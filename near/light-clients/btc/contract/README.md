@@ -24,9 +24,17 @@ If you want to test on a testnet follow next steps
 ```bash
 cargo-near near create-dev-account use-random-account-id autogenerate-new-keypair save-to-legacy-keychain network-config testnet create
 ```
+- Add nears to your test account if needed
+Go to https://near-faucet.io/ website and request Near for your account
 - Deploy contract to testnet
 ```bash
 near contract deploy <<ACCOUNT_NAME_FROM_PREVIOUS_COMMAND>> use-file ./target/wasm32-unknown-unknown/release/btc_light_client_contract.wasm without-init-call network-config testnet sign-with-keychain send
+```
+
+Setup relayer service:
+
+```shell
+cat <<PATH_TO_THE_KEY_FILE_FROM_ACCOUNT_CREATION_COMMAND>> | jq -r '.private_key'
 ```
 
 ## Useful Links
@@ -40,3 +48,9 @@ In more detail, the verification component performs the operations of a Bitcoin 
 * Transaction Inclusion Verification - given a transaction, a reference to a block header, the transaction’s index in that block and a Merkle tree path, determine whether the transaction is indeed included in the specified block header (which in turn must be already verified and stored in the Bitcoin main chain tracked by BTC-Relay).
 
 An overview and explanation of the different classes of blockchain state verification in the context of cross-chain communication, specifically the difference between full validation of transactions and mere verification of their inclusion in the underlying blockchain, can be found in this paper (Section 5).
+
+## FAQ
+What if somebody start to send older blocks than the genesis we used to initialize the relay?
+
+In this case we will ot insert those block headers, so we will not use storage for it. We also quickly check if prev_block is included into the contract, so
+we will not spend a lot of gas on it.

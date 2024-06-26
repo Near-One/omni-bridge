@@ -1,21 +1,25 @@
+use near_sdk::borsh::{self, BorshSerialize};
 use near_sdk::{log, near};
-use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
-use near_sdk::serde::{Deserialize, Serialize};
 
 use bitcoin::block::Header;
 
-use merkle_tools;
+#[derive(BorshSerialize, near_sdk::BorshStorageKey)]
+enum StorageKey {
+    MainchainHeightToHeader,
+    MainchainHeaderToHeight,
+    HeadersPool,
+}
 
-/// Contract implementing Bitcoin light client. See README.md for more details about features
-/// and implemetation logic behind the code.
+/// Contract implementing Bitcoin light client.
+/// See README.md for more details about features and implementation logic behind the code.
 
 /// This contract could work in a pairing with an external off-chain relay service. To learn more about
 /// relay, take a look at the relay service documentation.
 
 mod state {
     use bitcoin::block::Version;
-    use bitcoin::CompactTarget;
     use bitcoin::hashes::serde::{Deserialize, Serialize};
+    use bitcoin::CompactTarget;
     use near_sdk::borsh::{BorshDeserialize, BorshSerialize};
 
     /// Bitcoin header to store in the block height
@@ -24,8 +28,6 @@ mod state {
     pub struct Header {
         /// Block version, now repurposed for soft fork signalling.
         pub version: i32,
-        /// Current block_hash
-        pub current_blockhash: String,
         /// Reference to the previous block in the chain.
         pub prev_blockhash: String,
         /// The root hash of the merkle tree of transactions in the block.
@@ -36,14 +38,21 @@ mod state {
         pub bits: u32,
         /// The nonce, selected to obtain a low enough blockhash.
         pub nonce: u32,
-        /// Chainwork for this block
+
+        /// Below, state contains additional fields not presented in the standard blockchain header
+        /// those fields are used to represent additional information required for fork management
+        /// and other utility functionality
+        ///
+        /// Current block_hash
+        pub current_blockhash: String,
+        /// Accumulated chainwork at this position for this block (big endian storage format)
         pub chainwork: [u8; 32],
         /// Block height in the Bitcoin network
-        pub block_height: usize,
+        pub block_height: u64,
     }
 
     impl Header {
-        pub fn new(header: bitcoin::block::Header, chainwork: [u8; 32], block_height: usize) -> Self {
+        pub fn new(header: bitcoin::block::Header, chainwork: [u8; 32], block_height: u64) -> Self {
             Self {
                 version: header.version.to_consensus(),
                 current_blockhash: header.block_hash().to_string(),
@@ -52,8 +61,8 @@ mod state {
                 time: header.time,
                 bits: header.bits.to_consensus(),
                 nonce: header.nonce,
-                chainwork: chainwork,
-                block_height: block_height,
+                chainwork,
+                block_height,
             }
         }
 
@@ -73,258 +82,309 @@ mod state {
     }
 }
 
-struct ForkState {
-    fork_chain: Vec<state::Header>,
-    heaviest_block: usize,
-    chainwork: usize,
-}
-
 // Define the contract structure
 #[near(contract_state)]
+#[derive(near_sdk::PanicOnDefault)]
 pub struct Contract {
-    // block headers received from Bitcoin relay service
-    // block_headers: Vec<state::Header>,
-    // block with the highest chainWork, i.e., blockchain tip
+    // A pair of lookup maps that allows to find header by height and height by header
+    mainchain_height_to_header: near_sdk::store::LookupMap<u64, String>,
+    mainchain_header_to_height: near_sdk::store::LookupMap<String, u64>,
 
-    // fork_id -> vector of block headers from this fork
-    // we will promote one of the forks if we have to do a chain reorg
-    // when one of the forks will eventually reach the highest possible weight
-    // fork chainwork of fork is bigger than chainwork of the main chain
-    forks: near_sdk::store::LookupMap<usize, Vec<state::Header>>,
+    // Block with the highest chainWork, i.e., blockchain tip, you can find latest height inside of it
+    mainchain_tip_blockhash: String,
 
-    // fork_id -> latest_header
-    latest_fork_block_hashes: near_sdk::store::LookupMap<usize, state::Header>,
+    // Mapping of block hashes to block headers (ALL ever submitted, i.e., incl. forks)
+    headers_pool: near_sdk::store::LookupMap<String, state::Header>,
 
-    // mapping(bytes32 => HeaderInfo) public _headers;
-    // mapping(uint256 => bytes32) public _mainChain; // mapping of block heights to block hashes of the MAIN CHAIN
-
-    height_to_header: near_sdk::store::LookupMap<usize, String>,
-
-    // mapping of block hashes to block headers (ALL ever submitted, i.e., incl. forks)
-    headers: near_sdk::store::LookupMap<String, state::Header>,
-
-    current_fork_id: usize,
-    // We use latest block to help offchain relayer to recover the reading of blocks and
-    // to understand if we currently writing a fork or not.
-    // latest_block_info: String
-
-    // block with the highest chainWork, i.e., blockchain tip
-    heaviest_block: String,
-
-    // highest chainWork, i.e., accumulated PoW at current blockchain tip
-    high_score: [u8; 32]
-}
-
-// Define the default, which automatically initializes the contract
-impl Default for Contract {
-    fn default() -> Self {
-        Self {
-            height_to_header: near_sdk::store::LookupMap::new(b"a"),
-            headers: near_sdk::store::LookupMap::new(b"h"),
-            forks: near_sdk::store::LookupMap::new(b"f"),
-            latest_fork_block_hashes: near_sdk::store::LookupMap::new(b"l"),
-            current_fork_id: 0,
-            heaviest_block: String::new(),
-            high_score: [0; 32],
-        }
-    }
+    // If we should run all the block checks or not
+    enable_check: bool,
 }
 
 // Implement the contract structure
 #[near]
 impl Contract {
-    pub fn get_last_block_header(&self) -> state::Header {
-        self.headers[&self.heaviest_block].clone()
+    #[init]
+    pub fn new(genesis_block: Header, genesis_block_height: u64, enable_check: bool) -> Self {
+        log!("Running the initialization!");
+
+        let mut contract = Self {
+            mainchain_height_to_header: near_sdk::store::LookupMap::new(
+                StorageKey::MainchainHeightToHeader,
+            ),
+            mainchain_header_to_height: near_sdk::store::LookupMap::new(
+                StorageKey::MainchainHeaderToHeight,
+            ),
+            headers_pool: near_sdk::store::LookupMap::new(StorageKey::HeadersPool),
+            mainchain_tip_blockhash: String::new(),
+            enable_check,
+        };
+
+        contract.init_genesis(genesis_block, genesis_block_height);
+
+        contract
     }
 
-    // TODO: Should we submit genesis block separately or we can try to find the way to do it as a part
-    // TODO: of a general flow?
-    pub fn submit_genesis(&mut self, block_header: Header) -> bool {
-        let current_block_hash= block_header.block_hash().as_raw_hash().to_string();
+    fn init_genesis(&mut self, block_header: Header, block_height: u64) -> bool {
+        let current_block_hash = block_header.block_hash().as_raw_hash().to_string();
         let chainwork_bytes = block_header.work().to_be_bytes();
-        let height = 0;
 
-        let header = state::Header::new(block_header, chainwork_bytes, height);
+        let header = state::Header::new(block_header, chainwork_bytes, block_height);
 
-        self.store_block_header(current_block_hash.clone(), header);
-        self.heaviest_block = current_block_hash;
+        self.store_block_header(current_block_hash.clone(), &header);
+        self.mainchain_tip_blockhash = current_block_hash;
         true
     }
 
-    // Submit fork headers for a new fork
-    pub fn submit_new_fork_header(&mut self, block_header: Header, height: usize) -> bool {
-        self.current_fork_id = self.current_fork_id + 1;
-        self.submit_block_header(block_header, Some(self.current_fork_id), height);
-        true
+    pub fn get_last_block_header(&self) -> state::Header {
+        self.headers_pool[&self.mainchain_tip_blockhash].clone()
     }
 
-    // Submit main chain headers
-    pub fn submit_main_chain_header(&mut self, block_header: Header, height: usize) -> bool {
-        self.submit_block_header(block_header, None, height);
-        true
+    pub fn get_blockhash_by_height(&self, height: u64) -> Option<String> {
+        self.mainchain_height_to_header
+            .get(&height)
+            .map(|hash| hash.to_owned())
     }
 
-    // Submit fork headers
-    pub fn submit_fork_header(&mut self, block_header: Header, height: usize, fork_id: usize) -> bool {
-        self.submit_block_header(block_header, Some(fork_id), height);
-        true
+    pub fn get_height_by_blockhash(&self, blockhash: String) -> Option<u64> {
+        self.mainchain_header_to_height.get(&blockhash).copied()
     }
 
     /// Saving block header received from a Bitcoin relay service
     /// This method is private but critically important for the overall execution flow
-    fn submit_block_header(&mut self, block_header: Header, fork_id: Option<usize>, height: usize) {
+    #[handle_result]
+    pub fn submit_block_header(&mut self, block_header: Header) -> Result<(), String> {
         // Chainwork is validated inside block_header structure (other consistency checks too)
         let prev_blockhash = block_header.prev_blockhash.to_string();
-        let current_block_hash = block_header.block_hash().to_string();
-        let chainwork = block_header.work();
-        let chainwork_bytes = chainwork.to_be_bytes();
-        log!("block: {} | chainwork: {}", current_block_hash, chainwork);
 
-        // Checking that previous block exists on the chain, abort if not
-        if self.headers.get(&prev_blockhash).is_none() {
-            panic!("Cannot find prev_blockhash in header list");
-        }
+        let prev_block_header = if let Some(header) = self.headers_pool.get(&prev_blockhash) {
+            header.clone()
+        } else {
+            // We do not have a previous block in the headers_pool, there is a high probability
+            //it means we are starting to receive a new fork,
+            // so what we do now is we are returning the error code
+            // to ask the relay to deploy the previous block.
+            //
+            // Offchain relay now, should submit blocks one by one in decreasing height order
+            // 80 -> 79 -> 78 -> ...
+            // And do it until we can accept the block.
+            // It means we found an initial fork position.
+            // We are starting to gather new fork from this initial position.
+            return Err(String::from("1"));
+        };
 
-        let header = state::Header::new(block_header, chainwork_bytes, height);
+        let current_blockhash = block_header.block_hash().to_string();
+        let current_block_computed_chainwork =
+            bitcoin::Work::from_be_bytes(prev_block_header.chainwork) + block_header.work();
 
-        // Check if it is a MainChain or a Fork
-        match fork_id {
+        // Computing the target height based on the previous block
+        let height = 1 + prev_block_header.block_height;
+        let header = state::Header::new(
+            block_header,
+            current_block_computed_chainwork.to_be_bytes(),
+            height,
+        );
+
+        // Main chain submission
+        if prev_block_header.current_blockhash == self.mainchain_tip_blockhash {
+            // Probably we should check if it is not in a mainchain?
+            // chainwork > highScore
+            log!("Saving to mainchain");
+            // Validate chain
+            assert_eq!(self.mainchain_tip_blockhash, header.prev_blockhash);
+
+            self.store_block_header(current_blockhash.clone(), &header);
+            self.mainchain_tip_blockhash = current_blockhash;
+        } else {
             // Fork submission
-            Some(fork_id) => {
-                // Find fork
-                match self.forks.get(&fork_id) {
-                    Some(blocks) => {
-                        // Existing fork submission
-                        let prev_blockheader = blocks.last().expect("ongoing fork blocks must not be empty");
-                        // Validate chain
-                        assert_eq!(prev_blockheader.current_blockhash, header.prev_blockhash);
+            let main_chain_tip_header = self
+                .headers_pool
+                .get(&self.mainchain_tip_blockhash.clone())
+                .expect("tip should be in a header pool");
 
-                        // Current chainwork is higher than on a current mainchain, let's promote the fork
-                        if chainwork_bytes > self.high_score {
-                            // Remove the latest blocks in chain starting from fork promotion height
-                            let first_fork_block = blocks.first().expect("first block should exist");
-                            let promotion_height = first_fork_block.block_height;
-                            for height_to_clean in promotion_height .. height {
-                                self.height_to_header.remove(&height_to_clean);
-                            }
+            let total_main_chain_chainwork =
+                bitcoin::Work::from_be_bytes(main_chain_tip_header.chainwork);
 
-                            // Update heights with block hashes from the fork
-                            for block in blocks {
-                                self.height_to_header.insert(block.block_height, block.current_blockhash.clone());
-                            }
-                        } else {
-                            // Fork still being extended: append block
-                            self.store_fork_header(fork_id, current_block_hash, header);
-                        }
-                    }
-                    None => {
-                        // Submission of new fork
-                        // This should never fail
-                        assert_eq!(fork_id, self.current_fork_id);
-                        // Check that block is indeed a fork
-                        assert_ne!(header.prev_blockhash, self.heaviest_block);
+            self.store_fork_header(current_blockhash.clone(), header.clone());
 
-                        self.store_fork_header(fork_id, current_block_hash, header);
-                    }
-                }
-            },
-            // Mainchain submission
-            None => {
-                // Probably we should check if it is not in a mainchain?
-                // chainwork > highScore
-                log!("Saving to mainchain");
-                // Validate chain
-                assert_eq!(self.heaviest_block, header.prev_blockhash);
-
-                self.heaviest_block = current_block_hash.clone();
-                self.high_score = chainwork_bytes;
-                self.store_block_header(current_block_hash, header);
+            // Current chainwork is higher than on a current mainchain, let's promote the fork
+            if current_block_computed_chainwork > total_main_chain_chainwork {
+                self.reorg_chain(&current_blockhash);
             }
         }
+
+        Ok(())
+    }
+
+    /// The most expensive operation which reorganizes the chain, based on fork weight
+    fn reorg_chain(&mut self, fork_tip_header_blockhash: &str) {
+        let fork_tip_height = self.headers_pool[fork_tip_header_blockhash].block_height;
+        let last_main_chain_block_height =
+            self.headers_pool[&self.mainchain_tip_blockhash].block_height;
+
+        if last_main_chain_block_height > fork_tip_height {
+            // If we see that main chain is longer than fork we first garbage collect
+            // outstanding main chain blocks:
+            //
+            //      [m1] - [m2] - [m3] - [m4] <- We should remove [m4]
+            //     /
+            // [m0]
+            //     \
+            //      [f1] - [f2] - [f3]
+            for height in (fork_tip_height + 1)..=last_main_chain_block_height {
+                let current_main_chain_blockhash = self
+                    .mainchain_height_to_header
+                    .get(&height)
+                    .expect("cannot get a block");
+                self.mainchain_header_to_height
+                    .remove(current_main_chain_blockhash);
+                self.headers_pool.remove(current_main_chain_blockhash);
+                self.mainchain_height_to_header.remove(&height);
+            }
+        }
+
+        // Now we are in a situation where mainchain is equivalent to fork size:
+        //
+        //      [m1] - [m2] - [m3] - [m4] <- main tip
+        //     /
+        // [m0]
+        //     \
+        //      [f1] - [f2] - [f3] - [f4] <- fork tip
+        //
+        //
+        // Or in a situation where it is shorter:
+        //
+        //      [m1] - [m2] - [m3] <- main tip
+        //     /
+        // [m0]
+        //     \
+        //      [f1] - [f2] - [f3] - [f4] <- fork tip
+
+        let mut fork_header_cursor = self
+            .headers_pool
+            .get_mut(fork_tip_header_blockhash)
+            .expect("fork block should be already inserted at the time");
+
+        while !self
+            .mainchain_header_to_height
+            .contains_key(&fork_header_cursor.current_blockhash)
+        {
+            let prev_blockhash = fork_header_cursor.prev_blockhash.clone();
+            let current_blockhash = fork_header_cursor.current_blockhash.clone();
+            let current_height = fork_header_cursor.block_height;
+
+            // Inserting the fork block into the main chain, if some mainchain block is occupying
+            // this height let's save its hashcode
+            let main_chain_block = self
+                .mainchain_height_to_header
+                .insert(current_height, current_blockhash.clone());
+            self.mainchain_header_to_height
+                .insert(current_blockhash, current_height);
+
+            // If we found a mainchain block at the current height than remove this block from the
+            // header pool and from the header -> height map
+            if let Some(current_main_chain_blockhash) = main_chain_block {
+                self.mainchain_header_to_height
+                    .remove(&current_main_chain_blockhash);
+                self.headers_pool.remove(&current_main_chain_blockhash);
+            }
+
+            // Switch iterator cursor to the previous block in fork
+            fork_header_cursor = self
+                .headers_pool
+                .get_mut(&prev_blockhash)
+                .expect("previous fork block should be there");
+        }
+
+        // Updating tip of the new main chain
+        self.mainchain_tip_blockhash = fork_tip_header_blockhash.to_string();
     }
 
     /// Stores parsed block header and meta information
-    fn store_block_header(&mut self, current_block_hash: String, header: state::Header) {
-        self.headers.insert(current_block_hash.clone(), header.clone());
-        self.height_to_header.insert(header.block_height, current_block_hash);
+    fn store_block_header(&mut self, current_block_hash: String, header: &state::Header) {
+        self.headers_pool
+            .insert(current_block_hash.clone(), header.clone());
+        self.mainchain_height_to_header
+            .insert(header.block_height, current_block_hash.clone());
+        self.mainchain_header_to_height
+            .insert(current_block_hash, header.block_height);
     }
 
     /// Stores and handles fork submissions
-    fn store_fork_header(&mut self, fork_id: usize, current_block_hash: String, header: state::Header) {
-        self.headers.insert(current_block_hash, header.clone());
+    fn store_fork_header(&mut self, current_block_hash: String, header: state::Header) {
+        self.headers_pool.insert(current_block_hash, header);
+    }
 
-        match self.forks.get(&fork_id) {
-            Some(blocks) => {
-                let mut copy = blocks.clone();
-                copy.push(header);
+    // This method return n last blocks from the mainchain
+    pub fn receive_last_n_blocks(&self, n: u64, shift_from_the_end: u64) -> Vec<String> {
+        let mut block_hashes = vec![];
+        let tip_hash = &self.mainchain_tip_blockhash;
+        let tip = self
+            .headers_pool
+            .get(tip_hash)
+            .expect("heaviest block should be recorded");
 
-                self.forks.insert(fork_id, copy);
-            },
-            None => {
-                let new_elems = vec![(fork_id, vec![header])];
-                self.forks.extend(new_elems);
+        for height in (tip.block_height - n)..(tip.block_height - shift_from_the_end) {
+            if let Some(block_hash) = self.mainchain_height_to_header.get(&height) {
+                block_hashes.push(block_hash.to_string());
             }
         }
+
+        block_hashes
     }
 
-    // Return state of the relay, so offchain service can see all the forks available
-    // fork_id -> latest_block_header_hash
-    pub fn receive_state(&self) -> std::collections::HashMap<usize, String> {
-        let mut state = std::collections::HashMap::new();
+    /// Verifies that a transaction is included in a block at a given block height
 
-        // Add last mainnet block to the state
-        state.insert(0, self.heaviest_block.clone());
-
-        // Extract all of the last fork blocks
-        for fork_id in 1 ..= self.current_fork_id {
-            let block_hash = self.forks
-                .get(&fork_id)
-                .expect("fork data must be available")
-                .last()
-                .expect("fork data should contains at least 1 blockhash")
-                .current_blockhash
-                .clone();
-
-            state.insert(fork_id, block_hash);
-        }
-
-        state
-    }
-
-    /*
-    * Verifies that a transaction is included in a block at a given block height
-
-    * @param txid transaction identifier
-    * @param txBlockHeight block height at which transacton is supposedly included
-    * @param txIndex index of transaction in the block's tx merkle tree
-    * @param merkleProof  merkle tree path (concatenated LE sha256 hashes) (does not contain initial transaction_hash and merkle_root)
-    * @param confirmations how many confirmed blocks we want to have before the transaction is valid
-    * @return True if txid is at the claimed position in the block at the given blockheight, False otherwise
-    */
+    /// @param txid transaction identifier
+    /// @param txBlockHeight block height at which transacton is supposedly included
+    /// @param txIndex index of transaction in the block's tx merkle tree
+    /// @param merkleProof  merkle tree path (concatenated LE sha256 hashes) (does not contain initial transaction_hash and merkle_root)
+    /// @param confirmations how many confirmed blocks we want to have before the transaction is valid
+    /// @return True if txid is at the claimed position in the block at the given blockheight, False otherwise
     pub fn verify_transaction_inclusion(
         &self,
-        txid: String,
-        tx_block_height: usize,
-        tx_index: usize,
+        tx_id: String,
+        tx_block_blockhash: String,
+        tx_index: u64,
         merkle_proof: Vec<String>,
-        confirmations: usize,
+        confirmations: u64,
     ) -> bool {
-        // check requested confirmations. No need to compute proof if insufficient confs.
-        let heaviest_block_header = self.headers.get(&self.heaviest_block).expect("heaviest block must be recorded");
-        if (heaviest_block_header.block_height).saturating_sub(tx_block_height) < confirmations {
-            panic!("Not enough blocks confirmed cannot process verification");
+        let heaviest_block_header = self
+            .headers_pool
+            .get(&self.mainchain_tip_blockhash)
+            .expect("heaviest block must be recorded");
+        let target_block_height = *self
+            .mainchain_header_to_height
+            .get(&tx_block_blockhash)
+            .expect("block does not belong to the current main chain");
+
+        // Check requested confirmations. No need to compute proof if insufficient confirmations.
+        if (heaviest_block_header.block_height).saturating_sub(target_block_height) < confirmations
+        {
+            panic!("Not enough blocks confirmed, cannot process verification");
         }
 
-        let header_hash = self.height_to_header.get(&tx_block_height).expect("prover cannot find block by height");
-        let header = self.headers.get(header_hash).expect("cannot find requested transaction block");
+        let header = self
+            .headers_pool
+            .get(&tx_block_blockhash)
+            .expect("cannot find requested transaction block");
         let merkle_root = header.clone().merkle_root;
 
         // compute merkle tree root and check if it matches block's original merkle tree root
-        if merkle_tools::compute_root_from_merkle_proof(&txid, tx_index, &merkle_proof) == merkle_root {
-            log!("VerityTransaction: Tx {:?} is included in block with height {}", txid, tx_block_height);
+        if merkle_tools::compute_root_from_merkle_proof(&tx_id, tx_index as usize, &merkle_proof)
+            == merkle_root
+        {
+            log!(
+                "VerityTransaction: Tx {:?} is included in block with height {}",
+                tx_id,
+                target_block_height
+            );
             true
         } else {
-            log!("VerityTransaction: Tx {:?} is NOT included in block with height {}", txid, tx_block_height);
+            log!(
+                "VerityTransaction: Tx {:?} is NOT included in block with height {}",
+                tx_id,
+                target_block_height
+            );
             false
         }
     }
@@ -338,7 +398,6 @@ impl Contract {
 mod tests {
     use super::*;
     use bitcoin::block::Header;
-    use bitcoin::hex::DisplayHex;
 
     fn genesis_block_header() -> Header {
         let json_value = serde_json::json!({
@@ -349,64 +408,75 @@ mod tests {
             "bits": 486604799,
             "nonce": 2083236893
         });
-        let parsed_header = serde_json::from_value(json_value).expect("value is invalid");
-        parsed_header
+
+        serde_json::from_value(json_value).expect("value is invalid")
     }
 
     // Bitcoin header example
     fn block_header_example() -> Header {
         let json_value = serde_json::json!({
+            // block_hash: 62703463e75c025987093c6fa96e7261ac982063ea048a0550407ddbbe865345
             "version": 1,
             "prev_blockhash": "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f",
             "merkle_root": "4a5e1e4baab89f3a32518a88c31bc87f618f76673e2cc77ab2127b7afdeda33b",
-            "time": 1231006505,
+            "time": 1231006506,
             "bits": 486604799,
             "nonce": 2083236893
         });
-        let parsed_header = serde_json::from_value(json_value).expect("value is invalid");
-        parsed_header
+
+        serde_json::from_value(json_value).expect("value is invalid")
     }
 
     fn fork_block_header_example() -> Header {
         let json_value = serde_json::json!({
+            // "hash": "00000000839a8e6886ab5951d76f411475428afc90947ee320161bbf18eb6048",
+            //"chainwork": "0000000000000000000000000000000000000000000000000000000200020002",
             "version": 1,
-            "prev_blockhash": "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f",
-            "merkle_root": "589e1e4baab89f3a32518a88c31bc87f618f76673e2cc77ab2127b7afdeda33b",
-            "time": 1231006505,
+            "merkle_root": "0e3e2357e806b6cdb1f70b54c3a3a17b6714ee1f0e68bebb44a74b1efd512098",
+            "time": 1231469665,
+            "nonce": 2573394689_u32,
             "bits": 486604799,
-            "nonce": 2083236893
+            "prev_blockhash": "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f",
         });
-        let parsed_header = serde_json::from_value(json_value).expect("value is invalid");
-        parsed_header
+
+        serde_json::from_value(json_value).expect("value is invalid")
     }
 
     fn fork_block_header_example_2() -> Header {
         let json_value = serde_json::json!({
-            "version": 1,
-            "prev_blockhash": "8ad4fdb505b0ac54acfd43f6a0b88c5222f4b7d5b23bb2a2dc4e1cf821be8ab6",
-            "merkle_root": "989e1e4baab89f3a32518a88c31bc87f618f76673e2cc77ab2127b7afdeda33b",
-            "time": 1231006505,
-            "bits": 486604799,
-            "nonce": 2083236893
+            // "hash": "000000006a625f06636b8bb6ac7b960a8d03705d1ace08b1a19da3fdcc99ddbd",
+            // "chainwork": "0000000000000000000000000000000000000000000000000000000300030003",
+          "version": 1,
+          "merkle_root": "9b0fc92260312ce44e74ef369f5c66bbb85848f2eddd5a7a1cde251e54ccfdd5",
+          "time": 1231469744,
+          "nonce": 1639830024,
+          "bits": 486604799,
+          "prev_blockhash": "00000000839a8e6886ab5951d76f411475428afc90947ee320161bbf18eb6048",
         });
-        let parsed_header = serde_json::from_value(json_value).expect("value is invalid");
-        parsed_header
+
+        serde_json::from_value(json_value).expect("value is invalid")
     }
 
     #[test]
     fn test_saving_mainchain_block_header() {
         let header = block_header_example();
 
-        let mut contract = Contract::default();
+        let mut contract = Contract::new(genesis_block_header(), 0, true);
 
-        contract.submit_genesis(genesis_block_header());
-        contract.submit_block_header(header, None, 1);
+        contract.submit_block_header(header).unwrap();
 
         let received_header = contract.get_last_block_header();
 
-        assert_eq!(received_header, state::Header::new(header,
-                                                       [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 1],
-                                                       1)
+        assert_eq!(
+            received_header,
+            state::Header::new(
+                header,
+                [
+                    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                    0, 2, 0, 2, 0, 2
+                ],
+                1
+            )
         );
     }
 
@@ -414,59 +484,106 @@ mod tests {
     fn test_submitting_new_fork_block_header() {
         let header = block_header_example();
 
-        let mut contract = Contract::default();
+        let mut contract = Contract::new(genesis_block_header(), 0, true);
 
-        contract.submit_genesis(genesis_block_header());
-        contract.submit_block_header(header, None, 1);
+        contract.submit_block_header(header).unwrap();
 
-        contract.submit_new_fork_header(fork_block_header_example(), 1);
+        contract
+            .submit_block_header(fork_block_header_example())
+            .unwrap();
 
         let received_header = contract.get_last_block_header();
 
-        assert_eq!(received_header, state::Header::new(header,
-                                                       [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 1],
-                                                       1)
+        assert_eq!(
+            received_header,
+            state::Header::new(
+                header,
+                [
+                    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                    0, 2, 0, 2, 0, 2
+                ],
+                1
+            )
+        );
+    }
+
+    // test we can insert a block and get block back by it's height
+    #[test]
+    fn test_getting_block_by_height() {
+        let mut contract = Contract::new(genesis_block_header(), 0, true);
+
+        contract
+            .submit_block_header(block_header_example())
+            .unwrap();
+
+        assert_eq!(
+            contract.get_blockhash_by_height(0).unwrap(),
+            genesis_block_header().block_hash().to_string()
+        );
+        assert_eq!(
+            contract.get_blockhash_by_height(1).unwrap(),
+            block_header_example().block_hash().to_string()
         );
     }
 
     #[test]
-    fn test_receiving_a_latest_state_for_the_contract() {
-        let mut contract = Contract::default();
+    fn test_getting_height_by_block() {
+        let mut contract = Contract::new(genesis_block_header(), 0, true);
 
-        contract.submit_genesis(genesis_block_header());
-        contract.submit_block_header(block_header_example(), None, 1);
-        contract.submit_new_fork_header(fork_block_header_example(), 1);
+        contract
+            .submit_block_header(block_header_example())
+            .unwrap();
 
-        let received_state = contract.receive_state();
-        let expected_state: std::collections::HashMap<usize, String> = vec![
-            (0, block_header_example().block_hash().to_string()),
-            (1, fork_block_header_example().block_hash().to_string())
-        ].into_iter().collect();
-
-        assert_eq!(expected_state, received_state);
+        assert_eq!(
+            contract
+                .get_height_by_blockhash(genesis_block_header().block_hash().to_string())
+                .unwrap(),
+            0
+        );
+        assert_eq!(
+            contract
+                .get_height_by_blockhash(block_header_example().block_hash().to_string())
+                .unwrap(),
+            1
+        );
     }
 
-    // TODO: Modify this test to properly check fork promotion
     #[test]
-    fn test_submitting_existing_fork_block_header() {
-        let header = block_header_example();
+    fn test_submitting_existing_fork_block_header_and_promote_fork() {
+        let mut contract = Contract::new(genesis_block_header(), 0, true);
 
-        let mut contract = Contract::default();
+        contract
+            .submit_block_header(block_header_example())
+            .unwrap();
 
-        contract.submit_genesis(genesis_block_header());
-        contract.submit_main_chain_header(header, 1);
-
-        let fork_block_header_example = fork_block_header_example();
-
-        contract.submit_new_fork_header(fork_block_header_example, 1);
-        contract.submit_fork_header(fork_block_header_example_2(), 2, 1);
+        contract
+            .submit_block_header(fork_block_header_example())
+            .unwrap();
+        contract
+            .submit_block_header(fork_block_header_example_2())
+            .unwrap();
 
         let received_header = contract.get_last_block_header();
 
-        // TODO: Demonstrate fork promotio in this test
-        assert_eq!(received_header, state::Header::new(header,
-                                                       [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 1],
-                                                       1)
+        assert_eq!(
+            received_header,
+            state::Header::new(
+                fork_block_header_example_2(),
+                [
+                    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                    0, 3, 0, 3, 0, 3
+                ],
+                2
+            )
         );
+    }
+
+    #[test]
+    fn test_getting_an_error_if_submitting_unattached_block() {
+        let mut contract = Contract::new(genesis_block_header(), 0, true);
+
+        let result = contract.submit_block_header(fork_block_header_example_2());
+        assert!(result.is_err());
+        assert!(result.is_err_and(|value| value == *"1"))
     }
 }

@@ -20,7 +20,10 @@ pub fn merkle_proof_calculator(tx_hashes: Vec<String>, transaction_position: usi
         }
 
         if current_hashes.len() % 2 == 1 {
-            new_hashes.push(compute_hash(&current_hashes[current_hashes.len() - 1], &current_hashes[current_hashes.len() - 1]));
+            new_hashes.push(compute_hash(
+                &current_hashes[current_hashes.len() - 1],
+                &current_hashes[current_hashes.len() - 1],
+            ));
         }
 
         current_hashes = new_hashes;
@@ -91,10 +94,10 @@ fn merkle_root_calculator(hash_list: Vec<&str>) -> String {
 
     // If list length is odd, we must hash a last item twice
     if hash_list.len() % 2 == 1 {
-        new_hash_list.push(
-            compute_hash(hash_list[hash_list.len() - 1],
-                         hash_list[hash_list.len() - 1])
-        );
+        new_hash_list.push(compute_hash(
+            hash_list[hash_list.len() - 1],
+            hash_list[hash_list.len() - 1],
+        ));
     }
 
     merkle_root_calculator(new_hash_list.iter().map(|s| s.as_str()).collect())
@@ -117,7 +120,8 @@ mod tests {
             "8a06d54b8b411e99b7e4d60c330b8cde4feb23d62edfc25047c4d837dfb5b253",
         ];
 
-        let expected_merkle_root = "7c8708d1f517caf3082d95cf1f6ced11a009318338e720ecee58a2b4e643d56a";
+        let expected_merkle_root =
+            "7c8708d1f517caf3082d95cf1f6ced11a009318338e720ecee58a2b4e643d56a";
         let calculated_merkle_root = merkle_root_calculator(tx_hashes.clone());
         assert_eq!(calculated_merkle_root, expected_merkle_root);
     }
@@ -152,7 +156,8 @@ mod tests {
             "8a06d54b8b411e99b7e4d60c330b8cde4feb23d62edfc25047c4d837dfb5b253".to_string(),
         ];
 
-        let calculated_merkle_root = merkle_root_calculator(tx_hashes.iter().map(|s| s.as_str()).collect());
+        let calculated_merkle_root =
+            merkle_root_calculator(tx_hashes.iter().map(|s| s.as_str()).collect());
         let calculated_merkle_proof = merkle_proof_calculator(tx_hashes, 0);
 
         let computed_root_from_merkle_proof = compute_root_from_merkle_proof(

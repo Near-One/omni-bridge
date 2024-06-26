@@ -524,6 +524,7 @@ dependencies = [
  "merkle-tools",
  "near-sdk",
  "near-workspaces",
+ "serde",
  "serde_json",
  "tokio",
 ]
