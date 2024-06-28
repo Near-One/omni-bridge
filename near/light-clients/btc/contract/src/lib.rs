@@ -146,15 +146,16 @@ impl Contract {
             .map(std::borrow::ToOwned::to_owned)
     }
 
-    pub fn get_height_by_blockhash(&self, blockhash: &str) -> Option<u64> {
-        self.mainchain_header_to_height.get(blockhash).copied()
+    #[allow(clippy::needless_pass_by_value)]
+    pub fn get_height_by_blockhash(&self, blockhash: String) -> Option<u64> {
+        self.mainchain_header_to_height.get(&blockhash).copied()
     }
 
     /// Saving block header received from a Bitcoin relay service
     /// This method is private but critically important for the overall execution flow
     ///
     /// # Panics
-    /// Many cases
+    /// - Many cases
     ///
     /// # Errors
     /// - No previous block recorded, so we cannot validate chain
@@ -178,6 +179,12 @@ impl Contract {
             // We are starting to gather new fork from this initial position.
             return Err(String::from("1"));
         };
+
+        if self.enable_check {
+            block_header
+                .validate_pow(block_header.target())
+                .expect("block should have correct pow");
+        }
 
         let current_blockhash = block_header.block_hash().to_string();
         let current_block_computed_chainwork =
@@ -352,12 +359,13 @@ impl Contract {
     ///
     /// # Panics
     /// Multiple cases
+    #[allow(clippy::needless_pass_by_value)]
     pub fn verify_transaction_inclusion(
         &self,
-        tx_id: &str,
-        tx_block_blockhash: &str,
+        tx_id: String,
+        tx_block_blockhash: String,
         tx_index: u64,
-        merkle_proof: &[String],
+        merkle_proof: Vec<String>,
         confirmations: u64,
     ) -> bool {
         let heaviest_block_header = self
@@ -366,7 +374,7 @@ impl Contract {
             .expect("heaviest block must be recorded");
         let target_block_height = *self
             .mainchain_header_to_height
-            .get(tx_block_blockhash)
+            .get(&tx_block_blockhash)
             .expect("block does not belong to the current main chain");
 
         // Check requested confirmations. No need to compute proof if insufficient confirmations.
@@ -378,15 +386,15 @@ impl Contract {
 
         let header = self
             .headers_pool
-            .get(tx_block_blockhash)
+            .get(&tx_block_blockhash)
             .expect("cannot find requested transaction block");
         let merkle_root = header.clone().merkle_root;
 
         // compute merkle tree root and check if it matches block's original merkle tree root
         if merkle_tools::compute_root_from_merkle_proof(
-            tx_id,
+            &tx_id,
             usize::try_from(tx_index).unwrap(),
-            merkle_proof,
+            &merkle_proof,
         ) == merkle_root
         {
             log!(
@@ -474,10 +482,42 @@ mod tests {
     }
 
     #[test]
+    #[should_panic(expected = "block should have correct pow: BadProofOfWork")]
+    fn test_pow_validator_works_correctly_for_wrong_block() {
+        let header = block_header_example();
+        let mut contract = Contract::new(genesis_block_header(), 0, true);
+
+        // cannot submit header due to wrong POW
+        contract.submit_block_header(header).unwrap();
+    }
+
+    #[test]
+    fn test_pow_validator_works_correctly_for_correct_block() {
+        let header = fork_block_header_example();
+        let mut contract = Contract::new(genesis_block_header(), 0, true);
+
+        contract.submit_block_header(header).unwrap();
+
+        let received_header = contract.get_last_block_header();
+
+        assert_eq!(
+            received_header,
+            state::Header::new(
+                header,
+                [
+                    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                    0, 2, 0, 2, 0, 2
+                ],
+                1
+            )
+        );
+    }
+
+    #[test]
     fn test_saving_mainchain_block_header() {
         let header = block_header_example();
 
-        let mut contract = Contract::new(genesis_block_header(), 0, true);
+        let mut contract = Contract::new(genesis_block_header(), 0, false);
 
         contract.submit_block_header(header).unwrap();
 
@@ -500,7 +540,7 @@ mod tests {
     fn test_submitting_new_fork_block_header() {
         let header = block_header_example();
 
-        let mut contract = Contract::new(genesis_block_header(), 0, true);
+        let mut contract = Contract::new(genesis_block_header(), 0, false);
 
         contract.submit_block_header(header).unwrap();
 
@@ -526,7 +566,7 @@ mod tests {
     // test we can insert a block and get block back by it's height
     #[test]
     fn test_getting_block_by_height() {
-        let mut contract = Contract::new(genesis_block_header(), 0, true);
+        let mut contract = Contract::new(genesis_block_header(), 0, false);
 
         contract
             .submit_block_header(block_header_example())
@@ -544,7 +584,7 @@ mod tests {
 
     #[test]
     fn test_getting_height_by_block() {
-        let mut contract = Contract::new(genesis_block_header(), 0, true);
+        let mut contract = Contract::new(genesis_block_header(), 0, false);
 
         contract
             .submit_block_header(block_header_example())
@@ -552,13 +592,13 @@ mod tests {
 
         assert_eq!(
             contract
-                .get_height_by_blockhash(&genesis_block_header().block_hash().to_string())
+                .get_height_by_blockhash(genesis_block_header().block_hash().to_string())
                 .unwrap(),
             0
         );
         assert_eq!(
             contract
-                .get_height_by_blockhash(&block_header_example().block_hash().to_string())
+                .get_height_by_blockhash(block_header_example().block_hash().to_string())
                 .unwrap(),
             1
         );
@@ -566,7 +606,7 @@ mod tests {
 
     #[test]
     fn test_submitting_existing_fork_block_header_and_promote_fork() {
-        let mut contract = Contract::new(genesis_block_header(), 0, true);
+        let mut contract = Contract::new(genesis_block_header(), 0, false);
 
         contract
             .submit_block_header(block_header_example())
@@ -596,7 +636,7 @@ mod tests {
 
     #[test]
     fn test_getting_an_error_if_submitting_unattached_block() {
-        let mut contract = Contract::new(genesis_block_header(), 0, true);
+        let mut contract = Contract::new(genesis_block_header(), 0, false);
 
         let result = contract.submit_block_header(fork_block_header_example_2());
         assert!(result.is_err());
