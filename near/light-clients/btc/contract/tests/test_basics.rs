@@ -17,6 +17,7 @@ async fn test_setting_genesis_block() -> Result<(), Box<dyn std::error::Error>> 
             "genesis_block": serde_json::to_value(block_header).unwrap(),
             "genesis_block_height": 0,
             "enable_check": false,
+            "gc_threshold": 5,
         }))
         .transact()
         .await?;
@@ -49,6 +50,7 @@ async fn test_setting_chain_reorg() -> Result<(), Box<dyn std::error::Error>> {
             "genesis_block": serde_json::to_value(block_header).unwrap(),
             "genesis_block_height": 0,
             "enable_check": false,
+            "gc_threshold": 5,
         }))
         .transact()
         .await?;
