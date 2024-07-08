@@ -1,5 +1,4 @@
 use hex::{decode, encode};
-use sha2::{Digest, Sha256};
 
 pub fn merkle_proof_calculator(tx_hashes: Vec<String>, transaction_position: usize) -> Vec<String> {
     let mut transaction_position = transaction_position;
@@ -53,6 +52,29 @@ pub fn compute_root_from_merkle_proof(
     current_hash
 }
 
+#[inline]
+fn double_sha256(input: &[u8]) -> Vec<u8> {
+    #[cfg(target_arch = "wasm32")]
+    {
+        use near_sdk::env::sha256;
+
+        sha256(&sha256(input))
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        use sha2::{Digest, Sha256};
+
+        let mut hasher = Sha256::new();
+        hasher.update(input);
+        let first_hash_inputs = hasher.finalize();
+
+        let mut hasher = Sha256::new();
+        hasher.update(&first_hash_inputs);
+        hasher.finalize().to_vec()
+    }
+}
+
 fn compute_hash(first_tx_hash: &str, second_tx_hash: &str) -> String {
     // Reverse inputs before and after hashing
     // due to big-endian
@@ -65,16 +87,8 @@ fn compute_hash(first_tx_hash: &str, second_tx_hash: &str) -> String {
     concat_inputs.extend(unhex_reverse_first);
     concat_inputs.extend(unhex_reverse_second);
 
-    let mut hasher = Sha256::new();
-    hasher.update(&concat_inputs);
-    let first_hash_inputs = hasher.finalize();
-
-    let mut hasher = Sha256::new();
-    hasher.update(&first_hash_inputs);
-    let final_hash_inputs = hasher.finalize();
-
     // Reverse final hash and hex result
-    let mut final_hash_bytes = final_hash_inputs.to_vec();
+    let mut final_hash_bytes = double_sha256(&concat_inputs);
     final_hash_bytes.reverse();
     encode(final_hash_bytes)
 }
