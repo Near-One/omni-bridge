@@ -226,30 +226,25 @@ impl Contract {
     ///
     /// # Panics
     /// - Many cases
-    ///
-    /// # Errors
-    /// - No previous block recorded, so we cannot validate chain
-    #[handle_result]
     #[pause(except(roles(Role::UnrestrictedSubmitBlocks)))]
-    pub fn submit_block_header(&mut self, block_header: Header) -> Result<(), String> {
+    pub fn submit_block_header(&mut self, block_header: Header) {
         // Chainwork is validated inside block_header structure (other consistency checks too)
         let prev_blockhash = block_header.prev_blockhash.to_string();
 
-        let prev_block_header = if let Some(header) = self.headers_pool.get(&prev_blockhash) {
-            header.clone()
-        } else {
-            // We do not have a previous block in the headers_pool, there is a high probability
-            //it means we are starting to receive a new fork,
-            // so what we do now is we are returning the error code
-            // to ask the relay to deploy the previous block.
-            //
-            // Offchain relay now, should submit blocks one by one in decreasing height order
-            // 80 -> 79 -> 78 -> ...
-            // And do it until we can accept the block.
-            // It means we found an initial fork position.
-            // We are starting to gather new fork from this initial position.
-            return Err(String::from("1"));
-        };
+        // We do not have a previous block in the headers_pool, there is a high probability
+        //it means we are starting to receive a new fork,
+        // so what we do now is we are returning the error code
+        // to ask the relay to deploy the previous block.
+        //
+        // Offchain relay now, should submit blocks one by one in decreasing height order
+        // 80 -> 79 -> 78 -> ...
+        // And do it until we can accept the block.
+        // It means we found an initial fork position.
+        // We are starting to gather new fork from this initial position.
+        let prev_block_header = self
+            .headers_pool
+            .get(&prev_blockhash)
+            .unwrap_or_else(|| env::panic_str("PrevBlockNotFound"));
 
         if self.enable_check {
             block_header
@@ -296,8 +291,6 @@ impl Contract {
                 self.reorg_chain(&current_blockhash);
             }
         }
-
-        Ok(())
     }
 
     /// The most expensive operation which reorganizes the chain, based on fork weight
@@ -599,7 +592,7 @@ mod tests {
 
         let mut contract = Contract::new(genesis_block_header(), 0, true, 3);
 
-        let _ = contract.submit_block_header(header);
+        contract.submit_block_header(header);
     }
 
     #[test]
@@ -607,7 +600,7 @@ mod tests {
         let header = fork_block_header_example();
         let mut contract = Contract::new(genesis_block_header(), 0, true, 3);
 
-        contract.submit_block_header(header).unwrap();
+        contract.submit_block_header(header);
 
         let received_header = contract.get_last_block_header();
 
@@ -630,7 +623,7 @@ mod tests {
 
         let mut contract = Contract::new(genesis_block_header(), 0, false, 3);
 
-        contract.submit_block_header(header).unwrap();
+        contract.submit_block_header(header);
 
         let received_header = contract.get_last_block_header();
 
@@ -653,11 +646,9 @@ mod tests {
 
         let mut contract = Contract::new(genesis_block_header(), 0, false, 3);
 
-        contract.submit_block_header(header).unwrap();
+        contract.submit_block_header(header);
 
-        contract
-            .submit_block_header(fork_block_header_example())
-            .unwrap();
+        contract.submit_block_header(fork_block_header_example());
 
         let received_header = contract.get_last_block_header();
 
@@ -679,9 +670,7 @@ mod tests {
     fn test_getting_block_by_height() {
         let mut contract = Contract::new(genesis_block_header(), 0, false, 3);
 
-        contract
-            .submit_block_header(block_header_example())
-            .unwrap();
+        contract.submit_block_header(block_header_example());
 
         assert_eq!(
             contract.get_blockhash_by_height(0).unwrap(),
@@ -697,9 +686,7 @@ mod tests {
     fn test_getting_height_by_block() {
         let mut contract = Contract::new(genesis_block_header(), 0, false, 3);
 
-        contract
-            .submit_block_header(block_header_example())
-            .unwrap();
+        contract.submit_block_header(block_header_example());
 
         assert_eq!(
             contract
@@ -719,16 +706,10 @@ mod tests {
     fn test_submitting_existing_fork_block_header_and_promote_fork() {
         let mut contract = Contract::new(genesis_block_header(), 0, false, 3);
 
-        contract
-            .submit_block_header(block_header_example())
-            .unwrap();
+        contract.submit_block_header(block_header_example());
 
-        contract
-            .submit_block_header(fork_block_header_example())
-            .unwrap();
-        contract
-            .submit_block_header(fork_block_header_example_2())
-            .unwrap();
+        contract.submit_block_header(fork_block_header_example());
+        contract.submit_block_header(fork_block_header_example_2());
 
         let received_header = contract.get_last_block_header();
 
@@ -746,11 +727,10 @@ mod tests {
     }
 
     #[test]
+    #[should_panic(expected = "PrevBlockNotFound")]
     fn test_getting_an_error_if_submitting_unattached_block() {
         let mut contract = Contract::new(genesis_block_header(), 0, false, 3);
 
-        let result = contract.submit_block_header(fork_block_header_example_2());
-        assert!(result.is_err());
-        assert!(result.is_err_and(|value| value == *"1"));
+        contract.submit_block_header(fork_block_header_example_2());
     }
 }
