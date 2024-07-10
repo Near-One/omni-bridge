@@ -9,7 +9,7 @@ Install [`cargo-near`](https://github.com/near/cargo-near) to support some addit
 Use this command to build a wasm binary
 
 ```bash
-cargo build --target wasm32-unknown-unknown --release
+RUSTFLAGS='-C link-arg=-s' cargo build --target wasm32-unknown-unknown --release
 ```
 
 ## How to Test Locally?
