@@ -1,4 +1,7 @@
-use btc_types::{ExtendedHeader, Header, H256, U256};
+use btc_types::contract_args::{InitArgs, ProofArgs};
+use btc_types::hash::{ReversedH256, H256};
+use btc_types::header::{ExtendedHeader, Header};
+use btc_types::u256::U256;
 use near_plugins::{
     access_control, pause, AccessControlRole, AccessControllable, Pausable, Upgradable,
 };
@@ -69,7 +72,7 @@ enum StorageKey {
     duration_update_stagers(Role::DurationManager, Role::DAO),
     duration_update_appliers(Role::DurationManager, Role::DAO),
 ))]
-pub struct Contract {
+pub struct BtcLightClient {
     // A pair of lookup maps that allows to find header by height and height by header
     mainchain_height_to_header: near_sdk::store::LookupMap<u64, H256>,
     mainchain_header_to_height: near_sdk::store::LookupMap<H256, u64>,
@@ -90,19 +93,12 @@ pub struct Contract {
     gc_threshold: u64,
 }
 
-// Implement the contract structure
 #[near]
-impl Contract {
+impl BtcLightClient {
     #[init]
+    #[private]
     #[must_use]
-    pub fn new(
-        genesis_block: Header,
-        genesis_block_height: u64,
-        skip_pow_verification: bool,
-        gc_threshold: u64,
-    ) -> Self {
-        log!("Running the initialization!");
-
+    pub fn init(args: InitArgs) -> Self {
         let mut contract = Self {
             mainchain_height_to_header: near_sdk::store::LookupMap::new(
                 StorageKey::MainchainHeightToHeader,
@@ -113,8 +109,8 @@ impl Contract {
             headers_pool: near_sdk::store::LookupMap::new(StorageKey::HeadersPool),
             mainchain_initial_blockhash: H256::default(),
             mainchain_tip_blockhash: H256::default(),
-            skip_pow_verification,
-            gc_threshold,
+            skip_pow_verification: args.skip_pow_verification,
+            gc_threshold: args.gc_threshold,
         };
 
         // Make the contract itself super admin. This allows us to grant any role in the
@@ -124,11 +120,137 @@ impl Contract {
             "Failed to initialize super admin",
         );
 
-        contract.init_genesis(genesis_block, genesis_block_height);
+        contract.init_genesis(args.genesis_block, args.genesis_block_height);
 
         contract
     }
 
+    #[pause(except(roles(Role::UnrestrictedSubmitBlocks)))]
+    pub fn submit_blocks(&mut self, #[serializer(borsh)] headers: Vec<Header>) {
+        for header in headers {
+            self.submit_block_header(header);
+        }
+    }
+
+    pub fn get_last_block_header(&self) -> ExtendedHeader {
+        self.headers_pool[&self.mainchain_tip_blockhash].clone()
+    }
+
+    pub fn get_block_hash_by_height(&self, height: u64) -> Option<ReversedH256> {
+        self.mainchain_height_to_header
+            .get(&height)
+            .map(|hash| hash.clone().into())
+    }
+
+    #[allow(clippy::needless_pass_by_value)]
+    pub fn get_height_by_block_hash(&self, blockhash: H256) -> Option<u64> {
+        self.mainchain_header_to_height.get(&blockhash).copied()
+    }
+
+    /// This method return n last blocks from the mainchain
+    /// # Panics
+    /// Cannot find a tip of main chain in a pool
+    pub fn get_last_n_blocks_hashes(&self, skip: u64, limit: u64) -> Vec<ReversedH256> {
+        let mut block_hashes = vec![];
+        let tip_hash = &self.mainchain_tip_blockhash;
+        let tip = self
+            .headers_pool
+            .get(tip_hash)
+            .unwrap_or_else(|| env::panic_str("heaviest block should be recorded"));
+
+        for height in (tip.block_height - limit)..(tip.block_height - skip) {
+            if let Some(block_hash) = self.mainchain_height_to_header.get(&height) {
+                block_hashes.push(block_hash.clone().into());
+            }
+        }
+
+        block_hashes
+    }
+
+    /// Verifies that a transaction is included in a block at a given block height
+    ///
+    /// @param txid transaction identifier
+    /// @param txBlockHeight block height at which transacton is supposedly included
+    /// @param txIndex index of transaction in the block's tx merkle tree
+    /// @param merkleProof  merkle tree path (concatenated LE sha256 hashes) (does not contain initial transaction_hash and merkle_root)
+    /// @param confirmations how many confirmed blocks we want to have before the transaction is valid
+    /// @return True if txid is at the claimed position in the block at the given blockheight, False otherwise
+    ///
+    /// # Panics
+    /// Multiple cases
+    #[allow(clippy::needless_pass_by_value)]
+    #[pause(except(roles(Role::UnrestrictedVerifyTransaction)))]
+    pub fn verify_transaction_inclusion(&self, #[serializer(borsh)] args: ProofArgs) -> bool {
+        let heaviest_block_header = self
+            .headers_pool
+            .get(&self.mainchain_tip_blockhash)
+            .unwrap_or_else(|| env::panic_str("heaviest block must be recorded"));
+        let target_block_height = *self
+            .mainchain_header_to_height
+            .get(&args.tx_block_blockhash)
+            .unwrap_or_else(|| env::panic_str("block does not belong to the current main chain"));
+
+        // Check requested confirmations. No need to compute proof if insufficient confirmations.
+        require!(
+            (heaviest_block_header.block_height).saturating_sub(target_block_height)
+                >= args.confirmations,
+            "Not enough blocks confirmed, cannot process verification"
+        );
+
+        let header = self
+            .headers_pool
+            .get(&args.tx_block_blockhash)
+            .unwrap_or_else(|| env::panic_str("cannot find requested transaction block"));
+
+        // compute merkle tree root and check if it matches block's original merkle tree root
+        merkle_tools::compute_root_from_merkle_proof(
+            args.tx_id.clone(),
+            usize::try_from(args.tx_index).unwrap(),
+            &args.merkle_proof,
+        ) == header.block_header.merkle_root
+    }
+
+    /// Public call to run GC on a mainchain.
+    /// batch_size is how many block headers should be removed in the execution
+    ///
+    /// # Panics
+    /// If initial blockheader or tip blockheader are not in a header pool
+    pub fn run_mainchain_gc(&mut self, batch_size: u64) {
+        let initial_blockheader = self
+            .headers_pool
+            .get(&self.mainchain_initial_blockhash)
+            .unwrap_or_else(|| env::panic_str("initial blockheader must be in a header pool"));
+
+        let tip_blockheader = self
+            .headers_pool
+            .get(&self.mainchain_tip_blockhash)
+            .unwrap_or_else(|| env::panic_str("tip blockheader must be in a header pool"));
+
+        let amount_of_headers_we_store =
+            tip_blockheader.block_height - initial_blockheader.block_height;
+
+        if amount_of_headers_we_store > self.gc_threshold {
+            let total_amount_to_remove = amount_of_headers_we_store - self.gc_threshold;
+            let selected_amount_to_remove = std::cmp::min(total_amount_to_remove, batch_size);
+
+            let start_removal_height = initial_blockheader.block_height;
+            let end_removal_height = initial_blockheader.block_height + selected_amount_to_remove;
+
+            for height in start_removal_height..end_removal_height {
+                let blockhash = &self.mainchain_height_to_header[&height];
+
+                self.headers_pool.remove(blockhash);
+                self.mainchain_header_to_height.remove(blockhash);
+                self.mainchain_height_to_header.remove(&height);
+            }
+
+            self.mainchain_initial_blockhash
+                .clone_from(&self.mainchain_height_to_header[&end_removal_height]);
+        }
+    }
+}
+
+impl BtcLightClient {
     fn init_genesis(&mut self, block_header: Header, block_height: u64) {
         let current_block_hash = block_header.block_hash();
         let chain_work = block_header.work();
@@ -146,26 +268,7 @@ impl Contract {
         self.mainchain_tip_blockhash = current_block_hash;
     }
 
-    pub fn get_last_block_header(&self) -> ExtendedHeader {
-        self.headers_pool[&self.mainchain_tip_blockhash].clone()
-    }
-
-    pub fn get_blockhash_by_height(&self, height: u64) -> Option<&H256> {
-        self.mainchain_height_to_header.get(&height)
-    }
-
-    #[allow(clippy::needless_pass_by_value)]
-    pub fn get_height_by_blockhash(&self, blockhash: H256) -> Option<u64> {
-        self.mainchain_header_to_height.get(&blockhash).copied()
-    }
-
-    /// Saving block header received from a Bitcoin relay service
-    /// This method is private but critically important for the overall execution flow
-    ///
-    /// # Panics
-    /// - Many cases
-    #[pause(except(roles(Role::UnrestrictedSubmitBlocks)))]
-    pub fn submit_block_header(&mut self, block_header: Header) {
+    fn submit_block_header(&mut self, block_header: Header) {
         // We do not have a previous block in the headers_pool, there is a high probability
         // it means we are starting to receive a new fork,
         // so what we do now is we are returning the error code
@@ -182,6 +285,10 @@ impl Contract {
             .unwrap_or_else(|| env::panic_str("PrevBlockNotFound"));
 
         let current_block_hash = block_header.block_hash();
+        log!(
+            "Block hash: {}",
+            ReversedH256::from(current_block_hash.clone())
+        );
 
         require!(
             self.skip_pow_verification
@@ -330,115 +437,6 @@ impl Contract {
     fn store_fork_header(&mut self, current_block_hash: H256, header: ExtendedHeader) {
         self.headers_pool.insert(current_block_hash, header);
     }
-
-    /// This method return n last blocks from the mainchain
-    /// # Panics
-    /// Cannot find a tip of main chain in a pool
-    pub fn receive_last_n_blocks(&self, n: u64, shift_from_the_end: u64) -> Vec<&H256> {
-        let mut block_hashes = vec![];
-        let tip_hash = &self.mainchain_tip_blockhash;
-        let tip = self
-            .headers_pool
-            .get(tip_hash)
-            .unwrap_or_else(|| env::panic_str("heaviest block should be recorded"));
-
-        for height in (tip.block_height - n)..(tip.block_height - shift_from_the_end) {
-            if let Some(block_hash) = self.mainchain_height_to_header.get(&height) {
-                block_hashes.push(block_hash);
-            }
-        }
-
-        block_hashes
-    }
-
-    /// Verifies that a transaction is included in a block at a given block height
-    ///
-    /// @param txid transaction identifier
-    /// @param txBlockHeight block height at which transacton is supposedly included
-    /// @param txIndex index of transaction in the block's tx merkle tree
-    /// @param merkleProof  merkle tree path (concatenated LE sha256 hashes) (does not contain initial transaction_hash and merkle_root)
-    /// @param confirmations how many confirmed blocks we want to have before the transaction is valid
-    /// @return True if txid is at the claimed position in the block at the given blockheight, False otherwise
-    ///
-    /// # Panics
-    /// Multiple cases
-    #[allow(clippy::needless_pass_by_value)]
-    #[pause(except(roles(Role::UnrestrictedVerifyTransaction)))]
-    pub fn verify_transaction_inclusion(
-        &self,
-        tx_id: H256,
-        tx_block_blockhash: H256,
-        tx_index: u64,
-        merkle_proof: Vec<H256>,
-        confirmations: u64,
-    ) -> bool {
-        let heaviest_block_header = self
-            .headers_pool
-            .get(&self.mainchain_tip_blockhash)
-            .unwrap_or_else(|| env::panic_str("heaviest block must be recorded"));
-        let target_block_height = *self
-            .mainchain_header_to_height
-            .get(&tx_block_blockhash)
-            .unwrap_or_else(|| env::panic_str("block does not belong to the current main chain"));
-
-        // Check requested confirmations. No need to compute proof if insufficient confirmations.
-        assert!(
-            (heaviest_block_header.block_height).saturating_sub(target_block_height)
-                >= confirmations,
-            "Not enough blocks confirmed, cannot process verification"
-        );
-
-        let header = self
-            .headers_pool
-            .get(&tx_block_blockhash)
-            .unwrap_or_else(|| env::panic_str("cannot find requested transaction block"));
-
-        // compute merkle tree root and check if it matches block's original merkle tree root
-        merkle_tools::compute_root_from_merkle_proof(
-            tx_id.clone(),
-            usize::try_from(tx_index).unwrap(),
-            &merkle_proof,
-        ) == header.block_header.merkle_root
-    }
-
-    /// Public call to run GC on a mainchain.
-    /// batch_size is how many block headers should be removed in the execution
-    ///
-    /// # Panics
-    /// If initial blockheader or tip blockheader are not in a header pool
-    pub fn run_mainchain_gc(&mut self, batch_size: u64) {
-        let initial_blockheader = self
-            .headers_pool
-            .get(&self.mainchain_initial_blockhash)
-            .unwrap_or_else(|| env::panic_str("initial blockheader must be in a header pool"));
-
-        let tip_blockheader = self
-            .headers_pool
-            .get(&self.mainchain_tip_blockhash)
-            .unwrap_or_else(|| env::panic_str("tip blockheader must be in a header pool"));
-
-        let amount_of_headers_we_store =
-            tip_blockheader.block_height - initial_blockheader.block_height;
-
-        if amount_of_headers_we_store > self.gc_threshold {
-            let total_amount_to_remove = amount_of_headers_we_store - self.gc_threshold;
-            let selected_amount_to_remove = std::cmp::min(total_amount_to_remove, batch_size);
-
-            let start_removal_height = initial_blockheader.block_height;
-            let end_removal_height = initial_blockheader.block_height + selected_amount_to_remove;
-
-            for height in start_removal_height..end_removal_height {
-                let blockhash = &self.mainchain_height_to_header[&height];
-
-                self.headers_pool.remove(blockhash);
-                self.mainchain_header_to_height.remove(blockhash);
-                self.mainchain_height_to_header.remove(&height);
-            }
-
-            self.mainchain_initial_blockhash
-                .clone_from(&self.mainchain_height_to_header[&end_removal_height]);
-        }
-    }
 }
 
 /*
@@ -458,8 +456,8 @@ mod tests {
     fn genesis_block_header() -> Header {
         let json_value = serde_json::json!({
             "version": 1,
-            "prev_block_hash": decode_hex("0000000000000000000000000000000000000000000000000000000000000000"),
-            "merkle_root": decode_hex("4a5e1e4baab89f3a32518a88c31bc87f618f76673e2cc77ab2127b7afdeda33b"),
+            "prev_block_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+            "merkle_root": "4a5e1e4baab89f3a32518a88c31bc87f618f76673e2cc77ab2127b7afdeda33b",
             "time": 1_231_006_505,
             "bits": 486_604_799,
             "nonce": 2_083_236_893
@@ -473,8 +471,8 @@ mod tests {
         let json_value = serde_json::json!({
             // block_hash: 62703463e75c025987093c6fa96e7261ac982063ea048a0550407ddbbe865345
             "version": 1,
-            "prev_block_hash": decode_hex("000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f"),
-            "merkle_root": decode_hex("4a5e1e4baab89f3a32518a88c31bc87f618f76673e2cc77ab2127b7afdeda33b"),
+            "prev_block_hash": "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f",
+            "merkle_root": "4a5e1e4baab89f3a32518a88c31bc87f618f76673e2cc77ab2127b7afdeda33b",
             "time": 1_231_006_506,
             "bits": 486_604_799,
             "nonce": 2_083_236_893
@@ -488,11 +486,11 @@ mod tests {
             // "hash": "00000000839a8e6886ab5951d76f411475428afc90947ee320161bbf18eb6048",
             //"chainwork": "0000000000000000000000000000000000000000000000000000000200020002",
             "version": 1,
-            "merkle_root": decode_hex("0e3e2357e806b6cdb1f70b54c3a3a17b6714ee1f0e68bebb44a74b1efd512098"),
+            "merkle_root": "0e3e2357e806b6cdb1f70b54c3a3a17b6714ee1f0e68bebb44a74b1efd512098",
             "time": 1_231_469_665,
             "nonce": 2_573_394_689_u32,
             "bits": 486_604_799,
-            "prev_block_hash": decode_hex("000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f"),
+            "prev_block_hash": "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f",
         });
 
         serde_json::from_value(json_value).expect("value is invalid")
@@ -503,14 +501,32 @@ mod tests {
             // "hash": "000000006a625f06636b8bb6ac7b960a8d03705d1ace08b1a19da3fdcc99ddbd",
             // "chainwork": "0000000000000000000000000000000000000000000000000000000300030003",
           "version": 1,
-          "merkle_root": decode_hex("9b0fc92260312ce44e74ef369f5c66bbb85848f2eddd5a7a1cde251e54ccfdd5"),
+          "merkle_root": "9b0fc92260312ce44e74ef369f5c66bbb85848f2eddd5a7a1cde251e54ccfdd5",
           "time": 1_231_469_744,
           "nonce": 1_639_830_024,
           "bits": 486_604_799,
-          "prev_block_hash": decode_hex("00000000839a8e6886ab5951d76f411475428afc90947ee320161bbf18eb6048"),
+          "prev_block_hash": "00000000839a8e6886ab5951d76f411475428afc90947ee320161bbf18eb6048",
         });
 
         serde_json::from_value(json_value).expect("value is invalid")
+    }
+
+    fn get_default_init_args() -> InitArgs {
+        InitArgs {
+            genesis_block: genesis_block_header(),
+            genesis_block_height: 0,
+            skip_pow_verification: false,
+            gc_threshold: 3,
+        }
+    }
+
+    fn get_default_init_args_with_skip_pow() -> InitArgs {
+        InitArgs {
+            genesis_block: genesis_block_header(),
+            genesis_block_height: 0,
+            skip_pow_verification: true,
+            gc_threshold: 3,
+        }
     }
 
     #[test]
@@ -518,7 +534,7 @@ mod tests {
     fn test_pow_validator_works_correctly_for_wrong_block() {
         let header = block_header_example();
 
-        let mut contract = Contract::new(genesis_block_header(), 0, false, 3);
+        let mut contract = BtcLightClient::init(get_default_init_args());
 
         contract.submit_block_header(header);
     }
@@ -526,7 +542,7 @@ mod tests {
     #[test]
     fn test_pow_validator_works_correctly_for_correct_block() {
         let header = fork_block_header_example();
-        let mut contract = Contract::new(genesis_block_header(), 0, false, 3);
+        let mut contract = BtcLightClient::init(get_default_init_args());
 
         contract.submit_block_header(header.clone());
 
@@ -552,7 +568,7 @@ mod tests {
     fn test_saving_mainchain_block_header() {
         let header = block_header_example();
 
-        let mut contract = Contract::new(genesis_block_header(), 0, true, 3);
+        let mut contract = BtcLightClient::init(get_default_init_args_with_skip_pow());
 
         contract.submit_block_header(header.clone());
 
@@ -578,7 +594,7 @@ mod tests {
     fn test_submitting_new_fork_block_header() {
         let header = block_header_example();
 
-        let mut contract = Contract::new(genesis_block_header(), 0, true, 3);
+        let mut contract = BtcLightClient::init(get_default_init_args_with_skip_pow());
 
         contract.submit_block_header(header.clone());
 
@@ -605,35 +621,35 @@ mod tests {
     // test we can insert a block and get block back by it's height
     #[test]
     fn test_getting_block_by_height() {
-        let mut contract = Contract::new(genesis_block_header(), 0, true, 3);
+        let mut contract = BtcLightClient::init(get_default_init_args_with_skip_pow());
 
         contract.submit_block_header(block_header_example());
 
         assert_eq!(
-            contract.get_blockhash_by_height(0).unwrap(),
-            &genesis_block_header().block_hash()
+            contract.get_block_hash_by_height(0).unwrap().hash,
+            genesis_block_header().block_hash(),
         );
         assert_eq!(
-            contract.get_blockhash_by_height(1).unwrap(),
-            &block_header_example().block_hash()
+            contract.get_block_hash_by_height(1).unwrap().hash,
+            block_header_example().block_hash()
         );
     }
 
     #[test]
     fn test_getting_height_by_block() {
-        let mut contract = Contract::new(genesis_block_header(), 0, true, 3);
+        let mut contract = BtcLightClient::init(get_default_init_args_with_skip_pow());
 
         contract.submit_block_header(block_header_example());
 
         assert_eq!(
             contract
-                .get_height_by_blockhash(genesis_block_header().block_hash())
+                .get_height_by_block_hash(genesis_block_header().block_hash())
                 .unwrap(),
             0
         );
         assert_eq!(
             contract
-                .get_height_by_blockhash(block_header_example().block_hash())
+                .get_height_by_block_hash(block_header_example().block_hash())
                 .unwrap(),
             1
         );
@@ -641,7 +657,7 @@ mod tests {
 
     #[test]
     fn test_submitting_existing_fork_block_header_and_promote_fork() {
-        let mut contract = Contract::new(genesis_block_header(), 0, true, 3);
+        let mut contract = BtcLightClient::init(get_default_init_args_with_skip_pow());
 
         contract.submit_block_header(block_header_example());
 
@@ -669,7 +685,7 @@ mod tests {
     #[test]
     #[should_panic(expected = "PrevBlockNotFound")]
     fn test_getting_an_error_if_submitting_unattached_block() {
-        let mut contract = Contract::new(genesis_block_header(), 0, true, 3);
+        let mut contract = BtcLightClient::init(get_default_init_args_with_skip_pow());
 
         contract.submit_block_header(fork_block_header_example_2());
     }

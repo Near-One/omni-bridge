@@ -1,4 +1,4 @@
-pub use btc_types::{double_sha256, H256};
+pub use btc_types::hash::{double_sha256, H256};
 
 pub fn merkle_proof_calculator(tx_hashes: Vec<H256>, transaction_position: usize) -> Vec<H256> {
     let mut transaction_position = transaction_position;

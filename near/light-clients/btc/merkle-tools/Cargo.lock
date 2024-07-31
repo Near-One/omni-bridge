@@ -61,6 +61,7 @@ name = "btc-types"
 version = "0.1.0"
 dependencies = [
  "borsh",
+ "hex",
  "near-sdk",
  "serde",
  "sha2",
