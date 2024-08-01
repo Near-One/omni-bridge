@@ -50,15 +50,11 @@ pub fn compute_root_from_merkle_proof(
 }
 
 fn compute_hash(first_tx_hash: &H256, second_tx_hash: &H256) -> H256 {
-    // Reverse inputs before and after hashing due to big-endian
-    let mut concat_inputs = Vec::new();
-    concat_inputs.extend(first_tx_hash.0.iter().rev());
-    concat_inputs.extend(second_tx_hash.0.iter().rev());
+    let mut concat_inputs = Vec::with_capacity(64);
+    concat_inputs.extend(first_tx_hash.0);
+    concat_inputs.extend(second_tx_hash.0);
 
-    // Reverse final hash and hex result
-    let mut final_hash_bytes = double_sha256(&concat_inputs);
-    final_hash_bytes.0.reverse();
-    final_hash_bytes
+    double_sha256(&concat_inputs)
 }
 
 #[cfg(test)]
@@ -66,7 +62,9 @@ mod tests {
     use super::*;
 
     fn decode_hex(hex: &str) -> H256 {
-        H256(hex::decode(hex).unwrap().try_into().unwrap())
+        let mut hex_decode = hex::decode(hex).unwrap();
+        hex_decode.reverse();
+        H256(hex_decode.try_into().unwrap())
     }
 
     // Hash pairs of items recursively until a single value is obtained
