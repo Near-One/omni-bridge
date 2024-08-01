@@ -1,5 +1,5 @@
 use btc_types::contract_args::{InitArgs, ProofArgs};
-use btc_types::hash::{ReversedH256, H256};
+use btc_types::hash::H256;
 use btc_types::header::{ExtendedHeader, Header};
 use btc_types::u256::U256;
 use near_plugins::{
@@ -136,10 +136,8 @@ impl BtcLightClient {
         self.headers_pool[&self.mainchain_tip_blockhash].clone()
     }
 
-    pub fn get_block_hash_by_height(&self, height: u64) -> Option<ReversedH256> {
-        self.mainchain_height_to_header
-            .get(&height)
-            .map(|hash| hash.clone().into())
+    pub fn get_block_hash_by_height(&self, height: u64) -> Option<&H256> {
+        self.mainchain_height_to_header.get(&height)
     }
 
     #[allow(clippy::needless_pass_by_value)]
@@ -150,7 +148,7 @@ impl BtcLightClient {
     /// This method return n last blocks from the mainchain
     /// # Panics
     /// Cannot find a tip of main chain in a pool
-    pub fn get_last_n_blocks_hashes(&self, skip: u64, limit: u64) -> Vec<ReversedH256> {
+    pub fn get_last_n_blocks_hashes(&self, skip: u64, limit: u64) -> Vec<&H256> {
         let mut block_hashes = vec![];
         let tip_hash = &self.mainchain_tip_blockhash;
         let tip = self
@@ -160,7 +158,7 @@ impl BtcLightClient {
 
         for height in (tip.block_height - limit)..(tip.block_height - skip) {
             if let Some(block_hash) = self.mainchain_height_to_header.get(&height) {
-                block_hashes.push(block_hash.clone().into());
+                block_hashes.push(block_hash);
             }
         }
 
@@ -285,10 +283,7 @@ impl BtcLightClient {
             .unwrap_or_else(|| env::panic_str("PrevBlockNotFound"));
 
         let current_block_hash = block_header.block_hash();
-        log!(
-            "Block hash: {}",
-            ReversedH256::from(current_block_hash.clone())
-        );
+        log!("Block hash: {}", current_block_hash);
 
         require!(
             self.skip_pow_verification
@@ -448,9 +443,7 @@ mod tests {
     use super::*;
 
     fn decode_hex(hex: &str) -> H256 {
-        let mut hex_decode = hex::decode(hex).unwrap();
-        hex_decode.reverse();
-        H256(hex_decode.try_into().unwrap())
+        hex.parse().unwrap()
     }
 
     fn genesis_block_header() -> Header {
@@ -626,12 +619,12 @@ mod tests {
         contract.submit_block_header(block_header_example());
 
         assert_eq!(
-            contract.get_block_hash_by_height(0).unwrap().hash,
-            genesis_block_header().block_hash(),
+            contract.get_block_hash_by_height(0).unwrap(),
+            &genesis_block_header().block_hash(),
         );
         assert_eq!(
-            contract.get_block_hash_by_height(1).unwrap().hash,
-            block_header_example().block_hash()
+            contract.get_block_hash_by_height(1).unwrap(),
+            &block_header_example().block_hash()
         );
     }
 

@@ -2,7 +2,7 @@ use borsh::{BorshDeserialize, BorshSerialize};
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    hash::{double_sha256, serd_reversed_h256, H256},
+    hash::{double_sha256, H256},
     u256::U256,
 };
 pub type Target = U256;
@@ -13,10 +13,8 @@ pub struct Header {
     /// Block version, now repurposed for soft fork signalling.
     pub version: i32,
     /// Reference to the previous block in the chain.
-    #[serde(with = "serd_reversed_h256")]
     pub prev_block_hash: H256,
     /// The root hash of the merkle tree of transactions in the block.
-    #[serde(with = "serd_reversed_h256")]
     pub merkle_root: H256,
     /// The timestamp of the block, as claimed by the miner.
     pub time: u32,

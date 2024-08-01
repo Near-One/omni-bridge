@@ -2,6 +2,7 @@ use borsh::{BorshDeserialize, BorshSerialize};
 use serde::de::{self, Visitor};
 use serde::{Deserialize, Serialize};
 use std::fmt;
+use std::str::FromStr;
 
 #[derive(
     BorshDeserialize, BorshSerialize, Clone, Eq, PartialEq, Ord, PartialOrd, Debug, Default,
@@ -16,7 +17,8 @@ impl From<[u8; 32]> for H256 {
 
 impl fmt::Display for H256 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", hex::encode(self.0))
+        let reversed: Vec<u8> = self.0.into_iter().rev().collect();
+        write!(f, "{}", hex::encode(reversed))
     }
 }
 
@@ -25,6 +27,17 @@ impl TryFrom<Vec<u8>> for H256 {
 
     fn try_from(value: Vec<u8>) -> Result<Self, Self::Error> {
         Ok(H256(value.try_into().map_err(|_| "Invalid hex length")?))
+    }
+}
+
+impl FromStr for H256 {
+    type Err = hex::FromHexError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let mut result = [0; 32];
+        hex::decode_to_slice(s, &mut result)?;
+        result.reverse();
+        Ok(H256(result))
     }
 }
 
@@ -42,14 +55,14 @@ impl<'de> Deserialize<'de> for H256 {
                 formatter.write_str("a hex string")
             }
 
-            fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
+            fn visit_str<E>(self, s: &str) -> Result<Self::Value, E>
             where
                 E: de::Error,
             {
-                hex::decode(v)
-                    .map_err(de::Error::custom)?
-                    .try_into()
-                    .map_err(de::Error::custom)
+                let mut result = [0; 32];
+                hex::decode_to_slice(s, &mut result).map_err(de::Error::custom)?;
+                result.reverse();
+                Ok(H256(result))
             }
         }
 
@@ -65,51 +78,7 @@ impl Serialize for H256 {
     where
         S: serde::Serializer,
     {
-        serializer.serialize_str(&hex::encode(self.0))
-    }
-}
-
-#[derive(Serialize, Deserialize)]
-pub struct ReversedH256 {
-    #[serde(flatten)]
-    #[serde(with = "serd_reversed_h256")]
-    pub hash: H256,
-}
-
-impl From<H256> for ReversedH256 {
-    fn from(hash: H256) -> Self {
-        ReversedH256 { hash }
-    }
-}
-
-impl fmt::Display for ReversedH256 {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let reversed: Vec<u8> = self.hash.0.into_iter().rev().collect();
-        let hash_str = hex::encode(reversed);
-        write!(f, "{}", hash_str)
-    }
-}
-
-pub mod serd_reversed_h256 {
-    use super::*;
-
-    pub fn deserialize<'de, D>(deserializer: D) -> Result<H256, D::Error>
-    where
-        D: de::Deserializer<'de>,
-    {
-        let mut hash: H256 = de::Deserialize::deserialize(deserializer)?;
-        hash.0.reverse();
-        Ok(hash)
-    }
-
-    pub fn serialize<S>(
-        bytes: &H256,
-        serializer: S,
-    ) -> Result<<S as serde::Serializer>::Ok, <S as serde::Serializer>::Error>
-    where
-        S: serde::Serializer,
-    {
-        let reversed: Vec<u8> = bytes.0.into_iter().rev().collect();
+        let reversed: Vec<u8> = self.0.into_iter().rev().collect();
         serializer.serialize_str(&hex::encode(reversed))
     }
 }

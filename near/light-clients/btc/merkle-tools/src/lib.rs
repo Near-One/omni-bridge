@@ -62,9 +62,7 @@ mod tests {
     use super::*;
 
     fn decode_hex(hex: &str) -> H256 {
-        let mut hex_decode = hex::decode(hex).unwrap();
-        hex_decode.reverse();
-        H256(hex_decode.try_into().unwrap())
+        hex.parse().unwrap()
     }
 
     // Hash pairs of items recursively until a single value is obtained
