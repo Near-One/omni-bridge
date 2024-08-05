@@ -83,7 +83,7 @@ pub struct ExtendedHeader {
     /// and other utility functionality
     ///
     /// Current `block_hash`
-    pub current_block_hash: H256,
+    pub block_hash: H256,
     /// Accumulated chainwork at this position for this block
     pub chain_work: Work,
     /// Block height in the Bitcoin network
