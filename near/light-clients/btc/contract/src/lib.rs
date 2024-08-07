@@ -156,7 +156,16 @@ impl BtcLightClient {
             .get(tip_hash)
             .unwrap_or_else(|| env::panic_str("heaviest block should be recorded"));
 
-        for height in (tip.block_height - limit)..(tip.block_height - skip) {
+        let min_block_height = self
+            .headers_pool
+            .get(&self.mainchain_initial_blockhash)
+            .unwrap_or_else(|| env::panic_str("initial block should be recorded"))
+            .block_height;
+
+        let start_block_height =
+            std::cmp::max(min_block_height, tip.block_height - limit - skip + 1);
+
+        for height in start_block_height..=(tip.block_height - skip) {
             if let Some(block_hash) = self.mainchain_height_to_header.get(&height) {
                 block_hashes.push(block_hash);
             }
