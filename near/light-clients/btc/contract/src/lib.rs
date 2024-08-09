@@ -292,8 +292,6 @@ impl BtcLightClient {
             .unwrap_or_else(|| env::panic_str("PrevBlockNotFound"));
 
         let current_block_hash = block_header.block_hash();
-        log!("Block hash: {}", current_block_hash);
-
         require!(
             self.skip_pow_verification
                 || U256::from_le_bytes(&current_block_hash.0) <= block_header.target(),
@@ -316,7 +314,7 @@ impl BtcLightClient {
         if prev_block_header.block_hash == self.mainchain_tip_blockhash {
             // Probably we should check if it is not in a mainchain?
             // chainwork > highScore
-            log!("Saving to mainchain");
+            log!("Block {}: saving to mainchain", current_header.block_hash);
             // Validate chain
             assert_eq!(
                 self.mainchain_tip_blockhash,
@@ -326,6 +324,7 @@ impl BtcLightClient {
             self.mainchain_tip_blockhash = current_header.block_hash.clone();
             self.store_block_header(current_header);
         } else {
+            log!("Block {}: saving to fork", current_header.block_hash);
             // Fork submission
             let main_chain_tip_header = self
                 .headers_pool
@@ -339,6 +338,7 @@ impl BtcLightClient {
 
             // Current chainwork is higher than on a current mainchain, let's promote the fork
             if current_block_computed_chain_work > total_main_chain_chainwork {
+                log!("Chain reorg");
                 self.reorg_chain(current_header, last_main_chain_block_height);
             }
         }
