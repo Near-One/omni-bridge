@@ -83,6 +83,7 @@ impl Serialize for H256 {
     }
 }
 
+#[must_use]
 pub fn double_sha256(input: &[u8]) -> H256 {
     #[cfg(target_arch = "wasm32")]
     {

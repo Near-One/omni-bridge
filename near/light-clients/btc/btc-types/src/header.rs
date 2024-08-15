@@ -30,6 +30,7 @@ impl Header {
     pub const SIZE: usize = 4 + 32 + 32 + 4 + 4 + 4; // 80
 
     /// Computes the target (range [0, T] inclusive) that a blockhash must land in to be valid.
+    #[must_use]
     pub fn target(&self) -> Target {
         // This is a floating-point "compact" encoding originally used by
         // OpenSSL, which satoshi put into consensus code, so we're stuck
@@ -38,12 +39,9 @@ impl Header {
         let (mant, expt) = {
             let unshifted_expt = self.bits >> 24;
             if unshifted_expt <= 3 {
-                (
-                    (self.bits & 0xFFFFFF) >> (8 * (3 - unshifted_expt as usize)),
-                    0,
-                )
+                ((self.bits & 0x00FF_FFFF) >> (8 * (3 - unshifted_expt)), 0)
             } else {
-                (self.bits & 0xFFFFFF, 8 * (unshifted_expt - 3))
+                (self.bits & 0x00FF_FFFF, 8 * (unshifted_expt - 3))
             }
         };
 
@@ -58,10 +56,12 @@ impl Header {
     /// Returns the total work of the block.
     /// "Work" is defined as the work done to mine a block with this target value (recorded in the
     /// block header in compact form as nBits).
+    #[must_use]
     pub fn work(&self) -> Work {
         self.target().inverse()
     }
 
+    #[must_use]
     pub fn block_hash(&self) -> H256 {
         let mut block_header = Vec::with_capacity(Self::SIZE);
         block_header.extend_from_slice(&self.version.to_le_bytes());
@@ -75,6 +75,7 @@ impl Header {
     }
 }
 
+#[allow(clippy::module_name_repetitions)]
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct ExtendedHeader {
     pub block_header: Header,

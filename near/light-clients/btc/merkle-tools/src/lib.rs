@@ -1,5 +1,6 @@
 pub use btc_types::hash::{double_sha256, H256};
 
+#[must_use]
 pub fn merkle_proof_calculator(tx_hashes: Vec<H256>, transaction_position: usize) -> Vec<H256> {
     let mut transaction_position = transaction_position;
     let mut merkle_proof = Vec::new();
@@ -7,7 +8,7 @@ pub fn merkle_proof_calculator(tx_hashes: Vec<H256>, transaction_position: usize
 
     while current_hashes.len() > 1 {
         if current_hashes.len() % 2 == 1 {
-            current_hashes.push(current_hashes[current_hashes.len() - 1].clone())
+            current_hashes.push(current_hashes[current_hashes.len() - 1].clone());
         }
 
         if transaction_position % 2 == 1 {
@@ -29,6 +30,7 @@ pub fn merkle_proof_calculator(tx_hashes: Vec<H256>, transaction_position: usize
     merkle_proof
 }
 
+#[must_use]
 pub fn compute_root_from_merkle_proof(
     transaction_hash: H256,
     transaction_position: usize,
@@ -66,7 +68,7 @@ mod tests {
     }
 
     // Hash pairs of items recursively until a single value is obtained
-    fn merkle_root_calculator(hash_list: &Vec<H256>) -> H256 {
+    fn merkle_root_calculator(hash_list: &[H256]) -> H256 {
         if hash_list.len() == 1 {
             return hash_list[0].clone();
         }

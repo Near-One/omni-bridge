@@ -30,7 +30,7 @@ impl U256 {
     pub const ONE: U256 = U256(0, 1);
 
     /// Creates `U256` from a big-endian array of `u8`s.
-    #[cfg_attr(all(test, mutate), mutate)]
+    #[must_use]
     pub fn from_be_bytes(a: &[u8; 32]) -> U256 {
         let (high, low) = split_in_half(a);
         let big = u128::from_be_bytes(high);
@@ -39,7 +39,7 @@ impl U256 {
     }
 
     /// Creates a `U256` from a little-endian array of `u8`s.
-    #[cfg_attr(all(test, mutate), mutate)]
+    #[must_use]
     pub fn from_le_bytes(a: &[u8; 32]) -> U256 {
         let (high, low) = split_in_half(a);
         let little = u128::from_le_bytes(high);
@@ -48,7 +48,7 @@ impl U256 {
     }
 
     /// Converts `U256` to a big-endian array of `u8`s.
-    #[cfg_attr(all(test, mutate), mutate)]
+    #[must_use]
     pub fn to_be_bytes(self) -> [u8; 32] {
         let mut out = [0; 32];
         out[..16].copy_from_slice(&self.0.to_be_bytes());
@@ -61,6 +61,7 @@ impl U256 {
     /// 2**256 / (x + 1) == ~x / (x + 1) + 1
     ///
     /// (Equation shamelessly stolen from bitcoind)
+    #[must_use]
     pub fn inverse(&self) -> U256 {
         // We should never have a target/work of zero so this doesn't matter
         // that much but we define the inverse of 0 as max.
@@ -80,23 +81,19 @@ impl U256 {
         ret.wrapping_inc()
     }
 
-    #[cfg_attr(all(test, mutate), mutate)]
     fn is_zero(&self) -> bool {
         self.0 == 0 && self.1 == 0
     }
 
-    #[cfg_attr(all(test, mutate), mutate)]
     fn is_one(&self) -> bool {
         self.0 == 0 && self.1 == 1
     }
 
-    #[cfg_attr(all(test, mutate), mutate)]
     fn is_max(&self) -> bool {
         self.0 == u128::MAX && self.1 == u128::MAX
     }
 
     /// Returns the least number of bits needed to represent the number.
-    #[cfg_attr(all(test, mutate), mutate)]
     fn bits(&self) -> u32 {
         if self.0 > 0 {
             256 - self.0.leading_zeros()
@@ -114,7 +111,7 @@ impl U256 {
     /// # Panics
     ///
     /// If `rhs` is zero.
-    #[cfg_attr(all(test, mutate), mutate)]
+    #[allow(clippy::as_conversions)]
     fn div_rem(self, rhs: Self) -> (Self, Self) {
         let mut sub_copy = self;
         let mut shift_copy = rhs;
@@ -154,7 +151,6 @@ impl U256 {
     /// Returns a tuple of the addition along with a boolean indicating whether an arithmetic
     /// overflow would occur. If an overflow would have occurred then the wrapped value is returned.
     #[must_use = "this returns the result of the operation, without modifying the original"]
-    #[cfg_attr(all(test, mutate), mutate)]
     pub fn overflowing_add(self, rhs: Self) -> (Self, bool) {
         let mut ret = U256::ZERO;
         let mut ret_overflow = false;
@@ -179,7 +175,6 @@ impl U256 {
     /// Returns a tuple of the subtraction along with a boolean indicating whether an arithmetic
     /// overflow would occur. If an overflow would have occurred then the wrapped value is returned.
     #[must_use = "this returns the result of the operation, without modifying the original"]
-    #[cfg_attr(all(test, mutate), mutate)]
     fn overflowing_sub(self, rhs: Self) -> (Self, bool) {
         let ret = self.wrapping_add(!rhs).wrapping_add(Self::ONE);
         let overflow = rhs > self;
@@ -204,7 +199,6 @@ impl U256 {
 
     /// Returns `self` incremented by 1 wrapping around at the boundary of the type.
     #[must_use = "this returns the result of the increment, without modifying the original"]
-    #[cfg_attr(all(test, mutate), mutate)]
     fn wrapping_inc(&self) -> U256 {
         let mut ret = U256::ZERO;
 
@@ -224,16 +218,15 @@ impl U256 {
     /// restricted to the range of the type, rather than the bits shifted out of the LHS being
     /// returned to the other end. We do not currently support `rotate_left`.
     #[must_use = "this returns the result of the operation, without modifying the original"]
-    #[cfg_attr(all(test, mutate), mutate)]
     fn wrapping_shl(self, rhs: u32) -> Self {
-        let shift = rhs & 0x000000ff;
+        let shift = rhs & 0x0000_00ff;
 
         let mut ret = U256::ZERO;
         let word_shift = shift >= 128;
         let bit_shift = shift % 128;
 
         if word_shift {
-            ret.0 = self.1 << bit_shift
+            ret.0 = self.1 << bit_shift;
         } else {
             ret.0 = self.0 << bit_shift;
             if bit_shift > 0 {
@@ -251,16 +244,15 @@ impl U256 {
     /// restricted to the range of the type, rather than the bits shifted out of the LHS being
     /// returned to the other end. We do not currently support `rotate_right`.
     #[must_use = "this returns the result of the operation, without modifying the original"]
-    #[cfg_attr(all(test, mutate), mutate)]
     fn wrapping_shr(self, rhs: u32) -> Self {
-        let shift = rhs & 0x000000ff;
+        let shift = rhs & 0x0000_00ff;
 
         let mut ret = U256::ZERO;
         let word_shift = shift >= 128;
         let bit_shift = shift % 128;
 
         if word_shift {
-            ret.1 = self.0 >> bit_shift
+            ret.1 = self.0 >> bit_shift;
         } else {
             ret.0 = self.0 >> bit_shift;
             ret.1 = self.1 >> bit_shift;
