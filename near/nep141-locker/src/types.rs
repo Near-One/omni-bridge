@@ -169,18 +169,36 @@ impl fmt::Display for NearRecipient {
 
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Debug, Clone)]
 pub struct TransferMessage {
-    pub nonce: u128,
-    pub token: String,
-    pub amount: Balance,
+    pub origin_nonce: U128,
+    pub token: AccountId,
+    pub amount: U128,
     pub recipient: OmniAddress,
-    pub fee: u128,
+    pub fee: U128,
     pub sender: OmniAddress,
+}
+
+impl TransferMessage {
+    pub fn get_origin_chain(&self) -> ChainKind {
+        self.sender.get_chain()
+    }
+}
+
+#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Debug, Clone)]
+pub struct FinTransferMessage {
+    pub nonce: U128,
+    pub claim_recipient: AccountId,
+    pub factory: OmniAddress,
+}
+
+pub enum ProofResult {
+    InitTransfer(TransferMessage),
+    FinTransfer(FinTransferMessage),
 }
 
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Debug, Clone)]
 pub struct TransferMessagePayload {
-    pub nonce: u128,
-    pub token: String,
+    pub nonce: U128,
+    pub token: AccountId,
     pub amount: Balance,
     pub recipient: OmniAddress,
     pub relayer: Option<OmniAddress>,

@@ -7,12 +7,12 @@ use near_contract_standards::fungible_token::metadata::FungibleTokenMetadata;
 use near_contract_standards::fungible_token::receiver::FungibleTokenReceiver;
 use near_contract_standards::storage_management::StorageBalance;
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
-use near_sdk::collections::LookupMap;
+use near_sdk::collections::LookupMap; // TODO compare the perfomance with store
 use near_sdk::json_types::U128;
 use near_sdk::serde::{Deserialize, Serialize};
 use near_sdk::{
-    env, ext_contract, near, require, AccountId, BorshStorageKey, Gas, PanicOnDefault, Promise,
-    PromiseOrValue,
+    env, ext_contract, near, require, AccountId, BorshStorageKey, Gas, NearToken, PanicOnDefault,
+    Promise, PromiseOrValue,
 };
 
 mod types;
@@ -22,6 +22,11 @@ const LOG_METADATA_GAS: Gas = Gas::from_tgas(10);
 const LOG_METADATA_CALLBCAK_GAS: Gas = Gas::from_tgas(30);
 const MPC_SIGNING_GAS: Gas = Gas::from_tgas(200);
 const SIGN_TRANSFER_CALLBACK_GAS: Gas = Gas::from_tgas(5);
+const VERIFY_POOF_GAS: Gas = Gas::from_tgas(50);
+const FINISH_CLAIM_FEE_GAS: Gas = Gas::from_tgas(50);
+const FT_TRANSFER_CALL_GAS: Gas = Gas::from_tgas(50);
+const FT_TRANSFER_GAS: Gas = Gas::from_tgas(5);
+const NO_DEPOSIT: NearToken = NearToken::from_near(0);
 
 #[derive(BorshSerialize, BorshStorageKey)]
 enum StorageKey {
@@ -54,6 +59,7 @@ pub trait ExtContract {
         >,
         nonce: U128,
     );
+    fn claim_fee_callback(&self, #[callback_result] call_result: FinTransferMessage);
 }
 
 #[ext_contract(ext_token)]
@@ -83,6 +89,12 @@ pub trait ExtSigner {
     fn sign(&mut self, request: SignRequest);
 }
 
+#[ext_contract(ext_prover)]
+pub trait Prover {
+    #[result_serializer(borsh)]
+    fn verify_proof(&self, #[serializer(borsh)] proof: Vec<u8>) -> ProofResult;
+}
+
 #[near(contract_state)]
 #[derive(Pausable, Upgradable, PanicOnDefault)]
 #[access_control(role_type(Role))]
@@ -104,8 +116,6 @@ pub struct Contract {
 
 #[near]
 impl FungibleTokenReceiver for Contract {
-    /// Callback on receiving tokens by this contract.
-    /// msg: `Ethereum` address to receive the tokens on.
     #[pause(except(roles(Role::DAO, Role::UnrestrictedDeposit)))]
     fn ft_on_transfer(
         &mut self,
@@ -115,11 +125,11 @@ impl FungibleTokenReceiver for Contract {
     ) -> PromiseOrValue<U128> {
         self.current_nonce += 1;
         let event = TransferMessage {
-            nonce: self.current_nonce,
-            token: env::predecessor_account_id().to_string(),
-            amount: amount.0,
+            origin_nonce: U128(self.current_nonce),
+            token: env::predecessor_account_id(),
+            amount,
             recipient: msg.parse().unwrap(),
-            fee: 0,
+            fee: U128(0),
             sender: OmniAddress::Near(sender_id.to_string()),
         };
         self.pending_transfers.insert(&self.current_nonce, &event);
@@ -182,25 +192,17 @@ impl Contract {
             })
     }
 
-    #[access_control_any(roles(Role::DAO))]
-    pub fn add_factory(&mut self, address: OmniAddress) {
-        self.factories.insert(&(&address).into(), &address);
-    }
-
     pub fn update_transfer_fee(&mut self, nonce: U128, fee: UpdateFee) {
         match fee {
             UpdateFee::Fee(fee) => {
-                let mut message = self
-                    .pending_transfers
-                    .get(&nonce.0)
-                    .unwrap_or_else(|| env::panic_str("Transfer not exist"));
+                let mut message = self.get_transfer_message(nonce);
 
                 require!(
                     OmniAddress::Near(env::predecessor_account_id().to_string()) == message.sender,
                     "Only sender can update fee"
                 );
 
-                message.fee = fee.0;
+                message.fee = fee;
                 self.pending_transfers.insert(&nonce.0, &message);
             }
             UpdateFee::Proof(_) => env::panic_str("TODO"),
@@ -209,14 +211,11 @@ impl Contract {
 
     #[payable]
     pub fn sign_transfer(&mut self, nonce: U128, relayer: Option<OmniAddress>) -> Promise {
-        let transfer_message = self
-            .pending_transfers
-            .get(&nonce.0)
-            .unwrap_or_else(|| env::panic_str("The transfer does not exist"));
+        let transfer_message = self.get_transfer_message(nonce);
         let withdraw_payload = TransferMessagePayload {
-            nonce: transfer_message.nonce,
+            nonce,
             token: transfer_message.token,
-            amount: transfer_message.amount - transfer_message.fee,
+            amount: transfer_message.amount.0 - transfer_message.fee.0,
             recipient: transfer_message.recipient,
             relayer,
         };
@@ -248,14 +247,103 @@ impl Contract {
         nonce: U128,
     ) {
         if let Ok(Ok(_)) = call_result {
-            let transfer_message = self
-                .pending_transfers
-                .get(&nonce.0)
-                .unwrap_or_else(|| panic!("The transfer does not exist"));
+            let transfer_message = self.get_transfer_message(nonce);
 
-            if transfer_message.fee == 0 {
+            if transfer_message.fee.0 == 0 {
                 self.pending_transfers.remove(&nonce.0);
             }
         }
+    }
+
+    pub fn fin_transfer(&self, proof: Vec<u8>) -> Promise {
+        ext_prover::ext(self.prover_account.clone())
+            .with_static_gas(VERIFY_POOF_GAS)
+            .with_attached_deposit(NO_DEPOSIT)
+            .verify_proof(proof)
+            .then(
+                ext_self::ext(env::current_account_id())
+                    .with_attached_deposit(env::attached_deposit())
+                    .with_static_gas(FINISH_CLAIM_FEE_GAS)
+                    .claim_fee_callback(),
+            )
+    }
+
+    #[private]
+    pub fn fin_transfer_callback(
+        &mut self,
+        #[callback_result] call_result: ProofResult,
+    ) -> PromiseOrValue<U128> {
+        let ProofResult::InitTransfer(transfer_message) = call_result else {
+            env::panic_str("Invalid proof message")
+        };
+
+        if let OmniAddress::Near(recipient) = transfer_message.recipient {
+            let recipient: NearRecipient = recipient
+                .parse()
+                .unwrap_or_else(|_| env::panic_str("Failed to parse recipient"));
+
+            let amount_to_transfer = U128(transfer_message.amount.0 - transfer_message.fee.0);
+            // TODO transfer fee
+            match recipient.message {
+                Some(message) => ext_token::ext(transfer_message.token)
+                    .with_static_gas(FT_TRANSFER_CALL_GAS)
+                    .with_attached_deposit(NearToken::from_yoctonear(0))
+                    .ft_transfer_call(recipient.target, amount_to_transfer, None, message)
+                    .into(),
+                None => ext_token::ext(transfer_message.token)
+                    .with_static_gas(FT_TRANSFER_GAS)
+                    .with_attached_deposit(NearToken::from_yoctonear(0))
+                    .ft_transfer(recipient.target, amount_to_transfer, None)
+                    .into(),
+            }
+        } else {
+            self.current_nonce += 1;
+            self.pending_transfers
+                .insert(&self.current_nonce, &transfer_message);
+
+            PromiseOrValue::Value(U128(self.current_nonce))
+        }
+    }
+
+    pub fn claim_fee(&self, proof: Vec<u8>) -> Promise {
+        ext_prover::ext(self.prover_account.clone())
+            .with_static_gas(VERIFY_POOF_GAS)
+            .with_attached_deposit(NO_DEPOSIT)
+            .verify_proof(proof)
+            .then(
+                ext_self::ext(env::current_account_id())
+                    .with_attached_deposit(env::attached_deposit())
+                    .with_static_gas(FINISH_CLAIM_FEE_GAS)
+                    .claim_fee_callback(),
+            )
+    }
+
+    #[private]
+    pub fn claim_fee_callback(&mut self, #[callback_result] call_result: ProofResult) -> Promise {
+        let ProofResult::FinTransfer(fin_transfer) = call_result else {
+            env::panic_str("Invalid proof message")
+        };
+
+        let message = self.get_transfer_message(fin_transfer.nonce);
+        self.pending_transfers.remove(&fin_transfer.nonce.0);
+        require!(
+            self.factories.get(&fin_transfer.factory.get_chain()) == Some(fin_transfer.factory),
+            "Unknown factory"
+        );
+
+        ext_token::ext(message.token)
+            .with_static_gas(LOG_METADATA_GAS)
+            .ft_transfer(fin_transfer.claim_recipient, message.fee, None)
+    }
+
+    pub fn get_transfer_message(&self, nonce: U128) -> TransferMessage {
+        self.pending_transfers
+            .get(&nonce.0)
+            .unwrap_or_else(|| panic!("The transfer does not exist"))
+    }
+
+    #[access_control_any(roles(Role::DAO))]
+    pub fn add_factory(&mut self, address: OmniAddress) {
+        self.factories.insert(&(&address).into(), &address);
     }
 }
