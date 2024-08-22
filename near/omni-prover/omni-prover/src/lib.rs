@@ -31,7 +31,13 @@ enum StorageKey {
     RegisteredBridges,
 }
 
-type ChainKind = String;
+type ProverId = String;
+
+#[derive(BorshDeserialize, BorshSerialize)]
+pub struct VerifyProofInput {
+    pub prover_id: ProverId,
+    pub proof: Vec<u8>
+}
 
 #[near_bindgen]
 #[derive(BorshDeserialize, BorshSerialize, PanicOnDefault, Pausable, Upgradable)]
@@ -45,7 +51,7 @@ type ChainKind = String;
     duration_update_appliers(Role::DAO),
 ))]
 pub struct OmniProver {
-    bridges: near_sdk::collections::UnorderedMap<ChainKind, AccountId>,
+    bridges: near_sdk::collections::UnorderedMap<ProverId, AccountId>,
 }
 
 #[near_bindgen]
@@ -63,26 +69,27 @@ impl OmniProver {
     }
 
     #[access_control_any(roles(Role::BridgesManager, Role::DAO))]
-    pub fn set_bridge(&mut self, chain_kind: ChainKind, bridge_account_id: AccountId) {
+    pub fn set_bridge(&mut self, chain_kind: ProverId, bridge_account_id: AccountId) {
         self.bridges.insert(&chain_kind, &bridge_account_id);
     }
 
     #[access_control_any(roles(Role::BridgesManager, Role::DAO))]
-    pub fn remove_bridge(&mut self, chain_kind: ChainKind) {
+    pub fn remove_bridge(&mut self, chain_kind: ProverId) {
         self.bridges.remove(&chain_kind);
     }
 
-    pub fn get_bridges_list(&self) -> Vec<(ChainKind, AccountId)> {
+    pub fn get_bridges_list(&self) -> Vec<(ProverId, AccountId)> {
         self.bridges.iter().collect::<Vec<_>>()
     }
 
     #[pause(except(roles(Role::UnrestrictedValidateProof, Role::DAO)))]
-    pub fn validate_proof(&self, chain_kind: ChainKind, message: Vec<u8>) -> Promise {
-        let bridge_account_id = self.bridges.get(&chain_kind).unwrap_or_else(|| env::panic_str("BridgeForChainKindNotRegistered"));
+    pub fn verify_proof(&self, proof: Vec<u8>)-> Promise {
+        let input = VerifyProofInput::try_from_slice(&proof).unwrap_or_else(|_| env::panic_str("ErrorOnVerifyProofInputParsing"));
+        let bridge_account_id = self.bridges.get(&input.prover_id).unwrap_or_else(|| env::panic_str("ProverIdNotRegistered"));
 
         ext_omni_prover_proxy::ext(bridge_account_id)
             .with_static_gas(Gas::from_tgas(200))
             .with_attached_deposit(NearToken::from_near(0))
-            .verify_proof(message)
+            .verify_proof(input.proof)
     }
 }

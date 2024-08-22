@@ -91,7 +91,7 @@ pub trait ExtSigner {
 #[ext_contract(ext_prover)]
 pub trait Prover {
     #[result_serializer(borsh)]
-    fn verify_proof(&self, #[serializer(borsh)] proof: Vec<u8>) -> ProofResult;
+    fn verify_proof(&self, proof: Vec<u8>) -> ProofResult;
 }
 
 #[near(contract_state)]
