@@ -69,13 +69,13 @@ impl OmniProver {
     }
 
     #[access_control_any(roles(Role::BridgesManager, Role::DAO))]
-    pub fn set_bridge(&mut self, chain_kind: ProverId, bridge_account_id: AccountId) {
-        self.bridges.insert(&chain_kind, &bridge_account_id);
+    pub fn set_bridge(&mut self, prover_id: ProverId, bridge_account_id: AccountId) {
+        self.bridges.insert(&prover_id, &bridge_account_id);
     }
 
     #[access_control_any(roles(Role::BridgesManager, Role::DAO))]
-    pub fn remove_bridge(&mut self, chain_kind: ProverId) {
-        self.bridges.remove(&chain_kind);
+    pub fn remove_bridge(&mut self, prover_id: ProverId) {
+        self.bridges.remove(&prover_id);
     }
 
     pub fn get_bridges_list(&self) -> Vec<(ProverId, AccountId)> {
