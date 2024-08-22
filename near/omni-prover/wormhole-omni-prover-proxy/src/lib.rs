@@ -1,3 +1,4 @@
+use std::str::FromStr;
 use near_plugins::{
     access_control, AccessControlRole, AccessControllable, Pausable,
     Upgradable, pause
@@ -5,7 +6,8 @@ use near_plugins::{
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::serde::{Deserialize, Serialize};
 use near_sdk::{AccountId, Gas, env, ext_contract, near_bindgen, near, PanicOnDefault, Promise, PromiseError};
-use omni_types::{OmniAddress, BridgeMessage};
+use near_sdk::json_types::U128;
+use omni_types::{EthAddress, OmniAddress, ProofResult, TransferMessage};
 
 mod byte_utils;
 mod parsed_vaa;
@@ -87,9 +89,9 @@ impl WormholeOmniProverProxy {
         &mut self,
         vaa: String,
         #[callback_result] gov_idx: Result<u32, PromiseError>,
-    ) -> Option<BridgeMessage> {
+    ) -> ProofResult {
         if gov_idx.is_err() {
-            return None;
+            panic!("Proof is not valid!");
         }
 
         let h = hex::decode(vaa).expect("invalidVaa");
@@ -99,16 +101,20 @@ impl WormholeOmniProverProxy {
         let amount = data.get_u256(0);
         let token_address = data.get_bytes32(32).to_vec();
         let token_chain = data.get_u16(64);
+
+
         let recipient = data.get_bytes32(66).to_vec();
         let recipient_chain = data.get_u16(98);
 
-
-
-        return Some(BridgeMessage{
-            token_id: OmniAddress::Near("".to_string()),
-            sender: OmniAddress::Near("".to_string()),
-            receiver: OmniAddress::Near("".to_string()),
-            amount: 0
-        });
+        return ProofResult::InitTransfer(
+            TransferMessage {
+                origin_nonce: U128::from(0),
+                token: AccountId::from_str("fake_address.testnet").unwrap_or_else(|_| env::panic_str("ErrorOnTokenAccountParsing")),
+                amount: U128::from(amount.1),
+                recipient: OmniAddress::from_str("fake_address.testnet").unwrap_or(OmniAddress::Near("fake_address.testnet".to_string())),
+                fee: U128::from(0),
+                sender: OmniAddress::Eth(EthAddress::from_str("0000000000000000000000000000000000000000").unwrap())
+            }
+        );
     }
 }

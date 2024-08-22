@@ -9,8 +9,6 @@ pub trait ByteUtils {
     fn get_u256(&self, index: usize) -> (u128, u128);
     //    fn get_address(&self, index: usize) -> CanonicalAddr;
     fn get_bytes32(&self, index: usize) -> &[u8];
-    fn get_bytes(&self, index: usize, bytes: usize) -> &[u8];
-    fn get_const_bytes<const N: usize>(&self, index: usize) -> [u8; N];
 }
 
 impl ByteUtils for &[u8] {
@@ -46,15 +44,5 @@ impl ByteUtils for &[u8] {
     //    }
     fn get_bytes32(&self, index: usize) -> &[u8] {
         &self[index..index + 32]
-    }
-
-    fn get_bytes(&self, index: usize, bytes: usize) -> &[u8] {
-        &self[index..index + bytes]
-    }
-
-    fn get_const_bytes<const N: usize>(&self, index: usize) -> [u8; N] {
-        let mut bytes: [u8; N] = [0; N];
-        bytes.copy_from_slice(&self[index..index + N]);
-        bytes
     }
 }

@@ -5,14 +5,14 @@ use near_plugins::{
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::serde::{Deserialize, Serialize};
 use near_sdk::{AccountId, env, ext_contract, near_bindgen, NearToken, PanicOnDefault, Promise, near, Gas};
-use omni_types::BridgeMessage;
+use omni_types::ProofResult;
 
 #[ext_contract(ext_omni_prover_proxy)]
 pub trait OmniProverProxy {
     fn verify_proof(
         &self,
         msg: Vec<u8>,
-    ) -> Option<BridgeMessage>;
+    ) -> ProofResult;
 }
 
 #[derive(AccessControlRole, Deserialize, Serialize, Copy, Clone)]
