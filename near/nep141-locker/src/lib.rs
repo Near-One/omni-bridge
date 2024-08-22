@@ -53,10 +53,7 @@ pub trait ExtContract {
     );
     fn sign_transfer_callback(
         &self,
-        #[callback_result] call_result: Result<
-            Result<SignatureResponse, String>,
-            near_sdk::PromiseError,
-        >,
+        #[callback_result] call_result: Result<SignatureResponse, PromiseError>,
         nonce: U128,
     );
     fn fin_transfer_callback(
@@ -252,13 +249,10 @@ impl Contract {
     #[private]
     pub fn sign_transfer_callback(
         &mut self,
-        #[callback_result] call_result: Result<
-            Result<SignatureResponse, String>,
-            near_sdk::PromiseError,
-        >,
+        #[callback_result] call_result: Result<SignatureResponse, PromiseError>,
         nonce: U128,
     ) {
-        if let Ok(Ok(_)) = call_result {
+        if let Ok(_) = call_result {
             let transfer_message = self.get_transfer_message(nonce);
 
             if transfer_message.fee.0 == 0 {
