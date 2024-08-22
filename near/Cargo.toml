@@ -6,7 +6,7 @@ resolver = "2"
 members = ["nep141-locker",
            "omni-prover/omni-prover",
            "omni-prover/wormhole-omni-prover-proxy",
-           "omni-prover/rainbow-omni-prover-proxy",
+           #"omni-prover/rainbow-omni-prover-proxy",
            "omni-types"]
 
 
