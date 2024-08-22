@@ -11,6 +11,7 @@ crate-type = ["cdylib", "rlib"]
 near-sdk.workspace = true
 borsh.workspace = true
 near-plugins.workspace = true
+near-contract-standards.workspace = true
 
 omni-types = { path = "../../omni-types" }
 bridge-common = { git = "https://github.com/Near-One/rainbow-token-connector.git" }

@@ -1,3 +1,4 @@
+use std::str::FromStr;
 use hex::ToHex;
 use bridge_common::prover::{EthAddress, EthEvent, EthEventParams};
 use ethabi::ParamType;
@@ -7,11 +8,13 @@ use near_plugins::{
 };
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::serde::{Deserialize, Serialize};
-use near_sdk::{AccountId, Gas, env, ext_contract, near_bindgen, PanicOnDefault, Promise, Balance};
-use omni_types::{OmniAddress, BridgeMessage};
+use near_sdk::{AccountId, env, ext_contract, near, near_bindgen, Gas, PanicOnDefault, Promise};
+use near_contract_standards::fungible_token::Balance;
+use near_sdk::json_types::U128;
+use omni_types::{OmniAddress, ProofResult, TransferMessage};
 
 /// Gas to call verify_log_entry on prover.
-pub const VERIFY_LOG_ENTRY_GAS: Gas = Gas(Gas::ONE_TERA.0 * 50);
+pub const VERIFY_LOG_ENTRY_GAS: Gas = Gas::from_tgas(50);
 
 #[ext_contract(ext_prover)]
 pub trait Prover {
@@ -155,17 +158,22 @@ impl RainbowOmniProverProxy {
         &mut self,
         log_entry_data: Vec<u8>,
         #[callback_result] is_valid: bool,
-    ) -> Option<BridgeMessage> {
+    ) -> ProofResult {
         if !is_valid {
-            return None;
+            panic!("Proof is not valid!")
         }
 
         let event = EthUnlockedEvent::from_log_entry_data(&log_entry_data);
-        return Some(BridgeMessage{
-            token_id: OmniAddress{chain: "near".to_string(), account: event.token},
-            sender: OmniAddress{chain: "eth".to_string(), account: event.sender},
-            receiver: OmniAddress{chain: "near".to_string(), account: event.recipient},
-            amount: event.amount
-        });
+
+        return ProofResult::InitTransfer(
+            TransferMessage {
+                origin_nonce: U128::from(0),
+                token: AccountId::from_str(&event.token).unwrap_or_else(|_| env::panic_str("ErrorOnTokenAccountParsing")),
+                amount: U128::from(event.amount),
+                recipient: OmniAddress::from_str(&event.recipient).unwrap_or(OmniAddress::Near(event.recipient)),
+                fee: U128::from(0),
+                sender: OmniAddress::from_str(&event.sender).unwrap_or(OmniAddress::Eth(event.sender.parse().unwrap_or_else(|_| env::panic_str("ErrorOnSenderParsing"))))
+            }
+        );
     }
 }
