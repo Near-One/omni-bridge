@@ -12,7 +12,7 @@ use near_sdk::json_types::U128;
 use near_sdk::serde::{Deserialize, Serialize};
 use near_sdk::{
     env, ext_contract, near, require, AccountId, BorshStorageKey, Gas, NearToken, PanicOnDefault,
-    Promise, PromiseOrValue,
+    Promise, PromiseError, PromiseOrValue,
 };
 
 mod types;
@@ -59,7 +59,18 @@ pub trait ExtContract {
         >,
         nonce: U128,
     );
-    fn claim_fee_callback(&self, #[callback_result] call_result: FinTransferMessage);
+    fn fin_transfer_callback(
+        &self,
+        #[callback_result]
+        #[serializer(borsh)]
+        call_result: Result<ProofResult, PromiseError>,
+    );
+    fn claim_fee_callback(
+        &self,
+        #[callback_result]
+        #[serializer(borsh)]
+        call_result: Result<ProofResult, PromiseError>,
+    );
 }
 
 #[ext_contract(ext_token)]
@@ -124,15 +135,16 @@ impl FungibleTokenReceiver for Contract {
         msg: String,
     ) -> PromiseOrValue<U128> {
         self.current_nonce += 1;
-        let event = TransferMessage {
+        let transfer_message = TransferMessage {
             origin_nonce: U128(self.current_nonce),
             token: env::predecessor_account_id(),
             amount,
             recipient: msg.parse().unwrap(),
-            fee: U128(0),
+            fee: U128(0), // TODO get fee from msg
             sender: OmniAddress::Near(sender_id.to_string()),
         };
-        self.pending_transfers.insert(&self.current_nonce, &event);
+        self.pending_transfers
+            .insert(&self.current_nonce, &transfer_message);
 
         PromiseOrValue::Value(U128(0))
     }
@@ -215,7 +227,7 @@ impl Contract {
         let withdraw_payload = TransferMessagePayload {
             nonce,
             token: transfer_message.token,
-            amount: transfer_message.amount.0 - transfer_message.fee.0,
+            amount: U128(transfer_message.amount.0 - transfer_message.fee.0),
             recipient: transfer_message.recipient,
             relayer,
         };
@@ -271,9 +283,11 @@ impl Contract {
     #[private]
     pub fn fin_transfer_callback(
         &mut self,
-        #[callback_result] call_result: ProofResult,
+        #[callback_result]
+        #[serializer(borsh)]
+        call_result: Result<ProofResult, PromiseError>,
     ) -> PromiseOrValue<U128> {
-        let ProofResult::InitTransfer(transfer_message) = call_result else {
+        let Ok(ProofResult::InitTransfer(transfer_message)) = call_result else {
             env::panic_str("Invalid proof message")
         };
 
@@ -319,8 +333,13 @@ impl Contract {
     }
 
     #[private]
-    pub fn claim_fee_callback(&mut self, #[callback_result] call_result: ProofResult) -> Promise {
-        let ProofResult::FinTransfer(fin_transfer) = call_result else {
+    pub fn claim_fee_callback(
+        &mut self,
+        #[callback_result]
+        #[serializer(borsh)]
+        call_result: Result<ProofResult, PromiseError>,
+    ) -> Promise {
+        let Ok(ProofResult::FinTransfer(fin_transfer)) = call_result else {
             env::panic_str("Invalid proof message")
         };
 

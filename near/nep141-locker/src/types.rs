@@ -1,7 +1,6 @@
 use core::fmt;
 use core::str::FromStr;
 use hex::FromHex;
-use near_contract_standards::fungible_token::Balance;
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::json_types::U128;
 use near_sdk::serde::{Deserialize, Serialize};
@@ -190,6 +189,7 @@ pub struct FinTransferMessage {
     pub factory: OmniAddress,
 }
 
+#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Debug, Clone)]
 pub enum ProofResult {
     InitTransfer(TransferMessage),
     FinTransfer(FinTransferMessage),
@@ -199,7 +199,7 @@ pub enum ProofResult {
 pub struct TransferMessagePayload {
     pub nonce: U128,
     pub token: AccountId,
-    pub amount: Balance,
+    pub amount: U128,
     pub recipient: OmniAddress,
     pub relayer: Option<OmniAddress>,
 }
