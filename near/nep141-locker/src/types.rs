@@ -1,5 +1,5 @@
-use core::fmt;
 use core::str::FromStr;
+use core::{fmt, str};
 use hex::FromHex;
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::json_types::U128;
@@ -213,10 +213,20 @@ pub struct SignRequest {
 }
 
 #[derive(Serialize, Deserialize, Clone)]
+pub struct AffinePoint {
+    pub affine_point: String,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct Scalar {
+    pub scalar: String,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
 #[serde(crate = "near_sdk::serde")]
 pub struct SignatureResponse {
-    pub big_r: String,
-    pub s: String,
+    pub big_r: AffinePoint,
+    pub s: Scalar,
     pub recovery_id: u8,
 }
 
