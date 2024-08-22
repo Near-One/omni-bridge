@@ -15,8 +15,7 @@ use near_sdk::{
     Promise, PromiseOrValue,
 };
 
-mod types;
-use types::*;
+use omni_types::*;
 
 const LOG_METADATA_GAS: Gas = Gas::from_tgas(10);
 const LOG_METADATA_CALLBCAK_GAS: Gas = Gas::from_tgas(30);
