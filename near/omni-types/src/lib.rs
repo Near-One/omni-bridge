@@ -190,6 +190,7 @@ pub struct FinTransferMessage {
     pub factory: OmniAddress,
 }
 
+#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Debug, Clone)]
 pub enum ProofResult {
     InitTransfer(TransferMessage),
     FinTransfer(FinTransferMessage),
