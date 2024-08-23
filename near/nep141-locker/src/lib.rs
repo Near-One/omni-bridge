@@ -140,6 +140,7 @@ impl FungibleTokenReceiver for Contract {
             fee: U128(0), // TODO get fee from msg
             sender: OmniAddress::Near(sender_id.to_string()),
         };
+        env::log_str(&near_sdk::serde_json::to_string(&transfer_message).unwrap());
         self.pending_transfers
             .insert(&self.current_nonce, &transfer_message);
 
@@ -221,14 +222,14 @@ impl Contract {
     #[payable]
     pub fn sign_transfer(&mut self, nonce: U128, relayer: Option<OmniAddress>) -> Promise {
         let transfer_message = self.get_transfer_message(nonce);
-        let withdraw_payload = TransferMessagePayload {
+        let withdraw_payload: TransferMessagePayload = TransferMessagePayload {
             nonce,
             token: transfer_message.token,
             amount: U128(transfer_message.amount.0 - transfer_message.fee.0),
             recipient: transfer_message.recipient,
             relayer,
         };
-
+        env::log_str(&near_sdk::serde_json::to_string(&withdraw_payload).unwrap());
         let payload = near_sdk::env::keccak256_array(&borsh::to_vec(&withdraw_payload).unwrap());
 
         ext_signer::ext(self.mpc_signer.clone())
