@@ -11,3 +11,5 @@ hex.workspace = true
 borsh.workspace = true
 serde.workspace = true
 near-plugins.workspace = true
+bridge-common = { git = "https://github.com/Near-One/rainbow-token-connector.git" }
+ethabi = "12.0.0"

@@ -6,16 +6,12 @@ use near_plugins::{
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::serde::{Deserialize, Serialize};
 use near_sdk::{AccountId, Gas, env, ext_contract, near_bindgen, near, PanicOnDefault, Promise, PromiseError};
-use near_sdk::collections::LookupMap;
 use near_sdk::json_types::U128;
-use omni_types::{EthAddress, OmniAddress, ProofResult, TransferMessage};
+use omni_types::{OmniAddress, ProofResult, TransferMessage};
+use omni_types::token_unlock_event::TokenUnlockedEvent;
 
 mod byte_utils;
 mod parsed_vaa;
-
-use crate::byte_utils::{
-    ByteUtils,
-};
 
 /// Gas to call verify_log_entry on prover.
 pub const VERIFY_LOG_ENTRY_GAS: Gas = Gas::from_tgas(50);
@@ -26,11 +22,6 @@ pub trait Prover {
         &self,
         vaa: String
     ) -> u32;
-}
-
-#[derive(BorshSerialize, near_sdk::BorshStorageKey)]
-enum StorageKey {
-    RegisteredAccount,
 }
 
 #[derive(AccessControlRole, Deserialize, Serialize, Copy, Clone)]
@@ -56,7 +47,6 @@ pub enum Role {
 ))]
 pub struct WormholeOmniProverProxy {
     pub prover_account: AccountId,
-    pub hash_map: LookupMap<Vec<u8>, String>,
 }
 
 #[near_bindgen]
@@ -67,17 +57,10 @@ impl WormholeOmniProverProxy {
     pub fn init(prover_account: AccountId) -> Self {
         let mut contract = Self {
             prover_account,
-            hash_map: LookupMap::new(StorageKey::RegisteredAccount)
         };
 
         contract.acl_init_super_admin(near_sdk::env::predecessor_account_id());
         contract
-    }
-
-    pub fn register_account(&mut self, account: String) {
-        let account_hash = env::sha256(account.as_bytes());
-        self.hash_map.insert(&account_hash,&account);
-        env::log_str(&format!("recipient: {:?}", account_hash));
     }
 
     #[pause(except(roles(Role::UnrestrictedValidateProof, Role::DAO)))]
@@ -110,31 +93,17 @@ impl WormholeOmniProverProxy {
 
         let h = hex::decode(vaa).expect("invalidVaa");
         let parsed_vaa = parsed_vaa::ParsedVAA::parse(&h);
-        let data: &[u8] = &parsed_vaa.payload[1..];
-
-        let amount = data.get_u256(0);
-        let token_address = data.get_bytes32(32).to_vec();
-        let token_chain = data.get_u16(64);
-        env::log_str(&format!("token chain: {}", token_chain));
-        env::log_str(&format!("token address: {:?}", token_address));
-
-        let recipient = data.get_bytes32(66).to_vec();
-        let recipient_chain = data.get_u16(98);
-        env::log_str(&format!("recipient_chain: {}", recipient_chain));
-        env::log_str(&format!("recipient: {:?}", recipient));
-
-        let recipient_str = self.hash_map.get(&recipient).unwrap_or_else(|| env::panic_str("ErrorOnRecipientParsing"));
-
-        env::log_str(&format!("recipient str: {:?}", recipient_str));
+        let data: &[u8] = &parsed_vaa.payload;
+        let event = TokenUnlockedEvent::from_wormhole_payload(data);
 
         return ProofResult::InitTransfer(
             TransferMessage {
                 origin_nonce: U128::from(0),
-                token: AccountId::from_str("fake_account.testnet").unwrap_or_else(|_| env::panic_str("ErrorOnTokenAccountParsing")),
-                amount: U128::from(amount.1),
-                recipient: OmniAddress::from_str(&recipient_str).unwrap_or(OmniAddress::Near(recipient_str)),
+                token: AccountId::from_str(&event.token).unwrap_or_else(|_| env::panic_str("ErrorOnTokenAccountParsing")),
+                amount: U128::from(event.amount),
+                recipient: OmniAddress::from_str(&event.recipient).unwrap_or(OmniAddress::Near(event.recipient)),
                 fee: U128::from(0),
-                sender: OmniAddress::Eth(EthAddress::from_str("0000000000000000000000000000000000000000").unwrap())
+                sender: OmniAddress::from_str(&event.sender).unwrap_or(OmniAddress::Eth(event.sender.parse().unwrap_or_else(|_| env::panic_str("ErrorOnSenderParsing"))))
             }
         );
     }

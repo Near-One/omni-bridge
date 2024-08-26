@@ -1,17 +1,14 @@
 use std::str::FromStr;
-use hex::ToHex;
-use bridge_common::prover::{EthAddress, EthEvent, EthEventParams};
-use ethabi::ParamType;
 use near_plugins::{
     access_control, AccessControlRole, AccessControllable, Pausable,
     Upgradable, pause
 };
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::serde::{Deserialize, Serialize};
-use near_sdk::{AccountId, env, ext_contract, near, near_bindgen, Gas, PanicOnDefault, Promise};
-use near_contract_standards::fungible_token::Balance;
+use near_sdk::{AccountId, env, ext_contract, near, near_bindgen, Gas, PanicOnDefault, Promise, PromiseError};
 use near_sdk::json_types::U128;
 use omni_types::{OmniAddress, ProofResult, TransferMessage};
+use omni_types::token_unlock_event::TokenUnlockedEvent;
 
 /// Gas to call verify_log_entry on prover.
 pub const VERIFY_LOG_ENTRY_GAS: Gas = Gas::from_tgas(50);
@@ -42,53 +39,7 @@ pub struct Proof {
     pub proof: Vec<Vec<u8>>,
 }
 
-/// Data that was emitted by the Ethereum Unlocked event.
-#[derive(Debug, Eq, PartialEq)]
-pub struct EthUnlockedEvent {
-    pub eth_factory_address: EthAddress,
-    pub token: String,
-    pub sender: String,
-    pub amount: Balance,
-    pub recipient: String,
-    pub token_eth_address: EthAddress,
-}
 
-impl EthUnlockedEvent {
-    fn event_params() -> EthEventParams {
-        vec![
-            ("token".to_string(), ParamType::String, false),
-            ("sender".to_string(), ParamType::Address, true),
-            ("amount".to_string(), ParamType::Uint(256), false),
-            ("recipient".to_string(), ParamType::String, false),
-            ("tokenEthAddress".to_string(), ParamType::Address, true),
-        ]
-    }
-
-    /// Parse raw log entry data.
-    pub fn from_log_entry_data(data: &[u8]) -> Self {
-        let event =
-            EthEvent::from_log_entry_data("Withdraw", EthUnlockedEvent::event_params(), data);
-        let token = event.log.params[0].value.clone().to_string().unwrap();
-        let sender = event.log.params[1].value.clone().to_address().unwrap().0;
-        let sender = (&sender).encode_hex::<String>();
-        let amount = event.log.params[2]
-            .value
-            .clone()
-            .to_uint()
-            .unwrap()
-            .as_u128();
-        let recipient = event.log.params[3].value.clone().to_string().unwrap();
-        let token_eth_address = event.log.params[4].value.clone().to_address().unwrap().0;
-        Self {
-            eth_factory_address: event.locker_address,
-            token,
-            sender,
-            amount,
-            recipient,
-            token_eth_address,
-        }
-    }
-}
 
 #[derive(AccessControlRole, Deserialize, Serialize, Copy, Clone)]
 #[serde(crate = "near_sdk::serde")]
@@ -157,13 +108,13 @@ impl RainbowOmniProverProxy {
     pub fn verify_log_entry_callback(
         &mut self,
         log_entry_data: Vec<u8>,
-        #[callback_result] is_valid: bool,
+        #[callback_result] is_valid: Result<bool, PromiseError>,
     ) -> ProofResult {
-        if !is_valid {
+        if !is_valid.unwrap_or(false) {
             panic!("Proof is not valid!")
         }
 
-        let event = EthUnlockedEvent::from_log_entry_data(&log_entry_data);
+        let event = TokenUnlockedEvent::from_log_entry_data(&log_entry_data);
 
         return ProofResult::InitTransfer(
             TransferMessage {

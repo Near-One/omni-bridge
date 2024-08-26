@@ -8,6 +8,8 @@ use near_sdk::serde::{Deserialize, Serialize};
 use near_sdk::AccountId;
 use serde::de::Visitor;
 
+pub mod token_unlock_event;
+
 #[derive(BorshDeserialize, BorshSerialize, Debug, Clone, PartialEq, Eq)]
 pub struct H160(pub [u8; 20]);
 
@@ -236,10 +238,3 @@ pub struct MetadataPayload {
 }
 
 pub type Nonce = u128;
-
-pub struct BridgeMessage {
-    pub token_id: OmniAddress,
-    pub sender: OmniAddress,
-    pub receiver: OmniAddress,
-    pub amount: Balance
-}
