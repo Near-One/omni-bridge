@@ -1,0 +1,15 @@
+[package]
+name = "wormhole-omni-prover-proxy"
+version = "2.0.0"
+authors = ["Near Inc <hello@nearprotocol.com>"]
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+near-sdk.workspace = true
+borsh.workspace = true
+near-plugins.workspace = true
+hex = { version = "0.4.3" }
+omni-types = { path = "../../omni-types" }

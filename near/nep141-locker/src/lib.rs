@@ -143,7 +143,6 @@ impl FungibleTokenReceiver for Contract {
         env::log_str(&near_sdk::serde_json::to_string(&transfer_message).unwrap());
         self.pending_transfers
             .insert(&self.current_nonce, &transfer_message);
-
         PromiseOrValue::Value(U128(0))
     }
 }
@@ -230,6 +229,7 @@ impl Contract {
             relayer,
         };
         env::log_str(&near_sdk::serde_json::to_string(&withdraw_payload).unwrap());
+
         let payload = near_sdk::env::keccak256_array(&borsh::to_vec(&withdraw_payload).unwrap());
 
         ext_signer::ext(self.mpc_signer.clone())
