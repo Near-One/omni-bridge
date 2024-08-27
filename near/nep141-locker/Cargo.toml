@@ -1,0 +1,27 @@
+[package]
+name = "nep141-locker"
+version = "0.2.0"
+authors = ["nearone <hello@nearone.org>"]
+edition = "2021"
+publish = false
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[profile.release]
+codegen-units = 1
+# Tell `rustc` to optimize for small code size.
+opt-level = "z"
+lto = true
+debug = false
+panic = "abort"
+overflow-checks = true
+
+[dependencies]
+near-sdk = "5.2.0"
+near-contract-standards = "5.2.0"
+hex = "0.4.2"
+borsh = "1.5.1"
+serde = { version = "1.0.200", features = ["derive"] }
+near-plugins = { git = "https://github.com/aurora-is-near/near-plugins", tag = "v0.3.0" }
+

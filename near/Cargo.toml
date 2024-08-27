@@ -1,0 +1,6 @@
+[workspace.package]
+authors = ["Karim Alabtakh <karim.alabtakh@nearone.org>"]
+
+[workspace]
+resolver = "2"
+members = ["nep141-locker"]
