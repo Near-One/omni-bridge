@@ -12,14 +12,15 @@ use near_sdk::json_types::U128;
 use near_sdk::serde::{Deserialize, Serialize};
 use near_sdk::{
     env, ext_contract, near, require, AccountId, BorshStorageKey, Gas, NearToken, PanicOnDefault,
-    Promise, PromiseOrValue,
+    Promise, PromiseError, PromiseOrValue,
 };
 
-use omni_types::*;
+mod types;
+use types::*;
 
 const LOG_METADATA_GAS: Gas = Gas::from_tgas(10);
 const LOG_METADATA_CALLBCAK_GAS: Gas = Gas::from_tgas(30);
-const MPC_SIGNING_GAS: Gas = Gas::from_tgas(200);
+const MPC_SIGNING_GAS: Gas = Gas::from_tgas(250);
 const SIGN_TRANSFER_CALLBACK_GAS: Gas = Gas::from_tgas(5);
 const VERIFY_POOF_GAS: Gas = Gas::from_tgas(50);
 const FINISH_CLAIM_FEE_GAS: Gas = Gas::from_tgas(50);
@@ -52,13 +53,21 @@ pub trait ExtContract {
     );
     fn sign_transfer_callback(
         &self,
-        #[callback_result] call_result: Result<
-            Result<SignatureResponse, String>,
-            near_sdk::PromiseError,
-        >,
+        #[callback_result] call_result: Result<SignatureResponse, PromiseError>,
         nonce: U128,
     );
-    fn claim_fee_callback(&self, #[callback_result] call_result: FinTransferMessage);
+    fn fin_transfer_callback(
+        &self,
+        #[callback_result]
+        #[serializer(borsh)]
+        call_result: Result<ProofResult, PromiseError>,
+    );
+    fn claim_fee_callback(
+        &self,
+        #[callback_result]
+        #[serializer(borsh)]
+        call_result: Result<ProofResult, PromiseError>,
+    );
 }
 
 #[ext_contract(ext_token)]
@@ -91,7 +100,7 @@ pub trait ExtSigner {
 #[ext_contract(ext_prover)]
 pub trait Prover {
     #[result_serializer(borsh)]
-    fn verify_proof(&self, proof: Vec<u8>) -> ProofResult;
+    fn verify_proof(&self, #[serializer(borsh)] proof: Vec<u8>) -> ProofResult;
 }
 
 #[near(contract_state)]
@@ -123,16 +132,17 @@ impl FungibleTokenReceiver for Contract {
         msg: String,
     ) -> PromiseOrValue<U128> {
         self.current_nonce += 1;
-        let event = TransferMessage {
+        let transfer_message = TransferMessage {
             origin_nonce: U128(self.current_nonce),
             token: env::predecessor_account_id(),
             amount,
             recipient: msg.parse().unwrap(),
-            fee: U128(0),
+            fee: U128(0), // TODO get fee from msg
             sender: OmniAddress::Near(sender_id.to_string()),
         };
-        self.pending_transfers.insert(&self.current_nonce, &event);
-
+        env::log_str(&near_sdk::serde_json::to_string(&transfer_message).unwrap());
+        self.pending_transfers
+            .insert(&self.current_nonce, &transfer_message);
         PromiseOrValue::Value(U128(0))
     }
 }
@@ -211,13 +221,14 @@ impl Contract {
     #[payable]
     pub fn sign_transfer(&mut self, nonce: U128, relayer: Option<OmniAddress>) -> Promise {
         let transfer_message = self.get_transfer_message(nonce);
-        let withdraw_payload = TransferMessagePayload {
+        let withdraw_payload: TransferMessagePayload = TransferMessagePayload {
             nonce,
             token: transfer_message.token,
-            amount: transfer_message.amount.0 - transfer_message.fee.0,
+            amount: U128(transfer_message.amount.0 - transfer_message.fee.0),
             recipient: transfer_message.recipient,
             relayer,
         };
+        env::log_str(&near_sdk::serde_json::to_string(&withdraw_payload).unwrap());
 
         let payload = near_sdk::env::keccak256_array(&borsh::to_vec(&withdraw_payload).unwrap());
 
@@ -239,13 +250,10 @@ impl Contract {
     #[private]
     pub fn sign_transfer_callback(
         &mut self,
-        #[callback_result] call_result: Result<
-            Result<SignatureResponse, String>,
-            near_sdk::PromiseError,
-        >,
+        #[callback_result] call_result: Result<SignatureResponse, PromiseError>,
         nonce: U128,
     ) {
-        if let Ok(Ok(_)) = call_result {
+        if let Ok(_) = call_result {
             let transfer_message = self.get_transfer_message(nonce);
 
             if transfer_message.fee.0 == 0 {
@@ -270,9 +278,11 @@ impl Contract {
     #[private]
     pub fn fin_transfer_callback(
         &mut self,
-        #[callback_result] call_result: ProofResult,
+        #[callback_result]
+        #[serializer(borsh)]
+        call_result: Result<ProofResult, PromiseError>,
     ) -> PromiseOrValue<U128> {
-        let ProofResult::InitTransfer(transfer_message) = call_result else {
+        let Ok(ProofResult::InitTransfer(transfer_message)) = call_result else {
             env::panic_str("Invalid proof message")
         };
 
@@ -318,8 +328,13 @@ impl Contract {
     }
 
     #[private]
-    pub fn claim_fee_callback(&mut self, #[callback_result] call_result: ProofResult) -> Promise {
-        let ProofResult::FinTransfer(fin_transfer) = call_result else {
+    pub fn claim_fee_callback(
+        &mut self,
+        #[callback_result]
+        #[serializer(borsh)]
+        call_result: Result<ProofResult, PromiseError>,
+    ) -> Promise {
+        let Ok(ProofResult::FinTransfer(fin_transfer)) = call_result else {
             env::panic_str("Invalid proof message")
         };
 
