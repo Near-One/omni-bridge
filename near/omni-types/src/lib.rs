@@ -8,7 +8,8 @@ use near_sdk::serde::{Deserialize, Serialize};
 use near_sdk::AccountId;
 use serde::de::Visitor;
 
-pub mod token_unlock_event;
+pub mod evm_events;
+pub mod prover_types;
 
 #[derive(BorshDeserialize, BorshSerialize, Debug, Clone, PartialEq, Eq)]
 pub struct H160(pub [u8; 20]);
@@ -31,7 +32,7 @@ impl FromStr for H160 {
     }
 }
 
-impl fmt::Display for H160 {
+impl std::fmt::Display for H160 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "0x{}", hex::encode(self.0))
     }
@@ -39,8 +40,8 @@ impl fmt::Display for H160 {
 
 impl<'de> Deserialize<'de> for H160 {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-        where
-            D: serde::Deserializer<'de>,
+    where
+        D: serde::Deserializer<'de>,
     {
         struct HexVisitor;
 
@@ -52,8 +53,8 @@ impl<'de> Deserialize<'de> for H160 {
             }
 
             fn visit_str<E>(self, s: &str) -> Result<Self::Value, E>
-                where
-                    E: serde::de::Error,
+            where
+                E: serde::de::Error,
             {
                 Ok(s.parse().map_err(serde::de::Error::custom)?)
             }
@@ -68,8 +69,8 @@ impl Serialize for H160 {
         &self,
         serializer: S,
     ) -> Result<<S as serde::Serializer>::Ok, <S as serde::Serializer>::Error>
-        where
-            S: serde::Serializer,
+    where
+        S: serde::Serializer,
     {
         serializer.serialize_str(&self.to_string())
     }
@@ -112,16 +113,16 @@ impl OmniAddress {
 }
 
 impl FromStr for OmniAddress {
-    type Err = ();
+    type Err = String;
 
     fn from_str(input: &str) -> Result<OmniAddress, Self::Err> {
-        let (chain, recipient) = input.split_once(':').ok_or(())?;
+        let (chain, recipient) = input.split_once(':').ok_or("Invalid OmniAddress format")?;
 
         match chain {
-            "eth" => Ok(OmniAddress::Eth(recipient.parse().map_err(|_| ())?)),
+            "eth" => Ok(OmniAddress::Eth(recipient.parse().map_err(stringify)?)),
             "near" => Ok(OmniAddress::Near(recipient.to_owned())),
             "sol" => Ok(OmniAddress::Sol(recipient.to_owned())), // TODO validate sol address
-            _ => Err(()),
+            _ => Err(format!("Chain {chain} is not supported")),
         }
     }
 }
@@ -144,7 +145,7 @@ pub struct NearRecipient {
 }
 
 impl FromStr for NearRecipient {
-    type Err = ();
+    type Err = String;
 
     fn from_str(input: &str) -> Result<Self, Self::Err> {
         let (target, message) = input.split_once(':').map_or_else(
@@ -153,7 +154,7 @@ impl FromStr for NearRecipient {
         );
 
         Ok(Self {
-            target: target.parse().map_err(|_| ())?,
+            target: target.parse().map_err(stringify)?,
             message,
         })
     }
@@ -183,19 +184,6 @@ impl TransferMessage {
     pub fn get_origin_chain(&self) -> ChainKind {
         self.sender.get_chain()
     }
-}
-
-#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Debug, Clone)]
-pub struct FinTransferMessage {
-    pub nonce: U128,
-    pub claim_recipient: AccountId,
-    pub factory: OmniAddress,
-}
-
-#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Debug, Clone)]
-pub enum ProofResult {
-    InitTransfer(TransferMessage),
-    FinTransfer(FinTransferMessage),
 }
 
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Debug, Clone)]
@@ -238,3 +226,7 @@ pub struct MetadataPayload {
 }
 
 pub type Nonce = u128;
+
+pub fn stringify<T: std::fmt::Display>(item: T) -> String {
+    item.to_string()
+}

@@ -3,12 +3,22 @@ authors = ["Karim Alabtakh <karim.alabtakh@nearone.org>"]
 
 [workspace]
 resolver = "2"
-members = ["nep141-locker",
-           "omni-prover/omni-prover",
-           "omni-prover/wormhole-omni-prover-proxy",
-           "omni-prover/rainbow-omni-prover-proxy",
-           "omni-types"]
+members = [
+    "nep141-locker",
+    "omni-prover/omni-prover",
+    "omni-prover/wormhole-omni-prover-proxy",
+    "omni-prover/eth-light-client-prover-proxy",
+    "omni-types",
+]
 
+[profile.release]
+codegen-units = 1
+# Tell `rustc` to optimize for small code size.
+opt-level = "z"
+lto = true
+debug = false
+panic = "abort"
+overflow-checks = true
 
 [workspace.dependencies]
 near-sdk = "5.2.0"
@@ -17,7 +27,4 @@ hex = "0.4.2"
 borsh = "1.5.1"
 serde = { version = "1.0.200", features = ["derive"] }
 near-plugins = { git = "https://github.com/aurora-is-near/near-plugins", tag = "v0.3.0" }
-
-[patch]
-[patch.crates-io]
-parity-secp256k1 = { git = "https://github.com/paritytech/rust-secp256k1/" }
+omni-types = { path = "omni-types" }
