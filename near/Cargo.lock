@@ -664,7 +664,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "eth-light-client-prover-proxy"
+name = "evm-prover-proxy"
 version = "2.0.0"
 dependencies = [
  "borsh",

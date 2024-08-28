@@ -7,7 +7,7 @@ members = [
     "nep141-locker",
     "omni-prover/omni-prover",
     "omni-prover/wormhole-omni-prover-proxy",
-    "omni-prover/eth-light-client-prover-proxy",
+    "omni-prover/evm-prover-proxy",
     "omni-types",
 ]
 
