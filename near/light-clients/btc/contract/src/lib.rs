@@ -145,6 +145,12 @@ impl BtcLightClient {
         self.mainchain_header_to_height.get(&blockhash).copied()
     }
 
+    pub fn get_mainchain_size(&self) -> u64 {
+        let tail = &self.headers_pool[&self.mainchain_initial_blockhash];
+        let tip = &self.headers_pool[&self.mainchain_tip_blockhash];
+        tip.block_height - tail.block_height
+    }
+
     /// This method return n last blocks from the mainchain
     /// # Panics
     /// Cannot find a tip of main chain in a pool
@@ -242,6 +248,9 @@ impl BtcLightClient {
 
             let start_removal_height = initial_blockheader.block_height;
             let end_removal_height = initial_blockheader.block_height + selected_amount_to_remove;
+            env::log_str(&format!(
+                "Num of blocks to remove {selected_amount_to_remove}"
+            ));
 
             for height in start_removal_height..end_removal_height {
                 let blockhash = &self.mainchain_height_to_header[&height];
