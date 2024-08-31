@@ -1,18 +1,17 @@
 use near_plugins::{
-    access_control, access_control_any, AccessControlRole, AccessControllable, Pausable,
-    Upgradable, pause
+    access_control, access_control_any, pause, AccessControlRole, AccessControllable, Pausable,
+    Upgradable,
 };
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::serde::{Deserialize, Serialize};
-use near_sdk::{AccountId, env, ext_contract, near_bindgen, NearToken, PanicOnDefault, Promise, near, Gas};
-use omni_types::ProofResult;
+use near_sdk::{
+    env, ext_contract, near, near_bindgen, AccountId, Gas, NearToken, PanicOnDefault, Promise,
+};
+use omni_types::prover_types::ProofResult;
 
 #[ext_contract(ext_omni_prover_proxy)]
 pub trait OmniProverProxy {
-    fn verify_proof(
-        &self,
-        msg: Vec<u8>,
-    ) -> ProofResult;
+    fn verify_proof(&self, msg: Vec<u8>) -> ProofResult;
 }
 
 #[derive(AccessControlRole, Deserialize, Serialize, Copy, Clone)]
@@ -36,7 +35,7 @@ type ProverId = String;
 #[derive(BorshDeserialize, BorshSerialize)]
 pub struct VerifyProofInput {
     pub prover_id: ProverId,
-    pub proof: Vec<u8>
+    pub proof: Vec<u8>,
 }
 
 #[near_bindgen]
@@ -61,7 +60,7 @@ impl OmniProver {
     #[must_use]
     pub fn init() -> Self {
         let mut contract = Self {
-            bridges: near_sdk::collections::UnorderedMap::new(StorageKey::RegisteredBridges)
+            bridges: near_sdk::collections::UnorderedMap::new(StorageKey::RegisteredBridges),
         };
 
         contract.acl_init_super_admin(near_sdk::env::predecessor_account_id());
@@ -83,9 +82,13 @@ impl OmniProver {
     }
 
     #[pause(except(roles(Role::UnrestrictedValidateProof, Role::DAO)))]
-    pub fn verify_proof(&self, proof: Vec<u8>)-> Promise {
-        let input = VerifyProofInput::try_from_slice(&proof).unwrap_or_else(|_| env::panic_str("ErrorOnVerifyProofInputParsing"));
-        let bridge_account_id = self.bridges.get(&input.prover_id).unwrap_or_else(|| env::panic_str("ProverIdNotRegistered"));
+    pub fn verify_proof(&self, proof: Vec<u8>) -> Promise {
+        let input = VerifyProofInput::try_from_slice(&proof)
+            .unwrap_or_else(|_| env::panic_str("ErrorOnVerifyProofInputParsing"));
+        let bridge_account_id = self
+            .bridges
+            .get(&input.prover_id)
+            .unwrap_or_else(|| env::panic_str("ProverIdNotRegistered"));
 
         ext_omni_prover_proxy::ext(bridge_account_id)
             .with_static_gas(Gas::from_tgas(200))

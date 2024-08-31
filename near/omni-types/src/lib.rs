@@ -1,7 +1,6 @@
 use core::fmt;
 use core::str::FromStr;
 use hex::FromHex;
-use near_contract_standards::fungible_token::Balance;
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::json_types::U128;
 use near_sdk::serde::{Deserialize, Serialize};
@@ -9,6 +8,7 @@ use near_sdk::AccountId;
 use serde::de::Visitor;
 
 pub mod evm_events;
+pub mod mpc_types;
 pub mod prover_types;
 
 #[derive(BorshDeserialize, BorshSerialize, Debug, Clone, PartialEq, Eq)]
@@ -32,7 +32,7 @@ impl FromStr for H160 {
     }
 }
 
-impl std::fmt::Display for H160 {
+impl fmt::Display for H160 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "0x{}", hex::encode(self.0))
     }
@@ -209,7 +209,7 @@ impl TransferMessage {
 pub struct TransferMessagePayload {
     pub nonce: U128,
     pub token: AccountId,
-    pub amount: Balance,
+    pub amount: U128,
     pub recipient: OmniAddress,
     pub relayer: Option<OmniAddress>,
 }
@@ -220,14 +220,6 @@ pub struct SignRequest {
     pub payload: [u8; 32],
     pub path: String,
     pub key_version: u32,
-}
-
-#[derive(Serialize, Deserialize, Clone)]
-#[serde(crate = "near_sdk::serde")]
-pub struct SignatureResponse {
-    pub big_r: String,
-    pub s: String,
-    pub recovery_id: u8,
 }
 
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Debug, Clone)]

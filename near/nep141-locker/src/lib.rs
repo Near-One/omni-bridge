@@ -14,9 +14,12 @@ use near_sdk::{
     env, ext_contract, near, require, AccountId, BorshStorageKey, Gas, NearToken, PanicOnDefault,
     Promise, PromiseError, PromiseOrValue,
 };
-
-mod types;
-use types::*;
+use omni_types::mpc_types::SignatureResponse;
+use omni_types::prover_types::ProofResult;
+use omni_types::{
+    ChainKind, MetadataPayload, NearRecipient, Nonce, OmniAddress, SignRequest, TransferMessage,
+    TransferMessagePayload, UpdateFee,
+};
 
 const LOG_METADATA_GAS: Gas = Gas::from_tgas(10);
 const LOG_METADATA_CALLBCAK_GAS: Gas = Gas::from_tgas(30);
@@ -221,7 +224,7 @@ impl Contract {
     #[payable]
     pub fn sign_transfer(&mut self, nonce: U128, relayer: Option<OmniAddress>) -> Promise {
         let transfer_message = self.get_transfer_message(nonce);
-        let withdraw_payload: TransferMessagePayload = TransferMessagePayload {
+        let withdraw_payload = TransferMessagePayload {
             nonce,
             token: transfer_message.token,
             amount: U128(transfer_message.amount.0 - transfer_message.fee.0),
@@ -282,9 +285,10 @@ impl Contract {
         #[serializer(borsh)]
         call_result: Result<ProofResult, PromiseError>,
     ) -> PromiseOrValue<U128> {
-        let Ok(ProofResult::InitTransfer(transfer_message)) = call_result else {
+        let Ok(ProofResult::FinTransfer(fin_transfer_message)) = call_result else {
             env::panic_str("Invalid proof message")
         };
+        let transfer_message = self.get_transfer_message(fin_transfer_message.nonce);
 
         if let OmniAddress::Near(recipient) = transfer_message.recipient {
             let recipient: NearRecipient = recipient
@@ -341,7 +345,7 @@ impl Contract {
         let message = self.get_transfer_message(fin_transfer.nonce);
         self.pending_transfers.remove(&fin_transfer.nonce.0);
         require!(
-            self.factories.get(&fin_transfer.factory.get_chain()) == Some(fin_transfer.factory),
+            self.factories.get(&fin_transfer.contract.get_chain()) == Some(fin_transfer.contract),
             "Unknown factory"
         );
 

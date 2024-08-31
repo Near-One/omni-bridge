@@ -90,7 +90,7 @@ impl RainbowOmniProverProxy {
         #[callback_result] is_valid: Result<bool, PromiseError>,
     ) -> Result<ProofResult, String> {
         if !is_valid.unwrap_or(false) {
-            panic!("Proof is not valid!")
+            return Err("Proof is not valid!".to_owned());
         }
 
         match kind {
