@@ -5,6 +5,7 @@ use near_sdk::{
 };
 use omni_types::evm_events::parse_evm_event;
 use omni_types::prover_types::{ProofKind, ProofResult};
+use omni_types::ChainKind;
 
 /// Gas to call verify_log_entry on prover.
 pub const VERIFY_LOG_ENTRY_GAS: Gas = Gas::from_tgas(50);
@@ -39,6 +40,7 @@ pub struct Proof {
 #[derive(BorshDeserialize, BorshSerialize, PanicOnDefault)]
 pub struct RainbowOmniProverProxy {
     pub prover_account: AccountId,
+    pub chain_kind: ChainKind,
 }
 
 #[near_bindgen]
@@ -46,8 +48,11 @@ impl RainbowOmniProverProxy {
     #[init]
     #[private]
     #[must_use]
-    pub fn init(prover_account: AccountId) -> Self {
-        Self { prover_account }
+    pub fn init(prover_account: AccountId, chain_kind: ChainKind) -> Self {
+        Self {
+            prover_account,
+            chain_kind,
+        }
     }
 
     pub fn verify_proof(
@@ -89,15 +94,18 @@ impl RainbowOmniProverProxy {
         }
 
         match kind {
-            ProofKind::InitTransfer => {
-                Ok(ProofResult::InitTransfer(parse_evm_event(log_entry_data)?))
-            }
-            ProofKind::FinTransfer => {
-                Ok(ProofResult::FinTransfer(parse_evm_event(log_entry_data)?))
-            }
-            ProofKind::DeployToken => {
-                Ok(ProofResult::DeployToken(parse_evm_event(log_entry_data)?))
-            }
+            ProofKind::InitTransfer => Ok(ProofResult::InitTransfer(parse_evm_event(
+                self.chain_kind,
+                log_entry_data,
+            )?)),
+            ProofKind::FinTransfer => Ok(ProofResult::FinTransfer(parse_evm_event(
+                self.chain_kind,
+                log_entry_data,
+            )?)),
+            ProofKind::DeployToken => Ok(ProofResult::DeployToken(parse_evm_event(
+                self.chain_kind,
+                log_entry_data,
+            )?)),
         }
     }
 }

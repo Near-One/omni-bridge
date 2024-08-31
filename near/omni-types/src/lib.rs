@@ -76,7 +76,19 @@ impl Serialize for H160 {
     }
 }
 
-#[derive(Debug, Eq, PartialEq, PartialOrd, Ord, BorshSerialize, BorshDeserialize)]
+#[derive(
+    Debug,
+    Eq,
+    Clone,
+    Copy,
+    PartialEq,
+    PartialOrd,
+    Ord,
+    BorshSerialize,
+    BorshDeserialize,
+    Serialize,
+    Deserialize,
+)]
 pub enum ChainKind {
     Eth,
     Near,
@@ -93,16 +105,23 @@ impl From<&OmniAddress> for ChainKind {
     }
 }
 
-pub type EthAddress = H160;
+pub type EvmAddress = H160;
 
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub enum OmniAddress {
-    Eth(EthAddress),
+    Eth(EvmAddress),
     Near(String),
     Sol(String),
 }
 
 impl OmniAddress {
+    pub fn from_evm_address(chain_kind: ChainKind, address: EvmAddress) -> Result<Self, String> {
+        match chain_kind {
+            ChainKind::Eth => Ok(Self::Eth(address)),
+            _ => Err(format!("{chain_kind:?} is not an EVM chain")),
+        }
+    }
+
     pub fn get_chain(&self) -> ChainKind {
         match self {
             OmniAddress::Eth(_) => ChainKind::Eth,
