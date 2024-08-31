@@ -3,7 +3,7 @@ use alloy_rlp::Decodable;
 use alloy_sol_types::{sol, SolEvent};
 
 use crate::{
-    prover_types::{DeployTokenMessage, FinTransferMessage, InitTransferMessage},
+    prover_result::{DeployTokenMessage, FinTransferMessage, InitTransferMessage},
     stringify, ChainKind, OmniAddress, TransferMessage, H160,
 };
 

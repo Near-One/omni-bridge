@@ -9,7 +9,8 @@ use serde::de::Visitor;
 
 pub mod evm_events;
 pub mod mpc_types;
-pub mod prover_types;
+pub mod prover_args;
+pub mod prover_result;
 
 #[derive(BorshDeserialize, BorshSerialize, Debug, Clone, PartialEq, Eq)]
 pub struct H160(pub [u8; 20]);

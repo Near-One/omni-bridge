@@ -1,10 +1,10 @@
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
-use near_sdk::serde::{Deserialize, Serialize};
 use near_sdk::{
     env, ext_contract, near_bindgen, AccountId, Gas, PanicOnDefault, Promise, PromiseError,
 };
 use omni_types::evm_events::parse_evm_event;
-use omni_types::prover_types::{ProofKind, ProofResult};
+use omni_types::prover_args::EvmVerifyProofArgs;
+use omni_types::prover_result::{ProofKind, ProverResult};
 use omni_types::ChainKind;
 
 /// Gas to call verify_log_entry on prover.
@@ -23,17 +23,6 @@ pub trait Prover {
         #[serializer(borsh)] proof: Vec<Vec<u8>>,
         #[serializer(borsh)] skip_bridge_call: bool,
     ) -> bool;
-}
-
-#[derive(Default, BorshDeserialize, BorshSerialize, Clone, Serialize, Deserialize)]
-#[serde(crate = "near_sdk::serde")]
-pub struct Proof {
-    pub log_index: u64,
-    pub log_entry_data: Vec<u8>,
-    pub receipt_index: u64,
-    pub receipt_data: Vec<u8>,
-    pub header_data: Vec<u8>,
-    pub proof: Vec<Vec<u8>>,
 }
 
 #[near_bindgen]
@@ -55,13 +44,10 @@ impl RainbowOmniProverProxy {
         }
     }
 
-    pub fn verify_proof(
-        &self,
-        #[serializer(borsh)] kind: ProofKind,
-        #[serializer(borsh)] msg: Vec<u8>,
-    ) -> Promise {
-        let proof =
-            Proof::try_from_slice(&msg).unwrap_or_else(|_| env::panic_str("ErrorOnProofParsing"));
+    pub fn verify_proof(&self, #[serializer(borsh)] input: Vec<u8>) -> Promise {
+        let args = EvmVerifyProofArgs::try_from_slice(&input)
+            .unwrap_or_else(|_| env::panic_str("ErrorOnArgsParsing"));
+        let proof = args.proof;
 
         ext_prover::ext(self.prover_account.clone())
             .with_static_gas(VERIFY_LOG_ENTRY_GAS)
@@ -77,7 +63,7 @@ impl RainbowOmniProverProxy {
             .then(
                 Self::ext(env::current_account_id())
                     .with_static_gas(VERIFY_LOG_ENTRY_GAS)
-                    .verify_log_entry_callback(kind, proof.log_entry_data),
+                    .verify_log_entry_callback(args.proof_kind, proof.log_entry_data),
             )
     }
 
@@ -88,21 +74,21 @@ impl RainbowOmniProverProxy {
         #[serializer(borsh)] kind: ProofKind,
         #[serializer(borsh)] log_entry_data: Vec<u8>,
         #[callback_result] is_valid: Result<bool, PromiseError>,
-    ) -> Result<ProofResult, String> {
+    ) -> Result<ProverResult, String> {
         if !is_valid.unwrap_or(false) {
             return Err("Proof is not valid!".to_owned());
         }
 
         match kind {
-            ProofKind::InitTransfer => Ok(ProofResult::InitTransfer(parse_evm_event(
+            ProofKind::InitTransfer => Ok(ProverResult::InitTransfer(parse_evm_event(
                 self.chain_kind,
                 log_entry_data,
             )?)),
-            ProofKind::FinTransfer => Ok(ProofResult::FinTransfer(parse_evm_event(
+            ProofKind::FinTransfer => Ok(ProverResult::FinTransfer(parse_evm_event(
                 self.chain_kind,
                 log_entry_data,
             )?)),
-            ProofKind::DeployToken => Ok(ProofResult::DeployToken(parse_evm_event(
+            ProofKind::DeployToken => Ok(ProverResult::DeployToken(parse_evm_event(
                 self.chain_kind,
                 log_entry_data,
             )?)),

@@ -15,7 +15,7 @@ use near_sdk::{
     Promise, PromiseError, PromiseOrValue,
 };
 use omni_types::mpc_types::SignatureResponse;
-use omni_types::prover_types::ProofResult;
+use omni_types::prover_result::ProverResult;
 use omni_types::{
     ChainKind, MetadataPayload, NearRecipient, Nonce, OmniAddress, SignRequest, TransferMessage,
     TransferMessagePayload, UpdateFee,
@@ -63,13 +63,13 @@ pub trait ExtContract {
         &self,
         #[callback_result]
         #[serializer(borsh)]
-        call_result: Result<ProofResult, PromiseError>,
+        call_result: Result<ProverResult, PromiseError>,
     );
     fn claim_fee_callback(
         &self,
         #[callback_result]
         #[serializer(borsh)]
-        call_result: Result<ProofResult, PromiseError>,
+        call_result: Result<ProverResult, PromiseError>,
     );
 }
 
@@ -103,7 +103,7 @@ pub trait ExtSigner {
 #[ext_contract(ext_prover)]
 pub trait Prover {
     #[result_serializer(borsh)]
-    fn verify_proof(&self, #[serializer(borsh)] proof: Vec<u8>) -> ProofResult;
+    fn verify_proof(&self, #[serializer(borsh)] proof: Vec<u8>) -> ProverResult;
 }
 
 #[near(contract_state)]
@@ -265,7 +265,7 @@ impl Contract {
         }
     }
 
-    pub fn fin_transfer(&self, proof: Vec<u8>) -> Promise {
+    pub fn fin_transfer(&self, #[serializer(borsh)] proof: Vec<u8>) -> Promise {
         ext_prover::ext(self.prover_account.clone())
             .with_static_gas(VERIFY_POOF_GAS)
             .with_attached_deposit(NO_DEPOSIT)
@@ -283,9 +283,9 @@ impl Contract {
         &mut self,
         #[callback_result]
         #[serializer(borsh)]
-        call_result: Result<ProofResult, PromiseError>,
+        call_result: Result<ProverResult, PromiseError>,
     ) -> PromiseOrValue<U128> {
-        let Ok(ProofResult::FinTransfer(fin_transfer_message)) = call_result else {
+        let Ok(ProverResult::FinTransfer(fin_transfer_message)) = call_result else {
             env::panic_str("Invalid proof message")
         };
         let transfer_message = self.get_transfer_message(fin_transfer_message.nonce);
@@ -336,9 +336,9 @@ impl Contract {
         &mut self,
         #[callback_result]
         #[serializer(borsh)]
-        call_result: Result<ProofResult, PromiseError>,
+        call_result: Result<ProverResult, PromiseError>,
     ) -> Promise {
-        let Ok(ProofResult::FinTransfer(fin_transfer)) = call_result else {
+        let Ok(ProverResult::FinTransfer(fin_transfer)) = call_result else {
             env::panic_str("Invalid proof message")
         };
 
