@@ -19,7 +19,7 @@ mod types;
 use types::*;
 
 const LOG_METADATA_GAS: Gas = Gas::from_tgas(10);
-const LOG_METADATA_CALLBCAK_GAS: Gas = Gas::from_tgas(30);
+const LOG_METADATA_CALLBCAK_GAS: Gas = Gas::from_tgas(260);
 const MPC_SIGNING_GAS: Gas = Gas::from_tgas(250);
 const SIGN_TRANSFER_CALLBACK_GAS: Gas = Gas::from_tgas(5);
 const VERIFY_POOF_GAS: Gas = Gas::from_tgas(50);
