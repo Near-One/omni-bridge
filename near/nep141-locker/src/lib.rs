@@ -10,6 +10,7 @@ use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::collections::LookupMap; // TODO compare the perfomance with store
 use near_sdk::json_types::U128;
 use near_sdk::serde::{Deserialize, Serialize};
+use near_sdk::serde_json::json;
 use near_sdk::{
     env, ext_contract, near, require, AccountId, BorshStorageKey, Gas, NearToken, PanicOnDefault,
     Promise, PromiseError, PromiseOrValue,
@@ -42,6 +43,23 @@ pub enum Role {
     UnrestrictedDeposit,
     UpgradableCodeStager,
     UpgradableCodeDeployer,
+}
+
+#[derive(Deserialize, Serialize, Clone)]
+pub enum Nep141LockerEvent {
+    InitTransferEvent {
+        transfer_message: TransferMessage,
+    },
+    SignTransferEvent {
+        signature: SignatureResponse,
+        transfer_message: TransferMessage,
+    },
+}
+
+impl Nep141LockerEvent {
+    pub fn to_log_string(&self) -> String {
+        json!(self).to_string()
+    }
 }
 
 #[ext_contract(ext_self)]
@@ -140,9 +158,11 @@ impl FungibleTokenReceiver for Contract {
             fee: U128(0), // TODO get fee from msg
             sender: OmniAddress::Near(sender_id.to_string()),
         };
-        env::log_str(&near_sdk::serde_json::to_string(&transfer_message).unwrap());
+
         self.pending_transfers
             .insert(&self.current_nonce, &transfer_message);
+
+        env::log_str(&Nep141LockerEvent::InitTransferEvent { transfer_message }.to_log_string());
         PromiseOrValue::Value(U128(0))
     }
 }
@@ -221,16 +241,15 @@ impl Contract {
     #[payable]
     pub fn sign_transfer(&mut self, nonce: U128, relayer: Option<OmniAddress>) -> Promise {
         let transfer_message = self.get_transfer_message(nonce);
-        let withdraw_payload: TransferMessagePayload = TransferMessagePayload {
+        let transfer_payload = TransferMessagePayload {
             nonce,
             token: transfer_message.token,
             amount: U128(transfer_message.amount.0 - transfer_message.fee.0),
             recipient: transfer_message.recipient,
             relayer,
         };
-        env::log_str(&near_sdk::serde_json::to_string(&withdraw_payload).unwrap());
 
-        let payload = near_sdk::env::keccak256_array(&borsh::to_vec(&withdraw_payload).unwrap());
+        let payload = near_sdk::env::keccak256_array(&borsh::to_vec(&transfer_payload).unwrap());
 
         ext_signer::ext(self.mpc_signer.clone())
             .with_static_gas(MPC_SIGNING_GAS)
@@ -253,12 +272,19 @@ impl Contract {
         #[callback_result] call_result: Result<SignatureResponse, PromiseError>,
         nonce: U128,
     ) {
-        if let Ok(_) = call_result {
+        if let Ok(signature) = call_result {
             let transfer_message = self.get_transfer_message(nonce);
-
             if transfer_message.fee.0 == 0 {
                 self.pending_transfers.remove(&nonce.0);
             }
+
+            env::log_str(
+                &Nep141LockerEvent::SignTransferEvent {
+                    signature,
+                    transfer_message,
+                }
+                .to_log_string(),
+            );
         }
     }
 
