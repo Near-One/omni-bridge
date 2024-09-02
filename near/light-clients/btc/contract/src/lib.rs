@@ -23,6 +23,8 @@ pub enum Role {
     UnrestrictedSubmitBlocks,
     /// Allows to use `verify_transaction` API on a paused contract
     UnrestrictedVerifyTransaction,
+    // Allows to use `run_mainchain_gc` API on a paused contract
+    UnrestrictedRunGC,
     /// May successfully call any of the protected `Upgradable` methods since below it is passed to
     /// every attribute of `access_control_roles`.
     ///
@@ -182,18 +184,23 @@ impl BtcLightClient {
 
     /// Verifies that a transaction is included in a block at a given block height
     ///
-    /// @param txid transaction identifier
-    /// @param txBlockHeight block height at which transacton is supposedly included
-    /// @param txIndex index of transaction in the block's tx merkle tree
-    /// @param merkleProof  merkle tree path (concatenated LE sha256 hashes) (does not contain initial transaction_hash and merkle_root)
+    /// @param tx_id transaction identifier
+    /// @param tx_block_blockhash block hash at which transacton is supposedly included
+    /// @param tx_index index of transaction in the block's tx merkle tree
+    /// @param merkle_proof  merkle tree path (concatenated LE sha256 hashes) (does not contain initial transaction_hash and merkle_root)
     /// @param confirmations how many confirmed blocks we want to have before the transaction is valid
-    /// @return True if txid is at the claimed position in the block at the given blockheight, False otherwise
+    /// @return True if tx_id is at the claimed position in the block at the given blockhash, False otherwise
     ///
     /// # Panics
     /// Multiple cases
     #[allow(clippy::needless_pass_by_value)]
     #[pause(except(roles(Role::UnrestrictedVerifyTransaction)))]
     pub fn verify_transaction_inclusion(&self, #[serializer(borsh)] args: ProofArgs) -> bool {
+        require!(
+            args.confirmations <= self.gc_threshold,
+            "The required number of confirmations exceeds the number of blocks stored in memory"
+        );
+
         let heaviest_block_header = self
             .headers_pool
             .get(&self.mainchain_tip_blockhash)
@@ -228,6 +235,7 @@ impl BtcLightClient {
     ///
     /// # Panics
     /// If initial blockheader or tip blockheader are not in a header pool
+    #[pause(except(roles(Role::UnrestrictedRunGC)))]
     pub fn run_mainchain_gc(&mut self, batch_size: u64) {
         let initial_blockheader = self
             .headers_pool
@@ -240,7 +248,7 @@ impl BtcLightClient {
             .unwrap_or_else(|| env::panic_str("tip blockheader must be in a header pool"));
 
         let amount_of_headers_we_store =
-            tip_blockheader.block_height - initial_blockheader.block_height;
+            tip_blockheader.block_height - initial_blockheader.block_height + 1;
 
         if amount_of_headers_we_store > self.gc_threshold {
             let total_amount_to_remove = amount_of_headers_we_store - self.gc_threshold;
