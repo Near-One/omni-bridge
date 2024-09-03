@@ -27,13 +27,13 @@ pub trait Prover {
 
 #[near_bindgen]
 #[derive(BorshDeserialize, BorshSerialize, PanicOnDefault)]
-pub struct RainbowOmniProverProxy {
+pub struct EvmProverProxy {
     pub prover_account: AccountId,
     pub chain_kind: ChainKind,
 }
 
 #[near_bindgen]
-impl RainbowOmniProverProxy {
+impl EvmProverProxy {
     #[init]
     #[private]
     #[must_use]
