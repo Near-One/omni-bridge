@@ -1,6 +1,9 @@
 use btc_types::contract_args::InitArgs;
 use btc_types::header::{ExtendedHeader, Header};
+use near_sdk::NearToken;
 use serde_json::json;
+
+const STORAGE_DEPOSIT_PER_BLOCK: NearToken = NearToken::from_millinear(500);
 
 #[tokio::test]
 async fn test_setting_genesis_block() -> Result<(), Box<dyn std::error::Error>> {
@@ -12,6 +15,7 @@ async fn test_setting_genesis_block() -> Result<(), Box<dyn std::error::Error>> 
     let block_header = genesis_block_header();
     let args = InitArgs {
         genesis_block: block_header.clone(),
+        genesis_block_hash: block_header.block_hash(),
         genesis_block_height: 0,
         skip_pow_verification: true,
         gc_threshold: 5,
@@ -51,6 +55,7 @@ async fn test_setting_chain_reorg() -> Result<(), Box<dyn std::error::Error>> {
     let block_header = genesis_block_header();
 
     let args = InitArgs {
+        genesis_block_hash: block_header.block_hash(),
         genesis_block: block_header.clone(),
         genesis_block_height: 0,
         skip_pow_verification: true,
@@ -72,6 +77,7 @@ async fn test_setting_chain_reorg() -> Result<(), Box<dyn std::error::Error>> {
     let outcome = user_account
         .call(contract.id(), "submit_blocks")
         .args_borsh([block_header_example()].to_vec())
+        .deposit(STORAGE_DEPOSIT_PER_BLOCK)
         .transact()
         .await?;
     assert!(outcome.is_success());
@@ -80,6 +86,7 @@ async fn test_setting_chain_reorg() -> Result<(), Box<dyn std::error::Error>> {
     let outcome = user_account
         .call(contract.id(), "submit_blocks")
         .args_borsh([fork_block_header_example()].to_vec())
+        .deposit(STORAGE_DEPOSIT_PER_BLOCK)
         .transact()
         .await?;
     assert!(outcome.is_success());
@@ -88,6 +95,7 @@ async fn test_setting_chain_reorg() -> Result<(), Box<dyn std::error::Error>> {
     let outcome = user_account
         .call(contract.id(), "submit_blocks")
         .args_borsh([fork_block_header_example_2()].to_vec())
+        .deposit(STORAGE_DEPOSIT_PER_BLOCK)
         .transact()
         .await?;
     assert!(outcome.is_success());
