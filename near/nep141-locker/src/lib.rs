@@ -10,12 +10,12 @@ use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::collections::LookupMap;
 use near_sdk::json_types::U128;
 use near_sdk::serde::{Deserialize, Serialize};
-use near_sdk::serde_json::json;
 use near_sdk::{
     env, ext_contract, near, require, AccountId, BorshStorageKey, Gas, NearToken, PanicOnDefault,
     Promise, PromiseError, PromiseOrValue,
 };
 use omni_types::mpc_types::SignatureResponse;
+use omni_types::near_events::Nep141LockerEvent;
 use omni_types::prover_result::ProverResult;
 use omni_types::{
     ChainKind, MetadataPayload, NearRecipient, Nonce, OmniAddress, SignRequest, TransferMessage,
@@ -46,23 +46,6 @@ pub enum Role {
     UnrestrictedDeposit,
     UpgradableCodeStager,
     UpgradableCodeDeployer,
-}
-
-#[derive(Deserialize, Serialize, Clone)]
-pub enum Nep141LockerEvent {
-    InitTransferEvent {
-        transfer_message: TransferMessage,
-    },
-    SignTransferEvent {
-        signature: SignatureResponse,
-        message_payload: TransferMessagePayload,
-    },
-}
-
-impl Nep141LockerEvent {
-    pub fn to_log_string(&self) -> String {
-        json!(self).to_string()
-    }
 }
 
 #[ext_contract(ext_token)]

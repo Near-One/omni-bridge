@@ -9,6 +9,7 @@ use serde::de::Visitor;
 
 pub mod evm_events;
 pub mod mpc_types;
+pub mod near_events;
 pub mod prover_args;
 pub mod prover_result;
 
