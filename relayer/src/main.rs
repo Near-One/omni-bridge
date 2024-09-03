@@ -36,7 +36,7 @@ async fn main() -> Result<()> {
 
     let config = LakeConfigBuilder::default()
         .testnet()
-        .start_block_height(173242161)
+        .start_block_height(173246090)
         .build()
         .expect("Failed to build LakeConfig");
 
@@ -134,7 +134,7 @@ async fn sign_transfer(client: &JsonRpcClient, log: FungibleTokenOnTransfer) -> 
                     .to_string()
                     .into_bytes(),
                 gas: 300_000_000_000_000,
-                deposit: 250_000_000_000_000_000_000_000,
+                deposit: 500_000_000_000_000_000_000_000,
             }),
         )],
     };
