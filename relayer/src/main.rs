@@ -1,6 +1,11 @@
 use anyhow::Result;
 use futures::StreamExt;
-use near_jsonrpc_client::{methods::query::RpcQueryRequest, JsonRpcClient};
+
+use near_jsonrpc_client::{
+    methods::{broadcast_tx_commit::RpcBroadcastTxCommitRequest, query::RpcQueryRequest},
+    JsonRpcClient,
+};
+use near_jsonrpc_primitives::types::query::QueryResponseKind;
 use near_lake_framework::{
     near_indexer_primitives::{
         views::{ActionView, ReceiptEnumView, ReceiptView},
@@ -9,8 +14,8 @@ use near_lake_framework::{
     LakeConfigBuilder,
 };
 use near_primitives::{
-    types::{AccountId, BlockReference, FunctionArgs},
-    views::QueryRequest,
+    transaction::{Transaction, TransactionV0},
+    types::{AccountId, BlockReference},
 };
 
 const CONTRACT_ID: &str = "omni-locker.test1-dev.testnet";
@@ -31,7 +36,7 @@ async fn main() -> Result<()> {
 
     let config = LakeConfigBuilder::default()
         .testnet()
-        .start_block_height(172306861)
+        .start_block_height(173242161)
         .build()
         .expect("Failed to build LakeConfig");
 
@@ -96,22 +101,52 @@ fn is_ft_on_transfer(receipt: &ReceiptView) -> bool {
 }
 
 async fn sign_transfer(client: &JsonRpcClient, log: FungibleTokenOnTransfer) -> Result<()> {
-    let request = RpcQueryRequest {
-        block_reference: BlockReference::latest(),
-        request: QueryRequest::CallFunction {
-            account_id: CONTRACT_ID.parse()?,
-            method_name: "sign_transfer".to_string(),
-            args: FunctionArgs::from(
-                serde_json::json!({ "nonce": log.origin_nonce })
-                    .to_string()
-                    .into_bytes(),
-            ),
-        },
+    let signer = near_crypto::InMemorySigner::from_secret_key(
+        "account_name".parse()?,
+        "private_key".parse()?,
+    );
+
+    let access_key_query_response = client
+        .call(RpcQueryRequest {
+            block_reference: BlockReference::latest(),
+            request: near_primitives::views::QueryRequest::ViewAccessKey {
+                account_id: signer.account_id.clone(),
+                public_key: signer.public_key.clone(),
+            },
+        })
+        .await?;
+
+    let current_nonce = match access_key_query_response.kind {
+        QueryResponseKind::AccessKey(access_key) => access_key.nonce,
+        _ => anyhow::bail!("Unexpected response"),
     };
 
-    let server_status = client.call(request).await?;
+    let transaction = TransactionV0 {
+        signer_id: signer.account_id.clone(),
+        public_key: signer.public_key.clone(),
+        nonce: current_nonce + 1,
+        receiver_id: CONTRACT_ID.parse()?,
+        block_hash: access_key_query_response.block_hash,
+        actions: vec![near_primitives::transaction::Action::FunctionCall(
+            Box::new(near_primitives::transaction::FunctionCallAction {
+                method_name: "sign_transfer".to_string(),
+                args: serde_json::json!({ "nonce": log.origin_nonce })
+                    .to_string()
+                    .into_bytes(),
+                gas: 300_000_000_000_000,
+                deposit: 250_000_000_000_000_000_000_000,
+            }),
+        )],
+    };
 
-    println!("Response: {:?}", server_status);
+    let request = RpcBroadcastTxCommitRequest {
+        signed_transaction: Transaction::V0(transaction)
+            .sign(&near_crypto::Signer::InMemory(signer)),
+    };
+
+    let response = client.call(request).await?;
+
+    println!("response: {:#?}", response);
 
     Ok(())
 }
