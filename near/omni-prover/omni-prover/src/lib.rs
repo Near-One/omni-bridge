@@ -14,7 +14,7 @@ use omni_types::ChainKind;
 
 #[ext_contract(ext_omni_prover_proxy)]
 pub trait OmniProverProxy {
-    fn verify_proof(&self, msg: Vec<u8>) -> ProverResult;
+    fn verify_proof(&self, [serializer(borsh)] input: Vec<u8>) -> ProverResult;
 }
 
 #[derive(AccessControlRole, Deserialize, Serialize, Copy, Clone)]
