@@ -27,7 +27,7 @@ pub struct DeployTokenMessage {
 
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Debug, Clone)]
 pub enum ProverResult {
-    InitTransfer(FinTransferMessage),
+    InitTransfer(InitTransferMessage),
     FinTransfer(FinTransferMessage),
     DeployToken(DeployTokenMessage),
 }
