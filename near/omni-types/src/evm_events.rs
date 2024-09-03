@@ -7,6 +7,8 @@ use crate::{
     stringify, ChainKind, OmniAddress, TransferMessage, H160,
 };
 
+const ERR_INVALIDE_SIGNATURE_HASH: &str = "ERR_INVALIDE_SIGNATURE_HASH";
+
 sol! {
     event FinTransfer(
         address indexed sender,
@@ -53,6 +55,10 @@ impl TryFromLog<Log<FinTransfer>> for FinTransferMessage {
     type Error = String;
 
     fn try_from_log(chain_kind: ChainKind, event: Log<FinTransfer>) -> Result<Self, Self::Error> {
+        if event.topics().0 != FinTransfer::SIGNATURE_HASH {
+            return Err(ERR_INVALIDE_SIGNATURE_HASH.to_string());
+        }
+
         Ok(FinTransferMessage {
             nonce: near_sdk::json_types::U128(event.data.nonce.to::<u128>()),
             claim_recipient: event.data.claim_recipient.parse().map_err(stringify)?,
@@ -65,6 +71,10 @@ impl TryFromLog<Log<InitTransfer>> for InitTransferMessage {
     type Error = String;
 
     fn try_from_log(chain_kind: ChainKind, event: Log<InitTransfer>) -> Result<Self, Self::Error> {
+        if event.topics().0 != InitTransfer::SIGNATURE_HASH {
+            return Err(ERR_INVALIDE_SIGNATURE_HASH.to_string());
+        }
+
         Ok(InitTransferMessage {
             contract: OmniAddress::from_evm_address(chain_kind, H160(event.address.into()))?,
             transfer: TransferMessage {
@@ -83,6 +93,10 @@ impl TryFromLog<Log<DeployToken>> for DeployTokenMessage {
     type Error = String;
 
     fn try_from_log(chain_kind: ChainKind, event: Log<DeployToken>) -> Result<Self, Self::Error> {
+        if event.topics().0 != DeployToken::SIGNATURE_HASH {
+            return Err(ERR_INVALIDE_SIGNATURE_HASH.to_string());
+        }
+
         Ok(DeployTokenMessage {
             contract: OmniAddress::from_evm_address(chain_kind, H160(event.address.into()))?,
             token: event.data.token.parse().map_err(stringify)?,
@@ -91,5 +105,50 @@ impl TryFromLog<Log<DeployToken>> for DeployTokenMessage {
                 H160(event.data.token_address.into()),
             )?,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use alloy_primitives::{IntoLogData, U256};
+
+    use super::*;
+    sol! {
+        event TestFinTransfer(
+            address indexed sender,
+            uint nonce,
+            string claim_recipient,
+        );
+    }
+
+    #[test]
+    fn test_decode_log_with_same_params_with_validation() {
+        let event = FinTransfer {
+            sender: [0; 20].into(),
+            nonce: U256::from(55),
+            claim_recipient: "some_claim_recipient".to_string(),
+        };
+        let test_event = TestFinTransfer {
+            sender: event.sender,
+            nonce: event.nonce,
+            claim_recipient: event.claim_recipient.clone(),
+        };
+        let log = Log {
+            address: [1; 20].into(),
+            data: event.to_log_data(),
+        };
+        let test_log = Log {
+            address: log.address,
+            data: test_event.to_log_data(),
+        };
+
+        assert_ne!(log, test_log);
+
+        let decoded_log = FinTransfer::decode_log(&log, true).unwrap();
+        let decoded_test_log = TestFinTransfer::decode_log(&test_log, true).unwrap();
+
+        assert_ne!(FinTransfer::SIGNATURE_HASH, TestFinTransfer::SIGNATURE_HASH);
+        assert_eq!(FinTransfer::SIGNATURE_HASH, decoded_log.topics().0);
+        assert_eq!(TestFinTransfer::SIGNATURE_HASH, decoded_test_log.topics().0);
     }
 }
