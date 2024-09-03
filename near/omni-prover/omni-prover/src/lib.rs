@@ -12,9 +12,12 @@ use omni_types::prover_args::VerifyProofArgs;
 use omni_types::prover_result::ProverResult;
 use omni_types::ChainKind;
 
+const OUTER_VERIFY_PROOF_GAS: Gas = Gas::from_tgas(10);
+
 #[ext_contract(ext_omni_prover_proxy)]
-pub trait OmniProverProxy {
-    fn verify_proof(&self, [serializer(borsh)] input: Vec<u8>) -> ProverResult;
+pub trait Prover {
+    #[result_serializer(borsh)]
+    fn verify_proof(&self, #[serializer(borsh)] proof: Vec<u8>) -> ProverResult;
 }
 
 #[derive(AccessControlRole, Deserialize, Serialize, Copy, Clone)]
@@ -86,7 +89,7 @@ impl OmniProver {
             .unwrap_or_else(|| env::panic_str("ProverIdNotRegistered"));
 
         ext_omni_prover_proxy::ext(bridge_account_id)
-            .with_static_gas(Gas::from_tgas(200))
+            .with_static_gas(env::prepaid_gas().saturating_sub(OUTER_VERIFY_PROOF_GAS))
             .with_attached_deposit(NearToken::from_near(0))
             .verify_proof(input.prover_args)
     }
