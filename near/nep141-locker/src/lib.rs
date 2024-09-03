@@ -269,10 +269,15 @@ impl Contract {
         #[serializer(borsh)]
         call_result: Result<ProverResult, PromiseError>,
     ) -> PromiseOrValue<U128> {
-        let Ok(ProverResult::InitTransfer(fin_transfer_message)) = call_result else {
+        let Ok(ProverResult::InitTransfer(init_transfer)) = call_result else {
             env::panic_str("Invalid proof message")
         };
-        let transfer_message = self.get_transfer_message(fin_transfer_message.nonce);
+        require!(
+            self.factories.get(&init_transfer.contract.get_chain()) == Some(init_transfer.contract),
+            "Unknown factory"
+        );
+
+        let transfer_message = init_transfer.transfer;
 
         if let OmniAddress::Near(recipient) = transfer_message.recipient {
             let recipient: NearRecipient = recipient
