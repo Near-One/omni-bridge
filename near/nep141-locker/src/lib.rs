@@ -151,6 +151,7 @@ impl Contract {
             .then(
                 Self::ext(env::current_account_id())
                     .with_static_gas(LOG_METADATA_CALLBCAK_GAS)
+                    .with_attached_deposit(env::attached_deposit())
                     .log_metadata_callbcak(token_id),
             )
     }
