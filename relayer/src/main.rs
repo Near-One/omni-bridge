@@ -19,9 +19,22 @@ use near_primitives::{
 };
 
 const CONTRACT_ID: &str = "omni-locker.test1-dev.testnet";
+const SIGN_TRANSFER_GAS: u64 = 300_000_000_000_000;
+const SIGN_TRANSFER_ATTACHED_DEPOSIT: u128 = 500_000_000_000_000_000_000_000;
 
 #[derive(Debug, serde::Deserialize)]
-struct FungibleTokenOnTransfer {
+struct FtOnTransferLog {
+    #[serde(rename = "InitTransferEvent")]
+    init_transfer_event: InitTransferEvent,
+}
+
+#[derive(Debug, serde::Deserialize)]
+struct InitTransferEvent {
+    transfer_message: TransferMessage,
+}
+
+#[derive(Debug, serde::Deserialize)]
+struct TransferMessage {
     origin_nonce: String,
     token: String,
     amount: String,
@@ -30,13 +43,41 @@ struct FungibleTokenOnTransfer {
     sender: serde_json::Value,
 }
 
+#[derive(Debug, serde::Deserialize)]
+struct SignTransferLog {
+    #[serde(rename = "SignTransferEvent")]
+    sign_transfer_event: SignTransferEvent,
+}
+
+#[derive(Debug, serde::Deserialize)]
+struct SignTransferEvent {
+    signature: SignatureResponse,
+    message_payload: TransferMessagePayload,
+}
+
+#[derive(Debug, serde::Deserialize)]
+pub struct SignatureResponse {
+    pub big_r: serde_json::Value,
+    pub s: serde_json::Value,
+    pub recovery_id: u8,
+}
+
+#[derive(Debug, serde::Deserialize)]
+pub struct TransferMessagePayload {
+    pub nonce: String,
+    pub token: AccountId,
+    pub amount: String,
+    pub recipient: serde_json::Value,
+    pub relayer: serde_json::Value,
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     let client = JsonRpcClient::connect("https://rpc.testnet.near.org");
 
     let config = LakeConfigBuilder::default()
         .testnet()
-        .start_block_height(173246090)
+        .start_block_height(173318000)
         .build()
         .expect("Failed to build LakeConfig");
 
@@ -62,18 +103,26 @@ async fn handle_streamer_message(
 ) -> Result<()> {
     let ft_on_transfer_outcomes = find_ft_on_transfer_outcomes(&streamer_message);
 
-    let logs = ft_on_transfer_outcomes
+    let ft_on_transfer_logs = ft_on_transfer_outcomes
         .iter()
         .flat_map(|outcome| outcome.execution_outcome.outcome.logs.clone())
-        .filter_map(|log| serde_json::from_str::<FungibleTokenOnTransfer>(&log).ok())
+        .filter_map(|log| serde_json::from_str::<FtOnTransferLog>(&log).ok())
         .collect::<Vec<_>>();
 
-    println!("Logs: {:?}", logs);
-
     // TODO: This should be wrapped in `tokio::spawn` and error handling
-    for log in logs {
+    for log in ft_on_transfer_logs {
         sign_transfer(client, log).await.unwrap();
     }
+
+    let sign_transfer_callback_outcomes = find_sign_transfer_callback_outcomes(&streamer_message);
+
+    let sign_transfer_callback_logs = sign_transfer_callback_outcomes
+        .iter()
+        .flat_map(|outcome| outcome.execution_outcome.outcome.logs.clone())
+        .filter_map(|log| serde_json::from_str::<SignTransferLog>(&log).ok())
+        .collect::<Vec<_>>();
+
+    // TODO: call `finalize_deposit_omni_with_logs` using `bridge-sdk`
 
     Ok(())
 }
@@ -100,11 +149,31 @@ fn is_ft_on_transfer(receipt: &ReceiptView) -> bool {
         )
 }
 
-async fn sign_transfer(client: &JsonRpcClient, log: FungibleTokenOnTransfer) -> Result<()> {
-    let signer = near_crypto::InMemorySigner::from_secret_key(
-        "account_name".parse()?,
-        "private_key".parse()?,
-    );
+fn find_sign_transfer_callback_outcomes(
+    streamer_message: &StreamerMessage,
+) -> Vec<IndexerExecutionOutcomeWithReceipt> {
+    streamer_message
+        .shards
+        .iter()
+        .flat_map(|shard| shard.receipt_execution_outcomes.iter())
+        .filter(|outcome| is_sign_transfer_callback(&outcome.receipt))
+        .cloned()
+        .collect()
+}
+
+fn is_sign_transfer_callback(receipt: &ReceiptView) -> bool {
+    receipt.receiver_id == CONTRACT_ID.parse::<AccountId>().unwrap()
+        && matches!(
+            receipt.receipt,
+            ReceiptEnumView::Action { ref actions, .. } if actions.iter().any(|action| {
+                matches!(action, ActionView::FunctionCall { method_name, .. } if method_name == "sign_transfer_callback")
+            })
+        )
+}
+
+async fn sign_transfer(client: &JsonRpcClient, log: FtOnTransferLog) -> Result<()> {
+    let signer =
+        near_crypto::InMemorySigner::from_secret_key("account_id".parse()?, "private_key".parse()?);
 
     let access_key_query_response = client
         .call(RpcQueryRequest {
@@ -130,11 +199,11 @@ async fn sign_transfer(client: &JsonRpcClient, log: FungibleTokenOnTransfer) -> 
         actions: vec![near_primitives::transaction::Action::FunctionCall(
             Box::new(near_primitives::transaction::FunctionCallAction {
                 method_name: "sign_transfer".to_string(),
-                args: serde_json::json!({ "nonce": log.origin_nonce })
+                args: serde_json::json!({ "nonce": log.init_transfer_event.transfer_message.origin_nonce })
                     .to_string()
                     .into_bytes(),
-                gas: 300_000_000_000_000,
-                deposit: 500_000_000_000_000_000_000_000,
+                gas: SIGN_TRANSFER_GAS,
+                deposit: SIGN_TRANSFER_ATTACHED_DEPOSIT,
             }),
         )],
     };
@@ -144,9 +213,7 @@ async fn sign_transfer(client: &JsonRpcClient, log: FungibleTokenOnTransfer) -> 
             .sign(&near_crypto::Signer::InMemory(signer)),
     };
 
-    let response = client.call(request).await?;
-
-    println!("response: {:#?}", response);
+    client.call(request).await?;
 
     Ok(())
 }
