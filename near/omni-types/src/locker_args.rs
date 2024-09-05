@@ -6,3 +6,9 @@ pub struct FinTransferArgs {
     pub chain_kind: ChainKind,
     pub prover_args: Vec<u8>,
 }
+
+#[derive(BorshDeserialize, BorshSerialize, Clone)]
+pub struct ClaimFeeArgs {
+    pub chain_kind: ChainKind,
+    pub prover_args: Vec<u8>,
+}

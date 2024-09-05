@@ -15,7 +15,7 @@ use near_sdk::{
     env, ext_contract, near, require, AccountId, BorshStorageKey, Gas, NearToken, PanicOnDefault,
     Promise, PromiseError, PromiseOrValue,
 };
-use omni_types::locker_args::FinTransferArgs;
+use omni_types::locker_args::{ClaimFeeArgs, FinTransferArgs};
 use omni_types::mpc_types::SignatureResponse;
 use omni_types::near_events::Nep141LockerEvent;
 use omni_types::prover_args::VerifyProofArgs;
@@ -335,7 +335,7 @@ impl Contract {
         }
     }
 
-    pub fn claim_fee(&self, #[serializer(borsh)] args: FinTransferArgs) -> Promise {
+    pub fn claim_fee(&self, #[serializer(borsh)] args: ClaimFeeArgs) -> Promise {
         ext_prover::ext(self.prover_account.clone())
             .with_static_gas(VERIFY_POOF_GAS)
             .with_attached_deposit(NO_DEPOSIT)
