@@ -8,6 +8,7 @@ use near_sdk::AccountId;
 use serde::de::Visitor;
 
 pub mod evm_events;
+pub mod locker_args;
 pub mod mpc_types;
 pub mod near_events;
 pub mod prover_args;
@@ -90,6 +91,7 @@ impl Serialize for H160 {
     BorshDeserialize,
     Serialize,
     Deserialize,
+    strum_macros::AsRefStr,
 )]
 pub enum ChainKind {
     Eth,

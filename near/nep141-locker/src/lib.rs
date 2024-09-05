@@ -7,15 +7,18 @@ use near_contract_standards::fungible_token::metadata::FungibleTokenMetadata;
 use near_contract_standards::fungible_token::receiver::FungibleTokenReceiver;
 use near_contract_standards::storage_management::StorageBalance;
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
-use near_sdk::collections::LookupMap;
+use near_sdk::collections::{LookupMap, LookupSet};
 use near_sdk::json_types::U128;
 use near_sdk::serde::{Deserialize, Serialize};
+use near_sdk::serde_json::json;
 use near_sdk::{
     env, ext_contract, near, require, AccountId, BorshStorageKey, Gas, NearToken, PanicOnDefault,
     Promise, PromiseError, PromiseOrValue,
 };
+use omni_types::locker_args::FinTransferArgs;
 use omni_types::mpc_types::SignatureResponse;
 use omni_types::near_events::Nep141LockerEvent;
+use omni_types::prover_args::VerifyProofArgs;
 use omni_types::prover_result::ProverResult;
 use omni_types::{
     ChainKind, MetadataPayload, NearRecipient, Nonce, OmniAddress, SignRequest, TransferMessage,
@@ -27,7 +30,7 @@ const LOG_METADATA_CALLBCAK_GAS: Gas = Gas::from_tgas(260);
 const MPC_SIGNING_GAS: Gas = Gas::from_tgas(250);
 const SIGN_TRANSFER_CALLBACK_GAS: Gas = Gas::from_tgas(5);
 const VERIFY_POOF_GAS: Gas = Gas::from_tgas(50);
-const FINISH_CLAIM_FEE_GAS: Gas = Gas::from_tgas(50);
+const CLAIM_FEE_CALLBACK_GAS: Gas = Gas::from_tgas(50);
 const FT_TRANSFER_CALL_GAS: Gas = Gas::from_tgas(50);
 const FT_TRANSFER_GAS: Gas = Gas::from_tgas(5);
 const NO_DEPOSIT: NearToken = NearToken::from_near(0);
@@ -36,6 +39,7 @@ const NO_DEPOSIT: NearToken = NearToken::from_near(0);
 enum StorageKey {
     PendingTransfers,
     Factories,
+    FinalisedTransfers,
 }
 
 #[derive(AccessControlRole, Deserialize, Serialize, Copy, Clone)]
@@ -78,7 +82,7 @@ pub trait ExtSigner {
 #[ext_contract(ext_prover)]
 pub trait Prover {
     #[result_serializer(borsh)]
-    fn verify_proof(&self, #[serializer(borsh)] proof: Vec<u8>) -> ProverResult;
+    fn verify_proof(&self, #[serializer(borsh)] args: VerifyProofArgs) -> ProverResult;
 }
 
 #[near(contract_state)]
@@ -96,6 +100,7 @@ pub struct Contract {
     pub prover_account: AccountId,
     pub factories: LookupMap<ChainKind, OmniAddress>,
     pub pending_transfers: LookupMap<Nonce, TransferMessage>,
+    pub finalised_transfers: LookupSet<(ChainKind, Nonce)>,
     pub mpc_signer: AccountId,
     pub current_nonce: Nonce,
 }
@@ -135,6 +140,7 @@ impl Contract {
             prover_account,
             factories: LookupMap::new(StorageKey::Factories),
             pending_transfers: LookupMap::new(StorageKey::PendingTransfers),
+            finalised_transfers: LookupSet::new(StorageKey::FinalisedTransfers),
             mpc_signer,
             current_nonce: nonce.0,
         };
@@ -250,20 +256,25 @@ impl Contract {
         }
     }
 
-    pub fn fin_transfer(&self, #[serializer(borsh)] proof: Vec<u8>) -> Promise {
+    #[payable]
+    pub fn fin_transfer(&mut self, #[serializer(borsh)] args: FinTransferArgs) -> Promise {
         ext_prover::ext(self.prover_account.clone())
             .with_static_gas(VERIFY_POOF_GAS)
             .with_attached_deposit(NO_DEPOSIT)
-            .verify_proof(proof)
+            .verify_proof(VerifyProofArgs {
+                prover_id: args.chain_kind.as_ref().to_owned(),
+                prover_args: args.prover_args,
+            })
             .then(
                 Self::ext(env::current_account_id())
                     .with_attached_deposit(env::attached_deposit())
-                    .with_static_gas(FINISH_CLAIM_FEE_GAS)
-                    .claim_fee_callback(),
+                    .with_static_gas(CLAIM_FEE_CALLBACK_GAS)
+                    .fin_transfer_callback(),
             )
     }
 
     #[private]
+    #[payable]
     pub fn fin_transfer_callback(
         &mut self,
         #[callback_result]
@@ -281,26 +292,40 @@ impl Contract {
         );
 
         let transfer_message = init_transfer.transfer;
+        require!(
+            self.finalised_transfers.insert(&(
+                transfer_message.get_origin_chain(),
+                transfer_message.origin_nonce.0,
+            )) == true,
+            "The transfer is already finalised"
+        );
 
         if let OmniAddress::Near(recipient) = transfer_message.recipient {
             let recipient: NearRecipient = recipient
                 .parse()
                 .unwrap_or_else(|_| env::panic_str("Failed to parse recipient"));
 
+            // TODO: Figure out what to do with the storage deposit
             let amount_to_transfer = U128(transfer_message.amount.0 - transfer_message.fee.0);
-            // TODO transfer fee
-            match recipient.message {
+            let mut promise = match recipient.message {
                 Some(message) => ext_token::ext(transfer_message.token)
                     .with_static_gas(FT_TRANSFER_CALL_GAS)
                     .with_attached_deposit(NearToken::from_yoctonear(0))
-                    .ft_transfer_call(recipient.target, amount_to_transfer, None, message)
-                    .into(),
+                    .ft_transfer_call(recipient.target, amount_to_transfer, None, message),
                 None => ext_token::ext(transfer_message.token)
                     .with_static_gas(FT_TRANSFER_GAS)
                     .with_attached_deposit(NearToken::from_yoctonear(0))
-                    .ft_transfer(recipient.target, amount_to_transfer, None)
-                    .into(),
+                    .ft_transfer(recipient.target, amount_to_transfer, None),
+            };
+
+            if transfer_message.fee.0 > 0 {
+                promise = promise.function_call("ft_transfer".to_owned(),
+                json!({ "receiver_id": env::signer_account_id(), "amount": transfer_message.fee }).to_string().into_bytes(),
+                NO_DEPOSIT,
+                FT_TRANSFER_GAS);
             }
+
+            promise.into()
         } else {
             self.current_nonce += 1;
             self.pending_transfers
@@ -310,15 +335,18 @@ impl Contract {
         }
     }
 
-    pub fn claim_fee(&self, proof: Vec<u8>) -> Promise {
+    pub fn claim_fee(&self, #[serializer(borsh)] args: FinTransferArgs) -> Promise {
         ext_prover::ext(self.prover_account.clone())
             .with_static_gas(VERIFY_POOF_GAS)
             .with_attached_deposit(NO_DEPOSIT)
-            .verify_proof(proof)
+            .verify_proof(VerifyProofArgs {
+                prover_id: args.chain_kind.as_ref().to_owned(),
+                prover_args: args.prover_args,
+            })
             .then(
                 Self::ext(env::current_account_id())
                     .with_attached_deposit(env::attached_deposit())
-                    .with_static_gas(FINISH_CLAIM_FEE_GAS)
+                    .with_static_gas(CLAIM_FEE_CALLBACK_GAS)
                     .claim_fee_callback(),
             )
     }
