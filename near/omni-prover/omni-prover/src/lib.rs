@@ -9,14 +9,12 @@ use near_sdk::{
     env, ext_contract, near, near_bindgen, AccountId, Gas, NearToken, PanicOnDefault, Promise,
 };
 use omni_types::prover_args::{ProverId, VerifyProofArgs};
-use omni_types::prover_result::ProverResult;
 
 const OUTER_VERIFY_PROOF_GAS: Gas = Gas::from_tgas(10);
 
 #[ext_contract(ext_omni_prover_proxy)]
 pub trait Prover {
-    #[result_serializer(borsh)]
-    fn verify_proof(&self, #[serializer(borsh)] proof: Vec<u8>) -> ProverResult;
+    fn verify_proof(&self, #[serializer(borsh)] proof: Vec<u8>);
 }
 
 #[derive(AccessControlRole, Deserialize, Serialize, Copy, Clone)]
@@ -79,17 +77,15 @@ impl OmniProver {
     }
 
     #[pause(except(roles(Role::UnrestrictedValidateProof, Role::DAO)))]
-    pub fn verify_proof(&self, #[serializer(borsh)] proof: Vec<u8>) -> Promise {
-        let input = VerifyProofArgs::try_from_slice(&proof)
-            .unwrap_or_else(|_| env::panic_str("ErrorOnVerifyProofInputParsing"));
+    pub fn verify_proof(&self, #[serializer(borsh)] args: VerifyProofArgs) -> Promise {
         let prover_account_id = self
             .provers
-            .get(&input.prover_id)
+            .get(&args.prover_id)
             .unwrap_or_else(|| env::panic_str("ProverIdNotRegistered"));
 
         ext_omni_prover_proxy::ext(prover_account_id)
             .with_static_gas(env::prepaid_gas().saturating_sub(OUTER_VERIFY_PROOF_GAS))
             .with_attached_deposit(NearToken::from_near(0))
-            .verify_proof(input.prover_args)
+            .verify_proof(args.prover_args)
     }
 }
