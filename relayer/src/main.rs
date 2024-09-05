@@ -93,13 +93,49 @@ struct TransferMessagePayload {
     relayer: Option<OmniAddress>,
 }
 
+#[derive(Debug, serde::Serialize)]
+struct SignTransferEventDebug {
+    signature: SignatureResponse,
+    message_payload: TransferMessagePayloadDebug,
+}
+
+impl From<SignTransferEvent> for SignTransferEventDebug {
+    fn from(event: SignTransferEvent) -> Self {
+        SignTransferEventDebug {
+            signature: event.signature,
+            message_payload: TransferMessagePayloadDebug::from(event.message_payload),
+        }
+    }
+}
+
+#[derive(Debug, serde::Serialize)]
+struct TransferMessagePayloadDebug {
+    nonce: u128,
+    token: String,
+    amount: u128,
+    recipient: OmniAddress,
+    relayer: Option<OmniAddress>,
+}
+
+impl From<TransferMessagePayload> for TransferMessagePayloadDebug {
+    fn from(payload: TransferMessagePayload) -> Self {
+        TransferMessagePayloadDebug {
+            nonce: payload.nonce.parse().unwrap(),
+            token: payload.token,
+            amount: payload.amount.parse().unwrap(),
+            recipient: payload.recipient,
+            relayer: payload.relayer,
+        }
+    }
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     let client = JsonRpcClient::connect("https://rpc.testnet.near.org");
 
     let config = LakeConfigBuilder::default()
         .testnet()
-        .start_block_height(173318000)
+        .start_block_height(173405067)
         .build()
         .expect("Failed to build LakeConfig");
 
@@ -133,6 +169,7 @@ async fn handle_streamer_message(
 
     // TODO: This should be wrapped in `tokio::spawn` and error handling
     for log in ft_on_transfer_logs {
+        println!("FT on transfer: {:?}", log);
         sign_transfer(client, log).await.unwrap();
     }
 
@@ -155,28 +192,18 @@ async fn handle_streamer_message(
         .near_light_client_address(Some(
             defaults::NEAR_LIGHT_CLIENT_ETH_ADDRESS_TESTNET.to_string(),
         ))
-        .eth_private_key(None)
-        .near_signer(Some("account_id".to_string()))
-        .near_private_key(Some("private_key".to_string()))
+        .eth_private_key(Some("private_key".to_string()))
+        .near_signer(None)
+        .near_private_key(None)
         .build()
         .unwrap();
 
     for log in sign_transfer_callback_logs {
-        println!("Sign transfer callback: {:?}", log);
-        connector
-            .deposit(
-                log.sign_transfer_event.message_payload.token.clone(),
-                log.sign_transfer_event.message_payload.amount.parse()?,
-                log.sign_transfer_event
-                    .message_payload
-                    .recipient
-                    .to_string(),
-            )
-            .await
-            .unwrap();
         connector
             .finalize_deposit_omni_with_log(
-                &serde_json::to_string(&log.sign_transfer_event).unwrap(),
+                // TODO: No one should see this mess
+                &serde_json::to_string(&SignTransferEventDebug::from(log.sign_transfer_event))
+                    .unwrap(),
             )
             .await
             .unwrap();
