@@ -8,6 +8,11 @@ use crate::{
 pub type Target = U256;
 pub type Work = U256;
 
+pub const BLOCKS_PER_ADJUSTMENT: u64 = 2016;
+pub const TARGET_BLOCK_TIME_SECS: u64 = 10 * 60;
+pub const EXPECTED_TIME: u64 = BLOCKS_PER_ADJUSTMENT as u64 * TARGET_BLOCK_TIME_SECS;
+pub const MAX_ADJUSTMENT_FACTOR: u64 = 4;
+
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct Header {
     /// Block version, now repurposed for soft fork signalling.

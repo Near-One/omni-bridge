@@ -1,6 +1,8 @@
 use btc_types::contract_args::{InitArgs, ProofArgs};
 use btc_types::hash::H256;
-use btc_types::header::{ExtendedHeader, Header};
+use btc_types::header::{
+    ExtendedHeader, Header, BLOCKS_PER_ADJUSTMENT, EXPECTED_TIME, MAX_ADJUSTMENT_FACTOR,
+};
 use btc_types::u256::U256;
 use near_plugins::{
     access_control, pause, AccessControlRole, AccessControllable, Pausable, Upgradable,
@@ -318,6 +320,9 @@ impl BtcLightClient {
         env::log_str(&format!(
             "Init with block hash {block_hash} at height {block_height}"
         ));
+
+        require!(block_height % BLOCKS_PER_ADJUSTMENT == 0, format!("Error: The initial block height must be divisible by {} to ensure proper alignment with difficulty adjustment periods.", BLOCKS_PER_ADJUSTMENT));
+
         let current_block_hash = block_header.block_hash();
         require!(&current_block_hash == block_hash, "Invalid block hash");
         let chain_work = block_header.work();
@@ -350,6 +355,8 @@ impl BtcLightClient {
             .headers_pool
             .get(&block_header.prev_block_hash)
             .unwrap_or_else(|| env::panic_str("PrevBlockNotFound"));
+
+        self.check_target(&block_header, &prev_block_header);
 
         let current_block_hash = block_header.block_hash();
         require!(
@@ -402,6 +409,54 @@ impl BtcLightClient {
                 self.reorg_chain(current_header, last_main_chain_block_height);
             }
         }
+    }
+
+    fn check_target(&self, block_header: &Header, prev_block_header: &ExtendedHeader) {
+        if (prev_block_header.block_height + 1) % BLOCKS_PER_ADJUSTMENT != 0 {
+            require!(
+                block_header.bits == prev_block_header.block_header.bits,
+                format!(
+                    "Error: Incorrect bits. Expected bits: {}; Actual bits: {}.",
+                    prev_block_header.block_header.bits, block_header.bits
+                )
+            );
+            return;
+        }
+
+        let interval_tail_header_hash = self
+            .mainchain_height_to_header
+            .get(&(prev_block_header.block_height + 1 - BLOCKS_PER_ADJUSTMENT))
+            .unwrap_or_else(|| env::panic_str(ERR_KEY_NOT_EXIST));
+        let interval_tail_extend_header = self
+            .headers_pool
+            .get(&interval_tail_header_hash)
+            .unwrap_or_else(|| env::panic_str(ERR_KEY_NOT_EXIST));
+        let mut actual_time_taken = u64::from(
+            prev_block_header.block_header.time - interval_tail_extend_header.block_header.time,
+        );
+
+        if actual_time_taken < EXPECTED_TIME / MAX_ADJUSTMENT_FACTOR {
+            actual_time_taken = EXPECTED_TIME / MAX_ADJUSTMENT_FACTOR;
+        }
+        if actual_time_taken > EXPECTED_TIME * MAX_ADJUSTMENT_FACTOR {
+            actual_time_taken = EXPECTED_TIME * MAX_ADJUSTMENT_FACTOR;
+        }
+
+        let last_target = prev_block_header.block_header.target();
+
+        let (mut new_target, new_target_overflow) = last_target.overflowing_mul(actual_time_taken);
+        require!(!new_target_overflow, "new target overflow");
+        new_target = new_target / U256::from(EXPECTED_TIME);
+
+        let expected_bits = new_target.target_to_bits();
+
+        require!(
+            expected_bits == block_header.bits,
+            format!(
+                "Error: Incorrect target. Expected bits: {:?}, Actual bits: {:?}",
+                expected_bits, block_header.bits
+            )
+        );
     }
 
     /// The most expensive operation which reorganizes the chain, based on fork weight
@@ -620,7 +675,7 @@ mod tests {
                     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
                     0, 2, 0, 2, 0, 2
                 ]),
-                block_height: 1
+                block_height: 1,
             }
         );
     }
@@ -646,7 +701,7 @@ mod tests {
                     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
                     0, 2, 0, 2, 0, 2
                 ]),
-                block_height: 1
+                block_height: 1,
             }
         );
     }
@@ -674,7 +729,7 @@ mod tests {
                     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
                     0, 2, 0, 2, 0, 2
                 ]),
-                block_height: 1
+                block_height: 1,
             }
         );
     }
@@ -738,7 +793,7 @@ mod tests {
                     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
                     0, 3, 0, 3, 0, 3
                 ]),
-                block_height: 2
+                block_height: 2,
             }
         );
     }

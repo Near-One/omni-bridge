@@ -81,6 +81,26 @@ impl U256 {
         ret.wrapping_inc()
     }
 
+    pub fn target_to_bits(&self) -> u32 {
+        let mut n_size = (self.bits() + 7) / 8;
+        let mut n_compact: u32;
+
+        if n_size <= 3 {
+            n_compact = u32::try_from(self.1 << 8 * (3 - n_size)).unwrap();
+        } else {
+            let target = *self >> 8 * (n_size - 3);
+            n_compact = u32::try_from(target.1 & 0x00ff_ffff).unwrap();
+        }
+
+        if n_compact & 0x00800000 != 0 {
+            n_compact >>= 8;
+            n_size += 1;
+        }
+
+        n_compact |= n_size << 24;
+        return n_compact;
+    }
+
     fn is_zero(&self) -> bool {
         self.0 == 0 && self.1 == 0
     }
@@ -100,6 +120,19 @@ impl U256 {
         } else {
             128 - self.1.leading_zeros()
         }
+    }
+
+    pub fn overflowing_mul(self, rhs: u64) -> (Self, bool) {
+        let (high, overflow) = self.0.overflowing_mul(rhs as u128);
+        let (low, overflow_low) = self.1.overflowing_mul(rhs as u128);
+
+        if !overflow_low {
+            return (Self(high, low), overflow);
+        }
+        let carry = ((self.1 >> 64) * (rhs as u128)) >> 64;
+        let (high, overflow_add) = high.overflowing_add(carry);
+
+        (Self(high, low), overflow | overflow_add)
     }
 
     /// Calculates quotient and remainder.
