@@ -99,6 +99,11 @@ pub struct BtcLightClient {
 
 #[near]
 impl BtcLightClient {
+    /// Recommended initialization parameters:
+    /// * `genesis_block_height % 2016 == 0`: The genesis block height must be divisible by 2016 to align with difficulty adjustment cycles.
+    /// * The `genesis_block` must be at least 144 blocks earlier than the last block. 144 is the approximate number of blocks generated in one day.
+    /// * `skip_pow_verification = false`: Should be set to `false` for standard use. Set to `true` only for testing purposes.
+    /// * `gc_threshold = 52704`: This is the approximate number of blocks generated in a year.
     #[init]
     #[private]
     #[must_use]
@@ -226,6 +231,10 @@ impl BtcLightClient {
     /// @param merkle_proof  merkle tree path (concatenated LE sha256 hashes) (does not contain initial transaction_hash and merkle_root)
     /// @param confirmations how many confirmed blocks we want to have before the transaction is valid
     /// @return True if tx_id is at the claimed position in the block at the given blockhash, False otherwise
+    ///
+    /// # Warning
+    /// This function may return `true` if the provided `tx_id` is a hash of an internal node in the Merkle tree rather than a valid transaction hash.
+    /// We assume that validation of whether the `tx_id` corresponds to a valid transaction hash is performed at a higher level of verification.
     ///
     /// # Panics
     /// Multiple cases
