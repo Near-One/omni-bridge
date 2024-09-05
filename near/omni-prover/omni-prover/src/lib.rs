@@ -8,9 +8,8 @@ use near_sdk::serde::{Deserialize, Serialize};
 use near_sdk::{
     env, ext_contract, near, near_bindgen, AccountId, Gas, NearToken, PanicOnDefault, Promise,
 };
-use omni_types::prover_args::VerifyProofArgs;
+use omni_types::prover_args::{ProverId, VerifyProofArgs};
 use omni_types::prover_result::ProverResult;
-use omni_types::ChainKind;
 
 const OUTER_VERIFY_PROOF_GAS: Gas = Gas::from_tgas(10);
 
@@ -27,13 +26,13 @@ pub enum Role {
     UpgradableCodeStager,
     UpgradableCodeDeployer,
     DAO,
-    BridgesManager,
+    ProversManager,
     UnrestrictedValidateProof,
 }
 
 #[derive(BorshSerialize, near_sdk::BorshStorageKey)]
 enum StorageKey {
-    RegisteredBridges,
+    RegisteredProvers,
 }
 
 #[near_bindgen]
@@ -48,7 +47,7 @@ enum StorageKey {
     duration_update_appliers(Role::DAO),
 ))]
 pub struct OmniProver {
-    bridges: UnorderedMap<ChainKind, AccountId>,
+    provers: UnorderedMap<ProverId, AccountId>,
 }
 
 #[near_bindgen]
@@ -58,37 +57,37 @@ impl OmniProver {
     #[must_use]
     pub fn init() -> Self {
         let mut contract = Self {
-            bridges: near_sdk::collections::UnorderedMap::new(StorageKey::RegisteredBridges),
+            provers: near_sdk::collections::UnorderedMap::new(StorageKey::RegisteredProvers),
         };
 
         contract.acl_init_super_admin(near_sdk::env::predecessor_account_id());
         contract
     }
 
-    #[access_control_any(roles(Role::BridgesManager, Role::DAO))]
-    pub fn set_bridge(&mut self, chain_kind: ChainKind, account_id: AccountId) {
-        self.bridges.insert(&chain_kind, &account_id);
+    #[access_control_any(roles(Role::ProversManager, Role::DAO))]
+    pub fn add_prover(&mut self, prover_id: ProverId, account_id: AccountId) {
+        self.provers.insert(&prover_id, &account_id);
     }
 
-    #[access_control_any(roles(Role::BridgesManager, Role::DAO))]
-    pub fn remove_bridge(&mut self, chain_kind: ChainKind) {
-        self.bridges.remove(&chain_kind);
+    #[access_control_any(roles(Role::ProversManager, Role::DAO))]
+    pub fn remove_prover(&mut self, prover_id: ProverId) {
+        self.provers.remove(&prover_id);
     }
 
-    pub fn get_bridges_list(&self) -> Vec<(ChainKind, AccountId)> {
-        self.bridges.iter().collect::<Vec<_>>()
+    pub fn get_provers(&self) -> Vec<(ProverId, AccountId)> {
+        self.provers.iter().collect::<Vec<_>>()
     }
 
     #[pause(except(roles(Role::UnrestrictedValidateProof, Role::DAO)))]
     pub fn verify_proof(&self, #[serializer(borsh)] proof: Vec<u8>) -> Promise {
         let input = VerifyProofArgs::try_from_slice(&proof)
             .unwrap_or_else(|_| env::panic_str("ErrorOnVerifyProofInputParsing"));
-        let bridge_account_id = self
-            .bridges
-            .get(&input.chain_kind)
+        let prover_account_id = self
+            .provers
+            .get(&input.prover_id)
             .unwrap_or_else(|| env::panic_str("ProverIdNotRegistered"));
 
-        ext_omni_prover_proxy::ext(bridge_account_id)
+        ext_omni_prover_proxy::ext(prover_account_id)
             .with_static_gas(env::prepaid_gas().saturating_sub(OUTER_VERIFY_PROOF_GAS))
             .with_attached_deposit(NearToken::from_near(0))
             .verify_proof(input.prover_args)

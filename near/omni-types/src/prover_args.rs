@@ -2,11 +2,12 @@ use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::serde::{Deserialize, Serialize};
 
 use crate::prover_result::ProofKind;
-use crate::ChainKind;
+
+pub type ProverId = String;
 
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone)]
 pub struct VerifyProofArgs {
-    pub chain_kind: ChainKind,
+    pub prover_id: ProverId,
     pub prover_args: Vec<u8>,
 }
 

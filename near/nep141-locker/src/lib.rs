@@ -274,7 +274,9 @@ impl Contract {
             env::panic_str("Invalid proof message")
         };
         require!(
-            self.factories.get(&init_transfer.emitter_address.get_chain()) == Some(init_transfer.emitter_address),
+            self.factories
+                .get(&init_transfer.emitter_address.get_chain())
+                == Some(init_transfer.emitter_address),
             "Unknown factory"
         );
 
@@ -335,7 +337,9 @@ impl Contract {
         let message = self.get_transfer_message(fin_transfer.nonce);
         self.pending_transfers.remove(&fin_transfer.nonce.0);
         require!(
-            self.factories.get(&fin_transfer.emitter_address.get_chain()) == Some(fin_transfer.emitter_address),
+            self.factories
+                .get(&fin_transfer.emitter_address.get_chain())
+                == Some(fin_transfer.emitter_address),
             "Unknown factory"
         );
 
