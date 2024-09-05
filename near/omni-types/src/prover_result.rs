@@ -22,7 +22,7 @@ pub struct FinTransferMessage {
 pub struct DeployTokenMessage {
     pub token: AccountId,
     pub token_address: OmniAddress,
-    pub contract: OmniAddress,
+    pub emitter_address: OmniAddress,
 }
 
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Debug, Clone)]

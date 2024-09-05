@@ -98,7 +98,7 @@ impl TryFromLog<Log<DeployToken>> for DeployTokenMessage {
         }
 
         Ok(DeployTokenMessage {
-            contract: OmniAddress::from_evm_address(chain_kind, H160(event.address.into()))?,
+            emitter_address: OmniAddress::from_evm_address(chain_kind, H160(event.address.into()))?,
             token: event.data.token.parse().map_err(stringify)?,
             token_address: OmniAddress::from_evm_address(
                 chain_kind,
