@@ -256,8 +256,7 @@ impl Contract {
         }
     }
 
-    #[payable]
-    pub fn fin_transfer(&mut self, #[serializer(borsh)] args: FinTransferArgs) -> Promise {
+    pub fn fin_transfer(&self, #[serializer(borsh)] args: FinTransferArgs) -> Promise {
         ext_prover::ext(self.prover_account.clone())
             .with_static_gas(VERIFY_POOF_GAS)
             .with_attached_deposit(NO_DEPOSIT)
@@ -274,7 +273,6 @@ impl Contract {
     }
 
     #[private]
-    #[payable]
     pub fn fin_transfer_callback(
         &mut self,
         #[callback_result]
@@ -300,7 +298,7 @@ impl Contract {
             "The transfer is already finalised"
         );
 
-        if let OmniAddress::Near(recipient) = transfer_message.recipient {
+        if let OmniAddress::Near(recipient) = &transfer_message.recipient {
             let recipient: NearRecipient = recipient
                 .parse()
                 .unwrap_or_else(|_| env::panic_str("Failed to parse recipient"));
@@ -308,11 +306,11 @@ impl Contract {
             // TODO: Figure out what to do with the storage deposit
             let amount_to_transfer = U128(transfer_message.amount.0 - transfer_message.fee.0);
             let mut promise = match recipient.message {
-                Some(message) => ext_token::ext(transfer_message.token)
+                Some(message) => ext_token::ext(transfer_message.token.clone())
                     .with_static_gas(FT_TRANSFER_CALL_GAS)
                     .with_attached_deposit(NearToken::from_yoctonear(0))
                     .ft_transfer_call(recipient.target, amount_to_transfer, None, message),
-                None => ext_token::ext(transfer_message.token)
+                None => ext_token::ext(transfer_message.token.clone())
                     .with_static_gas(FT_TRANSFER_GAS)
                     .with_attached_deposit(NearToken::from_yoctonear(0))
                     .ft_transfer(recipient.target, amount_to_transfer, None),
@@ -325,12 +323,26 @@ impl Contract {
                 FT_TRANSFER_GAS);
             }
 
+            env::log_str(
+                &Nep141LockerEvent::FinTransferEvent {
+                    nonce: None,
+                    transfer_message,
+                }
+                .to_log_string(),
+            );
             promise.into()
         } else {
             self.current_nonce += 1;
             self.pending_transfers
                 .insert(&self.current_nonce, &transfer_message);
 
+            env::log_str(
+                &Nep141LockerEvent::FinTransferEvent {
+                    nonce: Some(U128(self.current_nonce)),
+                    transfer_message,
+                }
+                .to_log_string(),
+            );
             PromiseOrValue::Value(U128(self.current_nonce))
         }
     }
