@@ -1,3 +1,5 @@
+use std::fmt;
+
 use anyhow::Result;
 use futures::StreamExt;
 
@@ -18,9 +20,29 @@ use near_primitives::{
     types::{AccountId, BlockReference},
 };
 
+mod defaults;
+
 const CONTRACT_ID: &str = "omni-locker.test1-dev.testnet";
 const SIGN_TRANSFER_GAS: u64 = 300_000_000_000_000;
 const SIGN_TRANSFER_ATTACHED_DEPOSIT: u128 = 500_000_000_000_000_000_000_000;
+
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+enum OmniAddress {
+    Eth(String),
+    Near(String),
+    Sol(String),
+}
+
+impl fmt::Display for OmniAddress {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let (chain_str, recipient) = match self {
+            OmniAddress::Eth(recipient) => ("eth", recipient.to_string()),
+            OmniAddress::Near(recipient) => ("near", recipient.to_string()),
+            OmniAddress::Sol(recipient) => ("sol", recipient.clone()),
+        };
+        write!(f, "{}:{}", chain_str, recipient)
+    }
+}
 
 #[derive(Debug, serde::Deserialize)]
 struct FtOnTransferLog {
@@ -38,37 +60,37 @@ struct TransferMessage {
     origin_nonce: String,
     token: String,
     amount: String,
-    recipient: serde_json::Value,
+    recipient: OmniAddress,
     fee: String,
-    sender: serde_json::Value,
+    sender: OmniAddress,
 }
 
-#[derive(Debug, serde::Deserialize)]
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
 struct SignTransferLog {
     #[serde(rename = "SignTransferEvent")]
     sign_transfer_event: SignTransferEvent,
 }
 
-#[derive(Debug, serde::Deserialize)]
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
 struct SignTransferEvent {
     signature: SignatureResponse,
     message_payload: TransferMessagePayload,
 }
 
-#[derive(Debug, serde::Deserialize)]
-pub struct SignatureResponse {
-    pub big_r: serde_json::Value,
-    pub s: serde_json::Value,
-    pub recovery_id: u8,
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+struct SignatureResponse {
+    big_r: serde_json::Value,
+    s: serde_json::Value,
+    recovery_id: u8,
 }
 
-#[derive(Debug, serde::Deserialize)]
-pub struct TransferMessagePayload {
-    pub nonce: String,
-    pub token: AccountId,
-    pub amount: String,
-    pub recipient: serde_json::Value,
-    pub relayer: serde_json::Value,
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+struct TransferMessagePayload {
+    nonce: String,
+    token: String,
+    amount: String,
+    recipient: OmniAddress,
+    relayer: Option<OmniAddress>,
 }
 
 #[tokio::main]
@@ -122,7 +144,43 @@ async fn handle_streamer_message(
         .filter_map(|log| serde_json::from_str::<SignTransferLog>(&log).ok())
         .collect::<Vec<_>>();
 
-    // TODO: call `finalize_deposit_omni_with_logs` using `bridge-sdk`
+    let connector = nep141_connector::Nep141ConnectorBuilder::default()
+        .eth_endpoint(Some(defaults::ETH_RPC_TESTNET.to_string()))
+        .eth_chain_id(Some(defaults::ETH_CHAIN_ID_TESTNET))
+        .near_endpoint(Some(defaults::NEAR_RPC_TESTNET.to_string()))
+        .token_locker_id(Some(defaults::TOKEN_LOCKER_ID_TESTNET.to_string()))
+        .bridge_token_factory_address(Some(
+            defaults::BRIDGE_TOKEN_FACTORY_ADDRESS_TESTNET.to_string(),
+        ))
+        .near_light_client_address(Some(
+            defaults::NEAR_LIGHT_CLIENT_ETH_ADDRESS_TESTNET.to_string(),
+        ))
+        .eth_private_key(None)
+        .near_signer(Some("account_id".to_string()))
+        .near_private_key(Some("private_key".to_string()))
+        .build()
+        .unwrap();
+
+    for log in sign_transfer_callback_logs {
+        println!("Sign transfer callback: {:?}", log);
+        connector
+            .deposit(
+                log.sign_transfer_event.message_payload.token.clone(),
+                log.sign_transfer_event.message_payload.amount.parse()?,
+                log.sign_transfer_event
+                    .message_payload
+                    .recipient
+                    .to_string(),
+            )
+            .await
+            .unwrap();
+        connector
+            .finalize_deposit_omni_with_log(
+                &serde_json::to_string(&log.sign_transfer_event).unwrap(),
+            )
+            .await
+            .unwrap();
+    }
 
     Ok(())
 }
