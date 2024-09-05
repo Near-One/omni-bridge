@@ -7,17 +7,20 @@ use near_contract_standards::fungible_token::metadata::FungibleTokenMetadata;
 use near_contract_standards::fungible_token::receiver::FungibleTokenReceiver;
 use near_contract_standards::storage_management::StorageBalance;
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
-use near_sdk::collections::LookupMap; // TODO compare the perfomance with store
+use near_sdk::collections::LookupMap;
 use near_sdk::json_types::U128;
 use near_sdk::serde::{Deserialize, Serialize};
-use near_sdk::serde_json::json;
 use near_sdk::{
     env, ext_contract, near, require, AccountId, BorshStorageKey, Gas, NearToken, PanicOnDefault,
     Promise, PromiseError, PromiseOrValue,
 };
-
-mod types;
-use types::*;
+use omni_types::mpc_types::SignatureResponse;
+use omni_types::near_events::Nep141LockerEvent;
+use omni_types::prover_result::ProverResult;
+use omni_types::{
+    ChainKind, MetadataPayload, NearRecipient, Nonce, OmniAddress, SignRequest, TransferMessage,
+    TransferMessagePayload, UpdateFee,
+};
 
 const LOG_METADATA_GAS: Gas = Gas::from_tgas(10);
 const LOG_METADATA_CALLBCAK_GAS: Gas = Gas::from_tgas(260);
@@ -43,23 +46,6 @@ pub enum Role {
     UnrestrictedDeposit,
     UpgradableCodeStager,
     UpgradableCodeDeployer,
-}
-
-#[derive(Deserialize, Serialize, Clone)]
-pub enum Nep141LockerEvent {
-    InitTransferEvent {
-        transfer_message: TransferMessage,
-    },
-    SignTransferEvent {
-        signature: SignatureResponse,
-        message_payload: TransferMessagePayload,
-    },
-}
-
-impl Nep141LockerEvent {
-    pub fn to_log_string(&self) -> String {
-        json!(self).to_string()
-    }
 }
 
 #[ext_contract(ext_token)]
@@ -92,7 +78,7 @@ pub trait ExtSigner {
 #[ext_contract(ext_prover)]
 pub trait Prover {
     #[result_serializer(borsh)]
-    fn verify_proof(&self, #[serializer(borsh)] proof: Vec<u8>) -> ProofResult;
+    fn verify_proof(&self, #[serializer(borsh)] proof: Vec<u8>) -> ProverResult;
 }
 
 #[near(contract_state)]
@@ -264,7 +250,7 @@ impl Contract {
         }
     }
 
-    pub fn fin_transfer(&self, proof: Vec<u8>) -> Promise {
+    pub fn fin_transfer(&self, #[serializer(borsh)] proof: Vec<u8>) -> Promise {
         ext_prover::ext(self.prover_account.clone())
             .with_static_gas(VERIFY_POOF_GAS)
             .with_attached_deposit(NO_DEPOSIT)
@@ -282,11 +268,19 @@ impl Contract {
         &mut self,
         #[callback_result]
         #[serializer(borsh)]
-        call_result: Result<ProofResult, PromiseError>,
+        call_result: Result<ProverResult, PromiseError>,
     ) -> PromiseOrValue<U128> {
-        let Ok(ProofResult::InitTransfer(transfer_message)) = call_result else {
+        let Ok(ProverResult::InitTransfer(init_transfer)) = call_result else {
             env::panic_str("Invalid proof message")
         };
+        require!(
+            self.factories
+                .get(&init_transfer.emitter_address.get_chain())
+                == Some(init_transfer.emitter_address),
+            "Unknown factory"
+        );
+
+        let transfer_message = init_transfer.transfer;
 
         if let OmniAddress::Near(recipient) = transfer_message.recipient {
             let recipient: NearRecipient = recipient
@@ -334,16 +328,18 @@ impl Contract {
         &mut self,
         #[callback_result]
         #[serializer(borsh)]
-        call_result: Result<ProofResult, PromiseError>,
+        call_result: Result<ProverResult, PromiseError>,
     ) -> Promise {
-        let Ok(ProofResult::FinTransfer(fin_transfer)) = call_result else {
+        let Ok(ProverResult::FinTransfer(fin_transfer)) = call_result else {
             env::panic_str("Invalid proof message")
         };
 
         let message = self.get_transfer_message(fin_transfer.nonce);
         self.pending_transfers.remove(&fin_transfer.nonce.0);
         require!(
-            self.factories.get(&fin_transfer.factory.get_chain()) == Some(fin_transfer.factory),
+            self.factories
+                .get(&fin_transfer.emitter_address.get_chain())
+                == Some(fin_transfer.emitter_address),
             "Unknown factory"
         );
 

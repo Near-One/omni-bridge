@@ -1,5 +1,5 @@
 [package]
-name = "rainbow-omni-prover-proxy"
+name = "evm-prover-proxy"
 version = "2.0.0"
 authors = ["Near Inc <hello@nearprotocol.com>"]
 edition = "2021"
@@ -10,5 +10,4 @@ crate-type = ["cdylib", "rlib"]
 [dependencies]
 near-sdk.workspace = true
 borsh.workspace = true
-near-plugins.workspace = true
-omni-types = { path = "../../omni-types" }
+omni-types.workspace = true
