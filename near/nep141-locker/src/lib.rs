@@ -210,14 +210,14 @@ impl Contract {
     }
 
     #[payable]
-    pub fn sign_transfer(&mut self, nonce: U128, relayer: Option<OmniAddress>) -> Promise {
+    pub fn sign_transfer(&mut self, nonce: U128, fee_recipient: Option<AccountId>) -> Promise {
         let transfer_message = self.get_transfer_message(nonce);
         let transfer_payload = TransferMessagePayload {
             nonce,
             token: transfer_message.token,
             amount: U128(transfer_message.amount.0 - transfer_message.fee.0),
             recipient: transfer_message.recipient,
-            relayer,
+            fee_recipient,
         };
 
         let payload = near_sdk::env::keccak256_array(&borsh::to_vec(&transfer_payload).unwrap());

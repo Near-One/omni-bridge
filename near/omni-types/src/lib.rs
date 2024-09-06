@@ -215,7 +215,7 @@ pub struct TransferMessagePayload {
     pub token: AccountId,
     pub amount: U128,
     pub recipient: OmniAddress,
-    pub relayer: Option<OmniAddress>,
+    pub fee_recipient: Option<AccountId>,
 }
 
 #[derive(Deserialize, Serialize, Clone)]
