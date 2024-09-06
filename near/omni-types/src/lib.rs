@@ -243,9 +243,3 @@ pub type Nonce = u128;
 pub fn stringify<T: std::fmt::Display>(item: T) -> String {
     item.to_string()
 }
-
-#[derive(Serialize, Deserialize, Clone)]
-pub struct TransferLog {
-    pub message_payload: TransferMessagePayload,
-    pub signature: mpc_types::SignatureResponse,
-}
