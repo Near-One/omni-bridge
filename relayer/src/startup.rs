@@ -66,16 +66,11 @@ pub async fn start_near_indexer(
     let stream = tokio_stream::wrappers::ReceiverStream::new(stream);
 
     stream
-        .map(|streamer_message| {
-            utils::handle_streamer_message(
-                &client,
-                near_signer.clone(),
-                connector.clone(),
-                streamer_message,
-            )
+        .map(|streamer_message| async {
+            utils::handle_streamer_message(&client, &near_signer, &connector, streamer_message);
         })
         .buffer_unordered(10)
-        .for_each(|_| async {})
+        .for_each(|()| async {})
         .await;
 
     Ok(())

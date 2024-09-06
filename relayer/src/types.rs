@@ -10,11 +10,11 @@ enum OmniAddress {
 impl fmt::Display for OmniAddress {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let (chain_str, recipient) = match self {
-            OmniAddress::Eth(recipient) => ("eth", recipient.to_string()),
-            OmniAddress::Near(recipient) => ("near", recipient.to_string()),
-            OmniAddress::Sol(recipient) => ("sol", recipient.clone()),
+            Self::Eth(recipient) => ("eth", recipient.to_string()),
+            Self::Near(recipient) => ("near", recipient.to_string()),
+            Self::Sol(recipient) => ("sol", recipient.clone()),
         };
-        write!(f, "{}:{}", chain_str, recipient)
+        write!(f, "{chain_str}:{recipient}")
     }
 }
 

@@ -39,20 +39,20 @@ pub async fn get_final_block(client: &JsonRpcClient) -> Result<u64> {
         .map_err(Into::into)
 }
 
-pub async fn handle_streamer_message(
+pub fn handle_streamer_message(
     client: &JsonRpcClient,
-    near_signer: InMemorySigner,
-    connector: Arc<nep141_connector::Nep141Connector>,
+    near_signer: &InMemorySigner,
+    connector: &Arc<nep141_connector::Nep141Connector>,
     streamer_message: StreamerMessage,
 ) {
     process_ft_on_transfer(&streamer_message, client, near_signer);
-    process_sign_transfer_callback(streamer_message, connector);
+    process_sign_transfer_callback(&streamer_message, connector);
 }
 
 fn process_ft_on_transfer(
     streamer_message: &StreamerMessage,
     client: &JsonRpcClient,
-    near_signer: InMemorySigner,
+    near_signer: &InMemorySigner,
 ) {
     let ft_on_transfer_outcomes = find_ft_on_transfer_outcomes(streamer_message);
 
@@ -77,10 +77,10 @@ fn process_ft_on_transfer(
 }
 
 fn process_sign_transfer_callback(
-    streamer_message: StreamerMessage,
-    connector: Arc<nep141_connector::Nep141Connector>,
+    streamer_message: &StreamerMessage,
+    connector: &Arc<nep141_connector::Nep141Connector>,
 ) {
-    let sign_transfer_callback_outcomes = find_sign_transfer_callback_outcomes(&streamer_message);
+    let sign_transfer_callback_outcomes = find_sign_transfer_callback_outcomes(streamer_message);
     let sign_transfer_callback_logs = sign_transfer_callback_outcomes
         .iter()
         .flat_map(|outcome| outcome.execution_outcome.outcome.logs.clone())
@@ -114,13 +114,7 @@ fn find_ft_on_transfer_outcomes(
         .shards
         .iter()
         .flat_map(|shard| shard.receipt_execution_outcomes.iter())
-        .filter(|outcome| {
-            if let Ok(res) = is_ft_on_transfer(&outcome.receipt) {
-                res
-            } else {
-                false
-            }
-        })
+        .filter(|outcome| is_ft_on_transfer(&outcome.receipt).map_or(false, |res| res))
         .cloned()
         .collect()
 }
@@ -145,13 +139,7 @@ fn find_sign_transfer_callback_outcomes(
         .shards
         .iter()
         .flat_map(|shard| shard.receipt_execution_outcomes.iter())
-        .filter(|outcome| {
-            if let Ok(res) = is_sign_transfer_callback(&outcome.receipt) {
-                res
-            } else {
-                false
-            }
-        })
+        .filter(|outcome| is_sign_transfer_callback(&outcome.receipt).map_or(false, |res| res))
         .cloned()
         .collect()
 }
