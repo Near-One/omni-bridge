@@ -15,6 +15,7 @@ pub struct InitTransferMessage {
 pub struct FinTransferMessage {
     pub nonce: U128,
     pub claim_recipient: AccountId,
+    pub amount: U128,
     pub emitter_address: OmniAddress,
 }
 

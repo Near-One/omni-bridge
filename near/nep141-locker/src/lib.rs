@@ -383,9 +383,11 @@ impl Contract {
             "Unknown factory"
         );
 
+        let fee = message.amount.0 - fin_transfer.amount.0;
+
         ext_token::ext(message.token)
             .with_static_gas(LOG_METADATA_GAS)
-            .ft_transfer(fin_transfer.claim_recipient, message.fee, None)
+            .ft_transfer(fin_transfer.claim_recipient, U128(fee), None)
     }
 
     pub fn get_transfer_message(&self, nonce: U128) -> TransferMessage {
