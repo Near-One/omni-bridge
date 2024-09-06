@@ -12,7 +12,6 @@ use alloy::{
 
 mod defaults;
 mod startup;
-mod types;
 mod utils;
 
 #[tokio::main]

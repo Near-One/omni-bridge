@@ -21,8 +21,9 @@ use near_primitives::{
     types::{AccountId, BlockReference},
     views::FinalExecutionOutcomeView,
 };
+use omni_types::near_events::Nep141LockerEvent;
 
-use crate::{defaults, types};
+use crate::defaults;
 
 pub async fn get_final_block(client: &JsonRpcClient) -> Result<u64> {
     info!("Getting final block");
@@ -59,7 +60,7 @@ fn process_ft_on_transfer(
     let ft_on_transfer_logs = ft_on_transfer_outcomes
         .iter()
         .flat_map(|outcome| outcome.execution_outcome.outcome.logs.clone())
-        .filter_map(|log| serde_json::from_str::<types::FtOnTransferLog>(&log).ok())
+        .filter_map(|log| serde_json::from_str::<Nep141LockerEvent>(&log).ok())
         .collect::<Vec<_>>();
 
     for log in ft_on_transfer_logs {
@@ -84,23 +85,15 @@ fn process_sign_transfer_callback(
     let sign_transfer_callback_logs = sign_transfer_callback_outcomes
         .iter()
         .flat_map(|outcome| outcome.execution_outcome.outcome.logs.clone())
-        .filter_map(|log| serde_json::from_str::<types::SignTransferLog>(&log).ok())
+        .filter_map(|log| serde_json::from_str::<Nep141LockerEvent>(&log).ok())
         .collect::<Vec<_>>();
 
     for log in sign_transfer_callback_logs {
         info!("Processing sign_transfer_callback_log: {:?}", log);
 
         let connector_clone = connector.clone();
-        let Ok(serialized_log) = serde_json::to_string(&log.sign_transfer_event) else {
-            error!("Failed to serialize log: {:?}", log);
-            continue;
-        };
-
         tokio::spawn(async move {
-            if let Err(err) = connector_clone
-                .finalize_deposit_omni_with_log(&serialized_log)
-                .await
-            {
+            if let Err(err) = connector_clone.finalize_deposit_omni_with_log(log).await {
                 error!("Failed to finalize deposit: {}", err);
             }
         });
@@ -160,8 +153,12 @@ fn is_sign_transfer_callback(receipt: &ReceiptView) -> Result<bool> {
 async fn sign_transfer(
     client: JsonRpcClient,
     near_signer: InMemorySigner,
-    log: types::FtOnTransferLog,
+    log: Nep141LockerEvent,
 ) -> Result<FinalExecutionOutcomeView> {
+    let Nep141LockerEvent::InitTransferEvent { transfer_message } = log else {
+        anyhow::bail!("Expected InitTransferEvent, got: {:?}", log);
+    };
+
     let access_key_query_response = client
         .call(RpcQueryRequest {
             block_reference: BlockReference::latest(),
@@ -186,7 +183,7 @@ async fn sign_transfer(
         actions: vec![near_primitives::transaction::Action::FunctionCall(
             Box::new(near_primitives::transaction::FunctionCallAction {
                 method_name: "sign_transfer".to_string(),
-                args: serde_json::json!({ "nonce": log.init_transfer_event.transfer_message.origin_nonce })
+                args: serde_json::json!({ "nonce": transfer_message.origin_nonce })
                     .to_string()
                     .into_bytes(),
                 gas: defaults::SIGN_TRANSFER_GAS,
