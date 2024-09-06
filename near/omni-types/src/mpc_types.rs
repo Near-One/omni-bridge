@@ -22,13 +22,13 @@ impl SignatureResponse {
     pub fn to_bytes(&self) -> Vec<u8> {
         let mut bytes = Vec::new();
 
-        bytes.extend_from_slice(self.big_r.affine_point.as_bytes());
+        bytes.extend_from_slice(&self.big_r.affine_point.as_bytes()[1..]);
         bytes.push(0);
 
         bytes.extend_from_slice(self.s.scalar.as_bytes());
         bytes.push(0);
 
-        bytes.push(self.recovery_id);
+        bytes.push(self.recovery_id + 27);
 
         bytes
     }
