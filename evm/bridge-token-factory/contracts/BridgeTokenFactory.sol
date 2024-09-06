@@ -49,7 +49,7 @@ contract BridgeTokenFactory is
         string token;
         uint128 amount;
         address recipient;
-        address relayer;
+        string feeRecipient;
     }
 
     struct MetadataPayload {
@@ -68,7 +68,13 @@ contract BridgeTokenFactory is
         address indexed tokenEthAddress
     );
 
-    event Deposit(string indexed token, uint256 amount, address recipient);
+    event Deposit(
+        string indexed token,
+        uint256 amount,
+        address recipient,
+        uint128 indexed nonce,
+        string indexed feeRecipient
+    );
 
     event SetMetadata(
         address indexed token,
@@ -79,7 +85,7 @@ contract BridgeTokenFactory is
     );
 
     error InvalidSignature();
-    error NonceAlreadyUsed();
+    error NonceAlreadyUsed(uint256 nonce);
 
     // BridgeTokenFactory is linked to the bridge token factory on NEAR side.
     // It also links to the prover that it uses to unlock the tokens.
@@ -175,7 +181,7 @@ contract BridgeTokenFactory is
 
     function deposit(bytes calldata signatureData, BridgeDeposit calldata bridgeDeposit) external whenNotPaused(PAUSED_DEPOSIT) {
         if (completedTransfers[bridgeDeposit.nonce]) {
-            revert NonceAlreadyUsed();
+            revert NonceAlreadyUsed(bridgeDeposit.nonce);
         }
 
         bytes memory borshEncoded = bytes.concat(
@@ -184,9 +190,9 @@ contract BridgeTokenFactory is
             Borsh.encodeUint128(bridgeDeposit.amount),
             bytes1(0x00), // variant 1 in rust enum
             Borsh.encodeAddress(bridgeDeposit.recipient),
-            bridgeDeposit.relayer == address(0)  // None or Some(Address) in rust
+            bytes(bridgeDeposit.feeRecipient).length == 0  // None or Some(String) in rust
                 ? bytes("\x00") 
-                : bytes.concat(bytes("\x01"), Borsh.encodeAddress(bridgeDeposit.relayer))
+                : bytes.concat(bytes("\x01"), Borsh.encodeString(bridgeDeposit.feeRecipient))
         );
         bytes32 hashed = keccak256(borshEncoded);
 
@@ -199,7 +205,13 @@ contract BridgeTokenFactory is
 
         completedTransfers[bridgeDeposit.nonce] = true;
 
-        emit Deposit(bridgeDeposit.token, bridgeDeposit.amount, bridgeDeposit.recipient);
+        emit Deposit(
+            bridgeDeposit.token,
+            bridgeDeposit.amount,
+            bridgeDeposit.recipient,
+            bridgeDeposit.nonce,
+            bridgeDeposit.feeRecipient
+        );
     }
 
     function withdraw(

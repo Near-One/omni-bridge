@@ -111,7 +111,7 @@ describe('BridgeToken', () => {
     )
       .to
       .emit(BridgeTokenFactory, 'Deposit')
-      .withArgs(wrappedNearId, 1, payload.recipient);
+      .withArgs(wrappedNearId, 1, payload.recipient, payload.nonce, payload.feeRecipient);
 
     expect(
       (await token.balanceOf(payload.recipient))
@@ -207,7 +207,7 @@ describe('BridgeToken', () => {
     await createToken(wrappedNearId);
     
     const { signature, payload } = depositSignature(wrappedNearId, user1.address);
-    payload.relayer = user2.address;
+    payload.feeRecipient = "testrecipient.near";
 
     await expect(
       BridgeTokenFactory.deposit(signature, payload)

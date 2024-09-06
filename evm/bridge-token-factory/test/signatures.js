@@ -34,7 +34,7 @@ function depositSignature(tokenId, recipient) {
         token: "wrap.testnet",
         amount: 1,
         recipient: "0x3A445243376C32fAba679F63586e236F77EA601e",
-        relayer: "0x0000000000000000000000000000000000000000",
+        feeRecipient: "",
       },
       signature: "0x4B7305FD501E44EEF53E876DE0F8F4F848C00179FD27B0E4942EC2C94816C5CA33C583D7D386B77BF7AD121ED4FE0DB5AF8C730CC7B2D505987616B532F492AF1B"
     },
@@ -44,7 +44,7 @@ function depositSignature(tokenId, recipient) {
         token: "token-bridge-test.testnet",
         amount: 200,
         recipient: "0x5a08feed678c056650b3eb4a5cb1b9bb6f0fe265",
-        relayer: "0x0000000000000000000000000000000000000000",
+        feeRecipient: "",
       },
       signature: "0xE5C500D3D21289C620BF7CA0E9049B24B7D4D9864C5E3F09477BCCB7E6524E5810DDCDFE5988F08C36B6AC70D81E443D91CBA0E43935ECEDB8F14BD4222464FA1C"
     },
@@ -54,7 +54,7 @@ function depositSignature(tokenId, recipient) {
         token: "wrap.testnet",
         amount: 25,
         recipient: "0x5a08feed678c056650b3eb4a5cb1b9bb6f0fe265",
-        relayer: "0x0000000000000000000000000000000000000000",
+        feeRecipient: "",
       },
       signature: "0x316AFD2FFC056DD266296B023E2509222FC6ED9FAE44583414BE6E478BF62C5238E413341093B0E8C1A6192EFF1C0C4FFFB0D405C48993555E99B11A987891C61C"
     },
@@ -64,7 +64,7 @@ function depositSignature(tokenId, recipient) {
         token: "token-bridge-test.testnet",
         amount: 10,
         recipient: "0x3a445243376c32faba679f63586e236f77ea601e",
-        relayer: "0x0000000000000000000000000000000000000000",
+        feeRecipient: "",
       },
       signature: "0x15E146799FF4D5FC190A72633A0FAC14C399D2D9CFCEA1DAC8C1D0913C6698832C2AEF2C5CA6AA731089EA31559A57AE2586744DDDE7A196A3BDA26A38B8387A1C"
     }
