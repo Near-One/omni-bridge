@@ -58,7 +58,7 @@ impl<'de> Deserialize<'de> for H160 {
             where
                 E: serde::de::Error,
             {
-                Ok(s.parse().map_err(serde::de::Error::custom)?)
+                s.parse().map_err(serde::de::Error::custom)
             }
         }
 
