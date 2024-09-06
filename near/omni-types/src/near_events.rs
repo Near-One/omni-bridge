@@ -4,7 +4,7 @@ use near_sdk::serde_json::json;
 use crate::mpc_types::SignatureResponse;
 use crate::{TransferMessage, TransferMessagePayload};
 
-#[derive(Deserialize, Serialize, Clone)]
+#[derive(Deserialize, Serialize, Clone, Debug)]
 pub enum Nep141LockerEvent {
     InitTransferEvent {
         transfer_message: TransferMessage,
