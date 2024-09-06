@@ -15,7 +15,7 @@ use near_sdk::{
     env, ext_contract, near, require, AccountId, BorshStorageKey, Gas, NearToken, PanicOnDefault,
     Promise, PromiseError, PromiseOrValue,
 };
-use omni_types::locker_args::{ClaimFeeArgs, FinTransferArgs};
+use omni_types::locker_args::{BindTokenArgs, ClaimFeeArgs, FinTransferArgs};
 use omni_types::mpc_types::SignatureResponse;
 use omni_types::near_events::Nep141LockerEvent;
 use omni_types::prover_args::VerifyProofArgs;
@@ -31,6 +31,7 @@ const MPC_SIGNING_GAS: Gas = Gas::from_tgas(250);
 const SIGN_TRANSFER_CALLBACK_GAS: Gas = Gas::from_tgas(5);
 const VERIFY_POOF_GAS: Gas = Gas::from_tgas(50);
 const CLAIM_FEE_CALLBACK_GAS: Gas = Gas::from_tgas(50);
+const BIND_TOKEN_CALLBACK_GAS: Gas = Gas::from_tgas(25);
 const FT_TRANSFER_CALL_GAS: Gas = Gas::from_tgas(50);
 const FT_TRANSFER_GAS: Gas = Gas::from_tgas(5);
 const NO_DEPOSIT: NearToken = NearToken::from_near(0);
@@ -40,6 +41,7 @@ enum StorageKey {
     PendingTransfers,
     Factories,
     FinalisedTransfers,
+    TokensMapping,
 }
 
 #[derive(AccessControlRole, Deserialize, Serialize, Copy, Clone)]
@@ -101,6 +103,7 @@ pub struct Contract {
     pub factories: LookupMap<ChainKind, OmniAddress>,
     pub pending_transfers: LookupMap<Nonce, TransferMessage>,
     pub finalised_transfers: LookupSet<(ChainKind, Nonce)>,
+    pub tokens_to_address_mapping: LookupMap<(ChainKind, AccountId), OmniAddress>,
     pub mpc_signer: AccountId,
     pub current_nonce: Nonce,
 }
@@ -141,6 +144,7 @@ impl Contract {
             factories: LookupMap::new(StorageKey::Factories),
             pending_transfers: LookupMap::new(StorageKey::PendingTransfers),
             finalised_transfers: LookupSet::new(StorageKey::FinalisedTransfers),
+            tokens_to_address_mapping: LookupMap::new(StorageKey::TokensMapping),
             mpc_signer,
             current_nonce: nonce.0,
         };
@@ -388,6 +392,47 @@ impl Contract {
         ext_token::ext(message.token)
             .with_static_gas(LOG_METADATA_GAS)
             .ft_transfer(fin_transfer.fee_recipient, U128(fee), None)
+    }
+
+    pub fn bind_token(&self, #[serializer(borsh)] args: BindTokenArgs) -> Promise {
+        ext_prover::ext(self.prover_account.clone())
+            .with_static_gas(VERIFY_POOF_GAS)
+            .with_attached_deposit(NO_DEPOSIT)
+            .verify_proof(VerifyProofArgs {
+                prover_id: args.chain_kind.as_ref().to_owned(),
+                prover_args: args.prover_args,
+            })
+            .then(
+                Self::ext(env::current_account_id())
+                    .with_attached_deposit(env::attached_deposit())
+                    .with_static_gas(BIND_TOKEN_CALLBACK_GAS)
+                    .fin_transfer_callback(),
+            )
+    }
+
+    #[private]
+    pub fn bind_token_callback(
+        &mut self,
+        #[callback_result]
+        #[serializer(borsh)]
+        call_result: Result<ProverResult, PromiseError>,
+    ) {
+        let Ok(ProverResult::DeployToken(deploy_token)) = call_result else {
+            env::panic_str("Invalid proof message")
+        };
+
+        self.tokens_to_address_mapping.insert(
+            &(deploy_token.token_address.get_chain(), deploy_token.token),
+            &deploy_token.token_address,
+        );
+    }
+
+    pub fn get_token_address(
+        &self,
+        chain_kind: ChainKind,
+        token: AccountId,
+    ) -> Option<OmniAddress> {
+        self.tokens_to_address_mapping.get(&(chain_kind, token))
     }
 
     pub fn get_transfer_message(&self, nonce: U128) -> TransferMessage {
