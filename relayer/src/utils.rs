@@ -39,7 +39,17 @@ pub async fn get_final_block(client: &JsonRpcClient) -> Result<u64> {
         .map_err(Into::into)
 }
 
-pub fn process_ft_on_transfer(
+pub async fn handle_streamer_message(
+    client: &JsonRpcClient,
+    near_signer: InMemorySigner,
+    connector: Arc<nep141_connector::Nep141Connector>,
+    streamer_message: StreamerMessage,
+) {
+    process_ft_on_transfer(&streamer_message, client, near_signer);
+    process_sign_transfer_callback(streamer_message, connector);
+}
+
+fn process_ft_on_transfer(
     streamer_message: &StreamerMessage,
     client: &JsonRpcClient,
     near_signer: InMemorySigner,
@@ -66,7 +76,7 @@ pub fn process_ft_on_transfer(
     }
 }
 
-pub fn process_sign_transfer_callback(
+fn process_sign_transfer_callback(
     streamer_message: StreamerMessage,
     connector: Arc<nep141_connector::Nep141Connector>,
 ) {
