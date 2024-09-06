@@ -14,7 +14,7 @@ pub struct InitTransferMessage {
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Debug, Clone)]
 pub struct FinTransferMessage {
     pub nonce: U128,
-    pub claim_recipient: AccountId,
+    pub fee_recipient: AccountId,
     pub amount: U128,
     pub emitter_address: OmniAddress,
 }
