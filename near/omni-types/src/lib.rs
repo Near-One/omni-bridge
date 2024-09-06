@@ -243,3 +243,42 @@ pub type Nonce = u128;
 pub fn stringify<T: std::fmt::Display>(item: T) -> String {
     item.to_string()
 }
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct AffinePoint {
+    pub affine_point: String,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct Scalar {
+    pub scalar: String,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct Signature {
+    pub big_r: AffinePoint,
+    pub s: Scalar,
+    pub recovery_id: u8,
+}
+
+impl Signature {
+    pub fn to_bytes(&self) -> Vec<u8> {
+        let mut bytes = Vec::new();
+
+        bytes.extend_from_slice(self.big_r.affine_point.as_bytes());
+        bytes.push(0);
+
+        bytes.extend_from_slice(self.s.scalar.as_bytes());
+        bytes.push(0);
+
+        bytes.push(self.recovery_id);
+
+        bytes
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct TransferLog {
+    pub message_payload: TransferMessagePayload,
+    pub signature: Signature,
+}
