@@ -10,12 +10,11 @@ use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::collections::{LookupMap, LookupSet};
 use near_sdk::json_types::U128;
 use near_sdk::serde::{Deserialize, Serialize};
-use near_sdk::serde_json::json;
 use near_sdk::{
-    env, ext_contract, near, require, AccountId, BorshStorageKey, Gas, NearToken, PanicOnDefault,
-    Promise, PromiseError, PromiseOrValue,
+    env, ext_contract, near, require, serde_json, AccountId, BorshStorageKey, Gas, NearToken,
+    PanicOnDefault, Promise, PromiseError, PromiseOrValue, PromiseResult,
 };
-use omni_types::locker_args::{BindTokenArgs, ClaimFeeArgs, FinTransferArgs};
+use omni_types::locker_args::{BindTokenArgs, ClaimFeeArgs, FinTransferArgs, StorageDepositArgs};
 use omni_types::mpc_types::SignatureResponse;
 use omni_types::near_events::Nep141LockerEvent;
 use omni_types::prover_args::VerifyProofArgs;
@@ -34,7 +33,10 @@ const CLAIM_FEE_CALLBACK_GAS: Gas = Gas::from_tgas(50);
 const BIND_TOKEN_CALLBACK_GAS: Gas = Gas::from_tgas(25);
 const FT_TRANSFER_CALL_GAS: Gas = Gas::from_tgas(50);
 const FT_TRANSFER_GAS: Gas = Gas::from_tgas(5);
+const STORAGE_BALANCE_OF_GAS: Gas = Gas::from_tgas(3);
+const STORAGE_DEPOSIT_GAS: Gas = Gas::from_tgas(3);
 const NO_DEPOSIT: NearToken = NearToken::from_near(0);
+const NEP141_DEPOSIT: NearToken = NearToken::from_yoctonear(1250000000000000000000);
 
 #[derive(BorshSerialize, BorshStorageKey)]
 enum StorageKey {
@@ -73,6 +75,11 @@ pub trait ExtToken {
 
     fn ft_metadata(&self) -> FungibleTokenMetadata;
 
+    fn storage_deposit(
+        &mut self,
+        account_id: Option<AccountId>,
+        registration_only: Option<bool>,
+    ) -> Option<StorageBalance>;
     fn storage_balance_of(&mut self, account_id: Option<AccountId>) -> Option<StorageBalance>;
 }
 
@@ -260,30 +267,39 @@ impl Contract {
         }
     }
 
-    pub fn fin_transfer(&self, #[serializer(borsh)] args: FinTransferArgs) -> Promise {
-        ext_prover::ext(self.prover_account.clone())
+    #[payable]
+    pub fn fin_transfer(&mut self, #[serializer(borsh)] args: FinTransferArgs) -> Promise {
+        require!(
+            args.storage_deposit_args.accounts.len() <= 2,
+            "Invalid len of accounts for storage deposit"
+        );
+        let main_promise = ext_prover::ext(self.prover_account.clone())
             .with_static_gas(VERIFY_POOF_GAS)
             .with_attached_deposit(NO_DEPOSIT)
             .verify_proof(VerifyProofArgs {
                 prover_id: args.chain_kind.as_ref().to_owned(),
                 prover_args: args.prover_args,
-            })
-            .then(
-                Self::ext(env::current_account_id())
-                    .with_attached_deposit(env::attached_deposit())
-                    .with_static_gas(CLAIM_FEE_CALLBACK_GAS)
-                    .fin_transfer_callback(),
-            )
+            });
+
+        Self::check_or_pay_ft_storage(
+            main_promise,
+            &args.storage_deposit_args,
+            env::attached_deposit(),
+        )
+        .then(
+            Self::ext(env::current_account_id())
+                .with_attached_deposit(NO_DEPOSIT)
+                .with_static_gas(CLAIM_FEE_CALLBACK_GAS)
+                .fin_transfer_callback(args.storage_deposit_args),
+        )
     }
 
     #[private]
     pub fn fin_transfer_callback(
         &mut self,
-        #[callback_result]
-        #[serializer(borsh)]
-        call_result: Result<ProverResult, PromiseError>,
+        #[serializer(borsh)] storage_deposit_args: StorageDepositArgs,
     ) -> PromiseOrValue<U128> {
-        let Ok(ProverResult::InitTransfer(init_transfer)) = call_result else {
+        let Ok(ProverResult::InitTransfer(init_transfer)) = Self::decode_prover_result(0) else {
             env::panic_str("Invalid proof message")
         };
         require!(
@@ -294,6 +310,7 @@ impl Contract {
         );
 
         let transfer_message = init_transfer.transfer;
+        // TODO: pay for storage
         require!(
             self.finalised_transfers.insert(&(
                 transfer_message.get_origin_chain(),
@@ -307,24 +324,41 @@ impl Contract {
                 .parse()
                 .unwrap_or_else(|_| env::panic_str("Failed to parse recipient"));
 
-            // TODO: Figure out what to do with the storage deposit
+            require!(
+                transfer_message.token == storage_deposit_args.token,
+                "Invalid token"
+            );
+            require!(
+                Self::check_storage_balance_result(1)
+                    && storage_deposit_args.accounts[0].0 == recipient.target,
+                "The transfer recipient was omitted"
+            );
+
             let amount_to_transfer = U128(transfer_message.amount.0 - transfer_message.fee.0);
             let mut promise = match recipient.message {
                 Some(message) => ext_token::ext(transfer_message.token.clone())
                     .with_static_gas(FT_TRANSFER_CALL_GAS)
-                    .with_attached_deposit(NearToken::from_yoctonear(0))
+                    .with_attached_deposit(NO_DEPOSIT)
                     .ft_transfer_call(recipient.target, amount_to_transfer, None, message),
                 None => ext_token::ext(transfer_message.token.clone())
                     .with_static_gas(FT_TRANSFER_GAS)
-                    .with_attached_deposit(NearToken::from_yoctonear(0))
+                    .with_attached_deposit(NO_DEPOSIT)
                     .ft_transfer(recipient.target, amount_to_transfer, None),
             };
 
             if transfer_message.fee.0 > 0 {
-                promise = promise.function_call("ft_transfer".to_owned(),
-                json!({ "receiver_id": env::signer_account_id(), "amount": transfer_message.fee }).to_string().into_bytes(),
-                NO_DEPOSIT,
-                FT_TRANSFER_GAS);
+                let signer = env::signer_account_id();
+                require!(
+                    Self::check_storage_balance_result(2)
+                        && storage_deposit_args.accounts[1].0 == signer,
+                    "The fee recipient was omitted"
+                );
+                promise = promise.and(
+                    ext_token::ext(transfer_message.token.clone())
+                        .with_static_gas(FT_TRANSFER_GAS)
+                        .with_attached_deposit(NO_DEPOSIT)
+                        .ft_transfer(signer, transfer_message.fee, None),
+                );
             }
 
             env::log_str(
@@ -394,7 +428,8 @@ impl Contract {
             .ft_transfer(fin_transfer.fee_recipient, U128(fee), None)
     }
 
-    pub fn bind_token(&self, #[serializer(borsh)] args: BindTokenArgs) -> Promise {
+    #[payable]
+    pub fn bind_token(&mut self, #[serializer(borsh)] args: BindTokenArgs) -> Promise {
         ext_prover::ext(self.prover_account.clone())
             .with_static_gas(VERIFY_POOF_GAS)
             .with_attached_deposit(NO_DEPOSIT)
@@ -406,7 +441,7 @@ impl Contract {
                 Self::ext(env::current_account_id())
                     .with_attached_deposit(env::attached_deposit())
                     .with_static_gas(BIND_TOKEN_CALLBACK_GAS)
-                    .fin_transfer_callback(),
+                    .bind_token_callback(),
             )
     }
 
@@ -444,5 +479,55 @@ impl Contract {
     #[access_control_any(roles(Role::DAO))]
     pub fn add_factory(&mut self, address: OmniAddress) {
         self.factories.insert(&(&address).into(), &address);
+    }
+}
+
+impl Contract {
+    fn check_or_pay_ft_storage(
+        mut main_promise: Promise,
+        args: &StorageDepositArgs,
+        mut attached_deposit: NearToken,
+    ) -> Promise {
+        for (account, is_storage_deposit) in &args.accounts {
+            attached_deposit = attached_deposit
+                .checked_sub(NEP141_DEPOSIT)
+                .unwrap_or_else(|| env::panic_str("The attached deposit is less than required"));
+
+            let promise = if *is_storage_deposit {
+                ext_token::ext(args.token.clone())
+                    .with_static_gas(STORAGE_DEPOSIT_GAS)
+                    .with_attached_deposit(NEP141_DEPOSIT)
+                    .storage_deposit(Some(account.clone()), Some(true))
+            } else {
+                ext_token::ext(args.token.clone())
+                    .with_static_gas(STORAGE_BALANCE_OF_GAS)
+                    .with_attached_deposit(NO_DEPOSIT)
+                    .storage_balance_of(Some(account.clone()))
+            };
+
+            main_promise = main_promise.and(promise);
+        }
+
+        main_promise
+    }
+
+    fn check_storage_balance_result(result_idx: u64) -> bool {
+        match env::promise_result(result_idx) {
+            PromiseResult::Successful(data) => {
+                serde_json::from_slice::<Option<StorageBalance>>(&data)
+                    .ok()
+                    .flatten()
+                    .is_some()
+            }
+            _ => false,
+        }
+    }
+
+    fn decode_prover_result(result_idx: u64) -> Result<ProverResult, PromiseError> {
+        match env::promise_result(result_idx) {
+            PromiseResult::Successful(data) => Ok(ProverResult::try_from_slice(&data)
+                .unwrap_or_else(|_| env::panic_str("Invalid proof"))),
+            PromiseResult::Failed => Err(PromiseError::Failed),
+        }
     }
 }
