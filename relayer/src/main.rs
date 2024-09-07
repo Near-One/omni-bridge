@@ -34,11 +34,11 @@ async fn main() -> Result<()> {
     let filter = Filter::new()
         .address(defaults::BRIDGE_TOKEN_FACTORY_ADDRESS_MAINNET.parse::<Address>()?)
         .event("Withdraw(string,address,uint256,string,address)")
-        .from_block(20085270)
-        .to_block(20085370);
+        .from_block(20_085_270)
+        .to_block(20_085_370);
 
     let logs = provider.get_logs(&filter).await?;
-    println!("Logs: {:#?}", logs);
+    println!("Logs: {logs:#?}");
 
     tokio::signal::ctrl_c().await?;
 

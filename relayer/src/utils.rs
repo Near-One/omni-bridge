@@ -70,9 +70,14 @@ fn process_ft_on_transfer(
         let near_signer_clone = near_signer.clone();
 
         tokio::spawn(async move {
-            if let Err(err) = sign_transfer(client_clone, near_signer_clone, log).await {
-                error!("Failed to sign transfer: {}", err);
-            }
+            match sign_transfer(client_clone, near_signer_clone, log).await {
+                Ok(outcome) => {
+                    info!("Sign transfer outcome: {:?}", outcome);
+                }
+                Err(err) => {
+                    error!("Failed to sign transfer: {}", err);
+                }
+            };
         });
     }
 }
@@ -93,8 +98,13 @@ fn process_sign_transfer_callback(
 
         let connector_clone = connector.clone();
         tokio::spawn(async move {
-            if let Err(err) = connector_clone.finalize_deposit_omni_with_log(log).await {
-                error!("Failed to finalize deposit: {}", err);
+            match connector_clone.finalize_deposit_omni_with_log(log).await {
+                Ok(tx_hash) => {
+                    info!("Finalized deposit: {}", tx_hash);
+                }
+                Err(err) => {
+                    error!("Failed to finalize deposit: {}", err);
+                }
             }
         });
     }
