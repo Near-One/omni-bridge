@@ -135,6 +135,7 @@ impl FungibleTokenReceiver for Contract {
             sender: OmniAddress::Near(sender_id.to_string()),
         };
 
+        // TODO: pay for storage
         self.pending_transfers
             .insert(&self.current_nonce, &transfer_message);
 
