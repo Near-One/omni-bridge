@@ -374,6 +374,7 @@ impl Contract {
             );
             promise.into()
         } else {
+            // TODO: pay for storage
             self.current_nonce += 1;
             self.pending_transfers
                 .insert(&self.current_nonce, &transfer_message);
