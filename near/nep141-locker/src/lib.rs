@@ -335,7 +335,7 @@ impl Contract {
             require!(
                 Self::check_storage_balance_result(1)
                     && storage_deposit_args.accounts[0].0 == recipient.target,
-                "STORAGE_ERR: The transfer recipient was omitted"
+                "STORAGE_ERR: The transfer recipient is omitted"
             );
 
             let amount_to_transfer = U128(transfer_message.amount.0 - transfer_message.fee.0);
@@ -355,7 +355,7 @@ impl Contract {
                 require!(
                     Self::check_storage_balance_result(2)
                         && storage_deposit_args.accounts[1].0 == signer,
-                    "STORAGE_ERR: The fee recipient was omitted"
+                    "STORAGE_ERR: The fee recipient is omitted"
                 );
                 promise = promise.then(
                     ext_token::ext(transfer_message.token.clone())
@@ -519,6 +519,9 @@ impl Contract {
     }
 
     fn check_storage_balance_result(result_idx: u64) -> bool {
+        if result_idx >= env::promise_results_count() {
+            return false;
+        }
         match env::promise_result(result_idx) {
             PromiseResult::Successful(data) => {
                 serde_json::from_slice::<Option<StorageBalance>>(&data)

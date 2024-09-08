@@ -37,40 +37,69 @@ mod tests {
     async fn test_fin_transfer_storage_deposit() {
         struct TestStorageDeposit<'a> {
             storage_deposit_accounts: Vec<(AccountId, bool)>,
+            amount: u128,
+            fee: u128,
             error: Option<&'a str>,
         }
         let test_data = [
             TestStorageDeposit {
                 storage_deposit_accounts: [(account_1(), true), (relayer_account_id(), true)]
                     .to_vec(),
+                amount: 1000,
+                fee: 1,
                 error: None,
+            },
+            TestStorageDeposit {
+                storage_deposit_accounts: [(account_1(), true)].to_vec(),
+                amount: 1000,
+                fee: 0,
+                error: None,
+            },
+            TestStorageDeposit {
+                storage_deposit_accounts: [(account_1(), true)].to_vec(),
+                amount: 1000,
+                fee: 1,
+                error: Some("STORAGE_ERR: The fee recipient is omitted"),
+            },
+            TestStorageDeposit {
+                storage_deposit_accounts: [].to_vec(),
+                amount: 1000,
+                fee: 1,
+                error: Some("STORAGE_ERR: The transfer recipient is omitted"),
             },
             TestStorageDeposit {
                 storage_deposit_accounts: [(account_1(), false), (relayer_account_id(), false)]
                     .to_vec(),
-                error: Some("STORAGE_ERR: The transfer recipient was omitted"),
+                amount: 1000,
+                fee: 1,
+                error: Some("STORAGE_ERR: The transfer recipient is omitted"),
             },
             TestStorageDeposit {
                 storage_deposit_accounts: [(account_1(), true), (relayer_account_id(), false)]
                     .to_vec(),
-                error: Some("STORAGE_ERR: The fee recipient was omitted"),
+                amount: 1000,
+                fee: 1,
+                error: Some("STORAGE_ERR: The fee recipient is omitted"),
             },
             TestStorageDeposit {
                 storage_deposit_accounts: [(account_1(), false), (relayer_account_id(), true)]
                     .to_vec(),
-                error: Some("STORAGE_ERR: The transfer recipient was omitted"),
+                amount: 1000,
+                fee: 1,
+                error: Some("STORAGE_ERR: The transfer recipient is omitted"),
             },
         ];
 
-        for test in test_data.into_iter().enumerate() {
-            let result = test_fin_transfer(test.1.storage_deposit_accounts).await;
+        for (index, test) in test_data.into_iter().enumerate() {
+            let result =
+                test_fin_transfer(test.storage_deposit_accounts, test.amount, test.fee).await;
 
             match result {
-                Ok(_) => assert!(test.1.error.is_none()),
+                Ok(_) => assert!(test.error.is_none()),
                 Err(e) => assert!(
-                    e.to_string().contains(test.1.error.unwrap()),
+                    e.to_string().contains(test.error.unwrap()),
                     "Test index: {}, err: {}",
-                    test.0,
+                    index,
                     e
                 ),
             }
@@ -79,8 +108,11 @@ mod tests {
 
     async fn test_fin_transfer(
         storage_deposit_accounts: Vec<(AccountId, bool)>,
+        amount: u128,
+        fee: u128,
     ) -> anyhow::Result<()> {
         let worker = near_workspaces::sandbox().await?;
+        // Deploy and init FT token
         let token_contract = worker.dev_deploy(&std::fs::read(MOCK_TOKEN_PATH)?).await?;
         token_contract
             .call("new_default_meta")
@@ -91,21 +123,11 @@ mod tests {
             .max_gas()
             .transact()
             .await?
-            .unwrap();
+            .into_result()?;
 
         let prover_contract = worker.dev_deploy(&std::fs::read(MOCK_PROVER_PATH)?).await?;
+        // Deploy and init locker
         let locker_contract = worker.dev_deploy(&std::fs::read(LOCKER_PATH)?).await?;
-
-        let (_, sk) = worker.dev_generate().await;
-        let relayer_account = worker.create_tla(relayer_account_id(), sk).await?.unwrap();
-
-        worker
-            .root_account()
-            .unwrap()
-            .transfer_near(locker_contract.id(), NearToken::from_near(10))
-            .await?
-            .unwrap();
-
         locker_contract
             .call("new")
             .args_json(json!({
@@ -118,6 +140,13 @@ mod tests {
             .await?
             .into_result()?;
 
+        // Create relayer account
+        let relayer_account = worker
+            .create_tla(relayer_account_id(), worker.dev_generate().await.1)
+            .await?
+            .unwrap();
+
+        // Storage deposit and transfer tokens
         token_contract
             .call("storage_deposit")
             .args_json(json!({
@@ -130,12 +159,11 @@ mod tests {
             .await?
             .into_result()?;
 
-        // Transfer tokens
         token_contract
             .call("ft_transfer")
             .args_json(json!({
                 "receiver_id": locker_contract.id(),
-                "amount": U128(1000),
+                "amount": U128(amount),
             }))
             .deposit(NearToken::from_yoctonear(1))
             .max_gas()
@@ -143,7 +171,7 @@ mod tests {
             .await?
             .into_result()?;
 
-        // Add factory
+        // Add factory address
         locker_contract
             .call("add_factory")
             .args_json(json!({
@@ -169,8 +197,8 @@ mod tests {
                         origin_nonce: U128(1),
                         token: token_contract.id().clone(),
                         recipient: OmniAddress::Near(account_1().to_string()),
-                        amount: U128(999),
-                        fee: U128(1),
+                        amount: U128(amount - fee),
+                        fee: U128(fee),
                         sender: eth_eoa_address(),
                     },
                 }))
