@@ -36,6 +36,7 @@ const FT_TRANSFER_GAS: Gas = Gas::from_tgas(5);
 const STORAGE_BALANCE_OF_GAS: Gas = Gas::from_tgas(3);
 const STORAGE_DEPOSIT_GAS: Gas = Gas::from_tgas(3);
 const NO_DEPOSIT: NearToken = NearToken::from_near(0);
+const ONE_YOCTO: NearToken = NearToken::from_yoctonear(1);
 const NEP141_DEPOSIT: NearToken = NearToken::from_yoctonear(1250000000000000000000);
 
 #[derive(BorshSerialize, BorshStorageKey)]
@@ -338,11 +339,11 @@ impl Contract {
             let mut promise = match recipient.message {
                 Some(message) => ext_token::ext(transfer_message.token.clone())
                     .with_static_gas(FT_TRANSFER_CALL_GAS)
-                    .with_attached_deposit(NO_DEPOSIT)
+                    .with_attached_deposit(ONE_YOCTO)
                     .ft_transfer_call(recipient.target, amount_to_transfer, None, message),
                 None => ext_token::ext(transfer_message.token.clone())
                     .with_static_gas(FT_TRANSFER_GAS)
-                    .with_attached_deposit(NO_DEPOSIT)
+                    .with_attached_deposit(ONE_YOCTO)
                     .ft_transfer(recipient.target, amount_to_transfer, None),
             };
 
@@ -356,7 +357,7 @@ impl Contract {
                 promise = promise.and(
                     ext_token::ext(transfer_message.token.clone())
                         .with_static_gas(FT_TRANSFER_GAS)
-                        .with_attached_deposit(NO_DEPOSIT)
+                        .with_attached_deposit(ONE_YOCTO)
                         .ft_transfer(signer, transfer_message.fee, None),
                 );
             }
@@ -489,11 +490,13 @@ impl Contract {
         mut attached_deposit: NearToken,
     ) -> Promise {
         for (account, is_storage_deposit) in &args.accounts {
-            attached_deposit = attached_deposit
-                .checked_sub(NEP141_DEPOSIT)
-                .unwrap_or_else(|| env::panic_str("The attached deposit is less than required"));
-
             let promise = if *is_storage_deposit {
+                attached_deposit =
+                    attached_deposit
+                        .checked_sub(NEP141_DEPOSIT)
+                        .unwrap_or_else(|| {
+                            env::panic_str("The attached deposit is less than required")
+                        });
                 ext_token::ext(args.token.clone())
                     .with_static_gas(STORAGE_DEPOSIT_GAS)
                     .with_attached_deposit(NEP141_DEPOSIT)

@@ -119,6 +119,7 @@ mod tests {
         event TestFinTransfer(
             address indexed sender,
             uint nonce,
+            uint amount,
             string claim_recipient,
         );
     }
@@ -128,11 +129,13 @@ mod tests {
         let event = FinTransfer {
             sender: [0; 20].into(),
             nonce: U256::from(55),
+            amount: U256::from(100),
             claim_recipient: "some_claim_recipient".to_string(),
         };
         let test_event = TestFinTransfer {
             sender: event.sender,
             nonce: event.nonce,
+            amount: event.amount,
             claim_recipient: event.claim_recipient.clone(),
         };
         let log = Log {
