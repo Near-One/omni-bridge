@@ -354,7 +354,7 @@ impl Contract {
                         && storage_deposit_args.accounts[1].0 == signer,
                     "The fee recipient was omitted"
                 );
-                promise = promise.and(
+                promise = promise.then(
                     ext_token::ext(transfer_message.token.clone())
                         .with_static_gas(FT_TRANSFER_GAS)
                         .with_attached_deposit(ONE_YOCTO)
