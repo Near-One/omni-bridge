@@ -9,8 +9,7 @@ mod tests {
     };
 
     const MOCK_TOKEN_PATH: &str = "./../target/wasm32-unknown-unknown/release/mock_token.wasm";
-    const MOCK_PROVER_PATH: &str =
-        "./../target/wasm32-unknown-unknown/release/mock_prover.wasm";
+    const MOCK_PROVER_PATH: &str = "./../target/wasm32-unknown-unknown/release/mock_prover.wasm";
     const LOCKER_PATH: &str = "./../target/wasm32-unknown-unknown/release/nep141_locker.wasm";
     const NEP141_DEPOSIT: NearToken = NearToken::from_yoctonear(1250000000000000000000);
 
@@ -35,7 +34,52 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_fin_transfer() -> anyhow::Result<()> {
+    async fn test_fin_transfer_storage_deposit() {
+        struct TestStorageDeposit<'a> {
+            storage_deposit_accounts: Vec<(AccountId, bool)>,
+            error: Option<&'a str>,
+        }
+        let test_data = [
+            TestStorageDeposit {
+                storage_deposit_accounts: [(account_1(), true), (relayer_account_id(), true)]
+                    .to_vec(),
+                error: None,
+            },
+            TestStorageDeposit {
+                storage_deposit_accounts: [(account_1(), false), (relayer_account_id(), false)]
+                    .to_vec(),
+                error: Some("STORAGE_ERR: The transfer recipient was omitted"),
+            },
+            TestStorageDeposit {
+                storage_deposit_accounts: [(account_1(), true), (relayer_account_id(), false)]
+                    .to_vec(),
+                error: Some("STORAGE_ERR: The fee recipient was omitted"),
+            },
+            TestStorageDeposit {
+                storage_deposit_accounts: [(account_1(), false), (relayer_account_id(), true)]
+                    .to_vec(),
+                error: Some("STORAGE_ERR: The transfer recipient was omitted"),
+            },
+        ];
+
+        for test in test_data.into_iter().enumerate() {
+            let result = test_fin_transfer(test.1.storage_deposit_accounts).await;
+
+            match result {
+                Ok(_) => assert!(test.1.error.is_none()),
+                Err(e) => assert!(
+                    e.to_string().contains(test.1.error.unwrap()),
+                    "Test index: {}, err: {}",
+                    test.0,
+                    e
+                ),
+            }
+        }
+    }
+
+    async fn test_fin_transfer(
+        storage_deposit_accounts: Vec<(AccountId, bool)>,
+    ) -> anyhow::Result<()> {
         let worker = near_workspaces::sandbox().await?;
         let token_contract = worker.dev_deploy(&std::fs::read(MOCK_TOKEN_PATH)?).await?;
         token_contract
@@ -72,7 +116,7 @@ mod tests {
             .max_gas()
             .transact()
             .await?
-            .unwrap();
+            .into_result()?;
 
         token_contract
             .call("storage_deposit")
@@ -84,21 +128,20 @@ mod tests {
             .max_gas()
             .transact()
             .await?
-            .unwrap();
+            .into_result()?;
 
-        // Init transfer
+        // Transfer tokens
         token_contract
-            .call("ft_transfer_call")
+            .call("ft_transfer")
             .args_json(json!({
                 "receiver_id": locker_contract.id(),
                 "amount": U128(1000),
-                "msg": eth_eoa_address().to_string()
             }))
             .deposit(NearToken::from_yoctonear(1))
             .max_gas()
             .transact()
             .await?
-            .unwrap();
+            .into_result()?;
 
         // Add factory
         locker_contract
@@ -109,7 +152,7 @@ mod tests {
             .max_gas()
             .transact()
             .await?
-            .unwrap();
+            .into_result()?;
 
         // Fin transfer
         relayer_account
@@ -118,7 +161,7 @@ mod tests {
                 chain_kind: omni_types::ChainKind::Eth,
                 storage_deposit_args: StorageDepositArgs {
                     token: token_contract.id().clone(),
-                    accounts: [(account_1(), true), (relayer_account_id(), true)].to_vec(),
+                    accounts: storage_deposit_accounts,
                 },
                 prover_args: borsh::to_vec(&ProverResult::InitTransfer(InitTransferMessage {
                     emitter_address: eth_factory_address(),
@@ -137,7 +180,7 @@ mod tests {
             .max_gas()
             .transact()
             .await?
-            .unwrap();
+            .into_result()?;
 
         Ok(())
     }

@@ -330,12 +330,12 @@ impl Contract {
 
             require!(
                 transfer_message.token == storage_deposit_args.token,
-                "Invalid token"
+                "STORAGE_ERR: Invalid token"
             );
             require!(
                 Self::check_storage_balance_result(1)
                     && storage_deposit_args.accounts[0].0 == recipient.target,
-                "The transfer recipient was omitted"
+                "STORAGE_ERR: The transfer recipient was omitted"
             );
 
             let amount_to_transfer = U128(transfer_message.amount.0 - transfer_message.fee.0);
@@ -355,7 +355,7 @@ impl Contract {
                 require!(
                     Self::check_storage_balance_result(2)
                         && storage_deposit_args.accounts[1].0 == signer,
-                    "The fee recipient was omitted"
+                    "STORAGE_ERR: The fee recipient was omitted"
                 );
                 promise = promise.then(
                     ext_token::ext(transfer_message.token.clone())
