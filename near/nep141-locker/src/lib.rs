@@ -39,6 +39,8 @@ const NO_DEPOSIT: NearToken = NearToken::from_near(0);
 const ONE_YOCTO: NearToken = NearToken::from_yoctonear(1);
 const NEP141_DEPOSIT: NearToken = NearToken::from_yoctonear(1250000000000000000000);
 
+const SIGN_PATH: &str = "bridge-1";
+
 #[derive(BorshSerialize, BorshStorageKey)]
 enum StorageKey {
     PendingTransfers,
@@ -196,7 +198,7 @@ impl Contract {
             .with_attached_deposit(env::attached_deposit())
             .sign(SignRequest {
                 payload,
-                path: "bridge-1".to_owned(),
+                path: SIGN_PATH.to_owned(),
                 key_version: 0,
             })
     }
@@ -236,7 +238,7 @@ impl Contract {
             .with_attached_deposit(env::attached_deposit())
             .sign(SignRequest {
                 payload,
-                path: "bridge-1".to_owned(),
+                path: SIGN_PATH.to_owned(),
                 key_version: 0,
             })
             .then(
