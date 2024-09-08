@@ -1775,9 +1775,9 @@ dependencies = [
 
 [[package]]
 name = "cc"
-version = "1.1.16"
+version = "1.1.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e9d013ecb737093c0e86b151a7b837993cf9ec6c502946cfb44bedc392421e0b"
+checksum = "b62ac837cdb5cb22e10a256099b4fc502b1dfe560cb282963a974d7abd80e476"
 dependencies = [
  "jobserver",
  "libc",
@@ -4137,9 +4137,9 @@ dependencies = [
 
 [[package]]
 name = "ipnet"
-version = "2.9.0"
+version = "2.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8f518f335dce6725a761382244631d86cf0ccb2863413590b31338feb467f9c3"
+checksum = "187674a687eed5fe42285b40c6291f9a01517d415fad1c3cbc6a9f778af7fcd4"
 
 [[package]]
 name = "is-terminal"
@@ -5912,6 +5912,30 @@ dependencies = [
 ]
 
 [[package]]
+name = "omni-relayer"
+version = "0.1.0"
+dependencies = [
+ "alloy",
+ "anyhow",
+ "futures",
+ "itertools 0.13.0",
+ "log",
+ "near-crypto 0.25.0",
+ "near-jsonrpc-client 0.12.0",
+ "near-jsonrpc-primitives 0.25.0",
+ "near-lake-framework",
+ "near-lake-primitives",
+ "near-primitives 0.25.0",
+ "nep141-connector",
+ "omni-types",
+ "pretty_env_logger",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tokio-stream",
+]
+
+[[package]]
 name = "omni-types"
 version = "2.0.0"
 source = "git+https://github.com/near-one/omni-bridge#0484c3b313d3466a50611836214502f8a66b4f76"
@@ -6905,30 +6929,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "relayer"
-version = "0.1.0"
-dependencies = [
- "alloy",
- "anyhow",
- "futures",
- "itertools 0.13.0",
- "log",
- "near-crypto 0.25.0",
- "near-jsonrpc-client 0.12.0",
- "near-jsonrpc-primitives 0.25.0",
- "near-lake-framework",
- "near-lake-primitives",
- "near-primitives 0.25.0",
- "nep141-connector",
- "omni-types",
- "pretty_env_logger",
- "serde",
- "serde_json",
- "tokio",
- "tokio-stream",
-]
-
-[[package]]
 name = "rend"
 version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7346,11 +7346,11 @@ dependencies = [
 
 [[package]]
 name = "schannel"
-version = "0.1.23"
+version = "0.1.24"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fbc91545643bcf3a0bbb6569265615222618bdf33ce4ffbbd13c4bbd4c093534"
+checksum = "e9aaafd5a2b6e3d657ff009d82fbd630b6bd54dd4eb06f21693925cdf80f9b8b"
 dependencies = [
- "windows-sys 0.52.0",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
