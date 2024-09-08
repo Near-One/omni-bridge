@@ -6,9 +6,12 @@ resolver = "2"
 members = [
     "nep141-locker",
     "omni-prover/omni-prover",
+    "omni-prover/mock-omni-prover",
     "omni-prover/wormhole-omni-prover-proxy",
     "omni-prover/evm-prover-proxy",
     "omni-types",
+    "omni-tests",
+    "mock-token",
 ]
 
 [profile.release]
@@ -29,3 +32,6 @@ serde = { version = "1.0.200", features = ["derive"] }
 near-plugins = { git = "https://github.com/aurora-is-near/near-plugins", tag = "v0.3.0" }
 omni-types = { path = "omni-types" }
 strum_macros = "0.26"
+near-workspaces = "0.12.0"
+tokio = "1.40"
+anyhow = "1"

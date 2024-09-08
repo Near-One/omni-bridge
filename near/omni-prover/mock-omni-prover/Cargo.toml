@@ -1,18 +1,13 @@
 [package]
-name = "nep141-locker"
+name = "mock-omni-prover"
 version = "0.1.0"
 authors = ["Karim Alabtakh <karim.alabtakh@nearone.org>"]
 edition = "2021"
-publish = false
 
 [lib]
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 near-sdk.workspace = true
-near-contract-standards.workspace = true
-hex.workspace = true
 borsh.workspace = true
-serde.workspace = true
-near-plugins.workspace = true
-omni-types.workspace = true
+omni-types = { path = "../../omni-types" }
