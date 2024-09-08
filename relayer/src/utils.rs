@@ -46,83 +46,64 @@ pub fn handle_streamer_message(
     connector: &Arc<nep141_connector::Nep141Connector>,
     streamer_message: StreamerMessage,
 ) {
-    process_ft_on_transfer(&streamer_message, client, near_signer);
-    process_sign_transfer_callback(&streamer_message, connector);
-}
+    let nep_locker_event_outcomes = find_nep_locker_event_outcomes(streamer_message);
 
-fn process_ft_on_transfer(
-    streamer_message: &StreamerMessage,
-    client: &JsonRpcClient,
-    near_signer: &InMemorySigner,
-) {
-    let ft_on_transfer_outcomes = find_ft_on_transfer_outcomes(streamer_message);
-
-    let ft_on_transfer_logs = ft_on_transfer_outcomes
+    let nep_locker_event_logs = nep_locker_event_outcomes
         .iter()
         .flat_map(|outcome| outcome.execution_outcome.outcome.logs.clone())
         .filter_map(|log| serde_json::from_str::<Nep141LockerEvent>(&log).ok())
         .collect::<Vec<_>>();
 
-    for log in ft_on_transfer_logs {
-        info!("Processing ft_on_transfer_log: {:?}", log);
+    for log in nep_locker_event_logs {
+        info!("Processing Nep141LockerEvent: {:?}", log);
 
-        let client_clone = client.clone();
-        let near_signer_clone = near_signer.clone();
+        match log {
+            Nep141LockerEvent::InitTransferEvent { .. } => {
+                let client_clone = client.clone();
+                let near_signer_clone = near_signer.clone();
 
-        tokio::spawn(async move {
-            match sign_transfer(client_clone, near_signer_clone, log).await {
-                Ok(outcome) => {
-                    info!("Sign transfer outcome: {:?}", outcome);
-                }
-                Err(err) => {
-                    error!("Failed to sign transfer: {}", err);
-                }
-            };
-        });
-    }
-}
-
-fn process_sign_transfer_callback(
-    streamer_message: &StreamerMessage,
-    connector: &Arc<nep141_connector::Nep141Connector>,
-) {
-    let sign_transfer_callback_outcomes = find_sign_transfer_callback_outcomes(streamer_message);
-    let sign_transfer_callback_logs = sign_transfer_callback_outcomes
-        .iter()
-        .flat_map(|outcome| outcome.execution_outcome.outcome.logs.clone())
-        .filter_map(|log| serde_json::from_str::<Nep141LockerEvent>(&log).ok())
-        .collect::<Vec<_>>();
-
-    for log in sign_transfer_callback_logs {
-        info!("Processing sign_transfer_callback_log: {:?}", log);
-
-        let connector_clone = connector.clone();
-        tokio::spawn(async move {
-            match connector_clone.finalize_deposit_omni_with_log(log).await {
-                Ok(tx_hash) => {
-                    info!("Finalized deposit: {}", tx_hash);
-                }
-                Err(err) => {
-                    error!("Failed to finalize deposit: {}", err);
-                }
+                tokio::spawn(async move {
+                    match sign_transfer(client_clone, near_signer_clone, log).await {
+                        Ok(outcome) => {
+                            info!("Sign transfer outcome: {:?}", outcome);
+                        }
+                        Err(err) => {
+                            error!("Failed to sign transfer: {}", err);
+                        }
+                    };
+                });
             }
-        });
+            Nep141LockerEvent::SignTransferEvent { .. } => {
+                let connector_clone = connector.clone();
+
+                tokio::spawn(async move {
+                    match connector_clone.finalize_deposit_omni_with_log(log).await {
+                        Ok(tx_hash) => {
+                            info!("Finalized deposit: {}", tx_hash);
+                        }
+                        Err(err) => {
+                            error!("Failed to finalize deposit: {}", err);
+                        }
+                    }
+                });
+            }
+        }
     }
 }
 
-fn find_ft_on_transfer_outcomes(
-    streamer_message: &StreamerMessage,
+fn find_nep_locker_event_outcomes(
+    streamer_message: StreamerMessage,
 ) -> Vec<IndexerExecutionOutcomeWithReceipt> {
     streamer_message
         .shards
         .iter()
         .flat_map(|shard| shard.receipt_execution_outcomes.iter())
-        .filter(|outcome| is_ft_on_transfer(&outcome.receipt).map_or(false, |res| res))
+        .filter(|outcome| is_nep_locker_event(&outcome.receipt).map_or(false, |res| res))
         .cloned()
         .collect()
 }
 
-fn is_ft_on_transfer(receipt: &ReceiptView) -> Result<bool> {
+fn is_nep_locker_event(receipt: &ReceiptView) -> Result<bool> {
     Ok(receipt.receiver_id
         == defaults::TOKEN_LOCKER_ID_TESTNET
             .parse::<AccountId>()
@@ -130,32 +111,7 @@ fn is_ft_on_transfer(receipt: &ReceiptView) -> Result<bool> {
         && matches!(
             receipt.receipt,
             ReceiptEnumView::Action { ref actions, .. } if actions.iter().any(|action| {
-                matches!(action, ActionView::FunctionCall { method_name, .. } if method_name == "ft_on_transfer")
-            })
-        ))
-}
-
-fn find_sign_transfer_callback_outcomes(
-    streamer_message: &StreamerMessage,
-) -> Vec<IndexerExecutionOutcomeWithReceipt> {
-    streamer_message
-        .shards
-        .iter()
-        .flat_map(|shard| shard.receipt_execution_outcomes.iter())
-        .filter(|outcome| is_sign_transfer_callback(&outcome.receipt).map_or(false, |res| res))
-        .cloned()
-        .collect()
-}
-
-fn is_sign_transfer_callback(receipt: &ReceiptView) -> Result<bool> {
-    Ok(receipt.receiver_id
-        == defaults::TOKEN_LOCKER_ID_TESTNET
-            .parse::<AccountId>()
-            .context("Failed to parse AccountId")?
-        && matches!(
-            receipt.receipt,
-            ReceiptEnumView::Action { ref actions, .. } if actions.iter().any(|action| {
-                matches!(action, ActionView::FunctionCall { method_name, .. } if method_name == "sign_transfer_callback")
+                matches!(action, ActionView::FunctionCall { method_name, .. } if method_name == "ft_on_transfer" || method_name == "sign_transfer_callback")
             })
         ))
 }
