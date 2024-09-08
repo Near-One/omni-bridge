@@ -10,7 +10,7 @@ mod tests {
 
     const MOCK_TOKEN_PATH: &str = "./../target/wasm32-unknown-unknown/release/mock_token.wasm";
     const MOCK_PROVER_PATH: &str =
-        "./../target/wasm32-unknown-unknown/release/mock_omni_prover.wasm";
+        "./../target/wasm32-unknown-unknown/release/mock_prover.wasm";
     const LOCKER_PATH: &str = "./../target/wasm32-unknown-unknown/release/nep141_locker.wasm";
     const NEP141_DEPOSIT: NearToken = NearToken::from_yoctonear(1250000000000000000000);
 

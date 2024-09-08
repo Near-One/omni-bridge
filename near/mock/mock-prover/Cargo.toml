@@ -1,5 +1,5 @@
 [package]
-name = "mock-omni-prover"
+name = "mock-prover"
 version = "0.1.0"
 authors = ["Karim Alabtakh <karim.alabtakh@nearone.org>"]
 edition = "2021"
@@ -10,4 +10,5 @@ crate-type = ["cdylib", "rlib"]
 [dependencies]
 near-sdk.workspace = true
 borsh.workspace = true
-omni-types = { path = "../../omni-types" }
+omni-types.workspace = true
+

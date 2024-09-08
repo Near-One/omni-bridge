@@ -2949,7 +2949,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "mock-omni-prover"
+name = "mock-prover"
 version = "0.1.0"
 dependencies = [
  "borsh",
@@ -2959,7 +2959,7 @@ dependencies = [
 
 [[package]]
 name = "mock-token"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "near-contract-standards",
  "near-sdk",

@@ -6,12 +6,12 @@ resolver = "2"
 members = [
     "nep141-locker",
     "omni-prover/omni-prover",
-    "omni-prover/mock-omni-prover",
     "omni-prover/wormhole-omni-prover-proxy",
     "omni-prover/evm-prover-proxy",
     "omni-types",
     "omni-tests",
-    "mock-token",
+    "mock/mock-token",
+    "mock/mock-prover",
 ]
 
 [profile.release]
