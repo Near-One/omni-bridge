@@ -294,7 +294,7 @@ impl Contract {
             Self::ext(env::current_account_id())
                 .with_attached_deposit(NO_DEPOSIT)
                 .with_static_gas(CLAIM_FEE_CALLBACK_GAS)
-                .fin_transfer_callback(args.storage_deposit_args),
+                .fin_transfer_callback(args.storage_deposit_args, env::predecessor_account_id()),
         )
     }
 
@@ -302,6 +302,7 @@ impl Contract {
     pub fn fin_transfer_callback(
         &mut self,
         #[serializer(borsh)] storage_deposit_args: StorageDepositArgs,
+        #[serializer(borsh)] predecessor_account_id: AccountId,
     ) -> PromiseOrValue<U128> {
         let Ok(ProverResult::InitTransfer(init_transfer)) = Self::decode_prover_result(0) else {
             env::panic_str("Invalid proof message")
@@ -351,17 +352,16 @@ impl Contract {
             };
 
             if transfer_message.fee.0 > 0 {
-                let signer = env::signer_account_id();
                 require!(
                     Self::check_storage_balance_result(2)
-                        && storage_deposit_args.accounts[1].0 == signer,
+                        && storage_deposit_args.accounts[1].0 == predecessor_account_id,
                     "STORAGE_ERR: The fee recipient is omitted"
                 );
                 promise = promise.then(
                     ext_token::ext(transfer_message.token.clone())
                         .with_static_gas(FT_TRANSFER_GAS)
                         .with_attached_deposit(ONE_YOCTO)
-                        .ft_transfer(signer, transfer_message.fee, None),
+                        .ft_transfer(predecessor_account_id, transfer_message.fee, None),
                 );
             }
 

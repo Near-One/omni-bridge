@@ -34,7 +34,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_fin_transfer_storage_deposit() {
+    async fn test_storage_deposit_on_fin_transfer() {
         struct TestStorageDeposit<'a> {
             storage_deposit_accounts: Vec<(AccountId, bool)>,
             amount: u128,
