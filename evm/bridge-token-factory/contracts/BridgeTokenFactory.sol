@@ -73,7 +73,7 @@ contract BridgeTokenFactory is
         uint256 amount,
         address recipient,
         uint128 indexed nonce,
-        string indexed feeRecipient
+        string feeRecipient
     );
 
     event SetMetadata(
