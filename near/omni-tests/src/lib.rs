@@ -197,7 +197,7 @@ mod tests {
                         origin_nonce: U128(1),
                         token: token_contract.id().clone(),
                         recipient: OmniAddress::Near(account_1().to_string()),
-                        amount: U128(amount - fee),
+                        amount: U128(amount),
                         fee: U128(fee),
                         sender: eth_eoa_address(),
                     },
@@ -209,6 +209,25 @@ mod tests {
             .transact()
             .await?
             .into_result()?;
+
+        // Check balances
+        let recipient_balance: U128 = token_contract
+            .view("ft_balance_of")
+            .args_json(json!({
+                "account_id": account_1(),
+            }))
+            .await?
+            .json()?;
+        assert_eq!(amount - fee, recipient_balance.0);
+
+        let relayer_balance: U128 = token_contract
+            .view("ft_balance_of")
+            .args_json(json!({
+                "account_id": relayer_account_id(),
+            }))
+            .await?
+            .json()?;
+        assert_eq!(fee, relayer_balance.0);
 
         Ok(())
     }
