@@ -245,9 +245,3 @@ pub type Nonce = u128;
 pub fn stringify<T: std::fmt::Display>(item: T) -> String {
     item.to_string()
 }
-
-#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize)]
-pub struct StorageBalance {
-    pub total: U128,
-    pub available: U128,
-}
