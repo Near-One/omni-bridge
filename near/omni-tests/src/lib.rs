@@ -21,6 +21,10 @@ mod tests {
         "account_1".parse().unwrap()
     }
 
+    fn account_2() -> AccountId {
+        "account_2".parse().unwrap()
+    }
+
     fn eth_factory_address() -> OmniAddress {
         "eth:0x252e87862A3A720287E7fd527cE6e8d0738427A2"
             .parse()
@@ -54,6 +58,24 @@ mod tests {
                 amount: 1000,
                 fee: 0,
                 error: None,
+            },
+            TestStorageDeposit {
+                storage_deposit_accounts: [
+                    (account_1(), true),
+                    (relayer_account_id(), true),
+                    (account_2(), true),
+                ]
+                .to_vec(),
+                amount: 1000,
+                fee: 1,
+                error: Some("Invalid len of accounts for storage deposit"),
+            },
+            TestStorageDeposit {
+                storage_deposit_accounts: [(relayer_account_id(), true), (account_1(), true)]
+                    .to_vec(),
+                amount: 1000,
+                fee: 1,
+                error: Some("STORAGE_ERR: The transfer recipient is omitted"),
             },
             TestStorageDeposit {
                 storage_deposit_accounts: [(account_1(), true)].to_vec(),
