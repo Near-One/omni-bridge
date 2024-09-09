@@ -8,11 +8,23 @@ use alloy::{
     primitives::Address,
     providers::{Provider, ProviderBuilder},
     rpc::types::Filter,
+    sol,
 };
 
 mod defaults;
 mod startup;
 mod utils;
+
+sol!(
+    #[derive(Debug)]
+    event Withdraw(
+        string token,
+        address indexed sender,
+        uint256 amount,
+        string recipient,
+        address indexed tokenEthAddress
+    );
+);
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -38,7 +50,9 @@ async fn main() -> Result<()> {
         .to_block(20_085_370);
 
     let logs = provider.get_logs(&filter).await?;
-    println!("Logs: {logs:#?}");
+    for log in logs {
+        println!("{:?}", log.log_decode::<Withdraw>());
+    }
 
     tokio::signal::ctrl_c().await?;
 

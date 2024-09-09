@@ -27,4 +27,4 @@ near-primitives = "0.25.0"
 near-crypto = "0.25.0"
 nep141-connector = { git = "https://github.com/Near-One/rainbow-bridge-sdk-rs", branch = "omni-token-support", package = "nep141-connector" }
 
-alloy = { version = "0.3", features = ["node-bindings", "providers", "rpc-types"] }
+alloy = { version = "0.3", features = ["node-bindings", "providers", "rpc-types", "sol-types"] }
