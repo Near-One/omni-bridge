@@ -87,12 +87,10 @@ contract BridgeTokenFactory is
     error InvalidSignature();
     error NonceAlreadyUsed(uint256 nonce);
 
-    // BridgeTokenFactory is linked to the bridge token factory on NEAR side.
-    // It also links to the prover that it uses to unlock the tokens.
     function initialize(
         address _tokenImplementationAddress,
         address _nearBridgeDerivedAddress
-    ) external initializer {
+    ) public initializer {
         tokenImplementationAddress = _tokenImplementationAddress;
         nearBridgeDerivedAddress = _nearBridgeDerivedAddress;
 
@@ -205,6 +203,8 @@ contract BridgeTokenFactory is
 
         completedTransfers[bridgeDeposit.nonce] = true;
 
+        depositExtension(bridgeDeposit);
+
         emit Deposit(
             bridgeDeposit.token,
             bridgeDeposit.amount,
@@ -213,6 +213,8 @@ contract BridgeTokenFactory is
             bridgeDeposit.feeRecipient
         );
     }
+
+    function depositExtension(BridgeDeposit memory bridgeDeposit) internal virtual {}
 
     function withdraw(
         string memory token,
@@ -225,8 +227,12 @@ contract BridgeTokenFactory is
         address tokenEthAddress = _nearToEthToken[token];
         BridgeToken(tokenEthAddress).burn(msg.sender, amount);
 
+        withdrawExtension(token, amount, recipient);
+
         emit Withdraw(token, msg.sender, amount, recipient, tokenEthAddress);
     }
+
+    function withdrawExtension(string memory token, uint128 amount, string memory recipient) internal virtual {}
 
     function pause(uint flags) external onlyRole(DEFAULT_ADMIN_ROLE) {
         _pause(flags);

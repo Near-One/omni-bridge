@@ -36,10 +36,12 @@ describe('BridgeToken', () => {
     const bridgeToken = await BridgeTokenInstance.deploy()
     await bridgeToken.waitForDeployment()
 
+    const nearBridgeDeriveAddress = "0xa966f32b64caaee9211d674e698cb72100b5e792";
+
     BridgeTokenFactory = await ethers.getContractFactory('BridgeTokenFactory')
     BridgeTokenFactory = await upgrades.deployProxy(BridgeTokenFactory, [
       await bridgeToken.getAddress(),
-      "0xa966f32b64caaee9211d674e698cb72100b5e792"
+      nearBridgeDeriveAddress
     ], { initializer: 'initialize' });
     await BridgeTokenFactory.waitForDeployment();
   })
