@@ -35,7 +35,11 @@ async fn main() -> Result<()> {
     let near_signer = startup::near::create_signer()?;
     let connector = Arc::new(startup::build_connector(&near_signer)?);
 
-    tokio::spawn(startup::near::start_indexer(client, near_signer, connector));
+    tokio::spawn(startup::near::start_indexer(
+        client,
+        near_signer,
+        connector.clone(),
+    ));
 
     // ETH
     let provider = ProviderBuilder::new().on_http(
@@ -51,7 +55,17 @@ async fn main() -> Result<()> {
 
     let logs = provider.get_logs(&filter).await?;
     for log in logs {
-        println!("{:?}", log.log_decode::<Withdraw>());
+        if let Ok(decoded_log) = log.log_decode::<Withdraw>() {
+            log::info!("Decoded log: {:?}", decoded_log);
+            let data = decoded_log.data();
+
+            log::info!(
+                "Withdraw result: {:?}",
+                connector
+                    .withdraw(data.token.clone(), data.amount.to(), data.recipient.clone())
+                    .await?
+            );
+        }
     }
 
     tokio::signal::ctrl_c().await?;
