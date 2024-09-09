@@ -13,10 +13,7 @@ async fn main() -> Result<()> {
     let near_signer = startup::near::create_signer()?;
     let connector = Arc::new(startup::build_connector(&near_signer)?);
 
-    // NEAR
     tokio::spawn(startup::near::start_indexer(near_signer, connector.clone()));
-
-    // ETH
     tokio::spawn(startup::eth::start_indexer(connector));
 
     tokio::signal::ctrl_c().await?;
