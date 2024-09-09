@@ -5,6 +5,7 @@ use near_crypto::InMemorySigner;
 
 use crate::defaults;
 
+pub mod eth;
 pub mod near;
 
 pub fn build_connector(near_signer: &InMemorySigner) -> Result<nep141_connector::Nep141Connector> {

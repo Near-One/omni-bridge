@@ -26,7 +26,7 @@ pub fn create_signer() -> Result<InMemorySigner> {
 }
 
 async fn create_lake_config(client: &JsonRpcClient) -> Result<LakeConfig> {
-    let final_block = utils::get_final_block(client).await?;
+    let final_block = utils::near::get_final_block(client).await?;
     info!("NEAR Lake will start from block: {}", final_block);
 
     LakeConfigBuilder::default()
@@ -49,7 +49,12 @@ pub async fn start_indexer(
 
     stream
         .map(|streamer_message| async {
-            utils::handle_streamer_message(&client, &near_signer, &connector, streamer_message);
+            utils::near::handle_streamer_message(
+                &client,
+                &near_signer,
+                &connector,
+                streamer_message,
+            );
         })
         .buffer_unordered(10)
         .for_each(|()| async {})
