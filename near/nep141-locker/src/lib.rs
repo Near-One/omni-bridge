@@ -221,8 +221,17 @@ impl Contract {
     }
 
     #[payable]
-    pub fn sign_transfer(&mut self, nonce: U128, fee_recipient: Option<AccountId>) -> Promise {
+    pub fn sign_transfer(
+        &mut self,
+        nonce: U128,
+        fee_recipient: Option<AccountId>,
+        fee: Option<U128>,
+    ) -> Promise {
         let transfer_message = self.get_transfer_message(nonce);
+        if let Some(fee) = fee {
+            require!(transfer_message.fee == fee, "Invalid fee");
+        }
+
         let transfer_payload = TransferMessagePayload {
             nonce,
             token: transfer_message.token,
