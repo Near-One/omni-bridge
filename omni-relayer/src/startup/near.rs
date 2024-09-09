@@ -9,7 +9,7 @@ use near_jsonrpc_client::JsonRpcClient;
 use near_lake_framework::{LakeConfig, LakeConfigBuilder};
 use nep141_connector::Nep141Connector;
 
-use crate::utils;
+use crate::{defaults, utils};
 
 pub fn create_signer() -> Result<InMemorySigner> {
     info!("Creating NEAR signer");
@@ -37,11 +37,12 @@ async fn create_lake_config(client: &JsonRpcClient) -> Result<LakeConfig> {
 }
 
 pub async fn start_indexer(
-    client: JsonRpcClient,
     near_signer: InMemorySigner,
     connector: Arc<Nep141Connector>,
 ) -> Result<()> {
     info!("Starting NEAR indexer");
+
+    let client = JsonRpcClient::connect(defaults::NEAR_RPC_TESTNET);
 
     let config = create_lake_config(&client).await?;
     let (_, stream) = near_lake_framework::streamer(config);
