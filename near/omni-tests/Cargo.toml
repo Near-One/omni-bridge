@@ -1,0 +1,16 @@
+[package]
+name = "omni-tests"
+version = "0.1.0"
+authors = ["Karim Alabtakh <karim.alabtakh@nearone.org>"]
+edition = "2021"
+publish = false
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dev-dependencies]
+near-sdk.workspace = true
+near-workspaces.workspace = true
+tokio.workspace = true
+anyhow.workspace = true
+omni-types.workspace = true

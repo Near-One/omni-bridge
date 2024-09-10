@@ -8,6 +8,7 @@ use near_sdk::AccountId;
 use serde::de::Visitor;
 
 pub mod evm_events;
+pub mod locker_args;
 pub mod mpc_types;
 pub mod near_events;
 pub mod prover_args;
@@ -58,7 +59,7 @@ impl<'de> Deserialize<'de> for H160 {
             where
                 E: serde::de::Error,
             {
-                Ok(s.parse().map_err(serde::de::Error::custom)?)
+                s.parse().map_err(serde::de::Error::custom)
             }
         }
 
@@ -90,6 +91,7 @@ impl Serialize for H160 {
     BorshDeserialize,
     Serialize,
     Deserialize,
+    strum_macros::AsRefStr,
 )]
 pub enum ChainKind {
     Eth,
@@ -213,7 +215,7 @@ pub struct TransferMessagePayload {
     pub token: AccountId,
     pub amount: U128,
     pub recipient: OmniAddress,
-    pub relayer: Option<OmniAddress>,
+    pub fee_recipient: Option<AccountId>,
 }
 
 #[derive(Deserialize, Serialize, Clone)]

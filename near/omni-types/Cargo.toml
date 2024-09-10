@@ -11,6 +11,7 @@ hex.workspace = true
 borsh.workspace = true
 serde.workspace = true
 near-plugins.workspace = true
+strum_macros.workspace = true
 alloy-sol-types = "0.8"
 alloy-sol-macro = "0.8"
 alloy-primitives = { version = "0.8", features = ["rlp"] }

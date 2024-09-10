@@ -1,10 +1,11 @@
+use near_sdk::json_types::U128;
 use near_sdk::serde::{Deserialize, Serialize};
 use near_sdk::serde_json::json;
 
 use crate::mpc_types::SignatureResponse;
 use crate::{TransferMessage, TransferMessagePayload};
 
-#[derive(Deserialize, Serialize, Clone)]
+#[derive(Deserialize, Serialize, Clone, Debug)]
 pub enum Nep141LockerEvent {
     InitTransferEvent {
         transfer_message: TransferMessage,
@@ -12,6 +13,13 @@ pub enum Nep141LockerEvent {
     SignTransferEvent {
         signature: SignatureResponse,
         message_payload: TransferMessagePayload,
+    },
+    FinTransferEvent {
+        nonce: Option<U128>,
+        transfer_message: TransferMessage,
+    },
+    UpdateFeeEvent {
+        transfer_message: TransferMessage,
     },
 }
 
