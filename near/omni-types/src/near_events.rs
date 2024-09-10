@@ -18,6 +18,9 @@ pub enum Nep141LockerEvent {
         nonce: Option<U128>,
         transfer_message: TransferMessage,
     },
+    UpdateFeeEvent {
+        transfer_message: TransferMessage,
+    },
 }
 
 impl Nep141LockerEvent {

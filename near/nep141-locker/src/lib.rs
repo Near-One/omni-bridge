@@ -83,7 +83,7 @@ pub trait ExtToken {
         account_id: Option<AccountId>,
         registration_only: Option<bool>,
     ) -> Option<StorageBalance>;
-    
+
     fn storage_balance_of(&mut self, account_id: Option<AccountId>) -> Option<StorageBalance>;
 }
 
@@ -207,15 +207,19 @@ impl Contract {
     pub fn update_transfer_fee(&mut self, nonce: U128, fee: UpdateFee) {
         match fee {
             UpdateFee::Fee(fee) => {
-                let mut message = self.get_transfer_message(nonce);
+                let mut transfer_message = self.get_transfer_message(nonce);
 
                 require!(
-                    OmniAddress::Near(env::predecessor_account_id().to_string()) == message.sender,
+                    OmniAddress::Near(env::predecessor_account_id().to_string())
+                        == transfer_message.sender,
                     "Only sender can update fee"
                 );
 
-                message.fee = fee;
-                self.pending_transfers.insert(&nonce.0, &message);
+                transfer_message.fee = fee;
+                self.pending_transfers.insert(&nonce.0, &transfer_message);
+                env::log_str(
+                    &Nep141LockerEvent::UpdateFeeEvent { transfer_message }.to_log_string(),
+                );
             }
             UpdateFee::Proof(_) => env::panic_str("TODO"),
         }
