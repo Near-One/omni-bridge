@@ -334,7 +334,7 @@ impl Contract {
             self.finalised_transfers.insert(&(
                 transfer_message.get_origin_chain(),
                 transfer_message.origin_nonce.0,
-            )) == true,
+            )),
             "The transfer is already finalised"
         );
 
