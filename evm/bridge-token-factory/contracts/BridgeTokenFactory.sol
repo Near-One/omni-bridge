@@ -69,7 +69,7 @@ contract BridgeTokenFactory is
     );
 
     event Deposit(
-        string indexed token,
+        string token,
         uint256 amount,
         address recipient,
         uint128 indexed nonce,
