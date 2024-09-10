@@ -83,6 +83,7 @@ pub trait ExtToken {
         account_id: Option<AccountId>,
         registration_only: Option<bool>,
     ) -> Option<StorageBalance>;
+    
     fn storage_balance_of(&mut self, account_id: Option<AccountId>) -> Option<StorageBalance>;
 }
 
