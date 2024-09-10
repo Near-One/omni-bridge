@@ -13,7 +13,8 @@ sol! {
     event FinTransfer(
         address indexed sender,
         uint nonce,
-        string claim_recipient,
+        uint amount,
+        string fee_recipient,
     );
 
     event InitTransfer(
@@ -61,7 +62,8 @@ impl TryFromLog<Log<FinTransfer>> for FinTransferMessage {
 
         Ok(FinTransferMessage {
             nonce: near_sdk::json_types::U128(event.data.nonce.to::<u128>()),
-            claim_recipient: event.data.claim_recipient.parse().map_err(stringify)?,
+            amount: near_sdk::json_types::U128(event.data.amount.to::<u128>()),
+            fee_recipient: event.data.fee_recipient.parse().map_err(stringify)?,
             emitter_address: OmniAddress::from_evm_address(chain_kind, H160(event.address.into()))?,
         })
     }
@@ -117,7 +119,8 @@ mod tests {
         event TestFinTransfer(
             address indexed sender,
             uint nonce,
-            string claim_recipient,
+            uint amount,
+            string fee_recipient,
         );
     }
 
@@ -126,12 +129,14 @@ mod tests {
         let event = FinTransfer {
             sender: [0; 20].into(),
             nonce: U256::from(55),
-            claim_recipient: "some_claim_recipient".to_string(),
+            amount: U256::from(100),
+            fee_recipient: "some_fee_recipient".to_string(),
         };
         let test_event = TestFinTransfer {
             sender: event.sender,
             nonce: event.nonce,
-            claim_recipient: event.claim_recipient.clone(),
+            amount: event.amount,
+            fee_recipient: event.fee_recipient.clone(),
         };
         let log = Log {
             address: [1; 20].into(),
