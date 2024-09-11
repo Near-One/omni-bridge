@@ -1,29 +1,16 @@
-use std::sync::Arc;
-
 use anyhow::{Context, Result};
-use log::{error, info};
+use log::{info, warn};
+use tokio::sync::mpsc;
 
-use near_crypto::InMemorySigner;
-use near_jsonrpc_client::{
-    methods::{
-        block::RpcBlockRequest, broadcast_tx_commit::RpcBroadcastTxCommitRequest,
-        query::RpcQueryRequest,
-    },
-    JsonRpcClient,
-};
-use near_jsonrpc_primitives::types::query::QueryResponseKind;
+use near_jsonrpc_client::{methods::block::RpcBlockRequest, JsonRpcClient};
 use near_lake_framework::near_indexer_primitives::{
     views::{ActionView, ReceiptEnumView, ReceiptView},
     IndexerExecutionOutcomeWithReceipt, StreamerMessage,
 };
-use near_primitives::{
-    transaction::{Transaction, TransactionV0},
-    types::{AccountId, BlockReference},
-    views::FinalExecutionOutcomeView,
-};
+use near_primitives::types::AccountId;
 use omni_types::near_events::Nep141LockerEvent;
 
-use crate::{config, defaults};
+use crate::config;
 
 pub async fn get_final_block(client: &JsonRpcClient) -> Result<u64> {
     info!("Getting final block");
@@ -41,10 +28,9 @@ pub async fn get_final_block(client: &JsonRpcClient) -> Result<u64> {
 }
 
 pub fn handle_streamer_message(
-    client: &JsonRpcClient,
-    near_signer: &InMemorySigner,
-    connector: &Arc<nep141_connector::Nep141Connector>,
     streamer_message: StreamerMessage,
+    sign_tx: &mpsc::UnboundedSender<Nep141LockerEvent>,
+    finalize_transfer_tx: &mpsc::UnboundedSender<Nep141LockerEvent>,
 ) {
     let nep_locker_event_outcomes = find_nep_locker_event_outcomes(streamer_message);
 
@@ -59,33 +45,17 @@ pub fn handle_streamer_message(
 
         match log {
             Nep141LockerEvent::InitTransferEvent { .. } => {
-                let client_clone = client.clone();
-                let near_signer_clone = near_signer.clone();
-
-                tokio::spawn(async move {
-                    match sign_transfer(client_clone, near_signer_clone, log).await {
-                        Ok(outcome) => {
-                            info!("Sign transfer outcome: {:?}", outcome);
-                        }
-                        Err(err) => {
-                            error!("Failed to sign transfer: {}", err);
-                        }
-                    };
-                });
+                if let Err(err) = sign_tx.send(log) {
+                    warn!("Failed to send InitTransferEvent to sign_tx: {}", err);
+                }
             }
             Nep141LockerEvent::SignTransferEvent { .. } => {
-                let connector_clone = connector.clone();
-
-                tokio::spawn(async move {
-                    match connector_clone.finalize_deposit_omni_with_log(log).await {
-                        Ok(tx_hash) => {
-                            info!("Finalized deposit: {}", tx_hash);
-                        }
-                        Err(err) => {
-                            error!("Failed to finalize deposit: {}", err);
-                        }
-                    }
-                });
+                if let Err(err) = finalize_transfer_tx.send(log) {
+                    warn!(
+                        "Failed to send SignTransferEvent to finalize_transfer_tx: {}",
+                        err
+                    );
+                }
             }
         }
     }
@@ -114,57 +84,4 @@ fn is_nep_locker_event(receipt: &ReceiptView) -> Result<bool> {
                 matches!(action, ActionView::FunctionCall { method_name, .. } if method_name == "ft_on_transfer" || method_name == "sign_transfer_callback")
             })
         ))
-}
-
-async fn sign_transfer(
-    client: JsonRpcClient,
-    near_signer: InMemorySigner,
-    log: Nep141LockerEvent,
-) -> Result<FinalExecutionOutcomeView> {
-    let Nep141LockerEvent::InitTransferEvent { transfer_message } = log else {
-        anyhow::bail!("Expected InitTransferEvent, got: {:?}", log);
-    };
-
-    let access_key_query_response = client
-        .call(RpcQueryRequest {
-            block_reference: BlockReference::latest(),
-            request: near_primitives::views::QueryRequest::ViewAccessKey {
-                account_id: near_signer.account_id.clone(),
-                public_key: near_signer.public_key.clone(),
-            },
-        })
-        .await?;
-
-    let current_nonce = match access_key_query_response.kind {
-        QueryResponseKind::AccessKey(access_key) => access_key.nonce,
-        _ => anyhow::bail!("Failed to get current nonce"),
-    };
-
-    let transaction = TransactionV0 {
-        signer_id: near_signer.account_id.clone(),
-        public_key: near_signer.public_key.clone(),
-        nonce: current_nonce + 1,
-        receiver_id: config::TOKEN_LOCKER_ID_TESTNET.parse()?,
-        block_hash: access_key_query_response.block_hash,
-        actions: vec![near_primitives::transaction::Action::FunctionCall(
-            Box::new(near_primitives::transaction::FunctionCallAction {
-                method_name: "sign_transfer".to_string(),
-                args: serde_json::json!({ "nonce": transfer_message.origin_nonce })
-                    .to_string()
-                    .into_bytes(),
-                gas: defaults::SIGN_TRANSFER_GAS,
-                deposit: defaults::SIGN_TRANSFER_ATTACHED_DEPOSIT,
-            }),
-        )],
-    };
-
-    let request = RpcBroadcastTxCommitRequest {
-        signed_transaction: Transaction::V0(transaction)
-            .sign(&near_crypto::Signer::InMemory(near_signer)),
-    };
-
-    client
-        .call(request)
-        .await
-        .map_err(|err| anyhow::anyhow!(err))
 }

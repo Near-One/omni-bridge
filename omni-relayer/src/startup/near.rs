@@ -1,15 +1,14 @@
-use std::sync::Arc;
-
 use anyhow::{Context, Result};
 use futures::StreamExt;
 use log::info;
+use tokio::sync::mpsc;
 
 use near_crypto::InMemorySigner;
 use near_jsonrpc_client::JsonRpcClient;
 use near_lake_framework::{LakeConfig, LakeConfigBuilder};
-use nep141_connector::Nep141Connector;
+use omni_types::near_events::Nep141LockerEvent;
 
-use crate::{defaults, utils};
+use crate::utils;
 
 pub fn create_signer() -> Result<InMemorySigner> {
     info!("Creating NEAR signer");
@@ -37,12 +36,11 @@ async fn create_lake_config(client: &JsonRpcClient) -> Result<LakeConfig> {
 }
 
 pub async fn start_indexer(
-    near_signer: InMemorySigner,
-    connector: Arc<Nep141Connector>,
+    client: JsonRpcClient,
+    sign_tx: mpsc::UnboundedSender<Nep141LockerEvent>,
+    finalize_transfer_tx: mpsc::UnboundedSender<Nep141LockerEvent>,
 ) -> Result<()> {
     info!("Starting NEAR indexer");
-
-    let client = JsonRpcClient::connect(defaults::NEAR_RPC_TESTNET);
 
     let config = create_lake_config(&client).await?;
     let (_, stream) = near_lake_framework::streamer(config);
@@ -50,12 +48,7 @@ pub async fn start_indexer(
 
     stream
         .map(|streamer_message| async {
-            utils::near::handle_streamer_message(
-                &client,
-                &near_signer,
-                &connector,
-                streamer_message,
-            );
+            utils::near::handle_streamer_message(streamer_message, &sign_tx, &finalize_transfer_tx);
         })
         .buffer_unordered(10)
         .for_each(|()| async {})

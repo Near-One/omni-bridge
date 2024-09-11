@@ -1,19 +1,16 @@
-use std::sync::Arc;
-
 use anyhow::{Context, Result};
+use tokio::sync::mpsc;
 use tokio_stream::StreamExt;
 
 use alloy::{
     primitives::Address,
     providers::{Provider, ProviderBuilder, WsConnect},
-    rpc::types::Filter,
+    rpc::types::{Filter, Log},
 };
 
-use nep141_connector::Nep141Connector;
+use crate::defaults;
 
-use crate::{defaults, utils};
-
-pub async fn start_indexer(connector: Arc<Nep141Connector>) -> Result<()> {
+pub async fn start_indexer(finalize_withdraw_tx: mpsc::UnboundedSender<Log>) -> Result<()> {
     let http_provider = ProviderBuilder::new().on_http(
         defaults::ETH_RPC_MAINNET
             .parse()
@@ -36,12 +33,16 @@ pub async fn start_indexer(connector: Arc<Nep141Connector>) -> Result<()> {
         .get_logs(&filter.clone().from_block(from_block).to_block(latest_block))
         .await?;
     for log in logs {
-        utils::eth::process_log(connector.clone(), log).await;
+        if let Err(err) = finalize_withdraw_tx.send(log) {
+            log::warn!("Failed to send log: {}", err);
+        }
     }
 
     let mut stream = ws_provider.subscribe_logs(&filter).await?.into_stream();
     while let Some(log) = stream.next().await {
-        utils::eth::process_log(connector.clone(), log).await;
+        if let Err(err) = finalize_withdraw_tx.send(log) {
+            log::warn!("Failed to send log: {}", err);
+        }
     }
 
     Ok(())
