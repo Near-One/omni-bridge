@@ -25,7 +25,6 @@ pub async fn sign_transfer(
 ) {
     let receiver_id = config::TOKEN_LOCKER_ID_TESTNET
         .parse::<AccountId>()
-        .inspect_err(|err| error!("Failed to parse `TOKEN_LOCKER_ID_TESTNET`: {}", err))
         .unwrap();
 
     while let Some(log) = sign_transfer_rx.recv().await {
@@ -67,9 +66,13 @@ pub async fn sign_transfer(
             actions: vec![near_primitives::transaction::Action::FunctionCall(
                 Box::new(near_primitives::transaction::FunctionCallAction {
                     method_name: "sign_transfer".to_string(),
-                    args: serde_json::json!({ "nonce": transfer_message.origin_nonce })
-                        .to_string()
-                        .into_bytes(),
+                    args: serde_json::json!({
+                        "nonce": transfer_message.origin_nonce,
+                        "fee_recepient": None,
+                        "fee": Some(transfer_message.fee)
+                    })
+                    .to_string()
+                    .into_bytes(),
                     gas: defaults::SIGN_TRANSFER_GAS,
                     deposit: defaults::SIGN_TRANSFER_ATTACHED_DEPOSIT,
                 }),
