@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use anyhow::Result;
 
+mod config;
 mod defaults;
 mod startup;
 mod utils;

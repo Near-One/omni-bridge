@@ -23,7 +23,7 @@ use near_primitives::{
 };
 use omni_types::near_events::Nep141LockerEvent;
 
-use crate::defaults;
+use crate::{config, defaults};
 
 pub async fn get_final_block(client: &JsonRpcClient) -> Result<u64> {
     info!("Getting final block");
@@ -105,7 +105,7 @@ fn find_nep_locker_event_outcomes(
 
 fn is_nep_locker_event(receipt: &ReceiptView) -> Result<bool> {
     Ok(receipt.receiver_id
-        == defaults::TOKEN_LOCKER_ID_TESTNET
+        == config::TOKEN_LOCKER_ID_TESTNET
             .parse::<AccountId>()
             .context("Failed to parse AccountId")?
         && matches!(
@@ -144,7 +144,7 @@ async fn sign_transfer(
         signer_id: near_signer.account_id.clone(),
         public_key: near_signer.public_key.clone(),
         nonce: current_nonce + 1,
-        receiver_id: defaults::TOKEN_LOCKER_ID_TESTNET.parse()?,
+        receiver_id: config::TOKEN_LOCKER_ID_TESTNET.parse()?,
         block_hash: access_key_query_response.block_hash,
         actions: vec![near_primitives::transaction::Action::FunctionCall(
             Box::new(near_primitives::transaction::FunctionCallAction {
