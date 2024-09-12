@@ -25,13 +25,20 @@ pub fn create_signer() -> Result<InMemorySigner> {
     Ok(InMemorySigner::from_secret_key(account_id, private_key))
 }
 
-async fn create_lake_config(jsonrpc_client: &JsonRpcClient) -> Result<LakeConfig> {
-    let final_block = utils::near::get_final_block(jsonrpc_client).await?;
-    info!("NEAR Lake will start from block: {}", final_block);
+async fn create_lake_config(
+    redis_connection: &mut redis::aio::MultiplexedConnection,
+    jsonrpc_client: &JsonRpcClient,
+) -> Result<LakeConfig> {
+    let start_block_height: u64 = match redis_connection.get("near_last_processed_block").await {
+        Ok(block_height) => block_height,
+        Err(_) => utils::near::get_final_block(jsonrpc_client).await?,
+    };
+
+    info!("NEAR Lake will start from block: {}", start_block_height);
 
     LakeConfigBuilder::default()
         .testnet()
-        .start_block_height(final_block)
+        .start_block_height(start_block_height)
         .build()
         .context("Failed to build LakeConfig")
 }
@@ -45,9 +52,9 @@ pub async fn start_indexer(
 ) -> Result<()> {
     info!("Starting NEAR indexer");
 
-    let redis_connection = redis_client.get_multiplexed_tokio_connection().await?;
+    let mut redis_connection = redis_client.get_multiplexed_tokio_connection().await?;
 
-    let lake_config = create_lake_config(&jsonrpc_client).await?;
+    let lake_config = create_lake_config(&mut redis_connection, &jsonrpc_client).await?;
     let (_, stream) = near_lake_framework::streamer(lake_config);
     let stream = tokio_stream::wrappers::ReceiverStream::new(stream);
 

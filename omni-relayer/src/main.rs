@@ -60,14 +60,22 @@ async fn main() -> Result<()> {
         }
     });
 
-    tokio::spawn(startup::near::start_indexer(
-        config,
-        redis_client,
-        jsonrpc_client,
-        near_sign_transfer_tx,
-        eth_finalize_transfer_tx,
-    ));
-    tokio::spawn(startup::eth::start_indexer(eth_finalize_withdraw_tx));
+    tokio::spawn(async {
+        startup::near::start_indexer(
+            config,
+            redis_client,
+            jsonrpc_client,
+            near_sign_transfer_tx,
+            eth_finalize_transfer_tx,
+        )
+        .await
+        .unwrap();
+    });
+    tokio::spawn(async {
+        startup::eth::start_indexer(eth_finalize_withdraw_tx)
+            .await
+            .unwrap();
+    });
 
     tokio::signal::ctrl_c().await?;
 
