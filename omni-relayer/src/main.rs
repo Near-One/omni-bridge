@@ -67,6 +67,7 @@ async fn main() -> Result<()> {
 
     tokio::spawn({
         let config = config.clone();
+        let redis_client = redis_client.clone();
         async {
             startup::near::start_indexer(
                 config,
@@ -81,8 +82,9 @@ async fn main() -> Result<()> {
     });
     tokio::spawn({
         let config = config.clone();
+        let redis_client = redis_client.clone();
         async {
-            startup::eth::start_indexer(config, eth_finalize_withdraw_tx)
+            startup::eth::start_indexer(config, redis_client, eth_finalize_withdraw_tx)
                 .await
                 .unwrap();
         }

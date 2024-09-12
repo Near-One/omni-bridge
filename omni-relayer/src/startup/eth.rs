@@ -7,12 +7,15 @@ use alloy::{
     rpc::types::{Filter, Log},
 };
 
-use crate::defaults;
+use crate::{defaults, utils};
 
 pub async fn start_indexer(
     config: crate::Config,
+    redis_client: redis::Client,
     finalize_withdraw_tx: mpsc::UnboundedSender<Log>,
 ) -> Result<()> {
+    let mut redis_connection = redis_client.get_multiplexed_tokio_connection().await?;
+
     let http_provider = ProviderBuilder::new().on_http(
         defaults::ETH_RPC_MAINNET
             .parse()
@@ -35,6 +38,8 @@ pub async fn start_indexer(
         .get_logs(&filter.clone().from_block(from_block).to_block(latest_block))
         .await?;
     for log in logs {
+        process_log(&mut redis_connection, &log).await;
+
         if let Err(err) = finalize_withdraw_tx.send(log) {
             log::warn!("Failed to send log: {}", err);
         }
@@ -42,10 +47,25 @@ pub async fn start_indexer(
 
     let mut stream = ws_provider.subscribe_logs(&filter).await?.into_stream();
     while let Some(log) = stream.next().await {
+        process_log(&mut redis_connection, &log).await;
+
         if let Err(err) = finalize_withdraw_tx.send(log) {
             log::warn!("Failed to send log: {}", err);
         }
     }
 
     Ok(())
+}
+
+async fn process_log(redis_connection: &mut redis::aio::MultiplexedConnection, log: &Log) {
+    if let Some(block_height) = log.block_number {
+        utils::redis::update_last_processed_block(
+            redis_connection,
+            "eth_last_processed_block",
+            block_height,
+        )
+        .await;
+    }
+
+    utils::redis::add_event(redis_connection, "eth_withdraw_events", log.clone()).await;
 }

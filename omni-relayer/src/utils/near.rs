@@ -9,6 +9,8 @@ use near_lake_framework::near_indexer_primitives::{
 };
 use omni_types::near_events::Nep141LockerEvent;
 
+use crate::utils;
+
 pub async fn get_final_block(jsonrpc_client: &JsonRpcClient) -> Result<u64> {
     info!("Getting final block");
 
@@ -24,8 +26,9 @@ pub async fn get_final_block(jsonrpc_client: &JsonRpcClient) -> Result<u64> {
         .map_err(Into::into)
 }
 
-pub fn handle_streamer_message(
+pub async fn handle_streamer_message(
     config: &crate::Config,
+    redis_connection: &mut redis::aio::MultiplexedConnection,
     streamer_message: &StreamerMessage,
     sign_tx: &mpsc::UnboundedSender<Nep141LockerEvent>,
     finalize_transfer_tx: &mpsc::UnboundedSender<Nep141LockerEvent>,
@@ -43,11 +46,15 @@ pub fn handle_streamer_message(
 
         match log {
             Nep141LockerEvent::InitTransferEvent { .. } => {
+                utils::redis::add_event(redis_connection, "near_init_transfer_events", log.clone())
+                    .await;
                 if let Err(err) = sign_tx.send(log) {
                     warn!("Failed to send InitTransferEvent to sign_tx: {}", err);
                 }
             }
             Nep141LockerEvent::SignTransferEvent { .. } => {
+                utils::redis::add_event(redis_connection, "near_sign_transfer_events", log.clone())
+                    .await;
                 if let Err(err) = finalize_transfer_tx.send(log) {
                     warn!(
                         "Failed to send SignTransferEvent to finalize_transfer_tx: {}",

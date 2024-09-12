@@ -66,25 +66,21 @@ pub async fn start_indexer(
             let finalize_transfer_tx = finalize_transfer_tx.clone();
 
             async move {
-                if let Err(err) = redis_connection
-                    .set::<&str, u64, ()>(
-                        "near_last_processed_block",
-                        streamer_message.block.header.height,
-                    )
-                    .await
-                {
-                    log::warn!(
-                        "Failed to update last near processed block in redis-db: {}",
-                        err
-                    );
-                }
+                utils::redis::update_last_processed_block(
+                    &mut redis_connection,
+                    "near_last_processed_block",
+                    streamer_message.block.header.height,
+                )
+                .await;
 
                 utils::near::handle_streamer_message(
                     &config,
+                    &mut redis_connection,
                     &streamer_message,
                     &sign_tx,
                     &finalize_transfer_tx,
-                );
+                )
+                .await;
             }
         })
         .buffer_unordered(10)
