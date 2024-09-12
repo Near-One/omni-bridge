@@ -19,8 +19,12 @@ pub fn build_connector(
         .eth_chain_id(Some(defaults::ETH_CHAIN_ID_TESTNET))
         .near_endpoint(Some(defaults::NEAR_RPC_TESTNET.to_string()))
         .token_locker_id(Some(config.token_locker_id_testnet.to_string()))
-        .bridge_token_factory_address(Some(config.bridge_token_factory_address_testnet.clone()))
-        .near_light_client_address(Some(config.near_light_client_eth_address_testnet.clone()))
+        .bridge_token_factory_address(Some(
+            config.bridge_token_factory_address_testnet.to_string(),
+        ))
+        .near_light_client_address(Some(
+            config.near_light_client_eth_address_testnet.to_string(),
+        ))
         .eth_private_key(Some(
             std::env::var("ETH_PRIVATE_KEY")
                 .context("Failed to get `NEAR_PRIVATE_KEY` env variable")?,

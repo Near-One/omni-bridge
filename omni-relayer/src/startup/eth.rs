@@ -3,14 +3,16 @@ use tokio::sync::mpsc;
 use tokio_stream::StreamExt;
 
 use alloy::{
-    primitives::Address,
     providers::{Provider, ProviderBuilder, WsConnect},
     rpc::types::{Filter, Log},
 };
 
 use crate::defaults;
 
-pub async fn start_indexer(finalize_withdraw_tx: mpsc::UnboundedSender<Log>) -> Result<()> {
+pub async fn start_indexer(
+    config: crate::Config,
+    finalize_withdraw_tx: mpsc::UnboundedSender<Log>,
+) -> Result<()> {
     let http_provider = ProviderBuilder::new().on_http(
         defaults::ETH_RPC_MAINNET
             .parse()
@@ -26,7 +28,7 @@ pub async fn start_indexer(finalize_withdraw_tx: mpsc::UnboundedSender<Log>) -> 
     let from_block = latest_block.saturating_sub(1000);
 
     let filter = Filter::new()
-        .address(defaults::BRIDGE_TOKEN_FACTORY_ADDRESS_MAINNET.parse::<Address>()?)
+        .address(config.bridge_token_factory_address_mainnet)
         .event("Withdraw(string,address,uint256,string,address)");
 
     let logs = http_provider

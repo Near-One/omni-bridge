@@ -3,6 +3,7 @@ use std::sync::Arc;
 use anyhow::Result;
 use tokio::sync::mpsc;
 
+use alloy::primitives::Address;
 use near_primitives::types::AccountId;
 
 mod defaults;
@@ -12,9 +13,13 @@ mod workers;
 
 #[derive(serde::Deserialize, Clone, Debug)]
 struct Config {
+    redis_url: String,
+
+    bridge_token_factory_address_mainnet: Address,
+
     token_locker_id_testnet: AccountId,
-    bridge_token_factory_address_testnet: String,
-    near_light_client_eth_address_testnet: String,
+    bridge_token_factory_address_testnet: Address,
+    near_light_client_eth_address_testnet: Address,
 }
 
 #[tokio::main]
@@ -23,7 +28,7 @@ async fn main() -> Result<()> {
 
     let config: Config = toml::from_str(&std::fs::read_to_string(defaults::CONFIG_FILE)?)?;
 
-    let redis_client = redis::Client::open(defaults::REDIS_URL)?;
+    let redis_client = redis::Client::open(config.redis_url.clone())?;
 
     let jsonrpc_client = near_jsonrpc_client::JsonRpcClient::connect(defaults::NEAR_RPC_TESTNET);
     let near_signer = startup::near::create_signer()?;
@@ -60,21 +65,27 @@ async fn main() -> Result<()> {
         }
     });
 
-    tokio::spawn(async {
-        startup::near::start_indexer(
-            config,
-            redis_client,
-            jsonrpc_client,
-            near_sign_transfer_tx,
-            eth_finalize_transfer_tx,
-        )
-        .await
-        .unwrap();
-    });
-    tokio::spawn(async {
-        startup::eth::start_indexer(eth_finalize_withdraw_tx)
+    tokio::spawn({
+        let config = config.clone();
+        async {
+            startup::near::start_indexer(
+                config,
+                redis_client,
+                jsonrpc_client,
+                near_sign_transfer_tx,
+                eth_finalize_transfer_tx,
+            )
             .await
             .unwrap();
+        }
+    });
+    tokio::spawn({
+        let config = config.clone();
+        async {
+            startup::eth::start_indexer(config, eth_finalize_withdraw_tx)
+                .await
+                .unwrap();
+        }
     });
 
     tokio::signal::ctrl_c().await?;
