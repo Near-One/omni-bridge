@@ -1,4 +1,4 @@
-use anyhow::{Context, Result};
+use anyhow::Result;
 use log::{info, warn};
 use tokio::sync::mpsc;
 
@@ -7,7 +7,6 @@ use near_lake_framework::near_indexer_primitives::{
     views::{ActionView, ReceiptEnumView, ReceiptView},
     IndexerExecutionOutcomeWithReceipt, StreamerMessage,
 };
-use near_primitives::types::AccountId;
 use omni_types::near_events::Nep141LockerEvent;
 
 pub async fn get_final_block(client: &JsonRpcClient) -> Result<u64> {
@@ -70,21 +69,17 @@ fn find_nep_locker_event_outcomes(
         .shards
         .iter()
         .flat_map(|shard| shard.receipt_execution_outcomes.iter())
-        .filter(|outcome| is_nep_locker_event(config, &outcome.receipt).map_or(false, |res| res))
+        .filter(|outcome| is_nep_locker_event(config, &outcome.receipt))
         .cloned()
         .collect()
 }
 
-fn is_nep_locker_event(config: &crate::Config, receipt: &ReceiptView) -> Result<bool> {
-    Ok(receipt.receiver_id
-        == config
-            .token_locker_id_testnet
-            .parse::<AccountId>()
-            .context("Failed to parse AccountId")?
+fn is_nep_locker_event(config: &crate::Config, receipt: &ReceiptView) -> bool {
+    receipt.receiver_id == config.token_locker_id_testnet
         && matches!(
             receipt.receipt,
             ReceiptEnumView::Action { ref actions, .. } if actions.iter().any(|action| {
                 matches!(action, ActionView::FunctionCall { method_name, .. } if method_name == "ft_on_transfer" || method_name == "sign_transfer_callback")
             })
-        ))
+        )
 }

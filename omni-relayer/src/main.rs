@@ -3,6 +3,8 @@ use std::sync::Arc;
 use anyhow::Result;
 use tokio::sync::mpsc;
 
+use near_primitives::types::AccountId;
+
 mod defaults;
 mod startup;
 mod utils;
@@ -10,7 +12,7 @@ mod workers;
 
 #[derive(serde::Deserialize, Clone, Debug)]
 struct Config {
-    token_locker_id_testnet: String,
+    token_locker_id_testnet: AccountId,
     bridge_token_factory_address_testnet: String,
     near_light_client_eth_address_testnet: String,
 }
@@ -25,7 +27,7 @@ async fn main() -> Result<()> {
 
     let client = near_jsonrpc_client::JsonRpcClient::connect(defaults::NEAR_RPC_TESTNET);
     let near_signer = startup::near::create_signer()?;
-    let connector = Arc::new(startup::build_connector(config.clone(), &near_signer)?);
+    let connector = Arc::new(startup::build_connector(&config, &near_signer)?);
 
     let (near_sign_transfer_tx, mut near_sign_transfer_rx) = mpsc::unbounded_channel();
     let (eth_finalize_transfer_tx, mut eth_finalize_transfer_rx) = mpsc::unbounded_channel();

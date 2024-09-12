@@ -12,7 +12,7 @@ use near_jsonrpc_client::{
 use near_jsonrpc_primitives::types::query::QueryResponseKind;
 use near_primitives::{
     transaction::{Transaction, TransactionV0},
-    types::{AccountId, BlockReference},
+    types::BlockReference,
 };
 use omni_types::near_events::Nep141LockerEvent;
 
@@ -24,8 +24,6 @@ pub async fn sign_transfer(
     near_signer: InMemorySigner,
     sign_transfer_rx: &mut mpsc::UnboundedReceiver<Nep141LockerEvent>,
 ) {
-    let receiver_id = config.token_locker_id_testnet.parse::<AccountId>().unwrap();
-
     while let Some(log) = sign_transfer_rx.recv().await {
         let Nep141LockerEvent::InitTransferEvent { transfer_message } = log else {
             warn!("Expected InitTransferEvent, got: {:?}", log);
@@ -56,20 +54,18 @@ pub async fn sign_transfer(
                 continue;
             };
 
-        let receiver_id = receiver_id.clone();
-
         let transaction = TransactionV0 {
             signer_id: near_signer.account_id.clone(),
             public_key: near_signer.public_key.clone(),
             nonce: current_nonce + 1,
-            receiver_id: receiver_id.clone(),
+            receiver_id: config.token_locker_id_testnet.clone(),
             block_hash: access_key_query_response.block_hash,
             actions: vec![near_primitives::transaction::Action::FunctionCall(
                 Box::new(near_primitives::transaction::FunctionCallAction {
                     method_name: "sign_transfer".to_string(),
                     args: serde_json::json!({
                         "nonce": transfer_message.origin_nonce,
-                        "fee_recepient": Some(receiver_id),
+                        "fee_recepient": Some(config.token_locker_id_testnet.clone()),
                         "fee": Some(transfer_message.fee)
                     })
                     .to_string()
