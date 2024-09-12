@@ -1,5 +1,9 @@
+pub const CONFIG_FILE: &str = "config.toml";
+
 pub const SIGN_TRANSFER_GAS: u64 = 300_000_000_000_000;
 pub const SIGN_TRANSFER_ATTACHED_DEPOSIT: u128 = 500_000_000_000_000_000_000_000;
+
+pub const REDIS_URL: &str = "redis://127.0.0.1/";
 
 /// Mainnet
 pub const ETH_RPC_MAINNET: &str = "https://eth.llamarpc.com";

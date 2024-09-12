@@ -36,19 +36,26 @@ async fn create_lake_config(client: &JsonRpcClient) -> Result<LakeConfig> {
 }
 
 pub async fn start_indexer(
+    config: crate::Config,
+    redis_client: redis::Client,
     client: JsonRpcClient,
     sign_tx: mpsc::UnboundedSender<Nep141LockerEvent>,
     finalize_transfer_tx: mpsc::UnboundedSender<Nep141LockerEvent>,
 ) -> Result<()> {
     info!("Starting NEAR indexer");
 
-    let config = create_lake_config(&client).await?;
-    let (_, stream) = near_lake_framework::streamer(config);
+    let lake_config = create_lake_config(&client).await?;
+    let (_, stream) = near_lake_framework::streamer(lake_config);
     let stream = tokio_stream::wrappers::ReceiverStream::new(stream);
 
     stream
         .map(|streamer_message| async {
-            utils::near::handle_streamer_message(streamer_message, &sign_tx, &finalize_transfer_tx);
+            utils::near::handle_streamer_message(
+                &config,
+                streamer_message,
+                &sign_tx,
+                &finalize_transfer_tx,
+            );
         })
         .buffer_unordered(10)
         .for_each(|()| async {})

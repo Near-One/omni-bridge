@@ -1,0 +1,4 @@
+# Testnet
+token_locker_id_testnet = "omni-locker.test1-dev.testnet"
+bridge_token_factory_address_testnet= "0xCF6462b9fcE5aF3E6c660c83453ECa18Ff468773"
+near_light_client_eth_address_testnet = "0x202cdf10bfa45a3d2190901373edd864f071d707"

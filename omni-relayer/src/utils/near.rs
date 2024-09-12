@@ -10,8 +10,6 @@ use near_lake_framework::near_indexer_primitives::{
 use near_primitives::types::AccountId;
 use omni_types::near_events::Nep141LockerEvent;
 
-use crate::config;
-
 pub async fn get_final_block(client: &JsonRpcClient) -> Result<u64> {
     info!("Getting final block");
 
@@ -28,11 +26,12 @@ pub async fn get_final_block(client: &JsonRpcClient) -> Result<u64> {
 }
 
 pub fn handle_streamer_message(
+    config: &crate::Config,
     streamer_message: StreamerMessage,
     sign_tx: &mpsc::UnboundedSender<Nep141LockerEvent>,
     finalize_transfer_tx: &mpsc::UnboundedSender<Nep141LockerEvent>,
 ) {
-    let nep_locker_event_outcomes = find_nep_locker_event_outcomes(streamer_message);
+    let nep_locker_event_outcomes = find_nep_locker_event_outcomes(config, streamer_message);
 
     let nep_locker_event_logs = nep_locker_event_outcomes
         .iter()
@@ -57,25 +56,29 @@ pub fn handle_streamer_message(
                     );
                 }
             }
+            Nep141LockerEvent::FinTransferEvent { .. }
+            | Nep141LockerEvent::UpdateFeeEvent { .. } => todo!(),
         }
     }
 }
 
 fn find_nep_locker_event_outcomes(
+    config: &crate::Config,
     streamer_message: StreamerMessage,
 ) -> Vec<IndexerExecutionOutcomeWithReceipt> {
     streamer_message
         .shards
         .iter()
         .flat_map(|shard| shard.receipt_execution_outcomes.iter())
-        .filter(|outcome| is_nep_locker_event(&outcome.receipt).map_or(false, |res| res))
+        .filter(|outcome| is_nep_locker_event(config, &outcome.receipt).map_or(false, |res| res))
         .cloned()
         .collect()
 }
 
-fn is_nep_locker_event(receipt: &ReceiptView) -> Result<bool> {
+fn is_nep_locker_event(config: &crate::Config, receipt: &ReceiptView) -> Result<bool> {
     Ok(receipt.receiver_id
-        == config::TOKEN_LOCKER_ID_TESTNET
+        == config
+            .token_locker_id_testnet
             .parse::<AccountId>()
             .context("Failed to parse AccountId")?
         && matches!(

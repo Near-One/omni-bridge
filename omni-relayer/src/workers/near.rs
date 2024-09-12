@@ -16,16 +16,15 @@ use near_primitives::{
 };
 use omni_types::near_events::Nep141LockerEvent;
 
-use crate::{config, defaults};
+use crate::defaults;
 
 pub async fn sign_transfer(
+    config: crate::Config,
     client: JsonRpcClient,
     near_signer: InMemorySigner,
     sign_transfer_rx: &mut mpsc::UnboundedReceiver<Nep141LockerEvent>,
 ) {
-    let receiver_id = config::TOKEN_LOCKER_ID_TESTNET
-        .parse::<AccountId>()
-        .unwrap();
+    let receiver_id = config.token_locker_id_testnet.parse::<AccountId>().unwrap();
 
     while let Some(log) = sign_transfer_rx.recv().await {
         let Nep141LockerEvent::InitTransferEvent { transfer_message } = log else {
@@ -57,6 +56,8 @@ pub async fn sign_transfer(
                 continue;
             };
 
+        let receiver_id = receiver_id.clone();
+
         let transaction = TransactionV0 {
             signer_id: near_signer.account_id.clone(),
             public_key: near_signer.public_key.clone(),
@@ -68,7 +69,7 @@ pub async fn sign_transfer(
                     method_name: "sign_transfer".to_string(),
                     args: serde_json::json!({
                         "nonce": transfer_message.origin_nonce,
-                        "fee_recepient": None,
+                        "fee_recepient": Some(receiver_id),
                         "fee": Some(transfer_message.fee)
                     })
                     .to_string()
