@@ -1,6 +1,7 @@
 use anyhow::{Context, Result};
 use futures::StreamExt;
 use log::info;
+use redis::AsyncCommands;
 use tokio::sync::mpsc;
 
 use near_crypto::InMemorySigner;
@@ -44,18 +45,40 @@ pub async fn start_indexer(
 ) -> Result<()> {
     info!("Starting NEAR indexer");
 
+    let redis_connection = redis_client.get_multiplexed_tokio_connection().await?;
+
     let lake_config = create_lake_config(&client).await?;
     let (_, stream) = near_lake_framework::streamer(lake_config);
     let stream = tokio_stream::wrappers::ReceiverStream::new(stream);
 
     stream
-        .map(|streamer_message| async {
-            utils::near::handle_streamer_message(
-                &config,
-                streamer_message,
-                &sign_tx,
-                &finalize_transfer_tx,
-            );
+        .map(move |streamer_message| {
+            let mut redis_connection = redis_connection.clone();
+            let config = config.clone();
+            let sign_tx = sign_tx.clone();
+            let finalize_transfer_tx = finalize_transfer_tx.clone();
+
+            async move {
+                if let Err(err) = redis_connection
+                    .set::<&str, u64, ()>(
+                        "near_last_processed_block",
+                        streamer_message.block.header.height,
+                    )
+                    .await
+                {
+                    log::warn!(
+                        "Failed to update last near processed block in redis-db: {}",
+                        err
+                    );
+                }
+
+                utils::near::handle_streamer_message(
+                    &config,
+                    &streamer_message,
+                    &sign_tx,
+                    &finalize_transfer_tx,
+                );
+            }
         })
         .buffer_unordered(10)
         .for_each(|()| async {})

@@ -26,7 +26,7 @@ pub async fn get_final_block(client: &JsonRpcClient) -> Result<u64> {
 
 pub fn handle_streamer_message(
     config: &crate::Config,
-    streamer_message: StreamerMessage,
+    streamer_message: &StreamerMessage,
     sign_tx: &mpsc::UnboundedSender<Nep141LockerEvent>,
     finalize_transfer_tx: &mpsc::UnboundedSender<Nep141LockerEvent>,
 ) {
@@ -63,7 +63,7 @@ pub fn handle_streamer_message(
 
 fn find_nep_locker_event_outcomes(
     config: &crate::Config,
-    streamer_message: StreamerMessage,
+    streamer_message: &StreamerMessage,
 ) -> Vec<IndexerExecutionOutcomeWithReceipt> {
     streamer_message
         .shards

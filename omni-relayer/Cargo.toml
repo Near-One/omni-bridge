@@ -31,4 +31,4 @@ nep141-connector = { git = "https://github.com/Near-One/rainbow-bridge-sdk-rs", 
 
 alloy = { version = "0.3", features = ["node-bindings", "providers", "rpc-types", "sol-types", "provider-ws"] }
 
-redis = "0.26.1"
+redis = { version = "0.26.1", features = ["aio", "tokio-comp"] }
