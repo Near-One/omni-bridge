@@ -1,4 +1,5 @@
 use anyhow::{Context, Result};
+use redis::AsyncCommands;
 use tokio::sync::mpsc;
 use tokio_stream::StreamExt;
 
@@ -28,11 +29,31 @@ pub async fn start_indexer(
         .context("Failed to initialize WS provider")?;
 
     let latest_block = http_provider.get_block_number().await?;
-    let from_block = latest_block.saturating_sub(1000);
+    let from_block = match redis_connection.get("eth_last_processed_block").await {
+        Ok(block) => block,
+        Err(_) => latest_block.saturating_sub(10_000),
+    };
 
     let filter = Filter::new()
         .address(config.bridge_token_factory_address_mainnet)
         .event("Withdraw(string,address,uint256,string,address)");
+
+    for current_block in (from_block..latest_block).step_by(10_000) {
+        let logs = http_provider
+            .get_logs(
+                &filter
+                    .clone()
+                    .from_block(current_block)
+                    .to_block(current_block + 10_000),
+            )
+            .await?;
+        for log in logs {
+            process_log(&mut redis_connection, &log).await;
+            if let Err(err) = finalize_withdraw_tx.send(log) {
+                log::warn!("Failed to send log: {}", err);
+            }
+        }
+    }
 
     let logs = http_provider
         .get_logs(&filter.clone().from_block(from_block).to_block(latest_block))

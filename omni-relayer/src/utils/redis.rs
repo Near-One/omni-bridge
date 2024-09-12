@@ -16,7 +16,7 @@ pub async fn add_event<T>(
     key: &str,
     event: T,
 ) where
-    T: serde::Serialize,
+    T: serde::Serialize + Send,
 {
     if let Err(err) = redis_connection
         .rpush::<String, String, ()>(key.to_string(), serde_json::to_string(&event).unwrap())
