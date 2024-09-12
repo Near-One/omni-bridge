@@ -25,8 +25,8 @@ pub fn create_signer() -> Result<InMemorySigner> {
     Ok(InMemorySigner::from_secret_key(account_id, private_key))
 }
 
-async fn create_lake_config(client: &JsonRpcClient) -> Result<LakeConfig> {
-    let final_block = utils::near::get_final_block(client).await?;
+async fn create_lake_config(jsonrpc_client: &JsonRpcClient) -> Result<LakeConfig> {
+    let final_block = utils::near::get_final_block(jsonrpc_client).await?;
     info!("NEAR Lake will start from block: {}", final_block);
 
     LakeConfigBuilder::default()
@@ -39,7 +39,7 @@ async fn create_lake_config(client: &JsonRpcClient) -> Result<LakeConfig> {
 pub async fn start_indexer(
     config: crate::Config,
     redis_client: redis::Client,
-    client: JsonRpcClient,
+    jsonrpc_client: JsonRpcClient,
     sign_tx: mpsc::UnboundedSender<Nep141LockerEvent>,
     finalize_transfer_tx: mpsc::UnboundedSender<Nep141LockerEvent>,
 ) -> Result<()> {
@@ -47,7 +47,7 @@ pub async fn start_indexer(
 
     let redis_connection = redis_client.get_multiplexed_tokio_connection().await?;
 
-    let lake_config = create_lake_config(&client).await?;
+    let lake_config = create_lake_config(&jsonrpc_client).await?;
     let (_, stream) = near_lake_framework::streamer(lake_config);
     let stream = tokio_stream::wrappers::ReceiverStream::new(stream);
 

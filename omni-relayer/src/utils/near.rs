@@ -9,7 +9,7 @@ use near_lake_framework::near_indexer_primitives::{
 };
 use omni_types::near_events::Nep141LockerEvent;
 
-pub async fn get_final_block(client: &JsonRpcClient) -> Result<u64> {
+pub async fn get_final_block(jsonrpc_client: &JsonRpcClient) -> Result<u64> {
     info!("Getting final block");
 
     let block_response = RpcBlockRequest {
@@ -17,7 +17,7 @@ pub async fn get_final_block(client: &JsonRpcClient) -> Result<u64> {
             near_primitives::types::Finality::Final,
         ),
     };
-    client
+    jsonrpc_client
         .call(block_response)
         .await
         .map(|block| block.header.height)

@@ -25,7 +25,7 @@ async fn main() -> Result<()> {
 
     let redis_client = redis::Client::open(defaults::REDIS_URL)?;
 
-    let client = near_jsonrpc_client::JsonRpcClient::connect(defaults::NEAR_RPC_TESTNET);
+    let jsonrpc_client = near_jsonrpc_client::JsonRpcClient::connect(defaults::NEAR_RPC_TESTNET);
     let near_signer = startup::near::create_signer()?;
     let connector = Arc::new(startup::build_connector(&config, &near_signer)?);
 
@@ -35,11 +35,16 @@ async fn main() -> Result<()> {
 
     tokio::spawn({
         let config = config.clone();
-        let client = client.clone();
+        let jsonrpc_client = jsonrpc_client.clone();
         let near_signer = near_signer.clone();
         async move {
-            workers::near::sign_transfer(config, client, near_signer, &mut near_sign_transfer_rx)
-                .await;
+            workers::near::sign_transfer(
+                config,
+                jsonrpc_client,
+                near_signer,
+                &mut near_sign_transfer_rx,
+            )
+            .await;
         }
     });
     tokio::spawn({
@@ -58,7 +63,7 @@ async fn main() -> Result<()> {
     tokio::spawn(startup::near::start_indexer(
         config,
         redis_client,
-        client,
+        jsonrpc_client,
         near_sign_transfer_tx,
         eth_finalize_transfer_tx,
     ));

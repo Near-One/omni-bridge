@@ -20,7 +20,7 @@ use crate::defaults;
 
 pub async fn sign_transfer(
     config: crate::Config,
-    client: JsonRpcClient,
+    jsonrpc_client: JsonRpcClient,
     near_signer: InMemorySigner,
     sign_transfer_rx: &mut mpsc::UnboundedReceiver<Nep141LockerEvent>,
 ) {
@@ -32,7 +32,7 @@ pub async fn sign_transfer(
 
         let near_signer = near_signer.clone();
 
-        let Ok(access_key_query_response) = client
+        let Ok(access_key_query_response) = jsonrpc_client
             .call(RpcQueryRequest {
                 block_reference: BlockReference::latest(),
                 request: near_primitives::views::QueryRequest::ViewAccessKey {
@@ -81,7 +81,7 @@ pub async fn sign_transfer(
                 .sign(&near_crypto::Signer::InMemory(near_signer)),
         };
 
-        match client.call(request).await {
+        match jsonrpc_client.call(request).await {
             Ok(outcome) => {
                 info!("Signed transfer: {:?}", outcome);
             }
