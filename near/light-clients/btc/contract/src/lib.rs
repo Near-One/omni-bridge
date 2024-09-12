@@ -23,8 +23,6 @@ pub enum Role {
     PauseManager,
     /// Allows to use contract API even after contract is paused
     UnrestrictedSubmitBlocks,
-    /// Allows to use `verify_transaction` API on a paused contract
-    UnrestrictedVerifyTransaction,
     // Allows to use `run_mainchain_gc` API on a paused contract
     UnrestrictedRunGC,
     /// May successfully call any of the protected `Upgradable` methods since below it is passed to
@@ -238,8 +236,7 @@ impl BtcLightClient {
     ///
     /// # Panics
     /// Multiple cases
-    #[allow(clippy::needless_pass_by_value)]
-    #[pause(except(roles(Role::UnrestrictedVerifyTransaction)))]
+    #[pause]
     pub fn verify_transaction_inclusion(&self, #[serializer(borsh)] args: ProofArgs) -> bool {
         require!(
             args.confirmations <= self.gc_threshold,

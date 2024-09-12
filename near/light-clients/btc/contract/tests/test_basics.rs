@@ -1,4 +1,4 @@
-use btc_types::contract_args::InitArgs;
+use btc_types::contract_args::{InitArgs, ProofArgs};
 use btc_types::header::{ExtendedHeader, Header};
 use near_sdk::NearToken;
 use serde_json::json;
@@ -109,6 +109,49 @@ async fn test_setting_chain_reorg() -> Result<(), Box<dyn std::error::Error>> {
         user_message_outcome.json::<ExtendedHeader>()?.block_header,
         fork_block_header_example_2()
     );
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_view_call_verify_transaction_inclusion() -> Result<(), Box<dyn std::error::Error>> {
+    let sandbox = near_workspaces::sandbox().await?;
+    let contract_wasm = near_workspaces::compile_project("./").await?;
+
+    let contract = sandbox.dev_deploy(&contract_wasm).await?;
+
+    let block_header = genesis_block_header();
+    let args = InitArgs {
+        genesis_block: block_header.clone(),
+        genesis_block_hash: block_header.block_hash(),
+        genesis_block_height: 0,
+        skip_pow_verification: true,
+        gc_threshold: 5,
+    };
+    // Call the init method on the contract
+    let outcome = contract
+        .call("init")
+        .args_json(json!({
+            "args": serde_json::to_value(args).unwrap(),
+        }))
+        .transact()
+        .await?;
+    assert!(outcome.is_success());
+
+    let user_account = sandbox.dev_create_account().await?;
+    let result: bool = user_account
+        .view(contract.id(), "verify_transaction_inclusion")
+        .args_borsh(ProofArgs {
+            tx_id: merkle_tools::H256::default(),
+            tx_block_blockhash: block_header.block_hash(),
+            tx_index: 0,
+            merkle_proof: vec![],
+            confirmations: 0,
+        })
+        .await?
+        .json()?;
+
+    assert!(!result);
 
     Ok(())
 }
