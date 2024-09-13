@@ -23,12 +23,12 @@ omni-types = { git = "https://github.com/near-one/omni-bridge", package = "omni-
 
 near-lake-framework = "0.7.9"
 near-lake-primitives = "0.8.0-beta.3"
-near-jsonrpc-client = "0.12.0"
-near-jsonrpc-primitives = "0.25.0"
-near-primitives = "0.25.0"
-near-crypto = "0.25.0"
+near-jsonrpc-client = "0.13.0"
+near-jsonrpc-primitives = "0.26.0"
+near-primitives = "0.26.0"
+near-crypto = "0.26.0"
 nep141-connector = { git = "https://github.com/Near-One/rainbow-bridge-sdk-rs", branch = "omni-token-support", package = "nep141-connector" }
 
 alloy = { version = "0.3", features = ["node-bindings", "providers", "rpc-types", "sol-types", "provider-ws"] }
 
-redis = { version = "0.26.1", features = ["aio", "tokio-comp"] }
+redis = { version = "0.27.0", features = ["aio", "tokio-comp"] }
