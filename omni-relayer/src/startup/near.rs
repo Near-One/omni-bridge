@@ -1,15 +1,12 @@
 use anyhow::{Context, Result};
 use futures::StreamExt;
 use log::info;
-use redis::AsyncCommands;
-use tokio::sync::mpsc;
 
 use near_crypto::InMemorySigner;
 use near_jsonrpc_client::JsonRpcClient;
 use near_lake_framework::{LakeConfig, LakeConfigBuilder};
-use omni_types::near_events::Nep141LockerEvent;
 
-use crate::utils;
+use crate::{defaults, utils};
 
 pub fn create_signer() -> Result<InMemorySigner> {
     info!("Creating NEAR signer");
@@ -29,16 +26,21 @@ async fn create_lake_config(
     redis_connection: &mut redis::aio::MultiplexedConnection,
     jsonrpc_client: &JsonRpcClient,
 ) -> Result<LakeConfig> {
-    let start_block_height: u64 = match redis_connection.get("near_last_processed_block").await {
-        Ok(block_height) => block_height,
-        Err(_) => utils::near::get_final_block(jsonrpc_client).await?,
+    let start_block_height = match utils::redis::get_last_processed_block(
+        redis_connection,
+        defaults::REDIS_NEAR_LAST_PROCESSED_BLOCK,
+    )
+    .await
+    {
+        Some(block_height) => block_height,
+        None => utils::near::get_final_block(jsonrpc_client).await?,
     };
 
     info!("NEAR Lake will start from block: {}", start_block_height);
 
     LakeConfigBuilder::default()
         .testnet()
-        .start_block_height(start_block_height)
+        .start_block_height(utils::near::get_final_block(jsonrpc_client).await?)
         .build()
         .context("Failed to build LakeConfig")
 }
@@ -47,8 +49,6 @@ pub async fn start_indexer(
     config: crate::Config,
     redis_client: redis::Client,
     jsonrpc_client: JsonRpcClient,
-    sign_tx: mpsc::UnboundedSender<Nep141LockerEvent>,
-    finalize_transfer_tx: mpsc::UnboundedSender<Nep141LockerEvent>,
 ) -> Result<()> {
     info!("Starting NEAR indexer");
 
@@ -62,8 +62,6 @@ pub async fn start_indexer(
         .map(move |streamer_message| {
             let mut redis_connection = redis_connection.clone();
             let config = config.clone();
-            let sign_tx = sign_tx.clone();
-            let finalize_transfer_tx = finalize_transfer_tx.clone();
 
             async move {
                 utils::redis::update_last_processed_block(
@@ -77,8 +75,6 @@ pub async fn start_indexer(
                     &config,
                     &mut redis_connection,
                     &streamer_message,
-                    &sign_tx,
-                    &finalize_transfer_tx,
                 )
                 .await;
             }

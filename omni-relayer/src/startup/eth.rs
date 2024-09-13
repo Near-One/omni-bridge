@@ -1,6 +1,4 @@
 use anyhow::{Context, Result};
-use redis::AsyncCommands;
-use tokio::sync::mpsc;
 use tokio_stream::StreamExt;
 
 use alloy::{
@@ -10,11 +8,7 @@ use alloy::{
 
 use crate::{defaults, utils};
 
-pub async fn start_indexer(
-    config: crate::Config,
-    redis_client: redis::Client,
-    finalize_withdraw_tx: mpsc::UnboundedSender<Log>,
-) -> Result<()> {
+pub async fn start_indexer(config: crate::Config, redis_client: redis::Client) -> Result<()> {
     let mut redis_connection = redis_client.get_multiplexed_tokio_connection().await?;
 
     let http_provider = ProviderBuilder::new().on_http(
@@ -29,10 +23,10 @@ pub async fn start_indexer(
         .context("Failed to initialize WS provider")?;
 
     let latest_block = http_provider.get_block_number().await?;
-    let from_block = match redis_connection.get("eth_last_processed_block").await {
-        Ok(block) => block,
-        Err(_) => latest_block.saturating_sub(10_000),
-    };
+    let from_block =
+        utils::redis::get_last_processed_block(&mut redis_connection, "eth_last_processed_block")
+            .await
+            .map_or_else(|| latest_block.saturating_sub(10_000), |block| block);
 
     let filter = Filter::new()
         .address(config.bridge_token_factory_address_mainnet)
@@ -49,30 +43,12 @@ pub async fn start_indexer(
             .await?;
         for log in logs {
             process_log(&mut redis_connection, &log).await;
-            if let Err(err) = finalize_withdraw_tx.send(log) {
-                log::warn!("Failed to send log: {}", err);
-            }
-        }
-    }
-
-    let logs = http_provider
-        .get_logs(&filter.clone().from_block(from_block).to_block(latest_block))
-        .await?;
-    for log in logs {
-        process_log(&mut redis_connection, &log).await;
-
-        if let Err(err) = finalize_withdraw_tx.send(log) {
-            log::warn!("Failed to send log: {}", err);
         }
     }
 
     let mut stream = ws_provider.subscribe_logs(&filter).await?.into_stream();
     while let Some(log) = stream.next().await {
         process_log(&mut redis_connection, &log).await;
-
-        if let Err(err) = finalize_withdraw_tx.send(log) {
-            log::warn!("Failed to send log: {}", err);
-        }
     }
 
     Ok(())
@@ -82,11 +58,19 @@ async fn process_log(redis_connection: &mut redis::aio::MultiplexedConnection, l
     if let Some(block_height) = log.block_number {
         utils::redis::update_last_processed_block(
             redis_connection,
-            "eth_last_processed_block",
+            defaults::REDIS_ETH_LAST_PROCESSED_BLOCK,
             block_height,
         )
         .await;
     }
 
-    utils::redis::add_event(redis_connection, "eth_withdraw_events", log.clone()).await;
+    if let Some(tx_hash) = log.transaction_hash {
+        utils::redis::add_event_test(
+            redis_connection,
+            defaults::REDIS_ETH_WITHDRAW_EVENTS,
+            tx_hash.to_string(),
+            log.clone(),
+        )
+        .await;
+    }
 }

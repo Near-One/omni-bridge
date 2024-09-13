@@ -1,6 +1,3 @@
-# Redis
-redis_url = "redis://127.0.0.1/"
-
 # Mainnet
 bridge_token_factory_address_mainnet = "0x252e87862A3A720287E7fd527cE6e8d0738427A2"
 
@@ -8,5 +5,3 @@ bridge_token_factory_address_mainnet = "0x252e87862A3A720287E7fd527cE6e8d0738427
 token_locker_id_testnet = "omni-locker.test1-dev.testnet"
 bridge_token_factory_address_testnet= "0xCF6462b9fcE5aF3E6c660c83453ECa18Ff468773"
 near_light_client_eth_address_testnet = "0x202cdf10bfa45a3d2190901373edd864f071d707"
-
-

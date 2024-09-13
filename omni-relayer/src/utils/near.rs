@@ -1,6 +1,5 @@
 use anyhow::Result;
-use log::{info, warn};
-use tokio::sync::mpsc;
+use log::info;
 
 use near_jsonrpc_client::{methods::block::RpcBlockRequest, JsonRpcClient};
 use near_lake_framework::near_indexer_primitives::{
@@ -9,7 +8,7 @@ use near_lake_framework::near_indexer_primitives::{
 };
 use omni_types::near_events::Nep141LockerEvent;
 
-use crate::utils;
+use crate::{defaults, utils};
 
 pub async fn get_final_block(jsonrpc_client: &JsonRpcClient) -> Result<u64> {
     info!("Getting final block");
@@ -30,8 +29,6 @@ pub async fn handle_streamer_message(
     config: &crate::Config,
     redis_connection: &mut redis::aio::MultiplexedConnection,
     streamer_message: &StreamerMessage,
-    sign_tx: &mpsc::UnboundedSender<Nep141LockerEvent>,
-    finalize_transfer_tx: &mpsc::UnboundedSender<Nep141LockerEvent>,
 ) {
     let nep_locker_event_outcomes = find_nep_locker_event_outcomes(config, streamer_message);
 
@@ -45,22 +42,28 @@ pub async fn handle_streamer_message(
         info!("Processing Nep141LockerEvent: {:?}", log);
 
         match log {
-            Nep141LockerEvent::InitTransferEvent { .. } => {
-                utils::redis::add_event(redis_connection, "near_init_transfer_events", log.clone())
-                    .await;
-                if let Err(err) = sign_tx.send(log) {
-                    warn!("Failed to send InitTransferEvent to sign_tx: {}", err);
-                }
+            Nep141LockerEvent::InitTransferEvent {
+                ref transfer_message,
+            } => {
+                utils::redis::add_event_test(
+                    redis_connection,
+                    defaults::REDIS_NEAR_INIT_TRANSFER_EVENTS,
+                    transfer_message.origin_nonce.0.to_string(),
+                    log.clone(),
+                )
+                .await;
             }
-            Nep141LockerEvent::SignTransferEvent { .. } => {
-                utils::redis::add_event(redis_connection, "near_sign_transfer_events", log.clone())
-                    .await;
-                if let Err(err) = finalize_transfer_tx.send(log) {
-                    warn!(
-                        "Failed to send SignTransferEvent to finalize_transfer_tx: {}",
-                        err
-                    );
-                }
+            Nep141LockerEvent::SignTransferEvent {
+                ref message_payload,
+                ..
+            } => {
+                utils::redis::add_event_test(
+                    redis_connection,
+                    defaults::REDIS_NEAR_SIGN_TRANSFER_EVENTS,
+                    message_payload.nonce.0.to_string(),
+                    log.clone(),
+                )
+                .await;
             }
             Nep141LockerEvent::FinTransferEvent { .. }
             | Nep141LockerEvent::UpdateFeeEvent { .. } => todo!(),
