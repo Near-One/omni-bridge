@@ -16,10 +16,13 @@ use near_primitives::{
 };
 use omni_types::near_events::Nep141LockerEvent;
 
-use crate::{defaults, utils};
+use crate::{config, utils};
+
+pub const SIGN_TRANSFER_GAS: u64 = 300_000_000_000_000;
+pub const SIGN_TRANSFER_ATTACHED_DEPOSIT: u128 = 500_000_000_000_000_000_000_000;
 
 pub async fn sign_transfer(
-    config: crate::Config,
+    config: config::Config,
     redis_client: redis::Client,
     jsonrpc_client: JsonRpcClient,
     near_signer: InMemorySigner,
@@ -31,14 +34,14 @@ pub async fn sign_transfer(
 
     loop {
         let mut redis_connection_clone = redis_connection.clone();
-        let Some(mut events) = utils::redis::get_events_test(
+        let Some(mut events) = utils::redis::get_events(
             &mut redis_connection_clone,
             "near_init_transfer_events".to_string(),
         )
         .await
         else {
             tokio::time::sleep(tokio::time::Duration::from_secs(
-                defaults::SLEEP_TIME_AFTER_EVENTS_PROCESS,
+                config.redis.sleep_time_after_events_process_secs,
             ))
             .await;
             continue;
@@ -89,20 +92,20 @@ pub async fn sign_transfer(
                             signer_id: near_signer.account_id.clone(),
                             public_key: near_signer.public_key.clone(),
                             nonce: current_nonce + 1,
-                            receiver_id: config.token_locker_id_testnet.clone(),
+                            receiver_id: config.testnet.token_locker_id.clone(),
                             block_hash: access_key_query_response.block_hash,
                             actions: vec![near_primitives::transaction::Action::FunctionCall(
                                 Box::new(near_primitives::transaction::FunctionCallAction {
                                     method_name: "sign_transfer".to_string(),
                                     args: serde_json::json!({
                                         "nonce": transfer_message.origin_nonce,
-                                        "fee_recepient": Some(config.token_locker_id_testnet.clone()),
+                                        "fee_recepient": Some(config.testnet.token_locker_id.clone()),
                                         "fee": Some(transfer_message.fee)
                                     })
                                     .to_string()
                                     .into_bytes(),
-                                    gas: defaults::SIGN_TRANSFER_GAS,
-                                    deposit: defaults::SIGN_TRANSFER_ATTACHED_DEPOSIT,
+                                    gas: SIGN_TRANSFER_GAS,
+                                    deposit: SIGN_TRANSFER_ATTACHED_DEPOSIT,
                                 }),
                             )],
                         };
@@ -115,7 +118,7 @@ pub async fn sign_transfer(
                         match jsonrpc_client.call(request).await {
                             Ok(outcome) => {
                                 info!("Signed transfer: {:?}", outcome);
-                                utils::redis::remove_event_test(
+                                utils::redis::remove_event(
                                     &mut redis_connection,
                                     "near_init_transfer_events",
                                     &nonce,
@@ -134,13 +137,17 @@ pub async fn sign_transfer(
         join_all(handlers).await;
 
         tokio::time::sleep(tokio::time::Duration::from_secs(
-            defaults::SLEEP_TIME_AFTER_EVENTS_PROCESS,
+            config.redis.sleep_time_after_events_process_secs,
         ))
         .await;
     }
 }
 
-pub async fn finalize_transfer(redis_client: redis::Client, connector: Arc<Nep141Connector>) {
+pub async fn finalize_transfer(
+    config: config::Config,
+    redis_client: redis::Client,
+    connector: Arc<Nep141Connector>,
+) {
     let redis_connection = redis_client
         .get_multiplexed_tokio_connection()
         .await
@@ -148,14 +155,14 @@ pub async fn finalize_transfer(redis_client: redis::Client, connector: Arc<Nep14
 
     loop {
         let mut redis_connection_clone = redis_connection.clone();
-        let Some(mut events) = utils::redis::get_events_test(
+        let Some(mut events) = utils::redis::get_events(
             &mut redis_connection_clone,
             "near_sign_transfer_events".to_string(),
         )
         .await
         else {
             tokio::time::sleep(tokio::time::Duration::from_secs(
-                defaults::SLEEP_TIME_AFTER_EVENTS_PROCESS,
+                config.redis.sleep_time_after_events_process_secs,
             ))
             .await;
             continue;
@@ -177,7 +184,7 @@ pub async fn finalize_transfer(redis_client: redis::Client, connector: Arc<Nep14
                         match connector.finalize_deposit_omni_with_log(event).await {
                             Ok(tx_hash) => {
                                 info!("Finalized deposit: {}", tx_hash);
-                                utils::redis::remove_event_test(
+                                utils::redis::remove_event(
                                     &mut redis_connection,
                                     "near_sign_transfer_events",
                                     &nonce,
@@ -196,7 +203,7 @@ pub async fn finalize_transfer(redis_client: redis::Client, connector: Arc<Nep14
         join_all(handlers).await;
 
         tokio::time::sleep(tokio::time::Duration::from_secs(
-            defaults::SLEEP_TIME_AFTER_EVENTS_PROCESS,
+            config.redis.sleep_time_after_events_process_secs,
         ))
         .await;
     }

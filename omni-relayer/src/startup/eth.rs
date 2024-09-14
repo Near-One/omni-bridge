@@ -6,19 +6,21 @@ use alloy::{
     rpc::types::{Filter, Log},
 };
 
-use crate::{defaults, utils};
+use crate::{config, utils};
 
-pub async fn start_indexer(config: crate::Config, redis_client: redis::Client) -> Result<()> {
+pub async fn start_indexer(config: config::Config, redis_client: redis::Client) -> Result<()> {
     let mut redis_connection = redis_client.get_multiplexed_tokio_connection().await?;
 
     let http_provider = ProviderBuilder::new().on_http(
-        defaults::ETH_RPC_MAINNET
+        config
+            .mainnet
+            .eth_rpc_http_url
             .parse()
             .context("Failed to parse ETH rpc provider as url")?,
     );
 
     let ws_provider = ProviderBuilder::new()
-        .on_ws(WsConnect::new(defaults::ETH_WS_MAINNET))
+        .on_ws(WsConnect::new(config.mainnet.eth_rpc_ws_url.clone()))
         .await
         .context("Failed to initialize WS provider")?;
 
@@ -29,7 +31,7 @@ pub async fn start_indexer(config: crate::Config, redis_client: redis::Client) -
             .map_or_else(|| latest_block.saturating_sub(10_000), |block| block);
 
     let filter = Filter::new()
-        .address(config.bridge_token_factory_address_mainnet)
+        .address(config.mainnet.bridge_token_factory_address)
         .event("Withdraw(string,address,uint256,string,address)");
 
     for current_block in (from_block..latest_block).step_by(10_000) {
@@ -42,32 +44,36 @@ pub async fn start_indexer(config: crate::Config, redis_client: redis::Client) -
             )
             .await?;
         for log in logs {
-            process_log(&mut redis_connection, &log).await;
+            process_log(&config, &mut redis_connection, &log).await;
         }
     }
 
     let mut stream = ws_provider.subscribe_logs(&filter).await?.into_stream();
     while let Some(log) = stream.next().await {
-        process_log(&mut redis_connection, &log).await;
+        process_log(&config, &mut redis_connection, &log).await;
     }
 
     Ok(())
 }
 
-async fn process_log(redis_connection: &mut redis::aio::MultiplexedConnection, log: &Log) {
+async fn process_log(
+    config: &config::Config,
+    redis_connection: &mut redis::aio::MultiplexedConnection,
+    log: &Log,
+) {
     if let Some(block_height) = log.block_number {
         utils::redis::update_last_processed_block(
             redis_connection,
-            defaults::REDIS_ETH_LAST_PROCESSED_BLOCK,
+            &config.redis.eth_last_processed_block,
             block_height,
         )
         .await;
     }
 
     if let Some(tx_hash) = log.transaction_hash {
-        utils::redis::add_event_test(
+        utils::redis::add_event(
             redis_connection,
-            defaults::REDIS_ETH_WITHDRAW_EVENTS,
+            &config.redis.eth_withdraw_events,
             tx_hash.to_string(),
             log.clone(),
         )

@@ -24,7 +24,7 @@ pub async fn update_last_processed_block(
     }
 }
 
-pub async fn get_events_test(
+pub async fn get_events(
     redis_connection: &mut MultiplexedConnection,
     key: String,
 ) -> Option<redis::AsyncIter<(String, String)>> {
@@ -40,7 +40,7 @@ pub async fn get_events_test(
     }
 }
 
-pub async fn add_event_test<N, E>(
+pub async fn add_event<N, E>(
     redis_connection: &mut MultiplexedConnection,
     key: &str,
     nonce: N,
@@ -50,18 +50,14 @@ pub async fn add_event_test<N, E>(
     E: serde::Serialize + Send,
 {
     if let Err(err) = redis_connection
-        .hset_nx::<String, N, String, ()>(
-            key.to_string(),
-            nonce,
-            serde_json::to_string(&event).unwrap(),
-        )
+        .hset_nx::<&str, N, String, ()>(key, nonce, serde_json::to_string(&event).unwrap())
         .await
     {
         warn!("Failed to add event to redis db: {}", err);
     }
 }
 
-pub async fn remove_event_test<N>(redis_connection: &mut MultiplexedConnection, key: &str, nonce: N)
+pub async fn remove_event<N>(redis_connection: &mut MultiplexedConnection, key: &str, nonce: N)
 where
     N: redis::ToRedisArgs + Send + Sync,
 {

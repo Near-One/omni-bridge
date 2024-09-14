@@ -8,7 +8,7 @@ use near_lake_framework::near_indexer_primitives::{
 };
 use omni_types::near_events::Nep141LockerEvent;
 
-use crate::{defaults, utils};
+use crate::{config, utils};
 
 pub async fn get_final_block(jsonrpc_client: &JsonRpcClient) -> Result<u64> {
     info!("Getting final block");
@@ -26,7 +26,7 @@ pub async fn get_final_block(jsonrpc_client: &JsonRpcClient) -> Result<u64> {
 }
 
 pub async fn handle_streamer_message(
-    config: &crate::Config,
+    config: &config::Config,
     redis_connection: &mut redis::aio::MultiplexedConnection,
     streamer_message: &StreamerMessage,
 ) {
@@ -45,11 +45,11 @@ pub async fn handle_streamer_message(
             Nep141LockerEvent::InitTransferEvent {
                 ref transfer_message,
             } => {
-                utils::redis::add_event_test(
+                utils::redis::add_event(
                     redis_connection,
-                    defaults::REDIS_NEAR_INIT_TRANSFER_EVENTS,
+                    &config.redis.near_init_transfer_events,
                     transfer_message.origin_nonce.0.to_string(),
-                    log.clone(),
+                    log,
                 )
                 .await;
             }
@@ -57,11 +57,11 @@ pub async fn handle_streamer_message(
                 ref message_payload,
                 ..
             } => {
-                utils::redis::add_event_test(
+                utils::redis::add_event(
                     redis_connection,
-                    defaults::REDIS_NEAR_SIGN_TRANSFER_EVENTS,
+                    &config.redis.near_sign_transfer_events,
                     message_payload.nonce.0.to_string(),
-                    log.clone(),
+                    log,
                 )
                 .await;
             }
@@ -72,7 +72,7 @@ pub async fn handle_streamer_message(
 }
 
 fn find_nep_locker_event_outcomes(
-    config: &crate::Config,
+    config: &config::Config,
     streamer_message: &StreamerMessage,
 ) -> Vec<IndexerExecutionOutcomeWithReceipt> {
     streamer_message
@@ -84,8 +84,8 @@ fn find_nep_locker_event_outcomes(
         .collect()
 }
 
-fn is_nep_locker_event(config: &crate::Config, receipt: &ReceiptView) -> bool {
-    receipt.receiver_id == config.token_locker_id_testnet
+fn is_nep_locker_event(config: &config::Config, receipt: &ReceiptView) -> bool {
+    receipt.receiver_id == config.testnet.token_locker_id
         && matches!(
             receipt.receipt,
             ReceiptEnumView::Action { ref actions, .. } if actions.iter().any(|action| {

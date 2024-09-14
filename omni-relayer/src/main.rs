@@ -2,32 +2,26 @@ use std::sync::Arc;
 
 use anyhow::Result;
 
-use alloy::primitives::Address;
-use near_primitives::types::AccountId;
-
-mod defaults;
+mod config;
 mod startup;
 mod utils;
 mod workers;
 
-#[derive(serde::Deserialize, Clone, Debug)]
-struct Config {
-    bridge_token_factory_address_mainnet: Address,
-
-    token_locker_id_testnet: AccountId,
-    bridge_token_factory_address_testnet: Address,
-    near_light_client_eth_address_testnet: Address,
-}
+const CONFIG_FILE: &str = "config.toml";
 
 #[tokio::main]
 async fn main() -> Result<()> {
     pretty_env_logger::init();
 
-    let config: Config = toml::from_str(&std::fs::read_to_string(defaults::CONFIG_FILE)?)?;
+    println!("{}", u128::MAX);
+    println!("{}", 500_000_000_000_000_000_000_000u128);
 
-    let redis_client = redis::Client::open(defaults::REDIS_URL)?;
+    let config = toml::from_str::<config::Config>(&std::fs::read_to_string(CONFIG_FILE)?)?;
 
-    let jsonrpc_client = near_jsonrpc_client::JsonRpcClient::connect(defaults::NEAR_RPC_TESTNET);
+    let redis_client = redis::Client::open(config.redis.url.clone())?;
+
+    let jsonrpc_client =
+        near_jsonrpc_client::JsonRpcClient::connect(config.testnet.near_rpc_url.clone());
     let near_signer = startup::near::create_signer()?;
     let connector = Arc::new(startup::build_connector(&config, &near_signer)?);
 
@@ -41,17 +35,19 @@ async fn main() -> Result<()> {
         }
     });
     tokio::spawn({
+        let config = config.clone();
         let redis_client = redis_client.clone();
         let connector = connector.clone();
         async move {
-            workers::near::finalize_transfer(redis_client, connector).await;
+            workers::near::finalize_transfer(config, redis_client, connector).await;
         }
     });
     tokio::spawn({
+        let config = config.clone();
         let redis_client = redis_client.clone();
         let connector = connector.clone();
         async move {
-            workers::eth::finalize_withdraw(redis_client, connector).await;
+            workers::eth::finalize_withdraw(config, redis_client, connector).await;
         }
     });
 

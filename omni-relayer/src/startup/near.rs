@@ -6,7 +6,7 @@ use near_crypto::InMemorySigner;
 use near_jsonrpc_client::JsonRpcClient;
 use near_lake_framework::{LakeConfig, LakeConfigBuilder};
 
-use crate::{defaults, utils};
+use crate::{config, utils};
 
 pub fn create_signer() -> Result<InMemorySigner> {
     info!("Creating NEAR signer");
@@ -23,12 +23,13 @@ pub fn create_signer() -> Result<InMemorySigner> {
 }
 
 async fn create_lake_config(
+    config: &config::Config,
     redis_connection: &mut redis::aio::MultiplexedConnection,
     jsonrpc_client: &JsonRpcClient,
 ) -> Result<LakeConfig> {
     let start_block_height = match utils::redis::get_last_processed_block(
         redis_connection,
-        defaults::REDIS_NEAR_LAST_PROCESSED_BLOCK,
+        &config.redis.near_last_processed_block,
     )
     .await
     {
@@ -46,7 +47,7 @@ async fn create_lake_config(
 }
 
 pub async fn start_indexer(
-    config: crate::Config,
+    config: config::Config,
     redis_client: redis::Client,
     jsonrpc_client: JsonRpcClient,
 ) -> Result<()> {
@@ -54,7 +55,7 @@ pub async fn start_indexer(
 
     let mut redis_connection = redis_client.get_multiplexed_tokio_connection().await?;
 
-    let lake_config = create_lake_config(&mut redis_connection, &jsonrpc_client).await?;
+    let lake_config = create_lake_config(&config, &mut redis_connection, &jsonrpc_client).await?;
     let (_, stream) = near_lake_framework::streamer(lake_config);
     let stream = tokio_stream::wrappers::ReceiverStream::new(stream);
 
@@ -64,17 +65,17 @@ pub async fn start_indexer(
             let config = config.clone();
 
             async move {
-                utils::redis::update_last_processed_block(
-                    &mut redis_connection,
-                    "near_last_processed_block",
-                    streamer_message.block.header.height,
-                )
-                .await;
-
                 utils::near::handle_streamer_message(
                     &config,
                     &mut redis_connection,
                     &streamer_message,
+                )
+                .await;
+
+                utils::redis::update_last_processed_block(
+                    &mut redis_connection,
+                    &config.redis.near_last_processed_block,
+                    streamer_message.block.header.height,
                 )
                 .await;
             }
