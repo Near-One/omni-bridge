@@ -51,7 +51,7 @@ enum StorageKey {
     Factories,
     FinalisedTransfers,
     TokensMapping,
-    Accounts,
+    AccountsBalances,
 }
 
 #[derive(AccessControlRole, Deserialize, Serialize, Copy, Clone)]
@@ -122,8 +122,7 @@ pub struct Contract {
     pub tokens_to_address_mapping: LookupMap<(ChainKind, AccountId), OmniAddress>,
     pub mpc_signer: AccountId,
     pub current_nonce: Nonce,
-    pub accounts: LookupMap<AccountId, StorageBalance>,
-    pub account_storage_usage: u64,
+    pub accounts_balances: LookupMap<AccountId, StorageBalance>,
 }
 
 #[near]
@@ -170,13 +169,11 @@ impl Contract {
             tokens_to_address_mapping: LookupMap::new(StorageKey::TokensMapping),
             mpc_signer,
             current_nonce: nonce.0,
-            accounts: LookupMap::new(StorageKey::Accounts),
-            account_storage_usage: 0,
+            accounts_balances: LookupMap::new(StorageKey::AccountsBalances),
         };
 
         contract.acl_init_super_admin(near_sdk::env::predecessor_account_id());
         contract.acl_grant_role("DAO".to_owned(), near_sdk::env::predecessor_account_id());
-        contract.measure_account_storage_usage();
         contract
     }
 
@@ -597,20 +594,6 @@ impl Contract {
         }
     }
 
-    fn measure_account_storage_usage(&mut self) {
-        let initial_storage_usage = env::storage_usage();
-        let tmp_account_id = "a".repeat(64).parse().unwrap();
-        self.accounts.insert(
-            &tmp_account_id,
-            &StorageBalance {
-                total: NearToken::from_yoctonear(0),
-                available: NearToken::from_yoctonear(0),
-            },
-        );
-        self.account_storage_usage = env::storage_usage() - initial_storage_usage;
-        self.accounts.remove(&tmp_account_id);
-    }
-
     fn insert_raw_transfer(
         &mut self,
         nonce: u128,
@@ -637,7 +620,6 @@ impl Contract {
     }
 
     fn add_fin_transfer(&mut self, chain_kind: ChainKind, nonce: u128) -> NearToken {
-        // TODO: the storage size can be calculated on init
         let storage_usage = env::storage_usage();
         require!(
             self.finalised_transfers.insert(&(chain_kind, nonce)),
@@ -652,11 +634,11 @@ impl Contract {
         required_balance: NearToken,
         attached_deposit: NearToken,
     ) {
-        let refund = match self.accounts.get(&account_id) {
+        let refund = match self.accounts_balances.get(&account_id) {
             Some(mut storage) => {
                 if storage.available >= required_balance {
                     storage.available = storage.available.saturating_sub(required_balance);
-                    self.accounts.insert(&account_id, &storage);
+                    self.accounts_balances.insert(&account_id, &storage);
                     Some(attached_deposit)
                 } else {
                     None
