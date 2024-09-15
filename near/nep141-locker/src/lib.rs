@@ -22,8 +22,9 @@ use omni_types::prover_args::VerifyProofArgs;
 use omni_types::prover_result::ProverResult;
 use omni_types::{
     ChainKind, MetadataPayload, NearRecipient, Nonce, OmniAddress, SignRequest, TransferMessage,
-    TransferMessagePayload, TransferMessageStorage, UpdateFee,
+    TransferMessagePayload, UpdateFee,
 };
+use storage::TransferMessageStorage;
 
 mod errors;
 mod storage;

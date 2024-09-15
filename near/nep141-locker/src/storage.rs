@@ -4,6 +4,31 @@ use near_sdk::{env, near_bindgen, AccountId, NearToken};
 
 use crate::*;
 
+#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Debug, Clone)]
+pub enum TransferMessageStorage {
+    V0((TransferMessage, AccountId)),
+}
+
+impl TransferMessageStorage {
+    pub fn into_main(self) -> (TransferMessage, AccountId) {
+        match self {
+            TransferMessageStorage::V0(m) => m,
+        }
+    }
+
+    pub fn encode_borsh(
+        message: &TransferMessage,
+        account: &AccountId,
+    ) -> Result<Vec<u8>, std::io::Error> {
+        #[derive(BorshSerialize)]
+        enum RefTransferMessageStorage<'a> {
+            V0((&'a TransferMessage, &'a AccountId)),
+        }
+
+        borsh::to_vec(&RefTransferMessageStorage::V0((message, account)))
+    }
+}
+
 #[near_bindgen]
 impl Contract {
     #[payable]
@@ -76,19 +101,22 @@ impl Contract {
 
     pub fn required_balance_for_init_transfer(
         &self,
-        token: AccountId,
         recipient: OmniAddress,
         sender: OmniAddress,
     ) -> NearToken {
         let key_len = borsh::to_vec(&0_u128).sdk_expect("ERR_BORSH").len() as u64;
-        let value_len = borsh::to_vec(&TransferMessage {
-            origin_nonce: U128(0),
-            token,
-            amount: U128(0),
-            recipient,
-            fee: U128(0),
-            sender,
-        })
+        let max_account_id: AccountId = "a".repeat(64).parse().sdk_expect("ERR_PARSE_ACCOUNT_ID");
+        let value_len = borsh::to_vec(&TransferMessageStorage::V0((
+            TransferMessage {
+                origin_nonce: U128(0),
+                token: max_account_id.clone(),
+                amount: U128(0),
+                recipient,
+                fee: U128(0),
+                sender,
+            },
+            max_account_id,
+        )))
         .sdk_expect("ERR_BORSH")
         .len() as u64;
 

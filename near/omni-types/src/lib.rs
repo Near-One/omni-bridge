@@ -203,31 +203,6 @@ pub struct TransferMessage {
     pub sender: OmniAddress,
 }
 
-#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Debug, Clone)]
-pub enum TransferMessageStorage {
-    V0((TransferMessage, AccountId)),
-}
-
-impl TransferMessageStorage {
-    pub fn into_main(self) -> (TransferMessage, AccountId) {
-        match self {
-            TransferMessageStorage::V0(m) => m,
-        }
-    }
-
-    pub fn encode_borsh(
-        message: &TransferMessage,
-        account: &AccountId,
-    ) -> Result<Vec<u8>, std::io::Error> {
-        #[derive(BorshSerialize)]
-        enum RefTransferMessageStorage<'a> {
-            V0((&'a TransferMessage, &'a AccountId)),
-        }
-
-        borsh::to_vec(&RefTransferMessageStorage::V0((message, account)))
-    }
-}
-
 impl TransferMessage {
     pub fn get_origin_chain(&self) -> ChainKind {
         self.sender.get_chain()
