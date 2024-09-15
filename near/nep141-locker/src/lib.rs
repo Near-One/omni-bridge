@@ -1,4 +1,4 @@
-use errors::{SdkExpect, SdkUnwrap};
+use errors::SdkExpect;
 use near_plugins::{
     access_control, access_control_any, pause, AccessControlRole, AccessControllable, Pausable,
     Upgradable,
@@ -140,7 +140,7 @@ impl FungibleTokenReceiver for Contract {
             origin_nonce: U128(self.current_nonce),
             token: env::predecessor_account_id(),
             amount,
-            recipient: msg.parse().sdk_unwrap(),
+            recipient: msg.parse().sdk_expect("ERR_PARSE_MSG"),
             fee: U128(0), // TODO get fee from msg
             sender: OmniAddress::Near(sender_id.to_string()),
         };
@@ -614,8 +614,7 @@ impl Contract {
         message_owner: &AccountId,
     ) -> NearToken {
         let storage_usage = env::storage_usage();
-        self.insert_raw_transfer(nonce, transfer_message, message_owner)
-            .sdk_unwrap();
+        self.insert_raw_transfer(nonce, transfer_message, message_owner);
         env::storage_byte_cost().saturating_mul((env::storage_usage() - storage_usage).into())
     }
 
