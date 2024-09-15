@@ -13,6 +13,12 @@ pub const TARGET_BLOCK_TIME_SECS: u64 = 10 * 60;
 pub const EXPECTED_TIME: u64 = BLOCKS_PER_ADJUSTMENT as u64 * TARGET_BLOCK_TIME_SECS;
 pub const MAX_ADJUSTMENT_FACTOR: u64 = 4;
 
+#[cfg(feature = "testnet")]
+pub mod testnet {
+    pub const PROOF_OF_WORK_LIMIT_BITS: u32 = 0x1d00ffff;
+    pub const POW_TARGET_TIME_BETWEEN_BLOCKS_SECS: u32 = 10 * 60;
+}
+
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct Header {
     /// Block version, now repurposed for soft fork signalling.
