@@ -87,7 +87,7 @@ impl Contract {
     }
 
     pub fn required_balance_for_account(&self) -> NearToken {
-        let key_len = 68;
+        let key_len = 64 + 4;
         let value_len = borsh::to_vec(&StorageBalance {
             total: NearToken::from_yoctonear(0),
             available: NearToken::from_yoctonear(0),
