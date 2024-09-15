@@ -292,7 +292,7 @@ impl Contract {
         if let Ok(signature) = call_result {
             let nonce = message_payload.nonce;
             if fee.0 == 0 {
-                self.pending_transfers.remove(&nonce.0);
+                self.remove_transfer_message(nonce.0);
             }
 
             env::log_str(
@@ -465,9 +465,6 @@ impl Contract {
         let Ok(ProverResult::FinTransfer(fin_transfer)) = call_result else {
             env::panic_str("Invalid proof message")
         };
-
-        let message = self.get_transfer_message(fin_transfer.nonce);
-        self.pending_transfers.remove(&fin_transfer.nonce.0);
         require!(
             self.factories
                 .get(&fin_transfer.emitter_address.get_chain())
@@ -475,6 +472,7 @@ impl Contract {
             "Unknown factory"
         );
 
+        let message = self.remove_transfer_message(fin_transfer.nonce.0);
         let fee = message.amount.0 - fin_transfer.amount.0;
 
         ext_token::ext(message.token)
@@ -619,6 +617,28 @@ impl Contract {
         self.insert_raw_transfer(nonce, transfer_message, message_owner)
             .sdk_unwrap();
         env::storage_byte_cost().saturating_mul((env::storage_usage() - storage_usage).into())
+    }
+
+    fn remove_transfer_message(&mut self, nonce: u128) -> TransferMessage {
+        let storage_usage = env::storage_usage();
+        let (transfer_message, owner) = self
+            .pending_transfers
+            .remove(&nonce)
+            .map(|m| m.into_main())
+            .sdk_expect("ERR_TRANSFER_NOT_EXIST");
+
+        let refund =
+            env::storage_byte_cost().saturating_mul((storage_usage - env::storage_usage()).into());
+
+        let mut storage = self
+            .accounts_balances
+            .get(&owner)
+            .sdk_expect("ERR_ACCOUNT_NOT_REGISTERED");
+
+        storage.available = storage.available.saturating_sub(refund);
+        self.accounts_balances.insert(&owner, &storage);
+
+        transfer_message
     }
 
     fn add_fin_transfer(&mut self, chain_kind: ChainKind, nonce: u128) -> NearToken {

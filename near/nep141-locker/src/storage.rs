@@ -4,13 +4,15 @@ use near_sdk::{env, near_bindgen, AccountId, NearToken};
 
 use crate::*;
 
+pub type TransferMessageStorageValue = (TransferMessage, AccountId);
+
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Debug, Clone)]
 pub enum TransferMessageStorage {
-    V0((TransferMessage, AccountId)),
+    V0(TransferMessageStorageValue),
 }
 
 impl TransferMessageStorage {
-    pub fn into_main(self) -> (TransferMessage, AccountId) {
+    pub fn into_main(self) -> TransferMessageStorageValue {
         match self {
             TransferMessageStorage::V0(m) => m,
         }
