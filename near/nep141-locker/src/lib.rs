@@ -144,6 +144,7 @@ impl FungibleTokenReceiver for Contract {
             sender: OmniAddress::Near(sender_id.to_string()),
         };
 
+        // TODO: add native token as fee attachment
         let required_storage_balance =
             self.add_transfer_message(self.current_nonce, &transfer_message, &sender_id);
         self.update_storage_balance(
