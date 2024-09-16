@@ -189,7 +189,7 @@ impl BtcLightClient {
             .headers_pool
             .get(&self.mainchain_tip_blockhash)
             .unwrap_or_else(|| env::panic_str(ERR_KEY_NOT_EXIST));
-        tip.block_height - tail.block_height
+        tip.block_height - tail.block_height + 1
     }
 
     /// This method return n last blocks from the mainchain
