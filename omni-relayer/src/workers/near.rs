@@ -21,6 +21,8 @@ use crate::{config, utils};
 pub const SIGN_TRANSFER_GAS: u64 = 300_000_000_000_000;
 pub const SIGN_TRANSFER_ATTACHED_DEPOSIT: u128 = 500_000_000_000_000_000_000_000;
 
+// TODO: Move sign transfer and claim fee logic to `bridge-sdk`
+
 pub async fn sign_transfer(
     config: config::Config,
     redis_client: redis::Client,
@@ -36,7 +38,7 @@ pub async fn sign_transfer(
         let mut redis_connection_clone = redis_connection.clone();
         let Some(mut events) = utils::redis::get_events(
             &mut redis_connection_clone,
-            "near_init_transfer_events".to_string(),
+            config.redis.near_init_transfer_events.clone(),
         )
         .await
         else {
@@ -120,7 +122,7 @@ pub async fn sign_transfer(
                                 info!("Signed transfer: {:?}", outcome);
                                 utils::redis::remove_event(
                                     &mut redis_connection,
-                                    "near_init_transfer_events",
+                                    &config.redis.near_init_transfer_events,
                                     &nonce,
                                 )
                                 .await;
@@ -157,7 +159,7 @@ pub async fn finalize_transfer(
         let mut redis_connection_clone = redis_connection.clone();
         let Some(mut events) = utils::redis::get_events(
             &mut redis_connection_clone,
-            "near_sign_transfer_events".to_string(),
+            config.redis.near_sign_transfer_events.clone(),
         )
         .await
         else {
@@ -172,6 +174,7 @@ pub async fn finalize_transfer(
         while let Some((nonce, event)) = events.next_item().await {
             if let Ok(event) = serde_json::from_str::<Nep141LockerEvent>(&event) {
                 handlers.push(tokio::spawn({
+                    let config = config.clone();
                     let mut redis_connection = redis_connection.clone();
                     let connector = connector.clone();
 
@@ -186,10 +189,22 @@ pub async fn finalize_transfer(
                                 info!("Finalized deposit: {}", tx_hash);
                                 utils::redis::remove_event(
                                     &mut redis_connection,
-                                    "near_sign_transfer_events",
+                                    &config.redis.near_sign_transfer_events,
                                     &nonce,
                                 )
                                 .await;
+                                println!(
+                                    "Adding event: {} {} {}",
+                                    nonce, config.redis.eth_finalized_transfer_events, tx_hash
+                                );
+                                utils::redis::add_event(
+                                    &mut redis_connection,
+                                    &nonce,
+                                    &config.redis.eth_finalized_transfer_events,
+                                    tx_hash,
+                                )
+                                .await;
+                                println!("Added event");
                             }
                             Err(err) => {
                                 error!("Failed to finalize deposit: {}", err);
@@ -201,6 +216,40 @@ pub async fn finalize_transfer(
         }
 
         join_all(handlers).await;
+
+        tokio::time::sleep(tokio::time::Duration::from_secs(
+            config.redis.sleep_time_after_events_process_secs,
+        ))
+        .await;
+    }
+}
+
+pub async fn claim_fee(config: config::Config, redis_client: redis::Client) {
+    let redis_connection = redis_client
+        .get_multiplexed_tokio_connection()
+        .await
+        .unwrap();
+
+    loop {
+        let mut redis_connection_clone = redis_connection.clone();
+        let Some(mut events) = utils::redis::get_events(
+            &mut redis_connection_clone,
+            config.redis.eth_finalized_transfer_events.clone(),
+        )
+        .await
+        else {
+            tokio::time::sleep(tokio::time::Duration::from_secs(
+                config.redis.sleep_time_after_events_process_secs,
+            ))
+            .await;
+            continue;
+        };
+
+        while let Some((nonce, event)) = events.next_item().await {
+            if let Ok(event) = serde_json::from_str::<primitive_types::H256>(&event) {
+                info!("Event: {:?}", event);
+            }
+        }
 
         tokio::time::sleep(tokio::time::Duration::from_secs(
             config.redis.sleep_time_after_events_process_secs,

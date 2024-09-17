@@ -5,6 +5,7 @@ near_init_transfer_events = "near_init_transfer_events"
 near_sign_transfer_events = "near_sign_transfer_events"
 eth_last_processed_block = "eth_last_processed_block"
 eth_withdraw_events = "eth_withdraw_events"
+eth_finalized_transfer_events = "eth_finalized_transfer_events"
 sleep_time_after_events_process_secs = 10
 
 [mainnet]

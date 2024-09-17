@@ -47,6 +47,14 @@ async fn main() -> Result<()> {
         let redis_client = redis_client.clone();
         let connector = connector.clone();
         async move {
+            workers::near::claim_fee(config, redis_client, connector).await;
+        }
+    });
+    tokio::spawn({
+        let config = config.clone();
+        let redis_client = redis_client.clone();
+        let connector = connector.clone();
+        async move {
             workers::eth::finalize_withdraw(config, redis_client, connector).await;
         }
     });

@@ -32,7 +32,7 @@ pub async fn finalize_withdraw(
         let mut redis_connection_clone = redis_connection.clone();
         let Some(mut events) = utils::redis::get_events(
             &mut redis_connection_clone,
-            "near_sign_transfer_events".to_string(),
+            config.redis.near_sign_transfer_events.clone(),
         )
         .await
         else {
@@ -47,6 +47,7 @@ pub async fn finalize_withdraw(
         while let Some((key, event)) = events.next_item().await {
             if let Ok(event) = serde_json::from_str::<Log>(&event) {
                 handlers.push(tokio::spawn({
+                    let config = config.clone();
                     let mut redis_connection = redis_connection.clone();
                     let connector = connector.clone();
 
@@ -74,7 +75,7 @@ pub async fn finalize_withdraw(
                                     log::info!("Finalized withdraw: {:?}", tx_hash);
                                     utils::redis::remove_event(
                                         &mut redis_connection,
-                                        "near_sign_transfer_events",
+                                        &config.redis.near_sign_transfer_events,
                                         key,
                                     )
                                     .await;
