@@ -28,10 +28,9 @@ async fn main() -> Result<()> {
     tokio::spawn({
         let config = config.clone();
         let redis_client = redis_client.clone();
-        let jsonrpc_client = jsonrpc_client.clone();
-        let near_signer = near_signer.clone();
+        let connector = connector.clone();
         async move {
-            workers::near::sign_transfer(config, redis_client, jsonrpc_client, near_signer).await;
+            workers::near::sign_transfer(config, redis_client, connector).await;
         }
     });
     tokio::spawn({
@@ -45,9 +44,8 @@ async fn main() -> Result<()> {
     tokio::spawn({
         let config = config.clone();
         let redis_client = redis_client.clone();
-        let connector = connector.clone();
         async move {
-            workers::near::claim_fee(config, redis_client, connector).await;
+            workers::near::claim_fee(config, redis_client).await;
         }
     });
     tokio::spawn({
