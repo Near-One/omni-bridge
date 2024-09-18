@@ -16,7 +16,7 @@ pub struct Redis {
     pub near_sign_transfer_events: String,
     pub eth_last_processed_block: String,
     pub eth_withdraw_events: String,
-    pub eth_finalized_transfer_events: String,
+    pub eth_deposit_events: String,
     pub sleep_time_after_events_process_secs: u64,
 }
 

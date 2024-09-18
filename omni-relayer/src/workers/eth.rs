@@ -1,22 +1,11 @@
 use std::sync::Arc;
 
-use alloy::{rpc::types::Log, sol};
+use alloy::rpc::types::Log;
 
 use futures::future::join_all;
 use nep141_connector::Nep141Connector;
 
 use crate::{config, utils};
-
-sol!(
-    #[derive(Debug)]
-    event Withdraw(
-        string token,
-        address indexed sender,
-        uint256 amount,
-        string recipient,
-        address indexed tokenEthAddress
-    );
-);
 
 pub async fn finalize_withdraw(
     config: config::Config,
@@ -45,43 +34,43 @@ pub async fn finalize_withdraw(
 
         let mut handlers = Vec::new();
         while let Some((key, event)) = events.next_item().await {
-            if let Ok(event) = serde_json::from_str::<Log>(&event) {
+            if let Ok(withdraw_log) =
+                serde_json::from_str::<Log<crate::startup::eth::Withdraw>>(&event)
+            {
                 handlers.push(tokio::spawn({
                     let config = config.clone();
                     let mut redis_connection = redis_connection.clone();
                     let connector = connector.clone();
 
                     async move {
-                        if let Ok(decoded_log) = event.log_decode::<Withdraw>() {
-                            log::info!("Decoded log: {:?}", decoded_log);
+                        log::info!("Decoded log: {:?}", withdraw_log);
 
-                            let Some(tx_hash) = decoded_log.transaction_hash else {
-                                log::warn!("No transaction hash in log: {:?}", event);
-                                return;
-                            };
-                            let Some(log_index) = decoded_log.log_index else {
-                                log::warn!("No log index in log: {:?}", event);
-                                return;
-                            };
+                        let Some(tx_hash) = withdraw_log.transaction_hash else {
+                            log::warn!("No transaction hash in log: {:?}", withdraw_log);
+                            return;
+                        };
+                        let Some(log_index) = withdraw_log.log_index else {
+                            log::warn!("No log index in log: {:?}", withdraw_log);
+                            return;
+                        };
 
-                            match connector
-                                .finalize_withdraw(
-                                    primitive_types::H256::from_slice(tx_hash.as_slice()),
-                                    log_index,
+                        match connector
+                            .finalize_withdraw(
+                                primitive_types::H256::from_slice(tx_hash.as_slice()),
+                                log_index,
+                            )
+                            .await
+                        {
+                            Ok(tx_hash) => {
+                                log::info!("Finalized withdraw: {:?}", tx_hash);
+                                utils::redis::remove_event(
+                                    &mut redis_connection,
+                                    &config.redis.near_sign_transfer_events,
+                                    key,
                                 )
-                                .await
-                            {
-                                Ok(tx_hash) => {
-                                    log::info!("Finalized withdraw: {:?}", tx_hash);
-                                    utils::redis::remove_event(
-                                        &mut redis_connection,
-                                        &config.redis.near_sign_transfer_events,
-                                        key,
-                                    )
-                                    .await;
-                                }
-                                Err(err) => log::error!("Failed to finalize withdraw: {}", err),
+                                .await;
                             }
+                            Err(err) => log::error!("Failed to finalize withdraw: {}", err),
                         }
                     }
                 }));

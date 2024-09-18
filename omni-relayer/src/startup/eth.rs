@@ -4,9 +4,30 @@ use tokio_stream::StreamExt;
 use alloy::{
     providers::{Provider, ProviderBuilder, WsConnect},
     rpc::types::{Filter, Log},
+    sol,
 };
 
 use crate::{config, utils};
+
+sol!(
+    #[derive(Debug, serde::Serialize, serde::Deserialize)]
+    event Withdraw(
+        string token,
+        address indexed sender,
+        uint256 amount,
+        string recipient,
+        address indexed tokenEthAddress
+    );
+
+    #[derive(Debug, serde::Serialize, serde::Deserialize)]
+    event Deposit(
+        string token,
+        uint256 amount,
+        address recipient,
+        uint128 indexed nonce,
+        string feeRecipient
+    );
+);
 
 pub async fn start_indexer(config: config::Config, redis_client: redis::Client) -> Result<()> {
     let mut redis_connection = redis_client.get_multiplexed_tokio_connection().await?;
@@ -32,7 +53,8 @@ pub async fn start_indexer(config: config::Config, redis_client: redis::Client) 
 
     let filter = Filter::new()
         .address(config.mainnet.bridge_token_factory_address)
-        .event("Withdraw(string,address,uint256,string,address)");
+        .event("Withdraw(string,address,uint256,string,address)")
+        .event("Deposit(string,uint256,address,uint128,string)");
 
     for current_block in (from_block..latest_block).step_by(10_000) {
         let logs = http_provider
@@ -43,6 +65,7 @@ pub async fn start_indexer(config: config::Config, redis_client: redis::Client) 
                     .to_block(current_block + 10_000),
             )
             .await?;
+
         for log in logs {
             process_log(&config, &mut redis_connection, &log).await;
         }
@@ -71,12 +94,22 @@ async fn process_log(
     }
 
     if let Some(tx_hash) = log.transaction_hash {
-        utils::redis::add_event(
-            redis_connection,
-            &config.redis.eth_withdraw_events,
-            tx_hash.to_string(),
-            log.clone(),
-        )
-        .await;
+        if let Ok(withdraw_log) = log.log_decode::<Withdraw>() {
+            utils::redis::add_event(
+                redis_connection,
+                &config.redis.eth_withdraw_events,
+                tx_hash.to_string(),
+                withdraw_log,
+            )
+            .await;
+        } else if let Ok(deposit_log) = log.log_decode::<Deposit>() {
+            utils::redis::add_event(
+                redis_connection,
+                &config.redis.eth_deposit_events,
+                tx_hash.to_string(),
+                deposit_log,
+            )
+            .await;
+        }
     }
 }

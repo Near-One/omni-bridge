@@ -1,10 +1,12 @@
 use std::sync::Arc;
 
+use alloy::rpc::types::Log;
 use futures::future::join_all;
 use log::{error, info, warn};
+use near_primitives::borsh::BorshSerialize;
 use nep141_connector::Nep141Connector;
 
-use omni_types::near_events::Nep141LockerEvent;
+use omni_types::{locker_args::ClaimFeeArgs, near_events::Nep141LockerEvent, ChainKind};
 
 use crate::{config, utils};
 
@@ -136,18 +138,6 @@ pub async fn finalize_transfer(
                                     &nonce,
                                 )
                                 .await;
-                                println!(
-                                    "Adding event: {} {} {}",
-                                    nonce, config.redis.eth_finalized_transfer_events, tx_hash
-                                );
-                                utils::redis::add_event(
-                                    &mut redis_connection,
-                                    &nonce,
-                                    &config.redis.eth_finalized_transfer_events,
-                                    tx_hash,
-                                )
-                                .await;
-                                println!("Added event");
                             }
                             Err(err) => {
                                 error!("Failed to finalize deposit: {}", err);
@@ -167,7 +157,11 @@ pub async fn finalize_transfer(
     }
 }
 
-pub async fn claim_fee(config: config::Config, redis_client: redis::Client) {
+pub async fn claim_fee(
+    config: config::Config,
+    redis_client: redis::Client,
+    connector: Arc<Nep141Connector>,
+) {
     let redis_connection = redis_client
         .get_multiplexed_tokio_connection()
         .await
@@ -177,7 +171,7 @@ pub async fn claim_fee(config: config::Config, redis_client: redis::Client) {
         let mut redis_connection_clone = redis_connection.clone();
         let Some(mut events) = utils::redis::get_events(
             &mut redis_connection_clone,
-            config.redis.eth_finalized_transfer_events.clone(),
+            config.redis.eth_deposit_events.clone(),
         )
         .await
         else {
@@ -188,11 +182,66 @@ pub async fn claim_fee(config: config::Config, redis_client: redis::Client) {
             continue;
         };
 
-        while let Some((nonce, event)) = events.next_item().await {
-            if let Ok(event) = serde_json::from_str::<primitive_types::H256>(&event) {
-                info!("Event: {:?}", event);
+        let mut handlers = Vec::new();
+
+        while let Some((key, event)) = events.next_item().await {
+            if let Ok(deposit_log) =
+                serde_json::from_str::<Log<crate::startup::eth::Deposit>>(&event)
+            {
+                handlers.push(tokio::spawn({
+                    let config = config.clone();
+                    let mut redis_connection = redis_connection.clone();
+                    let connector = connector.clone();
+
+                    async move {
+                        info!("Decoded log: {:?}", deposit_log);
+
+                        let Some(tx_hash) = deposit_log.transaction_hash else {
+                            log::warn!("No transaction hash in log: {:?}", deposit_log);
+                            return;
+                        };
+                        let Some(log_index) = deposit_log.log_index else {
+                            log::warn!("No log index in log: {:?}", deposit_log);
+                            return;
+                        };
+
+                        match eth_proof::get_proof_for_event(
+                            primitive_types::H256::from_slice(tx_hash.as_slice()),
+                            log_index,
+                            &config.mainnet.eth_rpc_http_url,
+                        )
+                        .await
+                        {
+                            Ok(proof) => {
+                                let mut args = Vec::new();
+                                proof.serialize(&mut args).unwrap();
+
+                                if let Ok(response) = connector
+                                    .claim_fee(ClaimFeeArgs {
+                                        chain_kind: ChainKind::Eth,
+                                        prover_args: args,
+                                    })
+                                    .await
+                                {
+                                    info!("Claimed fee: {:?}", response);
+                                    utils::redis::remove_event(
+                                        &mut redis_connection,
+                                        &config.redis.eth_deposit_events,
+                                        &key,
+                                    )
+                                    .await;
+                                }
+                            }
+                            Err(err) => {
+                                error!("Failed to get proof: {}", err);
+                            }
+                        };
+                    }
+                }));
             }
         }
+
+        join_all(handlers).await;
 
         tokio::time::sleep(tokio::time::Duration::from_secs(
             config.redis.sleep_time_after_events_process_secs,

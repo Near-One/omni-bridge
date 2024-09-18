@@ -5722,6 +5722,7 @@ version = "0.1.0"
 dependencies = [
  "alloy",
  "anyhow",
+ "eth-proof",
  "futures",
  "log",
  "near-crypto 0.26.0",
