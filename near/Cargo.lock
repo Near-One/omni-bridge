@@ -3850,7 +3850,6 @@ dependencies = [
  "borsh",
  "hex",
  "near-contract-standards",
- "near-plugins",
  "near-sdk",
  "serde",
  "strum_macros 0.26.4",
