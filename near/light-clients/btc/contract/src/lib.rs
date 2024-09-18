@@ -850,6 +850,15 @@ mod tests {
     }
 
     #[test]
+    #[should_panic(expected = "Error: Incorrect bits")]
+    fn test_submitting_block_with_incorrect_bits_same_period() {
+        let mut contract = BtcLightClient::init(get_default_init_args_with_skip_pow());
+        let mut next_header = block_header_example();
+        next_header.bits += 1;
+        contract.submit_block_header(next_header);
+    }
+
+    #[test]
     #[should_panic(expected = "PrevBlockNotFound")]
     fn test_getting_an_error_if_submitting_unattached_block() {
         let mut contract = BtcLightClient::init(get_default_init_args_with_skip_pow());
