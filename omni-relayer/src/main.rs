@@ -13,9 +13,6 @@ const CONFIG_FILE: &str = "config.toml";
 async fn main() -> Result<()> {
     pretty_env_logger::init();
 
-    println!("{}", u128::MAX);
-    println!("{}", 500_000_000_000_000_000_000_000u128);
-
     let config = toml::from_str::<config::Config>(&std::fs::read_to_string(CONFIG_FILE)?)?;
 
     let redis_client = redis::Client::open(config.redis.url.clone())?;
