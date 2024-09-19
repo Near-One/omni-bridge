@@ -638,7 +638,7 @@ impl Contract {
             .get(&owner)
             .sdk_expect("ERR_ACCOUNT_NOT_REGISTERED");
 
-        storage.available = storage.available.saturating_sub(refund);
+        storage.available = storage.available.saturating_add(refund);
         self.accounts_balances.insert(&owner, &storage);
 
         transfer_message
