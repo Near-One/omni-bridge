@@ -77,6 +77,30 @@ impl Contract {
         storage
     }
 
+    pub fn storage_unregister(&mut self, force: Option<bool>) -> bool {
+        assert_one_yocto();
+        let account_id = env::predecessor_account_id();
+        let Some(storage) = self.storage_balance_of(&account_id) else {
+            return false;
+        };
+
+        if !force.unwrap_or_default() {
+            require!(
+                storage.total.saturating_sub(storage.available)
+                    == self.required_balance_for_account(),
+                "This account owns some pending transfers, use `force=true` to ignore them."
+            );
+        }
+
+        self.accounts_balances.remove(&account_id);
+
+        let refund = self
+            .required_balance_for_account()
+            .saturating_add(storage.available);
+        Promise::new(account_id).transfer(refund);
+        true
+    }
+
     pub fn storage_balance_bounds(&self) -> StorageBalanceBounds {
         StorageBalanceBounds {
             min: self.required_balance_for_account(),
