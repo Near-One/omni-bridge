@@ -142,6 +142,8 @@ contract BridgeTokenFactory is
             )
         );
 
+        deployTokenExtension(metadata.token, bridgeTokenProxy);
+
         emit SetMetadata(
             bridgeTokenProxy,
             metadata.token,
@@ -156,6 +158,8 @@ contract BridgeTokenFactory is
 
         return bridgeTokenProxy;
     }
+
+    function deployTokenExtension(string memory token, address tokenAddress) internal virtual {}
 
     function setMetadata(
         string calldata token,
@@ -227,12 +231,17 @@ contract BridgeTokenFactory is
         address tokenEthAddress = _nearToEthToken[token];
         BridgeToken(tokenEthAddress).burn(msg.sender, amount);
 
-        withdrawExtension(token, amount, recipient);
+        withdrawExtension(token, amount, recipient, msg.sender);
 
         emit Withdraw(token, msg.sender, amount, recipient, tokenEthAddress);
     }
 
-    function withdrawExtension(string memory token, uint128 amount, string memory recipient) internal virtual {}
+    function withdrawExtension(
+        string memory token,
+        uint128 amount,
+        string memory recipient,
+        address sender
+    ) internal virtual {}
 
     function pause(uint flags) external onlyRole(DEFAULT_ADMIN_ROLE) {
         _pause(flags);

@@ -14,6 +14,7 @@ interface IWormhole {
 
 contract BridgeTokenFactoryWormhole is BridgeTokenFactory {
     IWormhole private _wormhole;
+    // https://wormhole.com/docs/build/reference/consistency-levels
     uint8 private _consistencyLevel;
     uint32 public wormholeNonce;
 
@@ -28,6 +29,16 @@ contract BridgeTokenFactoryWormhole is BridgeTokenFactory {
         _consistencyLevel = consistencyLevel;
     }
 
+    function deployTokenExtension(string memory token, address tokenAddress) internal override {
+        _wormhole.publishMessage(
+            wormholeNonce,
+            abi.encode(token, tokenAddress),
+            _consistencyLevel
+        );
+
+        wormholeNonce++;
+    }
+
     function depositExtension(BridgeDeposit memory bridgeDeposit) internal override {
         _wormhole.publishMessage(
             wormholeNonce,
@@ -39,10 +50,10 @@ contract BridgeTokenFactoryWormhole is BridgeTokenFactory {
 
     }
 
-    function withdrawExtension(string memory token, uint128 amount, string memory recipient) internal override {
+    function withdrawExtension(string memory token, uint128 amount, string memory recipient, address sender) internal override {
         _wormhole.publishMessage(
             wormholeNonce,
-            abi.encode(token, amount, recipient),
+            abi.encode(token, amount, recipient, sender),
             _consistencyLevel
         );
 

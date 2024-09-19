@@ -1,6 +1,7 @@
 const { expect } = require('chai')
 const { ethers, upgrades } = require('hardhat')
 const { metadataSignature, depositSignature } = require('./signatures')
+const { anyValue } = require("@nomicfoundation/hardhat-chai-matchers/withArgs");
 
 describe('BridgeTokenWormhole', () => {
   const wrappedNearId = 'wrap.testnet';
@@ -53,6 +54,17 @@ describe('BridgeTokenWormhole', () => {
     return { tokenProxyAddress, token }
   }
 
+  it('deploy token', async function () {
+    const { signature, payload } = metadataSignature(wrappedNearId);
+
+    await expect(
+      await BridgeTokenFactory.newBridgeToken(signature, payload)
+    )
+      .to
+      .emit(TestWormhole, 'MessagePublished')
+      .withArgs(0, anyValue, consistencyLevel);
+  });
+
   it('deposit token', async function () {
     const { token } = await createToken(wrappedNearId);
     const { signature, payload } = depositSignature(wrappedNearId, user1.address);
@@ -68,7 +80,7 @@ describe('BridgeTokenWormhole', () => {
     )
        .to
        .emit(TestWormhole, 'MessagePublished')
-       .withArgs(0, expectedPayload, consistencyLevel);
+       .withArgs(1, expectedPayload, consistencyLevel);
 
     expect(
       (await token.balanceOf(payload.recipient))
@@ -87,8 +99,8 @@ describe('BridgeTokenWormhole', () => {
 
     const recipient = 'testrecipient.near';
     const expectedPayload = ethers.AbiCoder.defaultAbiCoder().encode(
-        ["string", "uint128", "string"],
-        [wrappedNearId, payload.amount, recipient]
+        ["string", "uint128", "string", "address"],
+        [wrappedNearId, payload.amount, recipient, user1.address]
     );
 
     await expect(
@@ -100,7 +112,7 @@ describe('BridgeTokenWormhole', () => {
     )
       .to
       .emit(TestWormhole, "MessagePublished")
-      .withArgs(1, expectedPayload, consistencyLevel);
+      .withArgs(2, expectedPayload, consistencyLevel);
 
     expect((await token.balanceOf(user1.address)).toString()).to.be.equal('0')
   });
