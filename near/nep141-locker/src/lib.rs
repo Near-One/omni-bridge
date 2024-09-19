@@ -24,7 +24,7 @@ use omni_types::{
     ChainKind, MetadataPayload, NearRecipient, Nonce, OmniAddress, SignRequest, TransferMessage,
     TransferMessagePayload, UpdateFee,
 };
-use storage::TransferMessageStorage;
+use storage::{TransferMessageStorage, TransferMessageStorageValue};
 
 mod errors;
 mod storage;
@@ -146,8 +146,11 @@ impl FungibleTokenReceiver for Contract {
         };
 
         // TODO: add native token as fee attachment
-        let required_storage_balance =
-            self.add_transfer_message(self.current_nonce, &transfer_message, &sender_id);
+        let required_storage_balance = self.add_transfer_message(
+            self.current_nonce,
+            transfer_message.clone(),
+            sender_id.clone(),
+        );
         self.update_storage_balance(
             sender_id,
             required_storage_balance,
@@ -222,21 +225,20 @@ impl Contract {
     pub fn update_transfer_fee(&mut self, nonce: U128, fee: UpdateFee) {
         match fee {
             UpdateFee::Fee(fee) => {
-                let (mut transfer_message, message_owner) =
-                    self.get_transfer_message_storage(nonce);
+                let mut transfer = self.get_transfer_message_storage(nonce);
 
                 require!(
                     OmniAddress::Near(env::predecessor_account_id().to_string())
-                        == transfer_message.sender,
+                        == transfer.message.sender,
                     "Only sender can update fee"
                 );
 
-                transfer_message.fee = fee;
-                self.insert_raw_transfer(nonce.0, &transfer_message, &message_owner);
+                transfer.message.fee = fee;
+                self.insert_raw_transfer(nonce.0, transfer.message.clone(), transfer.owner);
 
                 env::log_str(
                     &Nep141LockerEvent::UpdateFeeEvent {
-                        transfer_message: transfer_message,
+                        transfer_message: transfer.message,
                     }
                     .to_log_string(),
                 );
@@ -416,8 +418,8 @@ impl Contract {
             required_balance = self
                 .add_transfer_message(
                     self.current_nonce,
-                    &transfer_message,
-                    &predecessor_account_id,
+                    transfer_message.clone(),
+                    predecessor_account_id.clone(),
                 )
                 .saturating_add(required_balance);
 
@@ -525,11 +527,11 @@ impl Contract {
     pub fn get_transfer_message(&self, nonce: U128) -> TransferMessage {
         self.pending_transfers
             .get(&nonce.0)
-            .map(|m| m.into_main().0)
+            .map(|m| m.into_main().message)
             .sdk_expect("The transfer does not exist")
     }
 
-    pub fn get_transfer_message_storage(&self, nonce: U128) -> (TransferMessage, AccountId) {
+    pub fn get_transfer_message_storage(&self, nonce: U128) -> TransferMessageStorageValue {
         self.pending_transfers
             .get(&nonce.0)
             .map(|m| m.into_main())
@@ -597,8 +599,8 @@ impl Contract {
     fn insert_raw_transfer(
         &mut self,
         nonce: u128,
-        transfer_message: &TransferMessage,
-        message_owner: &AccountId,
+        transfer_message: TransferMessage,
+        message_owner: AccountId,
     ) -> Option<Vec<u8>> {
         self.pending_transfers.insert_raw(
             &borsh::to_vec(&nonce).sdk_expect("ERR_BORSH"),
@@ -610,8 +612,8 @@ impl Contract {
     fn add_transfer_message(
         &mut self,
         nonce: u128,
-        transfer_message: &TransferMessage,
-        message_owner: &AccountId,
+        transfer_message: TransferMessage,
+        message_owner: AccountId,
     ) -> NearToken {
         let storage_usage = env::storage_usage();
         require!(
@@ -624,7 +626,7 @@ impl Contract {
 
     fn remove_transfer_message(&mut self, nonce: u128) -> TransferMessage {
         let storage_usage = env::storage_usage();
-        let (transfer_message, owner) = self
+        let transfer = self
             .pending_transfers
             .remove(&nonce)
             .map(|m| m.into_main())
@@ -635,13 +637,13 @@ impl Contract {
 
         let mut storage = self
             .accounts_balances
-            .get(&owner)
+            .get(&transfer.owner)
             .sdk_expect("ERR_ACCOUNT_NOT_REGISTERED");
 
         storage.available = storage.available.saturating_add(refund);
-        self.accounts_balances.insert(&owner, &storage);
+        self.accounts_balances.insert(&transfer.owner, &storage);
 
-        transfer_message
+        transfer.message
     }
 
     fn add_fin_transfer(&mut self, chain_kind: ChainKind, nonce: u128) -> NearToken {
