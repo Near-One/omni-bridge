@@ -115,7 +115,7 @@ contract BridgeTokenFactory is
         return _nearToEthToken[nearTokenId];
     }
 
-    function newBridgeToken(bytes calldata signatureData, MetadataPayload calldata metadata) external returns (address) {
+    function newBridgeToken(bytes calldata signatureData, MetadataPayload calldata metadata) payable external returns (address) {
         bytes memory borshEncoded = bytes.concat(
             Borsh.encodeString(metadata.token),
             Borsh.encodeString(metadata.name),
@@ -181,7 +181,7 @@ contract BridgeTokenFactory is
         );
     }
 
-    function deposit(bytes calldata signatureData, BridgeDeposit calldata bridgeDeposit) external whenNotPaused(PAUSED_DEPOSIT) {
+    function deposit(bytes calldata signatureData, BridgeDeposit calldata bridgeDeposit) payable external whenNotPaused(PAUSED_DEPOSIT) {
         if (completedTransfers[bridgeDeposit.nonce]) {
             revert NonceAlreadyUsed(bridgeDeposit.nonce);
         }
@@ -224,7 +224,7 @@ contract BridgeTokenFactory is
         string memory token,
         uint128 amount,
         string memory recipient
-    ) external whenNotPaused(PAUSED_WITHDRAW) {
+    ) payable external whenNotPaused(PAUSED_WITHDRAW) {
         _checkWhitelistedToken(token, msg.sender);
         require(_isBridgeToken[_nearToEthToken[token]], "ERR_NOT_BRIDGE_TOKEN");
 

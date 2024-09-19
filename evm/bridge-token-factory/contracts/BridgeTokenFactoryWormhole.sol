@@ -30,7 +30,7 @@ contract BridgeTokenFactoryWormhole is BridgeTokenFactory {
     }
 
     function deployTokenExtension(string memory token, address tokenAddress) internal override {
-        _wormhole.publishMessage(
+        _wormhole.publishMessage{value: msg.value}(
             wormholeNonce,
             abi.encode(token, tokenAddress),
             _consistencyLevel
@@ -40,7 +40,7 @@ contract BridgeTokenFactoryWormhole is BridgeTokenFactory {
     }
 
     function depositExtension(BridgeDeposit memory bridgeDeposit) internal override {
-        _wormhole.publishMessage(
+        _wormhole.publishMessage{value: msg.value}(
             wormholeNonce,
             abi.encode(bridgeDeposit.token, bridgeDeposit.amount, bridgeDeposit.feeRecipient, bridgeDeposit.nonce),
             _consistencyLevel
@@ -51,7 +51,7 @@ contract BridgeTokenFactoryWormhole is BridgeTokenFactory {
     }
 
     function withdrawExtension(string memory token, uint128 amount, string memory recipient, address sender) internal override {
-        _wormhole.publishMessage(
+        _wormhole.publishMessage{value: msg.value}(
             wormholeNonce,
             abi.encode(token, amount, recipient, sender),
             _consistencyLevel
