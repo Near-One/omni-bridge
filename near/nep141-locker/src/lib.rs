@@ -598,11 +598,11 @@ impl Contract {
         &mut self,
         nonce: u128,
         transfer_message: &TransferMessage,
-        sender_id: &AccountId,
+        message_owner: &AccountId,
     ) -> Option<Vec<u8>> {
         self.pending_transfers.insert_raw(
             &borsh::to_vec(&nonce).sdk_expect("ERR_BORSH"),
-            &TransferMessageStorage::encode_borsh(transfer_message, sender_id)
+            &TransferMessageStorage::encode_borsh(transfer_message, message_owner)
                 .sdk_expect("ERR_BORSH"),
         )
     }
