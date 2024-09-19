@@ -614,7 +614,11 @@ impl Contract {
         message_owner: &AccountId,
     ) -> NearToken {
         let storage_usage = env::storage_usage();
-        self.insert_raw_transfer(nonce, transfer_message, message_owner);
+        require!(
+            self.insert_raw_transfer(nonce, transfer_message, message_owner)
+                .is_some(),
+            "ERR_KEY_EXIST"
+        );
         env::storage_byte_cost().saturating_mul((env::storage_usage() - storage_usage).into())
     }
 
