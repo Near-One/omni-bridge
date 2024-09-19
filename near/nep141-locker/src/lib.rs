@@ -659,26 +659,25 @@ impl Contract {
         required_balance: NearToken,
         attached_deposit: NearToken,
     ) {
-        let refund = match self.accounts_balances.get(&account_id) {
-            Some(mut storage) => {
-                if storage.available >= required_balance {
-                    storage.available = storage.available.saturating_sub(required_balance);
-                    self.accounts_balances.insert(&account_id, &storage);
-                    Some(attached_deposit)
-                } else {
-                    None
-                }
+        if attached_deposit >= required_balance {
+            let refund = attached_deposit.saturating_sub(required_balance);
+            if !refund.is_zero() {
+                Promise::new(account_id).transfer(refund);
             }
-            None => None,
-        }
-        .unwrap_or_else(|| {
-            attached_deposit
-                .checked_sub(required_balance)
-                .sdk_expect("Not enough storage deposited")
-        });
+        } else {
+            let required_balance = required_balance.saturating_sub(attached_deposit);
+            let mut storage_balance = self
+                .accounts_balances
+                .get(&account_id)
+                .sdk_expect("ERR_ACCOUNT_NOT_REGISTERED");
 
-        if !refund.is_zero() {
-            Promise::new(account_id).transfer(refund);
+            if storage_balance.available >= required_balance {
+                storage_balance.available =
+                    storage_balance.available.saturating_sub(required_balance);
+                self.accounts_balances.insert(&account_id, &storage_balance);
+            } else {
+                env::panic_str("Not enough storage deposited");
+            }
         }
     }
 }
