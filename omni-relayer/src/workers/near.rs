@@ -55,6 +55,26 @@ pub async fn sign_transfer(
                             transfer_message.origin_nonce.0
                         );
 
+                        // TODO: If fee is insufficient, it should be handled later. For example,
+                        // add to redis and try again in 1 hour
+                        match utils::price::is_fee_sufficient(
+                            transfer_message.sender,
+                            transfer_message.recipient,
+                            transfer_message.token,
+                            transfer_message.fee.into(),
+                        )
+                        .await
+                        {
+                            Some(res) => {
+                                if !res {
+                                    warn!("Fee is insufficient");
+                                }
+                            }
+                            None => {
+                                warn!("Failed to check fee");
+                            }
+                        }
+
                         match connector
                             .sign_transfer(
                                 transfer_message.origin_nonce.into(),
@@ -64,7 +84,7 @@ pub async fn sign_transfer(
                             .await
                         {
                             Ok(outcome) => {
-                                info!("Signed transfer: {:?}", outcome);
+                                info!("Signed transfer: {:?}", outcome.transaction.hash);
                                 utils::redis::remove_event(
                                     &mut redis_connection,
                                     &config.redis.near_init_transfer_events,
