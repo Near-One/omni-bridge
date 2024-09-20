@@ -1,7 +1,8 @@
 const { expect } = require('chai')
 const { ethers, upgrades } = require('hardhat')
-const { metadataSignature, depositSignature } = require('./signatures')
-const { anyValue } = require("@nomicfoundation/hardhat-chai-matchers/withArgs");
+const { metadataSignature, depositSignature } = require('./helpers/signatures')
+const { anyValue } = require("@nomicfoundation/hardhat-chai-matchers/withArgs")
+const { deriveEthereumAddress } = require('./helpers/kdf')
 
 describe('BridgeTokenWormhole', () => {
   const wrappedNearId = 'wrap.testnet';
@@ -25,7 +26,7 @@ describe('BridgeTokenWormhole', () => {
     TestWormhole = await TestWormhole.deploy();
     await TestWormhole.waitForDeployment();
 
-    const nearBridgeDeriveAddress = "0xa966f32b64caaee9211d674e698cb72100b5e792";
+    const nearBridgeDeriveAddress = await deriveEthereumAddress('omni-locker.test1-dev.testnet', 'bridge-1');
 
     BridgeTokenFactory = await ethers.getContractFactory('BridgeTokenFactoryWormhole');
     BridgeTokenFactory = await upgrades.deployProxy(BridgeTokenFactory, [
