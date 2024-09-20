@@ -1,3 +1,4 @@
+use errors::SdkExpect;
 use near_plugins::{
     access_control, access_control_any, pause, AccessControlRole, AccessControllable, Pausable,
     Upgradable,
@@ -23,6 +24,10 @@ use omni_types::{
     ChainKind, MetadataPayload, NearRecipient, Nonce, OmniAddress, SignRequest, TransferMessage,
     TransferMessagePayload, UpdateFee,
 };
+use storage::{TransferMessageStorage, TransferMessageStorageValue};
+
+mod errors;
+mod storage;
 
 const LOG_METADATA_GAS: Gas = Gas::from_tgas(10);
 const LOG_METADATA_CALLBCAK_GAS: Gas = Gas::from_tgas(260);
@@ -47,6 +52,7 @@ enum StorageKey {
     Factories,
     FinalisedTransfers,
     TokensMapping,
+    AccountsBalances,
 }
 
 #[derive(AccessControlRole, Deserialize, Serialize, Copy, Clone)]
@@ -112,11 +118,12 @@ pub trait Prover {
 pub struct Contract {
     pub prover_account: AccountId,
     pub factories: LookupMap<ChainKind, OmniAddress>,
-    pub pending_transfers: LookupMap<Nonce, TransferMessage>,
+    pub pending_transfers: LookupMap<Nonce, TransferMessageStorage>,
     pub finalised_transfers: LookupSet<(ChainKind, Nonce)>,
     pub tokens_to_address_mapping: LookupMap<(ChainKind, AccountId), OmniAddress>,
     pub mpc_signer: AccountId,
     pub current_nonce: Nonce,
+    pub accounts_balances: LookupMap<AccountId, StorageBalance>,
 }
 
 #[near]
@@ -133,14 +140,22 @@ impl FungibleTokenReceiver for Contract {
             origin_nonce: U128(self.current_nonce),
             token: env::predecessor_account_id(),
             amount,
-            recipient: msg.parse().unwrap(),
+            recipient: msg.parse().sdk_expect("ERR_PARSE_MSG"),
             fee: U128(0), // TODO get fee from msg
             sender: OmniAddress::Near(sender_id.to_string()),
         };
 
-        // TODO: pay for storage
-        self.pending_transfers
-            .insert(&self.current_nonce, &transfer_message);
+        // TODO: add native token as fee attachment
+        let required_storage_balance = self.add_transfer_message(
+            self.current_nonce,
+            transfer_message.clone(),
+            sender_id.clone(),
+        );
+        self.update_storage_balance(
+            sender_id,
+            required_storage_balance,
+            NearToken::from_yoctonear(0),
+        );
 
         env::log_str(&Nep141LockerEvent::InitTransferEvent { transfer_message }.to_log_string());
         PromiseOrValue::Value(U128(0))
@@ -159,6 +174,7 @@ impl Contract {
             tokens_to_address_mapping: LookupMap::new(StorageKey::TokensMapping),
             mpc_signer,
             current_nonce: nonce.0,
+            accounts_balances: LookupMap::new(StorageKey::AccountsBalances),
         };
 
         contract.acl_init_super_admin(near_sdk::env::predecessor_account_id());
@@ -192,7 +208,9 @@ impl Contract {
             decimals: metadata.decimals,
         };
 
-        let payload = near_sdk::env::keccak256_array(&borsh::to_vec(&metadata_paylaod).unwrap());
+        let payload = near_sdk::env::keccak256_array(
+            &borsh::to_vec(&metadata_paylaod).sdk_expect("ERR_BORSH"),
+        );
 
         ext_signer::ext(self.mpc_signer.clone())
             .with_static_gas(MPC_SIGNING_GAS)
@@ -207,18 +225,22 @@ impl Contract {
     pub fn update_transfer_fee(&mut self, nonce: U128, fee: UpdateFee) {
         match fee {
             UpdateFee::Fee(fee) => {
-                let mut transfer_message = self.get_transfer_message(nonce);
+                let mut transfer = self.get_transfer_message_storage(nonce);
 
                 require!(
                     OmniAddress::Near(env::predecessor_account_id().to_string())
-                        == transfer_message.sender,
+                        == transfer.message.sender,
                     "Only sender can update fee"
                 );
 
-                transfer_message.fee = fee;
-                self.pending_transfers.insert(&nonce.0, &transfer_message);
+                transfer.message.fee = fee;
+                self.insert_raw_transfer(nonce.0, transfer.message.clone(), transfer.owner);
+
                 env::log_str(
-                    &Nep141LockerEvent::UpdateFeeEvent { transfer_message }.to_log_string(),
+                    &Nep141LockerEvent::UpdateFeeEvent {
+                        transfer_message: transfer.message,
+                    }
+                    .to_log_string(),
                 );
             }
             UpdateFee::Proof(_) => env::panic_str("TODO"),
@@ -258,7 +280,7 @@ impl Contract {
             .then(
                 Self::ext(env::current_account_id())
                     .with_static_gas(SIGN_TRANSFER_CALLBACK_GAS)
-                    .sign_transfer_callback(transfer_payload),
+                    .sign_transfer_callback(transfer_payload, transfer_message.fee),
             )
     }
 
@@ -267,12 +289,12 @@ impl Contract {
         &mut self,
         #[callback_result] call_result: Result<SignatureResponse, PromiseError>,
         #[serializer(borsh)] message_payload: TransferMessagePayload,
+        #[serializer(borsh)] fee: U128,
     ) {
         if let Ok(signature) = call_result {
             let nonce = message_payload.nonce;
-            let transfer_message = self.get_transfer_message(nonce);
-            if transfer_message.fee.0 == 0 {
-                self.pending_transfers.remove(&nonce.0);
+            if fee.0 == 0 {
+                self.remove_transfer_message(nonce.0);
             }
 
             env::log_str(
@@ -299,20 +321,22 @@ impl Contract {
                 prover_args: args.prover_args,
             });
 
+        let mut attached_deposit = env::attached_deposit();
         Self::check_or_pay_ft_storage(
             main_promise,
             &args.storage_deposit_args,
-            env::attached_deposit(),
+            &mut attached_deposit,
         )
         .then(
             Self::ext(env::current_account_id())
-                .with_attached_deposit(NO_DEPOSIT)
+                .with_attached_deposit(attached_deposit)
                 .with_static_gas(CLAIM_FEE_CALLBACK_GAS)
                 .fin_transfer_callback(args.storage_deposit_args, env::predecessor_account_id()),
         )
     }
 
     #[private]
+    #[payable]
     pub fn fin_transfer_callback(
         &mut self,
         #[serializer(borsh)] storage_deposit_args: StorageDepositArgs,
@@ -329,19 +353,14 @@ impl Contract {
         );
 
         let transfer_message = init_transfer.transfer;
-        // TODO: pay for storage
-        require!(
-            self.finalised_transfers.insert(&(
-                transfer_message.get_origin_chain(),
-                transfer_message.origin_nonce.0,
-            )),
-            "The transfer is already finalised"
+        let mut required_balance = self.add_fin_transfer(
+            transfer_message.get_origin_chain(),
+            transfer_message.origin_nonce.0,
         );
 
         if let OmniAddress::Near(recipient) = &transfer_message.recipient {
-            let recipient: NearRecipient = recipient
-                .parse()
-                .unwrap_or_else(|_| env::panic_str("Failed to parse recipient"));
+            let recipient: NearRecipient =
+                recipient.parse().sdk_expect("Failed to parse recipient");
 
             require!(
                 transfer_message.token == storage_deposit_args.token,
@@ -375,9 +394,15 @@ impl Contract {
                     ext_token::ext(transfer_message.token.clone())
                         .with_static_gas(FT_TRANSFER_GAS)
                         .with_attached_deposit(ONE_YOCTO)
-                        .ft_transfer(predecessor_account_id, transfer_message.fee, None),
+                        .ft_transfer(predecessor_account_id.clone(), transfer_message.fee, None),
                 );
             }
+
+            self.update_storage_balance(
+                predecessor_account_id,
+                required_balance,
+                env::attached_deposit(),
+            );
 
             env::log_str(
                 &Nep141LockerEvent::FinTransferEvent {
@@ -386,12 +411,23 @@ impl Contract {
                 }
                 .to_log_string(),
             );
+
             promise.into()
         } else {
-            // TODO: pay for storage
             self.current_nonce += 1;
-            self.pending_transfers
-                .insert(&self.current_nonce, &transfer_message);
+            required_balance = self
+                .add_transfer_message(
+                    self.current_nonce,
+                    transfer_message.clone(),
+                    predecessor_account_id.clone(),
+                )
+                .saturating_add(required_balance);
+
+            self.update_storage_balance(
+                predecessor_account_id,
+                required_balance,
+                env::attached_deposit(),
+            );
 
             env::log_str(
                 &Nep141LockerEvent::FinTransferEvent {
@@ -400,6 +436,7 @@ impl Contract {
                 }
                 .to_log_string(),
             );
+
             PromiseOrValue::Value(U128(self.current_nonce))
         }
     }
@@ -430,9 +467,6 @@ impl Contract {
         let Ok(ProverResult::FinTransfer(fin_transfer)) = call_result else {
             env::panic_str("Invalid proof message")
         };
-
-        let message = self.get_transfer_message(fin_transfer.nonce);
-        self.pending_transfers.remove(&fin_transfer.nonce.0);
         require!(
             self.factories
                 .get(&fin_transfer.emitter_address.get_chain())
@@ -440,6 +474,7 @@ impl Contract {
             "Unknown factory"
         );
 
+        let message = self.remove_transfer_message(fin_transfer.nonce.0);
         let fee = message.amount.0 - fin_transfer.amount.0;
 
         ext_token::ext(message.token)
@@ -492,7 +527,15 @@ impl Contract {
     pub fn get_transfer_message(&self, nonce: U128) -> TransferMessage {
         self.pending_transfers
             .get(&nonce.0)
-            .unwrap_or_else(|| panic!("The transfer does not exist"))
+            .map(|m| m.into_main().message)
+            .sdk_expect("The transfer does not exist")
+    }
+
+    pub fn get_transfer_message_storage(&self, nonce: U128) -> TransferMessageStorageValue {
+        self.pending_transfers
+            .get(&nonce.0)
+            .map(|m| m.into_main())
+            .sdk_expect("The transfer does not exist")
     }
 
     #[access_control_any(roles(Role::DAO))]
@@ -505,16 +548,13 @@ impl Contract {
     fn check_or_pay_ft_storage(
         mut main_promise: Promise,
         args: &StorageDepositArgs,
-        mut attached_deposit: NearToken,
+        attached_deposit: &mut NearToken,
     ) -> Promise {
         for (account, is_storage_deposit) in &args.accounts {
             let promise = if *is_storage_deposit {
-                attached_deposit =
-                    attached_deposit
-                        .checked_sub(NEP141_DEPOSIT)
-                        .unwrap_or_else(|| {
-                            env::panic_str("The attached deposit is less than required")
-                        });
+                *attached_deposit = attached_deposit
+                    .checked_sub(NEP141_DEPOSIT)
+                    .sdk_expect("The attached deposit is less than required");
                 ext_token::ext(args.token.clone())
                     .with_static_gas(STORAGE_DEPOSIT_GAS)
                     .with_attached_deposit(NEP141_DEPOSIT)
@@ -549,9 +589,97 @@ impl Contract {
 
     fn decode_prover_result(result_idx: u64) -> Result<ProverResult, PromiseError> {
         match env::promise_result(result_idx) {
-            PromiseResult::Successful(data) => Ok(ProverResult::try_from_slice(&data)
-                .unwrap_or_else(|_| env::panic_str("Invalid proof"))),
+            PromiseResult::Successful(data) => {
+                Ok(ProverResult::try_from_slice(&data).sdk_expect("Invalid proof"))
+            }
             PromiseResult::Failed => Err(PromiseError::Failed),
+        }
+    }
+
+    fn insert_raw_transfer(
+        &mut self,
+        nonce: u128,
+        transfer_message: TransferMessage,
+        message_owner: AccountId,
+    ) -> Option<Vec<u8>> {
+        self.pending_transfers.insert_raw(
+            &borsh::to_vec(&nonce).sdk_expect("ERR_BORSH"),
+            &TransferMessageStorage::encode_borsh(transfer_message, message_owner)
+                .sdk_expect("ERR_BORSH"),
+        )
+    }
+
+    fn add_transfer_message(
+        &mut self,
+        nonce: u128,
+        transfer_message: TransferMessage,
+        message_owner: AccountId,
+    ) -> NearToken {
+        let storage_usage = env::storage_usage();
+        require!(
+            self.insert_raw_transfer(nonce, transfer_message, message_owner)
+                .is_some(),
+            "ERR_KEY_EXIST"
+        );
+        env::storage_byte_cost().saturating_mul((env::storage_usage() - storage_usage).into())
+    }
+
+    fn remove_transfer_message(&mut self, nonce: u128) -> TransferMessage {
+        let storage_usage = env::storage_usage();
+        let transfer = self
+            .pending_transfers
+            .remove(&nonce)
+            .map(|m| m.into_main())
+            .sdk_expect("ERR_TRANSFER_NOT_EXIST");
+
+        let refund =
+            env::storage_byte_cost().saturating_mul((storage_usage - env::storage_usage()).into());
+
+        let mut storage = self
+            .accounts_balances
+            .get(&transfer.owner)
+            .sdk_expect("ERR_ACCOUNT_NOT_REGISTERED");
+
+        storage.available = storage.available.saturating_add(refund);
+        self.accounts_balances.insert(&transfer.owner, &storage);
+
+        transfer.message
+    }
+
+    fn add_fin_transfer(&mut self, chain_kind: ChainKind, nonce: u128) -> NearToken {
+        let storage_usage = env::storage_usage();
+        require!(
+            self.finalised_transfers.insert(&(chain_kind, nonce)),
+            "The transfer is already finalised"
+        );
+        env::storage_byte_cost().saturating_mul((env::storage_usage() - storage_usage).into())
+    }
+
+    fn update_storage_balance(
+        &mut self,
+        account_id: AccountId,
+        required_balance: NearToken,
+        attached_deposit: NearToken,
+    ) {
+        if attached_deposit >= required_balance {
+            let refund = attached_deposit.saturating_sub(required_balance);
+            if !refund.is_zero() {
+                Promise::new(account_id).transfer(refund);
+            }
+        } else {
+            let required_balance = required_balance.saturating_sub(attached_deposit);
+            let mut storage_balance = self
+                .accounts_balances
+                .get(&account_id)
+                .sdk_expect("ERR_ACCOUNT_NOT_REGISTERED");
+
+            if storage_balance.available >= required_balance {
+                storage_balance.available =
+                    storage_balance.available.saturating_sub(required_balance);
+                self.accounts_balances.insert(&account_id, &storage_balance);
+            } else {
+                env::panic_str("Not enough storage deposited");
+            }
         }
     }
 }
