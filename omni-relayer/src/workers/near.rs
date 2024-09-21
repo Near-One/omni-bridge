@@ -1,11 +1,12 @@
 use std::sync::Arc;
 
 use alloy::rpc::types::Log;
+use anyhow::Result;
 use futures::future::join_all;
 use log::{error, info, warn};
+
 use near_primitives::borsh::BorshSerialize;
 use nep141_connector::Nep141Connector;
-
 use omni_types::{locker_args::ClaimFeeArgs, near_events::Nep141LockerEvent, ChainKind};
 
 use crate::{config, utils};
@@ -14,11 +15,8 @@ pub async fn sign_transfer(
     config: config::Config,
     redis_client: redis::Client,
     connector: Arc<Nep141Connector>,
-) {
-    let redis_connection = redis_client
-        .get_multiplexed_tokio_connection()
-        .await
-        .unwrap();
+) -> Result<()> {
+    let redis_connection = redis_client.get_multiplexed_tokio_connection().await?;
 
     loop {
         let mut redis_connection_clone = redis_connection.clone();
@@ -114,11 +112,8 @@ pub async fn finalize_transfer(
     config: config::Config,
     redis_client: redis::Client,
     connector: Arc<Nep141Connector>,
-) {
-    let redis_connection = redis_client
-        .get_multiplexed_tokio_connection()
-        .await
-        .unwrap();
+) -> Result<()> {
+    let redis_connection = redis_client.get_multiplexed_tokio_connection().await?;
 
     loop {
         let mut redis_connection_clone = redis_connection.clone();
@@ -181,11 +176,8 @@ pub async fn claim_fee(
     config: config::Config,
     redis_client: redis::Client,
     connector: Arc<Nep141Connector>,
-) {
-    let redis_connection = redis_client
-        .get_multiplexed_tokio_connection()
-        .await
-        .unwrap();
+) -> Result<()> {
+    let redis_connection = redis_client.get_multiplexed_tokio_connection().await?;
 
     loop {
         let mut redis_connection_clone = redis_connection.clone();
@@ -234,7 +226,10 @@ pub async fn claim_fee(
                         {
                             Ok(proof) => {
                                 let mut args = Vec::new();
-                                proof.serialize(&mut args).unwrap();
+                                if proof.serialize(&mut args).is_err() {
+                                    warn!("Failed to serialize proof");
+                                    return;
+                                }
 
                                 if let Ok(response) = connector
                                     .claim_fee(ClaimFeeArgs {

@@ -1,8 +1,9 @@
 use std::sync::Arc;
 
 use alloy::rpc::types::Log;
-
+use anyhow::Result;
 use futures::future::join_all;
+
 use nep141_connector::Nep141Connector;
 
 use crate::{config, utils};
@@ -11,11 +12,8 @@ pub async fn finalize_withdraw(
     config: config::Config,
     redis_client: redis::Client,
     connector: Arc<Nep141Connector>,
-) {
-    let redis_connection = redis_client
-        .get_multiplexed_tokio_connection()
-        .await
-        .unwrap();
+) -> Result<()> {
+    let redis_connection = redis_client.get_multiplexed_tokio_connection().await?;
 
     loop {
         let mut redis_connection_clone = redis_connection.clone();

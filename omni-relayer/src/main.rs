@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use anyhow::Result;
+use log::error;
 
 mod config;
 mod startup;
@@ -27,7 +28,9 @@ async fn main() -> Result<()> {
         let redis_client = redis_client.clone();
         let connector = connector.clone();
         async move {
-            workers::near::sign_transfer(config, redis_client, connector).await;
+            if let Err(err) = workers::near::sign_transfer(config, redis_client, connector).await {
+                error!("Error in sign_transfer: {:?}", err);
+            }
         }
     });
     tokio::spawn({
@@ -35,7 +38,11 @@ async fn main() -> Result<()> {
         let redis_client = redis_client.clone();
         let connector = connector.clone();
         async move {
-            workers::near::finalize_transfer(config, redis_client, connector).await;
+            if let Err(err) =
+                workers::near::finalize_transfer(config, redis_client, connector).await
+            {
+                error!("Error in finalize_transfer: {:?}", err);
+            }
         }
     });
     tokio::spawn({
@@ -43,7 +50,9 @@ async fn main() -> Result<()> {
         let redis_client = redis_client.clone();
         let connector = connector.clone();
         async move {
-            workers::near::claim_fee(config, redis_client, connector).await;
+            if let Err(err) = workers::near::claim_fee(config, redis_client, connector).await {
+                error!("Error in claim_fee: {:?}", err);
+            }
         }
     });
     tokio::spawn({
@@ -51,26 +60,31 @@ async fn main() -> Result<()> {
         let redis_client = redis_client.clone();
         let connector = connector.clone();
         async move {
-            workers::eth::finalize_withdraw(config, redis_client, connector).await;
+            if let Err(err) = workers::eth::finalize_withdraw(config, redis_client, connector).await
+            {
+                error!("Error in finalize_withdraw: {:?}", err);
+            }
         }
     });
 
     tokio::spawn({
         let config = config.clone();
         let redis_client = redis_client.clone();
-        async {
-            startup::near::start_indexer(config, redis_client, jsonrpc_client)
-                .await
-                .unwrap();
+        async move {
+            if let Err(err) =
+                startup::near::start_indexer(config, redis_client, jsonrpc_client).await
+            {
+                error!("Error in near start_indexer: {:?}", err);
+            }
         }
     });
     tokio::spawn({
         let config = config.clone();
         let redis_client = redis_client.clone();
-        async {
-            startup::eth::start_indexer(config, redis_client)
-                .await
-                .unwrap();
+        async move {
+            if let Err(err) = startup::eth::start_indexer(config, redis_client).await {
+                error!("Error in eth start_indexer: {:?}", err);
+            }
         }
     });
 

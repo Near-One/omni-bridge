@@ -40,29 +40,34 @@ pub async fn get_events(
     }
 }
 
-pub async fn add_event<N, E>(
+pub async fn add_event<F, E>(
     redis_connection: &mut MultiplexedConnection,
     key: &str,
-    nonce: N,
+    field: F,
     event: E,
 ) where
-    N: redis::ToRedisArgs + Send + Sync,
-    E: serde::Serialize + Send,
+    F: redis::ToRedisArgs + Send + Sync,
+    E: serde::Serialize + std::fmt::Debug + Send,
 {
+    let Ok(serialized_event) = serde_json::to_string(&event) else {
+        warn!("Failed to serialize event: {:?}", event);
+        return;
+    };
+
     if let Err(err) = redis_connection
-        .hset_nx::<&str, N, String, ()>(key, nonce, serde_json::to_string(&event).unwrap())
+        .hset_nx::<&str, F, String, ()>(key, field, serialized_event)
         .await
     {
         warn!("Failed to add event to redis db: {}", err);
     }
 }
 
-pub async fn remove_event<N>(redis_connection: &mut MultiplexedConnection, key: &str, nonce: N)
+pub async fn remove_event<F>(redis_connection: &mut MultiplexedConnection, key: &str, field: F)
 where
-    N: redis::ToRedisArgs + Send + Sync,
+    F: redis::ToRedisArgs + Send + Sync,
 {
     if let Err(err) = redis_connection
-        .hdel::<String, N, ()>(key.to_string(), nonce)
+        .hdel::<String, F, ()>(key.to_string(), field)
         .await
     {
         warn!("Failed to remove event from redis db: {}", err);
