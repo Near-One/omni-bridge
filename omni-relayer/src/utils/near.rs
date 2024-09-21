@@ -1,5 +1,5 @@
 use anyhow::Result;
-use log::info;
+use log::{info, warn};
 
 use near_jsonrpc_client::{methods::block::RpcBlockRequest, JsonRpcClient};
 use near_lake_framework::near_indexer_primitives::{
@@ -45,6 +45,26 @@ pub async fn handle_streamer_message(
             Nep141LockerEvent::InitTransferEvent {
                 ref transfer_message,
             } => {
+                // TODO: If fee is insufficient, it should be handled later. For example,
+                // add to redis and try again in 1 hour
+                match utils::price::is_fee_sufficient(
+                    &transfer_message.sender,
+                    &transfer_message.recipient,
+                    &transfer_message.token,
+                    transfer_message.fee.into(),
+                )
+                .await
+                {
+                    Some(res) => {
+                        if !res {
+                            warn!("Fee is insufficient");
+                        }
+                    }
+                    None => {
+                        warn!("Failed to check fee");
+                    }
+                }
+
                 utils::redis::add_event(
                     redis_connection,
                     &config.redis.near_init_transfer_events,
