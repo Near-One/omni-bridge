@@ -61,13 +61,15 @@ pub async fn start_indexer(
 
     stream
         .map(move |streamer_message| {
-            let mut redis_connection = redis_connection.clone();
             let config = config.clone();
+            let mut redis_connection = redis_connection.clone();
+            let jsonrpc_client = jsonrpc_client.clone();
 
             async move {
                 utils::near::handle_streamer_message(
                     &config,
                     &mut redis_connection,
+                    &jsonrpc_client,
                     &streamer_message,
                 )
                 .await;

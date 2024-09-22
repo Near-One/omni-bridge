@@ -28,6 +28,7 @@ pub async fn get_final_block(jsonrpc_client: &JsonRpcClient) -> Result<u64> {
 pub async fn handle_streamer_message(
     config: &config::Config,
     redis_connection: &mut redis::aio::MultiplexedConnection,
+    jsonrpc_client: &JsonRpcClient,
     streamer_message: &StreamerMessage,
 ) {
     let nep_locker_event_outcomes = find_nep_locker_event_outcomes(config, streamer_message);
@@ -48,6 +49,7 @@ pub async fn handle_streamer_message(
                 // TODO: If fee is insufficient, it should be handled later. For example,
                 // add to redis and try again in 1 hour
                 match utils::price::is_fee_sufficient(
+                    jsonrpc_client,
                     &transfer_message.sender,
                     &transfer_message.recipient,
                     &transfer_message.token,
@@ -55,13 +57,13 @@ pub async fn handle_streamer_message(
                 )
                 .await
                 {
-                    Some(res) => {
+                    Ok(res) => {
                         if !res {
                             warn!("Fee is insufficient");
                         }
                     }
-                    None => {
-                        warn!("Failed to check fee");
+                    Err(err) => {
+                        warn!("Failed to check fee: {}", err);
                     }
                 }
 
