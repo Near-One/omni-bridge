@@ -8,7 +8,10 @@ use alloy::rpc::types::Log;
 use ethereum_types::H256;
 use near_primitives::borsh::BorshSerialize;
 use nep141_connector::Nep141Connector;
-use omni_types::{locker_args::ClaimFeeArgs, near_events::Nep141LockerEvent, ChainKind};
+use omni_types::{
+    locker_args::ClaimFeeArgs, near_events::Nep141LockerEvent, prover_args::EvmVerifyProofArgs,
+    prover_result::ProofKind, ChainKind,
+};
 
 use crate::{config, utils};
 
@@ -206,16 +209,21 @@ pub async fn claim_fee(
                         .await
                         {
                             Ok(proof) => {
-                                let mut args = Vec::new();
-                                if proof.serialize(&mut args).is_err() {
-                                    warn!("Failed to serialize proof");
+                                let evm_proof_args = EvmVerifyProofArgs {
+                                    proof_kind: ProofKind::InitTransfer,
+                                    proof,
+                                };
+
+                                let mut prover_args = Vec::new();
+                                if let Err(err) = evm_proof_args.serialize(&mut prover_args) {
+                                    warn!("Failed to serialize evm proof: {}", err);
                                     return;
                                 }
 
                                 if let Ok(response) = connector
                                     .claim_fee(ClaimFeeArgs {
                                         chain_kind: ChainKind::Eth,
-                                        prover_args: args,
+                                        prover_args,
                                     })
                                     .await
                                 {
