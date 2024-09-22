@@ -66,12 +66,12 @@ pub async fn is_fee_sufficient(jsonrpc_client: &JsonRpcClient, sender: &OmniAddr
     let sender_fee = match sender {
         OmniAddress::Near(_) => 0.03 * get_price_by_symbol("near").await?,
         OmniAddress::Eth(_) => 0.00005 * get_price_by_symbol("ethereum").await?,
-        OmniAddress::Sol(_) => 0.001 * get_price_by_symbol("sol").await?
+        OmniAddress::Sol(_) => 0.001 * get_price_by_symbol("solana").await?
     };
     let recipient_fee = match recipient {
         OmniAddress::Near(_) => 0.03 * get_price_by_symbol("near").await?,
         OmniAddress::Eth(_) => 0.00005 * get_price_by_symbol("ethereum").await?,
-        OmniAddress::Sol(_) => 0.001 * get_price_by_symbol("sol").await?
+        OmniAddress::Sol(_) => 0.001 * get_price_by_symbol("solana").await?
     };
 
     Ok(sender_fee + recipient_fee <= given_fee)
