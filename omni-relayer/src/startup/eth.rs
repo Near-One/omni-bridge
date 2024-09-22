@@ -1,4 +1,5 @@
 use anyhow::{Context, Result};
+use log::info;
 use tokio_stream::StreamExt;
 
 use alloy::{
@@ -53,8 +54,10 @@ pub async fn start_indexer(config: config::Config, redis_client: redis::Client) 
 
     let filter = Filter::new()
         .address(config.mainnet.bridge_token_factory_address)
-        .event("Withdraw(string,address,uint256,string,address)")
-        .event("Deposit(string,uint256,address,uint128,string)");
+        .events(vec![
+            "Withdraw(string,address,uint256,string,address)",
+            "Deposit(string,uint256,address,uint128,string)",
+        ]);
 
     for current_block in (from_block..latest_block).step_by(10_000) {
         let logs = http_provider
@@ -70,6 +73,8 @@ pub async fn start_indexer(config: config::Config, redis_client: redis::Client) 
             process_log(&config, &mut redis_connection, &log).await;
         }
     }
+
+    info!("All historical logs processed, starting WS subscription");
 
     let mut stream = ws_provider.subscribe_logs(&filter).await?.into_stream();
     while let Some(log) = stream.next().await {
