@@ -24,14 +24,10 @@ pub async fn get_price_by_contract_address(platform: &str, address: &str) -> Opt
 }
 
 pub async fn is_fee_sufficient(sender: &OmniAddress, recipient: &OmniAddress, token: &AccountId, fee: u128) -> Option<bool> {
-    let platform = match sender {
-        OmniAddress::Near(_) => "near-protocol",
-        OmniAddress::Eth(_) => "ethereum",
-        OmniAddress::Sol(_) => "solana",
-    };
-
-    // TODO: This feels odd. I need to double check how we store fee
-    let token_price = get_price_by_contract_address(platform, token.as_ref()).await?;
+    // TODO: This feels odd
+    // 1 NEAR is 10^24 yoctoNEAR, so it'd be necessary to divide final result by 10^24, 
+    // but this logic can't be applied to every NEP141 token
+    let token_price = get_price_by_contract_address("near-protocol", token.as_ref()).await?;
     let given_fee = fee as f64 * token_price;
 
     // TODO: Right now I chose a random fee (around 0.10 USD). It should be calculated based on the chain
