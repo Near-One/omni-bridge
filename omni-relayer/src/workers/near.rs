@@ -1,10 +1,11 @@
 use std::sync::Arc;
 
-use alloy::rpc::types::Log;
 use anyhow::Result;
 use futures::future::join_all;
 use log::{error, info, warn};
 
+use alloy::rpc::types::Log;
+use ethereum_types::H256;
 use near_primitives::borsh::BorshSerialize;
 use nep141_connector::Nep141Connector;
 use omni_types::{locker_args::ClaimFeeArgs, near_events::Nep141LockerEvent, ChainKind};
@@ -198,7 +199,7 @@ pub async fn claim_fee(
                         };
 
                         match eth_proof::get_proof_for_event(
-                            primitive_types::H256::from_slice(tx_hash.as_slice()),
+                            H256::from_slice(tx_hash.as_slice()),
                             log_index,
                             &config.mainnet.eth_rpc_http_url,
                         )

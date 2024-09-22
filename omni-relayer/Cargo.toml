@@ -17,7 +17,7 @@ serde_json = "1.0"
 tokio = { version = "1", features = ["sync", "time", "macros", "rt-multi-thread"] }
 tokio-stream = { version = "0.1" }
 
-primitive-types = "0.12.2"
+ethereum-types = "0.14.1"
 omni-types = { git = "https://github.com/near-one/omni-bridge", package = "omni-types" }
 
 near-lake-framework = "0.7.9"

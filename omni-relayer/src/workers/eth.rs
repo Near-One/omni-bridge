@@ -1,9 +1,10 @@
 use std::sync::Arc;
 
-use alloy::rpc::types::Log;
 use anyhow::Result;
 use futures::future::join_all;
 
+use alloy::rpc::types::Log;
+use ethereum_types::H256;
 use nep141_connector::Nep141Connector;
 
 use crate::{config, utils};
@@ -53,10 +54,7 @@ pub async fn finalize_withdraw(
                         };
 
                         match connector
-                            .finalize_withdraw(
-                                primitive_types::H256::from_slice(tx_hash.as_slice()),
-                                log_index,
-                            )
+                            .finalize_withdraw(H256::from_slice(tx_hash.as_slice()), log_index)
                             .await
                         {
                             Ok(tx_hash) => {
