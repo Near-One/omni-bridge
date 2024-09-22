@@ -10,10 +10,10 @@ use serde_json::from_slice;
 
 #[derive(Debug, serde::Deserialize)]
 pub struct Metadata {
-    pub decimals: u8,
+    pub decimals: u32,
 }
 
-pub async fn get_token_decimals(jsonrpc_client: &JsonRpcClient, token: &AccountId) -> Result<u8> {
+pub async fn get_token_decimals(jsonrpc_client: &JsonRpcClient, token: &AccountId) -> Result<u32> {
     let request = methods::query::RpcQueryRequest {
         block_reference: BlockReference::latest(),
         request: QueryRequest::CallFunction {
@@ -60,9 +60,9 @@ pub async fn is_fee_sufficient(jsonrpc_client: &JsonRpcClient, sender: &OmniAddr
     let token_price = get_price_by_contract_address("near-protocol", token.as_ref()).await?;
     let token_decimals = get_token_decimals(jsonrpc_client, token).await?;
 
-    let given_fee = fee as f64 / 10u128.pow(token_decimals as u32) as f64 * token_price;
+    let given_fee = fee as f64 / 10u128.pow(token_decimals) as f64 * token_price;
 
-    // TODO: Right now I chose a random fee (around 0.10 USD). It should be calculated based on the chain
+    // TODO: Right now I chose a random fee (around 0.10 USD), but it should be calculated based on the chain in the future
     let sender_fee = match sender {
         OmniAddress::Near(_) => 0.03 * get_price_by_symbol("near").await?,
         OmniAddress::Eth(_) => 0.00005 * get_price_by_symbol("ethereum").await?,
