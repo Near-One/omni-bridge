@@ -6,7 +6,7 @@ pub const NEAR_INIT_TRANSFER_EVENTS: &str = "near_init_transfer_events";
 pub const NEAR_SIGN_TRANSFER_EVENTS: &str = "near_sign_transfer_events";
 pub const ETH_LAST_PROCESSED_BLOCK: &str = "eth_last_processed_block";
 pub const ETH_WITHDRAW_EVENTS: &str = "eth_withdraw_events";
-pub const ETH_DEPOSIT_EVENTS: &str = "eth_withdraw_events";
+pub const ETH_DEPOSIT_EVENTS: &str = "eth_deposit_events";
 pub const SLEEP_TIME_AFTER_EVENTS_PROCESS_SECS: u64 = 10;
 
 pub async fn get_last_processed_block(
