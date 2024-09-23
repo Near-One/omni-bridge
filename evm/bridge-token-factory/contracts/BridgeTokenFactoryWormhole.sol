@@ -12,6 +12,12 @@ interface IWormhole {
     ) external payable returns (uint64 sequence);
 }
 
+enum MessageType {
+    InitTransfer,
+    FinTransfer,
+    DeployToken
+}
+
 contract BridgeTokenFactoryWormhole is BridgeTokenFactory {
     IWormhole private _wormhole;
     // https://wormhole.com/docs/build/reference/consistency-levels
@@ -32,7 +38,7 @@ contract BridgeTokenFactoryWormhole is BridgeTokenFactory {
     function deployTokenExtension(string memory token, address tokenAddress) internal override {
         _wormhole.publishMessage{value: msg.value}(
             wormholeNonce,
-            abi.encode(token, tokenAddress),
+            abi.encode(MessageType.DeployToken, token, tokenAddress),
             _consistencyLevel
         );
 
@@ -42,7 +48,7 @@ contract BridgeTokenFactoryWormhole is BridgeTokenFactory {
     function depositExtension(BridgeDeposit memory bridgeDeposit) internal override {
         _wormhole.publishMessage{value: msg.value}(
             wormholeNonce,
-            abi.encode(bridgeDeposit.token, bridgeDeposit.amount, bridgeDeposit.feeRecipient, bridgeDeposit.nonce),
+            abi.encode(MessageType.FinTransfer, bridgeDeposit.token, bridgeDeposit.amount, bridgeDeposit.feeRecipient, bridgeDeposit.nonce),
             _consistencyLevel
         );
 
@@ -53,7 +59,7 @@ contract BridgeTokenFactoryWormhole is BridgeTokenFactory {
     function withdrawExtension(string memory token, uint128 amount, string memory recipient, address sender) internal override {
         _wormhole.publishMessage{value: msg.value}(
             wormholeNonce,
-            abi.encode(token, amount, recipient, sender),
+            abi.encode(MessageType.InitTransfer, token, amount, recipient, sender),
             _consistencyLevel
         );
 
