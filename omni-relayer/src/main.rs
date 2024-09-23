@@ -16,8 +16,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let config = toml::from_str::<config::Config>(&std::fs::read_to_string(CONFIG_FILE)?)?;
     let redis_client = redis::Client::open(config.redis.url.clone())?;
-    let jsonrpc_client =
-        near_jsonrpc_client::JsonRpcClient::connect(config.testnet.near_rpc_url.clone());
+    let jsonrpc_client = near_jsonrpc_client::JsonRpcClient::connect(config.near.rpc_url.clone());
     let near_signer = startup::near::create_signer()?;
     let connector = Arc::new(startup::build_connector(&config, &near_signer)?);
 

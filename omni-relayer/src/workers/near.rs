@@ -60,7 +60,7 @@ pub async fn sign_transfer(
                         match connector
                             .sign_transfer(
                                 transfer_message.origin_nonce.into(),
-                                Some(config.testnet.token_locker_id),
+                                Some(config.near.token_locker_id),
                                 transfer_message.fee.into(),
                             )
                             .await
@@ -202,7 +202,7 @@ pub async fn claim_fee(
                         match eth_proof::get_proof_for_event(
                             H256::from_slice(tx_hash.as_slice()),
                             log_index,
-                            &config.mainnet.eth_rpc_http_url,
+                            &config.eth.rpc_http_url,
                         )
                         .await
                         {

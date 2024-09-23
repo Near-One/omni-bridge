@@ -59,7 +59,7 @@ pub async fn finalize_withdraw(
                                 log::info!("Finalized withdraw: {:?}", tx_hash);
                                 utils::redis::remove_event(
                                     &mut redis_connection,
-                                    &utils::redis::NEAR_SIGN_TRANSFER_EVENTS,
+                                    utils::redis::NEAR_SIGN_TRANSFER_EVENTS,
                                     key,
                                 )
                                 .await;

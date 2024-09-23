@@ -35,14 +35,14 @@ pub async fn start_indexer(config: config::Config, redis_client: redis::Client) 
 
     let http_provider = ProviderBuilder::new().on_http(
         config
-            .mainnet
-            .eth_rpc_http_url
+            .eth
+            .rpc_http_url
             .parse()
             .context("Failed to parse ETH rpc provider as url")?,
     );
 
     let ws_provider = ProviderBuilder::new()
-        .on_ws(WsConnect::new(config.mainnet.eth_rpc_ws_url.clone()))
+        .on_ws(WsConnect::new(config.eth.rpc_ws_url.clone()))
         .await
         .context("Failed to initialize WS provider")?;
 
@@ -53,7 +53,7 @@ pub async fn start_indexer(config: config::Config, redis_client: redis::Client) 
             .map_or_else(|| latest_block.saturating_sub(10_000), |block| block);
 
     let filter = Filter::new()
-        .address(config.mainnet.bridge_token_factory_address)
+        .address(config.eth.bridge_token_factory_address)
         .events(vec![
             "Withdraw(string,address,uint256,string,address)",
             "Deposit(string,uint256,address,uint128,string)",

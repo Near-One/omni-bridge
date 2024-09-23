@@ -107,7 +107,7 @@ fn find_nep_locker_event_outcomes(
 }
 
 fn is_nep_locker_event(config: &config::Config, receipt: &ReceiptView) -> bool {
-    receipt.receiver_id == config.testnet.token_locker_id
+    receipt.receiver_id == config.near.token_locker_id
         && matches!(
             receipt.receipt,
             ReceiptEnumView::Action { ref actions, .. } if actions.iter().any(|action| {
