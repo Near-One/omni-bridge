@@ -21,8 +21,9 @@ pub struct Near {
 
 #[derive(Debug, Clone, serde::Deserialize)]
 pub struct Eth {
-    pub chain_id: u64,
     pub rpc_http_url: String,
     pub rpc_ws_url: String,
+    pub chain_id: u64,
     pub bridge_token_factory_address: Address,
+    pub block_processing_batch_size: u64,
 }

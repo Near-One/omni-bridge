@@ -6,7 +6,8 @@ rpc_url = "https://rpc.testnet.near.org/"
 token_locker_id = "omni-locker.test1-dev.testnet"
 
 [eth]
-chain_id = 11_155_111
 rpc_http_url = "https://eth.llamarpc.com"
 rpc_ws_url = "wss://eth-mainnet.g.alchemy.com/v2/API-KEY"
+chain_id = 11_155_111
 bridge_token_factory_address = "0xCF6462b9fcE5aF3E6c660c83453ECa18Ff468773"
+block_processing_batch_size = 10_000

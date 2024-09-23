@@ -50,7 +50,10 @@ pub async fn start_indexer(config: config::Config, redis_client: redis::Client) 
     let from_block =
         utils::redis::get_last_processed_block(&mut redis_connection, "eth_last_processed_block")
             .await
-            .map_or_else(|| latest_block.saturating_sub(10_000), |block| block);
+            .map_or_else(
+                || latest_block.saturating_sub(config.eth.block_processing_batch_size),
+                |block| block,
+            );
 
     let filter = Filter::new()
         .address(config.eth.bridge_token_factory_address)
@@ -59,13 +62,15 @@ pub async fn start_indexer(config: config::Config, redis_client: redis::Client) 
             "Deposit(string,uint256,address,uint128,string)",
         ]);
 
-    for current_block in (from_block..latest_block).step_by(10_000) {
+    for current_block in
+        (from_block..latest_block).step_by(config.eth.block_processing_batch_size as usize)
+    {
         let logs = http_provider
             .get_logs(
                 &filter
                     .clone()
                     .from_block(current_block)
-                    .to_block(current_block + 10_000),
+                    .to_block(current_block + config.eth.block_processing_batch_size),
             )
             .await?;
 
