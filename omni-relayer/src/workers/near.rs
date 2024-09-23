@@ -24,7 +24,7 @@ pub async fn sign_transfer(
 
     loop {
         let mut redis_connection_clone = redis_connection.clone();
-        let Some(mut events) = utils::redis::get_events(
+        let Some(events) = utils::redis::get_events(
             &mut redis_connection_clone,
             utils::redis::NEAR_INIT_TRANSFER_EVENTS.to_string(),
         )
@@ -38,7 +38,7 @@ pub async fn sign_transfer(
         };
 
         let mut handlers = Vec::new();
-        while let Some((nonce, event)) = events.next_item().await {
+        for (key, event) in events {
             if let Ok(event) = serde_json::from_str::<Nep141LockerEvent>(&event) {
                 handlers.push(tokio::spawn({
                     let config = config.clone();
@@ -70,7 +70,7 @@ pub async fn sign_transfer(
                                 utils::redis::remove_event(
                                     &mut redis_connection,
                                     utils::redis::NEAR_INIT_TRANSFER_EVENTS,
-                                    &nonce,
+                                    &key,
                                 )
                                 .await;
                             }
@@ -100,7 +100,7 @@ pub async fn finalize_transfer(
 
     loop {
         let mut redis_connection_clone = redis_connection.clone();
-        let Some(mut events) = utils::redis::get_events(
+        let Some(events) = utils::redis::get_events(
             &mut redis_connection_clone,
             utils::redis::NEAR_SIGN_TRANSFER_EVENTS.to_string(),
         )
@@ -114,7 +114,7 @@ pub async fn finalize_transfer(
         };
 
         let mut handlers = Vec::new();
-        while let Some((nonce, event)) = events.next_item().await {
+        for (key, event) in events {
             if let Ok(event) = serde_json::from_str::<Nep141LockerEvent>(&event) {
                 handlers.push(tokio::spawn({
                     let mut redis_connection = redis_connection.clone();
@@ -132,7 +132,7 @@ pub async fn finalize_transfer(
                                 utils::redis::remove_event(
                                     &mut redis_connection,
                                     utils::redis::NEAR_SIGN_TRANSFER_EVENTS,
-                                    &nonce,
+                                    &key,
                                 )
                                 .await;
                             }
@@ -163,7 +163,7 @@ pub async fn claim_fee(
 
     loop {
         let mut redis_connection_clone = redis_connection.clone();
-        let Some(mut events) = utils::redis::get_events(
+        let Some(events) = utils::redis::get_events(
             &mut redis_connection_clone,
             utils::redis::FINALISED_TRANSFERS.to_string(),
         )
@@ -178,7 +178,7 @@ pub async fn claim_fee(
 
         let mut handlers = Vec::new();
 
-        while let Some((key, event)) = events.next_item().await {
+        for (key, event) in events {
             if let Ok(deposit_log) =
                 serde_json::from_str::<Log<crate::startup::eth::Deposit>>(&event)
             {
