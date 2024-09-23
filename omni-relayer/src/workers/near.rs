@@ -4,14 +4,9 @@ use anyhow::Result;
 use futures::future::join_all;
 use log::{error, info, warn};
 
-use alloy::rpc::types::Log;
-use ethereum_types::H256;
-use near_primitives::borsh::BorshSerialize;
+use near_primitives::borsh;
 use nep141_connector::Nep141Connector;
-use omni_types::{
-    locker_args::ClaimFeeArgs, near_events::Nep141LockerEvent, prover_args::EvmVerifyProofArgs,
-    prover_result::ProofKind, ChainKind,
-};
+use omni_types::{locker_args::ClaimFeeArgs, near_events::Nep141LockerEvent};
 
 use crate::{config, utils};
 
@@ -154,18 +149,14 @@ pub async fn finalize_transfer(
     }
 }
 
-pub async fn claim_fee(
-    config: config::Config,
-    redis_client: redis::Client,
-    connector: Arc<Nep141Connector>,
-) -> Result<()> {
+pub async fn claim_fee(redis_client: redis::Client, connector: Arc<Nep141Connector>) -> Result<()> {
     let redis_connection = redis_client.get_multiplexed_tokio_connection().await?;
 
     loop {
         let mut redis_connection_clone = redis_connection.clone();
         let Some(events) = utils::redis::get_events(
             &mut redis_connection_clone,
-            utils::redis::FINALISED_TRANSFERS.to_string(),
+            utils::redis::FINALIZED_TRANSFERS.to_string(),
         )
         .await
         else {
@@ -179,65 +170,29 @@ pub async fn claim_fee(
         let mut handlers = Vec::new();
 
         for (key, event) in events {
-            if let Ok(deposit_log) =
-                serde_json::from_str::<Log<crate::startup::eth::Deposit>>(&event)
-            {
+            if let Ok(deposit_log) = serde_json::from_str::<Vec<u8>>(&event) {
                 handlers.push(tokio::spawn({
-                    let config = config.clone();
                     let mut redis_connection = redis_connection.clone();
                     let connector = connector.clone();
 
                     async move {
                         info!("Decoded log: {:?}", deposit_log);
 
-                        let Some(tx_hash) = deposit_log.transaction_hash else {
-                            log::warn!("No transaction hash in log: {:?}", deposit_log);
-                            return;
-                        };
-                        let Some(log_index) = deposit_log.log_index else {
-                            log::warn!("No log index in log: {:?}", deposit_log);
+                        let Ok(claim_fee_args) = borsh::from_slice::<ClaimFeeArgs>(&deposit_log)
+                        else {
+                            warn!("Failed to decode claim fee args");
                             return;
                         };
 
-                        match eth_proof::get_proof_for_event(
-                            H256::from_slice(tx_hash.as_slice()),
-                            log_index,
-                            &config.eth.rpc_http_url,
-                        )
-                        .await
-                        {
-                            Ok(proof) => {
-                                let evm_proof_args = EvmVerifyProofArgs {
-                                    proof_kind: ProofKind::InitTransfer,
-                                    proof,
-                                };
-
-                                let mut prover_args = Vec::new();
-                                if let Err(err) = evm_proof_args.serialize(&mut prover_args) {
-                                    warn!("Failed to serialize evm proof: {}", err);
-                                    return;
-                                }
-
-                                if let Ok(response) = connector
-                                    .claim_fee(ClaimFeeArgs {
-                                        chain_kind: ChainKind::Eth,
-                                        prover_args,
-                                    })
-                                    .await
-                                {
-                                    info!("Claimed fee: {:?}", response);
-                                    utils::redis::remove_event(
-                                        &mut redis_connection,
-                                        utils::redis::FINALISED_TRANSFERS,
-                                        &key,
-                                    )
-                                    .await;
-                                }
-                            }
-                            Err(err) => {
-                                error!("Failed to get proof: {}", err);
-                            }
-                        };
+                        if let Ok(response) = connector.claim_fee(claim_fee_args).await {
+                            info!("Claimed fee: {:?}", response);
+                            utils::redis::remove_event(
+                                &mut redis_connection,
+                                utils::redis::FINALIZED_TRANSFERS,
+                                &key,
+                            )
+                            .await;
+                        }
                     }
                 }));
             }
