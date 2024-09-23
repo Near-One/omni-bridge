@@ -165,7 +165,7 @@ pub async fn claim_fee(
         let mut redis_connection_clone = redis_connection.clone();
         let Some(mut events) = utils::redis::get_events(
             &mut redis_connection_clone,
-            utils::redis::ETH_DEPOSIT_EVENTS.to_string(),
+            utils::redis::FINALISED_TRANSFERS.to_string(),
         )
         .await
         else {
@@ -228,7 +228,7 @@ pub async fn claim_fee(
                                     info!("Claimed fee: {:?}", response);
                                     utils::redis::remove_event(
                                         &mut redis_connection,
-                                        utils::redis::ETH_DEPOSIT_EVENTS,
+                                        utils::redis::FINALISED_TRANSFERS,
                                         &key,
                                     )
                                     .await;

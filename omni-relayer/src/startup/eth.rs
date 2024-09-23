@@ -106,7 +106,7 @@ async fn process_log(redis_connection: &mut redis::aio::MultiplexedConnection, l
         } else if let Ok(deposit_log) = log.log_decode::<Deposit>() {
             utils::redis::add_event(
                 redis_connection,
-                utils::redis::ETH_DEPOSIT_EVENTS,
+                utils::redis::FINALISED_TRANSFERS,
                 tx_hash.to_string(),
                 deposit_log,
             )
