@@ -193,6 +193,12 @@ impl fmt::Display for NearRecipient {
     }
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct InitTransferMsg {
+    pub recip: OmniAddress,
+    pub fee: U128,
+}
+
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Debug, Clone)]
 pub struct TransferMessage {
     pub origin_nonce: U128,
