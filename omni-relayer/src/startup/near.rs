@@ -23,13 +23,12 @@ pub fn create_signer() -> Result<InMemorySigner> {
 }
 
 async fn create_lake_config(
-    config: &config::Config,
     redis_connection: &mut redis::aio::MultiplexedConnection,
     jsonrpc_client: &JsonRpcClient,
 ) -> Result<LakeConfig> {
     let start_block_height = match utils::redis::get_last_processed_block(
         redis_connection,
-        &config.redis.near_last_processed_block,
+        utils::redis::NEAR_LAST_PROCESSED_BLOCK,
     )
     .await
     {
@@ -55,7 +54,7 @@ pub async fn start_indexer(
 
     let mut redis_connection = redis_client.get_multiplexed_tokio_connection().await?;
 
-    let lake_config = create_lake_config(&config, &mut redis_connection, &jsonrpc_client).await?;
+    let lake_config = create_lake_config(&mut redis_connection, &jsonrpc_client).await?;
     let (_, stream) = near_lake_framework::streamer(lake_config);
     let stream = tokio_stream::wrappers::ReceiverStream::new(stream);
 
@@ -76,7 +75,7 @@ pub async fn start_indexer(
 
                 utils::redis::update_last_processed_block(
                     &mut redis_connection,
-                    &config.redis.near_last_processed_block,
+                    utils::redis::NEAR_LAST_PROCESSED_BLOCK,
                     streamer_message.block.header.height,
                 )
                 .await;

@@ -11,13 +11,6 @@ pub struct Config {
 #[derive(Debug, Clone, serde::Deserialize)]
 pub struct Redis {
     pub url: String,
-    pub near_last_processed_block: String,
-    pub near_init_transfer_events: String,
-    pub near_sign_transfer_events: String,
-    pub eth_last_processed_block: String,
-    pub eth_withdraw_events: String,
-    pub eth_deposit_events: String,
-    pub sleep_time_after_events_process_secs: u64,
 }
 
 #[derive(Debug, Clone, serde::Deserialize)]

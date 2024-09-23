@@ -7,10 +7,9 @@ use alloy::rpc::types::Log;
 use ethereum_types::H256;
 use nep141_connector::Nep141Connector;
 
-use crate::{config, utils};
+use crate::utils;
 
 pub async fn finalize_withdraw(
-    config: config::Config,
     redis_client: redis::Client,
     connector: Arc<Nep141Connector>,
 ) -> Result<()> {
@@ -20,12 +19,12 @@ pub async fn finalize_withdraw(
         let mut redis_connection_clone = redis_connection.clone();
         let Some(mut events) = utils::redis::get_events(
             &mut redis_connection_clone,
-            config.redis.near_sign_transfer_events.clone(),
+            utils::redis::NEAR_SIGN_TRANSFER_EVENTS.to_string(),
         )
         .await
         else {
             tokio::time::sleep(tokio::time::Duration::from_secs(
-                config.redis.sleep_time_after_events_process_secs,
+                utils::redis::SLEEP_TIME_AFTER_EVENTS_PROCESS_SECS,
             ))
             .await;
             continue;
@@ -37,7 +36,6 @@ pub async fn finalize_withdraw(
                 serde_json::from_str::<Log<crate::startup::eth::Withdraw>>(&event)
             {
                 handlers.push(tokio::spawn({
-                    let config = config.clone();
                     let mut redis_connection = redis_connection.clone();
                     let connector = connector.clone();
 
@@ -61,7 +59,7 @@ pub async fn finalize_withdraw(
                                 log::info!("Finalized withdraw: {:?}", tx_hash);
                                 utils::redis::remove_event(
                                     &mut redis_connection,
-                                    &config.redis.near_sign_transfer_events,
+                                    &utils::redis::NEAR_SIGN_TRANSFER_EVENTS,
                                     key,
                                 )
                                 .await;
@@ -76,7 +74,7 @@ pub async fn finalize_withdraw(
         join_all(handlers).await;
 
         tokio::time::sleep(tokio::time::Duration::from_secs(
-            config.redis.sleep_time_after_events_process_secs,
+            utils::redis::SLEEP_TIME_AFTER_EVENTS_PROCESS_SECS,
         ))
         .await;
     }

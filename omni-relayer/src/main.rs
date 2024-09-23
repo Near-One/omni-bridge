@@ -30,10 +30,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         async move { workers::near::sign_transfer(config, redis_client, connector).await }
     }));
     handles.push(tokio::spawn({
-        let config = config.clone();
         let redis_client = redis_client.clone();
         let connector = connector.clone();
-        async move { workers::near::finalize_transfer(config, redis_client, connector).await }
+        async move { workers::near::finalize_transfer(redis_client, connector).await }
     }));
     handles.push(tokio::spawn({
         let config = config.clone();
@@ -42,10 +41,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         async move { workers::near::claim_fee(config, redis_client, connector).await }
     }));
     handles.push(tokio::spawn({
-        let config = config.clone();
         let redis_client = redis_client.clone();
         let connector = connector.clone();
-        async move { workers::eth::finalize_withdraw(config, redis_client, connector).await }
+        async move { workers::eth::finalize_withdraw(redis_client, connector).await }
     }));
 
     handles.push(tokio::spawn({

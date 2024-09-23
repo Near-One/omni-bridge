@@ -1,12 +1,5 @@
 [redis]
 url = "redis://127.0.0.1/"
-near_last_processed_block = "near_last_processed_block"
-near_init_transfer_events = "near_init_transfer_events"
-near_sign_transfer_events = "near_sign_transfer_events"
-eth_last_processed_block = "eth_last_processed_block"
-eth_withdraw_events = "eth_withdraw_events"
-eth_deposit_events = "eth_withdraw_events"
-sleep_time_after_events_process_secs = 10
 
 [mainnet]
 eth_rpc_http_url = "https://eth.llamarpc.com"

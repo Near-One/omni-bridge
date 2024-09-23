@@ -70,7 +70,7 @@ pub async fn start_indexer(config: config::Config, redis_client: redis::Client) 
             .await?;
 
         for log in logs {
-            process_log(&config, &mut redis_connection, &log).await;
+            process_log(&mut redis_connection, &log).await;
         }
     }
 
@@ -78,21 +78,17 @@ pub async fn start_indexer(config: config::Config, redis_client: redis::Client) 
 
     let mut stream = ws_provider.subscribe_logs(&filter).await?.into_stream();
     while let Some(log) = stream.next().await {
-        process_log(&config, &mut redis_connection, &log).await;
+        process_log(&mut redis_connection, &log).await;
     }
 
     Ok(())
 }
 
-async fn process_log(
-    config: &config::Config,
-    redis_connection: &mut redis::aio::MultiplexedConnection,
-    log: &Log,
-) {
+async fn process_log(redis_connection: &mut redis::aio::MultiplexedConnection, log: &Log) {
     if let Some(block_height) = log.block_number {
         utils::redis::update_last_processed_block(
             redis_connection,
-            &config.redis.eth_last_processed_block,
+            utils::redis::ETH_LAST_PROCESSED_BLOCK,
             block_height,
         )
         .await;
@@ -102,7 +98,7 @@ async fn process_log(
         if let Ok(withdraw_log) = log.log_decode::<Withdraw>() {
             utils::redis::add_event(
                 redis_connection,
-                &config.redis.eth_withdraw_events,
+                utils::redis::ETH_WITHDRAW_EVENTS,
                 tx_hash.to_string(),
                 withdraw_log,
             )
@@ -110,7 +106,7 @@ async fn process_log(
         } else if let Ok(deposit_log) = log.log_decode::<Deposit>() {
             utils::redis::add_event(
                 redis_connection,
-                &config.redis.eth_deposit_events,
+                utils::redis::ETH_DEPOSIT_EVENTS,
                 tx_hash.to_string(),
                 deposit_log,
             )

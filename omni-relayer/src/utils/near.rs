@@ -69,7 +69,7 @@ pub async fn handle_streamer_message(
 
                 utils::redis::add_event(
                     redis_connection,
-                    &config.redis.near_init_transfer_events,
+                    utils::redis::NEAR_INIT_TRANSFER_EVENTS,
                     transfer_message.origin_nonce.0.to_string(),
                     log,
                 )
@@ -81,7 +81,7 @@ pub async fn handle_streamer_message(
             } => {
                 utils::redis::add_event(
                     redis_connection,
-                    &config.redis.near_sign_transfer_events,
+                    utils::redis::NEAR_SIGN_TRANSFER_EVENTS,
                     message_payload.nonce.0.to_string(),
                     log,
                 )
