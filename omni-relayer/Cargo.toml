@@ -25,7 +25,9 @@ near-jsonrpc-client = "0.13.0"
 near-jsonrpc-primitives = "0.26.0"
 near-primitives = "0.26.0"
 near-crypto = "0.26.0"
-nep141-connector = { git = "https://github.com/Near-One/rainbow-bridge-sdk-rs", branch = "omni-token-support", package = "nep141-connector" }
+# nep141-connector = { git = "https://github.com/Near-One/rainbow-bridge-sdk-rs", branch = "omni-token-support", package = "nep141-connector" }
+# This can be used until my PR will be merged
+nep141-connector = { git = "https://github.com/Near-One/rainbow-bridge-sdk-rs", branch = "feat/withdraw-omni-version", package = "nep141-connector" }
 eth-proof = { git = "https://github.com/Near-One/rainbow-bridge-sdk-rs", branch = "omni-token-support", package = "eth-proof" }
 
 alloy = { version = "0.3", features = ["node-bindings", "providers", "rpc-types", "sol-types", "provider-ws"] }

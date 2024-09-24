@@ -1,14 +1,15 @@
 use anyhow::{Context, Result};
-use ethereum_types::H256;
 use log::{info, warn};
-use near_primitives::borsh::BorshSerialize;
+use tokio_stream::StreamExt;
+
+use ethereum_types::H256;
+use near_primitives::{borsh::BorshSerialize, types::AccountId};
 use omni_types::{
-    locker_args::ClaimFeeArgs,
+    locker_args::{ClaimFeeArgs, FinTransferArgs, StorageDepositArgs},
     prover_args::{EvmVerifyProofArgs, WormholeVerifyProofArgs},
     prover_result::ProofKind,
     ChainKind,
 };
-use tokio_stream::StreamExt;
 
 use alloy::{
     providers::{Provider, ProviderBuilder, WsConnect},
@@ -23,6 +24,7 @@ const WORMHOLE_CHAIN_ID: u64 = 2;
 sol!(
     #[derive(Debug, serde::Serialize, serde::Deserialize)]
     event Withdraw(
+        string token,
         address indexed sender,
         uint256 amount,
         string recipient,
@@ -31,6 +33,7 @@ sol!(
 
     #[derive(Debug, serde::Serialize, serde::Deserialize)]
     event Deposit(
+        string token,
         uint256 amount,
         address recipient,
         uint128 indexed nonce,
@@ -184,16 +187,8 @@ async fn process_log(
         None
     };
 
-    if let Ok(withdraw_log) = log.log_decode::<Withdraw>() {
-        utils::redis::add_event(
-            redis_connection,
-            utils::redis::ETH_WITHDRAW_EVENTS,
-            tx_hash.to_string(),
-            withdraw_log,
-        )
-        .await;
-    } else if log.log_decode::<Deposit>().is_ok() {
-        let claim_fee_args = if let Some(vaa) = vaa {
+    let prover_args =
+        if let Some(vaa) = vaa {
             let wormhole_proof_args = WormholeVerifyProofArgs {
                 proof_kind: ProofKind::InitTransfer,
                 vaa,
@@ -204,10 +199,7 @@ async fn process_log(
                 warn!("Failed to serialize wormhole proof: {}", err);
             }
 
-            ClaimFeeArgs {
-                chain_kind: ChainKind::Eth,
-                prover_args,
-            }
+            prover_args
         } else {
             let evm_proof_args =
                 match eth_proof::get_proof_for_event(tx_hash, log_index, &config.eth.rpc_http_url)
@@ -231,16 +223,52 @@ async fn process_log(
                 return;
             }
 
-            ClaimFeeArgs {
-                chain_kind: ChainKind::Eth,
-                prover_args,
-            }
+            prover_args
+        };
+
+    if let Ok(withdraw_log) = log.log_decode::<Withdraw>() {
+        let Ok(token) = withdraw_log.inner.token.parse::<AccountId>() else {
+            warn!(
+                "Failed to parse token as AccountId: {:?}",
+                withdraw_log.inner.token
+            );
+            return;
+        };
+
+        let fin_transfer_args = FinTransferArgs {
+            chain_kind: ChainKind::Eth,
+            storage_deposit_args: StorageDepositArgs {
+                token,
+                // TODO: Add accounts
+                accounts: Vec::new(),
+            },
+            prover_args,
+        };
+
+        let mut serialized_fin_transfer_args = Vec::new();
+        if let Err(err) = fin_transfer_args.serialize(&mut serialized_fin_transfer_args) {
+            warn!("Failed to serialize fin transfer args: {}", err);
+            return;
+        }
+
+        utils::redis::add_event(
+            redis_connection,
+            utils::redis::ETH_WITHDRAW_EVENTS,
+            tx_hash.to_string(),
+            serialized_fin_transfer_args,
+        )
+        .await;
+    } else if log.log_decode::<Deposit>().is_ok() {
+        let claim_fee_args = ClaimFeeArgs {
+            chain_kind: ChainKind::Eth,
+            prover_args,
         };
 
         let mut serialized_claim_fee_args = Vec::new();
-        claim_fee_args
-            .serialize(&mut serialized_claim_fee_args)
-            .unwrap();
+        if let Err(err) = claim_fee_args.serialize(&mut serialized_claim_fee_args) {
+            warn!("Failed to serialize claim fee args: {}", err);
+            return;
+        }
 
         utils::redis::add_event(
             redis_connection,

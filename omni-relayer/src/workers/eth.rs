@@ -2,10 +2,11 @@ use std::sync::Arc;
 
 use anyhow::Result;
 use futures::future::join_all;
+use log::warn;
 
-use alloy::rpc::types::Log;
-use ethereum_types::H256;
+use near_primitives::borsh;
 use nep141_connector::Nep141Connector;
+use omni_types::locker_args::FinTransferArgs;
 
 use crate::utils;
 
@@ -32,9 +33,7 @@ pub async fn finalize_withdraw(
 
         let mut handlers = Vec::new();
         for (key, event) in events {
-            if let Ok(withdraw_log) =
-                serde_json::from_str::<Log<crate::startup::eth::Withdraw>>(&event)
-            {
+            if let Ok(withdraw_log) = serde_json::from_str::<Vec<u8>>(&event) {
                 handlers.push(tokio::spawn({
                     let mut redis_connection = redis_connection.clone();
                     let connector = connector.clone();
@@ -42,19 +41,14 @@ pub async fn finalize_withdraw(
                     async move {
                         log::info!("Decoded log: {:?}", withdraw_log);
 
-                        let Some(tx_hash) = withdraw_log.transaction_hash else {
-                            log::warn!("No transaction hash in log: {:?}", withdraw_log);
-                            return;
-                        };
-                        let Some(log_index) = withdraw_log.log_index else {
-                            log::warn!("No log index in log: {:?}", withdraw_log);
+                        let Ok(fin_transfer_args) =
+                            borsh::from_slice::<FinTransferArgs>(&withdraw_log)
+                        else {
+                            warn!("Failed to decode log: {:?}", withdraw_log);
                             return;
                         };
 
-                        match connector
-                            .finalize_withdraw(H256::from_slice(tx_hash.as_slice()), log_index)
-                            .await
-                        {
+                        match connector.finalize_withdraw_omni(fin_transfer_args).await {
                             Ok(tx_hash) => {
                                 log::info!("Finalized withdraw: {:?}", tx_hash);
                                 utils::redis::remove_event(
