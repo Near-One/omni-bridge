@@ -7,7 +7,7 @@ use near_sdk::serde::{Deserialize, Serialize};
 use near_sdk::AccountId;
 use serde::de::Visitor;
 
-pub mod evm_events;
+pub mod evm;
 pub mod locker_args;
 pub mod mpc_types;
 pub mod near_events;

@@ -7,7 +7,7 @@ members = [
     "nep141-locker",
     "omni-prover/omni-prover",
     "omni-prover/wormhole-omni-prover-proxy",
-    "omni-prover/evm-prover-proxy",
+    "omni-prover/evm-prover",
     "omni-types",
     "omni-tests",
     "mock/mock-token",
@@ -35,3 +35,6 @@ strum_macros = "0.26"
 near-workspaces = "0.12.0"
 tokio = "1.40"
 anyhow = "1"
+ethereum-types = { version = "0.15.1", default-features = false, features = ["rlp", "serialize"] }
+rlp = "0.6"
+sha3 = "0.10.0"
