@@ -224,7 +224,7 @@ impl Contract {
             .then(
                 Self::ext(env::current_account_id())
                     .with_static_gas(SIGN_LOG_METADATA_CALLBACK_GAS)
-                    .sign_log_metadata_callbcak(metadata_payload)
+                    .sign_log_metadata_callbcak(metadata_payload),
             )
     }
 
@@ -241,7 +241,7 @@ impl Contract {
                     signature,
                     metadata_payload,
                 }
-                    .to_log_string(),
+                .to_log_string(),
             );
         }
     }

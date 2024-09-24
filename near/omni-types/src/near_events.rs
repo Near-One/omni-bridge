@@ -24,7 +24,7 @@ pub enum Nep141LockerEvent {
     LogMetadataEvent {
         signature: SignatureResponse,
         metadata_payload: MetadataPayload,
-    }
+    },
 }
 
 impl Nep141LockerEvent {
