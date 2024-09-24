@@ -142,7 +142,7 @@ impl FungibleTokenReceiver for Contract {
             origin_nonce: U128(self.current_nonce),
             token: env::predecessor_account_id(),
             amount,
-            recipient: parsed_msg.recip,
+            recipient: parsed_msg.recipient,
             fee: parsed_msg.fee,
             sender: OmniAddress::Near(sender_id.to_string()),
         };
