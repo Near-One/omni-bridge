@@ -56,10 +56,25 @@ contract BridgeTokenFactoryWormhole is BridgeTokenFactory {
 
     }
 
-    function initTransferExtension(string calldata token, uint128 amount, uint128 fee, string calldata recipient, address sender) internal override {
+    function initTransferExtension(
+        uint128 nonce,
+        string calldata token,
+        uint128 amount,
+        uint128 fee,
+        string calldata recipient,
+        address sender
+    ) internal override {
         _wormhole.publishMessage{value: msg.value}(
             wormholeNonce,
-            abi.encode(MessageType.InitTransfer, token, amount, fee, recipient, sender),
+            abi.encode(
+                MessageType.InitTransfer,
+                nonce,
+                token,
+                amount,
+                fee,
+                recipient,
+                sender
+            ),
             _consistencyLevel
         );
 

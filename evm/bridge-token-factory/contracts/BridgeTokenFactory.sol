@@ -38,7 +38,7 @@ contract BridgeTokenFactory is
     address public nearBridgeDerivedAddress;
 
     mapping(uint128 => bool) public completedTransfers;
-    uint128 public currentNonce; 
+    uint128 public initTransferNonce; 
 
     bytes32 public constant PAUSABLE_ADMIN_ROLE = keccak256("PAUSABLE_ADMIN_ROLE");
     uint constant UNPAUSED_ALL = 0;
@@ -237,7 +237,7 @@ contract BridgeTokenFactory is
         uint128 fee,
         string calldata recipient
     ) payable external whenNotPaused(PAUSED_INIT_TRANSFER) {
-        currentNonce += 1;
+        initTransferNonce += 1;
         _checkWhitelistedToken(token, msg.sender);
         require(_isBridgeToken[_nearToEthToken[token]], "ERR_NOT_BRIDGE_TOKEN");
 
@@ -245,12 +245,13 @@ contract BridgeTokenFactory is
 
         BridgeToken(tokenAddress).burn(msg.sender, amount + fee);
 
-        initTransferExtension(token, amount, fee, recipient, msg.sender);
+        initTransferExtension(initTransferNonce, token, amount, fee, recipient, msg.sender);
 
-        emit InitTransfer(msg.sender, tokenAddress, currentNonce, token , amount, fee, recipient);
+        emit InitTransfer(msg.sender, tokenAddress, initTransferNonce, token , amount, fee, recipient);
     }
 
     function initTransferExtension(
+        uint128 nonce,
         string calldata token,
         uint128 amount,
         uint128 fee,
