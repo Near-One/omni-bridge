@@ -3,7 +3,7 @@
 use {
     crate::byte_utils::ByteUtils,
     alloy_sol_types::{sol, SolType},
-    near_sdk::env,
+    near_sdk::{bs58, env},
     omni_types::{
         prover_result::{DeployTokenMessage, FinTransferMessage, InitTransferMessage},
         stringify, EvmAddress, OmniAddress, TransferMessage, H160,
@@ -132,7 +132,6 @@ sol! {
     }
 }
 
-// TODO: Solana support when parsing VAA
 impl TryInto<InitTransferMessage> for ParsedVAA {
     type Error = String;
 
@@ -147,15 +146,11 @@ impl TryInto<InitTransferMessage> for ParsedVAA {
                 fee: transfer.fee.into(),
                 recipient: transfer.recipient.parse().map_err(stringify)?,
                 origin_nonce: 0.into(),
-                sender: to_omni_address(self.emitter_chain, H160(transfer.sender.0 .0)),
+                sender: to_omni_address(self.emitter_chain, &transfer.sender.0.0),
             },
             emitter_address: to_omni_address(
                 self.emitter_chain,
-                H160(
-                    self.emitter_address
-                        .try_into()
-                        .map_err(|_| "Invalid emitter address")?,
-                ),
+                &self.emitter_address,
             ),
         })
     }
@@ -174,11 +169,7 @@ impl TryInto<FinTransferMessage> for ParsedVAA {
             amount: transfer.amount.into(),
             emitter_address: to_omni_address(
                 self.emitter_chain,
-                H160(
-                    self.emitter_address
-                        .try_into()
-                        .map_err(|_| "Invalid emitter address")?,
-                ),
+                &self.emitter_address,
             ),
         })
     }
@@ -193,24 +184,28 @@ impl TryInto<DeployTokenMessage> for ParsedVAA {
 
         Ok(DeployTokenMessage {
             token: transfer.token.parse().map_err(stringify)?,
-            token_address: to_omni_address(self.emitter_chain, H160(transfer.tokenAddress.0 .0)),
+            token_address: to_omni_address(self.emitter_chain, &transfer.tokenAddress.0.0),
             emitter_address: to_omni_address(
                 self.emitter_chain,
-                H160(
-                    self.emitter_address
-                        .try_into()
-                        .map_err(|_| "Invalid emitter address")?,
-                ),
+                &self.emitter_address,
             ),
         })
     }
 }
 
-fn to_omni_address(emitter_chain: u16, address: EvmAddress) -> OmniAddress {
+fn to_omni_address(emitter_chain: u16, address: &[u8]) -> OmniAddress {
     match emitter_chain {
-        2 => OmniAddress::Eth(address),
-        23 => OmniAddress::Arb(address),
-        30 => OmniAddress::Base(address),
-        _ => env::panic_str("EVM chain not supported"),
+        1 => OmniAddress::Sol(bs58::encode(address).into_string()),
+        2 => OmniAddress::Eth(to_evm_address(address)),
+        23 => OmniAddress::Arb(to_evm_address(address)),
+        30 => OmniAddress::Base(to_evm_address(address)),
+        _ => env::panic_str("Chain not supported"),
     }
+}
+
+fn to_evm_address(address: &[u8]) -> EvmAddress {
+    match address.try_into() {
+        Ok(bytes) => H160(bytes),
+        Err(_) => env::panic_str("Invalid EVM address"),
+    } 
 }
