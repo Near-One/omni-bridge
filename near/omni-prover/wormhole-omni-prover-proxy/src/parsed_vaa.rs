@@ -1,6 +1,14 @@
 //https://github.com/wormhole-foundation/wormhole/blob/main/near/contracts/wormhole/src/state.rs
 
-use {crate::byte_utils::ByteUtils, near_sdk::env};
+use {
+    crate::byte_utils::ByteUtils,
+    alloy_sol_types::{sol, SolType},
+    near_sdk::env,
+    omni_types::{
+        prover_result::{DeployTokenMessage, FinTransferMessage, InitTransferMessage},
+        stringify, EvmAddress, OmniAddress, TransferMessage, H160,
+    },
+};
 
 // Validator Action Approval(VAA) data
 
@@ -99,5 +107,110 @@ impl ParsedVAA {
             payload,
             hash,
         }
+    }
+}
+
+sol! {
+    struct InitTransferWh {
+        string token;
+        uint128 amount;
+        uint128 fee;
+        string recipient;
+        address sender;
+    }
+
+    struct FinTransferWh {
+        string token;
+        uint128 amount;
+        string recipient;
+        uint128 nonce;
+    }
+
+    struct DeployTokenWh {
+        string token;
+        address tokenAddress;
+    }
+}
+
+// TODO: Solana support when parsing VAA
+impl TryInto<InitTransferMessage> for ParsedVAA {
+    type Error = String;
+
+    fn try_into(self) -> Result<InitTransferMessage, String> {
+        let data: &[u8] = &self.payload[1..];
+        let transfer = InitTransferWh::abi_decode(data, true).map_err(stringify)?;
+
+        Ok(InitTransferMessage {
+            transfer: TransferMessage {
+                token: transfer.token.parse().map_err(stringify)?,
+                amount: transfer.amount.into(),
+                fee: transfer.fee.into(),
+                recipient: transfer.recipient.parse().map_err(stringify)?,
+                origin_nonce: 0.into(),
+                sender: to_omni_address(self.emitter_chain, H160(transfer.sender.0 .0)),
+            },
+            emitter_address: to_omni_address(
+                self.emitter_chain,
+                H160(
+                    self.emitter_address
+                        .try_into()
+                        .map_err(|_| "Invalid emitter address")?,
+                ),
+            ),
+        })
+    }
+}
+
+impl TryInto<FinTransferMessage> for ParsedVAA {
+    type Error = String;
+
+    fn try_into(self) -> Result<FinTransferMessage, String> {
+        let data: &[u8] = &self.payload[1..];
+        let transfer = FinTransferWh::abi_decode(data, true).map_err(stringify)?;
+
+        Ok(FinTransferMessage {
+            nonce: transfer.nonce.into(),
+            fee_recipient: transfer.recipient.parse().map_err(stringify)?,
+            amount: transfer.amount.into(),
+            emitter_address: to_omni_address(
+                self.emitter_chain,
+                H160(
+                    self.emitter_address
+                        .try_into()
+                        .map_err(|_| "Invalid emitter address")?,
+                ),
+            ),
+        })
+    }
+}
+
+impl TryInto<DeployTokenMessage> for ParsedVAA {
+    type Error = String;
+
+    fn try_into(self) -> Result<DeployTokenMessage, String> {
+        let data: &[u8] = &self.payload[1..];
+        let transfer = DeployTokenWh::abi_decode(data, true).map_err(stringify)?;
+
+        Ok(DeployTokenMessage {
+            token: transfer.token.parse().map_err(stringify)?,
+            token_address: to_omni_address(self.emitter_chain, H160(transfer.tokenAddress.0 .0)),
+            emitter_address: to_omni_address(
+                self.emitter_chain,
+                H160(
+                    self.emitter_address
+                        .try_into()
+                        .map_err(|_| "Invalid emitter address")?,
+                ),
+            ),
+        })
+    }
+}
+
+fn to_omni_address(emitter_chain: u16, address: EvmAddress) -> OmniAddress {
+    match emitter_chain {
+        2 => OmniAddress::Eth(address),
+        23 => OmniAddress::Arb(address),
+        30 => OmniAddress::Base(address),
+        _ => env::panic_str("EVM chain not supported"),
     }
 }
