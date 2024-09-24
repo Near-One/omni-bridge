@@ -195,7 +195,7 @@ impl fmt::Display for NearRecipient {
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct InitTransferMsg {
-    pub recip: OmniAddress,
+    pub recipient: OmniAddress,
     pub fee: U128,
 }
 
