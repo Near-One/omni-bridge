@@ -33,6 +33,7 @@ const LOG_METADATA_GAS: Gas = Gas::from_tgas(10);
 const LOG_METADATA_CALLBCAK_GAS: Gas = Gas::from_tgas(260);
 const MPC_SIGNING_GAS: Gas = Gas::from_tgas(250);
 const SIGN_TRANSFER_CALLBACK_GAS: Gas = Gas::from_tgas(5);
+const SIGN_LOG_METADATA_CALLBACK_GAS: Gas = Gas::from_tgas(5);
 const VERIFY_POOF_GAS: Gas = Gas::from_tgas(50);
 const CLAIM_FEE_CALLBACK_GAS: Gas = Gas::from_tgas(50);
 const BIND_TOKEN_CALLBACK_GAS: Gas = Gas::from_tgas(25);
@@ -203,7 +204,7 @@ impl Contract {
         #[callback] metadata: FungibleTokenMetadata,
         token_id: AccountId,
     ) -> Promise {
-        let metadata_paylaod = MetadataPayload {
+        let metadata_payload = MetadataPayload {
             token: token_id.to_string(),
             name: metadata.name,
             symbol: metadata.symbol,
@@ -211,7 +212,7 @@ impl Contract {
         };
 
         let payload = near_sdk::env::keccak256_array(
-            &borsh::to_vec(&metadata_paylaod).sdk_expect("ERR_BORSH"),
+            &borsh::to_vec(&metadata_payload).sdk_expect("ERR_BORSH"),
         );
 
         ext_signer::ext(self.mpc_signer.clone())
@@ -222,6 +223,29 @@ impl Contract {
                 path: SIGN_PATH.to_owned(),
                 key_version: 0,
             })
+            .then(
+                Self::ext(env::current_account_id())
+                    .with_static_gas(SIGN_LOG_METADATA_CALLBACK_GAS)
+                    .sign_log_metadata_callbcak(metadata_payload),
+            )
+    }
+
+    #[private]
+    #[result_serializer(borsh)]
+    pub fn sign_log_metadata_callbcak(
+        &self,
+        #[callback_result] call_result: Result<SignatureResponse, PromiseError>,
+        #[serializer(borsh)] metadata_payload: MetadataPayload,
+    ) {
+        if let Ok(signature) = call_result {
+            env::log_str(
+                &Nep141LockerEvent::LogMetadataEvent {
+                    signature,
+                    metadata_payload,
+                }
+                .to_log_string(),
+            );
+        }
     }
 
     pub fn update_transfer_fee(&mut self, nonce: U128, fee: UpdateFee) {
