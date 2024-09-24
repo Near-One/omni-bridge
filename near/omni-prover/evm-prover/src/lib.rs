@@ -25,13 +25,13 @@ pub trait EvmClient {
 
 #[near_bindgen]
 #[derive(BorshDeserialize, BorshSerialize, PanicOnDefault)]
-pub struct EvmProverProxy {
+pub struct EvmProver {
     pub light_client: AccountId,
     pub chain_kind: ChainKind,
 }
 
 #[near_bindgen]
-impl EvmProverProxy {
+impl EvmProver {
     #[init]
     #[private]
     #[must_use]
