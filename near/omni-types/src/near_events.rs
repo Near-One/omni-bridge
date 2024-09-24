@@ -3,7 +3,7 @@ use near_sdk::serde::{Deserialize, Serialize};
 use near_sdk::serde_json::json;
 
 use crate::mpc_types::SignatureResponse;
-use crate::{TransferMessage, TransferMessagePayload};
+use crate::{MetadataPayload, TransferMessage, TransferMessagePayload};
 
 #[derive(Deserialize, Serialize, Clone, Debug)]
 pub enum Nep141LockerEvent {
@@ -21,6 +21,10 @@ pub enum Nep141LockerEvent {
     UpdateFeeEvent {
         transfer_message: TransferMessage,
     },
+    LogMetadataEvent {
+        signature: SignatureResponse,
+        metadata_paylaod: MetadataPayload,
+    }
 }
 
 impl Nep141LockerEvent {

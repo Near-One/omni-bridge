@@ -232,7 +232,7 @@ pub enum UpdateFee {
     Proof(Vec<u8>),
 }
 
-#[derive(Debug, Eq, PartialEq, BorshSerialize, BorshDeserialize)]
+#[derive(Debug, Eq, PartialEq, BorshSerialize, BorshDeserialize, Serialize, Deserialize, Clone)]
 pub struct MetadataPayload {
     pub token: String,
     pub name: String,

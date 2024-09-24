@@ -33,6 +33,7 @@ const LOG_METADATA_GAS: Gas = Gas::from_tgas(10);
 const LOG_METADATA_CALLBCAK_GAS: Gas = Gas::from_tgas(260);
 const MPC_SIGNING_GAS: Gas = Gas::from_tgas(250);
 const SIGN_TRANSFER_CALLBACK_GAS: Gas = Gas::from_tgas(5);
+const SIGN_LOG_METADATA_CALLBACK_GAS: Gas = Gas::from_tgas(5);
 const VERIFY_POOF_GAS: Gas = Gas::from_tgas(50);
 const CLAIM_FEE_CALLBACK_GAS: Gas = Gas::from_tgas(50);
 const BIND_TOKEN_CALLBACK_GAS: Gas = Gas::from_tgas(25);
@@ -220,6 +221,29 @@ impl Contract {
                 path: SIGN_PATH.to_owned(),
                 key_version: 0,
             })
+            .then(
+                Self::ext(env::current_account_id())
+                    .with_static_gas(SIGN_LOG_METADATA_CALLBACK_GAS)
+                    .sign_log_metadata_callbcak(metadata_paylaod)
+            )
+    }
+
+    #[private]
+    #[result_serializer(borsh)]
+    pub fn sign_log_metadata_callbcak(
+        &self,
+        #[callback_result] call_result: Result<SignatureResponse, PromiseError>,
+        #[serializer(borsh)] metadata_paylaod: MetadataPayload,
+    ) {
+        if let Ok(signature) = call_result {
+            env::log_str(
+                &Nep141LockerEvent::LogMetadataEvent {
+                    signature,
+                    metadata_paylaod,
+                }
+                    .to_log_string(),
+            );
+        }
     }
 
     pub fn update_transfer_fee(&mut self, nonce: U128, fee: UpdateFee) {
