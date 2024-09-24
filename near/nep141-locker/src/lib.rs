@@ -202,7 +202,7 @@ impl Contract {
         #[callback] metadata: FungibleTokenMetadata,
         token_id: AccountId,
     ) -> Promise {
-        let metadata_paylaod = MetadataPayload {
+        let metadata_payload = MetadataPayload {
             token: token_id.to_string(),
             name: metadata.name,
             symbol: metadata.symbol,
@@ -210,7 +210,7 @@ impl Contract {
         };
 
         let payload = near_sdk::env::keccak256_array(
-            &borsh::to_vec(&metadata_paylaod).sdk_expect("ERR_BORSH"),
+            &borsh::to_vec(&metadata_payload).sdk_expect("ERR_BORSH"),
         );
 
         ext_signer::ext(self.mpc_signer.clone())
@@ -224,7 +224,7 @@ impl Contract {
             .then(
                 Self::ext(env::current_account_id())
                     .with_static_gas(SIGN_LOG_METADATA_CALLBACK_GAS)
-                    .sign_log_metadata_callbcak(metadata_paylaod)
+                    .sign_log_metadata_callbcak(metadata_payload)
             )
     }
 
@@ -233,13 +233,13 @@ impl Contract {
     pub fn sign_log_metadata_callbcak(
         &self,
         #[callback_result] call_result: Result<SignatureResponse, PromiseError>,
-        #[serializer(borsh)] metadata_paylaod: MetadataPayload,
+        #[serializer(borsh)] metadata_payload: MetadataPayload,
     ) {
         if let Ok(signature) = call_result {
             env::log_str(
                 &Nep141LockerEvent::LogMetadataEvent {
                     signature,
-                    metadata_paylaod,
+                    metadata_payload,
                 }
                     .to_log_string(),
             );
