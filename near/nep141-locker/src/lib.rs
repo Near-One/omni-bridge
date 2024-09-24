@@ -21,8 +21,8 @@ use omni_types::near_events::Nep141LockerEvent;
 use omni_types::prover_args::VerifyProofArgs;
 use omni_types::prover_result::ProverResult;
 use omni_types::{
-    ChainKind, MetadataPayload, NearRecipient, Nonce, OmniAddress, SignRequest, TransferMessage,
-    TransferMessagePayload, UpdateFee,
+    ChainKind, InitTransferMsg, MetadataPayload, NearRecipient, Nonce, OmniAddress, SignRequest,
+    TransferMessage, TransferMessagePayload, UpdateFee,
 };
 use storage::{TransferMessageStorage, TransferMessageStorageValue};
 
@@ -135,13 +135,15 @@ impl FungibleTokenReceiver for Contract {
         amount: U128,
         msg: String,
     ) -> PromiseOrValue<U128> {
+        let parsed_msg: InitTransferMsg = serde_json::from_str(&msg).sdk_expect("ERR_PARSE_MSG");
+
         self.current_nonce += 1;
         let transfer_message = TransferMessage {
             origin_nonce: U128(self.current_nonce),
             token: env::predecessor_account_id(),
             amount,
-            recipient: msg.parse().sdk_expect("ERR_PARSE_MSG"),
-            fee: U128(0), // TODO get fee from msg
+            recipient: parsed_msg.recip,
+            fee: parsed_msg.fee,
             sender: OmniAddress::Near(sender_id.to_string()),
         };
 
