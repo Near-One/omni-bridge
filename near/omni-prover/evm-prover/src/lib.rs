@@ -9,7 +9,7 @@ use omni_types::prover_result::{ProofKind, ProverResult};
 use omni_types::ChainKind;
 use rlp::Rlp;
 
-const VERIFY_LOG_ENTRY_CALLBACK_GAS: Gas = Gas::from_tgas(50);
+const VERIFY_PROOF_CALLBACK_GAS: Gas = Gas::from_tgas(20);
 const BLOCK_HASH_SAFE_GAS: Gas = Gas::from_tgas(10);
 
 type H256 = [u8; 32];
@@ -81,8 +81,8 @@ impl EvmProverProxy {
             .block_hash_safe(header.number.as_u64())
             .then(
                 Self::ext(env::current_account_id())
-                    .with_static_gas(VERIFY_LOG_ENTRY_CALLBACK_GAS)
-                    .verify_log_entry_callback(
+                    .with_static_gas(VERIFY_PROOF_CALLBACK_GAS)
+                    .verify_proof_callback(
                         args.proof_kind,
                         evm_proof.log_entry_data,
                         header.hash.ok_or("ERR_HASH_NOT_SET")?.0,
@@ -92,7 +92,7 @@ impl EvmProverProxy {
 
     #[private]
     #[handle_result]
-    pub fn verify_log_entry_callback(
+    pub fn verify_proof_callback(
         &mut self,
         #[serializer(borsh)] kind: ProofKind,
         #[serializer(borsh)] log_entry_data: Vec<u8>,
