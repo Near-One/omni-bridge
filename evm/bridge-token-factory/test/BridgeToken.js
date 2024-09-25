@@ -1,6 +1,7 @@
 const { expect } = require('chai')
 const { ethers, upgrades } = require('hardhat')
-const { metadataSignature, depositSignature } = require('./signatures')
+const { metadataSignature, depositSignature } = require('./helpers/signatures')
+const { deriveEthereumAddress } = require('./helpers/kdf')
 
 const WhitelistMode = {
   NotInitialized: 0,
@@ -36,10 +37,12 @@ describe('BridgeToken', () => {
     const bridgeToken = await BridgeTokenInstance.deploy()
     await bridgeToken.waitForDeployment()
 
+    const nearBridgeDeriveAddress = await deriveEthereumAddress('omni-locker.test1-dev.testnet', 'bridge-1');
+
     BridgeTokenFactory = await ethers.getContractFactory('BridgeTokenFactory')
     BridgeTokenFactory = await upgrades.deployProxy(BridgeTokenFactory, [
       await bridgeToken.getAddress(),
-      "0xa966f32b64caaee9211d674e698cb72100b5e792"
+      nearBridgeDeriveAddress
     ], { initializer: 'initialize' });
     await BridgeTokenFactory.waitForDeployment();
   })

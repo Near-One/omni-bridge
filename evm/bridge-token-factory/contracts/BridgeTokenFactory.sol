@@ -87,12 +87,10 @@ contract BridgeTokenFactory is
     error InvalidSignature();
     error NonceAlreadyUsed(uint256 nonce);
 
-    // BridgeTokenFactory is linked to the bridge token factory on NEAR side.
-    // It also links to the prover that it uses to unlock the tokens.
     function initialize(
         address _tokenImplementationAddress,
         address _nearBridgeDerivedAddress
-    ) external initializer {
+    ) public initializer {
         tokenImplementationAddress = _tokenImplementationAddress;
         nearBridgeDerivedAddress = _nearBridgeDerivedAddress;
 
@@ -117,7 +115,7 @@ contract BridgeTokenFactory is
         return _nearToEthToken[nearTokenId];
     }
 
-    function newBridgeToken(bytes calldata signatureData, MetadataPayload calldata metadata) external returns (address) {
+    function newBridgeToken(bytes calldata signatureData, MetadataPayload calldata metadata) payable external returns (address) {
         bytes memory borshEncoded = bytes.concat(
             Borsh.encodeString(metadata.token),
             Borsh.encodeString(metadata.name),
@@ -144,6 +142,8 @@ contract BridgeTokenFactory is
             )
         );
 
+        deployTokenExtension(metadata.token, bridgeTokenProxy);
+
         emit SetMetadata(
             bridgeTokenProxy,
             metadata.token,
@@ -158,6 +158,8 @@ contract BridgeTokenFactory is
 
         return bridgeTokenProxy;
     }
+
+    function deployTokenExtension(string memory token, address tokenAddress) internal virtual {}
 
     function setMetadata(
         string calldata token,
@@ -179,7 +181,7 @@ contract BridgeTokenFactory is
         );
     }
 
-    function deposit(bytes calldata signatureData, BridgeDeposit calldata bridgeDeposit) external whenNotPaused(PAUSED_DEPOSIT) {
+    function deposit(bytes calldata signatureData, BridgeDeposit calldata bridgeDeposit) payable external whenNotPaused(PAUSED_DEPOSIT) {
         if (completedTransfers[bridgeDeposit.nonce]) {
             revert NonceAlreadyUsed(bridgeDeposit.nonce);
         }
@@ -205,6 +207,8 @@ contract BridgeTokenFactory is
 
         completedTransfers[bridgeDeposit.nonce] = true;
 
+        depositExtension(bridgeDeposit);
+
         emit Deposit(
             bridgeDeposit.token,
             bridgeDeposit.amount,
@@ -214,19 +218,30 @@ contract BridgeTokenFactory is
         );
     }
 
+    function depositExtension(BridgeDeposit memory bridgeDeposit) internal virtual {}
+
     function withdraw(
         string memory token,
         uint128 amount,
         string memory recipient
-    ) external whenNotPaused(PAUSED_WITHDRAW) {
+    ) payable external whenNotPaused(PAUSED_WITHDRAW) {
         _checkWhitelistedToken(token, msg.sender);
         require(_isBridgeToken[_nearToEthToken[token]], "ERR_NOT_BRIDGE_TOKEN");
 
         address tokenEthAddress = _nearToEthToken[token];
         BridgeToken(tokenEthAddress).burn(msg.sender, amount);
 
+        withdrawExtension(token, amount, recipient, msg.sender);
+
         emit Withdraw(token, msg.sender, amount, recipient, tokenEthAddress);
     }
+
+    function withdrawExtension(
+        string memory token,
+        uint128 amount,
+        string memory recipient,
+        address sender
+    ) internal virtual {}
 
     function pause(uint flags) external onlyRole(DEFAULT_ADMIN_ROLE) {
         _pause(flags);
