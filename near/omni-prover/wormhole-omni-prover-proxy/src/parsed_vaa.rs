@@ -112,6 +112,7 @@ impl ParsedVAA {
 
 sol! {
     struct InitTransferWh {
+        uint128 nonce;
         string token;
         uint128 amount;
         uint128 fee;
@@ -145,7 +146,7 @@ impl TryInto<InitTransferMessage> for ParsedVAA {
                 amount: transfer.amount.into(),
                 fee: transfer.fee.into(),
                 recipient: transfer.recipient.parse().map_err(stringify)?,
-                origin_nonce: 0.into(),
+                origin_nonce: transfer.nonce.into(),
                 sender: to_omni_address(self.emitter_chain, &transfer.sender.0.0),
             },
             emitter_address: to_omni_address(
