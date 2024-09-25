@@ -45,10 +45,10 @@ contract BridgeTokenFactoryWormhole is BridgeTokenFactory {
         wormholeNonce++;
     }
 
-    function depositExtension(BridgeDeposit memory bridgeDeposit) internal override {
+    function finTransferExtension(FinTransferPayload memory payload) internal override {
         _wormhole.publishMessage{value: msg.value}(
             wormholeNonce,
-            abi.encode(MessageType.FinTransfer, bridgeDeposit.token, bridgeDeposit.amount, bridgeDeposit.feeRecipient, bridgeDeposit.nonce),
+            abi.encode(MessageType.FinTransfer, payload.token, payload.amount, payload.feeRecipient, payload.nonce),
             _consistencyLevel
         );
 
@@ -56,10 +56,25 @@ contract BridgeTokenFactoryWormhole is BridgeTokenFactory {
 
     }
 
-    function withdrawExtension(string memory token, uint128 amount, string memory recipient, address sender) internal override {
+    function initTransferExtension(
+        uint128 nonce,
+        string calldata token,
+        uint128 amount,
+        uint128 fee,
+        string calldata recipient,
+        address sender
+    ) internal override {
         _wormhole.publishMessage{value: msg.value}(
             wormholeNonce,
-            abi.encode(MessageType.InitTransfer, token, amount, recipient, sender),
+            abi.encode(
+                MessageType.InitTransfer,
+                nonce,
+                token,
+                amount,
+                fee,
+                recipient,
+                sender
+            ),
             _consistencyLevel
         );
 

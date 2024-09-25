@@ -49,7 +49,7 @@ describe('BridgeTokenWormhole', () => {
   async function createToken(tokenId) {
     const { signature, payload } = metadataSignature(tokenId);
   
-    await BridgeTokenFactory.newBridgeToken(signature, payload);
+    await BridgeTokenFactory.deployToken(signature, payload);
     const tokenProxyAddress = await BridgeTokenFactory.nearToEthToken(tokenId)
     const token = BridgeTokenInstance.attach(tokenProxyAddress)
     return { tokenProxyAddress, token }
@@ -59,7 +59,7 @@ describe('BridgeTokenWormhole', () => {
     const { signature, payload } = metadataSignature(wrappedNearId);
 
     await expect(
-      await BridgeTokenFactory.newBridgeToken(signature, payload)
+      await BridgeTokenFactory.deployToken(signature, payload)
     )
       .to
       .emit(TestWormhole, 'MessagePublished')
@@ -77,7 +77,7 @@ describe('BridgeTokenWormhole', () => {
 
     await expect(
       BridgeTokenFactory
-        .deposit(signature, payload)
+        .finTransfer(signature, payload)
     )
        .to
        .emit(TestWormhole, 'MessagePublished')
@@ -96,18 +96,21 @@ describe('BridgeTokenWormhole', () => {
     const { token } = await createToken(wrappedNearId);
     const { signature, payload } = depositSignature(wrappedNearId, user1.address);
     await BridgeTokenFactory
-      .deposit(signature, payload);
+      .finTransfer(signature, payload);
 
     const recipient = 'testrecipient.near';
+    const fee = 0;
+    const nonce = 1;
     const expectedPayload = ethers.AbiCoder.defaultAbiCoder().encode(
-        ["uint8", "string", "uint128", "string", "address"],
-        [0, wrappedNearId, payload.amount, recipient, user1.address]
+        ["uint8", "uint128", "string", "uint128", "uint128", "string", "address"],
+        [0, nonce, wrappedNearId, payload.amount, fee, recipient, user1.address]
     );
 
     await expect(
-      BridgeTokenFactory.connect(user1).withdraw(
+      BridgeTokenFactory.connect(user1).initTransfer(
         wrappedNearId,
         payload.amount,
+        fee,
         recipient
       )
     )

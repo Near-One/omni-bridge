@@ -6746,6 +6746,7 @@ dependencies = [
 name = "wormhole-omni-prover-proxy"
 version = "2.0.0"
 dependencies = [
+ "alloy-sol-types",
  "borsh",
  "hex",
  "near-plugins",

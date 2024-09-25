@@ -38,13 +38,14 @@ contract BridgeTokenFactory is
     address public nearBridgeDerivedAddress;
 
     mapping(uint128 => bool) public completedTransfers;
+    uint128 public initTransferNonce; 
 
     bytes32 public constant PAUSABLE_ADMIN_ROLE = keccak256("PAUSABLE_ADMIN_ROLE");
     uint constant UNPAUSED_ALL = 0;
-    uint constant PAUSED_WITHDRAW = 1 << 0;
-    uint constant PAUSED_DEPOSIT = 1 << 1;
+    uint constant PAUSED_INIT_TRANSFER = 1 << 0;
+    uint constant PAUSED_FIN_TRANSFER = 1 << 1;
 
-    struct BridgeDeposit {
+    struct FinTransferPayload {
         uint128 nonce;
         string token;
         uint128 amount;
@@ -59,26 +60,36 @@ contract BridgeTokenFactory is
         uint8 decimals;
     }
 
-    // Event when funds are withdrawn from Ethereum back to NEAR.
-    event Withdraw(
-        string token,
+    event InitTransfer(
         address indexed sender,
-        uint256 amount,
-        string recipient,
-        address indexed tokenEthAddress
+        address indexed tokenAddress,
+        uint128 indexed nonce,
+        string token,
+        uint128 amount,
+        uint128 fee,
+        string recipient
     );
 
-    event Deposit(
-        string token,
-        uint256 amount,
-        address recipient,
+
+    event FinTransfer(
         uint128 indexed nonce,
+        string token,
+        uint128 amount,
+        address recipient,
         string feeRecipient
     );
 
+    event DeployToken(
+        address indexed tokenAddress,
+        string token,
+        string name,
+        string symbol,
+        uint8 decimals
+    );
+
     event SetMetadata(
-        address indexed token,
-        string tokenId,
+        address indexed tokenAddress,
+        string token,
         string name,
         string symbol,
         uint8 decimals
@@ -115,7 +126,7 @@ contract BridgeTokenFactory is
         return _nearToEthToken[nearTokenId];
     }
 
-    function newBridgeToken(bytes calldata signatureData, MetadataPayload calldata metadata) payable external returns (address) {
+    function deployToken(bytes calldata signatureData, MetadataPayload calldata metadata) payable external returns (address) {
         bytes memory borshEncoded = bytes.concat(
             Borsh.encodeString(metadata.token),
             Borsh.encodeString(metadata.name),
@@ -144,7 +155,7 @@ contract BridgeTokenFactory is
 
         deployTokenExtension(metadata.token, bridgeTokenProxy);
 
-        emit SetMetadata(
+        emit DeployToken(
             bridgeTokenProxy,
             metadata.token,
             metadata.name,
@@ -181,20 +192,20 @@ contract BridgeTokenFactory is
         );
     }
 
-    function deposit(bytes calldata signatureData, BridgeDeposit calldata bridgeDeposit) payable external whenNotPaused(PAUSED_DEPOSIT) {
-        if (completedTransfers[bridgeDeposit.nonce]) {
-            revert NonceAlreadyUsed(bridgeDeposit.nonce);
+    function finTransfer(bytes calldata signatureData, FinTransferPayload calldata payload) payable external whenNotPaused(PAUSED_FIN_TRANSFER) {
+        if (completedTransfers[payload.nonce]) {
+            revert NonceAlreadyUsed(payload.nonce);
         }
 
         bytes memory borshEncoded = bytes.concat(
-            Borsh.encodeUint128(bridgeDeposit.nonce),
-            Borsh.encodeString(bridgeDeposit.token),
-            Borsh.encodeUint128(bridgeDeposit.amount),
+            Borsh.encodeUint128(payload.nonce),
+            Borsh.encodeString(payload.token),
+            Borsh.encodeUint128(payload.amount),
             bytes1(0x00), // variant 1 in rust enum
-            Borsh.encodeAddress(bridgeDeposit.recipient),
-            bytes(bridgeDeposit.feeRecipient).length == 0  // None or Some(String) in rust
+            Borsh.encodeAddress(payload.recipient),
+            bytes(payload.feeRecipient).length == 0  // None or Some(String) in rust
                 ? bytes("\x00") 
-                : bytes.concat(bytes("\x01"), Borsh.encodeString(bridgeDeposit.feeRecipient))
+                : bytes.concat(bytes("\x01"), Borsh.encodeString(payload.feeRecipient))
         );
         bytes32 hashed = keccak256(borshEncoded);
 
@@ -202,44 +213,49 @@ contract BridgeTokenFactory is
             revert InvalidSignature();
         }
 
-        require(_isBridgeToken[_nearToEthToken[bridgeDeposit.token]], "ERR_NOT_BRIDGE_TOKEN");
-        BridgeToken(_nearToEthToken[bridgeDeposit.token]).mint(bridgeDeposit.recipient, bridgeDeposit.amount);
+        require(_isBridgeToken[_nearToEthToken[payload.token]], "ERR_NOT_BRIDGE_TOKEN");
+        BridgeToken(_nearToEthToken[payload.token]).mint(payload.recipient, payload.amount);
 
-        completedTransfers[bridgeDeposit.nonce] = true;
+        completedTransfers[payload.nonce] = true;
 
-        depositExtension(bridgeDeposit);
+        finTransferExtension(payload);
 
-        emit Deposit(
-            bridgeDeposit.token,
-            bridgeDeposit.amount,
-            bridgeDeposit.recipient,
-            bridgeDeposit.nonce,
-            bridgeDeposit.feeRecipient
+        emit FinTransfer(
+            payload.nonce,
+            payload.token,
+            payload.amount,
+            payload.recipient,
+            payload.feeRecipient
         );
     }
 
-    function depositExtension(BridgeDeposit memory bridgeDeposit) internal virtual {}
+    function finTransferExtension(FinTransferPayload memory payload) internal virtual {}
 
-    function withdraw(
-        string memory token,
+    function initTransfer(
+        string calldata token,
         uint128 amount,
-        string memory recipient
-    ) payable external whenNotPaused(PAUSED_WITHDRAW) {
+        uint128 fee,
+        string calldata recipient
+    ) payable external whenNotPaused(PAUSED_INIT_TRANSFER) {
+        initTransferNonce += 1;
         _checkWhitelistedToken(token, msg.sender);
         require(_isBridgeToken[_nearToEthToken[token]], "ERR_NOT_BRIDGE_TOKEN");
 
-        address tokenEthAddress = _nearToEthToken[token];
-        BridgeToken(tokenEthAddress).burn(msg.sender, amount);
+        address tokenAddress = _nearToEthToken[token];
 
-        withdrawExtension(token, amount, recipient, msg.sender);
+        BridgeToken(tokenAddress).burn(msg.sender, amount + fee);
 
-        emit Withdraw(token, msg.sender, amount, recipient, tokenEthAddress);
+        initTransferExtension(initTransferNonce, token, amount, fee, recipient, msg.sender);
+
+        emit InitTransfer(msg.sender, tokenAddress, initTransferNonce, token , amount, fee, recipient);
     }
 
-    function withdrawExtension(
-        string memory token,
+    function initTransferExtension(
+        uint128 nonce,
+        string calldata token,
         uint128 amount,
-        string memory recipient,
+        uint128 fee,
+        string calldata recipient,
         address sender
     ) internal virtual {}
 
@@ -247,16 +263,16 @@ contract BridgeTokenFactory is
         _pause(flags);
     }
 
-    function pauseDeposit() external onlyRole(PAUSABLE_ADMIN_ROLE) {
-        _pause(pausedFlags() | PAUSED_DEPOSIT);
+    function pauseFinTransfer() external onlyRole(PAUSABLE_ADMIN_ROLE) {
+        _pause(pausedFlags() | PAUSED_FIN_TRANSFER);
     }
 
-    function pauseWithdraw() external onlyRole(PAUSABLE_ADMIN_ROLE) {
-        _pause(pausedFlags() | PAUSED_WITHDRAW);
+    function pauseInitTransfer() external onlyRole(PAUSABLE_ADMIN_ROLE) {
+        _pause(pausedFlags() | PAUSED_INIT_TRANSFER);
     }
 
     function pauseAll() external onlyRole(PAUSABLE_ADMIN_ROLE) {
-        uint flags = PAUSED_DEPOSIT | PAUSED_WITHDRAW;
+        uint flags = PAUSED_FIN_TRANSFER | PAUSED_INIT_TRANSFER;
         _pause(flags);
     }
 

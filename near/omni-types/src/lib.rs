@@ -97,15 +97,13 @@ pub enum ChainKind {
     Eth,
     Near,
     Sol,
+    Arb,
+    Base,
 }
 
 impl From<&OmniAddress> for ChainKind {
     fn from(input: &OmniAddress) -> Self {
-        match input {
-            OmniAddress::Eth(_) => ChainKind::Eth,
-            OmniAddress::Near(_) => ChainKind::Near,
-            OmniAddress::Sol(_) => ChainKind::Sol,
-        }
+        input.get_chain()
     }
 }
 
@@ -116,6 +114,8 @@ pub enum OmniAddress {
     Eth(EvmAddress),
     Near(String),
     Sol(String),
+    Arb(EvmAddress),
+    Base(EvmAddress),
 }
 
 impl OmniAddress {
@@ -131,6 +131,8 @@ impl OmniAddress {
             OmniAddress::Eth(_) => ChainKind::Eth,
             OmniAddress::Near(_) => ChainKind::Near,
             OmniAddress::Sol(_) => ChainKind::Sol,
+            OmniAddress::Arb(_) => ChainKind::Arb,
+            OmniAddress::Base(_) => ChainKind::Base,
         }
     }
 }
@@ -145,6 +147,8 @@ impl FromStr for OmniAddress {
             "eth" => Ok(OmniAddress::Eth(recipient.parse().map_err(stringify)?)),
             "near" => Ok(OmniAddress::Near(recipient.to_owned())),
             "sol" => Ok(OmniAddress::Sol(recipient.to_owned())), // TODO validate sol address
+            "arb" => Ok(OmniAddress::Arb(recipient.parse().map_err(stringify)?)),
+            "base" => Ok(OmniAddress::Base(recipient.parse().map_err(stringify)?)),
             _ => Err(format!("Chain {chain} is not supported")),
         }
     }
@@ -156,6 +160,8 @@ impl fmt::Display for OmniAddress {
             OmniAddress::Eth(recipient) => ("eth", recipient.to_string()),
             OmniAddress::Near(recipient) => ("near", recipient.to_string()),
             OmniAddress::Sol(recipient) => ("sol", recipient.clone()),
+            OmniAddress::Arb(recipient) => ("arb", recipient.to_string()),
+            OmniAddress::Base(recipient) => ("base", recipient.to_string()),
         };
         write!(f, "{}:{}", chain_str, recipient)
     }
@@ -191,6 +197,12 @@ impl fmt::Display for NearRecipient {
             write!(f, "{}", self.target)
         }
     }
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct InitTransferMsg {
+    pub recipient: OmniAddress,
+    pub fee: U128,
 }
 
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Debug, Clone)]
@@ -232,7 +244,7 @@ pub enum UpdateFee {
     Proof(Vec<u8>),
 }
 
-#[derive(Debug, Eq, PartialEq, BorshSerialize, BorshDeserialize)]
+#[derive(Debug, Eq, PartialEq, BorshSerialize, BorshDeserialize, Serialize, Deserialize, Clone)]
 pub struct MetadataPayload {
     pub token: String,
     pub name: String,
