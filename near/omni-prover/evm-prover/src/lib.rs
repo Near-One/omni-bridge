@@ -48,14 +48,6 @@ impl EvmProver {
 
         let evm_proof = args.proof;
         let header: BlockHeader = rlp::decode(&evm_proof.header_data).map_err(|e| e.to_string())?;
-        if !Self::is_block_height_in_bound(
-            header.number.as_u64(),
-            args.min_header_height,
-            args.max_header_height,
-        ) {
-            return Err("ERR_BLOCK_NOT_IN_BOUND".to_owned());
-        }
-
         let log_entry: LogEntry =
             rlp::decode(&evm_proof.log_entry_data).map_err(|e| e.to_string())?;
         let receipt: Receipt = rlp::decode(&evm_proof.receipt_data).map_err(|e| e.to_string())?;
@@ -119,40 +111,6 @@ impl EvmProver {
                 log_entry_data,
             )?)),
         }
-    }
-
-    fn is_block_height_in_bound(
-        header_height: u64,
-        min_header_height: Option<u64>,
-        max_header_height: Option<u64>,
-    ) -> bool {
-        if let Some(min_header_height) = min_header_height {
-            if header_height < min_header_height {
-                env::log_str(
-                    format!(
-                        "Block height {} < Minimum header height {}",
-                        header_height, min_header_height
-                    )
-                    .as_str(),
-                );
-                return false;
-            }
-        }
-
-        if let Some(max_header_height) = max_header_height {
-            if header_height > max_header_height {
-                env::log_str(
-                    format!(
-                        "Block height {} > Maximum header height {}",
-                        header_height, max_header_height
-                    )
-                    .as_str(),
-                );
-                return false;
-            }
-        }
-
-        true
     }
 
     /// Verify the proof recursively traversing through the key.

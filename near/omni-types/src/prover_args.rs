@@ -15,8 +15,6 @@ pub struct VerifyProofArgs {
 pub struct EvmVerifyProofArgs {
     pub proof_kind: ProofKind,
     pub proof: EvmProof,
-    pub min_header_height: Option<u64>,
-    pub max_header_height: Option<u64>,
 }
 
 #[derive(BorshDeserialize, BorshSerialize, Clone)]
