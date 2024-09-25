@@ -49,7 +49,7 @@ describe('BridgeTokenWormhole', () => {
   async function createToken(tokenId) {
     const { signature, payload } = metadataSignature(tokenId);
   
-    await BridgeTokenFactory.newBridgeToken(signature, payload);
+    await BridgeTokenFactory.deployToken(signature, payload);
     const tokenProxyAddress = await BridgeTokenFactory.nearToEthToken(tokenId)
     const token = BridgeTokenInstance.attach(tokenProxyAddress)
     return { tokenProxyAddress, token }
@@ -59,7 +59,7 @@ describe('BridgeTokenWormhole', () => {
     const { signature, payload } = metadataSignature(wrappedNearId);
 
     await expect(
-      await BridgeTokenFactory.newBridgeToken(signature, payload)
+      await BridgeTokenFactory.deployToken(signature, payload)
     )
       .to
       .emit(TestWormhole, 'MessagePublished')

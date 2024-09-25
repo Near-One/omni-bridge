@@ -58,7 +58,7 @@ describe('BridgeToken', () => {
   async function createToken(tokenId) {
     const { signature, payload } = metadataSignature(tokenId);
   
-    await BridgeTokenFactory.newBridgeToken(signature, payload);
+    await BridgeTokenFactory.deployToken(signature, payload);
     const tokenProxyAddress = await BridgeTokenFactory.nearToEthToken(tokenId)
     const token = BridgeTokenInstance.attach(tokenProxyAddress)
     return { tokenProxyAddress, token }

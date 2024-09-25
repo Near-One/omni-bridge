@@ -126,7 +126,7 @@ contract BridgeTokenFactory is
         return _nearToEthToken[nearTokenId];
     }
 
-    function newBridgeToken(bytes calldata signatureData, MetadataPayload calldata metadata) payable external returns (address) {
+    function deployToken(bytes calldata signatureData, MetadataPayload calldata metadata) payable external returns (address) {
         bytes memory borshEncoded = bytes.concat(
             Borsh.encodeString(metadata.token),
             Borsh.encodeString(metadata.name),
