@@ -21,13 +21,8 @@ pub struct SignatureResponse {
 impl SignatureResponse {
     pub fn to_bytes(&self) -> Vec<u8> {
         let mut bytes = Vec::new();
-
         bytes.extend_from_slice(&hex::decode(&self.big_r.affine_point).expect("Incorrect Signature")[1..]);
-        bytes.push(0);
-
         bytes.extend_from_slice(&hex::decode(&self.s.scalar).expect("Incorrect Signature"));
-        bytes.push(0);
-
         bytes.push(self.recovery_id + 27);
 
         bytes
