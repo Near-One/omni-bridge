@@ -22,7 +22,7 @@ dotenv = "0.15"
 shellexpand = "3.1.0"
 json = "0.12.4"
 url = "2.5.2"
-nep141-connector = { git = "https://github.com/Near-One/rainbow-bridge-sdk-rs", branch = "feat/withdraw-omni-version", package = "nep141-connector" }
+nep141-connector = { path = "../../../../rainbow-bridge-sdk-rs/bridge-sdk/connectors/nep141-connector" }
 tracing = "0.1.37"
 tracing-subscriber = { version="0.3.15", features = ["env-filter"] }
 
