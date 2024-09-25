@@ -1,3 +1,5 @@
+use std::{collections::HashMap, path::Path};
+
 use anyhow::{Context, Result};
 use futures::StreamExt;
 use log::info;
@@ -8,16 +10,29 @@ use near_lake_framework::{LakeConfig, LakeConfigBuilder};
 
 use crate::{config, utils};
 
-pub fn create_signer() -> Result<InMemorySigner> {
+pub fn create_signer(file: Option<String>) -> Result<InMemorySigner> {
     info!("Creating NEAR signer");
 
     let account_id = std::env::var("NEAR_ACCOUNT_ID")
         .context("Failed to get `NEAR_ACCOUNT_ID` env variable")?
         .parse()?;
 
-    let private_key = std::env::var("NEAR_PRIVATE_KEY")
-        .context("Failed to get `NEAR_PRIVATE_KEY` env variable")?
-        .parse()?;
+    let private_key = if let Some(file) = file {
+        let file_path = Path::new(&file);
+
+        let file_content = std::fs::read_to_string(file_path)
+            .context(format!("Failed to read file: {file_path:?}"))?;
+
+        serde_json::from_str::<HashMap<String, String>>(&file_content)
+            .context("Failed to parse json from file")?
+            .get("private_key")
+            .context("Failed to get `private_key` from file")?
+            .parse()?
+    } else {
+        std::env::var("NEAR_PRIVATE_KEY")
+            .context("Failed to get `NEAR_PRIVATE_KEY` env variable")?
+            .parse()?
+    };
 
     Ok(InMemorySigner::from_secret_key(account_id, private_key))
 }

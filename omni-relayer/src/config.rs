@@ -17,6 +17,7 @@ pub struct Redis {
 pub struct Near {
     pub rpc_url: String,
     pub token_locker_id: AccountId,
+    pub credentials_path: Option<String>,
 }
 
 #[derive(Debug, Clone, serde::Deserialize)]
