@@ -20,7 +20,7 @@ pub async fn finalize_withdraw(
         let mut redis_connection_clone = redis_connection.clone();
         let Some(events) = utils::redis::get_events(
             &mut redis_connection_clone,
-            utils::redis::NEAR_SIGN_TRANSFER_EVENTS.to_string(),
+            utils::redis::ETH_WITHDRAW_EVENTS.to_string(),
         )
         .await
         else {
@@ -53,7 +53,7 @@ pub async fn finalize_withdraw(
                                 log::info!("Finalized withdraw: {:?}", tx_hash);
                                 utils::redis::remove_event(
                                     &mut redis_connection,
-                                    utils::redis::NEAR_SIGN_TRANSFER_EVENTS,
+                                    utils::redis::ETH_WITHDRAW_EVENTS,
                                     key,
                                 )
                                 .await;

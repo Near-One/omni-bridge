@@ -15,6 +15,7 @@ use alloy::{
     providers::{Provider, ProviderBuilder, WsConnect},
     rpc::types::{Filter, Log, TransactionReceipt},
     sol,
+    sol_types::SolEvent,
 };
 
 use crate::{config, utils};
@@ -23,20 +24,22 @@ const WORMHOLE_CHAIN_ID: u64 = 2;
 
 sol!(
     #[derive(Debug, serde::Serialize, serde::Deserialize)]
-    event Withdraw(
-        string token,
+    event InitTransfer(
         address indexed sender,
-        uint256 amount,
-        string recipient,
-        address indexed tokenEthAddress
+        address indexed tokenAddress,
+        uint128 indexed nonce,
+        string token,
+        uint128 amount,
+        uint128 fee,
+        string recipient
     );
 
     #[derive(Debug, serde::Serialize, serde::Deserialize)]
-    event Deposit(
-        string token,
-        uint256 amount,
-        address recipient,
+    event FinTransfer(
         uint128 indexed nonce,
+        string token,
+        uint128 amount,
+        address recipient,
         string feeRecipient
     );
 
@@ -75,10 +78,7 @@ pub async fn start_indexer(config: config::Config, redis_client: redis::Client) 
 
     let filter = Filter::new()
         .address(config.eth.bridge_token_factory_address)
-        .events(vec![
-            "Withdraw(string,address,uint256,string,address)",
-            "Deposit(string,uint256,address,uint128,string)",
-        ]);
+        .event_signature([FinTransfer::SIGNATURE_HASH, InitTransfer::SIGNATURE_HASH].to_vec());
 
     for current_block in
         (from_block..latest_block).step_by(config.eth.block_processing_batch_size as usize)
@@ -226,7 +226,7 @@ async fn process_log(
             prover_args
         };
 
-    if let Ok(withdraw_log) = log.log_decode::<Withdraw>() {
+    if let Ok(withdraw_log) = log.log_decode::<InitTransfer>() {
         let Ok(token) = withdraw_log.inner.token.parse::<AccountId>() else {
             warn!(
                 "Failed to parse token as AccountId: {:?}",
@@ -270,7 +270,7 @@ async fn process_log(
             serialized_fin_transfer_args,
         )
         .await;
-    } else if log.log_decode::<Deposit>().is_ok() {
+    } else if log.log_decode::<FinTransfer>().is_ok() {
         let claim_fee_args = ClaimFeeArgs {
             chain_kind: ChainKind::Eth,
             prover_args,

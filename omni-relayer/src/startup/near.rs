@@ -55,7 +55,7 @@ async fn create_lake_config(
 
     LakeConfigBuilder::default()
         .testnet()
-        .start_block_height(utils::near::get_final_block(jsonrpc_client).await?)
+        .start_block_height(start_block_height)
         .build()
         .context("Failed to build LakeConfig")
 }
