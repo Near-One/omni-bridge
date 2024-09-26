@@ -36,7 +36,7 @@ contract BridgeTokenFactory is
 
     address public tokenImplementationAddress;
     address public nearBridgeDerivedAddress;
-    uint8 private _omniBridgeChainId;
+    uint8 public omniBridgeChainId;
 
     mapping(uint128 => bool) public completedTransfers;
     uint128 public initTransferNonce; 
@@ -102,11 +102,11 @@ contract BridgeTokenFactory is
     function initialize(
         address tokenImplementationAddress_,
         address nearBridgeDerivedAddress_,
-        uint8 omniBridgeChainId
+        uint8 omniBridgeChainId_
     ) public initializer {
         tokenImplementationAddress = tokenImplementationAddress_;
         nearBridgeDerivedAddress = nearBridgeDerivedAddress_;
-        _omniBridgeChainId = omniBridgeChainId;
+        omniBridgeChainId = omniBridgeChainId_;
 
         __UUPSUpgradeable_init();
         __AccessControl_init();
@@ -204,7 +204,7 @@ contract BridgeTokenFactory is
             Borsh.encodeUint128(payload.nonce),
             Borsh.encodeString(payload.token),
             Borsh.encodeUint128(payload.amount),
-            bytes1(_omniBridgeChainId),
+            bytes1(omniBridgeChainId),
             Borsh.encodeAddress(payload.recipient),
             bytes(payload.feeRecipient).length == 0  // None or Some(String) in rust
                 ? bytes("\x00") 
