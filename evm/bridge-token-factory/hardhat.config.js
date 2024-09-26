@@ -52,6 +52,7 @@ task('add-account-to-whitelist-eth', 'Add an account to whitelist')
 task("deploy-bridge-token-factory", "Deploys the BridgeTokenFactory contract")
   .addParam("bridgeTokenImpl", "The address of the bridge token implementation")
   .addParam("nearBridgeDerivedAddress", "The derived EVM address of the Near's OmniBridge")
+  .addParam("omniBridgeChainId", "Chain Id of the network in the OmniBridge")
   .setAction(async (taskArgs, hre) => {
     const { ethers, upgrades } = hre;
 
@@ -61,7 +62,8 @@ task("deploy-bridge-token-factory", "Deploys the BridgeTokenFactory contract")
       BridgeTokenFactoryContract,
       [
         taskArgs.bridgeTokenImpl,
-        taskArgs.nearBridgeDerivedAddress
+        taskArgs.nearBridgeDerivedAddress,
+        taskArgs.omniBridgeChainId
       ],
       {
         initializer: "initialize",

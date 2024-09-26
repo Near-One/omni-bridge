@@ -38,11 +38,13 @@ describe('BridgeToken', () => {
     await bridgeToken.waitForDeployment()
 
     const nearBridgeDeriveAddress = await deriveEthereumAddress('omni-locker.test1-dev.testnet', 'bridge-1');
+    const omniBridgeChainId = 0;
 
     BridgeTokenFactory = await ethers.getContractFactory('BridgeTokenFactory')
     BridgeTokenFactory = await upgrades.deployProxy(BridgeTokenFactory, [
       await bridgeToken.getAddress(),
-      nearBridgeDeriveAddress
+      nearBridgeDeriveAddress,
+      omniBridgeChainId,
     ], { initializer: 'initialize' });
     await BridgeTokenFactory.waitForDeployment();
   })

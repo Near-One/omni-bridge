@@ -27,11 +27,13 @@ describe('BridgeTokenWormhole', () => {
     await TestWormhole.waitForDeployment();
 
     const nearBridgeDeriveAddress = await deriveEthereumAddress('omni-locker.test1-dev.testnet', 'bridge-1');
+    const omniBridgeChainId = 0;
 
     BridgeTokenFactory = await ethers.getContractFactory('BridgeTokenFactoryWormhole');
     BridgeTokenFactory = await upgrades.deployProxy(BridgeTokenFactory, [
       await bridgeToken.getAddress(),
       nearBridgeDeriveAddress,
+      omniBridgeChainId,
       await TestWormhole.getAddress(),
       consistencyLevel
     ], { initializer: 'initializeWormhole' });

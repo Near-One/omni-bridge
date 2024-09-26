@@ -25,12 +25,13 @@ contract BridgeTokenFactoryWormhole is BridgeTokenFactory {
     uint32 public wormholeNonce;
 
     function initializeWormhole(
-        address _tokenImplementationAddress,
-        address _nearBridgeDerivedAddress,
+        address tokenImplementationAddress,
+        address nearBridgeDerivedAddress,
+        uint8 omniBridgeChainId,
         address wormholeAddress,
         uint8 consistencyLevel
     ) external initializer {
-        initialize(_tokenImplementationAddress, _nearBridgeDerivedAddress);
+        initialize(tokenImplementationAddress, nearBridgeDerivedAddress, omniBridgeChainId);
         _wormhole = IWormhole(wormholeAddress);
         _consistencyLevel = consistencyLevel;
     }
