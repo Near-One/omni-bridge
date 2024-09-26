@@ -53,7 +53,7 @@ pub async fn handle_streamer_message(
             } => {
                 // TODO: If fee is insufficient, it should be handled later. For example,
                 // add to redis and try again in 1 hour
-                match utils::price::is_fee_sufficient(
+                match utils::fee::is_fee_sufficient(
                     jsonrpc_client,
                     &transfer_message.sender,
                     &transfer_message.recipient,
