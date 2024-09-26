@@ -13,7 +13,7 @@ pub fn build_connector(
     config: &config::Config,
     near_signer: &InMemorySigner,
 ) -> Result<OmniConnector> {
-    info!("Building NEP-141 connector");
+    info!("Building Omni connector");
 
     OmniConnectorBuilder::default()
         .eth_endpoint(Some(config.eth.rpc_http_url.clone()))
