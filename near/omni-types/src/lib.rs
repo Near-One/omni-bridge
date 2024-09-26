@@ -333,16 +333,13 @@ mod test {
 
     #[test]
     fn test_omni_address_serialization() {
-        let address =
-            OmniAddress::Eth(H160::from_str("0x5A08FeED678C056650b3eb4a5cb1b9BB6F0fE265").unwrap());
+        let address_str = "0x5A08FeED678C056650b3eb4a5cb1b9BB6F0fE265";
+        let address = OmniAddress::Eth(H160::from_str(address_str).unwrap());
 
         let serialized = serde_json::to_string(&address).unwrap();
         let deserialized: OmniAddress = serde_json::from_str(&serialized).unwrap();
 
-        assert_eq!(
-            serialized,
-            "\"eth:0x5A08FeED678C056650b3eb4a5cb1b9BB6F0fE265\""
-        );
+        assert_eq!(serialized, format!("\"eth:{}\"", address_str));
         assert_eq!(address, deserialized);
     }
 }
