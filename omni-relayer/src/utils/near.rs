@@ -89,7 +89,7 @@ pub async fn handle_streamer_message(
             }
             Nep141LockerEvent::FinTransferEvent { .. }
             | Nep141LockerEvent::UpdateFeeEvent { .. }
-            | Nep141LockerEvent::LogMetadataEvent { .. } => todo!(),
+            | Nep141LockerEvent::LogMetadataEvent { .. } => {}
         }
     }
 }
@@ -112,7 +112,7 @@ fn is_nep_locker_event(config: &config::Config, receipt: &ReceiptView) -> bool {
         && matches!(
             receipt.receipt,
             ReceiptEnumView::Action { ref actions, .. } if actions.iter().any(|action| {
-                matches!(action, ActionView::FunctionCall { method_name, .. } if method_name == "ft_on_transfer" || method_name == "sign_transfer_callback")
+                matches!(action, ActionView::FunctionCall { .. })
             })
         )
 }
