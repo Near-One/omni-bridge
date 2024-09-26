@@ -337,7 +337,7 @@ mod test {
         let address = OmniAddress::Eth(H160::from_str(address_str).unwrap());
 
         let serialized = serde_json::to_string(&address).unwrap();
-        let deserialized: OmniAddress = serde_json::from_str(&serialized).unwrap();
+        let deserialized = serde_json::from_str(&serialized).unwrap();
 
         assert_eq!(serialized, format!("\"eth:{}\"", address_str));
         assert_eq!(address, deserialized);
