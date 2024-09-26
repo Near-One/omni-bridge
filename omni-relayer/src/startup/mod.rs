@@ -23,7 +23,7 @@ pub fn build_connector(
         .bridge_token_factory_address(Some(config.eth.bridge_token_factory_address.to_string()))
         .eth_private_key(Some(
             std::env::var("ETH_PRIVATE_KEY")
-                .context("Failed to get `NEAR_PRIVATE_KEY` env variable")?,
+                .context("Failed to get `ETH_PRIVATE_KEY` env variable")?,
         ))
         .near_signer(Some(near_signer.account_id.to_string()))
         .near_private_key(Some(near_signer.secret_key.to_string()))
