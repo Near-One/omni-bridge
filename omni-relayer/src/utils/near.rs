@@ -88,7 +88,8 @@ pub async fn handle_streamer_message(
                 .await;
             }
             Nep141LockerEvent::FinTransferEvent { .. }
-            | Nep141LockerEvent::UpdateFeeEvent { .. } => todo!(),
+            | Nep141LockerEvent::UpdateFeeEvent { .. }
+            | Nep141LockerEvent::LogMetadataEvent { .. } => todo!(),
         }
     }
 }

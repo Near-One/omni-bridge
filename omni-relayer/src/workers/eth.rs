@@ -5,14 +5,14 @@ use futures::future::join_all;
 use log::warn;
 
 use near_primitives::borsh;
-use nep141_connector::Nep141Connector;
+use omni_connector::OmniConnector;
 use omni_types::locker_args::FinTransferArgs;
 
 use crate::utils;
 
 pub async fn finalize_withdraw(
     redis_client: redis::Client,
-    connector: Arc<Nep141Connector>,
+    connector: Arc<OmniConnector>,
 ) -> Result<()> {
     let redis_connection = redis_client.get_multiplexed_tokio_connection().await?;
 
@@ -48,7 +48,7 @@ pub async fn finalize_withdraw(
                             return;
                         };
 
-                        match connector.finalize_withdraw_omni(fin_transfer_args).await {
+                        match connector.near_fin_transfer(fin_transfer_args).await {
                             Ok(tx_hash) => {
                                 log::info!("Finalized withdraw: {:?}", tx_hash);
                                 utils::redis::remove_event(

@@ -5,7 +5,7 @@ use futures::future::join_all;
 use log::{error, info, warn};
 
 use near_primitives::borsh;
-use nep141_connector::Nep141Connector;
+use omni_connector::OmniConnector;
 use omni_types::{locker_args::ClaimFeeArgs, near_events::Nep141LockerEvent};
 
 use crate::{config, utils};
@@ -13,7 +13,7 @@ use crate::{config, utils};
 pub async fn sign_transfer(
     config: config::Config,
     redis_client: redis::Client,
-    connector: Arc<Nep141Connector>,
+    connector: Arc<OmniConnector>,
 ) -> Result<()> {
     let redis_connection = redis_client.get_multiplexed_tokio_connection().await?;
 
@@ -89,7 +89,7 @@ pub async fn sign_transfer(
 
 pub async fn finalize_transfer(
     redis_client: redis::Client,
-    connector: Arc<Nep141Connector>,
+    connector: Arc<OmniConnector>,
 ) -> Result<()> {
     let redis_connection = redis_client.get_multiplexed_tokio_connection().await?;
 
@@ -121,7 +121,7 @@ pub async fn finalize_transfer(
                             return;
                         };
 
-                        match connector.finalize_deposit_omni_with_log(event).await {
+                        match connector.evm_fin_transfer_with_log(event).await {
                             Ok(tx_hash) => {
                                 info!("Finalized deposit: {}", tx_hash);
                                 utils::redis::remove_event(
@@ -149,7 +149,7 @@ pub async fn finalize_transfer(
     }
 }
 
-pub async fn claim_fee(redis_client: redis::Client, connector: Arc<Nep141Connector>) -> Result<()> {
+pub async fn claim_fee(redis_client: redis::Client, connector: Arc<OmniConnector>) -> Result<()> {
     let redis_connection = redis_client.get_multiplexed_tokio_connection().await?;
 
     loop {
