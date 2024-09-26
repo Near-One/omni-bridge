@@ -235,12 +235,24 @@ async fn process_log(
             return;
         };
 
+        let Ok(recipient) = withdraw_log.inner.recipient.parse::<AccountId>() else {
+            warn!(
+                "Failed to parse recipient as AccountId: {:?}",
+                withdraw_log.inner.recipient
+            );
+            return;
+        };
+
         let fin_transfer_args = FinTransferArgs {
             chain_kind: ChainKind::Eth,
             storage_deposit_args: StorageDepositArgs {
                 token,
-                // TODO: Add accounts
-                accounts: Vec::new(),
+                // TODO: Replace hardcoded `true` fields with actual values, once
+                // `storage_balance_of` method will be available in `bridge_sdk`
+                accounts: vec![
+                    (config.near.token_locker_id.clone(), true),
+                    (recipient, true),
+                ],
             },
             prover_args,
         };
