@@ -55,7 +55,7 @@ impl<'a> CustomRlpIter<'a> {
             Ok(result) => {
                 self.consumed_bytes += result.as_raw().len();
                 self.index += 1;
-                Ok(Some(result.as_val::<T>()?))
+                Ok(Some(result.as_val()?))
             }
             Err(_) => Ok(None),
         }
