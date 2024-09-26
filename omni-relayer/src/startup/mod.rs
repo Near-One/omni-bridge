@@ -28,5 +28,5 @@ pub fn build_connector(
         .near_signer(Some(near_signer.account_id.to_string()))
         .near_private_key(Some(near_signer.secret_key.to_string()))
         .build()
-        .context("Failed to build Nep141Connector")
+        .context("Failed to build OmniConnector")
 }
