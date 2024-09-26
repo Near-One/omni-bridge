@@ -45,6 +45,11 @@ pub async fn handle_streamer_message(
         match log {
             Nep141LockerEvent::InitTransferEvent {
                 ref transfer_message,
+            }
+            // TODO: Later it's better to add a separate key in db for storing events with any
+            // troubles there. For now we just update whole event with a new fee for the same nonce
+            | Nep141LockerEvent::UpdateFeeEvent {
+                ref transfer_message,
             } => {
                 // TODO: If fee is insufficient, it should be handled later. For example,
                 // add to redis and try again in 1 hour
@@ -88,7 +93,6 @@ pub async fn handle_streamer_message(
                 .await;
             }
             Nep141LockerEvent::FinTransferEvent { .. }
-            | Nep141LockerEvent::UpdateFeeEvent { .. }
             | Nep141LockerEvent::LogMetadataEvent { .. } => {}
         }
     }

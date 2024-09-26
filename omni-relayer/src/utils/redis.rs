@@ -89,7 +89,7 @@ pub async fn add_event<F, E>(
 
     for _ in 0..RETRY_ATTEMPTS {
         if redis_connection
-            .hset_nx::<&str, F, String, ()>(key, field.clone(), serialized_event.clone())
+            .hset::<&str, F, String, ()>(key, field.clone(), serialized_event.clone())
             .await
             .is_ok()
         {
