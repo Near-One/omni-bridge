@@ -41,6 +41,41 @@ impl fmt::Display for H160 {
     }
 }
 
+impl H160 {
+    pub fn to_eip_55_checksum(&self) -> String {
+        let hex_addr = hex::encode(self.0);
+
+        let hash = evm::utils::keccak256(hex_addr.as_bytes());
+
+        let mut result = String::with_capacity(40);
+
+        for (i, c) in hex_addr.chars().enumerate() {
+            let hash_byte = hash[i / 2];
+
+            let hash_nibble = if i % 2 == 0 {
+                (hash_byte >> 4) & 0xF
+            } else {
+                hash_byte & 0xF
+            };
+
+            let c = match c {
+                'a'..='f' => {
+                    if hash_nibble >= 8 {
+                        c.to_ascii_uppercase()
+                    } else {
+                        c
+                    }
+                }
+                _ => c,
+            };
+
+            result.push(c);
+        }
+
+        result
+    }
+}
+
 impl<'de> Deserialize<'de> for H160 {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
@@ -109,7 +144,7 @@ impl From<&OmniAddress> for ChainKind {
 
 pub type EvmAddress = H160;
 
-#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+#[derive(BorshDeserialize, BorshSerialize, Debug, Clone, PartialEq, Eq)]
 pub enum OmniAddress {
     Eth(EvmAddress),
     Near(String),
@@ -164,6 +199,41 @@ impl fmt::Display for OmniAddress {
             OmniAddress::Base(recipient) => ("base", recipient.to_string()),
         };
         write!(f, "{}:{}", chain_str, recipient)
+    }
+}
+
+impl Serialize for OmniAddress {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.serialize_str(&self.to_string())
+    }
+}
+
+impl<'de> Deserialize<'de> for OmniAddress {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        struct OmniAddressVisitor;
+
+        impl<'de> serde::de::Visitor<'de> for OmniAddressVisitor {
+            type Value = OmniAddress;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                formatter.write_str("a string in the format 'chain:address'")
+            }
+
+            fn visit_str<E>(self, input: &str) -> Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                OmniAddress::from_str(input).map_err(E::custom)
+            }
+        }
+
+        deserializer.deserialize_str(OmniAddressVisitor)
     }
 }
 
@@ -256,4 +326,23 @@ pub type Nonce = u128;
 
 pub fn stringify<T: std::fmt::Display>(item: T) -> String {
     item.to_string()
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    use near_sdk::serde_json;
+
+    #[test]
+    fn test_omni_address_serialization() {
+        let address_str = "0x5a08feed678c056650b3eb4a5cb1b9bb6f0fe265";
+        let address = OmniAddress::Eth(H160::from_str(address_str).unwrap());
+
+        let serialized = serde_json::to_string(&address).unwrap();
+        let deserialized = serde_json::from_str(&serialized).unwrap();
+
+        assert_eq!(serialized, format!("\"eth:{address_str}\""));
+        assert_eq!(address, deserialized);
+    }
 }
