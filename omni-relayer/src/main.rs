@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use anyhow::Result;
+use clap::Parser;
 use log::{error, info};
 
 mod config;
@@ -8,13 +9,20 @@ mod startup;
 mod utils;
 mod workers;
 
-const CONFIG_FILE: &str = "config.toml";
+#[derive(Parser)]
+struct CliArgs {
+    /// Path to the configuration file
+    #[clap(short, long, default_value = "config.toml")]
+    config: String,
+}
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     pretty_env_logger::init();
 
-    let config = toml::from_str::<config::Config>(&std::fs::read_to_string(CONFIG_FILE)?)?;
+    let args = CliArgs::parse();
+
+    let config = toml::from_str::<config::Config>(&std::fs::read_to_string(args.config)?)?;
 
     let redis_client = redis::Client::open(config.redis.url.clone())?;
     let jsonrpc_client = near_jsonrpc_client::JsonRpcClient::connect(config.near.rpc_url.clone());
