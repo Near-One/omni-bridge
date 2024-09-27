@@ -14,9 +14,7 @@ const CONFIG_FILE: &str = "config.toml";
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     pretty_env_logger::init();
 
-    let mut config = toml::from_str::<config::Config>(&std::fs::read_to_string(CONFIG_FILE)?)?;
-
-    config.inject_api_keys()?;
+    let config = toml::from_str::<config::Config>(&std::fs::read_to_string(CONFIG_FILE)?)?;
 
     let redis_client = redis::Client::open(config.redis.url.clone())?;
     let jsonrpc_client = near_jsonrpc_client::JsonRpcClient::connect(config.near.rpc_url.clone());
