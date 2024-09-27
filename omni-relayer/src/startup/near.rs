@@ -4,35 +4,62 @@ use anyhow::{Context, Result};
 use futures::StreamExt;
 use log::info;
 
-use near_crypto::InMemorySigner;
+use near_crypto::{InMemorySigner, SecretKey};
 use near_jsonrpc_client::JsonRpcClient;
 use near_lake_framework::{LakeConfig, LakeConfigBuilder};
+use near_primitives::types::AccountId;
 
 use crate::{config, utils};
+
+fn get_account_id(file: Option<&String>) -> Result<AccountId> {
+    if let Some(file) = file {
+        if let Some(file_stem) = Path::new(file).file_stem().and_then(|s| s.to_str()) {
+            if let Ok(account_id) = file_stem.parse::<AccountId>() {
+                info!("Retrieved account_id from filename: {}", account_id);
+                return Ok(account_id);
+            }
+        }
+    }
+
+    let account_id = std::env::var("NEAR_ACCOUNT_ID")
+        .context("Failed to get `NEAR_ACCOUNT_ID` environment variable")?;
+
+    info!("Retrieved account_id from env: {}", account_id);
+
+    account_id
+        .parse()
+        .context("Failed to parse `NEAR_ACCOUNT_ID`")
+}
+
+fn get_private_key(file: Option<String>) -> Result<SecretKey> {
+    if let Some(file) = file {
+        if let Ok(file_content) = std::fs::read_to_string(file) {
+            if let Ok(key_data) = serde_json::from_str::<HashMap<String, String>>(&file_content) {
+                if let Some(private_key_str) = key_data.get("private_key") {
+                    if let Ok(private_key) = private_key_str.parse::<SecretKey>() {
+                        info!("Retrieved private key from file");
+                        return Ok(private_key);
+                    }
+                }
+            }
+        }
+    }
+
+    let private_key_str = std::env::var("NEAR_PRIVATE_KEY")
+        .context("Failed to get `NEAR_PRIVATE_KEY` environment variable")?;
+
+    info!("Retrieved private key from env");
+
+    private_key_str
+        .parse()
+        .context("Failed to parse private key")
+}
 
 pub fn create_signer(file: Option<String>) -> Result<InMemorySigner> {
     info!("Creating NEAR signer");
 
-    let account_id = std::env::var("NEAR_ACCOUNT_ID")
-        .context("Failed to get `NEAR_ACCOUNT_ID` env variable")?
-        .parse()?;
-
-    let private_key = if let Some(file) = file {
-        let file_path = Path::new(&file);
-
-        let file_content = std::fs::read_to_string(file_path)
-            .context(format!("Failed to read file: {file_path:?}"))?;
-
-        serde_json::from_str::<HashMap<String, String>>(&file_content)
-            .context("Failed to parse json from file")?
-            .get("private_key")
-            .context("Failed to get `private_key` from file")?
-            .parse()?
-    } else {
-        std::env::var("NEAR_PRIVATE_KEY")
-            .context("Failed to get `NEAR_PRIVATE_KEY` env variable")?
-            .parse()?
-    };
+    let account_id = get_account_id(file.as_ref())?;
+    let private_key = get_private_key(file)?;
 
     Ok(InMemorySigner::from_secret_key(account_id, private_key))
 }
