@@ -56,7 +56,7 @@ ETHERSCAN_API_KEY=...
 Run 
 ```shell
 npx hardhat compile
-npx hardhat --network sepolia deploy-bridge-token-factory --bridge-token-impl 0xdb73F5222Ae011FaA466BC1872871b2FCB8f76cB --near-bridge-derived-address <DERIVED_ADDRESS_FROM_PREV_SECTION>
+npx hardhat --network sepolia deploy-bridge-token-factory --bridge-token-impl 0xdb73F5222Ae011FaA466BC1872871b2FCB8f76cB --near-bridge-derived-address <DERIVED_ADDRESS_FROM_PREV_SECTION> --omni-bridge-chain-id 0
 yarn hardhat verify <IMPL_ADDRESS>  --network sepolia
 ```
 
@@ -70,4 +70,5 @@ NEP141_LOCKER_ACCOUNT_ID=nep141_locker_omni_<ID>.testnet
 OMNI_PROVER_ACCOUNT_ID=omni_prover_<ID>.testnet
 ETH_BRIDGE_TOKEN_FACTORY_ADDRESS=...
 ETH_PRIVATE_KEY=...
+INFURA_API_KEY=...
 ```

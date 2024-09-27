@@ -26,10 +26,10 @@ async fn deploy_token_test() {
     dotenv().unwrap();
 
     let near_signer = get_near_signer();
-    let nep141_connector = build_connector(&near_signer);
+    let omni_connector = build_connector(&near_signer);
     let mock_token = env::var("MOCK_TOKEN_ACCOUNT_ID").unwrap();
-    let tx_id = nep141_connector.log_token_metadata(mock_token).await.unwrap();
-    let eth_tx = nep141_connector.new_bridge_token_omni(tx_id, None).await.unwrap();
+    let tx_id = omni_connector.log_token_metadata(mock_token).await.unwrap();
+    let eth_tx = omni_connector.evm_deploy_token(tx_id, None).await.unwrap();
 
     info!("Eth tx: {:?}", eth_tx)
 }
@@ -75,14 +75,13 @@ fn read_private_key_from_file(
 
 pub fn build_connector(
     near_signer: &InMemorySigner,
-) -> nep141_connector::Nep141Connector {
-    nep141_connector::Nep141ConnectorBuilder::default()
-        .eth_endpoint(Some("https://eth.llamarpc.com".to_string()))
+) -> omni_connector::OmniConnector {
+    omni_connector::OmniConnectorBuilder::default()
+        .eth_endpoint(Some(format!("https://sepolia.infura.io/v3/{}", env::var("INFURA_API_KEY").unwrap())))
         .eth_chain_id(Some(11_155_111))
         .near_endpoint(Some(get_near_endpoint_url().to_string()))
         .token_locker_id(Some(env::var("NEP141_LOCKER_ACCOUNT_ID").unwrap()))
         .bridge_token_factory_address(Some(env::var("ETH_BRIDGE_TOKEN_FACTORY_ADDRESS").unwrap()))
-        .near_light_client_address(Some("0x202cdf10bfa45a3d2190901373edd864f071d707".to_string()))
         .eth_private_key(Some(std::env::var("ETH_PRIVATE_KEY").unwrap()))
         .near_signer(Some(near_signer.account_id.to_string()))
         .near_private_key(Some(near_signer.secret_key.to_string()))
