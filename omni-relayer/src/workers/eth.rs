@@ -39,7 +39,7 @@ pub async fn finalize_withdraw(
                     let connector = connector.clone();
 
                     async move {
-                        log::info!("Decoded log: {:?}", withdraw_log);
+                        log::info!("Received FinTransfer log");
 
                         let Ok(fin_transfer_args) =
                             borsh::from_slice::<FinTransferArgs>(&withdraw_log)

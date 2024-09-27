@@ -176,7 +176,7 @@ pub async fn claim_fee(redis_client: redis::Client, connector: Arc<OmniConnector
                     let connector = connector.clone();
 
                     async move {
-                        info!("Decoded log: {:?}", deposit_log);
+                        info!("Received finalized transfer");
 
                         let Ok(claim_fee_args) = borsh::from_slice::<ClaimFeeArgs>(&deposit_log)
                         else {
