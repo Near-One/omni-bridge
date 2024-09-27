@@ -42,7 +42,7 @@ impl fmt::Display for H160 {
 }
 
 impl H160 {
-    fn to_eip_55_checksum(&self) -> String {
+    pub fn to_eip_55_checksum(&self) -> String {
         let hex_addr = hex::encode(self.0);
 
         let hash = evm::utils::keccak256(hex_addr.as_bytes());
