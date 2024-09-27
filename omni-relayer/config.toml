@@ -2,6 +2,7 @@
 url = "redis://127.0.0.1/"
 
 [near]
+network = "testnet"
 rpc_url = "https://rpc.testnet.near.org/"
 token_locker_id = "omni-locker.testnet"
 

@@ -14,7 +14,15 @@ pub struct Redis {
 }
 
 #[derive(Debug, Clone, serde::Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Network {
+    Testnet,
+    Mainnet,
+}
+
+#[derive(Debug, Clone, serde::Deserialize)]
 pub struct Near {
+    pub network: Network,
     pub rpc_url: String,
     pub token_locker_id: AccountId,
     pub credentials_path: Option<String>,

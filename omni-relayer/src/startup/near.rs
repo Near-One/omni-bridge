@@ -65,6 +65,7 @@ pub fn create_signer(file: Option<String>) -> Result<InMemorySigner> {
 }
 
 async fn create_lake_config(
+    config: &config::Config,
     redis_connection: &mut redis::aio::MultiplexedConnection,
     jsonrpc_client: &JsonRpcClient,
 ) -> Result<LakeConfig> {
@@ -80,11 +81,18 @@ async fn create_lake_config(
 
     info!("NEAR Lake will start from block: {}", start_block_height);
 
-    LakeConfigBuilder::default()
-        .testnet()
-        .start_block_height(start_block_height)
-        .build()
-        .context("Failed to build LakeConfig")
+    let lake_config = LakeConfigBuilder::default().start_block_height(start_block_height);
+
+    match config.near.network {
+        config::Network::Testnet => lake_config
+            .testnet()
+            .build()
+            .context("Failed to build testnet LakeConfig"),
+        config::Network::Mainnet => lake_config
+            .mainnet()
+            .build()
+            .context("Failed to build mainnet LakeConfig"),
+    }
 }
 
 pub async fn start_indexer(
@@ -96,7 +104,7 @@ pub async fn start_indexer(
 
     let mut redis_connection = redis_client.get_multiplexed_tokio_connection().await?;
 
-    let lake_config = create_lake_config(&mut redis_connection, &jsonrpc_client).await?;
+    let lake_config = create_lake_config(&config, &mut redis_connection, &jsonrpc_client).await?;
     let (_, stream) = near_lake_framework::streamer(lake_config);
     let stream = tokio_stream::wrappers::ReceiverStream::new(stream);
 
