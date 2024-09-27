@@ -1,6 +1,6 @@
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::{
-    env, ext_contract, near_bindgen, AccountId, Gas, PanicOnDefault, Promise, PromiseError,
+    env, ext_contract, near_bindgen, require, AccountId, Gas, PanicOnDefault, Promise, PromiseError,
 };
 use omni_types::prover_args::WormholeVerifyProofArgs;
 use omni_types::prover_result::{ProofKind, ProverResult};
@@ -51,7 +51,7 @@ impl WormholeOmniProverProxy {
     #[handle_result]
     pub fn verify_vaa_callback(
         &mut self,
-        _proof_kind: ProofKind,
+        proof_kind: ProofKind,
         vaa: String,
         #[callback_result] gov_idx: Result<u32, PromiseError>,
     ) -> Result<ProverResult, String> {
@@ -61,7 +61,16 @@ impl WormholeOmniProverProxy {
 
         let h = hex::decode(vaa).expect("invalidVaa");
         let parsed_vaa = parsed_vaa::ParsedVAA::parse(&h);
-        let _data: &[u8] = &parsed_vaa.payload;
-        Err("TODO: parse data".to_owned())
+
+        require!(
+            proof_kind as u8 == parsed_vaa.payload[0],
+            "Invalid proof kind"
+        );
+
+        match proof_kind {
+            ProofKind::InitTransfer => Ok(ProverResult::InitTransfer(parsed_vaa.try_into()?)),
+            ProofKind::FinTransfer => Ok(ProverResult::FinTransfer(parsed_vaa.try_into()?)),
+            ProofKind::DeployToken => Ok(ProverResult::DeployToken(parsed_vaa.try_into()?)),
+        }
     }
 }
