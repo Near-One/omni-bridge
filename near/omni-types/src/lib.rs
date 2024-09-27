@@ -37,7 +37,7 @@ impl FromStr for H160 {
 
 impl fmt::Display for H160 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "0x{}", self.to_eip_55_checksum())
+        write!(f, "0x{}", hex::encode(self.0))
     }
 }
 
@@ -336,7 +336,7 @@ mod test {
 
     #[test]
     fn test_omni_address_serialization() {
-        let address_str = "0x5A08FeED678C056650b3eb4a5cb1b9BB6F0fE265";
+        let address_str = "0x5a08feed678c056650b3eb4a5cb1b9bb6f0fe265";
         let address = OmniAddress::Eth(H160::from_str(address_str).unwrap());
 
         let serialized = serde_json::to_string(&address).unwrap();
