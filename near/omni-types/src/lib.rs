@@ -1,4 +1,3 @@
-use alloy_primitives::Keccak256;
 use core::fmt;
 use core::str::FromStr;
 use hex::FromHex;
@@ -38,11 +37,15 @@ impl FromStr for H160 {
 
 impl fmt::Display for H160 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "0x{}", self.to_eip_55_checksum())
+    }
+}
+
+impl H160 {
+    fn to_eip_55_checksum(&self) -> String {
         let hex_addr = hex::encode(self.0);
 
-        let mut hasher = Keccak256::new();
-        hasher.update(hex_addr.as_bytes());
-        let hash = hasher.finalize();
+        let hash = evm::utils::keccak256(hex_addr.as_bytes());
 
         let mut result = String::with_capacity(40);
 
@@ -69,7 +72,7 @@ impl fmt::Display for H160 {
             result.push(c);
         }
 
-        write!(f, "0x{}", result)
+        result
     }
 }
 
