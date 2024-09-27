@@ -6,6 +6,6 @@ pub fn keccak256(data: &[u8]) -> [u8; 32] {
     #[cfg(not(target_arch = "wasm32"))]
     {
         use sha3::{Digest, Keccak256};
-        Keccak256::digest(data).try_into().unwrap()
+        Keccak256::digest(data).into()
     }
 }
