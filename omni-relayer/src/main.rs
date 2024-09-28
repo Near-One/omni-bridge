@@ -17,7 +17,7 @@ struct CliArgs {
 }
 
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
+async fn main() -> Result<()> {
     pretty_env_logger::init();
     dotenv::dotenv().ok();
 
@@ -58,12 +58,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     handles.push(tokio::spawn({
         let config = config.clone();
         let redis_client = redis_client.clone();
+        let jsonrpc_client = jsonrpc_client.clone();
         async move { startup::near::start_indexer(config, redis_client, jsonrpc_client).await }
     }));
     handles.push(tokio::spawn({
         let config = config.clone();
         let redis_client = redis_client.clone();
-        async move { startup::eth::start_indexer(config, redis_client).await }
+        let jsonrpc_client = jsonrpc_client.clone();
+        async move { startup::eth::start_indexer(config, redis_client, jsonrpc_client).await }
     }));
 
     tokio::select! {

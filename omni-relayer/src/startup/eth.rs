@@ -2,7 +2,7 @@ use anyhow::{Context, Result};
 use log::{info, warn};
 use tokio_stream::StreamExt;
 
-use ethereum_types::H256;
+use near_jsonrpc_client::JsonRpcClient;
 use near_primitives::{borsh::BorshSerialize, types::AccountId};
 use omni_types::{
     locker_args::{ClaimFeeArgs, FinTransferArgs, StorageDepositArgs},
@@ -17,6 +17,7 @@ use alloy::{
     sol,
     sol_types::SolEvent,
 };
+use ethereum_types::H256;
 
 use crate::{config, utils};
 
@@ -51,7 +52,11 @@ sol!(
     );
 );
 
-pub async fn start_indexer(config: config::Config, redis_client: redis::Client) -> Result<()> {
+pub async fn start_indexer(
+    config: config::Config,
+    redis_client: redis::Client,
+    jsonrpc_client: JsonRpcClient,
+) -> Result<()> {
     let mut redis_connection = redis_client.get_multiplexed_tokio_connection().await?;
 
     let http_provider = ProviderBuilder::new().on_http(
@@ -108,6 +113,7 @@ pub async fn start_indexer(config: config::Config, redis_client: redis::Client) 
             process_log(
                 &config,
                 &mut redis_connection,
+                &jsonrpc_client,
                 H256::from_slice(tx_hash.as_slice()),
                 tx_logs,
                 log,
@@ -139,6 +145,7 @@ pub async fn start_indexer(config: config::Config, redis_client: redis::Client) 
         process_log(
             &config,
             &mut redis_connection,
+            &jsonrpc_client,
             H256::from_slice(tx_hash.as_slice()),
             tx_logs,
             log,
@@ -153,6 +160,7 @@ pub async fn start_indexer(config: config::Config, redis_client: redis::Client) 
 async fn process_log(
     config: &config::Config,
     redis_connection: &mut redis::aio::MultiplexedConnection,
+    jsonrpc_client: &JsonRpcClient,
     tx_hash: H256,
     tx_logs: Option<TransactionReceipt>,
     log: Log,
@@ -243,15 +251,25 @@ async fn process_log(
             return;
         };
 
+        let sender = config.near.token_locker_id.clone();
+
+        // If storage is sufficient, then flag should be false, otherwise true
+        let sender_is_storage_deposit =
+            !utils::storage::is_storage_sufficient(jsonrpc_client, &token, &sender)
+                .await
+                .unwrap_or_default();
+        let recipient_is_storage_deposit =
+            !utils::storage::is_storage_sufficient(jsonrpc_client, &token, &recipient)
+                .await
+                .unwrap_or_default();
+
         let fin_transfer_args = FinTransferArgs {
             chain_kind: ChainKind::Eth,
             storage_deposit_args: StorageDepositArgs {
                 token,
-                // TODO: Replace hardcoded `true` fields with actual values, once
-                // `storage_balance_of` method will be available in `bridge_sdk`
                 accounts: vec![
-                    (config.near.token_locker_id.clone(), true),
-                    (recipient, true),
+                    (sender, sender_is_storage_deposit),
+                    (recipient, recipient_is_storage_deposit),
                 ],
             },
             prover_args,
