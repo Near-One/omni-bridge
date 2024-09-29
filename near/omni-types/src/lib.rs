@@ -273,21 +273,53 @@ impl fmt::Display for NearRecipient {
 pub struct InitTransferMsg {
     pub recipient: OmniAddress,
     pub fee: U128,
+    pub native_token_fee: U128,
 }
 
+#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Debug, Clone)]
+pub struct FeeRecipient {
+    pub recipient: AccountId,
+    pub native_fee_recipient: OmniAddress,
+}
+
+#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Debug, Clone)]
+pub struct NativeFee {
+    pub amount: U128,
+    pub recipient: OmniAddress,
+}
+
+#[derive(
+    BorshDeserialize, BorshSerialize, Serialize, Deserialize, Debug, Clone, PartialEq, Default,
+)]
+pub struct Fee {
+    pub fee: U128,
+    pub native_fee: U128,
+}
+
+impl Fee {
+    pub fn is_zero(&self) -> bool {
+        self.fee.0 == 0 && self.native_fee.0 == 0
+    }
+}
+
+pub type TransferId = (ChainKind, Nonce);
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Debug, Clone)]
 pub struct TransferMessage {
     pub origin_nonce: U128,
     pub token: AccountId,
     pub amount: U128,
     pub recipient: OmniAddress,
-    pub fee: U128,
+    pub fee: Fee,
     pub sender: OmniAddress,
 }
 
 impl TransferMessage {
     pub fn get_origin_chain(&self) -> ChainKind {
         self.sender.get_chain()
+    }
+
+    pub fn get_transfer_id(&self) -> TransferId {
+        (self.get_origin_chain(), self.origin_nonce.0)
     }
 }
 
@@ -300,6 +332,13 @@ pub struct TransferMessagePayload {
     pub fee_recipient: Option<AccountId>,
 }
 
+#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Debug, Clone)]
+pub struct ClaimNativeFeePayload {
+    pub nonces: Vec<U128>,
+    pub amount: U128,
+    pub recipient: OmniAddress,
+}
+
 #[derive(Deserialize, Serialize, Clone)]
 #[serde(crate = "near_sdk::serde")]
 pub struct SignRequest {
@@ -310,7 +349,7 @@ pub struct SignRequest {
 
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Debug, Clone)]
 pub enum UpdateFee {
-    Fee(U128),
+    Fee(Fee),
     Proof(Vec<u8>),
 }
 
