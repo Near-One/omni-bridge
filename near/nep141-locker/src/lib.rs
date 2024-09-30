@@ -282,26 +282,27 @@ impl Contract {
     }
 
     #[payable]
-    pub fn sign_claim_native_fee(&mut self, claim_payload: ClaimNativeFeePayload) -> Promise {
-        let chain_kind = claim_payload.recipient.get_chain();
-        let mut amount = 0_u128;
-        for nonce in &claim_payload.nonces {
+    pub fn sign_claim_native_fee(&mut self, nonces: Vec<U128>, recipient: OmniAddress) -> Promise {
+        let chain_kind = recipient.get_chain();
+        let mut amount: u128 = 0_u128;
+        for nonce in &nonces {
             let native_fee = self
                 .finalised_transfers
                 .get(&(chain_kind, nonce.0))
                 .flatten()
                 .sdk_expect("ERR_NATIVE_FEE_NOT_EXISIT");
 
-            require!(
-                native_fee.recipient == claim_payload.recipient,
-                "ERR_WRONG_RECIPIENT"
-            );
+            require!(native_fee.recipient == recipient, "ERR_WRONG_RECIPIENT");
             amount += native_fee.amount.0;
         }
 
-        require!(amount == claim_payload.amount.0, "ERR_WRONG_AMOUNT");
-
-        let payload = near_sdk::env::keccak256_array(&borsh::to_vec(&claim_payload).unwrap());
+        let claim_payload = ClaimNativeFeePayload {
+            nonces,
+            amount: U128(amount),
+            recipient,
+        };
+        let payload =
+            near_sdk::env::keccak256_array(&borsh::to_vec(&claim_payload).sdk_expect("ERR_BORSH"));
 
         ext_signer::ext(self.mpc_signer.clone())
             .with_static_gas(MPC_SIGNING_GAS)
