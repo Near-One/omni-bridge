@@ -327,7 +327,7 @@ impl Contract {
     ) {
         if let Ok(signature) = call_result {
             env::log_str(
-                &Nep141LockerEvent::SingCalimNativeFeeEvent {
+                &Nep141LockerEvent::SingClaimNativeFeeEvent {
                     signature,
                     claim_payload,
                 }

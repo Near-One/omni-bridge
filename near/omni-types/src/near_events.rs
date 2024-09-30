@@ -25,7 +25,7 @@ pub enum Nep141LockerEvent {
         signature: SignatureResponse,
         metadata_payload: MetadataPayload,
     },
-    SingCalimNativeFeeEvent {
+    SingClaimNativeFeeEvent {
         signature: SignatureResponse,
         claim_payload: ClaimNativeFeePayload,
     },
