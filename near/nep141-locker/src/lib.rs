@@ -610,23 +610,28 @@ impl Contract {
         let message = self.remove_transfer_message(fin_transfer.nonce.0);
         let fee = message.amount.0 - fin_transfer.amount.0;
 
-        if message.get_origin_chain() == ChainKind::Near && message.fee.native_fee.0 != 0 {
-            Promise::new(fin_transfer.fee_recipient.clone())
-                .transfer(NearToken::from_yoctonear(message.fee.native_fee.0));
-        } else {
-            let required_balance = self.update_fin_transfer(
-                &message.get_transfer_id(),
-                &Some(NativeFee {
-                    amount: message.fee.native_fee,
-                    recipient: native_fee_recipient,
-                }),
-            );
+        if message.fee.native_fee.0 != 0 {
+            if message.get_origin_chain() == ChainKind::Near {
+                let OmniAddress::Near(recipient) = native_fee_recipient else {
+                    env::panic_str("ERR_WRONG_CHAIN_KIND")
+                };
+                Promise::new(recipient.parse().sdk_expect("ERR_PARSE_FEE_RECIPIENT"))
+                    .transfer(NearToken::from_yoctonear(message.fee.native_fee.0));
+            } else {
+                let required_balance = self.update_fin_transfer(
+                    &message.get_transfer_id(),
+                    &Some(NativeFee {
+                        amount: message.fee.native_fee,
+                        recipient: native_fee_recipient,
+                    }),
+                );
 
-            self.update_storage_balance(
-                predecessor_account_id,
-                required_balance,
-                env::attached_deposit(),
-            );
+                self.update_storage_balance(
+                    predecessor_account_id,
+                    required_balance,
+                    env::attached_deposit(),
+                );
+            }
         }
 
         ext_token::ext(message.token)
