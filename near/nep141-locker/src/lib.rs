@@ -152,6 +152,10 @@ impl FungibleTokenReceiver for Contract {
             },
             sender: OmniAddress::Near(sender_id.to_string()),
         };
+        require!(
+            transfer_message.fee.fee < transfer_message.amount,
+            "ERR_INVALID_FEE"
+        );
 
         let mut required_storage_balance = self.add_transfer_message(
             self.current_nonce,
@@ -255,6 +259,7 @@ impl Contract {
         }
     }
 
+    #[payable]
     pub fn update_transfer_fee(&mut self, nonce: U128, fee: UpdateFee) {
         match fee {
             UpdateFee::Fee(fee) => {
@@ -266,7 +271,23 @@ impl Contract {
                     "Only sender can update fee"
                 );
 
-                // TODO: attach deposit
+                let current_fee = transfer.message.fee;
+                require!(
+                    fee.fee >= current_fee.fee && fee.fee < transfer.message.amount,
+                    "ERR_INVALID_FEE"
+                );
+
+                let diff_native_fee = current_fee
+                    .native_fee
+                    .0
+                    .checked_sub(fee.native_fee.0)
+                    .sdk_expect("ERR_LOWER_FEE");
+
+                require!(
+                    NearToken::from_yoctonear(diff_native_fee) == env::attached_deposit(),
+                    "ERR_INVALID_ATTACHED_DEPOSIT"
+                );
+
                 transfer.message.fee = fee;
                 self.insert_raw_transfer(nonce.0, transfer.message.clone(), transfer.owner);
 
