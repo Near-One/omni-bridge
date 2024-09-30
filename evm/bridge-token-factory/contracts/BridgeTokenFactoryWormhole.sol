@@ -62,10 +62,12 @@ contract BridgeTokenFactoryWormhole is BridgeTokenFactory {
         string calldata token,
         uint128 amount,
         uint128 fee,
+        uint128 nativeFee,
         string calldata recipient,
-        address sender
+        address sender,
+        uint256 value
     ) internal override {
-        _wormhole.publishMessage{value: msg.value}(
+        _wormhole.publishMessage{value: value}(
             wormholeNonce,
             abi.encode(
                 MessageType.InitTransfer,
@@ -73,6 +75,7 @@ contract BridgeTokenFactoryWormhole is BridgeTokenFactory {
                 token,
                 amount,
                 fee,
+                nativeFee,
                 recipient,
                 sender
             ),
