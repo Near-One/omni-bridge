@@ -452,7 +452,7 @@ impl Contract {
             required_balance = self.add_fin_transfer(
                 &transfer_message.get_transfer_id(),
                 &Some(NativeFee {
-                    amount: transfer_message.amount,
+                    amount: transfer_message.fee.native_fee,
                     recipient: native_fee_recipient,
                 }),
             );
