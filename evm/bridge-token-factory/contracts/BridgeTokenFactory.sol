@@ -106,6 +106,7 @@ contract BridgeTokenFactory is
 
     error InvalidSignature();
     error NonceAlreadyUsed(uint256 nonce);
+    error InvalidFee();
 
     function initialize(
         address tokenImplementationAddress_,
@@ -252,10 +253,13 @@ contract BridgeTokenFactory is
         initTransferNonce += 1;
         _checkWhitelistedToken(token, msg.sender);
         require(_isBridgeToken[_nearToEthToken[token]], "ERR_NOT_BRIDGE_TOKEN");
+        if (fee >= amount) {
+            revert InvalidFee();
+        }
 
         address tokenAddress = _nearToEthToken[token];
 
-        BridgeToken(tokenAddress).burn(msg.sender, amount + fee);
+        BridgeToken(tokenAddress).burn(msg.sender, amount);
 
         uint256 extensionValue = msg.value - nativeFee;
         initTransferExtension(initTransferNonce, token, amount, fee, nativeFee, recipient, msg.sender, extensionValue);
