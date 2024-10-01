@@ -32,6 +32,7 @@ sol!(
         string token,
         uint128 amount,
         uint128 fee,
+        uint128 nativeFee,
         string recipient
     );
 
