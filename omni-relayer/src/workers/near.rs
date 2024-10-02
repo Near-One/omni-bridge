@@ -4,11 +4,92 @@ use anyhow::Result;
 use futures::future::join_all;
 use log::{error, info, warn};
 
+use near_jsonrpc_client::JsonRpcClient;
 use near_primitives::borsh;
 use omni_connector::OmniConnector;
 use omni_types::{locker_args::ClaimFeeArgs, near_events::Nep141LockerEvent};
 
 use crate::{config, utils};
+
+pub async fn check_bad_fees(
+    redis_client: redis::Client,
+    jsonrpc_client: JsonRpcClient,
+) -> Result<()> {
+    let redis_connection = redis_client.get_multiplexed_tokio_connection().await?;
+
+    loop {
+        let mut redis_connection_clone = redis_connection.clone();
+        let Some(events) = utils::redis::get_events(
+            &mut redis_connection_clone,
+            utils::redis::NEAR_BAD_FEE_EVENTS.to_string(),
+        )
+        .await
+        else {
+            tokio::time::sleep(tokio::time::Duration::from_secs(
+                utils::redis::SLEEP_TIME_AFTER_EVENTS_PROCESS_SECS,
+            ))
+            .await;
+            continue;
+        };
+
+        let mut handlers = Vec::new();
+        for (key, event) in events {
+            if let Ok(event) = serde_json::from_str::<Nep141LockerEvent>(&event) {
+                handlers.push(tokio::spawn({
+                    let mut redis_connection = redis_connection.clone();
+                    let jsonrpc_client = jsonrpc_client.clone();
+
+                    async move {
+                        let Nep141LockerEvent::InitTransferEvent {
+                            ref transfer_message,
+                        } = event
+                        else {
+                            warn!("Expected InitTransferEvent, got: {:?}", event);
+                            return;
+                        };
+
+                        info!(
+                            "Received InitTransferEvent with bad fee: {}",
+                            transfer_message.origin_nonce.0
+                        );
+
+                        if matches!(
+                            utils::fee::is_fee_sufficient(
+                                &jsonrpc_client,
+                                &transfer_message.sender,
+                                &transfer_message.recipient,
+                                &transfer_message.token,
+                                transfer_message.fee.into(),
+                            )
+                            .await,
+                            Ok(true)
+                        ) {
+                            info!("Fee is now sufficient");
+
+                            utils::redis::remove_event(
+                                &mut redis_connection,
+                                utils::redis::NEAR_BAD_FEE_EVENTS,
+                                &key,
+                            )
+                            .await;
+                            utils::redis::add_event(
+                                &mut redis_connection,
+                                utils::redis::NEAR_INIT_TRANSFER_EVENTS,
+                                transfer_message.origin_nonce.0.to_string(),
+                                event,
+                            )
+                            .await;
+                        }
+                    }
+                }));
+            }
+        }
+
+        join_all(handlers).await;
+
+        tokio::time::sleep(tokio::time::Duration::from_secs(3600)).await;
+    }
+}
 
 pub async fn sign_transfer(
     config: config::Config,
