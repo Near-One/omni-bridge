@@ -52,7 +52,7 @@ async fn main() -> Result<()> {
     handles.push(tokio::spawn({
         let redis_client = redis_client.clone();
         let connector = connector.clone();
-        async move { workers::eth::finalize_withdraw(redis_client, connector).await }
+        async move { workers::evm::finalize_withdraw(redis_client, connector).await }
     }));
 
     handles.push(tokio::spawn({
@@ -65,7 +65,7 @@ async fn main() -> Result<()> {
         let config = config.clone();
         let redis_client = redis_client.clone();
         let jsonrpc_client = jsonrpc_client.clone();
-        async move { startup::eth::start_indexer(config, redis_client, jsonrpc_client).await }
+        async move { startup::evm::start_indexer(config, redis_client, jsonrpc_client).await }
     }));
 
     tokio::select! {

@@ -5,7 +5,7 @@ use near_primitives::types::AccountId;
 pub struct Config {
     pub redis: Redis,
     pub near: Near,
-    pub eth: Eth,
+    pub evm: Evm,
 }
 
 #[derive(Debug, Clone, serde::Deserialize)]
@@ -29,7 +29,7 @@ pub struct Near {
 }
 
 #[derive(Debug, Clone, serde::Deserialize)]
-pub struct Eth {
+pub struct Evm {
     pub rpc_http_url: String,
     pub rpc_ws_url: String,
     pub chain_id: u64,

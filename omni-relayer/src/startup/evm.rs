@@ -62,14 +62,14 @@ pub async fn start_indexer(
 
     let http_provider = ProviderBuilder::new().on_http(
         config
-            .eth
+            .evm
             .rpc_http_url
             .parse()
             .context("Failed to parse ETH rpc provider as url")?,
     );
 
     let ws_provider = ProviderBuilder::new()
-        .on_ws(WsConnect::new(config.eth.rpc_ws_url.clone()))
+        .on_ws(WsConnect::new(config.evm.rpc_ws_url.clone()))
         .await
         .context("Failed to initialize WS provider")?;
 
@@ -78,20 +78,20 @@ pub async fn start_indexer(
         utils::redis::get_last_processed_block(&mut redis_connection, "eth_last_processed_block")
             .await
             .map_or_else(
-                || latest_block.saturating_sub(config.eth.block_processing_batch_size),
+                || latest_block.saturating_sub(config.evm.block_processing_batch_size),
                 |block| block,
             );
 
     let filter = Filter::new()
-        .address(config.eth.bridge_token_factory_address)
+        .address(config.evm.bridge_token_factory_address)
         .event_signature([FinTransfer::SIGNATURE_HASH, InitTransfer::SIGNATURE_HASH].to_vec());
 
     for current_block in
-        (from_block..latest_block).step_by(config.eth.block_processing_batch_size as usize)
+        (from_block..latest_block).step_by(config.evm.block_processing_batch_size as usize)
     {
         let logs = http_provider
             .get_logs(&filter.clone().from_block(current_block).to_block(
-                (current_block + config.eth.block_processing_batch_size).min(latest_block),
+                (current_block + config.evm.block_processing_batch_size).min(latest_block),
             ))
             .await?;
 
@@ -183,7 +183,7 @@ async fn process_log(
             if let Ok(log) = log.log_decode::<LogMessagePublished>() {
                 vaa = utils::wormhole::get_vaa(
                     WORMHOLE_CHAIN_ID,
-                    config.eth.bridge_token_factory_address,
+                    config.evm.bridge_token_factory_address,
                     log.inner.sequence,
                 )
                 .await
@@ -211,7 +211,7 @@ async fn process_log(
             prover_args
         } else {
             let evm_proof_args =
-                match eth_proof::get_proof_for_event(tx_hash, log_index, &config.eth.rpc_http_url)
+                match eth_proof::get_proof_for_event(tx_hash, log_index, &config.evm.rpc_http_url)
                     .await
                 {
                     Ok(proof) => proof,
