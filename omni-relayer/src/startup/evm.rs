@@ -84,7 +84,7 @@ pub async fn start_indexer(
 
     let filter = Filter::new()
         .address(config.evm.bridge_token_factory_address)
-        .event_signature([FinTransfer::SIGNATURE_HASH, InitTransfer::SIGNATURE_HASH].to_vec());
+        .event_signature([InitTransfer::SIGNATURE_HASH, FinTransfer::SIGNATURE_HASH].to_vec());
 
     for current_block in
         (from_block..latest_block).step_by(config.evm.block_processing_batch_size as usize)
