@@ -775,7 +775,7 @@ impl Contract {
         let storage_usage = env::storage_usage();
         require!(
             self.insert_raw_transfer(nonce, transfer_message, message_owner)
-                .is_some(),
+                .is_none(),
             "ERR_KEY_EXIST"
         );
         env::storage_byte_cost().saturating_mul((env::storage_usage() - storage_usage).into())
