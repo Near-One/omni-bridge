@@ -34,6 +34,11 @@ async fn main() -> Result<()> {
     let mut handles = Vec::new();
 
     handles.push(tokio::spawn({
+        let redis_client = redis_client.clone();
+        let jsonrpc_client = jsonrpc_client.clone();
+        async move { workers::near::check_bad_fees(redis_client, jsonrpc_client).await }
+    }));
+    handles.push(tokio::spawn({
         let config = config.clone();
         let redis_client = redis_client.clone();
         let connector = connector.clone();
