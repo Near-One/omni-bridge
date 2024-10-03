@@ -254,19 +254,19 @@ async fn process_log(
             prover_args
         };
 
-    if let Ok(withdraw_log) = log.log_decode::<InitTransfer>() {
-        let Ok(token) = withdraw_log.inner.token.parse::<AccountId>() else {
+    if let Ok(init_log) = log.log_decode::<InitTransfer>() {
+        let Ok(token) = init_log.inner.token.parse::<AccountId>() else {
             warn!(
                 "Failed to parse token as AccountId: {:?}",
-                withdraw_log.inner.token
+                init_log.inner.token
             );
             return;
         };
 
-        let Ok(recipient) = withdraw_log.inner.recipient.parse::<AccountId>() else {
+        let Ok(recipient) = init_log.inner.recipient.parse::<AccountId>() else {
             warn!(
                 "Failed to parse recipient as AccountId: {:?}",
-                withdraw_log.inner.recipient
+                init_log.inner.recipient
             );
             return;
         };
