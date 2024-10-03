@@ -8,7 +8,7 @@ use omni_types::{
     locker_args::{ClaimFeeArgs, FinTransferArgs, StorageDepositArgs},
     prover_args::{EvmVerifyProofArgs, WormholeVerifyProofArgs},
     prover_result::ProofKind,
-    ChainKind,
+    ChainKind, OmniAddress,
 };
 
 use alloy::{
@@ -20,8 +20,6 @@ use alloy::{
 use ethereum_types::H256;
 
 use crate::{config, utils};
-
-const WORMHOLE_CHAIN_ID: u64 = 2;
 
 sol!(
     #[derive(Debug, serde::Serialize, serde::Deserialize)]
@@ -179,15 +177,36 @@ async fn process_log(
     let vaa = if let Some(tx_logs) = tx_logs {
         let mut vaa = None;
 
-        for log in tx_logs.inner.logs() {
-            if let Ok(log) = log.log_decode::<LogMessagePublished>() {
-                vaa = utils::wormhole::get_vaa(
-                    WORMHOLE_CHAIN_ID,
-                    config.evm.bridge_token_factory_address,
-                    log.inner.sequence,
-                )
-                .await
-                .ok();
+        let recipient = if let Ok(init_log) = log.log_decode::<InitTransfer>() {
+            init_log.inner.recipient.parse::<OmniAddress>().ok()
+        } else if let Ok(fin_log) = log.log_decode::<FinTransfer>() {
+            fin_log
+                .inner
+                .recipient
+                .to_string()
+                .parse::<OmniAddress>()
+                .ok()
+        } else {
+            None
+        };
+
+        if let Some(address) = recipient {
+            let chain_id = match address {
+                OmniAddress::Eth(_) => 2,
+                OmniAddress::Near(_) => 15,
+                OmniAddress::Sol(_) => 1,
+            };
+
+            for log in tx_logs.inner.logs() {
+                if let Ok(log) = log.log_decode::<LogMessagePublished>() {
+                    vaa = utils::wormhole::get_vaa(
+                        chain_id,
+                        config.evm.bridge_token_factory_address,
+                        log.inner.sequence,
+                    )
+                    .await
+                    .ok();
+                }
             }
         }
 
