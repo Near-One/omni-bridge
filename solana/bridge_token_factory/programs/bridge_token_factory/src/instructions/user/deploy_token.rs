@@ -4,18 +4,31 @@ use anchor_spl::metadata::mpl_token_metadata::types::DataV2;
 use anchor_spl::metadata::{create_metadata_accounts_v3, CreateMetadataAccountsV3, Metadata as Metaplex, ID as MetaplexID};
 use anchor_spl::token::{Mint, Token};
 
+use crate::constants::{AUTHORITY_SEED, CONFIG_SEED};
+use crate::state::config::Config;
+
 #[derive(Accounts)]
 #[instruction(data: DeployTokenData)]
 pub struct DeployToken<'info> {
-    #[account(mut)]
-    pub signer: Signer<'info>,
+    #[account(
+        seeds = [CONFIG_SEED],
+        bump = config.bumps.config,
+    )]
+    pub config: Account<'info, Config>,
+
+    /// CHECK: PDA
+    #[account(
+        seeds = [AUTHORITY_SEED],
+        bump = config.bumps.authority,
+    )]
+    pub authority: UncheckedAccount<'info>,
     #[account(
         init,
-        payer = signer,
+        payer = payer,
         seeds = [data.metadata.token.as_bytes().as_ref()],
         bump,
         mint::decimals = data.metadata.decimals,
-        mint::authority = mint,
+        mint::authority = authority,
     )]
     pub mint: Account<'info, Mint>,
     #[account(
@@ -30,6 +43,9 @@ pub struct DeployToken<'info> {
     )]
     pub metadata: SystemAccount<'info>,
 
+    #[account(mut)]
+    pub payer: Signer<'info>,
+
     pub rent: Sysvar<'info, Rent>,
 
     pub system_program: Program<'info, System>,
@@ -38,17 +54,16 @@ pub struct DeployToken<'info> {
 }
 
 impl<'info> DeployToken<'info> {
-    pub fn initialize_token_metadata(&self, metadata: MetadataPayload, mint_bump: u8) -> Result<()> {
-        let seed = metadata.token.as_bytes().as_ref();
-        let bump = &[mint_bump];
-        let signer_seeds = &[&[seed, bump][..]];
+    pub fn initialize_token_metadata(&self, metadata: MetadataPayload) -> Result<()> {
+        let bump = &[self.config.bumps.authority];
+        let signer_seeds = &[&[AUTHORITY_SEED, bump][..]];
 
         let cpi_accounts = CreateMetadataAccountsV3 {
-            payer: self.signer.to_account_info(),
-            update_authority: self.mint.to_account_info(),
+            payer: self.payer.to_account_info(),
+            update_authority: self.authority.to_account_info(),
             mint: self.mint.to_account_info(),
             metadata: self.metadata.to_account_info(),
-            mint_authority: self.mint.to_account_info(),
+            mint_authority: self.authority.to_account_info(),
             system_program: self.system_program.to_account_info(),
             rent: self.rent.to_account_info(),
         };

@@ -1,12 +1,13 @@
 use anchor_lang::prelude::*;
-use deploy_token::*;
-use finalize_deposit::*;
+use instructions::*;
 
-pub mod deploy_token;
-pub mod finalize_deposit;
+pub mod constants;
+pub mod instructions;
+pub mod state;
 
 declare_id!("2ajXVaqXXpHWtPnW3tKZukuXHGGjVcENjuZaWrz6NhD4");
 
+#[constant]
 const DERIVED_NEAR_BRIDGE_ADDRESS: [u8; 64] = [
     251, 68, 120, 58, 81, 118, 152, 127, 82, 144, 201, 3, 155, 120, 205, 68, 127, 0, 13, 46, 181,
     138, 131, 83, 41, 60, 134, 18, 214, 185, 83, 102, 221, 254, 189, 217, 72, 147, 49, 87, 118,
@@ -22,8 +23,7 @@ pub mod bridge_token_factory {
         msg!("Deploying token");
 
         data.verify_signature()?;
-        ctx.accounts
-            .initialize_token_metadata(data.metadata, ctx.bumps.mint)?;
+        ctx.accounts.initialize_token_metadata(data.metadata)?;
 
         // Emit event
         Ok(())
@@ -36,7 +36,44 @@ pub mod bridge_token_factory {
         msg!("Finalizing deposit");
 
         data.verify_signature()?;
-        ctx.accounts.mint(data, ctx.bumps.mint)?;
+        ctx.accounts.mint(data)?;
+
+        // Emit event
+        Ok(())
+    }
+
+    pub fn register_mint(ctx: Context<RegisterMint>) -> Result<()> {
+        msg!("Registering mint");
+
+        ctx.accounts.process(ctx.bumps.wormhole_message)?;
+
+        // Emit event
+        Ok(())
+    }
+
+    pub fn send(ctx: Context<Send>, data: SendData) -> Result<()> {
+        msg!("Omni transfer");
+
+        ctx.accounts.process(data, ctx.bumps.wormhole_message)?;
+
+        // Emit event
+        Ok(())
+    }
+
+    pub fn finalize_withdraw(ctx: Context<FinalizeWithdraw>, data: FinalizeDepositData) -> Result<()> {
+        msg!("Finalizing withdraw");
+
+        data.verify_signature()?;
+        ctx.accounts.process(data)?;
+
+        // Emit event
+        Ok(())
+    }
+
+    pub fn repay(ctx: Context<Repay>, payload: DepositPayload) -> Result<()> {
+        msg!("Repaying");
+
+        ctx.accounts.process(payload, ctx.bumps.wormhole_message)?;
 
         // Emit event
         Ok(())

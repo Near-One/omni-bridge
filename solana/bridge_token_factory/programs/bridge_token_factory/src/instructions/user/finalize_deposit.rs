@@ -11,44 +11,60 @@ use std::{
     vec,
 };
 
+use crate::{constants::{AUTHORITY_SEED, CONFIG_SEED}, state::config::Config};
+
 #[derive(Accounts)]
 #[instruction(data: FinalizeDepositData)]
-pub struct FinalizeDeposit<'info> {
-    #[account(mut)]
-    pub signer: Signer<'info>,
+pub struct FinalizeDeposit<'info> {    
+    #[account(
+        seeds = [CONFIG_SEED],
+        bump = config.bumps.config,
+    )]
+    pub config: Account<'info, Config>,
+
     #[account(
         constraint = recipient.key == &data.payload.recipient,
     )]
     /// CHECK: this can be any type of account
     pub recipient: AccountInfo<'info>,
+    /// CHECK: PDA
+    #[account(
+        seeds = [AUTHORITY_SEED],
+        bump = config.bumps.authority,
+    )]
+    pub authority: UncheckedAccount<'info>,
     #[account(
         mut,
         seeds = [data.payload.token.as_bytes().as_ref()],
         bump,
+        mint::authority = authority,
     )]
     pub mint: Account<'info, Mint>,
     #[account(
         init_if_needed,
-        payer = signer,
+        payer = payer,
         associated_token::mint = mint,
         associated_token::authority = recipient,
     )]
     pub token_account: Account<'info, TokenAccount>,
+
+    #[account(mut)]
+    pub payer: Signer<'info>,
+
     pub associated_token_program: Program<'info, AssociatedToken>,
     pub system_program: Program<'info, System>,
     pub token_program: Program<'info, Token>,
 }
 
 impl<'info> FinalizeDeposit<'info> {
-    pub fn mint(&self, data: FinalizeDepositData, mint_bump: u8) -> Result<()> {
-        let seed = data.payload.token.as_bytes().as_ref();
-        let bump = &[mint_bump];
-        let signer_seeds = &[&[seed, bump][..]];
+    pub fn mint(&self, data: FinalizeDepositData) -> Result<()> {
+        let bump = &[self.config.bumps.authority];
+        let signer_seeds = &[&[AUTHORITY_SEED, bump][..]];
 
         let cpi_accounts = MintTo {
             mint: self.mint.to_account_info(),
             to: self.token_account.to_account_info(),
-            authority: self.mint.to_account_info(),
+            authority: self.authority.to_account_info(),
         };
 
         let cpi_ctx = CpiContext::new_with_signer(
