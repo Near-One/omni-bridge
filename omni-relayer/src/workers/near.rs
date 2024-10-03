@@ -59,7 +59,7 @@ pub async fn check_bad_fees(
                                 &transfer_message.sender,
                                 &transfer_message.recipient,
                                 &transfer_message.token,
-                                transfer_message.fee.into(),
+                                transfer_message.fee.fee.into(),
                             )
                             .await,
                             Ok(true)
@@ -137,7 +137,7 @@ pub async fn sign_transfer(
                             .sign_transfer(
                                 transfer_message.origin_nonce.into(),
                                 Some(config.near.token_locker_id),
-                                transfer_message.fee.into(),
+                                transfer_message.fee.fee.into(),
                             )
                             .await
                         {
