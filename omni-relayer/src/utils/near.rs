@@ -54,7 +54,7 @@ pub async fn handle_streamer_message(
                     &transfer_message.sender,
                     &transfer_message.recipient,
                     &transfer_message.token,
-                    transfer_message.fee.into(),
+                    transfer_message.fee.fee.into(),
                 )
                 .await
                 {
@@ -105,7 +105,8 @@ pub async fn handle_streamer_message(
                 .await;
             }
             Nep141LockerEvent::FinTransferEvent { .. }
-            | Nep141LockerEvent::LogMetadataEvent { .. } => {}
+            | Nep141LockerEvent::LogMetadataEvent { .. }
+            | Nep141LockerEvent::SignClaimNativeFeeEvent { .. } => {}
         }
     }
 }
