@@ -1,7 +1,4 @@
-use anchor_lang::{
-    prelude::*,
-    solana_program::{program::invoke, system_instruction::transfer},
-};
+use anchor_lang::prelude::*;
 use deploy_token::*;
 use finalize_deposit::*;
 
@@ -25,13 +22,8 @@ pub mod bridge_token_factory {
         msg!("Deploying token");
 
         data.verify_signature()?;
-        ctx.accounts.initialize_token_metadata(data.metadata)?;
-
-        update_account_lamports_to_minimum_balance(
-            ctx.accounts.mint.to_account_info(),
-            ctx.accounts.signer.to_account_info(),
-            ctx.accounts.system_program.to_account_info(),
-        )?;
+        ctx.accounts
+            .initialize_token_metadata(data.metadata, ctx.bumps.mint)?;
 
         // Emit event
         Ok(())
@@ -44,26 +36,11 @@ pub mod bridge_token_factory {
         msg!("Finalizing deposit");
 
         data.verify_signature()?;
-        ctx.accounts.mint(data)?;
+        ctx.accounts.mint(data, ctx.bumps.mint)?;
 
         // Emit event
         Ok(())
     }
-}
-
-pub fn update_account_lamports_to_minimum_balance<'info>(
-    account: AccountInfo<'info>,
-    payer: AccountInfo<'info>,
-    system_program: AccountInfo<'info>,
-) -> Result<()> {
-    let extra_lamports = Rent::get()?.minimum_balance(account.data_len()) - account.get_lamports();
-    if extra_lamports > 0 {
-        invoke(
-            &transfer(payer.key, account.key, extra_lamports),
-            &[payer, account, system_program],
-        )?;
-    }
-    Ok(())
 }
 
 #[error_code(offset = 6000)]

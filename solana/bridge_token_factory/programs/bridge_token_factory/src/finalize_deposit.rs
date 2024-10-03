@@ -3,9 +3,7 @@ use anchor_lang::{
     solana_program::{keccak, secp256k1_recover::secp256k1_recover},
 };
 use anchor_spl::{
-    associated_token::AssociatedToken,
-    token_2022::{mint_to, MintTo},
-    token_interface::{spl_pod::bytemuck, Mint, TokenAccount, TokenInterface},
+    associated_token::AssociatedToken, token::{Mint, Token, TokenAccount, mint_to, MintTo}
 };
 use near_sdk::json_types::U128;
 use std::{
@@ -28,25 +26,24 @@ pub struct FinalizeDeposit<'info> {
         seeds = [data.payload.token.as_bytes().as_ref()],
         bump,
     )]
-    pub mint: InterfaceAccount<'info, Mint>,
+    pub mint: Account<'info, Mint>,
     #[account(
         init_if_needed,
         payer = signer,
         associated_token::mint = mint,
         associated_token::authority = recipient,
-        associated_token::token_program = token_program,
     )]
-    pub token_account: InterfaceAccount<'info, TokenAccount>,
+    pub token_account: Account<'info, TokenAccount>,
     pub associated_token_program: Program<'info, AssociatedToken>,
     pub system_program: Program<'info, System>,
-    pub token_program: Interface<'info, TokenInterface>,
+    pub token_program: Program<'info, Token>,
 }
 
 impl<'info> FinalizeDeposit<'info> {
-    pub fn mint(&self, data: FinalizeDepositData) -> Result<()> {
+    pub fn mint(&self, data: FinalizeDepositData, mint_bump: u8) -> Result<()> {
         let seed = data.payload.token.as_bytes().as_ref();
-        let (_, bump) = Pubkey::find_program_address(&[seed], &crate::ID);
-        let signer_seeds = &[&[seed, bytemuck::pod_bytes_of(&bump)][..]];
+        let bump = &[mint_bump];
+        let signer_seeds = &[&[seed, bump][..]];
 
         let cpi_accounts = MintTo {
             mint: self.mint.to_account_info(),
