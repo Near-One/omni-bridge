@@ -206,3 +206,74 @@ pub async fn claim_fee(redis_client: redis::Client, connector: Arc<OmniConnector
         .await;
     }
 }
+
+pub async fn sign_claim_native_fee(
+    config: config::Config,
+    redis_client: redis::Client,
+    connector: Arc<OmniConnector>,
+) -> Result<()> {
+    let redis_connection = redis_client.get_multiplexed_tokio_connection().await?;
+
+    loop {
+        let mut redis_connection_clone = redis_connection.clone();
+        let Some(events) = utils::redis::get_events(
+            &mut redis_connection_clone,
+            utils::redis::NEAR_FIN_TRANSFER_EVENTS.to_string(),
+        )
+        .await
+        else {
+            tokio::time::sleep(tokio::time::Duration::from_secs(
+                utils::redis::SLEEP_TIME_AFTER_EVENTS_PROCESS_SECS,
+            ))
+            .await;
+            continue;
+        };
+
+        let mut handlers = Vec::new();
+        for (key, event) in events {
+            if let Ok(event) = serde_json::from_str::<Nep141LockerEvent>(&event) {
+                handlers.push(tokio::spawn({
+                    let config = config.clone();
+                    let mut redis_connection = redis_connection.clone();
+                    let connector = connector.clone();
+
+                    async move {
+                        let Nep141LockerEvent::FinTransferEvent {
+                            ref transfer_message,
+                            ..
+                        } = event
+                        else {
+                            warn!("Expected FinTransferEvent, got: {:?}", event);
+                            return;
+                        };
+
+                        log::info!("Received FinTransferEvent log");
+
+                        match connector.sign_native_claim_fee(
+                            vec![transfer_message.origin_nonce],
+                            config.evm.relayer,
+                        ) {
+                            Ok(tx_hash) => {
+                                log::info!("Claimed native fee: {:?}", tx_hash);
+                                utils::redis::remove_event(
+                                    &mut redis_connection,
+                                    utils::redis::NEAR_FIN_TRANSFER_EVENTS,
+                                    key,
+                                )
+                                .await;
+                            }
+                            Err(err) => log::error!("Failed to sign claiming native fee: {}", err),
+                        };
+                    }
+                }));
+            }
+        }
+
+        join_all(handlers).await;
+
+        tokio::time::sleep(tokio::time::Duration::from_secs(
+            utils::redis::SLEEP_TIME_AFTER_EVENTS_PROCESS_SECS,
+        ))
+        .await;
+    }
+}

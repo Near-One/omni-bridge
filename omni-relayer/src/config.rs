@@ -1,5 +1,6 @@
 use alloy::primitives::Address;
 use near_primitives::types::AccountId;
+use omni_types::OmniAddress;
 
 #[derive(Debug, Clone, serde::Deserialize)]
 pub struct Config {
@@ -35,4 +36,5 @@ pub struct Evm {
     pub chain_id: u64,
     pub bridge_token_factory_address: Address,
     pub block_processing_batch_size: u64,
+    pub relayer: OmniAddress,
 }
