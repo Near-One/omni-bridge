@@ -50,9 +50,10 @@ async fn main() -> Result<()> {
         async move { workers::near::claim_fee(redis_client, connector).await }
     }));
     handles.push(tokio::spawn({
+        let config = config.clone();
         let redis_client = redis_client.clone();
         let connector = connector.clone();
-        async move { workers::near::sign_claim_native_fee(redis_client, connector).await }
+        async move { workers::near::sign_claim_native_fee(config, redis_client, connector).await }
     }));
 
     handles.push(tokio::spawn({
