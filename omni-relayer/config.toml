@@ -12,4 +12,4 @@ rpc_ws_url = "wss://eth-sepolia.g.alchemy.com/v2/API-KEY"
 chain_id = 11_155_111
 bridge_token_factory_address = "0xAD167CA3A900c977d9edDf6Ec80d6095381DFD33"
 block_processing_batch_size = 10_000
-relayer = "0xabc"
+relayer = "eth:0xabc"
