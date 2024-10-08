@@ -657,10 +657,10 @@ impl Contract {
     }
 
     #[private]
+    #[payable]
     pub fn bind_token_callback(
         &mut self,
         #[callback_result]
-        #[serializer(borsh)]
         call_result: Result<ProverResult, PromiseError>,
     ) {
         let Ok(ProverResult::DeployToken(deploy_token)) = call_result else {

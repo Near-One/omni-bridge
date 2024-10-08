@@ -7,6 +7,8 @@ use std::ffi::OsStr;
 use std::str::FromStr;
 use serde_json::json;
 use tracing::info;
+use ethers::types::TxHash;
+use std::thread;
 
 #[macro_use]
 extern crate serde_json;
@@ -27,11 +29,16 @@ async fn deploy_token_test() {
 
     let near_signer = get_near_signer();
     let omni_connector = build_connector(&near_signer);
-    let mock_token = env::var("MOCK_TOKEN_ACCOUNT_ID").unwrap();
+    /*let mock_token = env::var("MOCK_TOKEN_ACCOUNT_ID").unwrap();
     let tx_id = omni_connector.log_token_metadata(mock_token).await.unwrap();
     let eth_tx = omni_connector.evm_deploy_token(tx_id, None).await.unwrap();
+    info!("Deploy token eth tx: {:?}", eth_tx);*/
+    let eth_tx = TxHash::from_str("0x1b83cb1173e33f93cbacf4cef5ca5ba1961351f4680fbe2185a72bb8b429639b").unwrap();
 
-    info!("Eth tx: {:?}", eth_tx)
+    thread::sleep(std::time::Duration::from_secs(10));
+
+    let tx_id = omni_connector.bind_token_eth_evm_prover(eth_tx, None, Some(3)).await.unwrap();
+    info!("Bind token NEAR tx: {:?}", tx_id);
 }
 
 fn abspath(p: &str) -> Option<String> {

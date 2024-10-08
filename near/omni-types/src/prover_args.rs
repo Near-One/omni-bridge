@@ -11,7 +11,7 @@ pub struct VerifyProofArgs {
     pub prover_args: Vec<u8>,
 }
 
-#[derive(BorshDeserialize, BorshSerialize, Clone)]
+#[derive(BorshDeserialize, BorshSerialize, Clone, Debug)]
 pub struct EvmVerifyProofArgs {
     pub proof_kind: ProofKind,
     pub proof: EvmProof,
@@ -23,7 +23,7 @@ pub struct WormholeVerifyProofArgs {
     pub vaa: String,
 }
 
-#[derive(Default, BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone)]
+#[derive(Default, BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone, Debug)]
 pub struct EvmProof {
     pub log_index: u64,
     pub log_entry_data: Vec<u8>,

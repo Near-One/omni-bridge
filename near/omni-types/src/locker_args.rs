@@ -25,7 +25,7 @@ pub struct ClaimFeeArgs {
     pub native_fee_recipient: OmniAddress,
 }
 
-#[derive(BorshDeserialize, BorshSerialize, Clone)]
+#[derive(BorshDeserialize, BorshSerialize, Clone, Debug)]
 pub struct BindTokenArgs {
     pub chain_kind: ChainKind,
     pub prover_args: Vec<u8>,

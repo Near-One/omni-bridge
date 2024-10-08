@@ -9,6 +9,7 @@ publish = false
 crate-type = ["cdylib", "rlib"]
 
 [dev-dependencies]
+ethers.workspace = true
 near-sdk.workspace = true
 near-workspaces.workspace = true
 near-jsonrpc-client = "0.12.0"

@@ -15,6 +15,22 @@ near create omni_prover_<ID>.testnet --useFaucet
 near deploy omni_prover_<ID>.testnet --wasm-file "../target/wasm32-unknown-unknown/release/omni_prover.wasm" --init-function "init"
 ```
 
+## Deploy EVM Prover on testnet:
+```shell
+near create evm_prover_<ID>.testnet --useFaucet
+near deploy evm_prover_<ID>.testnet --wasm-file "../target/wasm32-unknown-unknown/release/evm_prover.wasm" --init-function "init" --init-args '{"light_client": "client-eth2.sepolia.testnet", "chain_kind": "Eth"}'
+```
+
+## Grant ProverManager Role
+```shell
+near contract call-function as-transaction omni_prover_<ID>.testnet acl_grant_role json-args '{"role": "ProversManager", "account_id": "omni_prover_<ID>.testnet"}' prepaid-gas '100.0 Tgas' attached-deposit '0 NEAR' sign-as omni_prover_<ID>.testnet network-config testnet sign-with-keychain send
+```
+
+## Add EVM Prover to the OmniProver:
+```shell
+near contract call-function as-transaction omni_prover_<ID>.testnet add_prover json-args '{"prover_id": "Eth", "account_id": "evm_prover_<ID>.testnet"}' prepaid-gas '100.0 Tgas' attached-deposit '0 NEAR' sign-as omni_prover_<ID>.testnet network-config testnet sign-with-keychain send
+```
+
 ## Deploy NEP-141 Locker on testnet:
 ```shell
 near create nep141_locker_omni_<ID>.testnet --useFaucet

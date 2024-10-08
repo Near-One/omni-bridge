@@ -1,5 +1,5 @@
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
-use near_sdk::{env, ext_contract, near_bindgen, AccountId, Gas, PanicOnDefault, Promise};
+use near_sdk::{env, ext_contract, near_bindgen, AccountId, Gas, PanicOnDefault, Promise, log};
 use omni_types::evm::events::parse_evm_event;
 use omni_types::evm::header::BlockHeader;
 use omni_types::evm::receipt::{LogEntry, Receipt};
@@ -43,8 +43,8 @@ impl EvmProver {
     }
 
     #[handle_result]
-    pub fn verify_proof(&self, #[serializer(borsh)] input: Vec<u8>) -> Result<Promise, String> {
-        let args = EvmVerifyProofArgs::try_from_slice(&input).map_err(|_| "ERR_PARSE_ARGS")?;
+    pub fn verify_proof(&self, #[serializer(borsh)] proof: Vec<u8>) -> Result<Promise, String> {
+        let args = EvmVerifyProofArgs::try_from_slice(&proof).map_err(|_| "ERR_PARSE_ARGS")?;
 
         let evm_proof = args.proof;
         let header: BlockHeader = rlp::decode(&evm_proof.header_data).map_err(|e| e.to_string())?;
