@@ -119,8 +119,23 @@ pub async fn handle_streamer_message(
                     .await;
                 }
             }
-            Nep141LockerEvent::LogMetadataEvent { .. }
-            | Nep141LockerEvent::SignClaimNativeFeeEvent { .. } => {}
+            Nep141LockerEvent::SignClaimNativeFeeEvent {
+                ref claim_payload, ..
+            } => {
+                utils::redis::add_event(
+                    redis_connection,
+                    utils::redis::NEAR_SIGN_CLAIM_NATIVE_FEE_EVENTS,
+                    claim_payload
+                        .nonces
+                        .iter()
+                        .map(|nonce| nonce.0.to_string())
+                        .collect::<Vec<_>>()
+                        .join(","),
+                    log,
+                )
+                .await;
+            }
+            Nep141LockerEvent::LogMetadataEvent { .. } => {}
         }
     }
 }
