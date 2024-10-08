@@ -61,6 +61,11 @@ async fn main() -> Result<()> {
         let connector = connector.clone();
         async move { workers::evm::finalize_withdraw(redis_client, connector).await }
     }));
+    handles.push(tokio::spawn({
+        let redis_client = redis_client.clone();
+        let connector = connector.clone();
+        async move { workers::evm::claim_native_fee(redis_client, connector).await }
+    }));
 
     handles.push(tokio::spawn({
         let config = config.clone();
