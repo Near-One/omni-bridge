@@ -4,7 +4,7 @@ use alloy_sol_types::{sol, SolEvent};
 
 use crate::{
     prover_result::{DeployTokenMessage, FinTransferMessage, InitTransferMessage},
-    stringify, ChainKind, OmniAddress, TransferMessage, H160,
+    stringify, ChainKind, Fee, OmniAddress, TransferMessage, H160,
 };
 
 const ERR_INVALIDE_SIGNATURE_HASH: &str = "ERR_INVALIDE_SIGNATURE_HASH";
@@ -17,6 +17,7 @@ sol! {
         string token,
         uint128 amount,
         uint128 fee,
+        uint128 nativeTokenFee,
         string recipient
     );
 
@@ -89,7 +90,10 @@ impl TryFromLog<Log<InitTransfer>> for InitTransferMessage {
                 token: event.data.token.parse().map_err(stringify)?,
                 amount: near_sdk::json_types::U128(event.data.amount),
                 recipient: event.data.recipient.parse().map_err(stringify)?,
-                fee: near_sdk::json_types::U128(event.data.fee),
+                fee: Fee {
+                    fee: near_sdk::json_types::U128(event.data.fee),
+                    native_fee: near_sdk::json_types::U128(event.data.nativeTokenFee),
+                },
                 sender: OmniAddress::from_evm_address(chain_kind, H160(event.data.sender.into()))?,
             },
         })

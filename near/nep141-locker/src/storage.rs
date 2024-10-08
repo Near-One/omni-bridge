@@ -140,7 +140,7 @@ impl Contract {
                 token: max_account_id.clone(),
                 amount: U128(0),
                 recipient,
-                fee: U128(0),
+                fee: Fee::default(),
                 sender,
             },
             owner: max_account_id,

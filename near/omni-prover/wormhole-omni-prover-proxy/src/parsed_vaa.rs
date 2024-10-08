@@ -6,7 +6,7 @@ use {
     near_sdk::{bs58, env},
     omni_types::{
         prover_result::{DeployTokenMessage, FinTransferMessage, InitTransferMessage},
-        stringify, EvmAddress, OmniAddress, TransferMessage, H160,
+        stringify, EvmAddress, Fee, OmniAddress, TransferMessage, H160,
     },
 };
 
@@ -116,6 +116,7 @@ sol! {
         string token;
         uint128 amount;
         uint128 fee;
+        uint128 nativeFee;
         string recipient;
         address sender;
     }
@@ -144,15 +145,15 @@ impl TryInto<InitTransferMessage> for ParsedVAA {
             transfer: TransferMessage {
                 token: transfer.token.parse().map_err(stringify)?,
                 amount: transfer.amount.into(),
-                fee: transfer.fee.into(),
+                fee: Fee {
+                    fee: transfer.fee.into(),
+                    native_fee: transfer.nativeFee.into(),
+                },
                 recipient: transfer.recipient.parse().map_err(stringify)?,
                 origin_nonce: transfer.nonce.into(),
-                sender: to_omni_address(self.emitter_chain, &transfer.sender.0.0),
+                sender: to_omni_address(self.emitter_chain, &transfer.sender.0 .0),
             },
-            emitter_address: to_omni_address(
-                self.emitter_chain,
-                &self.emitter_address,
-            ),
+            emitter_address: to_omni_address(self.emitter_chain, &self.emitter_address),
         })
     }
 }
@@ -168,10 +169,7 @@ impl TryInto<FinTransferMessage> for ParsedVAA {
             nonce: transfer.nonce.into(),
             fee_recipient: transfer.recipient.parse().map_err(stringify)?,
             amount: transfer.amount.into(),
-            emitter_address: to_omni_address(
-                self.emitter_chain,
-                &self.emitter_address,
-            ),
+            emitter_address: to_omni_address(self.emitter_chain, &self.emitter_address),
         })
     }
 }
@@ -185,11 +183,8 @@ impl TryInto<DeployTokenMessage> for ParsedVAA {
 
         Ok(DeployTokenMessage {
             token: transfer.token.parse().map_err(stringify)?,
-            token_address: to_omni_address(self.emitter_chain, &transfer.tokenAddress.0.0),
-            emitter_address: to_omni_address(
-                self.emitter_chain,
-                &self.emitter_address,
-            ),
+            token_address: to_omni_address(self.emitter_chain, &transfer.tokenAddress.0 .0),
+            emitter_address: to_omni_address(self.emitter_chain, &self.emitter_address),
         })
     }
 }
@@ -208,5 +203,5 @@ fn to_evm_address(address: &[u8]) -> EvmAddress {
     match address.try_into() {
         Ok(bytes) => H160(bytes),
         Err(_) => env::panic_str("Invalid EVM address"),
-    } 
+    }
 }
