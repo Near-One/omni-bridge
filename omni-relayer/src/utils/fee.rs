@@ -57,24 +57,24 @@ pub async fn get_price_by_contract_address(platform: &str, address: &str) -> Res
 }
 
 pub async fn is_fee_sufficient(jsonrpc_client: &JsonRpcClient, sender: &OmniAddress, recipient: &OmniAddress, token: &AccountId, fee: u128) -> Result<bool> {
-    let token_price = get_price_by_contract_address("near-protocol", token.as_ref()).await?;
-    let token_decimals = get_token_decimals(jsonrpc_client, token).await?;
-
-    let given_fee = fee as f64 / 10u128.pow(token_decimals) as f64 * token_price;
-
-    // TODO: Right now I chose a random fee (around 0.10 USD), but it should be calculated based on the chain in the future
-    let sender_fee = match sender {
-        OmniAddress::Near(_) => 0.03 * get_price_by_symbol("near").await?,
-        OmniAddress::Eth(_) => 0.00005 * get_price_by_symbol("ethereum").await?,
-        OmniAddress::Sol(_) => 0.001 * get_price_by_symbol("solana").await?,
-        OmniAddress::Arb(_) | OmniAddress::Base(_) => todo!()
-    };
-    let recipient_fee = match recipient {
-        OmniAddress::Near(_) => 0.03 * get_price_by_symbol("near").await?,
-        OmniAddress::Eth(_) => 0.00005 * get_price_by_symbol("ethereum").await?,
-        OmniAddress::Sol(_) => 0.001 * get_price_by_symbol("solana").await?,
-        OmniAddress::Arb(_) | OmniAddress::Base(_) => todo!()
-    };
-
-    Ok(sender_fee + recipient_fee <= given_fee)
+    //let token_price = get_price_by_contract_address("near-protocol", token.as_ref()).await?;
+    //let token_decimals = get_token_decimals(jsonrpc_client, token).await?;
+    //
+    //let given_fee = fee as f64 / 10u128.pow(token_decimals) as f64 * token_price;
+    //
+    //// TODO: Right now I chose a random fee (around 0.10 USD), but it should be calculated based on the chain in the future
+    //let sender_fee = match sender {
+    //    OmniAddress::Near(_) => 0.03 * get_price_by_symbol("near").await?,
+    //    OmniAddress::Eth(_) => 0.00005 * get_price_by_symbol("ethereum").await?,
+    //    OmniAddress::Sol(_) => 0.001 * get_price_by_symbol("solana").await?,
+    //    OmniAddress::Arb(_) | OmniAddress::Base(_) => todo!()
+    //};
+    //let recipient_fee = match recipient {
+    //    OmniAddress::Near(_) => 0.03 * get_price_by_symbol("near").await?,
+    //    OmniAddress::Eth(_) => 0.00005 * get_price_by_symbol("ethereum").await?,
+    //    OmniAddress::Sol(_) => 0.001 * get_price_by_symbol("solana").await?,
+    //    OmniAddress::Arb(_) | OmniAddress::Base(_) => todo!()
+    //};
+    //
+    Ok(true)
 }
