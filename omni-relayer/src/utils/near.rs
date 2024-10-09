@@ -91,9 +91,22 @@ pub async fn handle_streamer_message(
             Nep141LockerEvent::FinTransferEvent {
                 ref nonce,
                 ref transfer_message,
-                ..
             } => {
                 if nonce.is_none() {
+                    utils::redis::add_event(
+                        redis_connection,
+                        utils::redis::NEAR_FIN_TRANSFER_EVENTS,
+                        transfer_message.origin_nonce.0.to_string(),
+                        log,
+                    )
+                    .await;
+                }
+            }
+            Nep141LockerEvent::ClaimFeeEvent {
+                ref transfer_message,
+                ref native_fee_recipient,
+            } => {
+                if native_fee_recipient == &config.evm.relayer {
                     utils::redis::add_event(
                         redis_connection,
                         utils::redis::NEAR_FIN_TRANSFER_EVENTS,

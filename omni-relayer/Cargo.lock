@@ -1640,7 +1640,6 @@ dependencies = [
 [[package]]
 name = "bridge-connector-common"
 version = "0.1.0"
-source = "git+https://github.com/Near-One/rainbow-bridge-sdk-rs#003ea92153ac0f38548c1beec023dfa38185fc14"
 dependencies = [
  "eth-proof",
  "ethers",
@@ -2961,7 +2960,6 @@ dependencies = [
 [[package]]
 name = "eth-proof"
 version = "0.1.0"
-source = "git+https://github.com/Near-One/rainbow-bridge-sdk-rs#003ea92153ac0f38548c1beec023dfa38185fc14"
 dependencies = [
  "borsh 1.5.1",
  "cita_trie",
@@ -4982,7 +4980,6 @@ dependencies = [
 [[package]]
 name = "near-light-client-on-eth"
 version = "0.1.0"
-source = "git+https://github.com/Near-One/rainbow-bridge-sdk-rs#003ea92153ac0f38548c1beec023dfa38185fc14"
 dependencies = [
  "ethereum-types 0.14.1",
  "ethers",
@@ -5266,7 +5263,6 @@ dependencies = [
 [[package]]
 name = "near-rpc-client"
 version = "0.1.0"
-source = "git+https://github.com/Near-One/rainbow-bridge-sdk-rs#003ea92153ac0f38548c1beec023dfa38185fc14"
 dependencies = [
  "borsh 1.5.1",
  "lazy_static",
@@ -5759,7 +5755,6 @@ dependencies = [
 [[package]]
 name = "omni-connector"
 version = "0.1.0"
-source = "git+https://github.com/Near-One/rainbow-bridge-sdk-rs#003ea92153ac0f38548c1beec023dfa38185fc14"
 dependencies = [
  "borsh 1.5.1",
  "bridge-connector-common",
@@ -5810,7 +5805,7 @@ dependencies = [
 [[package]]
 name = "omni-types"
 version = "2.0.0"
-source = "git+https://github.com/near-one/omni-bridge?rev=21a328f5388bfa98d1ba1eb40b541316429a4369#21a328f5388bfa98d1ba1eb40b541316429a4369"
+source = "git+https://github.com/near-one/omni-bridge?rev=94cf598f00eaca77869820c07aeb22f5ff9adf63#94cf598f00eaca77869820c07aeb22f5ff9adf63"
 dependencies = [
  "alloy-primitives",
  "alloy-rlp",
