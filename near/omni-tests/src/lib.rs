@@ -5,7 +5,7 @@ mod tests {
     use omni_types::{
         locker_args::{FinTransferArgs, StorageDepositArgs},
         prover_result::{InitTransferMessage, ProverResult},
-        OmniAddress, TransferMessage, Fee
+        Fee, OmniAddress, TransferMessage,
     };
 
     const MOCK_TOKEN_PATH: &str = "./../target/wasm32-unknown-unknown/release/mock_token.wasm";
@@ -223,7 +223,7 @@ mod tests {
                         amount: U128(amount),
                         fee: Fee {
                             fee: U128(fee),
-                            native_fee: U128(0)
+                            native_fee: U128(0),
                         },
                         sender: eth_eoa_address(),
                     },
