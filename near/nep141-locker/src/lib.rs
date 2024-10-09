@@ -652,25 +652,42 @@ impl Contract {
                 Self::ext(env::current_account_id())
                     .with_attached_deposit(env::attached_deposit())
                     .with_static_gas(BIND_TOKEN_CALLBACK_GAS)
-                    .bind_token_callback(),
+                    .bind_token_callback(near_sdk::env::predecessor_account_id()),
             )
     }
 
     #[private]
+    #[payable]
     pub fn bind_token_callback(
         &mut self,
+        predecessor_account_id: AccountId,
         #[callback_result]
-        #[serializer(borsh)]
         call_result: Result<ProverResult, PromiseError>,
     ) {
         let Ok(ProverResult::DeployToken(deploy_token)) = call_result else {
-            env::panic_str("Invalid proof message")
+            Self::refund(predecessor_account_id, env::attached_deposit());
+            env::log_str("ERROR: Invalid proof message");
+            return;
         };
+
+        let storage_usage = env::storage_usage();
 
         self.tokens_to_address_mapping.insert(
             &(deploy_token.token_address.get_chain(), deploy_token.token),
             &deploy_token.token_address,
         );
+
+        let required_deposit = env::storage_byte_cost()
+            .saturating_mul((env::storage_usage().saturating_sub(storage_usage)).into());
+
+        if env::attached_deposit() < required_deposit {
+            Self::refund(predecessor_account_id, env::attached_deposit());
+            env::log_str("ERROR: The deposit is not sufficient to cover the storage.");
+            return;
+        }
+
+        let refund_amount = env::attached_deposit().saturating_sub(required_deposit);
+        Self::refund(predecessor_account_id, refund_amount);
     }
 
     pub fn get_token_address(
@@ -853,6 +870,12 @@ impl Contract {
             } else {
                 env::panic_str("Not enough storage deposited");
             }
+        }
+    }
+
+    fn refund(predecessor_account_id: AccountId, amount: NearToken) {
+        if !amount.is_zero() {
+            Promise::new(predecessor_account_id).transfer(amount);
         }
     }
 }
