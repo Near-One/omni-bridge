@@ -111,7 +111,7 @@ impl Contract {
     }
 
     pub fn storage_balance_of(&self, account_id: &AccountId) -> Option<StorageBalance> {
-        self.accounts_balances.get(&account_id)
+        self.accounts_balances.get(account_id)
     }
 
     pub fn required_balance_for_account(&self) -> NearToken {
