@@ -1,3 +1,4 @@
+pub mod evm;
 pub mod fee;
 pub mod near;
 pub mod redis;
