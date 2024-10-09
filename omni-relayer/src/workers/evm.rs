@@ -1,18 +1,26 @@
 use std::sync::Arc;
 
+use alloy::rpc::types::{Log, TransactionReceipt};
 use anyhow::Result;
+use ethereum_types::H256;
 use futures::future::join_all;
 use log::warn;
 
-use near_primitives::borsh;
+use near_primitives::types::AccountId;
 use omni_connector::OmniConnector;
-use omni_types::{locker_args::FinTransferArgs, near_events::Nep141LockerEvent};
+use omni_types::{
+    locker_args::{FinTransferArgs, StorageDepositArgs},
+    near_events::Nep141LockerEvent,
+    ChainKind,
+};
 
-use crate::utils;
+use crate::{config, utils};
 
 pub async fn finalize_withdraw(
+    config: config::Config,
     redis_client: redis::Client,
     connector: Arc<OmniConnector>,
+    jsonrpc_client: near_jsonrpc_client::JsonRpcClient,
 ) -> Result<()> {
     let redis_connection = redis_client.get_multiplexed_tokio_connection().await?;
 
@@ -33,24 +41,106 @@ pub async fn finalize_withdraw(
 
         let mut handlers = Vec::new();
         for (key, event) in events {
-            if let Ok(withdraw_log) = serde_json::from_str::<Vec<u8>>(&event) {
+            if let Ok((block_number, log, tx_logs)) =
+                serde_json::from_str::<(u64, Log, Option<TransactionReceipt>)>(&event)
+            {
+                let Ok(light_client_latest_block_number) =
+                    utils::near::get_eth_light_client_last_block_number(&config, &jsonrpc_client)
+                        .await
+                else {
+                    warn!("Failed to get eth light client last block number");
+                    continue;
+                };
+
+                if block_number > light_client_latest_block_number {
+                    continue;
+                }
+
+                let Ok(init_log) = log.log_decode::<utils::evm::InitTransfer>() else {
+                    warn!("Failed to decode log as InitTransfer: {:?}", log);
+                    continue;
+                };
+
                 handlers.push(tokio::spawn({
+                    let config = config.clone();
                     let mut redis_connection = redis_connection.clone();
                     let connector = connector.clone();
+                    let jsonrpc_client = jsonrpc_client.clone();
 
                     async move {
-                        log::info!("Received FinTransfer log");
+                        log::info!("Received InitTransfer log");
 
-                        let Ok(fin_transfer_args) =
-                            borsh::from_slice::<FinTransferArgs>(&withdraw_log)
-                        else {
-                            warn!("Failed to decode log: {:?}", withdraw_log);
+                        let Some(tx_hash) = log.transaction_hash else {
+                            warn!("No transaction hash in log: {:?}", log);
                             return;
+                        };
+
+                        let Some(log_index) = log.log_index else {
+                            warn!("No log index in log: {:?}", log);
+                            return;
+                        };
+
+                        let tx_hash = H256::from_slice(tx_hash.as_slice());
+
+                        let Ok(token) = init_log.inner.token.parse::<AccountId>() else {
+                            warn!(
+                                "Failed to parse token as AccountId: {:?}",
+                                init_log.inner.token
+                            );
+                            return;
+                        };
+                        let Ok(recipient) = init_log.inner.recipient.parse::<AccountId>() else {
+                            warn!(
+                                "Failed to parse recipient as AccountId: {:?}",
+                                init_log.inner.recipient
+                            );
+                            return;
+                        };
+
+                        let vaa = utils::evm::get_vaa(tx_logs, &log, &config).await;
+
+                        let prover_args =
+                            match utils::evm::get_prover_args(vaa, tx_hash, log_index, &config)
+                                .await
+                            {
+                                Some(value) => value,
+                                None => return,
+                            };
+
+                        let sender = config.near.token_locker_id.clone();
+
+                        // If storage is sufficient, then flag should be false, otherwise true
+                        let sender_is_storage_deposit = !utils::storage::is_storage_sufficient(
+                            &jsonrpc_client,
+                            &token,
+                            &sender,
+                        )
+                        .await
+                        .unwrap_or_default();
+                        let recipient_is_storage_deposit = !utils::storage::is_storage_sufficient(
+                            &jsonrpc_client,
+                            &token,
+                            &recipient,
+                        )
+                        .await
+                        .unwrap_or_default();
+
+                        let fin_transfer_args = FinTransferArgs {
+                            chain_kind: ChainKind::Eth,
+                            native_fee_recipient: config.evm.relayer.clone(),
+                            storage_deposit_args: StorageDepositArgs {
+                                token,
+                                accounts: vec![
+                                    (sender, sender_is_storage_deposit),
+                                    (recipient, recipient_is_storage_deposit),
+                                ],
+                            },
+                            prover_args,
                         };
 
                         match connector.near_fin_transfer(fin_transfer_args).await {
                             Ok(tx_hash) => {
-                                log::info!("Finalized withdraw: {:?}", tx_hash);
+                                log::info!("Finalized InitTransfer: {:?}", tx_hash);
                                 utils::redis::remove_event(
                                     &mut redis_connection,
                                     utils::redis::ETH_WITHDRAW_EVENTS,
@@ -58,7 +148,7 @@ pub async fn finalize_withdraw(
                                 )
                                 .await;
                             }
-                            Err(err) => log::error!("Failed to finalize withdraw: {}", err),
+                            Err(err) => log::error!("Failed to finalize InitTransfer: {}", err),
                         }
                     }
                 }));

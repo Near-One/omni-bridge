@@ -1,63 +1,19 @@
-use std::str::FromStr;
-
 use anyhow::{Context, Result};
 use log::{info, warn};
+use reqwest::Client;
 use tokio_stream::StreamExt;
 
-use near_jsonrpc_client::JsonRpcClient;
-use near_primitives::{borsh::BorshSerialize, types::AccountId};
-use omni_types::{
-    locker_args::{ClaimFeeArgs, FinTransferArgs, StorageDepositArgs},
-    prover_args::{EvmVerifyProofArgs, WormholeVerifyProofArgs},
-    prover_result::ProofKind,
-    ChainKind, OmniAddress, H160,
-};
-
 use alloy::{
-    providers::{Provider, ProviderBuilder, WsConnect},
-    rpc::types::{Filter, Log, TransactionReceipt},
-    sol,
+    providers::{Provider, ProviderBuilder, RootProvider, WsConnect},
+    rpc::types::{Filter, Log},
     sol_types::SolEvent,
+    transports::http::Http,
 };
 use ethereum_types::H256;
 
 use crate::{config, utils};
 
-sol!(
-    #[derive(Debug, serde::Serialize, serde::Deserialize)]
-    event InitTransfer(
-        address indexed sender,
-        address indexed tokenAddress,
-        uint128 indexed nonce,
-        string token,
-        uint128 amount,
-        uint128 fee,
-        uint128 nativeFee,
-        string recipient
-    );
-
-    #[derive(Debug, serde::Serialize, serde::Deserialize)]
-    event FinTransfer(
-        uint128 indexed nonce,
-        string token,
-        uint128 amount,
-        address recipient,
-        string feeRecipient
-    );
-
-    #[derive(Debug, serde::Serialize, serde::Deserialize)]
-    event LogMessagePublished(
-        uint64 sequence,
-        uint32 nonce,
-        uint8 consistencyLevel
-    );
-);
-
-pub async fn start_indexer(
-    config: config::Config,
-    redis_client: redis::Client,
-    jsonrpc_client: JsonRpcClient,
-) -> Result<()> {
+pub async fn start_indexer(config: config::Config, redis_client: redis::Client) -> Result<()> {
     let mut redis_connection = redis_client.get_multiplexed_tokio_connection().await?;
 
     let http_provider = ProviderBuilder::new().on_http(
@@ -84,7 +40,13 @@ pub async fn start_indexer(
 
     let filter = Filter::new()
         .address(config.evm.bridge_token_factory_address)
-        .event_signature([InitTransfer::SIGNATURE_HASH, FinTransfer::SIGNATURE_HASH].to_vec());
+        .event_signature(
+            [
+                utils::evm::InitTransfer::SIGNATURE_HASH,
+                utils::evm::FinTransfer::SIGNATURE_HASH,
+            ]
+            .to_vec(),
+        );
 
     for current_block in
         (from_block..latest_block).step_by(config.evm.block_processing_batch_size as usize)
@@ -96,31 +58,7 @@ pub async fn start_indexer(
             .await?;
 
         for log in logs {
-            let Some(tx_hash) = log.transaction_hash else {
-                warn!("No transaction hash in log: {:?}", log);
-                continue;
-            };
-
-            let Ok(tx_logs) = http_provider.get_transaction_receipt(tx_hash).await else {
-                warn!("Failed to get transaction receipt for tx: {:?}", tx_hash);
-                continue;
-            };
-
-            let Some(log_index) = log.log_index else {
-                warn!("No log index in log: {:?}", log);
-                continue;
-            };
-
-            process_log(
-                &config,
-                &mut redis_connection,
-                &jsonrpc_client,
-                H256::from_slice(tx_hash.as_slice()),
-                tx_logs,
-                log,
-                log_index,
-            )
-            .await;
+            process_log(&mut redis_connection, &http_provider, log).await;
         }
     }
 
@@ -128,211 +66,56 @@ pub async fn start_indexer(
 
     let mut stream = ws_provider.subscribe_logs(&filter).await?.into_stream();
     while let Some(log) = stream.next().await {
-        let Some(tx_hash) = log.transaction_hash else {
-            warn!("No transaction hash in log: {:?}", log);
-            continue;
-        };
-
-        let Ok(tx_logs) = http_provider.get_transaction_receipt(tx_hash).await else {
-            warn!("Failed to get transaction receipt for tx: {:?}", tx_hash);
-            continue;
-        };
-
-        let Some(log_index) = log.log_index else {
-            warn!("No log index in log: {:?}", log);
-            continue;
-        };
-
-        process_log(
-            &config,
-            &mut redis_connection,
-            &jsonrpc_client,
-            H256::from_slice(tx_hash.as_slice()),
-            tx_logs,
-            log,
-            log_index,
-        )
-        .await;
+        process_log(&mut redis_connection, &http_provider, log).await;
     }
 
     Ok(())
 }
 
 async fn process_log(
-    config: &config::Config,
     redis_connection: &mut redis::aio::MultiplexedConnection,
-    jsonrpc_client: &JsonRpcClient,
-    tx_hash: H256,
-    tx_logs: Option<TransactionReceipt>,
+    http_provider: &RootProvider<Http<Client>>,
     log: Log,
-    log_index: u64,
 ) {
-    if let Some(block_height) = log.block_number {
-        utils::redis::update_last_processed_block(
-            redis_connection,
-            utils::redis::ETH_LAST_PROCESSED_BLOCK,
-            block_height,
-        )
-        .await;
-    }
-
-    let vaa = if let Some(tx_logs) = tx_logs {
-        let mut vaa = None;
-
-        let recipient = if let Ok(init_log) = log.log_decode::<InitTransfer>() {
-            init_log.inner.recipient.parse::<OmniAddress>().ok()
-        } else if let Ok(fin_log) = log.log_decode::<FinTransfer>() {
-            fin_log
-                .inner
-                .recipient
-                .to_string()
-                .parse::<OmniAddress>()
-                .ok()
-        } else {
-            None
-        };
-
-        if let Some(address) = recipient {
-            let chain_id = match address {
-                OmniAddress::Eth(_) => 2,
-                OmniAddress::Near(_) => 15,
-                OmniAddress::Sol(_) => 1,
-                OmniAddress::Arb(_) | OmniAddress::Base(_) => todo!(),
-            };
-
-            for log in tx_logs.inner.logs() {
-                if let Ok(log) = log.log_decode::<LogMessagePublished>() {
-                    vaa = utils::wormhole::get_vaa(
-                        chain_id,
-                        config.evm.bridge_token_factory_address,
-                        log.inner.sequence,
-                    )
-                    .await
-                    .ok();
-                }
-            }
-        }
-
-        vaa
-    } else {
-        None
+    let Some(tx_hash) = log.transaction_hash else {
+        warn!("No transaction hash in log: {:?}", log);
+        return;
     };
 
-    let prover_args =
-        if let Some(vaa) = vaa {
-            let wormhole_proof_args = WormholeVerifyProofArgs {
-                proof_kind: ProofKind::InitTransfer,
-                vaa,
-            };
+    let Ok(tx_logs) = http_provider.get_transaction_receipt(tx_hash).await else {
+        warn!("Failed to get transaction receipt for tx: {:?}", tx_hash);
+        return;
+    };
 
-            let mut prover_args = Vec::new();
-            if let Err(err) = wormhole_proof_args.serialize(&mut prover_args) {
-                warn!("Failed to serialize wormhole proof: {}", err);
-            }
+    let tx_hash = H256::from_slice(tx_hash.as_slice());
 
-            prover_args
-        } else {
-            let evm_proof_args =
-                match eth_proof::get_proof_for_event(tx_hash, log_index, &config.evm.rpc_http_url)
-                    .await
-                {
-                    Ok(proof) => proof,
-                    Err(err) => {
-                        warn!("Failed to get proof: {}", err);
-                        return;
-                    }
-                };
+    let Some(block_number) = log.block_number else {
+        warn!("No block number in log: {:?}", log);
+        return;
+    };
 
-            let evm_proof_args = EvmVerifyProofArgs {
-                proof_kind: ProofKind::InitTransfer,
-                proof: evm_proof_args,
-            };
-
-            let mut prover_args = Vec::new();
-            if let Err(err) = evm_proof_args.serialize(&mut prover_args) {
-                warn!("Failed to serialize evm proof: {}", err);
-                return;
-            }
-
-            prover_args
-        };
-
-    if let Ok(init_log) = log.log_decode::<InitTransfer>() {
-        let Ok(token) = init_log.inner.token.parse::<AccountId>() else {
-            warn!(
-                "Failed to parse token as AccountId: {:?}",
-                init_log.inner.token
-            );
-            return;
-        };
-
-        let Ok(recipient) = init_log.inner.recipient.parse::<AccountId>() else {
-            warn!(
-                "Failed to parse recipient as AccountId: {:?}",
-                init_log.inner.recipient
-            );
-            return;
-        };
-
-        let sender = config.near.token_locker_id.clone();
-
-        // If storage is sufficient, then flag should be false, otherwise true
-        let sender_is_storage_deposit =
-            !utils::storage::is_storage_sufficient(jsonrpc_client, &token, &sender)
-                .await
-                .unwrap_or_default();
-        let recipient_is_storage_deposit =
-            !utils::storage::is_storage_sufficient(jsonrpc_client, &token, &recipient)
-                .await
-                .unwrap_or_default();
-
-        let fin_transfer_args = FinTransferArgs {
-            chain_kind: ChainKind::Eth,
-            // TODO: Add native fee recipient
-            native_fee_recipient: OmniAddress::Eth(H160::from_str("").unwrap()),
-            storage_deposit_args: StorageDepositArgs {
-                token,
-                accounts: vec![
-                    (sender, sender_is_storage_deposit),
-                    (recipient, recipient_is_storage_deposit),
-                ],
-            },
-            prover_args,
-        };
-
-        let mut serialized_fin_transfer_args = Vec::new();
-        if let Err(err) = fin_transfer_args.serialize(&mut serialized_fin_transfer_args) {
-            warn!("Failed to serialize fin transfer args: {}", err);
-            return;
-        }
-
+    if log.log_decode::<utils::evm::InitTransfer>().is_ok() {
         utils::redis::add_event(
             redis_connection,
             utils::redis::ETH_WITHDRAW_EVENTS,
             tx_hash.to_string(),
-            serialized_fin_transfer_args,
+            (block_number, log, tx_logs),
         )
         .await;
-    } else if log.log_decode::<FinTransfer>().is_ok() {
-        let claim_fee_args = ClaimFeeArgs {
-            chain_kind: ChainKind::Eth,
-            prover_args,
-            // TODO: Add native fee recipient
-            native_fee_recipient: OmniAddress::Eth(H160::from_str("").unwrap()),
-        };
-
-        let mut serialized_claim_fee_args = Vec::new();
-        if let Err(err) = claim_fee_args.serialize(&mut serialized_claim_fee_args) {
-            warn!("Failed to serialize claim fee args: {}", err);
-            return;
-        }
-
+    } else if log.log_decode::<utils::evm::FinTransfer>().is_ok() {
         utils::redis::add_event(
             redis_connection,
             utils::redis::FINALIZED_TRANSFERS,
             tx_hash.to_string(),
-            serialized_claim_fee_args,
+            log,
         )
         .await;
     }
+
+    utils::redis::update_last_processed_block(
+        redis_connection,
+        utils::redis::ETH_LAST_PROCESSED_BLOCK,
+        block_number,
+    )
+    .await;
 }
