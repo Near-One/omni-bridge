@@ -186,7 +186,12 @@ impl FungibleTokenReceiver for Contract {
 #[near]
 impl Contract {
     #[init]
-    pub fn new(prover_account: AccountId, mpc_signer: AccountId, nonce: U128, wnear_account_id: AccountId) -> Self {
+    pub fn new(
+        prover_account: AccountId,
+        mpc_signer: AccountId,
+        nonce: U128,
+        wnear_account_id: AccountId,
+    ) -> Self {
         let mut contract = Self {
             prover_account,
             factories: LookupMap::new(StorageKey::Factories),
@@ -502,24 +507,30 @@ impl Contract {
 
             let amount_to_transfer = U128(transfer_message.amount.0 - transfer_message.fee.fee.0);
 
-            let mut promise = if transfer_message.token == self.wnear_account_id {
-                ext_wnear_token::ext(self.wnear_account_id.clone())
-                    .with_static_gas(WNEAR_WITHDRAW_GAS)
-                    .with_attached_deposit(ONE_YOCTO)
-                    .near_withdraw(amount_to_transfer)
-                    .then(
-                        Promise::new(recipient.target).transfer(NearToken::from_yoctonear(amount_to_transfer.0))
-                    )
-            } else {
-                let transfer = ext_token::ext(transfer_message.token.clone())
-                    .with_attached_deposit(ONE_YOCTO);
-                match recipient.message {
-                    Some(message) => transfer.with_static_gas(FT_TRANSFER_CALL_GAS)
-                        .ft_transfer_call(recipient.target, amount_to_transfer, None, message),
-                    None => transfer.with_static_gas(FT_TRANSFER_GAS)
-                        .ft_transfer(recipient.target, amount_to_transfer, None),
-                }
-            };
+            let mut promise =
+                if transfer_message.token == self.wnear_account_id && recipient.message.is_none() {
+                    ext_wnear_token::ext(self.wnear_account_id.clone())
+                        .with_static_gas(WNEAR_WITHDRAW_GAS)
+                        .with_attached_deposit(ONE_YOCTO)
+                        .near_withdraw(amount_to_transfer)
+                        .then(
+                            Promise::new(recipient.target)
+                                .transfer(NearToken::from_yoctonear(amount_to_transfer.0)),
+                        )
+                } else {
+                    let transfer = ext_token::ext(transfer_message.token.clone())
+                        .with_attached_deposit(ONE_YOCTO);
+                    match recipient.message {
+                        Some(message) => transfer
+                            .with_static_gas(FT_TRANSFER_CALL_GAS)
+                            .ft_transfer_call(recipient.target, amount_to_transfer, None, message),
+                        None => transfer.with_static_gas(FT_TRANSFER_GAS).ft_transfer(
+                            recipient.target,
+                            amount_to_transfer,
+                            None,
+                        ),
+                    }
+                };
 
             if transfer_message.fee.fee.0 > 0 {
                 require!(
