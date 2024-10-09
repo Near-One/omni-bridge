@@ -47,7 +47,7 @@ pub async fn get_vaa(
     log: &Log,
     config: &config::Config,
 ) -> Option<String> {
-    let vaa = if let Some(tx_logs) = tx_logs {
+    if let Some(tx_logs) = tx_logs {
         let mut vaa = None;
 
         let recipient = if let Ok(init_log) = log.log_decode::<InitTransfer>() {
@@ -87,8 +87,7 @@ pub async fn get_vaa(
         vaa
     } else {
         None
-    };
-    vaa
+    }
 }
 
 pub async fn get_prover_args(

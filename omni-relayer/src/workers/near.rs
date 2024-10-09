@@ -226,13 +226,11 @@ pub async fn claim_fee(
 
                         let vaa = utils::evm::get_vaa(tx_logs, &log, &config).await;
 
-                        let prover_args =
-                            match utils::evm::get_prover_args(vaa, tx_hash, log_index, &config)
-                                .await
-                            {
-                                Some(value) => value,
-                                None => return,
-                            };
+                        let Some(prover_args) =
+                            utils::evm::get_prover_args(vaa, tx_hash, log_index, &config).await
+                        else {
+                            return;
+                        };
 
                         let claim_fee_args = ClaimFeeArgs {
                             chain_kind: ChainKind::Eth,
