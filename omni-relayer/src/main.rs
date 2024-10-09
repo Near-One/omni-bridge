@@ -69,7 +69,7 @@ async fn main() -> Result<()> {
         let connector = connector.clone();
         let jsonrpc_client = jsonrpc_client.clone();
         async move {
-            workers::evm::finalize_withdraw(config, redis_client, connector, jsonrpc_client).await
+            workers::evm::finalize_transfer(config, redis_client, connector, jsonrpc_client).await
         }
     }));
     handles.push(tokio::spawn({

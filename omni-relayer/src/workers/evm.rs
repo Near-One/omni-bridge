@@ -16,7 +16,7 @@ use omni_types::{
 
 use crate::{config, utils};
 
-pub async fn finalize_withdraw(
+pub async fn finalize_transfer(
     config: config::Config,
     redis_client: redis::Client,
     connector: Arc<OmniConnector>,
