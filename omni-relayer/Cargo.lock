@@ -1639,9 +1639,8 @@ dependencies = [
 [[package]]
 name = "bridge-connector-common"
 version = "0.1.0"
-source = "git+https://github.com/Near-One/rainbow-bridge-sdk-rs#4a85b29660ac612b71159f2d8d93f990336c07fb"
 dependencies = [
- "eth-proof 0.1.0 (git+https://github.com/Near-One/rainbow-bridge-sdk-rs)",
+ "eth-proof",
  "ethers",
  "near-light-client-on-eth",
  "near-rpc-client",
@@ -2960,26 +2959,6 @@ dependencies = [
 [[package]]
 name = "eth-proof"
 version = "0.1.0"
-source = "git+https://github.com/Near-One/rainbow-bridge-sdk-rs?branch=omni-token-support#1584cb3e77358a7eb25b81cc63e40e893d569239"
-dependencies = [
- "borsh 1.5.1",
- "cita_trie",
- "ethereum-types 0.14.1",
- "hasher",
- "hex",
- "omni-types",
- "reqwest 0.11.27",
- "rlp 0.5.2",
- "serde",
- "serde_json",
- "thiserror",
- "tokio",
-]
-
-[[package]]
-name = "eth-proof"
-version = "0.1.0"
-source = "git+https://github.com/Near-One/rainbow-bridge-sdk-rs#4a85b29660ac612b71159f2d8d93f990336c07fb"
 dependencies = [
  "borsh 1.5.1",
  "cita_trie",
@@ -5000,7 +4979,6 @@ dependencies = [
 [[package]]
 name = "near-light-client-on-eth"
 version = "0.1.0"
-source = "git+https://github.com/Near-One/rainbow-bridge-sdk-rs#4a85b29660ac612b71159f2d8d93f990336c07fb"
 dependencies = [
  "ethereum-types 0.14.1",
  "ethers",
@@ -5284,7 +5262,6 @@ dependencies = [
 [[package]]
 name = "near-rpc-client"
 version = "0.1.0"
-source = "git+https://github.com/Near-One/rainbow-bridge-sdk-rs#4a85b29660ac612b71159f2d8d93f990336c07fb"
 dependencies = [
  "borsh 1.5.1",
  "lazy_static",
@@ -5777,12 +5754,11 @@ dependencies = [
 [[package]]
 name = "omni-connector"
 version = "0.1.0"
-source = "git+https://github.com/Near-One/rainbow-bridge-sdk-rs#4a85b29660ac612b71159f2d8d93f990336c07fb"
 dependencies = [
  "borsh 1.5.1",
  "bridge-connector-common",
  "derive_builder 0.20.2",
- "eth-proof 0.1.0 (git+https://github.com/Near-One/rainbow-bridge-sdk-rs)",
+ "eth-proof",
  "ethers",
  "hex",
  "near-contract-standards",
@@ -5805,7 +5781,7 @@ dependencies = [
  "borsh 1.5.1",
  "clap",
  "dotenv",
- "eth-proof 0.1.0 (git+https://github.com/Near-One/rainbow-bridge-sdk-rs?branch=omni-token-support)",
+ "eth-proof",
  "ethereum-types 0.14.1",
  "futures",
  "log",
@@ -5829,7 +5805,7 @@ dependencies = [
 [[package]]
 name = "omni-types"
 version = "2.0.0"
-source = "git+https://github.com/near-one/omni-bridge?rev=1b88b4ee0df12e2f3007d4f2285e45b654c73b20#1b88b4ee0df12e2f3007d4f2285e45b654c73b20"
+source = "git+https://github.com/near-one/omni-bridge?rev=94cf598f00eaca77869820c07aeb22f5ff9adf63#94cf598f00eaca77869820c07aeb22f5ff9adf63"
 dependencies = [
  "alloy-primitives",
  "alloy-rlp",
