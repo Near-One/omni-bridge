@@ -612,7 +612,7 @@ impl Contract {
 
         if message.fee.native_fee.0 != 0 {
             if message.get_origin_chain() == ChainKind::Near {
-                let OmniAddress::Near(recipient) = native_fee_recipient else {
+                let OmniAddress::Near(recipient) = &native_fee_recipient else {
                     env::panic_str("ERR_WRONG_CHAIN_KIND")
                 };
                 Promise::new(recipient.parse().sdk_expect("ERR_PARSE_FEE_RECIPIENT"))
@@ -622,7 +622,7 @@ impl Contract {
                     &message.get_transfer_id(),
                     &Some(NativeFee {
                         amount: message.fee.native_fee,
-                        recipient: native_fee_recipient,
+                        recipient: native_fee_recipient.clone(),
                     }),
                 );
 
@@ -634,7 +634,16 @@ impl Contract {
             }
         }
 
-        ext_token::ext(message.token)
+        let token = message.token.clone();
+        env::log_str(
+            &Nep141LockerEvent::ClaimFeeEvent {
+                transfer_message: message,
+                native_fee_recipient,
+            }
+            .to_log_string(),
+        );
+
+        ext_token::ext(token)
             .with_static_gas(LOG_METADATA_GAS)
             .ft_transfer(fin_transfer.fee_recipient, U128(fee), None)
     }
