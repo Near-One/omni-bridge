@@ -41,6 +41,7 @@ const CLAIM_FEE_CALLBACK_GAS: Gas = Gas::from_tgas(50);
 const BIND_TOKEN_CALLBACK_GAS: Gas = Gas::from_tgas(25);
 const FT_TRANSFER_CALL_GAS: Gas = Gas::from_tgas(50);
 const FT_TRANSFER_GAS: Gas = Gas::from_tgas(5);
+const WNEAR_WITHDRAW_GAS: Gas = Gas::from_tgas(10);
 const STORAGE_BALANCE_OF_GAS: Gas = Gas::from_tgas(3);
 const STORAGE_DEPOSIT_GAS: Gas = Gas::from_tgas(3);
 const NO_DEPOSIT: NearToken = NearToken::from_near(0);
@@ -107,6 +108,11 @@ pub trait Prover {
     fn verify_proof(&self, #[serializer(borsh)] args: VerifyProofArgs) -> ProverResult;
 }
 
+#[ext_contract(ext_wnear_token)]
+pub trait ExtWNearToken {
+    fn near_withdraw(&self, amount: U128);
+}
+
 #[near(contract_state)]
 #[derive(Pausable, Upgradable, PanicOnDefault)]
 #[access_control(role_type(Role))]
@@ -127,6 +133,7 @@ pub struct Contract {
     pub mpc_signer: AccountId,
     pub current_nonce: Nonce,
     pub accounts_balances: LookupMap<AccountId, StorageBalance>,
+    pub wnear_account_id: AccountId,
 }
 
 #[near]
@@ -179,7 +186,12 @@ impl FungibleTokenReceiver for Contract {
 #[near]
 impl Contract {
     #[init]
-    pub fn new(prover_account: AccountId, mpc_signer: AccountId, nonce: U128) -> Self {
+    pub fn new(
+        prover_account: AccountId,
+        mpc_signer: AccountId,
+        nonce: U128,
+        wnear_account_id: AccountId,
+    ) -> Self {
         let mut contract = Self {
             prover_account,
             factories: LookupMap::new(StorageKey::Factories),
@@ -189,6 +201,7 @@ impl Contract {
             mpc_signer,
             current_nonce: nonce.0,
             accounts_balances: LookupMap::new(StorageKey::AccountsBalances),
+            wnear_account_id,
         };
 
         contract.acl_init_super_admin(near_sdk::env::predecessor_account_id());
@@ -493,16 +506,31 @@ impl Contract {
             );
 
             let amount_to_transfer = U128(transfer_message.amount.0 - transfer_message.fee.fee.0);
-            let mut promise = match recipient.message {
-                Some(message) => ext_token::ext(transfer_message.token.clone())
-                    .with_static_gas(FT_TRANSFER_CALL_GAS)
-                    .with_attached_deposit(ONE_YOCTO)
-                    .ft_transfer_call(recipient.target, amount_to_transfer, None, message),
-                None => ext_token::ext(transfer_message.token.clone())
-                    .with_static_gas(FT_TRANSFER_GAS)
-                    .with_attached_deposit(ONE_YOCTO)
-                    .ft_transfer(recipient.target, amount_to_transfer, None),
-            };
+
+            let mut promise =
+                if transfer_message.token == self.wnear_account_id && recipient.message.is_none() {
+                    ext_wnear_token::ext(self.wnear_account_id.clone())
+                        .with_static_gas(WNEAR_WITHDRAW_GAS)
+                        .with_attached_deposit(ONE_YOCTO)
+                        .near_withdraw(amount_to_transfer)
+                        .then(
+                            Promise::new(recipient.target)
+                                .transfer(NearToken::from_yoctonear(amount_to_transfer.0)),
+                        )
+                } else {
+                    let transfer = ext_token::ext(transfer_message.token.clone())
+                        .with_attached_deposit(ONE_YOCTO);
+                    match recipient.message {
+                        Some(message) => transfer
+                            .with_static_gas(FT_TRANSFER_CALL_GAS)
+                            .ft_transfer_call(recipient.target, amount_to_transfer, None, message),
+                        None => transfer.with_static_gas(FT_TRANSFER_GAS).ft_transfer(
+                            recipient.target,
+                            amount_to_transfer,
+                            None,
+                        ),
+                    }
+                };
 
             if transfer_message.fee.fee.0 > 0 {
                 require!(
@@ -612,7 +640,7 @@ impl Contract {
 
         if message.fee.native_fee.0 != 0 {
             if message.get_origin_chain() == ChainKind::Near {
-                let OmniAddress::Near(recipient) = native_fee_recipient else {
+                let OmniAddress::Near(recipient) = &native_fee_recipient else {
                     env::panic_str("ERR_WRONG_CHAIN_KIND")
                 };
                 Promise::new(recipient.parse().sdk_expect("ERR_PARSE_FEE_RECIPIENT"))
@@ -622,7 +650,7 @@ impl Contract {
                     &message.get_transfer_id(),
                     &Some(NativeFee {
                         amount: message.fee.native_fee,
-                        recipient: native_fee_recipient,
+                        recipient: native_fee_recipient.clone(),
                     }),
                 );
 
@@ -634,7 +662,16 @@ impl Contract {
             }
         }
 
-        ext_token::ext(message.token)
+        let token = message.token.clone();
+        env::log_str(
+            &Nep141LockerEvent::ClaimFeeEvent {
+                transfer_message: message,
+                native_fee_recipient,
+            }
+            .to_log_string(),
+        );
+
+        ext_token::ext(token)
             .with_static_gas(LOG_METADATA_GAS)
             .ft_transfer(fin_transfer.fee_recipient, U128(fee), None)
     }
