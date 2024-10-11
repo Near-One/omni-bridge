@@ -698,8 +698,7 @@ impl Contract {
     pub fn bind_token_callback(
         &mut self,
         predecessor_account_id: AccountId,
-        #[callback_result]
-        call_result: Result<ProverResult, PromiseError>,
+        #[callback_result] call_result: Result<ProverResult, PromiseError>,
     ) {
         let Ok(ProverResult::DeployToken(deploy_token)) = call_result else {
             Self::refund(predecessor_account_id, env::attached_deposit());
