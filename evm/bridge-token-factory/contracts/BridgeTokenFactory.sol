@@ -20,24 +20,9 @@ contract BridgeTokenFactory is
 {
     using SafeERC20 for IERC20;
 
-    enum WhitelistMode {
-        NotInitialized,
-        Blocked,
-        CheckToken,
-        CheckAccountAndToken
-    }
-
-    // We removed ProofConsumer from the list of parent contracts and added this gap
-    // to preserve storage layout when upgrading to the new contract version.
-    uint256[54] private __gap;
-
     mapping(address => string) public ethToNearToken;
     mapping(string => address) public nearToEthToken;
     mapping(address => bool) public isBridgeToken;
-
-    mapping(string => WhitelistMode) private whitelistedTokens;
-    mapping(bytes => bool) private _whitelistedAccounts;
-    bool private isWhitelistModeEnabled;
 
     address public tokenImplementationAddress;
     address public nearBridgeDerivedAddress;
@@ -187,7 +172,6 @@ contract BridgeTokenFactory is
         string calldata recipient
     ) payable external whenNotPaused(PAUSED_INIT_TRANSFER) {
         currentNonce += 1;
-        _checkWhitelistedToken(token, msg.sender);
         require(isBridgeToken[nearToEthToken[token]], "ERR_NOT_BRIDGE_TOKEN");
         if (fee >= amount) {
             revert InvalidFee();
@@ -329,14 +313,7 @@ contract BridgeTokenFactory is
         uint flags = PAUSED_FIN_TRANSFER | PAUSED_INIT_TRANSFER;
         _pause(flags);
     }
-
-    function isAccountWhitelistedForToken(
-        string calldata token,
-        address account
-    ) external view returns (bool) {
-        return _whitelistedAccounts[abi.encodePacked(token, account)];
-    }
-
+ 
     function upgradeToken(
         string calldata nearTokenId,
         address implementation
@@ -344,59 +321,6 @@ contract BridgeTokenFactory is
         require(isBridgeToken[nearToEthToken[nearTokenId]], "ERR_NOT_BRIDGE_TOKEN");
         BridgeToken proxy = BridgeToken(payable(nearToEthToken[nearTokenId]));
         proxy.upgradeToAndCall(implementation, bytes(""));
-    }
-
-    function enableWhitelistMode() external onlyRole(DEFAULT_ADMIN_ROLE) {
-        isWhitelistModeEnabled = true;
-    }
-
-    function disableWhitelistMode() external onlyRole(DEFAULT_ADMIN_ROLE) {
-        isWhitelistModeEnabled = false;
-    }
-
-    function setTokenWhitelistMode(
-        string calldata token,
-        WhitelistMode mode
-    ) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        whitelistedTokens[token] = mode;
-    }
-
-    function addAccountToWhitelist(
-        string calldata token,
-        address account
-    ) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        require(
-            whitelistedTokens[token] != WhitelistMode.NotInitialized,
-            "ERR_NOT_INITIALIZED_WHITELIST_TOKEN"
-        );
-        _whitelistedAccounts[abi.encodePacked(token, account)] = true;
-    }
-
-    function removeAccountFromWhitelist(
-        string calldata token,
-        address account
-    ) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        delete _whitelistedAccounts[abi.encodePacked(token, account)];
-    }
-
-    function _checkWhitelistedToken(string memory token, address account) internal view {
-        if (!isWhitelistModeEnabled) {
-            return;
-        }
-
-        WhitelistMode tokenMode = whitelistedTokens[token];
-        require(
-            tokenMode != WhitelistMode.NotInitialized,
-            "ERR_NOT_INITIALIZED_WHITELIST_TOKEN"
-        );
-        require(tokenMode != WhitelistMode.Blocked, "ERR_WHITELIST_TOKEN_BLOCKED");
-
-        if (tokenMode == WhitelistMode.CheckAccountAndToken) {
-            require(
-                _whitelistedAccounts[abi.encodePacked(token, account)],
-                "ERR_ACCOUNT_NOT_IN_WHITELIST"
-            );
-        }
     }
 
     function _authorizeUpgrade(
