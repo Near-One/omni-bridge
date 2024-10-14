@@ -69,26 +69,10 @@ pub async fn handle_streamer_message(
                             .await;
                         } else {
                             warn!("Fee is not sufficient for transfer: {:?}", transfer_message);
-
-                            utils::redis::add_event(
-                                redis_connection,
-                                utils::redis::NEAR_BAD_FEES,
-                                transfer_message.origin_nonce.0.to_string(),
-                                log,
-                            )
-                            .await;
                         }
                     }
                     Err(err) => {
                         warn!("Failed to check fee: {}", err);
-
-                        utils::redis::add_event(
-                            redis_connection,
-                            utils::redis::NEAR_BAD_FEES,
-                            transfer_message.origin_nonce.0.to_string(),
-                            log,
-                        )
-                        .await;
                     }
                 }
             }
