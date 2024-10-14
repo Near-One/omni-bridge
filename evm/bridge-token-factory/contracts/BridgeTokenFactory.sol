@@ -318,7 +318,7 @@ contract BridgeTokenFactory is
         uint flags = PAUSED_MINT_TOKEN | PAUSED_BURN_TOKEN | PAUSED_LOCK_TOKEN | PAUSED_UNLOCK_TOKEN;
         _pause(flags);
     }
-
+ 
     function upgradeToken(
         string calldata nearTokenId,
         address implementation
