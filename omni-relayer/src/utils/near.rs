@@ -90,7 +90,8 @@ pub async fn handle_streamer_message(
             }
             Nep141LockerEvent::FinTransferEvent { .. }
             | Nep141LockerEvent::LogMetadataEvent { .. }
-            | Nep141LockerEvent::SignClaimNativeFeeEvent { .. } => {}
+            | Nep141LockerEvent::SignClaimNativeFeeEvent { .. }
+            | Nep141LockerEvent::ClaimFeeEvent { .. } => {}
         }
     }
 }

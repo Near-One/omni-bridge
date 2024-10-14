@@ -1638,7 +1638,7 @@ dependencies = [
 [[package]]
 name = "bridge-connector-common"
 version = "0.1.0"
-source = "git+https://github.com/Near-One/rainbow-bridge-sdk-rs#90e70d91c1f168636e050765e39dca74a692d05a"
+source = "git+https://github.com/Near-One/rainbow-bridge-sdk-rs#4a85b29660ac612b71159f2d8d93f990336c07fb"
 dependencies = [
  "eth-proof 0.1.0 (git+https://github.com/Near-One/rainbow-bridge-sdk-rs)",
  "ethers",
@@ -2966,7 +2966,7 @@ dependencies = [
  "ethereum-types 0.14.1",
  "hasher",
  "hex",
- "omni-types",
+ "omni-types 2.0.0 (git+https://github.com/near-one/omni-bridge?rev=1b88b4ee0df12e2f3007d4f2285e45b654c73b20)",
  "reqwest 0.11.27",
  "rlp 0.5.2",
  "serde",
@@ -2978,14 +2978,14 @@ dependencies = [
 [[package]]
 name = "eth-proof"
 version = "0.1.0"
-source = "git+https://github.com/Near-One/rainbow-bridge-sdk-rs#90e70d91c1f168636e050765e39dca74a692d05a"
+source = "git+https://github.com/Near-One/rainbow-bridge-sdk-rs#4a85b29660ac612b71159f2d8d93f990336c07fb"
 dependencies = [
  "borsh 1.5.1",
  "cita_trie",
  "ethereum-types 0.14.1",
  "hasher",
  "hex",
- "omni-types",
+ "omni-types 2.0.0 (git+https://github.com/near-one/omni-bridge?rev=1b88b4ee0df12e2f3007d4f2285e45b654c73b20)",
  "reqwest 0.11.27",
  "rlp 0.5.2",
  "serde",
@@ -4989,7 +4989,7 @@ dependencies = [
 [[package]]
 name = "near-light-client-on-eth"
 version = "0.1.0"
-source = "git+https://github.com/Near-One/rainbow-bridge-sdk-rs#90e70d91c1f168636e050765e39dca74a692d05a"
+source = "git+https://github.com/Near-One/rainbow-bridge-sdk-rs#4a85b29660ac612b71159f2d8d93f990336c07fb"
 dependencies = [
  "ethereum-types 0.14.1",
  "ethers",
@@ -5273,7 +5273,7 @@ dependencies = [
 [[package]]
 name = "near-rpc-client"
 version = "0.1.0"
-source = "git+https://github.com/Near-One/rainbow-bridge-sdk-rs#90e70d91c1f168636e050765e39dca74a692d05a"
+source = "git+https://github.com/Near-One/rainbow-bridge-sdk-rs#4a85b29660ac612b71159f2d8d93f990336c07fb"
 dependencies = [
  "borsh 1.5.1",
  "lazy_static",
@@ -5766,7 +5766,7 @@ dependencies = [
 [[package]]
 name = "omni-connector"
 version = "0.1.0"
-source = "git+https://github.com/Near-One/rainbow-bridge-sdk-rs#90e70d91c1f168636e050765e39dca74a692d05a"
+source = "git+https://github.com/Near-One/rainbow-bridge-sdk-rs#4a85b29660ac612b71159f2d8d93f990336c07fb"
 dependencies = [
  "borsh 1.5.1",
  "bridge-connector-common",
@@ -5780,7 +5780,7 @@ dependencies = [
  "near-primitives 0.21.2",
  "near-rpc-client",
  "near-token",
- "omni-types",
+ "omni-types 2.0.0 (git+https://github.com/near-one/omni-bridge?rev=1b88b4ee0df12e2f3007d4f2285e45b654c73b20)",
  "serde_json",
  "tracing",
 ]
@@ -5803,7 +5803,7 @@ dependencies = [
  "near-lake-framework",
  "near-primitives 0.26.0",
  "omni-connector",
- "omni-types",
+ "omni-types 2.0.0 (git+https://github.com/near-one/omni-bridge?rev=21a328f5388bfa98d1ba1eb40b541316429a4369)",
  "pretty_env_logger",
  "redis",
  "reqwest 0.12.8",
@@ -5818,6 +5818,26 @@ dependencies = [
 name = "omni-types"
 version = "2.0.0"
 source = "git+https://github.com/near-one/omni-bridge?rev=1b88b4ee0df12e2f3007d4f2285e45b654c73b20#1b88b4ee0df12e2f3007d4f2285e45b654c73b20"
+dependencies = [
+ "alloy-primitives",
+ "alloy-rlp",
+ "alloy-sol-macro",
+ "alloy-sol-types",
+ "borsh 1.5.1",
+ "ethereum-types 0.15.1",
+ "hex",
+ "near-contract-standards",
+ "near-sdk",
+ "rlp 0.6.1",
+ "serde",
+ "sha3",
+ "strum_macros 0.26.4",
+]
+
+[[package]]
+name = "omni-types"
+version = "2.0.0"
+source = "git+https://github.com/near-one/omni-bridge?rev=21a328f5388bfa98d1ba1eb40b541316429a4369#21a328f5388bfa98d1ba1eb40b541316429a4369"
 dependencies = [
  "alloy-primitives",
  "alloy-rlp",
