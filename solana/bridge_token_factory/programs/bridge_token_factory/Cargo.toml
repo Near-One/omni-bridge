@@ -21,3 +21,9 @@ anchor-lang = { version = "0.30.1", git = "https://github.com/coral-xyz/anchor/"
 anchor-spl = { version = "0.30.1", git = "https://github.com/coral-xyz/anchor/", rev = "06527e57c3e59683c36eb0a5c69ee669100b42e5", features = ["metadata"] }
 near-sdk = "5.5.0"
 wormhole-anchor-sdk = { git = "https://github.com/wormhole-foundation/wormhole-scaffolding.git", rev = "962ef4841697980474854edea192d26b01d27848" }
+
+
+[dependencies.bitvec]
+version = "1.0.1"
+default-features = false
+features = []

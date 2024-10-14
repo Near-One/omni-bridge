@@ -5,8 +5,11 @@ use anchor_spl::{
 };
 
 use crate::{
-    constants::{AUTHORITY_SEED, CONFIG_SEED, VAULT_SEED},
-    state::config::Config,
+    constants::{
+        AUTHORITY_SEED, CONFIG_SEED, USED_NONCES_ACCOUNT_SIZE, USED_NONCES_PER_ACCOUNT,
+        USED_NONCES_SEED, VAULT_SEED,
+    },
+    state::{config::Config, used_nonces::UsedNonces},
     FinalizeDepositData,
 };
 
@@ -14,10 +17,22 @@ use crate::{
 #[instruction(data: FinalizeDepositData)]
 pub struct FinalizeWithdraw<'info> {
     #[account(
+        mut,
         seeds = [CONFIG_SEED],
         bump = config.bumps.config,
     )]
     pub config: Account<'info, Config>,
+    #[account(
+        init_if_needed,
+        space = USED_NONCES_ACCOUNT_SIZE,
+        payer = payer,
+        seeds = [
+            USED_NONCES_SEED,
+            &(data.payload.nonce / USED_NONCES_PER_ACCOUNT as u128).to_le_bytes(),
+        ],
+        bump,
+    )]
+    pub used_nonces: AccountLoader<'info, UsedNonces>,
     /// CHECK: PDA
     #[account(
         seeds = [AUTHORITY_SEED],
@@ -65,7 +80,16 @@ pub struct FinalizeWithdraw<'info> {
 }
 
 impl<'info> FinalizeWithdraw<'info> {
-    pub fn process(&self, data: FinalizeDepositData) -> Result<()> {
+    pub fn process(&mut self, data: FinalizeDepositData) -> Result<()> {
+        UsedNonces::use_nonce(
+            data.payload.nonce,
+            &self.used_nonces,
+            &mut self.config,
+            self.payer.to_account_info(),
+            &Rent::get()?,
+            self.system_program.to_account_info(),
+        )?;
+
         let bump = &[self.config.bumps.authority];
         let signer_seeds = &[&[AUTHORITY_SEED, bump][..]];
 

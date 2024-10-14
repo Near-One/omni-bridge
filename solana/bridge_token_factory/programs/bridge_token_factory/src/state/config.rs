@@ -24,6 +24,7 @@ pub struct WormholeConfig {
 #[derive(InitSpace)]
 pub struct Config {
     pub admin: Pubkey,
+    pub max_used_nonce: u128,
     pub derived_near_bridge_address: [u8; 64],
     pub wormhole: WormholeConfig,
     pub bumps: ConfigBumps,

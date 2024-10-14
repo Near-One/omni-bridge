@@ -3,7 +3,8 @@ use anchor_lang::{
     solana_program::{keccak, secp256k1_recover::secp256k1_recover},
 };
 use anchor_spl::{
-    associated_token::AssociatedToken, token::{Mint, Token, TokenAccount, mint_to, MintTo}
+    associated_token::AssociatedToken,
+    token::{mint_to, Mint, MintTo, Token, TokenAccount},
 };
 use near_sdk::json_types::U128;
 use std::{
@@ -11,16 +12,34 @@ use std::{
     vec,
 };
 
-use crate::{constants::{AUTHORITY_SEED, CONFIG_SEED}, state::config::Config};
+use crate::{
+    constants::{
+        AUTHORITY_SEED, CONFIG_SEED, USED_NONCES_ACCOUNT_SIZE, USED_NONCES_PER_ACCOUNT,
+        USED_NONCES_SEED,
+    },
+    state::{config::Config, used_nonces::UsedNonces},
+};
 
 #[derive(Accounts)]
 #[instruction(data: FinalizeDepositData)]
-pub struct FinalizeDeposit<'info> {    
+pub struct FinalizeDeposit<'info> {
     #[account(
+        mut,
         seeds = [CONFIG_SEED],
         bump = config.bumps.config,
     )]
     pub config: Account<'info, Config>,
+    #[account(
+        init_if_needed,
+        space = USED_NONCES_ACCOUNT_SIZE,
+        payer = payer,
+        seeds = [
+            USED_NONCES_SEED,
+            &(data.payload.nonce / USED_NONCES_PER_ACCOUNT as u128).to_le_bytes(),
+        ],
+        bump,
+    )]
+    pub used_nonces: AccountLoader<'info, UsedNonces>,
 
     #[account(
         constraint = recipient.key == &data.payload.recipient,
@@ -57,7 +76,15 @@ pub struct FinalizeDeposit<'info> {
 }
 
 impl<'info> FinalizeDeposit<'info> {
-    pub fn mint(&self, data: FinalizeDepositData) -> Result<()> {
+    pub fn mint(&mut self, data: FinalizeDepositData) -> Result<()> {
+        UsedNonces::use_nonce(
+            data.payload.nonce,
+            &self.used_nonces,
+            &mut self.config,
+            self.payer.to_account_info(),
+            &Rent::get()?,
+            self.system_program.to_account_info(),
+        )?;
         let bump = &[self.config.bumps.authority];
         let signer_seeds = &[&[AUTHORITY_SEED, bump][..]];
 

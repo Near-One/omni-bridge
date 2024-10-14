@@ -2,6 +2,7 @@ use anchor_lang::prelude::*;
 use instructions::*;
 
 pub mod constants;
+pub mod error;
 pub mod instructions;
 pub mod state;
 
@@ -60,7 +61,10 @@ pub mod bridge_token_factory {
         Ok(())
     }
 
-    pub fn finalize_withdraw(ctx: Context<FinalizeWithdraw>, data: FinalizeDepositData) -> Result<()> {
+    pub fn finalize_withdraw(
+        ctx: Context<FinalizeWithdraw>,
+        data: FinalizeDepositData,
+    ) -> Result<()> {
         msg!("Finalizing withdraw");
 
         data.verify_signature()?;
