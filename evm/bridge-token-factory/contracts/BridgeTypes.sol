@@ -2,7 +2,7 @@
 pragma solidity ^0.8.24;
 
 library BridgeTypes {
-    struct FinTransferPayload {
+    struct MintTokenPayload {
         uint128 nonce;
         string token;
         uint128 amount;
@@ -31,7 +31,7 @@ library BridgeTypes {
         string feeRecipient;
     }
 
-        event InitTransfer(
+    event BurnToken(
         address indexed sender,
         address indexed tokenAddress,
         uint128 indexed nonce,
@@ -42,7 +42,7 @@ library BridgeTypes {
         string recipient
     );
 
-    event FinTransfer(
+    event MintToken(
         uint128 indexed nonce,
         string token,
         uint128 amount,

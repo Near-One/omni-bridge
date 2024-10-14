@@ -34,8 +34,8 @@ contract BridgeTokenFactory is
 
     bytes32 public constant PAUSABLE_ADMIN_ROLE = keccak256("PAUSABLE_ADMIN_ROLE");
     uint constant UNPAUSED_ALL = 0;
-    uint constant PAUSED_INIT_TRANSFER = 1 << 0;
-    uint constant PAUSED_FIN_TRANSFER = 1 << 1;
+    uint constant PAUSED_BURN_TOKEN = 1 << 0;
+    uint constant PAUSED_MINT_TOKEN = 1 << 1;
     uint constant PAUSED_LOCK_TOKEN = 1 << 2;
     uint constant PAUSED_UNLOCK_TOKEN = 1 << 3;
 
@@ -125,7 +125,7 @@ contract BridgeTokenFactory is
         );
     }
 
-    function finTransfer(bytes calldata signatureData, BridgeTypes.FinTransferPayload calldata payload) payable external whenNotPaused(PAUSED_FIN_TRANSFER) {
+    function mintToken(bytes calldata signatureData, BridgeTypes.MintTokenPayload calldata payload) payable external whenNotPaused(PAUSED_FIN_TRANSFER) {
         if (completedTransfers[payload.nonce]) {
             revert NonceAlreadyUsed(payload.nonce);
         }
@@ -151,9 +151,9 @@ contract BridgeTokenFactory is
 
         completedTransfers[payload.nonce] = true;
 
-        finTransferExtension(payload);
+        mintTokenExtension(payload);
 
-        emit BridgeTypes.FinTransfer(
+        emit BridgeTypes.MintToken(
             payload.nonce,
             payload.token,
             payload.amount,
@@ -162,9 +162,9 @@ contract BridgeTokenFactory is
         );
     }
 
-    function finTransferExtension(BridgeTypes.FinTransferPayload memory payload) internal virtual {}
+    function mintTokenExtension(BridgeTypes.MintTokenPayload memory payload) internal virtual {}
 
-    function initTransfer(
+    function burnToken(
         string calldata token,
         uint128 amount,
         uint128 fee,
@@ -182,12 +182,12 @@ contract BridgeTokenFactory is
         BridgeToken(tokenAddress).burn(msg.sender, amount);
 
         uint256 extensionValue = msg.value - nativeFee;
-        initTransferExtension(currentNonce, token, amount, fee, nativeFee, recipient, msg.sender, extensionValue);
+        burnTokenExtension(currentNonce, token, amount, fee, nativeFee, recipient, msg.sender, extensionValue);
 
-        emit BridgeTypes.InitTransfer(msg.sender, tokenAddress, currentNonce, token , amount, fee, nativeFee, recipient);
+        emit BridgeTypes.BurnToken(msg.sender, tokenAddress, currentNonce, token , amount, fee, nativeFee, recipient);
     }
 
-    function initTransferExtension(
+    function burnTokenExtension(
         uint128 nonce,
         string calldata token,
         uint128 amount,
