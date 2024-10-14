@@ -106,8 +106,8 @@ pub async fn start_indexer(
                 continue;
             };
 
-            let Some(log_index) = log.log_index else {
-                warn!("No log index in log: {:?}", log);
+            let Some(topic) = log.topic0() else {
+                warn!("No topic in log: {:?}", log);
                 continue;
             };
 
@@ -117,8 +117,8 @@ pub async fn start_indexer(
                 &jsonrpc_client,
                 H256::from_slice(tx_hash.as_slice()),
                 tx_logs,
-                log,
-                log_index,
+                log.clone(),
+                H256::from_slice(topic.as_slice()),
             )
             .await;
         }
@@ -138,8 +138,8 @@ pub async fn start_indexer(
             continue;
         };
 
-        let Some(log_index) = log.log_index else {
-            warn!("No log index in log: {:?}", log);
+        let Some(topic) = log.topic0() else {
+            warn!("No topic in log: {:?}", log);
             continue;
         };
 
@@ -149,8 +149,8 @@ pub async fn start_indexer(
             &jsonrpc_client,
             H256::from_slice(tx_hash.as_slice()),
             tx_logs,
-            log,
-            log_index,
+            log.clone(),
+            H256::from_slice(topic.as_slice()),
         )
         .await;
     }
@@ -165,7 +165,7 @@ async fn process_log(
     tx_hash: H256,
     tx_logs: Option<TransactionReceipt>,
     log: Log,
-    log_index: u64,
+    topic: H256,
 ) {
     if let Some(block_height) = log.block_number {
         utils::redis::update_last_processed_block(
@@ -218,44 +218,41 @@ async fn process_log(
         None
     };
 
-    let prover_args =
-        if let Some(vaa) = vaa {
-            let wormhole_proof_args = WormholeVerifyProofArgs {
-                proof_kind: ProofKind::InitTransfer,
-                vaa,
-            };
-
-            let mut prover_args = Vec::new();
-            if let Err(err) = wormhole_proof_args.serialize(&mut prover_args) {
-                warn!("Failed to serialize wormhole proof: {}", err);
-            }
-
-            prover_args
-        } else {
-            let evm_proof_args =
-                match eth_proof::get_proof_for_event(tx_hash, log_index, &config.evm.rpc_http_url)
-                    .await
-                {
-                    Ok(proof) => proof,
-                    Err(err) => {
-                        warn!("Failed to get proof: {}", err);
-                        return;
-                    }
-                };
-
-            let evm_proof_args = EvmVerifyProofArgs {
-                proof_kind: ProofKind::InitTransfer,
-                proof: evm_proof_args,
-            };
-
-            let mut prover_args = Vec::new();
-            if let Err(err) = evm_proof_args.serialize(&mut prover_args) {
-                warn!("Failed to serialize evm proof: {}", err);
-                return;
-            }
-
-            prover_args
+    let prover_args = if let Some(vaa) = vaa {
+        let wormhole_proof_args = WormholeVerifyProofArgs {
+            proof_kind: ProofKind::InitTransfer,
+            vaa,
         };
+
+        let mut prover_args = Vec::new();
+        if let Err(err) = wormhole_proof_args.serialize(&mut prover_args) {
+            warn!("Failed to serialize wormhole proof: {}", err);
+        }
+
+        prover_args
+    } else {
+        let evm_proof_args =
+            match eth_proof::get_proof_for_event(tx_hash, topic, &config.evm.rpc_http_url).await {
+                Ok(proof) => proof,
+                Err(err) => {
+                    warn!("Failed to get proof: {}", err);
+                    return;
+                }
+            };
+
+        let evm_proof_args = EvmVerifyProofArgs {
+            proof_kind: ProofKind::InitTransfer,
+            proof: evm_proof_args,
+        };
+
+        let mut prover_args = Vec::new();
+        if let Err(err) = evm_proof_args.serialize(&mut prover_args) {
+            warn!("Failed to serialize evm proof: {}", err);
+            return;
+        }
+
+        prover_args
+    };
 
     if let Ok(init_log) = log.log_decode::<InitTransfer>() {
         let Ok(token) = init_log.inner.token.parse::<AccountId>() else {
