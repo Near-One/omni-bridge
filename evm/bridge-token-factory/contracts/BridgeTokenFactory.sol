@@ -125,7 +125,10 @@ contract BridgeTokenFactory is
         );
     }
 
-    function mintToken(bytes calldata signatureData, BridgeTypes.MintTokenPayload calldata payload) payable external whenNotPaused(PAUSED_FIN_TRANSFER) {
+    function mintToken(
+        bytes calldata signatureData, 
+        BridgeTypes.MintTokenPayload calldata payload
+    ) payable external whenNotPaused(PAUSED_MINT_TOKEN) {
         if (completedTransfers[payload.nonce]) {
             revert NonceAlreadyUsed(payload.nonce);
         }
@@ -170,7 +173,7 @@ contract BridgeTokenFactory is
         uint128 fee,
         uint128 nativeFee,
         string calldata recipient
-    ) payable external whenNotPaused(PAUSED_INIT_TRANSFER) {
+    ) payable external whenNotPaused(PAUSED_BURN_TOKEN) {
         currentNonce += 1;
         require(isBridgeToken[nearToEthToken[token]], "ERR_NOT_BRIDGE_TOKEN");
         if (fee >= amount) {
@@ -310,7 +313,7 @@ contract BridgeTokenFactory is
     }
 
     function pauseAll() external onlyRole(PAUSABLE_ADMIN_ROLE) {
-        uint flags = PAUSED_FIN_TRANSFER | PAUSED_INIT_TRANSFER;
+        uint flags = PAUSED_MINT_TOKEN | PAUSED_BURN_TOKEN;
         _pause(flags);
     }
  
