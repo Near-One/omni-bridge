@@ -238,7 +238,7 @@ pub async fn sign_claim_native_fee(
                     let connector = connector.clone();
 
                     async move {
-                        let Nep141LockerEvent::FinTransferEvent {
+                        let Nep141LockerEvent::ClaimFeeEvent {
                             ref transfer_message,
                             ..
                         } = event
