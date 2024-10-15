@@ -20,17 +20,17 @@ tokio = { version = "1", features = ["sync", "time", "macros", "rt-multi-thread"
 tokio-stream = { version = "0.1" }
 
 ethereum-types = "0.14.1"
-omni-types = { git = "https://github.com/near-one/omni-bridge", package = "omni-types", rev = "8371f5651be317b601703642903a136e8c8c4f13" }
+omni-types = { git = "https://github.com/near-one/omni-bridge", package = "omni-types", rev = "21a328f5388bfa98d1ba1eb40b541316429a4369" }
 
 near-lake-framework = "0.7.9"
 near-jsonrpc-client = "0.13.0"
 near-jsonrpc-primitives = "0.26.0"
 near-primitives = "0.26.0"
 near-crypto = "0.26.0"
-eth-proof = { git = "https://github.com/Near-One/rainbow-bridge-sdk-rs", branch = "omni-token-support", package = "eth-proof" }
-omni-connector = { git = "https://github.com/Near-One/rainbow-bridge-sdk-rs", branch = "omni-token-support", package = "omni-connector" }
+eth-proof = { git = "https://github.com/Near-One/rainbow-bridge-sdk-rs", package = "eth-proof" }
+omni-connector = { git = "https://github.com/Near-One/rainbow-bridge-sdk-rs", package = "omni-connector" }
 
-alloy = { version = "0.3", features = ["node-bindings", "providers", "rpc-types", "sol-types", "provider-ws"] }
+alloy = { version = "0.4.2", features = ["node-bindings", "providers", "rpc-types", "sol-types", "provider-ws"] }
 
 redis = { version = "0.27.0", features = ["aio", "tokio-comp"] }
 reqwest = "0.12"

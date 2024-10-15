@@ -4,9 +4,12 @@ use redis::{aio::MultiplexedConnection, AsyncCommands};
 pub const NEAR_LAST_PROCESSED_BLOCK: &str = "near_last_processed_block";
 pub const NEAR_INIT_TRANSFER_EVENTS: &str = "near_init_transfer_events";
 pub const NEAR_SIGN_TRANSFER_EVENTS: &str = "near_sign_transfer_events";
+
 pub const ETH_LAST_PROCESSED_BLOCK: &str = "eth_last_processed_block";
 pub const ETH_WITHDRAW_EVENTS: &str = "eth_withdraw_events";
+
 pub const FINALIZED_TRANSFERS: &str = "finalized_transfers";
+
 pub const SLEEP_TIME_AFTER_EVENTS_PROCESS_SECS: u64 = 10;
 
 const RETRY_ATTEMPTS: u64 = 10;

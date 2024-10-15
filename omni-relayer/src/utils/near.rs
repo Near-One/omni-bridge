@@ -46,39 +46,35 @@ pub async fn handle_streamer_message(
             Nep141LockerEvent::InitTransferEvent {
                 ref transfer_message,
             }
-            // TODO: Later it's better to add a separate key in db for storing events with any
-            // troubles there. For now we just update whole event with a new fee for the same nonce
             | Nep141LockerEvent::UpdateFeeEvent {
                 ref transfer_message,
             } => {
-                // TODO: If fee is insufficient, it should be handled later. For example,
-                // add to redis and try again in 1 hour
                 match utils::fee::is_fee_sufficient(
                     jsonrpc_client,
                     &transfer_message.sender,
                     &transfer_message.recipient,
                     &transfer_message.token,
-                    transfer_message.fee.into(),
+                    transfer_message.fee.fee.into(),
                 )
                 .await
                 {
                     Ok(res) => {
-                        if !res {
-                            warn!("Fee is insufficient");
+                        if res {
+                            utils::redis::add_event(
+                                redis_connection,
+                                utils::redis::NEAR_INIT_TRANSFER_EVENTS,
+                                transfer_message.origin_nonce.0.to_string(),
+                                log,
+                            )
+                            .await;
+                        } else {
+                            warn!("Fee is not sufficient for transfer: {:?}", transfer_message);
                         }
                     }
                     Err(err) => {
                         warn!("Failed to check fee: {}", err);
                     }
                 }
-
-                utils::redis::add_event(
-                    redis_connection,
-                    utils::redis::NEAR_INIT_TRANSFER_EVENTS,
-                    transfer_message.origin_nonce.0.to_string(),
-                    log,
-                )
-                .await;
             }
             Nep141LockerEvent::SignTransferEvent {
                 ref message_payload,
@@ -93,7 +89,9 @@ pub async fn handle_streamer_message(
                 .await;
             }
             Nep141LockerEvent::FinTransferEvent { .. }
-            | Nep141LockerEvent::LogMetadataEvent { .. } => {}
+            | Nep141LockerEvent::LogMetadataEvent { .. }
+            | Nep141LockerEvent::SignClaimNativeFeeEvent { .. }
+            | Nep141LockerEvent::ClaimFeeEvent { .. } => {}
         }
     }
 }

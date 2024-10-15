@@ -56,7 +56,7 @@ pub async fn sign_transfer(
                             .sign_transfer(
                                 transfer_message.origin_nonce.into(),
                                 Some(config.near.token_locker_id),
-                                transfer_message.fee.into(),
+                                Some(transfer_message.fee),
                             )
                             .await
                         {

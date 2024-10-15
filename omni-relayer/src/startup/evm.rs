@@ -1,3 +1,5 @@
+use std::str::FromStr;
+
 use anyhow::{Context, Result};
 use log::{info, warn};
 use tokio_stream::StreamExt;
@@ -8,7 +10,7 @@ use omni_types::{
     locker_args::{ClaimFeeArgs, FinTransferArgs, StorageDepositArgs},
     prover_args::{EvmVerifyProofArgs, WormholeVerifyProofArgs},
     prover_result::ProofKind,
-    ChainKind,
+    ChainKind, OmniAddress, H160,
 };
 
 use alloy::{
@@ -21,8 +23,6 @@ use ethereum_types::H256;
 
 use crate::{config, utils};
 
-const WORMHOLE_CHAIN_ID: u64 = 2;
-
 sol!(
     #[derive(Debug, serde::Serialize, serde::Deserialize)]
     event InitTransfer(
@@ -32,6 +32,7 @@ sol!(
         string token,
         uint128 amount,
         uint128 fee,
+        uint128 nativeFee,
         string recipient
     );
 
@@ -61,14 +62,14 @@ pub async fn start_indexer(
 
     let http_provider = ProviderBuilder::new().on_http(
         config
-            .eth
+            .evm
             .rpc_http_url
             .parse()
             .context("Failed to parse ETH rpc provider as url")?,
     );
 
     let ws_provider = ProviderBuilder::new()
-        .on_ws(WsConnect::new(config.eth.rpc_ws_url.clone()))
+        .on_ws(WsConnect::new(config.evm.rpc_ws_url.clone()))
         .await
         .context("Failed to initialize WS provider")?;
 
@@ -77,20 +78,20 @@ pub async fn start_indexer(
         utils::redis::get_last_processed_block(&mut redis_connection, "eth_last_processed_block")
             .await
             .map_or_else(
-                || latest_block.saturating_sub(config.eth.block_processing_batch_size),
+                || latest_block.saturating_sub(config.evm.block_processing_batch_size),
                 |block| block,
             );
 
     let filter = Filter::new()
-        .address(config.eth.bridge_token_factory_address)
-        .event_signature([FinTransfer::SIGNATURE_HASH, InitTransfer::SIGNATURE_HASH].to_vec());
+        .address(config.evm.bridge_token_factory_address)
+        .event_signature([InitTransfer::SIGNATURE_HASH, FinTransfer::SIGNATURE_HASH].to_vec());
 
     for current_block in
-        (from_block..latest_block).step_by(config.eth.block_processing_batch_size as usize)
+        (from_block..latest_block).step_by(config.evm.block_processing_batch_size as usize)
     {
         let logs = http_provider
             .get_logs(&filter.clone().from_block(current_block).to_block(
-                (current_block + config.eth.block_processing_batch_size).min(latest_block),
+                (current_block + config.evm.block_processing_batch_size).min(latest_block),
             ))
             .await?;
 
@@ -105,8 +106,8 @@ pub async fn start_indexer(
                 continue;
             };
 
-            let Some(log_index) = log.log_index else {
-                warn!("No log index in log: {:?}", log);
+            let Some(topic) = log.topic0() else {
+                warn!("No topic in log: {:?}", log);
                 continue;
             };
 
@@ -116,8 +117,8 @@ pub async fn start_indexer(
                 &jsonrpc_client,
                 H256::from_slice(tx_hash.as_slice()),
                 tx_logs,
-                log,
-                log_index,
+                log.clone(),
+                H256::from_slice(topic.as_slice()),
             )
             .await;
         }
@@ -137,8 +138,8 @@ pub async fn start_indexer(
             continue;
         };
 
-        let Some(log_index) = log.log_index else {
-            warn!("No log index in log: {:?}", log);
+        let Some(topic) = log.topic0() else {
+            warn!("No topic in log: {:?}", log);
             continue;
         };
 
@@ -148,8 +149,8 @@ pub async fn start_indexer(
             &jsonrpc_client,
             H256::from_slice(tx_hash.as_slice()),
             tx_logs,
-            log,
-            log_index,
+            log.clone(),
+            H256::from_slice(topic.as_slice()),
         )
         .await;
     }
@@ -164,7 +165,7 @@ async fn process_log(
     tx_hash: H256,
     tx_logs: Option<TransactionReceipt>,
     log: Log,
-    log_index: u64,
+    topic: H256,
 ) {
     if let Some(block_height) = log.block_number {
         utils::redis::update_last_processed_block(
@@ -178,15 +179,37 @@ async fn process_log(
     let vaa = if let Some(tx_logs) = tx_logs {
         let mut vaa = None;
 
-        for log in tx_logs.inner.logs() {
-            if let Ok(log) = log.log_decode::<LogMessagePublished>() {
-                vaa = utils::wormhole::get_vaa(
-                    WORMHOLE_CHAIN_ID,
-                    config.eth.bridge_token_factory_address,
-                    log.inner.sequence,
-                )
-                .await
-                .ok();
+        let recipient = if let Ok(init_log) = log.log_decode::<InitTransfer>() {
+            init_log.inner.recipient.parse::<OmniAddress>().ok()
+        } else if let Ok(fin_log) = log.log_decode::<FinTransfer>() {
+            fin_log
+                .inner
+                .recipient
+                .to_string()
+                .parse::<OmniAddress>()
+                .ok()
+        } else {
+            None
+        };
+
+        if let Some(address) = recipient {
+            let chain_id = match address {
+                OmniAddress::Eth(_) => 2,
+                OmniAddress::Near(_) => 15,
+                OmniAddress::Sol(_) => 1,
+                OmniAddress::Arb(_) | OmniAddress::Base(_) => todo!(),
+            };
+
+            for log in tx_logs.inner.logs() {
+                if let Ok(log) = log.log_decode::<LogMessagePublished>() {
+                    vaa = utils::wormhole::get_vaa(
+                        chain_id,
+                        config.evm.bridge_token_factory_address,
+                        log.inner.sequence,
+                    )
+                    .await
+                    .ok();
+                }
             }
         }
 
@@ -195,58 +218,55 @@ async fn process_log(
         None
     };
 
-    let prover_args =
-        if let Some(vaa) = vaa {
-            let wormhole_proof_args = WormholeVerifyProofArgs {
-                proof_kind: ProofKind::InitTransfer,
-                vaa,
-            };
-
-            let mut prover_args = Vec::new();
-            if let Err(err) = wormhole_proof_args.serialize(&mut prover_args) {
-                warn!("Failed to serialize wormhole proof: {}", err);
-            }
-
-            prover_args
-        } else {
-            let evm_proof_args =
-                match eth_proof::get_proof_for_event(tx_hash, log_index, &config.eth.rpc_http_url)
-                    .await
-                {
-                    Ok(proof) => proof,
-                    Err(err) => {
-                        warn!("Failed to get proof: {}", err);
-                        return;
-                    }
-                };
-
-            let evm_proof_args = EvmVerifyProofArgs {
-                proof_kind: ProofKind::InitTransfer,
-                proof: evm_proof_args,
-            };
-
-            let mut prover_args = Vec::new();
-            if let Err(err) = evm_proof_args.serialize(&mut prover_args) {
-                warn!("Failed to serialize evm proof: {}", err);
-                return;
-            }
-
-            prover_args
+    let prover_args = if let Some(vaa) = vaa {
+        let wormhole_proof_args = WormholeVerifyProofArgs {
+            proof_kind: ProofKind::InitTransfer,
+            vaa,
         };
 
-    if let Ok(withdraw_log) = log.log_decode::<InitTransfer>() {
-        let Ok(token) = withdraw_log.inner.token.parse::<AccountId>() else {
+        let mut prover_args = Vec::new();
+        if let Err(err) = wormhole_proof_args.serialize(&mut prover_args) {
+            warn!("Failed to serialize wormhole proof: {}", err);
+        }
+
+        prover_args
+    } else {
+        let evm_proof_args =
+            match eth_proof::get_proof_for_event(tx_hash, topic, &config.evm.rpc_http_url).await {
+                Ok(proof) => proof,
+                Err(err) => {
+                    warn!("Failed to get proof: {}", err);
+                    return;
+                }
+            };
+
+        let evm_proof_args = EvmVerifyProofArgs {
+            proof_kind: ProofKind::InitTransfer,
+            proof: evm_proof_args,
+        };
+
+        let mut prover_args = Vec::new();
+        if let Err(err) = evm_proof_args.serialize(&mut prover_args) {
+            warn!("Failed to serialize evm proof: {}", err);
+            return;
+        }
+
+        prover_args
+    };
+
+    if let Ok(init_log) = log.log_decode::<InitTransfer>() {
+        let Ok(token) = init_log.inner.token.parse::<AccountId>() else {
             warn!(
                 "Failed to parse token as AccountId: {:?}",
-                withdraw_log.inner.token
+                init_log.inner.token
             );
             return;
         };
 
-        let Ok(recipient) = withdraw_log.inner.recipient.parse::<AccountId>() else {
+        let Ok(recipient) = init_log.inner.recipient.parse::<AccountId>() else {
             warn!(
                 "Failed to parse recipient as AccountId: {:?}",
-                withdraw_log.inner.recipient
+                init_log.inner.recipient
             );
             return;
         };
@@ -265,6 +285,8 @@ async fn process_log(
 
         let fin_transfer_args = FinTransferArgs {
             chain_kind: ChainKind::Eth,
+            // TODO: Add native fee recipient
+            native_fee_recipient: OmniAddress::Eth(H160::from_str("").unwrap()),
             storage_deposit_args: StorageDepositArgs {
                 token,
                 accounts: vec![
@@ -292,6 +314,8 @@ async fn process_log(
         let claim_fee_args = ClaimFeeArgs {
             chain_kind: ChainKind::Eth,
             prover_args,
+            // TODO: Add native fee recipient
+            native_fee_recipient: OmniAddress::Eth(H160::from_str("").unwrap()),
         };
 
         let mut serialized_claim_fee_args = Vec::new();
