@@ -41,14 +41,20 @@ pub async fn sign_transfer(
                     let connector = connector.clone();
 
                     async move {
-                        let Nep141LockerEvent::InitTransferEvent { transfer_message } = event
+                        let (Nep141LockerEvent::InitTransferEvent { transfer_message }
+                        | Nep141LockerEvent::FinTransferEvent {
+                            transfer_message, ..
+                        }) = event
                         else {
-                            warn!("Expected InitTransferEvent, got: {:?}", event);
+                            warn!(
+                                "Expected InitTransferEvent/FinTransferEvent, got: {:?}",
+                                event
+                            );
                             return;
                         };
 
                         info!(
-                            "Received InitTransferEvent: {}",
+                            "Received InitTransferEvent/FinTransferEvent: {}",
                             transfer_message.origin_nonce.0
                         );
 
