@@ -207,7 +207,7 @@ contract BridgeTokenFactory is
     ) internal virtual {}
 
     function lockToken(
-        address ethToken,
+        address tokenAddress,
         uint128 amount,
         uint128 fee,
         uint128 nativeFee,
@@ -219,11 +219,11 @@ contract BridgeTokenFactory is
         }
 
         currentNonce += 1;
-        IERC20(ethToken).safeTransferFrom(msg.sender, address(this), amount);
+        IERC20(tokenAddress).safeTransferFrom(msg.sender, address(this), amount);
         uint256 extensionValue = msg.value - nativeFee;
-        lockTokenExtension(currentNonce, ethToken, msg.sender, amount, fee, nativeFee, recipient, message, extensionValue);
+        lockTokenExtension(currentNonce, tokenAddress, msg.sender, amount, fee, nativeFee, recipient, message, extensionValue);
 
-        emit BridgeTypes.Locked(currentNonce, ethToken, msg.sender, amount, fee, nativeFee, recipient, message);
+        emit BridgeTypes.Locked(currentNonce, tokenAddress, msg.sender, amount, fee, nativeFee, recipient, message);
     }
 
     function lockTokenExtension(
