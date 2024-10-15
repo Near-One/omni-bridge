@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use anyhow::Result;
 use futures::future::join_all;
-use log::warn;
+use log::{error, info, warn};
 
 use near_primitives::borsh;
 use omni_connector::OmniConnector;
@@ -39,8 +39,6 @@ pub async fn finalize_withdraw(
                     let connector = connector.clone();
 
                     async move {
-                        log::info!("Received FinTransfer log");
-
                         let Ok(fin_transfer_args) =
                             borsh::from_slice::<FinTransferArgs>(&withdraw_log)
                         else {
@@ -48,9 +46,11 @@ pub async fn finalize_withdraw(
                             return;
                         };
 
+                        info!("Received FinTransfer log");
+
                         match connector.near_fin_transfer(fin_transfer_args).await {
                             Ok(tx_hash) => {
-                                log::info!("Finalized withdraw: {:?}", tx_hash);
+                                info!("Finalized withdraw: {:?}", tx_hash);
                                 utils::redis::remove_event(
                                     &mut redis_connection,
                                     utils::redis::ETH_WITHDRAW_EVENTS,
@@ -58,7 +58,7 @@ pub async fn finalize_withdraw(
                                 )
                                 .await;
                             }
-                            Err(err) => log::error!("Failed to finalize withdraw: {}", err),
+                            Err(err) => error!("Failed to finalize withdraw: {}", err),
                         }
                     }
                 }));
@@ -108,11 +108,11 @@ pub async fn claim_native_fee(
                             return;
                         };
 
-                        log::info!("Received SignClaimNativeFeeEvent log");
+                        info!("Received SignClaimNativeFeeEvent log");
 
                         match connector.evm_claim_native_fee_with_log(event).await {
                             Ok(tx_hash) => {
-                                log::info!("Claimed native fee: {:?}", tx_hash);
+                                info!("Claimed native fee: {:?}", tx_hash);
                                 utils::redis::remove_event(
                                     &mut redis_connection,
                                     utils::redis::NEAR_SIGN_CLAIM_NATIVE_FEE_EVENTS,
@@ -120,7 +120,7 @@ pub async fn claim_native_fee(
                                 )
                                 .await;
                             }
-                            Err(err) => log::error!("Failed to claim native fee: {}", err),
+                            Err(err) => error!("Failed to claim native fee: {}", err),
                         }
                     }
                 }));

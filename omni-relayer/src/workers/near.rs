@@ -127,6 +127,8 @@ pub async fn finalize_transfer(
                             return;
                         };
 
+                        info!("Received SignTransferEvent");
+
                         match connector.evm_fin_transfer_with_log(event).await {
                             Ok(tx_hash) => {
                                 info!("Finalized deposit: {}", tx_hash);
@@ -253,7 +255,7 @@ pub async fn sign_claim_native_fee(
                             return;
                         };
 
-                        log::info!("Received ClaimFeeEvent log");
+                        info!("Received ClaimFeeEvent log");
 
                         match connector
                             .sign_claim_native_fee(
@@ -263,7 +265,7 @@ pub async fn sign_claim_native_fee(
                             .await
                         {
                             Ok(tx_hash) => {
-                                log::info!("Signed claiming native fee: {:?}", tx_hash);
+                                info!("Signed claiming native fee: {:?}", tx_hash);
                                 utils::redis::remove_event(
                                     &mut redis_connection,
                                     utils::redis::NEAR_SIGN_CLAIM_NATIVE_FEE_QUEUE,
@@ -271,7 +273,7 @@ pub async fn sign_claim_native_fee(
                                 )
                                 .await;
                             }
-                            Err(err) => log::error!("Failed to sign claiming native fee: {}", err),
+                            Err(err) => error!("Failed to sign claiming native fee: {}", err),
                         };
                     }
                 }));
