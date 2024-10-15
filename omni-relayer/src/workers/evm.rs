@@ -84,7 +84,7 @@ pub async fn claim_native_fee(
         let mut redis_connection_clone = redis_connection.clone();
         let Some(events) = utils::redis::get_events(
             &mut redis_connection_clone,
-            utils::redis::ETH_WITHDRAW_EVENTS.to_string(),
+            utils::redis::NEAR_SIGN_CLAIM_NATIVE_FEE_EVENTS.to_string(),
         )
         .await
         else {
