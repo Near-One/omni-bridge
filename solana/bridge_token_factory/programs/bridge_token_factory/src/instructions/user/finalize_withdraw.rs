@@ -1,8 +1,5 @@
 use anchor_lang::prelude::*;
-use anchor_spl::{
-    associated_token::AssociatedToken,
-    token::{transfer, Mint, Token, TokenAccount, Transfer},
-};
+use anchor_spl::{associated_token::AssociatedToken, token_2022::{transfer_checked, TransferChecked}, token_interface::{Mint, TokenAccount, TokenInterface}};
 
 use crate::{
     constants::{
@@ -48,9 +45,11 @@ pub struct FinalizeWithdraw<'info> {
 
     #[account(
         constraint = !mint.mint_authority.contains(authority.key),
+        mint::token_program = token_program,
     )]
-    pub mint: Account<'info, Mint>,
+    pub mint: InterfaceAccount<'info, Mint>,
 
+    // if this account exists the mint registration is already sent
     #[account(
         mut,
         token::mint = mint,
@@ -60,23 +59,25 @@ pub struct FinalizeWithdraw<'info> {
             mint.key().as_ref(),
         ],
         bump,
+        token::token_program = token_program,
     )]
-    pub vault: Account<'info, TokenAccount>,
+    pub vault: InterfaceAccount<'info, TokenAccount>,
 
     #[account(
         init_if_needed,
         payer = payer,
         associated_token::mint = mint,
         associated_token::authority = recipient,
+        token::token_program = token_program,
     )]
-    pub token_account: Account<'info, TokenAccount>,
+    pub token_account: InterfaceAccount<'info, TokenAccount>,
 
     #[account(mut)]
     pub payer: Signer<'info>,
 
     pub associated_token_program: Program<'info, AssociatedToken>,
     pub system_program: Program<'info, System>,
-    pub token_program: Program<'info, Token>,
+    pub token_program: Interface<'info, TokenInterface>,
 }
 
 impl<'info> FinalizeWithdraw<'info> {
@@ -93,17 +94,19 @@ impl<'info> FinalizeWithdraw<'info> {
         let bump = &[self.config.bumps.authority];
         let signer_seeds = &[&[AUTHORITY_SEED, bump][..]];
 
-        transfer(
+        transfer_checked(
             CpiContext::new_with_signer(
                 self.token_program.to_account_info(),
-                Transfer {
+                TransferChecked {
                     from: self.vault.to_account_info(),
                     to: self.recipient.to_account_info(),
                     authority: self.authority.to_account_info(),
+                    mint: self.mint.to_account_info(),
                 },
                 signer_seeds,
             ),
             data.payload.amount.try_into().unwrap(),
+            self.mint.decimals,
         )?;
 
         Ok(())

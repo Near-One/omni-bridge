@@ -1,12 +1,27 @@
 use anchor_lang::prelude::*;
 use anchor_spl::{
     associated_token::AssociatedToken,
-    metadata::MetadataAccount,
-    token::{Mint, Token, TokenAccount},
+    metadata::MetadataAccount as MplMetadata,
+    token_2022::{
+        self,
+        spl_token_2022::{
+            self,
+            extension::{
+                metadata_pointer::MetadataPointer, BaseStateWithExtensions, StateWithExtensions,
+            },
+        },
+    },
+    token_interface::{
+        spl_token_metadata_interface::state::TokenMetadata, Mint, TokenAccount, TokenInterface,
+    },
 };
-use wormhole_anchor_sdk::wormhole::{post_message, program::Wormhole, BridgeData, FeeCollector, Finality, PostMessage, SequenceTracker};
+use wormhole_anchor_sdk::wormhole::{
+    post_message, program::Wormhole, BridgeData, FeeCollector, Finality, PostMessage,
+    SequenceTracker,
+};
 
 use super::MetadataPayload;
+use crate::error::ErrorCode;
 use crate::{
     constants::{AUTHORITY_SEED, CONFIG_SEED, MESSAGE_SEED, VAULT_SEED},
     state::config::Config,
@@ -29,19 +44,14 @@ pub struct RegisterMint<'info> {
 
     #[account(
         constraint = !mint.mint_authority.contains(authority.key),
+        mint::token_program = token_program,
     )]
-    pub mint: Account<'info, Mint>,
+    pub mint: InterfaceAccount<'info, Mint>,
 
-    #[account(
-        seeds = [
-            b"metadata",
-            MetaplexID.as_ref(),
-            &mint.key().to_bytes(),
-        ],
-        bump,
-        seeds::program = MetaplexID,
-    )]
-    pub metadata: Account<'info, MetadataAccount>,
+    pub override_authority: Option<Signer<'info>>,
+
+    #[account()]
+    pub metadata: Option<Account<'info, MplMetadata>>,
 
     #[account(
         init,
@@ -53,8 +63,9 @@ pub struct RegisterMint<'info> {
             mint.key().as_ref(),
         ],
         bump,
+        token::token_program = token_program,
     )]
-    pub vault: Account<'info, TokenAccount>,
+    pub vault: InterfaceAccount<'info, TokenAccount>,
 
     /// Wormhole bridge data. [`wormhole::post_message`] requires this account
     /// be mutable.
@@ -98,18 +109,72 @@ pub struct RegisterMint<'info> {
     pub rent: Sysvar<'info, Rent>,
 
     pub system_program: Program<'info, System>,
-    pub token_program: Program<'info, Token>,
+    pub token_program: Interface<'info, TokenInterface>,
     pub associated_token_program: Program<'info, AssociatedToken>,
     pub wormhole_program: Program<'info, Wormhole>,
 }
 
 impl<'info> RegisterMint<'info> {
-    pub fn process(&mut self, wormhole_message_bump: u8) -> Result<()> {
+    pub fn process(
+        &mut self,
+        name_override: String,
+        symbol_override: String,
+        wormhole_message_bump: u8,
+    ) -> Result<()> {
+        let (name, symbol) = if let Some(override_authority) = self.override_authority.as_ref() {
+            match override_authority.key() {
+                a if a == self.config.admin => {}
+                a if self.mint.mint_authority.contains(&a) => {}
+                _ => return Err(ErrorCode::Unauthorized.into()),
+            }
+            (name_override, symbol_override)
+        } else {
+            if self.token_program.key() == token_2022::ID {
+                let mint_account_info = self.mint.to_account_info();
+                let mint_data = mint_account_info.try_borrow_data()?;
+                let mint_with_extension =
+                    StateWithExtensions::<spl_token_2022::state::Mint>::unpack(&mint_data)?;
+                let metadata_pointer = mint_with_extension
+                    .get_extension::<MetadataPointer>()
+                    .or(err!(ErrorCode::TokenMetadataNotProvided))?;
+                if metadata_pointer.metadata_address.0 == self.mint.key() {
+                    let metadata =
+                        mint_with_extension.get_variable_len_extension::<TokenMetadata>()?;
+                    (metadata.name, metadata.symbol)
+                } else {
+                    let metadata = self
+                        .metadata
+                        .as_ref()
+                        .ok_or(error!(ErrorCode::TokenMetadataNotProvided))?;
+                    require_keys_eq!(metadata.key(), metadata_pointer.metadata_address.0);
+                    (metadata.name.clone(), metadata.symbol.clone())
+                }
+            } else {
+                let metadata = self
+                    .metadata
+                    .as_ref()
+                    .ok_or(error!(ErrorCode::TokenMetadataNotProvided))?;
+                require_keys_eq!(
+                    metadata.key(),
+                    Pubkey::find_program_address(
+                        &[
+                            b"metadata",
+                            MetaplexID.as_ref(),
+                            &self.mint.key().to_bytes()
+                        ],
+                        &MetaplexID
+                    )
+                    .0
+                );
+                (metadata.name.clone(), metadata.symbol.clone())
+            }
+        };
+
         // TODO: correct message payload
         let payload = MetadataPayload {
             token: self.mint.key().to_string(),
-            name: self.metadata.name.clone(),
-            symbol: self.metadata.symbol.clone(),
+            name,
+            symbol,
             decimals: self.mint.decimals,
         }
         .try_to_vec()?;

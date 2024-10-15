@@ -43,10 +43,15 @@ pub mod bridge_token_factory {
         Ok(())
     }
 
-    pub fn register_mint(ctx: Context<RegisterMint>) -> Result<()> {
+    pub fn register_mint(
+        ctx: Context<RegisterMint>,
+        name_override: String,
+        symbol_override: String,
+    ) -> Result<()> {
         msg!("Registering mint");
 
-        ctx.accounts.process(ctx.bumps.wormhole_message)?;
+        ctx.accounts
+            .process(name_override, symbol_override, ctx.bumps.wormhole_message)?;
 
         // Emit event
         Ok(())
