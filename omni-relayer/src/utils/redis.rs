@@ -6,7 +6,6 @@ pub const NEAR_INIT_TRANSFER_EVENTS: &str = "near_init_transfer_events";
 pub const NEAR_SIGN_TRANSFER_EVENTS: &str = "near_sign_transfer_events";
 pub const NEAR_FIN_TRANSFER_EVENTS: &str = "near_fin_transfer_events";
 pub const NEAR_SIGN_CLAIM_NATIVE_FEE_EVENTS: &str = "near_sign_claim_native_fee_events";
-pub const NEAR_BAD_FEE_EVENTS: &str = "near_bad_fee_events";
 
 pub const ETH_LAST_PROCESSED_BLOCK: &str = "eth_last_processed_block";
 pub const ETH_WITHDRAW_EVENTS: &str = "eth_withdraw_events";

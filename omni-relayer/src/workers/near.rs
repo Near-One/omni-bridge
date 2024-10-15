@@ -249,10 +249,13 @@ pub async fn sign_claim_native_fee(
 
                         log::info!("Received FinTransferEvent log");
 
-                        match connector.sign_native_claim_fee(
-                            vec![transfer_message.origin_nonce],
-                            config.evm.relayer,
-                        ) {
+                        match connector
+                            .sign_claim_native_fee(
+                                vec![transfer_message.origin_nonce.into()],
+                                config.evm.relayer,
+                            )
+                            .await
+                        {
                             Ok(tx_hash) => {
                                 log::info!("Claimed native fee: {:?}", tx_hash);
                                 utils::redis::remove_event(
