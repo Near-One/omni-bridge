@@ -106,7 +106,7 @@ pub async fn handle_streamer_message(
                 ref transfer_message,
                 ref native_fee_recipient,
             } => {
-                if native_fee_recipient == &config.evm.relayer {
+                if native_fee_recipient == &config.near.relayer_address_on_evm {
                     utils::redis::add_event(
                         redis_connection,
                         utils::redis::NEAR_FIN_TRANSFER_EVENTS,

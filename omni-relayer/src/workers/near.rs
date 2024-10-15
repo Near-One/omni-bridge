@@ -252,7 +252,7 @@ pub async fn sign_claim_native_fee(
                         match connector
                             .sign_claim_native_fee(
                                 vec![transfer_message.origin_nonce.into()],
-                                config.evm.relayer,
+                                config.near.relayer_address_on_evm,
                             )
                             .await
                         {
