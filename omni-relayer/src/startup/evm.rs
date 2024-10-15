@@ -1,5 +1,3 @@
-use std::str::FromStr;
-
 use anyhow::{Context, Result};
 use log::{info, warn};
 use tokio_stream::StreamExt;
@@ -10,7 +8,7 @@ use omni_types::{
     locker_args::{ClaimFeeArgs, FinTransferArgs, StorageDepositArgs},
     prover_args::{EvmVerifyProofArgs, WormholeVerifyProofArgs},
     prover_result::ProofKind,
-    ChainKind, OmniAddress, H160,
+    ChainKind, OmniAddress,
 };
 
 use alloy::{
@@ -285,8 +283,7 @@ async fn process_log(
 
         let fin_transfer_args = FinTransferArgs {
             chain_kind: ChainKind::Eth,
-            // TODO: Add native fee recipient
-            native_fee_recipient: OmniAddress::Eth(H160::from_str("").unwrap()),
+            native_fee_recipient: config.near.relayer_address_on_evm.clone(),
             storage_deposit_args: StorageDepositArgs {
                 token,
                 accounts: vec![
@@ -314,8 +311,7 @@ async fn process_log(
         let claim_fee_args = ClaimFeeArgs {
             chain_kind: ChainKind::Eth,
             prover_args,
-            // TODO: Add native fee recipient
-            native_fee_recipient: OmniAddress::Eth(H160::from_str("").unwrap()),
+            native_fee_recipient: config.near.relayer_address_on_evm.clone(),
         };
 
         let mut serialized_claim_fee_args = Vec::new();
