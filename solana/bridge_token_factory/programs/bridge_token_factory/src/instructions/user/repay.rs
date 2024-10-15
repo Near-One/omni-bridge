@@ -39,6 +39,7 @@ pub struct Repay<'info> {
     /// Wormhole bridge data. [`wormhole::post_message`] requires this account
     /// be mutable.
     #[account(
+        mut,
         address = config.wormhole.bridge,
     )]
     pub wormhole_bridge: Account<'info, BridgeData>,

@@ -1,5 +1,5 @@
 use anchor_lang::prelude::*;
-use anchor_spl::token::{transfer, Mint, Token, TokenAccount, Transfer};
+use anchor_spl::{token_2022::{transfer_checked, TransferChecked}, token_interface::{Mint, TokenAccount, TokenInterface}};
 use wormhole_anchor_sdk::wormhole::{post_message, program::Wormhole, BridgeData, FeeCollector, Finality, PostMessage, SequenceTracker};
 
 use crate::{
@@ -25,11 +25,16 @@ pub struct Send<'info> {
 
     #[account(
         constraint = !mint.mint_authority.contains(authority.key),
+        mint::token_program = token_program,
     )]
-    pub mint: Account<'info, Mint>,
+    pub mint: InterfaceAccount<'info, Mint>,
 
-    #[account(mut)]
-    pub from: Account<'info, TokenAccount>,
+    #[account(
+        mut,
+        token::mint = mint,
+        token::token_program = token_program,
+    )]
+    pub from: InterfaceAccount<'info, TokenAccount>,
     #[account(
         mut,
         token::mint = mint,
@@ -39,13 +44,15 @@ pub struct Send<'info> {
             mint.key().as_ref(),
         ],
         bump,
+        token::token_program = token_program,
     )]
-    pub vault: Account<'info, TokenAccount>,
+    pub vault: InterfaceAccount<'info, TokenAccount>,
     pub user: Signer<'info>,
 
     /// Wormhole bridge data. [`wormhole::post_message`] requires this account
     /// be mutable.
     #[account(
+        mut,
         address = config.wormhole.bridge,
     )]
     pub wormhole_bridge: Account<'info, BridgeData>,
@@ -82,7 +89,7 @@ pub struct Send<'info> {
     pub rent: Sysvar<'info, Rent>,
 
     pub system_program: Program<'info, System>,
-    pub token_program: Program<'info, Token>,
+    pub token_program: Interface<'info, TokenInterface>,
     pub wormhole_program: Program<'info, Wormhole>,
 }
 
@@ -96,16 +103,18 @@ pub struct SendData {
 
 impl<'info> Send<'info> {
     pub fn process(&self, data: SendData, wormhole_message_bump: u8) -> Result<()> {
-        transfer(
+        transfer_checked(
             CpiContext::new(
                 self.token_program.to_account_info(),
-                Transfer {
+                TransferChecked {
                     from: self.from.to_account_info(),
                     to: self.vault.to_account_info(),
                     authority: self.user.to_account_info(),
+                    mint: self.mint.to_account_info(),
                 },
             ),
             data.amount.try_into().unwrap(),
+            self.mint.decimals,
         )?;
 
         let payload = DepositPayload {

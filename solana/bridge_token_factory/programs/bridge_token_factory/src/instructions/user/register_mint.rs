@@ -70,6 +70,7 @@ pub struct RegisterMint<'info> {
     /// Wormhole bridge data. [`wormhole::post_message`] requires this account
     /// be mutable.
     #[account(
+        mut,
         address = config.wormhole.bridge,
     )]
     pub wormhole_bridge: Account<'info, BridgeData>,
@@ -125,7 +126,7 @@ impl<'info> RegisterMint<'info> {
             match override_authority.key() {
                 a if a == self.config.admin => {}
                 a if self.mint.mint_authority.contains(&a) => {}
-                _ => return Err(ErrorCode::Unauthorized.into()),
+                _ => return err!(ErrorCode::Unauthorized),
             }
             (name_override, symbol_override)
         } else {
