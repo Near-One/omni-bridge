@@ -73,19 +73,19 @@ library BridgeTypes {
     }
 
     event Locked(
-        uint128 nonce,
-        address indexed token,
+        uint128 indexed nonce,
+        address indexed tokenAddress,
         address indexed sender,
         uint128 amount,
         uint128 fee,
         uint128 nativeFee,
-        string accountId,
-        string msg
+        string recipient,
+        string message
     );
 
     event Unlocked(
         uint128 indexed nonce,
-        address indexed token,
+        address indexed tokenAddress,
         uint128 amount,
         address recipient,
         string feeRecipient
