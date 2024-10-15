@@ -18,6 +18,9 @@ contract BridgeTokenFactory is
     AccessControlUpgradeable,
     SelectivePausableUpgradable
 {
+    // We removed ProofConsumer from the list of parent contracts and added this gap
+    // to preserve storage layout when upgrading to the new contract version.
+    uint256[54] private __gap;
     using SafeERC20 for IERC20;
     mapping(address => string) public ethToNearToken;
     mapping(string => address) public nearToEthToken;
@@ -27,6 +30,7 @@ contract BridgeTokenFactory is
     address public nearBridgeDerivedAddress;
     uint8 public omniBridgeChainId;
 
+    uint256[3] private __gapForRemovedFields;
     mapping(uint128 => bool) public completedTransfers;
     mapping(uint128 => bool) public claimedFee;
     uint128 public currentNonce; 
