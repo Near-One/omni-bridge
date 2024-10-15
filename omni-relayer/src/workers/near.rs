@@ -218,7 +218,7 @@ pub async fn sign_claim_native_fee(
         let mut redis_connection_clone = redis_connection.clone();
         let Some(events) = utils::redis::get_events(
             &mut redis_connection_clone,
-            utils::redis::NEAR_FIN_TRANSFER_EVENTS.to_string(),
+            utils::redis::NEAR_SIGN_CLAIM_NATIVE_FEE_QUEUE.to_string(),
         )
         .await
         else {
@@ -260,7 +260,7 @@ pub async fn sign_claim_native_fee(
                                 log::info!("Signed claiming native fee: {:?}", tx_hash);
                                 utils::redis::remove_event(
                                     &mut redis_connection,
-                                    utils::redis::NEAR_FIN_TRANSFER_EVENTS,
+                                    utils::redis::NEAR_SIGN_CLAIM_NATIVE_FEE_QUEUE,
                                     key,
                                 )
                                 .await;

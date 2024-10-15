@@ -95,7 +95,7 @@ pub async fn handle_streamer_message(
                 if nonce.is_none() {
                     utils::redis::add_event(
                         redis_connection,
-                        utils::redis::NEAR_FIN_TRANSFER_EVENTS,
+                        utils::redis::NEAR_SIGN_CLAIM_NATIVE_FEE_QUEUE,
                         transfer_message.origin_nonce.0.to_string(),
                         log,
                     )
@@ -109,7 +109,7 @@ pub async fn handle_streamer_message(
                 if native_fee_recipient == &config.near.relayer_address_on_evm {
                     utils::redis::add_event(
                         redis_connection,
-                        utils::redis::NEAR_FIN_TRANSFER_EVENTS,
+                        utils::redis::NEAR_SIGN_CLAIM_NATIVE_FEE_QUEUE,
                         transfer_message.origin_nonce.0.to_string(),
                         log,
                     )
