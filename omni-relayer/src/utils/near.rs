@@ -91,8 +91,8 @@ pub async fn handle_streamer_message(
             Nep141LockerEvent::FinTransferEvent {
                 ref nonce,
                 ref transfer_message,
-            } => match nonce {
-                Some(_) => {
+            } => {
+                if nonce.is_some() {
                     match utils::fee::is_fee_sufficient(
                         jsonrpc_client,
                         &transfer_message.sender,
@@ -119,8 +119,7 @@ pub async fn handle_streamer_message(
                             warn!("Failed to check fee: {}", err);
                         }
                     }
-                }
-                None => {
+                } else {
                     utils::redis::add_event(
                         redis_connection,
                         utils::redis::NEAR_SIGN_CLAIM_NATIVE_FEE_QUEUE,
@@ -129,7 +128,7 @@ pub async fn handle_streamer_message(
                     )
                     .await;
                 }
-            },
+            }
             Nep141LockerEvent::ClaimFeeEvent {
                 ref transfer_message,
                 ref native_fee_recipient,
