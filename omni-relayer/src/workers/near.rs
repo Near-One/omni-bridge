@@ -243,11 +243,11 @@ pub async fn sign_claim_native_fee(
                             ..
                         } = event
                         else {
-                            warn!("Expected FinTransferEvent, got: {:?}", event);
+                            warn!("Expected ClaimFeeEvent, got: {:?}", event);
                             return;
                         };
 
-                        log::info!("Received FinTransferEvent log");
+                        log::info!("Received ClaimFeeEvent log");
 
                         match connector
                             .sign_claim_native_fee(
@@ -257,7 +257,7 @@ pub async fn sign_claim_native_fee(
                             .await
                         {
                             Ok(tx_hash) => {
-                                log::info!("Claimed native fee: {:?}", tx_hash);
+                                log::info!("Signed claiming native fee: {:?}", tx_hash);
                                 utils::redis::remove_event(
                                     &mut redis_connection,
                                     utils::redis::NEAR_FIN_TRANSFER_EVENTS,

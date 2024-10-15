@@ -112,10 +112,10 @@ pub async fn claim_native_fee(
 
                         match connector.evm_claim_native_fee_with_log(event).await {
                             Ok(tx_hash) => {
-                                log::info!("Finalized withdraw: {:?}", tx_hash);
+                                log::info!("Claimed native fee: {:?}", tx_hash);
                                 utils::redis::remove_event(
                                     &mut redis_connection,
-                                    utils::redis::ETH_WITHDRAW_EVENTS,
+                                    utils::redis::NEAR_SIGN_CLAIM_NATIVE_FEE_EVENTS,
                                     key,
                                 )
                                 .await;
