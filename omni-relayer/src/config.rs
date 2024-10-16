@@ -1,6 +1,8 @@
 use alloy::primitives::Address;
+use alloy::signers::k256::ecdsa::SigningKey;
+use alloy::signers::local::LocalSigner;
 use near_primitives::{borsh::BorshDeserialize, types::AccountId};
-use omni_types::{evm::utils::keccak256, OmniAddress, H160};
+use omni_types::{OmniAddress, H160};
 
 fn derive_evm_address_from_private_key() -> OmniAddress {
     let decoded_private_key = hex::decode(
@@ -8,15 +10,13 @@ fn derive_evm_address_from_private_key() -> OmniAddress {
     )
     .expect("Failed to decode `ETH_PRIVATE_KEY`");
 
-    let secret_key = secp256k1::SecretKey::from_slice(&decoded_private_key)
+    let secret_key = SigningKey::from_slice(&decoded_private_key)
         .expect("Failed to create a `SecretKey` from the provided private key");
 
-    let secp = secp256k1::Secp256k1::new();
-    let public_key = secp256k1::PublicKey::from_secret_key(&secp, &secret_key);
-    let result = keccak256(&public_key.serialize_uncompressed()[1..]);
+    let signer = LocalSigner::from_signing_key(secret_key);
 
     OmniAddress::Eth(
-        H160::try_from_slice(&result[12..])
+        H160::try_from_slice(signer.address().as_slice())
             .expect("Failed to create `OmniAddress` from the derived public key"),
     )
 }
