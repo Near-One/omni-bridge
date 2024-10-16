@@ -13,14 +13,10 @@ fn derive_evm_address_from_private_key() -> OmniAddress {
 
     let secp = secp256k1::Secp256k1::new();
     let public_key = secp256k1::PublicKey::from_secret_key(&secp, &secret_key);
-    let public_key_bytes = public_key.serialize_uncompressed();
-    let public_key_bytes = &public_key_bytes[1..];
-
-    let result = keccak256(public_key_bytes);
-    let address = &result[12..];
+    let result = keccak256(&public_key.serialize_uncompressed()[1..]);
 
     OmniAddress::Eth(
-        H160::try_from_slice(address)
+        H160::try_from_slice(&result[12..])
             .expect("Failed to create `OmniAddress` from the derived public key"),
     )
 }
