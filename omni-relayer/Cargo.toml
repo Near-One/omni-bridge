@@ -30,7 +30,9 @@ near-crypto = "0.26.0"
 eth-proof = { git = "https://github.com/Near-One/rainbow-bridge-sdk-rs", package = "eth-proof" }
 omni-connector = { git = "https://github.com/Near-One/rainbow-bridge-sdk-rs", package = "omni-connector" }
 
-alloy = { version = "0.4.2", features = ["node-bindings", "providers", "rpc-types", "sol-types", "provider-ws"] }
+hex = "0.4.3"
+secp256k1 = "0.30.0"
+alloy = { version = "0.4.2", features = ["node-bindings", "providers", "rpc-types", "sol-types", "provider-ws", "signers", "signer-local"] }
 
 redis = { version = "0.27.0", features = ["aio", "tokio-comp"] }
 reqwest = "0.12"
