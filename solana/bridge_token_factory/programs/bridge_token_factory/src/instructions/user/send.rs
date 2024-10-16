@@ -1,13 +1,17 @@
 use anchor_lang::prelude::*;
-use anchor_spl::{token_2022::{transfer_checked, TransferChecked}, token_interface::{Mint, TokenAccount, TokenInterface}};
-use wormhole_anchor_sdk::wormhole::{post_message, program::Wormhole, BridgeData, FeeCollector, Finality, PostMessage, SequenceTracker};
+use anchor_spl::{
+    token_2022::{transfer_checked, TransferChecked},
+    token_interface::{Mint, TokenAccount, TokenInterface},
+};
+use wormhole_anchor_sdk::wormhole::{
+    post_message, program::Wormhole, BridgeData, FeeCollector, Finality, PostMessage,
+    SequenceTracker,
+};
 
 use crate::{
     constants::{AUTHORITY_SEED, CONFIG_SEED, MESSAGE_SEED, VAULT_SEED},
     state::config::Config,
 };
-
-use super::DepositPayload;
 
 #[derive(Accounts)]
 pub struct Send<'info> {
@@ -95,7 +99,14 @@ pub struct Send<'info> {
 
 #[derive(AnchorDeserialize, AnchorSerialize, Clone, Default)]
 pub struct SendData {
-    pub nonce: u128,
+    pub amount: u128,
+    pub recipient: Pubkey,
+    pub fee_recipient: Option<String>,
+}
+
+#[derive(AnchorSerialize, AnchorDeserialize)]
+pub struct SendPayload {
+    pub token: String,
     pub amount: u128,
     pub recipient: Pubkey,
     pub fee_recipient: Option<String>,
@@ -117,13 +128,11 @@ impl<'info> Send<'info> {
             self.mint.decimals,
         )?;
 
-        let payload = DepositPayload {
+        let payload = SendPayload {
             token: self.mint.key().to_string(),
-            nonce: data.nonce,
             amount: data.amount,
             recipient: data.recipient,
             fee_recipient: data.fee_recipient,
-            
         }
         .try_to_vec()?; // TODO: correct message payload
 

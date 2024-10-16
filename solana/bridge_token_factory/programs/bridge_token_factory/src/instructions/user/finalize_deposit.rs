@@ -7,6 +7,7 @@ use anchor_spl::{
     token::{mint_to, Mint, MintTo, Token, TokenAccount},
 };
 use near_sdk::json_types::U128;
+use wormhole_anchor_sdk::wormhole::{post_message, program::Wormhole, BridgeData, FeeCollector, Finality, PostMessage, SequenceTracker};
 use std::{
     io::{BufWriter, Write},
     vec,
@@ -14,8 +15,7 @@ use std::{
 
 use crate::{
     constants::{
-        AUTHORITY_SEED, CONFIG_SEED, USED_NONCES_ACCOUNT_SIZE, USED_NONCES_PER_ACCOUNT,
-        USED_NONCES_SEED,
+        AUTHORITY_SEED, CONFIG_SEED, MESSAGE_SEED, USED_NONCES_ACCOUNT_SIZE, USED_NONCES_PER_ACCOUNT, USED_NONCES_SEED
     },
     state::{config::Config, used_nonces::UsedNonces},
 };
@@ -45,7 +45,7 @@ pub struct FinalizeDeposit<'info> {
         constraint = recipient.key == &data.payload.recipient,
     )]
     /// CHECK: this can be any type of account
-    pub recipient: AccountInfo<'info>,
+    pub recipient: UncheckedAccount<'info>,
     /// CHECK: PDA
     #[account(
         seeds = [AUTHORITY_SEED],
@@ -70,13 +70,53 @@ pub struct FinalizeDeposit<'info> {
     #[account(mut)]
     pub payer: Signer<'info>,
 
+    /// Wormhole bridge data. [`wormhole::post_message`] requires this account
+    /// be mutable.
+    #[account(
+        mut,
+        address = config.wormhole.bridge,
+    )]
+    pub wormhole_bridge: Account<'info, BridgeData>,
+
+    /// Wormhole fee collector. [`wormhole::post_message`] requires this
+    /// account be mutable.
+    #[account(
+        mut,
+        address = config.wormhole.fee_collector
+    )]
+    pub wormhole_fee_collector: Account<'info, FeeCollector>,
+
+    /// Emitter's sequence account. [`wormhole::post_message`] requires this
+    /// account be mutable.
+    #[account(
+        mut,
+        address = config.wormhole.sequence
+    )]
+    pub wormhole_sequence: Account<'info, SequenceTracker>,
+
+    /// CHECK: Wormhole Message. [`wormhole::post_message`] requires this
+    /// account be mutable.
+    #[account(
+        mut,
+        seeds = [
+            MESSAGE_SEED,
+            &wormhole_sequence.next_value().to_le_bytes()[..]
+        ],
+        bump,
+    )]
+    pub wormhole_message: UncheckedAccount<'info>,
+
+    pub clock: Sysvar<'info, Clock>,
+    pub rent: Sysvar<'info, Rent>,
+
     pub associated_token_program: Program<'info, AssociatedToken>,
     pub system_program: Program<'info, System>,
     pub token_program: Program<'info, Token>,
+    pub wormhole_program: Program<'info, Wormhole>,
 }
 
 impl<'info> FinalizeDeposit<'info> {
-    pub fn mint(&mut self, data: FinalizeDepositData) -> Result<()> {
+    pub fn mint(&mut self, data: FinalizeDepositData, wormhole_message_bump: u8) -> Result<()> {
         UsedNonces::use_nonce(
             data.payload.nonce,
             &self.used_nonces,
@@ -100,6 +140,38 @@ impl<'info> FinalizeDeposit<'info> {
             signer_seeds,
         );
         mint_to(cpi_ctx, data.payload.amount.try_into().unwrap())?;
+
+        let payload = FinalizeDepositResponse {
+            nonce: data.payload.nonce,
+        }.try_to_vec()?;
+
+        post_message(
+            CpiContext::new_with_signer(
+                self.wormhole_program.to_account_info(),
+                PostMessage {
+                    config: self.wormhole_bridge.to_account_info(),
+                    message: self.wormhole_message.to_account_info(),
+                    emitter: self.config.to_account_info(),
+                    sequence: self.wormhole_sequence.to_account_info(),
+                    payer: self.payer.to_account_info(),
+                    fee_collector: self.wormhole_fee_collector.to_account_info(),
+                    clock: self.clock.to_account_info(),
+                    rent: self.rent.to_account_info(),
+                    system_program: self.system_program.to_account_info(),
+                },
+                &[
+                    &[
+                        MESSAGE_SEED,
+                        &self.wormhole_sequence.next_value().to_le_bytes()[..],
+                        &[wormhole_message_bump],
+                    ],
+                    &[CONFIG_SEED, &[self.config.bumps.config]], // emitter
+                ],
+            ),
+            0,
+            payload,
+            Finality::Finalized,
+        )?;
 
         Ok(())
     }
@@ -152,4 +224,9 @@ impl FinalizeDepositData {
 
         Ok(())
     }
+}
+
+#[derive(AnchorSerialize, AnchorDeserialize)]
+pub struct FinalizeDepositResponse {
+    pub nonce: u128,
 }

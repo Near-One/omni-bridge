@@ -115,11 +115,16 @@ pub struct RegisterMint<'info> {
     pub wormhole_program: Program<'info, Wormhole>,
 }
 
+#[derive(AnchorSerialize, AnchorDeserialize)]
+pub struct MetadataOverride {
+    pub name: String,
+    pub symbol: String,
+}
+
 impl<'info> RegisterMint<'info> {
     pub fn process(
         &mut self,
-        name_override: String,
-        symbol_override: String,
+        metadata_override: MetadataOverride,
         wormhole_message_bump: u8,
     ) -> Result<()> {
         let (name, symbol) = if let Some(override_authority) = self.override_authority.as_ref() {
@@ -128,7 +133,7 @@ impl<'info> RegisterMint<'info> {
                 a if self.mint.mint_authority.contains(&a) => {}
                 _ => return err!(ErrorCode::Unauthorized),
             }
-            (name_override, symbol_override)
+            (metadata_override.name, metadata_override.symbol)
         } else {
             if self.token_program.key() == token_2022::ID {
                 let mint_account_info = self.mint.to_account_info();

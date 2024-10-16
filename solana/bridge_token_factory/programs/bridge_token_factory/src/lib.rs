@@ -24,7 +24,8 @@ pub mod bridge_token_factory {
         msg!("Deploying token");
 
         data.verify_signature()?;
-        ctx.accounts.initialize_token_metadata(data.metadata)?;
+        ctx.accounts
+            .initialize_token_metadata(data.metadata, ctx.bumps.wormhole_message)?;
 
         // Emit event
         Ok(())
@@ -37,7 +38,7 @@ pub mod bridge_token_factory {
         msg!("Finalizing deposit");
 
         data.verify_signature()?;
-        ctx.accounts.mint(data)?;
+        ctx.accounts.mint(data, ctx.bumps.wormhole_message)?;
 
         // Emit event
         Ok(())
@@ -45,20 +46,19 @@ pub mod bridge_token_factory {
 
     pub fn register_mint(
         ctx: Context<RegisterMint>,
-        name_override: String,
-        symbol_override: String,
+        metadata_override: MetadataOverride,
     ) -> Result<()> {
         msg!("Registering mint");
 
         ctx.accounts
-            .process(name_override, symbol_override, ctx.bumps.wormhole_message)?;
+            .process(metadata_override, ctx.bumps.wormhole_message)?;
 
         // Emit event
         Ok(())
     }
 
     pub fn send(ctx: Context<Send>, data: SendData) -> Result<()> {
-        msg!("Omni transfer");
+        msg!("Sending");
 
         ctx.accounts.process(data, ctx.bumps.wormhole_message)?;
 
@@ -73,13 +73,13 @@ pub mod bridge_token_factory {
         msg!("Finalizing withdraw");
 
         data.verify_signature()?;
-        ctx.accounts.process(data)?;
+        ctx.accounts.process(data, ctx.bumps.wormhole_message)?;
 
         // Emit event
         Ok(())
     }
 
-    pub fn repay(ctx: Context<Repay>, payload: DepositPayload) -> Result<()> {
+    pub fn repay(ctx: Context<Repay>, payload: RepayPayload) -> Result<()> {
         msg!("Repaying");
 
         ctx.accounts.process(payload, ctx.bumps.wormhole_message)?;

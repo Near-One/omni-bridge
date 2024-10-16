@@ -1,16 +1,17 @@
 use anchor_lang::prelude::*;
 use anchor_spl::token::{burn, Burn, Mint, Token, TokenAccount};
-use wormhole_anchor_sdk::wormhole::{post_message, program::Wormhole, BridgeData, FeeCollector, Finality, PostMessage, SequenceTracker};
+use wormhole_anchor_sdk::wormhole::{
+    post_message, program::Wormhole, BridgeData, FeeCollector, Finality, PostMessage,
+    SequenceTracker,
+};
 
 use crate::{
     constants::{AUTHORITY_SEED, CONFIG_SEED, MESSAGE_SEED},
     state::config::Config,
 };
 
-use super::DepositPayload;
-
 #[derive(Accounts)]
-#[instruction(payload: DepositPayload)]
+#[instruction(payload: RepayPayload)]
 pub struct Repay<'info> {
     #[account(
         seeds = [CONFIG_SEED],
@@ -80,8 +81,16 @@ pub struct Repay<'info> {
     pub wormhole_program: Program<'info, Wormhole>,
 }
 
+#[derive(AnchorSerialize, AnchorDeserialize)]
+pub struct RepayPayload {
+    pub token: String,
+    pub amount: u128,
+    pub recipient: Pubkey,
+    pub fee_recipient: Option<String>,
+}
+
 impl<'info> Repay<'info> {
-    pub fn process(&self, payload: DepositPayload, wormhole_message_bump: u8) -> Result<()> {
+    pub fn process(&self, payload: RepayPayload, wormhole_message_bump: u8) -> Result<()> {
         burn(
             CpiContext::new(
                 self.token_program.to_account_info(),

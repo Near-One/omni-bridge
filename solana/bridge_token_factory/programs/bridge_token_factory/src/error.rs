@@ -5,4 +5,5 @@ pub enum ErrorCode {
     NonceAlreadyUsed,
     Unauthorized,
     TokenMetadataNotProvided,
+    SolanaTokenParsingFailed,
 }
