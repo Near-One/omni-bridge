@@ -39,6 +39,7 @@ const SIGN_CLAIM_NATIVE_FEE_CALLBACK_GAS: Gas = Gas::from_tgas(5);
 const VERIFY_POOF_GAS: Gas = Gas::from_tgas(50);
 const CLAIM_FEE_CALLBACK_GAS: Gas = Gas::from_tgas(50);
 const BIND_TOKEN_CALLBACK_GAS: Gas = Gas::from_tgas(25);
+const BIND_TOKEN_REFUND_GAS: Gas = Gas::from_tgas(5);
 const FT_TRANSFER_CALL_GAS: Gas = Gas::from_tgas(50);
 const FT_TRANSFER_GAS: Gas = Gas::from_tgas(5);
 const WNEAR_WITHDRAW_GAS: Gas = Gas::from_tgas(10);
@@ -687,27 +688,52 @@ impl Contract {
             })
             .then(
                 Self::ext(env::current_account_id())
-                    .with_attached_deposit(env::attached_deposit())
+                    .with_attached_deposit(NO_DEPOSIT)
                     .with_static_gas(BIND_TOKEN_CALLBACK_GAS)
-                    .bind_token_callback(),
+                    .bind_token_callback(near_sdk::env::attached_deposit()),
+            )
+            .then(
+                Self::ext(env::current_account_id())
+                    .with_attached_deposit(env::attached_deposit())
+                    .with_static_gas(BIND_TOKEN_REFUND_GAS)
+                    .bind_token_refund(near_sdk::env::predecessor_account_id()),
             )
     }
 
     #[private]
     pub fn bind_token_callback(
         &mut self,
-        #[callback_result]
-        #[serializer(borsh)]
-        call_result: Result<ProverResult, PromiseError>,
-    ) {
+        attached_deposit: NearToken,
+        #[callback_result] call_result: Result<ProverResult, PromiseError>,
+    ) -> NearToken {
         let Ok(ProverResult::DeployToken(deploy_token)) = call_result else {
-            env::panic_str("Invalid proof message")
+            env::panic_str("ERROR: Invalid proof message");
         };
 
+        let storage_usage = env::storage_usage();
         self.tokens_to_address_mapping.insert(
             &(deploy_token.token_address.get_chain(), deploy_token.token),
             &deploy_token.token_address,
         );
+        let required_deposit = env::storage_byte_cost()
+            .saturating_mul((env::storage_usage().saturating_sub(storage_usage)).into());
+
+        require!(
+            attached_deposit >= required_deposit,
+            "ERROR: The deposit is not sufficient to cover the storage."
+        );
+        attached_deposit.saturating_sub(required_deposit)
+    }
+
+    #[private]
+    #[payable]
+    pub fn bind_token_refund(
+        &mut self,
+        predecessor_account_id: AccountId,
+        #[callback_result] call_result: Result<NearToken, PromiseError>,
+    ) {
+        let refund_amount = call_result.unwrap_or(env::attached_deposit());
+        Self::refund(predecessor_account_id, refund_amount);
     }
 
     pub fn get_token_address(
@@ -872,10 +898,10 @@ impl Contract {
         attached_deposit: NearToken,
     ) {
         if attached_deposit >= required_balance {
-            let refund = attached_deposit.saturating_sub(required_balance);
-            if !refund.is_zero() {
-                Promise::new(account_id).transfer(refund);
-            }
+            Self::refund(
+                account_id,
+                attached_deposit.saturating_sub(required_balance),
+            );
         } else {
             let required_balance = required_balance.saturating_sub(attached_deposit);
             let mut storage_balance = self
@@ -890,6 +916,12 @@ impl Contract {
             } else {
                 env::panic_str("Not enough storage deposited");
             }
+        }
+    }
+
+    fn refund(account_id: AccountId, amount: NearToken) {
+        if !amount.is_zero() {
+            Promise::new(account_id).transfer(amount);
         }
     }
 }

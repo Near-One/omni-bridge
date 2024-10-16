@@ -160,6 +160,21 @@ impl Contract {
         env::storage_byte_cost().saturating_mul((Self::get_basic_storage() + key_len).into())
     }
 
+    pub fn required_balance_for_bind_token(&self, deploy_token_address: OmniAddress) -> NearToken {
+        let max_token_id: AccountId = "a".repeat(64).parse().sdk_expect("ERR_PARSE_ACCOUNT_ID");
+
+        let key_len = borsh::to_vec(&(deploy_token_address.get_chain(), max_token_id))
+            .sdk_expect("ERR_BORSH")
+            .len() as u64;
+
+        let value_len = borsh::to_vec(&deploy_token_address)
+            .sdk_expect("ERR_BORSH")
+            .len() as u64;
+
+        env::storage_byte_cost()
+            .saturating_mul((Self::get_basic_storage() + key_len + value_len).into())
+    }
+
     fn get_basic_storage() -> u64 {
         const EXTRA_BYTES_RECORD: u64 = 40;
         const EXTRA_KEY_PREFIX_LEN: u64 = 1;
