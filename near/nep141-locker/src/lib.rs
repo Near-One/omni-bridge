@@ -39,8 +39,10 @@ const SIGN_CLAIM_NATIVE_FEE_CALLBACK_GAS: Gas = Gas::from_tgas(5);
 const VERIFY_POOF_GAS: Gas = Gas::from_tgas(50);
 const CLAIM_FEE_CALLBACK_GAS: Gas = Gas::from_tgas(50);
 const BIND_TOKEN_CALLBACK_GAS: Gas = Gas::from_tgas(25);
+const BIND_TOKEN_REFUND_GAS: Gas = Gas::from_tgas(5);
 const FT_TRANSFER_CALL_GAS: Gas = Gas::from_tgas(50);
 const FT_TRANSFER_GAS: Gas = Gas::from_tgas(5);
+const WNEAR_WITHDRAW_GAS: Gas = Gas::from_tgas(10);
 const STORAGE_BALANCE_OF_GAS: Gas = Gas::from_tgas(3);
 const STORAGE_DEPOSIT_GAS: Gas = Gas::from_tgas(3);
 const NO_DEPOSIT: NearToken = NearToken::from_near(0);
@@ -107,6 +109,11 @@ pub trait Prover {
     fn verify_proof(&self, #[serializer(borsh)] args: VerifyProofArgs) -> ProverResult;
 }
 
+#[ext_contract(ext_wnear_token)]
+pub trait ExtWNearToken {
+    fn near_withdraw(&self, amount: U128);
+}
+
 #[near(contract_state)]
 #[derive(Pausable, Upgradable, PanicOnDefault)]
 #[access_control(role_type(Role))]
@@ -127,6 +134,7 @@ pub struct Contract {
     pub mpc_signer: AccountId,
     pub current_nonce: Nonce,
     pub accounts_balances: LookupMap<AccountId, StorageBalance>,
+    pub wnear_account_id: AccountId,
 }
 
 #[near]
@@ -179,7 +187,12 @@ impl FungibleTokenReceiver for Contract {
 #[near]
 impl Contract {
     #[init]
-    pub fn new(prover_account: AccountId, mpc_signer: AccountId, nonce: U128) -> Self {
+    pub fn new(
+        prover_account: AccountId,
+        mpc_signer: AccountId,
+        nonce: U128,
+        wnear_account_id: AccountId,
+    ) -> Self {
         let mut contract = Self {
             prover_account,
             factories: LookupMap::new(StorageKey::Factories),
@@ -189,6 +202,7 @@ impl Contract {
             mpc_signer,
             current_nonce: nonce.0,
             accounts_balances: LookupMap::new(StorageKey::AccountsBalances),
+            wnear_account_id,
         };
 
         contract.acl_init_super_admin(near_sdk::env::predecessor_account_id());
@@ -493,16 +507,31 @@ impl Contract {
             );
 
             let amount_to_transfer = U128(transfer_message.amount.0 - transfer_message.fee.fee.0);
-            let mut promise = match recipient.message {
-                Some(message) => ext_token::ext(transfer_message.token.clone())
-                    .with_static_gas(FT_TRANSFER_CALL_GAS)
-                    .with_attached_deposit(ONE_YOCTO)
-                    .ft_transfer_call(recipient.target, amount_to_transfer, None, message),
-                None => ext_token::ext(transfer_message.token.clone())
-                    .with_static_gas(FT_TRANSFER_GAS)
-                    .with_attached_deposit(ONE_YOCTO)
-                    .ft_transfer(recipient.target, amount_to_transfer, None),
-            };
+
+            let mut promise =
+                if transfer_message.token == self.wnear_account_id && recipient.message.is_none() {
+                    ext_wnear_token::ext(self.wnear_account_id.clone())
+                        .with_static_gas(WNEAR_WITHDRAW_GAS)
+                        .with_attached_deposit(ONE_YOCTO)
+                        .near_withdraw(amount_to_transfer)
+                        .then(
+                            Promise::new(recipient.target)
+                                .transfer(NearToken::from_yoctonear(amount_to_transfer.0)),
+                        )
+                } else {
+                    let transfer = ext_token::ext(transfer_message.token.clone())
+                        .with_attached_deposit(ONE_YOCTO);
+                    match recipient.message {
+                        Some(message) => transfer
+                            .with_static_gas(FT_TRANSFER_CALL_GAS)
+                            .ft_transfer_call(recipient.target, amount_to_transfer, None, message),
+                        None => transfer.with_static_gas(FT_TRANSFER_GAS).ft_transfer(
+                            recipient.target,
+                            amount_to_transfer,
+                            None,
+                        ),
+                    }
+                };
 
             if transfer_message.fee.fee.0 > 0 {
                 require!(
@@ -612,7 +641,7 @@ impl Contract {
 
         if message.fee.native_fee.0 != 0 {
             if message.get_origin_chain() == ChainKind::Near {
-                let OmniAddress::Near(recipient) = native_fee_recipient else {
+                let OmniAddress::Near(recipient) = &native_fee_recipient else {
                     env::panic_str("ERR_WRONG_CHAIN_KIND")
                 };
                 Promise::new(recipient.parse().sdk_expect("ERR_PARSE_FEE_RECIPIENT"))
@@ -622,7 +651,7 @@ impl Contract {
                     &message.get_transfer_id(),
                     &Some(NativeFee {
                         amount: message.fee.native_fee,
-                        recipient: native_fee_recipient,
+                        recipient: native_fee_recipient.clone(),
                     }),
                 );
 
@@ -634,7 +663,16 @@ impl Contract {
             }
         }
 
-        ext_token::ext(message.token)
+        let token = message.token.clone();
+        env::log_str(
+            &Nep141LockerEvent::ClaimFeeEvent {
+                transfer_message: message,
+                native_fee_recipient,
+            }
+            .to_log_string(),
+        );
+
+        ext_token::ext(token)
             .with_static_gas(LOG_METADATA_GAS)
             .ft_transfer(fin_transfer.fee_recipient, U128(fee), None)
     }
@@ -650,27 +688,52 @@ impl Contract {
             })
             .then(
                 Self::ext(env::current_account_id())
-                    .with_attached_deposit(env::attached_deposit())
+                    .with_attached_deposit(NO_DEPOSIT)
                     .with_static_gas(BIND_TOKEN_CALLBACK_GAS)
-                    .bind_token_callback(),
+                    .bind_token_callback(near_sdk::env::attached_deposit()),
+            )
+            .then(
+                Self::ext(env::current_account_id())
+                    .with_attached_deposit(env::attached_deposit())
+                    .with_static_gas(BIND_TOKEN_REFUND_GAS)
+                    .bind_token_refund(near_sdk::env::predecessor_account_id()),
             )
     }
 
     #[private]
     pub fn bind_token_callback(
         &mut self,
-        #[callback_result]
-        #[serializer(borsh)]
-        call_result: Result<ProverResult, PromiseError>,
-    ) {
+        attached_deposit: NearToken,
+        #[callback_result] call_result: Result<ProverResult, PromiseError>,
+    ) -> NearToken {
         let Ok(ProverResult::DeployToken(deploy_token)) = call_result else {
-            env::panic_str("Invalid proof message")
+            env::panic_str("ERROR: Invalid proof message");
         };
 
+        let storage_usage = env::storage_usage();
         self.tokens_to_address_mapping.insert(
             &(deploy_token.token_address.get_chain(), deploy_token.token),
             &deploy_token.token_address,
         );
+        let required_deposit = env::storage_byte_cost()
+            .saturating_mul((env::storage_usage().saturating_sub(storage_usage)).into());
+
+        require!(
+            attached_deposit >= required_deposit,
+            "ERROR: The deposit is not sufficient to cover the storage."
+        );
+        attached_deposit.saturating_sub(required_deposit)
+    }
+
+    #[private]
+    #[payable]
+    pub fn bind_token_refund(
+        &mut self,
+        predecessor_account_id: AccountId,
+        #[callback_result] call_result: Result<NearToken, PromiseError>,
+    ) {
+        let refund_amount = call_result.unwrap_or(env::attached_deposit());
+        Self::refund(predecessor_account_id, refund_amount);
     }
 
     pub fn get_token_address(
@@ -775,7 +838,7 @@ impl Contract {
         let storage_usage = env::storage_usage();
         require!(
             self.insert_raw_transfer(nonce, transfer_message, message_owner)
-                .is_some(),
+                .is_none(),
             "ERR_KEY_EXIST"
         );
         env::storage_byte_cost().saturating_mul((env::storage_usage() - storage_usage).into())
@@ -835,10 +898,10 @@ impl Contract {
         attached_deposit: NearToken,
     ) {
         if attached_deposit >= required_balance {
-            let refund = attached_deposit.saturating_sub(required_balance);
-            if !refund.is_zero() {
-                Promise::new(account_id).transfer(refund);
-            }
+            Self::refund(
+                account_id,
+                attached_deposit.saturating_sub(required_balance),
+            );
         } else {
             let required_balance = required_balance.saturating_sub(attached_deposit);
             let mut storage_balance = self
@@ -853,6 +916,12 @@ impl Contract {
             } else {
                 env::panic_str("Not enough storage deposited");
             }
+        }
+    }
+
+    fn refund(account_id: AccountId, amount: NearToken) {
+        if !amount.is_zero() {
+            Promise::new(account_id).transfer(amount);
         }
     }
 }
