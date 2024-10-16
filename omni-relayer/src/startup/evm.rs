@@ -283,7 +283,7 @@ async fn process_log(
 
         let fin_transfer_args = FinTransferArgs {
             chain_kind: ChainKind::Eth,
-            native_fee_recipient: config.near.relayer_address_on_evm.clone(),
+            native_fee_recipient: config.near.relayer_address_on_evm.clone().unwrap(),
             storage_deposit_args: StorageDepositArgs {
                 token,
                 accounts: vec![
@@ -311,7 +311,7 @@ async fn process_log(
         let claim_fee_args = ClaimFeeArgs {
             chain_kind: ChainKind::Eth,
             prover_args,
-            native_fee_recipient: config.near.relayer_address_on_evm.clone(),
+            native_fee_recipient: config.near.relayer_address_on_evm.clone().unwrap(),
         };
 
         let mut serialized_claim_fee_args = Vec::new();
