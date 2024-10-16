@@ -57,5 +57,5 @@ pub struct Evm {
     pub block_processing_batch_size: u64,
 
     #[serde(default = "derive_evm_address_from_private_key")]
-    pub relayer_address: OmniAddress,
+    pub relayer_address_on_eth: OmniAddress,
 }

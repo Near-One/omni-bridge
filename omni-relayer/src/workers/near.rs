@@ -21,7 +21,7 @@ pub async fn sign_transfer(
         let mut redis_connection_clone = redis_connection.clone();
         let Some(events) = utils::redis::get_events(
             &mut redis_connection_clone,
-            utils::redis::NEAR_INIT_TRANSFER_EVENTS.to_string(),
+            utils::redis::NEAR_INIT_TRANSFER_QUEUE.to_string(),
         )
         .await
         else {
@@ -70,7 +70,7 @@ pub async fn sign_transfer(
                                 info!("Signed transfer: {:?}", outcome.transaction.hash);
                                 utils::redis::remove_event(
                                     &mut redis_connection,
-                                    utils::redis::NEAR_INIT_TRANSFER_EVENTS,
+                                    utils::redis::NEAR_INIT_TRANSFER_QUEUE,
                                     &key,
                                 )
                                 .await;
@@ -260,7 +260,7 @@ pub async fn sign_claim_native_fee(
                         match connector
                             .sign_claim_native_fee(
                                 vec![transfer_message.origin_nonce.into()],
-                                config.evm.relayer_address,
+                                config.evm.relayer_address_on_eth,
                             )
                             .await
                         {
