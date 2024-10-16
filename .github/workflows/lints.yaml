@@ -1,0 +1,28 @@
+name: Rust testing 
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  clippy:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        component: [near, omni-relayer]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: 1.79.0
+          components: clippy
+
+      - name: Run Clippy
+        run: |
+          make rust-lint-${{ matrix.component }}
+
