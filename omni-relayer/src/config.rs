@@ -1,5 +1,25 @@
 use alloy::primitives::Address;
-use near_primitives::types::AccountId;
+use alloy::signers::k256::ecdsa::SigningKey;
+use alloy::signers::local::LocalSigner;
+use near_primitives::{borsh::BorshDeserialize, types::AccountId};
+use omni_types::{OmniAddress, H160};
+
+fn derive_evm_address_from_private_key() -> OmniAddress {
+    let decoded_private_key = hex::decode(
+        std::env::var("ETH_PRIVATE_KEY").expect("Failed to get `ETH_PRIVATE_KEY` env variable"),
+    )
+    .expect("Failed to decode `ETH_PRIVATE_KEY`");
+
+    let secret_key = SigningKey::from_slice(&decoded_private_key)
+        .expect("Failed to create a `SecretKey` from the provided private key");
+
+    let signer = LocalSigner::from_signing_key(secret_key);
+
+    OmniAddress::Eth(
+        H160::try_from_slice(signer.address().as_slice())
+            .expect("Failed to create `OmniAddress` from the derived public key"),
+    )
+}
 
 #[derive(Debug, Clone, serde::Deserialize)]
 pub struct Config {
@@ -35,4 +55,7 @@ pub struct Evm {
     pub chain_id: u64,
     pub bridge_token_factory_address: Address,
     pub block_processing_batch_size: u64,
+
+    #[serde(default = "derive_evm_address_from_private_key")]
+    pub relayer_address_on_eth: OmniAddress,
 }

@@ -21,7 +21,7 @@ pub async fn sign_transfer(
         let mut redis_connection_clone = redis_connection.clone();
         let Some(events) = utils::redis::get_events(
             &mut redis_connection_clone,
-            utils::redis::NEAR_INIT_TRANSFER_EVENTS.to_string(),
+            utils::redis::NEAR_INIT_TRANSFER_QUEUE.to_string(),
         )
         .await
         else {
@@ -41,14 +41,20 @@ pub async fn sign_transfer(
                     let connector = connector.clone();
 
                     async move {
-                        let Nep141LockerEvent::InitTransferEvent { transfer_message } = event
+                        let (Nep141LockerEvent::InitTransferEvent { transfer_message }
+                        | Nep141LockerEvent::FinTransferEvent {
+                            transfer_message, ..
+                        }) = event
                         else {
-                            warn!("Expected InitTransferEvent, got: {:?}", event);
+                            warn!(
+                                "Expected InitTransferEvent/FinTransferEvent, got: {:?}",
+                                event
+                            );
                             return;
                         };
 
                         info!(
-                            "Received InitTransferEvent: {}",
+                            "Received InitTransferEvent/FinTransferEvent: {}",
                             transfer_message.origin_nonce.0
                         );
 
@@ -64,7 +70,7 @@ pub async fn sign_transfer(
                                 info!("Signed transfer: {:?}", outcome.transaction.hash);
                                 utils::redis::remove_event(
                                     &mut redis_connection,
-                                    utils::redis::NEAR_INIT_TRANSFER_EVENTS,
+                                    utils::redis::NEAR_INIT_TRANSFER_QUEUE,
                                     &key,
                                 )
                                 .await;
@@ -120,6 +126,8 @@ pub async fn finalize_transfer(
                             error!("Expected SignTransferEvent, got: {:?}", event);
                             return;
                         };
+
+                        info!("Received SignTransferEvent");
 
                         match connector.evm_fin_transfer_with_log(event).await {
                             Ok(tx_hash) => {
@@ -193,6 +201,80 @@ pub async fn claim_fee(redis_client: redis::Client, connector: Arc<OmniConnector
                             )
                             .await;
                         }
+                    }
+                }));
+            }
+        }
+
+        join_all(handlers).await;
+
+        tokio::time::sleep(tokio::time::Duration::from_secs(
+            utils::redis::SLEEP_TIME_AFTER_EVENTS_PROCESS_SECS,
+        ))
+        .await;
+    }
+}
+
+pub async fn sign_claim_native_fee(
+    config: config::Config,
+    redis_client: redis::Client,
+    connector: Arc<OmniConnector>,
+) -> Result<()> {
+    let redis_connection = redis_client.get_multiplexed_tokio_connection().await?;
+
+    loop {
+        let mut redis_connection_clone = redis_connection.clone();
+        let Some(events) = utils::redis::get_events(
+            &mut redis_connection_clone,
+            utils::redis::NEAR_SIGN_CLAIM_NATIVE_FEE_QUEUE.to_string(),
+        )
+        .await
+        else {
+            tokio::time::sleep(tokio::time::Duration::from_secs(
+                utils::redis::SLEEP_TIME_AFTER_EVENTS_PROCESS_SECS,
+            ))
+            .await;
+            continue;
+        };
+
+        let mut handlers = Vec::new();
+        for (key, event) in events {
+            if let Ok(event) = serde_json::from_str::<Nep141LockerEvent>(&event) {
+                handlers.push(tokio::spawn({
+                    let config = config.clone();
+                    let mut redis_connection = redis_connection.clone();
+                    let connector = connector.clone();
+
+                    async move {
+                        let Nep141LockerEvent::ClaimFeeEvent {
+                            ref transfer_message,
+                            ..
+                        } = event
+                        else {
+                            warn!("Expected ClaimFeeEvent, got: {:?}", event);
+                            return;
+                        };
+
+                        info!("Received ClaimFeeEvent log");
+
+                        match connector
+                            .sign_claim_native_fee(
+                                vec![transfer_message.origin_nonce.into()],
+                                config.evm.relayer_address_on_eth,
+                            )
+                            .await
+                        {
+                            Ok(tx_hash) => {
+                                info!("Signed claiming native fee: {:?}", tx_hash);
+                                utils::redis::remove_event(
+                                    &mut redis_connection,
+                                    utils::redis::NEAR_SIGN_CLAIM_NATIVE_FEE_QUEUE,
+                                    key,
+                                )
+                                .await;
+                            }
+                            Err(err) => error!("Failed to sign claiming native fee: {}", err),
+                        };
                     }
                 }));
             }
