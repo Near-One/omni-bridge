@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use clap::Parser;
 use log::{error, info};
 
@@ -23,7 +23,10 @@ async fn main() -> Result<()> {
 
     let args = CliArgs::parse();
 
-    let config = toml::from_str::<config::Config>(&std::fs::read_to_string(args.config)?)?;
+    let config = toml::from_str::<config::Config>(
+        &std::fs::read_to_string(args.config).context("Config file doesn't exist")?,
+    )
+    .context("Failed to parse config file")?;
 
     let redis_client = redis::Client::open(config.redis.url.clone())?;
     let jsonrpc_client = near_jsonrpc_client::JsonRpcClient::connect(config.near.rpc_url.clone());
