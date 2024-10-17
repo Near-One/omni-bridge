@@ -68,7 +68,7 @@ pub async fn finalize_transfer(
                     let jsonrpc_client = jsonrpc_client.clone();
 
                     async move {
-                        log::info!("Received InitTransfer log");
+                        info!("Received InitTransfer log");
 
                         let Some(tx_hash) = log.transaction_hash else {
                             warn!("No transaction hash in log: {:?}", log);
@@ -143,7 +143,7 @@ pub async fn finalize_transfer(
 
                         match connector.near_fin_transfer(fin_transfer_args).await {
                             Ok(tx_hash) => {
-                                log::info!("Finalized InitTransfer: {:?}", tx_hash);
+                                info!("Finalized InitTransfer: {:?}", tx_hash);
                                 utils::redis::remove_event(
                                     &mut redis_connection,
                                     utils::redis::ETH_WITHDRAW_EVENTS,
@@ -151,7 +151,7 @@ pub async fn finalize_transfer(
                                 )
                                 .await;
                             }
-                            Err(err) => log::error!("Failed to finalize InitTransfer: {}", err),
+                            Err(err) => error!("Failed to finalize InitTransfer: {}", err),
                         }
                     }
                 }));
