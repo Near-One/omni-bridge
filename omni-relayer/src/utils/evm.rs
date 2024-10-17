@@ -93,7 +93,7 @@ pub async fn get_vaa(
 pub async fn get_prover_args(
     vaa: Option<String>,
     tx_hash: H256,
-    log_index: u64,
+    topic: H256,
     config: &config::Config,
 ) -> Option<Vec<u8>> {
     if let Some(vaa) = vaa {
@@ -109,19 +109,14 @@ pub async fn get_prover_args(
 
         Some(prover_args)
     } else {
-        let evm_proof_args = match eth_proof::get_proof_for_event(
-            tx_hash,
-            log_index,
-            &config.evm.rpc_http_url,
-        )
-        .await
-        {
-            Ok(proof) => proof,
-            Err(err) => {
-                warn!("Failed to get proof: {}", err);
-                return None;
-            }
-        };
+        let evm_proof_args =
+            match eth_proof::get_proof_for_event(tx_hash, topic, &config.evm.rpc_http_url).await {
+                Ok(proof) => proof,
+                Err(err) => {
+                    warn!("Failed to get proof: {}", err);
+                    return None;
+                }
+            };
 
         let evm_proof_args = EvmVerifyProofArgs {
             proof_kind: ProofKind::InitTransfer,

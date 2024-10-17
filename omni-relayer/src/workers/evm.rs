@@ -75,8 +75,8 @@ pub async fn finalize_transfer(
                             return;
                         };
 
-                        let Some(log_index) = log.log_index else {
-                            warn!("No log index in log: {:?}", log);
+                        let Some(topic) = log.topic0() else {
+                            warn!("No topic0 in log: {:?}", log);
                             return;
                         };
 
@@ -99,8 +99,13 @@ pub async fn finalize_transfer(
 
                         let vaa = utils::evm::get_vaa(tx_logs, &log, &config).await;
 
-                        let Some(prover_args) =
-                            utils::evm::get_prover_args(vaa, tx_hash, log_index, &config).await
+                        let Some(prover_args) = utils::evm::get_prover_args(
+                            vaa,
+                            tx_hash,
+                            H256::from_slice(topic.as_slice()),
+                            &config,
+                        )
+                        .await
                         else {
                             return;
                         };
@@ -125,7 +130,7 @@ pub async fn finalize_transfer(
 
                         let fin_transfer_args = FinTransferArgs {
                             chain_kind: ChainKind::Eth,
-                            native_fee_recipient: config.evm.relayer.clone(),
+                            native_fee_recipient: config.evm.relayer_address_on_eth.clone(),
                             storage_deposit_args: StorageDepositArgs {
                                 token,
                                 accounts: vec![

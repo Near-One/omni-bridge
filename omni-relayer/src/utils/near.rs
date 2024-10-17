@@ -128,19 +128,55 @@ pub async fn handle_streamer_message(
                 ref nonce,
                 ref transfer_message,
             } => {
-                match nonce {
-                    Some(_nonce) => {
-                        // TODO: Ignore, but catch event later
+                if nonce.is_some() {
+                    match utils::fee::is_fee_sufficient(
+                        jsonrpc_client,
+                        &transfer_message.sender,
+                        &transfer_message.recipient,
+                        &transfer_message.token,
+                        transfer_message.fee.fee.into(),
+                    )
+                    .await
+                    {
+                        Ok(res) => {
+                            if res {
+                                utils::redis::add_event(
+                                    redis_connection,
+                                    utils::redis::NEAR_INIT_TRANSFER_QUEUE,
+                                    transfer_message.origin_nonce.0.to_string(),
+                                    log,
+                                )
+                                .await;
+                            } else {
+                                warn!("Fee is not sufficient for transfer: {:?}", transfer_message);
+                            }
+                        }
+                        Err(err) => {
+                            warn!("Failed to check fee: {}", err);
+                        }
                     }
-                    None => {
-                        utils::redis::add_event(
-                            redis_connection,
-                            utils::redis::NEAR_FIN_TRANSFER_EVENTS,
-                            transfer_message.origin_nonce.0.to_string(),
-                            log,
-                        )
-                        .await;
-                    }
+                } else {
+                    utils::redis::add_event(
+                        redis_connection,
+                        utils::redis::NEAR_SIGN_CLAIM_NATIVE_FEE_QUEUE,
+                        transfer_message.origin_nonce.0.to_string(),
+                        log,
+                    )
+                    .await;
+                }
+            }
+            Nep141LockerEvent::ClaimFeeEvent {
+                ref transfer_message,
+                ref native_fee_recipient,
+            } => {
+                if native_fee_recipient == &config.evm.relayer_address_on_eth {
+                    utils::redis::add_event(
+                        redis_connection,
+                        utils::redis::NEAR_SIGN_CLAIM_NATIVE_FEE_QUEUE,
+                        transfer_message.origin_nonce.0.to_string(),
+                        log,
+                    )
+                    .await;
                 }
             }
             Nep141LockerEvent::SignClaimNativeFeeEvent {
@@ -161,9 +197,7 @@ pub async fn handle_streamer_message(
                     .await;
                 }
             }
-            Nep141LockerEvent::LogMetadataEvent { .. } => {
-                info!("Received LogMetadataEvent");
-            }
+            Nep141LockerEvent::LogMetadataEvent { .. } => {}
         }
     }
 }
