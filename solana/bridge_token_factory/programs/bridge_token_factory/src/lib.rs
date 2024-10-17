@@ -1,15 +1,14 @@
-use anchor_lang::{
-    prelude::*,
-    solana_program::{program::invoke, system_instruction::transfer},
-};
-use deploy_token::*;
-use finalize_deposit::*;
+use anchor_lang::prelude::*;
+use instructions::*;
 
-pub mod deploy_token;
-pub mod finalize_deposit;
+pub mod constants;
+pub mod error;
+pub mod instructions;
+pub mod state;
 
 declare_id!("2ajXVaqXXpHWtPnW3tKZukuXHGGjVcENjuZaWrz6NhD4");
 
+#[constant]
 const DERIVED_NEAR_BRIDGE_ADDRESS: [u8; 64] = [
     251, 68, 120, 58, 81, 118, 152, 127, 82, 144, 201, 3, 155, 120, 205, 68, 127, 0, 13, 46, 181,
     138, 131, 83, 41, 60, 134, 18, 214, 185, 83, 102, 221, 254, 189, 217, 72, 147, 49, 87, 118,
@@ -25,13 +24,8 @@ pub mod bridge_token_factory {
         msg!("Deploying token");
 
         data.verify_signature()?;
-        ctx.accounts.initialize_token_metadata(data.metadata)?;
-
-        update_account_lamports_to_minimum_balance(
-            ctx.accounts.mint.to_account_info(),
-            ctx.accounts.signer.to_account_info(),
-            ctx.accounts.system_program.to_account_info(),
-        )?;
+        ctx.accounts
+            .initialize_token_metadata(data.metadata, ctx.bumps.wormhole_message)?;
 
         // Emit event
         Ok(())
@@ -44,26 +38,55 @@ pub mod bridge_token_factory {
         msg!("Finalizing deposit");
 
         data.verify_signature()?;
-        ctx.accounts.mint(data)?;
+        ctx.accounts.mint(data, ctx.bumps.wormhole_message)?;
 
         // Emit event
         Ok(())
     }
-}
 
-pub fn update_account_lamports_to_minimum_balance<'info>(
-    account: AccountInfo<'info>,
-    payer: AccountInfo<'info>,
-    system_program: AccountInfo<'info>,
-) -> Result<()> {
-    let extra_lamports = Rent::get()?.minimum_balance(account.data_len()) - account.get_lamports();
-    if extra_lamports > 0 {
-        invoke(
-            &transfer(payer.key, account.key, extra_lamports),
-            &[payer, account, system_program],
-        )?;
+    pub fn register_mint(
+        ctx: Context<RegisterMint>,
+        metadata_override: MetadataOverride,
+    ) -> Result<()> {
+        msg!("Registering mint");
+
+        ctx.accounts
+            .process(metadata_override, ctx.bumps.wormhole_message)?;
+
+        // Emit event
+        Ok(())
     }
-    Ok(())
+
+    pub fn send(ctx: Context<Send>, data: SendData) -> Result<()> {
+        msg!("Sending");
+
+        ctx.accounts.process(data, ctx.bumps.wormhole_message)?;
+
+        // Emit event
+        Ok(())
+    }
+
+    pub fn finalize_withdraw(
+        ctx: Context<FinalizeWithdraw>,
+        data: FinalizeDepositData,
+    ) -> Result<()> {
+        msg!("Finalizing withdraw");
+
+        data.verify_signature()?;
+        ctx.accounts.process(data, ctx.bumps.wormhole_message)?;
+
+        // Emit event
+        Ok(())
+    }
+
+    pub fn repay(ctx: Context<Repay>, payload: RepayPayload) -> Result<()> {
+        msg!("Repaying");
+
+        ctx.accounts.process(payload, ctx.bumps.wormhole_message)?;
+
+        // Emit event
+        Ok(())
+    }
 }
 
 #[error_code(offset = 6000)]
