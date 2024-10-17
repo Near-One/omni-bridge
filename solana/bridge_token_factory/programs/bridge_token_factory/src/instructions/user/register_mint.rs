@@ -34,7 +34,7 @@ pub struct RegisterMint<'info> {
         seeds = [CONFIG_SEED],
         bump = config.bumps.config,
     )]
-    pub config: Account<'info, Config>,
+    pub config: Box<Account<'info, Config>>,
     /// CHECK: PDA
     #[account(
         seeds = [AUTHORITY_SEED],
@@ -46,7 +46,7 @@ pub struct RegisterMint<'info> {
         constraint = !mint.mint_authority.contains(authority.key),
         mint::token_program = token_program,
     )]
-    pub mint: InterfaceAccount<'info, Mint>,
+    pub mint: Box<InterfaceAccount<'info, Mint>>,
 
     pub override_authority: Option<Signer<'info>>,
 
@@ -65,7 +65,7 @@ pub struct RegisterMint<'info> {
         bump,
         token::token_program = token_program,
     )]
-    pub vault: InterfaceAccount<'info, TokenAccount>,
+    pub vault: Box<InterfaceAccount<'info, TokenAccount>>,
 
     /// Wormhole bridge data. [`wormhole::post_message`] requires this account
     /// be mutable.
@@ -73,7 +73,7 @@ pub struct RegisterMint<'info> {
         mut,
         address = config.wormhole.bridge,
     )]
-    pub wormhole_bridge: Account<'info, BridgeData>,
+    pub wormhole_bridge: Box<Account<'info, BridgeData>>,
 
     /// Wormhole fee collector. [`wormhole::post_message`] requires this
     /// account be mutable.
@@ -81,7 +81,7 @@ pub struct RegisterMint<'info> {
         mut,
         address = config.wormhole.fee_collector
     )]
-    pub wormhole_fee_collector: Account<'info, FeeCollector>,
+    pub wormhole_fee_collector: Box<Account<'info, FeeCollector>>,
 
     /// Emitter's sequence account. [`wormhole::post_message`] requires this
     /// account be mutable.
@@ -89,7 +89,7 @@ pub struct RegisterMint<'info> {
         mut,
         address = config.wormhole.sequence
     )]
-    pub wormhole_sequence: Account<'info, SequenceTracker>,
+    pub wormhole_sequence: Box<Account<'info, SequenceTracker>>,
 
     /// CHECK: Wormhole Message. [`wormhole::post_message`] requires this
     /// account be mutable.
@@ -101,7 +101,7 @@ pub struct RegisterMint<'info> {
         ],
         bump,
     )]
-    pub wormhole_message: UncheckedAccount<'info>,
+    pub wormhole_message: SystemAccount<'info>,
 
     #[account(mut)]
     pub payer: Signer<'info>,

@@ -17,7 +17,7 @@ pub struct Repay<'info> {
         seeds = [CONFIG_SEED],
         bump = config.bumps.config,
     )]
-    pub config: Account<'info, Config>,
+    pub config: Box<Account<'info, Config>>,
     /// CHECK: PDA
     #[account(
         seeds = [AUTHORITY_SEED],
@@ -31,10 +31,13 @@ pub struct Repay<'info> {
         bump,
         mint::authority = authority,
     )]
-    pub mint: Account<'info, Mint>,
+    pub mint: Box<Account<'info, Mint>>,
 
-    #[account(mut)]
-    pub from: Account<'info, TokenAccount>,
+    #[account(
+        mut,
+        token::mint = mint,
+    )]
+    pub from: Box<Account<'info, TokenAccount>>,
     pub user: Signer<'info>,
 
     /// Wormhole bridge data. [`wormhole::post_message`] requires this account
@@ -43,7 +46,7 @@ pub struct Repay<'info> {
         mut,
         address = config.wormhole.bridge,
     )]
-    pub wormhole_bridge: Account<'info, BridgeData>,
+    pub wormhole_bridge: Box<Account<'info, BridgeData>>,
 
     /// Wormhole fee collector. [`wormhole::post_message`] requires this
     /// account be mutable.
@@ -51,7 +54,7 @@ pub struct Repay<'info> {
         mut,
         address = config.wormhole.fee_collector
     )]
-    pub wormhole_fee_collector: Account<'info, FeeCollector>,
+    pub wormhole_fee_collector: Box<Account<'info, FeeCollector>>,
 
     /// Emitter's sequence account. [`wormhole::post_message`] requires this
     /// account be mutable.
@@ -59,7 +62,7 @@ pub struct Repay<'info> {
         mut,
         address = config.wormhole.sequence
     )]
-    pub wormhole_sequence: Account<'info, SequenceTracker>,
+    pub wormhole_sequence: Box<Account<'info, SequenceTracker>>,
 
     /// CHECK: Wormhole Message. [`wormhole::post_message`] requires this
     /// account be mutable.
@@ -71,7 +74,7 @@ pub struct Repay<'info> {
         ],
         bump,
     )]
-    pub wormhole_message: UncheckedAccount<'info>,
+    pub wormhole_message: SystemAccount<'info>,
 
     pub clock: Sysvar<'info, Clock>,
     pub rent: Sysvar<'info, Rent>,

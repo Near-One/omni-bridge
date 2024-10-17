@@ -1,17 +1,26 @@
 use anchor_lang::prelude::*;
 use anchor_lang::system_program::transfer;
 use anchor_lang::system_program::Transfer;
+#[cfg(not(feature = "idl-build"))]
 use bitvec::array::BitArray;
 
 use crate::constants::{USED_NONCES_ACCOUNT_SIZE, USED_NONCES_PER_ACCOUNT};
+#[cfg(not(feature = "idl-build"))]
 use crate::error::ErrorCode;
 
 use super::config::Config;
 
+#[cfg(not(feature = "idl-build"))]
 #[account(zero_copy(unsafe))]
 #[repr(C)]
 pub struct UsedNonces {
-    used: BitArray<[u8; (USED_NONCES_PER_ACCOUNT + 7) / 8]>,
+    used: BitArray<[u8; (USED_NONCES_PER_ACCOUNT as usize + 7) / 8]>,
+}
+
+#[cfg(feature = "idl-build")]
+#[account(zero_copy(unsafe))]
+#[repr(C)]
+pub struct UsedNonces {
 }
 
 impl UsedNonces {
@@ -39,7 +48,6 @@ impl UsedNonces {
         if config.max_used_nonce < nonce {
             config.max_used_nonce = nonce;
         }
-        let mut used_nonces = loader.load_mut()?;
         let config_rent_exempt = rent.minimum_balance(config.to_account_info().data_len());
         let current_config_lamports = config.to_account_info().lamports();
         // use max_used_nonce instead of the requested one to ignore the usage of the nonces from the gap
@@ -65,13 +73,19 @@ impl UsedNonces {
                 payer.add_lamports(compensation)?;
             }
         }
+        #[cfg(not(feature = "idl-build"))]
         {
+            let mut used_nonces = loader.load_mut()?;
             let mut nonce_slot = unsafe {
                 used_nonces
                     .used
-                    .get_unchecked_mut(nonce as usize % USED_NONCES_PER_ACCOUNT)
+                    .get_unchecked_mut((nonce % USED_NONCES_PER_ACCOUNT as u128) as usize)
             };
             require!(!nonce_slot.replace(true), ErrorCode::NonceAlreadyUsed);
+        }
+        #[cfg(feature = "idl-build")]
+        {
+            loader.load_mut()?; // fix unused variable warning
         }
 
         Ok(())
