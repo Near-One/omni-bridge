@@ -4,10 +4,12 @@ pragma solidity ^0.8.24;
 import {AccessControlUpgradeable} from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {UUPSUpgradeable} from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
+import {ICustomMinter} from "./ICustomMinter.sol";
 
 import "./BridgeToken.sol";
 import "./SelectivePausableUpgradable.sol";
@@ -29,7 +31,9 @@ contract BridgeTokenFactory is
     uint8 public omniBridgeChainId;
 
     mapping(uint64 => bool) public completedTransfers;
-    uint64 public currentOriginNonce; 
+    uint64 public currentOriginNonce;
+
+    mapping(address => address) public customMinters;
 
     bytes32 public constant PAUSABLE_ADMIN_ROLE = keccak256("PAUSABLE_ADMIN_ROLE");
     uint constant UNPAUSED_ALL = 0;
@@ -56,7 +60,35 @@ contract BridgeTokenFactory is
         _grantRole(PAUSABLE_ADMIN_ROLE, _msgSender());
     }
 
-    function deployToken(bytes calldata signatureData, BridgeTypes.MetadataPayload calldata metadata) payable external returns (address) {
+    function isBridgeToken(address token) external view returns (bool) {
+        return _isBridgeToken[token];
+    }
+
+    function ethToNearToken(address token) external view returns (string memory) {
+        require(_isBridgeToken[token], "ERR_NOT_BRIDGE_TOKEN");
+        return _ethToNearToken[token];
+    }
+
+    function nearToEthToken(string calldata nearTokenId) external view returns (address) {
+        require(_isBridgeToken[_nearToEthToken[nearTokenId]], "ERR_NOT_BRIDGE_TOKEN");
+        return _nearToEthToken[nearTokenId];
+    }
+
+    function addCustomToken(string calldata nearTokenId, address tokenAddress, address customMinter) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        _isBridgeToken[tokenAddress] = true;
+        _ethToNearToken[tokenAddress] = nearTokenId;
+        _nearToEthToken[nearTokenId] = tokenAddress;
+        customMinters[tokenAddress] = customMinter;
+    }
+
+    function removeCustomToken(address tokenAddress) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        delete _isBridgeToken[tokenAddress];
+        delete _nearToEthToken[_ethToNearToken[tokenAddress]];
+        delete _ethToNearToken[tokenAddress];
+        delete customMinters[tokenAddress];
+    }
+
+    function deployToken(bytes calldata signatureData, MetadataPayload calldata metadata) payable external returns (address) {
         bytes memory borshEncoded = bytes.concat(
             bytes1(uint8(BridgeTypes.PayloadType.Metadata)),
             Borsh.encodeString(metadata.token),
@@ -131,7 +163,7 @@ contract BridgeTokenFactory is
         uint8 decimals = IERC20Metadata(tokenAddress).decimals();
 
       logMetadataExtension(tokenAddress, name, symbol, decimals);
-       
+
         emit BridgeTypes.LogMetadata(
             tokenAddress,
             name,
@@ -168,7 +200,7 @@ contract BridgeTokenFactory is
             bytes1(omniBridgeChainId),
             Borsh.encodeAddress(payload.recipient),
             bytes(payload.feeRecipient).length == 0  // None or Some(String) in rust
-                ? bytes("\x00") 
+                ? bytes("\x00")
                 : bytes.concat(bytes("\x01"), Borsh.encodeString(payload.feeRecipient))
         );
         bytes32 hashed = keccak256(borshEncoded);
@@ -176,9 +208,15 @@ contract BridgeTokenFactory is
         if (ECDSA.recover(hashed, signatureData) != nearBridgeDerivedAddress) {
             revert InvalidSignature();
         }
-        
-        if (isBridgeToken[payload.tokenAddress]) {
-            BridgeToken(payload.tokenAddress).mint(payload.recipient, payload.amount);
+
+        address tokenAddress = _nearToEthToken[payload.token];
+
+        require(_isBridgeToken[tokenAddress], "ERR_NOT_BRIDGE_TOKEN");
+
+        if (customMinters[tokenAddress] != address(0)) {
+            ICustomMinter(customMinters[tokenAddress]).mint(tokenAddress, payload.recipient, payload.amount);
+        } else if (isBridgeToken[payload.tokenAddress]) {
+            BridgeToken(tokenAddress).mint(payload.recipient, payload.amount);
         } else {
             IERC20(payload.tokenAddress).safeTransfer(payload.recipient, payload.amount);
         }
@@ -219,10 +257,13 @@ contract BridgeTokenFactory is
             extensionValue = msg.value - amount - nativeFee;
         } else {
             extensionValue = msg.value - nativeFee;
-            if (isBridgeToken[tokenAddress]) {
-                BridgeToken(tokenAddress).burn(msg.sender, amount);
-            } else {
+            if (customMinters[tokenAddress] != address(0)) {
+                IERC20(tokenAddress).transferFrom(msg.sender, customMinters[tokenAddress], amount);
+                ICustomMinter(customMinters[tokenAddress]).burn(tokenAddress, amount);
+            } else if (isBridgeToken[tokenAddress]) {
                 IERC20(tokenAddress).safeTransferFrom(msg.sender, address(this), amount);
+            } else {
+                BridgeToken(tokenAddress).burn(msg.sender, amount);
             }
         }
 
@@ -251,7 +292,7 @@ contract BridgeTokenFactory is
         uint flags = PAUSED_FIN_TRANSFER | PAUSED_INIT_TRANSFER;
         _pause(flags);
     }
- 
+
     function upgradeToken(
         address tokenAddress,
         address implementation
