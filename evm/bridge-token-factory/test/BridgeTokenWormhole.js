@@ -102,10 +102,11 @@ describe('BridgeTokenWormhole', () => {
 
     const recipient = 'testrecipient.near';
     const fee = 0;
+    const nativeFee = 0;
     const nonce = 1;
     const expectedPayload = ethers.AbiCoder.defaultAbiCoder().encode(
-        ["uint8", "uint128", "string", "uint128", "uint128", "string", "address"],
-        [0, nonce, wrappedNearId, payload.amount, fee, recipient, user1.address]
+        ["uint8", "uint128", "string", "uint128", "uint128", "uint128", "string", "address"],
+        [0, nonce, wrappedNearId, payload.amount, fee, nativeFee, recipient, user1.address]
     );
 
     await expect(
@@ -113,6 +114,7 @@ describe('BridgeTokenWormhole', () => {
         wrappedNearId,
         payload.amount,
         fee,
+        nativeFee,
         recipient
       )
     )
