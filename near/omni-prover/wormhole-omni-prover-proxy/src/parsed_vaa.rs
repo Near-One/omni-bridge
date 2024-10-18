@@ -11,7 +11,7 @@ use {
 };
 
 // Validator Action Approval(VAA) data
-
+#[allow(dead_code)]
 pub struct ParsedVAA {
     pub version: u8,
     pub guardian_set_index: u32,
@@ -69,7 +69,7 @@ impl ParsedVAA {
         // Load 4 bytes starting from index 1
         let guardian_set_index: u32 = data.get_u32(Self::GUARDIAN_SET_INDEX_POS);
         let len_signers = data.get_u8(Self::LEN_SIGNER_POS) as usize;
-        let body_offset: usize = Self::HEADER_LEN + Self::SIGNATURE_LEN * len_signers as usize;
+        let body_offset: usize = Self::HEADER_LEN + Self::SIGNATURE_LEN * len_signers;
 
         // Hash the body
         if body_offset >= data.len() {
@@ -99,7 +99,7 @@ impl ParsedVAA {
             guardian_set_index,
             timestamp,
             nonce,
-            len_signers: len_signers as usize,
+            len_signers,
             emitter_chain,
             emitter_address,
             sequence,

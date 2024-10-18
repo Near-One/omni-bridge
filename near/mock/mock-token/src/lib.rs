@@ -35,11 +35,11 @@ impl Contract {
     /// Initializes the contract with the given total supply owned by the given `owner_id` with
     /// default metadata (for example purposes only).
     #[init]
-    pub fn new_default_meta(owner_id: AccountId, total_supply: U128) -> Self {
+    pub fn new_default_meta(owner_id: &AccountId, total_supply: U128) -> Self {
         Self::new(
             owner_id,
             total_supply,
-            FungibleTokenMetadata {
+            &FungibleTokenMetadata {
                 spec: FT_METADATA_SPEC.to_string(),
                 name: "Example NEAR fungible token".to_string(),
                 symbol: "EXAMPLE".to_string(),
@@ -54,18 +54,18 @@ impl Contract {
     /// Initializes the contract with the given total supply owned by the given `owner_id` with
     /// the given fungible token metadata.
     #[init]
-    pub fn new(owner_id: AccountId, total_supply: U128, metadata: FungibleTokenMetadata) -> Self {
+    pub fn new(owner_id: &AccountId, total_supply: U128, metadata: &FungibleTokenMetadata) -> Self {
         require!(!env::state_exists(), "Already initialized");
         metadata.assert_valid();
         let mut this = Self {
             token: FungibleToken::new(StorageKey::FungibleToken),
-            metadata: LazyOption::new(StorageKey::Metadata, Some(&metadata)),
+            metadata: LazyOption::new(StorageKey::Metadata, Some(metadata)),
         };
-        this.token.internal_register_account(&owner_id);
-        this.token.internal_deposit(&owner_id, total_supply.into());
+        this.token.internal_register_account(owner_id);
+        this.token.internal_deposit(owner_id, total_supply.into());
 
         near_contract_standards::fungible_token::events::FtMint {
-            owner_id: &owner_id,
+            owner_id,
             amount: total_supply,
             memo: Some("new tokens are minted"),
         }
@@ -79,7 +79,7 @@ impl Contract {
 impl FungibleTokenCore for Contract {
     #[payable]
     fn ft_transfer(&mut self, receiver_id: AccountId, amount: U128, memo: Option<String>) {
-        self.token.ft_transfer(receiver_id, amount, memo)
+        self.token.ft_transfer(receiver_id, amount, memo);
     }
 
     #[payable]
