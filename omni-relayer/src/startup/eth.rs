@@ -86,7 +86,7 @@ pub async fn start_indexer(
         .event_signature([FinTransfer::SIGNATURE_HASH, InitTransfer::SIGNATURE_HASH].to_vec());
 
     for current_block in
-        (from_block..latest_block).step_by(config.eth.block_processing_batch_size as usize)
+        (from_block..latest_block).step_by(usize::try_from(config.eth.block_processing_batch_size)?)
     {
         let logs = http_provider
             .get_logs(&filter.clone().from_block(current_block).to_block(
@@ -157,6 +157,8 @@ pub async fn start_indexer(
     Ok(())
 }
 
+// TODO: try to split this function
+#[allow(clippy::too_many_lines)]
 async fn process_log(
     config: &config::Config,
     redis_connection: &mut redis::aio::MultiplexedConnection,

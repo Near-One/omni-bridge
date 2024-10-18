@@ -60,6 +60,7 @@ pub async fn is_fee_sufficient(jsonrpc_client: &JsonRpcClient, sender: &OmniAddr
     let token_price = get_price_by_contract_address("near-protocol", token.as_ref()).await?;
     let token_decimals = get_token_decimals(jsonrpc_client, token).await?;
 
+    #[allow(clippy::cast_precision_loss)]
     let given_fee = fee as f64 / 10u128.pow(token_decimals) as f64 * token_price;
 
     // TODO: Right now I chose a random fee (around 0.10 USD), but it should be calculated based on the chain in the future
