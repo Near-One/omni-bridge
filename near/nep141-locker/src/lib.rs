@@ -45,7 +45,7 @@ const STORAGE_BALANCE_OF_GAS: Gas = Gas::from_tgas(3);
 const STORAGE_DEPOSIT_GAS: Gas = Gas::from_tgas(3);
 const NO_DEPOSIT: NearToken = NearToken::from_near(0);
 const ONE_YOCTO: NearToken = NearToken::from_yoctonear(1);
-const NEP141_DEPOSIT: NearToken = NearToken::from_yoctonear(1250000000000000000000);
+const NEP141_DEPOSIT: NearToken = NearToken::from_yoctonear(1_250_000_000_000_000_000_000);
 
 const SIGN_PATH: &str = "bridge-1";
 
@@ -196,7 +196,7 @@ impl Contract {
         contract
     }
 
-    pub fn log_metadata(&self, token_id: AccountId) -> Promise {
+    pub fn log_metadata(&self, token_id: &AccountId) -> Promise {
         ext_token::ext(token_id.clone())
             .with_static_gas(LOG_METADATA_GAS)
             .ft_metadata()
@@ -213,7 +213,7 @@ impl Contract {
     pub fn log_metadata_callbcak(
         &self,
         #[callback] metadata: FungibleTokenMetadata,
-        token_id: AccountId,
+        token_id: &AccountId,
     ) -> Promise {
         let metadata_payload = MetadataPayload {
             token: token_id.to_string(),
@@ -357,12 +357,18 @@ impl Contract {
         }
     }
 
+    /// # Panics
+    ///
+    /// This function will panic under the following conditions:
+    ///
+    /// - If the `borsh::to_vec` serialization of the `TransferMessagePayload` fails.
+    /// - If a `fee` is provided and it doesn't match the fee in the stored transfer message.
     #[payable]
     pub fn sign_transfer(
         &mut self,
         nonce: U128,
         fee_recipient: Option<AccountId>,
-        fee: Option<Fee>,
+        fee: &Option<Fee>,
     ) -> Promise {
         let transfer_message = self.get_transfer_message(nonce);
         if let Some(fee) = &fee {
@@ -390,7 +396,7 @@ impl Contract {
             .then(
                 Self::ext(env::current_account_id())
                     .with_static_gas(SIGN_TRANSFER_CALLBACK_GAS)
-                    .sign_transfer_callback(transfer_payload, transfer_message.fee),
+                    .sign_transfer_callback(transfer_payload, &transfer_message.fee),
             )
     }
 
@@ -399,7 +405,7 @@ impl Contract {
         &mut self,
         #[callback_result] call_result: Result<SignatureResponse, PromiseError>,
         #[serializer(borsh)] message_payload: TransferMessagePayload,
-        #[serializer(borsh)] fee: Fee,
+        #[serializer(borsh)] fee: &Fee,
     ) {
         if let Ok(signature) = call_result {
             let nonce = message_payload.nonce;
@@ -442,7 +448,7 @@ impl Contract {
                 .with_attached_deposit(attached_deposit)
                 .with_static_gas(CLAIM_FEE_CALLBACK_GAS)
                 .fin_transfer_callback(
-                    args.storage_deposit_args,
+                    &args.storage_deposit_args,
                     env::predecessor_account_id(),
                     args.native_fee_recipient,
                 ),
@@ -453,7 +459,7 @@ impl Contract {
     #[payable]
     pub fn fin_transfer_callback(
         &mut self,
-        #[serializer(borsh)] storage_deposit_args: StorageDepositArgs,
+        #[serializer(borsh)] storage_deposit_args: &StorageDepositArgs,
         #[serializer(borsh)] predecessor_account_id: AccountId,
         #[serializer(borsh)] native_fee_recipient: OmniAddress,
     ) -> PromiseOrValue<U128> {
@@ -684,14 +690,15 @@ impl Contract {
     pub fn get_transfer_message(&self, nonce: U128) -> TransferMessage {
         self.pending_transfers
             .get(&nonce.0)
-            .map(|m| m.into_main().message)
+            .map(storage::TransferMessageStorage::into_main)
+            .map(|m| m.message)
             .sdk_expect("The transfer does not exist")
     }
 
     pub fn get_transfer_message_storage(&self, nonce: U128) -> TransferMessageStorageValue {
         self.pending_transfers
             .get(&nonce.0)
-            .map(|m| m.into_main())
+            .map(storage::TransferMessageStorage::into_main)
             .sdk_expect("The transfer does not exist")
     }
 
@@ -740,7 +747,7 @@ impl Contract {
                     .flatten()
                     .is_some()
             }
-            _ => false,
+            PromiseResult::Failed => false,
         }
     }
 
@@ -786,7 +793,7 @@ impl Contract {
         let transfer = self
             .pending_transfers
             .remove(&nonce)
-            .map(|m| m.into_main())
+            .map(storage::TransferMessageStorage::into_main)
             .sdk_expect("ERR_TRANSFER_NOT_EXIST");
 
         let refund =

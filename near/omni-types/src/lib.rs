@@ -198,7 +198,7 @@ impl fmt::Display for OmniAddress {
             OmniAddress::Arb(recipient) => ("arb", recipient.to_string()),
             OmniAddress::Base(recipient) => ("base", recipient.to_string()),
         };
-        write!(f, "{}:{}", chain_str, recipient)
+        write!(f, "{chain_str}:{recipient}")
     }
 }
 

@@ -5,7 +5,7 @@ mod tests {
     use omni_types::{
         locker_args::{FinTransferArgs, StorageDepositArgs},
         prover_result::{InitTransferMessage, ProverResult},
-        OmniAddress, TransferMessage,
+        Fee, OmniAddress, TransferMessage,
     };
 
     const MOCK_TOKEN_PATH: &str = "./../target/wasm32-unknown-unknown/release/mock_token.wasm";
@@ -209,6 +209,7 @@ mod tests {
             .call(locker_contract.id(), "fin_transfer")
             .args_borsh(FinTransferArgs {
                 chain_kind: omni_types::ChainKind::Eth,
+                native_fee_recipient: eth_eoa_address(),
                 storage_deposit_args: StorageDepositArgs {
                     token: token_contract.id().clone(),
                     accounts: storage_deposit_accounts,
@@ -220,7 +221,10 @@ mod tests {
                         token: token_contract.id().clone(),
                         recipient: OmniAddress::Near(account_1().to_string()),
                         amount: U128(amount),
-                        fee: U128(fee),
+                        fee: Fee {
+                            fee: U128(fee),
+                            native_fee: U128(0),
+                        },
                         sender: eth_eoa_address(),
                     },
                 }))

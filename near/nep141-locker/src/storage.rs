@@ -2,7 +2,10 @@ use near_contract_standards::storage_management::{StorageBalance, StorageBalance
 use near_sdk::{assert_one_yocto, borsh};
 use near_sdk::{env, near_bindgen, AccountId, NearToken};
 
-use crate::*;
+use crate::{
+    require, BorshDeserialize, BorshSerialize, ChainKind, Contract, ContractExt, Deserialize, Fee,
+    OmniAddress, Promise, SdkExpect, Serialize, TransferMessage, U128,
+};
 
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Debug, Clone)]
 pub struct TransferMessageStorageValue {
@@ -111,7 +114,7 @@ impl Contract {
     }
 
     pub fn storage_balance_of(&self, account_id: &AccountId) -> Option<StorageBalance> {
-        self.accounts_balances.get(&account_id)
+        self.accounts_balances.get(account_id)
     }
 
     pub fn required_balance_for_account(&self) -> NearToken {
