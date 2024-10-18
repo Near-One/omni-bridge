@@ -1,6 +1,6 @@
 .PHONY: rust-lint rust-lint-near rust-lint-omni-relayer
 
-OPTIONS = -D warnings -D clippy::pedantic -A clippy::missing_errors_doc -A clippy::must_use_candidate
+OPTIONS = -D warnings -D clippy::pedantic -A clippy::missing_errors_doc -A clippy::must_use_candidate -A clippy::module_name_repetitions
 
 rust-lint: rust-lint-near #rust-lint-relayer
 
