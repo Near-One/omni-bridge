@@ -42,9 +42,13 @@ impl EvmProver {
         }
     }
 
+    /// # Panics
+    ///
+    /// This function will panic in the following situations:
+    /// - If the log entry at the specified index doesn't match the decoded log entry.
     #[handle_result]
-    pub fn verify_proof(&self, #[serializer(borsh)] input: Vec<u8>) -> Result<Promise, String> {
-        let args = EvmVerifyProofArgs::try_from_slice(&input).map_err(|_| "ERR_PARSE_ARGS")?;
+    pub fn verify_proof(&self, #[serializer(borsh)] input: &[u8]) -> Result<Promise, String> {
+        let args = EvmVerifyProofArgs::try_from_slice(input).map_err(|_| "ERR_PARSE_ARGS")?;
 
         let evm_proof = args.proof;
         let header: BlockHeader = rlp::decode(&evm_proof.header_data).map_err(|e| e.to_string())?;
@@ -76,7 +80,7 @@ impl EvmProver {
                     .with_static_gas(VERIFY_PROOF_CALLBACK_GAS)
                     .verify_proof_callback(
                         args.proof_kind,
-                        evm_proof.log_entry_data,
+                        &evm_proof.log_entry_data,
                         header.hash.ok_or("ERR_HASH_NOT_SET")?.0,
                     ),
             ))
@@ -87,7 +91,7 @@ impl EvmProver {
     pub fn verify_proof_callback(
         &mut self,
         #[serializer(borsh)] kind: ProofKind,
-        #[serializer(borsh)] log_entry_data: Vec<u8>,
+        #[serializer(borsh)] log_entry_data: &[u8],
         #[serializer(borsh)] expected_block_hash: H256,
         #[callback]
         #[serializer(borsh)]
@@ -133,7 +137,7 @@ impl EvmProver {
             actual_key.push(el / 16);
             actual_key.push(el % 16);
         }
-        Self::_verify_trie_proof(expected_root.to_vec(), &actual_key, proof, 0, 0)
+        Self::_verify_trie_proof(&expected_root, &actual_key, proof, 0, 0)
     }
 
     fn _verify_trie_proof(
@@ -155,7 +159,7 @@ impl EvmProver {
             require!(keccak256(node) == expected_root.as_slice());
         }
 
-        let node = Rlp::new(&node.as_slice());
+        let node = Rlp::new(node.as_slice());
 
         if node.iter().count() == 17 {
             // Branch node
@@ -164,17 +168,17 @@ impl EvmProver {
                 get_vec(&node, 16)
             } else {
                 let new_expected_root = get_vec(&node, key[key_index] as usize);
-                if !new_expected_root.is_empty() {
+                if new_expected_root.is_empty() {
+                    // not included in proof
+                    vec![]
+                } else {
                     Self::_verify_trie_proof(
-                        new_expected_root,
+                        &new_expected_root,
                         key,
                         proof,
                         key_index + 1,
                         proof_index + 1,
                     )
-                } else {
-                    // not included in proof
-                    vec![]
                 }
             }
         } else {
@@ -210,7 +214,7 @@ impl EvmProver {
                 require!(path.as_slice() == &key[key_index..key_index + path.len()]);
                 let new_expected_root = get_vec(&node, 1);
                 Self::_verify_trie_proof(
-                    new_expected_root,
+                    &new_expected_root,
                     key,
                     proof,
                     key_index + path.len(),
