@@ -4,7 +4,9 @@ pragma solidity ^0.8.24;
 import {AccessControlUpgradeable} from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {UUPSUpgradeable} from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
+import {ICustomMinter} from "./ICustomMinter.sol";
 
 import "./BridgeToken.sol";
 import "./SelectivePausableUpgradable.sol";
@@ -41,6 +43,8 @@ contract BridgeTokenFactory is
     mapping(uint128 => bool) public completedTransfers;
     mapping(uint128 => bool) public claimedFee;
     uint128 public initTransferNonce; 
+
+    mapping(address => address) public customMinters;
 
     bytes32 public constant PAUSABLE_ADMIN_ROLE = keccak256("PAUSABLE_ADMIN_ROLE");
     uint constant UNPAUSED_ALL = 0;
@@ -138,6 +142,20 @@ contract BridgeTokenFactory is
         return _nearToEthToken[nearTokenId];
     }
 
+    function addCustomToken(string calldata nearTokenId, address tokenAddress, address customMinter) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        _isBridgeToken[tokenAddress] = true;
+        _ethToNearToken[tokenAddress] = nearTokenId;
+        _nearToEthToken[nearTokenId] = tokenAddress;
+        customMinters[tokenAddress] = customMinter;
+    }
+
+    function removeCustomToken(address tokenAddress) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        delete _isBridgeToken[tokenAddress];
+        delete _nearToEthToken[_ethToNearToken[tokenAddress]];
+        delete _ethToNearToken[tokenAddress];
+        delete customMinters[tokenAddress];
+    }
+
     function deployToken(bytes calldata signatureData, MetadataPayload calldata metadata) payable external returns (address) {
         bytes memory borshEncoded = bytes.concat(
             Borsh.encodeString(metadata.token),
@@ -225,8 +243,15 @@ contract BridgeTokenFactory is
             revert InvalidSignature();
         }
 
-        require(_isBridgeToken[_nearToEthToken[payload.token]], "ERR_NOT_BRIDGE_TOKEN");
-        BridgeToken(_nearToEthToken[payload.token]).mint(payload.recipient, payload.amount);
+        address tokenAddress = _nearToEthToken[payload.token];
+
+        require(_isBridgeToken[tokenAddress], "ERR_NOT_BRIDGE_TOKEN");  
+
+        if (customMinters[tokenAddress] != address(0)) {
+            ICustomMinter(customMinters[tokenAddress]).mint(tokenAddress, payload.recipient, payload.amount);
+        } else {
+            BridgeToken(tokenAddress).mint(payload.recipient, payload.amount);
+        }
 
         completedTransfers[payload.nonce] = true;
 
@@ -259,7 +284,12 @@ contract BridgeTokenFactory is
 
         address tokenAddress = _nearToEthToken[token];
 
-        BridgeToken(tokenAddress).burn(msg.sender, amount);
+        if (customMinters[tokenAddress] != address(0)) {
+            IERC20(tokenAddress).transferFrom(msg.sender, customMinters[tokenAddress], amount);
+            ICustomMinter(customMinters[tokenAddress]).burn(tokenAddress, amount);
+        } else {
+            BridgeToken(tokenAddress).burn(msg.sender, amount);
+        }
 
         uint256 extensionValue = msg.value - nativeFee;
         initTransferExtension(initTransferNonce, token, amount, fee, nativeFee, recipient, msg.sender, extensionValue);
