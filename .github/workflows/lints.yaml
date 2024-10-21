@@ -1,4 +1,4 @@
-name: Rust testing 
+name: Rust testing and building
 
 on:
   push:
@@ -21,8 +21,26 @@ jobs:
         with:
           toolchain: 1.79.0
           components: clippy
+          target: wasm32-unknown-unknown
+          override: true
 
       - name: Run Clippy
         run: |
           make rust-lint-${{ matrix.component }}
 
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: 1.79.0
+          target: wasm32-unknown-unknown
+          override: true
+
+      - name: Build Near contract
+        run: |
+          make rust-build-near
