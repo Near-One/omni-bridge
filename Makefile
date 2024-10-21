@@ -6,12 +6,18 @@ RUSTFLAGS = -C link-arg=-s
 NEAR_MANIFEST = ./near/Cargo.toml
 OMNI_RELAYER_MANIFEST = ./omni-relayer/Cargo.toml
 
-rust-lint: rust-lint-near #rust-lint-relayer
+clippy: clippy-near #clippy-relayer
 
-rust-lint-near:
+clippy-near:
 	cargo clippy --manifest-path $(NEAR_MANIFEST) -- $(LINT_OPTIONS)
 
-rust-lint-omni-relayer:
+fmt-near:
+	cargo fmt --all --check --manifest-path $(NEAR_MANIFEST)
+
+fmt-omni-relayer:
+	cargo fmt --all --check --manifest-path $(OMNI_RELAYER_MANIFEST)
+
+clippy-omni-relayer:
 	cargo clippy --manifest-path $(OMNI_RELAYER_MANIFEST) -- $(LINT_OPTIONS)
 
 rust-build-near:
