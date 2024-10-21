@@ -46,9 +46,10 @@ impl EvmProver {
     ///
     /// This function will panic in the following situations:
     /// - If the log entry at the specified index doesn't match the decoded log entry.
+    #[allow(clippy::needless_pass_by_value)]
     #[handle_result]
-    pub fn verify_proof(&self, #[serializer(borsh)] input: &[u8]) -> Result<Promise, String> {
-        let args = EvmVerifyProofArgs::try_from_slice(input).map_err(|_| "ERR_PARSE_ARGS")?;
+    pub fn verify_proof(&self, #[serializer(borsh)] input: Vec<u8>) -> Result<Promise, String> {
+        let args = EvmVerifyProofArgs::try_from_slice(&input).map_err(|_| "ERR_PARSE_ARGS")?;
 
         let evm_proof = args.proof;
         let header: BlockHeader = rlp::decode(&evm_proof.header_data).map_err(|e| e.to_string())?;
@@ -80,18 +81,19 @@ impl EvmProver {
                     .with_static_gas(VERIFY_PROOF_CALLBACK_GAS)
                     .verify_proof_callback(
                         args.proof_kind,
-                        &evm_proof.log_entry_data,
+                        evm_proof.log_entry_data.clone(),
                         header.hash.ok_or("ERR_HASH_NOT_SET")?.0,
                     ),
             ))
     }
 
+    #[allow(clippy::needless_pass_by_value)]
     #[private]
     #[handle_result]
     pub fn verify_proof_callback(
         &mut self,
         #[serializer(borsh)] kind: ProofKind,
-        #[serializer(borsh)] log_entry_data: &[u8],
+        #[serializer(borsh)] log_entry_data: Vec<u8>,
         #[serializer(borsh)] expected_block_hash: H256,
         #[callback]
         #[serializer(borsh)]
@@ -104,15 +106,15 @@ impl EvmProver {
         match kind {
             ProofKind::InitTransfer => Ok(ProverResult::InitTransfer(parse_evm_event(
                 self.chain_kind,
-                log_entry_data,
+                &log_entry_data,
             )?)),
             ProofKind::FinTransfer => Ok(ProverResult::FinTransfer(parse_evm_event(
                 self.chain_kind,
-                log_entry_data,
+                &log_entry_data,
             )?)),
             ProofKind::DeployToken => Ok(ProverResult::DeployToken(parse_evm_event(
                 self.chain_kind,
-                log_entry_data,
+                &log_entry_data,
             )?)),
         }
     }
@@ -137,9 +139,10 @@ impl EvmProver {
             actual_key.push(el / 16);
             actual_key.push(el % 16);
         }
-        Self::_verify_trie_proof(&expected_root, &actual_key, proof, 0, 0)
+        Self::_verify_trie_proof(expected_root.to_vec(), &actual_key, proof, 0, 0)
     }
 
+    #[allow(clippy::needless_pass_by_value)]
     fn _verify_trie_proof(
         expected_root: Vec<u8>,
         key: &Vec<u8>,
@@ -173,7 +176,7 @@ impl EvmProver {
                     vec![]
                 } else {
                     Self::_verify_trie_proof(
-                        &new_expected_root,
+                        new_expected_root.clone(),
                         key,
                         proof,
                         key_index + 1,
@@ -214,7 +217,7 @@ impl EvmProver {
                 require!(path.as_slice() == &key[key_index..key_index + path.len()]);
                 let new_expected_root = get_vec(&node, 1);
                 Self::_verify_trie_proof(
-                    &new_expected_root,
+                    new_expected_root.clone(),
                     key,
                     proof,
                     key_index + path.len(),

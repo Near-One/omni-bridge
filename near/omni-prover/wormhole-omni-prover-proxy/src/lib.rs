@@ -31,8 +31,9 @@ impl WormholeOmniProverProxy {
         Self { prover_account }
     }
 
-    pub fn verify_proof(&self, #[serializer(borsh)] input: &[u8]) -> Promise {
-        let args = WormholeVerifyProofArgs::try_from_slice(input)
+    #[allow(clippy::needless_pass_by_value)]
+    pub fn verify_proof(&self, #[serializer(borsh)] input: Vec<u8>) -> Promise {
+        let args = WormholeVerifyProofArgs::try_from_slice(&input)
             .unwrap_or_else(|_| env::panic_str("ErrorOnArgsParsing"));
 
         env::log_str(&args.vaa.to_string());
