@@ -31,7 +31,7 @@ mod errors;
 mod storage;
 
 const LOG_METADATA_GAS: Gas = Gas::from_tgas(10);
-const LOG_METADATA_CALLBCAK_GAS: Gas = Gas::from_tgas(260);
+const LOG_METADATA_CALLBACK_GAS: Gas = Gas::from_tgas(260);
 const MPC_SIGNING_GAS: Gas = Gas::from_tgas(250);
 const SIGN_TRANSFER_CALLBACK_GAS: Gas = Gas::from_tgas(5);
 const SIGN_LOG_METADATA_CALLBACK_GAS: Gas = Gas::from_tgas(5);
@@ -216,15 +216,15 @@ impl Contract {
             .ft_metadata()
             .then(
                 Self::ext(env::current_account_id())
-                    .with_static_gas(LOG_METADATA_CALLBCAK_GAS)
+                    .with_static_gas(LOG_METADATA_CALLBACK_GAS)
                     .with_attached_deposit(env::attached_deposit())
-                    .log_metadata_callbcak(token_id),
+                    .log_metadata_callback(token_id),
             )
     }
 
     #[private]
     #[result_serializer(borsh)]
-    pub fn log_metadata_callbcak(
+    pub fn log_metadata_callback(
         &self,
         #[callback] metadata: FungibleTokenMetadata,
         token_id: AccountId,
@@ -251,13 +251,13 @@ impl Contract {
             .then(
                 Self::ext(env::current_account_id())
                     .with_static_gas(SIGN_LOG_METADATA_CALLBACK_GAS)
-                    .sign_log_metadata_callbcak(metadata_payload),
+                    .sign_log_metadata_callback(metadata_payload),
             )
     }
 
     #[private]
     #[result_serializer(borsh)]
-    pub fn sign_log_metadata_callbcak(
+    pub fn sign_log_metadata_callback(
         &self,
         #[callback_result] call_result: Result<SignatureResponse, PromiseError>,
         #[serializer(borsh)] metadata_payload: MetadataPayload,
