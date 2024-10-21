@@ -50,11 +50,12 @@ pub async fn handle_streamer_message(
                 ref transfer_message,
             } => {
                 match utils::fee::is_fee_sufficient(
+                    config,
                     jsonrpc_client,
                     &transfer_message.sender,
                     &transfer_message.recipient,
                     &transfer_message.token,
-                    transfer_message.fee.fee.into(),
+                    &transfer_message.fee,
                 )
                 .await
                 {
@@ -94,11 +95,12 @@ pub async fn handle_streamer_message(
             } => {
                 if nonce.is_some() {
                     match utils::fee::is_fee_sufficient(
+                        config,
                         jsonrpc_client,
                         &transfer_message.sender,
                         &transfer_message.recipient,
                         &transfer_message.token,
-                        transfer_message.fee.fee.into(),
+                        &transfer_message.fee,
                     )
                     .await
                     {
