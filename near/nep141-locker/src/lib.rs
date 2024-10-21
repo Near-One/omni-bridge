@@ -710,6 +710,13 @@ impl Contract {
             env::panic_str("ERROR: Invalid proof message");
         };
 
+        require!(
+            self.factories
+                .get(&deploy_token.emitter_address.get_chain())
+                == Some(deploy_token.emitter_address),
+            "Unknown factory"
+        );
+
         let storage_usage = env::storage_usage();
         self.tokens_to_address_mapping.insert(
             &(deploy_token.token_address.get_chain(), deploy_token.token),
