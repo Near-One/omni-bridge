@@ -33,7 +33,6 @@ pub enum Nep141LockerEvent {
     },
     ClaimFeeEvent {
         transfer_message: TransferMessage,
-        native_fee_recipient: OmniAddress,
     },
 }
 
