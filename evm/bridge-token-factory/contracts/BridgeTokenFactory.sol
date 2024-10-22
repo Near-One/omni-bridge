@@ -55,6 +55,7 @@ contract BridgeTokenFactory is
 
     function deployToken(bytes calldata signatureData, BridgeTypes.MetadataPayload calldata metadata) payable external returns (address) {
         bytes memory borshEncoded = bytes.concat(
+            bytes("\x01"),
             Borsh.encodeString(metadata.token),
             Borsh.encodeString(metadata.name),
             Borsh.encodeString(metadata.symbol),
@@ -125,6 +126,7 @@ contract BridgeTokenFactory is
         }
 
         bytes memory borshEncoded = bytes.concat(
+            bytes("\x00"),
             Borsh.encodeUint128(payload.nonce),
             Borsh.encodeString(payload.token),
             Borsh.encodeUint128(payload.amount),
@@ -192,6 +194,7 @@ contract BridgeTokenFactory is
 
             claimedFee[nonce] = true;
             borshEncodedNonces = bytes.concat(
+                bytes("\x02"),
                 borshEncodedNonces,
                 Borsh.encodeUint128(nonce)
             );

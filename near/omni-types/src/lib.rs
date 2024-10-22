@@ -324,7 +324,15 @@ impl TransferMessage {
 }
 
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Debug, Clone)]
+pub enum PayloadPrefix {
+    TransferMessagePayload,
+    MetadataPayload,
+    ClaimNativeFeePayload,
+}
+
+#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Debug, Clone)]
 pub struct TransferMessagePayload {
+    pub prefix: PayloadPrefix,
     pub nonce: U128,
     pub token: AccountId,
     pub amount: U128,
@@ -334,9 +342,19 @@ pub struct TransferMessagePayload {
 
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Debug, Clone)]
 pub struct ClaimNativeFeePayload {
+    pub prefix: PayloadPrefix,
     pub nonces: Vec<U128>,
     pub amount: U128,
     pub recipient: OmniAddress,
+}
+
+#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Debug, Clone)]
+pub struct MetadataPayload {
+    pub prefix: PayloadPrefix,
+    pub token: String,
+    pub name: String,
+    pub symbol: String,
+    pub decimals: u8,
 }
 
 #[derive(Deserialize, Serialize, Clone)]
@@ -351,14 +369,6 @@ pub struct SignRequest {
 pub enum UpdateFee {
     Fee(Fee),
     Proof(Vec<u8>),
-}
-
-#[derive(Debug, Eq, PartialEq, BorshSerialize, BorshDeserialize, Serialize, Deserialize, Clone)]
-pub struct MetadataPayload {
-    pub token: String,
-    pub name: String,
-    pub symbol: String,
-    pub decimals: u8,
 }
 
 pub type Nonce = u128;
@@ -383,5 +393,15 @@ mod test {
 
         assert_eq!(serialized, format!("\"eth:{address_str}\""));
         assert_eq!(address, deserialized);
+    }
+
+    #[test]
+    fn test_payload_prefix() {
+        let res = borsh::to_vec(&PayloadPrefix::TransferMessagePayload).unwrap();
+        assert_eq!(hex::encode(res), "00");
+        let res = borsh::to_vec(&PayloadPrefix::MetadataPayload).unwrap();
+        assert_eq!(hex::encode(res), "01");
+        let res = borsh::to_vec(&PayloadPrefix::ClaimNativeFeePayload).unwrap();
+        assert_eq!(hex::encode(res), "02");
     }
 }
