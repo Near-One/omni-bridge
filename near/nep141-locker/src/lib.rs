@@ -469,7 +469,7 @@ impl Contract {
         &mut self,
         #[serializer(borsh)] storage_deposit_args: StorageDepositArgs,
         #[serializer(borsh)] predecessor_account_id: AccountId,
-        #[serializer(borsh)] native_fee_recipient: OmniAddress,
+        #[serializer(borsh)] native_fee_recipient: Option<OmniAddress>,
     ) -> PromiseOrValue<U128> {
         let Ok(ProverResult::InitTransfer(init_transfer)) = Self::decode_prover_result(0) else {
             env::panic_str("Invalid proof message")
@@ -485,13 +485,22 @@ impl Contract {
         let mut required_balance;
 
         if let OmniAddress::Near(recipient) = &transfer_message.recipient {
-            required_balance = self.add_fin_transfer(
-                &transfer_message.get_transfer_id(),
-                &Some(NativeFee {
+            let native_fee = if transfer_message.fee.native_fee.0 != 0 {
+                let recipient = native_fee_recipient.sdk_expect("ERR_FEE_RECIPIENT_NOT_SET");
+                require!(
+                    transfer_message.get_origin_chain() == recipient.get_chain(),
+                    "ERR_WRONG_FEE_RECIPIENT_CHAIN"
+                );
+                Some(NativeFee {
                     amount: transfer_message.fee.native_fee,
-                    recipient: native_fee_recipient,
-                }),
-            );
+                    recipient,
+                })
+            } else {
+                None
+            };
+
+            required_balance =
+                self.add_fin_transfer(&transfer_message.get_transfer_id(), &native_fee);
 
             let recipient: NearRecipient =
                 recipient.parse().sdk_expect("Failed to parse recipient");
@@ -616,7 +625,7 @@ impl Contract {
     #[payable]
     pub fn claim_fee_callback(
         &mut self,
-        #[serializer(borsh)] native_fee_recipient: OmniAddress,
+        #[serializer(borsh)] native_fee_recipient: Option<OmniAddress>,
         #[serializer(borsh)] predecessor_account_id: AccountId,
         #[callback_result]
         #[serializer(borsh)]
@@ -640,6 +649,12 @@ impl Contract {
         let fee = message.amount.0 - fin_transfer.amount.0;
 
         if message.fee.native_fee.0 != 0 {
+            let native_fee_recipient = native_fee_recipient.sdk_expect("ERR_FEE_RECIPIENT_NOT_SET");
+            require!(
+                message.get_origin_chain() == native_fee_recipient.get_chain(),
+                "ERR_WRONG_FEE_RECIPIENT_CHAIN"
+            );
+
             if message.get_origin_chain() == ChainKind::Near {
                 let OmniAddress::Near(recipient) = &native_fee_recipient else {
                     env::panic_str("ERR_WRONG_CHAIN_KIND")
@@ -667,7 +682,6 @@ impl Contract {
         env::log_str(
             &Nep141LockerEvent::ClaimFeeEvent {
                 transfer_message: message,
-                native_fee_recipient,
             }
             .to_log_string(),
         );
