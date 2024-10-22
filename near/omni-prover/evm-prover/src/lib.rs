@@ -106,15 +106,15 @@ impl EvmProver {
         match kind {
             ProofKind::InitTransfer => Ok(ProverResult::InitTransfer(parse_evm_event(
                 self.chain_kind,
-                &log_entry_data,
+                log_entry_data,
             )?)),
             ProofKind::FinTransfer => Ok(ProverResult::FinTransfer(parse_evm_event(
                 self.chain_kind,
-                &log_entry_data,
+                log_entry_data,
             )?)),
             ProofKind::DeployToken => Ok(ProverResult::DeployToken(parse_evm_event(
                 self.chain_kind,
-                &log_entry_data,
+                log_entry_data,
             )?)),
         }
     }

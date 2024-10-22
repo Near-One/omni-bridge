@@ -38,14 +38,15 @@ sol! {
     );
 }
 
+#[allow(clippy::needless_pass_by_value)]
 pub fn parse_evm_event<T: SolEvent, V: TryFromLog<Log<T>>>(
     chain_kind: ChainKind,
-    log_rlp: &[u8],
+    log_rlp: Vec<u8>,
 ) -> Result<V, String>
 where
     <V as TryFromLog<Log<T>>>::Error: std::fmt::Display,
 {
-    let rlp_decoded = Log::decode(&mut log_rlp.to_vec().as_slice()).map_err(stringify)?;
+    let rlp_decoded = Log::decode(&mut log_rlp.as_slice()).map_err(stringify)?;
     V::try_from_log(
         chain_kind,
         T::decode_log(&rlp_decoded, true).map_err(stringify)?,
