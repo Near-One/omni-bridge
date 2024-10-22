@@ -16,15 +16,12 @@ use crate::config;
 
 use super::storage;
 
-const ETH_INIT_TRANSFER_GAS: u128 = 100_000;
-const ETH_FIN_TRANSFER_GAS: u128 = 150_000;
-
 #[derive(Debug, serde::Deserialize)]
-pub struct Metadata {
+struct Metadata {
     pub decimals: u32,
 }
 
-pub async fn get_token_decimals(jsonrpc_client: &JsonRpcClient, token: &AccountId) -> Result<u32> {
+async fn get_token_decimals(jsonrpc_client: &JsonRpcClient, token: &AccountId) -> Result<u32> {
     let request = methods::query::RpcQueryRequest {
         block_reference: BlockReference::latest(),
         request: QueryRequest::CallFunction {
@@ -43,7 +40,7 @@ pub async fn get_token_decimals(jsonrpc_client: &JsonRpcClient, token: &AccountI
     }
 }
 
-pub async fn get_price_by_symbol(symbol: &str) -> Result<f64> {
+async fn get_price_by_symbol(symbol: &str) -> Result<f64> {
     let url =
         format!("https://api.coingecko.com/api/v3/simple/price?ids={symbol}&vs_currencies=usd");
 
@@ -57,17 +54,18 @@ pub async fn get_price_by_symbol(symbol: &str) -> Result<f64> {
         .ok_or_else(|| anyhow::anyhow!("Failed to get price for symbol: {}", symbol))
 }
 
-pub async fn get_price_by_contract_address(platform: &str, address: &str) -> Result<f64> {
-    let url =  format!("https://api.coingecko.com/api/v3/simple/token_price/{platform}?contract_addresses={address}&vs_currencies=usd");
+fn get_symbol_and_decimals_by_chain(chain: ChainKind) -> (&'static str, u32) {
+    match chain {
+        ChainKind::Eth => ("ethereum", 18),
+        ChainKind::Near => ("near", 24),
+        ChainKind::Sol => ("solana", 9),
+        ChainKind::Arb => ("arbitrum", 18),
+        ChainKind::Base => ("base", 18),
+    }
+}
 
-    let response = reqwest::get(&url).await?;
-    let json = response
-        .json::<HashMap<String, HashMap<String, f64>>>()
-        .await?;
-
-    json.get(address)
-        .and_then(|inner_map| inner_map.get("usd").copied())
-        .ok_or_else(|| anyhow::anyhow!("Failed to get price for address: {}", address))
+async fn calculate_price(amount: u128, symbol: &str, decimals: u32) -> Result<f64> {
+    Ok(amount as f64 / 10u128.pow(decimals) as f64 * get_price_by_symbol(symbol).await?)
 }
 
 pub async fn is_fee_sufficient(
@@ -78,29 +76,18 @@ pub async fn is_fee_sufficient(
     token: &AccountId,
     fee: &Fee,
 ) -> Result<bool> {
-    let (sender_symbol, sender_token_decimals) = match sender.get_chain() {
-        ChainKind::Eth => ("ethereum", 18),
-        ChainKind::Near => ("near", 24),
-        ChainKind::Sol => ("solana", 9),
-        ChainKind::Arb => ("arbitrum", 18),
-        ChainKind::Base => ("base", 18),
-    };
-    let (recipient_symbol, recipient_token_decimals) = match recipient.get_chain() {
-        ChainKind::Eth => ("ethereum", 18),
-        ChainKind::Near => ("near", 24),
-        ChainKind::Sol => ("solana", 9),
-        ChainKind::Arb => ("arbitrum", 18),
-        ChainKind::Base => ("base", 18),
-    };
+    let (sender_symbol, sender_token_decimals) =
+        get_symbol_and_decimals_by_chain(sender.get_chain());
+    let (recipient_symbol, recipient_token_decimals) =
+        get_symbol_and_decimals_by_chain(recipient.get_chain());
 
-    let native_fee_usdt = fee.native_fee.0 as f64 / 10u128.pow(sender_token_decimals) as f64
-        * get_price_by_symbol(sender_symbol).await?;
+    let native_fee_usd =
+        calculate_price(fee.native_fee.0, sender_symbol, sender_token_decimals).await?;
 
     let fee_token_decimals = get_token_decimals(jsonrpc_client, token).await?;
-    let token_fee_usdt = fee.fee.0 as f64 / 10u128.pow(fee_token_decimals) as f64
-        * get_price_by_contract_address("near-protocol", token.as_ref()).await?;
+    let token_fee_usd = calculate_price(fee.fee.0, sender_symbol, fee_token_decimals).await?;
 
-    let expected_sender_fee_usdt = match sender {
+    let expected_sender_fee_usd = match sender {
         OmniAddress::Eth(_) => {
             let http_provider = ProviderBuilder::new().on_http(
                 config
@@ -109,11 +96,14 @@ pub async fn is_fee_sufficient(
                     .parse()
                     .context("Failed to parse ETH rpc provider as url")?,
             );
-            (ETH_INIT_TRANSFER_GAS * http_provider.get_gas_price().await?) as f64
-                / 10u128.pow(sender_token_decimals) as f64
-                * get_price_by_symbol(sender_symbol).await?
+            calculate_price(
+                config.evm.init_transfer_gas_estimation * http_provider.get_gas_price().await?,
+                sender_symbol,
+                sender_token_decimals,
+            )
+            .await?
         }
-        OmniAddress::Near(ref address) => {
+        OmniAddress::Near(address) => {
             if !storage::is_storage_sufficient(
                 jsonrpc_client,
                 token,
@@ -121,8 +111,12 @@ pub async fn is_fee_sufficient(
             )
             .await?
             {
-                storage::NEP141_STORAGE_DEPOSIT as f64 / 10u128.pow(sender_token_decimals) as f64
-                    * get_price_by_symbol(sender_symbol).await?
+                calculate_price(
+                    storage::NEP141_STORAGE_DEPOSIT,
+                    sender_symbol,
+                    sender_token_decimals,
+                )
+                .await?
             } else {
                 0.0
             }
@@ -132,7 +126,7 @@ pub async fn is_fee_sufficient(
         OmniAddress::Base(_) => todo!(),
     };
 
-    let expected_recipient_fee_usdt = match recipient {
+    let expected_recipient_fee_usd = match recipient {
         OmniAddress::Eth(_) => {
             let http_provider = ProviderBuilder::new().on_http(
                 config
@@ -141,11 +135,14 @@ pub async fn is_fee_sufficient(
                     .parse()
                     .context("Failed to parse ETH rpc provider as url")?,
             );
-            (ETH_FIN_TRANSFER_GAS * http_provider.get_gas_price().await?) as f64
-                / 10u128.pow(recipient_token_decimals) as f64
-                * get_price_by_symbol(recipient_symbol).await?
+            calculate_price(
+                config.evm.fin_transfer_gas_estimation * http_provider.get_gas_price().await?,
+                recipient_symbol,
+                recipient_token_decimals,
+            )
+            .await?
         }
-        OmniAddress::Near(ref address) => {
+        OmniAddress::Near(address) => {
             if !storage::is_storage_sufficient(
                 jsonrpc_client,
                 token,
@@ -153,8 +150,12 @@ pub async fn is_fee_sufficient(
             )
             .await?
             {
-                storage::NEP141_STORAGE_DEPOSIT as f64 / 10u128.pow(recipient_token_decimals) as f64
-                    * get_price_by_symbol(recipient_symbol).await?
+                calculate_price(
+                    storage::NEP141_STORAGE_DEPOSIT,
+                    recipient_symbol,
+                    recipient_token_decimals,
+                )
+                .await?
             } else {
                 0.0
             }
@@ -164,5 +165,5 @@ pub async fn is_fee_sufficient(
         OmniAddress::Base(_) => todo!(),
     };
 
-    Ok(native_fee_usdt + token_fee_usdt >= expected_sender_fee_usdt + expected_recipient_fee_usdt)
+    Ok(native_fee_usd + token_fee_usd >= expected_sender_fee_usd + expected_recipient_fee_usd)
 }
