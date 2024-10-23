@@ -3,27 +3,16 @@ use anchor_spl::{
     token_2022::{transfer_checked, TransferChecked},
     token_interface::{Mint, TokenAccount, TokenInterface},
 };
-use wormhole_anchor_sdk::wormhole::{
-    post_message, program::Wormhole, BridgeData, FeeCollector, Finality, PostMessage,
-    SequenceTracker,
-};
 
-use crate::{
-    constants::{AUTHORITY_SEED, CONFIG_SEED, MESSAGE_SEED, VAULT_SEED},
-    state::config::Config,
-};
+use crate::constants::{AUTHORITY_SEED, VAULT_SEED};
+use crate::instructions::wormhole_cpi::*;
 
 #[derive(Accounts)]
 pub struct Send<'info> {
-    #[account(
-        seeds = [CONFIG_SEED],
-        bump = config.bumps.config,
-    )]
-    pub config: Box<Account<'info, Config>>,
     /// CHECK: PDA
     #[account(
         seeds = [AUTHORITY_SEED],
-        bump = config.bumps.authority,
+        bump = wormhole.config.bumps.authority,
     )]
     pub authority: UncheckedAccount<'info>,
 
@@ -53,48 +42,10 @@ pub struct Send<'info> {
     pub vault: Box<InterfaceAccount<'info, TokenAccount>>,
     pub user: Signer<'info>,
 
-    /// Wormhole bridge data. [`wormhole::post_message`] requires this account
-    /// be mutable.
-    #[account(
-        mut,
-        address = config.wormhole.bridge,
-    )]
-    pub wormhole_bridge: Box<Account<'info, BridgeData>>,
-
-    /// Wormhole fee collector. [`wormhole::post_message`] requires this
-    /// account be mutable.
-    #[account(
-        mut,
-        address = config.wormhole.fee_collector
-    )]
-    pub wormhole_fee_collector: Box<Account<'info, FeeCollector>>,
-
-    /// Emitter's sequence account. [`wormhole::post_message`] requires this
-    /// account be mutable.
-    #[account(
-        mut,
-        address = config.wormhole.sequence
-    )]
-    pub wormhole_sequence: Box<Account<'info, SequenceTracker>>,
-
-    /// CHECK: Wormhole Message. [`wormhole::post_message`] requires this
-    /// account be mutable.
-    #[account(
-        mut,
-        seeds = [
-            MESSAGE_SEED,
-            &wormhole_sequence.next_value().to_le_bytes()[..]
-        ],
-        bump,
-    )]
-    pub wormhole_message: SystemAccount<'info>,
-
-    pub clock: Sysvar<'info, Clock>,
-    pub rent: Sysvar<'info, Rent>,
+    pub wormhole: WormholeCPI<'info>,
 
     pub system_program: Program<'info, System>,
     pub token_program: Interface<'info, TokenInterface>,
-    pub wormhole_program: Program<'info, Wormhole>,
 }
 
 #[derive(AnchorDeserialize, AnchorSerialize, Clone, Default)]
@@ -136,33 +87,8 @@ impl<'info> Send<'info> {
         }
         .try_to_vec()?; // TODO: correct message payload
 
-        post_message(
-            CpiContext::new_with_signer(
-                self.wormhole_program.to_account_info(),
-                PostMessage {
-                    config: self.wormhole_bridge.to_account_info(),
-                    message: self.wormhole_message.to_account_info(),
-                    emitter: self.config.to_account_info(),
-                    sequence: self.wormhole_sequence.to_account_info(),
-                    payer: self.user.to_account_info(),
-                    fee_collector: self.wormhole_fee_collector.to_account_info(),
-                    clock: self.clock.to_account_info(),
-                    rent: self.rent.to_account_info(),
-                    system_program: self.system_program.to_account_info(),
-                },
-                &[
-                    &[
-                        MESSAGE_SEED,
-                        &self.wormhole_sequence.next_value().to_le_bytes()[..],
-                        &[wormhole_message_bump],
-                    ],
-                    &[CONFIG_SEED, &[self.config.bumps.config]], // emitter
-                ],
-            ),
-            0,
-            payload,
-            Finality::Finalized,
-        )?;
+        self.wormhole.post_message(payload, wormhole_message_bump)?;
+
         Ok(())
     }
 }

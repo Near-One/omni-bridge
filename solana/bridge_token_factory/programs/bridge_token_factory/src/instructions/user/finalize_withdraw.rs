@@ -1,16 +1,24 @@
 use std::str::FromStr;
 
 use anchor_lang::prelude::*;
-use anchor_spl::{associated_token::AssociatedToken, token_2022::{transfer_checked, TransferChecked}, token_interface::{Mint, TokenAccount, TokenInterface}};
-use wormhole_anchor_sdk::wormhole::{post_message, program::Wormhole, BridgeData, FeeCollector, Finality, PostMessage, SequenceTracker};
+use anchor_spl::{
+    associated_token::AssociatedToken,
+    token_2022::{transfer_checked, TransferChecked},
+    token_interface::{Mint, TokenAccount, TokenInterface},
+};
 
 use crate::{
     constants::{
-        AUTHORITY_SEED, CONFIG_SEED, MESSAGE_SEED, USED_NONCES_ACCOUNT_SIZE, USED_NONCES_PER_ACCOUNT, USED_NONCES_SEED, VAULT_SEED
-    }, error::ErrorCode, state::{config::Config, used_nonces::UsedNonces}, FinalizeDepositData
+        AUTHORITY_SEED, CONFIG_SEED, USED_NONCES_ACCOUNT_SIZE, USED_NONCES_PER_ACCOUNT,
+        USED_NONCES_SEED, VAULT_SEED,
+    },
+    error::ErrorCode,
+    state::{config::Config, used_nonces::UsedNonces},
+    FinalizeDepositData,
 };
 
 use super::FinalizeDepositResponse;
+use crate::instructions::wormhole_cpi::*;
 
 #[derive(Accounts)]
 #[instruction(data: FinalizeDepositData)]
@@ -24,7 +32,7 @@ pub struct FinalizeWithdraw<'info> {
     #[account(
         init_if_needed,
         space = USED_NONCES_ACCOUNT_SIZE as usize,
-        payer = payer,
+        payer = wormhole.payer,
         seeds = [
             USED_NONCES_SEED,
             &(data.payload.nonce / USED_NONCES_PER_ACCOUNT as u128).to_le_bytes(),
@@ -68,59 +76,18 @@ pub struct FinalizeWithdraw<'info> {
 
     #[account(
         init_if_needed,
-        payer = payer,
+        payer = wormhole.payer,
         associated_token::mint = mint,
         associated_token::authority = recipient,
         token::token_program = token_program,
     )]
     pub token_account: Box<InterfaceAccount<'info, TokenAccount>>,
 
-    /// Wormhole bridge data. [`wormhole::post_message`] requires this account
-    /// be mutable.
-    #[account(
-        mut,
-        address = config.wormhole.bridge,
-    )]
-    pub wormhole_bridge: Box<Account<'info, BridgeData>>,
-
-    /// Wormhole fee collector. [`wormhole::post_message`] requires this
-    /// account be mutable.
-    #[account(
-        mut,
-        address = config.wormhole.fee_collector
-    )]
-    pub wormhole_fee_collector: Box<Account<'info, FeeCollector>>,
-
-    /// Emitter's sequence account. [`wormhole::post_message`] requires this
-    /// account be mutable.
-    #[account(
-        mut,
-        address = config.wormhole.sequence
-    )]
-    pub wormhole_sequence: Box<Account<'info, SequenceTracker>>,
-
-    /// CHECK: Wormhole Message. [`wormhole::post_message`] requires this
-    /// account be mutable.
-    #[account(
-        mut,
-        seeds = [
-            MESSAGE_SEED,
-            &wormhole_sequence.next_value().to_le_bytes()[..]
-        ],
-        bump,
-    )]
-    pub wormhole_message: SystemAccount<'info>,
-
-    #[account(mut)]
-    pub payer: Signer<'info>,
-
-    pub clock: Sysvar<'info, Clock>,
-    pub rent: Sysvar<'info, Rent>,
+    pub wormhole: WormholeCPI<'info>,
 
     pub associated_token_program: Program<'info, AssociatedToken>,
     pub system_program: Program<'info, System>,
     pub token_program: Interface<'info, TokenInterface>,
-    pub wormhole_program: Program<'info, Wormhole>,
 }
 
 impl<'info> FinalizeWithdraw<'info> {
@@ -129,7 +96,7 @@ impl<'info> FinalizeWithdraw<'info> {
             data.payload.nonce,
             &self.used_nonces,
             &mut self.config,
-            self.payer.to_account_info(),
+            self.wormhole.payer.to_account_info(),
             &Rent::get()?,
             self.system_program.to_account_info(),
         )?;
@@ -154,35 +121,10 @@ impl<'info> FinalizeWithdraw<'info> {
 
         let payload = FinalizeDepositResponse {
             nonce: data.payload.nonce,
-        }.try_to_vec()?;
+        }
+        .try_to_vec()?;
 
-        post_message(
-            CpiContext::new_with_signer(
-                self.wormhole_program.to_account_info(),
-                PostMessage {
-                    config: self.wormhole_bridge.to_account_info(),
-                    message: self.wormhole_message.to_account_info(),
-                    emitter: self.config.to_account_info(),
-                    sequence: self.wormhole_sequence.to_account_info(),
-                    payer: self.payer.to_account_info(),
-                    fee_collector: self.wormhole_fee_collector.to_account_info(),
-                    clock: self.clock.to_account_info(),
-                    rent: self.rent.to_account_info(),
-                    system_program: self.system_program.to_account_info(),
-                },
-                &[
-                    &[
-                        MESSAGE_SEED,
-                        &self.wormhole_sequence.next_value().to_le_bytes()[..],
-                        &[wormhole_message_bump],
-                    ],
-                    &[CONFIG_SEED, &[self.config.bumps.config]], // emitter
-                ],
-            ),
-            0,
-            payload,
-            Finality::Finalized,
-        )?;
+        self.wormhole.post_message(payload, wormhole_message_bump)?;
 
         Ok(())
     }

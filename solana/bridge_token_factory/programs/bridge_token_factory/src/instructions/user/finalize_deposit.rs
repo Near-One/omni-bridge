@@ -1,3 +1,4 @@
+use crate::instructions::wormhole_cpi::*;
 use anchor_lang::{
     prelude::*,
     solana_program::{keccak, secp256k1_recover::secp256k1_recover},
@@ -7,7 +8,6 @@ use anchor_spl::{
     token::{mint_to, Mint, MintTo, Token, TokenAccount},
 };
 use near_sdk::json_types::U128;
-use wormhole_anchor_sdk::wormhole::{post_message, program::Wormhole, BridgeData, FeeCollector, Finality, PostMessage, SequenceTracker};
 use std::{
     io::{BufWriter, Write},
     vec,
@@ -15,8 +15,11 @@ use std::{
 
 use crate::{
     constants::{
-        AUTHORITY_SEED, CONFIG_SEED, DERIVED_NEAR_BRIDGE_ADDRESS, MESSAGE_SEED, USED_NONCES_ACCOUNT_SIZE, USED_NONCES_PER_ACCOUNT, USED_NONCES_SEED
-    }, error::ErrorCode, state::{config::Config, used_nonces::UsedNonces}
+        AUTHORITY_SEED, CONFIG_SEED, USED_NONCES_ACCOUNT_SIZE, USED_NONCES_PER_ACCOUNT,
+        USED_NONCES_SEED,
+    },
+    error::ErrorCode,
+    state::{config::Config, used_nonces::UsedNonces},
 };
 
 #[derive(Accounts)]
@@ -31,7 +34,7 @@ pub struct FinalizeDeposit<'info> {
     #[account(
         init_if_needed,
         space = USED_NONCES_ACCOUNT_SIZE as usize,
-        payer = payer,
+        payer = wormhole.payer,
         seeds = [
             USED_NONCES_SEED,
             &(data.payload.nonce / USED_NONCES_PER_ACCOUNT as u128).to_le_bytes(),
@@ -41,7 +44,7 @@ pub struct FinalizeDeposit<'info> {
     pub used_nonces: AccountLoader<'info, UsedNonces>,
 
     #[account(
-        constraint = recipient.key == &data.payload.recipient,
+        address = data.payload.recipient,
     )]
     /// CHECK: this can be any type of account
     pub recipient: UncheckedAccount<'info>,
@@ -60,58 +63,17 @@ pub struct FinalizeDeposit<'info> {
     pub mint: Box<Account<'info, Mint>>,
     #[account(
         init_if_needed,
-        payer = payer,
+        payer = wormhole.payer,
         associated_token::mint = mint,
         associated_token::authority = recipient,
     )]
     pub token_account: Box<Account<'info, TokenAccount>>,
 
-    #[account(mut)]
-    pub payer: Signer<'info>,
-
-    /// Wormhole bridge data. [`wormhole::post_message`] requires this account
-    /// be mutable.
-    #[account(
-        mut,
-        address = config.wormhole.bridge,
-    )]
-    pub wormhole_bridge: Box<Account<'info, BridgeData>>,
-
-    /// Wormhole fee collector. [`wormhole::post_message`] requires this
-    /// account be mutable.
-    #[account(
-        mut,
-        address = config.wormhole.fee_collector
-    )]
-    pub wormhole_fee_collector: Box<Account<'info, FeeCollector>>,
-
-    /// Emitter's sequence account. [`wormhole::post_message`] requires this
-    /// account be mutable.
-    #[account(
-        mut,
-        address = config.wormhole.sequence
-    )]
-    pub wormhole_sequence: Box<Account<'info, SequenceTracker>>,
-
-    /// CHECK: Wormhole Message. [`wormhole::post_message`] requires this
-    /// account be mutable.
-    #[account(
-        mut,
-        seeds = [
-            MESSAGE_SEED,
-            &wormhole_sequence.next_value().to_le_bytes()[..]
-        ],
-        bump,
-    )]
-    pub wormhole_message: SystemAccount<'info>,
-
-    pub clock: Sysvar<'info, Clock>,
-    pub rent: Sysvar<'info, Rent>,
+    pub wormhole: WormholeCPI<'info>,
 
     pub associated_token_program: Program<'info, AssociatedToken>,
     pub system_program: Program<'info, System>,
     pub token_program: Program<'info, Token>,
-    pub wormhole_program: Program<'info, Wormhole>,
 }
 
 impl<'info> FinalizeDeposit<'info> {
@@ -120,7 +82,7 @@ impl<'info> FinalizeDeposit<'info> {
             data.payload.nonce,
             &self.used_nonces,
             &mut self.config,
-            self.payer.to_account_info(),
+            self.wormhole.payer.to_account_info(),
             &Rent::get()?,
             self.system_program.to_account_info(),
         )?;
@@ -142,35 +104,10 @@ impl<'info> FinalizeDeposit<'info> {
 
         let payload = FinalizeDepositResponse {
             nonce: data.payload.nonce,
-        }.try_to_vec()?;
+        }
+        .try_to_vec()?;
 
-        post_message(
-            CpiContext::new_with_signer(
-                self.wormhole_program.to_account_info(),
-                PostMessage {
-                    config: self.wormhole_bridge.to_account_info(),
-                    message: self.wormhole_message.to_account_info(),
-                    emitter: self.config.to_account_info(),
-                    sequence: self.wormhole_sequence.to_account_info(),
-                    payer: self.payer.to_account_info(),
-                    fee_collector: self.wormhole_fee_collector.to_account_info(),
-                    clock: self.clock.to_account_info(),
-                    rent: self.rent.to_account_info(),
-                    system_program: self.system_program.to_account_info(),
-                },
-                &[
-                    &[
-                        MESSAGE_SEED,
-                        &self.wormhole_sequence.next_value().to_le_bytes()[..],
-                        &[wormhole_message_bump],
-                    ],
-                    &[CONFIG_SEED, &[self.config.bumps.config]], // emitter
-                ],
-            ),
-            0,
-            payload,
-            Finality::Finalized,
-        )?;
+        self.wormhole.post_message(payload, wormhole_message_bump)?;
 
         Ok(())
     }
@@ -208,7 +145,7 @@ pub struct FinalizeDepositData {
 }
 
 impl FinalizeDepositData {
-    pub fn verify_signature(&self) -> Result<()> {
+    pub fn verify_signature(&self, derived_near_bridge_address: &[u8; 64]) -> Result<()> {
         let borsh_encoded = self.payload.serialize_for_signature()?;
         let hash = keccak::hash(&borsh_encoded);
 
@@ -217,7 +154,7 @@ impl FinalizeDepositData {
                 .map_err(|_| error!(ErrorCode::SignatureVerificationFailed))?;
 
         require!(
-            signer.0 == DERIVED_NEAR_BRIDGE_ADDRESS,
+            signer.0 == *derived_near_bridge_address,
             ErrorCode::SignatureVerificationFailed
         );
 
