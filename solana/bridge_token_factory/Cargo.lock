@@ -632,6 +632,7 @@ dependencies = [
  "anchor-lang",
  "anchor-spl",
  "bitvec",
+ "cfg-if 1.0.0",
  "near-sdk",
  "wormhole-anchor-sdk",
 ]

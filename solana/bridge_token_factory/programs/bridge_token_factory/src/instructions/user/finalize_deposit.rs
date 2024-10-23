@@ -15,9 +15,8 @@ use std::{
 
 use crate::{
     constants::{
-        AUTHORITY_SEED, CONFIG_SEED, MESSAGE_SEED, USED_NONCES_ACCOUNT_SIZE, USED_NONCES_PER_ACCOUNT, USED_NONCES_SEED
-    },
-    state::{config::Config, used_nonces::UsedNonces},
+        AUTHORITY_SEED, CONFIG_SEED, DERIVED_NEAR_BRIDGE_ADDRESS, MESSAGE_SEED, USED_NONCES_ACCOUNT_SIZE, USED_NONCES_PER_ACCOUNT, USED_NONCES_SEED
+    }, error::ErrorCode, state::{config::Config, used_nonces::UsedNonces}
 };
 
 #[derive(Accounts)]
@@ -198,7 +197,7 @@ impl DepositPayload {
 
         writer
             .into_inner()
-            .map_err(|_| crate::ErrorCode::InvalidArgs.into())
+            .map_err(|_| error!(ErrorCode::InvalidArgs))
     }
 }
 
@@ -215,11 +214,11 @@ impl FinalizeDepositData {
 
         let signer =
             secp256k1_recover(&hash.to_bytes(), self.signature[64], &self.signature[0..64])
-                .map_err(|_| crate::ErrorCode::SignatureVerificationFailed)?;
+                .map_err(|_| error!(ErrorCode::SignatureVerificationFailed))?;
 
         require!(
-            signer.0 == crate::DERIVED_NEAR_BRIDGE_ADDRESS,
-            crate::ErrorCode::SignatureVerificationFailed
+            signer.0 == DERIVED_NEAR_BRIDGE_ADDRESS,
+            ErrorCode::SignatureVerificationFailed
         );
 
         Ok(())

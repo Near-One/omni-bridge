@@ -10,8 +10,9 @@ use wormhole_anchor_sdk::wormhole::{
     post_message, BridgeData, FeeCollector, Finality, PostMessage, SequenceTracker,
 };
 
-use crate::constants::{AUTHORITY_SEED, CONFIG_SEED, MESSAGE_SEED};
+use crate::constants::{AUTHORITY_SEED, CONFIG_SEED, DERIVED_NEAR_BRIDGE_ADDRESS, MESSAGE_SEED};
 use crate::state::config::Config;
+use crate::error::ErrorCode;
 
 #[derive(Accounts)]
 #[instruction(data: DeployTokenData)]
@@ -190,16 +191,16 @@ pub struct DeployTokenData {
 impl DeployTokenData {
     pub fn verify_signature(&self) -> Result<()> {
         let borsh_encoded =
-            borsh::to_vec(&self.metadata).map_err(|_| crate::ErrorCode::InvalidArgs)?;
+            borsh::to_vec(&self.metadata).map_err(|_| error!(ErrorCode::InvalidArgs))?;
         let hash = keccak::hash(&borsh_encoded);
 
         let signer =
             secp256k1_recover(&hash.to_bytes(), self.signature[64], &self.signature[0..64])
-                .map_err(|_| crate::ErrorCode::SignatureVerificationFailed)?;
+                .map_err(|_| error!(ErrorCode::SignatureVerificationFailed))?;
 
         require!(
-            signer.0 == crate::DERIVED_NEAR_BRIDGE_ADDRESS,
-            crate::ErrorCode::SignatureVerificationFailed
+            signer.0 == DERIVED_NEAR_BRIDGE_ADDRESS,
+            ErrorCode::SignatureVerificationFailed
         );
 
         Ok(())
