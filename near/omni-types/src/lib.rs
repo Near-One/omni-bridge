@@ -324,15 +324,15 @@ impl TransferMessage {
 }
 
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Debug, Clone)]
-pub enum PayloadPrefix {
-    TransferMessagePayload,
-    MetadataPayload,
-    ClaimNativeFeePayload,
+pub enum PayloadType {
+    TransferMessage,
+    Metadata,
+    ClaimNativeFee,
 }
 
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Debug, Clone)]
 pub struct TransferMessagePayload {
-    pub prefix: PayloadPrefix,
+    pub prefix: PayloadType,
     pub nonce: U128,
     pub token: AccountId,
     pub amount: U128,
@@ -342,7 +342,7 @@ pub struct TransferMessagePayload {
 
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Debug, Clone)]
 pub struct ClaimNativeFeePayload {
-    pub prefix: PayloadPrefix,
+    pub prefix: PayloadType,
     pub nonces: Vec<U128>,
     pub amount: U128,
     pub recipient: OmniAddress,
@@ -350,7 +350,7 @@ pub struct ClaimNativeFeePayload {
 
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Debug, Clone)]
 pub struct MetadataPayload {
-    pub prefix: PayloadPrefix,
+    pub prefix: PayloadType,
     pub token: String,
     pub name: String,
     pub symbol: String,
@@ -397,11 +397,11 @@ mod test {
 
     #[test]
     fn test_payload_prefix() {
-        let res = borsh::to_vec(&PayloadPrefix::TransferMessagePayload).unwrap();
+        let res = borsh::to_vec(&PayloadType::TransferMessage).unwrap();
         assert_eq!(hex::encode(res), "00");
-        let res = borsh::to_vec(&PayloadPrefix::MetadataPayload).unwrap();
+        let res = borsh::to_vec(&PayloadType::Metadata).unwrap();
         assert_eq!(hex::encode(res), "01");
-        let res = borsh::to_vec(&PayloadPrefix::ClaimNativeFeePayload).unwrap();
+        let res = borsh::to_vec(&PayloadType::ClaimNativeFee).unwrap();
         assert_eq!(hex::encode(res), "02");
     }
 }

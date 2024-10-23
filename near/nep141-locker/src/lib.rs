@@ -22,7 +22,7 @@ use omni_types::prover_args::VerifyProofArgs;
 use omni_types::prover_result::ProverResult;
 use omni_types::{
     ChainKind, ClaimNativeFeePayload, Fee, InitTransferMsg, MetadataPayload, NativeFee,
-    NearRecipient, Nonce, OmniAddress, PayloadPrefix, SignRequest, TransferId, TransferMessage,
+    NearRecipient, Nonce, OmniAddress, PayloadType, SignRequest, TransferId, TransferMessage,
     TransferMessagePayload, UpdateFee,
 };
 use storage::{TransferMessageStorage, TransferMessageStorageValue};
@@ -230,7 +230,7 @@ impl Contract {
         token_id: AccountId,
     ) -> Promise {
         let metadata_payload = MetadataPayload {
-            prefix: PayloadPrefix::MetadataPayload,
+            prefix: PayloadType::Metadata,
             token: token_id.to_string(),
             name: metadata.name,
             symbol: metadata.symbol,
@@ -333,7 +333,7 @@ impl Contract {
         }
 
         let claim_payload = ClaimNativeFeePayload {
-            prefix: PayloadPrefix::ClaimNativeFeePayload,
+            prefix: PayloadType::ClaimNativeFee,
             nonces,
             amount: U128(amount),
             recipient,
@@ -386,7 +386,7 @@ impl Contract {
         }
 
         let transfer_payload = TransferMessagePayload {
-            prefix: PayloadPrefix::TransferMessagePayload,
+            prefix: PayloadType::TransferMessage,
             nonce,
             token: transfer_message.token,
             amount: U128(transfer_message.amount.0 - transfer_message.fee.fee.0),
