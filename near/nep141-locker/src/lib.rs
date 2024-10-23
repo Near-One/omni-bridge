@@ -569,6 +569,10 @@ impl Contract {
                             None,
                         ),
                 );
+
+                required_balance = required_balance.saturating_add(NearToken::from_yoctonear(2));
+            } else {
+                required_balance = required_balance.saturating_add(ONE_YOCTO);
             }
 
             self.update_storage_balance(
