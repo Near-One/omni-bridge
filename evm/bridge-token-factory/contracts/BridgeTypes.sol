@@ -57,4 +57,10 @@ library BridgeTypes {
         string symbol,
         uint8 decimals
     );
+
+    enum PayloadType {
+        TransferMessage,
+        Metadata,
+        ClaimNativeFee
+    }
 }
