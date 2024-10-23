@@ -292,10 +292,10 @@ impl Contract {
                     "ERR_INVALID_FEE"
                 );
 
-                let diff_native_fee = current_fee
+                let diff_native_fee = fee
                     .native_fee
                     .0
-                    .checked_sub(fee.native_fee.0)
+                    .checked_sub(current_fee.native_fee.0)
                     .sdk_expect("ERR_LOWER_FEE");
 
                 require!(
