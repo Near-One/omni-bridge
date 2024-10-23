@@ -118,12 +118,18 @@ mod tests {
 
             match result {
                 Ok(_) => assert!(test.error.is_none()),
-                Err(e) => assert!(
-                    e.to_string().contains(test.error.unwrap()),
-                    "Test index: {}, err: {}",
-                    index,
-                    e
-                ),
+                Err(result_error) => match test.error {
+                    Some(exepected_error) => {
+                        assert!(
+                            result_error.to_string().contains(exepected_error),
+                            "Wrong error. Test index: {}, err: {}, expected: {}",
+                            index,
+                            result_error,
+                            exepected_error
+                        )
+                    }
+                    None => panic!("Test index: {}, err: {}", index, result_error),
+                },
             }
         }
     }
@@ -155,7 +161,8 @@ mod tests {
             .args_json(json!({
                 "prover_account": prover_contract.id(),
                 "mpc_signer": "mpc.testnet",
-                "nonce": U128(0)
+                "nonce": U128(0),
+                "wnear_account_id": "wnear.testnet",
             }))
             .max_gas()
             .transact()
@@ -193,7 +200,17 @@ mod tests {
             .await?
             .into_result()?;
 
-        // Add factory address
+        locker_contract
+            .call("storage_deposit")
+            .args_json(json!({
+                "account_id": relayer_account.id(),
+            }))
+            .deposit(NEP141_DEPOSIT.saturating_mul(2))
+            .max_gas()
+            .transact()
+            .await?
+            .into_result()?;
+
         locker_contract
             .call("add_factory")
             .args_json(json!({
@@ -209,7 +226,7 @@ mod tests {
             .call(locker_contract.id(), "fin_transfer")
             .args_borsh(FinTransferArgs {
                 chain_kind: omni_types::ChainKind::Eth,
-                native_fee_recipient: OmniAddress::Near(account_1().to_string()),
+                native_fee_recipient: Some(OmniAddress::Near(account_1().to_string())),
                 storage_deposit_args: StorageDepositArgs {
                     token: token_contract.id().clone(),
                     accounts: storage_deposit_accounts,

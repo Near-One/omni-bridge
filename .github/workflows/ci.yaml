@@ -45,3 +45,20 @@ jobs:
       - name: Build Near contract
         run: |
           make rust-build-near
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+      
+      - name: Set up Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: 1.79.0
+          target: wasm32-unknown-unknown
+          override: true
+
+      - name: Test Near contracts
+        run: |
+          make test-near
