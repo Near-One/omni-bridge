@@ -81,7 +81,7 @@ impl EvmProver {
                     .with_static_gas(VERIFY_PROOF_CALLBACK_GAS)
                     .verify_proof_callback(
                         args.proof_kind,
-                        evm_proof.log_entry_data.clone(),
+                        evm_proof.log_entry_data,
                         header.hash.ok_or("ERR_HASH_NOT_SET")?.0,
                     ),
             ))
@@ -176,7 +176,7 @@ impl EvmProver {
                     vec![]
                 } else {
                     Self::_verify_trie_proof(
-                        new_expected_root.clone(),
+                        new_expected_root,
                         key,
                         proof,
                         key_index + 1,
@@ -217,7 +217,7 @@ impl EvmProver {
                 require!(path.as_slice() == &key[key_index..key_index + path.len()]);
                 let new_expected_root = get_vec(&node, 1);
                 Self::_verify_trie_proof(
-                    new_expected_root.clone(),
+                    new_expected_root,
                     key,
                     proof,
                     key_index + path.len(),
