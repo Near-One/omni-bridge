@@ -42,6 +42,11 @@ impl EvmProver {
         }
     }
 
+    /// # Panics
+    ///
+    /// This function will panic in the following situations:
+    /// - If the log entry at the specified index doesn't match the decoded log entry.
+    #[allow(clippy::needless_pass_by_value)]
     #[handle_result]
     pub fn verify_proof(&self, #[serializer(borsh)] input: Vec<u8>) -> Result<Promise, String> {
         let args = EvmVerifyProofArgs::try_from_slice(&input).map_err(|_| "ERR_PARSE_ARGS")?;
@@ -82,6 +87,7 @@ impl EvmProver {
             ))
     }
 
+    #[allow(clippy::needless_pass_by_value)]
     #[private]
     #[handle_result]
     pub fn verify_proof_callback(
@@ -136,6 +142,7 @@ impl EvmProver {
         Self::_verify_trie_proof(expected_root.to_vec(), &actual_key, proof, 0, 0)
     }
 
+    #[allow(clippy::needless_pass_by_value)]
     fn _verify_trie_proof(
         expected_root: Vec<u8>,
         key: &Vec<u8>,
@@ -155,7 +162,7 @@ impl EvmProver {
             require!(keccak256(node) == expected_root.as_slice());
         }
 
-        let node = Rlp::new(&node.as_slice());
+        let node = Rlp::new(node.as_slice());
 
         if node.iter().count() == 17 {
             // Branch node
@@ -164,7 +171,10 @@ impl EvmProver {
                 get_vec(&node, 16)
             } else {
                 let new_expected_root = get_vec(&node, key[key_index] as usize);
-                if !new_expected_root.is_empty() {
+                if new_expected_root.is_empty() {
+                    // not included in proof
+                    vec![]
+                } else {
                     Self::_verify_trie_proof(
                         new_expected_root,
                         key,
@@ -172,9 +182,6 @@ impl EvmProver {
                         key_index + 1,
                         proof_index + 1,
                     )
-                } else {
-                    // not included in proof
-                    vec![]
                 }
             }
         } else {

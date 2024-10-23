@@ -38,6 +38,7 @@ sol! {
     );
 }
 
+#[allow(clippy::needless_pass_by_value)]
 pub fn parse_evm_event<T: SolEvent, V: TryFromLog<Log<T>>>(
     chain_kind: ChainKind,
     log_rlp: Vec<u8>,
