@@ -90,6 +90,7 @@ impl EvmProver {
     #[allow(clippy::needless_pass_by_value)]
     #[private]
     #[handle_result]
+    #[result_serializer(borsh)]
     pub fn verify_proof_callback(
         &mut self,
         #[serializer(borsh)] kind: ProofKind,

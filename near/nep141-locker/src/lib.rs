@@ -733,7 +733,9 @@ impl Contract {
     pub fn bind_token_callback(
         &mut self,
         attached_deposit: NearToken,
-        #[callback_result] call_result: Result<ProverResult, PromiseError>,
+        #[callback_result]
+        #[serializer(borsh)]
+        call_result: Result<ProverResult, PromiseError>,
     ) -> NearToken {
         let Ok(ProverResult::DeployToken(deploy_token)) = call_result else {
             env::panic_str("ERROR: Invalid proof message");
