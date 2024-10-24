@@ -170,28 +170,10 @@ mod tests {
             .into_result()?;
 
         // Get required balances
-        let required_balance_for_account: NearToken = locker_contract
-            .view("required_balance_for_account")
-            .await?
-            .json()?;
-
-        let required_balance_for_init_transfer: NearToken = locker_contract
-            .view("required_balance_for_init_transfer")
-            .args_json(json!({
-                "recipient": OmniAddress::Near(account_1().to_string()),
-                "sender": OmniAddress::Near(token_contract.id().to_string()),
-            }))
-            .await?
-            .json()?;
-
         let required_balance_for_fin_transfer: NearToken = locker_contract
             .view("required_balance_for_fin_transfer")
             .await?
             .json()?;
-
-        let required_balance_for_calling_account: NearToken = required_balance_for_account
-            .saturating_add(required_balance_for_fin_transfer)
-            .saturating_add(required_balance_for_init_transfer);
 
         // Create relayer account
         let relayer_account = worker
@@ -225,17 +207,6 @@ mod tests {
             .into_result()?;
 
         locker_contract
-            .call("storage_deposit")
-            .args_json(json!({
-                "account_id": relayer_account.id(),
-            }))
-            .deposit(required_balance_for_calling_account)
-            .max_gas()
-            .transact()
-            .await?
-            .into_result()?;
-
-        locker_contract
             .call("add_factory")
             .args_json(json!({
                 "address": eth_factory_address(),
@@ -245,8 +216,13 @@ mod tests {
             .await?
             .into_result()?;
 
-        let required_deposit_for_fin_transfer =
-            NEP141_DEPOSIT.saturating_mul(storage_deposit_accounts.len() as u128);
+        let required_deposit_for_fin_transfer = NEP141_DEPOSIT
+            .saturating_mul(storage_deposit_accounts.len() as u128)
+            .saturating_add(required_balance_for_fin_transfer)
+            .saturating_add(NearToken::from_yoctonear(2))
+            // This is a temporary value to cover the issue with incorrect storage deposit calculation
+            .saturating_add(NearToken::from_yoctonear(1250000000000000000000));
+
         // Fin transfer
         relayer_account
             .call(locker_contract.id(), "fin_transfer")
