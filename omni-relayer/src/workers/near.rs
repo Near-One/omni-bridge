@@ -157,7 +157,12 @@ pub async fn finalize_transfer(
     }
 }
 
-pub async fn claim_fee(redis_client: redis::Client, connector: Arc<OmniConnector>) -> Result<()> {
+pub async fn claim_fee(
+    config: config::Config,
+    redis_client: redis::Client,
+    connector: Arc<OmniConnector>,
+    jsonrpc_client: near_jsonrpc_client::JsonRpcClient,
+) -> Result<()> {
     let redis_connection = redis_client.get_multiplexed_tokio_connection().await?;
 
     loop {
@@ -178,7 +183,20 @@ pub async fn claim_fee(redis_client: redis::Client, connector: Arc<OmniConnector
         let mut handlers = Vec::new();
 
         for (key, event) in events {
-            if let Ok(deposit_log) = serde_json::from_str::<Vec<u8>>(&event) {
+            if let Ok((block_number, deposit_log)) = serde_json::from_str::<(u64, Vec<u8>)>(&event)
+            {
+                let Ok(light_client_latest_block_number) =
+                    utils::near::get_eth_light_client_last_block_number(&config, &jsonrpc_client)
+                        .await
+                else {
+                    warn!("Failed to get eth light client last block number");
+                    continue;
+                };
+
+                if block_number > light_client_latest_block_number {
+                    continue;
+                }
+
                 handlers.push(tokio::spawn({
                     let mut redis_connection = redis_connection.clone();
                     let connector = connector.clone();
