@@ -46,7 +46,6 @@ pub struct Near {
     pub rpc_url: String,
     pub token_locker_id: AccountId,
     pub credentials_path: Option<String>,
-    pub eth_light_client: AccountId,
 }
 
 #[derive(Debug, Clone, serde::Deserialize)]
@@ -59,4 +58,6 @@ pub struct Evm {
 
     #[serde(default = "derive_evm_address_from_private_key")]
     pub relayer_address_on_eth: OmniAddress,
+
+    pub eth_light_client: AccountId,
 }

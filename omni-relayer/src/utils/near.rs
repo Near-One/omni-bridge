@@ -46,7 +46,7 @@ pub async fn get_eth_light_client_last_block_number(
     let request = methods::query::RpcQueryRequest {
         block_reference: BlockReference::latest(),
         request: QueryRequest::CallFunction {
-            account_id: config.near.eth_light_client.clone(),
+            account_id: config.evm.eth_light_client.clone(),
             method_name: "last_block_number".to_string(),
             args: Vec::new().into(),
         },
