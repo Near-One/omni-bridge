@@ -53,6 +53,10 @@ pub async fn finalize_transfer(
                 };
 
                 if block_number > light_client_latest_block_number {
+                    tokio::time::sleep(tokio::time::Duration::from_secs(
+                        utils::redis::SLEEP_TIME_AFTER_EVENTS_PROCESS_SECS,
+                    ))
+                    .await;
                     continue;
                 }
 
