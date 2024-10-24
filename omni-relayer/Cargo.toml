@@ -21,7 +21,7 @@ tokio = { version = "1", features = ["sync", "time", "macros", "rt-multi-thread"
 tokio-stream = { version = "0.1" }
 
 ethereum-types = "0.14.1"
-omni-types = { git = "https://github.com/near-one/omni-bridge", package = "omni-types", rev = "21a328f5388bfa98d1ba1eb40b541316429a4369" }
+omni-types = { git = "https://github.com/near-one/omni-bridge", package = "omni-types", rev = "234cc6af6920027f779b842a6d8afc00530ddbc2" }
 
 near-lake-framework = "0.7.9"
 near-jsonrpc-client = "0.13.0"

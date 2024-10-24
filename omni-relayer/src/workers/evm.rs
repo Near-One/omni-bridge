@@ -139,7 +139,7 @@ pub async fn finalize_transfer(
 
                         let fin_transfer_args = FinTransferArgs {
                             chain_kind: ChainKind::Eth,
-                            native_fee_recipient: config.evm.relayer_address_on_eth.clone(),
+                            native_fee_recipient: Some(config.evm.relayer_address_on_eth.clone()),
                             storage_deposit_args: StorageDepositArgs {
                                 token,
                                 accounts: vec![

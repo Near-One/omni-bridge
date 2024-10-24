@@ -167,17 +167,14 @@ pub async fn handle_streamer_message(
             }
             Nep141LockerEvent::ClaimFeeEvent {
                 ref transfer_message,
-                ref native_fee_recipient,
             } => {
-                if native_fee_recipient == &config.evm.relayer_address_on_eth {
-                    utils::redis::add_event(
-                        redis_connection,
-                        utils::redis::NEAR_SIGN_CLAIM_NATIVE_FEE_QUEUE,
-                        transfer_message.origin_nonce.0.to_string(),
-                        log,
-                    )
-                    .await;
-                }
+                utils::redis::add_event(
+                    redis_connection,
+                    utils::redis::NEAR_SIGN_CLAIM_NATIVE_FEE_QUEUE,
+                    transfer_message.origin_nonce.0.to_string(),
+                    log,
+                )
+                .await;
             }
             Nep141LockerEvent::SignClaimNativeFeeEvent {
                 ref claim_payload, ..
