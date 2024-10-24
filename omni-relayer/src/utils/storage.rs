@@ -7,7 +7,7 @@ use near_primitives::{
     views::QueryRequest,
 };
 
-const NEP141_STORAGE_DEPOSIT: u128 = 1_250_000_000_000_000_000_000;
+pub const NEP141_STORAGE_DEPOSIT: u128 = 1_250_000_000_000_000_000_000;
 
 #[derive(Debug, serde::Deserialize)]
 struct StorageBalance {
