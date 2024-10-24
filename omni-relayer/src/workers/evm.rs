@@ -44,20 +44,27 @@ pub async fn finalize_transfer(
             if let Ok((block_number, log, tx_logs)) =
                 serde_json::from_str::<(u64, Log, Option<TransactionReceipt>)>(&event)
             {
-                let Ok(light_client_latest_block_number) =
-                    utils::near::get_eth_light_client_last_block_number(&config, &jsonrpc_client)
-                        .await
-                else {
-                    warn!("Failed to get eth light client last block number");
-                    continue;
-                };
+                let vaa = utils::evm::get_vaa(tx_logs, &log, &config).await;
 
-                if block_number > light_client_latest_block_number {
-                    tokio::time::sleep(tokio::time::Duration::from_secs(
-                        utils::redis::SLEEP_TIME_AFTER_EVENTS_PROCESS_SECS,
-                    ))
-                    .await;
-                    continue;
+                if vaa.is_none() {
+                    let Ok(light_client_latest_block_number) =
+                        utils::near::get_eth_light_client_last_block_number(
+                            &config,
+                            &jsonrpc_client,
+                        )
+                        .await
+                    else {
+                        warn!("Failed to get eth light client last block number");
+                        continue;
+                    };
+
+                    if block_number > light_client_latest_block_number {
+                        tokio::time::sleep(tokio::time::Duration::from_secs(
+                            utils::redis::SLEEP_TIME_AFTER_EVENTS_PROCESS_SECS,
+                        ))
+                        .await;
+                        continue;
+                    }
                 }
 
                 let Ok(init_log) = log.log_decode::<utils::evm::InitTransfer>() else {
@@ -100,8 +107,6 @@ pub async fn finalize_transfer(
                             );
                             return;
                         };
-
-                        let vaa = utils::evm::get_vaa(tx_logs, &log, &config).await;
 
                         let Some(prover_args) = utils::evm::get_prover_args(
                             vaa,
