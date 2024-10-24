@@ -1,12 +1,13 @@
 use std::sync::Arc;
 
+use alloy::rpc::types::{Log, TransactionReceipt};
 use anyhow::Result;
+use ethereum_types::H256;
 use futures::future::join_all;
 use log::{error, info, warn};
 
-use near_primitives::borsh;
 use omni_connector::OmniConnector;
-use omni_types::{locker_args::ClaimFeeArgs, near_events::Nep141LockerEvent};
+use omni_types::{locker_args::ClaimFeeArgs, near_events::Nep141LockerEvent, ChainKind};
 
 use crate::{config, utils};
 
@@ -183,35 +184,67 @@ pub async fn claim_fee(
         let mut handlers = Vec::new();
 
         for (key, event) in events {
-            if let Ok((block_number, deposit_log)) = serde_json::from_str::<(u64, Vec<u8>)>(&event)
+            if let Ok((block_number, log, tx_logs)) =
+                serde_json::from_str::<(u64, Log, Option<TransactionReceipt>)>(&event)
             {
-                let Ok(light_client_latest_block_number) =
-                    utils::near::get_eth_light_client_last_block_number(&config, &jsonrpc_client)
-                        .await
-                else {
-                    warn!("Failed to get eth light client last block number");
-                    continue;
-                };
+                let vaa = utils::evm::get_vaa(tx_logs, &log, &config).await;
 
-                if block_number > light_client_latest_block_number {
-                    tokio::time::sleep(tokio::time::Duration::from_secs(
-                        utils::redis::SLEEP_TIME_AFTER_EVENTS_PROCESS_SECS,
-                    ))
-                    .await;
-                    continue;
+                if vaa.is_none() {
+                    let Ok(light_client_latest_block_number) =
+                        utils::near::get_eth_light_client_last_block_number(
+                            &config,
+                            &jsonrpc_client,
+                        )
+                        .await
+                    else {
+                        warn!("Failed to get eth light client last block number");
+                        continue;
+                    };
+
+                    if block_number > light_client_latest_block_number {
+                        tokio::time::sleep(tokio::time::Duration::from_secs(
+                            utils::redis::SLEEP_TIME_AFTER_EVENTS_PROCESS_SECS,
+                        ))
+                        .await;
+                        continue;
+                    }
                 }
 
                 handlers.push(tokio::spawn({
+                    let config = config.clone();
                     let mut redis_connection = redis_connection.clone();
                     let connector = connector.clone();
 
                     async move {
                         info!("Received finalized transfer");
 
-                        let Ok(claim_fee_args) = borsh::from_slice::<ClaimFeeArgs>(&deposit_log)
-                        else {
-                            warn!("Failed to decode claim fee args");
+                        let Some(tx_hash) = log.transaction_hash else {
+                            warn!("No transaction hash in log: {:?}", log);
                             return;
+                        };
+
+                        let Some(topic) = log.topic0() else {
+                            warn!("No topic0 in log: {:?}", log);
+                            return;
+                        };
+
+                        let tx_hash = H256::from_slice(tx_hash.as_slice());
+
+                        let Some(prover_args) = utils::evm::get_prover_args(
+                            vaa,
+                            tx_hash,
+                            H256::from_slice(topic.as_slice()),
+                            &config,
+                        )
+                        .await
+                        else {
+                            return;
+                        };
+
+                        let claim_fee_args = ClaimFeeArgs {
+                            chain_kind: ChainKind::Near,
+                            prover_args,
+                            native_fee_recipient: Some(config.evm.relayer_address_on_eth),
                         };
 
                         if let Ok(response) = connector.claim_fee(claim_fee_args).await {

@@ -107,7 +107,7 @@ async fn process_log(
             redis_connection,
             utils::redis::FINALIZED_TRANSFERS,
             tx_hash.to_string(),
-            (block_number, log),
+            (block_number, log, tx_logs),
         )
         .await;
     }
