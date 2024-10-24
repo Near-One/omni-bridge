@@ -14,7 +14,7 @@ struct StorageBalance {
     total: String,
 }
 
-pub async fn is_storage_sufficient(
+pub async fn has_storage_deposit(
     jsonrpc_client: &JsonRpcClient,
     token: &AccountId,
     accound_id: &AccountId,

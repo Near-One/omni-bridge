@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use clap::Parser;
 use log::{error, info};
 
@@ -23,7 +23,10 @@ async fn main() -> Result<()> {
 
     let args = CliArgs::parse();
 
-    let config = toml::from_str::<config::Config>(&std::fs::read_to_string(args.config)?)?;
+    let config = toml::from_str::<config::Config>(
+        &std::fs::read_to_string(args.config).context("Config file doesn't exist")?,
+    )
+    .context("Failed to parse config file")?;
 
     let redis_client = redis::Client::open(config.redis.url.clone())?;
     let jsonrpc_client = near_jsonrpc_client::JsonRpcClient::connect(config.near.rpc_url.clone());
@@ -45,9 +48,11 @@ async fn main() -> Result<()> {
         async move { workers::near::finalize_transfer(redis_client, connector).await }
     }));
     handles.push(tokio::spawn({
+        let config = config.clone();
         let redis_client = redis_client.clone();
         let connector = connector.clone();
-        async move { workers::near::claim_fee(redis_client, connector).await }
+        let jsonrpc_client = jsonrpc_client.clone();
+        async move { workers::near::claim_fee(config, redis_client, connector, jsonrpc_client).await }
     }));
     handles.push(tokio::spawn({
         let config = config.clone();
@@ -57,9 +62,21 @@ async fn main() -> Result<()> {
     }));
 
     handles.push(tokio::spawn({
+        let config = config.clone();
         let redis_client = redis_client.clone();
         let connector = connector.clone();
-        async move { workers::evm::finalize_withdraw(redis_client, connector).await }
+        let jsonrpc_client = jsonrpc_client.clone();
+        let near_signer = near_signer.clone();
+        async move {
+            workers::evm::finalize_transfer(
+                config,
+                redis_client,
+                connector,
+                jsonrpc_client,
+                near_signer,
+            )
+            .await
+        }
     }));
     handles.push(tokio::spawn({
         let redis_client = redis_client.clone();
@@ -76,8 +93,7 @@ async fn main() -> Result<()> {
     handles.push(tokio::spawn({
         let config = config.clone();
         let redis_client = redis_client.clone();
-        let jsonrpc_client = jsonrpc_client.clone();
-        async move { startup::evm::start_indexer(config, redis_client, jsonrpc_client).await }
+        async move { startup::evm::start_indexer(config, redis_client).await }
     }));
 
     tokio::select! {

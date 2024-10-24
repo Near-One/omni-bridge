@@ -1,10 +1,19 @@
 use anyhow::Result;
 use log::{info, warn};
 
-use near_jsonrpc_client::{methods::block::RpcBlockRequest, JsonRpcClient};
+use near_jsonrpc_client::{
+    methods::{self, block::RpcBlockRequest},
+    JsonRpcClient,
+};
+use near_jsonrpc_primitives::types::query::QueryResponseKind;
 use near_lake_framework::near_indexer_primitives::{
     views::{ActionView, ReceiptEnumView, ReceiptView},
     IndexerExecutionOutcomeWithReceipt, StreamerMessage,
+};
+use near_primitives::{
+    borsh::{from_slice, BorshDeserialize},
+    types::BlockReference,
+    views::QueryRequest,
 };
 use omni_types::near_events::Nep141LockerEvent;
 
@@ -23,6 +32,33 @@ pub async fn get_final_block(jsonrpc_client: &JsonRpcClient) -> Result<u64> {
         .await
         .map(|block| block.header.height)
         .map_err(Into::into)
+}
+
+#[derive(BorshDeserialize)]
+struct EthLightClientResponse {
+    last_block_number: u64,
+}
+
+pub async fn get_eth_light_client_last_block_number(
+    config: &config::Config,
+    jsonrpc_client: &JsonRpcClient,
+) -> Result<u64> {
+    let request = methods::query::RpcQueryRequest {
+        block_reference: BlockReference::latest(),
+        request: QueryRequest::CallFunction {
+            account_id: config.evm.eth_light_client.clone(),
+            method_name: "last_block_number".to_string(),
+            args: Vec::new().into(),
+        },
+    };
+
+    let response = jsonrpc_client.call(request).await?;
+
+    if let QueryResponseKind::CallResult(result) = response.kind {
+        Ok(from_slice::<EthLightClientResponse>(&result.result)?.last_block_number)
+    } else {
+        anyhow::bail!("Failed to get token decimals")
+    }
 }
 
 pub async fn handle_streamer_message(
