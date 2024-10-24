@@ -11,6 +11,7 @@ use omni_connector::OmniConnector;
 use omni_types::{
     locker_args::{FinTransferArgs, StorageDepositArgs},
     near_events::Nep141LockerEvent,
+    prover_result::ProofKind,
     ChainKind, OmniAddress,
 };
 
@@ -111,10 +112,11 @@ pub async fn finalize_transfer(
                         };
 
                         let Some(prover_args) = utils::evm::get_prover_args(
+                            &config,
                             vaa,
                             tx_hash,
                             H256::from_slice(topic.as_slice()),
-                            &config,
+                            ProofKind::InitTransfer,
                         )
                         .await
                         else {

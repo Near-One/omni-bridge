@@ -91,16 +91,14 @@ pub async fn get_vaa(
 }
 
 pub async fn get_prover_args(
+    config: &config::Config,
     vaa: Option<String>,
     tx_hash: H256,
     topic: H256,
-    config: &config::Config,
+    proof_kind: ProofKind,
 ) -> Option<Vec<u8>> {
     if let Some(vaa) = vaa {
-        let wormhole_proof_args = WormholeVerifyProofArgs {
-            proof_kind: ProofKind::InitTransfer,
-            vaa,
-        };
+        let wormhole_proof_args = WormholeVerifyProofArgs { proof_kind, vaa };
 
         let mut prover_args = Vec::new();
         if let Err(err) = wormhole_proof_args.serialize(&mut prover_args) {
@@ -119,7 +117,7 @@ pub async fn get_prover_args(
             };
 
         let evm_proof_args = EvmVerifyProofArgs {
-            proof_kind: ProofKind::InitTransfer,
+            proof_kind,
             proof: evm_proof_args,
         };
 

@@ -7,7 +7,9 @@ use futures::future::join_all;
 use log::{error, info, warn};
 
 use omni_connector::OmniConnector;
-use omni_types::{locker_args::ClaimFeeArgs, near_events::Nep141LockerEvent, ChainKind};
+use omni_types::{
+    locker_args::ClaimFeeArgs, near_events::Nep141LockerEvent, prover_result::ProofKind, ChainKind,
+};
 
 use crate::{config, utils};
 
@@ -231,18 +233,20 @@ pub async fn claim_fee(
                         let tx_hash = H256::from_slice(tx_hash.as_slice());
 
                         let Some(prover_args) = utils::evm::get_prover_args(
+                            &config,
                             vaa,
                             tx_hash,
                             H256::from_slice(topic.as_slice()),
-                            &config,
+                            ProofKind::FinTransfer,
                         )
                         .await
                         else {
+                            warn!("Failed to get prover args");
                             return;
                         };
 
                         let claim_fee_args = ClaimFeeArgs {
-                            chain_kind: ChainKind::Near,
+                            chain_kind: ChainKind::Eth,
                             prover_args,
                             native_fee_recipient: Some(config.evm.relayer_address_on_eth),
                         };
