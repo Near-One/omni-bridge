@@ -301,16 +301,19 @@ pub async fn sign_claim_native_fee(
                     let connector = connector.clone();
 
                     async move {
-                        let Nep141LockerEvent::ClaimFeeEvent {
+                        let (Nep141LockerEvent::FinTransferEvent {
                             ref transfer_message,
                             ..
-                        } = event
+                        }
+                        | Nep141LockerEvent::ClaimFeeEvent {
+                            ref transfer_message,
+                        }) = event
                         else {
-                            warn!("Expected ClaimFeeEvent, got: {:?}", event);
+                            warn!("Expected FinTransferEvent/ClaimFeeEvent, got: {:?}", event);
                             return;
                         };
 
-                        info!("Received ClaimFeeEvent log");
+                        info!("Received FinTransferEvent/ClaimFeeEvent log");
 
                         match connector
                             .sign_claim_native_fee(
