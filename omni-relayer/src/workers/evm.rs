@@ -11,7 +11,7 @@ use omni_connector::OmniConnector;
 use omni_types::{
     locker_args::{FinTransferArgs, StorageDepositArgs},
     near_events::Nep141LockerEvent,
-    ChainKind,
+    ChainKind, OmniAddress,
 };
 
 use crate::{config, utils};
@@ -21,6 +21,7 @@ pub async fn finalize_transfer(
     redis_client: redis::Client,
     connector: Arc<OmniConnector>,
     jsonrpc_client: near_jsonrpc_client::JsonRpcClient,
+    near_signer: near_crypto::InMemorySigner,
 ) -> Result<()> {
     let redis_connection = redis_client.get_multiplexed_tokio_connection().await?;
 
@@ -77,6 +78,7 @@ pub async fn finalize_transfer(
                     let mut redis_connection = redis_connection.clone();
                     let connector = connector.clone();
                     let jsonrpc_client = jsonrpc_client.clone();
+                    let near_signer = near_signer.clone();
 
                     async move {
                         info!("Received InitTransfer log");
@@ -100,9 +102,9 @@ pub async fn finalize_transfer(
                             );
                             return;
                         };
-                        let Ok(recipient) = init_log.inner.recipient.parse::<AccountId>() else {
+                        let Ok(recipient) = init_log.inner.recipient.parse::<OmniAddress>() else {
                             warn!(
-                                "Failed to parse recipient as AccountId: {:?}",
+                                "Failed to parse recipient as OmniAddress: {:?}",
                                 init_log.inner.recipient
                             );
                             return;
@@ -119,33 +121,54 @@ pub async fn finalize_transfer(
                             return;
                         };
 
-                        let sender = config.near.token_locker_id.clone();
+                        let storage_deposit_accounts =
+                            if let OmniAddress::Near(near_recipient) = &recipient {
+                                let Ok(recipient_account_id) = near_recipient.parse::<AccountId>()
+                                else {
+                                    warn!(
+                                        "Failed to parse recipient as AccountId: {:?}",
+                                        near_recipient
+                                    );
+                                    return;
+                                };
 
-                        // If storage is sufficient, then flag should be false, otherwise true
-                        let sender_is_storage_deposit = !utils::storage::is_storage_sufficient(
-                            &jsonrpc_client,
-                            &token,
-                            &sender,
-                        )
-                        .await
-                        .unwrap_or_default();
-                        let recipient_is_storage_deposit = !utils::storage::is_storage_sufficient(
-                            &jsonrpc_client,
-                            &token,
-                            &recipient,
-                        )
-                        .await
-                        .unwrap_or_default();
+                                let Ok(sender_has_storage_deposit) =
+                                    utils::storage::has_storage_deposit(
+                                        &jsonrpc_client,
+                                        &token,
+                                        &near_signer.account_id,
+                                    )
+                                    .await
+                                else {
+                                    warn!("Failed to check sender storage balance");
+                                    return;
+                                };
+                                let Ok(recipient_has_storage_deposit) =
+                                    utils::storage::has_storage_deposit(
+                                        &jsonrpc_client,
+                                        &token,
+                                        &recipient_account_id,
+                                    )
+                                    .await
+                                else {
+                                    warn!("Failed to check recipient storage balance");
+                                    return;
+                                };
+
+                                vec![
+                                    (near_signer.account_id, !sender_has_storage_deposit),
+                                    (recipient_account_id, !recipient_has_storage_deposit),
+                                ]
+                            } else {
+                                Vec::new()
+                            };
 
                         let fin_transfer_args = FinTransferArgs {
                             chain_kind: ChainKind::Eth,
                             native_fee_recipient: Some(config.evm.relayer_address_on_eth.clone()),
                             storage_deposit_args: StorageDepositArgs {
                                 token,
-                                accounts: vec![
-                                    (sender, sender_is_storage_deposit),
-                                    (recipient, recipient_is_storage_deposit),
-                                ],
+                                accounts: storage_deposit_accounts,
                             },
                             prover_args,
                         };

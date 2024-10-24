@@ -66,8 +66,16 @@ async fn main() -> Result<()> {
         let redis_client = redis_client.clone();
         let connector = connector.clone();
         let jsonrpc_client = jsonrpc_client.clone();
+        let near_signer = near_signer.clone();
         async move {
-            workers::evm::finalize_transfer(config, redis_client, connector, jsonrpc_client).await
+            workers::evm::finalize_transfer(
+                config,
+                redis_client,
+                connector,
+                jsonrpc_client,
+                near_signer,
+            )
+            .await
         }
     }));
     handles.push(tokio::spawn({
