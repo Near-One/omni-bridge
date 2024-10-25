@@ -250,11 +250,11 @@ contract BridgeTokenFactory is
     }
  
     function upgradeToken(
-        string calldata nearTokenId,
+        address tokenAddress,
         address implementation
     ) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        require(isBridgeToken[nearToEthToken[nearTokenId]], "ERR_NOT_BRIDGE_TOKEN");
-        BridgeToken proxy = BridgeToken(payable(nearToEthToken[nearTokenId]));
+        require(isBridgeToken[tokenAddress], "ERR_NOT_BRIDGE_TOKEN");
+        BridgeToken proxy = BridgeToken(tokenAddress);
         proxy.upgradeToAndCall(implementation, bytes(""));
     }
 
