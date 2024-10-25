@@ -27,7 +27,6 @@ contract BridgeTokenFactory is
     address public nearBridgeDerivedAddress;
     uint8 public omniBridgeChainId;
 
-    uint256[3] private __gapForRemovedFields;
     mapping(uint128 => bool) public completedTransfers;
     mapping(uint128 => bool) public claimedFee;
     uint128 public currentNonce; 
