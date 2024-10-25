@@ -9,9 +9,7 @@ crate-type = ["cdylib", "lib"]
 name = "bridge_token_factory"
 
 [features]
-default = ["mainnet"]
-mainnet = ["wormhole-anchor-sdk/mainnet"]
-solana-devnet = ["wormhole-anchor-sdk/solana-devnet"]
+default = []
 cpi = ["no-entrypoint"]
 no-entrypoint = []
 no-idl = []
@@ -23,7 +21,7 @@ anchor-lang = { version = "0.30.1", git = "https://github.com/coral-xyz/anchor/"
 anchor-spl = { version = "0.30.1", git = "https://github.com/coral-xyz/anchor/", rev = "06527e57c3e59683c36eb0a5c69ee669100b42e5", features = ["metadata"] }
 cfg-if = "1.0.0"
 near-sdk = "5.5.0"
-wormhole-anchor-sdk = { git = "https://github.com/wormhole-foundation/wormhole-scaffolding.git", rev = "962ef4841697980474854edea192d26b01d27848" }
+wormhole-anchor-sdk = { git = "https://github.com/wormhole-foundation/wormhole-scaffolding.git", rev = "962ef4841697980474854edea192d26b01d27848", default-features = false, features = ["solana-devnet"]}
 
 
 [dependencies.bitvec]

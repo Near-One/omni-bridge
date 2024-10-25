@@ -140,7 +140,7 @@ impl<'info> Initialize<'info> {
             )?;
         }
 
-        let payload = vec![]; // TODO: correct message payload
+        let payload = vec![0]; // TODO: correct message payload
 
         wormhole::post_message(
             CpiContext::new_with_signer(

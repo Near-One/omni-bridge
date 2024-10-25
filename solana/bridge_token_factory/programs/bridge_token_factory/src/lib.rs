@@ -5,15 +5,8 @@ pub mod constants;
 pub mod error;
 pub mod instructions;
 pub mod state;
-use cfg_if::cfg_if;
 
-cfg_if! {
-    if #[cfg(feature = "mainnet")] {
-        declare_id!("2ajXVaqXXpHWtPnW3tKZukuXHGGjVcENjuZaWrz6NhD4");
-    } else if #[cfg(feature = "solana-devnet")] {
-        declare_id!("BfXGzL2m8hFjVsYgzMMeE7wSNd8FAV1PPet81Qb7tgcT");
-    }
-}
+declare_id!("BfXGzL2m8hFjVsYgzMMeE7wSNd8FAV1PPet81Qb7tgcT");
 
 #[program]
 pub mod bridge_token_factory {
