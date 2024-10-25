@@ -104,12 +104,8 @@ pub async fn is_fee_sufficient(
             .await?
         }
         OmniAddress::Near(address) => {
-            if !storage::is_storage_sufficient(
-                jsonrpc_client,
-                token,
-                &address.parse::<AccountId>()?,
-            )
-            .await?
+            if !storage::has_storage_deposit(jsonrpc_client, token, &address.parse::<AccountId>()?)
+                .await?
             {
                 calculate_price(
                     storage::NEP141_STORAGE_DEPOSIT,
@@ -143,12 +139,8 @@ pub async fn is_fee_sufficient(
             .await?
         }
         OmniAddress::Near(address) => {
-            if !storage::is_storage_sufficient(
-                jsonrpc_client,
-                token,
-                &address.parse::<AccountId>()?,
-            )
-            .await?
+            if !storage::has_storage_deposit(jsonrpc_client, token, &address.parse::<AccountId>()?)
+                .await?
             {
                 calculate_price(
                     storage::NEP141_STORAGE_DEPOSIT,

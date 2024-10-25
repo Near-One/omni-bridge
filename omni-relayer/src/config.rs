@@ -59,6 +59,8 @@ pub struct Evm {
     #[serde(default = "derive_evm_address_from_private_key")]
     pub relayer_address_on_eth: OmniAddress,
 
+    pub eth_light_client: AccountId,
+
     pub init_transfer_gas_estimation: u128,
     pub fin_transfer_gas_estimation: u128,
 }
