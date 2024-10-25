@@ -21,9 +21,9 @@ use omni_types::near_events::Nep141LockerEvent;
 use omni_types::prover_args::VerifyProofArgs;
 use omni_types::prover_result::ProverResult;
 use omni_types::{
-    ChainKind, ClaimNativeFeePayload, Fee, InitTransferMsg, MetadataPayload, NativeFee,
-    NearRecipient, Nonce, OmniAddress, PayloadType, SignRequest, TransferId, TransferMessage,
-    TransferMessagePayload, UpdateFee,
+    ChainKind, ClaimNativeFeePayload, Fee, InitTransferMsg, MetadataPayload, NativeFee, Nonce,
+    OmniAddress, PayloadType, SignRequest, TransferId, TransferMessage, TransferMessagePayload,
+    UpdateFee,
 };
 use storage::{TransferMessageStorage, TransferMessageStorageValue};
 
@@ -59,8 +59,9 @@ enum StorageKey {
     PendingTransfers,
     Factories,
     FinalisedTransfers,
-    TokensMapping,
+    TokenIdToAddress,
     AccountsBalances,
+    TokenAddressToId,
 }
 
 #[derive(AccessControlRole, Deserialize, Serialize, Copy, Clone)]
@@ -133,7 +134,8 @@ pub struct Contract {
     pub factories: LookupMap<ChainKind, OmniAddress>,
     pub pending_transfers: LookupMap<Nonce, TransferMessageStorage>,
     pub finalised_transfers: LookupMap<TransferId, Option<NativeFee>>,
-    pub tokens_to_address_mapping: LookupMap<(ChainKind, AccountId), OmniAddress>,
+    pub token_id_to_address: LookupMap<(ChainKind, AccountId), OmniAddress>,
+    pub token_address_to_id: LookupMap<OmniAddress, AccountId>,
     pub mpc_signer: AccountId,
     pub current_nonce: Nonce,
     pub accounts_balances: LookupMap<AccountId, StorageBalance>,
@@ -154,14 +156,15 @@ impl FungibleTokenReceiver for Contract {
         self.current_nonce += 1;
         let transfer_message = TransferMessage {
             origin_nonce: U128(self.current_nonce),
-            token: env::predecessor_account_id(),
+            token: OmniAddress::Near(env::predecessor_account_id()),
             amount,
             recipient: parsed_msg.recipient,
             fee: Fee {
                 fee: parsed_msg.fee,
                 native_fee: parsed_msg.native_token_fee,
             },
-            sender: OmniAddress::Near(sender_id.to_string()),
+            sender: OmniAddress::Near(sender_id.clone()),
+            msg: String::new(),
         };
         require!(
             transfer_message.fee.fee < transfer_message.amount,
@@ -201,7 +204,8 @@ impl Contract {
             factories: LookupMap::new(StorageKey::Factories),
             pending_transfers: LookupMap::new(StorageKey::PendingTransfers),
             finalised_transfers: LookupMap::new(StorageKey::FinalisedTransfers),
-            tokens_to_address_mapping: LookupMap::new(StorageKey::TokensMapping),
+            token_id_to_address: LookupMap::new(StorageKey::TokenIdToAddress),
+            token_address_to_id: LookupMap::new(StorageKey::TokenAddressToId),
             mpc_signer,
             current_nonce: nonce.0,
             accounts_balances: LookupMap::new(StorageKey::AccountsBalances),
@@ -284,8 +288,7 @@ impl Contract {
                 let mut transfer = self.get_transfer_message_storage(nonce);
 
                 require!(
-                    OmniAddress::Near(env::predecessor_account_id().to_string())
-                        == transfer.message.sender,
+                    OmniAddress::Near(env::predecessor_account_id()) == transfer.message.sender,
                     "Only sender can update fee"
                 );
 
@@ -397,7 +400,7 @@ impl Contract {
         let transfer_payload = TransferMessagePayload {
             prefix: PayloadType::TransferMessage,
             nonce,
-            token: transfer_message.token,
+            token: self.get_token_id(&transfer_message.token),
             amount: U128(transfer_message.amount.0 - transfer_message.fee.fee.0),
             recipient: transfer_message.recipient,
             fee_recipient,
@@ -516,43 +519,46 @@ impl Contract {
             required_balance =
                 self.add_fin_transfer(&transfer_message.get_transfer_id(), &native_fee);
 
-            let recipient: NearRecipient =
-                recipient.parse().sdk_expect("Failed to parse recipient");
-
+            let token = self.get_token_id(&transfer_message.token);
             require!(
-                transfer_message.token == storage_deposit_args.token,
+                token == storage_deposit_args.token,
                 "STORAGE_ERR: Invalid token"
             );
             require!(
                 Self::check_storage_balance_result(1)
-                    && storage_deposit_args.accounts[0].0 == recipient.target,
+                    && &storage_deposit_args.accounts[0].0 == recipient,
                 "STORAGE_ERR: The transfer recipient is omitted"
             );
 
             let amount_to_transfer = U128(transfer_message.amount.0 - transfer_message.fee.fee.0);
 
             let mut promise =
-                if transfer_message.token == self.wnear_account_id && recipient.message.is_none() {
+                if token == self.wnear_account_id && transfer_message.msg.is_empty() {
                     ext_wnear_token::ext(self.wnear_account_id.clone())
                         .with_static_gas(WNEAR_WITHDRAW_GAS)
                         .with_attached_deposit(ONE_YOCTO)
                         .near_withdraw(amount_to_transfer)
                         .then(
-                            Promise::new(recipient.target)
+                            Promise::new(recipient.clone())
                                 .transfer(NearToken::from_yoctonear(amount_to_transfer.0)),
                         )
                 } else {
-                    let transfer = ext_token::ext(transfer_message.token.clone())
-                        .with_attached_deposit(ONE_YOCTO);
-                    match recipient.message {
-                        Some(message) => transfer
-                            .with_static_gas(FT_TRANSFER_CALL_GAS)
-                            .ft_transfer_call(recipient.target, amount_to_transfer, None, message),
-                        None => transfer.with_static_gas(FT_TRANSFER_GAS).ft_transfer(
-                            recipient.target,
+                    let transfer = ext_token::ext(token.clone()).with_attached_deposit(ONE_YOCTO);
+                    if transfer_message.msg.is_empty() {
+                        transfer.with_static_gas(FT_TRANSFER_GAS).ft_transfer(
+                            recipient.clone(),
                             amount_to_transfer,
                             None,
-                        ),
+                        )
+                    } else {
+                        transfer
+                            .with_static_gas(FT_TRANSFER_CALL_GAS)
+                            .ft_transfer_call(
+                                recipient.clone(),
+                                amount_to_transfer,
+                                None,
+                                transfer_message.msg.clone(),
+                            )
                     }
                 };
 
@@ -563,7 +569,7 @@ impl Contract {
                     "STORAGE_ERR: The fee recipient is omitted"
                 );
                 promise = promise.then(
-                    ext_token::ext(transfer_message.token.clone())
+                    ext_token::ext(token)
                         .with_static_gas(FT_TRANSFER_GAS)
                         .with_attached_deposit(ONE_YOCTO)
                         .ft_transfer(
@@ -677,7 +683,7 @@ impl Contract {
                 let OmniAddress::Near(recipient) = &native_fee_recipient else {
                     env::panic_str("ERR_WRONG_CHAIN_KIND")
                 };
-                Promise::new(recipient.parse().sdk_expect("ERR_PARSE_FEE_RECIPIENT"))
+                Promise::new(recipient.clone())
                     .transfer(NearToken::from_yoctonear(message.fee.native_fee.0));
             } else {
                 let required_balance = self.update_fin_transfer(
@@ -696,7 +702,7 @@ impl Contract {
             }
         }
 
-        let token = message.token.clone();
+        let token = self.get_token_id(&message.token);
         env::log_str(
             &Nep141LockerEvent::ClaimFeeEvent {
                 transfer_message: message,
@@ -753,10 +759,15 @@ impl Contract {
         );
 
         let storage_usage = env::storage_usage();
-        self.tokens_to_address_mapping.insert(
-            &(deploy_token.token_address.get_chain(), deploy_token.token),
+        self.token_id_to_address.insert(
+            &(
+                deploy_token.token_address.get_chain(),
+                deploy_token.token.clone(),
+            ),
             &deploy_token.token_address,
         );
+        self.token_address_to_id
+            .insert(&deploy_token.token_address, &deploy_token.token);
         let required_deposit = env::storage_byte_cost()
             .saturating_mul((env::storage_usage().saturating_sub(storage_usage)).into());
 
@@ -783,7 +794,7 @@ impl Contract {
         chain_kind: ChainKind,
         token: AccountId,
     ) -> Option<OmniAddress> {
-        self.tokens_to_address_mapping.get(&(chain_kind, token))
+        self.token_id_to_address.get(&(chain_kind, token))
     }
 
     pub fn get_transfer_message(&self, nonce: U128) -> TransferMessage {
@@ -812,6 +823,16 @@ impl Contract {
 }
 
 impl Contract {
+    fn get_token_id(&self, address: &OmniAddress) -> AccountId {
+        if let OmniAddress::Near(token_account_id) = address {
+            token_account_id.clone()
+        } else {
+            self.token_address_to_id
+                .get(address)
+                .sdk_expect("ERR_TOKEN_NOT_REGISTERED")
+        }
+    }
+
     fn check_or_pay_ft_storage(
         mut main_promise: Promise,
         args: &StorageDepositArgs,
