@@ -232,7 +232,7 @@ pub async fn claim_fee(
 
                         let tx_hash = H256::from_slice(tx_hash.as_slice());
 
-                        let Some(prover_args) = utils::evm::get_prover_args(
+                        let Some(prover_args) = utils::evm::construct_prover_args(
                             &config,
                             vaa,
                             tx_hash,

@@ -90,7 +90,7 @@ pub async fn get_vaa(
     }
 }
 
-pub async fn get_prover_args(
+pub async fn construct_prover_args(
     config: &config::Config,
     vaa: Option<String>,
     tx_hash: H256,

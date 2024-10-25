@@ -111,7 +111,7 @@ pub async fn finalize_transfer(
                             return;
                         };
 
-                        let Some(prover_args) = utils::evm::get_prover_args(
+                        let Some(prover_args) = utils::evm::construct_prover_args(
                             &config,
                             vaa,
                             tx_hash,
