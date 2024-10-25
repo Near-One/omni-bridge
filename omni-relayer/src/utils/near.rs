@@ -45,9 +45,6 @@ pub async fn handle_streamer_message(
         match log {
             Nep141LockerEvent::InitTransferEvent {
                 ref transfer_message,
-            }
-            | Nep141LockerEvent::UpdateFeeEvent {
-                ref transfer_message,
             } => {
                 match utils::fee::is_fee_sufficient(
                     config,
@@ -76,6 +73,18 @@ pub async fn handle_streamer_message(
                         warn!("Failed to check fee: {}", err);
                     }
                 }
+            }
+            Nep141LockerEvent::UpdateFeeEvent {
+                ref transfer_message,
+            } => {
+                // TODO: check if transcation is already in redis (in any other case we can ignore it, because there's nothing to update)
+                utils::redis::add_event(
+                    redis_connection,
+                    utils::redis::NEAR_INIT_TRANSFER_QUEUE,
+                    transfer_message.origin_nonce.0.to_string(),
+                    log,
+                )
+                .await;
             }
             Nep141LockerEvent::SignTransferEvent {
                 ref message_payload,
