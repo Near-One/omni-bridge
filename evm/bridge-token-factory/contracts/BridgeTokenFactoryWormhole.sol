@@ -47,7 +47,7 @@ contract BridgeTokenFactoryWormhole is BridgeTokenFactory {
         wormholeNonce++;
     }
 
-    function mintTokenExtension(BridgeTypes.MintTokenPayload memory payload) internal override {
+    function finTransferExtension(BridgeTypes.FinTransferPayload memory payload) internal override {
         _wormhole.publishMessage{value: msg.value}(
             wormholeNonce,
             abi.encode(MessageType.FinTransfer, payload.token, payload.amount, payload.feeRecipient, payload.nonce),
@@ -55,12 +55,11 @@ contract BridgeTokenFactoryWormhole is BridgeTokenFactory {
         );
 
         wormholeNonce++;
-
     }
 
-    function burnTokenExtension(
+    function initTransferExtension(
         uint128 nonce,
-        string calldata token,
+        address tokenAddress,
         uint128 amount,
         uint128 fee,
         uint128 nativeFee,
@@ -73,7 +72,7 @@ contract BridgeTokenFactoryWormhole is BridgeTokenFactory {
             abi.encode(
                 MessageType.InitTransfer,
                 nonce,
-                token,
+                tokenAddress,
                 amount,
                 fee,
                 nativeFee,
