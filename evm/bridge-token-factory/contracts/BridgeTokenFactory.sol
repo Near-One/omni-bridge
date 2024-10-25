@@ -127,7 +127,7 @@ contract BridgeTokenFactory is
 
     function mintToken(
         bytes calldata signatureData, 
-        BridgeTypes.MintTokenPayload calldata payload
+        BridgeTypes.FinTransferPayload calldata payload
     ) payable external whenNotPaused(PAUSED_MINT_TOKEN) {
         if (completedTransfers[payload.nonce]) {
             revert NonceAlreadyUsed(payload.nonce);
@@ -150,14 +150,18 @@ contract BridgeTokenFactory is
             revert InvalidSignature();
         }
 
-        require(isBridgeToken[nearToEthToken[payload.token]], "ERR_NOT_BRIDGE_TOKEN");
-        BridgeToken(nearToEthToken[payload.token]).mint(payload.recipient, payload.amount);
-
+        address tokenAddress = nearToEthToken[payload.token];
+        if (tokenAddress != address(0)) {
+            BridgeToken(tokenAddress).mint(payload.recipient, payload.amount);
+        } else {
+            IERC20(tokenAddress).safeTransfer(payload.recipient, payload.amount);
+        }
+ 
         completedTransfers[payload.nonce] = true;
 
-        mintTokenExtension(payload);
+        finTransferExtension(payload);
 
-        emit BridgeTypes.MintToken(
+        emit BridgeTypes.FinTransfer(
             payload.nonce,
             payload.token,
             payload.amount,
@@ -166,34 +170,37 @@ contract BridgeTokenFactory is
         );
     }
 
-    function mintTokenExtension(BridgeTypes.MintTokenPayload memory payload) internal virtual {}
+    function finTransferExtension(BridgeTypes.FinTransferPayload memory payload) internal virtual {}
 
-    function burnToken(
-        string calldata token,
+    function initTransfer(
+        address tokenAddress,
         uint128 amount,
         uint128 fee,
         uint128 nativeFee,
-        string calldata recipient
+        string calldata recipient,
+        string calldata message
     ) payable external whenNotPaused(PAUSED_BURN_TOKEN) {
         currentNonce += 1;
-        require(isBridgeToken[nearToEthToken[token]], "ERR_NOT_BRIDGE_TOKEN");
         if (fee >= amount) {
             revert InvalidFee();
         }
 
-        address tokenAddress = nearToEthToken[token];
-
-        BridgeToken(tokenAddress).burn(msg.sender, amount);
-
         uint256 extensionValue = msg.value - nativeFee;
-        burnTokenExtension(currentNonce, token, amount, fee, nativeFee, recipient, msg.sender, extensionValue);
 
-        emit BridgeTypes.BurnToken(msg.sender, tokenAddress, currentNonce, token , amount, fee, nativeFee, recipient);
+        if (isBridgeToken[tokenAddress]) {
+            BridgeToken(tokenAddress).burn(msg.sender, amount);
+        } else {
+            IERC20(tokenAddress).safeTransferFrom(msg.sender, address(this), amount);
+        }
+
+        initTransferExtension(currentNonce, tokenAddress, amount, fee, nativeFee, recipient, msg.sender, extensionValue);
+
+        emit BridgeTypes.InitTransfer(msg.sender, tokenAddress, currentNonce, amount, fee, nativeFee, recipient, message);
     }
 
-    function burnTokenExtension(
+    function initTransferExtension(
         uint128 nonce,
-        string calldata token,
+        address tokenAddress,
         uint128 amount,
         uint128 fee,
         uint128 nativeFee,
@@ -201,81 +208,6 @@ contract BridgeTokenFactory is
         address sender,
         uint256 value
     ) internal virtual {}
-
-    function lockToken(
-        address tokenAddress,
-        uint128 amount,
-        uint128 fee,
-        uint128 nativeFee,
-        string calldata recipient,
-        string calldata message
-    ) external payable whenNotPaused(PAUSED_LOCK_TOKEN) {
-        if (fee >= amount) {
-            revert InvalidFee();
-        }
-
-        currentNonce += 1;
-        IERC20(tokenAddress).safeTransferFrom(msg.sender, address(this), amount);
-        uint256 extensionValue = msg.value - nativeFee;
-        lockTokenExtension(currentNonce, tokenAddress, msg.sender, amount, fee, nativeFee, recipient, message, extensionValue);
-
-        emit BridgeTypes.Locked(currentNonce, tokenAddress, msg.sender, amount, fee, nativeFee, recipient, message);
-    }
-
-    function lockTokenExtension(
-        uint128 nonce,
-        address token,
-        address sender,
-        uint128 amount,
-        uint128 fee,
-        uint128 nativeFee,
-        string calldata recipient,
-        string calldata message,
-        uint256 value
-    ) internal virtual {
-    }
-
-    function unlockToken(
-        bytes calldata signatureData, 
-        BridgeTypes.UnlockTokenPayload calldata payload
-    ) external payable whenNotPaused(PAUSED_UNLOCK_TOKEN)
-    {
-        if (completedTransfers[payload.nonce]) {
-            revert NonceAlreadyUsed(payload.nonce);
-        }
-
-        bytes memory borshEncoded = bytes.concat(
-            Borsh.encodeUint128(payload.nonce),
-            Borsh.encodeAddress(payload.token),
-            Borsh.encodeUint128(payload.amount),
-            bytes1(omniBridgeChainId),
-            Borsh.encodeAddress(payload.recipient),
-            bytes(payload.feeRecipient).length == 0  // None or Some(String) in rust
-                ? bytes("\x00") 
-                : bytes.concat(bytes("\x01"), Borsh.encodeString(payload.feeRecipient))
-        );
-        bytes32 hashed = keccak256(borshEncoded);
-
-        if (ECDSA.recover(hashed, signatureData) != nearBridgeDerivedAddress) {
-            revert InvalidSignature();
-        }
-
-        IERC20(payload.token).safeTransfer(payload.recipient, payload.amount);
-
-        completedTransfers[payload.nonce] = true;
-
-        unlockTokenExtension(payload);
-
-        emit BridgeTypes.Unlocked(
-            payload.nonce,
-            payload.token,
-            payload.amount,
-            payload.recipient,
-            payload.feeRecipient
-        );
-    }
-
-    function unlockTokenExtension(BridgeTypes.UnlockTokenPayload memory payload) internal virtual {}
 
     function claimNativeFee(bytes calldata signatureData, BridgeTypes.ClaimFeePayload memory payload) external {
         bytes memory borshEncodedNonces = Borsh.encodeUint32(uint32(payload.nonces.length));
