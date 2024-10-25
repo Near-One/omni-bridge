@@ -29,7 +29,7 @@ contract BridgeTokenFactory is
 
     mapping(uint128 => bool) public completedTransfers;
     mapping(uint128 => bool) public claimedFee;
-    uint128 public currentNonce; 
+    uint128 public initTransferNonce; 
 
     bytes32 public constant PAUSABLE_ADMIN_ROLE = keccak256("PAUSABLE_ADMIN_ROLE");
     uint constant UNPAUSED_ALL = 0;
@@ -178,7 +178,7 @@ contract BridgeTokenFactory is
         string calldata recipient,
         string calldata message
     ) payable external whenNotPaused(PAUSED_INIT_TRANSFER) {
-        currentNonce += 1;
+        initTransferNonce += 1;
         if (fee >= amount) {
             revert InvalidFee();
         }
@@ -191,9 +191,9 @@ contract BridgeTokenFactory is
             IERC20(tokenAddress).safeTransferFrom(msg.sender, address(this), amount);
         }
 
-        initTransferExtension(currentNonce, tokenAddress, amount, fee, nativeFee, recipient, msg.sender, extensionValue);
+        initTransferExtension(initTransferNonce, tokenAddress, amount, fee, nativeFee, recipient, msg.sender, extensionValue);
 
-        emit BridgeTypes.InitTransfer(msg.sender, tokenAddress, currentNonce, amount, fee, nativeFee, recipient, message);
+        emit BridgeTypes.InitTransfer(msg.sender, tokenAddress, initTransferNonce, amount, fee, nativeFee, recipient, message);
     }
 
     function initTransferExtension(
