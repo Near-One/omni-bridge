@@ -23,14 +23,6 @@ library BridgeTypes {
         address recipient;
     }
 
-    struct UnlockTokenPayload {
-        uint128 nonce;
-        address token;
-        uint128 amount;
-        address recipient;
-        string feeRecipient;
-    }
-
     event InitTransfer(
         address indexed sender,
         address indexed tokenAddress,

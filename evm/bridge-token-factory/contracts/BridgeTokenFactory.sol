@@ -33,10 +33,8 @@ contract BridgeTokenFactory is
 
     bytes32 public constant PAUSABLE_ADMIN_ROLE = keccak256("PAUSABLE_ADMIN_ROLE");
     uint constant UNPAUSED_ALL = 0;
-    uint constant PAUSED_BURN_TOKEN = 1 << 0;
-    uint constant PAUSED_MINT_TOKEN = 1 << 1;
-    uint constant PAUSED_LOCK_TOKEN = 1 << 2;
-    uint constant PAUSED_UNLOCK_TOKEN = 1 << 3;
+    uint constant PAUSED_INIT_TRANSFER = 1 << 0;
+    uint constant PAUSED_FIN_TRANSFER = 1 << 1;
 
     error InvalidSignature();
     error NonceAlreadyUsed(uint256 nonce);
@@ -125,10 +123,10 @@ contract BridgeTokenFactory is
         );
     }
 
-    function mintToken(
+    function finTransfer(
         bytes calldata signatureData, 
         BridgeTypes.FinTransferPayload calldata payload
-    ) payable external whenNotPaused(PAUSED_MINT_TOKEN) {
+    ) payable external whenNotPaused(PAUSED_FIN_TRANSFER) {
         if (completedTransfers[payload.nonce]) {
             revert NonceAlreadyUsed(payload.nonce);
         }
@@ -179,7 +177,7 @@ contract BridgeTokenFactory is
         uint128 nativeFee,
         string calldata recipient,
         string calldata message
-    ) payable external whenNotPaused(PAUSED_BURN_TOKEN) {
+    ) payable external whenNotPaused(PAUSED_INIT_TRANSFER) {
         currentNonce += 1;
         if (fee >= amount) {
             revert InvalidFee();
@@ -247,7 +245,7 @@ contract BridgeTokenFactory is
     }
 
     function pauseAll() external onlyRole(PAUSABLE_ADMIN_ROLE) {
-        uint flags = PAUSED_MINT_TOKEN | PAUSED_BURN_TOKEN | PAUSED_LOCK_TOKEN | PAUSED_UNLOCK_TOKEN;
+        uint flags = PAUSED_FIN_TRANSFER | PAUSED_INIT_TRANSFER;
         _pause(flags);
     }
  
