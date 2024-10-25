@@ -148,14 +148,14 @@ contract BridgeTokenFactory is
             revert InvalidSignature();
         }
 
+        completedTransfers[payload.nonce] = true;
         address tokenAddress = nearToEthToken[payload.token];
+        
         if (tokenAddress != address(0)) {
             BridgeToken(tokenAddress).mint(payload.recipient, payload.amount);
         } else {
             IERC20(tokenAddress).safeTransfer(payload.recipient, payload.amount);
         }
- 
-        completedTransfers[payload.nonce] = true;
 
         finTransferExtension(payload);
 
