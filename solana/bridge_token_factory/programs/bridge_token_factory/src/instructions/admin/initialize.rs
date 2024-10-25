@@ -5,7 +5,7 @@ use crate::{
         AUTHORITY_SEED, CONFIG_SEED, DEFAULT_ADMIN, MESSAGE_SEED, USED_NONCES_PER_ACCOUNT,
     },
     state::{
-        config::{Config, ConfigBumps, WormholeBumps, WormholeConfig},
+        config::{Config, ConfigBumps, WormholeBumps},
         used_nonces::UsedNonces,
     },
     ID,
@@ -100,11 +100,6 @@ impl<'info> Initialize<'info> {
             admin: DEFAULT_ADMIN,
             max_used_nonce: 0,
             derived_near_bridge_address,
-            wormhole: WormholeConfig {
-                bridge: self.wormhole_bridge.key(),
-                fee_collector: self.wormhole_fee_collector.key(),
-                sequence: self.wormhole_sequence.key(),
-            },
             bumps: ConfigBumps {
                 config: config_bump,
                 authority: authority_bump,

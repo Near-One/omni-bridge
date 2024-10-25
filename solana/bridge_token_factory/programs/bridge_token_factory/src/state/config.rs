@@ -17,17 +17,6 @@ pub struct ConfigBumps {
     pub wormhole: WormholeBumps,
 }
 
-#[derive(Default, AnchorSerialize, AnchorDeserialize, Clone, PartialEq, Eq)]
-#[derive(InitSpace)]
-pub struct WormholeConfig {
-    /// [BridgeData](wormhole_anchor_sdk::wormhole::BridgeData) address.
-    pub bridge: Pubkey,
-    /// [FeeCollector](wormhole_anchor_sdk::wormhole::FeeCollector) address.
-    pub fee_collector: Pubkey,
-    /// [SequenceTracker](wormhole_anchor_sdk::wormhole::SequenceTracker) address.
-    pub sequence: Pubkey,
-}
-
 
 
 #[account]
@@ -36,6 +25,5 @@ pub struct Config {
     pub admin: Pubkey,
     pub max_used_nonce: u128,
     pub derived_near_bridge_address: [u8; 64],
-    pub wormhole: WormholeConfig,
     pub bumps: ConfigBumps,
 }
