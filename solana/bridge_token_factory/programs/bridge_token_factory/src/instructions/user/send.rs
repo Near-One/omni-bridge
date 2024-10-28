@@ -9,12 +9,11 @@ use crate::instructions::wormhole_cpi::*;
 
 #[derive(Accounts)]
 pub struct Send<'info> {
-    /// CHECK: PDA
     #[account(
         seeds = [AUTHORITY_SEED],
         bump = wormhole.config.bumps.authority,
     )]
-    pub authority: UncheckedAccount<'info>,
+    pub authority: SystemAccount<'info>,
 
     #[account(
         constraint = !mint.mint_authority.contains(authority.key),

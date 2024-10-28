@@ -15,6 +15,8 @@ pub const MESSAGE_SEED: &[u8] = b"message";
 #[constant]
 pub const USED_NONCES_SEED: &[u8] = b"used_nonces";
 
+#[constant]
+pub const WRAPPED_MINT_SEED: &[u8] = b"wrapped_mint";
 
 #[constant]
 pub const USED_NONCES_PER_ACCOUNT: u32 = 1024;

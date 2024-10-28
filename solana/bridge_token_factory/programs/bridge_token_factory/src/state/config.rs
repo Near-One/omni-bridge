@@ -18,7 +18,6 @@ pub struct ConfigBumps {
 }
 
 
-
 #[account]
 #[derive(InitSpace)]
 pub struct Config {

@@ -47,6 +47,23 @@
           "pda": {
             "seeds": [
               {
+                "kind": "const",
+                "value": [
+                  119,
+                  114,
+                  97,
+                  112,
+                  112,
+                  101,
+                  100,
+                  95,
+                  109,
+                  105,
+                  110,
+                  116
+                ]
+              },
+              {
                 "kind": "arg",
                 "path": "data.metadata.token"
               }
@@ -358,6 +375,7 @@
         },
         {
           "name": "authority",
+          "writable": true,
           "pda": {
             "seeds": [
               {
@@ -382,6 +400,23 @@
           "writable": true,
           "pda": {
             "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  119,
+                  114,
+                  97,
+                  112,
+                  112,
+                  101,
+                  100,
+                  95,
+                  109,
+                  105,
+                  110,
+                  116
+                ]
+              },
               {
                 "kind": "arg",
                 "path": "data.payload.token"
@@ -682,6 +717,7 @@
         },
         {
           "name": "authority",
+          "writable": true,
           "pda": {
             "seeds": [
               {
@@ -977,7 +1013,7 @@
           "name": "data",
           "type": {
             "defined": {
-              "name": "FinalizeDepositData"
+              "name": "FinalizeWithdrawData"
             }
           }
         }
@@ -1015,6 +1051,28 @@
                   102,
                   105,
                   103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "authority",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
                 ]
               }
             ]
@@ -1416,6 +1474,23 @@
           "writable": true,
           "pda": {
             "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  119,
+                  114,
+                  97,
+                  112,
+                  112,
+                  101,
+                  100,
+                  95,
+                  109,
+                  105,
+                  110,
+                  116
+                ]
+              },
               {
                 "kind": "arg",
                 "path": "payload.token"
@@ -1977,10 +2052,6 @@
             "type": "u128"
           },
           {
-            "name": "recipient",
-            "type": "pubkey"
-          },
-          {
             "name": "fee_recipient",
             "type": {
               "option": "string"
@@ -1999,6 +2070,31 @@
             "type": {
               "defined": {
                 "name": "DepositPayload"
+              }
+            }
+          },
+          {
+            "name": "signature",
+            "type": {
+              "array": [
+                "u8",
+                65
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "FinalizeWithdrawData",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "payload",
+            "type": {
+              "defined": {
+                "name": "WithdrawPayload"
               }
             }
           },
@@ -2114,6 +2210,28 @@
       }
     },
     {
+      "name": "WithdrawPayload",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "nonce",
+            "type": "u128"
+          },
+          {
+            "name": "amount",
+            "type": "u128"
+          },
+          {
+            "name": "fee_recipient",
+            "type": {
+              "option": "string"
+            }
+          }
+        ]
+      }
+    },
+    {
       "name": "WormholeBumps",
       "type": {
         "kind": "struct",
@@ -2174,6 +2292,11 @@
       "name": "VAULT_SEED",
       "type": "bytes",
       "value": "[118, 97, 117, 108, 116]"
+    },
+    {
+      "name": "WRAPPED_MINT_SEED",
+      "type": "bytes",
+      "value": "[119, 114, 97, 112, 112, 101, 100, 95, 109, 105, 110, 116]"
     }
   ]
 }

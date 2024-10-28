@@ -11,7 +11,7 @@ import {VersionedTransaction} from '@solana/web3.js';
 import BN from 'bn.js';
 import {TOKEN_PROGRAM_ID} from '@solana/spl-token';
 
-const MAX_TX_KEYS = 12;
+const MAX_TX_KEYS = 20;
 
 async function findLookupTable(): Promise<PublicKey | undefined> {
   // eslint-disable-next-line prefer-const

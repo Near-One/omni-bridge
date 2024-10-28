@@ -8,7 +8,6 @@ use crate::{
         config::{Config, ConfigBumps, WormholeBumps},
         used_nonces::UsedNonces,
     },
-    ID,
 };
 use anchor_lang::system_program::{transfer, Transfer};
 use wormhole_anchor_sdk::wormhole::{self, program::Wormhole};
@@ -26,6 +25,13 @@ pub struct Initialize<'info> {
         bump,
     )]
     pub config: Account<'info, Config>,
+
+    #[account(
+        mut,
+        seeds = [AUTHORITY_SEED],
+        bump,
+    )]
+    pub authority: SystemAccount<'info>,
 
     #[account(
         mut,
@@ -90,12 +96,12 @@ impl<'info> Initialize<'info> {
         &mut self,
         derived_near_bridge_address: [u8; 64],
         config_bump: u8,
+        authority_bump: u8,
         wormhole_bridge_bump: u8,
         wormhole_fee_collector_bump: u8,
         wormhole_sequence_bump: u8,
         wormhole_message_bump: u8,
     ) -> Result<()> {
-        let (_, authority_bump) = Pubkey::find_program_address(&[AUTHORITY_SEED], &ID);
         self.config.set_inner(Config {
             admin: DEFAULT_ADMIN,
             max_used_nonce: 0,
@@ -111,16 +117,19 @@ impl<'info> Initialize<'info> {
             },
         });
 
+        let rent= Rent::get()?;
+
         // prepare rent for the next used_nonces account creation
         transfer(
             CpiContext::new(
                 self.system_program.to_account_info(),
                 Transfer {
                     from: self.payer.to_account_info(),
-                    to: self.config.to_account_info(),
+                    to: self.authority.to_account_info(),
                 },
             ),
-            UsedNonces::rent_level(USED_NONCES_PER_ACCOUNT as u128 - 1, &Rent::get()?)?,
+            rent.minimum_balance(0) // for account creation
+                + UsedNonces::rent_level(USED_NONCES_PER_ACCOUNT as u128 - 1, &rent)?,
         )?;
 
         // If Wormhole requires a fee before posting a message, we need to

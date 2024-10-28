@@ -1,6 +1,8 @@
 import {Command} from 'commander';
 import {setupContext} from './context';
 import {installInitializeCLI} from './initialize';
+import {installDeployTokenCLI} from './deployToken';
+import {installFinalizeDepositCLI} from './finalizeDeposit';
 
 export function cli() {
   const program = new Command();
@@ -20,6 +22,8 @@ export function cli() {
     .hook('preAction', (command: Command) => setupContext(command.opts()));
 
   installInitializeCLI(program);
+  installDeployTokenCLI(program);
+  installFinalizeDepositCLI(program);
 
   return program;
 }

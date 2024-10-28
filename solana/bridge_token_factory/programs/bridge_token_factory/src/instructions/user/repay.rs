@@ -1,22 +1,21 @@
 use anchor_lang::prelude::*;
 use anchor_spl::token::{burn, Burn, Mint, Token, TokenAccount};
 
-use crate::constants::AUTHORITY_SEED;
+use crate::constants::{AUTHORITY_SEED, WRAPPED_MINT_SEED};
 use crate::instructions::wormhole_cpi::*;
 
 #[derive(Accounts)]
 #[instruction(payload: RepayPayload)]
 pub struct Repay<'info> {
-    /// CHECK: PDA
     #[account(
         seeds = [AUTHORITY_SEED],
         bump = wormhole.config.bumps.authority,
     )]
-    pub authority: UncheckedAccount<'info>,
+    pub authority: SystemAccount<'info>,
 
     #[account(
         mut,
-        seeds = [payload.token.as_bytes().as_ref()],
+        seeds = [WRAPPED_MINT_SEED, payload.token.as_bytes().as_ref()],
         bump,
         mint::authority = authority,
     )]

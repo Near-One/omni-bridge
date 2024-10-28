@@ -21,6 +21,7 @@ pub mod bridge_token_factory {
         ctx.accounts.process(
             derived_near_bridge_address,
             ctx.bumps.config,
+            ctx.bumps.authority,
             ctx.bumps.wormhole_bridge,
             ctx.bumps.wormhole_fee_collector,
             ctx.bumps.wormhole_sequence,
@@ -34,7 +35,7 @@ pub mod bridge_token_factory {
     pub fn deploy_token(ctx: Context<DeployToken>, data: DeployTokenData) -> Result<()> {
         msg!("Deploying token");
 
-        data.verify_signature(&ctx.accounts.wormhole.config.derived_near_bridge_address)?;
+        // TODO: data.verify_signature(&ctx.recipient.key, &ctx.accounts.wormhole.config.derived_near_bridge_address)?;
         ctx.accounts
             .initialize_token_metadata(data.metadata, ctx.bumps.wormhole.message)?;
 
@@ -48,7 +49,7 @@ pub mod bridge_token_factory {
     ) -> Result<()> {
         msg!("Finalizing deposit");
 
-        data.verify_signature(&ctx.accounts.config.derived_near_bridge_address)?;
+        // TODO: data.verify_signature(&ctx.recipient.key, &ctx.accounts.config.derived_near_bridge_address)?;
         ctx.accounts.mint(data, ctx.bumps.wormhole.message)?;
 
         // Emit event
@@ -79,11 +80,11 @@ pub mod bridge_token_factory {
 
     pub fn finalize_withdraw(
         ctx: Context<FinalizeWithdraw>,
-        data: FinalizeDepositData,
+        data: FinalizeWithdrawData,
     ) -> Result<()> {
         msg!("Finalizing withdraw");
 
-        data.verify_signature(&ctx.accounts.config.derived_near_bridge_address)?;
+        // TODO: data.verify_signature(&ctx.recipient.key, &ctx.mint.key, &ctx.accounts.config.derived_near_bridge_address)?;
         ctx.accounts.process(data, ctx.bumps.wormhole.message)?;
 
         // Emit event

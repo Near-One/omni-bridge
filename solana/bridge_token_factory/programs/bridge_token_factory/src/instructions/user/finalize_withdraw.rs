@@ -1,10 +1,18 @@
 use std::str::FromStr;
 
-use anchor_lang::prelude::*;
+use anchor_lang::{
+    prelude::*,
+    solana_program::{keccak, secp256k1_recover::secp256k1_recover},
+};
 use anchor_spl::{
     associated_token::AssociatedToken,
     token_2022::{transfer_checked, TransferChecked},
     token_interface::{Mint, TokenAccount, TokenInterface},
+};
+use near_sdk::json_types::U128;
+use std::{
+    io::{BufWriter, Write},
+    vec,
 };
 
 use crate::{
@@ -40,16 +48,13 @@ pub struct FinalizeWithdraw<'info> {
         bump,
     )]
     pub used_nonces: AccountLoader<'info, UsedNonces>,
-    /// CHECK: PDA
     #[account(
+        mut,
         seeds = [AUTHORITY_SEED],
         bump = config.bumps.authority,
     )]
-    pub authority: UncheckedAccount<'info>,
+    pub authority: SystemAccount<'info>,
 
-    #[account(
-        constraint = recipient.key == &data.payload.recipient,
-    )]
     /// CHECK: this can be any type of account
     pub recipient: UncheckedAccount<'info>,
 
@@ -91,11 +96,12 @@ pub struct FinalizeWithdraw<'info> {
 }
 
 impl<'info> FinalizeWithdraw<'info> {
-    pub fn process(&mut self, data: FinalizeDepositData, wormhole_message_bump: u8) -> Result<()> {
+    pub fn process(&mut self, data: FinalizeWithdrawData, wormhole_message_bump: u8) -> Result<()> {
         UsedNonces::use_nonce(
             data.payload.nonce,
             &self.used_nonces,
             &mut self.config,
+            self.authority.to_account_info(),
             self.wormhole.payer.to_account_info(),
             &Rent::get()?,
             self.system_program.to_account_info(),
@@ -125,6 +131,58 @@ impl<'info> FinalizeWithdraw<'info> {
         .try_to_vec()?;
 
         self.wormhole.post_message(payload, wormhole_message_bump)?;
+
+        Ok(())
+    }
+}
+
+#[derive(AnchorSerialize, AnchorDeserialize)]
+pub struct WithdrawPayload {
+    pub nonce: u128,
+    pub amount: u128,
+    pub fee_recipient: Option<String>,
+}
+
+impl WithdrawPayload {
+    fn serialize_for_signature(&self, recipient: &Pubkey, token: &Pubkey) -> Result<Vec<u8>> {
+        let mut writer = BufWriter::new(vec![]);
+        near_sdk::borsh::BorshSerialize::serialize(&U128(self.nonce), &mut writer)?;
+        token.to_string().serialize(&mut writer)?;
+        near_sdk::borsh::BorshSerialize::serialize(&U128(self.amount), &mut writer)?;
+        writer.write(&[2])?;
+        recipient.to_string().serialize(&mut writer)?;
+        self.fee_recipient.serialize(&mut writer)?;
+
+        writer
+            .into_inner()
+            .map_err(|_| error!(ErrorCode::InvalidArgs))
+    }
+}
+
+#[derive(AnchorSerialize, AnchorDeserialize)]
+pub struct FinalizeWithdrawData {
+    pub payload: WithdrawPayload,
+    signature: [u8; 65],
+}
+
+impl FinalizeWithdrawData {
+    pub fn verify_signature(
+        &self,
+        recipient: &Pubkey,
+        token: &Pubkey,
+        derived_near_bridge_address: &[u8; 64],
+    ) -> Result<()> {
+        let borsh_encoded = self.payload.serialize_for_signature(recipient, token)?;
+        let hash = keccak::hash(&borsh_encoded);
+
+        let signer =
+            secp256k1_recover(&hash.to_bytes(), self.signature[64], &self.signature[0..64])
+                .map_err(|_| error!(ErrorCode::SignatureVerificationFailed))?;
+
+        require!(
+            signer.0 == *derived_near_bridge_address,
+            ErrorCode::SignatureVerificationFailed
+        );
 
         Ok(())
     }

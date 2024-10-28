@@ -1,4 +1,4 @@
-use crate::constants::AUTHORITY_SEED;
+use crate::constants::{AUTHORITY_SEED, WRAPPED_MINT_SEED};
 use crate::error::ErrorCode;
 use crate::instructions::wormhole_cpi::*;
 use anchor_lang::prelude::*;
@@ -12,16 +12,15 @@ use anchor_spl::token::{Mint, Token};
 #[derive(Accounts)]
 #[instruction(data: DeployTokenData)]
 pub struct DeployToken<'info> {
-    /// CHECK: PDA
     #[account(
         seeds = [AUTHORITY_SEED],
         bump = wormhole.config.bumps.authority,
     )]
-    pub authority: UncheckedAccount<'info>,
+    pub authority: SystemAccount<'info>,
     #[account(
         init,
         payer = wormhole.payer,
-        seeds = [data.metadata.token.as_bytes().as_ref()],
+        seeds = [WRAPPED_MINT_SEED, data.metadata.token.as_bytes().as_ref()],
         bump,
         mint::decimals = data.metadata.decimals,
         mint::authority = authority,

@@ -1,4 +1,4 @@
-use crate::instructions::wormhole_cpi::*;
+use crate::{constants::WRAPPED_MINT_SEED, instructions::wormhole_cpi::*};
 use anchor_lang::{
     prelude::*,
     solana_program::{keccak, secp256k1_recover::secp256k1_recover},
@@ -43,20 +43,17 @@ pub struct FinalizeDeposit<'info> {
     )]
     pub used_nonces: AccountLoader<'info, UsedNonces>,
 
-    #[account(
-        address = data.payload.recipient,
-    )]
     /// CHECK: this can be any type of account
     pub recipient: UncheckedAccount<'info>,
-    /// CHECK: PDA
     #[account(
+        mut,
         seeds = [AUTHORITY_SEED],
         bump = config.bumps.authority,
     )]
-    pub authority: UncheckedAccount<'info>,
+    pub authority: SystemAccount<'info>,
     #[account(
         mut,
-        seeds = [data.payload.token.as_bytes().as_ref()],
+        seeds = [WRAPPED_MINT_SEED, data.payload.token.as_bytes().as_ref()],
         bump,
         mint::authority = authority,
     )]
@@ -82,6 +79,7 @@ impl<'info> FinalizeDeposit<'info> {
             data.payload.nonce,
             &self.used_nonces,
             &mut self.config,
+            self.authority.to_account_info(),
             self.wormhole.payer.to_account_info(),
             &Rent::get()?,
             self.system_program.to_account_info(),
@@ -118,18 +116,17 @@ pub struct DepositPayload {
     pub nonce: u128,
     pub token: String,
     pub amount: u128,
-    pub recipient: Pubkey,
     pub fee_recipient: Option<String>,
 }
 
 impl DepositPayload {
-    fn serialize_for_signature(&self) -> Result<Vec<u8>> {
+    fn serialize_for_signature(&self, recipient: &Pubkey) -> Result<Vec<u8>> {
         let mut writer = BufWriter::new(vec![]);
         near_sdk::borsh::BorshSerialize::serialize(&U128(self.nonce), &mut writer)?;
         self.token.serialize(&mut writer)?;
         near_sdk::borsh::BorshSerialize::serialize(&U128(self.amount), &mut writer)?;
         writer.write(&[2])?;
-        self.recipient.to_string().serialize(&mut writer)?;
+        recipient.to_string().serialize(&mut writer)?;
         self.fee_recipient.serialize(&mut writer)?;
 
         writer
@@ -145,8 +142,8 @@ pub struct FinalizeDepositData {
 }
 
 impl FinalizeDepositData {
-    pub fn verify_signature(&self, derived_near_bridge_address: &[u8; 64]) -> Result<()> {
-        let borsh_encoded = self.payload.serialize_for_signature()?;
+    pub fn verify_signature(&self, recipient: &Pubkey, derived_near_bridge_address: &[u8; 64]) -> Result<()> {
+        let borsh_encoded = self.payload.serialize_for_signature(recipient)?;
         let hash = keccak::hash(&borsh_encoded);
 
         let signer =

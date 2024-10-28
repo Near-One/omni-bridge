@@ -53,6 +53,23 @@ export type BridgeTokenFactory = {
           "pda": {
             "seeds": [
               {
+                "kind": "const",
+                "value": [
+                  119,
+                  114,
+                  97,
+                  112,
+                  112,
+                  101,
+                  100,
+                  95,
+                  109,
+                  105,
+                  110,
+                  116
+                ]
+              },
+              {
                 "kind": "arg",
                 "path": "data.metadata.token"
               }
@@ -364,6 +381,7 @@ export type BridgeTokenFactory = {
         },
         {
           "name": "authority",
+          "writable": true,
           "pda": {
             "seeds": [
               {
@@ -388,6 +406,23 @@ export type BridgeTokenFactory = {
           "writable": true,
           "pda": {
             "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  119,
+                  114,
+                  97,
+                  112,
+                  112,
+                  101,
+                  100,
+                  95,
+                  109,
+                  105,
+                  110,
+                  116
+                ]
+              },
               {
                 "kind": "arg",
                 "path": "data.payload.token"
@@ -688,6 +723,7 @@ export type BridgeTokenFactory = {
         },
         {
           "name": "authority",
+          "writable": true,
           "pda": {
             "seeds": [
               {
@@ -983,7 +1019,7 @@ export type BridgeTokenFactory = {
           "name": "data",
           "type": {
             "defined": {
-              "name": "finalizeDepositData"
+              "name": "finalizeWithdrawData"
             }
           }
         }
@@ -1021,6 +1057,28 @@ export type BridgeTokenFactory = {
                   102,
                   105,
                   103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "authority",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
                 ]
               }
             ]
@@ -1422,6 +1480,23 @@ export type BridgeTokenFactory = {
           "writable": true,
           "pda": {
             "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  119,
+                  114,
+                  97,
+                  112,
+                  112,
+                  101,
+                  100,
+                  95,
+                  109,
+                  105,
+                  110,
+                  116
+                ]
+              },
               {
                 "kind": "arg",
                 "path": "payload.token"
@@ -1983,10 +2058,6 @@ export type BridgeTokenFactory = {
             "type": "u128"
           },
           {
-            "name": "recipient",
-            "type": "pubkey"
-          },
-          {
             "name": "feeRecipient",
             "type": {
               "option": "string"
@@ -2005,6 +2076,31 @@ export type BridgeTokenFactory = {
             "type": {
               "defined": {
                 "name": "depositPayload"
+              }
+            }
+          },
+          {
+            "name": "signature",
+            "type": {
+              "array": [
+                "u8",
+                65
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "finalizeWithdrawData",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "payload",
+            "type": {
+              "defined": {
+                "name": "withdrawPayload"
               }
             }
           },
@@ -2120,6 +2216,28 @@ export type BridgeTokenFactory = {
       }
     },
     {
+      "name": "withdrawPayload",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "nonce",
+            "type": "u128"
+          },
+          {
+            "name": "amount",
+            "type": "u128"
+          },
+          {
+            "name": "feeRecipient",
+            "type": {
+              "option": "string"
+            }
+          }
+        ]
+      }
+    },
+    {
       "name": "wormholeBumps",
       "type": {
         "kind": "struct",
@@ -2180,6 +2298,11 @@ export type BridgeTokenFactory = {
       "name": "vaultSeed",
       "type": "bytes",
       "value": "[118, 97, 117, 108, 116]"
+    },
+    {
+      "name": "wrappedMintSeed",
+      "type": "bytes",
+      "value": "[119, 114, 97, 112, 112, 101, 100, 95, 109, 105, 110, 116]"
     }
   ]
 };

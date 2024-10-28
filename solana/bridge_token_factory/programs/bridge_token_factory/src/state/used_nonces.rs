@@ -20,8 +20,7 @@ pub struct UsedNonces {
 #[cfg(feature = "idl-build")]
 #[account(zero_copy(unsafe))]
 #[repr(C)]
-pub struct UsedNonces {
-}
+pub struct UsedNonces {}
 
 impl UsedNonces {
     pub fn full_rent(rent: &Rent) -> u64 {
@@ -41,6 +40,7 @@ impl UsedNonces {
         nonce: u128,
         loader: &AccountLoader<'info, UsedNonces>,
         config: &mut Account<'info, Config>,
+        rent_reserve: AccountInfo<'info>,
         payer: AccountInfo<'info>,
         rent: &Rent,
         system_program: AccountInfo<'info>,
@@ -48,34 +48,53 @@ impl UsedNonces {
         if config.max_used_nonce < nonce {
             config.max_used_nonce = nonce;
         }
-        let config_rent_exempt = rent.minimum_balance(config.to_account_info().data_len());
-        let current_config_lamports = config.to_account_info().lamports();
         // use max_used_nonce instead of the requested one to ignore the usage of the nonces from the gap
-        let expected_config_lamports =
-            config_rent_exempt + Self::rent_level(config.max_used_nonce, rent)?;
-        if current_config_lamports < expected_config_lamports {
+        let expected_rent_reserve_lamports =
+            rent.minimum_balance(0) + Self::rent_level(config.max_used_nonce, rent)?;
+        let current_rent_reserve_lamports = rent_reserve.lamports();
+        if current_rent_reserve_lamports < expected_rent_reserve_lamports {
             // pay for the rent of the next account
             transfer(
                 CpiContext::new(
                     system_program,
                     Transfer {
                         from: payer,
-                        to: config.to_account_info(),
+                        to: rent_reserve,
                     },
                 ),
-                expected_config_lamports - current_config_lamports,
+                expected_rent_reserve_lamports - current_rent_reserve_lamports,
             )?;
         } else {
             // compensate for the account creation
-            let compensation = current_config_lamports - expected_config_lamports;
+            let compensation = current_rent_reserve_lamports - expected_rent_reserve_lamports;
             if compensation > 0 {
-                config.sub_lamports(compensation)?;
-                payer.add_lamports(compensation)?;
+                // compensate expenses for the account creation
+                transfer(
+                    CpiContext::new(
+                        system_program,
+                        Transfer {
+                            from: rent_reserve,
+                            to: payer,
+                        },
+                    ),
+                    expected_rent_reserve_lamports - current_rent_reserve_lamports,
+                )?;
             }
         }
         #[cfg(not(feature = "idl-build"))]
         {
-            let mut used_nonces = loader.load_mut()?;
+            let mut used_nonces = match loader.load_init() {
+                Ok(used_nonces) => used_nonces,
+                Err(Error::AnchorError(e))
+                    if e.error_code_number
+                        == u32::from(
+                            anchor_lang::error::ErrorCode::AccountDiscriminatorAlreadySet,
+                        ) =>
+                {
+                    loader.load_mut()?
+                }
+                Err(e) => return Err(e.with_account_name("used_nonces")),
+            };
             let mut nonce_slot = unsafe {
                 used_nonces
                     .used
