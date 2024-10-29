@@ -113,13 +113,13 @@ impl ParsedVAA {
 
 sol! {
     struct InitTransferWh {
+        address sender;
+        address tokenAddress;
         uint128 nonce;
-        string token;
         uint128 amount;
         uint128 fee;
         uint128 nativeFee;
         string recipient;
-        address sender;
         string message;
     }
 
@@ -145,7 +145,7 @@ impl TryInto<InitTransferMessage> for ParsedVAA {
 
         Ok(InitTransferMessage {
             transfer: TransferMessage {
-                token: transfer.token.parse().map_err(stringify)?,
+                token: to_omni_address(self.emitter_chain, &transfer.tokenAddress.0 .0),
                 amount: transfer.amount.into(),
                 fee: Fee {
                     fee: transfer.fee.into(),
