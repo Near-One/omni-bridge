@@ -38,8 +38,7 @@ pub struct Repay<'info> {
 pub struct RepayPayload {
     pub token: String,
     pub amount: u128,
-    pub recipient: Pubkey,
-    pub fee_recipient: Option<String>,
+    pub recipient: String,
 }
 
 impl<'info> Repay<'info> {

@@ -145,6 +145,13 @@ export class OmniBridgeSolanaSDK {
     );
   }
 
+  vaultId({mint}: {mint: PublicKey}): [PublicKey, number] {
+    return PublicKey.findProgramAddressSync(
+      [OmniBridgeSolanaSDK.VAULT_SEED, mint.toBuffer()],
+      this.programId,
+    );
+  }
+
   constructor({
     provider,
     wormholeProgramId,
@@ -326,6 +333,131 @@ export class OmniBridgeSolanaSDK {
         systemProgram: SystemProgram.programId,
         tokenProgram: TOKEN_PROGRAM_ID,
         tokenAccount,
+        associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+      })
+      .instruction();
+  }
+
+  async repay({
+    token,
+    from,
+    user,
+    amount,
+    recipient,
+    payer,
+    sequenceNumber,
+  }: {
+    token: string;
+    from?: PublicKey;
+    user?: PublicKey;
+    amount: BN;
+    recipient: string;
+    payer?: PublicKey;
+    sequenceNumber?: BN;
+  }) {
+    const [config] = this.configId();
+    const [mint] = this.wrappedMintId({token});
+
+    if (!sequenceNumber) {
+      sequenceNumber = await this.fetchNextSequenceNumber();
+    }
+
+    if (!user) {
+      user = this.provider.publicKey!;
+    }
+
+    if (!from) {
+      from = getAssociatedTokenAddressSync(mint, user, true);
+    }
+
+    return await this.program.methods
+      .repay({
+        token,
+        amount,
+        recipient,
+      })
+      .accountsStrict({
+        wormhole: {
+          config,
+          bridge: this.wormholeBridgeId()[0],
+          feeCollector: this.wormholeFeeCollectorId()[0],
+          sequence: this.wormholeSequenceId()[0],
+          clock: SYSVAR_CLOCK_PUBKEY,
+          rent: SYSVAR_RENT_PUBKEY,
+          systemProgram: SystemProgram.programId,
+          wormholeProgram: this.wormholeProgramId,
+          message: this.messageId({sequenceNumber})[0],
+          payer: payer || this.provider.publicKey!,
+        },
+        authority: this.authority()[0],
+        mint,
+        systemProgram: SystemProgram.programId,
+        tokenProgram: TOKEN_PROGRAM_ID,
+        from,
+        user,
+      })
+      .instruction();
+  }
+
+  async registerMint({
+    mint,
+    name = '',
+    symbol = '',
+    sequenceNumber,
+    overrideAuthority = null,
+    useMetaplex,
+  }: {
+    mint: PublicKey;
+    name?: string;
+    symbol?: string;
+    sequenceNumber?: BN;
+    overrideAuthority?: PublicKey | null;
+    useMetaplex?: boolean;
+  }) {
+    const [config] = this.configId();
+    const [metadata] = PublicKey.findProgramAddressSync(
+      [
+        Buffer.from('metadata', 'utf-8'),
+        MPL_PROGRAM_ID.toBuffer(),
+        mint.toBuffer(),
+      ],
+      MPL_PROGRAM_ID,
+    );
+
+    if (!sequenceNumber) {
+      sequenceNumber = await this.fetchNextSequenceNumber();
+    }
+
+    const mintInfo = await this.provider.connection.getAccountInfo(mint);
+
+    if (useMetaplex === undefined && !overrideAuthority) {
+      if (mintInfo?.owner.equals(TOKEN_PROGRAM_ID)) {
+        useMetaplex = true;
+      }
+    }
+
+    return await this.program.methods
+      .registerMint({name, symbol})
+      .accountsStrict({
+        authority: this.authority()[0],
+        mint,
+        wormhole: {
+          config,
+          bridge: this.wormholeBridgeId()[0],
+          feeCollector: this.wormholeFeeCollectorId()[0],
+          sequence: this.wormholeSequenceId()[0],
+          clock: SYSVAR_CLOCK_PUBKEY,
+          rent: SYSVAR_RENT_PUBKEY,
+          systemProgram: SystemProgram.programId,
+          wormholeProgram: this.wormholeProgramId,
+          message: this.messageId({sequenceNumber})[0],
+          payer: this.provider.publicKey!,
+        },
+        metadata: useMetaplex ? metadata : null,
+        systemProgram: SystemProgram.programId,
+        tokenProgram: mintInfo!.owner,
+        overrideAuthority,
+        vault: this.vaultId({mint})[0],
         associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
       })
       .instruction();

@@ -2165,13 +2165,7 @@
           },
           {
             "name": "recipient",
-            "type": "pubkey"
-          },
-          {
-            "name": "fee_recipient",
-            "type": {
-              "option": "string"
-            }
+            "type": "string"
           }
         ]
       }
@@ -2187,13 +2181,7 @@
           },
           {
             "name": "recipient",
-            "type": "pubkey"
-          },
-          {
-            "name": "fee_recipient",
-            "type": {
-              "option": "string"
-            }
+            "type": "string"
           }
         ]
       }

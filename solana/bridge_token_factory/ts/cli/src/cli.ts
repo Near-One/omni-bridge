@@ -3,6 +3,9 @@ import {setupContext} from './context';
 import {installInitializeCLI} from './initialize';
 import {installDeployTokenCLI} from './deployToken';
 import {installFinalizeDepositCLI} from './finalizeDeposit';
+import {installRepayCLI} from './repay';
+import {installRegisterMintCLI} from './registerMint';
+import {installCreateTokenCLI} from './createToken';
 
 export function cli() {
   const program = new Command();
@@ -21,9 +24,12 @@ export function cli() {
     .option('--print <multisig|legacy|0>', 'Print tx instead of running')
     .hook('preAction', (command: Command) => setupContext(command.opts()));
 
+  installCreateTokenCLI(program);
   installInitializeCLI(program);
   installDeployTokenCLI(program);
   installFinalizeDepositCLI(program);
+  installRepayCLI(program);
+  installRegisterMintCLI(program);
 
   return program;
 }

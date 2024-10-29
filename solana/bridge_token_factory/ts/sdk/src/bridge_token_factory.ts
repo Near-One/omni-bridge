@@ -2171,13 +2171,7 @@ export type BridgeTokenFactory = {
           },
           {
             "name": "recipient",
-            "type": "pubkey"
-          },
-          {
-            "name": "feeRecipient",
-            "type": {
-              "option": "string"
-            }
+            "type": "string"
           }
         ]
       }
@@ -2193,13 +2187,7 @@ export type BridgeTokenFactory = {
           },
           {
             "name": "recipient",
-            "type": "pubkey"
-          },
-          {
-            "name": "feeRecipient",
-            "type": {
-              "option": "string"
-            }
+            "type": "string"
           }
         ]
       }

@@ -50,16 +50,14 @@ pub struct Send<'info> {
 #[derive(AnchorDeserialize, AnchorSerialize, Clone, Default)]
 pub struct SendData {
     pub amount: u128,
-    pub recipient: Pubkey,
-    pub fee_recipient: Option<String>,
+    pub recipient: String,
 }
 
 #[derive(AnchorSerialize, AnchorDeserialize)]
 pub struct SendPayload {
     pub token: String,
     pub amount: u128,
-    pub recipient: Pubkey,
-    pub fee_recipient: Option<String>,
+    pub recipient: String,
 }
 
 impl<'info> Send<'info> {
@@ -82,7 +80,6 @@ impl<'info> Send<'info> {
             token: self.mint.key().to_string(),
             amount: data.amount,
             recipient: data.recipient,
-            fee_recipient: data.fee_recipient,
         }
         .try_to_vec()?; // TODO: correct message payload
 
