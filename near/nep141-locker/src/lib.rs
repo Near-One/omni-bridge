@@ -532,35 +532,34 @@ impl Contract {
 
             let amount_to_transfer = U128(transfer_message.amount.0 - transfer_message.fee.fee.0);
 
-            let mut promise =
-                if token == self.wnear_account_id && transfer_message.msg.is_empty() {
-                    ext_wnear_token::ext(self.wnear_account_id.clone())
-                        .with_static_gas(WNEAR_WITHDRAW_GAS)
-                        .with_attached_deposit(ONE_YOCTO)
-                        .near_withdraw(amount_to_transfer)
-                        .then(
-                            Promise::new(recipient.clone())
-                                .transfer(NearToken::from_yoctonear(amount_to_transfer.0)),
-                        )
+            let mut promise = if token == self.wnear_account_id && transfer_message.msg.is_empty() {
+                ext_wnear_token::ext(self.wnear_account_id.clone())
+                    .with_static_gas(WNEAR_WITHDRAW_GAS)
+                    .with_attached_deposit(ONE_YOCTO)
+                    .near_withdraw(amount_to_transfer)
+                    .then(
+                        Promise::new(recipient.clone())
+                            .transfer(NearToken::from_yoctonear(amount_to_transfer.0)),
+                    )
+            } else {
+                let transfer = ext_token::ext(token.clone()).with_attached_deposit(ONE_YOCTO);
+                if transfer_message.msg.is_empty() {
+                    transfer.with_static_gas(FT_TRANSFER_GAS).ft_transfer(
+                        recipient.clone(),
+                        amount_to_transfer,
+                        None,
+                    )
                 } else {
-                    let transfer = ext_token::ext(token.clone()).with_attached_deposit(ONE_YOCTO);
-                    if transfer_message.msg.is_empty() {
-                        transfer.with_static_gas(FT_TRANSFER_GAS).ft_transfer(
+                    transfer
+                        .with_static_gas(FT_TRANSFER_CALL_GAS)
+                        .ft_transfer_call(
                             recipient.clone(),
                             amount_to_transfer,
                             None,
+                            transfer_message.msg.clone(),
                         )
-                    } else {
-                        transfer
-                            .with_static_gas(FT_TRANSFER_CALL_GAS)
-                            .ft_transfer_call(
-                                recipient.clone(),
-                                amount_to_transfer,
-                                None,
-                                transfer_message.msg.clone(),
-                            )
-                    }
-                };
+                }
+            };
 
             if transfer_message.fee.fee.0 > 0 {
                 require!(
