@@ -191,19 +191,20 @@ contract BridgeTokenFactory is
             IERC20(tokenAddress).safeTransferFrom(msg.sender, address(this), amount);
         }
 
-        initTransferExtension(initTransferNonce, tokenAddress, amount, fee, nativeFee, recipient, msg.sender, extensionValue);
+        initTransferExtension(msg.sender, tokenAddress, initTransferNonce, amount, fee, nativeFee, recipient, message, extensionValue);
 
         emit BridgeTypes.InitTransfer(msg.sender, tokenAddress, initTransferNonce, amount, fee, nativeFee, recipient, message);
     }
 
     function initTransferExtension(
-        uint128 nonce,
+        address sender,
         address tokenAddress,
+        uint128 nonce,
         uint128 amount,
         uint128 fee,
         uint128 nativeFee,
         string calldata recipient,
-        address sender,
+        string calldata message,
         uint256 value
     ) internal virtual {}
 
