@@ -5,9 +5,11 @@ authors = ["Karim Alabtakh <karim.alabtakh@nearone.org>"]
 resolver = "2"
 members = [
     "nep141-locker",
+    "token-deployer",
     "omni-prover/omni-prover",
     "omni-prover/wormhole-omni-prover-proxy",
     "omni-prover/evm-prover",
+    "omni-token",
     "omni-types",
     "omni-tests",
     "mock/mock-token",
