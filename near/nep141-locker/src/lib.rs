@@ -59,6 +59,7 @@ enum StorageKey {
     TokenIdToAddress,
     AccountsBalances,
     TokenAddressToId,
+    TokenDeployerAccounts,
 }
 
 #[derive(AccessControlRole, Deserialize, Serialize, Copy, Clone)]
@@ -133,6 +134,7 @@ pub struct Contract {
     pub finalised_transfers: LookupMap<TransferId, Option<NativeFee>>,
     pub token_id_to_address: LookupMap<(ChainKind, AccountId), OmniAddress>,
     pub token_address_to_id: LookupMap<OmniAddress, AccountId>,
+    pub token_deployer_accounts: LookupMap<ChainKind, AccountId>,
     pub mpc_signer: AccountId,
     pub current_nonce: Nonce,
     pub accounts_balances: LookupMap<AccountId, StorageBalance>,
@@ -203,6 +205,7 @@ impl Contract {
             finalised_transfers: LookupMap::new(StorageKey::FinalisedTransfers),
             token_id_to_address: LookupMap::new(StorageKey::TokenIdToAddress),
             token_address_to_id: LookupMap::new(StorageKey::TokenAddressToId),
+            token_deployer_accounts: LookupMap::new(StorageKey::TokenDeployerAccounts),
             mpc_signer,
             current_nonce: nonce.0,
             accounts_balances: LookupMap::new(StorageKey::AccountsBalances),
@@ -817,6 +820,11 @@ impl Contract {
     #[access_control_any(roles(Role::DAO))]
     pub fn add_factory(&mut self, address: OmniAddress) {
         self.factories.insert(&(&address).into(), &address);
+    }
+
+    #[access_control_any(roles(Role::DAO))]
+    pub fn add_token_deployer(&mut self, chain: ChainKind, account_id: AccountId) {
+        self.token_deployer_accounts.insert(&chain, &account_id);
     }
 }
 

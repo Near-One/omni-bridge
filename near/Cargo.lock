@@ -3886,6 +3886,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "omni-token"
+version = "0.1.0"
+dependencies = [
+ "near-contract-standards",
+ "near-sdk",
+]
+
+[[package]]
 name = "omni-types"
 version = "2.0.0"
 dependencies = [
@@ -5794,6 +5802,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a56eb9e5a28c3c4f0a6aa8ea70a8ad2d6c53e4bf364571ce78f57945b6766843"
 dependencies = [
  "rand",
+]
+
+[[package]]
+name = "token-deployer"
+version = "0.1.0"
+dependencies = [
+ "borsh",
+ "hex",
+ "near-contract-standards",
+ "near-plugins",
+ "near-sdk",
+ "omni-types",
+ "serde",
 ]
 
 [[package]]
