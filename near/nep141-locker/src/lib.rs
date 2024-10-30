@@ -394,10 +394,17 @@ impl Contract {
             require!(&transfer_message.fee == fee, "Invalid fee");
         }
 
+        let token_address = self
+            .get_token_address(
+                transfer_message.get_destination_chain(),
+                self.get_token_id(&transfer_message.token),
+            )
+            .unwrap_or_else(|| env::panic_str("ERR_FAILED_TO_GET_TOKEN_ADDRESS"));
+
         let transfer_payload = TransferMessagePayload {
             prefix: PayloadType::TransferMessage,
             nonce,
-            token: self.get_token_id(&transfer_message.token),
+            token_address,
             amount: U128(transfer_message.amount.0 - transfer_message.fee.fee.0),
             recipient: transfer_message.recipient,
             fee_recipient,

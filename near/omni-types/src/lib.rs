@@ -292,6 +292,10 @@ impl TransferMessage {
     pub fn get_transfer_id(&self) -> TransferId {
         (self.get_origin_chain(), self.origin_nonce.0)
     }
+
+    pub fn get_destination_chain(&self) -> ChainKind {
+        self.recipient.get_chain()
+    }
 }
 
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Debug, Clone)]
@@ -305,7 +309,7 @@ pub enum PayloadType {
 pub struct TransferMessagePayload {
     pub prefix: PayloadType,
     pub nonce: U128,
-    pub token: AccountId,
+    pub token_address: OmniAddress,
     pub amount: U128,
     pub recipient: OmniAddress,
     pub fee_recipient: Option<AccountId>,

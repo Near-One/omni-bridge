@@ -134,7 +134,8 @@ contract BridgeTokenFactory is
         bytes memory borshEncoded = bytes.concat(
             bytes1(uint8(BridgeTypes.PayloadType.TransferMessage)),
             Borsh.encodeUint128(payload.nonce),
-            Borsh.encodeString(payload.token),
+            bytes1(omniBridgeChainId),
+            Borsh.encodeAddress(payload.tokenAddress),
             Borsh.encodeUint128(payload.amount),
             bytes1(omniBridgeChainId),
             Borsh.encodeAddress(payload.recipient),
@@ -149,19 +150,18 @@ contract BridgeTokenFactory is
         }
 
         completedTransfers[payload.nonce] = true;
-        address tokenAddress = nearToEthToken[payload.token];
         
-        if (tokenAddress != address(0)) {
-            BridgeToken(tokenAddress).mint(payload.recipient, payload.amount);
+        if (isBridgeToken[payload.tokenAddress]) {
+            BridgeToken(payload.tokenAddress).mint(payload.recipient, payload.amount);
         } else {
-            IERC20(tokenAddress).safeTransfer(payload.recipient, payload.amount);
+            IERC20(payload.tokenAddress).safeTransfer(payload.recipient, payload.amount);
         }
 
         finTransferExtension(payload);
 
         emit BridgeTypes.FinTransfer(
             payload.nonce,
-            payload.token,
+            payload.tokenAddress,
             payload.amount,
             payload.recipient,
             payload.feeRecipient
