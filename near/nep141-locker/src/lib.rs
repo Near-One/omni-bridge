@@ -797,6 +797,10 @@ impl Contract {
             .sdk_expect("The transfer does not exist")
     }
 
+    pub fn is_transfer_finalised(&self, chain: ChainKind, nonce: U128) -> bool {
+        self.finalised_transfers.contains_key(&(chain, nonce.0))
+    }
+
     #[access_control_any(roles(Role::DAO))]
     pub fn add_factory(&mut self, address: OmniAddress) {
         self.factories.insert(&(&address).into(), &address);
