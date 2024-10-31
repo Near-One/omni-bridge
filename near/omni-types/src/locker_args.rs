@@ -30,3 +30,9 @@ pub struct BindTokenArgs {
     pub chain_kind: ChainKind,
     pub prover_args: Vec<u8>,
 }
+
+#[derive(BorshDeserialize, BorshSerialize, Clone)]
+pub struct DeployTokenArgs {
+    pub chain_kind: ChainKind,
+    pub prover_args: Vec<u8>,
+}

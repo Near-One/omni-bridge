@@ -1,4 +1,5 @@
-use near_sdk::{env, near, AccountId, Gas, NearToken, PanicOnDefault, Promise};
+use near_sdk::{env, near, serde_json, AccountId, Gas, NearToken, PanicOnDefault, Promise};
+use omni_types::BasicMetadata;
 
 const BRIDGE_TOKEN_INIT_BALANCE: NearToken = NearToken::from_near(3);
 const NO_DEPOSIT: NearToken = NearToken::from_near(0);
@@ -20,7 +21,7 @@ impl Contract {
         Self { controller }
     }
 
-    pub fn deploy_token(&mut self, account_id: AccountId, init_args: Vec<u8>) -> Promise {
+    pub fn deploy_token(&mut self, account_id: AccountId, metadata: BasicMetadata) -> Promise {
         assert_eq!(
             env::predecessor_account_id(),
             self.controller,
@@ -33,7 +34,7 @@ impl Contract {
             .deploy_contract(BRIDGE_TOKEN_BINARY.to_vec())
             .function_call(
                 "new".to_string(),
-                init_args,
+                serde_json::to_string(&metadata).unwrap().into_bytes(),
                 NO_DEPOSIT,
                 OMNI_TOKEN_INIT_GAS,
             )

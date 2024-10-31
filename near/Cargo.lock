@@ -3929,6 +3929,7 @@ version = "0.1.0"
 dependencies = [
  "near-contract-standards",
  "near-sdk",
+ "omni-types",
 ]
 
 [[package]]

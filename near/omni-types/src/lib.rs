@@ -175,6 +175,17 @@ impl OmniAddress {
             OmniAddress::Base(_) => ChainKind::Base,
         }
     }
+
+    pub fn encode(&self, separator: char) -> String {
+        let (chain_str, recipient) = match self {
+            OmniAddress::Eth(recipient) => ("eth", recipient.to_string()),
+            OmniAddress::Near(recipient) => ("near", recipient.to_string()),
+            OmniAddress::Sol(recipient) => ("sol", recipient.to_string()),
+            OmniAddress::Arb(recipient) => ("arb", recipient.to_string()),
+            OmniAddress::Base(recipient) => ("base", recipient.to_string()),
+        };
+        format!("{chain_str}{separator}{recipient}")
+    }
 }
 
 impl FromStr for OmniAddress {
@@ -196,14 +207,7 @@ impl FromStr for OmniAddress {
 
 impl fmt::Display for OmniAddress {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let (chain_str, recipient) = match self {
-            OmniAddress::Eth(recipient) => ("eth", recipient.to_string()),
-            OmniAddress::Near(recipient) => ("near", recipient.to_string()),
-            OmniAddress::Sol(recipient) => ("sol", recipient.to_string()),
-            OmniAddress::Arb(recipient) => ("arb", recipient.to_string()),
-            OmniAddress::Base(recipient) => ("base", recipient.to_string()),
-        };
-        write!(f, "{chain_str}:{recipient}")
+        write!(f, "{}", &self.encode(':'))
     }
 }
 
@@ -385,4 +389,11 @@ pub type Nonce = u128;
 
 pub fn stringify<T: std::fmt::Display>(item: T) -> String {
     item.to_string()
+}
+
+#[derive(Deserialize, Serialize, Clone)]
+pub struct BasicMetadata {
+    pub name: String,
+    pub symbol: String,
+    pub decimals: u8,
 }
