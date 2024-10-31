@@ -8,7 +8,7 @@ use near_contract_standards::fungible_token::metadata::FungibleTokenMetadata;
 use near_contract_standards::fungible_token::receiver::FungibleTokenReceiver;
 use near_contract_standards::storage_management::StorageBalance;
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
-use near_sdk::collections::LookupMap;
+use near_sdk::collections::{LookupMap, LookupSet};
 use near_sdk::json_types::U128;
 use near_sdk::serde::{Deserialize, Serialize};
 use near_sdk::{
@@ -65,6 +65,7 @@ enum StorageKey {
     AccountsBalances,
     TokenAddressToId,
     TokenDeployerAccounts,
+    DeployedTokens,
 }
 
 #[derive(AccessControlRole, Deserialize, Serialize, Copy, Clone)]
@@ -144,6 +145,7 @@ pub struct Contract {
     pub finalised_transfers: LookupMap<TransferId, Option<NativeFee>>,
     pub token_id_to_address: LookupMap<(ChainKind, AccountId), OmniAddress>,
     pub token_address_to_id: LookupMap<OmniAddress, AccountId>,
+    pub deployed_tokens: LookupSet<AccountId>,
     pub token_deployer_accounts: LookupMap<ChainKind, AccountId>,
     pub mpc_signer: AccountId,
     pub current_nonce: Nonce,
@@ -215,6 +217,7 @@ impl Contract {
             finalised_transfers: LookupMap::new(StorageKey::FinalisedTransfers),
             token_id_to_address: LookupMap::new(StorageKey::TokenIdToAddress),
             token_address_to_id: LookupMap::new(StorageKey::TokenAddressToId),
+            deployed_tokens: LookupSet::new(StorageKey::DeployedTokens),
             token_deployer_accounts: LookupMap::new(StorageKey::TokenDeployerAccounts),
             mpc_signer,
             current_nonce: nonce.0,
@@ -775,10 +778,19 @@ impl Contract {
             .unwrap_or_else(|_| env::panic_str("ERR_PARSE_ACCOUNT"));
 
         let storage_usage = env::storage_usage();
-        self.token_id_to_address
-            .insert(&(chain, token_id.clone()), &metadata.token_address);
-        self.token_address_to_id
-            .insert(&metadata.token_address, &token_id);
+        require!(
+            self.token_id_to_address
+                .insert(&(chain, token_id.clone()), &metadata.token_address)
+                .is_none(),
+            "ERR_TOKEN_EXIST"
+        );
+        require!(
+            self.token_address_to_id
+                .insert(&metadata.token_address, &token_id)
+                .is_none(),
+            "ERR_TOKEN_EXIST"
+        );
+        require!(self.deployed_tokens.insert(&token_id), "ERR_TOKEN_EXIST");
         let required_deposit = env::storage_byte_cost()
             .saturating_mul((env::storage_usage().saturating_sub(storage_usage)).into())
             .saturating_add(BRIDGE_TOKEN_INIT_BALANCE);
