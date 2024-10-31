@@ -15,15 +15,17 @@ use near_sdk::{
     env, ext_contract, near, require, serde_json, AccountId, BorshStorageKey, Gas, NearToken,
     PanicOnDefault, Promise, PromiseError, PromiseOrValue, PromiseResult,
 };
-use omni_types::locker_args::{BindTokenArgs, ClaimFeeArgs, FinTransferArgs, StorageDepositArgs};
+use omni_types::locker_args::{
+    BindTokenArgs, ClaimFeeArgs, DeployTokenArgs, FinTransferArgs, StorageDepositArgs,
+};
 use omni_types::mpc_types::SignatureResponse;
 use omni_types::near_events::Nep141LockerEvent;
 use omni_types::prover_args::VerifyProofArgs;
 use omni_types::prover_result::ProverResult;
 use omni_types::{
-    ChainKind, ClaimNativeFeePayload, Fee, InitTransferMsg, MetadataPayload, NativeFee, Nonce,
-    OmniAddress, PayloadType, SignRequest, TransferId, TransferMessage, TransferMessagePayload,
-    UpdateFee,
+    BasicMetadata, ChainKind, ClaimNativeFeePayload, Fee, InitTransferMsg, MetadataPayload,
+    NativeFee, Nonce, OmniAddress, PayloadType, SignRequest, TransferId, TransferMessage,
+    TransferMessagePayload, UpdateFee,
 };
 use storage::{TransferMessageStorage, TransferMessageStorageValue};
 
@@ -45,10 +47,13 @@ const FT_TRANSFER_GAS: Gas = Gas::from_tgas(5);
 const WNEAR_WITHDRAW_GAS: Gas = Gas::from_tgas(10);
 const STORAGE_BALANCE_OF_GAS: Gas = Gas::from_tgas(3);
 const STORAGE_DEPOSIT_GAS: Gas = Gas::from_tgas(3);
+const DEPLOY_TOKEN_CALLBACK_GAS: Gas = Gas::from_tgas(75);
+const DEPLOY_TOKEN_GAS: Gas = Gas::from_tgas(50);
+
 const NO_DEPOSIT: NearToken = NearToken::from_near(0);
 const ONE_YOCTO: NearToken = NearToken::from_yoctonear(1);
 const NEP141_DEPOSIT: NearToken = NearToken::from_yoctonear(1_250_000_000_000_000_000_000);
-
+const BRIDGE_TOKEN_INIT_BALANCE: NearToken = NearToken::from_near(3);
 const SIGN_PATH: &str = "bridge-1";
 
 #[derive(BorshSerialize, BorshStorageKey)]
@@ -114,6 +119,11 @@ pub trait Prover {
 #[ext_contract(ext_wnear_token)]
 pub trait ExtWNearToken {
     fn near_withdraw(&self, amount: U128);
+}
+
+#[ext_contract(ext_deployer)]
+pub trait TokenDeployer {
+    fn deploy_token(&self, account_id: AccountId, metadata: BasicMetadata) -> Promise;
 }
 
 #[near(contract_state)]
@@ -719,6 +729,76 @@ impl Contract {
         ext_token::ext(token)
             .with_static_gas(LOG_METADATA_GAS)
             .ft_transfer(fin_transfer.fee_recipient, U128(fee), None)
+    }
+
+    #[payable]
+    pub fn deploy_token(&mut self, #[serializer(borsh)] args: DeployTokenArgs) -> Promise {
+        ext_prover::ext(self.prover_account.clone())
+            .with_static_gas(VERIFY_POOF_GAS)
+            .with_attached_deposit(NO_DEPOSIT)
+            .verify_proof(VerifyProofArgs {
+                prover_id: args.chain_kind.as_ref().to_owned(),
+                prover_args: args.prover_args,
+            })
+            .then(
+                Self::ext(env::current_account_id())
+                    .with_attached_deposit(NO_DEPOSIT)
+                    .with_static_gas(DEPLOY_TOKEN_CALLBACK_GAS)
+                    .bind_token_callback(near_sdk::env::attached_deposit()),
+            )
+    }
+
+    #[private]
+    pub fn deploy_token_callback(
+        &mut self,
+        attached_deposit: NearToken,
+        #[callback_result]
+        #[serializer(borsh)]
+        call_result: Result<ProverResult, PromiseError>,
+    ) -> Promise {
+        let Ok(ProverResult::TokenMetadata(metadata)) = call_result else {
+            env::panic_str("ERR_INVALID_PROOF");
+        };
+
+        let chain = metadata.emitter_address.get_chain();
+        require!(
+            self.factories.get(&chain) == Some(metadata.emitter_address),
+            "ERR_UNKNOWN_FACTORY"
+        );
+        let deployer = self
+            .token_deployer_accounts
+            .get(&chain)
+            .unwrap_or_else(|| env::panic_str("ERR_DEPLOYER_NOT_SET"));
+        let prefix = metadata.token_address.encode('-');
+        let token_id: AccountId = format!("{}.{}", prefix, deployer)
+            .parse()
+            .unwrap_or_else(|_| env::panic_str("ERR_PARSE_ACCOUNT"));
+
+        let storage_usage = env::storage_usage();
+        self.token_id_to_address
+            .insert(&(chain, token_id.clone()), &metadata.token_address);
+        self.token_address_to_id
+            .insert(&metadata.token_address, &token_id);
+        let required_deposit = env::storage_byte_cost()
+            .saturating_mul((env::storage_usage().saturating_sub(storage_usage)).into())
+            .saturating_add(BRIDGE_TOKEN_INIT_BALANCE);
+
+        require!(
+            attached_deposit >= required_deposit,
+            "ERROR: The deposit is not sufficient to cover the storage."
+        );
+
+        ext_deployer::ext(deployer)
+            .with_static_gas(DEPLOY_TOKEN_GAS)
+            .with_attached_deposit(BRIDGE_TOKEN_INIT_BALANCE)
+            .deploy_token(
+                token_id,
+                BasicMetadata {
+                    name: metadata.name,
+                    symbol: metadata.symbol,
+                    decimals: metadata.decimals,
+                },
+            )
     }
 
     #[payable]

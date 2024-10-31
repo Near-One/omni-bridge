@@ -14,6 +14,7 @@ use near_sdk::{
     assert_one_yocto, env, ext_contract, near, require, AccountId, Gas, NearToken, PanicOnDefault,
     Promise, PromiseOrValue, PublicKey, StorageUsage,
 };
+use omni_types::BasicMetadata;
 /// Gas to call finish withdraw method on factory.
 const FINISH_WITHDRAW_GAS: Gas = Gas::from_tgas(50);
 const OUTER_UPGRADE_GAS: Gas = Gas::from_tgas(15);
@@ -44,7 +45,7 @@ pub trait ExtOmniTokenFactory {
 #[near]
 impl OmniToken {
     #[init]
-    pub fn new(controller: AccountId, metadta: Option<FungibleTokenMetadata>) -> Self {
+    pub fn new(controller: AccountId, metadta: BasicMetadata) -> Self {
         let current_account_id = env::current_account_id();
         let deployer_account = current_account_id
             .get_parent_account_id()
@@ -58,7 +59,18 @@ impl OmniToken {
         Self {
             controller,
             token: FungibleToken::new(b"t".to_vec()),
-            metadata: LazyOption::new(b"m".to_vec(), metadta.as_ref()),
+            metadata: LazyOption::new(
+                b"m".to_vec(),
+                Some(&FungibleTokenMetadata {
+                    spec: FT_METADATA_SPEC.to_string(),
+                    name: metadta.name,
+                    symbol: metadta.symbol,
+                    icon: None,
+                    reference: None,
+                    reference_hash: None,
+                    decimals: metadta.decimals,
+                }),
+            ),
             paused: Mask::default(),
         }
     }
