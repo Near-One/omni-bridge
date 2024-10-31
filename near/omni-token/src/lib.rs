@@ -7,6 +7,7 @@ use near_contract_standards::fungible_token::{
 use near_contract_standards::storage_management::{
     StorageBalance, StorageBalanceBounds, StorageManagement,
 };
+use near_sdk::collections::LazyOption;
 use near_sdk::json_types::{Base64VecU8, U128};
 use near_sdk::serde_json::json;
 use near_sdk::{
@@ -26,13 +27,8 @@ pub type Mask = u128;
 pub struct OmniToken {
     controller: AccountId,
     token: FungibleToken,
-    name: String,
-    symbol: String,
-    reference: String,
-    reference_hash: Base64VecU8,
-    decimals: u8,
+    metadata: LazyOption<FungibleTokenMetadata>,
     paused: Mask,
-    icon: Option<String>,
 }
 
 #[ext_contract(ext_omni_factory)]
@@ -48,7 +44,7 @@ pub trait ExtOmniTokenFactory {
 #[near]
 impl OmniToken {
     #[init]
-    pub fn new(controller: AccountId) -> Self {
+    pub fn new(controller: AccountId, metadta: Option<FungibleTokenMetadata>) -> Self {
         let current_account_id = env::current_account_id();
         let deployer_account = current_account_id
             .get_parent_account_id()
@@ -62,13 +58,8 @@ impl OmniToken {
         Self {
             controller,
             token: FungibleToken::new(b"t".to_vec()),
-            name: String::default(),
-            symbol: String::default(),
-            reference: String::default(),
-            reference_hash: Base64VecU8(vec![]),
-            decimals: 0,
+            metadata: LazyOption::new(b"m".to_vec(), metadta.as_ref()),
             paused: Mask::default(),
-            icon: None,
         }
     }
 
@@ -83,12 +74,15 @@ impl OmniToken {
     ) {
         require!(self.controller_or_self());
 
-        name.map(|name| self.name = name);
-        symbol.map(|symbol| self.symbol = symbol);
-        reference.map(|reference| self.reference = reference);
-        reference_hash.map(|reference_hash| self.reference_hash = reference_hash);
-        decimals.map(|decimals| self.decimals = decimals);
-        icon.map(|icon| self.icon = Some(icon));
+        let mut metadata = self.ft_metadata();
+        name.map(|name| metadata.name = name);
+        symbol.map(|symbol| metadata.symbol = symbol);
+        reference.map(|reference| metadata.reference = Some(reference));
+        reference_hash.map(|reference_hash| metadata.reference_hash = Some(reference_hash));
+        decimals.map(|decimals| metadata.decimals = decimals);
+        icon.map(|icon| metadata.icon = Some(icon));
+
+        self.metadata.set(&metadata);
     }
 
     #[payable]
@@ -257,14 +251,16 @@ impl StorageManagement for OmniToken {
 #[near]
 impl FungibleTokenMetadataProvider for OmniToken {
     fn ft_metadata(&self) -> FungibleTokenMetadata {
-        FungibleTokenMetadata {
-            spec: FT_METADATA_SPEC.to_string(),
-            name: self.name.clone(),
-            symbol: self.symbol.clone(),
-            icon: self.icon.clone(),
-            reference: Some(self.reference.clone()),
-            reference_hash: Some(self.reference_hash.clone()),
-            decimals: self.decimals,
-        }
+        self.metadata
+            .get()
+            .unwrap_or_else(|| FungibleTokenMetadata {
+                spec: FT_METADATA_SPEC.to_string(),
+                name: String::default(),
+                symbol: String::default(),
+                icon: None,
+                reference: None,
+                reference_hash: None,
+                decimals: 0,
+            })
     }
 }
