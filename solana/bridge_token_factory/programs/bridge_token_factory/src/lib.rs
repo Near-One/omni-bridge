@@ -6,7 +6,8 @@ pub mod error;
 pub mod instructions;
 pub mod state;
 
-declare_id!("BfXGzL2m8hFjVsYgzMMeE7wSNd8FAV1PPet81Qb7tgcT");
+// declare_id!("BfXGzL2m8hFjVsYgzMMeE7wSNd8FAV1PPet81Qb7tgcT");
+declare_id!("6HGfCdjhytqyJB8ZSJNN5Aa1rnciyaSsrxZ2KDLgLSuv");
 
 #[program]
 pub mod bridge_token_factory {
@@ -14,11 +15,13 @@ pub mod bridge_token_factory {
 
     pub fn initialize(
         ctx: Context<Initialize>,
+        admin: Pubkey,
         derived_near_bridge_address: [u8; 64],
     ) -> Result<()> {
         msg!("Initializing");
 
         ctx.accounts.process(
+            admin,
             derived_near_bridge_address,
             ctx.bumps.config,
             ctx.bumps.authority,

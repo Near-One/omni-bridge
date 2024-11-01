@@ -4,6 +4,7 @@ use anchor_lang::system_program::Transfer;
 #[cfg(not(feature = "idl-build"))]
 use bitvec::array::BitArray;
 
+use crate::constants::AUTHORITY_SEED;
 use crate::constants::{USED_NONCES_ACCOUNT_SIZE, USED_NONCES_PER_ACCOUNT};
 #[cfg(not(feature = "idl-build"))]
 use crate::error::ErrorCode;
@@ -70,14 +71,15 @@ impl UsedNonces {
             if compensation > 0 {
                 // compensate expenses for the account creation
                 transfer(
-                    CpiContext::new(
+                    CpiContext::new_with_signer(
                         system_program,
                         Transfer {
                             from: rent_reserve,
                             to: payer,
                         },
+                        &[&[AUTHORITY_SEED, &[config.bumps.authority]]],
                     ),
-                    expected_rent_reserve_lamports - current_rent_reserve_lamports,
+                    compensation,
                 )?;
             }
         }

@@ -5,7 +5,7 @@
  * IDL can be found at `target/idl/bridge_token_factory.json`.
  */
 export type BridgeTokenFactory = {
-  "address": "BfXGzL2m8hFjVsYgzMMeE7wSNd8FAV1PPet81Qb7tgcT",
+  "address": "6HGfCdjhytqyJB8ZSJNN5Aa1rnciyaSsrxZ2KDLgLSuv",
   "metadata": {
     "name": "bridgeTokenFactory",
     "version": "0.1.0",
@@ -1039,11 +1039,6 @@ export type BridgeTokenFactory = {
       ],
       "accounts": [
         {
-          "name": "admin",
-          "signer": true,
-          "address": "MP5o14fjGUU6G562tivBsvUBohqFxiczbWGHrwXDEyQ"
-        },
-        {
           "name": "config",
           "writable": true,
           "pda": {
@@ -1195,9 +1190,18 @@ export type BridgeTokenFactory = {
         {
           "name": "wormholeProgram",
           "address": "3u8hJUVTA4jH1wYAyUur7FFZVQ8H635K3tSHHF4ssjQ5"
+        },
+        {
+          "name": "program",
+          "signer": true,
+          "address": "6HGfCdjhytqyJB8ZSJNN5Aa1rnciyaSsrxZ2KDLgLSuv"
         }
       ],
       "args": [
+        {
+          "name": "admin",
+          "type": "pubkey"
+        },
         {
           "name": "derivedNearBridgeAddress",
           "type": {
@@ -2256,11 +2260,6 @@ export type BridgeTokenFactory = {
       "name": "configSeed",
       "type": "bytes",
       "value": "[99, 111, 110, 102, 105, 103]"
-    },
-    {
-      "name": "defaultAdmin",
-      "type": "pubkey",
-      "value": "MP5o14fjGUU6G562tivBsvUBohqFxiczbWGHrwXDEyQ"
     },
     {
       "name": "messageSeed",

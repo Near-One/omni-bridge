@@ -23,6 +23,3 @@ pub const USED_NONCES_PER_ACCOUNT: u32 = 1024;
 
 #[constant]
 pub const USED_NONCES_ACCOUNT_SIZE: u32 = 8 + (USED_NONCES_PER_ACCOUNT + 7) / 8;
-
-#[constant]
-pub const DEFAULT_ADMIN: Pubkey = pubkey!("MP5o14fjGUU6G562tivBsvUBohqFxiczbWGHrwXDEyQ");

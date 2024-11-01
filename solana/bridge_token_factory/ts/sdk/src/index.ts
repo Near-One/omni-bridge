@@ -72,12 +72,6 @@ export class OmniBridgeSolanaSDK {
     ),
   );
 
-  public static readonly DEFAULT_ADMIN = new PublicKey(
-    BridgeTokenFactoryIdl.constants.find(
-      ({name}) => name === 'DEFAULT_ADMIN',
-    )!.value,
-  );
-
   public static readonly USED_NONCES_PER_ACCOUNT = parseInt(
     BridgeTokenFactoryIdl.constants.find(
       ({name}) => name === 'USED_NONCES_PER_ACCOUNT',
@@ -188,25 +182,27 @@ export class OmniBridgeSolanaSDK {
   async initialize({
     payer,
     nearBridge,
+    admin,
   }: {
     payer?: PublicKey;
     nearBridge: number[];
+    admin?: PublicKey;
   }): Promise<TransactionInstruction> {
     return await this.program.methods
-      .initialize(nearBridge)
+      .initialize(admin || this.provider.publicKey!, nearBridge)
       .accountsStrict({
         config: this.configId()[0],
         authority: this.authority()[0],
         payer: payer || this.provider.publicKey!,
         clock: SYSVAR_CLOCK_PUBKEY,
         rent: SYSVAR_RENT_PUBKEY,
-        admin: OmniBridgeSolanaSDK.DEFAULT_ADMIN,
         wormholeBridge: this.wormholeBridgeId()[0],
         wormholeFeeCollector: this.wormholeFeeCollectorId()[0],
         wormholeSequence: this.wormholeSequenceId()[0],
         wormholeMessage: this.messageId({sequenceNumber: new BN(1)})[0],
         systemProgram: SystemProgram.programId,
         wormholeProgram: this.wormholeProgramId,
+        program: this.programId,
       })
       .instruction();
   }

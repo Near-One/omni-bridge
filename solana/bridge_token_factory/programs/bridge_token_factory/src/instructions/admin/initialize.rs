@@ -2,7 +2,7 @@ use anchor_lang::prelude::*;
 
 use crate::{
     constants::{
-        AUTHORITY_SEED, CONFIG_SEED, DEFAULT_ADMIN, MESSAGE_SEED, USED_NONCES_PER_ACCOUNT,
+        AUTHORITY_SEED, CONFIG_SEED, MESSAGE_SEED, USED_NONCES_PER_ACCOUNT,
     },
     state::{
         config::{Config, ConfigBumps, WormholeBumps},
@@ -14,9 +14,6 @@ use wormhole_anchor_sdk::wormhole::{self, program::Wormhole};
 
 #[derive(Accounts)]
 pub struct Initialize<'info> {
-    #[account(address = DEFAULT_ADMIN)]
-    pub admin: Signer<'info>,
-
     #[account(
         init,
         payer = payer,
@@ -89,11 +86,14 @@ pub struct Initialize<'info> {
 
     pub system_program: Program<'info, System>,
     pub wormhole_program: Program<'info, Wormhole>,
+    #[account(address = crate::ID)]
+    pub program: Signer<'info>,
 }
 
 impl<'info> Initialize<'info> {
     pub fn process(
         &mut self,
+        admin: Pubkey,
         derived_near_bridge_address: [u8; 64],
         config_bump: u8,
         authority_bump: u8,
@@ -103,7 +103,7 @@ impl<'info> Initialize<'info> {
         wormhole_message_bump: u8,
     ) -> Result<()> {
         self.config.set_inner(Config {
-            admin: DEFAULT_ADMIN,
+            admin,
             max_used_nonce: 0,
             derived_near_bridge_address,
             bumps: ConfigBumps {
