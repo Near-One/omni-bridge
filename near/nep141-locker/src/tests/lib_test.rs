@@ -5,7 +5,7 @@ use near_sdk::test_utils::VMContextBuilder;
 use near_sdk::RuntimeFeesConfig;
 use near_sdk::{test_vm_config, testing_env};
 use omni_types::prover_result::{InitTransferMessage, ProverResult};
-use omni_types::EvmAddress;
+use omni_types::{EvmAddress, NativeFee};
 use std::str::FromStr;
 
 use near_contract_standards::fungible_token::receiver::FungibleTokenReceiver;
@@ -658,4 +658,27 @@ fn test_fin_transfer_callback_missing_fee_recipient() {
         predecessor,
         None, // Missing fee recipient when native fee is non-zero
     );
+}
+
+#[test]
+fn test_is_transfer_finalised() {
+    let mut contract = get_default_contract();
+    let chain = ChainKind::Eth;
+    let nonce = U128(1);
+
+    assert!(!contract.is_transfer_finalised(chain, nonce));
+
+    contract
+        .finalised_transfers
+        .insert(&(chain, nonce.0), &None);
+    assert!(contract.is_transfer_finalised(chain, nonce));
+
+    let native_fee = NativeFee {
+        amount: U128(100),
+        recipient: OmniAddress::Eth(EvmAddress::from_str(DEFAULT_ETH_USER_ADDRESS).unwrap()),
+    };
+    contract
+        .finalised_transfers
+        .insert(&(chain, nonce.0), &Some(native_fee));
+    assert!(contract.is_transfer_finalised(chain, nonce));
 }
