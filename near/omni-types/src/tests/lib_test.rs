@@ -158,12 +158,12 @@ fn test_chain_kind_from_omni_address() {
 
     test_chain_kind(OmniAddress::Eth(evm_address.clone()), ChainKind::Eth, "ETH");
     test_chain_kind(
-        OmniAddress::Near("alice.near".to_string()),
+        OmniAddress::Near("alice.near".parse().unwrap()),
         ChainKind::Near,
         "NEAR",
     );
     test_chain_kind(
-        OmniAddress::Sol("SoLaddr123".to_string()),
+        OmniAddress::Sol("11111111111111111111111111111111".parse().unwrap()),
         ChainKind::Sol,
         "SOL",
     );
@@ -206,12 +206,12 @@ fn test_omni_address_from_str() {
         ),
         (
             "near:alice.near".to_string(),
-            Ok(OmniAddress::Near("alice.near".to_string())),
+            Ok(OmniAddress::Near("alice.near".parse().unwrap())),
             "Should parse NEAR address",
         ),
         (
-            "sol:solana123".to_string(),
-            Ok(OmniAddress::Sol("solana123".to_string())),
+            "sol:11111111111111111111111111111111".to_string(),
+            Ok(OmniAddress::Sol("11111111111111111111111111111111".parse().unwrap())),
             "Should parse SOL address",
         ),
         (
@@ -253,13 +253,13 @@ fn test_omni_address_display() {
             "ETH address should format as eth:0x...",
         ),
         (
-            OmniAddress::Near("alice.near".to_string()),
+            OmniAddress::Near("alice.near".parse().unwrap()),
             "near:alice.near".to_string(),
             "NEAR address should format as near:account",
         ),
         (
-            OmniAddress::Sol("solana123".to_string()),
-            "sol:solana123".to_string(),
+            OmniAddress::Sol("11111111111111111111111111111111".parse().unwrap()),
+            "sol:11111111111111111111111111111111".to_string(),
             "SOL address should format as sol:address",
         ),
         (
@@ -431,11 +431,12 @@ fn test_transfer_message_getters() {
         (
             TransferMessage {
                 origin_nonce: U128(123),
-                token: "token.near".parse().unwrap(),
+                token: OmniAddress::Near("token.near".parse().unwrap()),
                 amount: U128(1000),
-                recipient: OmniAddress::Near("bob.near".to_string()),
+                recipient: OmniAddress::Near("bob.near".parse().unwrap()),
                 fee: Fee::default(),
                 sender: OmniAddress::Eth(evm_addr.clone()),
+                msg: "".to_string(),
             },
             ChainKind::Eth,
             (ChainKind::Eth, 123),
@@ -444,11 +445,12 @@ fn test_transfer_message_getters() {
         (
             TransferMessage {
                 origin_nonce: U128(456),
-                token: "token.near".parse().unwrap(),
+                token: OmniAddress::Near("token.near".parse().unwrap()),
                 amount: U128(2000),
                 recipient: OmniAddress::Eth(evm_addr.clone()),
                 fee: Fee::default(),
-                sender: OmniAddress::Near("alice.near".to_string()),
+                sender: OmniAddress::Near("alice.near".parse().unwrap()),
+                msg: "".to_string(),
             },
             ChainKind::Near,
             (ChainKind::Near, 456),
@@ -457,11 +459,12 @@ fn test_transfer_message_getters() {
         (
             TransferMessage {
                 origin_nonce: U128(789),
-                token: "token.near".parse().unwrap(),
+                token: OmniAddress::Near("token.near".parse().unwrap()),
                 amount: U128(3000),
-                recipient: OmniAddress::Near("carol.near".to_string()),
+                recipient: OmniAddress::Near("carol.near".parse().unwrap()),
                 fee: Fee::default(),
-                sender: OmniAddress::Sol("solana123".to_string()),
+                sender: OmniAddress::Sol("11111111111111111111111111111111".parse().unwrap()),
+                msg: "".to_string(),
             },
             ChainKind::Sol,
             (ChainKind::Sol, 789),
