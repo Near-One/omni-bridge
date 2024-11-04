@@ -211,7 +211,9 @@ fn test_omni_address_from_str() {
         ),
         (
             "sol:11111111111111111111111111111111".to_string(),
-            Ok(OmniAddress::Sol("11111111111111111111111111111111".parse().unwrap())),
+            Ok(OmniAddress::Sol(
+                "11111111111111111111111111111111".parse().unwrap(),
+            )),
             "Should parse SOL address",
         ),
         (
