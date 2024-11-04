@@ -30,6 +30,9 @@ use storage::{TransferMessageStorage, TransferMessageStorageValue};
 mod errors;
 mod storage;
 
+#[cfg(test)]
+mod tests;
+
 const LOG_METADATA_GAS: Gas = Gas::from_tgas(10);
 const LOG_METADATA_CALLBACK_GAS: Gas = Gas::from_tgas(260);
 const MPC_SIGNING_GAS: Gas = Gas::from_tgas(250);

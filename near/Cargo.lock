@@ -2765,6 +2765,9 @@ name = "lazy_static"
 version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bbd2bcb4c963f2ddae06a2efc7e9f3591312473c50c6685e1f298068316e66fe"
+dependencies = [
+ "spin",
+]
 
 [[package]]
 name = "lazycell"
@@ -3520,10 +3523,15 @@ dependencies = [
  "borsh",
  "bs58 0.5.1",
  "near-account-id",
+ "near-crypto",
  "near-gas 0.2.5",
+ "near-parameters",
+ "near-primitives",
+ "near-primitives-core",
  "near-sdk-macros",
  "near-sys",
  "near-token 0.2.1",
+ "near-vm-runner",
  "once_cell",
  "serde",
  "serde_json",
@@ -3607,6 +3615,36 @@ dependencies = [
  "borsh",
  "interactive-clap",
  "serde",
+]
+
+[[package]]
+name = "near-vm-runner"
+version = "0.24.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "48e94f68dde77aa3c94e659edab4c98b14f6dbbeba2aded72ebb6c6456631164"
+dependencies = [
+ "borsh",
+ "bytesize",
+ "ed25519-dalek",
+ "enum-map",
+ "lru",
+ "near-crypto",
+ "near-parameters",
+ "near-primitives-core",
+ "near-stdx",
+ "num-rational 0.3.2",
+ "once_cell",
+ "ripemd",
+ "rustix",
+ "serde",
+ "serde_repr",
+ "sha2 0.10.8",
+ "sha3",
+ "strum 0.24.1",
+ "tempfile",
+ "thiserror",
+ "tracing",
+ "zeropool-bn",
 ]
 
 [[package]]
@@ -4731,6 +4769,15 @@ dependencies = [
  "spin",
  "untrusted",
  "windows-sys 0.52.0",
+]
+
+[[package]]
+name = "ripemd"
+version = "0.1.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bd124222d17ad93a644ed9d011a40f4fb64aa54275c08cc216524a9ea82fb09f"
+dependencies = [
+ "digest 0.10.7",
 ]
 
 [[package]]
@@ -6819,6 +6866,19 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.75",
+]
+
+[[package]]
+name = "zeropool-bn"
+version = "0.5.11"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "71e61de68ede9ffdd69c01664f65a178c5188b73f78faa21f0936016a888ff7c"
+dependencies = [
+ "byteorder",
+ "crunchy",
+ "lazy_static",
+ "rand",
+ "rustc-hex",
 ]
 
 [[package]]
