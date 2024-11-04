@@ -85,43 +85,7 @@ pub async fn is_fee_sufficient(
         calculate_price(fee.native_fee.0, sender_symbol, sender_token_decimals).await?;
 
     let fee_token_decimals = get_token_decimals(jsonrpc_client, token).await?;
-    let token_fee_usd = calculate_price(fee.fee.0, sender_symbol, fee_token_decimals).await?;
-
-    let expected_sender_fee_usd = match sender {
-        OmniAddress::Eth(_) => {
-            let http_provider = ProviderBuilder::new().on_http(
-                config
-                    .evm
-                    .rpc_http_url
-                    .parse()
-                    .context("Failed to parse ETH rpc provider as url")?,
-            );
-            calculate_price(
-                config.evm.init_transfer_gas_estimation as u128
-                    * http_provider.get_gas_price().await?,
-                sender_symbol,
-                sender_token_decimals,
-            )
-            .await?
-        }
-        OmniAddress::Near(address) => {
-            if !storage::has_storage_deposit(jsonrpc_client, token, &address.parse::<AccountId>()?)
-                .await?
-            {
-                calculate_price(
-                    storage::NEP141_STORAGE_DEPOSIT,
-                    sender_symbol,
-                    sender_token_decimals,
-                )
-                .await?
-            } else {
-                0.0
-            }
-        }
-        OmniAddress::Sol(_) => todo!(),
-        OmniAddress::Arb(_) => todo!(),
-        OmniAddress::Base(_) => todo!(),
-    };
+    let token_fee_usd = calculate_price(fee.fee.0, token.as_ref(), fee_token_decimals).await?;
 
     let expected_recipient_fee_usd = match recipient {
         OmniAddress::Eth(_) => {
@@ -159,5 +123,5 @@ pub async fn is_fee_sufficient(
         OmniAddress::Base(_) => todo!(),
     };
 
-    Ok(native_fee_usd + token_fee_usd >= expected_sender_fee_usd + expected_recipient_fee_usd)
+    Ok(native_fee_usd + token_fee_usd >= expected_recipient_fee_usd)
 }
