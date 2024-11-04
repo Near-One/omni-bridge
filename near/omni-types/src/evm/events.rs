@@ -23,7 +23,7 @@ sol! {
 
     event FinTransfer(
         uint128 indexed nonce,
-        string token,
+        address tokenAddress,
         uint128 amount,
         address recipient,
         string feeRecipient
