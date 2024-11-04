@@ -706,6 +706,7 @@ impl Contract {
 
         ext_token::ext(token)
             .with_static_gas(LOG_METADATA_GAS)
+            .with_attached_deposit(ONE_YOCTO)
             .ft_transfer(fin_transfer.fee_recipient, U128(fee), None)
     }
 
