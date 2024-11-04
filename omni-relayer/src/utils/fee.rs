@@ -97,7 +97,8 @@ pub async fn is_fee_sufficient(
                     .context("Failed to parse ETH rpc provider as url")?,
             );
             calculate_price(
-                config.evm.init_transfer_gas_estimation * http_provider.get_gas_price().await?,
+                config.evm.init_transfer_gas_estimation as u128
+                    * http_provider.get_gas_price().await?,
                 sender_symbol,
                 sender_token_decimals,
             )
@@ -132,7 +133,8 @@ pub async fn is_fee_sufficient(
                     .context("Failed to parse ETH rpc provider as url")?,
             );
             calculate_price(
-                config.evm.fin_transfer_gas_estimation * http_provider.get_gas_price().await?,
+                config.evm.fin_transfer_gas_estimation as u128
+                    * http_provider.get_gas_price().await?,
                 recipient_symbol,
                 recipient_token_decimals,
             )

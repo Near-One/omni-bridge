@@ -61,6 +61,6 @@ pub struct Evm {
 
     pub eth_light_client: AccountId,
 
-    pub init_transfer_gas_estimation: u128,
-    pub fin_transfer_gas_estimation: u128,
+    pub init_transfer_gas_estimation: u64,
+    pub fin_transfer_gas_estimation: u64,
 }
