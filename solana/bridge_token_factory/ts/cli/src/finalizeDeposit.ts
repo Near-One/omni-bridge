@@ -28,14 +28,14 @@ export function installFinalizeDepositCLI(program: Command) {
         signature?: string;
       }) => {
         const {sdk} = getContext();
-        const ix = await sdk.finalizeDeposit({
+        const {instructions, signers} = await sdk.finalizeDeposit({
           token,
           nonce: new BN(nonce),
           amount: new BN(amount),
           recipient: await parsePubkey(recipient),
           signature: signature ? JSON.parse(signature) : new Array(65).fill(0),
         });
-        await executeTx({instructions: [ix]});
+        await executeTx({instructions, signers});
       },
     );
 }

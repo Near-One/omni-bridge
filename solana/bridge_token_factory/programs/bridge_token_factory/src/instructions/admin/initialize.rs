@@ -1,9 +1,7 @@
 use anchor_lang::prelude::*;
 
 use crate::{
-    constants::{
-        AUTHORITY_SEED, CONFIG_SEED, MESSAGE_SEED, USED_NONCES_PER_ACCOUNT,
-    },
+    constants::{AUTHORITY_SEED, CONFIG_SEED, USED_NONCES_PER_ACCOUNT},
     state::{
         config::{Config, ConfigBumps, WormholeBumps},
         used_nonces::UsedNonces,
@@ -68,15 +66,8 @@ pub struct Initialize<'info> {
 
     /// CHECK: Wormhole Message. [`wormhole::post_message`] requires this
     /// account be mutable.
-    #[account(
-        mut,
-        seeds = [
-            MESSAGE_SEED,
-            &wormhole::INITIAL_SEQUENCE.to_le_bytes()[..]
-        ],
-        bump,
-    )]
-    pub wormhole_message: SystemAccount<'info>,
+    #[account(mut)]
+    pub wormhole_message: Signer<'info>,
 
     #[account(mut)]
     pub payer: Signer<'info>,
@@ -100,7 +91,6 @@ impl<'info> Initialize<'info> {
         wormhole_bridge_bump: u8,
         wormhole_fee_collector_bump: u8,
         wormhole_sequence_bump: u8,
-        wormhole_message_bump: u8,
     ) -> Result<()> {
         self.config.set_inner(Config {
             admin,
@@ -117,7 +107,7 @@ impl<'info> Initialize<'info> {
             },
         });
 
-        let rent= Rent::get()?;
+        let rent = Rent::get()?;
 
         // prepare rent for the next used_nonces account creation
         transfer(
@@ -166,11 +156,6 @@ impl<'info> Initialize<'info> {
                     system_program: self.system_program.to_account_info(),
                 },
                 &[
-                    &[
-                        MESSAGE_SEED,
-                        &wormhole::INITIAL_SEQUENCE.to_le_bytes()[..],
-                        &[wormhole_message_bump],
-                    ],
                     &[CONFIG_SEED, &[self.config.bumps.config]], // emitter
                 ],
             ),

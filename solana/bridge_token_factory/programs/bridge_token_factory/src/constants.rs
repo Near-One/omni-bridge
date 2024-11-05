@@ -10,9 +10,6 @@ pub const AUTHORITY_SEED: &[u8] = b"authority";
 pub const VAULT_SEED: &[u8] = b"vault";
 
 #[constant]
-pub const MESSAGE_SEED: &[u8] = b"message";
-
-#[constant]
 pub const USED_NONCES_SEED: &[u8] = b"used_nonces";
 
 #[constant]

@@ -21,12 +21,12 @@ export function installRepayCLI(program: Command) {
         recipient: string;
       }) => {
         const {sdk} = getContext();
-        const ix = await sdk.repay({
+        const {instructions, signers} = await sdk.repay({
           token,
           amount: new BN(amount),
           recipient,
         });
-        await executeTx({instructions: [ix]});
+        await executeTx({instructions, signers});
       },
     );
 }

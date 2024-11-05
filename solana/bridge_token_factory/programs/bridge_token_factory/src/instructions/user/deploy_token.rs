@@ -49,7 +49,6 @@ impl<'info> DeployToken<'info> {
     pub fn initialize_token_metadata(
         &self,
         metadata: MetadataPayload,
-        wormhole_message_bump: u8,
     ) -> Result<()> {
         let bump = &[self.wormhole.config.bumps.authority];
         let signer_seeds = &[&[AUTHORITY_SEED, bump][..]];
@@ -90,7 +89,7 @@ impl<'info> DeployToken<'info> {
         }
         .try_to_vec()?;
 
-        self.wormhole.post_message(payload, wormhole_message_bump)?;
+        self.wormhole.post_message(payload)?;
 
         Ok(())
     }

@@ -282,7 +282,8 @@
               "docs": [
                 "account be mutable."
               ],
-              "writable": true
+              "writable": true,
+              "signer": true
             },
             {
               "name": "payer",
@@ -627,7 +628,8 @@
               "docs": [
                 "account be mutable."
               ],
-              "writable": true
+              "writable": true,
+              "signer": true
             },
             {
               "name": "payer",
@@ -968,7 +970,8 @@
               "docs": [
                 "account be mutable."
               ],
-              "writable": true
+              "writable": true,
+              "signer": true
             },
             {
               "name": "payer",
@@ -1162,7 +1165,8 @@
           "docs": [
             "account be mutable."
           ],
-          "writable": true
+          "writable": true,
+          "signer": true
         },
         {
           "name": "payer",
@@ -1388,7 +1392,8 @@
               "docs": [
                 "account be mutable."
               ],
-              "writable": true
+              "writable": true,
+              "signer": true
             },
             {
               "name": "payer",
@@ -1623,7 +1628,8 @@
               "docs": [
                 "account be mutable."
               ],
-              "writable": true
+              "writable": true,
+              "signer": true
             },
             {
               "name": "payer",
@@ -1650,10 +1656,6 @@
               "address": "11111111111111111111111111111111"
             }
           ]
-        },
-        {
-          "name": "system_program",
-          "address": "11111111111111111111111111111111"
         },
         {
           "name": "token_program",
@@ -1851,7 +1853,8 @@
               "docs": [
                 "account be mutable."
               ],
-              "writable": true
+              "writable": true,
+              "signer": true
             },
             {
               "name": "payer",
@@ -1878,10 +1881,6 @@
               "address": "11111111111111111111111111111111"
             }
           ]
-        },
-        {
-          "name": "system_program",
-          "address": "11111111111111111111111111111111"
         },
         {
           "name": "token_program"
@@ -2254,11 +2253,6 @@
       "name": "CONFIG_SEED",
       "type": "bytes",
       "value": "[99, 111, 110, 102, 105, 103]"
-    },
-    {
-      "name": "MESSAGE_SEED",
-      "type": "bytes",
-      "value": "[109, 101, 115, 115, 97, 103, 101]"
     },
     {
       "name": "USED_NONCES_ACCOUNT_SIZE",

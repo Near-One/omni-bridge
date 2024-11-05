@@ -288,7 +288,8 @@ export type BridgeTokenFactory = {
               "docs": [
                 "account be mutable."
               ],
-              "writable": true
+              "writable": true,
+              "signer": true
             },
             {
               "name": "payer",
@@ -633,7 +634,8 @@ export type BridgeTokenFactory = {
               "docs": [
                 "account be mutable."
               ],
-              "writable": true
+              "writable": true,
+              "signer": true
             },
             {
               "name": "payer",
@@ -974,7 +976,8 @@ export type BridgeTokenFactory = {
               "docs": [
                 "account be mutable."
               ],
-              "writable": true
+              "writable": true,
+              "signer": true
             },
             {
               "name": "payer",
@@ -1168,7 +1171,8 @@ export type BridgeTokenFactory = {
           "docs": [
             "account be mutable."
           ],
-          "writable": true
+          "writable": true,
+          "signer": true
         },
         {
           "name": "payer",
@@ -1394,7 +1398,8 @@ export type BridgeTokenFactory = {
               "docs": [
                 "account be mutable."
               ],
-              "writable": true
+              "writable": true,
+              "signer": true
             },
             {
               "name": "payer",
@@ -1629,7 +1634,8 @@ export type BridgeTokenFactory = {
               "docs": [
                 "account be mutable."
               ],
-              "writable": true
+              "writable": true,
+              "signer": true
             },
             {
               "name": "payer",
@@ -1656,10 +1662,6 @@ export type BridgeTokenFactory = {
               "address": "11111111111111111111111111111111"
             }
           ]
-        },
-        {
-          "name": "systemProgram",
-          "address": "11111111111111111111111111111111"
         },
         {
           "name": "tokenProgram",
@@ -1857,7 +1859,8 @@ export type BridgeTokenFactory = {
               "docs": [
                 "account be mutable."
               ],
-              "writable": true
+              "writable": true,
+              "signer": true
             },
             {
               "name": "payer",
@@ -1884,10 +1887,6 @@ export type BridgeTokenFactory = {
               "address": "11111111111111111111111111111111"
             }
           ]
-        },
-        {
-          "name": "systemProgram",
-          "address": "11111111111111111111111111111111"
         },
         {
           "name": "tokenProgram"
@@ -2260,11 +2259,6 @@ export type BridgeTokenFactory = {
       "name": "configSeed",
       "type": "bytes",
       "value": "[99, 111, 110, 102, 105, 103]"
-    },
-    {
-      "name": "messageSeed",
-      "type": "bytes",
-      "value": "[109, 101, 115, 115, 97, 103, 101]"
     },
     {
       "name": "usedNoncesAccountSize",

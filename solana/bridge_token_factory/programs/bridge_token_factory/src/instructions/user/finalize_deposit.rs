@@ -74,7 +74,7 @@ pub struct FinalizeDeposit<'info> {
 }
 
 impl<'info> FinalizeDeposit<'info> {
-    pub fn mint(&mut self, data: FinalizeDepositData, wormhole_message_bump: u8) -> Result<()> {
+    pub fn mint(&mut self, data: FinalizeDepositData) -> Result<()> {
         UsedNonces::use_nonce(
             data.payload.nonce,
             &self.used_nonces,
@@ -105,7 +105,7 @@ impl<'info> FinalizeDeposit<'info> {
         }
         .try_to_vec()?;
 
-        self.wormhole.post_message(payload, wormhole_message_bump)?;
+        self.wormhole.post_message(payload)?;
 
         Ok(())
     }

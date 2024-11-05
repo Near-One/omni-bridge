@@ -11,9 +11,9 @@ export function installInitializeCLI(program: Command) {
     .action(async ({program}: {program: string}) => {
       const {sdk} = getContext();
       const programKp = await parseKeypair(program);
-      const ix = await sdk.initialize({
+      const {instructions, signers} = await sdk.initialize({
         nearBridge: new Array(64).fill(0),
       });
-      await executeTx({instructions: [ix], signers: [programKp]});
+      await executeTx({instructions, signers: [...signers, programKp]});
     });
 }

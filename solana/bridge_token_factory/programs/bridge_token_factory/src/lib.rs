@@ -28,7 +28,6 @@ pub mod bridge_token_factory {
             ctx.bumps.wormhole_bridge,
             ctx.bumps.wormhole_fee_collector,
             ctx.bumps.wormhole_sequence,
-            ctx.bumps.wormhole_message,
         )?;
 
         // Emit event
@@ -40,7 +39,7 @@ pub mod bridge_token_factory {
 
         // TODO: data.verify_signature(&ctx.recipient.key, &ctx.accounts.wormhole.config.derived_near_bridge_address)?;
         ctx.accounts
-            .initialize_token_metadata(data.metadata, ctx.bumps.wormhole.message)?;
+            .initialize_token_metadata(data.metadata)?;
 
         // Emit event
         Ok(())
@@ -53,7 +52,7 @@ pub mod bridge_token_factory {
         msg!("Finalizing deposit");
 
         // TODO: data.verify_signature(&ctx.recipient.key, &ctx.accounts.config.derived_near_bridge_address)?;
-        ctx.accounts.mint(data, ctx.bumps.wormhole.message)?;
+        ctx.accounts.mint(data)?;
 
         // Emit event
         Ok(())
@@ -66,7 +65,7 @@ pub mod bridge_token_factory {
         msg!("Registering mint");
 
         ctx.accounts
-            .process(metadata_override, ctx.bumps.wormhole.message)?;
+            .process(metadata_override)?;
 
         // Emit event
         Ok(())
@@ -75,7 +74,7 @@ pub mod bridge_token_factory {
     pub fn send(ctx: Context<Send>, data: SendData) -> Result<()> {
         msg!("Sending");
 
-        ctx.accounts.process(data, ctx.bumps.wormhole.message)?;
+        ctx.accounts.process(data)?;
 
         // Emit event
         Ok(())
@@ -88,7 +87,7 @@ pub mod bridge_token_factory {
         msg!("Finalizing withdraw");
 
         // TODO: data.verify_signature(&ctx.recipient.key, &ctx.mint.key, &ctx.accounts.config.derived_near_bridge_address)?;
-        ctx.accounts.process(data, ctx.bumps.wormhole.message)?;
+        ctx.accounts.process(data)?;
 
         // Emit event
         Ok(())
@@ -97,7 +96,7 @@ pub mod bridge_token_factory {
     pub fn repay(ctx: Context<Repay>, payload: RepayPayload) -> Result<()> {
         msg!("Repaying");
 
-        ctx.accounts.process(payload, ctx.bumps.wormhole.message)?;
+        ctx.accounts.process(payload)?;
 
         // Emit event
         Ok(())

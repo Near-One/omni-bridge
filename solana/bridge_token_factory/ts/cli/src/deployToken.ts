@@ -26,14 +26,14 @@ export function installDeployTokenCLI(program: Command) {
         signature?: string;
       }) => {
         const {sdk} = getContext();
-        const ix = await sdk.deployToken({
+        const {instructions, signers} = await sdk.deployToken({
           token,
           name,
           symbol,
           decimals,
           signature: signature ? JSON.parse(signature) : new Array(65).fill(0),
         });
-        await executeTx({instructions: [ix]});
+        await executeTx({instructions, signers});
       },
     );
 }

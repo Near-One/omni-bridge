@@ -1,7 +1,10 @@
-use anchor_lang::{prelude::*, system_program::{transfer, Transfer}};
+use anchor_lang::{
+    prelude::*,
+    system_program::{transfer, Transfer},
+};
 use wormhole_anchor_sdk::wormhole::{self, program::Wormhole};
 
-use crate::{constants::{CONFIG_SEED, MESSAGE_SEED}, state::config::Config};
+use crate::{constants::CONFIG_SEED, state::config::Config};
 
 #[derive(Accounts)]
 pub struct WormholeCPI<'info> {
@@ -50,15 +53,8 @@ pub struct WormholeCPI<'info> {
 
     /// CHECK: Wormhole Message. [`wormhole::post_message`] requires this
     /// account be mutable.
-    #[account(
-        mut,
-        seeds = [
-            MESSAGE_SEED,
-            &sequence.next_value().to_le_bytes()[..]
-        ],
-        bump,
-    )]
-    pub message: SystemAccount<'info>,
+    #[account(mut)]
+    pub message: Signer<'info>,
 
     #[account(mut)]
     pub payer: Signer<'info>,
@@ -72,11 +68,7 @@ pub struct WormholeCPI<'info> {
 }
 
 impl<'info> WormholeCPI<'info> {
-    pub fn post_message(
-        &self,
-        data: Vec<u8>,
-        wormhole_message_bump: u8,
-    ) -> Result<()> {
+    pub fn post_message(&self, data: Vec<u8>) -> Result<()> {
         // If Wormhole requires a fee before posting a message, we need to
         // transfer lamports to the fee collector. Otherwise
         // `wormhole::post_message` will fail.
@@ -109,11 +101,6 @@ impl<'info> WormholeCPI<'info> {
                     system_program: self.system_program.to_account_info(),
                 },
                 &[
-                    &[
-                        MESSAGE_SEED,
-                        &self.sequence.next_value().to_le_bytes()[..],
-                        &[wormhole_message_bump],
-                    ],
                     &[CONFIG_SEED, &[self.config.bumps.config]], // emitter
                 ],
             ),

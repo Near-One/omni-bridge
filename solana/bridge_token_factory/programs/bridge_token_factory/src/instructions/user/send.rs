@@ -43,7 +43,6 @@ pub struct Send<'info> {
 
     pub wormhole: WormholeCPI<'info>,
 
-    pub system_program: Program<'info, System>,
     pub token_program: Interface<'info, TokenInterface>,
 }
 
@@ -61,7 +60,7 @@ pub struct SendPayload {
 }
 
 impl<'info> Send<'info> {
-    pub fn process(&self, data: SendData, wormhole_message_bump: u8) -> Result<()> {
+    pub fn process(&self, data: SendData) -> Result<()> {
         transfer_checked(
             CpiContext::new(
                 self.token_program.to_account_info(),
@@ -83,7 +82,7 @@ impl<'info> Send<'info> {
         }
         .try_to_vec()?; // TODO: correct message payload
 
-        self.wormhole.post_message(payload, wormhole_message_bump)?;
+        self.wormhole.post_message(payload)?;
 
         Ok(())
     }

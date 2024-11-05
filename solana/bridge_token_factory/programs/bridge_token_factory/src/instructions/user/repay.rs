@@ -30,7 +30,6 @@ pub struct Repay<'info> {
 
     pub wormhole: WormholeCPI<'info>,
 
-    pub system_program: Program<'info, System>,
     pub token_program: Program<'info, Token>,
 }
 
@@ -42,7 +41,7 @@ pub struct RepayPayload {
 }
 
 impl<'info> Repay<'info> {
-    pub fn process(&self, payload: RepayPayload, wormhole_message_bump: u8) -> Result<()> {
+    pub fn process(&self, payload: RepayPayload) -> Result<()> {
         burn(
             CpiContext::new(
                 self.token_program.to_account_info(),
@@ -57,7 +56,7 @@ impl<'info> Repay<'info> {
 
         let payload = payload.try_to_vec()?; // TODO: correct message payload
 
-        self.wormhole.post_message(payload, wormhole_message_bump)?;
+        self.wormhole.post_message(payload)?;
 
         Ok(())
     }

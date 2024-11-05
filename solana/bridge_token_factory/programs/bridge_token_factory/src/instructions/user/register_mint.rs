@@ -72,7 +72,6 @@ impl<'info> RegisterMint<'info> {
     pub fn process(
         &mut self,
         metadata_override: MetadataOverride,
-        wormhole_message_bump: u8,
     ) -> Result<()> {
         let (name, symbol) = if let Some(override_authority) = self.override_authority.as_ref() {
             match override_authority.key() {
@@ -132,7 +131,7 @@ impl<'info> RegisterMint<'info> {
         }
         .try_to_vec()?;
 
-        self.wormhole.post_message(payload, wormhole_message_bump)?;
+        self.wormhole.post_message(payload)?;
 
         Ok(())
     }

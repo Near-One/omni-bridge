@@ -28,13 +28,13 @@ export function installRegisterMintCLI(program: Command) {
         const overrideAuthorityPk = overrideAuthority
           ? await parsePubkey(overrideAuthority)
           : null;
-        const ix = await sdk.registerMint({
+        const {instructions, signers} = await sdk.registerMint({
           mint: mintPk,
           name,
           symbol,
           overrideAuthority: overrideAuthorityPk,
         });
-        await executeTx({instructions: [ix]});
+        await executeTx({instructions, signers});
       },
     );
 }
