@@ -14,16 +14,16 @@ sol! {
         address indexed sender,
         address indexed tokenAddress,
         uint128 indexed nonce,
-        string token,
         uint128 amount,
         uint128 fee,
         uint128 nativeTokenFee,
-        string recipient
+        string recipient,
+        string message
     );
 
     event FinTransfer(
         uint128 indexed nonce,
-        string token,
+        address tokenAddress,
         uint128 amount,
         address recipient,
         string feeRecipient
@@ -88,7 +88,7 @@ impl TryFromLog<Log<InitTransfer>> for InitTransferMessage {
             emitter_address: OmniAddress::from_evm_address(chain_kind, H160(event.address.into()))?,
             transfer: TransferMessage {
                 origin_nonce: near_sdk::json_types::U128(event.data.nonce),
-                token: event.data.token.parse().map_err(stringify)?,
+                token: OmniAddress::from_evm_address(chain_kind, H160(event.tokenAddress.into()))?,
                 amount: near_sdk::json_types::U128(event.data.amount),
                 recipient: event.data.recipient.parse().map_err(stringify)?,
                 fee: Fee {
@@ -96,6 +96,7 @@ impl TryFromLog<Log<InitTransfer>> for InitTransferMessage {
                     native_fee: near_sdk::json_types::U128(event.data.nativeTokenFee),
                 },
                 sender: OmniAddress::from_evm_address(chain_kind, H160(event.data.sender.into()))?,
+                msg: event.data.message,
             },
         })
     }
@@ -128,7 +129,7 @@ mod tests {
     sol! {
         event TestFinTransfer(
             uint128 indexed nonce,
-            string token,
+            address tokenAddress,
             uint128 amount,
             address recipient,
             string feeRecipient
@@ -140,14 +141,14 @@ mod tests {
         let event = FinTransfer {
             nonce: 55,
             amount: 100,
-            token: "some_token".to_owned(),
+            tokenAddress: [0; 20].into(),
             recipient: [0; 20].into(),
             feeRecipient: "some_fee_recipient".to_owned(),
         };
         let test_event = TestFinTransfer {
             nonce: event.nonce,
             amount: event.amount,
-            token: event.token.clone(),
+            tokenAddress: event.tokenAddress,
             recipient: event.recipient,
             feeRecipient: event.feeRecipient.clone(),
         };

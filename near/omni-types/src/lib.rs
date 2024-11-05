@@ -6,6 +6,7 @@ use near_sdk::json_types::U128;
 use near_sdk::serde::{Deserialize, Serialize};
 use near_sdk::AccountId;
 use serde::de::Visitor;
+use sol_address::SolAddress;
 
 pub mod evm;
 pub mod locker_args;
@@ -13,6 +14,7 @@ pub mod mpc_types;
 pub mod near_events;
 pub mod prover_args;
 pub mod prover_result;
+pub mod sol_address;
 
 #[cfg(test)]
 mod tests;
@@ -150,8 +152,8 @@ pub type EvmAddress = H160;
 #[derive(BorshDeserialize, BorshSerialize, Debug, Clone, PartialEq, Eq)]
 pub enum OmniAddress {
     Eth(EvmAddress),
-    Near(String),
-    Sol(String),
+    Near(AccountId),
+    Sol(SolAddress),
     Arb(EvmAddress),
     Base(EvmAddress),
 }
@@ -183,8 +185,8 @@ impl FromStr for OmniAddress {
 
         match chain {
             "eth" => Ok(OmniAddress::Eth(recipient.parse().map_err(stringify)?)),
-            "near" => Ok(OmniAddress::Near(recipient.to_owned())),
-            "sol" => Ok(OmniAddress::Sol(recipient.to_owned())), // TODO validate sol address
+            "near" => Ok(OmniAddress::Near(recipient.parse().map_err(stringify)?)),
+            "sol" => Ok(OmniAddress::Sol(recipient.parse().map_err(stringify)?)),
             "arb" => Ok(OmniAddress::Arb(recipient.parse().map_err(stringify)?)),
             "base" => Ok(OmniAddress::Base(recipient.parse().map_err(stringify)?)),
             _ => Err(format!("Chain {chain} is not supported")),
@@ -197,7 +199,7 @@ impl fmt::Display for OmniAddress {
         let (chain_str, recipient) = match self {
             OmniAddress::Eth(recipient) => ("eth", recipient.to_string()),
             OmniAddress::Near(recipient) => ("near", recipient.to_string()),
-            OmniAddress::Sol(recipient) => ("sol", recipient.clone()),
+            OmniAddress::Sol(recipient) => ("sol", recipient.to_string()),
             OmniAddress::Arb(recipient) => ("arb", recipient.to_string()),
             OmniAddress::Base(recipient) => ("base", recipient.to_string()),
         };
@@ -309,11 +311,12 @@ pub type TransferId = (ChainKind, Nonce);
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Debug, Clone)]
 pub struct TransferMessage {
     pub origin_nonce: U128,
-    pub token: AccountId,
+    pub token: OmniAddress,
     pub amount: U128,
     pub recipient: OmniAddress,
     pub fee: Fee,
     pub sender: OmniAddress,
+    pub msg: String,
 }
 
 impl TransferMessage {
@@ -323,6 +326,10 @@ impl TransferMessage {
 
     pub fn get_transfer_id(&self) -> TransferId {
         (self.get_origin_chain(), self.origin_nonce.0)
+    }
+
+    pub fn get_destination_chain(&self) -> ChainKind {
+        self.recipient.get_chain()
     }
 }
 
@@ -337,7 +344,7 @@ pub enum PayloadType {
 pub struct TransferMessagePayload {
     pub prefix: PayloadType,
     pub nonce: U128,
-    pub token: AccountId,
+    pub token_address: OmniAddress,
     pub amount: U128,
     pub recipient: OmniAddress,
     pub fee_recipient: Option<AccountId>,

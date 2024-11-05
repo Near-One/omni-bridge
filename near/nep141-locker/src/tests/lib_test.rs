@@ -103,10 +103,7 @@ fn run_ft_on_transfer(
         Some(deposit) => deposit,
         None => {
             let min_storage_balance = contract.required_balance_for_account();
-            let init_transfer_balance = contract.required_balance_for_init_transfer(
-                msg.recipient.clone(),
-                OmniAddress::Near(sender_id.to_string()),
-            );
+            let init_transfer_balance = contract.required_balance_for_init_transfer();
             min_storage_balance.saturating_add(init_transfer_balance)
         }
     };
@@ -171,11 +168,12 @@ fn test_ft_on_transfer_stored_transfer_message() {
     );
     assert_eq!(
         stored_transfer.sender,
-        OmniAddress::Near(DEFAULT_NEAR_USER_ACCOUNT.to_string()),
+        OmniAddress::Near(DEFAULT_NEAR_USER_ACCOUNT.parse().unwrap()),
         "Incorrect stored sender"
     );
     assert_eq!(
-        stored_transfer.token, DEFAULT_FT_CONTRACT_ACCOUNT,
+        stored_transfer.token,
+        OmniAddress::Near(DEFAULT_FT_CONTRACT_ACCOUNT.parse().unwrap()),
         "Incorrect stored token"
     );
     assert_eq!(
@@ -225,15 +223,10 @@ fn test_ft_on_transfer_invalid_fee() {
 
 #[test]
 fn test_ft_on_transfer_balance_updated() {
-    use std::str::FromStr;
-
     let mut contract = get_default_contract();
 
     let min_storage_balance = contract.required_balance_for_account();
-    let init_transfer_balance = contract.required_balance_for_init_transfer(
-        OmniAddress::Eth(EvmAddress::from_str(DEFAULT_ETH_USER_ADDRESS).unwrap()),
-        OmniAddress::Near(DEFAULT_NEAR_USER_ACCOUNT.to_string()),
-    );
+    let init_transfer_balance = contract.required_balance_for_init_transfer();
     let total_balance = min_storage_balance.saturating_add(init_transfer_balance);
 
     run_ft_on_transfer(
@@ -266,11 +259,14 @@ fn run_update_transfer_fee(
 
     let transfer_msg = TransferMessage {
         origin_nonce: U128(DEFAULT_NONCE),
-        token: AccountId::try_from(DEFAULT_FT_CONTRACT_ACCOUNT.to_string()).unwrap(),
+        token: OmniAddress::Near(
+            AccountId::try_from(DEFAULT_FT_CONTRACT_ACCOUNT.to_string()).unwrap(),
+        ),
         amount: U128(DEFAULT_TRANSFER_AMOUNT),
         recipient: OmniAddress::Eth(EvmAddress::from_str(DEFAULT_ETH_USER_ADDRESS).unwrap()),
         fee: init_fee.clone(),
-        sender: OmniAddress::Near(sender_id.clone()),
+        sender: OmniAddress::Near(sender_id.clone().parse().unwrap()),
+        msg: "".to_string(),
     };
 
     contract.insert_raw_transfer(
@@ -455,12 +451,16 @@ fn get_default_storage_deposit_args() -> StorageDepositArgs {
 
 fn get_prover_result(recipient: Option<OmniAddress>) -> ProverResult {
     use std::str::FromStr;
-    let recipient = recipient.unwrap_or(OmniAddress::Near(DEFAULT_NEAR_USER_ACCOUNT.to_string()));
+    let recipient = recipient.unwrap_or(OmniAddress::Near(
+        DEFAULT_NEAR_USER_ACCOUNT.parse().unwrap(),
+    ));
     ProverResult::InitTransfer(InitTransferMessage {
         emitter_address: OmniAddress::Eth(EvmAddress::from_str(DEFAULT_ETH_USER_ADDRESS).unwrap()),
         transfer: TransferMessage {
             origin_nonce: U128(DEFAULT_NONCE),
-            token: AccountId::try_from(DEFAULT_FT_CONTRACT_ACCOUNT.to_string()).unwrap(),
+            token: OmniAddress::Near(
+                AccountId::try_from(DEFAULT_FT_CONTRACT_ACCOUNT.to_string()).unwrap(),
+            ),
             amount: U128(DEFAULT_TRANSFER_AMOUNT),
             recipient,
             fee: Fee {
@@ -468,6 +468,7 @@ fn get_prover_result(recipient: Option<OmniAddress>) -> ProverResult {
                 native_fee: U128(5),
             },
             sender: OmniAddress::Eth(EvmAddress::from_str(DEFAULT_ETH_USER_ADDRESS).unwrap()),
+            msg: "".to_string(),
         },
     })
 }
@@ -503,7 +504,7 @@ fn test_fin_transfer_callback_near_success() {
     ));
 
     let prover_result = get_prover_result(Some(OmniAddress::Near(
-        DEFAULT_NEAR_USER_ACCOUNT.to_string(),
+        DEFAULT_NEAR_USER_ACCOUNT.parse().unwrap(),
     )));
 
     setup_test_env(

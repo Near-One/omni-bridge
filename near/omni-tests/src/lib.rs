@@ -228,7 +228,7 @@ mod tests {
             .call(locker_contract.id(), "fin_transfer")
             .args_borsh(FinTransferArgs {
                 chain_kind: omni_types::ChainKind::Eth,
-                native_fee_recipient: Some(OmniAddress::Near(account_1().to_string())),
+                native_fee_recipient: Some(OmniAddress::Near(account_1())),
                 storage_deposit_args: StorageDepositArgs {
                     token: token_contract.id().clone(),
                     accounts: storage_deposit_accounts,
@@ -237,14 +237,15 @@ mod tests {
                     emitter_address: eth_factory_address(),
                     transfer: TransferMessage {
                         origin_nonce: U128(1),
-                        token: token_contract.id().clone(),
-                        recipient: OmniAddress::Near(account_1().to_string()),
+                        token: OmniAddress::Near(token_contract.id().clone()),
+                        recipient: OmniAddress::Near(account_1()),
                         amount: U128(amount),
                         fee: Fee {
                             fee: U128(fee),
                             native_fee: U128(0),
                         },
                         sender: eth_eoa_address(),
+                        msg: String::default(),
                     },
                 }))
                 .unwrap(),
