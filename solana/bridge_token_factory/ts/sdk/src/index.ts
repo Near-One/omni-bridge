@@ -501,12 +501,18 @@ export class OmniBridgeSolanaSDK {
 
     const [config] = this.configId();
     const [usedNonces] = this.usedNoncesId({nonce});
-    const tokenAccount = getAssociatedTokenAddressSync(mint, recipient, true);
 
     if (token22 === undefined) {
       const mintInfo = await this.provider.connection.getAccountInfo(mint);
       token22 = mintInfo?.owner.equals(TOKEN_2022_PROGRAM_ID);
     }
+
+    const tokenAccount = getAssociatedTokenAddressSync(
+      mint,
+      recipient,
+      true,
+      token22 ? TOKEN_2022_PROGRAM_ID : TOKEN_PROGRAM_ID,
+    );
 
     const instruction = await this.program.methods
       .finalizeWithdraw({
@@ -576,13 +582,18 @@ export class OmniBridgeSolanaSDK {
       user = this.provider.publicKey!;
     }
 
-    if (!from) {
-      from = getAssociatedTokenAddressSync(mint, user, true);
-    }
-
     if (token22 === undefined) {
       const mintInfo = await this.provider.connection.getAccountInfo(mint);
       token22 = mintInfo?.owner.equals(TOKEN_2022_PROGRAM_ID);
+    }
+
+    if (!from) {
+      from = getAssociatedTokenAddressSync(
+        mint,
+        user,
+        true,
+        token22 ? TOKEN_2022_PROGRAM_ID : TOKEN_PROGRAM_ID,
+      );
     }
 
     const instruction = await this.program.methods

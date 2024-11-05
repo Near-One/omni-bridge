@@ -5,7 +5,7 @@
  * IDL can be found at `target/idl/bridge_token_factory.json`.
  */
 export type BridgeTokenFactory = {
-  "address": "6HGfCdjhytqyJB8ZSJNN5Aa1rnciyaSsrxZ2KDLgLSuv",
+  "address": "3ZtEZ8xABFbUr4c1FVpXbQiVdqv4vwhvfCc8HMmhEeua",
   "metadata": {
     "name": "bridgeTokenFactory",
     "version": "0.1.0",
@@ -1228,7 +1228,7 @@ export type BridgeTokenFactory = {
         {
           "name": "program",
           "signer": true,
-          "address": "6HGfCdjhytqyJB8ZSJNN5Aa1rnciyaSsrxZ2KDLgLSuv"
+          "address": "3ZtEZ8xABFbUr4c1FVpXbQiVdqv4vwhvfCc8HMmhEeua"
         }
       ],
       "args": [

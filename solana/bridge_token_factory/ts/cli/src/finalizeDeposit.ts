@@ -11,7 +11,7 @@ export function installFinalizeDepositCLI(program: Command) {
     .requiredOption('--token <string>', 'Near token address')
     .requiredOption('--nonce <string>', 'Nonce')
     .requiredOption('--amount <number>', 'Amount')
-    .requiredOption('--recipient <pubkey>', 'Recipient')
+    .option('--recipient <pubkey>', 'Recipient')
     .option('--signature <string>', 'Signature')
     .action(
       async ({
@@ -24,15 +24,18 @@ export function installFinalizeDepositCLI(program: Command) {
         token: string;
         nonce: string;
         amount: string;
-        recipient: string;
+        recipient?: string;
         signature?: string;
       }) => {
         const {sdk} = getContext();
+        const recipientPk = recipient
+          ? await parsePubkey(recipient)
+          : sdk.provider.publicKey!;
         const {instructions, signers} = await sdk.finalizeDeposit({
           token,
           nonce: new BN(nonce),
           amount: new BN(amount),
-          recipient: await parsePubkey(recipient),
+          recipient: recipientPk,
           signature: signature ? JSON.parse(signature) : new Array(65).fill(0),
         });
         await executeTx({instructions, signers});
