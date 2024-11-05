@@ -6,6 +6,7 @@ use ethereum_types::H256;
 use futures::future::join_all;
 use log::{error, info, warn};
 
+use near_jsonrpc_client::JsonRpcClient;
 use omni_connector::OmniConnector;
 use omni_types::{
     locker_args::ClaimFeeArgs, near_events::Nep141LockerEvent, prover_result::ProofKind, ChainKind,
@@ -17,6 +18,7 @@ pub async fn sign_transfer(
     config: config::Config,
     redis_client: redis::Client,
     connector: Arc<OmniConnector>,
+    jsonrpc_client: JsonRpcClient,
 ) -> Result<()> {
     let redis_connection = redis_client.get_multiplexed_tokio_connection().await?;
 
@@ -37,35 +39,92 @@ pub async fn sign_transfer(
 
         let mut handlers = Vec::new();
         for (key, event) in events {
-            if let Ok(event) = serde_json::from_str::<Nep141LockerEvent>(&event) {
+            if let Ok((event, attempt)) = serde_json::from_str::<(Nep141LockerEvent, u64)>(&event) {
                 handlers.push(tokio::spawn({
                     let config = config.clone();
                     let mut redis_connection = redis_connection.clone();
                     let connector = connector.clone();
+                    let jsonrpc_client = jsonrpc_client.clone();
 
                     async move {
-                        let (Nep141LockerEvent::InitTransferEvent { transfer_message }
+                        let (Nep141LockerEvent::InitTransferEvent {
+                            ref transfer_message,
+                        }
                         | Nep141LockerEvent::FinTransferEvent {
-                            transfer_message, ..
+                            ref transfer_message,
+                            ..
+                        }
+                        | Nep141LockerEvent::UpdateFeeEvent {
+                            ref transfer_message,
                         }) = event
                         else {
                             warn!(
-                                "Expected InitTransferEvent/FinTransferEvent, got: {:?}",
+                                "Expected InitTransferEvent/FinTransferEvent/UpdateFeeEvent, got: {:?}",
                                 event
                             );
                             return;
                         };
 
                         info!(
-                            "Received InitTransferEvent/FinTransferEvent: {}",
-                            transfer_message.origin_nonce.0
+                            "Received InitTransferEvent/FinTransferEvent/UpdateFeeEvent",
                         );
+
+                        match utils::fee::is_fee_sufficient(
+                            &config,
+                            &jsonrpc_client,
+                            &transfer_message.sender,
+                            &transfer_message.recipient,
+                            &transfer_message.token,
+                            &transfer_message.fee,
+                        )
+                        .await
+                        {
+                            Ok(is_fee_sufficient) => {
+                                if !is_fee_sufficient {
+                                    warn!(
+                                        "Fee is not sufficient for transfer: {:?}",
+                                        transfer_message
+                                    );
+
+                                    if attempt < utils::redis::INVALID_FEE_RETRY_ATTEMPTS {
+                                        utils::redis::add_event(
+                                            &mut redis_connection,
+                                            utils::redis::NEAR_INIT_TRANSFER_QUEUE,
+                                            transfer_message.origin_nonce.0.to_string(),
+                                            (event, attempt + 1),
+                                        )
+                                        .await;
+                                    } else {
+                                        utils::redis::remove_event(
+                                            &mut redis_connection,
+                                            utils::redis::NEAR_INIT_TRANSFER_QUEUE,
+                                            &key,
+                                        )
+                                        .await;
+                                    }
+
+                                    return;
+                                }
+                            }
+                            Err(err) => {
+                                warn!("Failed to check fee: {}", err);
+
+                                utils::redis::remove_event(
+                                    &mut redis_connection,
+                                    utils::redis::NEAR_INIT_TRANSFER_QUEUE,
+                                    &key,
+                                )
+                                .await;
+
+                                return;
+                            }
+                        }
 
                         match connector
                             .sign_transfer(
                                 transfer_message.origin_nonce.into(),
                                 Some(config.near.token_locker_id),
-                                Some(transfer_message.fee),
+                                Some(transfer_message.fee.clone()),
                             )
                             .await
                         {

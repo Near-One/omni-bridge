@@ -18,7 +18,7 @@ use super::storage;
 
 #[derive(Debug, serde::Deserialize)]
 struct Metadata {
-    pub decimals: u32,
+    decimals: u32,
 }
 
 async fn get_token_decimals(jsonrpc_client: &JsonRpcClient, token: &AccountId) -> Result<u32> {

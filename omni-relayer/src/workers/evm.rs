@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use alloy::rpc::types::{Log, TransactionReceipt};
 use anyhow::Result;
+use borsh::BorshDeserialize;
 use ethereum_types::H256;
 use futures::future::join_all;
 use log::{error, info, warn};
@@ -12,7 +13,7 @@ use omni_types::{
     locker_args::{FinTransferArgs, StorageDepositArgs},
     near_events::Nep141LockerEvent,
     prover_result::ProofKind,
-    ChainKind, OmniAddress,
+    ChainKind, Fee, OmniAddress, H160,
 };
 
 use crate::{config, utils};
@@ -43,9 +44,93 @@ pub async fn finalize_transfer(
 
         let mut handlers = Vec::new();
         for (key, event) in events {
-            if let Ok((block_number, log, tx_logs)) =
-                serde_json::from_str::<(u64, Log, Option<TransactionReceipt>)>(&event)
+            if let Ok((block_number, log, tx_logs, attempt)) =
+                serde_json::from_str::<(u64, Log, Option<TransactionReceipt>, u64)>(&event)
             {
+                let Ok(init_log) = log.log_decode::<utils::evm::InitTransfer>() else {
+                    warn!("Failed to decode log as InitTransfer: {:?}", log);
+                    continue;
+                };
+
+                info!("Received InitTransfer log");
+
+                let Some(tx_hash) = log.transaction_hash else {
+                    warn!("No transaction hash in log: {:?}", log);
+                    continue;
+                };
+
+                let Ok(sender) = H160::try_from_slice(init_log.inner.sender.as_slice()) else {
+                    warn!("Failed to construct `H160` from sender address");
+                    continue;
+                };
+                let Ok(recipient) = init_log.inner.recipient.parse::<OmniAddress>() else {
+                    warn!(
+                        "Failed to parse recipient as OmniAddress: {:?}",
+                        init_log.inner.recipient
+                    );
+                    continue;
+                };
+                let Ok(token) = init_log.inner.token.parse::<AccountId>() else {
+                    warn!(
+                        "Failed to parse token as AccountId: {:?}",
+                        init_log.inner.token
+                    );
+                    continue;
+                };
+
+                let mut redis_connection = redis_connection.clone();
+
+                match utils::fee::is_fee_sufficient(
+                    &config,
+                    &jsonrpc_client,
+                    &OmniAddress::Eth(sender),
+                    &recipient,
+                    &token,
+                    &Fee {
+                        fee: init_log.inner.fee.into(),
+                        native_fee: init_log.inner.nativeFee.into(),
+                    },
+                )
+                .await
+                {
+                    Ok(is_fee_sufficient) => {
+                        if !is_fee_sufficient {
+                            warn!("Fee is not sufficient for transfer: {:?}", log);
+
+                            if attempt < utils::redis::INVALID_FEE_RETRY_ATTEMPTS {
+                                utils::redis::add_event(
+                                    &mut redis_connection,
+                                    utils::redis::ETH_WITHDRAW_EVENTS,
+                                    tx_hash.to_string(),
+                                    (block_number, log, tx_logs, attempt + 1),
+                                )
+                                .await;
+                            } else {
+                                utils::redis::remove_event(
+                                    &mut redis_connection,
+                                    utils::redis::ETH_WITHDRAW_EVENTS,
+                                    &key,
+                                )
+                                .await;
+                            }
+
+                            continue;
+                        }
+                    }
+                    Err(err) => {
+                        warn!("Failed to check fee: {}", err);
+
+                        utils::redis::remove_event(
+                            &mut redis_connection,
+                            utils::redis::ETH_WITHDRAW_EVENTS,
+                            &key,
+                        )
+                        .await;
+
+                        continue;
+                    }
+                }
+
                 let vaa = utils::evm::get_vaa(tx_logs, &log, &config).await;
 
                 if vaa.is_none() {
@@ -69,47 +154,19 @@ pub async fn finalize_transfer(
                     }
                 }
 
-                let Ok(init_log) = log.log_decode::<utils::evm::InitTransfer>() else {
-                    warn!("Failed to decode log as InitTransfer: {:?}", log);
-                    continue;
-                };
-
                 handlers.push(tokio::spawn({
                     let config = config.clone();
-                    let mut redis_connection = redis_connection.clone();
                     let connector = connector.clone();
                     let jsonrpc_client = jsonrpc_client.clone();
                     let near_signer = near_signer.clone();
 
                     async move {
-                        info!("Received InitTransfer log");
-
-                        let Some(tx_hash) = log.transaction_hash else {
-                            warn!("No transaction hash in log: {:?}", log);
-                            return;
-                        };
-
                         let Some(topic) = log.topic0() else {
                             warn!("No topic0 in log: {:?}", log);
                             return;
                         };
 
                         let tx_hash = H256::from_slice(tx_hash.as_slice());
-
-                        let Ok(token) = init_log.inner.token.parse::<AccountId>() else {
-                            warn!(
-                                "Failed to parse token as AccountId: {:?}",
-                                init_log.inner.token
-                            );
-                            return;
-                        };
-                        let Ok(recipient) = init_log.inner.recipient.parse::<OmniAddress>() else {
-                            warn!(
-                                "Failed to parse recipient as OmniAddress: {:?}",
-                                init_log.inner.recipient
-                            );
-                            return;
-                        };
 
                         let Some(prover_args) = utils::evm::construct_prover_args(
                             &config,

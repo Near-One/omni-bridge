@@ -99,7 +99,7 @@ async fn process_log(
             redis_connection,
             utils::redis::ETH_WITHDRAW_EVENTS,
             tx_hash.to_string(),
-            (block_number, log, tx_logs),
+            (block_number, log, tx_logs, 0),
         )
         .await;
     } else if log.log_decode::<utils::evm::FinTransfer>().is_ok() {
