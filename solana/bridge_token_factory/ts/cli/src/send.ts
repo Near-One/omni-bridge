@@ -2,27 +2,29 @@ import {Command} from 'commander';
 import {getContext} from './context';
 import {executeTx} from './executor';
 import BN from 'bn.js';
+import {parsePubkey} from './keyParser';
 
-export function installRepayCLI(program: Command) {
+export function installSendCLI(program: Command) {
   program
-    .command('repay')
-    .description('Repay')
-    .requiredOption('--token <string>', 'Token address')
+    .command('send')
+    .description('Sends solana token to the near')
+    .requiredOption('--mint <pubkey>', 'Mint address')
     .requiredOption('--amount <number>', 'Amount')
     .requiredOption('--recipient <address>', 'Recipient')
     .action(
       async ({
-        token,
+        mint,
         amount,
         recipient,
       }: {
-        token: string;
+        mint: string;
         amount: string;
         recipient: string;
       }) => {
         const {sdk} = getContext();
-        const {instructions, signers} = await sdk.repay({
-          token,
+        const mintPk = await parsePubkey(mint);
+        const {instructions, signers} = await sdk.send({
+          mint: mintPk,
           amount: new BN(amount),
           recipient,
         });

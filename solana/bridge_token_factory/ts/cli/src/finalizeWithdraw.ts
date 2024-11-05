@@ -4,32 +4,33 @@ import {executeTx} from './executor';
 import BN from 'bn.js';
 import {parsePubkey} from './keyParser';
 
-export function installFinalizeDepositCLI(program: Command) {
+export function installFinalizeWithdrawCLI(program: Command) {
   program
-    .command('finalize-deposit')
-    .description('Finalize the deposit')
-    .requiredOption('--token <string>', 'Near token address')
+    .command('finalize-withdraw')
+    .description('Finalize the withdraw')
+    .requiredOption('--mint <pubkey>', 'Mint address')
     .requiredOption('--nonce <string>', 'Nonce')
     .requiredOption('--amount <number>', 'Amount')
     .requiredOption('--recipient <pubkey>', 'Recipient')
     .option('--signature <string>', 'Signature')
     .action(
       async ({
-        token,
+        mint,
         nonce,
         amount,
         recipient,
         signature,
       }: {
-        token: string;
+        mint: string;
         nonce: string;
         amount: string;
         recipient: string;
         signature?: string;
       }) => {
         const {sdk} = getContext();
-        const {instructions, signers} = await sdk.finalizeDeposit({
-          token,
+        const mintPk = await parsePubkey(mint);
+        const {instructions, signers} = await sdk.finalizeWithdraw({
+          mint: mintPk,
           nonce: new BN(nonce),
           amount: new BN(amount),
           recipient: await parsePubkey(recipient),

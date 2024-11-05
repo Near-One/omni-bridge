@@ -4,8 +4,11 @@ use anchor_spl::{
     token_interface::{Mint, TokenAccount, TokenInterface},
 };
 
-use crate::constants::{AUTHORITY_SEED, VAULT_SEED};
 use crate::instructions::wormhole_cpi::*;
+use crate::{
+    constants::{AUTHORITY_SEED, VAULT_SEED},
+    state::message::{send::SendPayload, Payload},
+};
 
 #[derive(Accounts)]
 pub struct Send<'info> {
@@ -46,21 +49,8 @@ pub struct Send<'info> {
     pub token_program: Interface<'info, TokenInterface>,
 }
 
-#[derive(AnchorDeserialize, AnchorSerialize, Clone, Default)]
-pub struct SendData {
-    pub amount: u128,
-    pub recipient: String,
-}
-
-#[derive(AnchorSerialize, AnchorDeserialize)]
-pub struct SendPayload {
-    pub token: String,
-    pub amount: u128,
-    pub recipient: String,
-}
-
 impl<'info> Send<'info> {
-    pub fn process(&self, data: SendData) -> Result<()> {
+    pub fn process(&self, payload: SendPayload) -> Result<()> {
         transfer_checked(
             CpiContext::new(
                 self.token_program.to_account_info(),
@@ -71,18 +61,12 @@ impl<'info> Send<'info> {
                     mint: self.mint.to_account_info(),
                 },
             ),
-            data.amount.try_into().unwrap(),
+            payload.amount.try_into().unwrap(),
             self.mint.decimals,
         )?;
 
-        let payload = SendPayload {
-            token: self.mint.key().to_string(),
-            amount: data.amount,
-            recipient: data.recipient,
-        }
-        .try_to_vec()?; // TODO: correct message payload
-
-        self.wormhole.post_message(payload)?;
+        self.wormhole
+            .post_message(payload.serialize_for_near(self.mint.key())?)?;
 
         Ok(())
     }

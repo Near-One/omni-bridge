@@ -1,16 +1,15 @@
-use crate::{constants::WRAPPED_MINT_SEED, instructions::wormhole_cpi::*};
-use anchor_lang::{
-    prelude::*,
-    solana_program::{keccak, secp256k1_recover::secp256k1_recover},
+use crate::{
+    constants::WRAPPED_MINT_SEED,
+    instructions::wormhole_cpi::*,
+    state::message::{
+        deposit::{DepositPayload, FinalizeDepositResponse},
+        Payload, SignedPayload,
+    },
 };
+use anchor_lang::prelude::*;
 use anchor_spl::{
     associated_token::AssociatedToken,
     token::{mint_to, Mint, MintTo, Token, TokenAccount},
-};
-use near_sdk::json_types::U128;
-use std::{
-    io::{BufWriter, Write},
-    vec,
 };
 
 use crate::{
@@ -18,12 +17,11 @@ use crate::{
         AUTHORITY_SEED, CONFIG_SEED, USED_NONCES_ACCOUNT_SIZE, USED_NONCES_PER_ACCOUNT,
         USED_NONCES_SEED,
     },
-    error::ErrorCode,
     state::{config::Config, used_nonces::UsedNonces},
 };
 
 #[derive(Accounts)]
-#[instruction(data: FinalizeDepositData)]
+#[instruction(data: SignedPayload<DepositPayload>)]
 pub struct FinalizeDeposit<'info> {
     #[account(
         mut,
@@ -74,9 +72,9 @@ pub struct FinalizeDeposit<'info> {
 }
 
 impl<'info> FinalizeDeposit<'info> {
-    pub fn mint(&mut self, data: FinalizeDepositData) -> Result<()> {
+    pub fn mint(&mut self, data: DepositPayload) -> Result<()> {
         UsedNonces::use_nonce(
-            data.payload.nonce,
+            data.nonce,
             &self.used_nonces,
             &mut self.config,
             self.authority.to_account_info(),
@@ -98,68 +96,12 @@ impl<'info> FinalizeDeposit<'info> {
             cpi_accounts,
             signer_seeds,
         );
-        mint_to(cpi_ctx, data.payload.amount.try_into().unwrap())?;
+        mint_to(cpi_ctx, data.amount.try_into().unwrap())?;
 
-        let payload = FinalizeDepositResponse {
-            nonce: data.payload.nonce,
-        }
-        .try_to_vec()?;
+        let payload = FinalizeDepositResponse { nonce: data.nonce }.serialize_for_near(())?;
 
         self.wormhole.post_message(payload)?;
 
         Ok(())
     }
-}
-
-#[derive(AnchorSerialize, AnchorDeserialize)]
-pub struct DepositPayload {
-    pub nonce: u128,
-    pub token: String,
-    pub amount: u128,
-    pub fee_recipient: Option<String>,
-}
-
-impl DepositPayload {
-    fn serialize_for_signature(&self, recipient: &Pubkey) -> Result<Vec<u8>> {
-        let mut writer = BufWriter::new(vec![]);
-        near_sdk::borsh::BorshSerialize::serialize(&U128(self.nonce), &mut writer)?;
-        self.token.serialize(&mut writer)?;
-        near_sdk::borsh::BorshSerialize::serialize(&U128(self.amount), &mut writer)?;
-        writer.write(&[2])?;
-        recipient.to_string().serialize(&mut writer)?;
-        self.fee_recipient.serialize(&mut writer)?;
-
-        writer
-            .into_inner()
-            .map_err(|_| error!(ErrorCode::InvalidArgs))
-    }
-}
-
-#[derive(AnchorSerialize, AnchorDeserialize)]
-pub struct FinalizeDepositData {
-    pub payload: DepositPayload,
-    signature: [u8; 65],
-}
-
-impl FinalizeDepositData {
-    pub fn verify_signature(&self, recipient: &Pubkey, derived_near_bridge_address: &[u8; 64]) -> Result<()> {
-        let borsh_encoded = self.payload.serialize_for_signature(recipient)?;
-        let hash = keccak::hash(&borsh_encoded);
-
-        let signer =
-            secp256k1_recover(&hash.to_bytes(), self.signature[64], &self.signature[0..64])
-                .map_err(|_| error!(ErrorCode::SignatureVerificationFailed))?;
-
-        require!(
-            signer.0 == *derived_near_bridge_address,
-            ErrorCode::SignatureVerificationFailed
-        );
-
-        Ok(())
-    }
-}
-
-#[derive(AnchorSerialize, AnchorDeserialize)]
-pub struct FinalizeDepositResponse {
-    pub nonce: u128,
 }

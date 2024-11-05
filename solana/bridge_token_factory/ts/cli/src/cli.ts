@@ -6,6 +6,8 @@ import {installFinalizeDepositCLI} from './finalizeDeposit';
 import {installRepayCLI} from './repay';
 import {installRegisterMintCLI} from './registerMint';
 import {installCreateTokenCLI} from './createToken';
+import {installFinalizeWithdrawCLI} from './finalizeWithdraw';
+import {installSendCLI} from './send';
 
 export function cli() {
   const program = new Command();
@@ -30,6 +32,8 @@ export function cli() {
   installFinalizeDepositCLI(program);
   installRepayCLI(program);
   installRegisterMintCLI(program);
+  installFinalizeWithdrawCLI(program);
+  installSendCLI(program);
 
   return program;
 }

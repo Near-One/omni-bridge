@@ -1,4 +1,4 @@
-import {IdlAccounts, IdlEvents, Program, Provider} from '@coral-xyz/anchor';
+import {IdlAccounts, Program, Provider} from '@coral-xyz/anchor';
 
 import {BridgeTokenFactory} from './bridge_token_factory';
 import * as BridgeTokenFactoryIdl from './bridge_token_factory.json';
@@ -16,6 +16,7 @@ import BN from 'bn.js';
 import {
   ASSOCIATED_TOKEN_PROGRAM_ID,
   getAssociatedTokenAddressSync,
+  TOKEN_2022_PROGRAM_ID,
   TOKEN_PROGRAM_ID,
 } from '@solana/spl-token';
 
@@ -235,7 +236,7 @@ export class OmniBridgeSolanaSDK {
 
     const instruction = await this.program.methods
       .deployToken({
-        metadata: {
+        payload: {
           token,
           name,
           symbol,
@@ -406,6 +407,8 @@ export class OmniBridgeSolanaSDK {
     sequenceNumber,
     overrideAuthority = null,
     useMetaplex,
+    payer,
+    token22,
   }: {
     mint: PublicKey;
     name?: string;
@@ -413,6 +416,8 @@ export class OmniBridgeSolanaSDK {
     sequenceNumber?: BN;
     overrideAuthority?: PublicKey | null;
     useMetaplex?: boolean;
+    payer?: PublicKey;
+    token22?: boolean;
   }): Promise<TransactionData> {
     const wormholeMessage = Keypair.generate();
     const [config] = this.configId();
@@ -429,12 +434,13 @@ export class OmniBridgeSolanaSDK {
       sequenceNumber = await this.fetchNextSequenceNumber();
     }
 
-    const mintInfo = await this.provider.connection.getAccountInfo(mint);
+    if (token22 === undefined) {
+      const mintInfo = await this.provider.connection.getAccountInfo(mint);
+      token22 = mintInfo?.owner.equals(TOKEN_2022_PROGRAM_ID);
+    }
 
-    if (useMetaplex === undefined && !overrideAuthority) {
-      if (mintInfo?.owner.equals(TOKEN_PROGRAM_ID)) {
-        useMetaplex = true;
-      }
+    if (useMetaplex === undefined && !overrideAuthority && !token22) {
+      useMetaplex = true;
     }
 
     const instruction = await this.program.methods
@@ -452,14 +458,157 @@ export class OmniBridgeSolanaSDK {
           systemProgram: SystemProgram.programId,
           wormholeProgram: this.wormholeProgramId,
           message: wormholeMessage.publicKey,
-          payer: this.provider.publicKey!,
+          payer: payer || this.provider.publicKey!,
         },
         metadata: useMetaplex ? metadata : null,
         systemProgram: SystemProgram.programId,
-        tokenProgram: mintInfo!.owner,
+        tokenProgram: token22 ? TOKEN_2022_PROGRAM_ID : TOKEN_PROGRAM_ID,
         overrideAuthority,
         vault: this.vaultId({mint})[0],
         associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+      })
+      .instruction();
+
+    return {instructions: [instruction], signers: [wormholeMessage]};
+  }
+
+  async finalizeWithdraw({
+    nonce,
+    mint,
+    amount,
+    recipient,
+    feeRecipient = null,
+    signature,
+    payer,
+    sequenceNumber,
+    token22,
+  }: {
+    nonce: BN;
+    mint: PublicKey;
+    amount: BN;
+    recipient: PublicKey;
+    feeRecipient?: string | null;
+    signature: number[];
+    payer?: PublicKey;
+    sequenceNumber?: BN;
+    token22?: boolean;
+  }): Promise<TransactionData> {
+    const wormholeMessage = Keypair.generate();
+
+    if (!sequenceNumber) {
+      sequenceNumber = await this.fetchNextSequenceNumber();
+    }
+
+    const [config] = this.configId();
+    const [usedNonces] = this.usedNoncesId({nonce});
+    const tokenAccount = getAssociatedTokenAddressSync(mint, recipient, true);
+
+    if (token22 === undefined) {
+      const mintInfo = await this.provider.connection.getAccountInfo(mint);
+      token22 = mintInfo?.owner.equals(TOKEN_2022_PROGRAM_ID);
+    }
+
+    const instruction = await this.program.methods
+      .finalizeWithdraw({
+        payload: {
+          nonce,
+          amount,
+          feeRecipient,
+        },
+        signature,
+      })
+      .accountsStrict({
+        config,
+        usedNonces,
+        authority: this.authority()[0],
+        wormhole: {
+          config,
+          bridge: this.wormholeBridgeId()[0],
+          feeCollector: this.wormholeFeeCollectorId()[0],
+          sequence: this.wormholeSequenceId()[0],
+          clock: SYSVAR_CLOCK_PUBKEY,
+          rent: SYSVAR_RENT_PUBKEY,
+          systemProgram: SystemProgram.programId,
+          wormholeProgram: this.wormholeProgramId,
+          message: wormholeMessage.publicKey,
+          payer: payer || this.provider.publicKey!,
+        },
+        recipient,
+        mint,
+        vault: this.vaultId({mint})[0],
+        systemProgram: SystemProgram.programId,
+        tokenProgram: token22 ? TOKEN_2022_PROGRAM_ID : TOKEN_PROGRAM_ID,
+        associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+        tokenAccount,
+      })
+      .instruction();
+
+    return {instructions: [instruction], signers: [wormholeMessage]};
+  }
+
+  async send({
+    mint,
+    from,
+    user,
+    amount,
+    recipient,
+    payer,
+    sequenceNumber,
+    token22,
+  }: {
+    mint: PublicKey;
+    from?: PublicKey;
+    user?: PublicKey;
+    amount: BN;
+    recipient: string;
+    payer?: PublicKey;
+    sequenceNumber?: BN;
+    token22?: boolean;
+  }): Promise<TransactionData> {
+    const wormholeMessage = Keypair.generate();
+    const [config] = this.configId();
+
+    if (!sequenceNumber) {
+      sequenceNumber = await this.fetchNextSequenceNumber();
+    }
+
+    if (!user) {
+      user = this.provider.publicKey!;
+    }
+
+    if (!from) {
+      from = getAssociatedTokenAddressSync(mint, user, true);
+    }
+
+    if (token22 === undefined) {
+      const mintInfo = await this.provider.connection.getAccountInfo(mint);
+      token22 = mintInfo?.owner.equals(TOKEN_2022_PROGRAM_ID);
+    }
+
+    const instruction = await this.program.methods
+      .send({
+        amount,
+        recipient,
+      })
+      .accountsStrict({
+        wormhole: {
+          config,
+          bridge: this.wormholeBridgeId()[0],
+          feeCollector: this.wormholeFeeCollectorId()[0],
+          sequence: this.wormholeSequenceId()[0],
+          clock: SYSVAR_CLOCK_PUBKEY,
+          rent: SYSVAR_RENT_PUBKEY,
+          systemProgram: SystemProgram.programId,
+          wormholeProgram: this.wormholeProgramId,
+          message: wormholeMessage.publicKey,
+          payer: payer || this.provider.publicKey!,
+        },
+        authority: this.authority()[0],
+        mint,
+        tokenProgram: token22 ? TOKEN_2022_PROGRAM_ID : TOKEN_PROGRAM_ID,
+        from,
+        user,
+        vault: this.vaultId({mint})[0],
       })
       .instruction();
 

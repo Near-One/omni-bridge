@@ -16,8 +16,7 @@ use anchor_spl::{
     },
 };
 
-use super::MetadataPayload;
-use crate::constants::{AUTHORITY_SEED, VAULT_SEED};
+use crate::{constants::{AUTHORITY_SEED, VAULT_SEED}, state::message::{deploy_token::DeployTokenPayload, Payload}};
 use crate::error::ErrorCode;
 use crate::instructions::wormhole_cpi::*;
 use anchor_spl::metadata::ID as MetaplexID;
@@ -122,14 +121,13 @@ impl<'info> RegisterMint<'info> {
             }
         };
 
-        // TODO: correct message payload
-        let payload = MetadataPayload {
+        let payload = DeployTokenPayload {
             token: self.mint.key().to_string(),
             name,
             symbol,
             decimals: self.mint.decimals,
         }
-        .try_to_vec()?;
+        .serialize_for_near(())?;
 
         self.wormhole.post_message(payload)?;
 

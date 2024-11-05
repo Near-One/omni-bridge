@@ -1,18 +1,8 @@
-use std::str::FromStr;
-
-use anchor_lang::{
-    prelude::*,
-    solana_program::{keccak, secp256k1_recover::secp256k1_recover},
-};
+use anchor_lang::prelude::*;
 use anchor_spl::{
     associated_token::AssociatedToken,
     token_2022::{transfer_checked, TransferChecked},
     token_interface::{Mint, TokenAccount, TokenInterface},
-};
-use near_sdk::json_types::U128;
-use std::{
-    io::{BufWriter, Write},
-    vec,
 };
 
 use crate::{
@@ -20,16 +10,20 @@ use crate::{
         AUTHORITY_SEED, CONFIG_SEED, USED_NONCES_ACCOUNT_SIZE, USED_NONCES_PER_ACCOUNT,
         USED_NONCES_SEED, VAULT_SEED,
     },
-    error::ErrorCode,
-    state::{config::Config, used_nonces::UsedNonces},
-    FinalizeDepositData,
+    state::{
+        config::Config,
+        message::{
+            withdraw::{FinalizeWithdrawResponse, WithdrawPayload},
+            Payload, SignedPayload,
+        },
+        used_nonces::UsedNonces,
+    },
 };
 
-use super::FinalizeDepositResponse;
 use crate::instructions::wormhole_cpi::*;
 
 #[derive(Accounts)]
-#[instruction(data: FinalizeDepositData)]
+#[instruction(data: SignedPayload<WithdrawPayload>)]
 pub struct FinalizeWithdraw<'info> {
     #[account(
         mut,
@@ -59,7 +53,6 @@ pub struct FinalizeWithdraw<'info> {
     pub recipient: UncheckedAccount<'info>,
 
     #[account(
-        address = Pubkey::from_str(&data.payload.token).or(err!(ErrorCode::SolanaTokenParsingFailed))?,
         constraint = !mint.mint_authority.contains(authority.key),
         mint::token_program = token_program,
     )]
@@ -96,9 +89,9 @@ pub struct FinalizeWithdraw<'info> {
 }
 
 impl<'info> FinalizeWithdraw<'info> {
-    pub fn process(&mut self, data: FinalizeWithdrawData) -> Result<()> {
+    pub fn process(&mut self, data: WithdrawPayload) -> Result<()> {
         UsedNonces::use_nonce(
-            data.payload.nonce,
+            data.nonce,
             &self.used_nonces,
             &mut self.config,
             self.authority.to_account_info(),
@@ -121,74 +114,14 @@ impl<'info> FinalizeWithdraw<'info> {
                 },
                 signer_seeds,
             ),
-            data.payload.amount.try_into().unwrap(),
+            data.amount.try_into().unwrap(),
             self.mint.decimals,
         )?;
 
-        let payload = FinalizeDepositResponse {
-            nonce: data.payload.nonce,
-        }
-        .try_to_vec()?;
+        let payload = FinalizeWithdrawResponse { nonce: data.nonce }.serialize_for_near(())?;
 
         self.wormhole.post_message(payload)?;
 
         Ok(())
     }
-}
-
-#[derive(AnchorSerialize, AnchorDeserialize)]
-pub struct WithdrawPayload {
-    pub nonce: u128,
-    pub amount: u128,
-    pub fee_recipient: Option<String>,
-}
-
-impl WithdrawPayload {
-    fn serialize_for_signature(&self, recipient: &Pubkey, token: &Pubkey) -> Result<Vec<u8>> {
-        let mut writer = BufWriter::new(vec![]);
-        near_sdk::borsh::BorshSerialize::serialize(&U128(self.nonce), &mut writer)?;
-        token.to_string().serialize(&mut writer)?;
-        near_sdk::borsh::BorshSerialize::serialize(&U128(self.amount), &mut writer)?;
-        writer.write(&[2])?;
-        recipient.to_string().serialize(&mut writer)?;
-        self.fee_recipient.serialize(&mut writer)?;
-
-        writer
-            .into_inner()
-            .map_err(|_| error!(ErrorCode::InvalidArgs))
-    }
-}
-
-#[derive(AnchorSerialize, AnchorDeserialize)]
-pub struct FinalizeWithdrawData {
-    pub payload: WithdrawPayload,
-    signature: [u8; 65],
-}
-
-impl FinalizeWithdrawData {
-    pub fn verify_signature(
-        &self,
-        recipient: &Pubkey,
-        token: &Pubkey,
-        derived_near_bridge_address: &[u8; 64],
-    ) -> Result<()> {
-        let borsh_encoded = self.payload.serialize_for_signature(recipient, token)?;
-        let hash = keccak::hash(&borsh_encoded);
-
-        let signer =
-            secp256k1_recover(&hash.to_bytes(), self.signature[64], &self.signature[0..64])
-                .map_err(|_| error!(ErrorCode::SignatureVerificationFailed))?;
-
-        require!(
-            signer.0 == *derived_near_bridge_address,
-            ErrorCode::SignatureVerificationFailed
-        );
-
-        Ok(())
-    }
-}
-
-#[derive(AnchorSerialize, AnchorDeserialize)]
-pub struct FinalizeWithdrawResponse {
-    pub nonce: u128,
 }

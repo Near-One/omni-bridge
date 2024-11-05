@@ -71,7 +71,7 @@ export type BridgeTokenFactory = {
               },
               {
                 "kind": "arg",
-                "path": "data.metadata.token"
+                "path": "data.payload.token"
               }
             ]
           }
@@ -335,7 +335,17 @@ export type BridgeTokenFactory = {
           "name": "data",
           "type": {
             "defined": {
-              "name": "deployTokenData"
+              "name": "signedPayload",
+              "generics": [
+                {
+                  "kind": "type",
+                  "type": {
+                    "defined": {
+                      "name": "deployTokenPayload"
+                    }
+                  }
+                }
+              ]
             }
           }
         }
@@ -681,7 +691,17 @@ export type BridgeTokenFactory = {
           "name": "data",
           "type": {
             "defined": {
-              "name": "finalizeDepositData"
+              "name": "signedPayload",
+              "generics": [
+                {
+                  "kind": "type",
+                  "type": {
+                    "defined": {
+                      "name": "depositPayload"
+                    }
+                  }
+                }
+              ]
             }
           }
         }
@@ -1022,7 +1042,17 @@ export type BridgeTokenFactory = {
           "name": "data",
           "type": {
             "defined": {
-              "name": "finalizeWithdrawData"
+              "name": "signedPayload",
+              "generics": [
+                {
+                  "kind": "type",
+                  "type": {
+                    "defined": {
+                      "name": "withdrawPayload"
+                    }
+                  }
+                }
+              ]
             }
           }
         }
@@ -1894,10 +1924,10 @@ export type BridgeTokenFactory = {
       ],
       "args": [
         {
-          "name": "data",
+          "name": "payload",
           "type": {
             "defined": {
-              "name": "sendData"
+              "name": "sendPayload"
             }
           }
         }
@@ -2019,26 +2049,25 @@ export type BridgeTokenFactory = {
       }
     },
     {
-      "name": "deployTokenData",
+      "name": "deployTokenPayload",
       "type": {
         "kind": "struct",
         "fields": [
           {
-            "name": "metadata",
-            "type": {
-              "defined": {
-                "name": "metadataPayload"
-              }
-            }
+            "name": "token",
+            "type": "string"
           },
           {
-            "name": "signature",
-            "type": {
-              "array": [
-                "u8",
-                65
-              ]
-            }
+            "name": "name",
+            "type": "string"
+          },
+          {
+            "name": "symbol",
+            "type": "string"
+          },
+          {
+            "name": "decimals",
+            "type": "u8"
           }
         ]
       }
@@ -2070,56 +2099,6 @@ export type BridgeTokenFactory = {
       }
     },
     {
-      "name": "finalizeDepositData",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "payload",
-            "type": {
-              "defined": {
-                "name": "depositPayload"
-              }
-            }
-          },
-          {
-            "name": "signature",
-            "type": {
-              "array": [
-                "u8",
-                65
-              ]
-            }
-          }
-        ]
-      }
-    },
-    {
-      "name": "finalizeWithdrawData",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "payload",
-            "type": {
-              "defined": {
-                "name": "withdrawPayload"
-              }
-            }
-          },
-          {
-            "name": "signature",
-            "type": {
-              "array": [
-                "u8",
-                65
-              ]
-            }
-          }
-        ]
-      }
-    },
-    {
       "name": "metadataOverride",
       "type": {
         "kind": "struct",
@@ -2131,30 +2110,6 @@ export type BridgeTokenFactory = {
           {
             "name": "symbol",
             "type": "string"
-          }
-        ]
-      }
-    },
-    {
-      "name": "metadataPayload",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "token",
-            "type": "string"
-          },
-          {
-            "name": "name",
-            "type": "string"
-          },
-          {
-            "name": "symbol",
-            "type": "string"
-          },
-          {
-            "name": "decimals",
-            "type": "u8"
           }
         ]
       }
@@ -2180,7 +2135,7 @@ export type BridgeTokenFactory = {
       }
     },
     {
-      "name": "sendData",
+      "name": "sendPayload",
       "type": {
         "kind": "struct",
         "fields": [
@@ -2191,6 +2146,35 @@ export type BridgeTokenFactory = {
           {
             "name": "recipient",
             "type": "string"
+          }
+        ]
+      }
+    },
+    {
+      "name": "signedPayload",
+      "generics": [
+        {
+          "kind": "type",
+          "name": "p"
+        }
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "payload",
+            "type": {
+              "generic": "p"
+            }
+          },
+          {
+            "name": "signature",
+            "type": {
+              "array": [
+                "u8",
+                65
+              ]
+            }
           }
         ]
       }

@@ -3,6 +3,8 @@ use anchor_spl::token::{burn, Burn, Mint, Token, TokenAccount};
 
 use crate::constants::{AUTHORITY_SEED, WRAPPED_MINT_SEED};
 use crate::instructions::wormhole_cpi::*;
+use crate::state::message::repay::RepayPayload;
+use crate::state::message::Payload;
 
 #[derive(Accounts)]
 #[instruction(payload: RepayPayload)]
@@ -33,13 +35,6 @@ pub struct Repay<'info> {
     pub token_program: Program<'info, Token>,
 }
 
-#[derive(AnchorSerialize, AnchorDeserialize)]
-pub struct RepayPayload {
-    pub token: String,
-    pub amount: u128,
-    pub recipient: String,
-}
-
 impl<'info> Repay<'info> {
     pub fn process(&self, payload: RepayPayload) -> Result<()> {
         burn(
@@ -54,9 +49,8 @@ impl<'info> Repay<'info> {
             payload.amount.try_into().unwrap(),
         )?;
 
-        let payload = payload.try_to_vec()?; // TODO: correct message payload
-
-        self.wormhole.post_message(payload)?;
+        self.wormhole
+            .post_message(payload.serialize_for_near(())?)?;
 
         Ok(())
     }
