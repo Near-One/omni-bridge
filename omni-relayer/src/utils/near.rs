@@ -1,5 +1,5 @@
 use anyhow::Result;
-use log::{info, warn};
+use log::info;
 
 use near_jsonrpc_client::{
     methods::{self, block::RpcBlockRequest},
@@ -64,7 +64,6 @@ pub async fn get_eth_light_client_last_block_number(
 pub async fn handle_streamer_message(
     config: &config::Config,
     redis_connection: &mut redis::aio::MultiplexedConnection,
-    jsonrpc_client: &JsonRpcClient,
     streamer_message: &StreamerMessage,
 ) {
     let nep_locker_event_outcomes = find_nep_locker_event_outcomes(config, streamer_message);
@@ -81,44 +80,19 @@ pub async fn handle_streamer_message(
         match log {
             Nep141LockerEvent::InitTransferEvent {
                 ref transfer_message,
-            } => {
-                match utils::fee::is_fee_sufficient(
-                    config,
-                    jsonrpc_client,
-                    &transfer_message.sender,
-                    &transfer_message.recipient,
-                    &transfer_message.token,
-                    &transfer_message.fee,
-                )
-                .await
-                {
-                    Ok(res) => {
-                        if res {
-                            utils::redis::add_event(
-                                redis_connection,
-                                utils::redis::NEAR_INIT_TRANSFER_QUEUE,
-                                transfer_message.origin_nonce.0.to_string(),
-                                log,
-                            )
-                            .await;
-                        } else {
-                            warn!("Fee is not sufficient for transfer: {:?}", transfer_message);
-                        }
-                    }
-                    Err(err) => {
-                        warn!("Failed to check fee: {}", err);
-                    }
-                }
             }
-            Nep141LockerEvent::UpdateFeeEvent {
+            | Nep141LockerEvent::UpdateFeeEvent {
                 ref transfer_message,
             } => {
-                // TODO: check if transcation is already in redis (in any other case we can ignore it, because there's nothing to update)
                 utils::redis::add_event(
                     redis_connection,
                     utils::redis::NEAR_INIT_TRANSFER_QUEUE,
                     transfer_message.origin_nonce.0.to_string(),
-                    log,
+                    crate::workers::near::InitTransferWithTimestamp {
+                        event: log,
+                        creation_timestamp: chrono::Utc::now().timestamp(),
+                        last_update_timestamp: None,
+                    },
                 )
                 .await;
             }
@@ -139,33 +113,17 @@ pub async fn handle_streamer_message(
                 ref transfer_message,
             } => {
                 if nonce.is_some() {
-                    match utils::fee::is_fee_sufficient(
-                        config,
-                        jsonrpc_client,
-                        &transfer_message.sender,
-                        &transfer_message.recipient,
-                        &transfer_message.token,
-                        &transfer_message.fee,
+                    utils::redis::add_event(
+                        redis_connection,
+                        utils::redis::NEAR_INIT_TRANSFER_QUEUE,
+                        transfer_message.origin_nonce.0.to_string(),
+                        crate::workers::near::InitTransferWithTimestamp {
+                            event: log,
+                            creation_timestamp: chrono::Utc::now().timestamp(),
+                            last_update_timestamp: None,
+                        },
                     )
-                    .await
-                    {
-                        Ok(res) => {
-                            if res {
-                                utils::redis::add_event(
-                                    redis_connection,
-                                    utils::redis::NEAR_INIT_TRANSFER_QUEUE,
-                                    transfer_message.origin_nonce.0.to_string(),
-                                    log,
-                                )
-                                .await;
-                            } else {
-                                warn!("Fee is not sufficient for transfer: {:?}", transfer_message);
-                            }
-                        }
-                        Err(err) => {
-                            warn!("Failed to check fee: {}", err);
-                        }
-                    }
+                    .await;
                 } else {
                     utils::redis::add_event(
                         redis_connection,

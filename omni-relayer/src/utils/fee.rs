@@ -18,7 +18,7 @@ use super::storage;
 
 #[derive(Debug, serde::Deserialize)]
 struct Metadata {
-    pub decimals: u32,
+    decimals: u32,
 }
 
 async fn get_token_decimals(jsonrpc_client: &JsonRpcClient, token: &AccountId) -> Result<u32> {
@@ -105,17 +105,17 @@ pub async fn is_fee_sufficient(
             .await?
         }
         OmniAddress::Near(address) => {
-            if !storage::has_storage_deposit(jsonrpc_client, token, &address.parse::<AccountId>()?)
+            if storage::has_storage_deposit(jsonrpc_client, token, &address.parse::<AccountId>()?)
                 .await?
             {
+                0.0
+            } else {
                 calculate_price(
                     storage::NEP141_STORAGE_DEPOSIT,
                     recipient_symbol,
                     recipient_token_decimals,
                 )
                 .await?
-            } else {
-                0.0
             }
         }
         OmniAddress::Sol(_) => todo!(),

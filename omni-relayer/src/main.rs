@@ -40,7 +40,10 @@ async fn main() -> Result<()> {
         let config = config.clone();
         let redis_client = redis_client.clone();
         let connector = connector.clone();
-        async move { workers::near::sign_transfer(config, redis_client, connector).await }
+        let jsonrpc_client = jsonrpc_client.clone();
+        async move {
+            workers::near::sign_transfer(config, redis_client, connector, jsonrpc_client).await
+        }
     }));
     handles.push(tokio::spawn({
         let redis_client = redis_client.clone();

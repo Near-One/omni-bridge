@@ -5958,6 +5958,7 @@ dependencies = [
  "alloy",
  "anyhow",
  "borsh 1.5.1",
+ "chrono",
  "clap",
  "dotenv",
  "eth-proof",
