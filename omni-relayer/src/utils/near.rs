@@ -88,7 +88,11 @@ pub async fn handle_streamer_message(
                     redis_connection,
                     utils::redis::NEAR_INIT_TRANSFER_QUEUE,
                     transfer_message.origin_nonce.0.to_string(),
-                    (log, 0),
+                    crate::workers::near::InitTransferWithTimestamp {
+                        event: log,
+                        creation_timestamp: chrono::Utc::now().timestamp(),
+                        last_update_timestamp: None,
+                    },
                 )
                 .await;
             }
@@ -113,7 +117,11 @@ pub async fn handle_streamer_message(
                         redis_connection,
                         utils::redis::NEAR_INIT_TRANSFER_QUEUE,
                         transfer_message.origin_nonce.0.to_string(),
-                        (log, 0),
+                        crate::workers::near::InitTransferWithTimestamp {
+                            event: log,
+                            creation_timestamp: chrono::Utc::now().timestamp(),
+                            last_update_timestamp: None,
+                        },
                     )
                     .await;
                 } else {

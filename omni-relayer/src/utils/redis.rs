@@ -12,7 +12,9 @@ pub const ETH_WITHDRAW_EVENTS: &str = "eth_withdraw_events";
 
 pub const FINALIZED_TRANSFERS: &str = "finalized_transfers";
 
-pub const INVALID_FEE_RETRY_ATTEMPTS: u64 = 10;
+pub const KEEP_INSUFFICIENT_FEE_TRANSFERS_FOR: i64 = 60 * 60 * 24 * 14; // 14 days
+pub const CHECK_INSUFFICIENT_FEE_TRANSFERS_EVERY_SECS: i64 = 60 * 30; // 30 minutes
+
 pub const SLEEP_TIME_AFTER_EVENTS_PROCESS_SECS: u64 = 10;
 
 const QUERY_RETRY_ATTEMPTS: u64 = 10;

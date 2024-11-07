@@ -14,6 +14,13 @@ use omni_types::{
 
 use crate::{config, utils};
 
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+pub struct InitTransferWithTimestamp {
+    pub event: Nep141LockerEvent,
+    pub creation_timestamp: i64,
+    pub last_update_timestamp: Option<i64>,
+}
+
 pub async fn sign_transfer(
     config: config::Config,
     redis_client: redis::Client,
@@ -39,7 +46,9 @@ pub async fn sign_transfer(
 
         let mut handlers = Vec::new();
         for (key, event) in events {
-            if let Ok((event, attempt)) = serde_json::from_str::<(Nep141LockerEvent, u64)>(&event) {
+            if let Ok(init_transfer_with_timestamp) =
+                serde_json::from_str::<InitTransferWithTimestamp>(&event)
+            {
                 handlers.push(tokio::spawn({
                     let config = config.clone();
                     let mut redis_connection = redis_connection.clone();
@@ -56,7 +65,7 @@ pub async fn sign_transfer(
                         }
                         | Nep141LockerEvent::UpdateFeeEvent {
                             ref transfer_message,
-                        }) = event
+                        }) = init_transfer_with_timestamp.event
                         else {
                             warn!(
                                 "Expected InitTransferEvent/FinTransferEvent/UpdateFeeEvent, got: {:?}",
@@ -69,55 +78,71 @@ pub async fn sign_transfer(
                             "Received InitTransferEvent/FinTransferEvent/UpdateFeeEvent",
                         );
 
-                        match utils::fee::is_fee_sufficient(
-                            &config,
-                            &jsonrpc_client,
-                            &transfer_message.sender,
-                            &transfer_message.recipient,
-                            &transfer_message.token,
-                            &transfer_message.fee,
-                        )
-                        .await
+                        let current_timestamp = chrono::Utc::now().timestamp();
+
+                        if current_timestamp - init_transfer_with_timestamp.creation_timestamp
+                            > utils::redis::KEEP_INSUFFICIENT_FEE_TRANSFERS_FOR 
+                        {
+                            warn!(
+                                "Removing InitTransfer that is older than 2 weeks: {:?}",
+                                init_transfer_with_timestamp
+                            );
+                            utils::redis::remove_event(
+                                &mut redis_connection,
+                                utils::redis::NEAR_INIT_TRANSFER_QUEUE,
+                                &key,
+                            )
+                            .await;
+                            return;
+                        }
+
+                        if current_timestamp
+                            - init_transfer_with_timestamp
+                                .last_update_timestamp
+                                .unwrap_or_default()
+                            < utils::redis::CHECK_INSUFFICIENT_FEE_TRANSFERS_EVERY_SECS
+                        {
+                            return;
+                        }
+
+                        let is_fee_sufficient = 
+                            match utils::fee::is_fee_sufficient(
+                                &config,
+                                &jsonrpc_client,
+                                &transfer_message.sender,
+                                &transfer_message.recipient,
+                                &transfer_message.token,
+                                &transfer_message.fee,
+                            )
+                            .await
                         {
                             Ok(is_fee_sufficient) => {
                                 if !is_fee_sufficient {
-                                    warn!(
-                                        "Fee is not sufficient for transfer: {:?}",
-                                        transfer_message
-                                    );
-
-                                    if attempt < utils::redis::INVALID_FEE_RETRY_ATTEMPTS {
-                                        utils::redis::add_event(
-                                            &mut redis_connection,
-                                            utils::redis::NEAR_INIT_TRANSFER_QUEUE,
-                                            transfer_message.origin_nonce.0.to_string(),
-                                            (event, attempt + 1),
-                                        )
-                                        .await;
-                                    } else {
-                                        utils::redis::remove_event(
-                                            &mut redis_connection,
-                                            utils::redis::NEAR_INIT_TRANSFER_QUEUE,
-                                            &key,
-                                        )
-                                        .await;
-                                    }
-
-                                    return;
+                                    warn!("Fee is not sufficient for transfer: {:?}", init_transfer_with_timestamp.event);
                                 }
+
+                                is_fee_sufficient
                             }
                             Err(err) => {
                                 warn!("Failed to check fee: {}", err);
 
-                                utils::redis::remove_event(
-                                    &mut redis_connection,
-                                    utils::redis::NEAR_INIT_TRANSFER_QUEUE,
-                                    &key,
-                                )
-                                .await;
-
-                                return;
+                                 false
                             }
+                        };
+
+                        if !is_fee_sufficient {
+                            utils::redis::add_event(
+                                &mut redis_connection,
+                                utils::redis::NEAR_INIT_TRANSFER_QUEUE,
+                                transfer_message.origin_nonce.0.to_string(),
+                                InitTransferWithTimestamp {
+                                    event: init_transfer_with_timestamp.event,
+                                    creation_timestamp: init_transfer_with_timestamp.creation_timestamp,
+                                    last_update_timestamp: Some(current_timestamp),
+                                },
+                            )
+                            .await;
+                            return;
                         }
 
                         match connector
@@ -219,6 +244,13 @@ pub async fn finalize_transfer(
     }
 }
 
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+pub struct FinTransfer {
+    pub block_number: u64,
+    pub log: Log,
+    pub tx_logs: Option<TransactionReceipt>,
+}
+
 pub async fn claim_fee(
     config: config::Config,
     redis_client: redis::Client,
@@ -245,10 +277,9 @@ pub async fn claim_fee(
         let mut handlers = Vec::new();
 
         for (key, event) in events {
-            if let Ok((block_number, log, tx_logs)) =
-                serde_json::from_str::<(u64, Log, Option<TransactionReceipt>)>(&event)
-            {
-                let vaa = utils::evm::get_vaa(tx_logs, &log, &config).await;
+            if let Ok(fin_transfer) = serde_json::from_str::<FinTransfer>(&event) {
+                let vaa =
+                    utils::evm::get_vaa(fin_transfer.tx_logs, &fin_transfer.log, &config).await;
 
                 if vaa.is_none() {
                     let Ok(light_client_latest_block_number) =
@@ -262,7 +293,7 @@ pub async fn claim_fee(
                         continue;
                     };
 
-                    if block_number > light_client_latest_block_number {
+                    if fin_transfer.block_number > light_client_latest_block_number {
                         tokio::time::sleep(tokio::time::Duration::from_secs(
                             utils::redis::SLEEP_TIME_AFTER_EVENTS_PROCESS_SECS,
                         ))
@@ -279,13 +310,13 @@ pub async fn claim_fee(
                     async move {
                         info!("Received finalized transfer");
 
-                        let Some(tx_hash) = log.transaction_hash else {
-                            warn!("No transaction hash in log: {:?}", log);
+                        let Some(tx_hash) = fin_transfer.log.transaction_hash else {
+                            warn!("No transaction hash in log: {:?}", fin_transfer.log);
                             return;
                         };
 
-                        let Some(topic) = log.topic0() else {
-                            warn!("No topic0 in log: {:?}", log);
+                        let Some(topic) = fin_transfer.log.topic0() else {
+                            warn!("No topic0 in log: {:?}", fin_transfer.log);
                             return;
                         };
 
