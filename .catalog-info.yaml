@@ -10,3 +10,4 @@ spec:
     - ./near/omni-prover/evm-prover/.catalog-info.yaml
     - ./near/nep141-locker/.catalog-info.yaml
     - ./evm/bridge-token-factory/.catalog-info.yaml
+    - ./omni-relayer/.catalog-info.yaml
