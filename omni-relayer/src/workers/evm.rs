@@ -64,6 +64,17 @@ pub async fn finalize_transfer(
                     let near_signer = near_signer.clone();
 
                     async move {
+                        let current_timestamp = chrono::Utc::now().timestamp();
+
+                        if current_timestamp
+                            - init_transfer_with_timestamp
+                                .last_update_timestamp
+                                .unwrap_or_default()
+                            < utils::redis::CHECK_INSUFFICIENT_FEE_TRANSFERS_EVERY_SECS
+                        {
+                            return;
+                        }
+
                         let Ok(init_log) = init_transfer_with_timestamp
                             .log
                             .log_decode::<utils::evm::InitTransfer>()
@@ -103,13 +114,11 @@ pub async fn finalize_transfer(
                             return;
                         };
 
-                        let current_timestamp = chrono::Utc::now().timestamp();
-
                         if current_timestamp - init_transfer_with_timestamp.creation_timestamp
                             > utils::redis::KEEP_INSUFFICIENT_FEE_TRANSFERS_FOR
                         {
                             warn!(
-                                "Removing InitTransfer that is older than 2 weeks: {:?}",
+                                "Removing an old InitTransfer: {:?}",
                                 init_transfer_with_timestamp
                             );
                             utils::redis::remove_event(
@@ -118,15 +127,6 @@ pub async fn finalize_transfer(
                                 &key,
                             )
                             .await;
-                            return;
-                        }
-
-                        if current_timestamp
-                            - init_transfer_with_timestamp
-                                .last_update_timestamp
-                                .unwrap_or_default()
-                            < utils::redis::CHECK_INSUFFICIENT_FEE_TRANSFERS_EVERY_SECS
-                        {
                             return;
                         }
 

@@ -56,6 +56,17 @@ pub async fn sign_transfer(
                     let jsonrpc_client = jsonrpc_client.clone();
 
                     async move {
+                        let current_timestamp = chrono::Utc::now().timestamp();
+
+                        if current_timestamp
+                            - init_transfer_with_timestamp
+                                .last_update_timestamp
+                                .unwrap_or_default()
+                            < utils::redis::CHECK_INSUFFICIENT_FEE_TRANSFERS_EVERY_SECS
+                        {
+                            return;
+                        }
+
                         let (Nep141LockerEvent::InitTransferEvent {
                             ref transfer_message,
                         }
@@ -78,13 +89,11 @@ pub async fn sign_transfer(
                             "Received InitTransferEvent/FinTransferEvent/UpdateFeeEvent",
                         );
 
-                        let current_timestamp = chrono::Utc::now().timestamp();
-
                         if current_timestamp - init_transfer_with_timestamp.creation_timestamp
-                            > utils::redis::KEEP_INSUFFICIENT_FEE_TRANSFERS_FOR 
+                            > utils::redis::KEEP_INSUFFICIENT_FEE_TRANSFERS_FOR
                         {
                             warn!(
-                                "Removing InitTransfer that is older than 2 weeks: {:?}",
+                                "Removing an old InitTransfer: {:?}",
                                 init_transfer_with_timestamp
                             );
                             utils::redis::remove_event(
@@ -96,17 +105,7 @@ pub async fn sign_transfer(
                             return;
                         }
 
-                        if current_timestamp
-                            - init_transfer_with_timestamp
-                                .last_update_timestamp
-                                .unwrap_or_default()
-                            < utils::redis::CHECK_INSUFFICIENT_FEE_TRANSFERS_EVERY_SECS
-                        {
-                            return;
-                        }
-
-                        let is_fee_sufficient = 
-                            match utils::fee::is_fee_sufficient(
+                        let is_fee_sufficient = match utils::fee::is_fee_sufficient(
                                 &config,
                                 &jsonrpc_client,
                                 &transfer_message.sender,
