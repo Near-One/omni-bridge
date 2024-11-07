@@ -11,7 +11,7 @@ use alloy::{
 };
 use ethereum_types::H256;
 
-use crate::{config, utils};
+use crate::{config, utils, workers::near::FinTransfer};
 
 pub async fn start_indexer(config: config::Config, redis_client: redis::Client) -> Result<()> {
     let mut redis_connection = redis_client.get_multiplexed_tokio_connection().await?;
@@ -99,7 +99,13 @@ async fn process_log(
             redis_connection,
             utils::redis::ETH_WITHDRAW_EVENTS,
             tx_hash.to_string(),
-            (block_number, log, tx_logs),
+            crate::workers::evm::InitTransferWithTimestamp {
+                block_number,
+                log,
+                tx_logs,
+                creation_timestamp: chrono::Utc::now().timestamp(),
+                last_update_timestamp: None,
+            },
         )
         .await;
     } else if log.log_decode::<utils::evm::FinTransfer>().is_ok() {
@@ -107,7 +113,11 @@ async fn process_log(
             redis_connection,
             utils::redis::FINALIZED_TRANSFERS,
             tx_hash.to_string(),
-            (block_number, log, tx_logs),
+            FinTransfer {
+                block_number,
+                log,
+                tx_logs,
+            },
         )
         .await;
     }

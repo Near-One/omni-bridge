@@ -55,6 +55,7 @@ pub struct Evm {
     pub chain_id: u64,
     pub bridge_token_factory_address: Address,
     pub block_processing_batch_size: u64,
+    pub fin_transfer_gas_estimation: u64,
 
     #[serde(default = "derive_evm_address_from_private_key")]
     pub relayer_address_on_eth: OmniAddress,

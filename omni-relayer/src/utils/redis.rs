@@ -12,21 +12,24 @@ pub const ETH_WITHDRAW_EVENTS: &str = "eth_withdraw_events";
 
 pub const FINALIZED_TRANSFERS: &str = "finalized_transfers";
 
+pub const KEEP_INSUFFICIENT_FEE_TRANSFERS_FOR: i64 = 60 * 60 * 24 * 14; // 14 days
+pub const CHECK_INSUFFICIENT_FEE_TRANSFERS_EVERY_SECS: i64 = 60 * 30; // 30 minutes
+
 pub const SLEEP_TIME_AFTER_EVENTS_PROCESS_SECS: u64 = 10;
 
-const RETRY_ATTEMPTS: u64 = 10;
-const RETRY_SLEEP_SECS: u64 = 1;
+const QUERY_RETRY_ATTEMPTS: u64 = 10;
+const QUERY_RETRY_SLEEP_SECS: u64 = 1;
 
 pub async fn get_last_processed_block(
     redis_connection: &mut MultiplexedConnection,
     key: &str,
 ) -> Option<u64> {
-    for _ in 0..RETRY_ATTEMPTS {
+    for _ in 0..QUERY_RETRY_ATTEMPTS {
         if let Ok(res) = redis_connection.get::<&str, u64>(key).await {
             return Some(res);
         }
 
-        tokio::time::sleep(tokio::time::Duration::from_secs(RETRY_SLEEP_SECS)).await;
+        tokio::time::sleep(tokio::time::Duration::from_secs(QUERY_RETRY_SLEEP_SECS)).await;
     }
 
     warn!("Failed to get last processed block from redis db");
@@ -38,7 +41,7 @@ pub async fn update_last_processed_block(
     key: &str,
     value: u64,
 ) {
-    for _ in 0..RETRY_ATTEMPTS {
+    for _ in 0..QUERY_RETRY_ATTEMPTS {
         if redis_connection
             .set::<&str, u64, ()>(key, value)
             .await
@@ -47,7 +50,7 @@ pub async fn update_last_processed_block(
             return;
         }
 
-        tokio::time::sleep(tokio::time::Duration::from_secs(RETRY_SLEEP_SECS)).await;
+        tokio::time::sleep(tokio::time::Duration::from_secs(QUERY_RETRY_SLEEP_SECS)).await;
     }
 
     warn!("Failed to update last processed block in redis db");
@@ -57,7 +60,7 @@ pub async fn get_events(
     redis_connection: &mut MultiplexedConnection,
     key: String,
 ) -> Option<Vec<(String, String)>> {
-    for _ in 0..RETRY_ATTEMPTS {
+    for _ in 0..QUERY_RETRY_ATTEMPTS {
         if let Ok(mut iter) = redis_connection
             .hscan::<String, (String, String)>(key.clone())
             .await
@@ -71,7 +74,7 @@ pub async fn get_events(
             return Some(events);
         }
 
-        tokio::time::sleep(tokio::time::Duration::from_secs(RETRY_SLEEP_SECS)).await;
+        tokio::time::sleep(tokio::time::Duration::from_secs(QUERY_RETRY_SLEEP_SECS)).await;
     }
 
     warn!("Failed to get events from redis db");
@@ -92,7 +95,7 @@ pub async fn add_event<F, E>(
         return;
     };
 
-    for _ in 0..RETRY_ATTEMPTS {
+    for _ in 0..QUERY_RETRY_ATTEMPTS {
         if redis_connection
             .hset::<&str, F, String, ()>(key, field.clone(), serialized_event.clone())
             .await
@@ -101,7 +104,7 @@ pub async fn add_event<F, E>(
             return;
         }
 
-        tokio::time::sleep(tokio::time::Duration::from_secs(RETRY_SLEEP_SECS)).await;
+        tokio::time::sleep(tokio::time::Duration::from_secs(QUERY_RETRY_SLEEP_SECS)).await;
     }
 
     warn!("Failed to add event to redis db");
@@ -111,7 +114,7 @@ pub async fn remove_event<F>(redis_connection: &mut MultiplexedConnection, key: 
 where
     F: redis::ToRedisArgs + Clone + Send + Sync,
 {
-    for _ in 0..RETRY_ATTEMPTS {
+    for _ in 0..QUERY_RETRY_ATTEMPTS {
         if redis_connection
             .hdel::<&str, F, ()>(key, field.clone())
             .await
@@ -120,7 +123,7 @@ where
             return;
         }
 
-        tokio::time::sleep(tokio::time::Duration::from_secs(RETRY_SLEEP_SECS)).await;
+        tokio::time::sleep(tokio::time::Duration::from_secs(QUERY_RETRY_SLEEP_SECS)).await;
     }
 
     warn!("Failed to remove event from redis db");

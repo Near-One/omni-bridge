@@ -1,25 +1,33 @@
 use std::collections::HashMap;
 
-use anyhow::Result;
+use alloy::providers::{Provider, ProviderBuilder};
+use anyhow::{Context, Result};
 
 use near_jsonrpc_client::{methods, JsonRpcClient};
 use near_jsonrpc_primitives::types::query::QueryResponseKind;
-use near_primitives::{types::{AccountId, BlockReference}, views::QueryRequest};
-use omni_types::OmniAddress;
+use near_primitives::{
+    types::{AccountId, BlockReference},
+    views::QueryRequest,
+};
+use omni_types::{ChainKind, Fee, OmniAddress};
 use serde_json::from_slice;
 
+use crate::config;
+
+use super::storage;
+
 #[derive(Debug, serde::Deserialize)]
-pub struct Metadata {
-    pub decimals: u32,
+struct Metadata {
+    decimals: u32,
 }
 
-pub async fn get_token_decimals(jsonrpc_client: &JsonRpcClient, token: &AccountId) -> Result<u32> {
+async fn get_token_decimals(jsonrpc_client: &JsonRpcClient, token: &AccountId) -> Result<u32> {
     let request = methods::query::RpcQueryRequest {
         block_reference: BlockReference::latest(),
         request: QueryRequest::CallFunction {
             account_id: token.clone(),
             method_name: "ft_metadata".to_string(),
-            args: Vec::new().into()
+            args: Vec::new().into(),
         },
     };
 
@@ -32,49 +40,88 @@ pub async fn get_token_decimals(jsonrpc_client: &JsonRpcClient, token: &AccountI
     }
 }
 
-pub async fn get_price_by_symbol(symbol: &str) -> Result<f64> {
+async fn get_price_by_symbol(symbol: &str) -> Result<f64> {
     let url =
         format!("https://api.coingecko.com/api/v3/simple/price?ids={symbol}&vs_currencies=usd");
 
     let response = reqwest::get(&url).await?;
-    let json = response.json::<HashMap<String, HashMap<String, f64>>>().await?;
+    let json = response
+        .json::<HashMap<String, HashMap<String, f64>>>()
+        .await?;
 
     json.get(symbol)
         .and_then(|inner_map| inner_map.get("usd").copied())
         .ok_or_else(|| anyhow::anyhow!("Failed to get price for symbol: {}", symbol))
 }
 
-pub async fn get_price_by_contract_address(platform: &str, address: &str) -> Result<f64> {
-    let url = 
-        format!("https://api.coingecko.com/api/v3/simple/token_price/{platform}?contract_addresses={address}&vs_currencies=usd");
-
-    let response = reqwest::get(&url).await?;
-    let json = response.json::<HashMap<String, HashMap<String, f64>>>().await?;
-
-    json.get(address)
-        .and_then(|inner_map| inner_map.get("usd").copied())
-        .ok_or_else(|| anyhow::anyhow!("Failed to get price for address: {}", address))
+fn get_symbol_and_decimals_by_chain(chain: ChainKind) -> (&'static str, u32) {
+    match chain {
+        ChainKind::Eth => ("ethereum", 18),
+        ChainKind::Near => ("near", 24),
+        ChainKind::Sol => ("solana", 9),
+        ChainKind::Arb => ("arbitrum", 18),
+        ChainKind::Base => ("base", 18),
+    }
 }
 
-pub async fn is_fee_sufficient(jsonrpc_client: &JsonRpcClient, sender: &OmniAddress, recipient: &OmniAddress, token: &AccountId, fee: u128) -> Result<bool> {
-    let token_price = get_price_by_contract_address("near-protocol", token.as_ref()).await?;
-    let token_decimals = get_token_decimals(jsonrpc_client, token).await?;
+async fn calculate_price(amount: u128, symbol: &str, decimals: u32) -> Result<f64> {
+    Ok(amount as f64 / 10u128.pow(decimals) as f64 * get_price_by_symbol(symbol).await?)
+}
 
-    let given_fee = fee as f64 / 10u128.pow(token_decimals) as f64 * token_price;
+pub async fn is_fee_sufficient(
+    config: &config::Config,
+    jsonrpc_client: &JsonRpcClient,
+    sender: &OmniAddress,
+    recipient: &OmniAddress,
+    token: &AccountId,
+    fee: &Fee,
+) -> Result<bool> {
+    let (sender_symbol, sender_token_decimals) =
+        get_symbol_and_decimals_by_chain(sender.get_chain());
+    let (recipient_symbol, recipient_token_decimals) =
+        get_symbol_and_decimals_by_chain(recipient.get_chain());
 
-    // TODO: Right now I chose a random fee (around 0.10 USD), but it should be calculated based on the chain in the future
-    let sender_fee = match sender {
-        OmniAddress::Near(_) => 0.03 * get_price_by_symbol("near").await?,
-        OmniAddress::Eth(_) => 0.00005 * get_price_by_symbol("ethereum").await?,
-        OmniAddress::Sol(_) => 0.001 * get_price_by_symbol("solana").await?,
-        OmniAddress::Arb(_) | OmniAddress::Base(_) => todo!()
+    let native_fee_usd =
+        calculate_price(fee.native_fee.0, sender_symbol, sender_token_decimals).await?;
+
+    let fee_token_decimals = get_token_decimals(jsonrpc_client, token).await?;
+    let token_fee_usd = calculate_price(fee.fee.0, token.as_ref(), fee_token_decimals).await?;
+
+    let expected_recipient_fee_usd = match recipient {
+        OmniAddress::Eth(_) => {
+            let http_provider = ProviderBuilder::new().on_http(
+                config
+                    .evm
+                    .rpc_http_url
+                    .parse()
+                    .context("Failed to parse ETH rpc provider as url")?,
+            );
+            calculate_price(
+                config.evm.fin_transfer_gas_estimation as u128
+                    * http_provider.get_gas_price().await?,
+                recipient_symbol,
+                recipient_token_decimals,
+            )
+            .await?
+        }
+        OmniAddress::Near(address) => {
+            if storage::has_storage_deposit(jsonrpc_client, token, &address.parse::<AccountId>()?)
+                .await?
+            {
+                0.0
+            } else {
+                calculate_price(
+                    storage::NEP141_STORAGE_DEPOSIT,
+                    recipient_symbol,
+                    recipient_token_decimals,
+                )
+                .await?
+            }
+        }
+        OmniAddress::Sol(_) => todo!(),
+        OmniAddress::Arb(_) => todo!(),
+        OmniAddress::Base(_) => todo!(),
     };
-    let recipient_fee = match recipient {
-        OmniAddress::Near(_) => 0.03 * get_price_by_symbol("near").await?,
-        OmniAddress::Eth(_) => 0.00005 * get_price_by_symbol("ethereum").await?,
-        OmniAddress::Sol(_) => 0.001 * get_price_by_symbol("solana").await?,
-        OmniAddress::Arb(_) | OmniAddress::Base(_) => todo!()
-    };
 
-    Ok(sender_fee + recipient_fee <= given_fee)
+    Ok(native_fee_usd + token_fee_usd >= expected_recipient_fee_usd)
 }
