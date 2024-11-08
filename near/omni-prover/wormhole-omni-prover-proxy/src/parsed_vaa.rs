@@ -113,6 +113,7 @@ impl ParsedVAA {
 
 sol! {
     struct InitTransferWh {
+        uint8 messageType;
         address sender;
         address tokenAddress;
         uint128 nonce;
@@ -124,6 +125,7 @@ sol! {
     }
 
     struct FinTransferWh {
+        uint8 messageType;
         string token;
         uint128 amount;
         string recipient;
@@ -131,6 +133,7 @@ sol! {
     }
 
     struct DeployTokenWh {
+        uint8 messageType;
         string token;
         address tokenAddress;
     }
@@ -140,9 +143,8 @@ impl TryInto<InitTransferMessage> for ParsedVAA {
     type Error = String;
 
     fn try_into(self) -> Result<InitTransferMessage, String> {
-        let data: &[u8] = &self.payload[1..];
-        let transfer = InitTransferWh::abi_decode(data, true).map_err(stringify)?;
-
+        let transfer =
+            InitTransferWh::abi_decode_sequence(&self.payload, true).map_err(stringify)?;
         Ok(InitTransferMessage {
             transfer: TransferMessage {
                 token: to_omni_address(self.emitter_chain, &transfer.tokenAddress.0 .0),
@@ -165,8 +167,8 @@ impl TryInto<FinTransferMessage> for ParsedVAA {
     type Error = String;
 
     fn try_into(self) -> Result<FinTransferMessage, String> {
-        let data: &[u8] = &self.payload[1..];
-        let transfer = FinTransferWh::abi_decode(data, true).map_err(stringify)?;
+        let transfer =
+            FinTransferWh::abi_decode_sequence(&self.payload, true).map_err(stringify)?;
 
         Ok(FinTransferMessage {
             nonce: transfer.nonce.into(),
@@ -181,8 +183,8 @@ impl TryInto<DeployTokenMessage> for ParsedVAA {
     type Error = String;
 
     fn try_into(self) -> Result<DeployTokenMessage, String> {
-        let data: &[u8] = &self.payload[1..];
-        let transfer = DeployTokenWh::abi_decode(data, true).map_err(stringify)?;
+        let transfer =
+            DeployTokenWh::abi_decode_sequence(&self.payload, true).map_err(stringify)?;
 
         Ok(DeployTokenMessage {
             token: transfer.token.parse().map_err(stringify)?,
@@ -195,14 +197,20 @@ impl TryInto<DeployTokenMessage> for ParsedVAA {
 fn to_omni_address(emitter_chain: u16, address: &[u8]) -> OmniAddress {
     match emitter_chain {
         1 => OmniAddress::Sol(to_sol_address(address)),
-        2 => OmniAddress::Eth(to_evm_address(address)),
-        23 => OmniAddress::Arb(to_evm_address(address)),
-        30 => OmniAddress::Base(to_evm_address(address)),
+        2 | 10002 => OmniAddress::Eth(to_evm_address(address)),
+        23 | 10003 => OmniAddress::Arb(to_evm_address(address)),
+        30 | 10004 => OmniAddress::Base(to_evm_address(address)),
         _ => env::panic_str("Chain not supported"),
     }
 }
 
 fn to_evm_address(address: &[u8]) -> EvmAddress {
+    let address = if address.len() == 32 {
+        &address[address.len() - 20..]
+    } else {
+        address
+    };
+
     match address.try_into() {
         Ok(bytes) => H160(bytes),
         Err(_) => env::panic_str("Invalid EVM address"),
