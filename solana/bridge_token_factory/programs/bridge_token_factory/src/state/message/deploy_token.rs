@@ -2,7 +2,7 @@ use std::io::BufWriter;
 
 use anchor_lang::prelude::*;
 
-use super::{Payload, PayloadType, DEFAULT_SERIALIZER_CAPACITY};
+use super::{IncomingMessageType, OutgoingMessageType, Payload, DEFAULT_SERIALIZER_CAPACITY};
 use crate::error::ErrorCode;
 
 #[derive(AnchorSerialize, AnchorDeserialize)]
@@ -18,7 +18,7 @@ impl Payload for DeployTokenPayload {
 
     fn serialize_for_near(&self, _params: Self::AdditionalParams) -> Result<Vec<u8>> {
         let mut writer = BufWriter::new(Vec::with_capacity(DEFAULT_SERIALIZER_CAPACITY));
-        PayloadType::DeployToken.serialize(&mut writer)?;
+        IncomingMessageType::Metadata.serialize(&mut writer)?;
         self.serialize(&mut writer)?; // borsh encoding
         writer
             .into_inner()
@@ -37,7 +37,7 @@ impl Payload for DeployTokenResponse {
 
     fn serialize_for_near(&self, _params: Self::AdditionalParams) -> Result<Vec<u8>> {
         let mut writer = BufWriter::new(Vec::with_capacity(DEFAULT_SERIALIZER_CAPACITY));
-        PayloadType::DeployTokenResponse.serialize(&mut writer)?;
+        OutgoingMessageType::DeployToken.serialize(&mut writer)?;
         self.serialize(&mut writer)?; // borsh encoding
         writer
             .into_inner()

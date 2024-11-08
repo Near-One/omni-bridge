@@ -2,7 +2,7 @@ use std::io::{BufWriter, Write};
 
 use anchor_lang::prelude::*;
 use near_sdk::json_types::U128;
-use super::{Payload, PayloadType, DEFAULT_SERIALIZER_CAPACITY};
+use super::{OutgoingMessageType, Payload, DEFAULT_SERIALIZER_CAPACITY};
 use crate::error::ErrorCode;
 
 #[derive(AnchorSerialize, AnchorDeserialize)]
@@ -17,7 +17,7 @@ impl Payload for RepayPayload {
 
     fn serialize_for_near(&self, _params: Self::AdditionalParams) -> Result<Vec<u8>> {
         let mut writer = BufWriter::new(Vec::with_capacity(DEFAULT_SERIALIZER_CAPACITY));
-        PayloadType::Repay.serialize(&mut writer)?;
+        OutgoingMessageType::InitTransfer.serialize(&mut writer)?;
         self.token.serialize(&mut writer)?;
         near_sdk::borsh::BorshSerialize::serialize(&U128(self.amount), &mut writer)?;
         writer.write(&[2])?;

@@ -11,7 +11,7 @@ use state::message::{
     send::SendPayload, withdraw::WithdrawPayload, SignedPayload,
 };
 
-declare_id!("3ZtEZ8xABFbUr4c1FVpXbQiVdqv4vwhvfCc8HMmhEeua");
+declare_id!("5Q8uh6bK5e7zQ2tV8iGrAzUgRQcC9mvCzKQn6uPW2CGp");
 
 #[program]
 pub mod bridge_token_factory {

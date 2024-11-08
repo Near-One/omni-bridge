@@ -40,17 +40,16 @@ impl<P: Payload> SignedPayload<P> {
 }
 
 #[derive(AnchorSerialize, AnchorDeserialize)]
-pub enum PayloadType {
+pub enum IncomingMessageType {
+    InitTransfer,
+    Metadata,
+}
+
+#[derive(AnchorSerialize, AnchorDeserialize)]
+pub enum OutgoingMessageType {
+    InitTransfer,
+    FinTransfer,
     DeployToken,
-    DeployTokenResponse,
-    Deposit,
-    DepositResponse,
-    Withdraw,
-    WithdrawResponse,
-    Repay,
-    RepayResponse,
-    Send,
-    SendResponse,
 }
 
 const DEFAULT_SERIALIZER_CAPACITY: usize = 1024;

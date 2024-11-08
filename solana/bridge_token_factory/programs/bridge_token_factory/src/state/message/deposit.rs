@@ -4,7 +4,7 @@ use crate::error::ErrorCode;
 use anchor_lang::prelude::*;
 use near_sdk::json_types::U128;
 
-use super::{Payload, PayloadType, DEFAULT_SERIALIZER_CAPACITY};
+use super::{IncomingMessageType, OutgoingMessageType, Payload, DEFAULT_SERIALIZER_CAPACITY};
 
 #[derive(AnchorSerialize, AnchorDeserialize)]
 pub struct DepositPayload {
@@ -18,7 +18,7 @@ impl Payload for DepositPayload {
     type AdditionalParams = Pubkey;
     fn serialize_for_near(&self, recipient: Self::AdditionalParams) -> Result<Vec<u8>> {
         let mut writer = BufWriter::new(Vec::with_capacity(DEFAULT_SERIALIZER_CAPACITY));
-        PayloadType::Deposit.serialize(&mut writer)?;
+        IncomingMessageType::InitTransfer.serialize(&mut writer)?;
         near_sdk::borsh::BorshSerialize::serialize(&U128(self.nonce), &mut writer)?;
         self.token.serialize(&mut writer)?;
         near_sdk::borsh::BorshSerialize::serialize(&U128(self.amount), &mut writer)?;
@@ -41,7 +41,7 @@ impl Payload for FinalizeDepositResponse {
     type AdditionalParams = ();
     fn serialize_for_near(&self, _params: Self::AdditionalParams) -> Result<Vec<u8>> {
         let mut writer = BufWriter::new(Vec::with_capacity(DEFAULT_SERIALIZER_CAPACITY));
-        PayloadType::DepositResponse.serialize(&mut writer)?;
+        OutgoingMessageType::FinTransfer.serialize(&mut writer)?;
         self.serialize(&mut writer)?; // borsh encoding
         writer
             .into_inner()
