@@ -2,13 +2,13 @@
 
 use {
     crate::byte_utils::ByteUtils,
-    alloy_sol_types::{sol, SolType},
+    borsh::BorshDeserialize,
     near_sdk::env,
     omni_types::{
         prover_result::{DeployTokenMessage, FinTransferMessage, InitTransferMessage},
         sol_address::SolAddress,
         stringify, EvmAddress, Fee, OmniAddress, TransferMessage, H160,
-    },
+    }
 };
 
 // Validator Action Approval(VAA) data
@@ -111,29 +111,30 @@ impl ParsedVAA {
     }
 }
 
-sol! {
-    struct InitTransferWh {
-        address sender;
-        address tokenAddress;
-        uint128 nonce;
-        uint128 amount;
-        uint128 fee;
-        uint128 nativeFee;
-        string recipient;
-        string message;
-    }
+#[derive(Debug, BorshDeserialize)]
+struct DeployTokenWh {
+    token: String,
+    token_address: EvmAddress,
+}
 
-    struct FinTransferWh {
-        string token;
-        uint128 amount;
-        string recipient;
-        uint128 nonce;
-    }
+#[derive(Debug, BorshDeserialize)]
+struct FinTransferWh {
+    _token: String,
+    amount: u128,
+    recipient: String,
+    nonce: u128,
+}
 
-    struct DeployTokenWh {
-        string token;
-        address tokenAddress;
-    }
+#[derive(Debug, BorshDeserialize)]
+struct InitTransferWh {
+    sender: EvmAddress,
+    token_address: EvmAddress,
+    nonce: u128,
+    amount: u128,
+    fee: u128,
+    native_fee: u128,
+    recipient: String,
+    message: String,
 }
 
 impl TryInto<InitTransferMessage> for ParsedVAA {
@@ -141,19 +142,19 @@ impl TryInto<InitTransferMessage> for ParsedVAA {
 
     fn try_into(self) -> Result<InitTransferMessage, String> {
         let data: &[u8] = &self.payload[1..];
-        let transfer = InitTransferWh::abi_decode(data, true).map_err(stringify)?;
+        let transfer: InitTransferWh = borsh::from_slice(data).map_err(stringify)?;
 
         Ok(InitTransferMessage {
             transfer: TransferMessage {
-                token: to_omni_address(self.emitter_chain, &transfer.tokenAddress.0 .0),
+                token: to_omni_address(self.emitter_chain, &transfer.token_address.0),
                 amount: transfer.amount.into(),
                 fee: Fee {
                     fee: transfer.fee.into(),
-                    native_fee: transfer.nativeFee.into(),
+                    native_fee: transfer.native_fee.into(),
                 },
                 recipient: transfer.recipient.parse().map_err(stringify)?,
                 origin_nonce: transfer.nonce.into(),
-                sender: to_omni_address(self.emitter_chain, &transfer.sender.0 .0),
+                sender: to_omni_address(self.emitter_chain, &transfer.sender.0),
                 msg: transfer.message,
             },
             emitter_address: to_omni_address(self.emitter_chain, &self.emitter_address),
@@ -166,7 +167,7 @@ impl TryInto<FinTransferMessage> for ParsedVAA {
 
     fn try_into(self) -> Result<FinTransferMessage, String> {
         let data: &[u8] = &self.payload[1..];
-        let transfer = FinTransferWh::abi_decode(data, true).map_err(stringify)?;
+        let transfer: FinTransferWh = borsh::from_slice(data).map_err(stringify)?;
 
         Ok(FinTransferMessage {
             nonce: transfer.nonce.into(),
@@ -182,11 +183,11 @@ impl TryInto<DeployTokenMessage> for ParsedVAA {
 
     fn try_into(self) -> Result<DeployTokenMessage, String> {
         let data: &[u8] = &self.payload[1..];
-        let transfer = DeployTokenWh::abi_decode(data, true).map_err(stringify)?;
+        let transfer: DeployTokenWh = borsh::from_slice(data).map_err(stringify)?;
 
         Ok(DeployTokenMessage {
             token: transfer.token.parse().map_err(stringify)?,
-            token_address: to_omni_address(self.emitter_chain, &transfer.tokenAddress.0 .0),
+            token_address: to_omni_address(self.emitter_chain, &transfer.token_address.0),
             emitter_address: to_omni_address(self.emitter_chain, &self.emitter_address),
         })
     }
