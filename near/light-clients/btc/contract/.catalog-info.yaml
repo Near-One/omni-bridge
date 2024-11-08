@@ -1,0 +1,19 @@
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: btc-light-client-contract
+  title: BTC Light Client contract
+  tags:
+    - contract
+    - near
+  links: []
+  annotations:
+    aurora.dev/security-tier: "1"
+spec:
+  owner: nearone-team
+  type: contract
+  lifecycle: production
+  deployedAt:
+    - contract:near/mainnet/btc-client.bridge.near
+    - contract:near/mainnet/btc-client-v4.testnet
+  interactsWith: []
