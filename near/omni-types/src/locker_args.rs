@@ -1,4 +1,4 @@
-use crate::ChainKind;
+use crate::{ChainKind, OmniAddress};
 use near_sdk::{
     borsh::{self, BorshDeserialize, BorshSerialize},
     AccountId,
@@ -13,6 +13,7 @@ pub struct StorageDepositArgs {
 #[derive(BorshDeserialize, BorshSerialize, Clone)]
 pub struct FinTransferArgs {
     pub chain_kind: ChainKind,
+    pub native_fee_recipient: OmniAddress,
     pub storage_deposit_args: StorageDepositArgs,
     pub prover_args: Vec<u8>,
 }
@@ -21,6 +22,7 @@ pub struct FinTransferArgs {
 pub struct ClaimFeeArgs {
     pub chain_kind: ChainKind,
     pub prover_args: Vec<u8>,
+    pub native_fee_recipient: OmniAddress,
 }
 
 #[derive(BorshDeserialize, BorshSerialize, Clone)]

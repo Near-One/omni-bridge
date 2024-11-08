@@ -33,7 +33,7 @@ pub enum ProverResult {
     DeployToken(DeployTokenMessage),
 }
 
-#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Debug, Clone)]
+#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Debug, Clone, Copy)]
 pub enum ProofKind {
     InitTransfer,
     FinTransfer,

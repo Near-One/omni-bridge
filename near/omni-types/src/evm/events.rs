@@ -4,31 +4,37 @@ use alloy_sol_types::{sol, SolEvent};
 
 use crate::{
     prover_result::{DeployTokenMessage, FinTransferMessage, InitTransferMessage},
-    stringify, ChainKind, OmniAddress, TransferMessage, H160,
+    stringify, ChainKind, Fee, OmniAddress, TransferMessage, H160,
 };
 
 const ERR_INVALIDE_SIGNATURE_HASH: &str = "ERR_INVALIDE_SIGNATURE_HASH";
 
 sol! {
-    event FinTransfer(
-        address indexed sender,
-        uint nonce,
-        uint amount,
-        string fee_recipient,
-    );
-
     event InitTransfer(
         address indexed sender,
-        uint nonce,
+        address indexed tokenAddress,
+        uint128 indexed nonce,
         string token,
-        uint amount,
-        uint fee,
-        string recipient,
+        uint128 amount,
+        uint128 fee,
+        uint128 nativeTokenFee,
+        string recipient
+    );
+
+    event FinTransfer(
+        uint128 indexed nonce,
+        string token,
+        uint128 amount,
+        address recipient,
+        string feeRecipient
     );
 
     event DeployToken(
+        address indexed tokenAddress,
         string token,
-        address token_address,
+        string name,
+        string symbol,
+        uint8 decimals
     );
 }
 
@@ -61,9 +67,9 @@ impl TryFromLog<Log<FinTransfer>> for FinTransferMessage {
         }
 
         Ok(FinTransferMessage {
-            nonce: near_sdk::json_types::U128(event.data.nonce.to::<u128>()),
-            amount: near_sdk::json_types::U128(event.data.amount.to::<u128>()),
-            fee_recipient: event.data.fee_recipient.parse().map_err(stringify)?,
+            nonce: near_sdk::json_types::U128(event.data.nonce),
+            amount: near_sdk::json_types::U128(event.data.amount),
+            fee_recipient: event.data.feeRecipient.parse().map_err(stringify)?,
             emitter_address: OmniAddress::from_evm_address(chain_kind, H160(event.address.into()))?,
         })
     }
@@ -80,11 +86,14 @@ impl TryFromLog<Log<InitTransfer>> for InitTransferMessage {
         Ok(InitTransferMessage {
             emitter_address: OmniAddress::from_evm_address(chain_kind, H160(event.address.into()))?,
             transfer: TransferMessage {
-                origin_nonce: near_sdk::json_types::U128(event.data.nonce.to::<u128>()),
+                origin_nonce: near_sdk::json_types::U128(event.data.nonce),
                 token: event.data.token.parse().map_err(stringify)?,
-                amount: near_sdk::json_types::U128(event.data.amount.to::<u128>()),
+                amount: near_sdk::json_types::U128(event.data.amount),
                 recipient: event.data.recipient.parse().map_err(stringify)?,
-                fee: near_sdk::json_types::U128(event.data.fee.to::<u128>()),
+                fee: Fee {
+                    fee: near_sdk::json_types::U128(event.data.fee),
+                    native_fee: near_sdk::json_types::U128(event.data.nativeTokenFee),
+                },
                 sender: OmniAddress::from_evm_address(chain_kind, H160(event.data.sender.into()))?,
             },
         })
@@ -104,7 +113,7 @@ impl TryFromLog<Log<DeployToken>> for DeployTokenMessage {
             token: event.data.token.parse().map_err(stringify)?,
             token_address: OmniAddress::from_evm_address(
                 chain_kind,
-                H160(event.data.token_address.into()),
+                H160(event.data.tokenAddress.into()),
             )?,
         })
     }
@@ -112,31 +121,34 @@ impl TryFromLog<Log<DeployToken>> for DeployTokenMessage {
 
 #[cfg(test)]
 mod tests {
-    use alloy_primitives::{IntoLogData, U256};
+    use alloy_primitives::IntoLogData;
 
     use super::*;
     sol! {
         event TestFinTransfer(
-            address indexed sender,
-            uint nonce,
-            uint amount,
-            string fee_recipient,
+            uint128 indexed nonce,
+            string token,
+            uint128 amount,
+            address recipient,
+            string feeRecipient
         );
     }
 
     #[test]
     fn test_decode_log_with_same_params_with_validation() {
         let event = FinTransfer {
-            sender: [0; 20].into(),
-            nonce: U256::from(55),
-            amount: U256::from(100),
-            fee_recipient: "some_fee_recipient".to_string(),
+            nonce: 55,
+            amount: 100,
+            token: "some_token".to_owned(),
+            recipient: [0; 20].into(),
+            feeRecipient: "some_fee_recipient".to_owned(),
         };
         let test_event = TestFinTransfer {
-            sender: event.sender,
             nonce: event.nonce,
             amount: event.amount,
-            fee_recipient: event.fee_recipient.clone(),
+            token: event.token.clone(),
+            recipient: event.recipient,
+            feeRecipient: event.feeRecipient.clone(),
         };
         let log = Log {
             address: [1; 20].into(),
