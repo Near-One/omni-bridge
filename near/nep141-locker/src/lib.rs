@@ -926,6 +926,18 @@ impl Contract {
     pub fn add_token_deployer(&mut self, chain: ChainKind, account_id: AccountId) {
         self.token_deployer_accounts.insert(&chain, &account_id);
     }
+
+    #[access_control_any(roles(Role::DAO))]
+    pub fn add_deployed_tokens(&mut self, tokens: Vec<(OmniAddress, AccountId)>) {
+        for (token_address, token_id) in tokens {
+            self.deployed_tokens.insert(&token_id);
+            self.token_address_to_id.insert(&token_address, &token_id);
+            self.token_id_to_address.insert(
+                &(token_address.get_chain(), token_id.clone()),
+                &token_address,
+            );
+        }
+    }
 }
 
 impl Contract {
