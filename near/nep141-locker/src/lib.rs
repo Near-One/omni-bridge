@@ -776,7 +776,7 @@ impl Contract {
             .token_deployer_accounts
             .get(&chain)
             .unwrap_or_else(|| env::panic_str("ERR_DEPLOYER_NOT_SET"));
-        let prefix = metadata.token_address.encode('-');
+        let prefix = metadata.token_address.get_token_prefix();
         let token_id: AccountId = format!("{}.{}", prefix, deployer)
             .parse()
             .unwrap_or_else(|_| env::panic_str("ERR_PARSE_ACCOUNT"));

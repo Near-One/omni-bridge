@@ -47,6 +47,12 @@ impl fmt::Display for H160 {
 }
 
 impl H160 {
+    pub const ZERO: Self = Self([0u8; 20]);
+
+    pub fn is_zero(&self) -> bool {
+        *self == Self::ZERO
+    }
+
     pub fn to_eip_55_checksum(&self) -> String {
         let hex_addr = hex::encode(self.0);
 
@@ -176,15 +182,34 @@ impl OmniAddress {
         }
     }
 
-    pub fn encode(&self, separator: char) -> String {
-        let (chain_str, recipient) = match self {
-            OmniAddress::Eth(recipient) => ("eth", recipient.to_string()),
-            OmniAddress::Near(recipient) => ("near", recipient.to_string()),
-            OmniAddress::Sol(recipient) => ("sol", recipient.to_string()),
-            OmniAddress::Arb(recipient) => ("arb", recipient.to_string()),
-            OmniAddress::Base(recipient) => ("base", recipient.to_string()),
+    pub fn encode(&self, separator: char, skip_zero_address: bool) -> String {
+        let (chain_str, address) = match self {
+            OmniAddress::Eth(address) => ("eth", address.to_string()),
+            OmniAddress::Near(address) => ("near", address.to_string()),
+            OmniAddress::Sol(address) => ("sol", address.to_string()),
+            OmniAddress::Arb(address) => ("arb", address.to_string()),
+            OmniAddress::Base(address) => ("base", address.to_string()),
         };
-        format!("{chain_str}{separator}{recipient}")
+
+        if skip_zero_address && self.is_zero() {
+            format!("{chain_str}")
+        } else {
+            format!("{chain_str}{separator}{address}")
+        }
+    }
+
+    pub fn is_zero(&self) -> bool {
+        match self {
+            OmniAddress::Eth(address) => address.is_zero(),
+            OmniAddress::Near(address) => address.len() == 0,
+            OmniAddress::Sol(address) => address.is_zero(),
+            OmniAddress::Arb(address) => address.is_zero(),
+            OmniAddress::Base(address) => address.is_zero(),
+        }
+    }
+
+    pub fn get_token_prefix(&self) -> String {
+        self.encode('-', true)
     }
 }
 
@@ -207,7 +232,7 @@ impl FromStr for OmniAddress {
 
 impl fmt::Display for OmniAddress {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", &self.encode(':'))
+        write!(f, "{}", &self.encode(':', false))
     }
 }
 
