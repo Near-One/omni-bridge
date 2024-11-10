@@ -183,12 +183,21 @@ contract BridgeTokenFactory is
             revert InvalidFee();
         }
 
-        uint256 extensionValue = msg.value - nativeFee;
+        uint256 extensionValue;
 
-        if (isBridgeToken[tokenAddress]) {
-            BridgeToken(tokenAddress).burn(msg.sender, amount);
+        if (tokenAddress == address(0)) {
+            if (fee != 0) {
+                revert InvalidFee();
+            }
+            extensionValue = msg.value - amount - nativeFee;
         } else {
-            IERC20(tokenAddress).safeTransferFrom(msg.sender, address(this), amount);
+            extensionValue = msg.value - nativeFee;
+
+            if (isBridgeToken[tokenAddress]) {
+                BridgeToken(tokenAddress).burn(msg.sender, amount);
+            } else {
+                IERC20(tokenAddress).safeTransferFrom(msg.sender, address(this), amount);
+            }
         }
 
         initTransferExtension(msg.sender, tokenAddress, initTransferNonce, amount, fee, nativeFee, recipient, message, extensionValue);
