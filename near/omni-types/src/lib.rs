@@ -217,7 +217,7 @@ impl FromStr for OmniAddress {
     type Err = String;
 
     fn from_str(input: &str) -> Result<OmniAddress, Self::Err> {
-        let (chain, recipient) = input.split_once(':').ok_or("Invalid OmniAddress format")?;
+        let (chain, recipient) = input.split_once(':').unwrap_or(("eth", input));
 
         match chain {
             "eth" => Ok(OmniAddress::Eth(recipient.parse().map_err(stringify)?)),

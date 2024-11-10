@@ -2,7 +2,7 @@ use near_contract_standards::fungible_token::metadata::{
     FungibleTokenMetadata, FungibleTokenMetadataProvider, FT_METADATA_SPEC,
 };
 use near_contract_standards::fungible_token::{
-    Balance, FungibleToken, FungibleTokenCore, FungibleTokenResolver,
+    FungibleToken, FungibleTokenCore, FungibleTokenResolver,
 };
 use near_contract_standards::storage_management::{
     StorageBalance, StorageBalanceBounds, StorageManagement,
@@ -11,12 +11,10 @@ use near_sdk::collections::LazyOption;
 use near_sdk::json_types::{Base64VecU8, U128};
 use near_sdk::serde_json::json;
 use near_sdk::{
-    assert_one_yocto, env, ext_contract, near, require, AccountId, Gas, NearToken, PanicOnDefault,
-    Promise, PromiseOrValue, PublicKey, StorageUsage,
+    env, ext_contract, near, require, AccountId, Gas, NearToken, PanicOnDefault, Promise,
+    PromiseOrValue, PublicKey, StorageUsage,
 };
-use omni_types::BasicMetadata;
-/// Gas to call finish withdraw method on factory.
-const FINISH_WITHDRAW_GAS: Gas = Gas::from_tgas(50);
+use omni_types::{BasicMetadata, OmniAddress};
 const OUTER_UPGRADE_GAS: Gas = Gas::from_tgas(15);
 const NO_DEPOSIT: NearToken = NearToken::from_yoctonear(0);
 const CURRENT_STATE_VERSION: u32 = 1;
@@ -34,11 +32,13 @@ pub struct OmniToken {
 
 #[ext_contract(ext_omni_factory)]
 pub trait ExtOmniTokenFactory {
-    #[result_serializer(borsh)]
-    fn finish_withdraw(
+    fn init_transfer(
         &self,
-        #[serializer(borsh)] amount: Balance,
-        #[serializer(borsh)] recipient: String,
+        sender: AccountId,
+        amount: U128,
+        recipient: OmniAddress,
+        fee: U128,
+        native_fee: U128,
     ) -> Promise;
 }
 
@@ -97,29 +97,38 @@ impl OmniToken {
         self.metadata.set(&metadata);
     }
 
-    #[payable]
-    pub fn mint(&mut self, account_id: AccountId, amount: U128) {
+    pub fn mint(
+        &mut self,
+        account_id: AccountId,
+        amount: U128,
+        msg: Option<String>,
+    ) -> PromiseOrValue<U128> {
         assert_eq!(
             env::predecessor_account_id(),
             self.controller,
             "Only controller can call mint"
         );
 
-        self.storage_deposit(Some(account_id.clone()), None);
-        self.token.internal_deposit(&account_id, amount.into());
+        if let Some(msg) = msg {
+            self.token
+                .internal_deposit(&env::predecessor_account_id(), amount.into());
+
+            self.ft_transfer_call(account_id, amount, None, msg)
+        } else {
+            self.token.internal_deposit(&account_id, amount.into());
+            PromiseOrValue::Value(amount)
+        }
     }
 
-    #[payable]
-    pub fn withdraw(&mut self, amount: U128, recipient: String) -> Promise {
-        require!(!self.is_paused());
-        assert_one_yocto();
+    pub fn burn(&mut self, amount: U128) {
+        assert_eq!(
+            env::predecessor_account_id(),
+            self.controller,
+            "Only controller can call burn"
+        );
 
         self.token
             .internal_withdraw(&env::predecessor_account_id(), amount.into());
-
-        ext_omni_factory::ext(self.controller.clone())
-            .with_static_gas(FINISH_WITHDRAW_GAS)
-            .finish_withdraw(amount.into(), recipient)
     }
 
     pub fn account_storage_usage(&self) -> StorageUsage {

@@ -52,6 +52,8 @@ const STORAGE_BALANCE_OF_GAS: Gas = Gas::from_tgas(3);
 const STORAGE_DEPOSIT_GAS: Gas = Gas::from_tgas(3);
 const DEPLOY_TOKEN_CALLBACK_GAS: Gas = Gas::from_tgas(75);
 const DEPLOY_TOKEN_GAS: Gas = Gas::from_tgas(50);
+const BURN_TOKEN_GAS: Gas = Gas::from_tgas(10);
+const MINT_TOKEN_GAS: Gas = Gas::from_tgas(10);
 
 const NO_DEPOSIT: NearToken = NearToken::from_near(0);
 const ONE_YOCTO: NearToken = NearToken::from_yoctonear(1);
@@ -107,6 +109,10 @@ pub trait ExtToken {
     ) -> Option<StorageBalance>;
 
     fn storage_balance_of(&mut self, account_id: Option<AccountId>) -> Option<StorageBalance>;
+
+    fn mint(&mut self, account_id: AccountId, amount: U128, msg: Option<String>);
+
+    fn burn(&mut self, amount: U128);
 }
 
 #[ext_contract(ext_signer)]
@@ -166,11 +172,12 @@ impl FungibleTokenReceiver for Contract {
         msg: String,
     ) -> PromiseOrValue<U128> {
         let parsed_msg: InitTransferMsg = serde_json::from_str(&msg).sdk_expect("ERR_PARSE_MSG");
+        let token_id = env::predecessor_account_id();
 
         self.current_nonce += 1;
         let transfer_message = TransferMessage {
             origin_nonce: U128(self.current_nonce),
-            token: OmniAddress::Near(env::predecessor_account_id()),
+            token: OmniAddress::Near(token_id.clone()),
             amount,
             recipient: parsed_msg.recipient,
             fee: Fee {
@@ -198,6 +205,12 @@ impl FungibleTokenReceiver for Contract {
             required_storage_balance,
             NearToken::from_yoctonear(0),
         );
+
+        if self.deployed_tokens.contains(&token_id) {
+            ext_token::ext(token_id.clone())
+                .with_static_gas(BURN_TOKEN_GAS)
+                .burn(amount);
+        }
 
         env::log_str(&Nep141LockerEvent::InitTransferEvent { transfer_message }.to_log_string());
         PromiseOrValue::Value(U128(0))
@@ -554,6 +567,7 @@ impl Contract {
             );
 
             let amount_to_transfer = U128(transfer_message.amount.0 - transfer_message.fee.fee.0);
+            let is_deployed_token = self.deployed_tokens.contains(&token);
 
             let mut promise = if token == self.wnear_account_id && transfer_message.msg.is_empty() {
                 ext_wnear_token::ext(self.wnear_account_id.clone())
@@ -566,21 +580,32 @@ impl Contract {
                     )
             } else {
                 let transfer = ext_token::ext(token.clone()).with_attached_deposit(ONE_YOCTO);
-                if transfer_message.msg.is_empty() {
-                    transfer.with_static_gas(FT_TRANSFER_GAS).ft_transfer(
-                        recipient.clone(),
-                        amount_to_transfer,
-                        None,
-                    )
-                } else {
+                if is_deployed_token {
                     transfer
-                        .with_static_gas(FT_TRANSFER_CALL_GAS)
-                        .ft_transfer_call(
+                        .with_static_gas(MINT_TOKEN_GAS.saturating_add(FT_TRANSFER_CALL_GAS))
+                        .mint(
+                            recipient.clone(),
+                            amount_to_transfer,
+                            (!transfer_message.msg.is_empty())
+                                .then(|| transfer_message.msg.clone()),
+                        )
+                } else {
+                    if transfer_message.msg.is_empty() {
+                        transfer.with_static_gas(FT_TRANSFER_GAS).ft_transfer(
                             recipient.clone(),
                             amount_to_transfer,
                             None,
-                            transfer_message.msg.clone(),
                         )
+                    } else {
+                        transfer
+                            .with_static_gas(FT_TRANSFER_CALL_GAS)
+                            .ft_transfer_call(
+                                recipient.clone(),
+                                amount_to_transfer,
+                                None,
+                                transfer_message.msg.clone(),
+                            )
+                    }
                 }
             };
 
@@ -590,16 +615,26 @@ impl Contract {
                         && storage_deposit_args.accounts[1].0 == predecessor_account_id,
                     "STORAGE_ERR: The fee recipient is omitted"
                 );
-                promise = promise.then(
-                    ext_token::ext(token)
-                        .with_static_gas(FT_TRANSFER_GAS)
-                        .with_attached_deposit(ONE_YOCTO)
-                        .ft_transfer(
+
+                if is_deployed_token {
+                    promise =
+                        promise.then(ext_token::ext(token).with_static_gas(MINT_TOKEN_GAS).mint(
                             predecessor_account_id.clone(),
                             transfer_message.fee.fee,
                             None,
-                        ),
-                );
+                        ));
+                } else {
+                    promise = promise.then(
+                        ext_token::ext(token)
+                            .with_static_gas(FT_TRANSFER_GAS)
+                            .with_attached_deposit(ONE_YOCTO)
+                            .ft_transfer(
+                                predecessor_account_id.clone(),
+                                transfer_message.fee.fee,
+                                None,
+                            ),
+                    );
+                }
 
                 required_balance = required_balance.saturating_add(NearToken::from_yoctonear(2));
             } else {
