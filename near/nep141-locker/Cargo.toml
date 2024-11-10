@@ -16,3 +16,6 @@ borsh.workspace = true
 serde.workspace = true
 near-plugins.workspace = true
 omni-types.workspace = true
+
+[dev-dependencies]
+near-sdk = { workspace = true, features = ["unit-testing"] }

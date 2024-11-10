@@ -23,7 +23,7 @@ sol! {
 
     event FinTransfer(
         uint128 indexed nonce,
-        string token,
+        address tokenAddress,
         uint128 amount,
         address recipient,
         string feeRecipient
@@ -129,7 +129,7 @@ mod tests {
     sol! {
         event TestFinTransfer(
             uint128 indexed nonce,
-            string token,
+            address tokenAddress,
             uint128 amount,
             address recipient,
             string feeRecipient
@@ -141,14 +141,14 @@ mod tests {
         let event = FinTransfer {
             nonce: 55,
             amount: 100,
-            token: "some_token".to_owned(),
+            tokenAddress: [0; 20].into(),
             recipient: [0; 20].into(),
             feeRecipient: "some_fee_recipient".to_owned(),
         };
         let test_event = TestFinTransfer {
             nonce: event.nonce,
             amount: event.amount,
-            token: event.token.clone(),
+            tokenAddress: event.tokenAddress,
             recipient: event.recipient,
             feeRecipient: event.feeRecipient.clone(),
         };

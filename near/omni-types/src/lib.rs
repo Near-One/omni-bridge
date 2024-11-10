@@ -16,6 +16,9 @@ pub mod prover_args;
 pub mod prover_result;
 pub mod sol_address;
 
+#[cfg(test)]
+mod tests;
+
 #[derive(BorshDeserialize, BorshSerialize, Debug, Clone, PartialEq, Eq)]
 pub struct H160(pub [u8; 20]);
 
@@ -361,33 +364,4 @@ pub struct BasicMetadata {
     pub name: String,
     pub symbol: String,
     pub decimals: u8,
-}
-
-#[cfg(test)]
-mod test {
-    use super::*;
-
-    use near_sdk::serde_json;
-
-    #[test]
-    fn test_omni_address_serialization() {
-        let address_str = "0x5a08feed678c056650b3eb4a5cb1b9bb6f0fe265";
-        let address = OmniAddress::Eth(H160::from_str(address_str).unwrap());
-
-        let serialized = serde_json::to_string(&address).unwrap();
-        let deserialized = serde_json::from_str(&serialized).unwrap();
-
-        assert_eq!(serialized, format!("\"eth:{address_str}\""));
-        assert_eq!(address, deserialized);
-    }
-
-    #[test]
-    fn test_payload_prefix() {
-        let res = borsh::to_vec(&PayloadType::TransferMessage).unwrap();
-        assert_eq!(hex::encode(res), "00");
-        let res = borsh::to_vec(&PayloadType::Metadata).unwrap();
-        assert_eq!(hex::encode(res), "01");
-        let res = borsh::to_vec(&PayloadType::ClaimNativeFee).unwrap();
-        assert_eq!(hex::encode(res), "02");
-    }
 }
