@@ -50,7 +50,7 @@ contract BridgeTokenFactoryWormhole is BridgeTokenFactory {
     function finTransferExtension(BridgeTypes.FinTransferPayload memory payload) internal override {
         _wormhole.publishMessage{value: msg.value}(
             wormholeNonce,
-            abi.encode(MessageType.FinTransfer, payload.token, payload.amount, payload.feeRecipient, payload.nonce),
+            abi.encode(MessageType.FinTransfer, payload.tokenAddress, payload.amount, payload.feeRecipient, payload.nonce),
             _consistencyLevel
         );
 
