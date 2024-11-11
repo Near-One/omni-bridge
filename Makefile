@@ -8,7 +8,7 @@ OMNI_RELAYER_MANIFEST = ./omni-relayer/Cargo.toml
 
 clippy: clippy-near #clippy-relayer
 
-clippy-near:
+clippy-near: rust-build-token
 	cargo clippy --manifest-path $(NEAR_MANIFEST) -- $(LINT_OPTIONS)
 
 fmt-near:
@@ -20,7 +20,10 @@ fmt-omni-relayer:
 clippy-omni-relayer:
 	cargo clippy --manifest-path $(OMNI_RELAYER_MANIFEST) -- $(LINT_OPTIONS)
 
-rust-build-near:
+rust-build-token:
+	RUSTFLAGS='$(RUSTFLAGS)' cargo build --target wasm32-unknown-unknown --release --manifest-path $(NEAR_MANIFEST) --package omni-token
+
+rust-build-near: rust-build-token
 	RUSTFLAGS='$(RUSTFLAGS)' cargo build --target wasm32-unknown-unknown --release --manifest-path $(NEAR_MANIFEST)
 
 test-near: rust-build-near
