@@ -589,23 +589,21 @@ impl Contract {
                             (!transfer_message.msg.is_empty())
                                 .then(|| transfer_message.msg.clone()),
                         )
+                } else if transfer_message.msg.is_empty() {
+                    transfer.with_static_gas(FT_TRANSFER_GAS).ft_transfer(
+                        recipient.clone(),
+                        amount_to_transfer,
+                        None,
+                    )
                 } else {
-                    if transfer_message.msg.is_empty() {
-                        transfer.with_static_gas(FT_TRANSFER_GAS).ft_transfer(
+                    transfer
+                        .with_static_gas(FT_TRANSFER_CALL_GAS)
+                        .ft_transfer_call(
                             recipient.clone(),
                             amount_to_transfer,
                             None,
+                            transfer_message.msg.clone(),
                         )
-                    } else {
-                        transfer
-                            .with_static_gas(FT_TRANSFER_CALL_GAS)
-                            .ft_transfer_call(
-                                recipient.clone(),
-                                amount_to_transfer,
-                                None,
-                                transfer_message.msg.clone(),
-                            )
-                    }
                 }
             };
 
@@ -782,7 +780,7 @@ impl Contract {
     #[payable]
     pub fn deploy_token(&mut self, #[serializer(borsh)] args: DeployTokenArgs) -> Promise {
         ext_prover::ext(self.prover_account.clone())
-            .with_static_gas(VERIFY_POOF_GAS)
+            .with_static_gas(VERIFY_PROOF_GAS)
             .with_attached_deposit(NO_DEPOSIT)
             .verify_proof(VerifyProofArgs {
                 prover_id: args.chain_kind.as_ref().to_owned(),
@@ -818,7 +816,7 @@ impl Contract {
             .get(&chain)
             .unwrap_or_else(|| env::panic_str("ERR_DEPLOYER_NOT_SET"));
         let prefix = metadata.token_address.get_token_prefix();
-        let token_id: AccountId = format!("{}.{}", prefix, deployer)
+        let token_id: AccountId = format!("{prefix}.{deployer}")
             .parse()
             .unwrap_or_else(|_| env::panic_str("ERR_PARSE_ACCOUNT"));
 

@@ -19,15 +19,12 @@ const OUTER_UPGRADE_GAS: Gas = Gas::from_tgas(15);
 const NO_DEPOSIT: NearToken = NearToken::from_yoctonear(0);
 const CURRENT_STATE_VERSION: u32 = 1;
 
-pub type Mask = u128;
-
 #[near(contract_state)]
 #[derive(PanicOnDefault)]
 pub struct OmniToken {
     controller: AccountId,
     token: FungibleToken,
     metadata: LazyOption<FungibleTokenMetadata>,
-    paused: Mask,
 }
 
 #[ext_contract(ext_omni_factory)]
@@ -71,7 +68,6 @@ impl OmniToken {
                     decimals: metadta.decimals,
                 }),
             ),
-            paused: Mask::default(),
         }
     }
 
@@ -84,15 +80,27 @@ impl OmniToken {
         decimals: Option<u8>,
         icon: Option<String>,
     ) {
-        require!(self.controller_or_self());
+        self.assert_controller();
 
         let mut metadata = self.ft_metadata();
-        name.map(|name| metadata.name = name);
-        symbol.map(|symbol| metadata.symbol = symbol);
-        reference.map(|reference| metadata.reference = Some(reference));
-        reference_hash.map(|reference_hash| metadata.reference_hash = Some(reference_hash));
-        decimals.map(|decimals| metadata.decimals = decimals);
-        icon.map(|icon| metadata.icon = Some(icon));
+        if let Some(name) = name {
+            metadata.name = name;
+        }
+        if let Some(symbol) = symbol {
+            metadata.symbol = symbol;
+        }
+        if let Some(reference) = reference {
+            metadata.reference = Some(reference);
+        }
+        if let Some(reference_hash) = reference_hash {
+            metadata.reference_hash = Some(reference_hash);
+        }
+        if let Some(decimals) = decimals {
+            metadata.decimals = decimals;
+        }
+        if let Some(icon) = icon {
+            metadata.icon = Some(icon);
+        }
 
         self.metadata.set(&metadata);
     }
@@ -103,11 +111,7 @@ impl OmniToken {
         amount: U128,
         msg: Option<String>,
     ) -> PromiseOrValue<U128> {
-        assert_eq!(
-            env::predecessor_account_id(),
-            self.controller,
-            "Only controller can call mint"
-        );
+        self.assert_controller();
 
         if let Some(msg) = msg {
             self.token
@@ -121,11 +125,7 @@ impl OmniToken {
     }
 
     pub fn burn(&mut self, amount: U128) {
-        assert_eq!(
-            env::predecessor_account_id(),
-            self.controller,
-            "Only controller can call burn"
-        );
+        self.assert_controller();
 
         self.token
             .internal_withdraw(&env::predecessor_account_id(), amount.into());
@@ -135,30 +135,12 @@ impl OmniToken {
         self.token.account_storage_usage
     }
 
-    /// Return true if the caller is either controller or self
-    pub fn controller_or_self(&self) -> bool {
-        let caller = env::predecessor_account_id();
-        caller == self.controller || caller == env::current_account_id()
-    }
-
-    pub fn is_paused(&self) -> bool {
-        self.paused != 0 && !self.controller_or_self()
-    }
-
-    pub fn set_paused(&mut self, paused: bool) {
-        require!(self.controller_or_self());
-        self.paused = if paused { 1 } else { 0 };
-    }
-
     pub fn upgrade_and_migrate(&self) {
-        require!(
-            self.controller_or_self(),
-            "Only the controller or self can update the code"
-        );
+        self.assert_controller();
 
         // Receive the code directly from the input to avoid the
         // GAS overhead of deserializing parameters
-        let code = env::input().unwrap_or_else(|| panic!("ERR_NO_INPUT"));
+        let code = env::input().unwrap_or_else(|| env::panic_str("ERR_NO_INPUT"));
         // Deploy the contract code.
         let promise_id = env::promise_batch_create(&env::current_account_id());
         env::promise_batch_action_deploy_contract(promise_id, &code);
@@ -180,18 +162,24 @@ impl OmniToken {
 
     #[private]
     #[init(ignore_state)]
-    pub fn migrate(_from_version: u32) -> Self {
+    #[allow(unused_variables)]
+    pub fn migrate(from_version: u32) -> Self {
         env::state_read().unwrap_or_else(|| env::panic_str("ERR_FAILED_TO_READ_STATE"))
     }
 
     /// Attach a new full access to the current contract.
     pub fn attach_full_access_key(&mut self, public_key: PublicKey) -> Promise {
-        require!(self.controller_or_self());
+        self.assert_controller();
         Promise::new(env::current_account_id()).add_full_access_key(public_key)
     }
 
     pub fn version(&self) -> String {
         env!("CARGO_PKG_VERSION").to_owned()
+    }
+
+    fn assert_controller(&self) {
+        let caller = env::predecessor_account_id();
+        require!(caller == self.controller, "ERR_MISSING_PERMISSION");
     }
 }
 
@@ -199,7 +187,7 @@ impl OmniToken {
 impl FungibleTokenCore for OmniToken {
     #[payable]
     fn ft_transfer(&mut self, receiver_id: AccountId, amount: U128, memo: Option<String>) {
-        self.token.ft_transfer(receiver_id, amount, memo)
+        self.token.ft_transfer(receiver_id, amount, memo);
     }
 
     #[payable]

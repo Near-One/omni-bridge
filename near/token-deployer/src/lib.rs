@@ -12,7 +12,7 @@ const BRIDGE_TOKEN_INIT_BALANCE: NearToken = NearToken::from_near(3);
 const NO_DEPOSIT: NearToken = NearToken::from_near(0);
 const OMNI_TOKEN_INIT_GAS: Gas = Gas::from_tgas(10);
 
-const BRIDGE_TOKEN_BINARY: &'static [u8] =
+const BRIDGE_TOKEN_BINARY: &[u8] =
     include_bytes!("../.././target/wasm32-unknown-unknown/release/omni_token.wasm");
 
 #[derive(AccessControlRole, Deserialize, Serialize, Copy, Clone)]
@@ -53,7 +53,7 @@ impl TokenDeployer {
     }
 
     #[payable]
-    pub fn deploy_token(&mut self, account_id: AccountId, metadata: BasicMetadata) -> Promise {
+    pub fn deploy_token(&mut self, account_id: AccountId, metadata: &BasicMetadata) -> Promise {
         require!(
             env::predecessor_account_id() == self.controller,
             "ERR_NOT_CONTROLLER"
@@ -70,7 +70,9 @@ impl TokenDeployer {
             .deploy_contract(BRIDGE_TOKEN_BINARY.to_vec())
             .function_call(
                 "new".to_string(),
-                serde_json::to_string(&metadata).unwrap().into_bytes(),
+                serde_json::to_string(&metadata)
+                    .unwrap_or_else(|_| env::panic_str("ERR_FAILED_TO_SERD"))
+                    .into_bytes(),
                 NO_DEPOSIT,
                 OMNI_TOKEN_INIT_GAS,
             )
