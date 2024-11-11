@@ -660,7 +660,7 @@ impl Contract {
         #[callback_result]
         #[serializer(borsh)]
         call_result: Result<ProverResult, PromiseError>,
-    ) -> PromiseOrValue<U128> {
+    ) -> PromiseOrValue<()> {
         let Ok(ProverResult::FinTransfer(fin_transfer)) = call_result else {
             env::panic_str("Invalid proof message")
         };
@@ -724,7 +724,7 @@ impl Contract {
                     .ft_transfer(fin_transfer.fee_recipient, U128(fee), None),
             )
         } else {
-            PromiseOrValue::Value(fin_transfer.nonce)
+            PromiseOrValue::Value(())
         }
     }
 
