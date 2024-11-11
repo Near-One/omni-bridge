@@ -60,7 +60,7 @@ contract BridgeTokenFactoryWormhole is BridgeTokenFactory {
             Borsh.encodeString(payload.feeRecipient),
             Borsh.encodeUint128(payload.nonce)
         );
-        _wormhole.publishMessage{value: msg.value} (
+        _wormhole.publishMessage{value: msg.value}(
             wormholeNonce,
             messagePayload,
             _consistencyLevel
