@@ -1,16 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-pragma solidity 0.8.27;
+pragma solidity 0.8.24;
 
 import {AccessControlUpgradeable} from '@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol';
 import {UUPSUpgradeable} from '@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol';
 import {ENear} from './ENear.sol';
+import {ICustomMinter} from '../../common/ICustomMinter.sol';
 
-interface ICustomMinter {
-    function mint(address token, address to, uint128 amount) external;
-    function burn(address token, uint128 amount) external;
-}
-
-contract ENearProxy is UUPSUpgradeable, AccessControlUpgradeable {
+contract ENearProxy is UUPSUpgradeable, AccessControlUpgradeable, ICustomMinter {
     ENear public eNear;
 
     bytes32 public constant MINTER_ROLE = keccak256("MINTER_ROLE");

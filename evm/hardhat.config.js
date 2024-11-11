@@ -138,7 +138,7 @@ task('etherscan-verify', 'Verify contract on etherscan')
 
 module.exports = {
   paths: {
-    sources: './contracts',
+    sources: './src',
     artifacts: './build'
   },
   solidity: {
@@ -173,6 +173,11 @@ module.exports = {
         : `https://eth-mainnet.alchemyapi.io/v2/${ALCHEMY_API_KEY}`,
       accounts: [`${ETH_PRIVATE_KEY}`]
     },
+  },
+  paths: {
+    sources: "./src",
+    cache: "./cache",
+    artifacts: "./build"
   },
   etherscan: {
     apiKey: ETHERSCAN_API_KEY

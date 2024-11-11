@@ -6,7 +6,7 @@ import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.s
 import {UUPSUpgradeable} from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
-import {ICustomMinter} from "./ICustomMinter.sol";
+import {ICustomMinter} from "../../common/ICustomMinter.sol";
 
 import "./BridgeToken.sol";
 import "./SelectivePausableUpgradable.sol";
