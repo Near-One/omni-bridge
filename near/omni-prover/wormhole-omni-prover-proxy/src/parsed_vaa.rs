@@ -5,7 +5,7 @@ use {
     borsh::BorshDeserialize,
     near_sdk::env,
     omni_types::{
-        prover_result::{DeployTokenMessage, FinTransferMessage, InitTransferMessage},
+        prover_result::{DeployTokenMessage, FinTransferMessage, InitTransferMessage, ProofKind},
         sol_address::SolAddress,
         stringify, EvmAddress, Fee, OmniAddress, TransferMessage, H160,
     }
@@ -113,12 +113,14 @@ impl ParsedVAA {
 
 #[derive(Debug, BorshDeserialize)]
 struct DeployTokenWh {
+    payload_type: ProofKind,
     token: String,
     token_address: EvmAddress,
 }
 
 #[derive(Debug, BorshDeserialize)]
 struct FinTransferWh {
+    payload_type: ProofKind,
     _token: String,
     amount: u128,
     recipient: String,
@@ -127,6 +129,7 @@ struct FinTransferWh {
 
 #[derive(Debug, BorshDeserialize)]
 struct InitTransferWh {
+    payload_type: ProofKind,
     sender: EvmAddress,
     token_address: EvmAddress,
     nonce: u128,
@@ -141,8 +144,11 @@ impl TryInto<InitTransferMessage> for ParsedVAA {
     type Error = String;
 
     fn try_into(self) -> Result<InitTransferMessage, String> {
-        let data: &[u8] = &self.payload[1..];
-        let transfer: InitTransferWh = borsh::from_slice(data).map_err(stringify)?;
+        let transfer: InitTransferWh = borsh::from_slice(&self.payload).map_err(stringify)?;
+
+        if transfer.payload_type != ProofKind::InitTransfer {
+            return Err("Invalid proof kind".to_owned());
+        }
 
         Ok(InitTransferMessage {
             transfer: TransferMessage {
@@ -166,8 +172,11 @@ impl TryInto<FinTransferMessage> for ParsedVAA {
     type Error = String;
 
     fn try_into(self) -> Result<FinTransferMessage, String> {
-        let data: &[u8] = &self.payload[1..];
-        let transfer: FinTransferWh = borsh::from_slice(data).map_err(stringify)?;
+        let transfer: FinTransferWh = borsh::from_slice(&self.payload).map_err(stringify)?;
+
+        if transfer.payload_type != ProofKind::FinTransfer {
+            return Err("Invalid proof kind".to_owned());
+        }
 
         Ok(FinTransferMessage {
             nonce: transfer.nonce.into(),
@@ -182,8 +191,11 @@ impl TryInto<DeployTokenMessage> for ParsedVAA {
     type Error = String;
 
     fn try_into(self) -> Result<DeployTokenMessage, String> {
-        let data: &[u8] = &self.payload[1..];
-        let transfer: DeployTokenWh = borsh::from_slice(data).map_err(stringify)?;
+        let transfer: DeployTokenWh = borsh::from_slice(&self.payload).map_err(stringify)?;
+
+        if transfer.payload_type != ProofKind::DeployToken {
+            return Err("Invalid proof kind".to_owned());
+        }
 
         Ok(DeployTokenMessage {
             token: transfer.token.parse().map_err(stringify)?,
