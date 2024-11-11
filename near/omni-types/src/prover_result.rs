@@ -44,7 +44,9 @@ pub enum ProverResult {
     TokenMetadata(TokenMetadataMessage),
 }
 
-#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Debug, Clone, Copy)]
+#[derive(
+    BorshDeserialize, BorshSerialize, Serialize, Deserialize, Debug, Clone, Copy, Eq, PartialEq,
+)]
 pub enum ProofKind {
     InitTransfer,
     FinTransfer,
