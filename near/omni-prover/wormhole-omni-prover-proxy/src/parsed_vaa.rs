@@ -208,14 +208,20 @@ impl TryInto<DeployTokenMessage> for ParsedVAA {
 fn to_omni_address(emitter_chain: u16, address: &[u8]) -> OmniAddress {
     match emitter_chain {
         1 => OmniAddress::Sol(to_sol_address(address)),
-        2 => OmniAddress::Eth(to_evm_address(address)),
-        23 => OmniAddress::Arb(to_evm_address(address)),
-        30 => OmniAddress::Base(to_evm_address(address)),
+        2 | 10002 => OmniAddress::Eth(to_evm_address(address)),
+        23 | 10003 => OmniAddress::Arb(to_evm_address(address)),
+        30 | 10004 => OmniAddress::Base(to_evm_address(address)),
         _ => env::panic_str("Chain not supported"),
     }
 }
 
 fn to_evm_address(address: &[u8]) -> EvmAddress {
+    let address = if address.len() == 32 {
+        &address[address.len() - 20..]
+    } else {
+        address
+    };
+
     match address.try_into() {
         Ok(bytes) => H160(bytes),
         Err(_) => env::panic_str("Invalid EVM address"),

@@ -39,7 +39,7 @@ const MPC_SIGNING_GAS: Gas = Gas::from_tgas(250);
 const SIGN_TRANSFER_CALLBACK_GAS: Gas = Gas::from_tgas(5);
 const SIGN_LOG_METADATA_CALLBACK_GAS: Gas = Gas::from_tgas(5);
 const SIGN_CLAIM_NATIVE_FEE_CALLBACK_GAS: Gas = Gas::from_tgas(5);
-const VERIFY_POOF_GAS: Gas = Gas::from_tgas(50);
+const VERIFY_PROOF_GAS: Gas = Gas::from_tgas(50);
 const CLAIM_FEE_CALLBACK_GAS: Gas = Gas::from_tgas(50);
 const BIND_TOKEN_CALLBACK_GAS: Gas = Gas::from_tgas(25);
 const BIND_TOKEN_REFUND_GAS: Gas = Gas::from_tgas(5);
@@ -460,7 +460,7 @@ impl Contract {
             "Invalid len of accounts for storage deposit"
         );
         let main_promise = ext_prover::ext(self.prover_account.clone())
-            .with_static_gas(VERIFY_POOF_GAS)
+            .with_static_gas(VERIFY_PROOF_GAS)
             .with_attached_deposit(NO_DEPOSIT)
             .verify_proof(VerifyProofArgs {
                 prover_id: args.chain_kind.as_ref().to_owned(),
@@ -637,7 +637,7 @@ impl Contract {
     #[payable]
     pub fn claim_fee(&mut self, #[serializer(borsh)] args: ClaimFeeArgs) -> Promise {
         ext_prover::ext(self.prover_account.clone())
-            .with_static_gas(VERIFY_POOF_GAS)
+            .with_static_gas(VERIFY_PROOF_GAS)
             .with_attached_deposit(NO_DEPOSIT)
             .verify_proof(VerifyProofArgs {
                 prover_id: args.chain_kind.as_ref().to_owned(),
@@ -660,7 +660,7 @@ impl Contract {
         #[callback_result]
         #[serializer(borsh)]
         call_result: Result<ProverResult, PromiseError>,
-    ) -> Promise {
+    ) -> PromiseOrValue<()> {
         let Ok(ProverResult::FinTransfer(fin_transfer)) = call_result else {
             env::panic_str("Invalid proof message")
         };
@@ -686,10 +686,10 @@ impl Contract {
             );
 
             if message.get_origin_chain() == ChainKind::Near {
-                let OmniAddress::Near(recipient) = &native_fee_recipient else {
+                let OmniAddress::Near(near_recipient) = &native_fee_recipient else {
                     env::panic_str("ERR_WRONG_CHAIN_KIND")
                 };
-                Promise::new(recipient.clone())
+                Promise::new(near_recipient.clone())
                     .transfer(NearToken::from_yoctonear(message.fee.native_fee.0));
             } else {
                 let required_balance = self.update_fin_transfer(
@@ -716,16 +716,22 @@ impl Contract {
             .to_log_string(),
         );
 
-        ext_token::ext(token)
-            .with_static_gas(LOG_METADATA_GAS)
-            .with_attached_deposit(ONE_YOCTO)
-            .ft_transfer(fin_transfer.fee_recipient, U128(fee), None)
+        if fee > 0 {
+            PromiseOrValue::Promise(
+                ext_token::ext(token)
+                    .with_static_gas(FT_TRANSFER_GAS)
+                    .with_attached_deposit(ONE_YOCTO)
+                    .ft_transfer(fin_transfer.fee_recipient, U128(fee), None),
+            )
+        } else {
+            PromiseOrValue::Value(())
+        }
     }
 
     #[payable]
     pub fn bind_token(&mut self, #[serializer(borsh)] args: BindTokenArgs) -> Promise {
         ext_prover::ext(self.prover_account.clone())
-            .with_static_gas(VERIFY_POOF_GAS)
+            .with_static_gas(VERIFY_PROOF_GAS)
             .with_attached_deposit(NO_DEPOSIT)
             .verify_proof(VerifyProofArgs {
                 prover_id: args.chain_kind.as_ref().to_owned(),
