@@ -192,7 +192,7 @@ impl OmniAddress {
         };
 
         if skip_zero_address && self.is_zero() {
-            format!("{chain_str}")
+            chain_str.to_string()
         } else {
             format!("{chain_str}{separator}{address}")
         }
@@ -200,11 +200,11 @@ impl OmniAddress {
 
     pub fn is_zero(&self) -> bool {
         match self {
-            OmniAddress::Eth(address) => address.is_zero(),
+            OmniAddress::Eth(address) | OmniAddress::Arb(address) | OmniAddress::Base(address) => {
+                address.is_zero()
+            }
             OmniAddress::Near(address) => address.len() == 0,
             OmniAddress::Sol(address) => address.is_zero(),
-            OmniAddress::Arb(address) => address.is_zero(),
-            OmniAddress::Base(address) => address.is_zero(),
         }
     }
 
