@@ -8,7 +8,7 @@ use {
         prover_result::{DeployTokenMessage, FinTransferMessage, InitTransferMessage, ProofKind},
         sol_address::SolAddress,
         stringify, EvmAddress, Fee, OmniAddress, TransferMessage, H160,
-    }
+    },
 };
 
 // Validator Action Approval(VAA) data
