@@ -9,7 +9,7 @@ import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
-import {ICustomMinter} from "./ICustomMinter.sol";
+import {ICustomMinter} from "../../common/ICustomMinter.sol";
 
 import "./BridgeToken.sol";
 import "./SelectivePausableUpgradable.sol";
