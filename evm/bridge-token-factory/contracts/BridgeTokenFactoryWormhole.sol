@@ -3,6 +3,7 @@ pragma solidity ^0.8.24;
 
 import {BridgeTokenFactory} from "./BridgeTokenFactory.sol";
 import "./Borsh.sol";
+import "./BridgeTypes.sol";
 
 interface IWormhole {
     function publishMessage(
@@ -46,7 +47,7 @@ contract BridgeTokenFactoryWormhole is BridgeTokenFactory {
         wormholeNonce++;
     }
 
-    function finTransferExtension(FinTransferPayload memory payload) internal override {
+    function finTransferExtension(BridgeTypes.FinTransferPayload memory payload) internal override {
         _wormhole.publishMessage{value: msg.value}(
             wormholeNonce,
             abi.encode(MessageType.FinTransfer, payload.token, payload.amount, payload.feeRecipient, payload.nonce),
@@ -54,30 +55,31 @@ contract BridgeTokenFactoryWormhole is BridgeTokenFactory {
         );
 
         wormholeNonce++;
-
     }
 
     function initTransferExtension(
+        address sender,
+        address tokenAddress,
         uint128 nonce,
-        string calldata token,
         uint128 amount,
         uint128 fee,
         uint128 nativeFee,
         string calldata recipient,
-        address sender,
+        string calldata message,
         uint256 value
     ) internal override {
         _wormhole.publishMessage{value: value}(
             wormholeNonce,
             abi.encode(
                 MessageType.InitTransfer,
+                sender,
+                tokenAddress,
                 nonce,
-                token,
                 amount,
                 fee,
                 nativeFee,
                 recipient,
-                sender
+                message
             ),
             _consistencyLevel
         );

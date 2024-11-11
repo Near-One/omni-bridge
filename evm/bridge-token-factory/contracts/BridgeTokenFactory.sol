@@ -5,34 +5,23 @@ import {AccessControlUpgradeable} from "@openzeppelin/contracts-upgradeable/acce
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {UUPSUpgradeable} from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
+import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 import "./BridgeToken.sol";
 import "./SelectivePausableUpgradable.sol";
 import "./Borsh.sol";
+import "./BridgeTypes.sol";
 
 contract BridgeTokenFactory is
     UUPSUpgradeable,
     AccessControlUpgradeable,
     SelectivePausableUpgradable
 {
-    enum WhitelistMode {
-        NotInitialized,
-        Blocked,
-        CheckToken,
-        CheckAccountAndToken
-    }
-
-    // We removed ProofConsumer from the list of parent contracts and added this gap
-    // to preserve storage layout when upgrading to the new contract version.
-    uint256[54] private __gap;
-
-    mapping(address => string) private _ethToNearToken;
-    mapping(string => address) private _nearToEthToken;
-    mapping(address => bool) private _isBridgeToken;
-
-    mapping(string => WhitelistMode) private _whitelistedTokens;
-    mapping(bytes => bool) private _whitelistedAccounts;
-    bool private _isWhitelistModeEnabled;
+    using SafeERC20 for IERC20;
+    mapping(address => string) public ethToNearToken;
+    mapping(string => address) public nearToEthToken;
+    mapping(address => bool) public isBridgeToken;
 
     address public tokenImplementationAddress;
     address public nearBridgeDerivedAddress;
@@ -46,63 +35,6 @@ contract BridgeTokenFactory is
     uint constant UNPAUSED_ALL = 0;
     uint constant PAUSED_INIT_TRANSFER = 1 << 0;
     uint constant PAUSED_FIN_TRANSFER = 1 << 1;
-
-    struct FinTransferPayload {
-        uint128 nonce;
-        string token;
-        uint128 amount;
-        address recipient;
-        string feeRecipient;
-    }
-
-    struct MetadataPayload {
-        string token;
-        string name;
-        string symbol;
-        uint8 decimals;
-    }
-
-    struct ClaimFeePayload {
-        uint128[] nonces;
-        uint128 amount;
-        address recipient;
-    }
-
-    event InitTransfer(
-        address indexed sender,
-        address indexed tokenAddress,
-        uint128 indexed nonce,
-        string token,
-        uint128 amount,
-        uint128 fee,
-        uint128 nativeFee,
-        string recipient
-    );
-
-
-    event FinTransfer(
-        uint128 indexed nonce,
-        string token,
-        uint128 amount,
-        address recipient,
-        string feeRecipient
-    );
-
-    event DeployToken(
-        address indexed tokenAddress,
-        string token,
-        string name,
-        string symbol,
-        uint8 decimals
-    );
-
-    event SetMetadata(
-        address indexed tokenAddress,
-        string token,
-        string name,
-        string symbol,
-        uint8 decimals
-    );
 
     error InvalidSignature();
     error NonceAlreadyUsed(uint256 nonce);
@@ -124,22 +56,9 @@ contract BridgeTokenFactory is
         _grantRole(PAUSABLE_ADMIN_ROLE, _msgSender());
     }
 
-    function isBridgeToken(address token) external view returns (bool) {
-        return _isBridgeToken[token];
-    }
-
-    function ethToNearToken(address token) external view returns (string memory) {
-        require(_isBridgeToken[token], "ERR_NOT_BRIDGE_TOKEN");
-        return _ethToNearToken[token];
-    }
-
-    function nearToEthToken(string calldata nearTokenId) external view returns (address) {
-        require(_isBridgeToken[_nearToEthToken[nearTokenId]], "ERR_NOT_BRIDGE_TOKEN");
-        return _nearToEthToken[nearTokenId];
-    }
-
-    function deployToken(bytes calldata signatureData, MetadataPayload calldata metadata) payable external returns (address) {
+    function deployToken(bytes calldata signatureData, BridgeTypes.MetadataPayload calldata metadata) payable external returns (address) {
         bytes memory borshEncoded = bytes.concat(
+            bytes1(uint8(BridgeTypes.PayloadType.Metadata)),
             Borsh.encodeString(metadata.token),
             Borsh.encodeString(metadata.name),
             Borsh.encodeString(metadata.symbol),
@@ -151,7 +70,7 @@ contract BridgeTokenFactory is
             revert InvalidSignature();
         }
 
-        require(!_isBridgeToken[_nearToEthToken[metadata.token]], "ERR_TOKEN_EXIST");
+        require(!isBridgeToken[nearToEthToken[metadata.token]], "ERR_TOKEN_EXIST");
 
         address bridgeTokenProxy = address(
             new ERC1967Proxy(
@@ -167,7 +86,7 @@ contract BridgeTokenFactory is
 
         deployTokenExtension(metadata.token, bridgeTokenProxy);
 
-        emit DeployToken(
+        emit BridgeTypes.DeployToken(
             bridgeTokenProxy,
             metadata.token,
             metadata.name,
@@ -175,9 +94,9 @@ contract BridgeTokenFactory is
             metadata.decimals
         );
 
-        _isBridgeToken[address(bridgeTokenProxy)] = true;
-        _ethToNearToken[address(bridgeTokenProxy)] = metadata.token;
-        _nearToEthToken[metadata.token] = address(bridgeTokenProxy);
+        isBridgeToken[address(bridgeTokenProxy)] = true;
+        ethToNearToken[address(bridgeTokenProxy)] = metadata.token;
+        nearToEthToken[metadata.token] = address(bridgeTokenProxy);
 
         return bridgeTokenProxy;
     }
@@ -189,13 +108,13 @@ contract BridgeTokenFactory is
         string calldata name,
         string calldata symbol
     ) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        require(_isBridgeToken[_nearToEthToken[token]], "ERR_NOT_BRIDGE_TOKEN");
+        require(isBridgeToken[nearToEthToken[token]], "ERR_NOT_BRIDGE_TOKEN");
 
-        BridgeToken bridgeToken = BridgeToken(_nearToEthToken[token]);
+        BridgeToken bridgeToken = BridgeToken(nearToEthToken[token]);
 
         bridgeToken.setMetadata(name, symbol, bridgeToken.decimals());
 
-        emit SetMetadata(
+        emit BridgeTypes.SetMetadata(
             address(bridgeToken),
             token,
             name,
@@ -204,14 +123,19 @@ contract BridgeTokenFactory is
         );
     }
 
-    function finTransfer(bytes calldata signatureData, FinTransferPayload calldata payload) payable external whenNotPaused(PAUSED_FIN_TRANSFER) {
+    function finTransfer(
+        bytes calldata signatureData, 
+        BridgeTypes.FinTransferPayload calldata payload
+    ) payable external whenNotPaused(PAUSED_FIN_TRANSFER) {
         if (completedTransfers[payload.nonce]) {
             revert NonceAlreadyUsed(payload.nonce);
         }
 
         bytes memory borshEncoded = bytes.concat(
+            bytes1(uint8(BridgeTypes.PayloadType.TransferMessage)),
             Borsh.encodeUint128(payload.nonce),
-            Borsh.encodeString(payload.token),
+            bytes1(omniBridgeChainId),
+            Borsh.encodeAddress(payload.tokenAddress),
             Borsh.encodeUint128(payload.amount),
             bytes1(omniBridgeChainId),
             Borsh.encodeAddress(payload.recipient),
@@ -225,49 +149,66 @@ contract BridgeTokenFactory is
             revert InvalidSignature();
         }
 
-        require(_isBridgeToken[_nearToEthToken[payload.token]], "ERR_NOT_BRIDGE_TOKEN");
-        BridgeToken(_nearToEthToken[payload.token]).mint(payload.recipient, payload.amount);
-
         completedTransfers[payload.nonce] = true;
+        
+        if (isBridgeToken[payload.tokenAddress]) {
+            BridgeToken(payload.tokenAddress).mint(payload.recipient, payload.amount);
+        } else {
+            IERC20(payload.tokenAddress).safeTransfer(payload.recipient, payload.amount);
+        }
 
         finTransferExtension(payload);
 
-        emit FinTransfer(
+        emit BridgeTypes.FinTransfer(
             payload.nonce,
-            payload.token,
+            payload.tokenAddress,
             payload.amount,
             payload.recipient,
             payload.feeRecipient
         );
     }
 
-    function finTransferExtension(FinTransferPayload memory payload) internal virtual {}
+    function finTransferExtension(BridgeTypes.FinTransferPayload memory payload) internal virtual {}
 
     function initTransfer(
-        string calldata token,
+        address tokenAddress,
         uint128 amount,
         uint128 fee,
         uint128 nativeFee,
-        string calldata recipient
+        string calldata recipient,
+        string calldata message
     ) payable external whenNotPaused(PAUSED_INIT_TRANSFER) {
         initTransferNonce += 1;
-        _checkWhitelistedToken(token, msg.sender);
-        require(_isBridgeToken[_nearToEthToken[token]], "ERR_NOT_BRIDGE_TOKEN");
         if (fee >= amount) {
             revert InvalidFee();
         }
 
-        address tokenAddress = _nearToEthToken[token];
-
-        BridgeToken(tokenAddress).burn(msg.sender, amount);
-
         uint256 extensionValue = msg.value - nativeFee;
-        initTransferExtension(initTransferNonce, token, amount, fee, nativeFee, recipient, msg.sender, extensionValue);
 
-        emit InitTransfer(msg.sender, tokenAddress, initTransferNonce, token , amount, fee, nativeFee, recipient);
+        if (isBridgeToken[tokenAddress]) {
+            BridgeToken(tokenAddress).burn(msg.sender, amount);
+        } else {
+            IERC20(tokenAddress).safeTransferFrom(msg.sender, address(this), amount);
+        }
+
+        initTransferExtension(msg.sender, tokenAddress, initTransferNonce, amount, fee, nativeFee, recipient, message, extensionValue);
+
+        emit BridgeTypes.InitTransfer(msg.sender, tokenAddress, initTransferNonce, amount, fee, nativeFee, recipient, message);
     }
 
-    function claimNativeFee(bytes calldata signatureData, ClaimFeePayload memory payload) external {
+    function initTransferExtension(
+        address sender,
+        address tokenAddress,
+        uint128 nonce,
+        uint128 amount,
+        uint128 fee,
+        uint128 nativeFee,
+        string calldata recipient,
+        string calldata message,
+        uint256 value
+    ) internal virtual {}
+
+    function claimNativeFee(bytes calldata signatureData, BridgeTypes.ClaimFeePayload memory payload) external {
         bytes memory borshEncodedNonces = Borsh.encodeUint32(uint32(payload.nonces.length));
 
         for (uint i = 0; i < payload.nonces.length; ++i) {
@@ -278,6 +219,7 @@ contract BridgeTokenFactory is
 
             claimedFee[nonce] = true;
             borshEncodedNonces = bytes.concat(
+            bytes1(uint8(BridgeTypes.PayloadType.ClaimNativeFee)),
                 borshEncodedNonces,
                 Borsh.encodeUint128(nonce)
             );
@@ -299,111 +241,22 @@ contract BridgeTokenFactory is
         require(success, "Failed to send Ether.");
     }
 
-    function initTransferExtension(
-        uint128 nonce,
-        string calldata token,
-        uint128 amount,
-        uint128 fee,
-        uint128 nativeFee,
-        string calldata recipient,
-        address sender,
-        uint256 value
-    ) internal virtual {}
-
     function pause(uint flags) external onlyRole(DEFAULT_ADMIN_ROLE) {
         _pause(flags);
-    }
-
-    function pauseFinTransfer() external onlyRole(PAUSABLE_ADMIN_ROLE) {
-        _pause(pausedFlags() | PAUSED_FIN_TRANSFER);
-    }
-
-    function pauseInitTransfer() external onlyRole(PAUSABLE_ADMIN_ROLE) {
-        _pause(pausedFlags() | PAUSED_INIT_TRANSFER);
     }
 
     function pauseAll() external onlyRole(PAUSABLE_ADMIN_ROLE) {
         uint flags = PAUSED_FIN_TRANSFER | PAUSED_INIT_TRANSFER;
         _pause(flags);
     }
-
-    function isWhitelistModeEnabled() external view returns (bool) {
-        return _isWhitelistModeEnabled;
-    }
-
-    function getTokenWhitelistMode(
-        string calldata token
-    ) external view returns (WhitelistMode) {
-        return _whitelistedTokens[token];
-    }
-
-    function isAccountWhitelistedForToken(
-        string calldata token,
-        address account
-    ) external view returns (bool) {
-        return _whitelistedAccounts[abi.encodePacked(token, account)];
-    }
-
+ 
     function upgradeToken(
-        string calldata nearTokenId,
+        address tokenAddress,
         address implementation
     ) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        require(_isBridgeToken[_nearToEthToken[nearTokenId]], "ERR_NOT_BRIDGE_TOKEN");
-        BridgeToken proxy = BridgeToken(payable(_nearToEthToken[nearTokenId]));
+        require(isBridgeToken[tokenAddress], "ERR_NOT_BRIDGE_TOKEN");
+        BridgeToken proxy = BridgeToken(tokenAddress);
         proxy.upgradeToAndCall(implementation, bytes(""));
-    }
-
-    function enableWhitelistMode() external onlyRole(DEFAULT_ADMIN_ROLE) {
-        _isWhitelistModeEnabled = true;
-    }
-
-    function disableWhitelistMode() external onlyRole(DEFAULT_ADMIN_ROLE) {
-        _isWhitelistModeEnabled = false;
-    }
-
-    function setTokenWhitelistMode(
-        string calldata token,
-        WhitelistMode mode
-    ) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        _whitelistedTokens[token] = mode;
-    }
-
-    function addAccountToWhitelist(
-        string calldata token,
-        address account
-    ) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        require(
-            _whitelistedTokens[token] != WhitelistMode.NotInitialized,
-            "ERR_NOT_INITIALIZED_WHITELIST_TOKEN"
-        );
-        _whitelistedAccounts[abi.encodePacked(token, account)] = true;
-    }
-
-    function removeAccountFromWhitelist(
-        string calldata token,
-        address account
-    ) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        delete _whitelistedAccounts[abi.encodePacked(token, account)];
-    }
-
-    function _checkWhitelistedToken(string memory token, address account) internal view {
-        if (!_isWhitelistModeEnabled) {
-            return;
-        }
-
-        WhitelistMode tokenMode = _whitelistedTokens[token];
-        require(
-            tokenMode != WhitelistMode.NotInitialized,
-            "ERR_NOT_INITIALIZED_WHITELIST_TOKEN"
-        );
-        require(tokenMode != WhitelistMode.Blocked, "ERR_WHITELIST_TOKEN_BLOCKED");
-
-        if (tokenMode == WhitelistMode.CheckAccountAndToken) {
-            require(
-                _whitelistedAccounts[abi.encodePacked(token, account)],
-                "ERR_ACCOUNT_NOT_IN_WHITELIST"
-            );
-        }
     }
 
     function _authorizeUpgrade(

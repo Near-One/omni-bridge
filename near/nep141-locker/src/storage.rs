@@ -2,7 +2,10 @@ use near_contract_standards::storage_management::{StorageBalance, StorageBalance
 use near_sdk::{assert_one_yocto, borsh};
 use near_sdk::{env, near_bindgen, AccountId, NearToken};
 
-use crate::*;
+use crate::{
+    require, BorshDeserialize, BorshSerialize, ChainKind, Contract, ContractExt, Deserialize, Fee,
+    OmniAddress, Promise, SdkExpect, Serialize, TransferMessage, U128,
+};
 
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Debug, Clone)]
 pub struct TransferMessageStorageValue {
@@ -111,7 +114,7 @@ impl Contract {
     }
 
     pub fn storage_balance_of(&self, account_id: &AccountId) -> Option<StorageBalance> {
-        self.accounts_balances.get(&account_id)
+        self.accounts_balances.get(account_id)
     }
 
     pub fn required_balance_for_account(&self) -> NearToken {
@@ -127,21 +130,18 @@ impl Contract {
             .saturating_mul((Self::get_basic_storage() + key_len + value_len).into())
     }
 
-    pub fn required_balance_for_init_transfer(
-        &self,
-        recipient: OmniAddress,
-        sender: OmniAddress,
-    ) -> NearToken {
+    pub fn required_balance_for_init_transfer(&self) -> NearToken {
         let key_len = borsh::to_vec(&0_u128).sdk_expect("ERR_BORSH").len() as u64;
         let max_account_id: AccountId = "a".repeat(64).parse().sdk_expect("ERR_PARSE_ACCOUNT_ID");
         let value_len = borsh::to_vec(&TransferMessageStorage::V0(TransferMessageStorageValue {
             message: TransferMessage {
                 origin_nonce: U128(0),
-                token: max_account_id.clone(),
+                token: OmniAddress::Near(max_account_id.clone()),
                 amount: U128(0),
-                recipient,
+                recipient: OmniAddress::Near(max_account_id.clone()),
                 fee: Fee::default(),
-                sender,
+                sender: OmniAddress::Near(max_account_id.clone()),
+                msg: String::new(),
             },
             owner: max_account_id,
         }))
@@ -158,6 +158,23 @@ impl Contract {
             .len() as u64;
 
         env::storage_byte_cost().saturating_mul((Self::get_basic_storage() + key_len).into())
+    }
+
+    pub fn required_balance_for_bind_token(&self) -> NearToken {
+        let max_token_id: AccountId = "a".repeat(64).parse().sdk_expect("ERR_PARSE_ACCOUNT_ID");
+
+        let key_len = borsh::to_vec(&(ChainKind::Near, &max_token_id))
+            .sdk_expect("ERR_BORSH")
+            .len() as u64
+            * 2;
+
+        let value_len = borsh::to_vec(&OmniAddress::Near(max_token_id))
+            .sdk_expect("ERR_BORSH")
+            .len() as u64
+            * 2;
+
+        env::storage_byte_cost()
+            .saturating_mul((Self::get_basic_storage() + key_len + value_len).into())
     }
 
     fn get_basic_storage() -> u64 {

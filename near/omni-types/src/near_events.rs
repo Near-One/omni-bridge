@@ -29,6 +29,9 @@ pub enum Nep141LockerEvent {
         signature: SignatureResponse,
         claim_payload: ClaimNativeFeePayload,
     },
+    ClaimFeeEvent {
+        transfer_message: TransferMessage,
+    },
 }
 
 impl Nep141LockerEvent {

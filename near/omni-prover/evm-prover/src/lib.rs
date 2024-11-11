@@ -1,5 +1,5 @@
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
-use near_sdk::{env, ext_contract, near_bindgen, AccountId, Gas, PanicOnDefault, Promise};
+use near_sdk::{env, ext_contract, near_bindgen, require, AccountId, Gas, PanicOnDefault, Promise};
 use omni_types::evm::events::parse_evm_event;
 use omni_types::evm::header::BlockHeader;
 use omni_types::evm::receipt::{LogEntry, Receipt};
@@ -42,6 +42,11 @@ impl EvmProver {
         }
     }
 
+    /// # Panics
+    ///
+    /// This function will panic in the following situations:
+    /// - If the log entry at the specified index doesn't match the decoded log entry.
+    #[allow(clippy::needless_pass_by_value)]
     #[handle_result]
     pub fn verify_proof(&self, #[serializer(borsh)] input: Vec<u8>) -> Result<Promise, String> {
         let args = EvmVerifyProofArgs::try_from_slice(&input).map_err(|_| "ERR_PARSE_ARGS")?;
@@ -54,7 +59,7 @@ impl EvmProver {
 
         // Verify log_entry included in receipt
         let log_index_usize = usize::try_from(evm_proof.log_index).map_err(|e| e.to_string())?;
-        assert_eq!(receipt.logs[log_index_usize], log_entry);
+        require!(receipt.logs[log_index_usize] == log_entry);
 
         // Verify receipt included into header
         let data = Self::verify_trie_proof(
@@ -82,8 +87,10 @@ impl EvmProver {
             ))
     }
 
+    #[allow(clippy::needless_pass_by_value)]
     #[private]
     #[handle_result]
+    #[result_serializer(borsh)]
     pub fn verify_proof_callback(
         &mut self,
         #[serializer(borsh)] kind: ProofKind,
@@ -136,6 +143,7 @@ impl EvmProver {
         Self::_verify_trie_proof(expected_root.to_vec(), &actual_key, proof, 0, 0)
     }
 
+    #[allow(clippy::needless_pass_by_value)]
     fn _verify_trie_proof(
         expected_root: Vec<u8>,
         key: &Vec<u8>,
@@ -147,24 +155,27 @@ impl EvmProver {
 
         if key_index == 0 {
             // trie root is always a hash
-            assert_eq!(keccak256(node), expected_root.as_slice());
+            require!(keccak256(node) == expected_root.as_slice());
         } else if node.len() < 32 {
             // if rlp < 32 bytes, then it is not hashed
-            assert_eq!(node.as_slice(), expected_root);
+            require!(node.as_slice() == expected_root);
         } else {
-            assert_eq!(keccak256(node), expected_root.as_slice());
+            require!(keccak256(node) == expected_root.as_slice());
         }
 
-        let node = Rlp::new(&node.as_slice());
+        let node = Rlp::new(node.as_slice());
 
         if node.iter().count() == 17 {
             // Branch node
             if key_index >= key.len() {
-                assert_eq!(proof_index + 1, proof.len());
+                require!(proof_index + 1 == proof.len());
                 get_vec(&node, 16)
             } else {
                 let new_expected_root = get_vec(&node, key[key_index] as usize);
-                if !new_expected_root.is_empty() {
+                if new_expected_root.is_empty() {
+                    // not included in proof
+                    vec![]
+                } else {
                     Self::_verify_trie_proof(
                         new_expected_root,
                         key,
@@ -172,19 +183,16 @@ impl EvmProver {
                         key_index + 1,
                         proof_index + 1,
                     )
-                } else {
-                    // not included in proof
-                    vec![]
                 }
             }
         } else {
             // Leaf or extension node
-            assert_eq!(node.iter().count(), 2);
+            require!(node.iter().count() == 2);
             let path_u8 = get_vec(&node, 0);
             // Extract first nibble
             let head = path_u8[0] / 16;
-            // assert!(0 <= head); is implicit because of type limits
-            assert!(head <= 3);
+            // require!(0 <= head); is implicit because of type limits
+            require!(head <= 3);
 
             // Extract path
             let mut path = vec![];
@@ -198,8 +206,8 @@ impl EvmProver {
 
             if head >= 2 {
                 // Leaf node
-                assert_eq!(proof_index + 1, proof.len());
-                assert_eq!(key_index + path.len(), key.len());
+                require!(proof_index + 1 == proof.len());
+                require!(key_index + path.len() == key.len());
                 if path.as_slice() == &key[key_index..key_index + path.len()] {
                     get_vec(&node, 1)
                 } else {
@@ -207,7 +215,7 @@ impl EvmProver {
                 }
             } else {
                 // Extension node
-                assert_eq!(path.as_slice(), &key[key_index..key_index + path.len()]);
+                require!(path.as_slice() == &key[key_index..key_index + path.len()]);
                 let new_expected_root = get_vec(&node, 1);
                 Self::_verify_trie_proof(
                     new_expected_root,

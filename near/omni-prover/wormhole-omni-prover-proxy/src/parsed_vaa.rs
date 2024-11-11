@@ -3,15 +3,16 @@
 use {
     crate::byte_utils::ByteUtils,
     alloy_sol_types::{sol, SolType},
-    near_sdk::{bs58, env},
+    near_sdk::env,
     omni_types::{
         prover_result::{DeployTokenMessage, FinTransferMessage, InitTransferMessage},
+        sol_address::SolAddress,
         stringify, EvmAddress, Fee, OmniAddress, TransferMessage, H160,
     },
 };
 
 // Validator Action Approval(VAA) data
-
+#[allow(dead_code)]
 pub struct ParsedVAA {
     pub version: u8,
     pub guardian_set_index: u32,
@@ -69,7 +70,7 @@ impl ParsedVAA {
         // Load 4 bytes starting from index 1
         let guardian_set_index: u32 = data.get_u32(Self::GUARDIAN_SET_INDEX_POS);
         let len_signers = data.get_u8(Self::LEN_SIGNER_POS) as usize;
-        let body_offset: usize = Self::HEADER_LEN + Self::SIGNATURE_LEN * len_signers as usize;
+        let body_offset: usize = Self::HEADER_LEN + Self::SIGNATURE_LEN * len_signers;
 
         // Hash the body
         if body_offset >= data.len() {
@@ -99,7 +100,7 @@ impl ParsedVAA {
             guardian_set_index,
             timestamp,
             nonce,
-            len_signers: len_signers as usize,
+            len_signers,
             emitter_chain,
             emitter_address,
             sequence,
@@ -112,13 +113,14 @@ impl ParsedVAA {
 
 sol! {
     struct InitTransferWh {
+        address sender;
+        address tokenAddress;
         uint128 nonce;
-        string token;
         uint128 amount;
         uint128 fee;
         uint128 nativeFee;
         string recipient;
-        address sender;
+        string message;
     }
 
     struct FinTransferWh {
@@ -143,7 +145,7 @@ impl TryInto<InitTransferMessage> for ParsedVAA {
 
         Ok(InitTransferMessage {
             transfer: TransferMessage {
-                token: transfer.token.parse().map_err(stringify)?,
+                token: to_omni_address(self.emitter_chain, &transfer.tokenAddress.0 .0),
                 amount: transfer.amount.into(),
                 fee: Fee {
                     fee: transfer.fee.into(),
@@ -152,6 +154,7 @@ impl TryInto<InitTransferMessage> for ParsedVAA {
                 recipient: transfer.recipient.parse().map_err(stringify)?,
                 origin_nonce: transfer.nonce.into(),
                 sender: to_omni_address(self.emitter_chain, &transfer.sender.0 .0),
+                msg: transfer.message,
             },
             emitter_address: to_omni_address(self.emitter_chain, &self.emitter_address),
         })
@@ -191,7 +194,7 @@ impl TryInto<DeployTokenMessage> for ParsedVAA {
 
 fn to_omni_address(emitter_chain: u16, address: &[u8]) -> OmniAddress {
     match emitter_chain {
-        1 => OmniAddress::Sol(bs58::encode(address).into_string()),
+        1 => OmniAddress::Sol(to_sol_address(address)),
         2 => OmniAddress::Eth(to_evm_address(address)),
         23 => OmniAddress::Arb(to_evm_address(address)),
         30 => OmniAddress::Base(to_evm_address(address)),
@@ -203,5 +206,12 @@ fn to_evm_address(address: &[u8]) -> EvmAddress {
     match address.try_into() {
         Ok(bytes) => H160(bytes),
         Err(_) => env::panic_str("Invalid EVM address"),
+    }
+}
+
+fn to_sol_address(address: &[u8]) -> SolAddress {
+    match address.try_into() {
+        Ok(bytes) => SolAddress(bytes),
+        Err(_) => env::panic_str("Invalid SOL address"),
     }
 }
