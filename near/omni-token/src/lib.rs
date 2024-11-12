@@ -45,7 +45,7 @@ pub trait ExtOmniTokenFactory {
 #[near]
 impl OmniToken {
     #[init]
-    pub fn new(controller: AccountId, metadta: BasicMetadata) -> Self {
+    pub fn new(controller: AccountId, metadata: BasicMetadata) -> Self {
         let current_account_id = env::current_account_id();
         let deployer_account = current_account_id
             .get_parent_account_id()
@@ -63,12 +63,12 @@ impl OmniToken {
                 b"m".to_vec(),
                 Some(&FungibleTokenMetadata {
                     spec: FT_METADATA_SPEC.to_string(),
-                    name: metadta.name,
-                    symbol: metadta.symbol,
+                    name: metadata.name,
+                    symbol: metadata.symbol,
                     icon: None,
                     reference: None,
                     reference_hash: None,
-                    decimals: metadta.decimals,
+                    decimals: metadata.decimals,
                 }),
             ),
         }
@@ -154,7 +154,10 @@ impl MetadataManagment for OmniToken {
             metadata.reference_hash = Some(reference_hash);
         }
         if let Some(decimals) = decimals {
-            metadata.decimals = decimals;
+            // Decimals can't be changed if it's already set.
+            if decimals != 0 {
+                metadata.decimals = decimals;
+            }
         }
         if let Some(icon) = icon {
             metadata.icon = Some(icon);

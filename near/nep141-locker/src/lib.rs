@@ -1,3 +1,4 @@
+#![allow(clippy::too_many_arguments)]
 use errors::SdkExpect;
 use near_plugins::{
     access_control, access_control_any, pause, AccessControlRole, AccessControllable, Pausable,
@@ -9,7 +10,7 @@ use near_contract_standards::fungible_token::receiver::FungibleTokenReceiver;
 use near_contract_standards::storage_management::StorageBalance;
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::collections::{LookupMap, LookupSet};
-use near_sdk::json_types::U128;
+use near_sdk::json_types::{Base64VecU8, U128};
 use near_sdk::serde::{Deserialize, Serialize};
 use near_sdk::{
     env, ext_contract, near, require, serde_json, AccountId, BorshStorageKey, Gas, NearToken,
@@ -54,7 +55,7 @@ const DEPLOY_TOKEN_CALLBACK_GAS: Gas = Gas::from_tgas(75);
 const DEPLOY_TOKEN_GAS: Gas = Gas::from_tgas(50);
 const BURN_TOKEN_GAS: Gas = Gas::from_tgas(10);
 const MINT_TOKEN_GAS: Gas = Gas::from_tgas(10);
-
+const SET_METADATA_GAS: Gas = Gas::from_tgas(10);
 const NO_DEPOSIT: NearToken = NearToken::from_near(0);
 const ONE_YOCTO: NearToken = NearToken::from_yoctonear(1);
 const NEP141_DEPOSIT: NearToken = NearToken::from_yoctonear(1_250_000_000_000_000_000_000);
@@ -81,6 +82,7 @@ pub enum Role {
     UnrestrictedDeposit,
     UpgradableCodeStager,
     UpgradableCodeDeployer,
+    MetadataManager,
 }
 
 #[ext_contract(ext_token)]
@@ -113,6 +115,16 @@ pub trait ExtToken {
     fn mint(&mut self, account_id: AccountId, amount: U128, msg: Option<String>);
 
     fn burn(&mut self, amount: U128);
+
+    fn set_metadata(
+        &mut self,
+        name: Option<String>,
+        symbol: Option<String>,
+        reference: Option<String>,
+        reference_hash: Option<Base64VecU8>,
+        decimals: Option<u8>,
+        icon: Option<String>,
+    );
 }
 
 #[ext_contract(ext_signer)]
@@ -976,6 +988,22 @@ impl Contract {
                 &token_address,
             );
         }
+    }
+
+    #[access_control_any(roles(Role::DAO, Role::MetadataManager))]
+    pub fn set_token_metadata(
+        &mut self,
+        token: AccountId,
+        name: Option<String>,
+        symbol: Option<String>,
+        decimals: Option<u8>,
+        icon: Option<String>,
+        reference: Option<String>,
+        reference_hash: Option<Base64VecU8>,
+    ) -> Promise {
+        ext_token::ext(token)
+            .with_static_gas(SET_METADATA_GAS)
+            .set_metadata(name, symbol, reference, reference_hash, decimals, icon)
     }
 }
 
