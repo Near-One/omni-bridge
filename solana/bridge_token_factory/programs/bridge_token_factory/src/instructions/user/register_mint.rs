@@ -16,9 +16,12 @@ use anchor_spl::{
     },
 };
 
-use crate::{constants::{AUTHORITY_SEED, VAULT_SEED}, state::message::{deploy_token::DeployTokenPayload, Payload}};
 use crate::error::ErrorCode;
 use crate::instructions::wormhole_cpi::*;
+use crate::{
+    constants::{AUTHORITY_SEED, VAULT_SEED},
+    state::message::{deploy_token::DeployTokenPayload, Payload},
+};
 use anchor_spl::metadata::ID as MetaplexID;
 
 #[derive(Accounts)]
@@ -68,10 +71,7 @@ pub struct MetadataOverride {
 }
 
 impl<'info> RegisterMint<'info> {
-    pub fn process(
-        &mut self,
-        metadata_override: MetadataOverride,
-    ) -> Result<()> {
+    pub fn process(&mut self, metadata_override: MetadataOverride) -> Result<()> {
         let (name, symbol) = if let Some(override_authority) = self.override_authority.as_ref() {
             match override_authority.key() {
                 a if a == self.wormhole.config.admin => {}

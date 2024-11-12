@@ -1,9 +1,9 @@
-use std::io::BufWriter;
+use std::io::{BufWriter, Write};
 
 use anchor_lang::prelude::*;
 
 use super::{IncomingMessageType, OutgoingMessageType, Payload, DEFAULT_SERIALIZER_CAPACITY};
-use crate::error::ErrorCode;
+use crate::{constants::SOLANA_OMNI_BRIDGE_CHAIN_ID, error::ErrorCode};
 
 #[derive(AnchorSerialize, AnchorDeserialize)]
 pub struct DeployTokenPayload {
@@ -37,8 +37,14 @@ impl Payload for DeployTokenResponse {
 
     fn serialize_for_near(&self, _params: Self::AdditionalParams) -> Result<Vec<u8>> {
         let mut writer = BufWriter::new(Vec::with_capacity(DEFAULT_SERIALIZER_CAPACITY));
+        // 0. OutgoingMessageType::DeployToken
         OutgoingMessageType::DeployToken.serialize(&mut writer)?;
-        self.serialize(&mut writer)?; // borsh encoding
+        // 1. token
+        self.token.serialize(&mut writer)?;
+        // 2. solana_mint
+        writer.write_all(&[SOLANA_OMNI_BRIDGE_CHAIN_ID])?;
+        self.solana_mint.serialize(&mut writer)?;
+
         writer
             .into_inner()
             .map_err(|_| error!(ErrorCode::InvalidArgs))

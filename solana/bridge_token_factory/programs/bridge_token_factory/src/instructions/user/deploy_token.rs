@@ -1,7 +1,10 @@
 use crate::constants::{AUTHORITY_SEED, WRAPPED_MINT_SEED};
 use crate::instructions::wormhole_cpi::*;
 use crate::state::message::SignedPayload;
-use crate::state::message::{Payload, deploy_token::{DeployTokenResponse, DeployTokenPayload}};
+use crate::state::message::{
+    deploy_token::{DeployTokenPayload, DeployTokenResponse},
+    Payload,
+};
 use anchor_lang::prelude::*;
 use anchor_spl::metadata::mpl_token_metadata::types::DataV2;
 use anchor_spl::metadata::{
@@ -46,10 +49,7 @@ pub struct DeployToken<'info> {
 }
 
 impl<'info> DeployToken<'info> {
-    pub fn initialize_token_metadata(
-        &self,
-        metadata: DeployTokenPayload,
-    ) -> Result<()> {
+    pub fn initialize_token_metadata(&self, metadata: DeployTokenPayload) -> Result<()> {
         let bump = &[self.wormhole.config.bumps.authority];
         let signer_seeds = &[&[AUTHORITY_SEED, bump][..]];
 
@@ -94,4 +94,3 @@ impl<'info> DeployToken<'info> {
         Ok(())
     }
 }
-

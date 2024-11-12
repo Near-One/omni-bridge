@@ -49,8 +49,11 @@ impl<'info> Repay<'info> {
             payload.amount.try_into().unwrap(),
         )?;
 
-        self.wormhole
-            .post_message(payload.serialize_for_near(())?)?;
+        self.wormhole.post_message(payload.serialize_for_near((
+            self.wormhole.sequence.sequence,
+            self.user.key(),
+            self.mint.key(),
+        ))?)?;
 
         Ok(())
     }

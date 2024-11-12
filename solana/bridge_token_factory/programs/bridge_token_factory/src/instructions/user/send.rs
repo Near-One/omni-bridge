@@ -65,8 +65,11 @@ impl<'info> Send<'info> {
             self.mint.decimals,
         )?;
 
-        self.wormhole
-            .post_message(payload.serialize_for_near(self.mint.key())?)?;
+        self.wormhole.post_message(payload.serialize_for_near((
+            self.wormhole.sequence.sequence,
+            self.user.key(),
+            self.mint.key(),
+        ))?)?;
 
         Ok(())
     }

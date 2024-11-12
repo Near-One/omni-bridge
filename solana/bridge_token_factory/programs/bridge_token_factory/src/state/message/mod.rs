@@ -1,18 +1,26 @@
+use std::io::BufWriter;
+
 use anchor_lang::prelude::*;
 use anchor_lang::solana_program::{keccak, secp256k1_recover::secp256k1_recover};
+use near_sdk::json_types::U128;
 
 use crate::error::ErrorCode;
 
 pub mod deploy_token;
 pub mod deposit;
-pub mod withdraw;
 pub mod repay;
 pub mod send;
+pub mod withdraw;
 
 pub trait Payload: AnchorSerialize + AnchorDeserialize {
     type AdditionalParams;
 
     fn serialize_for_near(&self, params: Self::AdditionalParams) -> Result<Vec<u8>>;
+
+    fn serialize_as_near_u128(u: u128, writer: &mut BufWriter<Vec<u8>>) -> Result<()> {
+        near_sdk::borsh::BorshSerialize::serialize(&U128(u), writer)?;
+        Ok(())
+    }
 }
 
 #[derive(AnchorSerialize, AnchorDeserialize)]
@@ -22,7 +30,11 @@ pub struct SignedPayload<P: Payload> {
 }
 
 impl<P: Payload> SignedPayload<P> {
-    pub fn verify_signature(&self, params: P::AdditionalParams, derived_near_bridge_address: &[u8; 64]) -> Result<()> {
+    pub fn verify_signature(
+        &self,
+        params: P::AdditionalParams,
+        derived_near_bridge_address: &[u8; 64],
+    ) -> Result<()> {
         let serialized = self.payload.serialize_for_near(params)?;
         let hash = keccak::hash(&serialized);
 

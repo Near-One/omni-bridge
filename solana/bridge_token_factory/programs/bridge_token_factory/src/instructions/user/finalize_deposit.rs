@@ -98,7 +98,13 @@ impl<'info> FinalizeDeposit<'info> {
         );
         mint_to(cpi_ctx, data.amount.try_into().unwrap())?;
 
-        let payload = FinalizeDepositResponse { nonce: data.nonce }.serialize_for_near(())?;
+        let payload = FinalizeDepositResponse {
+            token: self.mint.key(),
+            amount: data.amount,
+            fee_recipient: data.fee_recipient.unwrap_or_default(),
+            nonce: data.nonce,
+        }
+        .serialize_for_near(())?;
 
         self.wormhole.post_message(payload)?;
 

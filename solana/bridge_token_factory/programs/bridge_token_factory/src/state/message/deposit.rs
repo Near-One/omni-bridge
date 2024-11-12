@@ -34,6 +34,9 @@ impl Payload for DepositPayload {
 
 #[derive(AnchorSerialize, AnchorDeserialize)]
 pub struct FinalizeDepositResponse {
+    pub token: Pubkey,
+    pub amount: u128,
+    pub fee_recipient: String,
     pub nonce: u128,
 }
 
@@ -41,8 +44,17 @@ impl Payload for FinalizeDepositResponse {
     type AdditionalParams = ();
     fn serialize_for_near(&self, _params: Self::AdditionalParams) -> Result<Vec<u8>> {
         let mut writer = BufWriter::new(Vec::with_capacity(DEFAULT_SERIALIZER_CAPACITY));
+        // 0. OutgoingMessageType::FinTransfer
         OutgoingMessageType::FinTransfer.serialize(&mut writer)?;
-        self.serialize(&mut writer)?; // borsh encoding
+        // 1. token
+        format!("sol:{:?}", self.token).serialize(&mut writer)?;
+        // 2. amount
+        Self::serialize_as_near_u128(self.amount, &mut writer)?;
+        // 3. recipient
+        self.fee_recipient.serialize(&mut writer)?;
+        // 4. nonce
+        Self::serialize_as_near_u128(self.nonce, &mut writer)?;
+
         writer
             .into_inner()
             .map_err(|_| error!(ErrorCode::InvalidArgs))

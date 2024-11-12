@@ -1,22 +1,18 @@
 use anchor_lang::prelude::*;
 
-
-#[derive(Default, AnchorSerialize, AnchorDeserialize, Clone, PartialEq, Eq)]
-#[derive(InitSpace)]
+#[derive(Default, AnchorSerialize, AnchorDeserialize, Clone, PartialEq, Eq, InitSpace)]
 pub struct WormholeBumps {
     pub bridge: u8,
     pub fee_collector: u8,
     pub sequence: u8,
 }
 
-#[derive(AnchorSerialize, AnchorDeserialize, Clone)]
-#[derive(InitSpace)]
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, InitSpace)]
 pub struct ConfigBumps {
     pub config: u8,
     pub authority: u8,
     pub wormhole: WormholeBumps,
 }
-
 
 #[account]
 #[derive(InitSpace)]
