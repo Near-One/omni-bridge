@@ -8,8 +8,8 @@ use omni_types::prover_result::{ProofKind, ProverResult};
 mod byte_utils;
 mod parsed_vaa;
 
-/// Gas to call `verify_log_entry` on prover.
-pub const VERIFY_LOG_ENTRY_GAS: Gas = Gas::from_tgas(50);
+pub const VERIFY_VAA_GAS: Gas = Gas::from_tgas(10);
+pub const VERIFY_VAA_CALLBACK_GAS: Gas = Gas::from_tgas(10);
 
 #[ext_contract(ext_prover)]
 pub trait Prover {
@@ -39,11 +39,11 @@ impl WormholeOmniProverProxy {
         env::log_str(&args.vaa);
 
         ext_prover::ext(self.prover_account.clone())
-            .with_static_gas(VERIFY_LOG_ENTRY_GAS)
+            .with_static_gas(VERIFY_VAA_GAS)
             .verify_vaa(&args.vaa)
             .then(
                 Self::ext(env::current_account_id())
-                    .with_static_gas(VERIFY_LOG_ENTRY_GAS)
+                    .with_static_gas(VERIFY_VAA_CALLBACK_GAS)
                     .verify_vaa_callback(args.proof_kind, args.vaa),
             )
     }
@@ -56,6 +56,7 @@ impl WormholeOmniProverProxy {
     /// - If the `proof_kind` doesn't match the first byte of the VAA payload.
     #[private]
     #[handle_result]
+    #[result_serializer(borsh)]
     pub fn verify_vaa_callback(
         &mut self,
         proof_kind: ProofKind,

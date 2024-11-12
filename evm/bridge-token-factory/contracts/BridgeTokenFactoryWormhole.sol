@@ -38,9 +38,14 @@ contract BridgeTokenFactoryWormhole is BridgeTokenFactory {
     }
 
     function deployTokenExtension(string memory token, address tokenAddress) internal override {
+        bytes memory payload = bytes.concat(
+            bytes1(uint8(MessageType.DeployToken)),
+            Borsh.encodeString(token),
+            Borsh.encodeAddress(tokenAddress)
+        );
         _wormhole.publishMessage{value: msg.value}(
             wormholeNonce,
-            abi.encode(MessageType.DeployToken, token, tokenAddress),
+            payload,
             _consistencyLevel
         );
 
@@ -48,9 +53,16 @@ contract BridgeTokenFactoryWormhole is BridgeTokenFactory {
     }
 
     function finTransferExtension(BridgeTypes.FinTransferPayload memory payload) internal override {
+        bytes memory messagePayload = bytes.concat(
+            bytes1(uint8(MessageType.FinTransfer)),
+            Borsh.encodeAddress(payload.tokenAddress),
+            Borsh.encodeUint128(payload.amount),
+            Borsh.encodeString(payload.feeRecipient),
+            Borsh.encodeUint128(payload.nonce)
+        );
         _wormhole.publishMessage{value: msg.value}(
             wormholeNonce,
-            abi.encode(MessageType.FinTransfer, payload.token, payload.amount, payload.feeRecipient, payload.nonce),
+            messagePayload,
             _consistencyLevel
         );
 
@@ -68,19 +80,20 @@ contract BridgeTokenFactoryWormhole is BridgeTokenFactory {
         string calldata message,
         uint256 value
     ) internal override {
+        bytes memory payload = bytes.concat(
+            bytes1(uint8(MessageType.InitTransfer)),
+            Borsh.encodeAddress(sender),
+            Borsh.encodeAddress(tokenAddress),
+            Borsh.encodeUint128(nonce),
+            Borsh.encodeUint128(amount),
+            Borsh.encodeUint128(fee),
+            Borsh.encodeUint128(nativeFee),
+            Borsh.encodeString(recipient),
+            Borsh.encodeString(message)
+        );
         _wormhole.publishMessage{value: value}(
             wormholeNonce,
-            abi.encode(
-                MessageType.InitTransfer,
-                sender,
-                tokenAddress,
-                nonce,
-                amount,
-                fee,
-                nativeFee,
-                recipient,
-                message
-            ),
+            payload,
             _consistencyLevel
         );
 
