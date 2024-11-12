@@ -43,10 +43,10 @@ pub mod bridge_token_factory {
     ) -> Result<()> {
         msg!("Deploying token");
 
-        /*data.verify_signature(
+        data.verify_signature(
             (),
             &ctx.accounts.wormhole.config.derived_near_bridge_address,
-        )?;*/
+        )?;
         ctx.accounts.initialize_token_metadata(data.payload)?;
 
         Ok(())
@@ -58,10 +58,10 @@ pub mod bridge_token_factory {
     ) -> Result<()> {
         msg!("Finalizing transfer");
 
-        /*data.verify_signature(
+        data.verify_signature(
             (ctx.accounts.mint.key(), ctx.accounts.recipient.key()),
             &ctx.accounts.config.derived_near_bridge_address,
-        )?;*/
+        )?;
         ctx.accounts.mint(data.payload)?;
 
         Ok(())
@@ -73,10 +73,10 @@ pub mod bridge_token_factory {
     ) -> Result<()> {
         msg!("Finalizing transfer");
 
-        /*data.verify_signature(
+        data.verify_signature(
             (ctx.accounts.mint.key(), ctx.accounts.recipient.key()),
             &ctx.accounts.config.derived_near_bridge_address,
-        )?;*/
+        )?;
         ctx.accounts.process(data.payload)?;
 
         Ok(())
