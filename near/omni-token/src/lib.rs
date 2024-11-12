@@ -105,6 +105,7 @@ impl OmniToken {
         self.metadata.set(&metadata);
     }
 
+    #[payable]
     pub fn mint(
         &mut self,
         account_id: AccountId,
