@@ -12,12 +12,15 @@ use near_sdk::json_types::{Base64VecU8, U128};
 use near_sdk::serde_json::json;
 use near_sdk::{
     env, ext_contract, near, require, AccountId, Gas, NearToken, PanicOnDefault, Promise,
-    PromiseOrValue, PublicKey, StorageUsage,
+    PromiseOrValue, PublicKey,
 };
+use omni_ft::{MetadataManagment, MintAndBurn, UpgradeAndMigrate};
 use omni_types::{BasicMetadata, OmniAddress};
 const OUTER_UPGRADE_GAS: Gas = Gas::from_tgas(15);
 const NO_DEPOSIT: NearToken = NearToken::from_yoctonear(0);
 const CURRENT_STATE_VERSION: u32 = 1;
+
+pub mod omni_ft;
 
 #[near(contract_state)]
 #[derive(PanicOnDefault)]
@@ -71,7 +74,62 @@ impl OmniToken {
         }
     }
 
-    pub fn set_metadata(
+    #[private]
+    #[init(ignore_state)]
+    #[allow(unused_variables)]
+    pub fn migrate(from_version: u32) -> Self {
+        env::state_read().unwrap_or_else(|| env::panic_str("ERR_FAILED_TO_READ_STATE"))
+    }
+
+    /// Attach a new full access to the current contract.
+    pub fn attach_full_access_key(&mut self, public_key: PublicKey) -> Promise {
+        self.assert_controller();
+        Promise::new(env::current_account_id()).add_full_access_key(public_key)
+    }
+
+    pub fn version(&self) -> String {
+        env!("CARGO_PKG_VERSION").to_owned()
+    }
+
+    fn assert_controller(&self) {
+        let caller = env::predecessor_account_id();
+        require!(caller == self.controller, "ERR_MISSING_PERMISSION");
+    }
+}
+
+#[near]
+impl MintAndBurn for OmniToken {
+    #[payable]
+    fn mint(
+        &mut self,
+        account_id: AccountId,
+        amount: U128,
+        msg: Option<String>,
+    ) -> PromiseOrValue<U128> {
+        self.assert_controller();
+
+        if let Some(msg) = msg {
+            self.token
+                .internal_deposit(&env::predecessor_account_id(), amount.into());
+
+            self.ft_transfer_call(account_id, amount, None, msg)
+        } else {
+            self.token.internal_deposit(&account_id, amount.into());
+            PromiseOrValue::Value(amount)
+        }
+    }
+
+    fn burn(&mut self, amount: U128) {
+        self.assert_controller();
+
+        self.token
+            .internal_withdraw(&env::predecessor_account_id(), amount.into());
+    }
+}
+
+#[near]
+impl MetadataManagment for OmniToken {
+    fn set_metadata(
         &mut self,
         name: Option<String>,
         symbol: Option<String>,
@@ -104,39 +162,11 @@ impl OmniToken {
 
         self.metadata.set(&metadata);
     }
+}
 
-    #[payable]
-    pub fn mint(
-        &mut self,
-        account_id: AccountId,
-        amount: U128,
-        msg: Option<String>,
-    ) -> PromiseOrValue<U128> {
-        self.assert_controller();
-
-        if let Some(msg) = msg {
-            self.token
-                .internal_deposit(&env::predecessor_account_id(), amount.into());
-
-            self.ft_transfer_call(account_id, amount, None, msg)
-        } else {
-            self.token.internal_deposit(&account_id, amount.into());
-            PromiseOrValue::Value(amount)
-        }
-    }
-
-    pub fn burn(&mut self, amount: U128) {
-        self.assert_controller();
-
-        self.token
-            .internal_withdraw(&env::predecessor_account_id(), amount.into());
-    }
-
-    pub fn account_storage_usage(&self) -> StorageUsage {
-        self.token.account_storage_usage
-    }
-
-    pub fn upgrade_and_migrate(&self) {
+#[near]
+impl UpgradeAndMigrate for OmniToken {
+    fn upgrade_and_migrate(&self) {
         self.assert_controller();
 
         // Receive the code directly from the input to avoid the
@@ -159,28 +189,6 @@ impl OmniToken {
                 .saturating_sub(OUTER_UPGRADE_GAS),
         );
         env::promise_return(promise_id);
-    }
-
-    #[private]
-    #[init(ignore_state)]
-    #[allow(unused_variables)]
-    pub fn migrate(from_version: u32) -> Self {
-        env::state_read().unwrap_or_else(|| env::panic_str("ERR_FAILED_TO_READ_STATE"))
-    }
-
-    /// Attach a new full access to the current contract.
-    pub fn attach_full_access_key(&mut self, public_key: PublicKey) -> Promise {
-        self.assert_controller();
-        Promise::new(env::current_account_id()).add_full_access_key(public_key)
-    }
-
-    pub fn version(&self) -> String {
-        env!("CARGO_PKG_VERSION").to_owned()
-    }
-
-    fn assert_controller(&self) {
-        let caller = env::predecessor_account_id();
-        require!(caller == self.controller, "ERR_MISSING_PERMISSION");
     }
 }
 
