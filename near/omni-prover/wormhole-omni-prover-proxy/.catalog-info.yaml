@@ -2,10 +2,10 @@
 apiVersion: backstage.io/v1alpha1
 kind: Component
 metadata:
-  name: omni-prover
-  title: "Omni Prover"
+  name: wormhole-omni-prover-proxy
+  title: "Wormhole Omni Prover Proxy"
   description: |-
-    Aggregator or proxy for others provers, redirects calls to evm or wormhole prover
+    Takes proof of a Receipt from Wormhole and checks if it's valid and included on-chain.
   tags:
     - contract
     - near
