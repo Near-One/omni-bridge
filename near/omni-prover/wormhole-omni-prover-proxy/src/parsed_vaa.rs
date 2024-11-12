@@ -115,13 +115,13 @@ impl ParsedVAA {
 struct DeployTokenWh {
     payload_type: ProofKind,
     token: String,
-    token_address: EvmAddress,
+    token_address: OmniAddress,
 }
 
 #[derive(Debug, BorshDeserialize)]
 struct FinTransferWh {
     payload_type: ProofKind,
-    _token: String,
+    _token: OmniAddress,
     amount: u128,
     recipient: String,
     nonce: u128,
@@ -130,8 +130,8 @@ struct FinTransferWh {
 #[derive(Debug, BorshDeserialize)]
 struct InitTransferWh {
     payload_type: ProofKind,
-    sender: EvmAddress,
-    token_address: EvmAddress,
+    sender: OmniAddress,
+    token_address: OmniAddress,
     nonce: u128,
     amount: u128,
     fee: u128,
@@ -152,7 +152,7 @@ impl TryInto<InitTransferMessage> for ParsedVAA {
 
         Ok(InitTransferMessage {
             transfer: TransferMessage {
-                token: to_omni_address(self.emitter_chain, &transfer.token_address.0),
+                token: transfer.token_address,
                 amount: transfer.amount.into(),
                 fee: Fee {
                     fee: transfer.fee.into(),
@@ -160,7 +160,7 @@ impl TryInto<InitTransferMessage> for ParsedVAA {
                 },
                 recipient: transfer.recipient.parse().map_err(stringify)?,
                 origin_nonce: transfer.nonce.into(),
-                sender: to_omni_address(self.emitter_chain, &transfer.sender.0),
+                sender: transfer.sender,
                 msg: transfer.message,
             },
             emitter_address: to_omni_address(self.emitter_chain, &self.emitter_address),
@@ -199,7 +199,7 @@ impl TryInto<DeployTokenMessage> for ParsedVAA {
 
         Ok(DeployTokenMessage {
             token: transfer.token.parse().map_err(stringify)?,
-            token_address: to_omni_address(self.emitter_chain, &transfer.token_address.0),
+            token_address: transfer.token_address,
             emitter_address: to_omni_address(self.emitter_chain, &self.emitter_address),
         })
     }
