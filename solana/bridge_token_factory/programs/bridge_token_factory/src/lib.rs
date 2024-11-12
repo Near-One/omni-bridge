@@ -7,8 +7,8 @@ pub mod instructions;
 pub mod state;
 
 use state::message::{
-    deploy_token::DeployTokenPayload, deposit::DepositPayload, repay::RepayPayload,
-    send::SendPayload, withdraw::WithdrawPayload, SignedPayload,
+    deploy_token::DeployTokenPayload, deposit::DepositPayload,
+    send::SendPayload, SignedPayload,
 };
 
 declare_id!("5Q8uh6bK5e7zQ2tV8iGrAzUgRQcC9mvCzKQn6uPW2CGp");
@@ -34,7 +34,6 @@ pub mod bridge_token_factory {
             ctx.bumps.wormhole_sequence,
         )?;
 
-        // Emit event
         Ok(())
     }
 
@@ -44,23 +43,39 @@ pub mod bridge_token_factory {
     ) -> Result<()> {
         msg!("Deploying token");
 
-        // TODO: data.verify_signature(&ctx.recipient.key, &ctx.accounts.wormhole.config.derived_near_bridge_address)?;
+        data.verify_signature((), &ctx.accounts.wormhole.config.derived_near_bridge_address)?;
         ctx.accounts.initialize_token_metadata(data.payload)?;
 
-        // Emit event
         Ok(())
     }
 
-    pub fn finalize_deposit(
+    pub fn finalize_transfer_bridged(
         ctx: Context<FinalizeDeposit>,
         data: SignedPayload<DepositPayload>,
     ) -> Result<()> {
-        msg!("Finalizing deposit");
+        msg!("Finalizing transfer");
 
-        // TODO: data.verify_signature(&ctx.recipient.key, &ctx.accounts.config.derived_near_bridge_address)?;
+        data.verify_signature(
+            (ctx.accounts.mint.key(), ctx.accounts.recipient.key()),
+            &ctx.accounts.config.derived_near_bridge_address,
+        )?;
         ctx.accounts.mint(data.payload)?;
 
-        // Emit event
+        Ok(())
+    }
+
+    pub fn finalize_transfer_native(
+        ctx: Context<FinalizeWithdraw>,
+        data: SignedPayload<DepositPayload>,
+    ) -> Result<()> {
+        msg!("Finalizing transfer");
+
+        data.verify_signature(
+            (ctx.accounts.mint.key(), ctx.accounts.recipient.key()),
+            &ctx.accounts.config.derived_near_bridge_address,
+        )?;
+        ctx.accounts.process(data.payload)?;
+
         Ok(())
     }
 
@@ -72,38 +87,22 @@ pub mod bridge_token_factory {
 
         ctx.accounts.process(metadata_override)?;
 
-        // Emit event
         Ok(())
     }
 
-    pub fn send(ctx: Context<Send>, payload: SendPayload) -> Result<()> {
-        msg!("Sending");
+    pub fn init_transfer_native(ctx: Context<Send>, payload: SendPayload) -> Result<()> {
+        msg!("Initializing transfer");
 
         ctx.accounts.process(payload)?;
 
-        // Emit event
         Ok(())
     }
 
-    pub fn finalize_withdraw(
-        ctx: Context<FinalizeWithdraw>,
-        data: SignedPayload<WithdrawPayload>,
-    ) -> Result<()> {
-        msg!("Finalizing withdraw");
-
-        // TODO: data.verify_signature(&ctx.recipient.key, &ctx.mint.key, &ctx.accounts.config.derived_near_bridge_address)?;
-        ctx.accounts.process(data.payload)?;
-
-        // Emit event
-        Ok(())
-    }
-
-    pub fn repay(ctx: Context<Repay>, payload: RepayPayload) -> Result<()> {
-        msg!("Repaying");
+    pub fn init_transfer_bridged(ctx: Context<Repay>, payload: SendPayload) -> Result<()> {
+        msg!("Initializing transfer");
 
         ctx.accounts.process(payload)?;
 
-        // Emit event
         Ok(())
     }
 }

@@ -13,8 +13,7 @@ use crate::{
     state::{
         config::Config,
         message::{
-            withdraw::{FinalizeWithdrawResponse, WithdrawPayload},
-            Payload, SignedPayload,
+            deposit::{DepositPayload, FinalizeDepositResponse}, Payload, SignedPayload
         },
         used_nonces::UsedNonces,
     },
@@ -23,7 +22,7 @@ use crate::{
 use crate::instructions::wormhole_cpi::*;
 
 #[derive(Accounts)]
-#[instruction(data: SignedPayload<WithdrawPayload>)]
+#[instruction(data: SignedPayload<DepositPayload>)]
 pub struct FinalizeWithdraw<'info> {
     #[account(
         mut,
@@ -89,7 +88,7 @@ pub struct FinalizeWithdraw<'info> {
 }
 
 impl<'info> FinalizeWithdraw<'info> {
-    pub fn process(&mut self, data: WithdrawPayload) -> Result<()> {
+    pub fn process(&mut self, data: DepositPayload) -> Result<()> {
         UsedNonces::use_nonce(
             data.nonce,
             &self.used_nonces,
@@ -118,7 +117,7 @@ impl<'info> FinalizeWithdraw<'info> {
             self.mint.decimals,
         )?;
 
-        let payload = FinalizeWithdrawResponse {
+        let payload = FinalizeDepositResponse {
             token: self.mint.key(),
             amount: data.amount,
             fee_recipient: data.fee_recipient.unwrap_or_default(),

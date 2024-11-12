@@ -8,9 +8,7 @@ use crate::error::ErrorCode;
 
 pub mod deploy_token;
 pub mod deposit;
-pub mod repay;
 pub mod send;
-pub mod withdraw;
 
 pub trait Payload: AnchorSerialize + AnchorDeserialize {
     type AdditionalParams;

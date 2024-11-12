@@ -1,6 +1,6 @@
 use std::io::{BufWriter, Write};
 
-use crate::error::ErrorCode;
+use crate::{constants::SOLANA_OMNI_BRIDGE_CHAIN_ID, error::ErrorCode};
 use anchor_lang::prelude::*;
 use near_sdk::json_types::U128;
 
@@ -9,21 +9,27 @@ use super::{IncomingMessageType, OutgoingMessageType, Payload, DEFAULT_SERIALIZE
 #[derive(AnchorSerialize, AnchorDeserialize)]
 pub struct DepositPayload {
     pub nonce: u128,
-    pub token: String,
     pub amount: u128,
     pub fee_recipient: Option<String>,
 }
 
 impl Payload for DepositPayload {
-    type AdditionalParams = Pubkey;
-    fn serialize_for_near(&self, recipient: Self::AdditionalParams) -> Result<Vec<u8>> {
+    type AdditionalParams = (Pubkey, Pubkey); // mint, recipient
+    fn serialize_for_near(&self, params: Self::AdditionalParams) -> Result<Vec<u8>> {
         let mut writer = BufWriter::new(Vec::with_capacity(DEFAULT_SERIALIZER_CAPACITY));
+        // 0. prefix
         IncomingMessageType::InitTransfer.serialize(&mut writer)?;
+        // 1. nonce
         near_sdk::borsh::BorshSerialize::serialize(&U128(self.nonce), &mut writer)?;
-        self.token.serialize(&mut writer)?;
+        // 2. token
+        writer.write(&[SOLANA_OMNI_BRIDGE_CHAIN_ID])?;
+        params.0.serialize(&mut writer)?;
+        // 3. amount
         near_sdk::borsh::BorshSerialize::serialize(&U128(self.amount), &mut writer)?;
-        writer.write(&[2])?;
-        recipient.to_string().serialize(&mut writer)?;
+        // 4. recipient
+        writer.write(&[SOLANA_OMNI_BRIDGE_CHAIN_ID])?;
+        params.1.to_string().serialize(&mut writer)?;
+        // 5. fee_recipient
         self.fee_recipient.serialize(&mut writer)?;
 
         writer
@@ -47,7 +53,8 @@ impl Payload for FinalizeDepositResponse {
         // 0. OutgoingMessageType::FinTransfer
         OutgoingMessageType::FinTransfer.serialize(&mut writer)?;
         // 1. token
-        format!("sol:{:?}", self.token).serialize(&mut writer)?;
+        writer.write(&[SOLANA_OMNI_BRIDGE_CHAIN_ID])?;
+        self.token.serialize(&mut writer)?;
         // 2. amount
         Self::serialize_as_near_u128(self.amount, &mut writer)?;
         // 3. recipient

@@ -51,8 +51,6 @@ pub struct FinalizeDeposit<'info> {
     pub authority: SystemAccount<'info>,
     #[account(
         mut,
-        seeds = [WRAPPED_MINT_SEED, data.payload.token.as_bytes().as_ref()],
-        bump,
         mint::authority = authority,
     )]
     pub mint: Box<Account<'info, Mint>>,
