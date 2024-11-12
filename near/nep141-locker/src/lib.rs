@@ -790,7 +790,7 @@ impl Contract {
                 Self::ext(env::current_account_id())
                     .with_attached_deposit(NO_DEPOSIT)
                     .with_static_gas(DEPLOY_TOKEN_CALLBACK_GAS)
-                    .bind_token_callback(near_sdk::env::attached_deposit()),
+                    .deploy_token_callback(near_sdk::env::attached_deposit()),
             )
     }
 
