@@ -50,6 +50,13 @@ library BridgeTypes {
         uint8 decimals
     );
 
+    event LogMetadata(
+        address indexed tokenAddress,
+        string name,
+        string symbol,
+        uint8 decimals
+    );
+
     event SetMetadata(
         address indexed tokenAddress,
         string token,

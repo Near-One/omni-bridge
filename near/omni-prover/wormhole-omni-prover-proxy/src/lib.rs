@@ -79,6 +79,7 @@ impl WormholeOmniProverProxy {
             ProofKind::InitTransfer => Ok(ProverResult::InitTransfer(parsed_vaa.try_into()?)),
             ProofKind::FinTransfer => Ok(ProverResult::FinTransfer(parsed_vaa.try_into()?)),
             ProofKind::DeployToken => Ok(ProverResult::DeployToken(parsed_vaa.try_into()?)),
+            ProofKind::LogMetadata => Ok(ProverResult::LogMetadata(parsed_vaa.try_into()?)),
         }
     }
 }

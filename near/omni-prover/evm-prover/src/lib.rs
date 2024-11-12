@@ -117,6 +117,10 @@ impl EvmProver {
                 self.chain_kind,
                 log_entry_data,
             )?)),
+            ProofKind::LogMetadata => Ok(ProverResult::LogMetadata(parse_evm_event(
+                self.chain_kind,
+                log_entry_data,
+            )?)),
         }
     }
 

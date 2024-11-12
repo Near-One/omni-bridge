@@ -3,7 +3,9 @@ use alloy_rlp::Decodable;
 use alloy_sol_types::{sol, SolEvent};
 
 use crate::{
-    prover_result::{DeployTokenMessage, FinTransferMessage, InitTransferMessage},
+    prover_result::{
+        DeployTokenMessage, FinTransferMessage, InitTransferMessage, LogMetadataMessage,
+    },
     stringify, ChainKind, Fee, OmniAddress, TransferMessage, H160,
 };
 
@@ -32,6 +34,13 @@ sol! {
     event DeployToken(
         address indexed tokenAddress,
         string token,
+        string name,
+        string symbol,
+        uint8 decimals
+    );
+
+    event LogMetadata(
+        address indexed tokenAddress,
         string name,
         string symbol,
         uint8 decimals
@@ -117,6 +126,28 @@ impl TryFromLog<Log<DeployToken>> for DeployTokenMessage {
                 chain_kind,
                 H160(event.data.tokenAddress.into()),
             )?,
+        })
+    }
+}
+
+impl TryFromLog<Log<LogMetadata>> for LogMetadataMessage {
+    type Error = String;
+
+    fn try_from_log(chain_kind: ChainKind, event: Log<LogMetadata>) -> Result<Self, Self::Error> {
+        if event.topics().0 != LogMetadata::SIGNATURE_HASH {
+            return Err(ERR_INVALIDE_SIGNATURE_HASH.to_string());
+        }
+
+        Ok(LogMetadataMessage {
+            token_address: OmniAddress::from_evm_address(
+                chain_kind,
+                H160(event.data.tokenAddress.into()),
+            )?,
+            name: event.data.name,
+            symbol: event.data.symbol,
+            decimals: event.data.decimals,
+
+            emitter_address: OmniAddress::from_evm_address(chain_kind, H160(event.address.into()))?,
         })
     }
 }

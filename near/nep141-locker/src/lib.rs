@@ -802,7 +802,7 @@ impl Contract {
         #[serializer(borsh)]
         call_result: Result<ProverResult, PromiseError>,
     ) -> Promise {
-        let Ok(ProverResult::TokenMetadata(metadata)) = call_result else {
+        let Ok(ProverResult::LogMetadata(metadata)) = call_result else {
             env::panic_str("ERR_INVALID_PROOF");
         };
 

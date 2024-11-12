@@ -5,7 +5,10 @@ use {
     borsh::BorshDeserialize,
     near_sdk::env,
     omni_types::{
-        prover_result::{DeployTokenMessage, FinTransferMessage, InitTransferMessage, ProofKind},
+        prover_result::{
+            DeployTokenMessage, FinTransferMessage, InitTransferMessage, LogMetadataMessage,
+            ProofKind,
+        },
         sol_address::SolAddress,
         stringify, EvmAddress, Fee, OmniAddress, TransferMessage, H160,
     },
@@ -119,6 +122,15 @@ struct DeployTokenWh {
 }
 
 #[derive(Debug, BorshDeserialize)]
+struct LogMetadataWh {
+    payload_type: ProofKind,
+    token_address: EvmAddress,
+    name: String,
+    symbol: String,
+    decimals: u8,
+}
+
+#[derive(Debug, BorshDeserialize)]
 struct FinTransferWh {
     payload_type: ProofKind,
     _token: String,
@@ -191,15 +203,35 @@ impl TryInto<DeployTokenMessage> for ParsedVAA {
     type Error = String;
 
     fn try_into(self) -> Result<DeployTokenMessage, String> {
-        let transfer: DeployTokenWh = borsh::from_slice(&self.payload).map_err(stringify)?;
+        let parsed_payload: DeployTokenWh = borsh::from_slice(&self.payload).map_err(stringify)?;
 
-        if transfer.payload_type != ProofKind::DeployToken {
+        if parsed_payload.payload_type != ProofKind::DeployToken {
             return Err("Invalid proof kind".to_owned());
         }
 
         Ok(DeployTokenMessage {
-            token: transfer.token.parse().map_err(stringify)?,
-            token_address: to_omni_address(self.emitter_chain, &transfer.token_address.0),
+            token: parsed_payload.token.parse().map_err(stringify)?,
+            token_address: to_omni_address(self.emitter_chain, &parsed_payload.token_address.0),
+            emitter_address: to_omni_address(self.emitter_chain, &self.emitter_address),
+        })
+    }
+}
+
+impl TryInto<LogMetadataMessage> for ParsedVAA {
+    type Error = String;
+
+    fn try_into(self) -> Result<LogMetadataMessage, String> {
+        let parsed_payload: LogMetadataWh = borsh::from_slice(&self.payload).map_err(stringify)?;
+
+        if parsed_payload.payload_type != ProofKind::LogMetadata {
+            return Err("Invalid proof kind".to_owned());
+        }
+
+        Ok(LogMetadataMessage {
+            token_address: to_omni_address(self.emitter_chain, &parsed_payload.token_address.0),
+            name: parsed_payload.name,
+            symbol: parsed_payload.symbol,
+            decimals: parsed_payload.decimals,
             emitter_address: to_omni_address(self.emitter_chain, &self.emitter_address),
         })
     }
