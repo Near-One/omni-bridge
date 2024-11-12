@@ -1,8 +1,7 @@
 use crate::{
-    constants::WRAPPED_MINT_SEED,
     instructions::wormhole_cpi::*,
     state::message::{
-        deposit::{DepositPayload, FinalizeDepositResponse},
+        finalize_transfer::{FinalizeTransferPayload, FinalizeTransferResponse},
         Payload, SignedPayload,
     },
 };
@@ -21,8 +20,8 @@ use crate::{
 };
 
 #[derive(Accounts)]
-#[instruction(data: SignedPayload<DepositPayload>)]
-pub struct FinalizeDeposit<'info> {
+#[instruction(data: SignedPayload<FinalizeTransferPayload>)]
+pub struct FinalizeDepositBridged<'info> {
     #[account(
         mut,
         seeds = [CONFIG_SEED],
@@ -69,8 +68,8 @@ pub struct FinalizeDeposit<'info> {
     pub token_program: Program<'info, Token>,
 }
 
-impl<'info> FinalizeDeposit<'info> {
-    pub fn mint(&mut self, data: DepositPayload) -> Result<()> {
+impl<'info> FinalizeDepositBridged<'info> {
+    pub fn mint(&mut self, data: FinalizeTransferPayload) -> Result<()> {
         UsedNonces::use_nonce(
             data.nonce,
             &self.used_nonces,
@@ -96,7 +95,7 @@ impl<'info> FinalizeDeposit<'info> {
         );
         mint_to(cpi_ctx, data.amount.try_into().unwrap())?;
 
-        let payload = FinalizeDepositResponse {
+        let payload = FinalizeTransferResponse {
             token: self.mint.key(),
             amount: data.amount,
             fee_recipient: data.fee_recipient.unwrap_or_default(),

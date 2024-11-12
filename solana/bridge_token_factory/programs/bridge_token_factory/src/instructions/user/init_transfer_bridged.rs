@@ -3,12 +3,12 @@ use anchor_spl::token::{burn, Burn, Mint, Token, TokenAccount};
 
 use crate::constants::AUTHORITY_SEED;
 use crate::instructions::wormhole_cpi::*;
-use crate::state::message::send::SendPayload;
+use crate::state::message::init_transfer::InitTransferPayload;
 use crate::state::message::Payload;
 
 #[derive(Accounts)]
-#[instruction(payload: SendPayload)]
-pub struct Repay<'info> {
+#[instruction(payload: InitTransferPayload)]
+pub struct InitTransferBridged<'info> {
     #[account(
         seeds = [AUTHORITY_SEED],
         bump = wormhole.config.bumps.authority,
@@ -34,8 +34,8 @@ pub struct Repay<'info> {
     pub token_program: Program<'info, Token>,
 }
 
-impl<'info> Repay<'info> {
-    pub fn process(&self, payload: SendPayload) -> Result<()> {
+impl<'info> InitTransferBridged<'info> {
+    pub fn process(&self, payload: InitTransferPayload) -> Result<()> {
         burn(
             CpiContext::new(
                 self.token_program.to_account_info(),

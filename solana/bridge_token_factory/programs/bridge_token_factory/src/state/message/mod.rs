@@ -7,8 +7,8 @@ use near_sdk::json_types::U128;
 use crate::error::ErrorCode;
 
 pub mod deploy_token;
-pub mod deposit;
-pub mod send;
+pub mod finalize_transfer;
+pub mod init_transfer;
 
 pub trait Payload: AnchorSerialize + AnchorDeserialize {
     type AdditionalParams;

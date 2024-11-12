@@ -5,13 +5,13 @@ use crate::{constants::SOLANA_OMNI_BRIDGE_CHAIN_ID, error::ErrorCode};
 use anchor_lang::prelude::*;
 
 #[derive(AnchorSerialize, AnchorDeserialize)]
-pub struct SendPayload {
+pub struct InitTransferPayload {
     pub amount: u128,
     pub recipient: String,
     pub fee: u128,
 }
 
-impl Payload for SendPayload {
+impl Payload for InitTransferPayload {
     type AdditionalParams = (u64, Pubkey, Pubkey); // nonce, sender, token_address
 
     fn serialize_for_near(&self, params: Self::AdditionalParams) -> Result<Vec<u8>> {

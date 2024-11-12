@@ -7,13 +7,13 @@ use near_sdk::json_types::U128;
 use super::{IncomingMessageType, OutgoingMessageType, Payload, DEFAULT_SERIALIZER_CAPACITY};
 
 #[derive(AnchorSerialize, AnchorDeserialize)]
-pub struct DepositPayload {
+pub struct FinalizeTransferPayload {
     pub nonce: u128,
     pub amount: u128,
     pub fee_recipient: Option<String>,
 }
 
-impl Payload for DepositPayload {
+impl Payload for FinalizeTransferPayload {
     type AdditionalParams = (Pubkey, Pubkey); // mint, recipient
     fn serialize_for_near(&self, params: Self::AdditionalParams) -> Result<Vec<u8>> {
         let mut writer = BufWriter::new(Vec::with_capacity(DEFAULT_SERIALIZER_CAPACITY));
@@ -39,14 +39,14 @@ impl Payload for DepositPayload {
 }
 
 #[derive(AnchorSerialize, AnchorDeserialize)]
-pub struct FinalizeDepositResponse {
+pub struct FinalizeTransferResponse {
     pub token: Pubkey,
     pub amount: u128,
     pub fee_recipient: String,
     pub nonce: u128,
 }
 
-impl Payload for FinalizeDepositResponse {
+impl Payload for FinalizeTransferResponse {
     type AdditionalParams = ();
     fn serialize_for_near(&self, _params: Self::AdditionalParams) -> Result<Vec<u8>> {
         let mut writer = BufWriter::new(Vec::with_capacity(DEFAULT_SERIALIZER_CAPACITY));

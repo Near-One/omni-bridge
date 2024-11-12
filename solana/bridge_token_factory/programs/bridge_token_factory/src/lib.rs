@@ -7,8 +7,8 @@ pub mod instructions;
 pub mod state;
 
 use state::message::{
-    deploy_token::DeployTokenPayload, deposit::DepositPayload,
-    send::SendPayload, SignedPayload,
+    deploy_token::DeployTokenPayload, finalize_transfer::FinalizeTransferPayload,
+    init_transfer::InitTransferPayload, SignedPayload,
 };
 
 declare_id!("5Q8uh6bK5e7zQ2tV8iGrAzUgRQcC9mvCzKQn6uPW2CGp");
@@ -43,15 +43,18 @@ pub mod bridge_token_factory {
     ) -> Result<()> {
         msg!("Deploying token");
 
-        data.verify_signature((), &ctx.accounts.wormhole.config.derived_near_bridge_address)?;
+        data.verify_signature(
+            (),
+            &ctx.accounts.wormhole.config.derived_near_bridge_address,
+        )?;
         ctx.accounts.initialize_token_metadata(data.payload)?;
 
         Ok(())
     }
 
     pub fn finalize_transfer_bridged(
-        ctx: Context<FinalizeDeposit>,
-        data: SignedPayload<DepositPayload>,
+        ctx: Context<FinalizeDepositBridged>,
+        data: SignedPayload<FinalizeTransferPayload>,
     ) -> Result<()> {
         msg!("Finalizing transfer");
 
@@ -65,8 +68,8 @@ pub mod bridge_token_factory {
     }
 
     pub fn finalize_transfer_native(
-        ctx: Context<FinalizeWithdraw>,
-        data: SignedPayload<DepositPayload>,
+        ctx: Context<FinalizeTransferNative>,
+        data: SignedPayload<FinalizeTransferPayload>,
     ) -> Result<()> {
         msg!("Finalizing transfer");
 
@@ -90,7 +93,10 @@ pub mod bridge_token_factory {
         Ok(())
     }
 
-    pub fn init_transfer_native(ctx: Context<Send>, payload: SendPayload) -> Result<()> {
+    pub fn init_transfer_native(
+        ctx: Context<InitTransferNative>,
+        payload: InitTransferPayload,
+    ) -> Result<()> {
         msg!("Initializing transfer");
 
         ctx.accounts.process(payload)?;
@@ -98,7 +104,10 @@ pub mod bridge_token_factory {
         Ok(())
     }
 
-    pub fn init_transfer_bridged(ctx: Context<Repay>, payload: SendPayload) -> Result<()> {
+    pub fn init_transfer_bridged(
+        ctx: Context<InitTransferBridged>,
+        payload: InitTransferPayload,
+    ) -> Result<()> {
         msg!("Initializing transfer");
 
         ctx.accounts.process(payload)?;

@@ -7,11 +7,11 @@ use anchor_spl::{
 use crate::instructions::wormhole_cpi::*;
 use crate::{
     constants::{AUTHORITY_SEED, VAULT_SEED},
-    state::message::{send::SendPayload, Payload},
+    state::message::{init_transfer::InitTransferPayload, Payload},
 };
 
 #[derive(Accounts)]
-pub struct Send<'info> {
+pub struct InitTransferNative<'info> {
     #[account(
         seeds = [AUTHORITY_SEED],
         bump = wormhole.config.bumps.authority,
@@ -49,8 +49,8 @@ pub struct Send<'info> {
     pub token_program: Interface<'info, TokenInterface>,
 }
 
-impl<'info> Send<'info> {
-    pub fn process(&self, payload: SendPayload) -> Result<()> {
+impl<'info> InitTransferNative<'info> {
+    pub fn process(&self, payload: InitTransferPayload) -> Result<()> {
         transfer_checked(
             CpiContext::new(
                 self.token_program.to_account_info(),
