@@ -42,11 +42,12 @@ const MPC_SIGNING_GAS: Gas = Gas::from_tgas(250);
 const SIGN_TRANSFER_CALLBACK_GAS: Gas = Gas::from_tgas(5);
 const SIGN_LOG_METADATA_CALLBACK_GAS: Gas = Gas::from_tgas(5);
 const SIGN_CLAIM_NATIVE_FEE_CALLBACK_GAS: Gas = Gas::from_tgas(5);
-const VERIFY_PROOF_GAS: Gas = Gas::from_tgas(50);
+const VERIFY_PROOF_GAS: Gas = Gas::from_tgas(30);
+const VERIFY_PROOF_CALLBACK_GAS: Gas = Gas::from_tgas(150);
 const CLAIM_FEE_CALLBACK_GAS: Gas = Gas::from_tgas(50);
 const BIND_TOKEN_CALLBACK_GAS: Gas = Gas::from_tgas(25);
 const BIND_TOKEN_REFUND_GAS: Gas = Gas::from_tgas(5);
-const FT_TRANSFER_CALL_GAS: Gas = Gas::from_tgas(50);
+const FT_TRANSFER_CALL_GAS: Gas = Gas::from_tgas(125);
 const FT_TRANSFER_GAS: Gas = Gas::from_tgas(5);
 const WNEAR_WITHDRAW_GAS: Gas = Gas::from_tgas(10);
 const STORAGE_BALANCE_OF_GAS: Gas = Gas::from_tgas(3);
@@ -517,7 +518,7 @@ impl Contract {
         .then(
             Self::ext(env::current_account_id())
                 .with_attached_deposit(attached_deposit)
-                .with_static_gas(CLAIM_FEE_CALLBACK_GAS)
+                .with_static_gas(VERIFY_PROOF_CALLBACK_GAS)
                 .fin_transfer_callback(
                     &args.storage_deposit_args,
                     env::predecessor_account_id(),
