@@ -155,6 +155,9 @@ impl From<&OmniAddress> for ChainKind {
 
 pub type EvmAddress = H160;
 
+pub const ZERO_ACCOUNT_ID: &str =
+    "0000000000000000000000000000000000000000000000000000000000000000";
+
 #[derive(BorshDeserialize, BorshSerialize, Debug, Clone, PartialEq, Eq)]
 pub enum OmniAddress {
     Eth(EvmAddress),
@@ -165,6 +168,17 @@ pub enum OmniAddress {
 }
 
 impl OmniAddress {
+    #[allow(clippy::missing_panics_doc)]
+    pub fn new_zero(chain_kind: ChainKind) -> OmniAddress {
+        match chain_kind {
+            ChainKind::Eth => OmniAddress::Eth(H160::ZERO),
+            ChainKind::Near => OmniAddress::Near(ZERO_ACCOUNT_ID.parse().unwrap()),
+            ChainKind::Sol => OmniAddress::Sol(SolAddress::ZERO),
+            ChainKind::Arb => OmniAddress::Arb(H160::ZERO),
+            ChainKind::Base => OmniAddress::Base(H160::ZERO),
+        }
+    }
+
     pub fn from_evm_address(chain_kind: ChainKind, address: EvmAddress) -> Result<Self, String> {
         match chain_kind {
             ChainKind::Eth => Ok(Self::Eth(address)),
@@ -203,7 +217,7 @@ impl OmniAddress {
             OmniAddress::Eth(address) | OmniAddress::Arb(address) | OmniAddress::Base(address) => {
                 address.is_zero()
             }
-            OmniAddress::Near(address) => address.len() == 0,
+            OmniAddress::Near(address) => *address == ZERO_ACCOUNT_ID,
             OmniAddress::Sol(address) => address.is_zero(),
         }
     }

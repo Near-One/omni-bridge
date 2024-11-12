@@ -823,11 +823,46 @@ impl Contract {
             self.factories.get(&chain) == Some(metadata.emitter_address),
             "ERR_UNKNOWN_FACTORY"
         );
+
+        self.deploy_token_internal(
+            chain,
+            &metadata.token_address,
+            BasicMetadata {
+                name: metadata.name,
+                symbol: metadata.symbol,
+                decimals: metadata.decimals,
+            },
+            attached_deposit,
+        )
+    }
+
+    #[payable]
+    #[access_control_any(roles(Role::DAO))]
+    pub fn deploy_native_token(
+        &mut self,
+        chain_kind: ChainKind,
+        metadata: BasicMetadata,
+    ) -> Promise {
+        self.deploy_token_internal(
+            chain_kind,
+            &OmniAddress::new_zero(chain_kind),
+            metadata,
+            env::attached_deposit(),
+        )
+    }
+
+    fn deploy_token_internal(
+        &mut self,
+        chain_kind: ChainKind,
+        token_address: &OmniAddress,
+        metadata: BasicMetadata,
+        attached_deposit: NearToken,
+    ) -> Promise {
         let deployer = self
             .token_deployer_accounts
-            .get(&chain)
+            .get(&chain_kind)
             .unwrap_or_else(|| env::panic_str("ERR_DEPLOYER_NOT_SET"));
-        let prefix = metadata.token_address.get_token_prefix();
+        let prefix = token_address.get_token_prefix();
         let token_id: AccountId = format!("{prefix}.{deployer}")
             .parse()
             .unwrap_or_else(|_| env::panic_str("ERR_PARSE_ACCOUNT"));
@@ -835,13 +870,13 @@ impl Contract {
         let storage_usage = env::storage_usage();
         require!(
             self.token_id_to_address
-                .insert(&(chain, token_id.clone()), &metadata.token_address)
+                .insert(&(chain_kind, token_id.clone()), token_address)
                 .is_none(),
             "ERR_TOKEN_EXIST"
         );
         require!(
             self.token_address_to_id
-                .insert(&metadata.token_address, &token_id)
+                .insert(token_address, &token_id)
                 .is_none(),
             "ERR_TOKEN_EXIST"
         );
@@ -858,14 +893,7 @@ impl Contract {
         ext_deployer::ext(deployer)
             .with_static_gas(DEPLOY_TOKEN_GAS)
             .with_attached_deposit(BRIDGE_TOKEN_INIT_BALANCE)
-            .deploy_token(
-                token_id,
-                BasicMetadata {
-                    name: metadata.name,
-                    symbol: metadata.symbol,
-                    decimals: metadata.decimals,
-                },
-            )
+            .deploy_token(token_id, metadata)
     }
 
     #[payable]
