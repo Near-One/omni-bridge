@@ -4,10 +4,10 @@ import {executeTx} from './executor';
 import BN from 'bn.js';
 import {parsePubkey} from './keyParser';
 
-export function installFinalizeDepositCLI(program: Command) {
+export function installFinalizeTransferBridgedCLI(program: Command) {
   program
-    .command('finalize-deposit')
-    .description('Finalize the deposit')
+    .command('finalize-transfer-bridged')
+    .description('Finalize bridged transfer')
     .requiredOption('--token <string>', 'Near token address')
     .requiredOption('--nonce <string>', 'Nonce')
     .requiredOption('--amount <number>', 'Amount')
@@ -31,7 +31,7 @@ export function installFinalizeDepositCLI(program: Command) {
         const recipientPk = recipient
           ? await parsePubkey(recipient)
           : sdk.provider.publicKey!;
-        const {instructions, signers} = await sdk.finalizeDeposit({
+        const {instructions, signers} = await sdk.finalizeTransferBridged({
           token,
           nonce: new BN(nonce),
           amount: new BN(amount),

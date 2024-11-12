@@ -2,31 +2,33 @@ import {Command} from 'commander';
 import {getContext} from './context';
 import {executeTx} from './executor';
 import BN from 'bn.js';
-import {parsePubkey} from './keyParser';
 
-export function installSendCLI(program: Command) {
+export function installInitTransferBridgedCLI(program: Command) {
   program
-    .command('send')
-    .description('Sends solana token to the near')
-    .requiredOption('--mint <pubkey>', 'Mint address')
+    .command('init-transfer-bridged')
+    .description('Init bridged transfer')
+    .requiredOption('--token <string>', 'Token address')
     .requiredOption('--amount <number>', 'Amount')
     .requiredOption('--recipient <address>', 'Recipient')
+    .option('--fee <number>', 'Fee', '0')
     .action(
       async ({
-        mint,
+        token,
         amount,
         recipient,
+        fee,
       }: {
-        mint: string;
+        token: string;
         amount: string;
         recipient: string;
+        fee?: string;
       }) => {
         const {sdk} = getContext();
-        const mintPk = await parsePubkey(mint);
-        const {instructions, signers} = await sdk.send({
-          mint: mintPk,
+        const {instructions, signers} = await sdk.initTransferBridged({
+          token,
           amount: new BN(amount),
           recipient,
+          fee: fee ? new BN(fee) : new BN(0),
         });
         await executeTx({instructions, signers});
       },

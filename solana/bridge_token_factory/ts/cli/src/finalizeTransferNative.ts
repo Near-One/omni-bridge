@@ -4,10 +4,10 @@ import {executeTx} from './executor';
 import BN from 'bn.js';
 import {parsePubkey} from './keyParser';
 
-export function installFinalizeWithdrawCLI(program: Command) {
+export function installFinalizeTransferNativeCLI(program: Command) {
   program
-    .command('finalize-withdraw')
-    .description('Finalize the withdraw')
+    .command('finalize-transfer-native')
+    .description('Finalize native transfer')
     .requiredOption('--mint <pubkey>', 'Mint address')
     .requiredOption('--nonce <string>', 'Nonce')
     .requiredOption('--amount <number>', 'Amount')
@@ -32,7 +32,7 @@ export function installFinalizeWithdrawCLI(program: Command) {
         const recipientPk = recipient
           ? await parsePubkey(recipient)
           : sdk.provider.publicKey!;
-        const {instructions, signers} = await sdk.finalizeWithdraw({
+        const {instructions, signers} = await sdk.finalizeTransferNative({
           mint: mintPk,
           nonce: new BN(nonce),
           amount: new BN(amount),
