@@ -2,6 +2,7 @@ use near_plugins::{
     access_control, access_control_any, AccessControlRole, AccessControllable, Pausable, Upgradable,
 };
 use near_sdk::borsh::BorshDeserialize;
+use near_sdk::json_types::Base58CryptoHash;
 use near_sdk::serde::{Deserialize, Serialize};
 use near_sdk::{
     env, near, require, serde_json, AccountId, Gas, NearToken, PanicOnDefault, Promise,
@@ -23,6 +24,7 @@ pub enum Role {
     UnrestrictedDeposit,
     UpgradableCodeStager,
     UpgradableCodeDeployer,
+    Controller,
 }
 
 #[near(contract_state)]
@@ -36,29 +38,24 @@ pub enum Role {
     duration_update_stagers(Role::DAO),
     duration_update_appliers(Role::DAO),
 ))]
-pub struct TokenDeployer {
-    pub controller: AccountId,
-}
+pub struct TokenDeployer {}
 
 #[near]
 impl TokenDeployer {
     #[init]
     pub fn new(controller: AccountId, dao: AccountId) -> Self {
-        let mut contract = Self { controller };
+        let mut contract = Self {};
 
         contract.acl_init_super_admin(near_sdk::env::predecessor_account_id());
-        contract.acl_grant_role("DAO".to_owned(), dao.clone());
+        contract.acl_grant_role(Role::DAO.into(), dao.clone());
+        contract.acl_grant_role(Role::Controller.into(), controller);
         contract.acl_transfer_super_admin(dao);
         contract
     }
 
     #[payable]
+    #[access_control_any(roles(Role::Controller))]
     pub fn deploy_token(&mut self, account_id: AccountId, metadata: &BasicMetadata) -> Promise {
-        require!(
-            env::predecessor_account_id() == self.controller,
-            "ERR_NOT_CONTROLLER"
-        );
-
         require!(
             env::attached_deposit() >= BRIDGE_TOKEN_INIT_BALANCE,
             "ERR_NOT_ENOUGH_ATTACHED_BALANCE"
@@ -79,12 +76,11 @@ impl TokenDeployer {
     }
 
     #[result_serializer(borsh)]
-    pub fn get_token_binary() -> Vec<u8> {
+    pub fn get_token_code() -> Vec<u8> {
         BRIDGE_TOKEN_BINARY.to_vec()
     }
 
-    #[access_control_any(roles(Role::DAO))]
-    pub fn set_controller(&mut self, controller: AccountId) {
-        self.controller = controller;
+    pub fn get_token_code_hash() -> Base58CryptoHash {
+        near_sdk::env::sha256_array(BRIDGE_TOKEN_BINARY).into()
     }
 }

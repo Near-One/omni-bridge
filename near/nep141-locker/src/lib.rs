@@ -255,7 +255,7 @@ impl Contract {
         };
 
         contract.acl_init_super_admin(near_sdk::env::predecessor_account_id());
-        contract.acl_grant_role("DAO".to_owned(), near_sdk::env::predecessor_account_id());
+        contract.acl_grant_role(Role::DAO.into(), near_sdk::env::predecessor_account_id());
         contract
     }
 
