@@ -159,7 +159,10 @@ pub enum OmniAddress {
 }
 
 impl OmniAddress {
-    pub fn new_from_evm_address(chain_kind: ChainKind, address: EvmAddress) -> Result<Self, String> {
+    pub fn new_from_evm_address(
+        chain_kind: ChainKind,
+        address: EvmAddress,
+    ) -> Result<Self, String> {
         match chain_kind {
             ChainKind::Eth => Ok(Self::Eth(address)),
             ChainKind::Arb => Ok(Self::Arb(address)),

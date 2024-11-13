@@ -184,8 +184,6 @@ fn test_omni_address_from_evm_address() {
     for chain_kind in [
         ChainKind::Near,
         ChainKind::Sol,
-        ChainKind::Arb,
-        ChainKind::Base,
     ] {
         let expected_error = format!("{:?} is not an EVM chain", chain_kind);
         assert_eq!(
