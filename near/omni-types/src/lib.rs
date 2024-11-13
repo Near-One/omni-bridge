@@ -159,7 +159,7 @@ pub enum OmniAddress {
 }
 
 impl OmniAddress {
-    pub fn from_evm_address(chain_kind: ChainKind, address: EvmAddress) -> Result<Self, String> {
+    pub fn new_from_evm_address(chain_kind: ChainKind, address: EvmAddress) -> Result<Self, String> {
         match chain_kind {
             ChainKind::Eth => Ok(Self::Eth(address)),
             ChainKind::Arb => Ok(Self::Arb(address)),
@@ -168,11 +168,11 @@ impl OmniAddress {
         }
     }
 
-    pub fn from_bytearray(chain_kind: ChainKind, address: &[u8]) -> Result<Self, String> {
+    pub fn new_from_slice(chain_kind: ChainKind, address: &[u8]) -> Result<Self, String> {
         match chain_kind {
             ChainKind::Sol => Ok(Self::Sol(Self::to_sol_address(address)?)),
             ChainKind::Eth | ChainKind::Arb | ChainKind::Base => {
-                Self::from_evm_address(chain_kind, Self::to_evm_address(address)?)
+                Self::new_from_evm_address(chain_kind, Self::to_evm_address(address)?)
             }
             ChainKind::Near => Ok(Self::Near(Self::to_near_account_id(address)?)),
         }

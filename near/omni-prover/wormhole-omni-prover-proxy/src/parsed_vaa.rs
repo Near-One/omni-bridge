@@ -162,7 +162,7 @@ impl TryInto<InitTransferMessage> for ParsedVAA {
                 sender: transfer.sender,
                 msg: transfer.message,
             },
-            emitter_address: OmniAddress::from_bytearray(
+            emitter_address: OmniAddress::new_from_slice(
                 transfer.token_address.get_chain(),
                 &self.emitter_address,
             )?,
@@ -184,7 +184,7 @@ impl TryInto<FinTransferMessage> for ParsedVAA {
             nonce: transfer.nonce.into(),
             fee_recipient: transfer.recipient.parse().map_err(stringify)?,
             amount: transfer.amount.into(),
-            emitter_address: OmniAddress::from_bytearray(
+            emitter_address: OmniAddress::new_from_slice(
                 transfer.token_address.get_chain(),
                 &self.emitter_address,
             )?,
@@ -205,7 +205,7 @@ impl TryInto<DeployTokenMessage> for ParsedVAA {
         Ok(DeployTokenMessage {
             token: transfer.token.parse().map_err(stringify)?,
             token_address: transfer.token_address.clone(),
-            emitter_address: OmniAddress::from_bytearray(
+            emitter_address: OmniAddress::new_from_slice(
                 transfer.token_address.get_chain(),
                 &self.emitter_address,
             )?,
