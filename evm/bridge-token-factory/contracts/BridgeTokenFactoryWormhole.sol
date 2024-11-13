@@ -41,6 +41,7 @@ contract BridgeTokenFactoryWormhole is BridgeTokenFactory {
         bytes memory payload = bytes.concat(
             bytes1(uint8(MessageType.DeployToken)),
             Borsh.encodeString(token),
+            bytes1(omniBridgeChainId),
             Borsh.encodeAddress(tokenAddress)
         );
         _wormhole.publishMessage{value: msg.value}(
@@ -55,6 +56,7 @@ contract BridgeTokenFactoryWormhole is BridgeTokenFactory {
     function finTransferExtension(BridgeTypes.FinTransferPayload memory payload) internal override {
         bytes memory messagePayload = bytes.concat(
             bytes1(uint8(MessageType.FinTransfer)),
+            bytes1(omniBridgeChainId),
             Borsh.encodeAddress(payload.tokenAddress),
             Borsh.encodeUint128(payload.amount),
             Borsh.encodeString(payload.feeRecipient),
@@ -82,7 +84,9 @@ contract BridgeTokenFactoryWormhole is BridgeTokenFactory {
     ) internal override {
         bytes memory payload = bytes.concat(
             bytes1(uint8(MessageType.InitTransfer)),
+            bytes1(omniBridgeChainId),
             Borsh.encodeAddress(sender),
+            bytes1(omniBridgeChainId),
             Borsh.encodeAddress(tokenAddress),
             Borsh.encodeUint128(nonce),
             Borsh.encodeUint128(amount),

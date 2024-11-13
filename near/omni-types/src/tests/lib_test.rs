@@ -177,19 +177,14 @@ fn test_omni_address_from_evm_address() {
         H160::from_str("0x5a08feed678c056650b3eb4a5cb1b9bb6f0fe265").expect("Valid address");
 
     assert_eq!(
-        OmniAddress::from_evm_address(ChainKind::Eth, evm_address.clone()),
+        OmniAddress::new_from_evm_address(ChainKind::Eth, evm_address.clone()),
         Ok(OmniAddress::Eth(evm_address.clone()))
     );
 
-    for chain_kind in [
-        ChainKind::Near,
-        ChainKind::Sol,
-        ChainKind::Arb,
-        ChainKind::Base,
-    ] {
+    for chain_kind in [ChainKind::Near, ChainKind::Sol] {
         let expected_error = format!("{:?} is not an EVM chain", chain_kind);
         assert_eq!(
-            OmniAddress::from_evm_address(chain_kind, evm_address.clone()),
+            OmniAddress::new_from_evm_address(chain_kind, evm_address.clone()),
             Err(expected_error)
         );
     }
