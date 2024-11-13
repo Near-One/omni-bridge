@@ -309,7 +309,7 @@ export type BridgeTokenFactory = {
               "docs": [
                 "Wormhole program."
               ],
-              "address": "3u8hJUVTA4jH1wYAyUur7FFZVQ8H635K3tSHHF4ssjQ5"
+              "address": "worm2ZoG2kUd4vFXhvjh93UUH596ayRfgQ2MgjNMTth"
             },
             {
               "name": "systemProgram",
@@ -352,16 +352,16 @@ export type BridgeTokenFactory = {
       ]
     },
     {
-      "name": "finalizeDeposit",
+      "name": "finalizeTransferBridged",
       "discriminator": [
-        240,
-        178,
-        165,
-        14,
-        221,
-        29,
-        104,
-        47
+        9,
+        113,
+        68,
+        220,
+        238,
+        32,
+        44,
+        13
       ],
       "accounts": [
         {
@@ -414,32 +414,7 @@ export type BridgeTokenFactory = {
         },
         {
           "name": "mint",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  119,
-                  114,
-                  97,
-                  112,
-                  112,
-                  101,
-                  100,
-                  95,
-                  109,
-                  105,
-                  110,
-                  116
-                ]
-              },
-              {
-                "kind": "arg",
-                "path": "data.payload.token"
-              }
-            ]
-          }
+          "writable": true
         },
         {
           "name": "tokenAccount",
@@ -665,7 +640,7 @@ export type BridgeTokenFactory = {
               "docs": [
                 "Wormhole program."
               ],
-              "address": "3u8hJUVTA4jH1wYAyUur7FFZVQ8H635K3tSHHF4ssjQ5"
+              "address": "worm2ZoG2kUd4vFXhvjh93UUH596ayRfgQ2MgjNMTth"
             },
             {
               "name": "systemProgram",
@@ -697,7 +672,7 @@ export type BridgeTokenFactory = {
                   "kind": "type",
                   "type": {
                     "defined": {
-                      "name": "depositPayload"
+                      "name": "finalizeTransferPayload"
                     }
                   }
                 }
@@ -708,16 +683,16 @@ export type BridgeTokenFactory = {
       ]
     },
     {
-      "name": "finalizeWithdraw",
+      "name": "finalizeTransferNative",
       "discriminator": [
-        17,
-        72,
-        11,
-        172,
-        214,
-        42,
-        12,
-        23
+        27,
+        208,
+        189,
+        73,
+        113,
+        171,
+        160,
+        204
       ],
       "accounts": [
         {
@@ -1017,7 +992,7 @@ export type BridgeTokenFactory = {
               "docs": [
                 "Wormhole program."
               ],
-              "address": "3u8hJUVTA4jH1wYAyUur7FFZVQ8H635K3tSHHF4ssjQ5"
+              "address": "worm2ZoG2kUd4vFXhvjh93UUH596ayRfgQ2MgjNMTth"
             },
             {
               "name": "systemProgram",
@@ -1048,11 +1023,439 @@ export type BridgeTokenFactory = {
                   "kind": "type",
                   "type": {
                     "defined": {
-                      "name": "withdrawPayload"
+                      "name": "finalizeTransferPayload"
                     }
                   }
                 }
               ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "initTransferBridged",
+      "discriminator": [
+        102,
+        4,
+        222,
+        127,
+        222,
+        254,
+        91,
+        156
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "mint",
+          "writable": true
+        },
+        {
+          "name": "from",
+          "writable": true
+        },
+        {
+          "name": "user",
+          "signer": true
+        },
+        {
+          "name": "wormhole",
+          "accounts": [
+            {
+              "name": "config",
+              "docs": [
+                "Used as an emitter"
+              ],
+              "pda": {
+                "seeds": [
+                  {
+                    "kind": "const",
+                    "value": [
+                      99,
+                      111,
+                      110,
+                      102,
+                      105,
+                      103
+                    ]
+                  }
+                ]
+              }
+            },
+            {
+              "name": "bridge",
+              "docs": [
+                "Wormhole bridge data account (a.k.a. its config).",
+                "[`wormhole::post_message`] requires this account be mutable."
+              ],
+              "writable": true,
+              "pda": {
+                "seeds": [
+                  {
+                    "kind": "const",
+                    "value": [
+                      66,
+                      114,
+                      105,
+                      100,
+                      103,
+                      101
+                    ]
+                  }
+                ]
+              }
+            },
+            {
+              "name": "feeCollector",
+              "docs": [
+                "Wormhole fee collector account, which requires lamports before the",
+                "program can post a message (if there is a fee).",
+                "[`wormhole::post_message`] requires this account be mutable."
+              ],
+              "writable": true,
+              "pda": {
+                "seeds": [
+                  {
+                    "kind": "const",
+                    "value": [
+                      102,
+                      101,
+                      101,
+                      95,
+                      99,
+                      111,
+                      108,
+                      108,
+                      101,
+                      99,
+                      116,
+                      111,
+                      114
+                    ]
+                  }
+                ]
+              }
+            },
+            {
+              "name": "sequence",
+              "docs": [
+                "message is posted, so it needs to be an [UncheckedAccount] for the",
+                "[`initialize`](crate::initialize) instruction.",
+                "[`wormhole::post_message`] requires this account be mutable."
+              ],
+              "writable": true,
+              "pda": {
+                "seeds": [
+                  {
+                    "kind": "const",
+                    "value": [
+                      83,
+                      101,
+                      113,
+                      117,
+                      101,
+                      110,
+                      99,
+                      101
+                    ]
+                  },
+                  {
+                    "kind": "account",
+                    "path": "config"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "message",
+              "docs": [
+                "account be mutable."
+              ],
+              "writable": true,
+              "signer": true
+            },
+            {
+              "name": "payer",
+              "writable": true,
+              "signer": true
+            },
+            {
+              "name": "clock",
+              "address": "SysvarC1ock11111111111111111111111111111111"
+            },
+            {
+              "name": "rent",
+              "address": "SysvarRent111111111111111111111111111111111"
+            },
+            {
+              "name": "wormholeProgram",
+              "docs": [
+                "Wormhole program."
+              ],
+              "address": "worm2ZoG2kUd4vFXhvjh93UUH596ayRfgQ2MgjNMTth"
+            },
+            {
+              "name": "systemProgram",
+              "address": "11111111111111111111111111111111"
+            }
+          ]
+        },
+        {
+          "name": "tokenProgram",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        }
+      ],
+      "args": [
+        {
+          "name": "payload",
+          "type": {
+            "defined": {
+              "name": "initTransferPayload"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "initTransferNative",
+      "discriminator": [
+        253,
+        5,
+        175,
+        189,
+        176,
+        62,
+        114,
+        77
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "mint"
+        },
+        {
+          "name": "from",
+          "writable": true
+        },
+        {
+          "name": "vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "user",
+          "signer": true
+        },
+        {
+          "name": "wormhole",
+          "accounts": [
+            {
+              "name": "config",
+              "docs": [
+                "Used as an emitter"
+              ],
+              "pda": {
+                "seeds": [
+                  {
+                    "kind": "const",
+                    "value": [
+                      99,
+                      111,
+                      110,
+                      102,
+                      105,
+                      103
+                    ]
+                  }
+                ]
+              }
+            },
+            {
+              "name": "bridge",
+              "docs": [
+                "Wormhole bridge data account (a.k.a. its config).",
+                "[`wormhole::post_message`] requires this account be mutable."
+              ],
+              "writable": true,
+              "pda": {
+                "seeds": [
+                  {
+                    "kind": "const",
+                    "value": [
+                      66,
+                      114,
+                      105,
+                      100,
+                      103,
+                      101
+                    ]
+                  }
+                ]
+              }
+            },
+            {
+              "name": "feeCollector",
+              "docs": [
+                "Wormhole fee collector account, which requires lamports before the",
+                "program can post a message (if there is a fee).",
+                "[`wormhole::post_message`] requires this account be mutable."
+              ],
+              "writable": true,
+              "pda": {
+                "seeds": [
+                  {
+                    "kind": "const",
+                    "value": [
+                      102,
+                      101,
+                      101,
+                      95,
+                      99,
+                      111,
+                      108,
+                      108,
+                      101,
+                      99,
+                      116,
+                      111,
+                      114
+                    ]
+                  }
+                ]
+              }
+            },
+            {
+              "name": "sequence",
+              "docs": [
+                "message is posted, so it needs to be an [UncheckedAccount] for the",
+                "[`initialize`](crate::initialize) instruction.",
+                "[`wormhole::post_message`] requires this account be mutable."
+              ],
+              "writable": true,
+              "pda": {
+                "seeds": [
+                  {
+                    "kind": "const",
+                    "value": [
+                      83,
+                      101,
+                      113,
+                      117,
+                      101,
+                      110,
+                      99,
+                      101
+                    ]
+                  },
+                  {
+                    "kind": "account",
+                    "path": "config"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "message",
+              "docs": [
+                "account be mutable."
+              ],
+              "writable": true,
+              "signer": true
+            },
+            {
+              "name": "payer",
+              "writable": true,
+              "signer": true
+            },
+            {
+              "name": "clock",
+              "address": "SysvarC1ock11111111111111111111111111111111"
+            },
+            {
+              "name": "rent",
+              "address": "SysvarRent111111111111111111111111111111111"
+            },
+            {
+              "name": "wormholeProgram",
+              "docs": [
+                "Wormhole program."
+              ],
+              "address": "worm2ZoG2kUd4vFXhvjh93UUH596ayRfgQ2MgjNMTth"
+            },
+            {
+              "name": "systemProgram",
+              "address": "11111111111111111111111111111111"
+            }
+          ]
+        },
+        {
+          "name": "tokenProgram"
+        }
+      ],
+      "args": [
+        {
+          "name": "payload",
+          "type": {
+            "defined": {
+              "name": "initTransferPayload"
             }
           }
         }
@@ -1223,7 +1626,7 @@ export type BridgeTokenFactory = {
         },
         {
           "name": "wormholeProgram",
-          "address": "3u8hJUVTA4jH1wYAyUur7FFZVQ8H635K3tSHHF4ssjQ5"
+          "address": "worm2ZoG2kUd4vFXhvjh93UUH596ayRfgQ2MgjNMTth"
         },
         {
           "name": "program",
@@ -1449,7 +1852,7 @@ export type BridgeTokenFactory = {
               "docs": [
                 "Wormhole program."
               ],
-              "address": "3u8hJUVTA4jH1wYAyUur7FFZVQ8H635K3tSHHF4ssjQ5"
+              "address": "worm2ZoG2kUd4vFXhvjh93UUH596ayRfgQ2MgjNMTth"
             },
             {
               "name": "systemProgram",
@@ -1475,459 +1878,6 @@ export type BridgeTokenFactory = {
           "type": {
             "defined": {
               "name": "metadataOverride"
-            }
-          }
-        }
-      ]
-    },
-    {
-      "name": "repay",
-      "discriminator": [
-        234,
-        103,
-        67,
-        82,
-        208,
-        234,
-        219,
-        166
-      ],
-      "accounts": [
-        {
-          "name": "authority",
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  97,
-                  117,
-                  116,
-                  104,
-                  111,
-                  114,
-                  105,
-                  116,
-                  121
-                ]
-              }
-            ]
-          }
-        },
-        {
-          "name": "mint",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  119,
-                  114,
-                  97,
-                  112,
-                  112,
-                  101,
-                  100,
-                  95,
-                  109,
-                  105,
-                  110,
-                  116
-                ]
-              },
-              {
-                "kind": "arg",
-                "path": "payload.token"
-              }
-            ]
-          }
-        },
-        {
-          "name": "from",
-          "writable": true
-        },
-        {
-          "name": "user",
-          "signer": true
-        },
-        {
-          "name": "wormhole",
-          "accounts": [
-            {
-              "name": "config",
-              "docs": [
-                "Used as an emitter"
-              ],
-              "pda": {
-                "seeds": [
-                  {
-                    "kind": "const",
-                    "value": [
-                      99,
-                      111,
-                      110,
-                      102,
-                      105,
-                      103
-                    ]
-                  }
-                ]
-              }
-            },
-            {
-              "name": "bridge",
-              "docs": [
-                "Wormhole bridge data account (a.k.a. its config).",
-                "[`wormhole::post_message`] requires this account be mutable."
-              ],
-              "writable": true,
-              "pda": {
-                "seeds": [
-                  {
-                    "kind": "const",
-                    "value": [
-                      66,
-                      114,
-                      105,
-                      100,
-                      103,
-                      101
-                    ]
-                  }
-                ]
-              }
-            },
-            {
-              "name": "feeCollector",
-              "docs": [
-                "Wormhole fee collector account, which requires lamports before the",
-                "program can post a message (if there is a fee).",
-                "[`wormhole::post_message`] requires this account be mutable."
-              ],
-              "writable": true,
-              "pda": {
-                "seeds": [
-                  {
-                    "kind": "const",
-                    "value": [
-                      102,
-                      101,
-                      101,
-                      95,
-                      99,
-                      111,
-                      108,
-                      108,
-                      101,
-                      99,
-                      116,
-                      111,
-                      114
-                    ]
-                  }
-                ]
-              }
-            },
-            {
-              "name": "sequence",
-              "docs": [
-                "message is posted, so it needs to be an [UncheckedAccount] for the",
-                "[`initialize`](crate::initialize) instruction.",
-                "[`wormhole::post_message`] requires this account be mutable."
-              ],
-              "writable": true,
-              "pda": {
-                "seeds": [
-                  {
-                    "kind": "const",
-                    "value": [
-                      83,
-                      101,
-                      113,
-                      117,
-                      101,
-                      110,
-                      99,
-                      101
-                    ]
-                  },
-                  {
-                    "kind": "account",
-                    "path": "config"
-                  }
-                ]
-              }
-            },
-            {
-              "name": "message",
-              "docs": [
-                "account be mutable."
-              ],
-              "writable": true,
-              "signer": true
-            },
-            {
-              "name": "payer",
-              "writable": true,
-              "signer": true
-            },
-            {
-              "name": "clock",
-              "address": "SysvarC1ock11111111111111111111111111111111"
-            },
-            {
-              "name": "rent",
-              "address": "SysvarRent111111111111111111111111111111111"
-            },
-            {
-              "name": "wormholeProgram",
-              "docs": [
-                "Wormhole program."
-              ],
-              "address": "3u8hJUVTA4jH1wYAyUur7FFZVQ8H635K3tSHHF4ssjQ5"
-            },
-            {
-              "name": "systemProgram",
-              "address": "11111111111111111111111111111111"
-            }
-          ]
-        },
-        {
-          "name": "tokenProgram",
-          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
-        }
-      ],
-      "args": [
-        {
-          "name": "payload",
-          "type": {
-            "defined": {
-              "name": "repayPayload"
-            }
-          }
-        }
-      ]
-    },
-    {
-      "name": "send",
-      "discriminator": [
-        102,
-        251,
-        20,
-        187,
-        65,
-        75,
-        12,
-        69
-      ],
-      "accounts": [
-        {
-          "name": "authority",
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  97,
-                  117,
-                  116,
-                  104,
-                  111,
-                  114,
-                  105,
-                  116,
-                  121
-                ]
-              }
-            ]
-          }
-        },
-        {
-          "name": "mint"
-        },
-        {
-          "name": "from",
-          "writable": true
-        },
-        {
-          "name": "vault",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  118,
-                  97,
-                  117,
-                  108,
-                  116
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "mint"
-              }
-            ]
-          }
-        },
-        {
-          "name": "user",
-          "signer": true
-        },
-        {
-          "name": "wormhole",
-          "accounts": [
-            {
-              "name": "config",
-              "docs": [
-                "Used as an emitter"
-              ],
-              "pda": {
-                "seeds": [
-                  {
-                    "kind": "const",
-                    "value": [
-                      99,
-                      111,
-                      110,
-                      102,
-                      105,
-                      103
-                    ]
-                  }
-                ]
-              }
-            },
-            {
-              "name": "bridge",
-              "docs": [
-                "Wormhole bridge data account (a.k.a. its config).",
-                "[`wormhole::post_message`] requires this account be mutable."
-              ],
-              "writable": true,
-              "pda": {
-                "seeds": [
-                  {
-                    "kind": "const",
-                    "value": [
-                      66,
-                      114,
-                      105,
-                      100,
-                      103,
-                      101
-                    ]
-                  }
-                ]
-              }
-            },
-            {
-              "name": "feeCollector",
-              "docs": [
-                "Wormhole fee collector account, which requires lamports before the",
-                "program can post a message (if there is a fee).",
-                "[`wormhole::post_message`] requires this account be mutable."
-              ],
-              "writable": true,
-              "pda": {
-                "seeds": [
-                  {
-                    "kind": "const",
-                    "value": [
-                      102,
-                      101,
-                      101,
-                      95,
-                      99,
-                      111,
-                      108,
-                      108,
-                      101,
-                      99,
-                      116,
-                      111,
-                      114
-                    ]
-                  }
-                ]
-              }
-            },
-            {
-              "name": "sequence",
-              "docs": [
-                "message is posted, so it needs to be an [UncheckedAccount] for the",
-                "[`initialize`](crate::initialize) instruction.",
-                "[`wormhole::post_message`] requires this account be mutable."
-              ],
-              "writable": true,
-              "pda": {
-                "seeds": [
-                  {
-                    "kind": "const",
-                    "value": [
-                      83,
-                      101,
-                      113,
-                      117,
-                      101,
-                      110,
-                      99,
-                      101
-                    ]
-                  },
-                  {
-                    "kind": "account",
-                    "path": "config"
-                  }
-                ]
-              }
-            },
-            {
-              "name": "message",
-              "docs": [
-                "account be mutable."
-              ],
-              "writable": true,
-              "signer": true
-            },
-            {
-              "name": "payer",
-              "writable": true,
-              "signer": true
-            },
-            {
-              "name": "clock",
-              "address": "SysvarC1ock11111111111111111111111111111111"
-            },
-            {
-              "name": "rent",
-              "address": "SysvarRent111111111111111111111111111111111"
-            },
-            {
-              "name": "wormholeProgram",
-              "docs": [
-                "Wormhole program."
-              ],
-              "address": "3u8hJUVTA4jH1wYAyUur7FFZVQ8H635K3tSHHF4ssjQ5"
-            },
-            {
-              "name": "systemProgram",
-              "address": "11111111111111111111111111111111"
-            }
-          ]
-        },
-        {
-          "name": "tokenProgram"
-        }
-      ],
-      "args": [
-        {
-          "name": "payload",
-          "type": {
-            "defined": {
-              "name": "sendPayload"
             }
           }
         }
@@ -2073,17 +2023,13 @@ export type BridgeTokenFactory = {
       }
     },
     {
-      "name": "depositPayload",
+      "name": "finalizeTransferPayload",
       "type": {
         "kind": "struct",
         "fields": [
           {
             "name": "nonce",
             "type": "u128"
-          },
-          {
-            "name": "token",
-            "type": "string"
           },
           {
             "name": "amount",
@@ -2099,6 +2045,26 @@ export type BridgeTokenFactory = {
       }
     },
     {
+      "name": "initTransferPayload",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "amount",
+            "type": "u128"
+          },
+          {
+            "name": "recipient",
+            "type": "string"
+          },
+          {
+            "name": "fee",
+            "type": "u128"
+          }
+        ]
+      }
+    },
+    {
       "name": "metadataOverride",
       "type": {
         "kind": "struct",
@@ -2109,42 +2075,6 @@ export type BridgeTokenFactory = {
           },
           {
             "name": "symbol",
-            "type": "string"
-          }
-        ]
-      }
-    },
-    {
-      "name": "repayPayload",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "token",
-            "type": "string"
-          },
-          {
-            "name": "amount",
-            "type": "u128"
-          },
-          {
-            "name": "recipient",
-            "type": "string"
-          }
-        ]
-      }
-    },
-    {
-      "name": "sendPayload",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "amount",
-            "type": "u128"
-          },
-          {
-            "name": "recipient",
             "type": "string"
           }
         ]
@@ -2191,28 +2121,6 @@ export type BridgeTokenFactory = {
       }
     },
     {
-      "name": "withdrawPayload",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "nonce",
-            "type": "u128"
-          },
-          {
-            "name": "amount",
-            "type": "u128"
-          },
-          {
-            "name": "feeRecipient",
-            "type": {
-              "option": "string"
-            }
-          }
-        ]
-      }
-    },
-    {
       "name": "wormholeBumps",
       "type": {
         "kind": "struct",
@@ -2243,6 +2151,11 @@ export type BridgeTokenFactory = {
       "name": "configSeed",
       "type": "bytes",
       "value": "[99, 111, 110, 102, 105, 103]"
+    },
+    {
+      "name": "solanaOmniBridgeChainId",
+      "type": "u8",
+      "value": "2"
     },
     {
       "name": "usedNoncesAccountSize",

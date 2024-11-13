@@ -11,7 +11,7 @@ use state::message::{
     init_transfer::InitTransferPayload, SignedPayload,
 };
 
-declare_id!("5Q8uh6bK5e7zQ2tV8iGrAzUgRQcC9mvCzKQn6uPW2CGp");
+include!(concat!(env!("OUT_DIR"), "/program_id.rs"));
 
 #[program]
 pub mod bridge_token_factory {

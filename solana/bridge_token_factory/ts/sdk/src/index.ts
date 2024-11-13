@@ -269,7 +269,7 @@ export class OmniBridgeSolanaSDK {
     return {instructions: [instruction], signers: [wormholeMessage]};
   }
 
-  async finalizeDeposit({
+  async finalizeTransferBridged({
     nonce,
     token,
     amount,
@@ -300,7 +300,7 @@ export class OmniBridgeSolanaSDK {
     const tokenAccount = getAssociatedTokenAddressSync(mint, recipient, true);
 
     const instruction = await this.program.methods
-      .finalizeDeposit({
+      .finalizeTransferBridged({
         payload: {
           nonce,
           token,
@@ -337,12 +337,13 @@ export class OmniBridgeSolanaSDK {
     return {instructions: [instruction], signers: [wormholeMessage]};
   }
 
-  async repay({
+  async initTransferBridged({
     token,
     from,
     user,
     amount,
     recipient,
+    fee,
     payer,
     sequenceNumber,
   }: {
@@ -351,6 +352,7 @@ export class OmniBridgeSolanaSDK {
     user?: PublicKey;
     amount: BN;
     recipient: string;
+    fee: BN;
     payer?: PublicKey;
     sequenceNumber?: BN;
   }): Promise<TransactionData> {
@@ -371,10 +373,10 @@ export class OmniBridgeSolanaSDK {
     }
 
     const instruction = await this.program.methods
-      .repay({
-        token,
+      .initTransferBridged({
         amount,
         recipient,
+        fee,
       })
       .accountsStrict({
         wormhole: {
@@ -472,7 +474,7 @@ export class OmniBridgeSolanaSDK {
     return {instructions: [instruction], signers: [wormholeMessage]};
   }
 
-  async finalizeWithdraw({
+  async finalizeTransferNative({
     nonce,
     mint,
     amount,
@@ -515,7 +517,7 @@ export class OmniBridgeSolanaSDK {
     );
 
     const instruction = await this.program.methods
-      .finalizeWithdraw({
+      .finalizeTransferNative({
         payload: {
           nonce,
           amount,
@@ -552,12 +554,13 @@ export class OmniBridgeSolanaSDK {
     return {instructions: [instruction], signers: [wormholeMessage]};
   }
 
-  async send({
+  async initTransferNative({
     mint,
     from,
     user,
     amount,
     recipient,
+    fee,
     payer,
     sequenceNumber,
     token22,
@@ -567,6 +570,7 @@ export class OmniBridgeSolanaSDK {
     user?: PublicKey;
     amount: BN;
     recipient: string;
+    fee: BN;
     payer?: PublicKey;
     sequenceNumber?: BN;
     token22?: boolean;
@@ -597,9 +601,10 @@ export class OmniBridgeSolanaSDK {
     }
 
     const instruction = await this.program.methods
-      .send({
+      .initTransferNative({
         amount,
         recipient,
+        fee,
       })
       .accountsStrict({
         wormhole: {

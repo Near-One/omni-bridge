@@ -2,12 +2,12 @@ import {Command} from 'commander';
 import {setupContext} from './context';
 import {installInitializeCLI} from './initialize';
 import {installDeployTokenCLI} from './deployToken';
-import {installFinalizeDepositCLI} from './finalizeDeposit';
-import {installRepayCLI} from './repay';
+import {installFinalizeTransferBridgedCLI} from './finalizeTransferBridged';
+import {installInitTransferBridgedCLI} from './initTransferBridged';
 import {installRegisterMintCLI} from './registerMint';
 import {installCreateTokenCLI} from './createToken';
-import {installFinalizeWithdrawCLI} from './finalizeWithdraw';
-import {installSendCLI} from './send';
+import {installFinalizeTransferNativeCLI} from './finalizeTransferNative';
+import {installInitTransferNativeCLI} from './initTransferNative';
 
 export function cli() {
   const program = new Command();
@@ -29,11 +29,11 @@ export function cli() {
   installCreateTokenCLI(program);
   installInitializeCLI(program);
   installDeployTokenCLI(program);
-  installFinalizeDepositCLI(program);
-  installRepayCLI(program);
+  installFinalizeTransferBridgedCLI(program);
+  installInitTransferBridgedCLI(program);
   installRegisterMintCLI(program);
-  installFinalizeWithdrawCLI(program);
-  installSendCLI(program);
+  installFinalizeTransferNativeCLI(program);
+  installInitTransferNativeCLI(program);
 
   return program;
 }
