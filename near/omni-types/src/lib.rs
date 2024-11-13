@@ -327,38 +327,6 @@ impl<'de> Deserialize<'de> for OmniAddress {
     }
 }
 
-#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Debug, Clone)]
-pub struct NearRecipient {
-    pub target: AccountId,
-    pub message: Option<String>,
-}
-
-impl FromStr for NearRecipient {
-    type Err = String;
-
-    fn from_str(input: &str) -> Result<Self, Self::Err> {
-        let (target, message) = input.split_once(':').map_or_else(
-            || (input, None),
-            |(recipient, msg)| (recipient, Some(msg.to_owned())),
-        );
-
-        Ok(Self {
-            target: target.parse().map_err(stringify)?,
-            message,
-        })
-    }
-}
-
-impl fmt::Display for NearRecipient {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        if let Some(message) = &self.message {
-            write!(f, "{}:{}", self.target, message)
-        } else {
-            write!(f, "{}", self.target)
-        }
-    }
-}
-
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct InitTransferMsg {
     pub recipient: OmniAddress,
