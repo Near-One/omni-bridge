@@ -162,7 +162,19 @@ impl OmniAddress {
     pub fn from_evm_address(chain_kind: ChainKind, address: EvmAddress) -> Result<Self, String> {
         match chain_kind {
             ChainKind::Eth => Ok(Self::Eth(address)),
+            ChainKind::Arb => Ok(Self::Arb(address)),
+            ChainKind::Base => Ok(Self::Base(address)),
             _ => Err(format!("{chain_kind:?} is not an EVM chain")),
+        }
+    }
+
+    pub fn from_bytearray(chain_kind: ChainKind, address: &[u8]) -> Result<Self, String> {
+        match chain_kind {
+            ChainKind::Sol => Ok(Self::Sol(Self::to_sol_address(address)?)),
+            ChainKind::Eth | ChainKind::Arb | ChainKind::Base => {
+                Self::from_evm_address(chain_kind, Self::to_evm_address(address)?)
+            }
+            _ => Err(format!("Chain {chain_kind:?} not supported")),
         }
     }
 
@@ -173,6 +185,26 @@ impl OmniAddress {
             OmniAddress::Sol(_) => ChainKind::Sol,
             OmniAddress::Arb(_) => ChainKind::Arb,
             OmniAddress::Base(_) => ChainKind::Base,
+        }
+    }
+
+    fn to_evm_address(address: &[u8]) -> Result<EvmAddress, String> {
+        let address = if address.len() == 32 {
+            &address[address.len() - 20..]
+        } else {
+            address
+        };
+
+        match address.try_into() {
+            Ok(bytes) => Ok(H160(bytes)),
+            Err(_) => Err("Invalid EVM address".to_string()),
+        }
+    }
+
+    fn to_sol_address(address: &[u8]) -> Result<SolAddress, String> {
+        match address.try_into() {
+            Ok(bytes) => Ok(SolAddress(bytes)),
+            Err(_) => Err("Invalid SOL address".to_string()),
         }
     }
 }
