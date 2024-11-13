@@ -37,7 +37,7 @@ describe('eNear contract', () => {
   beforeEach(async () => {
     [deployer, eNearAdmin, alice, bob] = await ethers.getSigners();
 
-    nearProverMockContractFactory = await ethers.getContractFactory('NearProverMock')
+    nearProverMockContractFactory = await ethers.getContractFactory('FakeProver')
     nearProver = await nearProverMockContractFactory.deploy();
     await nearProver.waitForDeployment();
 
