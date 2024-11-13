@@ -181,10 +181,7 @@ fn test_omni_address_from_evm_address() {
         Ok(OmniAddress::Eth(evm_address.clone()))
     );
 
-    for chain_kind in [
-        ChainKind::Near,
-        ChainKind::Sol,
-    ] {
+    for chain_kind in [ChainKind::Near, ChainKind::Sol] {
         let expected_error = format!("{:?} is not an EVM chain", chain_kind);
         assert_eq!(
             OmniAddress::new_from_evm_address(chain_kind, evm_address.clone()),
