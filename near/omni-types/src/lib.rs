@@ -174,7 +174,7 @@ impl OmniAddress {
             ChainKind::Eth | ChainKind::Arb | ChainKind::Base => {
                 Self::from_evm_address(chain_kind, Self::to_evm_address(address)?)
             }
-            _ => Err(format!("Chain {chain_kind:?} not supported")),
+            ChainKind::Near => Ok(Self::Near(Self::to_near_account_id(address)?)),
         }
     }
 
@@ -206,6 +206,11 @@ impl OmniAddress {
             Ok(bytes) => Ok(SolAddress(bytes)),
             Err(_) => Err("Invalid SOL address".to_string()),
         }
+    }
+
+    fn to_near_account_id(address: &[u8]) -> Result<AccountId, String> {
+        AccountId::from_str(&String::from_utf8(address.to_vec()).map_err(stringify)?)
+            .map_err(stringify)
     }
 }
 
