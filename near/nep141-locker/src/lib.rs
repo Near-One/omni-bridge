@@ -628,12 +628,16 @@ impl Contract {
                 );
 
                 if is_deployed_token {
-                    promise =
-                        promise.then(ext_token::ext(token).with_static_gas(MINT_TOKEN_GAS).mint(
-                            predecessor_account_id.clone(),
-                            transfer_message.fee.fee,
-                            None,
-                        ));
+                    promise = promise.then(
+                        ext_token::ext(token)
+                            .with_static_gas(MINT_TOKEN_GAS)
+                            .with_attached_deposit(ONE_YOCTO)
+                            .mint(
+                                predecessor_account_id.clone(),
+                                transfer_message.fee.fee,
+                                None,
+                            ),
+                    );
                 } else {
                     promise = promise.then(
                         ext_token::ext(token)
