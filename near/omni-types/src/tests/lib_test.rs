@@ -221,7 +221,7 @@ fn test_omni_address_from_str() {
         ),
         (
             "invalid_format".to_string(),
-            Err("Invalid OmniAddress format".to_string()),
+            Err("ERR_INVALIDE_HEX".to_string()),
             "Should fail on missing chain prefix",
         ),
         (

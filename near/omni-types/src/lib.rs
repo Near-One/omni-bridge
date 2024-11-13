@@ -31,7 +31,7 @@ impl FromStr for H160 {
         } else {
             s
         };
-        let result = Vec::from_hex(s).map_err(|err| err.to_string())?;
+        let result = Vec::from_hex(s).map_err(|_| "ERR_INVALIDE_HEX")?;
         Ok(H160(
             result
                 .try_into()
