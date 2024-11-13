@@ -80,7 +80,10 @@ impl TryFromLog<Log<FinTransfer>> for FinTransferMessage {
             nonce: near_sdk::json_types::U128(event.data.nonce),
             amount: near_sdk::json_types::U128(event.data.amount),
             fee_recipient: event.data.feeRecipient.parse().map_err(stringify)?,
-            emitter_address: OmniAddress::from_evm_address(chain_kind, H160(event.address.into()))?,
+            emitter_address: OmniAddress::new_from_evm_address(
+                chain_kind,
+                H160(event.address.into()),
+            )?,
         })
     }
 }
@@ -94,17 +97,26 @@ impl TryFromLog<Log<InitTransfer>> for InitTransferMessage {
         }
 
         Ok(InitTransferMessage {
-            emitter_address: OmniAddress::from_evm_address(chain_kind, H160(event.address.into()))?,
+            emitter_address: OmniAddress::new_from_evm_address(
+                chain_kind,
+                H160(event.address.into()),
+            )?,
             transfer: TransferMessage {
                 origin_nonce: near_sdk::json_types::U128(event.data.nonce),
-                token: OmniAddress::from_evm_address(chain_kind, H160(event.tokenAddress.into()))?,
+                token: OmniAddress::new_from_evm_address(
+                    chain_kind,
+                    H160(event.tokenAddress.into()),
+                )?,
                 amount: near_sdk::json_types::U128(event.data.amount),
                 recipient: event.data.recipient.parse().map_err(stringify)?,
                 fee: Fee {
                     fee: near_sdk::json_types::U128(event.data.fee),
                     native_fee: near_sdk::json_types::U128(event.data.nativeTokenFee),
                 },
-                sender: OmniAddress::from_evm_address(chain_kind, H160(event.data.sender.into()))?,
+                sender: OmniAddress::new_from_evm_address(
+                    chain_kind,
+                    H160(event.data.sender.into()),
+                )?,
                 msg: event.data.message,
             },
         })
@@ -120,9 +132,12 @@ impl TryFromLog<Log<DeployToken>> for DeployTokenMessage {
         }
 
         Ok(DeployTokenMessage {
-            emitter_address: OmniAddress::from_evm_address(chain_kind, H160(event.address.into()))?,
+            emitter_address: OmniAddress::new_from_evm_address(
+                chain_kind,
+                H160(event.address.into()),
+            )?,
             token: event.data.token.parse().map_err(stringify)?,
-            token_address: OmniAddress::from_evm_address(
+            token_address: OmniAddress::new_from_evm_address(
                 chain_kind,
                 H160(event.data.tokenAddress.into()),
             )?,
@@ -139,7 +154,7 @@ impl TryFromLog<Log<LogMetadata>> for LogMetadataMessage {
         }
 
         Ok(LogMetadataMessage {
-            token_address: OmniAddress::from_evm_address(
+            token_address: OmniAddress::new_from_evm_address(
                 chain_kind,
                 H160(event.data.tokenAddress.into()),
             )?,
@@ -147,7 +162,10 @@ impl TryFromLog<Log<LogMetadata>> for LogMetadataMessage {
             symbol: event.data.symbol,
             decimals: event.data.decimals,
 
-            emitter_address: OmniAddress::from_evm_address(chain_kind, H160(event.address.into()))?,
+            emitter_address: OmniAddress::new_from_evm_address(
+                chain_kind,
+                H160(event.address.into()),
+            )?,
         })
     }
 }

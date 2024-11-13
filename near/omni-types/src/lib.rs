@@ -169,20 +169,37 @@ pub enum OmniAddress {
 
 impl OmniAddress {
     #[allow(clippy::missing_panics_doc)]
-    pub fn new_zero(chain_kind: ChainKind) -> OmniAddress {
+    pub fn new_zero(chain_kind: ChainKind) -> Result<Self, String> {
         match chain_kind {
-            ChainKind::Eth => OmniAddress::Eth(H160::ZERO),
-            ChainKind::Near => OmniAddress::Near(ZERO_ACCOUNT_ID.parse().unwrap()),
-            ChainKind::Sol => OmniAddress::Sol(SolAddress::ZERO),
-            ChainKind::Arb => OmniAddress::Arb(H160::ZERO),
-            ChainKind::Base => OmniAddress::Base(H160::ZERO),
+            ChainKind::Eth => Ok(OmniAddress::Eth(H160::ZERO)),
+            ChainKind::Near => Ok(OmniAddress::Near(
+                ZERO_ACCOUNT_ID.parse().map_err(stringify)?,
+            )),
+            ChainKind::Sol => Ok(OmniAddress::Sol(SolAddress::ZERO)),
+            ChainKind::Arb => Ok(OmniAddress::Arb(H160::ZERO)),
+            ChainKind::Base => Ok(OmniAddress::Base(H160::ZERO)),
         }
     }
 
-    pub fn from_evm_address(chain_kind: ChainKind, address: EvmAddress) -> Result<Self, String> {
+    pub fn new_from_evm_address(
+        chain_kind: ChainKind,
+        address: EvmAddress,
+    ) -> Result<Self, String> {
         match chain_kind {
             ChainKind::Eth => Ok(Self::Eth(address)),
+            ChainKind::Arb => Ok(Self::Arb(address)),
+            ChainKind::Base => Ok(Self::Base(address)),
             _ => Err(format!("{chain_kind:?} is not an EVM chain")),
+        }
+    }
+
+    pub fn new_from_slice(chain_kind: ChainKind, address: &[u8]) -> Result<Self, String> {
+        match chain_kind {
+            ChainKind::Sol => Ok(Self::Sol(Self::to_sol_address(address)?)),
+            ChainKind::Eth | ChainKind::Arb | ChainKind::Base => {
+                Self::new_from_evm_address(chain_kind, Self::to_evm_address(address)?)
+            }
+            ChainKind::Near => Ok(Self::Near(Self::to_near_account_id(address)?)),
         }
     }
 
@@ -224,6 +241,31 @@ impl OmniAddress {
 
     pub fn get_token_prefix(&self) -> String {
         self.encode('-', true)
+    }
+
+    fn to_evm_address(address: &[u8]) -> Result<EvmAddress, String> {
+        let address = if address.len() == 32 {
+            &address[address.len() - 20..]
+        } else {
+            address
+        };
+
+        match address.try_into() {
+            Ok(bytes) => Ok(H160(bytes)),
+            Err(_) => Err("Invalid EVM address".to_string()),
+        }
+    }
+
+    fn to_sol_address(address: &[u8]) -> Result<SolAddress, String> {
+        match address.try_into() {
+            Ok(bytes) => Ok(SolAddress(bytes)),
+            Err(_) => Err("Invalid SOL address".to_string()),
+        }
+    }
+
+    fn to_near_account_id(address: &[u8]) -> Result<AccountId, String> {
+        AccountId::from_str(&String::from_utf8(address.to_vec()).map_err(stringify)?)
+            .map_err(stringify)
     }
 }
 

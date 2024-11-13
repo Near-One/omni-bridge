@@ -9,8 +9,7 @@ use {
             DeployTokenMessage, FinTransferMessage, InitTransferMessage, LogMetadataMessage,
             ProofKind,
         },
-        sol_address::SolAddress,
-        stringify, EvmAddress, Fee, OmniAddress, TransferMessage, H160,
+        stringify, Fee, OmniAddress, TransferMessage,
     },
 };
 
@@ -118,13 +117,13 @@ impl ParsedVAA {
 struct DeployTokenWh {
     payload_type: ProofKind,
     token: String,
-    token_address: EvmAddress,
+    token_address: OmniAddress,
 }
 
 #[derive(Debug, BorshDeserialize)]
 struct LogMetadataWh {
     payload_type: ProofKind,
-    token_address: EvmAddress,
+    token_address: OmniAddress,
     name: String,
     symbol: String,
     decimals: u8,
@@ -133,7 +132,7 @@ struct LogMetadataWh {
 #[derive(Debug, BorshDeserialize)]
 struct FinTransferWh {
     payload_type: ProofKind,
-    _token: String,
+    token_address: OmniAddress,
     amount: u128,
     recipient: String,
     nonce: u128,
@@ -142,8 +141,8 @@ struct FinTransferWh {
 #[derive(Debug, BorshDeserialize)]
 struct InitTransferWh {
     payload_type: ProofKind,
-    sender: EvmAddress,
-    token_address: EvmAddress,
+    sender: OmniAddress,
+    token_address: OmniAddress,
     nonce: u128,
     amount: u128,
     fee: u128,
@@ -164,7 +163,7 @@ impl TryInto<InitTransferMessage> for ParsedVAA {
 
         Ok(InitTransferMessage {
             transfer: TransferMessage {
-                token: to_omni_address(self.emitter_chain, &transfer.token_address.0),
+                token: transfer.token_address.clone(),
                 amount: transfer.amount.into(),
                 fee: Fee {
                     fee: transfer.fee.into(),
@@ -172,10 +171,13 @@ impl TryInto<InitTransferMessage> for ParsedVAA {
                 },
                 recipient: transfer.recipient.parse().map_err(stringify)?,
                 origin_nonce: transfer.nonce.into(),
-                sender: to_omni_address(self.emitter_chain, &transfer.sender.0),
+                sender: transfer.sender,
                 msg: transfer.message,
             },
-            emitter_address: to_omni_address(self.emitter_chain, &self.emitter_address),
+            emitter_address: OmniAddress::new_from_slice(
+                transfer.token_address.get_chain(),
+                &self.emitter_address,
+            )?,
         })
     }
 }
@@ -194,7 +196,10 @@ impl TryInto<FinTransferMessage> for ParsedVAA {
             nonce: transfer.nonce.into(),
             fee_recipient: transfer.recipient.parse().map_err(stringify)?,
             amount: transfer.amount.into(),
-            emitter_address: to_omni_address(self.emitter_chain, &self.emitter_address),
+            emitter_address: OmniAddress::new_from_slice(
+                transfer.token_address.get_chain(),
+                &self.emitter_address,
+            )?,
         })
     }
 }
@@ -211,8 +216,11 @@ impl TryInto<DeployTokenMessage> for ParsedVAA {
 
         Ok(DeployTokenMessage {
             token: parsed_payload.token.parse().map_err(stringify)?,
-            token_address: to_omni_address(self.emitter_chain, &parsed_payload.token_address.0),
-            emitter_address: to_omni_address(self.emitter_chain, &self.emitter_address),
+            token_address: parsed_payload.token_address.clone(),
+            emitter_address: OmniAddress::new_from_slice(
+                parsed_payload.token_address.get_chain(),
+                &self.emitter_address,
+            )?,
         })
     }
 }
@@ -227,42 +235,13 @@ impl TryInto<LogMetadataMessage> for ParsedVAA {
             return Err("Invalid proof kind".to_owned());
         }
 
+        let chain_kind = parsed_payload.token_address.get_chain();
         Ok(LogMetadataMessage {
-            token_address: to_omni_address(self.emitter_chain, &parsed_payload.token_address.0),
+            token_address: parsed_payload.token_address,
             name: parsed_payload.name,
             symbol: parsed_payload.symbol,
             decimals: parsed_payload.decimals,
-            emitter_address: to_omni_address(self.emitter_chain, &self.emitter_address),
+            emitter_address: OmniAddress::new_from_slice(chain_kind, &self.emitter_address)?,
         })
-    }
-}
-
-fn to_omni_address(emitter_chain: u16, address: &[u8]) -> OmniAddress {
-    match emitter_chain {
-        1 => OmniAddress::Sol(to_sol_address(address)),
-        2 | 10002 => OmniAddress::Eth(to_evm_address(address)),
-        23 | 10003 => OmniAddress::Arb(to_evm_address(address)),
-        30 | 10004 => OmniAddress::Base(to_evm_address(address)),
-        _ => env::panic_str("Chain not supported"),
-    }
-}
-
-fn to_evm_address(address: &[u8]) -> EvmAddress {
-    let address = if address.len() == 32 {
-        &address[address.len() - 20..]
-    } else {
-        address
-    };
-
-    match address.try_into() {
-        Ok(bytes) => H160(bytes),
-        Err(_) => env::panic_str("Invalid EVM address"),
-    }
-}
-
-fn to_sol_address(address: &[u8]) -> SolAddress {
-    match address.try_into() {
-        Ok(bytes) => SolAddress(bytes),
-        Err(_) => env::panic_str("Invalid SOL address"),
     }
 }

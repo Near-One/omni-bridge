@@ -713,7 +713,8 @@ impl Contract {
     ) -> Promise {
         self.deploy_token_internal(
             chain_kind,
-            &OmniAddress::new_zero(chain_kind),
+            &OmniAddress::new_zero(chain_kind)
+                .unwrap_or_else(|_| env::panic_str("ERR_FAILED_TO_GET_ZERO_ADDRESS")),
             metadata,
             env::attached_deposit(),
         )
