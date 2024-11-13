@@ -55,7 +55,7 @@ const STORAGE_DEPOSIT_GAS: Gas = Gas::from_tgas(3);
 const DEPLOY_TOKEN_CALLBACK_GAS: Gas = Gas::from_tgas(75);
 const DEPLOY_TOKEN_GAS: Gas = Gas::from_tgas(50);
 const BURN_TOKEN_GAS: Gas = Gas::from_tgas(10);
-const MINT_TOKEN_GAS: Gas = Gas::from_tgas(10);
+const MINT_TOKEN_GAS: Gas = Gas::from_tgas(5);
 const SET_METADATA_GAS: Gas = Gas::from_tgas(10);
 const NO_DEPOSIT: NearToken = NearToken::from_near(0);
 const ONE_YOCTO: NearToken = NearToken::from_yoctonear(1);
@@ -956,9 +956,9 @@ impl Contract {
                         .transfer(NearToken::from_yoctonear(amount_to_transfer.0)),
                 )
         } else {
-            let transfer = ext_token::ext(token.clone()).with_attached_deposit(ONE_YOCTO);
+            let transfer_promise = ext_token::ext(token.clone()).with_attached_deposit(ONE_YOCTO);
             if is_deployed_token {
-                transfer
+                transfer_promise
                     .with_static_gas(MINT_TOKEN_GAS.saturating_add(FT_TRANSFER_CALL_GAS))
                     .mint(
                         recipient,
@@ -966,13 +966,11 @@ impl Contract {
                         (!transfer_message.msg.is_empty()).then(|| transfer_message.msg.clone()),
                     )
             } else if transfer_message.msg.is_empty() {
-                transfer.with_static_gas(FT_TRANSFER_GAS).ft_transfer(
-                    recipient,
-                    amount_to_transfer,
-                    None,
-                )
+                transfer_promise
+                    .with_static_gas(FT_TRANSFER_GAS)
+                    .ft_transfer(recipient, amount_to_transfer, None)
             } else {
-                transfer
+                transfer_promise
                     .with_static_gas(FT_TRANSFER_CALL_GAS)
                     .ft_transfer_call(
                         recipient,
@@ -990,29 +988,22 @@ impl Contract {
                 "STORAGE_ERR: The fee recipient is omitted"
             );
 
-            if is_deployed_token {
-                promise = promise.then(
-                    ext_token::ext(token)
-                        .with_static_gas(MINT_TOKEN_GAS)
-                        .with_attached_deposit(ONE_YOCTO)
-                        .mint(
-                            predecessor_account_id.clone(),
-                            transfer_message.fee.fee,
-                            None,
-                        ),
-                );
+            let transfer_fee_promise = ext_token::ext(token).with_attached_deposit(ONE_YOCTO);
+            promise = promise.then(if is_deployed_token {
+                transfer_fee_promise.with_static_gas(MINT_TOKEN_GAS).mint(
+                    predecessor_account_id.clone(),
+                    transfer_message.fee.fee,
+                    None,
+                )
             } else {
-                promise = promise.then(
-                    ext_token::ext(token)
-                        .with_static_gas(FT_TRANSFER_GAS)
-                        .with_attached_deposit(ONE_YOCTO)
-                        .ft_transfer(
-                            predecessor_account_id.clone(),
-                            transfer_message.fee.fee,
-                            None,
-                        ),
-                );
-            }
+                transfer_fee_promise
+                    .with_static_gas(FT_TRANSFER_GAS)
+                    .ft_transfer(
+                        predecessor_account_id.clone(),
+                        transfer_message.fee.fee,
+                        None,
+                    )
+            });
 
             required_balance = required_balance.saturating_add(NearToken::from_yoctonear(2));
         } else {
