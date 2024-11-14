@@ -84,5 +84,20 @@ describe('eNearProxy contract', () => {
       await eNearProxy.connect(alice).mint(await eNear.getAddress(), alice.address, 100);
       expect(await eNear.balanceOf(alice.address)).to.equal(200);
     })
+
+    it('Burn by using eNearProxy', async () => {
+      await eNearProxy.connect(deployer).grantRole(ethers.keccak256(ethers.toUtf8Bytes("MINTER_ROLE")), alice.address);
+      await eNearProxy.connect(alice).mint(await eNear.getAddress(), alice.address, 100);
+      expect(await eNear.balanceOf(alice.address)).to.equal(100);
+      expect(await eNear.totalSupply()).to.equal(100)
+
+      await eNear.connect(alice).transfer(await eNearProxy.getAddress(), 100);
+
+      expect(await eNear.totalSupply()).to.equal(100);
+
+      await eNearProxy.connect(alice).burn(await eNear.getAddress(), 100);
+
+      expect(await eNear.totalSupply()).to.equal(0);
+    })
   })
 })
