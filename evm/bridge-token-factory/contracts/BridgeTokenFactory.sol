@@ -28,7 +28,7 @@ contract BridgeTokenFactory is
     address public nearBridgeDerivedAddress;
     uint8 public omniBridgeChainId;
 
-    mapping(uint128 => bool) public completedTransfers;
+    mapping(bytes32 => bool) public completedTransfers;
     mapping(uint128 => bool) public claimedFee;
     uint128 public initTransferNonce; 
 
@@ -38,7 +38,8 @@ contract BridgeTokenFactory is
     uint constant PAUSED_FIN_TRANSFER = 1 << 1;
 
     error InvalidSignature();
-    error NonceAlreadyUsed(uint256 nonce);
+    error NonceAlreadyUsed(uint128 nonce);
+    error TransferAlreadyFinalised(uint8 chain, uint128 nonce);
     error InvalidFee();
 
     function initialize(
@@ -149,15 +150,23 @@ contract BridgeTokenFactory is
     ) internal virtual {}
 
     function finTransfer(
-        bytes calldata signatureData, 
+        bytes calldata signatureData,
         BridgeTypes.FinTransferPayload calldata payload
     ) payable external whenNotPaused(PAUSED_FIN_TRANSFER) {
-        if (completedTransfers[payload.nonce]) {
-            revert NonceAlreadyUsed(payload.nonce);
+        bytes32 transfer_id = bytes32(
+            (uint256(uint128(payload.origin_chain)) << 128) | payload.nonce
+        );
+
+        if (completedTransfers[transfer_id]) {
+            revert TransferAlreadyFinalised(
+                payload.origin_chain,
+                payload.nonce
+            );
         }
 
         bytes memory borshEncoded = bytes.concat(
             bytes1(uint8(BridgeTypes.PayloadType.TransferMessage)),
+            bytes1(payload.origin_chain),
             Borsh.encodeUint128(payload.nonce),
             bytes1(omniBridgeChainId),
             Borsh.encodeAddress(payload.tokenAddress),
@@ -174,7 +183,7 @@ contract BridgeTokenFactory is
             revert InvalidSignature();
         }
 
-        completedTransfers[payload.nonce] = true;
+        completedTransfers[transfer_id] = true;
         
         if (isBridgeToken[payload.tokenAddress]) {
             BridgeToken(payload.tokenAddress).mint(payload.recipient, payload.amount);
@@ -186,6 +195,7 @@ contract BridgeTokenFactory is
 
         emit BridgeTypes.FinTransfer(
             payload.nonce,
+            payload.origin_chain,
             payload.tokenAddress,
             payload.amount,
             payload.recipient,

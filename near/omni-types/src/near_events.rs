@@ -2,9 +2,7 @@ use near_sdk::serde::{Deserialize, Serialize};
 use near_sdk::serde_json::json;
 
 use crate::mpc_types::SignatureResponse;
-use crate::{
-    ClaimNativeFeePayload, MetadataPayload, PayloadId, TransferMessage, TransferMessagePayload,
-};
+use crate::{ClaimNativeFeePayload, MetadataPayload, TransferMessage, TransferMessagePayload};
 
 #[derive(Deserialize, Serialize, Clone, Debug)]
 pub enum Nep141LockerEvent {
@@ -16,7 +14,6 @@ pub enum Nep141LockerEvent {
         message_payload: TransferMessagePayload,
     },
     FinTransferEvent {
-        payload_id: Option<PayloadId>,
         transfer_message: TransferMessage,
     },
     UpdateFeeEvent {

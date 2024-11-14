@@ -86,6 +86,7 @@ contract BridgeTokenFactoryWormhole is BridgeTokenFactory {
             Borsh.encodeAddress(payload.tokenAddress),
             Borsh.encodeUint128(payload.amount),
             Borsh.encodeString(payload.feeRecipient),
+            bytes1(payload.origin_chain),
             Borsh.encodeUint128(payload.nonce)
         );
         _wormhole.publishMessage{value: msg.value}(

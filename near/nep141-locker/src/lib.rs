@@ -25,8 +25,8 @@ use omni_types::prover_args::VerifyProofArgs;
 use omni_types::prover_result::ProverResult;
 use omni_types::{
     BasicMetadata, ChainKind, ClaimNativeFeePayload, Fee, InitTransferMsg, MetadataPayload,
-    NativeFee, Nonce, OmniAddress, PayloadId, PayloadType, SignRequest, TransferId,
-    TransferMessage, TransferMessagePayload, UpdateFee,
+    NativeFee, Nonce, OmniAddress, PayloadType, SignRequest, TransferId, TransferMessage,
+    TransferMessagePayload, UpdateFee,
 };
 use storage::{TransferMessageStorage, TransferMessageStorageValue};
 
@@ -164,7 +164,7 @@ pub trait TokenDeployer {
 pub struct Contract {
     pub prover_account: AccountId,
     pub factories: LookupMap<ChainKind, OmniAddress>,
-    pub pending_transfers: LookupMap<PayloadId, TransferMessageStorage>,
+    pub pending_transfers: LookupMap<TransferId, TransferMessageStorage>,
     pub finalised_transfers: LookupMap<TransferId, Option<NativeFee>>,
     pub token_id_to_address: LookupMap<(ChainKind, AccountId), OmniAddress>,
     pub token_address_to_id: LookupMap<OmniAddress, AccountId>,
@@ -208,9 +208,8 @@ impl FungibleTokenReceiver for Contract {
             "ERR_INVALID_FEE"
         );
 
-        let payload_id = self.get_next_payload_id(transfer_message.get_destination_chain());
         let mut required_storage_balance =
-            self.add_transfer_message(payload_id, transfer_message.clone(), sender_id.clone());
+            self.add_transfer_message(transfer_message.clone(), sender_id.clone());
         required_storage_balance = required_storage_balance
             .saturating_add(NearToken::from_yoctonear(parsed_msg.native_token_fee.0));
 
@@ -325,10 +324,10 @@ impl Contract {
     }
 
     #[payable]
-    pub fn update_transfer_fee(&mut self, payload_id: PayloadId, fee: UpdateFee) {
+    pub fn update_transfer_fee(&mut self, transfer_id: TransferId, fee: UpdateFee) {
         match fee {
             UpdateFee::Fee(fee) => {
-                let mut transfer = self.get_transfer_message_storage(payload_id);
+                let mut transfer = self.get_transfer_message_storage(transfer_id);
 
                 require!(
                     OmniAddress::Near(env::predecessor_account_id()) == transfer.message.sender,
@@ -353,7 +352,7 @@ impl Contract {
                 );
 
                 transfer.message.fee = fee;
-                self.insert_raw_transfer(payload_id, transfer.message.clone(), transfer.owner);
+                self.insert_raw_transfer(transfer.message.clone(), transfer.owner);
 
                 env::log_str(
                     &Nep141LockerEvent::UpdateFeeEvent {
@@ -434,11 +433,11 @@ impl Contract {
     #[payable]
     pub fn sign_transfer(
         &mut self,
-        payload_id: PayloadId,
+        transfer_id: TransferId,
         fee_recipient: Option<AccountId>,
         fee: &Option<Fee>,
     ) -> Promise {
-        let transfer_message = self.get_transfer_message(payload_id);
+        let transfer_message = self.get_transfer_message(transfer_id);
         if let Some(fee) = &fee {
             require!(&transfer_message.fee == fee, "Invalid fee");
         }
@@ -452,7 +451,7 @@ impl Contract {
 
         let transfer_payload = TransferMessagePayload {
             prefix: PayloadType::TransferMessage,
-            nonce: payload_id.nonce,
+            transfer_id,
             token_address,
             amount: U128(transfer_message.amount.0 - transfer_message.fee.fee.0),
             recipient: transfer_message.recipient,
@@ -485,7 +484,7 @@ impl Contract {
     ) {
         if let Ok(signature) = call_result {
             if fee.is_zero() {
-                self.remove_transfer_message(message_payload.get_payload_id());
+                self.remove_transfer_message(message_payload.transfer_id);
             }
 
             env::log_str(
@@ -537,7 +536,7 @@ impl Contract {
         #[serializer(borsh)] storage_deposit_args: &StorageDepositArgs,
         #[serializer(borsh)] predecessor_account_id: AccountId,
         #[serializer(borsh)] native_fee_recipient: Option<OmniAddress>,
-    ) -> PromiseOrValue<PayloadId> {
+    ) -> PromiseOrValue<()> {
         let Ok(ProverResult::InitTransfer(init_transfer)) = Self::decode_prover_result(0) else {
             env::panic_str("Invalid proof message")
         };
@@ -560,9 +559,8 @@ impl Contract {
             )
             .into()
         } else {
-            let payload_id =
-                self.process_fin_transfer_to_other_cahin(predecessor_account_id, transfer_message);
-            PromiseOrValue::Value(payload_id)
+            self.process_fin_transfer_to_other_cahin(predecessor_account_id, transfer_message);
+            PromiseOrValue::Value(())
         }
     }
 
@@ -608,7 +606,7 @@ impl Contract {
             "ERR_UNKNOWN_FACTORY"
         );
 
-        let message = self.remove_transfer_message(fin_transfer.get_payload_id());
+        let message = self.remove_transfer_message(fin_transfer.transfer_id);
         let fee = message.amount.0 - fin_transfer.amount.0;
 
         if message.fee.native_fee.0 != 0 {
@@ -850,9 +848,9 @@ impl Contract {
         self.token_id_to_address.get(&(chain_kind, token))
     }
 
-    pub fn get_transfer_message(&self, payload_id: PayloadId) -> TransferMessage {
+    pub fn get_transfer_message(&self, transfer_id: TransferId) -> TransferMessage {
         self.pending_transfers
-            .get(&payload_id)
+            .get(&transfer_id)
             .map(storage::TransferMessageStorage::into_main)
             .map(|m| m.message)
             .sdk_expect("The transfer does not exist")
@@ -860,10 +858,10 @@ impl Contract {
 
     pub fn get_transfer_message_storage(
         &self,
-        payload_id: PayloadId,
+        transfer_id: TransferId,
     ) -> TransferMessageStorageValue {
         self.pending_transfers
-            .get(&payload_id)
+            .get(&transfer_id)
             .map(storage::TransferMessageStorage::into_main)
             .sdk_expect("The transfer does not exist")
     }
@@ -912,23 +910,6 @@ impl Contract {
 }
 
 impl Contract {
-    fn get_next_payload_id(&mut self, chain_kind: ChainKind) -> PayloadId {
-        let mut payload_nonce = self
-            .current_payload_nonces
-            .get(&chain_kind)
-            .unwrap_or_default();
-
-        payload_nonce.0 += 1;
-
-        self.current_payload_nonces
-            .insert(&chain_kind, &payload_nonce);
-
-        PayloadId {
-            chain: chain_kind,
-            nonce: payload_nonce,
-        }
-    }
-
     #[allow(clippy::too_many_lines)]
     fn process_fin_transfer_to_near(
         &mut self,
@@ -1040,13 +1021,7 @@ impl Contract {
             env::attached_deposit(),
         );
 
-        env::log_str(
-            &Nep141LockerEvent::FinTransferEvent {
-                payload_id: None,
-                transfer_message,
-            }
-            .to_log_string(),
-        );
+        env::log_str(&Nep141LockerEvent::FinTransferEvent { transfer_message }.to_log_string());
 
         promise
     }
@@ -1055,18 +1030,12 @@ impl Contract {
         &mut self,
         predecessor_account_id: AccountId,
         transfer_message: TransferMessage,
-    ) -> PayloadId {
+    ) {
         let mut required_balance =
             self.add_fin_transfer(&transfer_message.get_transfer_id(), &None);
 
-        let payload_id = self.get_next_payload_id(transfer_message.get_destination_chain());
-
         required_balance = self
-            .add_transfer_message(
-                payload_id,
-                transfer_message.clone(),
-                predecessor_account_id.clone(),
-            )
+            .add_transfer_message(transfer_message.clone(), predecessor_account_id.clone())
             .saturating_add(required_balance);
 
         self.update_storage_balance(
@@ -1075,15 +1044,7 @@ impl Contract {
             env::attached_deposit(),
         );
 
-        env::log_str(
-            &Nep141LockerEvent::FinTransferEvent {
-                payload_id: Some(payload_id),
-                transfer_message,
-            }
-            .to_log_string(),
-        );
-
-        payload_id
+        env::log_str(&Nep141LockerEvent::FinTransferEvent { transfer_message }.to_log_string());
     }
 
     fn get_token_id(&self, address: &OmniAddress) -> AccountId {
@@ -1149,12 +1110,11 @@ impl Contract {
 
     fn insert_raw_transfer(
         &mut self,
-        payload_id: PayloadId,
         transfer_message: TransferMessage,
         message_owner: AccountId,
     ) -> Option<Vec<u8>> {
         self.pending_transfers.insert_raw(
-            &borsh::to_vec(&payload_id).sdk_expect("ERR_BORSH"),
+            &borsh::to_vec(&transfer_message.get_transfer_id()).sdk_expect("ERR_BORSH"),
             &TransferMessageStorage::encode_borsh(transfer_message, message_owner)
                 .sdk_expect("ERR_BORSH"),
         )
@@ -1162,24 +1122,23 @@ impl Contract {
 
     fn add_transfer_message(
         &mut self,
-        payload_id: PayloadId,
         transfer_message: TransferMessage,
         message_owner: AccountId,
     ) -> NearToken {
         let storage_usage = env::storage_usage();
         require!(
-            self.insert_raw_transfer(payload_id, transfer_message, message_owner,)
+            self.insert_raw_transfer(transfer_message, message_owner,)
                 .is_none(),
             "ERR_KEY_EXIST"
         );
         env::storage_byte_cost().saturating_mul((env::storage_usage() - storage_usage).into())
     }
 
-    fn remove_transfer_message(&mut self, payload_id: PayloadId) -> TransferMessage {
+    fn remove_transfer_message(&mut self, transfer_id: TransferId) -> TransferMessage {
         let storage_usage = env::storage_usage();
         let transfer = self
             .pending_transfers
-            .remove(&payload_id)
+            .remove(&transfer_id)
             .map(storage::TransferMessageStorage::into_main)
             .sdk_expect("ERR_TRANSFER_NOT_EXIST");
 

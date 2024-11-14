@@ -1,7 +1,7 @@
 use near_contract_standards::storage_management::{StorageBalance, StorageBalanceBounds};
 use near_sdk::{assert_one_yocto, borsh};
 use near_sdk::{env, near_bindgen, AccountId, NearToken};
-use omni_types::PayloadId;
+use omni_types::TransferId;
 
 use crate::{
     require, BorshDeserialize, BorshSerialize, ChainKind, Contract, ContractExt, Deserialize, Fee,
@@ -132,7 +132,7 @@ impl Contract {
     }
 
     pub fn required_balance_for_init_transfer(&self) -> NearToken {
-        let key_len = borsh::to_vec(&PayloadId::default())
+        let key_len = borsh::to_vec(&TransferId::default())
             .sdk_expect("ERR_BORSH")
             .len() as u64;
         let max_account_id: AccountId = "a".repeat(64).parse().sdk_expect("ERR_PARSE_ACCOUNT_ID");

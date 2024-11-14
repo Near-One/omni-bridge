@@ -25,6 +25,7 @@ sol! {
 
     event FinTransfer(
         uint128 indexed nonce,
+        uint8 origin_chain,
         address tokenAddress,
         uint128 amount,
         address recipient,
@@ -77,7 +78,10 @@ impl TryFromLog<Log<FinTransfer>> for FinTransferMessage {
         }
 
         Ok(FinTransferMessage {
-            nonce: near_sdk::json_types::U128(event.data.nonce),
+            transfer_id: crate::TransferId {
+                chain: event.data.origin_chain.try_into()?,
+                nonce: near_sdk::json_types::U128(event.data.nonce),
+            },
             amount: near_sdk::json_types::U128(event.data.amount),
             fee_recipient: event.data.feeRecipient.parse().map_err(stringify)?,
             emitter_address: OmniAddress::new_from_evm_address(
@@ -189,6 +193,7 @@ mod tests {
     fn test_decode_log_with_same_params_with_validation() {
         let event = FinTransfer {
             nonce: 55,
+            origin_chain: 1,
             amount: 100,
             tokenAddress: [0; 20].into(),
             recipient: [0; 20].into(),

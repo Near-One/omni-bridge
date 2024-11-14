@@ -9,7 +9,7 @@ use {
             DeployTokenMessage, FinTransferMessage, InitTransferMessage, LogMetadataMessage,
             ProofKind,
         },
-        stringify, Fee, OmniAddress, TransferMessage,
+        stringify, Fee, OmniAddress, TransferId, TransferMessage,
     },
 };
 
@@ -135,7 +135,7 @@ struct FinTransferWh {
     token_address: OmniAddress,
     amount: u128,
     recipient: String,
-    nonce: u128,
+    transfer_id: TransferId,
 }
 
 #[derive(Debug, BorshDeserialize)]
@@ -193,7 +193,7 @@ impl TryInto<FinTransferMessage> for ParsedVAA {
         }
 
         Ok(FinTransferMessage {
-            nonce: transfer.nonce.into(),
+            transfer_id: transfer.transfer_id,
             fee_recipient: transfer.recipient.parse().map_err(stringify)?,
             amount: transfer.amount.into(),
             emitter_address: OmniAddress::new_from_slice(

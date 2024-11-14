@@ -155,6 +155,20 @@ impl From<&OmniAddress> for ChainKind {
     }
 }
 
+impl TryFrom<u8> for ChainKind {
+    type Error = String;
+    fn try_from(input: u8) -> Result<Self, String> {
+        match input {
+            1 => Ok(ChainKind::Eth),
+            2 => Ok(ChainKind::Near),
+            3 => Ok(ChainKind::Sol),
+            4 => Ok(ChainKind::Arb),
+            5 => Ok(ChainKind::Base),
+            _ => Err(format!("{input:?} invalid chain kind")),
+        }
+    }
+}
+
 pub type EvmAddress = H160;
 
 pub const ZERO_ACCOUNT_ID: &str =
@@ -381,25 +395,6 @@ pub struct TransferId {
     pub nonce: Nonce,
 }
 
-#[derive(
-    BorshDeserialize,
-    BorshSerialize,
-    Serialize,
-    Deserialize,
-    Debug,
-    Clone,
-    PartialEq,
-    Eq,
-    Default,
-    Copy,
-)]
-pub struct PayloadId {
-    // The destination chain kind
-    pub chain: ChainKind,
-    // The payload nonce that maintained on NEAR
-    pub nonce: Nonce,
-}
-
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Debug, Clone)]
 pub struct TransferMessage {
     pub origin_nonce: U128,
@@ -438,20 +433,11 @@ pub enum PayloadType {
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Debug, Clone)]
 pub struct TransferMessagePayload {
     pub prefix: PayloadType,
-    pub nonce: U128,
+    pub transfer_id: TransferId,
     pub token_address: OmniAddress,
     pub amount: U128,
     pub recipient: OmniAddress,
     pub fee_recipient: Option<AccountId>,
-}
-
-impl TransferMessagePayload {
-    pub fn get_payload_id(&self) -> PayloadId {
-        PayloadId {
-            chain: self.recipient.get_chain(),
-            nonce: self.nonce,
-        }
-    }
 }
 
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Debug, Clone)]
