@@ -18,8 +18,6 @@ const SCHEMA = {
 };
 
 const UNPAUSED_ALL = 0
-const PAUSED_FINALISE_FROM_NEAR = 1 << 0
-const PAUSED_XFER_TO_NEAR = 1 << 1
 
 describe('eNear contract', () => {
   let deployer;

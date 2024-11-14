@@ -1,19 +1,9 @@
 const { expect } = require('chai');
 const { ethers, upgrades} = require('hardhat');
 
-const SCHEMA = {
-  'MigrateNearToEthereum': {
-    kind: 'struct', fields: [
-      ['flag', 'u8'],
-      ['amount', 'u128'],
-      ['recipient', [20]],
-    ]
-  }
-};
-
 const UNPAUSED_ALL = 0
-const PAUSED_FINALISE_FROM_NEAR = 1 << 0
-const PAUSED_XFER_TO_NEAR = 1 << 1
+const PAUSE_FINALISE_FROM_NEAR = 1 << 0;
+const PAUSE_TRANSFER_TO_NEAR = 1 << 1;
 
 describe('eNearProxy contract', () => {
   let deployer;
@@ -111,7 +101,15 @@ describe('eNearProxy contract', () => {
     })
 
     it('Pause All', async () => {
+      await eNear.connect(eNearAdmin).adminPause(PAUSE_TRANSFER_TO_NEAR | PAUSE_FINALISE_FROM_NEAR);
 
+      await eNearProxy.connect(deployer).grantRole(ethers.keccak256(ethers.toUtf8Bytes("MINTER_ROLE")), alice.address);
+      await expect(eNearProxy.connect(alice).mint(await eNear.getAddress(), alice.address, 100)).to.be.reverted;
+      expect(await eNear.balanceOf(alice.address)).to.equal(0);
+
+      await eNear.connect(eNearAdmin).adminSstoreWithMask(9, await eNearProxy.getAddress(), "0x000000000000000000000000ffffffffffffffffffffffffffffffffffffffff");
+      await eNearProxy.connect(alice).mint(await eNear.getAddress(), alice.address, 100);
+      expect(await eNear.balanceOf(alice.address)).to.equal(100);
     })
   })
 })
