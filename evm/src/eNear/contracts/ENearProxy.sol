@@ -4,11 +4,11 @@ pragma solidity 0.8.24;
 import "rainbow-bridge-sol/nearbridge/contracts/Utils.sol";
 import {AccessControlUpgradeable} from '@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol';
 import {UUPSUpgradeable} from '@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol';
-import {ENear} from './ENearABI.sol';
+import {IENear} from './IENear.sol';
 import {ICustomMinter} from '../../common/ICustomMinter.sol';
 
 contract ENearProxy is UUPSUpgradeable, AccessControlUpgradeable, ICustomMinter {
-    ENear public eNear;
+    IENear public eNear;
 
     bytes32 public constant MINTER_ROLE = keccak256("MINTER_ROLE");
     bytes public nearConnector;
@@ -22,7 +22,7 @@ contract ENearProxy is UUPSUpgradeable, AccessControlUpgradeable, ICustomMinter 
     function initialize(address _eNear, bytes memory _nearConnector, uint256 _current_receipt_id) public initializer {
         __UUPSUpgradeable_init();
         __AccessControl_init();
-        eNear = ENear(_eNear);
+        eNear = IENear(_eNear);
         nearConnector = _nearConnector;
         current_receipt_id = _current_receipt_id;
         _grantRole(DEFAULT_ADMIN_ROLE, _msgSender());
