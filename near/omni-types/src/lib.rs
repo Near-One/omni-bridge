@@ -159,11 +159,11 @@ impl TryFrom<u8> for ChainKind {
     type Error = String;
     fn try_from(input: u8) -> Result<Self, String> {
         match input {
-            1 => Ok(ChainKind::Eth),
-            2 => Ok(ChainKind::Near),
-            3 => Ok(ChainKind::Sol),
-            4 => Ok(ChainKind::Arb),
-            5 => Ok(ChainKind::Base),
+            0 => Ok(ChainKind::Eth),
+            1 => Ok(ChainKind::Near),
+            2 => Ok(ChainKind::Sol),
+            3 => Ok(ChainKind::Arb),
+            4 => Ok(ChainKind::Base),
             _ => Err(format!("{input:?} invalid chain kind")),
         }
     }
