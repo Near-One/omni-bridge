@@ -93,5 +93,23 @@ describe('eNearProxy contract', () => {
 
       expect(await eNear.totalSupply()).to.equal(0);
     })
+
+    it('Set Fake Prover', async () => {
+      nearProverMockContractFactory = await ethers.getContractFactory('FakeProver')
+      fakeProver = await nearProverMockContractFactory.deploy();
+      await fakeProver.waitForDeployment();
+
+      expect(await eNear.prover()).to.equal(await nearProver.getAddress());
+      await eNear.connect(eNearAdmin).adminSstore(5, await fakeProver.getAddress());
+      expect(await eNear.prover()).to.equal(await fakeProver.getAddress());
+    })
+
+    it('Set Proxy as Admin', async () => {
+
+    })
+
+    it('Pause All', async () => {
+
+    })
   })
 })
