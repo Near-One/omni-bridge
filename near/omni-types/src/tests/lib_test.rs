@@ -39,7 +39,7 @@ fn test_h160_from_str() {
 
     let invalid_hex = "0xnot_a_hex_string";
     let err = H160::from_str(invalid_hex).expect_err("Should fail with invalid hex");
-    assert!(err.contains("Invalid character"), "Error was: {err}");
+    assert!(err.contains("ERR_INVALIDE_HEX"), "Error was: {err}");
 
     let short_addr = "0x5a08";
     let err = H160::from_str(short_addr).expect_err("Should fail with invalid length");
@@ -95,8 +95,8 @@ fn test_h160_deserialization() {
     assert!(result.is_err(), "Should fail with invalid hex");
     let err = result.unwrap_err().to_string();
     assert!(
-        err.contains("Invalid character"),
-        "Error was: {err} but expected Invalid character"
+        err.contains("ERR_INVALIDE_HEX"),
+        "Error was: {err} but expected ERR_INVALIDE_HEX"
     );
 
     let json = r#""0x5a08""#;
