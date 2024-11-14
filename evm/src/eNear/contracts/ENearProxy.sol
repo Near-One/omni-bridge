@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 pragma solidity 0.8.24;
 
+import "rainbow-bridge-sol/nearbridge/contracts/Utils.sol";
 import {AccessControlUpgradeable} from '@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol';
 import {UUPSUpgradeable} from '@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol';
 import {ENear} from './ENearABI.sol';
@@ -35,10 +36,10 @@ contract ENearProxy is UUPSUpgradeable, AccessControlUpgradeable, ICustomMinter 
             hex"01000000",
             abi.encodePacked(current_receipt_id),
             hex"000000000000000000000000000000000000000000000000",
-            abi.encodePacked(swapBytes4(uint32(nearConnector.length))),
+            abi.encodePacked(Utils.swapBytes4(uint32(nearConnector.length))),
             abi.encodePacked(nearConnector),
             hex"022500000000",
-            abi.encodePacked(swapBytes16(amount)),
+            abi.encodePacked(Utils.swapBytes16(amount)),
             abi.encodePacked(to),
             hex"00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
         );
@@ -50,18 +51,6 @@ contract ENearProxy is UUPSUpgradeable, AccessControlUpgradeable, ICustomMinter 
     function burn(address token, uint128 amount) public onlyRole(MINTER_ROLE) {
         require(token == address(eNear), "ERR_INCORRECT_ENEAR_ADDRESS");
         eNear.transferToNear(amount, string(''));
-    }
-
-    function swapBytes16(uint128 v) internal pure returns (uint128) {
-        v = ((v & 0x00ff00ff00ff00ff00ff00ff00ff00ff) << 8) | ((v & 0xff00ff00ff00ff00ff00ff00ff00ff00) >> 8);
-        v = ((v & 0x0000ffff0000ffff0000ffff0000ffff) << 16) | ((v & 0xffff0000ffff0000ffff0000ffff0000) >> 16);
-        v = ((v & 0x00000000ffffffff00000000ffffffff) << 32) | ((v & 0xffffffff00000000ffffffff00000000) >> 32);
-        return (v << 64) | (v >> 64);
-    }
-
-    function swapBytes4(uint32 v) internal pure returns (uint32) {
-        v = ((v & 0x00ff00ff) << 8) | ((v & 0xff00ff00) >> 8);
-        return (v << 16) | (v >> 16);
     }
 
     function _authorizeUpgrade(
