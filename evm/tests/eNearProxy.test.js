@@ -100,12 +100,14 @@ describe('eNearProxy contract', () => {
       await fakeProver.waitForDeployment();
 
       expect(await eNear.prover()).to.equal(await nearProver.getAddress());
-      await eNear.connect(eNearAdmin).adminSstore(5, await fakeProver.getAddress());
+      await eNear.connect(eNearAdmin).adminSstoreWithMask(5, await fakeProver.getAddress(), "0x000000000000000000000000ffffffffffffffffffffffffffffffffffffffff");
       expect(await eNear.prover()).to.equal(await fakeProver.getAddress());
     })
 
     it('Set Proxy as Admin', async () => {
-
+      expect(await eNear.admin()).to.equal(await eNearAdmin.getAddress());
+      await eNear.connect(eNearAdmin).adminSstoreWithMask(9, await eNearProxy.getAddress(), "0x000000000000000000000000ffffffffffffffffffffffffffffffffffffffff");
+      expect(await eNear.admin()).to.equal(await eNearProxy.getAddress());
     })
 
     it('Pause All', async () => {
