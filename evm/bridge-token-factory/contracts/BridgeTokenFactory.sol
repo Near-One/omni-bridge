@@ -29,7 +29,6 @@ contract BridgeTokenFactory is
     uint8 public omniBridgeChainId;
 
     mapping(uint64 => bool) public completedTransfers;
-    mapping(uint64 => bool) public claimedFee;
     uint64 public currentOriginNonce; 
 
     bytes32 public constant PAUSABLE_ADMIN_ROLE = keccak256("PAUSABLE_ADMIN_ROLE");
@@ -243,39 +242,6 @@ contract BridgeTokenFactory is
         string calldata message,
         uint256 value
     ) internal virtual {}
-
-    function claimNativeFee(bytes calldata signatureData, BridgeTypes.ClaimFeePayload memory payload) external {
-        bytes memory borshEncodedNonces = abi.encodePacked(Borsh.encodeUint32(uint32(payload.nonces.length)));
-
-        for (uint i = 0; i < payload.nonces.length; ++i) {
-            uint64 nonce = payload.nonces[i];
-            if (claimedFee[nonce]) {
-                revert NonceAlreadyUsed(nonce);
-            }
-
-            claimedFee[nonce] = true;
-            borshEncodedNonces = bytes.concat(
-            bytes1(uint8(BridgeTypes.PayloadType.ClaimNativeFee)),
-                borshEncodedNonces,
-                Borsh.encodeUint64(nonce)
-            );
-        }        
-        
-        bytes memory borshEncoded = bytes.concat(
-            borshEncodedNonces,
-            Borsh.encodeUint128(payload.amount),
-            bytes1(omniBridgeChainId),
-            Borsh.encodeAddress(payload.recipient)
-        );
-        bytes32 hashed = keccak256(borshEncoded);
-
-        if (ECDSA.recover(hashed, signatureData) != nearBridgeDerivedAddress) {
-            revert InvalidSignature();
-        }
-
-        (bool success,) = payload.recipient.call{value: payload.amount}("");
-        require(success, "Failed to send Ether.");
-    }
 
     function pause(uint flags) external onlyRole(DEFAULT_ADMIN_ROLE) {
         _pause(flags);

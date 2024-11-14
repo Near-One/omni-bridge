@@ -356,12 +356,6 @@ pub struct FeeRecipient {
     pub native_fee_recipient: OmniAddress,
 }
 
-#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Debug, Clone)]
-pub struct NativeFee {
-    pub amount: U128,
-    pub recipient: OmniAddress,
-}
-
 #[derive(
     BorshDeserialize, BorshSerialize, Serialize, Deserialize, Debug, Clone, PartialEq, Default,
 )]
@@ -440,14 +434,6 @@ pub struct TransferMessagePayload {
     pub amount: U128,
     pub recipient: OmniAddress,
     pub fee_recipient: Option<AccountId>,
-}
-
-#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Debug, Clone)]
-pub struct ClaimNativeFeePayload {
-    pub prefix: PayloadType,
-    pub nonces: Vec<Nonce>,
-    pub amount: U128,
-    pub recipient: OmniAddress,
 }
 
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Debug, Clone)]

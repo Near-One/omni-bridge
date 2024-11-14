@@ -19,12 +19,6 @@ library BridgeTypes {
         uint8 decimals;
     }
 
-    struct ClaimFeePayload {
-        uint64[] nonces;
-        uint128 amount;
-        address recipient;
-    }
-
     event InitTransfer(
         address indexed sender,
         address indexed tokenAddress,
