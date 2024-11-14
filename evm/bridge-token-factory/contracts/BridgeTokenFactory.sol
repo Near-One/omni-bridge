@@ -7,6 +7,7 @@ import {UUPSUpgradeable} from "@openzeppelin/contracts-upgradeable/proxy/utils/U
 import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 
 import "./BridgeToken.sol";
 import "./SelectivePausableUpgradable.sol";
@@ -123,6 +124,30 @@ contract BridgeTokenFactory is
         );
     }
 
+    function logMetadata(
+        address tokenAddress
+    ) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        string memory name = IERC20Metadata(tokenAddress).name();
+        string memory symbol = IERC20Metadata(tokenAddress).symbol();
+        uint8 decimals = IERC20Metadata(tokenAddress).decimals();
+
+      logMetadataExtension(tokenAddress, name, symbol, decimals);
+       
+        emit BridgeTypes.LogMetadata(
+            tokenAddress,
+            name,
+            symbol,
+            decimals
+        );
+    }
+
+    function logMetadataExtension(
+        address tokenAddress,
+        string memory name,
+        string memory symbol,
+        uint8 decimals
+    ) internal virtual {}
+
     function finTransfer(
         bytes calldata signatureData, 
         BridgeTypes.FinTransferPayload calldata payload
@@ -183,12 +208,20 @@ contract BridgeTokenFactory is
             revert InvalidFee();
         }
 
-        uint256 extensionValue = msg.value - nativeFee;
+        uint256 extensionValue;
 
-        if (isBridgeToken[tokenAddress]) {
-            BridgeToken(tokenAddress).burn(msg.sender, amount);
+        if (tokenAddress == address(0)) {
+            if (fee != 0) {
+                revert InvalidFee();
+            }
+            extensionValue = msg.value - amount - nativeFee;
         } else {
-            IERC20(tokenAddress).safeTransferFrom(msg.sender, address(this), amount);
+            extensionValue = msg.value - nativeFee;
+            if (isBridgeToken[tokenAddress]) {
+                BridgeToken(tokenAddress).burn(msg.sender, amount);
+            } else {
+                IERC20(tokenAddress).safeTransferFrom(msg.sender, address(this), amount);
+            }
         }
 
         initTransferExtension(msg.sender, tokenAddress, initTransferNonce, amount, fee, nativeFee, recipient, message, extensionValue);

@@ -2,9 +2,7 @@ use near_sdk::borsh;
 use near_sdk::json_types::U128;
 use near_sdk::serde_json;
 
-use crate::{
-    stringify, ChainKind, Fee, NearRecipient, OmniAddress, PayloadType, TransferMessage, H160,
-};
+use crate::{stringify, ChainKind, Fee, OmniAddress, PayloadType, TransferMessage, H160};
 use std::str::FromStr;
 
 #[test]
@@ -41,7 +39,7 @@ fn test_h160_from_str() {
 
     let invalid_hex = "0xnot_a_hex_string";
     let err = H160::from_str(invalid_hex).expect_err("Should fail with invalid hex");
-    assert!(err.contains("Invalid character"), "Error was: {err}");
+    assert!(err.contains("ERR_INVALIDE_HEX"), "Error was: {err}");
 
     let short_addr = "0x5a08";
     let err = H160::from_str(short_addr).expect_err("Should fail with invalid length");
@@ -97,8 +95,8 @@ fn test_h160_deserialization() {
     assert!(result.is_err(), "Should fail with invalid hex");
     let err = result.unwrap_err().to_string();
     assert!(
-        err.contains("Invalid character"),
-        "Error was: {err} but expected Invalid character"
+        err.contains("ERR_INVALIDE_HEX"),
+        "Error was: {err} but expected ERR_INVALIDE_HEX"
     );
 
     let json = r#""0x5a08""#;
@@ -223,7 +221,7 @@ fn test_omni_address_from_str() {
         ),
         (
             "invalid_format".to_string(),
-            Err("Invalid OmniAddress format".to_string()),
+            Err("ERR_INVALIDE_HEX".to_string()),
             "Should fail on missing chain prefix",
         ),
         (
@@ -286,96 +284,6 @@ fn test_omni_address_visitor_expecting() {
     let result: Result<OmniAddress, _> = serde_json::from_value(serde_json::json!(invalid_value));
     let error = result.unwrap_err().to_string();
     assert_eq!(error, expected_error, "{}", message);
-}
-
-#[test]
-fn test_near_recipient_from_str() {
-    type TestFn = Box<dyn Fn(Result<NearRecipient, String>)>;
-
-    let test_cases: Vec<(&str, TestFn)> = vec![
-        (
-            "alice.near",
-            Box::new(|r| {
-                let message = "Should parse simple account without message";
-                let recipient = r.expect(message);
-                assert_eq!(recipient.target.to_string(), "alice.near", "{message}");
-                assert_eq!(recipient.message, None, "{message}");
-            }),
-        ),
-        (
-            "bob.near:Hello World",
-            Box::new(|r| {
-                let message = "Should parse account with message";
-                let recipient = r.expect(message);
-                assert_eq!(recipient.target.to_string(), "bob.near", "{message}");
-                assert_eq!(
-                    recipient.message,
-                    Some("Hello World".to_string()),
-                    "{message}"
-                );
-            }),
-        ),
-        (
-            "test.near:message:with:colons",
-            Box::new(|r| {
-                let message = "Should parse account with colons";
-                let recipient = r.expect(message);
-                assert_eq!(recipient.target.to_string(), "test.near", "{message}");
-                assert_eq!(
-                    recipient.message,
-                    Some("message:with:colons".to_string()),
-                    "{message}"
-                );
-            }),
-        ),
-    ];
-
-    for (input, validator) in test_cases {
-        let result = NearRecipient::from_str(input);
-        validator(result);
-    }
-}
-
-#[test]
-fn test_near_recipient_display() {
-    let test_cases = vec![
-        (
-            NearRecipient {
-                target: "alice.near".parse().unwrap(),
-                message: None,
-            },
-            "alice.near",
-            "Should format account without message",
-        ),
-        (
-            NearRecipient {
-                target: "bob.near".parse().unwrap(),
-                message: Some("Hello World".to_string()),
-            },
-            "bob.near:Hello World",
-            "Should format account with message",
-        ),
-        (
-            NearRecipient {
-                target: "test.near".parse().unwrap(),
-                message: Some("message:with:colons".to_string()),
-            },
-            "test.near:message:with:colons",
-            "Should format account with colon-containing message",
-        ),
-        (
-            NearRecipient {
-                target: "empty.near".parse().unwrap(),
-                message: Some("".to_string()),
-            },
-            "empty.near:",
-            "Should format account with empty message",
-        ),
-    ];
-
-    for (recipient, expected, message) in test_cases {
-        assert_eq!(recipient.to_string(), expected, "{}", message);
-    }
 }
 
 #[test]

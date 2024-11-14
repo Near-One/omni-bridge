@@ -5,7 +5,10 @@ use {
     borsh::BorshDeserialize,
     near_sdk::env,
     omni_types::{
-        prover_result::{DeployTokenMessage, FinTransferMessage, InitTransferMessage, ProofKind},
+        prover_result::{
+            DeployTokenMessage, FinTransferMessage, InitTransferMessage, LogMetadataMessage,
+            ProofKind,
+        },
         stringify, Fee, OmniAddress, TransferMessage,
     },
 };
@@ -118,6 +121,15 @@ struct DeployTokenWh {
 }
 
 #[derive(Debug, BorshDeserialize)]
+struct LogMetadataWh {
+    payload_type: ProofKind,
+    token_address: OmniAddress,
+    name: String,
+    symbol: String,
+    decimals: u8,
+}
+
+#[derive(Debug, BorshDeserialize)]
 struct FinTransferWh {
     payload_type: ProofKind,
     token_address: OmniAddress,
@@ -196,19 +208,40 @@ impl TryInto<DeployTokenMessage> for ParsedVAA {
     type Error = String;
 
     fn try_into(self) -> Result<DeployTokenMessage, String> {
-        let transfer: DeployTokenWh = borsh::from_slice(&self.payload).map_err(stringify)?;
+        let parsed_payload: DeployTokenWh = borsh::from_slice(&self.payload).map_err(stringify)?;
 
-        if transfer.payload_type != ProofKind::DeployToken {
+        if parsed_payload.payload_type != ProofKind::DeployToken {
             return Err("Invalid proof kind".to_owned());
         }
 
         Ok(DeployTokenMessage {
-            token: transfer.token.parse().map_err(stringify)?,
-            token_address: transfer.token_address.clone(),
+            token: parsed_payload.token.parse().map_err(stringify)?,
+            token_address: parsed_payload.token_address.clone(),
             emitter_address: OmniAddress::new_from_slice(
-                transfer.token_address.get_chain(),
+                parsed_payload.token_address.get_chain(),
                 &self.emitter_address,
             )?,
+        })
+    }
+}
+
+impl TryInto<LogMetadataMessage> for ParsedVAA {
+    type Error = String;
+
+    fn try_into(self) -> Result<LogMetadataMessage, String> {
+        let parsed_payload: LogMetadataWh = borsh::from_slice(&self.payload).map_err(stringify)?;
+
+        if parsed_payload.payload_type != ProofKind::LogMetadata {
+            return Err("Invalid proof kind".to_owned());
+        }
+
+        let chain_kind = parsed_payload.token_address.get_chain();
+        Ok(LogMetadataMessage {
+            token_address: parsed_payload.token_address,
+            name: parsed_payload.name,
+            symbol: parsed_payload.symbol,
+            decimals: parsed_payload.decimals,
+            emitter_address: OmniAddress::new_from_slice(chain_kind, &self.emitter_address)?,
         })
     }
 }

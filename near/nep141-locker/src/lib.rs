@@ -1,3 +1,4 @@
+#![allow(clippy::too_many_arguments)]
 use errors::SdkExpect;
 use near_plugins::{
     access_control, access_control_any, pause, AccessControlRole, AccessControllable, Pausable,
@@ -8,22 +9,24 @@ use near_contract_standards::fungible_token::metadata::FungibleTokenMetadata;
 use near_contract_standards::fungible_token::receiver::FungibleTokenReceiver;
 use near_contract_standards::storage_management::StorageBalance;
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
-use near_sdk::collections::LookupMap;
-use near_sdk::json_types::U128;
+use near_sdk::collections::{LookupMap, LookupSet};
+use near_sdk::json_types::{Base64VecU8, U128};
 use near_sdk::serde::{Deserialize, Serialize};
 use near_sdk::{
     env, ext_contract, near, require, serde_json, AccountId, BorshStorageKey, Gas, NearToken,
     PanicOnDefault, Promise, PromiseError, PromiseOrValue, PromiseResult,
 };
-use omni_types::locker_args::{BindTokenArgs, ClaimFeeArgs, FinTransferArgs, StorageDepositArgs};
+use omni_types::locker_args::{
+    BindTokenArgs, ClaimFeeArgs, DeployTokenArgs, FinTransferArgs, StorageDepositArgs,
+};
 use omni_types::mpc_types::SignatureResponse;
 use omni_types::near_events::Nep141LockerEvent;
 use omni_types::prover_args::VerifyProofArgs;
 use omni_types::prover_result::ProverResult;
 use omni_types::{
-    ChainKind, ClaimNativeFeePayload, Fee, InitTransferMsg, MetadataPayload, NativeFee, Nonce,
-    OmniAddress, PayloadType, SignRequest, TransferId, TransferMessage, TransferMessagePayload,
-    UpdateFee,
+    BasicMetadata, ChainKind, ClaimNativeFeePayload, Fee, InitTransferMsg, MetadataPayload,
+    NativeFee, Nonce, OmniAddress, PayloadType, SignRequest, TransferId, TransferMessage,
+    TransferMessagePayload, UpdateFee,
 };
 use storage::{TransferMessageStorage, TransferMessageStorageValue};
 
@@ -39,19 +42,25 @@ const MPC_SIGNING_GAS: Gas = Gas::from_tgas(250);
 const SIGN_TRANSFER_CALLBACK_GAS: Gas = Gas::from_tgas(5);
 const SIGN_LOG_METADATA_CALLBACK_GAS: Gas = Gas::from_tgas(5);
 const SIGN_CLAIM_NATIVE_FEE_CALLBACK_GAS: Gas = Gas::from_tgas(5);
-const VERIFY_PROOF_GAS: Gas = Gas::from_tgas(50);
+const VERIFY_PROOF_GAS: Gas = Gas::from_tgas(30);
+const VERIFY_PROOF_CALLBACK_GAS: Gas = Gas::from_tgas(150);
 const CLAIM_FEE_CALLBACK_GAS: Gas = Gas::from_tgas(50);
 const BIND_TOKEN_CALLBACK_GAS: Gas = Gas::from_tgas(25);
 const BIND_TOKEN_REFUND_GAS: Gas = Gas::from_tgas(5);
-const FT_TRANSFER_CALL_GAS: Gas = Gas::from_tgas(50);
+const FT_TRANSFER_CALL_GAS: Gas = Gas::from_tgas(125);
 const FT_TRANSFER_GAS: Gas = Gas::from_tgas(5);
 const WNEAR_WITHDRAW_GAS: Gas = Gas::from_tgas(10);
 const STORAGE_BALANCE_OF_GAS: Gas = Gas::from_tgas(3);
 const STORAGE_DEPOSIT_GAS: Gas = Gas::from_tgas(3);
+const DEPLOY_TOKEN_CALLBACK_GAS: Gas = Gas::from_tgas(75);
+const DEPLOY_TOKEN_GAS: Gas = Gas::from_tgas(50);
+const BURN_TOKEN_GAS: Gas = Gas::from_tgas(10);
+const MINT_TOKEN_GAS: Gas = Gas::from_tgas(5);
+const SET_METADATA_GAS: Gas = Gas::from_tgas(10);
 const NO_DEPOSIT: NearToken = NearToken::from_near(0);
 const ONE_YOCTO: NearToken = NearToken::from_yoctonear(1);
 const NEP141_DEPOSIT: NearToken = NearToken::from_yoctonear(1_250_000_000_000_000_000_000);
-
+const BRIDGE_TOKEN_INIT_BALANCE: NearToken = NearToken::from_near(3);
 const SIGN_PATH: &str = "bridge-1";
 
 #[derive(BorshSerialize, BorshStorageKey)]
@@ -62,6 +71,8 @@ enum StorageKey {
     TokenIdToAddress,
     AccountsBalances,
     TokenAddressToId,
+    TokenDeployerAccounts,
+    DeployedTokens,
 }
 
 #[derive(AccessControlRole, Deserialize, Serialize, Copy, Clone)]
@@ -72,6 +83,7 @@ pub enum Role {
     UnrestrictedDeposit,
     UpgradableCodeStager,
     UpgradableCodeDeployer,
+    MetadataManager,
 }
 
 #[ext_contract(ext_token)]
@@ -100,6 +112,20 @@ pub trait ExtToken {
     ) -> Option<StorageBalance>;
 
     fn storage_balance_of(&mut self, account_id: Option<AccountId>) -> Option<StorageBalance>;
+
+    fn mint(&mut self, account_id: AccountId, amount: U128, msg: Option<String>);
+
+    fn burn(&mut self, amount: U128);
+
+    fn set_metadata(
+        &mut self,
+        name: Option<String>,
+        symbol: Option<String>,
+        reference: Option<String>,
+        reference_hash: Option<Base64VecU8>,
+        decimals: Option<u8>,
+        icon: Option<String>,
+    );
 }
 
 #[ext_contract(ext_signer)]
@@ -116,6 +142,11 @@ pub trait Prover {
 #[ext_contract(ext_wnear_token)]
 pub trait ExtWNearToken {
     fn near_withdraw(&self, amount: U128);
+}
+
+#[ext_contract(ext_deployer)]
+pub trait TokenDeployer {
+    fn deploy_token(&self, account_id: AccountId, metadata: BasicMetadata) -> Promise;
 }
 
 #[near(contract_state)]
@@ -136,6 +167,8 @@ pub struct Contract {
     pub finalised_transfers: LookupMap<TransferId, Option<NativeFee>>,
     pub token_id_to_address: LookupMap<(ChainKind, AccountId), OmniAddress>,
     pub token_address_to_id: LookupMap<OmniAddress, AccountId>,
+    pub deployed_tokens: LookupSet<AccountId>,
+    pub token_deployer_accounts: LookupMap<ChainKind, AccountId>,
     pub mpc_signer: AccountId,
     pub current_nonce: Nonce,
     pub accounts_balances: LookupMap<AccountId, StorageBalance>,
@@ -152,11 +185,12 @@ impl FungibleTokenReceiver for Contract {
         msg: String,
     ) -> PromiseOrValue<U128> {
         let parsed_msg: InitTransferMsg = serde_json::from_str(&msg).sdk_expect("ERR_PARSE_MSG");
+        let token_id = env::predecessor_account_id();
 
         self.current_nonce += 1;
         let transfer_message = TransferMessage {
             origin_nonce: U128(self.current_nonce),
-            token: OmniAddress::Near(env::predecessor_account_id()),
+            token: OmniAddress::Near(token_id.clone()),
             amount,
             recipient: parsed_msg.recipient,
             fee: Fee {
@@ -185,6 +219,12 @@ impl FungibleTokenReceiver for Contract {
             NearToken::from_yoctonear(0),
         );
 
+        if self.deployed_tokens.contains(&token_id) {
+            ext_token::ext(token_id.clone())
+                .with_static_gas(BURN_TOKEN_GAS)
+                .burn(amount);
+        }
+
         env::log_str(&Nep141LockerEvent::InitTransferEvent { transfer_message }.to_log_string());
         PromiseOrValue::Value(U128(0))
     }
@@ -206,6 +246,8 @@ impl Contract {
             finalised_transfers: LookupMap::new(StorageKey::FinalisedTransfers),
             token_id_to_address: LookupMap::new(StorageKey::TokenIdToAddress),
             token_address_to_id: LookupMap::new(StorageKey::TokenAddressToId),
+            deployed_tokens: LookupSet::new(StorageKey::DeployedTokens),
+            token_deployer_accounts: LookupMap::new(StorageKey::TokenDeployerAccounts),
             mpc_signer,
             current_nonce: nonce.0,
             accounts_balances: LookupMap::new(StorageKey::AccountsBalances),
@@ -213,7 +255,7 @@ impl Contract {
         };
 
         contract.acl_init_super_admin(near_sdk::env::predecessor_account_id());
-        contract.acl_grant_role("DAO".to_owned(), near_sdk::env::predecessor_account_id());
+        contract.acl_grant_role(Role::DAO.into(), near_sdk::env::predecessor_account_id());
         contract
     }
 
@@ -476,7 +518,7 @@ impl Contract {
         .then(
             Self::ext(env::current_account_id())
                 .with_attached_deposit(attached_deposit)
-                .with_static_gas(CLAIM_FEE_CALLBACK_GAS)
+                .with_static_gas(VERIFY_PROOF_CALLBACK_GAS)
                 .fin_transfer_callback(
                     &args.storage_deposit_args,
                     env::predecessor_account_id(),
@@ -485,8 +527,6 @@ impl Contract {
         )
     }
 
-    // TODO: try to split this function
-    #[allow(clippy::too_many_lines)]
     #[private]
     #[payable]
     pub fn fin_transfer_callback(
@@ -506,131 +546,20 @@ impl Contract {
         );
 
         let transfer_message = init_transfer.transfer;
-        let mut required_balance;
 
-        if let OmniAddress::Near(recipient) = &transfer_message.recipient {
-            let native_fee = if transfer_message.fee.native_fee.0 != 0 {
-                let recipient = native_fee_recipient.sdk_expect("ERR_FEE_RECIPIENT_NOT_SET");
-                require!(
-                    transfer_message.get_origin_chain() == recipient.get_chain(),
-                    "ERR_WRONG_FEE_RECIPIENT_CHAIN"
-                );
-                Some(NativeFee {
-                    amount: transfer_message.fee.native_fee,
-                    recipient,
-                })
-            } else {
-                None
-            };
-
-            required_balance =
-                self.add_fin_transfer(&transfer_message.get_transfer_id(), &native_fee);
-
-            let token = self.get_token_id(&transfer_message.token);
-            require!(
-                token == storage_deposit_args.token,
-                "STORAGE_ERR: Invalid token"
-            );
-            require!(
-                Self::check_storage_balance_result(1)
-                    && &storage_deposit_args.accounts[0].0 == recipient,
-                "STORAGE_ERR: The transfer recipient is omitted"
-            );
-
-            let amount_to_transfer = U128(transfer_message.amount.0 - transfer_message.fee.fee.0);
-
-            let mut promise = if token == self.wnear_account_id && transfer_message.msg.is_empty() {
-                ext_wnear_token::ext(self.wnear_account_id.clone())
-                    .with_static_gas(WNEAR_WITHDRAW_GAS)
-                    .with_attached_deposit(ONE_YOCTO)
-                    .near_withdraw(amount_to_transfer)
-                    .then(
-                        Promise::new(recipient.clone())
-                            .transfer(NearToken::from_yoctonear(amount_to_transfer.0)),
-                    )
-            } else {
-                let transfer = ext_token::ext(token.clone()).with_attached_deposit(ONE_YOCTO);
-                if transfer_message.msg.is_empty() {
-                    transfer.with_static_gas(FT_TRANSFER_GAS).ft_transfer(
-                        recipient.clone(),
-                        amount_to_transfer,
-                        None,
-                    )
-                } else {
-                    transfer
-                        .with_static_gas(FT_TRANSFER_CALL_GAS)
-                        .ft_transfer_call(
-                            recipient.clone(),
-                            amount_to_transfer,
-                            None,
-                            transfer_message.msg.clone(),
-                        )
-                }
-            };
-
-            if transfer_message.fee.fee.0 > 0 {
-                require!(
-                    Self::check_storage_balance_result(2)
-                        && storage_deposit_args.accounts[1].0 == predecessor_account_id,
-                    "STORAGE_ERR: The fee recipient is omitted"
-                );
-                promise = promise.then(
-                    ext_token::ext(token)
-                        .with_static_gas(FT_TRANSFER_GAS)
-                        .with_attached_deposit(ONE_YOCTO)
-                        .ft_transfer(
-                            predecessor_account_id.clone(),
-                            transfer_message.fee.fee,
-                            None,
-                        ),
-                );
-
-                required_balance = required_balance.saturating_add(NearToken::from_yoctonear(2));
-            } else {
-                required_balance = required_balance.saturating_add(ONE_YOCTO);
-            }
-
-            self.update_storage_balance(
+        if let OmniAddress::Near(recipient) = transfer_message.recipient.clone() {
+            self.process_fin_transfer_to_near(
+                recipient,
                 predecessor_account_id,
-                required_balance,
-                env::attached_deposit(),
-            );
-
-            env::log_str(
-                &Nep141LockerEvent::FinTransferEvent {
-                    nonce: None,
-                    transfer_message,
-                }
-                .to_log_string(),
-            );
-
-            promise.into()
+                transfer_message,
+                storage_deposit_args,
+                native_fee_recipient,
+            )
+            .into()
         } else {
-            required_balance = self.add_fin_transfer(&transfer_message.get_transfer_id(), &None);
-            self.current_nonce += 1;
-            required_balance = self
-                .add_transfer_message(
-                    self.current_nonce,
-                    transfer_message.clone(),
-                    predecessor_account_id.clone(),
-                )
-                .saturating_add(required_balance);
-
-            self.update_storage_balance(
-                predecessor_account_id,
-                required_balance,
-                env::attached_deposit(),
-            );
-
-            env::log_str(
-                &Nep141LockerEvent::FinTransferEvent {
-                    nonce: Some(U128(self.current_nonce)),
-                    transfer_message,
-                }
-                .to_log_string(),
-            );
-
-            PromiseOrValue::Value(U128(self.current_nonce))
+            let nonce =
+                self.process_fin_transfer_to_other_cahin(predecessor_account_id, transfer_message);
+            PromiseOrValue::Value(nonce)
         }
     }
 
@@ -726,6 +655,114 @@ impl Contract {
         } else {
             PromiseOrValue::Value(())
         }
+    }
+
+    #[payable]
+    pub fn deploy_token(&mut self, #[serializer(borsh)] args: DeployTokenArgs) -> Promise {
+        ext_prover::ext(self.prover_account.clone())
+            .with_static_gas(VERIFY_PROOF_GAS)
+            .with_attached_deposit(NO_DEPOSIT)
+            .verify_proof(VerifyProofArgs {
+                prover_id: args.chain_kind.as_ref().to_owned(),
+                prover_args: args.prover_args,
+            })
+            .then(
+                Self::ext(env::current_account_id())
+                    .with_attached_deposit(NO_DEPOSIT)
+                    .with_static_gas(DEPLOY_TOKEN_CALLBACK_GAS)
+                    .deploy_token_callback(near_sdk::env::attached_deposit()),
+            )
+    }
+
+    #[private]
+    pub fn deploy_token_callback(
+        &mut self,
+        attached_deposit: NearToken,
+        #[callback_result]
+        #[serializer(borsh)]
+        call_result: Result<ProverResult, PromiseError>,
+    ) -> Promise {
+        let Ok(ProverResult::LogMetadata(metadata)) = call_result else {
+            env::panic_str("ERR_INVALID_PROOF");
+        };
+
+        let chain = metadata.emitter_address.get_chain();
+        require!(
+            self.factories.get(&chain) == Some(metadata.emitter_address),
+            "ERR_UNKNOWN_FACTORY"
+        );
+
+        self.deploy_token_internal(
+            chain,
+            &metadata.token_address,
+            BasicMetadata {
+                name: metadata.name,
+                symbol: metadata.symbol,
+                decimals: metadata.decimals,
+            },
+            attached_deposit,
+        )
+    }
+
+    #[payable]
+    #[access_control_any(roles(Role::DAO))]
+    pub fn deploy_native_token(
+        &mut self,
+        chain_kind: ChainKind,
+        metadata: BasicMetadata,
+    ) -> Promise {
+        self.deploy_token_internal(
+            chain_kind,
+            &OmniAddress::new_zero(chain_kind)
+                .unwrap_or_else(|_| env::panic_str("ERR_FAILED_TO_GET_ZERO_ADDRESS")),
+            metadata,
+            env::attached_deposit(),
+        )
+    }
+
+    fn deploy_token_internal(
+        &mut self,
+        chain_kind: ChainKind,
+        token_address: &OmniAddress,
+        metadata: BasicMetadata,
+        attached_deposit: NearToken,
+    ) -> Promise {
+        let deployer = self
+            .token_deployer_accounts
+            .get(&chain_kind)
+            .unwrap_or_else(|| env::panic_str("ERR_DEPLOYER_NOT_SET"));
+        let prefix = token_address.get_token_prefix();
+        let token_id: AccountId = format!("{prefix}.{deployer}")
+            .parse()
+            .unwrap_or_else(|_| env::panic_str("ERR_PARSE_ACCOUNT"));
+
+        let storage_usage = env::storage_usage();
+        require!(
+            self.token_id_to_address
+                .insert(&(chain_kind, token_id.clone()), token_address)
+                .is_none(),
+            "ERR_TOKEN_EXIST"
+        );
+        require!(
+            self.token_address_to_id
+                .insert(token_address, &token_id)
+                .is_none(),
+            "ERR_TOKEN_EXIST"
+        );
+        require!(self.deployed_tokens.insert(&token_id), "ERR_TOKEN_EXIST");
+        let required_deposit = env::storage_byte_cost()
+            .saturating_mul((env::storage_usage().saturating_sub(storage_usage)).into())
+            .saturating_add(BRIDGE_TOKEN_INIT_BALANCE);
+
+        require!(
+            attached_deposit >= required_deposit,
+            "ERROR: The deposit is not sufficient to cover the storage."
+        );
+
+        ext_deployer::ext(deployer)
+            .with_static_gas(DEPLOY_TOKEN_GAS)
+            .with_attached_deposit(BRIDGE_TOKEN_INIT_BALANCE)
+            .deploy_token(token_id, metadata)
     }
 
     #[payable]
@@ -832,9 +869,197 @@ impl Contract {
     pub fn add_factory(&mut self, address: OmniAddress) {
         self.factories.insert(&(&address).into(), &address);
     }
+
+    #[access_control_any(roles(Role::DAO))]
+    pub fn add_token_deployer(&mut self, chain: ChainKind, account_id: AccountId) {
+        self.token_deployer_accounts.insert(&chain, &account_id);
+    }
+
+    #[access_control_any(roles(Role::DAO))]
+    pub fn add_deployed_tokens(&mut self, tokens: Vec<(OmniAddress, AccountId)>) {
+        for (token_address, token_id) in tokens {
+            self.deployed_tokens.insert(&token_id);
+            self.token_address_to_id.insert(&token_address, &token_id);
+            self.token_id_to_address.insert(
+                &(token_address.get_chain(), token_id.clone()),
+                &token_address,
+            );
+        }
+    }
+
+    #[access_control_any(roles(Role::DAO, Role::MetadataManager))]
+    pub fn set_token_metadata(
+        &mut self,
+        token: AccountId,
+        name: Option<String>,
+        symbol: Option<String>,
+        decimals: Option<u8>,
+        icon: Option<String>,
+        reference: Option<String>,
+        reference_hash: Option<Base64VecU8>,
+    ) -> Promise {
+        ext_token::ext(token)
+            .with_static_gas(SET_METADATA_GAS)
+            .set_metadata(name, symbol, reference, reference_hash, decimals, icon)
+    }
 }
 
 impl Contract {
+    #[allow(clippy::too_many_lines)]
+    fn process_fin_transfer_to_near(
+        &mut self,
+        recipient: AccountId,
+        predecessor_account_id: AccountId,
+        transfer_message: TransferMessage,
+        storage_deposit_args: &StorageDepositArgs,
+        native_fee_recipient: Option<OmniAddress>,
+    ) -> Promise {
+        let native_fee = if transfer_message.fee.native_fee.0 != 0 {
+            let recipient = native_fee_recipient.sdk_expect("ERR_FEE_RECIPIENT_NOT_SET");
+            require!(
+                transfer_message.get_origin_chain() == recipient.get_chain(),
+                "ERR_WRONG_FEE_RECIPIENT_CHAIN"
+            );
+            Some(NativeFee {
+                amount: transfer_message.fee.native_fee,
+                recipient,
+            })
+        } else {
+            None
+        };
+
+        let mut required_balance =
+            self.add_fin_transfer(&transfer_message.get_transfer_id(), &native_fee);
+
+        let token = self.get_token_id(&transfer_message.token);
+        require!(
+            token == storage_deposit_args.token,
+            "STORAGE_ERR: Invalid token"
+        );
+        require!(
+            Self::check_storage_balance_result(1)
+                && storage_deposit_args.accounts[0].0 == recipient,
+            "STORAGE_ERR: The transfer recipient is omitted"
+        );
+
+        let amount_to_transfer = U128(transfer_message.amount.0 - transfer_message.fee.fee.0);
+        let is_deployed_token = self.deployed_tokens.contains(&token);
+
+        let mut promise = if token == self.wnear_account_id && transfer_message.msg.is_empty() {
+            // Unwrap wNEAR and transfer NEAR tokens
+            ext_wnear_token::ext(self.wnear_account_id.clone())
+                .with_static_gas(WNEAR_WITHDRAW_GAS)
+                .with_attached_deposit(ONE_YOCTO)
+                .near_withdraw(amount_to_transfer)
+                .then(
+                    Promise::new(recipient)
+                        .transfer(NearToken::from_yoctonear(amount_to_transfer.0)),
+                )
+        } else {
+            let transfer_promise = ext_token::ext(token.clone()).with_attached_deposit(ONE_YOCTO);
+            if is_deployed_token {
+                transfer_promise
+                    .with_static_gas(MINT_TOKEN_GAS.saturating_add(FT_TRANSFER_CALL_GAS))
+                    .mint(
+                        recipient,
+                        amount_to_transfer,
+                        (!transfer_message.msg.is_empty()).then(|| transfer_message.msg.clone()),
+                    )
+            } else if transfer_message.msg.is_empty() {
+                transfer_promise
+                    .with_static_gas(FT_TRANSFER_GAS)
+                    .ft_transfer(recipient, amount_to_transfer, None)
+            } else {
+                transfer_promise
+                    .with_static_gas(FT_TRANSFER_CALL_GAS)
+                    .ft_transfer_call(
+                        recipient,
+                        amount_to_transfer,
+                        None,
+                        transfer_message.msg.clone(),
+                    )
+            }
+        };
+
+        if transfer_message.fee.fee.0 > 0 {
+            require!(
+                Self::check_storage_balance_result(2)
+                    && storage_deposit_args.accounts[1].0 == predecessor_account_id,
+                "STORAGE_ERR: The fee recipient is omitted"
+            );
+
+            let transfer_fee_promise = ext_token::ext(token).with_attached_deposit(ONE_YOCTO);
+            promise = promise.then(if is_deployed_token {
+                transfer_fee_promise.with_static_gas(MINT_TOKEN_GAS).mint(
+                    predecessor_account_id.clone(),
+                    transfer_message.fee.fee,
+                    None,
+                )
+            } else {
+                transfer_fee_promise
+                    .with_static_gas(FT_TRANSFER_GAS)
+                    .ft_transfer(
+                        predecessor_account_id.clone(),
+                        transfer_message.fee.fee,
+                        None,
+                    )
+            });
+
+            required_balance = required_balance.saturating_add(NearToken::from_yoctonear(2));
+        } else {
+            required_balance = required_balance.saturating_add(ONE_YOCTO);
+        }
+
+        self.update_storage_balance(
+            predecessor_account_id,
+            required_balance,
+            env::attached_deposit(),
+        );
+
+        env::log_str(
+            &Nep141LockerEvent::FinTransferEvent {
+                nonce: None,
+                transfer_message,
+            }
+            .to_log_string(),
+        );
+
+        promise
+    }
+
+    fn process_fin_transfer_to_other_cahin(
+        &mut self,
+        predecessor_account_id: AccountId,
+        transfer_message: TransferMessage,
+    ) -> U128 {
+        let mut required_balance =
+            self.add_fin_transfer(&transfer_message.get_transfer_id(), &None);
+        self.current_nonce += 1;
+        required_balance = self
+            .add_transfer_message(
+                self.current_nonce,
+                transfer_message.clone(),
+                predecessor_account_id.clone(),
+            )
+            .saturating_add(required_balance);
+
+        self.update_storage_balance(
+            predecessor_account_id,
+            required_balance,
+            env::attached_deposit(),
+        );
+
+        env::log_str(
+            &Nep141LockerEvent::FinTransferEvent {
+                nonce: Some(U128(self.current_nonce)),
+                transfer_message,
+            }
+            .to_log_string(),
+        );
+
+        U128(self.current_nonce)
+    }
+
     fn get_token_id(&self, address: &OmniAddress) -> AccountId {
         if let OmniAddress::Near(token_account_id) = address {
             token_account_id.clone()

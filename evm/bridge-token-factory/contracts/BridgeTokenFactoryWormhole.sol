@@ -16,7 +16,8 @@ interface IWormhole {
 enum MessageType {
     InitTransfer,
     FinTransfer,
-    DeployToken
+    DeployToken,
+    LogMetadata
 }
 
 contract BridgeTokenFactoryWormhole is BridgeTokenFactory {
@@ -44,6 +45,31 @@ contract BridgeTokenFactoryWormhole is BridgeTokenFactory {
             bytes1(omniBridgeChainId),
             Borsh.encodeAddress(tokenAddress)
         );
+        _wormhole.publishMessage{value: msg.value}(
+            wormholeNonce,
+            payload,
+            _consistencyLevel
+        );
+
+        wormholeNonce++;
+    }
+
+
+    function logMetadataExtension(
+        address tokenAddress,
+        string memory name,
+        string memory symbol,
+        uint8 decimals
+    ) internal override {
+        bytes memory payload = bytes.concat(
+            bytes1(uint8(MessageType.LogMetadata)),
+            bytes1(omniBridgeChainId),
+            Borsh.encodeAddress(tokenAddress),
+            Borsh.encodeString(name),
+            Borsh.encodeString(symbol),
+            bytes1(decimals)
+        );
+
         _wormhole.publishMessage{value: msg.value}(
             wormholeNonce,
             payload,

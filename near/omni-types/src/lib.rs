@@ -31,7 +31,7 @@ impl FromStr for H160 {
         } else {
             s
         };
-        let result = Vec::from_hex(s).map_err(|err| err.to_string())?;
+        let result = Vec::from_hex(s).map_err(|_| "ERR_INVALIDE_HEX")?;
         Ok(H160(
             result
                 .try_into()
@@ -47,6 +47,12 @@ impl fmt::Display for H160 {
 }
 
 impl H160 {
+    pub const ZERO: Self = Self([0u8; 20]);
+
+    pub fn is_zero(&self) -> bool {
+        *self == Self::ZERO
+    }
+
     pub fn to_eip_55_checksum(&self) -> String {
         let hex_addr = hex::encode(self.0);
 
@@ -149,6 +155,9 @@ impl From<&OmniAddress> for ChainKind {
 
 pub type EvmAddress = H160;
 
+pub const ZERO_ACCOUNT_ID: &str =
+    "0000000000000000000000000000000000000000000000000000000000000000";
+
 #[derive(BorshDeserialize, BorshSerialize, Debug, Clone, PartialEq, Eq)]
 pub enum OmniAddress {
     Eth(EvmAddress),
@@ -159,6 +168,19 @@ pub enum OmniAddress {
 }
 
 impl OmniAddress {
+    #[allow(clippy::missing_panics_doc)]
+    pub fn new_zero(chain_kind: ChainKind) -> Result<Self, String> {
+        match chain_kind {
+            ChainKind::Eth => Ok(OmniAddress::Eth(H160::ZERO)),
+            ChainKind::Near => Ok(OmniAddress::Near(
+                ZERO_ACCOUNT_ID.parse().map_err(stringify)?,
+            )),
+            ChainKind::Sol => Ok(OmniAddress::Sol(SolAddress::ZERO)),
+            ChainKind::Arb => Ok(OmniAddress::Arb(H160::ZERO)),
+            ChainKind::Base => Ok(OmniAddress::Base(H160::ZERO)),
+        }
+    }
+
     pub fn new_from_evm_address(
         chain_kind: ChainKind,
         address: EvmAddress,
@@ -191,6 +213,36 @@ impl OmniAddress {
         }
     }
 
+    pub fn encode(&self, separator: char, skip_zero_address: bool) -> String {
+        let (chain_str, address) = match self {
+            OmniAddress::Eth(address) => ("eth", address.to_string()),
+            OmniAddress::Near(address) => ("near", address.to_string()),
+            OmniAddress::Sol(address) => ("sol", address.to_string()),
+            OmniAddress::Arb(address) => ("arb", address.to_string()),
+            OmniAddress::Base(address) => ("base", address.to_string()),
+        };
+
+        if skip_zero_address && self.is_zero() {
+            chain_str.to_string()
+        } else {
+            format!("{chain_str}{separator}{address}")
+        }
+    }
+
+    pub fn is_zero(&self) -> bool {
+        match self {
+            OmniAddress::Eth(address) | OmniAddress::Arb(address) | OmniAddress::Base(address) => {
+                address.is_zero()
+            }
+            OmniAddress::Near(address) => *address == ZERO_ACCOUNT_ID,
+            OmniAddress::Sol(address) => address.is_zero(),
+        }
+    }
+
+    pub fn get_token_prefix(&self) -> String {
+        self.encode('-', true)
+    }
+
     fn to_evm_address(address: &[u8]) -> Result<EvmAddress, String> {
         let address = if address.len() == 32 {
             &address[address.len() - 20..]
@@ -221,7 +273,7 @@ impl FromStr for OmniAddress {
     type Err = String;
 
     fn from_str(input: &str) -> Result<OmniAddress, Self::Err> {
-        let (chain, recipient) = input.split_once(':').ok_or("Invalid OmniAddress format")?;
+        let (chain, recipient) = input.split_once(':').unwrap_or(("eth", input));
 
         match chain {
             "eth" => Ok(OmniAddress::Eth(recipient.parse().map_err(stringify)?)),
@@ -236,14 +288,7 @@ impl FromStr for OmniAddress {
 
 impl fmt::Display for OmniAddress {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let (chain_str, recipient) = match self {
-            OmniAddress::Eth(recipient) => ("eth", recipient.to_string()),
-            OmniAddress::Near(recipient) => ("near", recipient.to_string()),
-            OmniAddress::Sol(recipient) => ("sol", recipient.to_string()),
-            OmniAddress::Arb(recipient) => ("arb", recipient.to_string()),
-            OmniAddress::Base(recipient) => ("base", recipient.to_string()),
-        };
-        write!(f, "{chain_str}:{recipient}")
+        write!(f, "{}", &self.encode(':', false))
     }
 }
 
@@ -279,38 +324,6 @@ impl<'de> Deserialize<'de> for OmniAddress {
         }
 
         deserializer.deserialize_str(OmniAddressVisitor)
-    }
-}
-
-#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Debug, Clone)]
-pub struct NearRecipient {
-    pub target: AccountId,
-    pub message: Option<String>,
-}
-
-impl FromStr for NearRecipient {
-    type Err = String;
-
-    fn from_str(input: &str) -> Result<Self, Self::Err> {
-        let (target, message) = input.split_once(':').map_or_else(
-            || (input, None),
-            |(recipient, msg)| (recipient, Some(msg.to_owned())),
-        );
-
-        Ok(Self {
-            target: target.parse().map_err(stringify)?,
-            message,
-        })
-    }
-}
-
-impl fmt::Display for NearRecipient {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        if let Some(message) = &self.message {
-            write!(f, "{}:{}", self.target, message)
-        } else {
-            write!(f, "{}", self.target)
-        }
     }
 }
 
@@ -425,4 +438,11 @@ pub type Nonce = u128;
 
 pub fn stringify<T: std::fmt::Display>(item: T) -> String {
     item.to_string()
+}
+
+#[derive(Deserialize, Serialize, Clone)]
+pub struct BasicMetadata {
+    pub name: String,
+    pub symbol: String,
+    pub decimals: u8,
 }

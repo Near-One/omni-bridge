@@ -8,6 +8,14 @@ use serde::de::Visitor;
 #[derive(BorshDeserialize, BorshSerialize, Debug, Clone, PartialEq, Eq)]
 pub struct SolAddress(pub [u8; 32]);
 
+impl SolAddress {
+    pub const ZERO: Self = Self([0u8; 32]);
+
+    pub fn is_zero(&self) -> bool {
+        *self == Self::ZERO
+    }
+}
+
 impl FromStr for SolAddress {
     type Err = String;
 

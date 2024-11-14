@@ -27,10 +27,20 @@ pub struct DeployTokenMessage {
 }
 
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Debug, Clone)]
+pub struct LogMetadataMessage {
+    pub token_address: OmniAddress,
+    pub name: String,
+    pub symbol: String,
+    pub decimals: u8,
+    pub emitter_address: OmniAddress,
+}
+
+#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Debug, Clone)]
 pub enum ProverResult {
     InitTransfer(InitTransferMessage),
     FinTransfer(FinTransferMessage),
     DeployToken(DeployTokenMessage),
+    LogMetadata(LogMetadataMessage),
 }
 
 #[derive(
@@ -40,4 +50,5 @@ pub enum ProofKind {
     InitTransfer,
     FinTransfer,
     DeployToken,
+    LogMetadata,
 }
