@@ -57,8 +57,6 @@ describe('eNearProxy contract', () => {
 
     await eNear.waitForDeployment();
 
-    console.log(await eNear.getAddress());
-
     eNearProxyFactory = await ethers.getContractFactory('ENearProxy');
     eNearProxy = await upgrades.deployProxy(eNearProxyFactory, [
       await eNear.getAddress(),
@@ -76,6 +74,15 @@ describe('eNearProxy contract', () => {
       await eNearProxy.connect(deployer).grantRole(ethers.keccak256(ethers.toUtf8Bytes("MINTER_ROLE")), alice.address);
       await eNearProxy.connect(alice).mint(await eNear.getAddress(), alice.address, 100);
       expect(await eNear.balanceOf(alice.address)).to.equal(100);
+    })
+
+    it('Two mints by using eNearProxy', async () => {
+      await eNearProxy.connect(deployer).grantRole(ethers.keccak256(ethers.toUtf8Bytes("MINTER_ROLE")), alice.address);
+      await eNearProxy.connect(alice).mint(await eNear.getAddress(), alice.address, 100);
+      expect(await eNear.balanceOf(alice.address)).to.equal(100);
+
+      await eNearProxy.connect(alice).mint(await eNear.getAddress(), alice.address, 100);
+      expect(await eNear.balanceOf(alice.address)).to.equal(200);
     })
   })
 })
