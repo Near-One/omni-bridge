@@ -73,7 +73,6 @@ enum StorageKey {
     TokenAddressToId,
     TokenDeployerAccounts,
     DeployedTokens,
-    CurrentPayloadNonces,
 }
 
 #[derive(AccessControlRole, Deserialize, Serialize, Copy, Clone)]
@@ -172,8 +171,6 @@ pub struct Contract {
     pub token_deployer_accounts: LookupMap<ChainKind, AccountId>,
     pub mpc_signer: AccountId,
     pub init_transfer_nonce: Nonce,
-    // We maintain a separate nonce for each chain to oprimise the storage usage on Solana by reducing the gaps.
-    pub current_payload_nonces: LookupMap<ChainKind, Nonce>,
     pub accounts_balances: LookupMap<AccountId, StorageBalance>,
     pub wnear_account_id: AccountId,
 }
@@ -249,7 +246,6 @@ impl Contract {
             token_deployer_accounts: LookupMap::new(StorageKey::TokenDeployerAccounts),
             mpc_signer,
             init_transfer_nonce: U128(0),
-            current_payload_nonces: LookupMap::new(StorageKey::CurrentPayloadNonces),
             accounts_balances: LookupMap::new(StorageKey::AccountsBalances),
             wnear_account_id,
         };
