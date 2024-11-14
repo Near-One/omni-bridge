@@ -1,31 +1,37 @@
-/* task('deploy-e-near-proxy', 'Deploys the ENearProxy contract')
-    .setAction(async () => {
-      const { ethers, upgrades } = hre;
-  
-      const eNearProxyContract = 
-        await ethers.getContractFactory("ENearProxy");
-      const eNearProxy = await upgrades.deployProxy(
-        eNearProxyContract,
-        [
-          taskArgs.eNear,
-        ],
-        {
-          initializer: "initialize",
-          timeout: 0,
-        },
-      );
-  
-      await eNearProxy.waitForDeployment();
-      console.log(`eNearProxy deployed at ${await eNearProxy.getAddress()}`);
-      console.log(
-        "Implementation address:",
-        await upgrades.erc1967.getImplementationAddress(
-          await eNearProxy.getAddress(),
-        ),
-      );
+task('deploy-e-near-proxy', 'Deploys the ENearProxy contract')
+    .addParam('enear', 'Address of eNear contract')
+    .setAction(async (taskArgs, hre) => {
+        const { ethers, upgrades } = hre;
+
+        const eNear = await ethers.getContractAt('ENear', taskArgs.enear);
+        const nearConnector =  await eNear.nearConnector();
+
+        const eNearProxyContract =
+            await ethers.getContractFactory("ENearProxy");
+        const eNearProxy = await upgrades.deployProxy(
+            eNearProxyContract, [
+                taskArgs.enear,
+                nearConnector,
+                0
+            ],
+            {
+                initializer: "initialize",
+                timeout: 0,
+            },
+        );
+
+        await eNearProxy.waitForDeployment();
+        console.log(`eNearProxy deployed at ${await eNearProxy.getAddress()}`);
+        console.log(
+            "Implementation address:",
+            await upgrades.erc1967.getImplementationAddress(
+                await eNearProxy.getAddress(),
+            ),
+        );
     });
 
-task('set-proxy-as-admin', 'Set the proxy as admin for eNear')
+/*
+task('e-near-set-admin', 'Set the proxy as admin for eNear')
     .addParam('proxy', 'Address of the proxy to set as admin')
     .addParam('eNear', 'Address of the eNear contract')
     .setAction(async (taskArgs, hre) => {
@@ -35,7 +41,7 @@ task('set-proxy-as-admin', 'Set the proxy as admin for eNear')
         await eNear.acceptAdmin(taskArgs.proxy);
     });
 
-task('set-fake-prover', 'Set the fake prover for eNear')
+task('e-near-set-prover', 'Set the fake prover for eNear')
     .addParam('eNear', 'Address of the eNear contract')
     .setAction(async (taskArgs, hre) => {
         const { ethers } = hre;

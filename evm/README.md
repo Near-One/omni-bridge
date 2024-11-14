@@ -9,3 +9,8 @@ $ yarn hardhat test
 ```shell
 yarn hardhat check
 ```
+
+**Deploy eNearProxy**
+```shell
+yarn hardhat deploy-e-near-proxy --enear "<eNear address>" --network=sepolia
+```
