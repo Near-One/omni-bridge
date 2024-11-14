@@ -1,8 +1,4 @@
 const { expect } = require('chai');
-
-const { serialize } = require('rainbow-bridge-lib/borsh.js');
-const { borshifyOutcomeProof } = require('rainbow-bridge-lib/borshify-proof.js');
-
 const { ethers, upgrades} = require('hardhat');
 
 const SCHEMA = {
@@ -30,8 +26,6 @@ describe('eNearProxy contract', () => {
 
   const ERC20_NAME = 'eNear';
   const ERC20_SYMBOL = 'eNear';
-
-  const ONE_HUNDRED_TOKENS = ethers.toBigInt(100) * (ethers.toBigInt(10) ** (ethers.toBigInt(24)))
 
   beforeEach(async () => {
     [deployer, eNearAdmin, alice, bob] = await ethers.getSigners();
