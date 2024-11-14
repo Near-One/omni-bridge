@@ -3,7 +3,7 @@ use near_sdk::json_types::U128;
 use near_sdk::serde::{Deserialize, Serialize};
 use near_sdk::AccountId;
 
-use crate::{OmniAddress, TransferMessage};
+use crate::{OmniAddress, PayloadId, TransferMessage};
 
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Debug, Clone)]
 pub struct InitTransferMessage {
@@ -17,6 +17,15 @@ pub struct FinTransferMessage {
     pub fee_recipient: AccountId,
     pub amount: U128,
     pub emitter_address: OmniAddress,
+}
+
+impl FinTransferMessage {
+    pub fn get_payload_id(&self) -> PayloadId {
+        PayloadId {
+            chain: self.emitter_address.get_chain(),
+            nonce: self.nonce,
+        }
+    }
 }
 
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Debug, Clone)]

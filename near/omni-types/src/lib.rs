@@ -138,8 +138,10 @@ impl Serialize for H160 {
     Serialize,
     Deserialize,
     strum_macros::AsRefStr,
+    Default,
 )]
 pub enum ChainKind {
+    #[default]
     Eth,
     Near,
     Sol,
@@ -360,7 +362,44 @@ impl Fee {
     }
 }
 
-pub type TransferId = (ChainKind, Nonce);
+#[derive(
+    BorshDeserialize,
+    BorshSerialize,
+    Serialize,
+    Deserialize,
+    Debug,
+    Clone,
+    PartialEq,
+    Eq,
+    Default,
+    Copy,
+)]
+pub struct TransferId {
+    // The origin chain kind
+    pub chain: ChainKind,
+    // The transfer nonce that maintained on the source chain
+    pub nonce: Nonce,
+}
+
+#[derive(
+    BorshDeserialize,
+    BorshSerialize,
+    Serialize,
+    Deserialize,
+    Debug,
+    Clone,
+    PartialEq,
+    Eq,
+    Default,
+    Copy,
+)]
+pub struct PayloadId {
+    // The destination chain kind
+    pub chain: ChainKind,
+    // The payload nonce that maintained on NEAR
+    pub nonce: Nonce,
+}
+
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Debug, Clone)]
 pub struct TransferMessage {
     pub origin_nonce: U128,
@@ -378,7 +417,10 @@ impl TransferMessage {
     }
 
     pub fn get_transfer_id(&self) -> TransferId {
-        (self.get_origin_chain(), self.origin_nonce.0)
+        TransferId {
+            chain: self.get_origin_chain(),
+            nonce: self.origin_nonce,
+        }
     }
 
     pub fn get_destination_chain(&self) -> ChainKind {
@@ -401,6 +443,15 @@ pub struct TransferMessagePayload {
     pub amount: U128,
     pub recipient: OmniAddress,
     pub fee_recipient: Option<AccountId>,
+}
+
+impl TransferMessagePayload {
+    pub fn get_payload_id(&self) -> PayloadId {
+        PayloadId {
+            chain: self.recipient.get_chain(),
+            nonce: self.nonce,
+        }
+    }
 }
 
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Debug, Clone)]
@@ -434,7 +485,7 @@ pub enum UpdateFee {
     Proof(Vec<u8>),
 }
 
-pub type Nonce = u128;
+pub type Nonce = U128;
 
 pub fn stringify<T: std::fmt::Display>(item: T) -> String {
     item.to_string()
