@@ -110,7 +110,6 @@ describe('eNear contract', () => {
 
     it('Reverts when reusing proof event', async () => {
       let proof = JSON.parse(JSON.stringify(proof_template));
-
       const amount = ethers.parseUnits('1', 24);
       proof.outcome_proof.outcome.status.SuccessValue = serialize(SCHEMA, 'MigrateNearToEthereum', {
         flag: 0,
