@@ -10,4 +10,5 @@ pub enum ErrorCode {
     Unauthorized,
     TokenMetadataNotProvided,
     SolanaTokenParsingFailed,
+    InvalidBridgedToken,
 }

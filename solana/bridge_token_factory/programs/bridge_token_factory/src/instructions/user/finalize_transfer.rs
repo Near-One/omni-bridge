@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
 use anchor_spl::{
     associated_token::AssociatedToken,
-    token_2022::{transfer_checked, TransferChecked},
+    token_2022::{mint_to, transfer_checked, MintTo, TransferChecked},
     token_interface::{Mint, TokenAccount, TokenInterface},
 };
 
@@ -10,6 +10,8 @@ use crate::{
         AUTHORITY_SEED, CONFIG_SEED, USED_NONCES_ACCOUNT_SIZE, USED_NONCES_PER_ACCOUNT,
         USED_NONCES_SEED, VAULT_SEED,
     },
+    error::ErrorCode,
+    instructions::wormhole_cpi::*,
     state::{
         config::Config,
         message::{
@@ -20,11 +22,9 @@ use crate::{
     },
 };
 
-use crate::instructions::wormhole_cpi::*;
-
 #[derive(Accounts)]
 #[instruction(data: SignedPayload<FinalizeTransferPayload>)]
-pub struct FinalizeTransferNative<'info> {
+pub struct FinalizeTransfer<'info> {
     #[account(
         mut,
         seeds = [CONFIG_SEED],
@@ -53,7 +53,6 @@ pub struct FinalizeTransferNative<'info> {
     pub recipient: UncheckedAccount<'info>,
 
     #[account(
-        constraint = !mint.mint_authority.contains(authority.key),
         mint::token_program = token_program,
     )]
     pub mint: Box<InterfaceAccount<'info, Mint>>,
@@ -70,7 +69,7 @@ pub struct FinalizeTransferNative<'info> {
         bump,
         token::token_program = token_program,
     )]
-    pub vault: Box<InterfaceAccount<'info, TokenAccount>>,
+    pub vault: Option<Box<InterfaceAccount<'info, TokenAccount>>>,
 
     #[account(
         init_if_needed,
@@ -88,7 +87,7 @@ pub struct FinalizeTransferNative<'info> {
     pub token_program: Interface<'info, TokenInterface>,
 }
 
-impl<'info> FinalizeTransferNative<'info> {
+impl<'info> FinalizeTransfer<'info> {
     pub fn process(&mut self, data: FinalizeTransferPayload) -> Result<()> {
         UsedNonces::use_nonce(
             data.nonce,
@@ -100,23 +99,42 @@ impl<'info> FinalizeTransferNative<'info> {
             self.system_program.to_account_info(),
         )?;
 
-        let bump = &[self.config.bumps.authority];
-        let signer_seeds = &[&[AUTHORITY_SEED, bump][..]];
+        if let Some(vault) = &self.vault {
+            // Native version. We have a proof of token registration by vault existence
+            transfer_checked(
+                CpiContext::new_with_signer(
+                    self.token_program.to_account_info(),
+                    TransferChecked {
+                        from: vault.to_account_info(),
+                        to: self.token_account.to_account_info(),
+                        authority: self.authority.to_account_info(),
+                        mint: self.mint.to_account_info(),
+                    },
+                    &[&[AUTHORITY_SEED, &[self.config.bumps.authority]]],
+                ),
+                data.amount.try_into().unwrap(),
+                self.mint.decimals,
+            )?;
+        } else {
+            // Bridged version. May be a fake token with our authority set but it will be ignored on the near side
+            require!(
+                self.mint.mint_authority.contains(self.authority.key),
+                ErrorCode::InvalidBridgedToken
+            );
 
-        transfer_checked(
-            CpiContext::new_with_signer(
-                self.token_program.to_account_info(),
-                TransferChecked {
-                    from: self.vault.to_account_info(),
-                    to: self.token_account.to_account_info(),
-                    authority: self.authority.to_account_info(),
-                    mint: self.mint.to_account_info(),
-                },
-                signer_seeds,
-            ),
-            data.amount.try_into().unwrap(),
-            self.mint.decimals,
-        )?;
+            mint_to(
+                CpiContext::new_with_signer(
+                    self.token_program.to_account_info(),
+                    MintTo {
+                        mint: self.mint.to_account_info(),
+                        to: self.token_account.to_account_info(),
+                        authority: self.authority.to_account_info(),
+                    },
+                    &[&[AUTHORITY_SEED, &[self.config.bumps.authority]]],
+                ),
+                data.amount.try_into().unwrap(),
+            )?;
+        }
 
         let payload = FinalizeTransferResponse {
             token: self.mint.key(),
