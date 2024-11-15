@@ -30,26 +30,34 @@ task('deploy-e-near-proxy', 'Deploys the ENearProxy contract')
         );
     });
 
-/*
 task('e-near-set-admin', 'Set the proxy as admin for eNear')
-    .addParam('proxy', 'Address of the proxy to set as admin')
-    .addParam('eNear', 'Address of the eNear contract')
+    .addParam('newAdmin', 'New admin address')
+    .addParam('enear', 'Address of the eNear contract')
     .setAction(async (taskArgs, hre) => {
         const { ethers } = hre;
-        const eNear = await ethers.getContractAt('ENear', taskArgs.eNear);
-        await eNear.nominateAdmin(taskArgs.proxy);
-        await eNear.acceptAdmin(taskArgs.proxy);
+        const eNear = await ethers.getContractAt('ENear', taskArgs.enear);
+        await eNear.adminSstore(9, ethers.zeroPadValue(taskArgs.newAdmin, 32));
     });
 
-task('e-near-set-prover', 'Set the fake prover for eNear')
-    .addParam('eNear', 'Address of the eNear contract')
-    .setAction(async (taskArgs, hre) => {
+task('deploy-fake-prover', 'Deploy fake prover')
+    .setAction(async (_taskArgs, hre) => {
         const { ethers } = hre;
-
         const FakeProverContractFactory = await ethers.getContractFactory("FakeProver");
         const FakeProverContract = await FakeProverContractFactory.deploy();
         await FakeProverContract.waitForDeployment();
 
-        const eNear = await ethers.getContractAt('ENear', taskArgs.eNear);
-        eNear.adminSstore(5, uint256(await FakeProverContract.getAddress()));
-    }); */
+        console.log(`FakeProver deployed at ${await FakeProverContract.getAddress()}`);
+    });
+
+task('e-near-set-prover', 'Set new prover for eNear')
+    .addParam('enear', 'Address of the eNear contract')
+    .addParam('newProver', 'Address of the new prover contract')
+    .setAction(async (taskArgs, hre) => {
+        const { ethers } = hre;
+
+        const eNear = await ethers.getContractAt('ENear', taskArgs.enear);
+        let slotValue = await ethers.provider.getStorage(await eNear.getAddress(), 5);
+        slotValue = (taskArgs.newProver).concat(slotValue.slice(-2));
+
+        await eNear.adminSstore(5, ethers.zeroPadValue(slotValue, 32));
+    });
