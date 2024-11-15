@@ -38,7 +38,7 @@ contract BridgeTokenFactory is
     uint constant PAUSED_FIN_TRANSFER = 1 << 1;
 
     error InvalidSignature();
-    error NonceAlreadyUsed(uint128 nonce);
+    error NonceAlreadyUsed(uint64 nonce);
     error InvalidFee();
 
     function initialize(
