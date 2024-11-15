@@ -170,7 +170,7 @@ pub struct Contract {
     pub token_deployer_accounts: LookupMap<ChainKind, AccountId>,
     pub mpc_signer: AccountId,
     pub current_origin_nonce: Nonce,
-    // We maintain a separate nonce for each chain to oprimise the storage usage on Solana by reducing the gaps.
+    // We maintain a separate nonce for each chain to optimize the storage usage on Solana by reducing the gaps.
     pub destination_nonces: LookupMap<ChainKind, Nonce>,
     pub accounts_balances: LookupMap<AccountId, StorageBalance>,
     pub wnear_account_id: AccountId,
