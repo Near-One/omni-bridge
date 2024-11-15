@@ -6,7 +6,7 @@ use crate::{
     prover_result::{
         DeployTokenMessage, FinTransferMessage, InitTransferMessage, LogMetadataMessage,
     },
-    stringify, ChainKind, Fee, OmniAddress, TransferMessage, H160,
+    stringify, ChainKind, Fee, OmniAddress, H160,
 };
 
 const ERR_INVALIDE_SIGNATURE_HASH: &str = "ERR_INVALIDE_SIGNATURE_HASH";
@@ -24,7 +24,8 @@ sol! {
     );
 
     event FinTransfer(
-        uint128 indexed nonce,
+        uint128 indexed payload_nonce,
+        uint128 indexed origin_nonce,
         uint8 origin_chain,
         address tokenAddress,
         uint128 amount,
@@ -78,9 +79,10 @@ impl TryFromLog<Log<FinTransfer>> for FinTransferMessage {
         }
 
         Ok(FinTransferMessage {
+            payload_nonce: near_sdk::json_types::U128(event.data.payload_nonce),
             transfer_id: crate::TransferId {
                 chain: event.data.origin_chain.try_into()?,
-                nonce: near_sdk::json_types::U128(event.data.nonce),
+                nonce: near_sdk::json_types::U128(event.data.origin_nonce),
             },
             amount: near_sdk::json_types::U128(event.data.amount),
             fee_recipient: event.data.feeRecipient.parse().map_err(stringify)?,
@@ -105,24 +107,16 @@ impl TryFromLog<Log<InitTransfer>> for InitTransferMessage {
                 chain_kind,
                 H160(event.address.into()),
             )?,
-            transfer: TransferMessage {
-                origin_nonce: near_sdk::json_types::U128(event.data.nonce),
-                token: OmniAddress::new_from_evm_address(
-                    chain_kind,
-                    H160(event.tokenAddress.into()),
-                )?,
-                amount: near_sdk::json_types::U128(event.data.amount),
-                recipient: event.data.recipient.parse().map_err(stringify)?,
-                fee: Fee {
-                    fee: near_sdk::json_types::U128(event.data.fee),
-                    native_fee: near_sdk::json_types::U128(event.data.nativeTokenFee),
-                },
-                sender: OmniAddress::new_from_evm_address(
-                    chain_kind,
-                    H160(event.data.sender.into()),
-                )?,
-                msg: event.data.message,
+            origin_nonce: near_sdk::json_types::U128(event.data.nonce),
+            token: OmniAddress::new_from_evm_address(chain_kind, H160(event.tokenAddress.into()))?,
+            amount: near_sdk::json_types::U128(event.data.amount),
+            recipient: event.data.recipient.parse().map_err(stringify)?,
+            fee: Fee {
+                fee: near_sdk::json_types::U128(event.data.fee),
+                native_fee: near_sdk::json_types::U128(event.data.nativeTokenFee),
             },
+            sender: OmniAddress::new_from_evm_address(chain_kind, H160(event.data.sender.into()))?,
+            msg: event.data.message,
         })
     }
 }
@@ -181,7 +175,9 @@ mod tests {
     use super::*;
     sol! {
         event TestFinTransfer(
-            uint128 indexed nonce,
+            uint128 indexed payload_nonce,
+            uint128 indexed origin_nonce,
+            uint8 origin_chain,
             address tokenAddress,
             uint128 amount,
             address recipient,
@@ -192,7 +188,8 @@ mod tests {
     #[test]
     fn test_decode_log_with_same_params_with_validation() {
         let event = FinTransfer {
-            nonce: 55,
+            payload_nonce: 55,
+            origin_nonce: 50,
             origin_chain: 1,
             amount: 100,
             tokenAddress: [0; 20].into(),
@@ -200,7 +197,9 @@ mod tests {
             feeRecipient: "some_fee_recipient".to_owned(),
         };
         let test_event = TestFinTransfer {
-            nonce: event.nonce,
+            payload_nonce: event.payload_nonce,
+            origin_nonce: event.origin_nonce,
+            origin_chain: event.origin_chain,
             amount: event.amount,
             tokenAddress: event.tokenAddress,
             recipient: event.recipient,

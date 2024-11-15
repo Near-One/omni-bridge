@@ -73,6 +73,7 @@ enum StorageKey {
     TokenAddressToId,
     TokenDeployerAccounts,
     DeployedTokens,
+    CurrentPayloadNonces,
 }
 
 #[derive(AccessControlRole, Deserialize, Serialize, Copy, Clone)]
@@ -171,6 +172,8 @@ pub struct Contract {
     pub token_deployer_accounts: LookupMap<ChainKind, AccountId>,
     pub mpc_signer: AccountId,
     pub init_transfer_nonce: Nonce,
+    // We maintain a separate nonce for each chain to oprimise the storage usage on Solana by reducing the gaps.
+    pub current_payload_nonces: LookupMap<ChainKind, Nonce>,
     pub accounts_balances: LookupMap<AccountId, StorageBalance>,
     pub wnear_account_id: AccountId,
 }
@@ -188,6 +191,8 @@ impl FungibleTokenReceiver for Contract {
         let token_id = env::predecessor_account_id();
 
         self.init_transfer_nonce.0 += 1;
+        let payload_nonce = self.get_next_payload_nonce(parsed_msg.recipient.get_chain());
+
         let transfer_message = TransferMessage {
             origin_nonce: self.init_transfer_nonce,
             token: OmniAddress::Near(token_id.clone()),
@@ -199,6 +204,7 @@ impl FungibleTokenReceiver for Contract {
             },
             sender: OmniAddress::Near(sender_id.clone()),
             msg: String::new(),
+            payload_nonce,
         };
         require!(
             transfer_message.fee.fee < transfer_message.amount,
@@ -246,6 +252,7 @@ impl Contract {
             token_deployer_accounts: LookupMap::new(StorageKey::TokenDeployerAccounts),
             mpc_signer,
             init_transfer_nonce: U128(0),
+            current_payload_nonces: LookupMap::new(StorageKey::CurrentPayloadNonces),
             accounts_balances: LookupMap::new(StorageKey::AccountsBalances),
             wnear_account_id,
         };
@@ -447,6 +454,7 @@ impl Contract {
 
         let transfer_payload = TransferMessagePayload {
             prefix: PayloadType::TransferMessage,
+            nonce: transfer_message.payload_nonce,
             transfer_id,
             token_address,
             amount: U128(transfer_message.amount.0 - transfer_message.fee.fee.0),
@@ -543,7 +551,17 @@ impl Contract {
             "Unknown factory"
         );
 
-        let transfer_message = init_transfer.transfer;
+        let payload_nonce = self.get_next_payload_nonce(init_transfer.recipient.get_chain());
+        let transfer_message = TransferMessage {
+            origin_nonce: init_transfer.origin_nonce,
+            token: init_transfer.token,
+            amount: init_transfer.amount,
+            recipient: init_transfer.recipient,
+            fee: init_transfer.fee,
+            sender: init_transfer.sender,
+            msg: init_transfer.msg,
+            payload_nonce,
+        };
 
         if let OmniAddress::Near(recipient) = transfer_message.recipient.clone() {
             self.process_fin_transfer_to_near(
@@ -906,6 +924,20 @@ impl Contract {
 }
 
 impl Contract {
+    fn get_next_payload_nonce(&mut self, chain_kind: ChainKind) -> Nonce {
+        let mut payload_nonce = self
+            .current_payload_nonces
+            .get(&chain_kind)
+            .unwrap_or_default();
+
+        payload_nonce.0 += 1;
+
+        self.current_payload_nonces
+            .insert(&chain_kind, &payload_nonce);
+
+        payload_nonce
+    }
+
     #[allow(clippy::too_many_lines)]
     fn process_fin_transfer_to_near(
         &mut self,

@@ -404,6 +404,7 @@ pub struct TransferMessage {
     pub fee: Fee,
     pub sender: OmniAddress,
     pub msg: String,
+    pub payload_nonce: U128,
 }
 
 impl TransferMessage {
@@ -433,6 +434,7 @@ pub enum PayloadType {
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Debug, Clone)]
 pub struct TransferMessagePayload {
     pub prefix: PayloadType,
+    pub nonce: U128,
     pub transfer_id: TransferId,
     pub token_address: OmniAddress,
     pub amount: U128,

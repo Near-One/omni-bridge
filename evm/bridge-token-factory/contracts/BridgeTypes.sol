@@ -4,6 +4,7 @@ pragma solidity ^0.8.24;
 library BridgeTypes {
     struct FinTransferPayload {
         uint128 nonce;
+        uint128 origin_nonce;
         uint8 origin_chain;
         address tokenAddress;
         uint128 amount;
@@ -36,7 +37,8 @@ library BridgeTypes {
     );
 
     event FinTransfer(
-        uint128 indexed nonce,
+        uint128 indexed payload_nonce,
+        uint128 indexed origin_nonce,
         uint8 origin_chain,
         address tokenAddress,
         uint128 amount,

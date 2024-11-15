@@ -28,7 +28,7 @@ contract BridgeTokenFactory is
     address public nearBridgeDerivedAddress;
     uint8 public omniBridgeChainId;
 
-    mapping(bytes32 => bool) public completedTransfers;
+    mapping(uint128 => bool) public completedTransfers;
     mapping(uint128 => bool) public claimedFee;
     uint128 public initTransferNonce; 
 
@@ -153,11 +153,7 @@ contract BridgeTokenFactory is
         bytes calldata signatureData,
         BridgeTypes.FinTransferPayload calldata payload
     ) payable external whenNotPaused(PAUSED_FIN_TRANSFER) {
-        bytes32 transfer_id = bytes32(
-            (uint256(uint128(payload.origin_chain)) << 128) | payload.nonce
-        );
-
-        if (completedTransfers[transfer_id]) {
+        if (completedTransfers[payload.nonce]) {
             revert TransferAlreadyFinalised(
                 payload.origin_chain,
                 payload.nonce
@@ -183,7 +179,7 @@ contract BridgeTokenFactory is
             revert InvalidSignature();
         }
 
-        completedTransfers[transfer_id] = true;
+        completedTransfers[payload.nonce] = true;
         
         if (isBridgeToken[payload.tokenAddress]) {
             BridgeToken(payload.tokenAddress).mint(payload.recipient, payload.amount);
@@ -195,6 +191,7 @@ contract BridgeTokenFactory is
 
         emit BridgeTypes.FinTransfer(
             payload.nonce,
+            payload.origin_nonce,
             payload.origin_chain,
             payload.tokenAddress,
             payload.amount,
