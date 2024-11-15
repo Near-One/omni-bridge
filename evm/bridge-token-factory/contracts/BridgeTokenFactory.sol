@@ -28,9 +28,9 @@ contract BridgeTokenFactory is
     address public nearBridgeDerivedAddress;
     uint8 public omniBridgeChainId;
 
-    mapping(uint128 => bool) public completedTransfers;
-    mapping(uint128 => bool) public claimedFee;
-    uint128 public initTransferNonce; 
+    mapping(uint64 => bool) public completedTransfers;
+    mapping(uint64 => bool) public claimedFee;
+    uint64 public currentOriginNonce; 
 
     bytes32 public constant PAUSABLE_ADMIN_ROLE = keccak256("PAUSABLE_ADMIN_ROLE");
     uint constant UNPAUSED_ALL = 0;
@@ -38,7 +38,7 @@ contract BridgeTokenFactory is
     uint constant PAUSED_FIN_TRANSFER = 1 << 1;
 
     error InvalidSignature();
-    error NonceAlreadyUsed(uint256 nonce);
+    error NonceAlreadyUsed(uint64 nonce);
     error InvalidFee();
 
     function initialize(
@@ -149,16 +149,20 @@ contract BridgeTokenFactory is
     ) internal virtual {}
 
     function finTransfer(
-        bytes calldata signatureData, 
-        BridgeTypes.FinTransferPayload calldata payload
+        bytes calldata signatureData,
+        BridgeTypes.TransferMessagePayload calldata payload
     ) payable external whenNotPaused(PAUSED_FIN_TRANSFER) {
-        if (completedTransfers[payload.nonce]) {
-            revert NonceAlreadyUsed(payload.nonce);
+        if (completedTransfers[payload.destinationNonce]) {
+            revert NonceAlreadyUsed(payload.destinationNonce);
         }
+
+        completedTransfers[payload.destinationNonce] = true;
 
         bytes memory borshEncoded = bytes.concat(
             bytes1(uint8(BridgeTypes.PayloadType.TransferMessage)),
-            Borsh.encodeUint128(payload.nonce),
+            Borsh.encodeUint64(payload.destinationNonce),
+            bytes1(payload.originChain),
+            Borsh.encodeUint64(payload.originNonce),
             bytes1(omniBridgeChainId),
             Borsh.encodeAddress(payload.tokenAddress),
             Borsh.encodeUint128(payload.amount),
@@ -173,8 +177,6 @@ contract BridgeTokenFactory is
         if (ECDSA.recover(hashed, signatureData) != nearBridgeDerivedAddress) {
             revert InvalidSignature();
         }
-
-        completedTransfers[payload.nonce] = true;
         
         if (isBridgeToken[payload.tokenAddress]) {
             BridgeToken(payload.tokenAddress).mint(payload.recipient, payload.amount);
@@ -185,7 +187,8 @@ contract BridgeTokenFactory is
         finTransferExtension(payload);
 
         emit BridgeTypes.FinTransfer(
-            payload.nonce,
+            payload.originChain,
+            payload.originNonce,
             payload.tokenAddress,
             payload.amount,
             payload.recipient,
@@ -193,7 +196,7 @@ contract BridgeTokenFactory is
         );
     }
 
-    function finTransferExtension(BridgeTypes.FinTransferPayload memory payload) internal virtual {}
+    function finTransferExtension(BridgeTypes.TransferMessagePayload memory payload) internal virtual {}
 
     function initTransfer(
         address tokenAddress,
@@ -203,7 +206,7 @@ contract BridgeTokenFactory is
         string calldata recipient,
         string calldata message
     ) payable external whenNotPaused(PAUSED_INIT_TRANSFER) {
-        initTransferNonce += 1;
+        currentOriginNonce += 1;
         if (fee >= amount) {
             revert InvalidFee();
         }
@@ -224,15 +227,15 @@ contract BridgeTokenFactory is
             }
         }
 
-        initTransferExtension(msg.sender, tokenAddress, initTransferNonce, amount, fee, nativeFee, recipient, message, extensionValue);
+        initTransferExtension(msg.sender, tokenAddress, currentOriginNonce, amount, fee, nativeFee, recipient, message, extensionValue);
 
-        emit BridgeTypes.InitTransfer(msg.sender, tokenAddress, initTransferNonce, amount, fee, nativeFee, recipient, message);
+        emit BridgeTypes.InitTransfer(msg.sender, tokenAddress, currentOriginNonce, amount, fee, nativeFee, recipient, message);
     }
 
     function initTransferExtension(
         address sender,
         address tokenAddress,
-        uint128 nonce,
+        uint128 originNonce,
         uint128 amount,
         uint128 fee,
         uint128 nativeFee,
@@ -242,10 +245,10 @@ contract BridgeTokenFactory is
     ) internal virtual {}
 
     function claimNativeFee(bytes calldata signatureData, BridgeTypes.ClaimFeePayload memory payload) external {
-        bytes memory borshEncodedNonces = Borsh.encodeUint32(uint32(payload.nonces.length));
+        bytes memory borshEncodedNonces = abi.encodePacked(Borsh.encodeUint32(uint32(payload.nonces.length)));
 
         for (uint i = 0; i < payload.nonces.length; ++i) {
-            uint128 nonce = payload.nonces[i];
+            uint64 nonce = payload.nonces[i];
             if (claimedFee[nonce]) {
                 revert NonceAlreadyUsed(nonce);
             }
@@ -254,7 +257,7 @@ contract BridgeTokenFactory is
             borshEncodedNonces = bytes.concat(
             bytes1(uint8(BridgeTypes.PayloadType.ClaimNativeFee)),
                 borshEncodedNonces,
-                Borsh.encodeUint128(nonce)
+                Borsh.encodeUint64(nonce)
             );
         }        
         

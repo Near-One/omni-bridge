@@ -138,8 +138,10 @@ impl Serialize for H160 {
     Serialize,
     Deserialize,
     strum_macros::AsRefStr,
+    Default,
 )]
 pub enum ChainKind {
+    #[default]
     Eth,
     Near,
     Sol,
@@ -150,6 +152,20 @@ pub enum ChainKind {
 impl From<&OmniAddress> for ChainKind {
     fn from(input: &OmniAddress) -> Self {
         input.get_chain()
+    }
+}
+
+impl TryFrom<u8> for ChainKind {
+    type Error = String;
+    fn try_from(input: u8) -> Result<Self, String> {
+        match input {
+            0 => Ok(ChainKind::Eth),
+            1 => Ok(ChainKind::Near),
+            2 => Ok(ChainKind::Sol),
+            3 => Ok(ChainKind::Arb),
+            4 => Ok(ChainKind::Base),
+            _ => Err(format!("{input:?} invalid chain kind")),
+        }
     }
 }
 
@@ -360,16 +376,35 @@ impl Fee {
     }
 }
 
-pub type TransferId = (ChainKind, Nonce);
+#[derive(
+    BorshDeserialize,
+    BorshSerialize,
+    Serialize,
+    Deserialize,
+    Debug,
+    Clone,
+    PartialEq,
+    Eq,
+    Default,
+    Copy,
+)]
+pub struct TransferId {
+    // The origin chain kind
+    pub origin_chain: ChainKind,
+    // The transfer nonce that maintained on the source chain
+    pub origin_nonce: Nonce,
+}
+
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Debug, Clone)]
 pub struct TransferMessage {
-    pub origin_nonce: U128,
+    pub origin_nonce: Nonce,
     pub token: OmniAddress,
     pub amount: U128,
     pub recipient: OmniAddress,
     pub fee: Fee,
     pub sender: OmniAddress,
     pub msg: String,
+    pub destination_nonce: Nonce,
 }
 
 impl TransferMessage {
@@ -378,7 +413,10 @@ impl TransferMessage {
     }
 
     pub fn get_transfer_id(&self) -> TransferId {
-        (self.get_origin_chain(), self.origin_nonce.0)
+        TransferId {
+            origin_chain: self.get_origin_chain(),
+            origin_nonce: self.origin_nonce,
+        }
     }
 
     pub fn get_destination_chain(&self) -> ChainKind {
@@ -396,7 +434,8 @@ pub enum PayloadType {
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Debug, Clone)]
 pub struct TransferMessagePayload {
     pub prefix: PayloadType,
-    pub nonce: U128,
+    pub destination_nonce: Nonce,
+    pub transfer_id: TransferId,
     pub token_address: OmniAddress,
     pub amount: U128,
     pub recipient: OmniAddress,
@@ -406,7 +445,7 @@ pub struct TransferMessagePayload {
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Debug, Clone)]
 pub struct ClaimNativeFeePayload {
     pub prefix: PayloadType,
-    pub nonces: Vec<U128>,
+    pub nonces: Vec<Nonce>,
     pub amount: U128,
     pub recipient: OmniAddress,
 }
@@ -434,7 +473,7 @@ pub enum UpdateFee {
     Proof(Vec<u8>),
 }
 
-pub type Nonce = u128;
+pub type Nonce = u64;
 
 pub fn stringify<T: std::fmt::Display>(item: T) -> String {
     item.to_string()

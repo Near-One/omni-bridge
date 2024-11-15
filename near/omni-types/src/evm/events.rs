@@ -6,7 +6,7 @@ use crate::{
     prover_result::{
         DeployTokenMessage, FinTransferMessage, InitTransferMessage, LogMetadataMessage,
     },
-    stringify, ChainKind, Fee, OmniAddress, TransferMessage, H160,
+    stringify, ChainKind, Fee, OmniAddress, H160,
 };
 
 const ERR_INVALIDE_SIGNATURE_HASH: &str = "ERR_INVALIDE_SIGNATURE_HASH";
@@ -15,7 +15,7 @@ sol! {
     event InitTransfer(
         address indexed sender,
         address indexed tokenAddress,
-        uint128 indexed nonce,
+        uint64 indexed originNonce,
         uint128 amount,
         uint128 fee,
         uint128 nativeTokenFee,
@@ -24,7 +24,8 @@ sol! {
     );
 
     event FinTransfer(
-        uint128 indexed nonce,
+        uint8 indexed originChain,
+        uint64 indexed originNonce,
         address tokenAddress,
         uint128 amount,
         address recipient,
@@ -77,7 +78,10 @@ impl TryFromLog<Log<FinTransfer>> for FinTransferMessage {
         }
 
         Ok(FinTransferMessage {
-            nonce: near_sdk::json_types::U128(event.data.nonce),
+            transfer_id: crate::TransferId {
+                origin_chain: event.data.originChain.try_into()?,
+                origin_nonce: event.data.originNonce,
+            },
             amount: near_sdk::json_types::U128(event.data.amount),
             fee_recipient: event.data.feeRecipient.parse().map_err(stringify)?,
             emitter_address: OmniAddress::new_from_evm_address(
@@ -101,24 +105,16 @@ impl TryFromLog<Log<InitTransfer>> for InitTransferMessage {
                 chain_kind,
                 H160(event.address.into()),
             )?,
-            transfer: TransferMessage {
-                origin_nonce: near_sdk::json_types::U128(event.data.nonce),
-                token: OmniAddress::new_from_evm_address(
-                    chain_kind,
-                    H160(event.tokenAddress.into()),
-                )?,
-                amount: near_sdk::json_types::U128(event.data.amount),
-                recipient: event.data.recipient.parse().map_err(stringify)?,
-                fee: Fee {
-                    fee: near_sdk::json_types::U128(event.data.fee),
-                    native_fee: near_sdk::json_types::U128(event.data.nativeTokenFee),
-                },
-                sender: OmniAddress::new_from_evm_address(
-                    chain_kind,
-                    H160(event.data.sender.into()),
-                )?,
-                msg: event.data.message,
+            origin_nonce: event.data.originNonce,
+            token: OmniAddress::new_from_evm_address(chain_kind, H160(event.tokenAddress.into()))?,
+            amount: near_sdk::json_types::U128(event.data.amount),
+            recipient: event.data.recipient.parse().map_err(stringify)?,
+            fee: Fee {
+                fee: near_sdk::json_types::U128(event.data.fee),
+                native_fee: near_sdk::json_types::U128(event.data.nativeTokenFee),
             },
+            sender: OmniAddress::new_from_evm_address(chain_kind, H160(event.data.sender.into()))?,
+            msg: event.data.message,
         })
     }
 }
@@ -177,7 +173,8 @@ mod tests {
     use super::*;
     sol! {
         event TestFinTransfer(
-            uint128 indexed nonce,
+            uint8 indexed originChain,
+            uint64 indexed originNonce,
             address tokenAddress,
             uint128 amount,
             address recipient,
@@ -188,14 +185,16 @@ mod tests {
     #[test]
     fn test_decode_log_with_same_params_with_validation() {
         let event = FinTransfer {
-            nonce: 55,
+            originChain: 1,
+            originNonce: 50,
             amount: 100,
             tokenAddress: [0; 20].into(),
             recipient: [0; 20].into(),
             feeRecipient: "some_fee_recipient".to_owned(),
         };
         let test_event = TestFinTransfer {
-            nonce: event.nonce,
+            originChain: event.originChain,
+            originNonce: event.originNonce,
             amount: event.amount,
             tokenAddress: event.tokenAddress,
             recipient: event.recipient,

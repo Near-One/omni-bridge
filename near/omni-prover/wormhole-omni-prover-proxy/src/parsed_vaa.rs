@@ -9,7 +9,7 @@ use {
             DeployTokenMessage, FinTransferMessage, InitTransferMessage, LogMetadataMessage,
             ProofKind,
         },
-        stringify, Fee, OmniAddress, TransferMessage,
+        stringify, Fee, Nonce, OmniAddress, TransferId,
     },
 };
 
@@ -132,10 +132,10 @@ struct LogMetadataWh {
 #[derive(Debug, BorshDeserialize)]
 struct FinTransferWh {
     payload_type: ProofKind,
+    transfer_id: TransferId,
     token_address: OmniAddress,
     amount: u128,
-    recipient: String,
-    nonce: u128,
+    fee_recipient: String,
 }
 
 #[derive(Debug, BorshDeserialize)]
@@ -143,7 +143,7 @@ struct InitTransferWh {
     payload_type: ProofKind,
     sender: OmniAddress,
     token_address: OmniAddress,
-    nonce: u128,
+    origin_nonce: Nonce,
     amount: u128,
     fee: u128,
     native_fee: u128,
@@ -162,18 +162,16 @@ impl TryInto<InitTransferMessage> for ParsedVAA {
         }
 
         Ok(InitTransferMessage {
-            transfer: TransferMessage {
-                token: transfer.token_address.clone(),
-                amount: transfer.amount.into(),
-                fee: Fee {
-                    fee: transfer.fee.into(),
-                    native_fee: transfer.native_fee.into(),
-                },
-                recipient: transfer.recipient.parse().map_err(stringify)?,
-                origin_nonce: transfer.nonce.into(),
-                sender: transfer.sender,
-                msg: transfer.message,
+            token: transfer.token_address.clone(),
+            amount: transfer.amount.into(),
+            fee: Fee {
+                fee: transfer.fee.into(),
+                native_fee: transfer.native_fee.into(),
             },
+            recipient: transfer.recipient.parse().map_err(stringify)?,
+            origin_nonce: transfer.origin_nonce,
+            sender: transfer.sender,
+            msg: transfer.message,
             emitter_address: OmniAddress::new_from_slice(
                 transfer.token_address.get_chain(),
                 &self.emitter_address,
@@ -193,8 +191,8 @@ impl TryInto<FinTransferMessage> for ParsedVAA {
         }
 
         Ok(FinTransferMessage {
-            nonce: transfer.nonce.into(),
-            fee_recipient: transfer.recipient.parse().map_err(stringify)?,
+            transfer_id: transfer.transfer_id,
+            fee_recipient: transfer.fee_recipient.parse().map_err(stringify)?,
             amount: transfer.amount.into(),
             emitter_address: OmniAddress::new_from_slice(
                 transfer.token_address.get_chain(),

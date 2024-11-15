@@ -1,4 +1,3 @@
-use near_sdk::json_types::U128;
 use near_sdk::serde::{Deserialize, Serialize};
 use near_sdk::serde_json::json;
 
@@ -15,7 +14,6 @@ pub enum Nep141LockerEvent {
         message_payload: TransferMessagePayload,
     },
     FinTransferEvent {
-        nonce: Option<U128>,
         transfer_message: TransferMessage,
     },
     UpdateFeeEvent {

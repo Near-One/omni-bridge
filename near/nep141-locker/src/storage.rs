@@ -1,6 +1,7 @@
 use near_contract_standards::storage_management::{StorageBalance, StorageBalanceBounds};
 use near_sdk::{assert_one_yocto, borsh};
 use near_sdk::{env, near_bindgen, AccountId, NearToken};
+use omni_types::TransferId;
 
 use crate::{
     require, BorshDeserialize, BorshSerialize, ChainKind, Contract, ContractExt, Deserialize, Fee,
@@ -131,17 +132,20 @@ impl Contract {
     }
 
     pub fn required_balance_for_init_transfer(&self) -> NearToken {
-        let key_len = borsh::to_vec(&0_u128).sdk_expect("ERR_BORSH").len() as u64;
+        let key_len = borsh::to_vec(&TransferId::default())
+            .sdk_expect("ERR_BORSH")
+            .len() as u64;
         let max_account_id: AccountId = "a".repeat(64).parse().sdk_expect("ERR_PARSE_ACCOUNT_ID");
         let value_len = borsh::to_vec(&TransferMessageStorage::V0(TransferMessageStorageValue {
             message: TransferMessage {
-                origin_nonce: U128(0),
+                origin_nonce: 0,
                 token: OmniAddress::Near(max_account_id.clone()),
                 amount: U128(0),
                 recipient: OmniAddress::Near(max_account_id.clone()),
                 fee: Fee::default(),
                 sender: OmniAddress::Near(max_account_id.clone()),
                 msg: String::new(),
+                destination_nonce: 0,
             },
             owner: max_account_id,
         }))

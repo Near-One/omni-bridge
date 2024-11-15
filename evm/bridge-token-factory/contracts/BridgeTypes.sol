@@ -2,8 +2,10 @@
 pragma solidity ^0.8.24;
 
 library BridgeTypes {
-    struct FinTransferPayload {
-        uint128 nonce;
+    struct TransferMessagePayload {
+        uint64 destinationNonce;
+        uint8 originChain;
+        uint64 originNonce;
         address tokenAddress;
         uint128 amount;
         address recipient;
@@ -18,7 +20,7 @@ library BridgeTypes {
     }
 
     struct ClaimFeePayload {
-        uint128[] nonces;
+        uint64[] nonces;
         uint128 amount;
         address recipient;
     }
@@ -26,7 +28,7 @@ library BridgeTypes {
     event InitTransfer(
         address indexed sender,
         address indexed tokenAddress,
-        uint128 indexed nonce,
+        uint64 indexed originNonce,
         uint128 amount,
         uint128 fee,
         uint128 nativeFee,
@@ -35,7 +37,8 @@ library BridgeTypes {
     );
 
     event FinTransfer(
-        uint128 indexed nonce,
+        uint8 indexed originChain,
+        uint64 indexed originNonce,
         address tokenAddress,
         uint128 amount,
         address recipient,

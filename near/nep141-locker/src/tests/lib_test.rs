@@ -5,7 +5,7 @@ use near_sdk::test_utils::VMContextBuilder;
 use near_sdk::RuntimeFeesConfig;
 use near_sdk::{test_vm_config, testing_env};
 use omni_types::prover_result::{InitTransferMessage, ProverResult};
-use omni_types::{EvmAddress, NativeFee};
+use omni_types::{EvmAddress, NativeFee, Nonce, TransferId};
 use std::str::FromStr;
 
 use near_contract_standards::fungible_token::receiver::FungibleTokenReceiver;
@@ -15,7 +15,11 @@ use near_sdk::{serde_json, AccountId, NearToken, PromiseOrValue, PromiseResult};
 use omni_types::locker_args::StorageDepositArgs;
 use omni_types::{ChainKind, Fee, InitTransferMsg, OmniAddress, TransferMessage, UpdateFee};
 
-const DEFAULT_NONCE: u128 = 0;
+const DEFAULT_NONCE: Nonce = 0;
+const DEFAULT_TRANSFER_ID: TransferId = TransferId {
+    origin_chain: ChainKind::Near,
+    origin_nonce: DEFAULT_NONCE,
+};
 const DEFAULT_PROVER_ACCOUNT: &str = "prover.testnet";
 const DEFAULT_MPC_SIGNER_ACCOUNT: &str = "mpc_signer.testnet";
 const DEFAULT_WNEAR_ACCOUNT: &str = "wnear.testnet";
@@ -48,16 +52,10 @@ fn setup_test_env(
     }
 }
 
-fn setup_contract(
-    prover_id: String,
-    mpc_signer_id: String,
-    wnear_id: String,
-    init_nonce: u128,
-) -> Contract {
+fn setup_contract(prover_id: String, mpc_signer_id: String, wnear_id: String) -> Contract {
     Contract::new(
         AccountId::try_from(prover_id).expect("Invalid default prover ID"),
         AccountId::try_from(mpc_signer_id).expect("Invalid default mpc signer ID"),
-        U128(init_nonce),
         AccountId::try_from(wnear_id).expect("Invalid default wnear ID"),
     )
 }
@@ -67,7 +65,6 @@ fn get_default_contract() -> Contract {
         DEFAULT_PROVER_ACCOUNT.to_string(),
         DEFAULT_MPC_SIGNER_ACCOUNT.to_string(),
         DEFAULT_WNEAR_ACCOUNT.to_string(),
-        DEFAULT_NONCE,
     )
 }
 
@@ -122,7 +119,7 @@ fn test_initialize_contract() {
 
     assert_eq!(contract.prover_account, DEFAULT_PROVER_ACCOUNT);
     assert_eq!(contract.mpc_signer, DEFAULT_MPC_SIGNER_ACCOUNT);
-    assert_eq!(contract.current_nonce, DEFAULT_NONCE);
+    assert_eq!(contract.current_origin_nonce, DEFAULT_NONCE);
     assert_eq!(contract.wnear_account_id, DEFAULT_WNEAR_ACCOUNT);
 }
 
@@ -139,7 +136,7 @@ fn test_ft_on_transfer_nonce_increment() {
         get_init_transfer_msg(DEFAULT_ETH_USER_ADDRESS.to_string(), 0, 0),
     );
 
-    assert_eq!(contract.current_nonce, DEFAULT_NONCE + 1);
+    assert_eq!(contract.current_origin_nonce, DEFAULT_NONCE + 1);
 }
 
 #[test]
@@ -156,7 +153,10 @@ fn test_ft_on_transfer_stored_transfer_message() {
         msg.clone(),
     );
 
-    let stored_transfer = contract.get_transfer_message(U128(contract.current_nonce));
+    let stored_transfer = contract.get_transfer_message(TransferId {
+        origin_chain: ChainKind::Near,
+        origin_nonce: contract.current_origin_nonce,
+    });
     assert_eq!(
         stored_transfer.recipient, msg.recipient,
         "Incorrect stored recipient"
@@ -258,7 +258,7 @@ fn run_update_transfer_fee(
     use std::str::FromStr;
 
     let transfer_msg = TransferMessage {
-        origin_nonce: U128(DEFAULT_NONCE),
+        origin_nonce: DEFAULT_NONCE,
         token: OmniAddress::Near(
             AccountId::try_from(DEFAULT_FT_CONTRACT_ACCOUNT.to_string()).unwrap(),
         ),
@@ -267,11 +267,11 @@ fn run_update_transfer_fee(
         fee: init_fee.clone(),
         sender: OmniAddress::Near(sender_id.clone().parse().unwrap()),
         msg: "".to_string(),
+        destination_nonce: 1,
     };
 
     contract.insert_raw_transfer(
-        DEFAULT_NONCE,
-        transfer_msg,
+        transfer_msg.clone(),
         AccountId::try_from(sender_id.clone()).unwrap(),
     );
 
@@ -287,7 +287,7 @@ fn run_update_transfer_fee(
         attached_deposit,
         None,
     );
-    contract.update_transfer_fee(U128(DEFAULT_NONCE), new_fee);
+    contract.update_transfer_fee(transfer_msg.get_transfer_id(), new_fee);
 }
 
 #[test]
@@ -307,7 +307,7 @@ fn test_update_transfer_fee_same_fee() {
         Some(NearToken::from_yoctonear(0)),
     );
 
-    let updated_transfer = contract.get_transfer_message(U128(DEFAULT_NONCE));
+    let updated_transfer = contract.get_transfer_message(DEFAULT_TRANSFER_ID);
     assert_eq!(updated_transfer.fee, fee);
 }
 
@@ -333,7 +333,7 @@ fn test_update_transfer_fee_valid() {
         None,
     );
 
-    let updated_transfer = contract.get_transfer_message(U128(DEFAULT_NONCE));
+    let updated_transfer = contract.get_transfer_message(DEFAULT_TRANSFER_ID);
     assert_eq!(updated_transfer.fee, new_fee);
 }
 
@@ -439,7 +439,7 @@ fn test_update_transfer_fee_wrong_sender() {
         NearToken::from_yoctonear(5),
         None,
     );
-    contract.update_transfer_fee(U128(DEFAULT_NONCE), UpdateFee::Fee(new_fee));
+    contract.update_transfer_fee(DEFAULT_TRANSFER_ID, UpdateFee::Fee(new_fee));
 }
 
 fn get_default_storage_deposit_args() -> StorageDepositArgs {
@@ -455,21 +455,19 @@ fn get_prover_result(recipient: Option<OmniAddress>) -> ProverResult {
         DEFAULT_NEAR_USER_ACCOUNT.parse().unwrap(),
     ));
     ProverResult::InitTransfer(InitTransferMessage {
-        emitter_address: OmniAddress::Eth(EvmAddress::from_str(DEFAULT_ETH_USER_ADDRESS).unwrap()),
-        transfer: TransferMessage {
-            origin_nonce: U128(DEFAULT_NONCE),
-            token: OmniAddress::Near(
-                AccountId::try_from(DEFAULT_FT_CONTRACT_ACCOUNT.to_string()).unwrap(),
-            ),
-            amount: U128(DEFAULT_TRANSFER_AMOUNT),
-            recipient,
-            fee: Fee {
-                fee: U128(10),
-                native_fee: U128(5),
-            },
-            sender: OmniAddress::Eth(EvmAddress::from_str(DEFAULT_ETH_USER_ADDRESS).unwrap()),
-            msg: "".to_string(),
+        origin_nonce: DEFAULT_NONCE,
+        token: OmniAddress::Near(
+            AccountId::try_from(DEFAULT_FT_CONTRACT_ACCOUNT.to_string()).unwrap(),
+        ),
+        amount: U128(DEFAULT_TRANSFER_AMOUNT),
+        recipient,
+        fee: Fee {
+            fee: U128(10),
+            native_fee: U128(5),
         },
+        sender: OmniAddress::Eth(EvmAddress::from_str(DEFAULT_ETH_USER_ADDRESS).unwrap()),
+        msg: "".to_string(),
+        emitter_address: OmniAddress::Eth(EvmAddress::from_str(DEFAULT_ETH_USER_ADDRESS).unwrap()),
     })
 }
 
@@ -563,13 +561,19 @@ fn test_fin_transfer_callback_non_near_success() {
 
     let result = contract.fin_transfer_callback(&storage_args, predecessor.clone(), None);
 
-    // For non-NEAR recipients, should return U128 value of current_nonce
+    // For non-NEAR recipients, should return u64 value of current_destination_nonce
     match result {
         PromiseOrValue::Value(nonce) => {
-            assert_eq!(nonce, U128(contract.current_nonce));
+            assert_eq!(
+                nonce,
+                contract.get_current_destination_nonce(ChainKind::Eth)
+            );
 
             // Verify transfer was stored correctly
-            let stored_transfer = contract.get_transfer_message(nonce);
+            let stored_transfer = contract.get_transfer_message(TransferId {
+                origin_chain: ChainKind::Eth,
+                origin_nonce: DEFAULT_NONCE,
+            });
             assert_eq!(stored_transfer.recipient, eth_recipient);
         }
         PromiseOrValue::Promise(_) => panic!("Expected Value variant, got Promise"),
@@ -635,7 +639,7 @@ fn test_fin_transfer_callback_missing_fee_recipient() {
 
     let mut prover_result = get_prover_result(None);
     if let ProverResult::InitTransfer(ref mut init_transfer) = prover_result {
-        init_transfer.transfer.fee.native_fee = U128(100); // Set non-zero native fee
+        init_transfer.fee.native_fee = U128(100); // Set non-zero native fee
     }
 
     let storage_args = get_default_storage_deposit_args();
@@ -665,14 +669,16 @@ fn test_fin_transfer_callback_missing_fee_recipient() {
 fn test_is_transfer_finalised() {
     let mut contract = get_default_contract();
     let chain = ChainKind::Eth;
-    let nonce = U128(1);
+    let nonce = 1;
+    let transfer_id = TransferId {
+        origin_chain: chain,
+        origin_nonce: nonce,
+    };
 
-    assert!(!contract.is_transfer_finalised(chain, nonce));
+    assert!(!contract.is_transfer_finalised(transfer_id));
 
-    contract
-        .finalised_transfers
-        .insert(&(chain, nonce.0), &None);
-    assert!(contract.is_transfer_finalised(chain, nonce));
+    contract.finalised_transfers.insert(&transfer_id, &None);
+    assert!(contract.is_transfer_finalised(transfer_id));
 
     let native_fee = NativeFee {
         amount: U128(100),
@@ -680,6 +686,6 @@ fn test_is_transfer_finalised() {
     };
     contract
         .finalised_transfers
-        .insert(&(chain, nonce.0), &Some(native_fee));
-    assert!(contract.is_transfer_finalised(chain, nonce));
+        .insert(&transfer_id, &Some(native_fee));
+    assert!(contract.is_transfer_finalised(transfer_id));
 }
