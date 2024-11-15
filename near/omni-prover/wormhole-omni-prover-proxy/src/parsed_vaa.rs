@@ -8,7 +8,8 @@ use {
         prover_result::{
             DeployTokenMessage, FinTransferMessage, InitTransferMessage, LogMetadataMessage,
             ProofKind,
-        }, stringify, Fee, Nonce, OmniAddress, TransferId
+        },
+        stringify, Fee, Nonce, OmniAddress, TransferId,
     },
 };
 
