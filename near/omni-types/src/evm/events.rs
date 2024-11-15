@@ -79,8 +79,8 @@ impl TryFromLog<Log<FinTransfer>> for FinTransferMessage {
 
         Ok(FinTransferMessage {
             transfer_id: crate::TransferId {
-                chain: event.data.originChain.try_into()?,
-                nonce: event.data.originNonce,
+                origin_chain: event.data.originChain.try_into()?,
+                origin_nonce: event.data.originNonce,
             },
             amount: near_sdk::json_types::U128(event.data.amount),
             fee_recipient: event.data.feeRecipient.parse().map_err(stringify)?,

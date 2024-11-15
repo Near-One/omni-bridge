@@ -390,9 +390,9 @@ impl Fee {
 )]
 pub struct TransferId {
     // The origin chain kind
-    pub chain: ChainKind,
+    pub origin_chain: ChainKind,
     // The transfer nonce that maintained on the source chain
-    pub nonce: Nonce,
+    pub origin_nonce: Nonce,
 }
 
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Debug, Clone)]
@@ -414,8 +414,8 @@ impl TransferMessage {
 
     pub fn get_transfer_id(&self) -> TransferId {
         TransferId {
-            chain: self.get_origin_chain(),
-            nonce: self.origin_nonce,
+            origin_chain: self.get_origin_chain(),
+            origin_nonce: self.origin_nonce,
         }
     }
 

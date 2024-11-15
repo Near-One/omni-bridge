@@ -376,8 +376,8 @@ impl Contract {
             let native_fee = self
                 .finalised_transfers
                 .get(&TransferId {
-                    chain: chain_kind,
-                    nonce: *nonce,
+                    origin_chain: chain_kind,
+                    origin_nonce: *nonce,
                 })
                 .flatten()
                 .sdk_expect("ERR_NATIVE_FEE_NOT_EXISIT");

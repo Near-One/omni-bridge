@@ -348,8 +348,8 @@ fn test_transfer_message_getters() {
             },
             ChainKind::Eth,
             TransferId {
-                chain: ChainKind::Eth,
-                nonce: 123,
+                origin_chain: ChainKind::Eth,
+                origin_nonce: 123,
             },
             "Should handle ETH sender",
         ),
@@ -366,8 +366,8 @@ fn test_transfer_message_getters() {
             },
             ChainKind::Near,
             TransferId {
-                chain: ChainKind::Near,
-                nonce: 456,
+                origin_chain: ChainKind::Near,
+                origin_nonce: 456,
             },
             "Should handle NEAR sender",
         ),
@@ -384,8 +384,8 @@ fn test_transfer_message_getters() {
             },
             ChainKind::Sol,
             TransferId {
-                chain: ChainKind::Sol,
-                nonce: 789,
+                origin_chain: ChainKind::Sol,
+                origin_nonce: 789,
             },
             "Should handle SOL sender",
         ),
