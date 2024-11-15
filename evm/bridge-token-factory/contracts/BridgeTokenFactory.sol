@@ -39,7 +39,6 @@ contract BridgeTokenFactory is
 
     error InvalidSignature();
     error NonceAlreadyUsed(uint128 nonce);
-    error TransferAlreadyFinalised(uint8 chain, uint128 nonce);
     error InvalidFee();
 
     function initialize(
@@ -154,10 +153,7 @@ contract BridgeTokenFactory is
         BridgeTypes.FinTransferPayload calldata payload
     ) payable external whenNotPaused(PAUSED_FIN_TRANSFER) {
         if (completedTransfers[payload.nonce]) {
-            revert TransferAlreadyFinalised(
-                payload.origin_chain,
-                payload.nonce
-            );
+            revert NonceAlreadyUsed(payload.nonce);
         }
 
         bytes memory borshEncoded = bytes.concat(
