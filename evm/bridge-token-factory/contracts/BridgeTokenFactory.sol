@@ -28,8 +28,8 @@ contract BridgeTokenFactory is
     address public nearBridgeDerivedAddress;
     uint8 public omniBridgeChainId;
 
-    mapping(uint128 => bool) public completedTransfers;
-    mapping(uint128 => bool) public claimedFee;
+    mapping(uint64 => bool) public completedTransfers;
+    mapping(uint64 => bool) public claimedFee;
     uint64 public currentOriginNonce; 
 
     bytes32 public constant PAUSABLE_ADMIN_ROLE = keccak256("PAUSABLE_ADMIN_ROLE");
