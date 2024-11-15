@@ -20,7 +20,7 @@ library BridgeTypes {
     }
 
     struct ClaimFeePayload {
-        uint128[] nonces;
+        uint64[] nonces;
         uint128 amount;
         address recipient;
     }

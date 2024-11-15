@@ -160,9 +160,9 @@ contract BridgeTokenFactory is
 
         bytes memory borshEncoded = bytes.concat(
             bytes1(uint8(BridgeTypes.PayloadType.TransferMessage)),
-            Borsh.encodeUint128(payload.destinationNonce),
+            Borsh.encodeUint64(payload.destinationNonce),
             bytes1(payload.originChain),
-            Borsh.encodeUint128(payload.originNonce),
+            Borsh.encodeUint64(payload.originNonce),
             bytes1(omniBridgeChainId),
             Borsh.encodeAddress(payload.tokenAddress),
             Borsh.encodeUint128(payload.amount),
@@ -245,10 +245,10 @@ contract BridgeTokenFactory is
     ) internal virtual {}
 
     function claimNativeFee(bytes calldata signatureData, BridgeTypes.ClaimFeePayload memory payload) external {
-        bytes memory borshEncodedNonces = Borsh.encodeUint32(uint32(payload.nonces.length));
+        bytes memory borshEncodedNonces = abi.encodePacked(Borsh.encodeUint32(uint32(payload.nonces.length)));
 
         for (uint i = 0; i < payload.nonces.length; ++i) {
-            uint128 nonce = payload.nonces[i];
+            uint64 nonce = payload.nonces[i];
             if (claimedFee[nonce]) {
                 revert NonceAlreadyUsed(nonce);
             }
@@ -257,7 +257,7 @@ contract BridgeTokenFactory is
             borshEncodedNonces = bytes.concat(
             bytes1(uint8(BridgeTypes.PayloadType.ClaimNativeFee)),
                 borshEncodedNonces,
-                Borsh.encodeUint128(nonce)
+                Borsh.encodeUint64(nonce)
             );
         }        
         
