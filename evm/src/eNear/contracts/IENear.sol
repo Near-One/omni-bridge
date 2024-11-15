@@ -5,4 +5,6 @@ pragma solidity 0.8.24;
 interface IENear {
     function transferToNear(uint256 _amount, string calldata _nearReceiverAccountId) external;
     function finaliseNearToEthTransfer(bytes calldata proofData, uint64 proofBlockHeight) external;
+    function nearConnector() external view returns(bytes memory);
+    function adminSstore(uint key, uint value) external;
 }
