@@ -93,24 +93,14 @@ pub mod bridge_token_factory {
         Ok(())
     }
 
-    pub fn init_transfer_native(
-        ctx: Context<InitTransferNative>,
+    pub fn init_transfer(
+        ctx: Context<InitTransfer>,
+        token: Option<String>,
         payload: InitTransferPayload,
     ) -> Result<()> {
         msg!("Initializing transfer");
 
-        ctx.accounts.process(payload)?;
-
-        Ok(())
-    }
-
-    pub fn init_transfer_bridged(
-        ctx: Context<InitTransferBridged>,
-        payload: InitTransferPayload,
-    ) -> Result<()> {
-        msg!("Initializing transfer");
-
-        ctx.accounts.process(payload)?;
+        ctx.accounts.process(token, payload)?;
 
         Ok(())
     }

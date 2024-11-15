@@ -10,4 +10,6 @@ pub enum ErrorCode {
     Unauthorized,
     TokenMetadataNotProvided,
     SolanaTokenParsingFailed,
+    BridgedTokenHasVault,
+    NativeTokenHasNoVault
 }
