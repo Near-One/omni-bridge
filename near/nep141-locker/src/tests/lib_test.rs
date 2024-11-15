@@ -5,7 +5,7 @@ use near_sdk::test_utils::VMContextBuilder;
 use near_sdk::RuntimeFeesConfig;
 use near_sdk::{test_vm_config, testing_env};
 use omni_types::prover_result::{InitTransferMessage, ProverResult};
-use omni_types::{EvmAddress, NativeFee, Nonce, TransferId};
+use omni_types::{EvmAddress, Nonce, TransferId};
 use std::str::FromStr;
 
 use near_contract_standards::fungible_token::receiver::FungibleTokenReceiver;
@@ -497,9 +497,6 @@ fn test_fin_transfer_callback_near_success() {
     };
 
     let predecessor = AccountId::try_from(DEFAULT_NEAR_USER_ACCOUNT.to_string()).unwrap();
-    let native_fee_recipient = Some(OmniAddress::Eth(
-        EvmAddress::from_str(DEFAULT_ETH_USER_ADDRESS).unwrap(),
-    ));
 
     let prover_result = get_prover_result(Some(OmniAddress::Near(
         DEFAULT_NEAR_USER_ACCOUNT.parse().unwrap(),
@@ -529,8 +526,7 @@ fn test_fin_transfer_callback_near_success() {
         ]),
     );
 
-    let result =
-        contract.fin_transfer_callback(&storage_args, predecessor.clone(), native_fee_recipient);
+    let result = contract.fin_transfer_callback(&storage_args, predecessor.clone());
 
     assert!(matches!(result, PromiseOrValue::Promise(_)));
 }
@@ -559,7 +555,7 @@ fn test_fin_transfer_callback_non_near_success() {
         )]),
     );
 
-    let result = contract.fin_transfer_callback(&storage_args, predecessor.clone(), None);
+    let result = contract.fin_transfer_callback(&storage_args, predecessor.clone());
 
     // For non-NEAR recipients, should return u64 value of current_destination_nonce
     match result {
@@ -598,7 +594,7 @@ fn test_fin_transfer_callback_invalid_proof() {
         vec![PromiseResult::Failed],
     );
 
-    contract.fin_transfer_callback(&storage_args, predecessor, None);
+    contract.fin_transfer_callback(&storage_args, predecessor);
 }
 
 #[test]
@@ -623,46 +619,7 @@ fn test_fin_transfer_callback_unknown_factory() {
         )],
     );
 
-    contract.fin_transfer_callback(&storage_args, predecessor, None);
-}
-
-#[test]
-#[should_panic(expected = "ERR_FEE_RECIPIENT_NOT_SET")]
-fn test_fin_transfer_callback_missing_fee_recipient() {
-    let mut contract = get_default_contract();
-
-    // Add factory
-    contract.factories.insert(
-        &ChainKind::Eth,
-        &OmniAddress::Eth(EvmAddress::from_str(DEFAULT_ETH_USER_ADDRESS).unwrap()),
-    );
-
-    let mut prover_result = get_prover_result(None);
-    if let ProverResult::InitTransfer(ref mut init_transfer) = prover_result {
-        init_transfer.fee.native_fee = U128(100); // Set non-zero native fee
-    }
-
-    let storage_args = get_default_storage_deposit_args();
-    let predecessor = AccountId::try_from(DEFAULT_NEAR_USER_ACCOUNT.to_string()).unwrap();
-
-    testing_env!(
-        VMContextBuilder::new()
-            .predecessor_account_id(predecessor.clone())
-            .attached_deposit(NearToken::from_near(1))
-            .build(),
-        test_vm_config(),
-        RuntimeFeesConfig::test(),
-        Default::default(),
-        vec![PromiseResult::Successful(
-            borsh::to_vec(&prover_result).unwrap()
-        )],
-    );
-
-    contract.fin_transfer_callback(
-        &storage_args,
-        predecessor,
-        None, // Missing fee recipient when native fee is non-zero
-    );
+    contract.fin_transfer_callback(&storage_args, predecessor);
 }
 
 #[test]
@@ -677,15 +634,6 @@ fn test_is_transfer_finalised() {
 
     assert!(!contract.is_transfer_finalised(transfer_id));
 
-    contract.finalised_transfers.insert(&transfer_id, &None);
-    assert!(contract.is_transfer_finalised(transfer_id));
-
-    let native_fee = NativeFee {
-        amount: U128(100),
-        recipient: OmniAddress::Eth(EvmAddress::from_str(DEFAULT_ETH_USER_ADDRESS).unwrap()),
-    };
-    contract
-        .finalised_transfers
-        .insert(&transfer_id, &Some(native_fee));
+    contract.finalised_transfers.insert(&transfer_id);
     assert!(contract.is_transfer_finalised(transfer_id));
 }
