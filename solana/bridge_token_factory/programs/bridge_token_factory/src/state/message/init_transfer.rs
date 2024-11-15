@@ -9,6 +9,7 @@ pub struct InitTransferPayload {
     pub amount: u128,
     pub recipient: String,
     pub fee: u128,
+    pub native_fee: u64,
 }
 
 impl Payload for InitTransferPayload {
@@ -31,7 +32,7 @@ impl Payload for InitTransferPayload {
         // 5. fee
         Self::serialize_as_near_u128(self.fee, &mut writer)?;
         // 6. native_fee
-        Self::serialize_as_near_u128(0, &mut writer)?;
+        Self::serialize_as_near_u128(self.native_fee.into(), &mut writer)?;
         // 7. recipient
         self.recipient.serialize(&mut writer)?;
         // 8. message

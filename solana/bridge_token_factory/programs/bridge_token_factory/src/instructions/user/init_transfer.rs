@@ -1,11 +1,11 @@
-use anchor_lang::prelude::*;
+use anchor_lang::{prelude::*, system_program::{transfer, Transfer}};
 use anchor_spl::{
     token_2022::{burn, transfer_checked, Burn, TransferChecked},
     token_interface::{Mint, TokenAccount, TokenInterface},
 };
 
 use crate::{
-    constants::{AUTHORITY_SEED, VAULT_SEED},
+    constants::{AUTHORITY_SEED, SOL_VAULT_SEED, VAULT_SEED},
     error::ErrorCode,
     instructions::wormhole_cpi::*,
     state::message::{init_transfer::InitTransferPayload, Payload},
@@ -42,6 +42,14 @@ pub struct InitTransfer<'info> {
         token::token_program = token_program,
     )]
     pub vault: Option<Box<InterfaceAccount<'info, TokenAccount>>>,
+
+    #[account(
+        mut,
+        seeds = [SOL_VAULT_SEED],
+        bump = wormhole.config.bumps.sol_vault,
+    )]
+    pub sol_vault: SystemAccount<'info>,
+    
     pub user: Signer<'info>,
 
     pub wormhole: WormholeCPI<'info>,
@@ -51,6 +59,19 @@ pub struct InitTransfer<'info> {
 
 impl<'info> InitTransfer<'info> {
     pub fn process(&self, payload: InitTransferPayload) -> Result<()> {
+        if payload.native_fee > 0 {
+            transfer(
+                CpiContext::new(
+                    self.wormhole.system_program.to_account_info(),
+                    Transfer {
+                        from: self.user.to_account_info(),
+                        to: self.sol_vault.to_account_info(),
+                    },
+                ),
+                payload.native_fee,
+            )?;
+        }
+
         if let Some(vault) = &self.vault {
             // Native version. We have a proof of token registration by vault existence
             transfer_checked(

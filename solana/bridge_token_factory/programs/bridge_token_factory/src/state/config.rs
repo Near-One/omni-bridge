@@ -11,6 +11,7 @@ pub struct WormholeBumps {
 pub struct ConfigBumps {
     pub config: u8,
     pub authority: u8,
+    pub sol_vault: u8,
     pub wormhole: WormholeBumps,
 }
 

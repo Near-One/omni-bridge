@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
 
 use crate::{
-    constants::{AUTHORITY_SEED, CONFIG_SEED, USED_NONCES_PER_ACCOUNT},
+    constants::{AUTHORITY_SEED, CONFIG_SEED, SOL_VAULT_SEED, USED_NONCES_PER_ACCOUNT},
     state::{
         config::{Config, ConfigBumps, WormholeBumps},
         used_nonces::UsedNonces,
@@ -27,6 +27,13 @@ pub struct Initialize<'info> {
         bump,
     )]
     pub authority: SystemAccount<'info>,
+
+    #[account(
+        mut,
+        seeds = [SOL_VAULT_SEED],
+        bump,
+    )]
+    pub sol_vault: SystemAccount<'info>,
 
     #[account(
         mut,
@@ -88,6 +95,7 @@ impl<'info> Initialize<'info> {
         derived_near_bridge_address: [u8; 64],
         config_bump: u8,
         authority_bump: u8,
+        sol_vault_bump: u8,
         wormhole_bridge_bump: u8,
         wormhole_fee_collector_bump: u8,
         wormhole_sequence_bump: u8,
@@ -99,6 +107,7 @@ impl<'info> Initialize<'info> {
             bumps: ConfigBumps {
                 config: config_bump,
                 authority: authority_bump,
+                sol_vault: sol_vault_bump,
                 wormhole: WormholeBumps {
                     bridge: wormhole_bridge_bump,
                     fee_collector: wormhole_fee_collector_bump,
