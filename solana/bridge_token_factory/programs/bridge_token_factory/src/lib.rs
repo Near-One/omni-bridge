@@ -54,7 +54,6 @@ pub mod bridge_token_factory {
 
     pub fn finalize_transfer(
         ctx: Context<FinalizeTransfer>,
-        token: Option<String>,
         data: SignedPayload<FinalizeTransferPayload>,
     ) -> Result<()> {
         msg!("Finalizing transfer");
@@ -63,7 +62,7 @@ pub mod bridge_token_factory {
             (ctx.accounts.mint.key(), ctx.accounts.recipient.key()),
             &ctx.accounts.config.derived_near_bridge_address,
         )?;
-        ctx.accounts.process(token, data.payload)?;
+        ctx.accounts.process(data.payload)?;
 
         Ok(())
     }
@@ -81,12 +80,11 @@ pub mod bridge_token_factory {
 
     pub fn init_transfer(
         ctx: Context<InitTransfer>,
-        token: Option<String>,
         payload: InitTransferPayload,
     ) -> Result<()> {
         msg!("Initializing transfer");
 
-        ctx.accounts.process(token, payload)?;
+        ctx.accounts.process(payload)?;
 
         Ok(())
     }

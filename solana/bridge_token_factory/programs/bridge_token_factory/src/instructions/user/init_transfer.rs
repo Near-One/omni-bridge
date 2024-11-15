@@ -4,10 +4,10 @@ use anchor_spl::{
     token_interface::{Mint, TokenAccount, TokenInterface},
 };
 
-use crate::error::ErrorCode;
-use crate::{constants::WRAPPED_MINT_SEED, instructions::wormhole_cpi::*};
 use crate::{
     constants::{AUTHORITY_SEED, VAULT_SEED},
+    error::ErrorCode,
+    instructions::wormhole_cpi::*,
     state::message::{init_transfer::InitTransferPayload, Payload},
 };
 
@@ -50,19 +50,24 @@ pub struct InitTransfer<'info> {
 }
 
 impl<'info> InitTransfer<'info> {
-    pub fn process(&self, token: Option<String>, payload: InitTransferPayload) -> Result<()> {
-        if let Some(token) = token {
-            // Bridged version. We have a proof of the mint address
-            require!(self.vault.is_none(), ErrorCode::BridgedTokenHasVault);
-            let (expected_mint_address, _) = Pubkey::find_program_address(
-                &[WRAPPED_MINT_SEED, token.as_bytes().as_ref()],
-                &crate::ID,
-            );
-            require_keys_eq!(
-                self.mint.key(),
-                expected_mint_address,
-                ErrorCode::InvalidBridgedToken
-            );
+    pub fn process(&self, payload: InitTransferPayload) -> Result<()> {
+        if let Some(vault) = &self.vault {
+            // Native version. We have a proof of token registration by vault existence
+            transfer_checked(
+                CpiContext::new(
+                    self.token_program.to_account_info(),
+                    TransferChecked {
+                        from: self.from.to_account_info(),
+                        to: vault.to_account_info(),
+                        authority: self.user.to_account_info(),
+                        mint: self.mint.to_account_info(),
+                    },
+                ),
+                payload.amount.try_into().unwrap(),
+                self.mint.decimals,
+            )?;
+        } else {
+            // Bridged version. May be a fake token with our authority set but it will be ignored on the near side
             require!(
                 self.mint.mint_authority.contains(self.authority.key),
                 ErrorCode::InvalidBridgedToken
@@ -79,25 +84,6 @@ impl<'info> InitTransfer<'info> {
                 ),
                 payload.amount.try_into().unwrap(),
             )?;
-        } else {
-            // Native version. We have a proof by vault existence
-            if let Some(vault) = &self.vault {
-                transfer_checked(
-                    CpiContext::new(
-                        self.token_program.to_account_info(),
-                        TransferChecked {
-                            from: self.from.to_account_info(),
-                            to: vault.to_account_info(),
-                            authority: self.user.to_account_info(),
-                            mint: self.mint.to_account_info(),
-                        },
-                    ),
-                    payload.amount.try_into().unwrap(),
-                    self.mint.decimals,
-                )?;
-            } else {
-                return err!(ErrorCode::NativeTokenHasNoVault);
-            }
         }
 
         self.wormhole.post_message(payload.serialize_for_near((
