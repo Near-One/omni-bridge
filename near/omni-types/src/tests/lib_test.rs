@@ -337,8 +337,8 @@ fn test_transfer_message_getters() {
     let test_cases = vec![
         (
             TransferMessage {
-                destination_nonce: U128(1),
-                origin_nonce: U128(123),
+                destination_nonce: 1,
+                origin_nonce: 123,
                 token: OmniAddress::Near("token.near".parse().unwrap()),
                 amount: U128(1000),
                 recipient: OmniAddress::Near("bob.near".parse().unwrap()),
@@ -349,14 +349,14 @@ fn test_transfer_message_getters() {
             ChainKind::Eth,
             TransferId {
                 chain: ChainKind::Eth,
-                nonce: U128(123),
+                nonce: 123,
             },
             "Should handle ETH sender",
         ),
         (
             TransferMessage {
-                destination_nonce: U128(1),
-                origin_nonce: U128(456),
+                destination_nonce: 1,
+                origin_nonce: 456,
                 token: OmniAddress::Near("token.near".parse().unwrap()),
                 amount: U128(2000),
                 recipient: OmniAddress::Eth(evm_addr.clone()),
@@ -367,14 +367,14 @@ fn test_transfer_message_getters() {
             ChainKind::Near,
             TransferId {
                 chain: ChainKind::Near,
-                nonce: U128(456),
+                nonce: 456,
             },
             "Should handle NEAR sender",
         ),
         (
             TransferMessage {
-                destination_nonce: U128(1),
-                origin_nonce: U128(789),
+                destination_nonce: 1,
+                origin_nonce: 789,
                 token: OmniAddress::Near("token.near".parse().unwrap()),
                 amount: U128(3000),
                 recipient: OmniAddress::Near("carol.near".parse().unwrap()),
@@ -385,7 +385,7 @@ fn test_transfer_message_getters() {
             ChainKind::Sol,
             TransferId {
                 chain: ChainKind::Sol,
-                nonce: U128(789),
+                nonce: 789,
             },
             "Should handle SOL sender",
         ),

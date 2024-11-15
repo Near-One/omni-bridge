@@ -540,7 +540,7 @@ impl Contract {
         #[serializer(borsh)] storage_deposit_args: &StorageDepositArgs,
         #[serializer(borsh)] predecessor_account_id: AccountId,
         #[serializer(borsh)] native_fee_recipient: Option<OmniAddress>,
-    ) -> PromiseOrValue<()> {
+    ) -> PromiseOrValue<Nonce> {
         let Ok(ProverResult::InitTransfer(init_transfer)) = Self::decode_prover_result(0) else {
             env::panic_str("Invalid proof message")
         };
@@ -575,7 +575,7 @@ impl Contract {
             .into()
         } else {
             self.process_fin_transfer_to_other_cahin(predecessor_account_id, transfer_message);
-            PromiseOrValue::Value(())
+            PromiseOrValue::Value(destination_nonce)
         }
     }
 
