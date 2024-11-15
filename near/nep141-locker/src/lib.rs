@@ -171,7 +171,7 @@ pub struct Contract {
     pub deployed_tokens: LookupSet<AccountId>,
     pub token_deployer_accounts: LookupMap<ChainKind, AccountId>,
     pub mpc_signer: AccountId,
-    pub init_transfer_nonce: Nonce,
+    pub current_origin_nonce: Nonce,
     // We maintain a separate nonce for each chain to oprimise the storage usage on Solana by reducing the gaps.
     pub destination_nonces: LookupMap<ChainKind, Nonce>,
     pub accounts_balances: LookupMap<AccountId, StorageBalance>,
@@ -190,11 +190,11 @@ impl FungibleTokenReceiver for Contract {
         let parsed_msg: InitTransferMsg = serde_json::from_str(&msg).sdk_expect("ERR_PARSE_MSG");
         let token_id = env::predecessor_account_id();
 
-        self.init_transfer_nonce.0 += 1;
+        self.current_origin_nonce += 1;
         let destination_nonce = self.get_next_destination_nonce(parsed_msg.recipient.get_chain());
 
         let transfer_message = TransferMessage {
-            origin_nonce: self.init_transfer_nonce,
+            origin_nonce: self.current_origin_nonce,
             token: OmniAddress::Near(token_id.clone()),
             amount,
             recipient: parsed_msg.recipient,
@@ -251,7 +251,7 @@ impl Contract {
             deployed_tokens: LookupSet::new(StorageKey::DeployedTokens),
             token_deployer_accounts: LookupMap::new(StorageKey::TokenDeployerAccounts),
             mpc_signer,
-            init_transfer_nonce: U128(0),
+            current_origin_nonce: 0,
             destination_nonces: LookupMap::new(StorageKey::DestinationNonces),
             accounts_balances: LookupMap::new(StorageKey::AccountsBalances),
             wnear_account_id,
@@ -369,7 +369,7 @@ impl Contract {
     }
 
     #[payable]
-    pub fn sign_claim_native_fee(&mut self, nonces: Vec<U128>, recipient: OmniAddress) -> Promise {
+    pub fn sign_claim_native_fee(&mut self, nonces: Vec<Nonce>, recipient: OmniAddress) -> Promise {
         let chain_kind = recipient.get_chain();
         let mut amount: u128 = 0_u128;
         for nonce in &nonces {
@@ -928,7 +928,7 @@ impl Contract {
     fn get_next_destination_nonce(&mut self, chain_kind: ChainKind) -> Nonce {
         let mut payload_nonce = self.destination_nonces.get(&chain_kind).unwrap_or_default();
 
-        payload_nonce.0 += 1;
+        payload_nonce += 1;
 
         self.destination_nonces.insert(&chain_kind, &payload_nonce);
 

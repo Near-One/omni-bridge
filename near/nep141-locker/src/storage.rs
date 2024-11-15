@@ -138,14 +138,14 @@ impl Contract {
         let max_account_id: AccountId = "a".repeat(64).parse().sdk_expect("ERR_PARSE_ACCOUNT_ID");
         let value_len = borsh::to_vec(&TransferMessageStorage::V0(TransferMessageStorageValue {
             message: TransferMessage {
-                origin_nonce: U128(0),
+                origin_nonce: 0,
                 token: OmniAddress::Near(max_account_id.clone()),
                 amount: U128(0),
                 recipient: OmniAddress::Near(max_account_id.clone()),
                 fee: Fee::default(),
                 sender: OmniAddress::Near(max_account_id.clone()),
                 msg: String::new(),
-                destination_nonce: U128(0),
+                destination_nonce: 0,
             },
             owner: max_account_id,
         }))

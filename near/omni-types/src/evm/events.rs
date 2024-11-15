@@ -15,7 +15,7 @@ sol! {
     event InitTransfer(
         address indexed sender,
         address indexed tokenAddress,
-        uint128 indexed nonce,
+        uint64 indexed originNonce,
         uint128 amount,
         uint128 fee,
         uint128 nativeTokenFee,
@@ -24,8 +24,8 @@ sol! {
     );
 
     event FinTransfer(
-        uint8 indexed origin_chain,
-        uint128 indexed origin_nonce,
+        uint8 indexed originChain,
+        uint64 indexed originNonce,
         address tokenAddress,
         uint128 amount,
         address recipient,
@@ -79,8 +79,8 @@ impl TryFromLog<Log<FinTransfer>> for FinTransferMessage {
 
         Ok(FinTransferMessage {
             transfer_id: crate::TransferId {
-                chain: event.data.origin_chain.try_into()?,
-                nonce: near_sdk::json_types::U128(event.data.origin_nonce),
+                chain: event.data.originChain.try_into()?,
+                nonce: event.data.originNonce,
             },
             amount: near_sdk::json_types::U128(event.data.amount),
             fee_recipient: event.data.feeRecipient.parse().map_err(stringify)?,
@@ -105,7 +105,7 @@ impl TryFromLog<Log<InitTransfer>> for InitTransferMessage {
                 chain_kind,
                 H160(event.address.into()),
             )?,
-            origin_nonce: near_sdk::json_types::U128(event.data.nonce),
+            origin_nonce: event.data.originNonce,
             token: OmniAddress::new_from_evm_address(chain_kind, H160(event.tokenAddress.into()))?,
             amount: near_sdk::json_types::U128(event.data.amount),
             recipient: event.data.recipient.parse().map_err(stringify)?,
@@ -173,8 +173,8 @@ mod tests {
     use super::*;
     sol! {
         event TestFinTransfer(
-            uint8 indexed origin_chain,
-            uint128 indexed origin_nonce,
+            uint8 indexed originChain,
+            uint64 indexed originNonce,
             address tokenAddress,
             uint128 amount,
             address recipient,
@@ -185,16 +185,16 @@ mod tests {
     #[test]
     fn test_decode_log_with_same_params_with_validation() {
         let event = FinTransfer {
-            origin_nonce: 50,
-            origin_chain: 1,
+            originChain: 1,
+            originNonce: 50,
             amount: 100,
             tokenAddress: [0; 20].into(),
             recipient: [0; 20].into(),
             feeRecipient: "some_fee_recipient".to_owned(),
         };
         let test_event = TestFinTransfer {
-            origin_nonce: event.origin_nonce,
-            origin_chain: event.origin_chain,
+            originChain: event.originChain,
+            originNonce: event.originNonce,
             amount: event.amount,
             tokenAddress: event.tokenAddress,
             recipient: event.recipient,

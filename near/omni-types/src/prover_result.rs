@@ -3,11 +3,11 @@ use near_sdk::json_types::U128;
 use near_sdk::serde::{Deserialize, Serialize};
 use near_sdk::AccountId;
 
-use crate::{Fee, OmniAddress, TransferId};
+use crate::{Fee, Nonce, OmniAddress, TransferId};
 
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Debug, Clone)]
 pub struct InitTransferMessage {
-    pub origin_nonce: U128,
+    pub origin_nonce: Nonce,
     pub token: OmniAddress,
     pub amount: U128,
     pub recipient: OmniAddress,

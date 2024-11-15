@@ -30,7 +30,7 @@ contract BridgeTokenFactory is
 
     mapping(uint128 => bool) public completedTransfers;
     mapping(uint128 => bool) public claimedFee;
-    uint128 public initTransferNonce; 
+    uint64 public currentOriginNonce; 
 
     bytes32 public constant PAUSABLE_ADMIN_ROLE = keccak256("PAUSABLE_ADMIN_ROLE");
     uint constant UNPAUSED_ALL = 0;
@@ -152,17 +152,17 @@ contract BridgeTokenFactory is
         bytes calldata signatureData,
         BridgeTypes.TransferMessagePayload calldata payload
     ) payable external whenNotPaused(PAUSED_FIN_TRANSFER) {
-        if (completedTransfers[payload.destination_nonce]) {
-            revert NonceAlreadyUsed(payload.destination_nonce);
+        if (completedTransfers[payload.destinationNonce]) {
+            revert NonceAlreadyUsed(payload.destinationNonce);
         }
 
-        completedTransfers[payload.destination_nonce] = true;
+        completedTransfers[payload.destinationNonce] = true;
 
         bytes memory borshEncoded = bytes.concat(
             bytes1(uint8(BridgeTypes.PayloadType.TransferMessage)),
-            Borsh.encodeUint128(payload.destination_nonce),
-            bytes1(payload.origin_chain),
-            Borsh.encodeUint128(payload.origin_nonce),
+            Borsh.encodeUint128(payload.destinationNonce),
+            bytes1(payload.originChain),
+            Borsh.encodeUint128(payload.originNonce),
             bytes1(omniBridgeChainId),
             Borsh.encodeAddress(payload.tokenAddress),
             Borsh.encodeUint128(payload.amount),
@@ -187,8 +187,8 @@ contract BridgeTokenFactory is
         finTransferExtension(payload);
 
         emit BridgeTypes.FinTransfer(
-            payload.origin_chain,
-            payload.origin_nonce,
+            payload.originChain,
+            payload.originNonce,
             payload.tokenAddress,
             payload.amount,
             payload.recipient,
@@ -206,7 +206,7 @@ contract BridgeTokenFactory is
         string calldata recipient,
         string calldata message
     ) payable external whenNotPaused(PAUSED_INIT_TRANSFER) {
-        initTransferNonce += 1;
+        currentOriginNonce += 1;
         if (fee >= amount) {
             revert InvalidFee();
         }
@@ -227,15 +227,15 @@ contract BridgeTokenFactory is
             }
         }
 
-        initTransferExtension(msg.sender, tokenAddress, initTransferNonce, amount, fee, nativeFee, recipient, message, extensionValue);
+        initTransferExtension(msg.sender, tokenAddress, currentOriginNonce, amount, fee, nativeFee, recipient, message, extensionValue);
 
-        emit BridgeTypes.InitTransfer(msg.sender, tokenAddress, initTransferNonce, amount, fee, nativeFee, recipient, message);
+        emit BridgeTypes.InitTransfer(msg.sender, tokenAddress, currentOriginNonce, amount, fee, nativeFee, recipient, message);
     }
 
     function initTransferExtension(
         address sender,
         address tokenAddress,
-        uint128 nonce,
+        uint128 originNonce,
         uint128 amount,
         uint128 fee,
         uint128 nativeFee,

@@ -397,14 +397,14 @@ pub struct TransferId {
 
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Debug, Clone)]
 pub struct TransferMessage {
-    pub origin_nonce: U128,
+    pub origin_nonce: Nonce,
     pub token: OmniAddress,
     pub amount: U128,
     pub recipient: OmniAddress,
     pub fee: Fee,
     pub sender: OmniAddress,
     pub msg: String,
-    pub destination_nonce: U128,
+    pub destination_nonce: Nonce,
 }
 
 impl TransferMessage {
@@ -445,7 +445,7 @@ pub struct TransferMessagePayload {
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Debug, Clone)]
 pub struct ClaimNativeFeePayload {
     pub prefix: PayloadType,
-    pub nonces: Vec<U128>,
+    pub nonces: Vec<Nonce>,
     pub amount: U128,
     pub recipient: OmniAddress,
 }
@@ -473,7 +473,7 @@ pub enum UpdateFee {
     Proof(Vec<u8>),
 }
 
-pub type Nonce = U128;
+pub type Nonce = u64;
 
 pub fn stringify<T: std::fmt::Display>(item: T) -> String {
     item.to_string()

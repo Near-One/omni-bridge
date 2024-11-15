@@ -8,8 +8,7 @@ use {
         prover_result::{
             DeployTokenMessage, FinTransferMessage, InitTransferMessage, LogMetadataMessage,
             ProofKind,
-        },
-        stringify, Fee, OmniAddress, TransferId,
+        }, stringify, Fee, Nonce, OmniAddress, TransferId
     },
 };
 
@@ -143,7 +142,7 @@ struct InitTransferWh {
     payload_type: ProofKind,
     sender: OmniAddress,
     token_address: OmniAddress,
-    nonce: u128,
+    origin_nonce: Nonce,
     amount: u128,
     fee: u128,
     native_fee: u128,
@@ -169,7 +168,7 @@ impl TryInto<InitTransferMessage> for ParsedVAA {
                 native_fee: transfer.native_fee.into(),
             },
             recipient: transfer.recipient.parse().map_err(stringify)?,
-            origin_nonce: transfer.nonce.into(),
+            origin_nonce: transfer.origin_nonce,
             sender: transfer.sender,
             msg: transfer.message,
             emitter_address: OmniAddress::new_from_slice(
