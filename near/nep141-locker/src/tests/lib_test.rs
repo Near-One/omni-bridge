@@ -17,8 +17,8 @@ use omni_types::{ChainKind, Fee, InitTransferMsg, OmniAddress, TransferMessage, 
 
 const DEFAULT_NONCE: Nonce = 0;
 const DEFAULT_TRANSFER_ID: TransferId = TransferId {
-    chain: ChainKind::Near,
-    nonce: DEFAULT_NONCE,
+    origin_chain: ChainKind::Near,
+    origin_nonce: DEFAULT_NONCE,
 };
 const DEFAULT_PROVER_ACCOUNT: &str = "prover.testnet";
 const DEFAULT_MPC_SIGNER_ACCOUNT: &str = "mpc_signer.testnet";
@@ -154,8 +154,8 @@ fn test_ft_on_transfer_stored_transfer_message() {
     );
 
     let stored_transfer = contract.get_transfer_message(TransferId {
-        chain: ChainKind::Near,
-        nonce: contract.current_origin_nonce,
+        origin_chain: ChainKind::Near,
+        origin_nonce: contract.current_origin_nonce,
     });
     assert_eq!(
         stored_transfer.recipient, msg.recipient,
@@ -571,8 +571,8 @@ fn test_fin_transfer_callback_non_near_success() {
 
             // Verify transfer was stored correctly
             let stored_transfer = contract.get_transfer_message(TransferId {
-                chain: ChainKind::Eth,
-                nonce: DEFAULT_NONCE,
+                origin_chain: ChainKind::Eth,
+                origin_nonce: DEFAULT_NONCE,
             });
             assert_eq!(stored_transfer.recipient, eth_recipient);
         }
@@ -670,7 +670,10 @@ fn test_is_transfer_finalised() {
     let mut contract = get_default_contract();
     let chain = ChainKind::Eth;
     let nonce = 1;
-    let transfer_id = TransferId { chain, nonce };
+    let transfer_id = TransferId {
+        origin_chain: chain,
+        origin_nonce: nonce,
+    };
 
     assert!(!contract.is_transfer_finalised(transfer_id));
 
