@@ -11,5 +11,6 @@ pub enum ErrorCode {
     TokenMetadataNotProvided,
     SolanaTokenParsingFailed,
     BridgedTokenHasVault,
-    NativeTokenHasNoVault
+    NativeTokenHasNoVault,
+    InvalidBridgedToken,
 }

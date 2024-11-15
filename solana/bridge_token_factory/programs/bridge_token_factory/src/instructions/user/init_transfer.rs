@@ -1,7 +1,6 @@
 use anchor_lang::prelude::*;
 use anchor_spl::{
-    token_2022::{burn, Burn},
-    token_2022::{transfer_checked, TransferChecked},
+    token_2022::{burn, transfer_checked, Burn, TransferChecked},
     token_interface::{Mint, TokenAccount, TokenInterface},
 };
 
@@ -59,7 +58,15 @@ impl<'info> InitTransfer<'info> {
                 &[WRAPPED_MINT_SEED, token.as_bytes().as_ref()],
                 &crate::ID,
             );
-            require_keys_eq!(self.mint.key(), expected_mint_address);
+            require_keys_eq!(
+                self.mint.key(),
+                expected_mint_address,
+                ErrorCode::InvalidBridgedToken
+            );
+            require!(
+                self.mint.mint_authority.contains(self.authority.key),
+                ErrorCode::InvalidBridgedToken
+            );
 
             burn(
                 CpiContext::new(

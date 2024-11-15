@@ -52,8 +52,9 @@ pub mod bridge_token_factory {
         Ok(())
     }
 
-    pub fn finalize_transfer_bridged(
-        ctx: Context<FinalizeDepositBridged>,
+    pub fn finalize_transfer(
+        ctx: Context<FinalizeTransfer>,
+        token: Option<String>,
         data: SignedPayload<FinalizeTransferPayload>,
     ) -> Result<()> {
         msg!("Finalizing transfer");
@@ -62,22 +63,7 @@ pub mod bridge_token_factory {
             (ctx.accounts.mint.key(), ctx.accounts.recipient.key()),
             &ctx.accounts.config.derived_near_bridge_address,
         )?;
-        ctx.accounts.mint(data.payload)?;
-
-        Ok(())
-    }
-
-    pub fn finalize_transfer_native(
-        ctx: Context<FinalizeTransferNative>,
-        data: SignedPayload<FinalizeTransferPayload>,
-    ) -> Result<()> {
-        msg!("Finalizing transfer");
-
-        data.verify_signature(
-            (ctx.accounts.mint.key(), ctx.accounts.recipient.key()),
-            &ctx.accounts.config.derived_near_bridge_address,
-        )?;
-        ctx.accounts.process(data.payload)?;
+        ctx.accounts.process(token, data.payload)?;
 
         Ok(())
     }
