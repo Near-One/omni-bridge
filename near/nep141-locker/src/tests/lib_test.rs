@@ -561,15 +561,18 @@ fn test_fin_transfer_callback_non_near_success() {
 
     let result = contract.fin_transfer_callback(&storage_args, predecessor.clone(), None);
 
-    // For non-NEAR recipients, should return U128 value of current_nonce
+    // For non-NEAR recipients, should return u64 value of current_destination_nonce
     match result {
         PromiseOrValue::Value(nonce) => {
-            assert_eq!(nonce, contract.current_origin_nonce);
+            assert_eq!(
+                nonce,
+                contract.get_current_destination_nonce(ChainKind::Eth)
+            );
 
             // Verify transfer was stored correctly
             let stored_transfer = contract.get_transfer_message(TransferId {
                 chain: ChainKind::Eth,
-                nonce,
+                nonce: DEFAULT_NONCE,
             });
             assert_eq!(stored_transfer.recipient, eth_recipient);
         }

@@ -922,10 +922,18 @@ impl Contract {
             .with_static_gas(SET_METADATA_GAS)
             .set_metadata(name, symbol, reference, reference_hash, decimals, icon)
     }
+
+    pub fn get_current_destination_nonce(&self, chain_kind: ChainKind) -> Nonce {
+        self.destination_nonces.get(&chain_kind).unwrap_or_default()
+    }
 }
 
 impl Contract {
     fn get_next_destination_nonce(&mut self, chain_kind: ChainKind) -> Nonce {
+        if chain_kind == ChainKind::Near {
+            return 0;
+        }
+
         let mut payload_nonce = self.destination_nonces.get(&chain_kind).unwrap_or_default();
 
         payload_nonce += 1;
