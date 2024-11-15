@@ -145,7 +145,7 @@ impl Contract {
                 fee: Fee::default(),
                 sender: OmniAddress::Near(max_account_id.clone()),
                 msg: String::new(),
-                payload_nonce: U128(0),
+                destination_nonce: U128(0),
             },
             owner: max_account_id,
         }))

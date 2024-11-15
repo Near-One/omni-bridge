@@ -19,7 +19,6 @@ pub struct InitTransferMessage {
 
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Debug, Clone)]
 pub struct FinTransferMessage {
-    pub payload_nonce: U128,
     pub transfer_id: TransferId,
     pub fee_recipient: AccountId,
     pub amount: U128,

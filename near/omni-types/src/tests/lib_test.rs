@@ -2,7 +2,9 @@ use near_sdk::borsh;
 use near_sdk::json_types::U128;
 use near_sdk::serde_json;
 
-use crate::{stringify, ChainKind, Fee, OmniAddress, PayloadType, TransferMessage, H160};
+use crate::{
+    stringify, ChainKind, Fee, OmniAddress, PayloadType, TransferId, TransferMessage, H160,
+};
 use std::str::FromStr;
 
 #[test]
@@ -335,6 +337,7 @@ fn test_transfer_message_getters() {
     let test_cases = vec![
         (
             TransferMessage {
+                destination_nonce: U128(1),
                 origin_nonce: U128(123),
                 token: OmniAddress::Near("token.near".parse().unwrap()),
                 amount: U128(1000),
@@ -344,11 +347,15 @@ fn test_transfer_message_getters() {
                 msg: "".to_string(),
             },
             ChainKind::Eth,
-            (ChainKind::Eth, 123),
+            TransferId {
+                chain: ChainKind::Eth,
+                nonce: U128(123),
+            },
             "Should handle ETH sender",
         ),
         (
             TransferMessage {
+                destination_nonce: U128(1),
                 origin_nonce: U128(456),
                 token: OmniAddress::Near("token.near".parse().unwrap()),
                 amount: U128(2000),
@@ -358,11 +365,15 @@ fn test_transfer_message_getters() {
                 msg: "".to_string(),
             },
             ChainKind::Near,
-            (ChainKind::Near, 456),
+            TransferId {
+                chain: ChainKind::Near,
+                nonce: U128(456),
+            },
             "Should handle NEAR sender",
         ),
         (
             TransferMessage {
+                destination_nonce: U128(1),
                 origin_nonce: U128(789),
                 token: OmniAddress::Near("token.near".parse().unwrap()),
                 amount: U128(3000),
@@ -372,7 +383,10 @@ fn test_transfer_message_getters() {
                 msg: "".to_string(),
             },
             ChainKind::Sol,
-            (ChainKind::Sol, 789),
+            TransferId {
+                chain: ChainKind::Sol,
+                nonce: U128(789),
+            },
             "Should handle SOL sender",
         ),
     ];

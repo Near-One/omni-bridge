@@ -24,9 +24,8 @@ sol! {
     );
 
     event FinTransfer(
-        uint128 indexed payload_nonce,
+        uint8 indexed origin_chain,
         uint128 indexed origin_nonce,
-        uint8 origin_chain,
         address tokenAddress,
         uint128 amount,
         address recipient,
@@ -79,7 +78,6 @@ impl TryFromLog<Log<FinTransfer>> for FinTransferMessage {
         }
 
         Ok(FinTransferMessage {
-            payload_nonce: near_sdk::json_types::U128(event.data.payload_nonce),
             transfer_id: crate::TransferId {
                 chain: event.data.origin_chain.try_into()?,
                 nonce: near_sdk::json_types::U128(event.data.origin_nonce),
@@ -175,9 +173,8 @@ mod tests {
     use super::*;
     sol! {
         event TestFinTransfer(
-            uint128 indexed payload_nonce,
+            uint8 indexed origin_chain,
             uint128 indexed origin_nonce,
-            uint8 origin_chain,
             address tokenAddress,
             uint128 amount,
             address recipient,
@@ -188,7 +185,6 @@ mod tests {
     #[test]
     fn test_decode_log_with_same_params_with_validation() {
         let event = FinTransfer {
-            payload_nonce: 55,
             origin_nonce: 50,
             origin_chain: 1,
             amount: 100,
@@ -197,7 +193,6 @@ mod tests {
             feeRecipient: "some_fee_recipient".to_owned(),
         };
         let test_event = TestFinTransfer {
-            payload_nonce: event.payload_nonce,
             origin_nonce: event.origin_nonce,
             origin_chain: event.origin_chain,
             amount: event.amount,

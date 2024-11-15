@@ -150,16 +150,19 @@ contract BridgeTokenFactory is
 
     function finTransfer(
         bytes calldata signatureData,
-        BridgeTypes.FinTransferPayload calldata payload
+        BridgeTypes.TransferMessagePayload calldata payload
     ) payable external whenNotPaused(PAUSED_FIN_TRANSFER) {
-        if (completedTransfers[payload.nonce]) {
-            revert NonceAlreadyUsed(payload.nonce);
+        if (completedTransfers[payload.destination_nonce]) {
+            revert NonceAlreadyUsed(payload.destination_nonce);
         }
+
+        completedTransfers[payload.destination_nonce] = true;
 
         bytes memory borshEncoded = bytes.concat(
             bytes1(uint8(BridgeTypes.PayloadType.TransferMessage)),
+            Borsh.encodeUint128(payload.destination_nonce),
             bytes1(payload.origin_chain),
-            Borsh.encodeUint128(payload.nonce),
+            Borsh.encodeUint128(payload.origin_nonce),
             bytes1(omniBridgeChainId),
             Borsh.encodeAddress(payload.tokenAddress),
             Borsh.encodeUint128(payload.amount),
@@ -174,8 +177,6 @@ contract BridgeTokenFactory is
         if (ECDSA.recover(hashed, signatureData) != nearBridgeDerivedAddress) {
             revert InvalidSignature();
         }
-
-        completedTransfers[payload.nonce] = true;
         
         if (isBridgeToken[payload.tokenAddress]) {
             BridgeToken(payload.tokenAddress).mint(payload.recipient, payload.amount);
@@ -186,9 +187,8 @@ contract BridgeTokenFactory is
         finTransferExtension(payload);
 
         emit BridgeTypes.FinTransfer(
-            payload.nonce,
-            payload.origin_nonce,
             payload.origin_chain,
+            payload.origin_nonce,
             payload.tokenAddress,
             payload.amount,
             payload.recipient,
@@ -196,7 +196,7 @@ contract BridgeTokenFactory is
         );
     }
 
-    function finTransferExtension(BridgeTypes.FinTransferPayload memory payload) internal virtual {}
+    function finTransferExtension(BridgeTypes.TransferMessagePayload memory payload) internal virtual {}
 
     function initTransfer(
         address tokenAddress,
