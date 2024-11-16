@@ -12,7 +12,7 @@ import {ICustomMinter} from "../../common/ICustomMinter.sol";
 
 import "./BridgeToken.sol";
 import "./SelectivePausableUpgradable.sol";
-import "./Borsh.sol";
+import "../../common/Borsh.sol";
 import "./BridgeTypes.sol";
 
 contract BridgeTokenFactory is
