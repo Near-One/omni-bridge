@@ -60,35 +60,21 @@ contract BridgeTokenFactory is
         _grantRole(PAUSABLE_ADMIN_ROLE, _msgSender());
     }
 
-    function isBridgeToken(address token) external view returns (bool) {
-        return _isBridgeToken[token];
-    }
-
-    function ethToNearToken(address token) external view returns (string memory) {
-        require(_isBridgeToken[token], "ERR_NOT_BRIDGE_TOKEN");
-        return _ethToNearToken[token];
-    }
-
-    function nearToEthToken(string calldata nearTokenId) external view returns (address) {
-        require(_isBridgeToken[_nearToEthToken[nearTokenId]], "ERR_NOT_BRIDGE_TOKEN");
-        return _nearToEthToken[nearTokenId];
-    }
-
     function addCustomToken(string calldata nearTokenId, address tokenAddress, address customMinter) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        _isBridgeToken[tokenAddress] = true;
-        _ethToNearToken[tokenAddress] = nearTokenId;
-        _nearToEthToken[nearTokenId] = tokenAddress;
+        isBridgeToken[tokenAddress] = true;
+        ethToNearToken[tokenAddress] = nearTokenId;
+        nearToEthToken[nearTokenId] = tokenAddress;
         customMinters[tokenAddress] = customMinter;
     }
 
     function removeCustomToken(address tokenAddress) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        delete _isBridgeToken[tokenAddress];
-        delete _nearToEthToken[_ethToNearToken[tokenAddress]];
-        delete _ethToNearToken[tokenAddress];
+        delete isBridgeToken[tokenAddress];
+        delete nearToEthToken[ethToNearToken[tokenAddress]];
+        delete ethToNearToken[tokenAddress];
         delete customMinters[tokenAddress];
     }
 
-    function deployToken(bytes calldata signatureData, MetadataPayload calldata metadata) payable external returns (address) {
+    function deployToken(bytes calldata signatureData, BridgeTypes.MetadataPayload calldata metadata) payable external returns (address) {
         bytes memory borshEncoded = bytes.concat(
             bytes1(uint8(BridgeTypes.PayloadType.Metadata)),
             Borsh.encodeString(metadata.token),
@@ -209,14 +195,10 @@ contract BridgeTokenFactory is
             revert InvalidSignature();
         }
 
-        address tokenAddress = _nearToEthToken[payload.token];
-
-        require(_isBridgeToken[tokenAddress], "ERR_NOT_BRIDGE_TOKEN");
-
-        if (customMinters[tokenAddress] != address(0)) {
-            ICustomMinter(customMinters[tokenAddress]).mint(tokenAddress, payload.recipient, payload.amount);
+        if (customMinters[payload.tokenAddress] != address(0)) {
+            ICustomMinter(customMinters[payload.tokenAddress]).mint(payload.tokenAddress, payload.recipient, payload.amount);
         } else if (isBridgeToken[payload.tokenAddress]) {
-            BridgeToken(tokenAddress).mint(payload.recipient, payload.amount);
+            BridgeToken(payload.tokenAddress).mint(payload.recipient, payload.amount);
         } else {
             IERC20(payload.tokenAddress).safeTransfer(payload.recipient, payload.amount);
         }
