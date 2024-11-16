@@ -22,7 +22,7 @@ function depositSignature(tokenId, recipient) {
   const signatures = [
     {
       payload: {
-        nonce: 2045,
+        destinationNonce: 1,
         token: "wrap.testnet",
         amount: 1,
         recipient: "0x3A445243376C32fAba679F63586e236F77EA601e",

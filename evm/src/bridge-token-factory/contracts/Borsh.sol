@@ -6,7 +6,7 @@ library Borsh {
         return bytes4(swapBytes4(val));
     }
 
-    function encodeUint64(uint64 val) public pure returns (bytes8) {
+    function encodeUint64(uint64 val) internal pure returns (bytes8) {
         return bytes8(swapBytes8(val));
     }
 
