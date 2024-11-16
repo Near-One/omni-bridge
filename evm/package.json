@@ -6,8 +6,7 @@
     "dependencies": {
         "@openzeppelin/contracts": "^5.0.2",
         "@openzeppelin/contracts-upgradeable": "^5.0.2",
-        "bs58check": "^4.0.0",
-        "rainbow-bridge-sol": "https://gitpkg.now.sh/aurora-is-near/rainbow-bridge/contracts/eth?327ff937bda3e3a99386fe488994f3c8e35f8aa0"
+        "bs58check": "^4.0.0"
     },
     "devDependencies": {
         "@nomicfoundation/hardhat-chai-matchers": "^2.0.6",

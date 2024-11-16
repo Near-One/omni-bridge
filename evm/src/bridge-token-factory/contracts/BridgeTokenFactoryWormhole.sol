@@ -2,7 +2,7 @@
 pragma solidity ^0.8.24;
 
 import {BridgeTokenFactory} from "./BridgeTokenFactory.sol";
-import "./Borsh.sol";
+import "../../common/Borsh.sol";
 import "./BridgeTypes.sol";
 
 interface IWormhole {

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 pragma solidity 0.8.24;
 
-import "rainbow-bridge-sol/nearbridge/contracts/Utils.sol";
+import "../../common/Borsh.sol";
 import {AccessControlUpgradeable} from '@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol';
 import {UUPSUpgradeable} from '@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol';
 import {IENear} from './IENear.sol';
@@ -36,10 +36,10 @@ contract ENearProxy is UUPSUpgradeable, AccessControlUpgradeable, ICustomMinter 
             hex"01000000",
             abi.encodePacked(currentReceiptId),
             new bytes(24),
-            abi.encodePacked(Utils.swapBytes4(uint32(nearConnector.length))),
+            abi.encodePacked(Borsh.swapBytes4(uint32(nearConnector.length))),
             abi.encodePacked(nearConnector),
             hex"022500000000",
-            abi.encodePacked(Utils.swapBytes16(amount)),
+            abi.encodePacked(Borsh.swapBytes16(amount)),
             abi.encodePacked(to),
             new bytes(280)
         );
