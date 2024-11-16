@@ -24,9 +24,8 @@ use omni_types::near_events::Nep141LockerEvent;
 use omni_types::prover_args::VerifyProofArgs;
 use omni_types::prover_result::ProverResult;
 use omni_types::{
-    BasicMetadata, ChainKind, ClaimNativeFeePayload, Fee, InitTransferMsg, MetadataPayload,
-    NativeFee, Nonce, OmniAddress, PayloadType, SignRequest, TransferId, TransferMessage,
-    TransferMessagePayload, UpdateFee,
+    BasicMetadata, ChainKind, Fee, InitTransferMsg, MetadataPayload, Nonce, OmniAddress,
+    PayloadType, SignRequest, TransferId, TransferMessage, TransferMessagePayload, UpdateFee,
 };
 use storage::{TransferMessageStorage, TransferMessageStorageValue};
 
@@ -41,7 +40,6 @@ const LOG_METADATA_CALLBACK_GAS: Gas = Gas::from_tgas(260);
 const MPC_SIGNING_GAS: Gas = Gas::from_tgas(250);
 const SIGN_TRANSFER_CALLBACK_GAS: Gas = Gas::from_tgas(5);
 const SIGN_LOG_METADATA_CALLBACK_GAS: Gas = Gas::from_tgas(5);
-const SIGN_CLAIM_NATIVE_FEE_CALLBACK_GAS: Gas = Gas::from_tgas(5);
 const VERIFY_PROOF_GAS: Gas = Gas::from_tgas(30);
 const VERIFY_PROOF_CALLBACK_GAS: Gas = Gas::from_tgas(150);
 const CLAIM_FEE_CALLBACK_GAS: Gas = Gas::from_tgas(50);
@@ -165,14 +163,14 @@ pub struct Contract {
     pub prover_account: AccountId,
     pub factories: LookupMap<ChainKind, OmniAddress>,
     pub pending_transfers: LookupMap<TransferId, TransferMessageStorage>,
-    pub finalised_transfers: LookupMap<TransferId, Option<NativeFee>>,
+    pub finalised_transfers: LookupSet<TransferId>,
     pub token_id_to_address: LookupMap<(ChainKind, AccountId), OmniAddress>,
     pub token_address_to_id: LookupMap<OmniAddress, AccountId>,
     pub deployed_tokens: LookupSet<AccountId>,
     pub token_deployer_accounts: LookupMap<ChainKind, AccountId>,
     pub mpc_signer: AccountId,
     pub current_origin_nonce: Nonce,
-    // We maintain a separate nonce for each chain to oprimise the storage usage on Solana by reducing the gaps.
+    // We maintain a separate nonce for each chain to optimize the storage usage on Solana by reducing the gaps.
     pub destination_nonces: LookupMap<ChainKind, Nonce>,
     pub accounts_balances: LookupMap<AccountId, StorageBalance>,
     pub wnear_account_id: AccountId,
@@ -245,7 +243,7 @@ impl Contract {
             prover_account,
             factories: LookupMap::new(StorageKey::Factories),
             pending_transfers: LookupMap::new(StorageKey::PendingTransfers),
-            finalised_transfers: LookupMap::new(StorageKey::FinalisedTransfers),
+            finalised_transfers: LookupSet::new(StorageKey::FinalisedTransfers),
             token_id_to_address: LookupMap::new(StorageKey::TokenIdToAddress),
             token_address_to_id: LookupMap::new(StorageKey::TokenAddressToId),
             deployed_tokens: LookupSet::new(StorageKey::DeployedTokens),
@@ -368,65 +366,6 @@ impl Contract {
         }
     }
 
-    #[payable]
-    pub fn sign_claim_native_fee(&mut self, nonces: Vec<Nonce>, recipient: OmniAddress) -> Promise {
-        let chain_kind = recipient.get_chain();
-        let mut amount: u128 = 0_u128;
-        for nonce in &nonces {
-            let native_fee = self
-                .finalised_transfers
-                .get(&TransferId {
-                    origin_chain: chain_kind,
-                    origin_nonce: *nonce,
-                })
-                .flatten()
-                .sdk_expect("ERR_NATIVE_FEE_NOT_EXISIT");
-
-            require!(native_fee.recipient == recipient, "ERR_WRONG_RECIPIENT");
-            amount += native_fee.amount.0;
-        }
-
-        let claim_payload = ClaimNativeFeePayload {
-            prefix: PayloadType::ClaimNativeFee,
-            nonces,
-            amount: U128(amount),
-            recipient,
-        };
-        let payload =
-            near_sdk::env::keccak256_array(&borsh::to_vec(&claim_payload).sdk_expect("ERR_BORSH"));
-
-        ext_signer::ext(self.mpc_signer.clone())
-            .with_static_gas(MPC_SIGNING_GAS)
-            .with_attached_deposit(env::attached_deposit())
-            .sign(SignRequest {
-                payload,
-                path: SIGN_PATH.to_owned(),
-                key_version: 0,
-            })
-            .then(
-                Self::ext(env::current_account_id())
-                    .with_static_gas(SIGN_CLAIM_NATIVE_FEE_CALLBACK_GAS)
-                    .sign_claim_native_fee_callback(claim_payload),
-            )
-    }
-
-    #[private]
-    pub fn sign_claim_native_fee_callback(
-        &mut self,
-        #[callback_result] call_result: Result<SignatureResponse, PromiseError>,
-        #[serializer(borsh)] claim_payload: ClaimNativeFeePayload,
-    ) {
-        if let Ok(signature) = call_result {
-            env::log_str(
-                &Nep141LockerEvent::SignClaimNativeFeeEvent {
-                    signature,
-                    claim_payload,
-                }
-                .to_log_string(),
-            );
-        }
-    }
-
     /// # Panics
     ///
     /// This function will panic under the following conditions:
@@ -525,11 +464,7 @@ impl Contract {
             Self::ext(env::current_account_id())
                 .with_attached_deposit(attached_deposit)
                 .with_static_gas(VERIFY_PROOF_CALLBACK_GAS)
-                .fin_transfer_callback(
-                    &args.storage_deposit_args,
-                    env::predecessor_account_id(),
-                    args.native_fee_recipient,
-                ),
+                .fin_transfer_callback(&args.storage_deposit_args, env::predecessor_account_id()),
         )
     }
 
@@ -539,7 +474,6 @@ impl Contract {
         &mut self,
         #[serializer(borsh)] storage_deposit_args: &StorageDepositArgs,
         #[serializer(borsh)] predecessor_account_id: AccountId,
-        #[serializer(borsh)] native_fee_recipient: Option<OmniAddress>,
     ) -> PromiseOrValue<Nonce> {
         let Ok(ProverResult::InitTransfer(init_transfer)) = Self::decode_prover_result(0) else {
             env::panic_str("Invalid proof message")
@@ -570,7 +504,6 @@ impl Contract {
                 predecessor_account_id,
                 transfer_message,
                 storage_deposit_args,
-                native_fee_recipient,
             )
             .into()
         } else {
@@ -592,7 +525,7 @@ impl Contract {
                 Self::ext(env::current_account_id())
                     .with_attached_deposit(env::attached_deposit())
                     .with_static_gas(CLAIM_FEE_CALLBACK_GAS)
-                    .claim_fee_callback(args.native_fee_recipient, env::predecessor_account_id()),
+                    .claim_fee_callback(&env::predecessor_account_id()),
             )
     }
 
@@ -600,8 +533,7 @@ impl Contract {
     #[payable]
     pub fn claim_fee_callback(
         &mut self,
-        #[serializer(borsh)] native_fee_recipient: Option<OmniAddress>,
-        #[serializer(borsh)] predecessor_account_id: AccountId,
+        #[serializer(borsh)] predecessor_account_id: &AccountId,
         #[callback_result]
         #[serializer(borsh)]
         call_result: Result<ProverResult, PromiseError>,
@@ -610,7 +542,7 @@ impl Contract {
             env::panic_str("Invalid proof message")
         };
         require!(
-            fin_transfer.fee_recipient == predecessor_account_id,
+            fin_transfer.fee_recipient == *predecessor_account_id,
             "ERR_ONLY_FEE_RECIPIENT_CAN_CLAIM"
         );
         require!(
@@ -625,32 +557,21 @@ impl Contract {
         let fee = message.amount.0 - fin_transfer.amount.0;
 
         if message.fee.native_fee.0 != 0 {
-            let native_fee_recipient = native_fee_recipient.sdk_expect("ERR_FEE_RECIPIENT_NOT_SET");
-            require!(
-                message.get_origin_chain() == native_fee_recipient.get_chain(),
-                "ERR_WRONG_FEE_RECIPIENT_CHAIN"
-            );
-
             if message.get_origin_chain() == ChainKind::Near {
-                let OmniAddress::Near(near_recipient) = &native_fee_recipient else {
-                    env::panic_str("ERR_WRONG_CHAIN_KIND")
-                };
-                Promise::new(near_recipient.clone())
+                Promise::new(fin_transfer.fee_recipient.clone())
                     .transfer(NearToken::from_yoctonear(message.fee.native_fee.0));
             } else {
-                let required_balance = self.update_fin_transfer(
-                    &message.get_transfer_id(),
-                    &Some(NativeFee {
-                        amount: message.fee.native_fee,
-                        recipient: native_fee_recipient.clone(),
-                    }),
-                );
+                let native_token_address = OmniAddress::new_zero(message.get_origin_chain())
+                    .sdk_expect("ERR_FAILED_TO_GET_ZERO_ADDRESS");
 
-                self.update_storage_balance(
-                    predecessor_account_id,
-                    required_balance,
-                    env::attached_deposit(),
-                );
+                ext_token::ext(self.get_token_id(&native_token_address))
+                    .with_static_gas(MINT_TOKEN_GAS)
+                    .with_attached_deposit(ONE_YOCTO)
+                    .mint(
+                        fin_transfer.fee_recipient.clone(),
+                        message.fee.native_fee,
+                        None,
+                    );
             }
         }
 
@@ -882,7 +803,7 @@ impl Contract {
     }
 
     pub fn is_transfer_finalised(&self, transfer_id: TransferId) -> bool {
-        self.finalised_transfers.contains_key(&transfer_id)
+        self.finalised_transfers.contains(&transfer_id)
     }
 
     #[access_control_any(roles(Role::DAO))]
@@ -950,24 +871,8 @@ impl Contract {
         predecessor_account_id: AccountId,
         transfer_message: TransferMessage,
         storage_deposit_args: &StorageDepositArgs,
-        native_fee_recipient: Option<OmniAddress>,
     ) -> Promise {
-        let native_fee = if transfer_message.fee.native_fee.0 != 0 {
-            let recipient = native_fee_recipient.sdk_expect("ERR_FEE_RECIPIENT_NOT_SET");
-            require!(
-                transfer_message.get_origin_chain() == recipient.get_chain(),
-                "ERR_WRONG_FEE_RECIPIENT_CHAIN"
-            );
-            Some(NativeFee {
-                amount: transfer_message.fee.native_fee,
-                recipient,
-            })
-        } else {
-            None
-        };
-
-        let mut required_balance =
-            self.add_fin_transfer(&transfer_message.get_transfer_id(), &native_fee);
+        let mut required_balance = self.add_fin_transfer(&transfer_message.get_transfer_id());
 
         let token = self.get_token_id(&transfer_message.token);
         require!(
@@ -1064,8 +969,7 @@ impl Contract {
         predecessor_account_id: AccountId,
         transfer_message: TransferMessage,
     ) {
-        let mut required_balance =
-            self.add_fin_transfer(&transfer_message.get_transfer_id(), &None);
+        let mut required_balance = self.add_fin_transfer(&transfer_message.get_transfer_id());
 
         required_balance = self
             .add_transfer_message(transfer_message.clone(), predecessor_account_id.clone())
@@ -1186,30 +1090,12 @@ impl Contract {
         transfer.message
     }
 
-    fn add_fin_transfer(
-        &mut self,
-        transfer_id: &TransferId,
-        native_token_fee: &Option<NativeFee>,
-    ) -> NearToken {
+    fn add_fin_transfer(&mut self, transfer_id: &TransferId) -> NearToken {
         let storage_usage = env::storage_usage();
         require!(
-            self.finalised_transfers
-                .insert(transfer_id, native_token_fee)
-                .is_none(),
+            self.finalised_transfers.insert(transfer_id),
             "The transfer is already finalised"
         );
-        env::storage_byte_cost()
-            .saturating_mul((env::storage_usage().saturating_sub(storage_usage)).into())
-    }
-
-    fn update_fin_transfer(
-        &mut self,
-        transfer_id: &TransferId,
-        native_token_fee: &Option<NativeFee>,
-    ) -> NearToken {
-        let storage_usage = env::storage_usage();
-        self.finalised_transfers
-            .insert(transfer_id, native_token_fee);
         env::storage_byte_cost()
             .saturating_mul((env::storage_usage().saturating_sub(storage_usage)).into())
     }

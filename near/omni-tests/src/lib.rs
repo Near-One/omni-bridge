@@ -228,7 +228,6 @@ mod tests {
             .call(locker_contract.id(), "fin_transfer")
             .args_borsh(FinTransferArgs {
                 chain_kind: omni_types::ChainKind::Eth,
-                native_fee_recipient: Some(OmniAddress::Near(account_1())),
                 storage_deposit_args: StorageDepositArgs {
                     token: token_contract.id().clone(),
                     accounts: storage_deposit_accounts,
