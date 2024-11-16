@@ -1,6 +1,9 @@
 {
   "license": "ISC",
   "scripts": {
+    "_test-initialize-simple": "pnpm --filter omni-bridge-solana-tests run test-initialize-simple",
+    "test": "anchor test --skip-build",
+    "pretest": "pnpm --filter omni-bridge-solana-tests run setup-test",
     "copy-idl": "copyfiles -u 2 target/types/bridge_token_factory.ts ts/sdk/src && copyfiles -u 2 target/idl/bridge_token_factory.json ts/sdk/src",
     "build-devnet": "PROGRAM_ID=\"3ZtEZ8xABFbUr4c1FVpXbQiVdqv4vwhvfCc8HMmhEeua\" anchor build -- --features devnet",
     "build-test": "PROGRAM_ID=\"3ZtEZ8xABFbUr4c1FVpXbQiVdqv4vwhvfCc8HMmhEeua\" anchor build -- --features mainnet"

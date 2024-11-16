@@ -142,16 +142,22 @@ export class OmniBridgeSolanaSDK {
 
   constructor({
     provider,
+    programId,
     wormholeProgramId,
   }: {
     provider: Provider;
+    programId?: PublicKey;
     wormholeProgramId: PublicKey;
   }) {
     this.wormholeProgramId = wormholeProgramId;
-    this.program = new Program(
-      BridgeTokenFactoryIdl as BridgeTokenFactory,
-      provider,
-    );
+    let idl = BridgeTokenFactoryIdl;
+    if (programId) {
+      idl = {
+        ...BridgeTokenFactoryIdl,
+        address: programId.toBase58(),
+      };
+    }
+    this.program = new Program(idl as BridgeTokenFactory, provider);
   }
 
   get programId(): PublicKey {
@@ -269,139 +275,6 @@ export class OmniBridgeSolanaSDK {
     return {instructions: [instruction], signers: [wormholeMessage]};
   }
 
-  async finalizeTransferBridged({
-    nonce,
-    token,
-    amount,
-    recipient,
-    feeRecipient = null,
-    signature,
-    payer,
-    sequenceNumber,
-  }: {
-    nonce: BN;
-    token: string;
-    amount: BN;
-    recipient: PublicKey;
-    feeRecipient?: string | null;
-    signature: number[];
-    payer?: PublicKey;
-    sequenceNumber?: BN;
-  }): Promise<TransactionData> {
-    const wormholeMessage = Keypair.generate();
-
-    if (!sequenceNumber) {
-      sequenceNumber = await this.fetchNextSequenceNumber();
-    }
-
-    const [config] = this.configId();
-    const [usedNonces] = this.usedNoncesId({nonce});
-    const [mint] = this.wrappedMintId({token});
-    const tokenAccount = getAssociatedTokenAddressSync(mint, recipient, true);
-
-    const instruction = await this.program.methods
-      .finalizeTransferBridged({
-        payload: {
-          nonce,
-          token,
-          amount,
-          feeRecipient,
-        },
-        signature,
-      })
-      .accountsStrict({
-        config,
-        usedNonces,
-        wormhole: {
-          config,
-          bridge: this.wormholeBridgeId()[0],
-          feeCollector: this.wormholeFeeCollectorId()[0],
-          sequence: this.wormholeSequenceId()[0],
-          clock: SYSVAR_CLOCK_PUBKEY,
-          rent: SYSVAR_RENT_PUBKEY,
-          systemProgram: SystemProgram.programId,
-          wormholeProgram: this.wormholeProgramId,
-          message: wormholeMessage.publicKey,
-          payer: payer || this.provider.publicKey!,
-        },
-        recipient,
-        authority: this.authority()[0],
-        mint,
-        systemProgram: SystemProgram.programId,
-        tokenProgram: TOKEN_PROGRAM_ID,
-        tokenAccount,
-        associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
-      })
-      .instruction();
-
-    return {instructions: [instruction], signers: [wormholeMessage]};
-  }
-
-  async initTransferBridged({
-    token,
-    from,
-    user,
-    amount,
-    recipient,
-    fee,
-    payer,
-    sequenceNumber,
-  }: {
-    token: string;
-    from?: PublicKey;
-    user?: PublicKey;
-    amount: BN;
-    recipient: string;
-    fee: BN;
-    payer?: PublicKey;
-    sequenceNumber?: BN;
-  }): Promise<TransactionData> {
-    const wormholeMessage = Keypair.generate();
-    const [config] = this.configId();
-    const [mint] = this.wrappedMintId({token});
-
-    if (!sequenceNumber) {
-      sequenceNumber = await this.fetchNextSequenceNumber();
-    }
-
-    if (!user) {
-      user = this.provider.publicKey!;
-    }
-
-    if (!from) {
-      from = getAssociatedTokenAddressSync(mint, user, true);
-    }
-
-    const instruction = await this.program.methods
-      .initTransferBridged({
-        amount,
-        recipient,
-        fee,
-      })
-      .accountsStrict({
-        wormhole: {
-          config,
-          bridge: this.wormholeBridgeId()[0],
-          feeCollector: this.wormholeFeeCollectorId()[0],
-          sequence: this.wormholeSequenceId()[0],
-          clock: SYSVAR_CLOCK_PUBKEY,
-          rent: SYSVAR_RENT_PUBKEY,
-          systemProgram: SystemProgram.programId,
-          wormholeProgram: this.wormholeProgramId,
-          message: wormholeMessage.publicKey,
-          payer: payer || this.provider.publicKey!,
-        },
-        authority: this.authority()[0],
-        mint,
-        tokenProgram: TOKEN_PROGRAM_ID,
-        from,
-        user,
-      })
-      .instruction();
-
-    return {instructions: [instruction], signers: [wormholeMessage]};
-  }
-
   async registerMint({
     mint,
     name = '',
@@ -474,9 +347,10 @@ export class OmniBridgeSolanaSDK {
     return {instructions: [instruction], signers: [wormholeMessage]};
   }
 
-  async finalizeTransferNative({
+  async finalizeTransfer({
     nonce,
     mint,
+    token,
     amount,
     recipient,
     feeRecipient = null,
@@ -486,7 +360,8 @@ export class OmniBridgeSolanaSDK {
     token22,
   }: {
     nonce: BN;
-    mint: PublicKey;
+    mint?: PublicKey;
+    token?: string;
     amount: BN;
     recipient: PublicKey;
     feeRecipient?: string | null;
@@ -496,6 +371,15 @@ export class OmniBridgeSolanaSDK {
     token22?: boolean;
   }): Promise<TransactionData> {
     const wormholeMessage = Keypair.generate();
+
+    if (!mint) {
+      if (!token) {
+        throw new Error('One of token/mint must be supplied');
+      }
+      mint = this.wrappedMintId({token})[0];
+    }
+
+    const vault = token? null: this.vaultId({mint})[0];
 
     if (!sequenceNumber) {
       sequenceNumber = await this.fetchNextSequenceNumber();
@@ -517,7 +401,7 @@ export class OmniBridgeSolanaSDK {
     );
 
     const instruction = await this.program.methods
-      .finalizeTransferNative({
+      .finalizeTransfer({
         payload: {
           nonce,
           amount,
@@ -543,7 +427,7 @@ export class OmniBridgeSolanaSDK {
         },
         recipient,
         mint,
-        vault: this.vaultId({mint})[0],
+        vault,
         systemProgram: SystemProgram.programId,
         tokenProgram: token22 ? TOKEN_2022_PROGRAM_ID : TOKEN_PROGRAM_ID,
         associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
@@ -554,8 +438,9 @@ export class OmniBridgeSolanaSDK {
     return {instructions: [instruction], signers: [wormholeMessage]};
   }
 
-  async initTransferNative({
+  async initTransfer({
     mint,
+    token,
     from,
     user,
     amount,
@@ -565,7 +450,8 @@ export class OmniBridgeSolanaSDK {
     sequenceNumber,
     token22,
   }: {
-    mint: PublicKey;
+    mint?: PublicKey;
+    token?: string;
     from?: PublicKey;
     user?: PublicKey;
     amount: BN;
@@ -576,6 +462,16 @@ export class OmniBridgeSolanaSDK {
     token22?: boolean;
   }): Promise<TransactionData> {
     const wormholeMessage = Keypair.generate();
+
+    if (!mint) {
+      if (!token) {
+        throw new Error('One of token/mint must be supplied');
+      }
+      mint = this.wrappedMintId({token})[0];
+    }
+
+    const vault = token? null: this.vaultId({mint})[0];
+
     const [config] = this.configId();
 
     if (!sequenceNumber) {
@@ -601,7 +497,7 @@ export class OmniBridgeSolanaSDK {
     }
 
     const instruction = await this.program.methods
-      .initTransferNative({
+      .initTransfer({
         amount,
         recipient,
         fee,
@@ -624,7 +520,7 @@ export class OmniBridgeSolanaSDK {
         tokenProgram: token22 ? TOKEN_2022_PROGRAM_ID : TOKEN_PROGRAM_ID,
         from,
         user,
-        vault: this.vaultId({mint})[0],
+        vault,
       })
       .instruction();
 
