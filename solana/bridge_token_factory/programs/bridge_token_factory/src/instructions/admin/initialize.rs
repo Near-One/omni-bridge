@@ -118,6 +118,17 @@ impl<'info> Initialize<'info> {
 
         let rent = Rent::get()?;
 
+        transfer(
+            CpiContext::new(
+                self.system_program.to_account_info(),
+                Transfer {
+                    from: self.payer.to_account_info(),
+                    to: self.sol_vault.to_account_info(),
+                },
+            ),
+            rent.minimum_balance(0),
+        )?;
+
         // prepare rent for the next used_nonces account creation
         transfer(
             CpiContext::new(
