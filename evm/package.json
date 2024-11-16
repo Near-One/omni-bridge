@@ -9,6 +9,7 @@
         "@openzeppelin/contracts-upgradeable": "^5.0.2",
         "bs58check": "^4.0.0",
         "dotenv": "^16.0.1",
+        "hardhat-storage-layout": "^0.1.7",
         "near-api-js": "^5.0.0",
         "rainbow-bridge-eth2near-block-relay": "https://gitpkg.now.sh/aurora-is-near/rainbow-bridge/eth2near/eth2near-block-relay?327ff937bda3e3a99386fe488994f3c8e35f8aa0",
         "rainbow-bridge-lib": "https://gitpkg.now.sh/aurora-is-near/rainbow-bridge/utils?327ff937bda3e3a99386fe488994f3c8e35f8aa0",

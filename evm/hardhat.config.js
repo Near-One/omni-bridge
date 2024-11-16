@@ -2,6 +2,9 @@ require("dotenv").config();
 require("@openzeppelin/hardhat-upgrades");
 require("@nomicfoundation/hardhat-verify");
 require("@nomicfoundation/hardhat-chai-matchers");
+require("hardhat-storage-layout");
+
+require("./src/eNear/scripts.js");
 
 const ALCHEMY_API_KEY = process.env.ALCHEMY_API_KEY;
 const INFURA_API_KEY = process.env.INFURA_API_KEY;
@@ -56,7 +59,7 @@ task("deploy-bridge-token-factory", "Deploys the BridgeTokenFactory contract")
   .setAction(async (taskArgs, hre) => {
     const { ethers, upgrades } = hre;
 
-    const BridgeTokenFactoryContract = 
+    const BridgeTokenFactoryContract =
       await ethers.getContractFactory("BridgeTokenFactory");
     const BridgeTokenFactory = await upgrades.deployProxy(
       BridgeTokenFactoryContract,
@@ -138,8 +141,10 @@ task('etherscan-verify', 'Verify contract on etherscan')
 
 module.exports = {
   paths: {
-    sources: './contracts',
-    artifacts: './build'
+    sources: './src',
+    cache: "./cache",
+    artifacts: './build',
+    tests: './tests'
   },
   solidity: {
     compilers: [
@@ -172,9 +177,9 @@ module.exports = {
         ? `https://mainnet.infura.io/v3/${INFURA_API_KEY}`
         : `https://eth-mainnet.alchemyapi.io/v2/${ALCHEMY_API_KEY}`,
       accounts: [`${ETH_PRIVATE_KEY}`]
-    },
+    }
   },
   etherscan: {
     apiKey: ETHERSCAN_API_KEY
-  },
+  }
 }
