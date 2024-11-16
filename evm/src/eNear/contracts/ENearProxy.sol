@@ -12,19 +12,19 @@ contract ENearProxy is UUPSUpgradeable, AccessControlUpgradeable, ICustomMinter 
 
     bytes32 public constant MINTER_ROLE = keccak256("MINTER_ROLE");
     bytes public nearConnector;
-    uint256 public current_receipt_id;
+    uint256 public currentReceiptId;
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
         _disableInitializers();
     }
 
-    function initialize(address _eNear, bytes memory _nearConnector, uint256 _current_receipt_id) public initializer {
+    function initialize(address _eNear, bytes memory _nearConnector, uint256 _currentReceiptId) public initializer {
         __UUPSUpgradeable_init();
         __AccessControl_init();
         eNear = IENear(_eNear);
         nearConnector = _nearConnector;
-        current_receipt_id = _current_receipt_id;
+        currentReceiptId = _currentReceiptId;
         _grantRole(DEFAULT_ADMIN_ROLE, _msgSender());
     }
 
@@ -34,7 +34,7 @@ contract ENearProxy is UUPSUpgradeable, AccessControlUpgradeable, ICustomMinter 
         bytes memory fakeProofData = bytes.concat(
             new bytes(72),
             hex"01000000",
-            abi.encodePacked(current_receipt_id),
+            abi.encodePacked(currentReceiptId),
             new bytes(24),
             abi.encodePacked(Utils.swapBytes4(uint32(nearConnector.length))),
             abi.encodePacked(nearConnector),
@@ -44,7 +44,7 @@ contract ENearProxy is UUPSUpgradeable, AccessControlUpgradeable, ICustomMinter 
             new bytes(280)
         );
 
-        current_receipt_id += 1;
+        currentReceiptId += 1;
         eNear.finaliseNearToEthTransfer(fakeProofData, 0);
     }
 
