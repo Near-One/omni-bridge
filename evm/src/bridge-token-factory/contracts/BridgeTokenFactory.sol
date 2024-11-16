@@ -243,9 +243,9 @@ contract BridgeTokenFactory is
                 IERC20(tokenAddress).transferFrom(msg.sender, customMinters[tokenAddress], amount);
                 ICustomMinter(customMinters[tokenAddress]).burn(tokenAddress, amount);
             } else if (isBridgeToken[tokenAddress]) {
-                IERC20(tokenAddress).safeTransferFrom(msg.sender, address(this), amount);
-            } else {
                 BridgeToken(tokenAddress).burn(msg.sender, amount);
+            } else {
+                IERC20(tokenAddress).safeTransferFrom(msg.sender, address(this), amount);
             }
         }
 
