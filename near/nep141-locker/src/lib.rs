@@ -647,13 +647,19 @@ impl Contract {
     pub fn deploy_native_token(
         &mut self,
         chain_kind: ChainKind,
-        metadata: BasicMetadata,
+        name: String,
+        symbol: String,
+        decimals: u8,
     ) -> Promise {
         self.deploy_token_internal(
             chain_kind,
             &OmniAddress::new_zero(chain_kind)
                 .unwrap_or_else(|_| env::panic_str("ERR_FAILED_TO_GET_ZERO_ADDRESS")),
-            metadata,
+            BasicMetadata {
+                name,
+                symbol,
+                decimals,
+            },
             env::attached_deposit(),
         )
     }
