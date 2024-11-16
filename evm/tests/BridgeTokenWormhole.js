@@ -26,7 +26,7 @@ describe('BridgeTokenWormhole', () => {
     TestWormhole = await TestWormhole.deploy();
     await TestWormhole.waitForDeployment();
 
-    const nearBridgeDeriveAddress = await deriveEthereumAddress('omni-locker.test1-dev.testnet', 'bridge-1');
+    const nearBridgeDeriveAddress = await deriveEthereumAddress('omni-locker.testnet', 'bridge-1');
     const omniBridgeChainId = 0;
 
     BridgeTokenFactory = await ethers.getContractFactory('BridgeTokenFactoryWormhole');
@@ -50,7 +50,7 @@ describe('BridgeTokenWormhole', () => {
 
   async function createToken(tokenId) {
     const { signature, payload } = metadataSignature(tokenId);
-  
+
     await BridgeTokenFactory.deployToken(signature, payload);
     const tokenProxyAddress = await BridgeTokenFactory.nearToEthToken(tokenId)
     const token = BridgeTokenInstance.attach(tokenProxyAddress)

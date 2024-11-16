@@ -1,7 +1,7 @@
 const { expect } = require('chai')
 const { ethers, upgrades } = require('hardhat')
 const { metadataSignature, depositSignature } = require('./helpers/signatures')
-const { deriveEthereumAddress } = require('./helpers/kdf')
+const { deriveEthereumAddress, deriveChildPublicKey, najPublicKeyStrToUncompressedHexPoint } = require('./helpers/kdf')
 
 const WhitelistMode = {
   NotInitialized: 0,
@@ -38,7 +38,8 @@ describe('BridgeToken', () => {
     const bridgeToken = await BridgeTokenInstance.deploy()
     await bridgeToken.waitForDeployment()
 
-    const nearBridgeDeriveAddress = await deriveEthereumAddress('omni-locker.test1-dev.testnet', 'bridge-1');
+    const nearBridgeDeriveAddress = await deriveEthereumAddress('omni-locker.testnet', 'bridge-1');
+    console.log(await deriveChildPublicKey(najPublicKeyStrToUncompressedHexPoint(), 'omni-locker.testnet', 'bridge-1'));
     const omniBridgeChainId = 0;
 
     BridgeTokenFactory = await ethers.getContractFactory('BridgeTokenFactory')
