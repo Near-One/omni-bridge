@@ -29,6 +29,7 @@ pub mod bridge_token_factory {
             derived_near_bridge_address,
             ctx.bumps.config,
             ctx.bumps.authority,
+            ctx.bumps.sol_vault,
             ctx.bumps.wormhole_bridge,
             ctx.bumps.wormhole_fee_collector,
             ctx.bumps.wormhole_sequence,
@@ -67,6 +68,21 @@ pub mod bridge_token_factory {
         Ok(())
     }
 
+    pub fn finalize_transfer_sol(
+        ctx: Context<FinalizeTransferSol>,
+        data: SignedPayload<FinalizeTransferPayload>,
+    ) -> Result<()> {
+        msg!("Finalizing transfer");
+
+        data.verify_signature(
+            (Pubkey::default(), ctx.accounts.recipient.key()),
+            &ctx.accounts.config.derived_near_bridge_address,
+        )?;
+        ctx.accounts.process(data.payload)?;
+
+        Ok(())
+    }
+
     pub fn register_mint(
         ctx: Context<RegisterMint>,
         metadata_override: MetadataOverride,
@@ -80,6 +96,17 @@ pub mod bridge_token_factory {
 
     pub fn init_transfer(
         ctx: Context<InitTransfer>,
+        payload: InitTransferPayload,
+    ) -> Result<()> {
+        msg!("Initializing transfer");
+
+        ctx.accounts.process(payload)?;
+
+        Ok(())
+    }
+
+    pub fn init_transfer_sol(
+        ctx: Context<InitTransferSol>,
         payload: InitTransferPayload,
     ) -> Result<()> {
         msg!("Initializing transfer");

@@ -11,6 +11,7 @@ pub struct WormholeBumps {
 pub struct ConfigBumps {
     pub config: u8,
     pub authority: u8,
+    pub sol_vault: u8,
     pub wormhole: WormholeBumps,
 }
 
@@ -18,7 +19,7 @@ pub struct ConfigBumps {
 #[derive(InitSpace)]
 pub struct Config {
     pub admin: Pubkey,
-    pub max_used_nonce: u128,
+    pub max_used_nonce: u64,
     pub derived_near_bridge_address: [u8; 64],
     pub bumps: ConfigBumps,
 }

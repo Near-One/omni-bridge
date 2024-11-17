@@ -2,7 +2,7 @@ use std::io::BufWriter;
 
 use anchor_lang::prelude::*;
 use anchor_lang::solana_program::{keccak, secp256k1_recover::secp256k1_recover};
-use near_sdk::json_types::U128;
+use near_sdk::json_types::{U128, U64};
 
 use crate::error::ErrorCode;
 
@@ -17,6 +17,11 @@ pub trait Payload: AnchorSerialize + AnchorDeserialize {
 
     fn serialize_as_near_u128(u: u128, writer: &mut BufWriter<Vec<u8>>) -> Result<()> {
         near_sdk::borsh::BorshSerialize::serialize(&U128(u), writer)?;
+        Ok(())
+    }
+
+    fn serialize_as_near_u64(u: u64, writer: &mut BufWriter<Vec<u8>>) -> Result<()> {
+        near_sdk::borsh::BorshSerialize::serialize(&U64(u), writer)?;
         Ok(())
     }
 }
@@ -60,6 +65,12 @@ pub enum OutgoingMessageType {
     InitTransfer,
     FinTransfer,
     DeployToken,
+}
+
+#[derive(AnchorSerialize, AnchorDeserialize, Debug)]
+pub struct TransferId {
+    pub origin_chain: u8,
+    pub origin_nonce: u64,
 }
 
 const DEFAULT_SERIALIZER_CAPACITY: usize = 1024;

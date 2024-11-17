@@ -11,4 +11,5 @@ pub enum ErrorCode {
     TokenMetadataNotProvided,
     SolanaTokenParsingFailed,
     InvalidBridgedToken,
+    InvalidFee,
 }
