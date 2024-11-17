@@ -26,7 +26,7 @@ impl Payload for InitTransferPayload {
         writer.write_all(&[SOLANA_OMNI_BRIDGE_CHAIN_ID])?;
         params.2.serialize(&mut writer)?;
         // 3. nonce
-        Self::serialize_as_near_u128(params.0.into(), &mut writer)?;
+        Self::serialize_as_near_u64(params.0, &mut writer)?;
         // 4. amount
         Self::serialize_as_near_u128(self.amount, &mut writer)?;
         // 5. fee
@@ -36,7 +36,7 @@ impl Payload for InitTransferPayload {
         // 7. recipient
         self.recipient.serialize(&mut writer)?;
         // 8. message
-        writer.write(&[0])?;
+        String::new().serialize(&mut writer)?;
 
         writer
             .into_inner()

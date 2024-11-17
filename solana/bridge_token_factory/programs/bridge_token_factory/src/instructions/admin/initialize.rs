@@ -139,7 +139,7 @@ impl<'info> Initialize<'info> {
                 },
             ),
             rent.minimum_balance(0) // for account creation
-                + UsedNonces::rent_level(USED_NONCES_PER_ACCOUNT as u128 - 1, &rent)?,
+                + UsedNonces::rent_level(USED_NONCES_PER_ACCOUNT as u64 - 1, &rent)?,
         )?;
 
         // If Wormhole requires a fee before posting a message, we need to

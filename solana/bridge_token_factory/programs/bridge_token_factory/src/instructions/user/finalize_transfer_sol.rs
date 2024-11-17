@@ -29,7 +29,7 @@ pub struct FinalizeTransferSol<'info> {
         payer = wormhole.payer,
         seeds = [
             USED_NONCES_SEED,
-            &(data.payload.nonce / USED_NONCES_PER_ACCOUNT as u128).to_le_bytes(),
+            &(data.payload.destination_nonce / USED_NONCES_PER_ACCOUNT as u64).to_le_bytes(),
         ],
         bump,
     )]
@@ -58,7 +58,7 @@ pub struct FinalizeTransferSol<'info> {
 impl<'info> FinalizeTransferSol<'info> {
     pub fn process(&mut self, data: FinalizeTransferPayload) -> Result<()> {
         UsedNonces::use_nonce(
-            data.nonce,
+            data.destination_nonce,
             &self.used_nonces,
             &mut self.config,
             self.authority.to_account_info(),
@@ -68,12 +68,13 @@ impl<'info> FinalizeTransferSol<'info> {
         )?;
 
         transfer(
-            CpiContext::new(
+            CpiContext::new_with_signer(
                 self.wormhole.system_program.to_account_info(),
                 Transfer {
                     from: self.sol_vault.to_account_info(),
                     to: self.recipient.to_account_info(),
                 },
+                &[&[SOL_VAULT_SEED, &[self.config.bumps.sol_vault]]],
             ),
             data.amount.try_into().unwrap(),
         )?;
@@ -82,7 +83,7 @@ impl<'info> FinalizeTransferSol<'info> {
             token: Pubkey::default(),
             amount: data.amount,
             fee_recipient: data.fee_recipient.unwrap_or_default(),
-            nonce: data.nonce,
+            transfer_id: data.transfer_id,
         }
         .serialize_for_near(())?;
 

@@ -2,13 +2,13 @@ use std::io::{BufWriter, Write};
 
 use crate::{constants::SOLANA_OMNI_BRIDGE_CHAIN_ID, error::ErrorCode};
 use anchor_lang::prelude::*;
-use near_sdk::json_types::U128;
 
-use super::{IncomingMessageType, OutgoingMessageType, Payload, DEFAULT_SERIALIZER_CAPACITY};
+use super::{IncomingMessageType, OutgoingMessageType, Payload, TransferId, DEFAULT_SERIALIZER_CAPACITY};
 
-#[derive(AnchorSerialize, AnchorDeserialize)]
+#[derive(AnchorSerialize, AnchorDeserialize, Debug)]
 pub struct FinalizeTransferPayload {
-    pub nonce: u128,
+    pub destination_nonce: u64,
+    pub transfer_id: TransferId,
     pub amount: u128,
     pub fee_recipient: Option<String>,
 }
@@ -19,17 +19,20 @@ impl Payload for FinalizeTransferPayload {
         let mut writer = BufWriter::new(Vec::with_capacity(DEFAULT_SERIALIZER_CAPACITY));
         // 0. prefix
         IncomingMessageType::InitTransfer.serialize(&mut writer)?;
-        // 1. nonce
-        near_sdk::borsh::BorshSerialize::serialize(&U128(self.nonce), &mut writer)?;
-        // 2. token
+        // 1. destination_nonce
+        Self::serialize_as_near_u64(self.destination_nonce, &mut writer)?;
+        // 2. transfer_id
+        writer.write(&[self.transfer_id.origin_chain])?;
+        Self::serialize_as_near_u64(self.transfer_id.origin_nonce, &mut writer)?;
+        // 3. token
         writer.write(&[SOLANA_OMNI_BRIDGE_CHAIN_ID])?;
         params.0.serialize(&mut writer)?;
-        // 3. amount
-        near_sdk::borsh::BorshSerialize::serialize(&U128(self.amount), &mut writer)?;
-        // 4. recipient
+        // 4. amount
+        Self::serialize_as_near_u128(self.amount, &mut writer)?;
+        // 5. recipient
         writer.write(&[SOLANA_OMNI_BRIDGE_CHAIN_ID])?;
-        params.1.to_string().serialize(&mut writer)?;
-        // 5. fee_recipient
+        params.1.serialize(&mut writer)?;
+        // 6. fee_recipient
         self.fee_recipient.serialize(&mut writer)?;
 
         writer
@@ -43,7 +46,7 @@ pub struct FinalizeTransferResponse {
     pub token: Pubkey,
     pub amount: u128,
     pub fee_recipient: String,
-    pub nonce: u128,
+    pub transfer_id: TransferId,
 }
 
 impl Payload for FinalizeTransferResponse {
@@ -52,15 +55,16 @@ impl Payload for FinalizeTransferResponse {
         let mut writer = BufWriter::new(Vec::with_capacity(DEFAULT_SERIALIZER_CAPACITY));
         // 0. OutgoingMessageType::FinTransfer
         OutgoingMessageType::FinTransfer.serialize(&mut writer)?;
-        // 1. token
+        // 1. transfer_id
+        writer.write(&[self.transfer_id.origin_chain])?;
+        Self::serialize_as_near_u64(self.transfer_id.origin_nonce, &mut writer)?;
+        // 2. token
         writer.write(&[SOLANA_OMNI_BRIDGE_CHAIN_ID])?;
         self.token.serialize(&mut writer)?;
-        // 2. amount
+        // 3. amount
         Self::serialize_as_near_u128(self.amount, &mut writer)?;
-        // 3. recipient
+        // 4. fee_recipient
         self.fee_recipient.serialize(&mut writer)?;
-        // 4. nonce
-        Self::serialize_as_near_u128(self.nonce, &mut writer)?;
 
         writer
             .into_inner()

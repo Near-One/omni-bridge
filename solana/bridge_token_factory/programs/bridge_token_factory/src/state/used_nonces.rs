@@ -28,17 +28,16 @@ impl UsedNonces {
         rent.minimum_balance(USED_NONCES_ACCOUNT_SIZE as usize)
     }
 
-    pub fn rent_level(nonce: u128, rent: &Rent) -> Result<u64> {
+    pub fn rent_level(nonce: u64, rent: &Rent) -> Result<u64> {
         let full = Self::full_rent(rent);
         Ok(
-            ((nonce % USED_NONCES_PER_ACCOUNT as u128 + 1) * full as u128
-                / USED_NONCES_PER_ACCOUNT as u128)
-                .try_into()?,
+            (nonce % USED_NONCES_PER_ACCOUNT as u64 + 1) * full as u64
+                / USED_NONCES_PER_ACCOUNT as u64,
         )
     }
 
     pub fn use_nonce<'info>(
-        nonce: u128,
+        nonce: u64,
         loader: &AccountLoader<'info, UsedNonces>,
         config: &mut Account<'info, Config>,
         rent_reserve: AccountInfo<'info>,
@@ -100,7 +99,7 @@ impl UsedNonces {
             let mut nonce_slot = unsafe {
                 used_nonces
                     .used
-                    .get_unchecked_mut((nonce % USED_NONCES_PER_ACCOUNT as u128) as usize)
+                    .get_unchecked_mut((nonce % USED_NONCES_PER_ACCOUNT as u64) as usize)
             };
             require!(!nonce_slot.replace(true), ErrorCode::NonceAlreadyUsed);
         }

@@ -37,7 +37,7 @@ pub struct FinalizeTransfer<'info> {
         payer = wormhole.payer,
         seeds = [
             USED_NONCES_SEED,
-            &(data.payload.nonce / USED_NONCES_PER_ACCOUNT as u128).to_le_bytes(),
+            &(data.payload.destination_nonce / USED_NONCES_PER_ACCOUNT as u64).to_le_bytes(),
         ],
         bump,
     )]
@@ -90,7 +90,7 @@ pub struct FinalizeTransfer<'info> {
 impl<'info> FinalizeTransfer<'info> {
     pub fn process(&mut self, data: FinalizeTransferPayload) -> Result<()> {
         UsedNonces::use_nonce(
-            data.nonce,
+            data.destination_nonce,
             &self.used_nonces,
             &mut self.config,
             self.authority.to_account_info(),
@@ -140,7 +140,7 @@ impl<'info> FinalizeTransfer<'info> {
             token: self.mint.key(),
             amount: data.amount,
             fee_recipient: data.fee_recipient.unwrap_or_default(),
-            nonce: data.nonce,
+            transfer_id: data.transfer_id,
         }
         .serialize_for_near(())?;
 
