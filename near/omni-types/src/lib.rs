@@ -15,6 +15,7 @@ pub mod near_events;
 pub mod prover_args;
 pub mod prover_result;
 pub mod sol_address;
+pub mod utils;
 
 #[cfg(test)]
 mod tests;
@@ -56,7 +57,7 @@ impl H160 {
     pub fn to_eip_55_checksum(&self) -> String {
         let hex_addr = hex::encode(self.0);
 
-        let hash = evm::utils::keccak256(hex_addr.as_bytes());
+        let hash = utils::keccak256(hex_addr.as_bytes());
 
         let mut result = String::with_capacity(40);
 
@@ -256,7 +257,18 @@ impl OmniAddress {
     }
 
     pub fn get_token_prefix(&self) -> String {
-        self.encode('-', true)
+        match self {
+            OmniAddress::Sol(address) => {
+                let hashed_address = H160(
+                    utils::keccak256(&address.0)[12..]
+                        .try_into()
+                        .unwrap_or_default(),
+                )
+                .to_string();
+                format!("sol-{hashed_address}")
+            }
+            _ => self.encode('-', true),
+        }
     }
 
     fn to_evm_address(address: &[u8]) -> Result<EvmAddress, String> {

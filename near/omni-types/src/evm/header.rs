@@ -1,7 +1,7 @@
 pub use ethereum_types::{Address, Bloom, H256, H64, U256, U64};
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
 
-use super::utils::keccak256;
+use crate::utils::keccak256;
 
 #[derive(Default, Debug, Clone)]
 pub struct BlockHeader {
