@@ -22,15 +22,15 @@ impl Payload for FinalizeTransferPayload {
         // 0. prefix
         IncomingMessageType::InitTransfer.serialize(&mut writer)?;
         // 1. destination_nonce
-        Self::serialize_as_near_u64(self.destination_nonce, &mut writer)?;
+        self.destination_nonce.serialize(&mut writer)?;
         // 2. transfer_id
         writer.write(&[self.transfer_id.origin_chain])?;
-        Self::serialize_as_near_u64(self.transfer_id.origin_nonce, &mut writer)?;
+        self.transfer_id.origin_nonce.serialize(&mut writer)?;
         // 3. token
         writer.write(&[SOLANA_OMNI_BRIDGE_CHAIN_ID])?;
         params.0.serialize(&mut writer)?;
         // 4. amount
-        Self::serialize_as_near_u128(self.amount, &mut writer)?;
+        self.amount.serialize(&mut writer)?;
         // 5. recipient
         writer.write(&[SOLANA_OMNI_BRIDGE_CHAIN_ID])?;
         params.1.serialize(&mut writer)?;
@@ -59,12 +59,12 @@ impl Payload for FinalizeTransferResponse {
         OutgoingMessageType::FinTransfer.serialize(&mut writer)?;
         // 1. transfer_id
         writer.write(&[self.transfer_id.origin_chain])?;
-        Self::serialize_as_near_u64(self.transfer_id.origin_nonce, &mut writer)?;
+        self.transfer_id.origin_nonce.serialize(&mut writer)?;
         // 2. token
         writer.write(&[SOLANA_OMNI_BRIDGE_CHAIN_ID])?;
         self.token.serialize(&mut writer)?;
         // 3. amount
-        Self::serialize_as_near_u128(self.amount, &mut writer)?;
+        self.amount.serialize(&mut writer)?;
         // 4. fee_recipient
         self.fee_recipient.serialize(&mut writer)?;
 
