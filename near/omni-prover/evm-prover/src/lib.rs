@@ -3,9 +3,9 @@ use near_sdk::{env, ext_contract, near_bindgen, require, AccountId, Gas, PanicOn
 use omni_types::evm::events::parse_evm_event;
 use omni_types::evm::header::BlockHeader;
 use omni_types::evm::receipt::{LogEntry, Receipt};
-use omni_types::evm::utils::keccak256;
 use omni_types::prover_args::EvmVerifyProofArgs;
 use omni_types::prover_result::{ProofKind, ProverResult};
+use omni_types::utils::keccak256;
 use omni_types::ChainKind;
 use rlp::Rlp;
 
