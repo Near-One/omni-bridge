@@ -259,6 +259,8 @@ impl OmniAddress {
     pub fn get_token_prefix(&self) -> String {
         match self {
             OmniAddress::Sol(address) => {
+                // The AccountId on Near can't be uppercased and has a 64 character limit,
+                // so we encode the solana address into 20 bytes to bypass these restrictions
                 let hashed_address = H160(
                     utils::keccak256(&address.0)[12..]
                         .try_into()
