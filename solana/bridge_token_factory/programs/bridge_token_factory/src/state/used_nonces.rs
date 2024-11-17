@@ -30,10 +30,8 @@ impl UsedNonces {
 
     pub fn rent_level(nonce: u64, rent: &Rent) -> Result<u64> {
         let full = Self::full_rent(rent);
-        Ok(
-            (nonce % USED_NONCES_PER_ACCOUNT as u64 + 1) * full as u64
-                / USED_NONCES_PER_ACCOUNT as u64,
-        )
+        Ok((nonce % USED_NONCES_PER_ACCOUNT as u64 + 1) * full as u64
+            / USED_NONCES_PER_ACCOUNT as u64)
     }
 
     pub fn use_nonce<'info>(

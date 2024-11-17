@@ -94,10 +94,7 @@ pub mod bridge_token_factory {
         Ok(())
     }
 
-    pub fn init_transfer(
-        ctx: Context<InitTransfer>,
-        payload: InitTransferPayload,
-    ) -> Result<()> {
+    pub fn init_transfer(ctx: Context<InitTransfer>, payload: InitTransferPayload) -> Result<()> {
         msg!("Initializing transfer");
 
         ctx.accounts.process(payload)?;

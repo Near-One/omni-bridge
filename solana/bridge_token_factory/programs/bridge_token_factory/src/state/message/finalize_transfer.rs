@@ -3,7 +3,9 @@ use std::io::{BufWriter, Write};
 use crate::{constants::SOLANA_OMNI_BRIDGE_CHAIN_ID, error::ErrorCode};
 use anchor_lang::prelude::*;
 
-use super::{IncomingMessageType, OutgoingMessageType, Payload, TransferId, DEFAULT_SERIALIZER_CAPACITY};
+use super::{
+    IncomingMessageType, OutgoingMessageType, Payload, TransferId, DEFAULT_SERIALIZER_CAPACITY,
+};
 
 #[derive(AnchorSerialize, AnchorDeserialize, Debug)]
 pub struct FinalizeTransferPayload {

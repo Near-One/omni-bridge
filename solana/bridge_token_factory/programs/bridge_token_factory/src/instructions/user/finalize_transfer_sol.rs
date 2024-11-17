@@ -1,7 +1,7 @@
-use anchor_lang::{prelude::*, system_program::{transfer, Transfer}};
 use crate::{
     constants::{
-        AUTHORITY_SEED, CONFIG_SEED, SOL_VAULT_SEED, USED_NONCES_ACCOUNT_SIZE, USED_NONCES_PER_ACCOUNT, USED_NONCES_SEED,
+        AUTHORITY_SEED, CONFIG_SEED, SOL_VAULT_SEED, USED_NONCES_ACCOUNT_SIZE,
+        USED_NONCES_PER_ACCOUNT, USED_NONCES_SEED,
     },
     instructions::wormhole_cpi::*,
     state::{
@@ -12,6 +12,10 @@ use crate::{
         },
         used_nonces::UsedNonces,
     },
+};
+use anchor_lang::{
+    prelude::*,
+    system_program::{transfer, Transfer},
 };
 
 #[derive(Accounts)]
@@ -42,7 +46,7 @@ pub struct FinalizeTransferSol<'info> {
     pub authority: SystemAccount<'info>,
 
     pub recipient: SystemAccount<'info>,
-    
+
     #[account(
         mut,
         seeds = [SOL_VAULT_SEED],

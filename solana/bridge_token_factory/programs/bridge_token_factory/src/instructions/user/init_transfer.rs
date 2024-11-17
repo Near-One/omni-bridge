@@ -1,4 +1,7 @@
-use anchor_lang::{prelude::*, system_program::{transfer, Transfer}};
+use anchor_lang::{
+    prelude::*,
+    system_program::{transfer, Transfer},
+};
 use anchor_spl::{
     token_2022::{burn, transfer_checked, Burn, TransferChecked},
     token_interface::{Mint, TokenAccount, TokenInterface},
@@ -50,7 +53,7 @@ pub struct InitTransfer<'info> {
         bump = wormhole.config.bumps.sol_vault,
     )]
     pub sol_vault: SystemAccount<'info>,
-    
+
     pub user: Signer<'info>,
 
     pub wormhole: WormholeCPI<'info>,
