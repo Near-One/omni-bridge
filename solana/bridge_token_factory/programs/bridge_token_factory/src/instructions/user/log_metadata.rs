@@ -16,16 +16,16 @@ use anchor_spl::{
     },
 };
 
-use crate::error::ErrorCode;
+use crate::{error::ErrorCode, state::message::log_metadata::LogMetadataPayload};
 use crate::instructions::wormhole_cpi::*;
 use crate::{
     constants::{AUTHORITY_SEED, VAULT_SEED},
-    state::message::{deploy_token::DeployTokenPayload, Payload},
+    state::message::Payload,
 };
 use anchor_spl::metadata::ID as MetaplexID;
 
 #[derive(Accounts)]
-pub struct RegisterMint<'info> {
+pub struct LogMetadata<'info> {
     #[account(
         seeds = [AUTHORITY_SEED],
         bump = wormhole.config.bumps.authority,
@@ -44,7 +44,7 @@ pub struct RegisterMint<'info> {
     pub metadata: Option<Account<'info, MplMetadata>>,
 
     #[account(
-        init,
+        init_if_needed,
         payer = wormhole.payer,
         token::mint = mint,
         token::authority = authority,
@@ -70,7 +70,7 @@ pub struct MetadataOverride {
     pub symbol: String,
 }
 
-impl<'info> RegisterMint<'info> {
+impl<'info> LogMetadata<'info> {
     pub fn process(&mut self, metadata_override: MetadataOverride) -> Result<()> {
         let (name, symbol) = if let Some(override_authority) = self.override_authority.as_ref() {
             match override_authority.key() {
@@ -121,8 +121,8 @@ impl<'info> RegisterMint<'info> {
             }
         };
 
-        let payload = DeployTokenPayload {
-            token: self.mint.key().to_string(),
+        let payload = LogMetadataPayload {
+            token: self.mint.key(),
             name,
             symbol,
             decimals: self.mint.decimals,

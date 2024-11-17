@@ -83,11 +83,11 @@ pub mod bridge_token_factory {
         Ok(())
     }
 
-    pub fn register_mint(
-        ctx: Context<RegisterMint>,
+    pub fn log_metadata(
+        ctx: Context<LogMetadata>,
         metadata_override: MetadataOverride,
     ) -> Result<()> {
-        msg!("Registering mint");
+        msg!("Logging metadata");
 
         ctx.accounts.process(metadata_override)?;
 

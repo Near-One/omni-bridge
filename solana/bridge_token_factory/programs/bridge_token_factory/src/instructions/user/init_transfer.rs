@@ -20,6 +20,7 @@ pub struct InitTransfer<'info> {
     pub authority: SystemAccount<'info>,
 
     #[account(
+        mut,
         mint::token_program = token_program,
     )]
     pub mint: Box<InterfaceAccount<'info, Mint>>,

@@ -9,6 +9,7 @@ use crate::error::ErrorCode;
 pub mod deploy_token;
 pub mod finalize_transfer;
 pub mod init_transfer;
+pub mod log_metadata;
 
 pub trait Payload: AnchorSerialize + AnchorDeserialize {
     type AdditionalParams;
@@ -65,6 +66,7 @@ pub enum OutgoingMessageType {
     InitTransfer,
     FinTransfer,
     DeployToken,
+    LogMetadata,
 }
 
 #[derive(AnchorSerialize, AnchorDeserialize, Debug)]
