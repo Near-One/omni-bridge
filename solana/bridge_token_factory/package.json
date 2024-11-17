@@ -1,0 +1,14 @@
+{
+  "license": "ISC",
+  "scripts": {
+    "copy-idl": "copyfiles -u 2 target/types/bridge_token_factory.ts ts/sdk/src && copyfiles -u 2 target/idl/bridge_token_factory.json ts/sdk/src",
+    "build-devnet": "PROGRAM_ID=\"3ZtEZ8xABFbUr4c1FVpXbQiVdqv4vwhvfCc8HMmhEeua\" anchor build -- --features devnet",
+    "build-test": "PROGRAM_ID=\"3ZtEZ8xABFbUr4c1FVpXbQiVdqv4vwhvfCc8HMmhEeua\" anchor build -- --features mainnet"
+  },
+  "devDependencies": {
+    "@types/bn.js": "^5.1.0",
+    "prettier": "^2.6.2",
+    "typescript": "^4.3.5",
+    "copyfiles": "^2.4.1"
+  }
+}
