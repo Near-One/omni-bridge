@@ -13,7 +13,7 @@ describe("BridgeTokenWormhole", () => {
 	let user1: Signer
 	let adminAccount: Signer
 	let BridgeTokenInstance: BridgeToken
-	let BridgeTokenFactory: BridgeTokenFactory
+  let BridgeTokenFactoryWormhole: BridgeTokenFactoryWormhole
 	let TestWormhole: TestWormhole
 
 	beforeEach(async () => {
@@ -21,34 +21,31 @@ describe("BridgeTokenWormhole", () => {
 		user1 = await ethers.getImpersonatedSigner("0x3A445243376C32fAba679F63586e236F77EA601e")
 		await fundAddress(await user1.getAddress(), "1")
 
-		const bridgeTokenFactory = await ethers.getContractFactory("BridgeToken")
-		BridgeTokenInstance = await bridgeTokenFactory.deploy()
+		const bridgeToken_factory = await ethers.getContractFactory("BridgeToken")
+		BridgeTokenInstance = await bridgeToken_factory.deploy()
 		await BridgeTokenInstance.waitForDeployment()
 
-		const testWormholeFactory = await ethers.getContractFactory("TestWormhole")
-		TestWormhole = await testWormholeFactory.deploy()
+		const testWormhole_factory = await ethers.getContractFactory("TestWormhole")
+		TestWormhole = await testWormhole_factory.deploy()
 		await TestWormhole.waitForDeployment()
 
 		const nearBridgeDeriveAddress = await deriveEthereumAddress("omni-locker.testnet", "bridge-1")
 		const omniBridgeChainId = 0
 
-		const bridgeTokenFactoryWormhole_factory = await ethers.getContractFactory(
-			"BridgeTokenFactoryWormhole",
-		)
-		const proxyContract = await upgrades.deployProxy(
-			bridgeTokenFactoryWormhole_factory,
-			[
-				await BridgeTokenInstance.getAddress(),
-				nearBridgeDeriveAddress,
-				omniBridgeChainId,
-				await TestWormhole.getAddress(),
-				consistencyLevel,
-			],
-			{ initializer: "initializeWormhole" },
-		)
-		await proxyContract.waitForDeployment()
-
-		BridgeTokenFactory = bridgeTokenFactory.attach(await BridgeTokenInstance.getAddress()) as BridgeTokenFactoryWormhole
+		const bridgeTokenFactoryWormhole_factory = await ethers.getContractFactory("BridgeTokenFactoryWormhole"		)
+		BridgeTokenFactoryWormhole = await upgrades.deployProxy(
+      bridgeTokenFactoryWormhole_factory,
+      [
+        await BridgeTokenInstance.getAddress(),
+        nearBridgeDeriveAddress,
+        omniBridgeChainId,
+        await TestWormhole.getAddress(),
+        consistencyLevel,
+      ],
+      { initializer: "initializeWormhole" }
+    ) as unknown as BridgeTokenFactoryWormhole
+		await BridgeTokenFactoryWormhole.waitForDeployment()
+		
 	})
 
 	async function fundAddress(address: string, amount: string): Promise<void> {
@@ -64,8 +61,8 @@ describe("BridgeTokenWormhole", () => {
 	): Promise<{ tokenProxyAddress: string; token: BridgeToken }> {
 		const { signature, payload } = metadataSignature(tokenId)
 
-		await BridgeTokenFactory.deployToken(signature, payload)
-		const tokenProxyAddress = await BridgeTokenFactory.nearToEthToken(tokenId)
+		await BridgeTokenFactoryWormhole.deployToken(signature, payload)
+		const tokenProxyAddress = await BridgeTokenFactoryWormhole.nearToEthToken(tokenId)
 		const token = BridgeTokenInstance.attach(tokenProxyAddress) as BridgeToken
 		return { tokenProxyAddress, token }
 	}
@@ -73,7 +70,7 @@ describe("BridgeTokenWormhole", () => {
 	it("deploy token", async () => {
 		const { signature, payload } = metadataSignature(wrappedNearId)
 
-		await expect(await BridgeTokenFactory.deployToken(signature, payload))
+		await expect(await BridgeTokenFactoryWormhole.deployToken(signature, payload))
 			.to.emit(TestWormhole, "MessagePublished")
 			.withArgs(0, anyValue, consistencyLevel)
 	})
@@ -87,7 +84,7 @@ describe("BridgeTokenWormhole", () => {
 			[1, wrappedNearId, payload.amount, payload.feeRecipient, payload.destinationNonce],
 		)
 
-		await expect(BridgeTokenFactory.finTransfer(signature, payload))
+		await expect(BridgeTokenFactoryWormhole.finTransfer(signature, payload))
 			.to.emit(TestWormhole, "MessagePublished")
 			.withArgs(1, expectedPayload, consistencyLevel)
 
@@ -99,7 +96,7 @@ describe("BridgeTokenWormhole", () => {
 	it("withdraw token", async () => {
 		const { token } = await createToken(wrappedNearId)
 		const { signature, payload } = depositSignature(wrappedNearId, await user1.getAddress())
-		await BridgeTokenFactory.finTransfer(signature, payload)
+		await BridgeTokenFactoryWormhole.finTransfer(signature, payload)
 
 		const recipient = "testrecipient.near"
 		const fee = 0
@@ -121,7 +118,7 @@ describe("BridgeTokenWormhole", () => {
 		)
 
 		await expect(
-			BridgeTokenFactory.connect(user1).initTransfer(
+			BridgeTokenFactoryWormhole.connect(user1).initTransfer(
 				wrappedNearId,
 				payload.amount,
 				fee,
