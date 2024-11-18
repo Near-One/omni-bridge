@@ -1,0 +1,41 @@
+name: EVM Checks
+
+on:
+  push:
+    paths:
+      - 'evm/**'
+  pull_request:
+    paths:
+      - 'evm/**'
+
+jobs:
+  check:
+    name: Type Check, Lint, and Test
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: evm
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'yarn'
+          cache-dependency-path: evm/yarn.lock
+
+      - name: Install dependencies
+        run: yarn install --frozen-lockfile
+
+      - name: Type check
+        run: yarn tsc
+
+      - name: Lint and format check
+        run: yarn biome check
+
+      # - name: Run tests
+      #   run: yarn test

@@ -7,4 +7,10 @@ interface IENear {
     function finaliseNearToEthTransfer(bytes calldata proofData, uint64 proofBlockHeight) external;
     function nearConnector() external view returns(bytes memory);
     function adminSstore(uint key, uint value) external;
+    function balanceOf(address account) external view returns (uint256);
+    function totalSupply() external view returns (uint256);
+    function transfer(address recipient, uint256 amount) external returns (bool);
+    function prover() external view returns (address);
+    function admin() external view returns (address);
+    function adminPause(uint256 flags) external;
 }
