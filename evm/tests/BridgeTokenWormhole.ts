@@ -2,7 +2,7 @@ import { anyValue } from "@nomicfoundation/hardhat-chai-matchers/withArgs"
 import { expect } from "chai"
 import type { Signer } from "ethers"
 import { ethers, upgrades } from "hardhat"
-import type { BridgeToken, BridgeTokenFactory, BridgeTokenFactoryWormhole, TestWormhole } from "../typechain-types"
+import type { BridgeToken, BridgeTokenFactoryWormhole, TestWormhole } from "../typechain-types"
 import { deriveEthereumAddress } from "./helpers/kdf"
 import { depositSignature, metadataSignature } from "./helpers/signatures"
 
@@ -13,7 +13,7 @@ describe("BridgeTokenWormhole", () => {
 	let user1: Signer
 	let adminAccount: Signer
 	let BridgeTokenInstance: BridgeToken
-  let BridgeTokenFactoryWormhole: BridgeTokenFactoryWormhole
+	let BridgeTokenFactoryWormhole: BridgeTokenFactoryWormhole
 	let TestWormhole: TestWormhole
 
 	beforeEach(async () => {
@@ -32,20 +32,21 @@ describe("BridgeTokenWormhole", () => {
 		const nearBridgeDeriveAddress = await deriveEthereumAddress("omni-locker.testnet", "bridge-1")
 		const omniBridgeChainId = 0
 
-		const bridgeTokenFactoryWormhole_factory = await ethers.getContractFactory("BridgeTokenFactoryWormhole"		)
-		BridgeTokenFactoryWormhole = await upgrades.deployProxy(
-      bridgeTokenFactoryWormhole_factory,
-      [
-        await BridgeTokenInstance.getAddress(),
-        nearBridgeDeriveAddress,
-        omniBridgeChainId,
-        await TestWormhole.getAddress(),
-        consistencyLevel,
-      ],
-      { initializer: "initializeWormhole" }
-    ) as unknown as BridgeTokenFactoryWormhole
+		const bridgeTokenFactoryWormhole_factory = await ethers.getContractFactory(
+			"BridgeTokenFactoryWormhole",
+		)
+		BridgeTokenFactoryWormhole = (await upgrades.deployProxy(
+			bridgeTokenFactoryWormhole_factory,
+			[
+				await BridgeTokenInstance.getAddress(),
+				nearBridgeDeriveAddress,
+				omniBridgeChainId,
+				await TestWormhole.getAddress(),
+				consistencyLevel,
+			],
+			{ initializer: "initializeWormhole" },
+		)) as unknown as BridgeTokenFactoryWormhole
 		await BridgeTokenFactoryWormhole.waitForDeployment()
-		
 	})
 
 	async function fundAddress(address: string, amount: string): Promise<void> {
