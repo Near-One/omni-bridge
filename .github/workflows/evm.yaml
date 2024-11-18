@@ -30,6 +30,9 @@ jobs:
 
       - name: Install dependencies
         run: yarn install --frozen-lockfile
+      
+      - name: Compile hardhat
+        run: yarn hardhat compile
 
       - name: Type check
         run: yarn tsc
