@@ -85,11 +85,10 @@ pub mod bridge_token_factory {
 
     pub fn log_metadata(
         ctx: Context<LogMetadata>,
-        metadata_override: MetadataOverride,
     ) -> Result<()> {
         msg!("Logging metadata");
 
-        ctx.accounts.process(metadata_override)?;
+        ctx.accounts.process()?;
 
         Ok(())
     }

@@ -6,10 +6,14 @@ pub enum ErrorCode {
     InvalidArgs,
     #[msg("Signature verification failed")]
     SignatureVerificationFailed,
+    #[msg("Nonce already used")]
     NonceAlreadyUsed,
-    Unauthorized,
+    #[msg("Token metadata not provided")]
     TokenMetadataNotProvided,
-    SolanaTokenParsingFailed,
+    #[msg("Invalid token metadata address")]
+    InvalidTokenMetadataAddress,
+    #[msg("Invalid bridged token")]
     InvalidBridgedToken,
+    #[msg("Invalid fee")]
     InvalidFee,
 }
