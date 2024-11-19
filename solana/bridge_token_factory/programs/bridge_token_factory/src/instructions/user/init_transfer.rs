@@ -54,6 +54,10 @@ pub struct InitTransfer<'info> {
     )]
     pub sol_vault: SystemAccount<'info>,
 
+    #[account(
+        mut,
+        owner = wormhole.system_program,
+    )]
     pub user: Signer<'info>,
 
     pub wormhole: WormholeCPI<'info>,
