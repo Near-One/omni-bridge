@@ -56,7 +56,7 @@ pub struct InitTransfer<'info> {
 
     #[account(
         mut,
-        owner = wormhole.system_program,
+        owner = wormhole.system_program.key(),
     )]
     pub user: Signer<'info>,
 
