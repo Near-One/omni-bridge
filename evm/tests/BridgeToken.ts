@@ -3,8 +3,7 @@ import type { BridgeToken, BridgeTokenFactory, TestBridgeToken } from "../typech
 import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers"
 import { expect } from "chai"
 import { ethers, upgrades } from "hardhat"
-import { deriveEthereumAddress } from "./helpers/kdf"
-import { depositSignature, metadataSignature } from "./helpers/signatures"
+import { depositSignature, metadataSignature, testWallet } from "./helpers/signatures"
 
 const PauseMode = {
 	UnpausedAll: 0,
@@ -34,8 +33,9 @@ describe("BridgeToken", () => {
 		const bridgeToken = await BridgeToken_factory.deploy()
 		BridgeTokenInstance = await bridgeToken.waitForDeployment()
 
-		const nearBridgeDeriveAddress = await deriveEthereumAddress("omni-locker.testnet", "bridge-1")
-		//console.log(await deriveChildPublicKey(najPublicKeyStrToUncompressedHexPoint(), 'omni-locker.testnet', 'bridge-1'));
+		// Use our test wallet's address as the bridge authority
+		const nearBridgeDeriveAddress = testWallet.address
+		//console.log("nearBridgeDeriveAddress:", nearBridgeDeriveAddress)
 		const omniBridgeChainId = 0
 
 		const BridgeTokenFactory_factory = await ethers.getContractFactory("BridgeTokenFactory")
@@ -57,12 +57,11 @@ describe("BridgeToken", () => {
 	}
 
 	async function createToken(tokenId: string) {
-		const { signature, payload } = metadataSignature(tokenId)
-
+		const { signature, payload } = await metadataSignature(tokenId)
 		await BridgeTokenFactory.deployToken(signature, payload)
 		const tokenProxyAddress = await BridgeTokenFactory.nearToEthToken(tokenId)
 		const token = BridgeTokenInstance.attach(tokenProxyAddress) as BridgeToken
-		return { tokenProxyAddress, token }
+		return { token, tokenProxyAddress }
 	}
 
 	it("can create a token", async () => {
@@ -105,12 +104,20 @@ describe("BridgeToken", () => {
 
 	it("deposit token", async () => {
 		const { token } = await createToken(wrappedNearId)
+		const tokenProxyAddress = await BridgeTokenFactory.nearToEthToken(wrappedNearId)
 
-		const { signature, payload } = depositSignature(wrappedNearId, user1.address)
+		const { signature, payload } = await depositSignature(tokenProxyAddress, user1.address)
 
 		await expect(BridgeTokenFactory.finTransfer(signature, payload))
 			.to.emit(BridgeTokenFactory, "FinTransfer")
-			.withArgs(payload.destinationNonce, wrappedNearId, 1, payload.recipient, payload.feeRecipient)
+			.withArgs(
+				payload.destinationNonce,
+				payload.originChain,
+				tokenProxyAddress,
+				1,
+				payload.recipient,
+				payload.feeRecipient,
+			)
 
 		expect((await token.balanceOf(payload.recipient)).toString()).to.be.equal(
 			payload.amount.toString(),
@@ -134,8 +141,9 @@ describe("BridgeToken", () => {
 
 	it("can't deposit twice with the same signature", async () => {
 		await createToken(wrappedNearId)
+		const tokenProxyAddress = await BridgeTokenFactory.nearToEthToken(wrappedNearId)
 
-		const { signature, payload } = depositSignature(wrappedNearId, user1.address)
+		const { signature, payload } = depositSignature(tokenProxyAddress, user1.address)
 		await BridgeTokenFactory.finTransfer(signature, payload)
 
 		await expect(BridgeTokenFactory.finTransfer(signature, payload)).to.be.revertedWithCustomError(
@@ -146,8 +154,9 @@ describe("BridgeToken", () => {
 
 	it("can't deposit with invalid amount", async () => {
 		await createToken(wrappedNearId)
+		const tokenProxyAddress = await BridgeTokenFactory.nearToEthToken(wrappedNearId)
 
-		const { signature, payload } = depositSignature(wrappedNearId, user1.address)
+		const { signature, payload } = depositSignature(tokenProxyAddress, user1.address)
 		payload.amount = 100000
 
 		await expect(BridgeTokenFactory.finTransfer(signature, payload)).to.be.revertedWithCustomError(
@@ -158,8 +167,9 @@ describe("BridgeToken", () => {
 
 	it("can't deposit with invalid nonce", async () => {
 		await createToken(wrappedNearId)
+		const tokenProxyAddress = await BridgeTokenFactory.nearToEthToken(wrappedNearId)
 
-		const { signature, payload } = depositSignature(wrappedNearId, user1.address)
+		const { signature, payload } = depositSignature(tokenProxyAddress, user1.address)
 		payload.destinationNonce = 99
 
 		await expect(BridgeTokenFactory.finTransfer(signature, payload)).to.be.revertedWithCustomError(
@@ -170,9 +180,11 @@ describe("BridgeToken", () => {
 
 	it("can't deposit with invalid token", async () => {
 		await createToken(wrappedNearId)
+		const wrappedNearTokenAddress = await BridgeTokenFactory.nearToEthToken(wrappedNearId)
 
-		const { signature, payload } = depositSignature(wrappedNearId, user1.address)
-		payload.tokenAddress = "test-token.testnet"
+		const { signature, payload } = depositSignature(wrappedNearTokenAddress, user1.address)
+		const tokenProxyAddress = await BridgeTokenFactory.nearToEthToken("test-token.testnet")
+		payload.tokenAddress = tokenProxyAddress
 
 		await expect(BridgeTokenFactory.finTransfer(signature, payload)).to.be.revertedWithCustomError(
 			BridgeTokenFactory,
@@ -182,8 +194,9 @@ describe("BridgeToken", () => {
 
 	it("can't deposit with invalid recipient", async () => {
 		await createToken(wrappedNearId)
+		const tokenProxyAddress = await BridgeTokenFactory.nearToEthToken(wrappedNearId)
 
-		const { signature, payload } = depositSignature(wrappedNearId, user1.address)
+		const { signature, payload } = depositSignature(tokenProxyAddress, user1.address)
 		payload.recipient = user2.address
 
 		await expect(BridgeTokenFactory.finTransfer(signature, payload)).to.be.revertedWithCustomError(
@@ -194,8 +207,9 @@ describe("BridgeToken", () => {
 
 	it("can't deposit with invalid relayer", async () => {
 		await createToken(wrappedNearId)
+		const wrappedNearTokenAddress = await BridgeTokenFactory.nearToEthToken(wrappedNearId)
 
-		const { signature, payload } = depositSignature(wrappedNearId, user1.address)
+		const { signature, payload } = depositSignature(wrappedNearTokenAddress, user1.address)
 		payload.feeRecipient = "testrecipient.near"
 
 		await expect(BridgeTokenFactory.finTransfer(signature, payload)).to.be.revertedWithCustomError(
@@ -206,8 +220,9 @@ describe("BridgeToken", () => {
 
 	it("withdraw token", async () => {
 		const { token } = await createToken(wrappedNearId)
+		const tokenProxyAddress = await token.getAddress()
 
-		const { signature, payload } = depositSignature(wrappedNearId, user1.address)
+		const { signature, payload } = await depositSignature(tokenProxyAddress, user1.address)
 		await BridgeTokenFactory.finTransfer(signature, payload)
 
 		const recipient = "testrecipient.near"
@@ -216,7 +231,7 @@ describe("BridgeToken", () => {
 
 		await expect(
 			BridgeTokenFactory.connect(user1).initTransfer(
-				wrappedNearId,
+				tokenProxyAddress,
 				payload.amount,
 				fee,
 				nativeFee,
@@ -225,24 +240,16 @@ describe("BridgeToken", () => {
 			),
 		)
 			.to.emit(BridgeTokenFactory, "InitTransfer")
-			.withArgs(
-				user1.address,
-				await BridgeTokenFactory.nearToEthToken(wrappedNearId),
-				1,
-				wrappedNearId,
-				payload.amount,
-				fee,
-				nativeFee,
-				recipient,
-			)
+			.withArgs(user1.address, tokenProxyAddress, 1, payload.amount, fee, nativeFee, recipient, "")
 
 		expect((await token.balanceOf(user1.address)).toString()).to.be.equal("0")
 	})
 
 	it("cant withdraw token when paused", async () => {
 		await createToken(wrappedNearId)
+		const tokenProxyAddress = await BridgeTokenFactory.nearToEthToken(wrappedNearId)
 
-		const { signature, payload } = depositSignature(wrappedNearId, user1.address)
+		const { signature, payload } = depositSignature(tokenProxyAddress, user1.address)
 		await BridgeTokenFactory.finTransfer(signature, payload)
 
 		const fee = 0
@@ -253,7 +260,7 @@ describe("BridgeToken", () => {
 			.withArgs(adminAccount.address, PauseMode.PausedInitTransfer)
 		await expect(
 			BridgeTokenFactory.initTransfer(
-				wrappedNearId,
+				tokenProxyAddress,
 				payload.amount,
 				fee,
 				nativeFee,
@@ -265,8 +272,9 @@ describe("BridgeToken", () => {
 
 	it("can deposit and withdraw after unpausing", async () => {
 		const { token } = await createToken(wrappedNearId)
+		const tokenProxyAddress = await token.getAddress()
 
-		const { signature, payload } = depositSignature(wrappedNearId, user1.address)
+		const { signature, payload } = depositSignature(tokenProxyAddress, user1.address)
 		await BridgeTokenFactory.finTransfer(signature, payload)
 
 		await expect(BridgeTokenFactory.pause(PauseMode.PausedInitTransfer))
@@ -282,7 +290,7 @@ describe("BridgeToken", () => {
 		const nativeFee = 0
 		const message = ""
 		await BridgeTokenFactory.connect(user1).initTransfer(
-			wrappedNearId,
+			tokenProxyAddress,
 			payload.amount,
 			fee,
 			nativeFee,
@@ -300,7 +308,7 @@ describe("BridgeToken", () => {
 		const BridgeTokenV2 = await BridgeTokenV2Instance.deploy()
 		await BridgeTokenV2.waitForDeployment()
 
-		await BridgeTokenFactory.upgradeToken(wrappedNearId, await BridgeTokenV2.getAddress())
+		await BridgeTokenFactory.upgradeToken(tokenProxyAddress, await BridgeTokenV2.getAddress())
 		const BridgeTokenV2Proxied = BridgeTokenV2Instance.attach(tokenProxyAddress) as TestBridgeToken
 		expect(await BridgeTokenV2Proxied.returnTestString()).to.equal("test")
 		expect(await BridgeTokenV2Proxied.name()).to.equal("Wrapped NEAR fungible token")
@@ -310,6 +318,7 @@ describe("BridgeToken", () => {
 
 	it("user cant upgrade token contract", async () => {
 		await createToken(wrappedNearId)
+		const tokenProxyAddress = await BridgeTokenFactory.nearToEthToken(wrappedNearId)
 
 		const BridgeTokenV2Instance = await ethers.getContractFactory("TestBridgeToken")
 		const BridgeTokenV2 = await BridgeTokenV2Instance.deploy()
@@ -317,7 +326,7 @@ describe("BridgeToken", () => {
 
 		await expect(
 			BridgeTokenFactory.connect(user1).upgradeToken(
-				wrappedNearId,
+				tokenProxyAddress,
 				await BridgeTokenV2.getAddress(),
 			),
 		).to.be.revertedWithCustomError(BridgeTokenFactory, "AccessControlUnauthorizedAccount")

@@ -1,10 +1,74 @@
 import { anyValue } from "@nomicfoundation/hardhat-chai-matchers/withArgs"
+import * as borsh from "borsh"
 import { expect } from "chai"
 import type { Signer } from "ethers"
 import { ethers, upgrades } from "hardhat"
 import type { BridgeToken, BridgeTokenFactoryWormhole, TestWormhole } from "../typechain-types"
-import { deriveEthereumAddress } from "./helpers/kdf"
-import { depositSignature, metadataSignature } from "./helpers/signatures"
+import { depositSignature, metadataSignature, testWallet } from "./helpers/signatures"
+
+class FinTransferWormholeMessage {
+	static schema = {
+		struct: {
+			messageType: "u8",
+			originChain: "u8",
+			originNonce: "u128",
+			omniBridgeChainId: "u8",
+			tokenAddress: { array: { type: "u8", len: 20 } },
+			amount: "u128",
+			feeRecipient: "string",
+		},
+	}
+
+	constructor(
+		public messageType: number,
+		public originChain: number,
+		public originNonce: bigint,
+		public omniBridgeChainId: number,
+		public tokenAddress: Uint8Array,
+		public amount: bigint,
+		public feeRecipient: string,
+	) {}
+
+	static serialize(msg: FinTransferWormholeMessage): Uint8Array {
+		return borsh.serialize(FinTransferWormholeMessage.schema, msg)
+	}
+}
+
+class InitTransferWormholeMessage {
+	static schema = {
+		struct: {
+			messageType: "u8",
+			originChainId: "u8",
+			sender: { array: { type: "u8", len: 20 } },
+			destinationChainId: "u8",
+			tokenAddress: { array: { type: "u8", len: 20 } },
+			originNonce: "u128",
+			amount: "u128",
+			fee: "u128",
+			nativeFee: "u128",
+			recipient: "string",
+			message: "string",
+		},
+	}
+
+	constructor(
+		public messageType: number,
+		public originChainId: number,
+		public sender: Uint8Array,
+		public destinationChainId: number,
+		public tokenAddress: Uint8Array,
+		public originNonce: bigint,
+		public amount: bigint,
+		public fee: bigint,
+		public nativeFee: bigint,
+		public recipient: string,
+		public message: string,
+	) {}
+
+	static serialize(msg: InitTransferWormholeMessage): Uint8Array {
+		return borsh.serialize(InitTransferWormholeMessage.schema, msg)
+	}
+}
 
 describe("BridgeTokenWormhole", () => {
 	const wrappedNearId = "wrap.testnet"
@@ -29,7 +93,7 @@ describe("BridgeTokenWormhole", () => {
 		TestWormhole = await testWormhole_factory.deploy()
 		await TestWormhole.waitForDeployment()
 
-		const nearBridgeDeriveAddress = await deriveEthereumAddress("omni-locker.testnet", "bridge-1")
+		const nearBridgeDeriveAddress = testWallet.address
 		const omniBridgeChainId = 0
 
 		const bridgeTokenFactoryWormhole_factory = await ethers.getContractFactory(
@@ -78,16 +142,23 @@ describe("BridgeTokenWormhole", () => {
 
 	it("deposit token", async () => {
 		const { token } = await createToken(wrappedNearId)
-		const { signature, payload } = depositSignature(wrappedNearId, await user1.getAddress())
+		const tokenProxyAddress = await token.getAddress()
+		const { signature, payload } = depositSignature(tokenProxyAddress, await user1.getAddress())
 
-		const expectedPayload = ethers.AbiCoder.defaultAbiCoder().encode(
-			["uint8", "string", "uint256", "string", "uint128"],
-			[1, wrappedNearId, payload.amount, payload.feeRecipient, payload.destinationNonce],
-		)
+		// Serialize the payload using borsh
+		const messagePayload = FinTransferWormholeMessage.serialize({
+			messageType: 1,
+			originChain: payload.originChain,
+			originNonce: BigInt(payload.originNonce),
+			omniBridgeChainId: 0,
+			tokenAddress: ethers.getBytes(payload.tokenAddress),
+			amount: BigInt(payload.amount),
+			feeRecipient: payload.feeRecipient,
+		})
 
 		await expect(BridgeTokenFactoryWormhole.finTransfer(signature, payload))
 			.to.emit(TestWormhole, "MessagePublished")
-			.withArgs(1, expectedPayload, consistencyLevel)
+			.withArgs(1, messagePayload, consistencyLevel)
 
 		expect((await token.balanceOf(payload.recipient)).toString()).to.be.equal(
 			payload.amount.toString(),
@@ -96,7 +167,8 @@ describe("BridgeTokenWormhole", () => {
 
 	it("withdraw token", async () => {
 		const { token } = await createToken(wrappedNearId)
-		const { signature, payload } = depositSignature(wrappedNearId, await user1.getAddress())
+		const tokenProxyAddress = await token.getAddress()
+		const { signature, payload } = depositSignature(tokenProxyAddress, await user1.getAddress())
 		await BridgeTokenFactoryWormhole.finTransfer(signature, payload)
 
 		const recipient = "testrecipient.near"
@@ -104,23 +176,24 @@ describe("BridgeTokenWormhole", () => {
 		const nativeFee = 0
 		const nonce = 1
 		const message = ""
-		const expectedPayload = ethers.AbiCoder.defaultAbiCoder().encode(
-			["uint8", "uint128", "string", "uint128", "uint128", "uint128", "string", "address"],
-			[
-				0,
-				nonce,
-				wrappedNearId,
-				payload.amount,
-				fee,
-				nativeFee,
-				recipient,
-				await user1.getAddress(),
-			],
-		)
+
+		const expectedWormholeMessage = InitTransferWormholeMessage.serialize({
+			messageType: 0,
+			originChainId: 0,
+			sender: ethers.getBytes(await user1.getAddress()),
+			destinationChainId: 0,
+			tokenAddress: ethers.getBytes(tokenProxyAddress),
+			originNonce: BigInt(nonce),
+			amount: BigInt(payload.amount),
+			fee: BigInt(fee),
+			nativeFee: BigInt(nativeFee),
+			recipient: recipient,
+			message: message,
+		})
 
 		await expect(
 			BridgeTokenFactoryWormhole.connect(user1).initTransfer(
-				wrappedNearId,
+				tokenProxyAddress,
 				payload.amount,
 				fee,
 				nativeFee,
@@ -129,7 +202,7 @@ describe("BridgeTokenWormhole", () => {
 			),
 		)
 			.to.emit(TestWormhole, "MessagePublished")
-			.withArgs(2, expectedPayload, consistencyLevel)
+			.withArgs(2, expectedWormholeMessage, consistencyLevel)
 
 		expect((await token.balanceOf(await user1.getAddress())).toString()).to.be.equal("0")
 	})

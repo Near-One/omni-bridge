@@ -1,73 +1,146 @@
+import * as borsh from "borsh"
+import { Wallet } from "ethers"
+import { ethers } from "hardhat"
+
+// Types and Interfaces
 interface MetadataPayload {
-	token: string
-	name: string
-	symbol: string
-	decimals: number
+    token: string
+    name: string
+    symbol: string
+    decimals: number
 }
 
 interface DepositPayload {
-	destinationNonce: number
-	originChain: number
-	originNonce: number
-	tokenAddress: string
-	amount: number
-	recipient: string
-	feeRecipient: string
+    destinationNonce: number
+    originChain: number
+    originNonce: number
+    tokenAddress: string
+    amount: number
+    recipient: string
+    feeRecipient: string
 }
 
 interface SignatureData<T> {
-	payload: T
-	signature: string
+    payload: T
+    signature: string
 }
 
-function metadataSignature(tokenId: string): SignatureData<MetadataPayload> {
-	const signatures: SignatureData<MetadataPayload>[] = [
-		{
-			// https://testnet.nearblocks.io/txns/7ptwRrXz5o44RB55Tn82fR6Qvi6wriCzSgy6d4Byb54P#execution
-			payload: {
-				token: "wrap.testnet",
-				name: "Wrapped NEAR fungible token",
-				symbol: "wNEAR",
-				decimals: 24,
-			},
-			signature:
-				"0xBA0F62842505C4D93689D5066371F58A81559509CBF177644FBC5045EAA0965C1152C92ADEFF0516C854D6EAECE11DD100F4036CC30922BF873AE4066BA36A811C",
-		},
-	]
+// Constants
+const TEST_PRIVATE_KEY = "0x1234567890123456789012345678901234567890123456789012345678901234"
+export const testWallet = new Wallet(TEST_PRIVATE_KEY)
 
-	const data = signatures.find((s) => s.payload.token === tokenId)
-	if (data === undefined) throw new Error(`Metadata not found for token ${tokenId}`)
+// Message Classes
+class MetadataMessage {
+    static schema = {
+        struct: {
+            payloadType: "u8",
+            token: "string",
+            name: "string",
+            symbol: "string",
+            decimals: "u8",
+        },
+    }
 
-	return data
+    constructor(
+        public payloadType: number,
+        public token: string,
+        public name: string,
+        public symbol: string,
+        public decimals: number,
+    ) {}
+
+    static serialize(msg: MetadataMessage): Uint8Array {
+        return borsh.serialize(MetadataMessage.schema, msg)
+    }
 }
 
-function depositSignature(tokenId: string, recipient: string): SignatureData<DepositPayload> {
-	const signatures: SignatureData<DepositPayload>[] = [
-		{
-			payload: {
-				destinationNonce: 1,
-				tokenAddress: "0x856e4424f806D16E8CBC702B3c0F2ede5468eae5",
-				amount: 1,
-				recipient: "0x3A445243376C32fAba679F63586e236F77EA601e",
-				feeRecipient: "",
-				originChain: 1, // TODO: Fix this
-				originNonce: 1, // TODO: Fix this
-			},
-			// TODO: Update this signature
-			signature:
-				"0xEC712AAF47EADA1542B128231BA1315A4CEDD0578843ABF9E26EC6F9EFF8DFC14BA36FF643ED1EAA46CDE1E80A80126CEAE5FBDA572FE964BB8630C2EA83A7A91C",
-		},
-	]
+class TransferMessage {
+    static schema = {
+        struct: {
+            payloadType: "u8",
+            destinationNonce: "u64",
+            originChain: "u8",
+            originNonce: "u64",
+            omniBridgeChainId: "u8",
+            tokenAddress: { array: { type: "u8", len: 20 } },
+            amount: "u128",
+            recipientChainId: "u8",
+            recipient: { array: { type: "u8", len: 20 } },
+            feeRecipient: { option: "string" },
+        },
+    }
 
-	const data = signatures.find(
-		(s) =>
-			s.payload.tokenAddress === tokenId &&
-			s.payload.recipient.toLowerCase() === recipient.toLowerCase(),
-	)
-	if (data === undefined)
-		throw new Error(`Deposit not found for token ${tokenId} and recipient ${recipient}`)
+    constructor(
+        public payloadType: number,
+        public destinationNonce: bigint,
+        public originChain: number,
+        public originNonce: bigint,
+        public omniBridgeChainId: number,
+        public tokenAddress: Uint8Array,
+        public amount: bigint,
+        public recipientChainId: number,
+        public recipient: Uint8Array,
+        public feeRecipient: string | null,
+    ) {}
 
-	return data
+    static serialize(msg: TransferMessage): Uint8Array {
+        return borsh.serialize(TransferMessage.schema, msg)
+    }
 }
 
-export { metadataSignature, depositSignature }
+// Utility Functions
+function createMessageHash(borshEncoded: Uint8Array): string {
+    return ethers.keccak256(borshEncoded)
+}
+
+function signMessage(messageHash: string): string {
+    return testWallet.signingKey.sign(ethers.getBytes(messageHash)).serialized
+}
+
+// Main Functions
+export function metadataSignature(tokenId: string): SignatureData<MetadataPayload> {
+    const payload: MetadataPayload = {
+        token: tokenId,
+        name: "Wrapped NEAR fungible token",
+        symbol: "wNEAR",
+        decimals: 24,
+    }
+
+    const message = new MetadataMessage(1, payload.token, payload.name, payload.symbol, payload.decimals)
+    const borshEncoded = MetadataMessage.serialize(message)
+    const messageHash = createMessageHash(borshEncoded)
+    const signature = signMessage(messageHash)
+
+    return { payload, signature }
+}
+
+export function depositSignature(tokenAddress: string, recipient: string): SignatureData<DepositPayload> {
+    const payload: DepositPayload = {
+        destinationNonce: 1,
+        tokenAddress,
+        amount: 1,
+        recipient,
+        feeRecipient: "",
+        originChain: 1,
+        originNonce: 1,
+    }
+
+    const message = new TransferMessage(
+        0,
+        BigInt(payload.destinationNonce),
+        payload.originChain,
+        BigInt(payload.originNonce),
+        0,
+        ethers.getBytes(payload.tokenAddress),
+        BigInt(payload.amount),
+        0,
+        ethers.getBytes(payload.recipient),
+        null
+    )
+
+    const borshEncoded = TransferMessage.serialize(message)
+    const messageHash = createMessageHash(borshEncoded)
+    const signature = signMessage(messageHash)
+
+    return { payload, signature }
+}
