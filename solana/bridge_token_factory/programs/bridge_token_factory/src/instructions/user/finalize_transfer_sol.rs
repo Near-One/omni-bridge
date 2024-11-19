@@ -45,6 +45,7 @@ pub struct FinalizeTransferSol<'info> {
     )]
     pub authority: SystemAccount<'info>,
 
+    #[account(mut)]
     pub recipient: SystemAccount<'info>,
 
     #[account(
