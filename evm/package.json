@@ -4,19 +4,19 @@
 	"description": "ERC20 bridge token factory for the OmniBridge",
 	"license": "MIT",
 	"dependencies": {
-		"@openzeppelin/contracts": "^5.0.2",
-		"@openzeppelin/contracts-upgradeable": "^5.0.2",
+		"@openzeppelin/contracts": "^5.1.0",
+		"@openzeppelin/contracts-upgradeable": "^5.1.0",
 		"bs58check": "^4.0.0",
 		"prettier": "^3.3.3",
 		"prettier-plugin-solidity": "^1.4.1"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "^1.9.4",
-		"@nomicfoundation/hardhat-chai-matchers": "^2.0.6",
+		"@nomicfoundation/hardhat-chai-matchers": "^2.0.8",
 		"@nomicfoundation/hardhat-ethers": "^3.0.6",
 		"@nomicfoundation/hardhat-network-helpers": "^1.0.12",
-		"@nomicfoundation/hardhat-verify": "^2.0.7",
-		"@openzeppelin/hardhat-upgrades": "^3.1.0",
+		"@nomicfoundation/hardhat-verify": "^2.0.12",
+		"@openzeppelin/hardhat-upgrades": "^3.5.0",
 		"@typechain/ethers-v6": "^0.5.1",
 		"@typechain/hardhat": "^9.1.0",
 		"@types/chai": "4",
@@ -29,7 +29,7 @@
 		"ethers": "^6.13.4",
 		"hardhat": "^2.22.16",
 		"hardhat-storage-layout": "^0.1.7",
-		"near-api-js": "^5.0.0",
+		"near-api-js": "^5.0.1",
 		"ts-node": "^10.9.2",
 		"typechain": "^8.3.2",
 		"typescript": "^5.6.3"
