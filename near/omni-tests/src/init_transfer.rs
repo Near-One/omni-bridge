@@ -2,7 +2,7 @@
 mod tests {
     use crate::helpers::tests::{
         account_1, eth_eoa_address, eth_factory_address, eth_token_address, get_bind_token_args,
-        get_claim_fee_args, get_event_data, relayer_account_id, LOCKER_PATH, MOCK_PROVER_PATH,
+        get_claim_fee_args_near, get_event_data, relayer_account_id, LOCKER_PATH, MOCK_PROVER_PATH,
         MOCK_TOKEN_PATH, NEP141_DEPOSIT,
     };
     use anyhow::Ok;
@@ -12,7 +12,7 @@ mod tests {
     };
     use near_workspaces::{result::ExecutionSuccess, types::NearToken, AccountId};
     use omni_types::{
-        near_events::Nep141LockerEvent, ChainKind, Fee, InitTransferMsg, OmniAddress,
+        near_events::Nep141LockerEvent, ChainKind, Fee, InitTransferMsg, OmniAddress, TransferId,
         TransferMessage, UpdateFee,
     };
 
@@ -241,7 +241,10 @@ mod tests {
         signer
             .call(env.locker_contract.id(), "sign_transfer")
             .args_json(json!({
-                "nonce": transfer_message.origin_nonce,
+                "transfer_id": TransferId {
+                    origin_chain: ChainKind::Near,
+                    origin_nonce: transfer_message.origin_nonce,
+                },
                 "fee_recipient": env.relayer_account.id(),
                 "fee": &Some(signing_fee.clone()),
             }))
@@ -251,7 +254,8 @@ mod tests {
             .into_result()?;
 
         // Relayer claims the fee
-        let claim_fee_args = get_claim_fee_args(
+        let claim_fee_args = get_claim_fee_args_near(
+            ChainKind::Near,
             ChainKind::Eth,
             transfer_message.origin_nonce.into(),
             env.relayer_account.id().clone(),
@@ -341,11 +345,14 @@ mod tests {
         sender_account
             .call(locker_contract.id(), "update_transfer_fee")
             .args_json(json!({
-                "nonce": transfer_message.origin_nonce,
+                "transfer_id": TransferId {
+                    origin_chain: ChainKind::Near,
+                    origin_nonce: transfer_message.origin_nonce,
+                },
                 "fee": update_fee.clone(),
             }))
-            .deposit(deposit)
             .max_gas()
+            .deposit(deposit)
             .transact()
             .await?
             .into_result()?;

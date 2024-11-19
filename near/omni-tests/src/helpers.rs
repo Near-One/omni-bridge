@@ -5,7 +5,7 @@ pub mod tests {
     use omni_types::{
         locker_args::{BindTokenArgs, ClaimFeeArgs},
         prover_result::{DeployTokenMessage, FinTransferMessage, ProverResult},
-        ChainKind, OmniAddress,
+        ChainKind, Nonce, OmniAddress, TransferId,
     };
 
     pub const MOCK_TOKEN_PATH: &str = "./../target/wasm32-unknown-unknown/release/mock_token.wasm";
@@ -44,15 +44,19 @@ pub mod tests {
             .unwrap()
     }
 
-    pub fn get_claim_fee_args(
-        chain_kind: ChainKind,
-        nonce: u128,
+    pub fn get_claim_fee_args_near(
+        origin_chain: ChainKind,
+        destination_chain: ChainKind,
+        origin_nonce: Nonce,
         fee_recipient: AccountId,
         amount: u128,
         emitter_address: OmniAddress,
     ) -> ClaimFeeArgs {
         let fin_transfer = FinTransferMessage {
-            nonce: U128(nonce),
+            transfer_id: TransferId {
+                origin_chain: origin_chain,
+                origin_nonce: origin_nonce,
+            },
             fee_recipient: fee_recipient.clone(),
             amount: U128(amount),
             emitter_address,
@@ -63,9 +67,8 @@ pub mod tests {
         let prover_args = borsh::to_vec(&prover_result).expect("Failed to serialize prover result");
 
         ClaimFeeArgs {
-            chain_kind,
+            chain_kind: destination_chain,
             prover_args,
-            native_fee_recipient: Some(OmniAddress::Near(fee_recipient.clone())),
         }
     }
 
