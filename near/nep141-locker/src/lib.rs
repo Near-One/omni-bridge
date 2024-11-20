@@ -279,6 +279,11 @@ impl Contract {
         #[callback] metadata: FungibleTokenMetadata,
         token_id: &AccountId,
     ) -> Promise {
+        require!(
+            !metadata.name.is_empty() && !metadata.symbol.is_empty(),
+            "ERR_INVALID_METADATA"
+        );
+
         let metadata_payload = MetadataPayload {
             prefix: PayloadType::Metadata,
             token: token_id.to_string(),
@@ -840,14 +845,13 @@ impl Contract {
         token: AccountId,
         name: Option<String>,
         symbol: Option<String>,
-        decimals: Option<u8>,
         icon: Option<String>,
         reference: Option<String>,
         reference_hash: Option<Base64VecU8>,
     ) -> Promise {
         ext_token::ext(token)
             .with_static_gas(SET_METADATA_GAS)
-            .set_metadata(name, symbol, reference, reference_hash, decimals, icon)
+            .set_metadata(name, symbol, reference, reference_hash, None, icon)
     }
 
     pub fn get_current_destination_nonce(&self, chain_kind: ChainKind) -> Nonce {
