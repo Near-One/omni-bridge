@@ -1,24 +1,7 @@
 import * as borsh from "borsh"
-import { Wallet } from "ethers"
+import { BigNumberish, Wallet } from "ethers"
 import { ethers } from "hardhat"
-
-// Types and Interfaces
-interface MetadataPayload {
-	token: string
-	name: string
-	symbol: string
-	decimals: number
-}
-
-interface DepositPayload {
-	destinationNonce: number
-	originChain: number
-	originNonce: number
-	tokenAddress: string
-	amount: number
-	recipient: string
-	feeRecipient: string
-}
+import { BridgeTypes } from "../../typechain-types/src/bridge-token-factory/contracts/BridgeTokenFactory"
 
 interface SignatureData<T> {
 	payload: T
@@ -46,7 +29,7 @@ class MetadataMessage {
 		public token: string,
 		public name: string,
 		public symbol: string,
-		public decimals: number,
+		public decimals: BigNumberish,
 	) {}
 
 	static serialize(msg: MetadataMessage): Uint8Array {
@@ -73,7 +56,7 @@ class TransferMessage {
 	constructor(
 		public payloadType: number,
 		public destinationNonce: bigint,
-		public originChain: number,
+		public originChain: BigNumberish,
 		public originNonce: bigint,
 		public omniBridgeChainId: number,
 		public tokenAddress: Uint8Array,
@@ -98,8 +81,8 @@ function signMessage(messageHash: string): string {
 }
 
 // Main Functions
-export function metadataSignature(tokenId: string): SignatureData<MetadataPayload> {
-	const payload: MetadataPayload = {
+export function metadataSignature(tokenId: string): SignatureData<BridgeTypes.MetadataPayloadStruct> {
+	const payload: BridgeTypes.MetadataPayloadStruct = {
 		token: tokenId,
 		name: "Wrapped NEAR fungible token",
 		symbol: "wNEAR",
@@ -123,8 +106,8 @@ export function metadataSignature(tokenId: string): SignatureData<MetadataPayloa
 export function depositSignature(
 	tokenAddress: string,
 	recipient: string,
-): SignatureData<DepositPayload> {
-	const payload: DepositPayload = {
+): SignatureData<BridgeTypes.TransferMessagePayloadStruct> {
+	const payload: BridgeTypes.TransferMessagePayloadStruct = {
 		destinationNonce: 1,
 		tokenAddress,
 		amount: 1,
@@ -132,6 +115,10 @@ export function depositSignature(
 		feeRecipient: "",
 		originChain: 1,
 		originNonce: 1,
+	}
+
+	if (typeof payload.tokenAddress !== "string" || typeof payload.recipient !== "string") {
+		throw new Error("tokenAddress and recipient must be strings");
 	}
 
 	const message = new TransferMessage(
