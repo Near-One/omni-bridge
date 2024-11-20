@@ -1,7 +1,7 @@
 import * as borsh from "borsh"
-import { BigNumberish, Wallet } from "ethers"
+import { type BigNumberish, Wallet } from "ethers"
 import { ethers } from "hardhat"
-import { BridgeTypes } from "../../typechain-types/src/bridge-token-factory/contracts/BridgeTokenFactory"
+import type { BridgeTypes } from "../../typechain-types/src/bridge-token-factory/contracts/BridgeTokenFactory"
 
 interface SignatureData<T> {
 	payload: T
@@ -81,7 +81,9 @@ function signMessage(messageHash: string): string {
 }
 
 // Main Functions
-export function metadataSignature(tokenId: string): SignatureData<BridgeTypes.MetadataPayloadStruct> {
+export function metadataSignature(
+	tokenId: string,
+): SignatureData<BridgeTypes.MetadataPayloadStruct> {
 	const payload: BridgeTypes.MetadataPayloadStruct = {
 		token: tokenId,
 		name: "Wrapped NEAR fungible token",
@@ -118,7 +120,7 @@ export function depositSignature(
 	}
 
 	if (typeof payload.tokenAddress !== "string" || typeof payload.recipient !== "string") {
-		throw new Error("tokenAddress and recipient must be strings");
+		throw new Error("tokenAddress and recipient must be strings")
 	}
 
 	const message = new TransferMessage(
