@@ -125,8 +125,8 @@ impl<'info> LogMetadata<'info> {
 
         let payload = LogMetadataPayload {
             token: self.mint.key(),
-            name,
-            symbol,
+            name: name.trim_end_matches('\0').to_string(),
+            symbol: symbol.trim_end_matches('\0').to_string(),
             decimals: self.mint.decimals,
         }
         .serialize_for_near(())?;
