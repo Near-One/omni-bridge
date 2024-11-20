@@ -38,10 +38,8 @@ pub struct LogMetadata<'info> {
     )]
     pub mint: Box<InterfaceAccount<'info, Mint>>,
 
-    pub override_authority: Option<Signer<'info>>,
-
-    #[account()]
-    pub metadata: Option<Account<'info, MplMetadata>>,
+    /// CHECK: may be unitialized
+    pub metadata: Option<UncheckedAccount<'info>>,
 
     #[account(
         init_if_needed,
@@ -64,61 +62,65 @@ pub struct LogMetadata<'info> {
     pub associated_token_program: Program<'info, AssociatedToken>,
 }
 
-#[derive(AnchorSerialize, AnchorDeserialize)]
-pub struct MetadataOverride {
-    pub name: String,
-    pub symbol: String,
-}
-
 impl<'info> LogMetadata<'info> {
-    pub fn process(&mut self, metadata_override: MetadataOverride) -> Result<()> {
-        let (name, symbol) = if let Some(override_authority) = self.override_authority.as_ref() {
-            match override_authority.key() {
-                a if a == self.wormhole.config.admin => {}
-                a if self.mint.mint_authority.contains(&a) => {}
-                _ => return err!(ErrorCode::Unauthorized),
-            }
-            (metadata_override.name, metadata_override.symbol)
+    fn parse_metadata_account(&self, address: Pubkey) -> Result<(String, String)> {
+        let metadata = self
+            .metadata
+            .as_ref()
+            .ok_or(error!(ErrorCode::TokenMetadataNotProvided))?
+            .to_account_info();
+        require_keys_eq!(
+            metadata.key(),
+            address,
+            ErrorCode::InvalidTokenMetadataAddress,
+        );
+        if metadata.owner == &MetaplexID {
+            let data = metadata.try_borrow_data()?;
+            let metadata = MplMetadata::try_deserialize(&mut data.as_ref())?;
+            Ok((metadata.name.clone(), metadata.symbol.clone()))
         } else {
-            if self.token_program.key() == token_2022::ID {
-                let mint_account_info = self.mint.to_account_info();
-                let mint_data = mint_account_info.try_borrow_data()?;
-                let mint_with_extension =
-                    StateWithExtensions::<spl_token_2022::state::Mint>::unpack(&mint_data)?;
-                let metadata_pointer = mint_with_extension
-                    .get_extension::<MetadataPointer>()
-                    .or(err!(ErrorCode::TokenMetadataNotProvided))?;
+            Ok((String::default(), String::default()))
+        }
+    }
+    pub fn process(&mut self) -> Result<()> {
+        let (name, symbol) = if self.token_program.key() == token_2022::ID {
+            let mint_account_info = self.mint.to_account_info();
+            let mint_data = mint_account_info.try_borrow_data()?;
+            let mint_with_extension =
+                StateWithExtensions::<spl_token_2022::state::Mint>::unpack(&mint_data)?;
+
+            if let Some(metadata_pointer) =
+                mint_with_extension.get_extension::<MetadataPointer>().ok()
+            {
                 if metadata_pointer.metadata_address.0 == self.mint.key() {
+                    // Embedded metadata
                     let metadata =
                         mint_with_extension.get_variable_len_extension::<TokenMetadata>()?;
                     (metadata.name, metadata.symbol)
+                } else if metadata_pointer.metadata_address.0 != Pubkey::default() {
+                    // Third-party metadata
+                    self.parse_metadata_account(metadata_pointer.metadata_address.0)?
                 } else {
-                    let metadata = self
-                        .metadata
-                        .as_ref()
-                        .ok_or(error!(ErrorCode::TokenMetadataNotProvided))?;
-                    require_keys_eq!(metadata.key(), metadata_pointer.metadata_address.0);
-                    (metadata.name.clone(), metadata.symbol.clone())
+                    // No metadata
+                    (String::default(), String::default())
                 }
             } else {
-                let metadata = self
-                    .metadata
-                    .as_ref()
-                    .ok_or(error!(ErrorCode::TokenMetadataNotProvided))?;
-                require_keys_eq!(
-                    metadata.key(),
-                    Pubkey::find_program_address(
-                        &[
-                            b"metadata",
-                            MetaplexID.as_ref(),
-                            &self.mint.key().to_bytes()
-                        ],
-                        &MetaplexID
-                    )
-                    .0
-                );
-                (metadata.name.clone(), metadata.symbol.clone())
+                // No metadata pointer extension found
+                (String::default(), String::default())
             }
+        } else {
+            // Only metaplex is supported for the classic SPL tokens
+            self.parse_metadata_account(
+                Pubkey::find_program_address(
+                    &[
+                        b"metadata",
+                        MetaplexID.as_ref(),
+                        &self.mint.key().to_bytes(),
+                    ],
+                    &MetaplexID,
+                )
+                .0,
+            )?
         };
 
         let payload = LogMetadataPayload {
