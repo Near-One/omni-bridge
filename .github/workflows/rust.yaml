@@ -3,8 +3,14 @@ name: Rust testing and building
 on:
   push:
     branches: [ main, develop ]
+    paths:
+      - 'near/**'
+      - 'omni-relayer/**'
   pull_request:
     branches: [ main, develop ]
+    paths:
+      - 'near/**'
+      - 'omni-relayer/**'
 
 jobs:
   lint:
