@@ -566,12 +566,8 @@ impl Contract {
                 Promise::new(fin_transfer.fee_recipient.clone())
                     .transfer(NearToken::from_yoctonear(message.fee.native_fee.0));
             } else {
-                let native_token_address = OmniAddress::new_zero(message.get_origin_chain())
-                    .sdk_expect("ERR_FAILED_TO_GET_ZERO_ADDRESS");
-
-                ext_token::ext(self.get_token_id(&native_token_address))
+                ext_token::ext(self.get_native_token_id(message.get_origin_chain()))
                     .with_static_gas(MINT_TOKEN_GAS)
-                    .with_attached_deposit(ONE_YOCTO)
                     .mint(
                         fin_transfer.fee_recipient.clone(),
                         message.fee.native_fee,
@@ -963,6 +959,18 @@ impl Contract {
             required_balance = required_balance.saturating_add(ONE_YOCTO);
         }
 
+        if transfer_message.fee.native_fee.0 > 0 {
+            promise = promise.then(
+                ext_token::ext(self.get_native_token_id(transfer_message.get_origin_chain()))
+                    .with_static_gas(MINT_TOKEN_GAS)
+                    .mint(
+                        predecessor_account_id.clone(),
+                        transfer_message.fee.native_fee,
+                        None,
+                    ),
+            );
+        }
+
         self.update_storage_balance(
             predecessor_account_id,
             required_balance,
@@ -1002,6 +1010,13 @@ impl Contract {
                 .get(address)
                 .sdk_expect("ERR_TOKEN_NOT_REGISTERED")
         }
+    }
+
+    fn get_native_token_id(&self, origin_chain: ChainKind) -> AccountId {
+        let native_token_address =
+            OmniAddress::new_zero(origin_chain).sdk_expect("ERR_FAILED_TO_GET_ZERO_ADDRESS");
+
+        self.get_token_id(&native_token_address)
     }
 
     fn check_or_pay_ft_storage(
