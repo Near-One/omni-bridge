@@ -1,7 +1,7 @@
 import { anyValue } from "@nomicfoundation/hardhat-chai-matchers/withArgs"
 import * as borsh from "borsh"
 import { expect } from "chai"
-import type { Signer } from "ethers"
+import type { BigNumberish, Signer } from "ethers"
 import { ethers, upgrades } from "hardhat"
 import type { BridgeToken, BridgeTokenFactoryWormhole, TestWormhole } from "../typechain-types"
 import { depositSignature, metadataSignature, testWallet } from "./helpers/signatures"
@@ -21,7 +21,7 @@ class FinTransferWormholeMessage {
 
 	constructor(
 		public messageType: number,
-		public originChain: number,
+		public originChain: BigNumberish,
 		public originNonce: bigint,
 		public omniBridgeChainId: number,
 		public tokenAddress: Uint8Array,
@@ -151,7 +151,7 @@ describe("BridgeTokenWormhole", () => {
 			originChain: payload.originChain,
 			originNonce: BigInt(payload.originNonce),
 			omniBridgeChainId: 0,
-			tokenAddress: ethers.getBytes(payload.tokenAddress),
+			tokenAddress: ethers.getBytes(tokenProxyAddress),
 			amount: BigInt(payload.amount),
 			feeRecipient: payload.feeRecipient,
 		})
