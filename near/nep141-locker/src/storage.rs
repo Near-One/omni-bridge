@@ -181,6 +181,14 @@ impl Contract {
             .saturating_mul((Self::get_basic_storage() + key_len + value_len).into())
     }
 
+    pub fn required_balance_for_deploy_token(&self) -> NearToken {
+        let key_len = 64 + 4;
+        let deployed_tokens_required_balance = env::storage_byte_cost().saturating_mul(key_len);
+        let bind_token_required_balance = self.required_balance_for_bind_token();
+
+        bind_token_required_balance.saturating_add(deployed_tokens_required_balance)
+    }
+
     fn get_basic_storage() -> u64 {
         const EXTRA_BYTES_RECORD: u64 = 40;
         const EXTRA_KEY_PREFIX_LEN: u64 = 1;
