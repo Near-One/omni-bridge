@@ -5,7 +5,7 @@ use crate::mpc_types::SignatureResponse;
 use crate::{MetadataPayload, TransferMessage, TransferMessagePayload};
 
 #[derive(Deserialize, Serialize, Clone, Debug)]
-pub enum Nep141LockerEvent {
+pub enum OmniBridgeEvent {
     InitTransferEvent {
         transfer_message: TransferMessage,
     },
@@ -28,7 +28,7 @@ pub enum Nep141LockerEvent {
     },
 }
 
-impl Nep141LockerEvent {
+impl OmniBridgeEvent {
     pub fn to_log_string(&self) -> String {
         json!(self).to_string()
     }

@@ -11,7 +11,7 @@ pub mod tests {
     pub const MOCK_TOKEN_PATH: &str = "./../target/wasm32-unknown-unknown/release/mock_token.wasm";
     pub const MOCK_PROVER_PATH: &str =
         "./../target/wasm32-unknown-unknown/release/mock_prover.wasm";
-    pub const LOCKER_PATH: &str = "./../target/wasm32-unknown-unknown/release/nep141_locker.wasm";
+    pub const LOCKER_PATH: &str = "./../target/wasm32-unknown-unknown/release/omni_bridge.wasm";
     pub const NEP141_DEPOSIT: NearToken = NearToken::from_yoctonear(1250000000000000000000);
 
     pub fn relayer_account_id() -> AccountId {

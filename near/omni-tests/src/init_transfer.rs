@@ -12,7 +12,7 @@ mod tests {
     };
     use near_workspaces::{result::ExecutionSuccess, types::NearToken, AccountId};
     use omni_types::{
-        near_events::Nep141LockerEvent, ChainKind, Fee, InitTransferMsg, OmniAddress, TransferId,
+        near_events::OmniBridgeEvent, ChainKind, Fee, InitTransferMsg, OmniAddress, TransferId,
         TransferMessage, UpdateFee,
     };
 
@@ -313,12 +313,12 @@ mod tests {
             .flat_map(|outcome| &outcome.logs)
             .collect::<Vec<_>>();
 
-        let nep141_locker_event: Nep141LockerEvent = serde_json::from_value(
+        let omni_bridge_event: OmniBridgeEvent = serde_json::from_value(
             get_event_data("InitTransferEvent", &logs)?
                 .ok_or_else(|| anyhow::anyhow!("InitTransferEvent not found"))?,
         )?;
-        let transfer_message = match nep141_locker_event {
-            Nep141LockerEvent::InitTransferEvent { transfer_message } => transfer_message,
+        let transfer_message = match omni_bridge_event {
+            OmniBridgeEvent::InitTransferEvent { transfer_message } => transfer_message,
             _ => anyhow::bail!("InitTransferEvent is found in unexpected event"),
         };
 

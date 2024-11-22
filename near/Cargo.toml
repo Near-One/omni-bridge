@@ -4,7 +4,7 @@ authors = ["Karim Alabtakh <karim.alabtakh@nearone.org>"]
 [workspace]
 resolver = "2"
 members = [
-    "nep141-locker",
+    "omni-bridge",
     "token-deployer",
     "omni-prover/omni-prover",
     "omni-prover/wormhole-omni-prover-proxy",
