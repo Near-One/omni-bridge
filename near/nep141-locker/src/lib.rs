@@ -17,7 +17,7 @@ use near_sdk::{
     PanicOnDefault, Promise, PromiseError, PromiseOrValue, PromiseResult,
 };
 use omni_types::locker_args::{
-    BindTokenArgs, ClaimFeeArgs, DeployTokenArgs, FinTransferArgs, StorageDepositArgs,
+    BindTokenArgs, ClaimFeeArgs, DeployTokenArgs, FinTransferArgs, StorageDepositAction,
 };
 use omni_types::mpc_types::SignatureResponse;
 use omni_types::near_events::Nep141LockerEvent;
@@ -57,7 +57,6 @@ const MINT_TOKEN_GAS: Gas = Gas::from_tgas(5);
 const SET_METADATA_GAS: Gas = Gas::from_tgas(10);
 const NO_DEPOSIT: NearToken = NearToken::from_near(0);
 const ONE_YOCTO: NearToken = NearToken::from_yoctonear(1);
-const NEP141_DEPOSIT: NearToken = NearToken::from_yoctonear(1_250_000_000_000_000_000_000);
 const BRIDGE_TOKEN_INIT_BALANCE: NearToken = NearToken::from_near(3);
 const SIGN_PATH: &str = "bridge-1";
 
@@ -106,11 +105,11 @@ pub trait ExtToken {
 
     fn storage_deposit(
         &mut self,
-        account_id: Option<AccountId>,
+        account_id: &AccountId,
         registration_only: Option<bool>,
     ) -> Option<StorageBalance>;
 
-    fn storage_balance_of(&mut self, account_id: Option<AccountId>) -> Option<StorageBalance>;
+    fn storage_balance_of(&mut self, account_id: &AccountId) -> Option<StorageBalance>;
 
     fn mint(&mut self, account_id: AccountId, amount: U128, msg: Option<String>);
 
@@ -448,7 +447,7 @@ impl Contract {
     #[payable]
     pub fn fin_transfer(&mut self, #[serializer(borsh)] args: FinTransferArgs) -> Promise {
         require!(
-            args.storage_deposit_args.accounts.len() <= 2,
+            args.storage_deposit_actions.len() <= 3,
             "Invalid len of accounts for storage deposit"
         );
         let main_promise = ext_prover::ext(self.prover_account.clone())
@@ -462,14 +461,17 @@ impl Contract {
         let mut attached_deposit = env::attached_deposit();
         Self::check_or_pay_ft_storage(
             main_promise,
-            &args.storage_deposit_args,
+            &args.storage_deposit_actions,
             &mut attached_deposit,
         )
         .then(
             Self::ext(env::current_account_id())
                 .with_attached_deposit(attached_deposit)
                 .with_static_gas(VERIFY_PROOF_CALLBACK_GAS)
-                .fin_transfer_callback(&args.storage_deposit_args, env::predecessor_account_id()),
+                .fin_transfer_callback(
+                    &args.storage_deposit_actions,
+                    env::predecessor_account_id(),
+                ),
         )
     }
 
@@ -477,7 +479,7 @@ impl Contract {
     #[payable]
     pub fn fin_transfer_callback(
         &mut self,
-        #[serializer(borsh)] storage_deposit_args: &StorageDepositArgs,
+        #[serializer(borsh)] storage_deposit_actions: &Vec<StorageDepositAction>,
         #[serializer(borsh)] predecessor_account_id: AccountId,
     ) -> PromiseOrValue<Nonce> {
         let Ok(ProverResult::InitTransfer(init_transfer)) = Self::decode_prover_result(0) else {
@@ -508,7 +510,7 @@ impl Contract {
                 recipient,
                 predecessor_account_id,
                 transfer_message,
-                storage_deposit_args,
+                storage_deposit_actions,
             )
             .into()
         } else {
@@ -870,24 +872,22 @@ impl Contract {
         payload_nonce
     }
 
-    #[allow(clippy::too_many_lines)]
+    #[allow(clippy::too_many_lines, clippy::ptr_arg)]
     fn process_fin_transfer_to_near(
         &mut self,
         recipient: AccountId,
         predecessor_account_id: AccountId,
         transfer_message: TransferMessage,
-        storage_deposit_args: &StorageDepositArgs,
+        storage_deposit_actions: &Vec<StorageDepositAction>,
     ) -> Promise {
         let mut required_balance = self.add_fin_transfer(&transfer_message.get_transfer_id());
 
         let token = self.get_token_id(&transfer_message.token);
-        require!(
-            token == storage_deposit_args.token,
-            "STORAGE_ERR: Invalid token"
-        );
+
         require!(
             Self::check_storage_balance_result(1)
-                && storage_deposit_args.accounts[0].0 == recipient,
+                && storage_deposit_actions[0].account_id == recipient
+                && storage_deposit_actions[0].token_id == token,
             "STORAGE_ERR: The transfer recipient is omitted"
         );
 
@@ -933,7 +933,8 @@ impl Contract {
         if transfer_message.fee.fee.0 > 0 {
             require!(
                 Self::check_storage_balance_result(2)
-                    && storage_deposit_args.accounts[1].0 == predecessor_account_id,
+                    && storage_deposit_actions[1].account_id == predecessor_account_id
+                    && storage_deposit_actions[1].token_id == token,
                 "STORAGE_ERR: The fee recipient is omitted"
             );
 
@@ -960,8 +961,17 @@ impl Contract {
         }
 
         if transfer_message.fee.native_fee.0 > 0 {
+            let native_token_id = self.get_native_token_id(transfer_message.get_origin_chain());
+
+            require!(
+                Self::check_storage_balance_result(3)
+                    && storage_deposit_actions[2].account_id == predecessor_account_id
+                    && storage_deposit_actions[2].token_id == native_token_id,
+                "STORAGE_ERR: The native fee recipient is omitted"
+            );
+
             promise = promise.then(
-                ext_token::ext(self.get_native_token_id(transfer_message.get_origin_chain()))
+                ext_token::ext(native_token_id)
                     .with_static_gas(MINT_TOKEN_GAS)
                     .mint(
                         predecessor_account_id.clone(),
@@ -1021,23 +1031,26 @@ impl Contract {
 
     fn check_or_pay_ft_storage(
         mut main_promise: Promise,
-        args: &StorageDepositArgs,
+        storage_deposit_actions: &Vec<StorageDepositAction>,
         attached_deposit: &mut NearToken,
     ) -> Promise {
-        for (account, is_storage_deposit) in &args.accounts {
-            let promise = if *is_storage_deposit {
+        for action in storage_deposit_actions {
+            let promise = if let Some(storage_deposit_amount) = action.storage_deposit_amount {
+                let storage_deposit_amount = NearToken::from_yoctonear(storage_deposit_amount);
+
                 *attached_deposit = attached_deposit
-                    .checked_sub(NEP141_DEPOSIT)
+                    .checked_sub(storage_deposit_amount)
                     .sdk_expect("The attached deposit is less than required");
-                ext_token::ext(args.token.clone())
+
+                ext_token::ext(action.token_id.clone())
                     .with_static_gas(STORAGE_DEPOSIT_GAS)
-                    .with_attached_deposit(NEP141_DEPOSIT)
-                    .storage_deposit(Some(account.clone()), Some(true))
+                    .with_attached_deposit(storage_deposit_amount)
+                    .storage_deposit(&action.account_id, Some(true))
             } else {
-                ext_token::ext(args.token.clone())
+                ext_token::ext(action.token_id.clone())
                     .with_static_gas(STORAGE_BALANCE_OF_GAS)
                     .with_attached_deposit(NO_DEPOSIT)
-                    .storage_balance_of(Some(account.clone()))
+                    .storage_balance_of(&action.account_id)
             };
 
             main_promise = main_promise.and(promise);
