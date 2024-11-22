@@ -121,7 +121,7 @@ impl Contract {
     }
 
     pub fn required_balance_for_account(&self) -> NearToken {
-        let key_len = 64 + 4;
+        let key_len = Self::max_key_len_of_account_id();
         let value_len = borsh::to_vec(&StorageBalance {
             total: NearToken::from_yoctonear(0),
             available: NearToken::from_yoctonear(0),
@@ -186,7 +186,7 @@ impl Contract {
     }
 
     pub fn required_balance_for_deploy_token(&self) -> NearToken {
-        let key_len = 64 + 4;
+        let key_len = Self::max_key_len_of_account_id();
         let deployed_tokens_required_balance =
             env::storage_byte_cost().saturating_mul((Self::get_basic_storage() + key_len).into());
         let bind_token_required_balance = self.required_balance_for_bind_token();
@@ -200,5 +200,10 @@ impl Contract {
         const EXTRA_BYTES_RECORD: u64 = 40;
         const EXTRA_KEY_PREFIX_LEN: u64 = 1;
         EXTRA_BYTES_RECORD + EXTRA_KEY_PREFIX_LEN
+    }
+
+    fn max_key_len_of_account_id() -> u64 {
+        let max_account_id: AccountId = "a".repeat(64).parse().sdk_expect("ERR_PARSE_ACCOUNT_ID");
+        borsh::to_vec(&max_account_id).sdk_expect("ERR_BORSH").len() as u64
     }
 }
