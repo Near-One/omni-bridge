@@ -15,7 +15,7 @@ import "./SelectivePausableUpgradable.sol";
 import "../../common/Borsh.sol";
 import "./BridgeTypes.sol";
 
-contract BridgeTokenFactory is
+contract OmniBridge is
     UUPSUpgradeable,
     AccessControlUpgradeable,
     SelectivePausableUpgradable

@@ -20,8 +20,8 @@ const PauseAll = PauseMode.PausedInitTransfer | PauseMode.PausedFinTransfer;
 describe('BridgeToken', () => {
   const wrappedNearId = 'wrap.testnet'
 
-  let BridgeTokenInstance
-  let BridgeTokenFactory
+  let OmniBridgeInstance
+  let OmniBridge
   let adminAccount
   let user1
   let user2
@@ -34,21 +34,21 @@ describe('BridgeToken', () => {
     await fundAddress(user1.address, "1");
     await fundAddress(user2.address, "1");
 
-    BridgeTokenInstance = await ethers.getContractFactory('BridgeToken')
-    const bridgeToken = await BridgeTokenInstance.deploy()
+    OmniBridgeInstance = await ethers.getContractFactory('BridgeToken')
+    const bridgeToken = await OmniBridgeInstance.deploy()
     await bridgeToken.waitForDeployment()
 
     const nearBridgeDeriveAddress = await deriveEthereumAddress('omni-locker.testnet', 'bridge-1');
     console.log(await deriveChildPublicKey(najPublicKeyStrToUncompressedHexPoint(), 'omni-locker.testnet', 'bridge-1'));
     const omniBridgeChainId = 0;
 
-    BridgeTokenFactory = await ethers.getContractFactory('BridgeTokenFactory')
-    BridgeTokenFactory = await upgrades.deployProxy(BridgeTokenFactory, [
+    OmniBridge = await ethers.getContractFactory('OmniBridge')
+    OmniBridge = await upgrades.deployProxy(OmniBridge, [
       await bridgeToken.getAddress(),
       nearBridgeDeriveAddress,
       omniBridgeChainId,
     ], { initializer: 'initialize' });
-    await BridgeTokenFactory.waitForDeployment();
+    await OmniBridge.waitForDeployment();
   })
 
   async function fundAddress(address, amount) {
@@ -62,16 +62,16 @@ describe('BridgeToken', () => {
   async function createToken(tokenId) {
     const { signature, payload } = metadataSignature(tokenId);
   
-    await BridgeTokenFactory.deployToken(signature, payload);
-    const tokenProxyAddress = await BridgeTokenFactory.nearToEthToken(tokenId)
-    const token = BridgeTokenInstance.attach(tokenProxyAddress)
+    await OmniBridge.deployToken(signature, payload);
+    const tokenProxyAddress = await OmniBridge.nearToEthToken(tokenId)
+    const token = OmniBridgeInstance.attach(tokenProxyAddress)
     return { tokenProxyAddress, token }
   }
 
   it('can create a token', async function () {
     await createToken(wrappedNearId);
-    const tokenProxyAddress = await BridgeTokenFactory.nearToEthToken(wrappedNearId)
-    const token = BridgeTokenInstance.attach(tokenProxyAddress)
+    const tokenProxyAddress = await OmniBridge.nearToEthToken(wrappedNearId)
+    const token = OmniBridgeInstance.attach(tokenProxyAddress)
     expect(await token.name()).to.be.equal('Wrapped NEAR fungible token')
     expect(await token.symbol()).to.be.equal('wNEAR')
     expect((await token.decimals()).toString()).to.be.equal('24')
@@ -86,7 +86,7 @@ describe('BridgeToken', () => {
   it("can update token's metadata", async function() {
     const { token } = await createToken(wrappedNearId);
 
-    await BridgeTokenFactory.setMetadata(wrappedNearId, 'Circle USDC Bridged', 'USDC.E');
+    await OmniBridge.setMetadata(wrappedNearId, 'Circle USDC Bridged', 'USDC.E');
     expect(await token.name()).to.equal('Circle USDC Bridged');
     expect(await token.symbol()).to.equal('USDC.E');
   });
@@ -95,7 +95,7 @@ describe('BridgeToken', () => {
     await createToken(wrappedNearId);
 
     await expect(
-      BridgeTokenFactory.setMetadata('non-existing', 'Circle USDC', 'USDC')
+      OmniBridge.setMetadata('non-existing', 'Circle USDC', 'USDC')
     ).to.be.revertedWith('ERR_NOT_BRIDGE_TOKEN');
   })
 
@@ -103,8 +103,8 @@ describe('BridgeToken', () => {
     await createToken(wrappedNearId);
 
     await expect(
-      BridgeTokenFactory.connect(user1).setMetadata(wrappedNearId, 'Circle USDC', 'USDC')
-    ).to.be.revertedWithCustomError(BridgeTokenFactory, 'AccessControlUnauthorizedAccount');
+      OmniBridge.connect(user1).setMetadata(wrappedNearId, 'Circle USDC', 'USDC')
+    ).to.be.revertedWithCustomError(OmniBridge, 'AccessControlUnauthorizedAccount');
   })
 
   it('deposit token', async function () {
@@ -113,11 +113,11 @@ describe('BridgeToken', () => {
     const { signature, payload } = depositSignature(wrappedNearId, user1.address);
 
     await expect(
-      BridgeTokenFactory
+      OmniBridge
         .finTransfer(signature, payload)
     )
       .to
-      .emit(BridgeTokenFactory, 'FinTransfer')
+      .emit(OmniBridge, 'FinTransfer')
       .withArgs(payload.nonce, wrappedNearId, 1, payload.recipient, payload.feeRecipient);
 
     expect(
@@ -133,16 +133,16 @@ describe('BridgeToken', () => {
     await createToken(wrappedNearId);
 
     await expect (
-      BridgeTokenFactory.pause(PauseMode.PausedFinTransfer)
+      OmniBridge.pause(PauseMode.PausedFinTransfer)
     )
       .to
-      .emit(BridgeTokenFactory, 'Paused')
+      .emit(OmniBridge, 'Paused')
       .withArgs(adminAccount.address, PauseMode.PausedFinTransfer);
 
     const { signature, payload } = depositSignature(wrappedNearId, user1.address);
 
     await expect(
-      BridgeTokenFactory
+      OmniBridge
         .finTransfer(signature, payload)
     )
       .to
@@ -154,12 +154,12 @@ describe('BridgeToken', () => {
     await createToken(wrappedNearId);
     
     const { signature, payload } = depositSignature(wrappedNearId, user1.address);
-    await BridgeTokenFactory.finTransfer(signature, payload);
+    await OmniBridge.finTransfer(signature, payload);
 
     await expect(
-      BridgeTokenFactory.finTransfer(signature, payload)
+      OmniBridge.finTransfer(signature, payload)
     )
-      .to.be.revertedWithCustomError(BridgeTokenFactory, 'NonceAlreadyUsed');
+      .to.be.revertedWithCustomError(OmniBridge, 'NonceAlreadyUsed');
   })
 
   it('can\'t deposit with invalid amount', async function () {
@@ -169,9 +169,9 @@ describe('BridgeToken', () => {
     payload.amount = 100000;
 
     await expect(
-      BridgeTokenFactory.finTransfer(signature, payload)
+      OmniBridge.finTransfer(signature, payload)
     )
-      .to.be.revertedWithCustomError(BridgeTokenFactory, 'InvalidSignature');
+      .to.be.revertedWithCustomError(OmniBridge, 'InvalidSignature');
   })
 
   it('can\'t deposit with invalid nonce', async function () {
@@ -181,9 +181,9 @@ describe('BridgeToken', () => {
     payload.nonce = 99;
 
     await expect(
-      BridgeTokenFactory.finTransfer(signature, payload)
+      OmniBridge.finTransfer(signature, payload)
     )
-      .to.be.revertedWithCustomError(BridgeTokenFactory, 'InvalidSignature');
+      .to.be.revertedWithCustomError(OmniBridge, 'InvalidSignature');
   })
 
   it('can\'t deposit with invalid token', async function () {
@@ -193,9 +193,9 @@ describe('BridgeToken', () => {
     payload.token = 'test-token.testnet';
 
     await expect(
-      BridgeTokenFactory.finTransfer(signature, payload)
+      OmniBridge.finTransfer(signature, payload)
     )
-      .to.be.revertedWithCustomError(BridgeTokenFactory, 'InvalidSignature');
+      .to.be.revertedWithCustomError(OmniBridge, 'InvalidSignature');
   })
 
   it('can\'t deposit with invalid recipient', async function () {
@@ -205,9 +205,9 @@ describe('BridgeToken', () => {
     payload.recipient = user2.address;
 
     await expect(
-      BridgeTokenFactory.finTransfer(signature, payload)
+      OmniBridge.finTransfer(signature, payload)
     )
-      .to.be.revertedWithCustomError(BridgeTokenFactory, 'InvalidSignature');
+      .to.be.revertedWithCustomError(OmniBridge, 'InvalidSignature');
   })
 
   it('can\'t deposit with invalid relayer', async function () {
@@ -217,23 +217,23 @@ describe('BridgeToken', () => {
     payload.feeRecipient = "testrecipient.near";
 
     await expect(
-      BridgeTokenFactory.finTransfer(signature, payload)
+      OmniBridge.finTransfer(signature, payload)
     )
-      .to.be.revertedWithCustomError(BridgeTokenFactory, 'InvalidSignature');
+      .to.be.revertedWithCustomError(OmniBridge, 'InvalidSignature');
   })
 
   it('withdraw token', async function () {
     const { token } = await createToken(wrappedNearId);
 
     const { signature, payload } = depositSignature(wrappedNearId, user1.address);
-    await BridgeTokenFactory.finTransfer(signature, payload);
+    await OmniBridge.finTransfer(signature, payload);
 
     const recipient = 'testrecipient.near';
     const fee = 0;
     const nativeFee = 0;
 
     await expect(
-      BridgeTokenFactory.connect(user1).initTransfer(
+      OmniBridge.connect(user1).initTransfer(
         wrappedNearId,
         payload.amount,
         fee,
@@ -242,10 +242,10 @@ describe('BridgeToken', () => {
       )
     )
       .to
-      .emit(BridgeTokenFactory, "InitTransfer")
+      .emit(OmniBridge, "InitTransfer")
       .withArgs(
         user1.address,
-        await BridgeTokenFactory.nearToEthToken(wrappedNearId),
+        await OmniBridge.nearToEthToken(wrappedNearId),
         1,
         wrappedNearId,
         payload.amount,
@@ -261,18 +261,18 @@ describe('BridgeToken', () => {
     await createToken(wrappedNearId);
 
     const { signature, payload } = depositSignature(wrappedNearId, user1.address);
-    await BridgeTokenFactory.finTransfer(signature, payload);
+    await OmniBridge.finTransfer(signature, payload);
 
     const fee = 0;
     const nativeFee = 0;
     await expect(
-      BridgeTokenFactory.pause(PauseMode.PausedInitTransfer)
+      OmniBridge.pause(PauseMode.PausedInitTransfer)
     )
       .to
-      .emit(BridgeTokenFactory, 'Paused')
+      .emit(OmniBridge, 'Paused')
       .withArgs(adminAccount.address, PauseMode.PausedInitTransfer);
     await expect(
-      BridgeTokenFactory.initTransfer(wrappedNearId, payload.amount, fee, nativeFee, 'testrecipient.near')
+      OmniBridge.initTransfer(wrappedNearId, payload.amount, fee, nativeFee, 'testrecipient.near')
     )
       .to
       .be
@@ -283,26 +283,26 @@ describe('BridgeToken', () => {
     const { token } = await createToken(wrappedNearId);
 
     const { signature, payload } = depositSignature(wrappedNearId, user1.address);
-    await BridgeTokenFactory.finTransfer(signature, payload);
+    await OmniBridge.finTransfer(signature, payload);
   
     await expect(
-      BridgeTokenFactory.pause(PauseMode.PausedInitTransfer)
+      OmniBridge.pause(PauseMode.PausedInitTransfer)
     )
       .to
-      .emit(BridgeTokenFactory, 'Paused')
+      .emit(OmniBridge, 'Paused')
       .withArgs(adminAccount.address, PauseMode.PausedInitTransfer);
 
     await expect(
-      BridgeTokenFactory.pause(PauseMode.UnpausedAll)
+      OmniBridge.pause(PauseMode.UnpausedAll)
     )
       .to
-      .emit(BridgeTokenFactory, 'Paused')
+      .emit(OmniBridge, 'Paused')
       .withArgs(adminAccount.address, PauseMode.UnpausedAll);
 
       const recipient = 'testrecipient.near';
       const fee = 0;
       const nativeFee = 0;
-      await BridgeTokenFactory.connect(user1).initTransfer(
+      await OmniBridge.connect(user1).initTransfer(
         wrappedNearId,
         payload.amount,
         fee,
@@ -320,7 +320,7 @@ describe('BridgeToken', () => {
     const BridgeTokenV2 = await BridgeTokenV2Instance.deploy();
     await BridgeTokenV2.waitForDeployment();
 
-    await BridgeTokenFactory.upgradeToken(wrappedNearId, await BridgeTokenV2.getAddress())
+    await OmniBridge.upgradeToken(wrappedNearId, await BridgeTokenV2.getAddress())
     const BridgeTokenV2Proxied = BridgeTokenV2Instance.attach(tokenProxyAddress)
     expect(await BridgeTokenV2Proxied.returnTestString()).to.equal('test')
     expect(await BridgeTokenV2Proxied.name()).to.equal('Wrapped NEAR fungible token')
@@ -335,125 +335,125 @@ describe('BridgeToken', () => {
     const BridgeTokenV2 = await BridgeTokenV2Instance.deploy();
     await BridgeTokenV2.waitForDeployment();
 
-    await expect(BridgeTokenFactory.connect(user1).upgradeToken(wrappedNearId, await BridgeTokenV2.getAddress()))
-      .to.be.revertedWithCustomError(BridgeTokenFactory, 'AccessControlUnauthorizedAccount');
+    await expect(OmniBridge.connect(user1).upgradeToken(wrappedNearId, await BridgeTokenV2.getAddress()))
+      .to.be.revertedWithCustomError(OmniBridge, 'AccessControlUnauthorizedAccount');
   })
 
   it('Test selective pause', async function () {
     // Pause withdraw
     await expect(
-      BridgeTokenFactory.pause(PauseMode.PausedInitTransfer)
+      OmniBridge.pause(PauseMode.PausedInitTransfer)
     )
       .to
-      .emit(BridgeTokenFactory, 'Paused')
+      .emit(OmniBridge, 'Paused')
       .withArgs(adminAccount.address, PauseMode.PausedInitTransfer);
-    expect(await BridgeTokenFactory.pausedFlags()).to.be.equal(PauseMode.PausedInitTransfer);
+    expect(await OmniBridge.pausedFlags()).to.be.equal(PauseMode.PausedInitTransfer);
 
     // Pause withdraw again
     await expect(
-      BridgeTokenFactory.pause(PauseMode.PausedInitTransfer)
+      OmniBridge.pause(PauseMode.PausedInitTransfer)
     )
       .to
-      .emit(BridgeTokenFactory, 'Paused')
+      .emit(OmniBridge, 'Paused')
       .withArgs(adminAccount.address, PauseMode.PausedInitTransfer);
-    expect(await BridgeTokenFactory.pausedFlags()).to.be.equal(PauseMode.PausedInitTransfer);
-    expect(await BridgeTokenFactory.paused(PauseMode.PausedFinTransfer)).to.be.equal(false);
-    expect(await BridgeTokenFactory.paused(PauseMode.PausedInitTransfer)).to.be.equal(true);
+    expect(await OmniBridge.pausedFlags()).to.be.equal(PauseMode.PausedInitTransfer);
+    expect(await OmniBridge.paused(PauseMode.PausedFinTransfer)).to.be.equal(false);
+    expect(await OmniBridge.paused(PauseMode.PausedInitTransfer)).to.be.equal(true);
 
     // Pause deposit
     await expect(
-      BridgeTokenFactory.pause(PauseMode.PausedFinTransfer | PauseMode.PausedInitTransfer)
+      OmniBridge.pause(PauseMode.PausedFinTransfer | PauseMode.PausedInitTransfer)
     )
       .to
-      .emit(BridgeTokenFactory, 'Paused')
+      .emit(OmniBridge, 'Paused')
       .withArgs(adminAccount.address, PauseMode.PausedFinTransfer | PauseMode.PausedInitTransfer);
-    expect(await BridgeTokenFactory.pausedFlags()).to.be.equal(PauseMode.PausedFinTransfer | PauseMode.PausedInitTransfer);
+    expect(await OmniBridge.pausedFlags()).to.be.equal(PauseMode.PausedFinTransfer | PauseMode.PausedInitTransfer);
 
     // Pause deposit again
     await expect(
-      BridgeTokenFactory.pause(PauseMode.PausedFinTransfer | PauseMode.PausedInitTransfer)
+      OmniBridge.pause(PauseMode.PausedFinTransfer | PauseMode.PausedInitTransfer)
     )
       .to
-      .emit(BridgeTokenFactory, 'Paused')
+      .emit(OmniBridge, 'Paused')
       .withArgs(adminAccount.address, PauseMode.PausedFinTransfer | PauseMode.PausedInitTransfer);
-    expect(await BridgeTokenFactory.pausedFlags())
+    expect(await OmniBridge.pausedFlags())
       .to
       .be
       .equal(PauseMode.PausedFinTransfer | PauseMode.PausedInitTransfer);
 
     // Pause deposit and withdraw
     await expect(
-      BridgeTokenFactory.pause(PauseMode.PausedFinTransfer | PauseMode.PausedInitTransfer)
+      OmniBridge.pause(PauseMode.PausedFinTransfer | PauseMode.PausedInitTransfer)
     )
       .to
-      .emit(BridgeTokenFactory, 'Paused')
+      .emit(OmniBridge, 'Paused')
       .withArgs(adminAccount.address, PauseMode.PausedFinTransfer | PauseMode.PausedInitTransfer);
-    expect(await BridgeTokenFactory.pausedFlags())
+    expect(await OmniBridge.pausedFlags())
       .to
       .be
       .equal(PauseMode.PausedFinTransfer | PauseMode.PausedInitTransfer);
-    expect(await BridgeTokenFactory.paused(PauseMode.PausedFinTransfer)).to.be.equal(true);
-    expect(await BridgeTokenFactory.paused(PauseMode.PausedInitTransfer)).to.be.equal(true);
+    expect(await OmniBridge.paused(PauseMode.PausedFinTransfer)).to.be.equal(true);
+    expect(await OmniBridge.paused(PauseMode.PausedInitTransfer)).to.be.equal(true);
 
     // Unpause all
     await expect(
-      BridgeTokenFactory.pause(PauseMode.UnpausedAll)
+      OmniBridge.pause(PauseMode.UnpausedAll)
     )
       .to
-      .emit(BridgeTokenFactory, 'Paused')
+      .emit(OmniBridge, 'Paused')
       .withArgs(adminAccount.address, PauseMode.UnpausedAll);
-    expect(await BridgeTokenFactory.pausedFlags()).to.be.equal(PauseMode.UnpausedAll);
+    expect(await OmniBridge.pausedFlags()).to.be.equal(PauseMode.UnpausedAll);
 
     // Pause all
     await expect(
-      BridgeTokenFactory.pauseAll()
+      OmniBridge.pauseAll()
     )
       .to
-      .emit(BridgeTokenFactory, 'Paused')
+      .emit(OmniBridge, 'Paused')
       .withArgs(adminAccount.address, PauseMode.PausedFinTransfer | PauseMode.PausedInitTransfer);
-    expect(await BridgeTokenFactory.pausedFlags())
+    expect(await OmniBridge.pausedFlags())
       .to
       .be
       .equal(PauseMode.PausedFinTransfer | PauseMode.PausedInitTransfer);
-    expect(await BridgeTokenFactory.paused(PauseMode.PausedFinTransfer)).to.be.equal(true);
-    expect(await BridgeTokenFactory.paused(PauseMode.PausedInitTransfer)).to.be.equal(true);
+    expect(await OmniBridge.paused(PauseMode.PausedFinTransfer)).to.be.equal(true);
+    expect(await OmniBridge.paused(PauseMode.PausedInitTransfer)).to.be.equal(true);
   })
 
   it("Test grant admin role", async function() {
-    await BridgeTokenFactory.connect(adminAccount).pause(PauseMode.UnpausedAll);
-    expect(await BridgeTokenFactory.paused(PauseMode.PausedInitTransfer)).to.be.false;
+    await OmniBridge.connect(adminAccount).pause(PauseMode.UnpausedAll);
+    expect(await OmniBridge.paused(PauseMode.PausedInitTransfer)).to.be.false;
 
-    await BridgeTokenFactory.connect(adminAccount).pauseAll();
-    expect(await BridgeTokenFactory.paused(PauseMode.PausedInitTransfer)).to.be.true;
+    await OmniBridge.connect(adminAccount).pauseAll();
+    expect(await OmniBridge.paused(PauseMode.PausedInitTransfer)).to.be.true;
 
     const signers = await ethers.getSigners();
     const newAdminAccount = signers[2];
     const DEFAULT_ADMIN_ROLE = "0x0000000000000000000000000000000000000000000000000000000000000000";
     await expect(
-      BridgeTokenFactory.connect(newAdminAccount).pause(PauseMode.UnpausedAll)
-    ).to.be.revertedWithCustomError(BridgeTokenFactory, 'AccessControlUnauthorizedAccount');
-    expect(await BridgeTokenFactory.paused(PauseMode.PausedInitTransfer)).to.be.true;
+      OmniBridge.connect(newAdminAccount).pause(PauseMode.UnpausedAll)
+    ).to.be.revertedWithCustomError(OmniBridge, 'AccessControlUnauthorizedAccount');
+    expect(await OmniBridge.paused(PauseMode.PausedInitTransfer)).to.be.true;
 
     // Grant DEFAULT_ADMIN_ROLE to newAdminAccount
     await expect(
-      BridgeTokenFactory.grantRole(DEFAULT_ADMIN_ROLE, newAdminAccount.address)
+      OmniBridge.grantRole(DEFAULT_ADMIN_ROLE, newAdminAccount.address)
     )
       .to
-      .emit(BridgeTokenFactory, "RoleGranted")
+      .emit(OmniBridge, "RoleGranted")
       .withArgs(
         DEFAULT_ADMIN_ROLE,
         newAdminAccount.address,
         adminAccount.address
       );
-    await BridgeTokenFactory.connect(newAdminAccount).pause(PauseMode.UnpausedAll);
-    expect(await BridgeTokenFactory.paused(PauseMode.PausedInitTransfer)).to.be.false;
+    await OmniBridge.connect(newAdminAccount).pause(PauseMode.UnpausedAll);
+    expect(await OmniBridge.paused(PauseMode.PausedInitTransfer)).to.be.false;
 
-    await BridgeTokenFactory.connect(newAdminAccount).pause(PauseAll);
-    expect(await BridgeTokenFactory.paused(PauseMode.PausedInitTransfer)).to.be.true;
+    await OmniBridge.connect(newAdminAccount).pause(PauseAll);
+    expect(await OmniBridge.paused(PauseMode.PausedInitTransfer)).to.be.true;
 
     // Revoke DEFAULT_ADMIN_ROLE from adminAccount
     await expect(
-      BridgeTokenFactory
+      OmniBridge
         .connect(newAdminAccount)
         .revokeRole(
           DEFAULT_ADMIN_ROLE,
@@ -461,7 +461,7 @@ describe('BridgeToken', () => {
         )
     )
       .to
-      .emit(BridgeTokenFactory, "RoleRevoked")
+      .emit(OmniBridge, "RoleRevoked")
       .withArgs(
         DEFAULT_ADMIN_ROLE,
         adminAccount.address,
@@ -470,24 +470,24 @@ describe('BridgeToken', () => {
 
     // Check tx reverted on call from revoked adminAccount
     await expect(
-      BridgeTokenFactory.connect(adminAccount).pause(PauseMode.UnpausedAll)
-    ).to.be.revertedWithCustomError(BridgeTokenFactory, 'AccessControlUnauthorizedAccount');
-    expect(await BridgeTokenFactory.paused(PauseMode.PausedInitTransfer)).to.be.true;
+      OmniBridge.connect(adminAccount).pause(PauseMode.UnpausedAll)
+    ).to.be.revertedWithCustomError(OmniBridge, 'AccessControlUnauthorizedAccount');
+    expect(await OmniBridge.paused(PauseMode.PausedInitTransfer)).to.be.true;
 
     // Check newAdminAccount can perform admin calls
-    await BridgeTokenFactory.connect(newAdminAccount).pause(PauseMode.UnpausedAll);
-    expect(await BridgeTokenFactory.paused(PauseMode.PausedInitTransfer)).to.be.false;
-    await BridgeTokenFactory.connect(newAdminAccount).pause(PauseAll);
-    expect(await BridgeTokenFactory.paused(PauseMode.PausedInitTransfer)).to.be.true;
+    await OmniBridge.connect(newAdminAccount).pause(PauseMode.UnpausedAll);
+    expect(await OmniBridge.paused(PauseMode.PausedInitTransfer)).to.be.false;
+    await OmniBridge.connect(newAdminAccount).pause(PauseAll);
+    expect(await OmniBridge.paused(PauseMode.PausedInitTransfer)).to.be.true;
 
     // Check newAdminAccount can grant DEFAULT_ADMIN_ROLE to adminAccount
     await expect(
-      BridgeTokenFactory
+      OmniBridge
         .connect(newAdminAccount)
         .grantRole(DEFAULT_ADMIN_ROLE, adminAccount.address)
     )
       .to
-      .emit(BridgeTokenFactory, "RoleGranted")
+      .emit(OmniBridge, "RoleGranted")
       .withArgs(
         DEFAULT_ADMIN_ROLE,
         adminAccount.address,
@@ -495,9 +495,9 @@ describe('BridgeToken', () => {
       );
 
     // Check that adminAccount can perform admin calls again
-    await BridgeTokenFactory.connect(adminAccount).pause(PauseMode.UnpausedAll);
-    expect(await BridgeTokenFactory.paused(PauseMode.PausedInitTransfer)).to.be.false;
-    await BridgeTokenFactory.connect(adminAccount).pause(PauseAll);
-    expect(await BridgeTokenFactory.paused(PauseMode.PausedInitTransfer)).to.be.true;
+    await OmniBridge.connect(adminAccount).pause(PauseMode.UnpausedAll);
+    expect(await OmniBridge.paused(PauseMode.PausedInitTransfer)).to.be.false;
+    await OmniBridge.connect(adminAccount).pause(PauseAll);
+    expect(await OmniBridge.paused(PauseMode.PausedInitTransfer)).to.be.true;
   });
 })

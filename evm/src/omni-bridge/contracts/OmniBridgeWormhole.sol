@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 pragma solidity ^0.8.24;
 
-import {BridgeTokenFactory} from "./BridgeTokenFactory.sol";
+import {OmniBridge} from "./OmniBridge.sol";
 import "../../common/Borsh.sol";
 import "./BridgeTypes.sol";
 
@@ -20,7 +20,7 @@ enum MessageType {
     LogMetadata
 }
 
-contract BridgeTokenFactoryWormhole is BridgeTokenFactory {
+contract OmniBridgeWormhole is OmniBridge {
     IWormhole private _wormhole;
     // https://wormhole.com/docs/build/reference/consistency-levels
     uint8 private _consistencyLevel;
