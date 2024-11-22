@@ -186,6 +186,10 @@ impl FungibleTokenReceiver for Contract {
     ) -> PromiseOrValue<U128> {
         let parsed_msg: InitTransferMsg = serde_json::from_str(&msg).sdk_expect("ERR_PARSE_MSG");
         let token_id = env::predecessor_account_id();
+        require!(
+            parsed_msg.recipient.get_chain() != ChainKind::Near,
+            "ERR_INVALID_RECIPIENT_CHAIN"
+        );
 
         self.current_origin_nonce += 1;
         let destination_nonce = self.get_next_destination_nonce(parsed_msg.recipient.get_chain());
