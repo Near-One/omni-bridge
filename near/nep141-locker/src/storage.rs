@@ -8,6 +8,8 @@ use crate::{
     OmniAddress, Promise, SdkExpect, Serialize, TransferMessage, U128,
 };
 
+pub const BRIDGE_TOKEN_INIT_BALANCE: NearToken = NearToken::from_near(3);
+
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Debug, Clone)]
 pub struct TransferMessageStorageValue {
     pub message: TransferMessage,
@@ -119,7 +121,7 @@ impl Contract {
     }
 
     pub fn required_balance_for_account(&self) -> NearToken {
-        let key_len = 64 + 4;
+        let key_len = Self::max_key_len_of_account_id();
         let value_len = borsh::to_vec(&StorageBalance {
             total: NearToken::from_yoctonear(0),
             available: NearToken::from_yoctonear(0),
@@ -161,7 +163,11 @@ impl Contract {
             .sdk_expect("ERR_BORSH")
             .len() as u64;
 
-        env::storage_byte_cost().saturating_mul((Self::get_basic_storage() + key_len).into())
+        let storage_cost =
+            env::storage_byte_cost().saturating_mul((Self::get_basic_storage() + key_len).into());
+        let ft_transfers_cost = NearToken::from_yoctonear(2);
+
+        storage_cost.saturating_add(ft_transfers_cost)
     }
 
     pub fn required_balance_for_bind_token(&self) -> NearToken {
@@ -169,21 +175,35 @@ impl Contract {
 
         let key_len = borsh::to_vec(&(ChainKind::Near, &max_token_id))
             .sdk_expect("ERR_BORSH")
-            .len() as u64
-            * 2;
+            .len() as u64;
 
         let value_len = borsh::to_vec(&OmniAddress::Near(max_token_id))
             .sdk_expect("ERR_BORSH")
-            .len() as u64
-            * 2;
+            .len() as u64;
 
         env::storage_byte_cost()
-            .saturating_mul((Self::get_basic_storage() + key_len + value_len).into())
+            .saturating_mul((2 * (Self::get_basic_storage() + key_len + value_len)).into())
+    }
+
+    pub fn required_balance_for_deploy_token(&self) -> NearToken {
+        let key_len = Self::max_key_len_of_account_id();
+        let deployed_tokens_required_balance =
+            env::storage_byte_cost().saturating_mul((Self::get_basic_storage() + key_len).into());
+        let bind_token_required_balance = self.required_balance_for_bind_token();
+
+        bind_token_required_balance
+            .saturating_add(deployed_tokens_required_balance)
+            .saturating_add(BRIDGE_TOKEN_INIT_BALANCE)
     }
 
     fn get_basic_storage() -> u64 {
         const EXTRA_BYTES_RECORD: u64 = 40;
         const EXTRA_KEY_PREFIX_LEN: u64 = 1;
         EXTRA_BYTES_RECORD + EXTRA_KEY_PREFIX_LEN
+    }
+
+    fn max_key_len_of_account_id() -> u64 {
+        let max_account_id: AccountId = "a".repeat(64).parse().sdk_expect("ERR_PARSE_ACCOUNT_ID");
+        borsh::to_vec(&max_account_id).sdk_expect("ERR_BORSH").len() as u64
     }
 }

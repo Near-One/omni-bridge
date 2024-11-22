@@ -57,7 +57,6 @@ const MINT_TOKEN_GAS: Gas = Gas::from_tgas(5);
 const SET_METADATA_GAS: Gas = Gas::from_tgas(10);
 const NO_DEPOSIT: NearToken = NearToken::from_near(0);
 const ONE_YOCTO: NearToken = NearToken::from_yoctonear(1);
-const BRIDGE_TOKEN_INIT_BALANCE: NearToken = NearToken::from_near(3);
 const SIGN_PATH: &str = "bridge-1";
 
 #[derive(BorshSerialize, BorshStorageKey)]
@@ -703,7 +702,7 @@ impl Contract {
         require!(self.deployed_tokens.insert(&token_id), "ERR_TOKEN_EXIST");
         let required_deposit = env::storage_byte_cost()
             .saturating_mul((env::storage_usage().saturating_sub(storage_usage)).into())
-            .saturating_add(BRIDGE_TOKEN_INIT_BALANCE);
+            .saturating_add(storage::BRIDGE_TOKEN_INIT_BALANCE);
 
         require!(
             attached_deposit >= required_deposit,
@@ -712,7 +711,7 @@ impl Contract {
 
         ext_deployer::ext(deployer)
             .with_static_gas(DEPLOY_TOKEN_GAS)
-            .with_attached_deposit(BRIDGE_TOKEN_INIT_BALANCE)
+            .with_attached_deposit(storage::BRIDGE_TOKEN_INIT_BALANCE)
             .deploy_token(token_id, metadata)
     }
 
