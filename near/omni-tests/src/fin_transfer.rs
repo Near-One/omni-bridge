@@ -7,9 +7,9 @@ mod tests {
     use near_sdk::{borsh, json_types::U128, serde_json::json, AccountId};
     use near_workspaces::types::NearToken;
     use omni_types::{
-        locker_args::{FinTransferArgs, StorageDepositArgs},
+        locker_args::{FinTransferArgs, StorageDepositAction},
         prover_result::{InitTransferMessage, ProverResult},
-        Fee, OmniAddress, TransferMessage,
+        Fee, OmniAddress,
     };
 
     #[tokio::test]
@@ -38,6 +38,7 @@ mod tests {
                 storage_deposit_accounts: [
                     (account_1(), true),
                     (relayer_account_id(), true),
+                    (account_2(), true),
                     (account_2(), true),
                 ]
                 .to_vec(),
@@ -198,15 +199,21 @@ mod tests {
             // This is a temporary value to cover the issue with incorrect storage deposit calculation
             .saturating_add(NearToken::from_yoctonear(1250000000000000000000));
 
+        let storage_deposit_actions = storage_deposit_accounts
+            .iter()
+            .map(|(account_id, is_deposit_needed)| StorageDepositAction {
+                token_id: token_contract.id().clone(),
+                account_id: account_id.clone(),
+                storage_deposit_amount: is_deposit_needed.then(|| NEP141_DEPOSIT.as_yoctonear()),
+            })
+            .collect();
+
         // Fin transfer
         relayer_account
             .call(locker_contract.id(), "fin_transfer")
             .args_borsh(FinTransferArgs {
                 chain_kind: omni_types::ChainKind::Eth,
-                storage_deposit_args: StorageDepositArgs {
-                    token: token_contract.id().clone(),
-                    accounts: storage_deposit_accounts,
-                },
+                storage_deposit_actions,
                 prover_args: borsh::to_vec(&ProverResult::InitTransfer(InitTransferMessage {
                     origin_nonce: 1,
                     token: OmniAddress::Near(token_contract.id().clone()),
