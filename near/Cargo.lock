@@ -3711,19 +3711,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "nep141-locker"
-version = "0.1.0"
-dependencies = [
- "borsh",
- "hex",
- "near-contract-standards",
- "near-plugins",
- "near-sdk",
- "omni-types",
- "serde",
-]
-
-[[package]]
 name = "new_debug_unreachable"
 version = "1.0.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3900,6 +3887,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a6a622008b6e321afc04970976f62ee297fdbaa6f95318ca343e3eebb9648441"
 dependencies = [
  "memchr",
+]
+
+[[package]]
+name = "omni-bridge"
+version = "0.1.0"
+dependencies = [
+ "borsh",
+ "hex",
+ "near-contract-standards",
+ "near-plugins",
+ "near-sdk",
+ "omni-types",
+ "serde",
 ]
 
 [[package]]

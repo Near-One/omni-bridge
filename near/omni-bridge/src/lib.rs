@@ -20,7 +20,7 @@ use omni_types::locker_args::{
     BindTokenArgs, ClaimFeeArgs, DeployTokenArgs, FinTransferArgs, StorageDepositAction,
 };
 use omni_types::mpc_types::SignatureResponse;
-use omni_types::near_events::Nep141LockerEvent;
+use omni_types::near_events::OmniBridgeEvent;
 use omni_types::prover_args::VerifyProofArgs;
 use omni_types::prover_result::ProverResult;
 use omni_types::{
@@ -228,7 +228,7 @@ impl FungibleTokenReceiver for Contract {
                 .burn(amount);
         }
 
-        env::log_str(&Nep141LockerEvent::InitTransferEvent { transfer_message }.to_log_string());
+        env::log_str(&OmniBridgeEvent::InitTransferEvent { transfer_message }.to_log_string());
         PromiseOrValue::Value(U128(0))
     }
 }
@@ -322,7 +322,7 @@ impl Contract {
     ) {
         if let Ok(signature) = call_result {
             env::log_str(
-                &Nep141LockerEvent::LogMetadataEvent {
+                &OmniBridgeEvent::LogMetadataEvent {
                     signature,
                     metadata_payload,
                 }
@@ -363,7 +363,7 @@ impl Contract {
                 self.insert_raw_transfer(transfer.message.clone(), transfer.owner);
 
                 env::log_str(
-                    &Nep141LockerEvent::UpdateFeeEvent {
+                    &OmniBridgeEvent::UpdateFeeEvent {
                         transfer_message: transfer.message,
                     }
                     .to_log_string(),
@@ -438,7 +438,7 @@ impl Contract {
             }
 
             env::log_str(
-                &Nep141LockerEvent::SignTransferEvent {
+                &OmniBridgeEvent::SignTransferEvent {
                     signature,
                     message_payload,
                 }
@@ -583,7 +583,7 @@ impl Contract {
 
         let token = self.get_token_id(&message.token);
         env::log_str(
-            &Nep141LockerEvent::ClaimFeeEvent {
+            &OmniBridgeEvent::ClaimFeeEvent {
                 transfer_message: message,
             }
             .to_log_string(),
@@ -990,7 +990,7 @@ impl Contract {
             env::attached_deposit(),
         );
 
-        env::log_str(&Nep141LockerEvent::FinTransferEvent { transfer_message }.to_log_string());
+        env::log_str(&OmniBridgeEvent::FinTransferEvent { transfer_message }.to_log_string());
 
         promise
     }
@@ -1012,7 +1012,7 @@ impl Contract {
             env::attached_deposit(),
         );
 
-        env::log_str(&Nep141LockerEvent::FinTransferEvent { transfer_message }.to_log_string());
+        env::log_str(&OmniBridgeEvent::FinTransferEvent { transfer_message }.to_log_string());
     }
 
     fn get_token_id(&self, address: &OmniAddress) -> AccountId {

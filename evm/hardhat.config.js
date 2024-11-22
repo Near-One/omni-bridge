@@ -17,9 +17,9 @@ task('set-metadata-ft', 'Set metadata for NEP-141 tokens on the Ethereum side')
   .addParam('symbol', 'The new symbol of the token')
   .addParam('factory', 'The address of the factory contract on Ethereum')
   .setAction(async (taskArgs) => {
-    const BridgeTokenFactoryContract = await ethers.getContractFactory("BridgeTokenFactory");
-    const BridgeTokenFactory = BridgeTokenFactoryContract.attach(taskArgs.factory);
-    await BridgeTokenFactory.setMetadata(taskArgs.nearTokenAccount, taskArgs.name, taskArgs.symbol);
+    const OmniBridgeContract = await ethers.getContractFactory("OmniBridge");
+    const OmniBridge = OmniBridgeContract.attach(taskArgs.factory);
+    await OmniBridge.setMetadata(taskArgs.nearTokenAccount, taskArgs.name, taskArgs.symbol);
   });
 
 task('add-token-to-whitelist-eth', 'Add a token to whitelist')
@@ -33,9 +33,9 @@ task('add-token-to-whitelist-eth', 'Add a token to whitelist')
       CheckToken: 2,
       CheckAccountAndToken: 3
     }
-    const BridgeTokenFactoryContract = await ethers.getContractFactory("BridgeTokenFactory");
-    const BridgeTokenFactory = BridgeTokenFactoryContract.attach(taskArgs.factory);
-    const tx = await BridgeTokenFactory.setTokenWhitelistMode(taskArgs.nearTokenAccount, WhitelistMode[taskArgs.mode]);
+    const OmniBridgeContract = await ethers.getContractFactory("OmniBridge");
+    const OmniBridge = OmniBridgeContract.attach(taskArgs.factory);
+    const tx = await OmniBridge.setTokenWhitelistMode(taskArgs.nearTokenAccount, WhitelistMode[taskArgs.mode]);
     const receipt = await tx.wait();
     console.log("Tx hash", receipt.transactionHash);
   });
@@ -45,24 +45,24 @@ task('add-account-to-whitelist-eth', 'Add an account to whitelist')
   .addParam('ethAccount', 'Ethereum account address to add to whitelist')
   .addParam('factory', 'The address of the factory contract on Ethereum')
   .setAction(async (taskArgs) => {
-    const BridgeTokenFactoryContract = await ethers.getContractFactory("BridgeTokenFactory");
-    const BridgeTokenFactory = BridgeTokenFactoryContract.attach(taskArgs.factory);
-    const tx = await BridgeTokenFactory.addAccountToWhitelist(taskArgs.nearTokenAccount, taskArgs.ethAccount);
+    const OmniBridgeContract = await ethers.getContractFactory("OmniBridge");
+    const OmniBridge = OmniBridgeContract.attach(taskArgs.factory);
+    const tx = await OmniBridge.addAccountToWhitelist(taskArgs.nearTokenAccount, taskArgs.ethAccount);
     const receipt = await tx.wait();
     console.log("Tx hash", receipt.transactionHash);
   });
 
-task("deploy-bridge-token-factory", "Deploys the BridgeTokenFactory contract")
+task("deploy-bridge-token-factory", "Deploys the OmniBridge contract")
   .addParam("bridgeTokenImpl", "The address of the bridge token implementation")
   .addParam("nearBridgeDerivedAddress", "The derived EVM address of the Near's OmniBridge")
   .addParam("omniBridgeChainId", "Chain Id of the network in the OmniBridge")
   .setAction(async (taskArgs, hre) => {
     const { ethers, upgrades } = hre;
 
-    const BridgeTokenFactoryContract =
-      await ethers.getContractFactory("BridgeTokenFactory");
-    const BridgeTokenFactory = await upgrades.deployProxy(
-      BridgeTokenFactoryContract,
+    const OmniBridgeContract =
+      await ethers.getContractFactory("OmniBridge");
+    const OmniBridge = await upgrades.deployProxy(
+      OmniBridgeContract,
       [
         taskArgs.bridgeTokenImpl,
         taskArgs.nearBridgeDerivedAddress,
@@ -74,12 +74,12 @@ task("deploy-bridge-token-factory", "Deploys the BridgeTokenFactory contract")
       },
     );
 
-    await BridgeTokenFactory.waitForDeployment();
-    console.log(`BridgeTokenFactory deployed at ${await BridgeTokenFactory.getAddress()}`);
+    await OmniBridge.waitForDeployment();
+    console.log(`OmniBridge deployed at ${await OmniBridge.getAddress()}`);
     console.log(
       "Implementation address:",
       await upgrades.erc1967.getImplementationAddress(
-        await BridgeTokenFactory.getAddress(),
+        await OmniBridge.getAddress(),
       ),
     );
   });
@@ -95,16 +95,16 @@ task("deploy-token-impl", "Deploys the BridgeToken implementation")
   });
 
 task("upgrade-bridge-token", "Upgrades a BridgeToken to a new implementation")
-  .addParam("factory", "The address of the BridgeTokenFactory contract")
+  .addParam("factory", "The address of the OmniBridge contract")
   .addParam("nearTokenAccount", "The NEAR token ID")
   .setAction(async (taskArgs, hre) => {
     const { ethers } = hre;
 
-    const BridgeTokenFactoryContract = await ethers.getContractFactory("BridgeTokenFactory");
-    const BridgeTokenFactory = BridgeTokenFactoryContract.attach(taskArgs.factory);
+    const OmniBridgeContract = await ethers.getContractFactory("OmniBridge");
+    const OmniBridge = OmniBridgeContract.attach(taskArgs.factory);
 
     console.log(`Upgrading token ${taskArgs.nearTokenAccount}`);
-    console.log(`Token proxy address:`, await BridgeTokenFactory.nearToEthToken(taskArgs.nearTokenAccount));
+    console.log(`Token proxy address:`, await OmniBridge.nearToEthToken(taskArgs.nearTokenAccount));
 
     const BridgeTokenV2Instance = await ethers.getContractFactory("BridgeTokenV2");
     const BridgeTokenV2 = await BridgeTokenV2Instance.deploy();
@@ -112,21 +112,21 @@ task("upgrade-bridge-token", "Upgrades a BridgeToken to a new implementation")
 
     console.log(`BridgeTokenV2 deployed at ${await BridgeTokenV2.getAddress()}`);
 
-    const tx = await BridgeTokenFactory.upgradeToken(taskArgs.nearTokenAccount, await BridgeTokenV2.getAddress());
+    const tx = await OmniBridge.upgradeToken(taskArgs.nearTokenAccount, await BridgeTokenV2.getAddress());
     const receipt = await tx.wait();
 
     console.log("Token upgraded at tx hash:", receipt.transactionHash);
   });
 
-task("upgrade-factory", "Upgrades the BridgeTokenFactory contract")
-  .addParam("factory", "The address of the BridgeTokenFactory contract")
+task("upgrade-factory", "Upgrades the OmniBridge contract")
+  .addParam("factory", "The address of the OmniBridge contract")
   .setAction(async (taskArgs, hre) => {
     const { ethers, upgrades } = hre;
 
-    const BridgeTokenFactoryContract = await ethers.getContractFactory("BridgeTokenFactory");
+    const OmniBridgeContract = await ethers.getContractFactory("OmniBridge");
     console.log("Current implementation address:", await upgrades.erc1967.getImplementationAddress(taskArgs.factory));
     console.log("Upgrade factory, proxy address", taskArgs.factory);
-    await upgrades.upgradeProxy(taskArgs.factory, BridgeTokenFactoryContract);
+    await upgrades.upgradeProxy(taskArgs.factory, OmniBridgeContract);
   });
 
 task('etherscan-verify', 'Verify contract on etherscan')

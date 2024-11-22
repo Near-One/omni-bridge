@@ -1,9 +1,9 @@
 apiVersion: backstage.io/v1alpha1
 kind: Component
 metadata:
-  name: omni-nep141-locker
-  title: NEP141 Locker
-  description: NEP141 Locker on Near
+  name: omni-bridge
+  title: OmniBridge
+  description: OmniBridge on Near
   tags:
     - contract
     - near

@@ -1,7 +1,7 @@
 {
-    "name": "bridge-token-factory",
+    "name": "omni-bridge",
     "version": "0.1.0",
-    "description": "ERC20 bridge token factory for the OmniBridge",
+    "description": "OmniBridge contracts for the EVM",
     "license": "MIT",
     "dependencies": {
         "@openzeppelin/contracts": "^5.0.2",
