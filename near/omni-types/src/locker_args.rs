@@ -5,15 +5,16 @@ use near_sdk::{
 };
 
 #[derive(BorshDeserialize, BorshSerialize, Clone)]
-pub struct StorageDepositArgs {
-    pub token: AccountId,
-    pub accounts: Vec<(AccountId, bool)>,
+pub struct StorageDepositAction {
+    pub token_id: AccountId,
+    pub account_id: AccountId,
+    pub storage_deposit_amount: Option<u128>,
 }
 
 #[derive(BorshDeserialize, BorshSerialize, Clone)]
 pub struct FinTransferArgs {
     pub chain_kind: ChainKind,
-    pub storage_deposit_args: StorageDepositArgs,
+    pub storage_deposit_actions: Vec<StorageDepositAction>,
     pub prover_args: Vec<u8>,
 }
 

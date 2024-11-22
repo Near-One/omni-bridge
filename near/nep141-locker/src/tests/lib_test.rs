@@ -1,4 +1,5 @@
 use near_contract_standards::storage_management::StorageBalance;
+use omni_types::locker_args::StorageDepositAction;
 
 use crate::Contract;
 use near_sdk::test_utils::VMContextBuilder;
@@ -12,7 +13,6 @@ use near_contract_standards::fungible_token::receiver::FungibleTokenReceiver;
 use near_sdk::borsh;
 use near_sdk::json_types::U128;
 use near_sdk::{serde_json, AccountId, NearToken, PromiseOrValue, PromiseResult};
-use omni_types::locker_args::StorageDepositArgs;
 use omni_types::{ChainKind, Fee, InitTransferMsg, OmniAddress, TransferMessage, UpdateFee};
 
 const DEFAULT_NONCE: Nonce = 0;
@@ -28,6 +28,7 @@ const DEFAULT_NEAR_USER_ACCOUNT: &str = "user.testnet";
 const DEFAULT_FT_CONTRACT_ACCOUNT: &str = "ft_contract.testnet";
 const DEFAULT_ETH_USER_ADDRESS: &str = "0x1234567890123456789012345678901234567890";
 const DEFAULT_TRANSFER_AMOUNT: u128 = 100;
+const NEP141_DEPOSIT: NearToken = NearToken::from_yoctonear(1_250_000_000_000_000_000_000);
 
 fn setup_test_env(
     predecessor_account_id: AccountId,
@@ -442,11 +443,12 @@ fn test_update_transfer_fee_wrong_sender() {
     contract.update_transfer_fee(DEFAULT_TRANSFER_ID, UpdateFee::Fee(new_fee));
 }
 
-fn get_default_storage_deposit_args() -> StorageDepositArgs {
-    StorageDepositArgs {
-        token: AccountId::try_from(DEFAULT_FT_CONTRACT_ACCOUNT.to_string()).unwrap(),
-        accounts: vec![],
-    }
+fn get_default_storage_deposit_actions() -> Vec<StorageDepositAction> {
+    vec![StorageDepositAction {
+        token_id: AccountId::try_from(DEFAULT_FT_CONTRACT_ACCOUNT.to_string()).unwrap(),
+        account_id: AccountId::try_from(DEFAULT_NEAR_USER_ACCOUNT.to_string()).unwrap(),
+        storage_deposit_amount: Some(NEP141_DEPOSIT.as_yoctonear()),
+    }]
 }
 
 fn get_prover_result(recipient: Option<OmniAddress>) -> ProverResult {
@@ -479,22 +481,29 @@ fn test_fin_transfer_callback_near_success() {
         &OmniAddress::Eth(EvmAddress::from_str(DEFAULT_ETH_USER_ADDRESS).unwrap()),
     );
 
-    // Add both recipient and fee recipient to storage deposit args
-    let storage_args = StorageDepositArgs {
-        token: AccountId::try_from(DEFAULT_FT_CONTRACT_ACCOUNT.to_string()).unwrap(),
-        accounts: vec![
-            // Transfer recipient
-            (
-                AccountId::try_from(DEFAULT_NEAR_USER_ACCOUNT.to_string()).unwrap(),
-                true,
-            ),
-            // Fee recipient
-            (
-                AccountId::try_from(DEFAULT_NEAR_USER_ACCOUNT.to_string()).unwrap(),
-                true,
-            ),
-        ],
-    };
+    let native_token_address = OmniAddress::new_zero(ChainKind::Eth).unwrap();
+    contract.token_address_to_id.insert(
+        &native_token_address,
+        &DEFAULT_FT_CONTRACT_ACCOUNT.parse().unwrap(),
+    );
+
+    let storage_actions = vec![
+        StorageDepositAction {
+            token_id: AccountId::try_from(DEFAULT_FT_CONTRACT_ACCOUNT.to_string()).unwrap(),
+            account_id: AccountId::try_from(DEFAULT_NEAR_USER_ACCOUNT.to_string()).unwrap(),
+            storage_deposit_amount: Some(NEP141_DEPOSIT.as_yoctonear()),
+        },
+        StorageDepositAction {
+            token_id: AccountId::try_from(DEFAULT_FT_CONTRACT_ACCOUNT.to_string()).unwrap(),
+            account_id: AccountId::try_from(DEFAULT_NEAR_USER_ACCOUNT.to_string()).unwrap(),
+            storage_deposit_amount: Some(NEP141_DEPOSIT.as_yoctonear()),
+        },
+        StorageDepositAction {
+            token_id: AccountId::try_from(DEFAULT_FT_CONTRACT_ACCOUNT.to_string()).unwrap(),
+            account_id: AccountId::try_from(DEFAULT_NEAR_USER_ACCOUNT.to_string()).unwrap(),
+            storage_deposit_amount: Some(NEP141_DEPOSIT.as_yoctonear()),
+        },
+    ];
 
     let predecessor = AccountId::try_from(DEFAULT_NEAR_USER_ACCOUNT.to_string()).unwrap();
 
@@ -523,10 +532,18 @@ fn test_fin_transfer_callback_near_success() {
                 }))
                 .unwrap(),
             ),
+            // Storage balance result for native fee recipient
+            PromiseResult::Successful(
+                serde_json::to_vec(&Some(StorageBalance {
+                    total: NearToken::from_near(1),
+                    available: NearToken::from_near(1),
+                }))
+                .unwrap(),
+            ),
         ]),
     );
 
-    let result = contract.fin_transfer_callback(&storage_args, predecessor.clone());
+    let result = contract.fin_transfer_callback(&storage_actions, predecessor.clone());
 
     assert!(matches!(result, PromiseOrValue::Promise(_)));
 }
@@ -540,7 +557,7 @@ fn test_fin_transfer_callback_non_near_success() {
         &ChainKind::Eth,
         &OmniAddress::Eth(EvmAddress::from_str(DEFAULT_ETH_USER_ADDRESS).unwrap()),
     );
-    let storage_args = get_default_storage_deposit_args();
+    let storage_actions = get_default_storage_deposit_actions();
     let predecessor = AccountId::try_from(DEFAULT_NEAR_USER_ACCOUNT.to_string()).unwrap();
 
     // Create prover result with ETH recipient
@@ -555,7 +572,7 @@ fn test_fin_transfer_callback_non_near_success() {
         )]),
     );
 
-    let result = contract.fin_transfer_callback(&storage_args, predecessor.clone());
+    let result = contract.fin_transfer_callback(&storage_actions, predecessor.clone());
 
     // For non-NEAR recipients, should return u64 value of current_destination_nonce
     match result {
@@ -580,7 +597,7 @@ fn test_fin_transfer_callback_non_near_success() {
 #[should_panic(expected = "Invalid proof message")]
 fn test_fin_transfer_callback_invalid_proof() {
     let mut contract = get_default_contract();
-    let storage_args = get_default_storage_deposit_args();
+    let storage_actions = get_default_storage_deposit_actions();
     let predecessor = AccountId::try_from(DEFAULT_NEAR_USER_ACCOUNT.to_string()).unwrap();
 
     testing_env!(
@@ -594,14 +611,14 @@ fn test_fin_transfer_callback_invalid_proof() {
         vec![PromiseResult::Failed],
     );
 
-    contract.fin_transfer_callback(&storage_args, predecessor);
+    contract.fin_transfer_callback(&storage_actions, predecessor);
 }
 
 #[test]
 #[should_panic(expected = "Unknown factory")]
 fn test_fin_transfer_callback_unknown_factory() {
     let mut contract = get_default_contract();
-    let storage_args = get_default_storage_deposit_args();
+    let storage_actions = get_default_storage_deposit_actions();
     let predecessor = AccountId::try_from(DEFAULT_NEAR_USER_ACCOUNT.to_string()).unwrap();
 
     // Don't add factory to make it fail
@@ -619,7 +636,7 @@ fn test_fin_transfer_callback_unknown_factory() {
         )],
     );
 
-    contract.fin_transfer_callback(&storage_args, predecessor);
+    contract.fin_transfer_callback(&storage_actions, predecessor);
 }
 
 #[test]
