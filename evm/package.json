@@ -6,7 +6,6 @@
   "dependencies": {
     "@openzeppelin/contracts": "^5.1.0",
     "@openzeppelin/contracts-upgradeable": "^5.1.0",
-    "bs58check": "^4.0.0",
     "prettier": "^3.3.3",
     "prettier-plugin-solidity": "^1.4.1"
   },
@@ -25,14 +24,14 @@
     "@types/node": "^22.9.0",
     "borsh": "^2.0.0",
     "chai": "4",
-    "dotenv": "^16.0.1",
+    "dotenv": "^16.4.5",
     "ethers": "^6.13.4",
     "hardhat": "^2.22.16",
     "hardhat-storage-layout": "^0.1.7",
-    "near-api-js": "^5.0.1",
+    "solidity-coverage": "^0.8.13",
     "ts-node": "^10.9.2",
     "typechain": "^8.3.2",
-    "typescript": "^5.6.3"
+    "typescript": "^5.7.2"
   },
   "scripts": {
     "build": "yarn hardhat compile",

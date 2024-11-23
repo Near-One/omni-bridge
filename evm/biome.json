@@ -7,15 +7,17 @@
   },
   "files": {
     "ignoreUnknown": false,
-    "ignore": ["build", "dist", "cache", "typechain-types"]
+    "ignore": [
+      "build",
+      "dist",
+      "cache",
+      "typechain-types"
+    ]
   },
   "formatter": {
     "enabled": true,
     "indentStyle": "space",
     "lineWidth": 100
-  },
-  "organizeImports": {
-    "enabled": true
   },
   "linter": {
     "enabled": true,
