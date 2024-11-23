@@ -1,4 +1,4 @@
-name: Rust testing and building
+name: Rust CI
 
 on:
   push:
@@ -13,52 +13,57 @@ on:
       - 'omni-relayer/**'
 
 jobs:
-  setup-rust:
+  lint:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        component: [near]  # Will be expanded with more components later
+        check: [clippy, fmt]
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set up Rust
+      - name: Setup Rust toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: 1.79.0
           components: clippy, rustfmt
           target: wasm32-unknown-unknown
 
-      - uses: Swatinem/rust-cache@v2
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
         with:
           cache-on-failure: true
+          shared-key: "lint-${{ matrix.component }}"
 
-      - name: Install nextest 
+      - name: Run ${{ matrix.check }}
+        run: make ${{ matrix.check }}-${{ matrix.component }}
+
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.79.0
+          target: wasm32-unknown-unknown
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
+          shared-key: "build-test"
+
+      - name: Install nextest
         uses: taiki-e/install-action@v2
         with:
           tool: nextest
 
-  lint:
-    needs: setup-rust
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        component: [near]
-        check: [clippy, fmt]
-    steps:
-      - name: Run ${{ matrix.check }}
-        run: |
-          make ${{ matrix.check }}-${{ matrix.component }}
+      - name: Build near contract
+        run: make rust-build-near
 
-  build:
-    needs: setup-rust
-    runs-on: ubuntu-latest
-    steps:
-      - name: Build Near contract
-        run: |
-          make rust-build-near
-
-  test:
-    needs: setup-rust
-    runs-on: ubuntu-latest
-    steps:
-      - name: Test Near contracts
-        run: |
-          make test-near
+      - name: Test near contracts
+        run: make test-near
