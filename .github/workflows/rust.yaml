@@ -33,6 +33,7 @@ jobs:
         uses: Swatinem/rust-cache@v2
         with:
           cache-on-failure: true
+          cache-all-crates: true
           shared-key: "lint-${{ matrix.component }}"
           workspaces: ${{ matrix.component }}
 
