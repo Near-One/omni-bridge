@@ -2,6 +2,8 @@ name: EVM Checks
 
 on:
   push:
+    branches:
+      - main
     paths:
       - 'evm/**'
   pull_request:
