@@ -34,6 +34,7 @@ jobs:
         with:
           cache-on-failure: true
           shared-key: "lint-${{ matrix.component }}"
+          workspaces: ${{ matrix.component }}
 
       - name: Run clippy
         run: make clippy-${{ matrix.component }}
@@ -57,6 +58,7 @@ jobs:
         uses: Swatinem/rust-cache@v2
         with:
           cache-on-failure: true
+          cache-all-crates: true
           shared-key: "build-test"
           workspaces: near
 
@@ -65,8 +67,11 @@ jobs:
         with:
           tool: nextest
 
-      - name: Build near contract
+      - name: Build token contract
         run: make rust-build-near
 
-      - name: Test near contracts
-        run: make test-near
+      - name: Build tests
+        run: cargo build --manifest-path ./near/Cargo.toml --tests --all-features
+
+      - name: Run tests
+        run: cargo nextest run --manifest-path ./near/Cargo.toml
