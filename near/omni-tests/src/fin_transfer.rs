@@ -68,7 +68,10 @@ mod tests {
         let result = test_fin_transfer(storage_deposit_accounts, amount, fee).await;
 
         match result {
-            Ok(_) => assert!(expected_error.is_none(), "Expected an error but got success"),
+            Ok(_) => assert!(
+                expected_error.is_none(),
+                "Expected an error but got success"
+            ),
             Err(result_error) => {
                 let error = expected_error.expect("Got an error when none was expected");
                 assert!(

@@ -18,7 +18,6 @@ jobs:
     strategy:
       matrix:
         component: [near]  # Will be expanded with more components later
-        check: [clippy, fmt]
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -36,8 +35,11 @@ jobs:
           cache-on-failure: true
           shared-key: "lint-${{ matrix.component }}"
 
-      - name: Run ${{ matrix.check }}
-        run: make ${{ matrix.check }}-${{ matrix.component }}
+      - name: Run clippy
+        run: make clippy-${{ matrix.component }}
+
+      - name: Run fmt
+        run: make fmt-${{ matrix.component }}
 
   build-and-test:
     runs-on: ubuntu-latest
