@@ -7,12 +7,7 @@
   },
   "files": {
     "ignoreUnknown": false,
-    "ignore": [
-      "build",
-      "dist",
-      "cache",
-      "typechain-types"
-    ]
+    "ignore": ["build", "dist", "cache", "typechain-types", "coverage"]
   },
   "formatter": {
     "enabled": true,
