@@ -58,6 +58,7 @@ jobs:
         with:
           cache-on-failure: true
           shared-key: "build-test"
+          workspaces: near
 
       - name: Install nextest
         uses: taiki-e/install-action@v2
