@@ -44,11 +44,10 @@ describe("BridgeToken", () => {
 			[await bridgeToken.getAddress(), nearBridgeDeriveAddress, omniBridgeChainId],
 			{ initializer: "initialize" },
 		)
-		OmniBridge =
-			(await upgradedContract.waitForDeployment()) as unknown as OmniBridge
+		OmniBridge = (await upgradedContract.waitForDeployment()) as unknown as OmniBridge
 	})
 
-	async function fundAddress(address: string, amount: string) {	
+	async function fundAddress(address: string, amount: string) {
 		const tx = await adminAccount.sendTransaction({
 			to: address,
 			value: ethers.parseEther(amount),
@@ -89,9 +88,9 @@ describe("BridgeToken", () => {
 	it("can't update metadata of non-existent token", async () => {
 		await createToken(wrappedNearId)
 
-		await expect(
-			OmniBridge.setMetadata("non-existing", "Circle USDC", "USDC"),
-		).to.be.revertedWith("ERR_NOT_BRIDGE_TOKEN")
+		await expect(OmniBridge.setMetadata("non-existing", "Circle USDC", "USDC")).to.be.revertedWith(
+			"ERR_NOT_BRIDGE_TOKEN",
+		)
 	})
 
 	it("can't update metadata as a normal user", async () => {
@@ -134,9 +133,7 @@ describe("BridgeToken", () => {
 
 		const { signature, payload } = depositSignature(tokenProxyAddress, user1.address)
 
-		await expect(OmniBridge.finTransfer(signature, payload)).to.be.revertedWith(
-			"Pausable: paused",
-		)
+		await expect(OmniBridge.finTransfer(signature, payload)).to.be.revertedWith("Pausable: paused")
 	})
 
 	it("can't deposit twice with the same signature", async () => {
@@ -325,10 +322,7 @@ describe("BridgeToken", () => {
 		await BridgeTokenV2.waitForDeployment()
 
 		await expect(
-			OmniBridge.connect(user1).upgradeToken(
-				tokenProxyAddress,
-				await BridgeTokenV2.getAddress(),
-			),
+			OmniBridge.connect(user1).upgradeToken(tokenProxyAddress, await BridgeTokenV2.getAddress()),
 		).to.be.revertedWithCustomError(OmniBridge, "AccessControlUnauthorizedAccount")
 	})
 
@@ -348,9 +342,7 @@ describe("BridgeToken", () => {
 		expect(await OmniBridge.paused(PauseMode.PausedInitTransfer)).to.be.equal(true)
 
 		// Pause deposit
-		await expect(
-			OmniBridge.pause(PauseMode.PausedFinTransfer | PauseMode.PausedInitTransfer),
-		)
+		await expect(OmniBridge.pause(PauseMode.PausedFinTransfer | PauseMode.PausedInitTransfer))
 			.to.emit(OmniBridge, "Paused")
 			.withArgs(adminAccount.address, PauseMode.PausedFinTransfer | PauseMode.PausedInitTransfer)
 		expect(await OmniBridge.pausedFlags()).to.be.equal(
@@ -358,9 +350,7 @@ describe("BridgeToken", () => {
 		)
 
 		// Pause deposit again
-		await expect(
-			OmniBridge.pause(PauseMode.PausedFinTransfer | PauseMode.PausedInitTransfer),
-		)
+		await expect(OmniBridge.pause(PauseMode.PausedFinTransfer | PauseMode.PausedInitTransfer))
 			.to.emit(OmniBridge, "Paused")
 			.withArgs(adminAccount.address, PauseMode.PausedFinTransfer | PauseMode.PausedInitTransfer)
 		expect(await OmniBridge.pausedFlags()).to.be.equal(
@@ -368,9 +358,7 @@ describe("BridgeToken", () => {
 		)
 
 		// Pause deposit and withdraw
-		await expect(
-			OmniBridge.pause(PauseMode.PausedFinTransfer | PauseMode.PausedInitTransfer),
-		)
+		await expect(OmniBridge.pause(PauseMode.PausedFinTransfer | PauseMode.PausedInitTransfer))
 			.to.emit(OmniBridge, "Paused")
 			.withArgs(adminAccount.address, PauseMode.PausedFinTransfer | PauseMode.PausedInitTransfer)
 		expect(await OmniBridge.pausedFlags()).to.be.equal(
@@ -423,10 +411,7 @@ describe("BridgeToken", () => {
 
 		// Revoke DEFAULT_ADMIN_ROLE from adminAccount
 		await expect(
-			OmniBridge.connect(newAdminAccount).revokeRole(
-				DEFAULT_ADMIN_ROLE,
-				adminAccount.address,
-			),
+			OmniBridge.connect(newAdminAccount).revokeRole(DEFAULT_ADMIN_ROLE, adminAccount.address),
 		)
 			.to.emit(OmniBridge, "RoleRevoked")
 			.withArgs(DEFAULT_ADMIN_ROLE, adminAccount.address, newAdminAccount.address)
@@ -445,10 +430,7 @@ describe("BridgeToken", () => {
 
 		// Check newAdminAccount can grant DEFAULT_ADMIN_ROLE to adminAccount
 		await expect(
-			OmniBridge.connect(newAdminAccount).grantRole(
-				DEFAULT_ADMIN_ROLE,
-				adminAccount.address,
-			),
+			OmniBridge.connect(newAdminAccount).grantRole(DEFAULT_ADMIN_ROLE, adminAccount.address),
 		)
 			.to.emit(OmniBridge, "RoleGranted")
 			.withArgs(DEFAULT_ADMIN_ROLE, adminAccount.address, newAdminAccount.address)

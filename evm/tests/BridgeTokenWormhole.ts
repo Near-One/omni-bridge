@@ -68,7 +68,7 @@ class InitTransferWormholeMessage {
 	static serialize(msg: InitTransferWormholeMessage): Uint8Array {
 		return borsh.serialize(InitTransferWormholeMessage.schema, msg)
 	}
-}	
+}
 
 describe("BridgeTokenWormhole", () => {
 	const wrappedNearId = "wrap.testnet"
@@ -96,9 +96,7 @@ describe("BridgeTokenWormhole", () => {
 		const nearBridgeDeriveAddress = testWallet.address
 		const omniBridgeChainId = 0
 
-		const OmniBridgeWormhole_factory = await ethers.getContractFactory(
-			"OmniBridgeWormhole",
-		)
+		const OmniBridgeWormhole_factory = await ethers.getContractFactory("OmniBridgeWormhole")
 		OmniBridgeWormhole = (await upgrades.deployProxy(
 			OmniBridgeWormhole_factory,
 			[
