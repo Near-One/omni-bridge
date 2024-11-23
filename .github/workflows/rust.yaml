@@ -13,58 +13,52 @@ on:
       - 'omni-relayer/**'
 
 jobs:
+  setup-rust:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.79.0
+          components: clippy, rustfmt
+          target: wasm32-unknown-unknown
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
+
+      - name: Install nextest 
+        uses: taiki-e/install-action@v2
+        with:
+          tool: nextest
+
   lint:
+    needs: setup-rust
     runs-on: ubuntu-latest
     strategy:
       matrix:
         component: [near]
         check: [clippy, fmt]
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
-
-      - name: Set up Rust
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: 1.79.0
-          components: clippy, rustfmt
-          target: wasm32-unknown-unknown
-          override: true
-
       - name: Run ${{ matrix.check }}
         run: |
           make ${{ matrix.check }}-${{ matrix.component }}
 
   build:
+    needs: setup-rust
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
-
-      - name: Set up Rust
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: 1.79.0
-          target: wasm32-unknown-unknown
-          override: true
-
       - name: Build Near contract
         run: |
           make rust-build-near
 
   test:
+    needs: setup-rust
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
-      
-      - name: Set up Rust
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: 1.79.0
-          target: wasm32-unknown-unknown
-          override: true
-
       - name: Test Near contracts
         run: |
           make test-near
