@@ -1,7 +1,7 @@
 import * as borsh from "borsh"
 import { type BigNumberish, Wallet } from "ethers"
 import { ethers } from "hardhat"
-import type { BridgeTypes } from "../../typechain-types/src/bridge-token-factory/contracts/BridgeTokenFactory"
+import type { BridgeTypes } from "../../typechain-types/src/omni-bridge/contracts/OmniBridge"
 
 interface SignatureData<T> {
 	payload: T
