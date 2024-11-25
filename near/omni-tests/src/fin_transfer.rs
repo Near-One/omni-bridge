@@ -194,10 +194,7 @@ mod tests {
 
         let required_deposit_for_fin_transfer = NEP141_DEPOSIT
             .saturating_mul(storage_deposit_accounts.len() as u128)
-            .saturating_add(required_balance_for_fin_transfer)
-            .saturating_add(NearToken::from_yoctonear(2))
-            // This is a temporary value to cover the issue with incorrect storage deposit calculation
-            .saturating_add(NearToken::from_yoctonear(1250000000000000000000));
+            .saturating_add(required_balance_for_fin_transfer);
 
         let storage_deposit_actions = storage_deposit_accounts
             .iter()
