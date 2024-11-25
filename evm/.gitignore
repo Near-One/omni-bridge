@@ -3,5 +3,7 @@ cache/
 coverage/
 coverage.json
 .openzeppelin/
-node_modules/
+node_modules
 .env
+typechain-types
+dist/
