@@ -796,6 +796,16 @@ impl Contract {
         self.token_id_to_address.get(&(chain_kind, token))
     }
 
+    pub fn get_token_id(&self, address: &OmniAddress) -> AccountId {
+        if let OmniAddress::Near(token_account_id) = address {
+            token_account_id.clone()
+        } else {
+            self.token_address_to_id
+                .get(address)
+                .sdk_expect("ERR_TOKEN_NOT_REGISTERED")
+        }
+    }
+
     pub fn get_transfer_message(&self, transfer_id: TransferId) -> TransferMessage {
         self.pending_transfers
             .get(&transfer_id)
@@ -1013,16 +1023,6 @@ impl Contract {
         );
 
         env::log_str(&OmniBridgeEvent::FinTransferEvent { transfer_message }.to_log_string());
-    }
-
-    fn get_token_id(&self, address: &OmniAddress) -> AccountId {
-        if let OmniAddress::Near(token_account_id) = address {
-            token_account_id.clone()
-        } else {
-            self.token_address_to_id
-                .get(address)
-                .sdk_expect("ERR_TOKEN_NOT_REGISTERED")
-        }
     }
 
     fn get_native_token_id(&self, origin_chain: ChainKind) -> AccountId {
