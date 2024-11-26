@@ -1,0 +1,14 @@
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: btc-light-client-merkle-tools
+  title: BTC Light Client merkle-tools
+  tags:
+    - near
+  links: []
+  annotations:
+    aurora.dev/security-tier: "1"
+spec:
+  owner: nearone-team
+  type: library
+  lifecycle: production
