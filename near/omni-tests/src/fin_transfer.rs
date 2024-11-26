@@ -11,101 +11,75 @@ mod tests {
         prover_result::{InitTransferMessage, ProverResult},
         Fee, OmniAddress,
     };
+    use rstest::rstest;
 
+    #[rstest]
+    #[case(vec![(account_1(), true), (relayer_account_id(), true)], 1000, 1, None)]
+    #[case(vec![(account_1(), true)], 1000, 0, None)]
+    #[case(
+        vec![
+            (account_1(), true),
+            (relayer_account_id(), true),
+            (account_2(), true),
+            (account_2(), true),
+        ],
+        1000,
+        1,
+        Some("Invalid len of accounts for storage deposit")
+    )]
+    #[case(
+        vec![(relayer_account_id(), true), (account_1(), true)],
+        1000,
+        1,
+        Some("STORAGE_ERR: The transfer recipient is omitted")
+    )]
+    #[case(
+        vec![(account_1(), true)],
+        1000,
+        1,
+        Some("STORAGE_ERR: The fee recipient is omitted")
+    )]
+    #[case(vec![], 1000, 1, Some("STORAGE_ERR: The transfer recipient is omitted"))]
+    #[case(
+        vec![(account_1(), false), (relayer_account_id(), false)],
+        1000,
+        1,
+        Some("STORAGE_ERR: The transfer recipient is omitted")
+    )]
+    #[case(
+        vec![(account_1(), true), (relayer_account_id(), false)],
+        1000,
+        1,
+        Some("STORAGE_ERR: The fee recipient is omitted")
+    )]
+    #[case(
+        vec![(account_1(), false), (relayer_account_id(), true)],
+        1000,
+        1,
+        Some("STORAGE_ERR: The transfer recipient is omitted")
+    )]
     #[tokio::test]
-    async fn test_storage_deposit_on_fin_transfer() {
-        struct TestStorageDeposit<'a> {
-            storage_deposit_accounts: Vec<(AccountId, bool)>,
-            amount: u128,
-            fee: u128,
-            error: Option<&'a str>,
-        }
-        let test_data = [
-            TestStorageDeposit {
-                storage_deposit_accounts: [(account_1(), true), (relayer_account_id(), true)]
-                    .to_vec(),
-                amount: 1000,
-                fee: 1,
-                error: None,
-            },
-            TestStorageDeposit {
-                storage_deposit_accounts: [(account_1(), true)].to_vec(),
-                amount: 1000,
-                fee: 0,
-                error: None,
-            },
-            TestStorageDeposit {
-                storage_deposit_accounts: [
-                    (account_1(), true),
-                    (relayer_account_id(), true),
-                    (account_2(), true),
-                    (account_2(), true),
-                ]
-                .to_vec(),
-                amount: 1000,
-                fee: 1,
-                error: Some("Invalid len of accounts for storage deposit"),
-            },
-            TestStorageDeposit {
-                storage_deposit_accounts: [(relayer_account_id(), true), (account_1(), true)]
-                    .to_vec(),
-                amount: 1000,
-                fee: 1,
-                error: Some("STORAGE_ERR: The transfer recipient is omitted"),
-            },
-            TestStorageDeposit {
-                storage_deposit_accounts: [(account_1(), true)].to_vec(),
-                amount: 1000,
-                fee: 1,
-                error: Some("STORAGE_ERR: The fee recipient is omitted"),
-            },
-            TestStorageDeposit {
-                storage_deposit_accounts: [].to_vec(),
-                amount: 1000,
-                fee: 1,
-                error: Some("STORAGE_ERR: The transfer recipient is omitted"),
-            },
-            TestStorageDeposit {
-                storage_deposit_accounts: [(account_1(), false), (relayer_account_id(), false)]
-                    .to_vec(),
-                amount: 1000,
-                fee: 1,
-                error: Some("STORAGE_ERR: The transfer recipient is omitted"),
-            },
-            TestStorageDeposit {
-                storage_deposit_accounts: [(account_1(), true), (relayer_account_id(), false)]
-                    .to_vec(),
-                amount: 1000,
-                fee: 1,
-                error: Some("STORAGE_ERR: The fee recipient is omitted"),
-            },
-            TestStorageDeposit {
-                storage_deposit_accounts: [(account_1(), false), (relayer_account_id(), true)]
-                    .to_vec(),
-                amount: 1000,
-                fee: 1,
-                error: Some("STORAGE_ERR: The transfer recipient is omitted"),
-            },
-        ];
+    async fn test_storage_deposit_on_fin_transfer(
+        #[case] storage_deposit_accounts: Vec<(AccountId, bool)>,
+        #[case] amount: u128,
+        #[case] fee: u128,
+        #[case] expected_error: Option<&str>,
+    ) {
+        let result = test_fin_transfer(storage_deposit_accounts, amount, fee).await;
 
-        for (index, test) in test_data.into_iter().enumerate() {
-            let result =
-                test_fin_transfer(test.storage_deposit_accounts, test.amount, test.fee).await;
-
-            match result {
-                Ok(_) => assert!(test.error.is_none()),
-                Err(result_error) => match test.error {
-                    Some(exepected_error) => {
-                        assert!(
-                            result_error.to_string().contains(exepected_error),
-                            "Wrong error. Test index: {}, err: {}, expected: {}",
-                            index,
-                            result_error,
-                            exepected_error
-                        )
-                    }
-                    None => panic!("Test index: {}, err: {}", index, result_error),
-                },
+        match result {
+            Ok(_) => assert!(
+                expected_error.is_none(),
+                "Expected an error but got success"
+            ),
+            Err(result_error) => {
+                let error = expected_error.expect("Got an error when none was expected");
+                assert!(
+                    result_error.to_string().contains(error),
+                    "Wrong error. Got: {}, Expected: {}",
+                    result_error,
+                    error
+                );
             }
         }
     }
