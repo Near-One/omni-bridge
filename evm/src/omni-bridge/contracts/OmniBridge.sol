@@ -286,4 +286,6 @@ contract OmniBridge is
     function _authorizeUpgrade(
         address newImplementation
     ) internal override onlyRole(DEFAULT_ADMIN_ROLE) {}
+
+    uint256[50] private __gap;
 }
