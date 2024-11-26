@@ -12,9 +12,8 @@ import type { OmniBridge } from "./typechain-types"
 
 dotenv.config()
 
-const ALCHEMY_API_KEY = process.env.ALCHEMY_API_KEY
-const INFURA_API_KEY = process.env.INFURA_API_KEY
-const ETH_PRIVATE_KEY = process.env.ETH_PRIVATE_KEY || "11".repeat(32)
+const EVM_RPC_URL = process.env.INFURA_API_KEY
+const EVM_PRIVATE_KEY = process.env.ETH_PRIVATE_KEY || "11".repeat(32)
 const ETHERSCAN_API_KEY = process.env.ETHERSCAN_API_KEY
 
 task("set-metadata-ft", "Set metadata for NEP-141 tokens on the Ethereum side")
@@ -143,23 +142,40 @@ const config: HardhatUserConfig = {
   networks: {
     hardhat: {
       chainId: 1337,
-      allowUnlimitedContractSize: true,
       mining: {
         auto: true,
         interval: 0,
       },
     },
-    sepolia: {
-      url: INFURA_API_KEY
-        ? `https://sepolia.infura.io/v3/${INFURA_API_KEY}`
-        : `https://eth-sepolia.g.alchemy.com/v2/${ALCHEMY_API_KEY}`,
-      accounts: [`${ETH_PRIVATE_KEY}`],
+    eth_mainnet: {
+      chainId: 1,
+      url: EVM_RPC_URL,
+      accounts: [`${EVM_PRIVATE_KEY}`],
     },
-    mainnet: {
-      url: INFURA_API_KEY
-        ? `https://mainnet.infura.io/v3/${INFURA_API_KEY}`
-        : `https://eth-mainnet.alchemyapi.io/v2/${ALCHEMY_API_KEY}`,
-      accounts: [`${ETH_PRIVATE_KEY}`],
+    base_mainnet: {
+      chainId: 8453,
+      url: EVM_RPC_URL,
+      accounts: [`${EVM_PRIVATE_KEY}`],
+    },
+    arb_mainnet: {
+      chainId: 42161,
+      url: EVM_RPC_URL,
+      accounts: [`${EVM_PRIVATE_KEY}`],
+    },
+    eth_sepolia: {
+      chainId: 11155111,
+      url: EVM_RPC_URL,
+      accounts: [`${EVM_PRIVATE_KEY}`],
+    },
+    base_sepolia: {
+      chainId: 84532,
+      url: EVM_RPC_URL,
+      accounts: [`${EVM_PRIVATE_KEY}`],
+    },
+    arb_sepolia: {
+      chainId: 421614,
+      url: EVM_RPC_URL,
+      accounts: [`${EVM_PRIVATE_KEY}`],
     },
   },
   etherscan: {
