@@ -13,7 +13,7 @@ import type { OmniBridge } from "./typechain-types"
 dotenv.config()
 
 const INFURA_API_KEY = process.env.INFURA_API_KEY
-const EVM_PRIVATE_KEY = process.env.ETH_PRIVATE_KEY || "11".repeat(32)
+const EVM_PRIVATE_KEY = process.env.EVM_PRIVATE_KEY || "11".repeat(32)
 const ETHERSCAN_API_KEY = process.env.ETHERSCAN_API_KEY
 
 task("set-metadata-ft", "Set metadata for NEP-141 tokens on the Ethereum side")
