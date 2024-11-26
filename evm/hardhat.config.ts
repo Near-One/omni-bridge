@@ -12,7 +12,7 @@ import type { OmniBridge } from "./typechain-types"
 
 dotenv.config()
 
-const EVM_RPC_URL = process.env.INFURA_API_KEY
+const INFURA_API_KEY = process.env.INFURA_API_KEY
 const EVM_PRIVATE_KEY = process.env.ETH_PRIVATE_KEY || "11".repeat(32)
 const ETHERSCAN_API_KEY = process.env.ETHERSCAN_API_KEY
 
@@ -149,32 +149,32 @@ const config: HardhatUserConfig = {
     },
     eth_mainnet: {
       chainId: 1,
-      url: EVM_RPC_URL,
+      url: `https://mainnet.infura.io/v3/${INFURA_API_KEY}`,
       accounts: [`${EVM_PRIVATE_KEY}`],
     },
     base_mainnet: {
       chainId: 8453,
-      url: EVM_RPC_URL,
+      url: `https://base-mainnet.infura.io/v3/${INFURA_API_KEY}`,
       accounts: [`${EVM_PRIVATE_KEY}`],
     },
     arb_mainnet: {
       chainId: 42161,
-      url: EVM_RPC_URL,
+      url: `https://arbitrum-mainnet.infura.io/v3/${INFURA_API_KEY}`,
       accounts: [`${EVM_PRIVATE_KEY}`],
     },
     eth_sepolia: {
       chainId: 11155111,
-      url: EVM_RPC_URL,
+      url: `https://sepolia.infura.io/v3/${INFURA_API_KEY}`,
       accounts: [`${EVM_PRIVATE_KEY}`],
     },
     base_sepolia: {
       chainId: 84532,
-      url: EVM_RPC_URL,
+      url: `https://base-sepolia.infura.io/v3/${INFURA_API_KEY}`,
       accounts: [`${EVM_PRIVATE_KEY}`],
     },
     arb_sepolia: {
       chainId: 421614,
-      url: EVM_RPC_URL,
+      url: `https://arbitrum-sepolia.infura.io/v3/${INFURA_API_KEY}`,
       accounts: [`${EVM_PRIVATE_KEY}`],
     },
   },
