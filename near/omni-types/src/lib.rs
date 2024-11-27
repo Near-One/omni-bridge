@@ -15,6 +15,7 @@ pub mod near_events;
 pub mod prover_args;
 pub mod prover_result;
 pub mod sol_address;
+pub mod utils;
 
 #[cfg(test)]
 mod tests;
@@ -56,7 +57,7 @@ impl H160 {
     pub fn to_eip_55_checksum(&self) -> String {
         let hex_addr = hex::encode(self.0);
 
-        let hash = evm::utils::keccak256(hex_addr.as_bytes());
+        let hash = utils::keccak256(hex_addr.as_bytes());
 
         let mut result = String::with_capacity(40);
 
@@ -138,8 +139,10 @@ impl Serialize for H160 {
     Serialize,
     Deserialize,
     strum_macros::AsRefStr,
+    Default,
 )]
 pub enum ChainKind {
+    #[default]
     Eth,
     Near,
     Sol,
@@ -150,6 +153,20 @@ pub enum ChainKind {
 impl From<&OmniAddress> for ChainKind {
     fn from(input: &OmniAddress) -> Self {
         input.get_chain()
+    }
+}
+
+impl TryFrom<u8> for ChainKind {
+    type Error = String;
+    fn try_from(input: u8) -> Result<Self, String> {
+        match input {
+            0 => Ok(ChainKind::Eth),
+            1 => Ok(ChainKind::Near),
+            2 => Ok(ChainKind::Sol),
+            3 => Ok(ChainKind::Arb),
+            4 => Ok(ChainKind::Base),
+            _ => Err(format!("{input:?} invalid chain kind")),
+        }
     }
 }
 
@@ -240,7 +257,20 @@ impl OmniAddress {
     }
 
     pub fn get_token_prefix(&self) -> String {
-        self.encode('-', true)
+        match self {
+            OmniAddress::Sol(address) => {
+                // The AccountId on Near can't be uppercased and has a 64 character limit,
+                // so we encode the solana address into 20 bytes to bypass these restrictions
+                let hashed_address = H160(
+                    utils::keccak256(&address.0)[12..]
+                        .try_into()
+                        .unwrap_or_default(),
+                )
+                .to_string();
+                format!("sol-{hashed_address}")
+            }
+            _ => self.encode('-', true),
+        }
     }
 
     fn to_evm_address(address: &[u8]) -> Result<EvmAddress, String> {
@@ -340,12 +370,6 @@ pub struct FeeRecipient {
     pub native_fee_recipient: OmniAddress,
 }
 
-#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Debug, Clone)]
-pub struct NativeFee {
-    pub amount: U128,
-    pub recipient: OmniAddress,
-}
-
 #[derive(
     BorshDeserialize, BorshSerialize, Serialize, Deserialize, Debug, Clone, PartialEq, Default,
 )]
@@ -360,16 +384,35 @@ impl Fee {
     }
 }
 
-pub type TransferId = (ChainKind, Nonce);
+#[derive(
+    BorshDeserialize,
+    BorshSerialize,
+    Serialize,
+    Deserialize,
+    Debug,
+    Clone,
+    PartialEq,
+    Eq,
+    Default,
+    Copy,
+)]
+pub struct TransferId {
+    // The origin chain kind
+    pub origin_chain: ChainKind,
+    // The transfer nonce that maintained on the source chain
+    pub origin_nonce: Nonce,
+}
+
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Debug, Clone)]
 pub struct TransferMessage {
-    pub origin_nonce: U128,
+    pub origin_nonce: Nonce,
     pub token: OmniAddress,
     pub amount: U128,
     pub recipient: OmniAddress,
     pub fee: Fee,
     pub sender: OmniAddress,
     pub msg: String,
+    pub destination_nonce: Nonce,
 }
 
 impl TransferMessage {
@@ -378,7 +421,10 @@ impl TransferMessage {
     }
 
     pub fn get_transfer_id(&self) -> TransferId {
-        (self.get_origin_chain(), self.origin_nonce.0)
+        TransferId {
+            origin_chain: self.get_origin_chain(),
+            origin_nonce: self.origin_nonce,
+        }
     }
 
     pub fn get_destination_chain(&self) -> ChainKind {
@@ -396,19 +442,12 @@ pub enum PayloadType {
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Debug, Clone)]
 pub struct TransferMessagePayload {
     pub prefix: PayloadType,
-    pub nonce: U128,
+    pub destination_nonce: Nonce,
+    pub transfer_id: TransferId,
     pub token_address: OmniAddress,
     pub amount: U128,
     pub recipient: OmniAddress,
     pub fee_recipient: Option<AccountId>,
-}
-
-#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Debug, Clone)]
-pub struct ClaimNativeFeePayload {
-    pub prefix: PayloadType,
-    pub nonces: Vec<U128>,
-    pub amount: U128,
-    pub recipient: OmniAddress,
 }
 
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Debug, Clone)]
@@ -434,7 +473,7 @@ pub enum UpdateFee {
     Proof(Vec<u8>),
 }
 
-pub type Nonce = u128;
+pub type Nonce = u64;
 
 pub fn stringify<T: std::fmt::Display>(item: T) -> String {
     item.to_string()

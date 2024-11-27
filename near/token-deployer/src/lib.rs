@@ -4,9 +4,8 @@ use near_plugins::{
 use near_sdk::borsh::BorshDeserialize;
 use near_sdk::json_types::Base58CryptoHash;
 use near_sdk::serde::{Deserialize, Serialize};
-use near_sdk::{
-    env, near, require, serde_json, AccountId, Gas, NearToken, PanicOnDefault, Promise,
-};
+use near_sdk::serde_json::json;
+use near_sdk::{env, near, require, AccountId, Gas, NearToken, PanicOnDefault, Promise};
 use omni_types::BasicMetadata;
 
 const BRIDGE_TOKEN_INIT_BALANCE: NearToken = NearToken::from_near(3);
@@ -14,7 +13,7 @@ const NO_DEPOSIT: NearToken = NearToken::from_near(0);
 const OMNI_TOKEN_INIT_GAS: Gas = Gas::from_tgas(10);
 
 const BRIDGE_TOKEN_BINARY: &[u8] =
-    include_bytes!("../.././target/wasm32-unknown-unknown/release/omni_token.wasm");
+    include_bytes!("../../target/wasm32-unknown-unknown/release/omni_token.wasm");
 
 #[derive(AccessControlRole, Deserialize, Serialize, Copy, Clone)]
 #[serde(crate = "near_sdk::serde")]
@@ -67,8 +66,8 @@ impl TokenDeployer {
             .deploy_contract(BRIDGE_TOKEN_BINARY.to_vec())
             .function_call(
                 "new".to_string(),
-                serde_json::to_string(&metadata)
-                    .unwrap_or_else(|_| env::panic_str("ERR_FAILED_TO_SERD"))
+                json!({"controller": env::predecessor_account_id(), "metadata": metadata})
+                    .to_string()
                     .into_bytes(),
                 NO_DEPOSIT,
                 OMNI_TOKEN_INIT_GAS,

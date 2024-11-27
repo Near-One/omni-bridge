@@ -27,4 +27,4 @@ rust-build-near: rust-build-token
 	RUSTFLAGS='$(RUSTFLAGS)' cargo build --target wasm32-unknown-unknown --release --manifest-path $(NEAR_MANIFEST)
 
 test-near: rust-build-near
-	cargo test --manifest-path $(NEAR_MANIFEST)
+	cargo nextest run --manifest-path $(NEAR_MANIFEST)

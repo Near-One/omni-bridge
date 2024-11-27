@@ -1,0 +1,78 @@
+name: Rust CI
+
+on:
+  push:
+    branches: [ main, develop ]
+    paths:
+      - 'near/**'
+      - 'omni-relayer/**'
+  pull_request:
+    branches: [ main, develop ]
+    paths:
+      - 'near/**'
+      - 'omni-relayer/**'
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        component: [near]  # Will be expanded with more components later
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.79.0
+          components: clippy, rustfmt
+          target: wasm32-unknown-unknown
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
+          cache-all-crates: true
+          shared-key: "lint-${{ matrix.component }}"
+          workspaces: ${{ matrix.component }}
+
+      - name: Run clippy
+        run: make clippy-${{ matrix.component }}
+
+      - name: Run fmt
+        run: make fmt-${{ matrix.component }}
+
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.79.0
+          target: wasm32-unknown-unknown
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
+          cache-all-crates: true
+          shared-key: "build-test"
+          workspaces: near
+
+      - name: Install nextest
+        uses: taiki-e/install-action@v2
+        with:
+          tool: nextest
+
+      - name: Build token contract
+        run: make rust-build-near
+
+      - name: Build tests
+        run: cargo build --manifest-path ./near/Cargo.toml --tests --all-features
+
+      - name: Run tests
+        run: cargo nextest run --manifest-path ./near/Cargo.toml

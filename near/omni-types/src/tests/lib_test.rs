@@ -2,7 +2,9 @@ use near_sdk::borsh;
 use near_sdk::json_types::U128;
 use near_sdk::serde_json;
 
-use crate::{stringify, ChainKind, Fee, OmniAddress, PayloadType, TransferMessage, H160};
+use crate::{
+    stringify, ChainKind, Fee, OmniAddress, PayloadType, TransferId, TransferMessage, H160,
+};
 use std::str::FromStr;
 
 #[test]
@@ -335,7 +337,8 @@ fn test_transfer_message_getters() {
     let test_cases = vec![
         (
             TransferMessage {
-                origin_nonce: U128(123),
+                destination_nonce: 1,
+                origin_nonce: 123,
                 token: OmniAddress::Near("token.near".parse().unwrap()),
                 amount: U128(1000),
                 recipient: OmniAddress::Near("bob.near".parse().unwrap()),
@@ -344,12 +347,16 @@ fn test_transfer_message_getters() {
                 msg: "".to_string(),
             },
             ChainKind::Eth,
-            (ChainKind::Eth, 123),
+            TransferId {
+                origin_chain: ChainKind::Eth,
+                origin_nonce: 123,
+            },
             "Should handle ETH sender",
         ),
         (
             TransferMessage {
-                origin_nonce: U128(456),
+                destination_nonce: 1,
+                origin_nonce: 456,
                 token: OmniAddress::Near("token.near".parse().unwrap()),
                 amount: U128(2000),
                 recipient: OmniAddress::Eth(evm_addr.clone()),
@@ -358,12 +365,16 @@ fn test_transfer_message_getters() {
                 msg: "".to_string(),
             },
             ChainKind::Near,
-            (ChainKind::Near, 456),
+            TransferId {
+                origin_chain: ChainKind::Near,
+                origin_nonce: 456,
+            },
             "Should handle NEAR sender",
         ),
         (
             TransferMessage {
-                origin_nonce: U128(789),
+                destination_nonce: 1,
+                origin_nonce: 789,
                 token: OmniAddress::Near("token.near".parse().unwrap()),
                 amount: U128(3000),
                 recipient: OmniAddress::Near("carol.near".parse().unwrap()),
@@ -372,7 +383,10 @@ fn test_transfer_message_getters() {
                 msg: "".to_string(),
             },
             ChainKind::Sol,
-            (ChainKind::Sol, 789),
+            TransferId {
+                origin_chain: ChainKind::Sol,
+                origin_nonce: 789,
+            },
             "Should handle SOL sender",
         ),
     ];

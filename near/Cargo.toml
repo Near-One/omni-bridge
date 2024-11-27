@@ -4,7 +4,7 @@ authors = ["Karim Alabtakh <karim.alabtakh@nearone.org>"]
 [workspace]
 resolver = "2"
 members = [
-    "nep141-locker",
+    "omni-bridge",
     "token-deployer",
     "omni-prover/omni-prover",
     "omni-prover/wormhole-omni-prover-proxy",
@@ -41,3 +41,4 @@ ethereum-types = { version = "0.15.1", default-features = false, features = ["rl
 rlp = "0.6"
 sha3 = "0.10.0"
 alloy-sol-types = "0.8"
+rstest = "0.18.2"
