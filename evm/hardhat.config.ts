@@ -11,9 +11,10 @@ import "./src/eNear/scripts"
 import { task } from "hardhat/config"
 import type { HttpNetworkUserConfig } from "hardhat/types"
 import type { OmniBridge } from "./typechain-types"
-import { deriveEthereumAddress, mpcRootPublicKeys } from "./utils/kdf"
+import { deriveEVMAddress, mpcRootPublicKeys } from "./utils/kdf"
 
 import "hardhat/types/config"
+import * as assert from "node:assert"
 
 declare module "hardhat/types/config" {
   interface HttpNetworkUserConfig {
@@ -55,7 +56,7 @@ task("deploy-bridge-token-factory", "Deploys the OmniBridge contract")
       ? mpcRootPublicKeys.mainnet.key
       : mpcRootPublicKeys.testnet.key
 
-    const nearBridgeDerivedAddress = await deriveEthereumAddress(
+    const nearBridgeDerivedAddress = await deriveEVMAddress(
       taskArgs.nearBridgeAccountId,
       "bridge-1",
       mpcRootPublicKey,
@@ -63,8 +64,9 @@ task("deploy-bridge-token-factory", "Deploys the OmniBridge contract")
 
     console.log(`Derived addres: ${nearBridgeDerivedAddress}`)
     console.log(`Omni chain id: ${omniChainId}`)
+    console.log(`Wormhole address: ${wormholeAddress}`)
 
-    const isWormholeContract = !hre.network.name.startsWith("eth")
+    const isWormholeContract = wormholeAddress ?? false
     const contractName = isWormholeContract ? "OmniBridgeWormhole" : "OmniBridge"
     const OmniBridgeContract = await ethers.getContractFactory(contractName)
     const consistencyLevel = 0
@@ -88,14 +90,19 @@ task("deploy-bridge-token-factory", "Deploys the OmniBridge contract")
 
     await OmniBridge.waitForDeployment()
     const bridgeAddress = await OmniBridge.getAddress()
-    const wormholeAddressStorageValue = await hre.ethers.provider.getStorage(bridgeAddress, 58)
 
     console.log(`OmniBridge deployed at ${bridgeAddress}`)
     console.log(
       "Implementation address:",
       await upgrades.erc1967.getImplementationAddress(await OmniBridge.getAddress()),
     )
-    console.log(`Wormhole address ${wormholeAddressStorageValue}`)
+
+    const wormholeAddressStorageValue = await hre.ethers.provider.getStorage(bridgeAddress, 58)
+    const decodedWormholeAddress = ethers.AbiCoder.defaultAbiCoder().decode(
+      ["address"],
+      wormholeAddressStorageValue,
+    )[0]
+    assert.strictEqual(decodedWormholeAddress, wormholeAddress ?? ethers.ZeroAddress)
   })
 
 task("deploy-token-impl", "Deploys the BridgeToken implementation").setAction(async (_, hre) => {

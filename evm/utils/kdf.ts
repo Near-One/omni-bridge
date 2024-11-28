@@ -1,8 +1,11 @@
 import bs58 from "bs58"
 import { ec as EC } from "elliptic"
 import { ethers } from "ethers"
-import hash from "hash.js"
 import { sha3_256 } from "js-sha3"
+
+// sources:
+// https://github.com/near-examples/near-multichain/blob/main/src/services/kdf.js
+// https://docs.near.org/build/chain-abstraction/chain-signatures/#1-deriving-the-foreign-address
 
 const mpcRootPublicKeys = {
   testnet: {
@@ -51,30 +54,7 @@ function uncompressedHexPointToEvmAddress(uncompressedHexPoint: string): string 
   return `0x${addressHash.substring(addressHash.length - 40)}`
 }
 
-async function uncompressedHexPointToBtcAddress(
-  publicKeyHex: string,
-  network: string,
-): Promise<string> {
-  // Step 1: SHA-256 hashing of the public key
-  const publicKeyBytes = Uint8Array.from(Buffer.from(publicKeyHex, "hex"))
-
-  const sha256HashOutput = await crypto.subtle.digest("SHA-256", publicKeyBytes)
-
-  // Step 2: RIPEMD-160 hashing on the result of SHA-256
-  const ripemd160 = hash.ripemd160().update(Buffer.from(sha256HashOutput)).digest()
-
-  // Step 3: Adding network byte (0x00 for Bitcoin Mainnet)
-  const network_byte = network === "bitcoin" ? 0x00 : 0x6f
-  const networkByte = Buffer.from([network_byte])
-  const networkByteAndRipemd160 = Buffer.concat([networkByte, Buffer.from(ripemd160)])
-
-  // Step 4: Base58Check encoding
-  const address = bs58.encode(networkByteAndRipemd160)
-
-  return address
-}
-
-async function deriveEthereumAddress(
+async function deriveEVMAddress(
   accountId: string,
   derivation_path: string,
   rootPublicKey: string,
@@ -87,9 +67,4 @@ async function deriveEthereumAddress(
   return uncompressedHexPointToEvmAddress(publicKey)
 }
 
-export {
-  deriveEthereumAddress,
-  deriveChildPublicKey,
-  uncompressedHexPointToBtcAddress,
-  mpcRootPublicKeys,
-}
+export { deriveEVMAddress, deriveChildPublicKey, mpcRootPublicKeys }
