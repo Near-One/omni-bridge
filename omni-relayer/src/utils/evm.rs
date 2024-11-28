@@ -39,58 +39,45 @@ sol!(
 
     #[derive(Debug, serde::Serialize, serde::Deserialize)]
     event LogMessagePublished(
+        address sender,
         uint64 sequence,
         uint32 nonce,
+        bytes payload,
         uint8 consistencyLevel
     );
 );
 
 pub async fn get_vaa(
     connector: Arc<OmniConnector>,
+    chain_kind: ChainKind,
     tx_logs: Option<alloy::rpc::types::TransactionReceipt>,
-    log: &Log,
     config: &config::Config,
 ) -> Option<String> {
     if let Some(tx_logs) = tx_logs {
         let mut vaa = None;
 
-        let recipient = if let Ok(init_log) = log.log_decode::<InitTransfer>() {
-            init_log.inner.recipient.parse::<OmniAddress>().ok()
-        } else if let Ok(fin_log) = log.log_decode::<FinTransfer>() {
-            fin_log
-                .inner
-                .recipient
-                .to_string()
-                .parse::<OmniAddress>()
-                .ok()
-        } else {
-            None
+        let (chain_id, bridge_token_factory) = match chain_kind {
+            ChainKind::Eth => (
+                config.wormhole.eth_chain_id,
+                config.eth.bridge_token_factory_address,
+            ),
+            ChainKind::Base => (
+                config.wormhole.base_chain_id,
+                config.base.bridge_token_factory_address,
+            ),
+            ChainKind::Arb => (
+                config.wormhole.arb_chain_id,
+                config.arb.bridge_token_factory_address,
+            ),
+            _ => unreachable!("VAA is only supported for EVM chains"),
         };
 
-        if let Some(address) = recipient {
-            let (chain_id, bridge_token_factory) = match address.get_chain() {
-                ChainKind::Eth => (
-                    config.wormhole.eth_chain_id,
-                    config.eth.bridge_token_factory_address,
-                ),
-                ChainKind::Base => (
-                    config.wormhole.base_chain_id,
-                    config.base.bridge_token_factory_address,
-                ),
-                ChainKind::Arb => (
-                    config.wormhole.arb_chain_id,
-                    config.arb.bridge_token_factory_address,
-                ),
-                _ => unreachable!("VAA is only supported for EVM chains"),
-            };
-
-            for log in tx_logs.inner.logs() {
-                if let Ok(log) = log.log_decode::<LogMessagePublished>() {
-                    vaa = connector
-                        .wormhole_get_vaa(chain_id, bridge_token_factory, log.inner.sequence)
-                        .await
-                        .ok();
-                }
+        for log in tx_logs.inner.logs() {
+            if let Ok(log) = log.log_decode::<LogMessagePublished>() {
+                vaa = connector
+                    .wormhole_get_vaa(chain_id, bridge_token_factory, log.inner.sequence)
+                    .await
+                    .ok();
             }
         }
 

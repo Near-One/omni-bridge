@@ -62,6 +62,7 @@ pub fn build_omni_connector(
         .eth_bridge_client(Some(eth_bridge_client))
         .base_bridge_client(Some(base_bridge_client))
         .arb_bridge_client(Some(arb_bridge_client))
+        .solana_bridge_client(None)
         .wormhole_bridge_client(Some(wormhole_bridge_client))
         .build()
         .context("Failed to build OmniConnector")

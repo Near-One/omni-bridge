@@ -126,8 +126,8 @@ pub async fn finalize_transfer(
 
                         let vaa = utils::evm::get_vaa(
                             connector.clone(),
+                            init_transfer_with_timestamp.chain_kind,
                             init_transfer_with_timestamp.tx_logs,
-                            &init_transfer_with_timestamp.log,
                             &config,
                         )
                         .await;

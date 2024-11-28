@@ -249,8 +249,8 @@ pub async fn claim_fee(
             if let Ok(fin_transfer) = serde_json::from_str::<FinTransfer>(&event) {
                 let vaa = utils::evm::get_vaa(
                     connector.clone(),
+                    fin_transfer.chain_kind,
                     fin_transfer.tx_logs,
-                    &fin_transfer.log,
                     &config,
                 )
                 .await;
