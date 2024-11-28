@@ -2,12 +2,14 @@ use log::warn;
 use redis::{aio::MultiplexedConnection, AsyncCommands};
 
 pub const NEAR_LAST_PROCESSED_BLOCK: &str = "near_last_processed_block";
+pub const ETH_LAST_PROCESSED_BLOCK: &str = "eth_last_processed_block";
+pub const BASE_LAST_PROCESSED_BLOCK: &str = "base_last_processed_block";
+pub const ARB_LAST_PROCESSED_BLOCK: &str = "arb_last_processed_block";
+
 pub const NEAR_INIT_TRANSFER_QUEUE: &str = "near_init_transfer_queue";
 pub const NEAR_SIGN_TRANSFER_EVENTS: &str = "near_sign_transfer_events";
 pub const NEAR_SIGN_CLAIM_NATIVE_FEE_QUEUE: &str = "near_sign_claim_native_fee_queue";
-pub const NEAR_SIGN_CLAIM_NATIVE_FEE_EVENTS: &str = "near_sign_claim_native_fee_events";
 
-pub const ETH_LAST_PROCESSED_BLOCK: &str = "eth_last_processed_block";
 pub const ETH_WITHDRAW_EVENTS: &str = "eth_withdraw_events";
 
 pub const FINALIZED_TRANSFERS: &str = "finalized_transfers";

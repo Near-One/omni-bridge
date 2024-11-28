@@ -1,16 +1,19 @@
+use std::sync::Arc;
+
 use log::warn;
 
 use near_primitives::borsh::BorshSerialize;
+use omni_connector::OmniConnector;
 use omni_types::{
     prover_args::{EvmVerifyProofArgs, WormholeVerifyProofArgs},
     prover_result::ProofKind,
-    OmniAddress,
+    ChainKind, OmniAddress,
 };
 
 use alloy::{rpc::types::Log, sol};
 use ethereum_types::H256;
 
-use crate::{config, utils};
+use crate::config;
 
 sol!(
     #[derive(Debug, serde::Serialize, serde::Deserialize)]
@@ -43,6 +46,7 @@ sol!(
 );
 
 pub async fn get_vaa(
+    connector: Arc<OmniConnector>,
     tx_logs: Option<alloy::rpc::types::TransactionReceipt>,
     log: &Log,
     config: &config::Config,
@@ -64,22 +68,28 @@ pub async fn get_vaa(
         };
 
         if let Some(address) = recipient {
-            let chain_id = match address {
-                OmniAddress::Eth(_) => 2,
-                OmniAddress::Near(_) => 15,
-                OmniAddress::Sol(_) => 1,
-                OmniAddress::Arb(_) | OmniAddress::Base(_) => todo!(),
+            let (chain_id, bridge_token_factory) = match address.get_chain() {
+                ChainKind::Eth => (
+                    config.wormhole.eth_chain_id,
+                    config.eth.bridge_token_factory_address,
+                ),
+                ChainKind::Base => (
+                    config.wormhole.base_chain_id,
+                    config.base.bridge_token_factory_address,
+                ),
+                ChainKind::Arb => (
+                    config.wormhole.arb_chain_id,
+                    config.arb.bridge_token_factory_address,
+                ),
+                _ => unreachable!("VAA is only supported for EVM chains"),
             };
 
             for log in tx_logs.inner.logs() {
                 if let Ok(log) = log.log_decode::<LogMessagePublished>() {
-                    vaa = utils::wormhole::get_vaa(
-                        chain_id,
-                        config.evm.bridge_token_factory_address,
-                        log.inner.sequence,
-                    )
-                    .await
-                    .ok();
+                    vaa = connector
+                        .wormhole_get_vaa(chain_id, bridge_token_factory, log.inner.sequence)
+                        .await
+                        .ok();
                 }
             }
         }
@@ -108,7 +118,7 @@ pub async fn construct_prover_args(
         Some(prover_args)
     } else {
         let evm_proof_args =
-            match eth_proof::get_proof_for_event(tx_hash, topic, &config.evm.rpc_http_url).await {
+            match eth_proof::get_proof_for_event(tx_hash, topic, &config.eth.rpc_http_url).await {
                 Ok(proof) => proof,
                 Err(err) => {
                     warn!("Failed to get proof: {}", err);

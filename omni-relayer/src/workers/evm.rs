@@ -2,7 +2,6 @@ use std::sync::Arc;
 
 use alloy::rpc::types::{Log, TransactionReceipt};
 use anyhow::Result;
-use borsh::BorshDeserialize;
 use ethereum_types::H256;
 use futures::future::join_all;
 use log::{error, info, warn};
@@ -10,16 +9,14 @@ use log::{error, info, warn};
 use near_primitives::types::AccountId;
 use omni_connector::OmniConnector;
 use omni_types::{
-    locker_args::{FinTransferArgs, StorageDepositArgs},
-    near_events::Nep141LockerEvent,
-    prover_result::ProofKind,
-    ChainKind, Fee, OmniAddress, H160,
+    locker_args::StorageDepositArgs, prover_result::ProofKind, ChainKind, OmniAddress,
 };
 
 use crate::{config, utils};
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub struct InitTransferWithTimestamp {
+    pub chain_kind: ChainKind,
     pub block_number: u64,
     pub log: Log,
     pub tx_logs: Option<TransactionReceipt>,
@@ -94,11 +91,6 @@ pub async fn finalize_transfer(
                             return;
                         };
 
-                        let Ok(sender) = H160::try_from_slice(init_log.inner.sender.as_slice())
-                        else {
-                            warn!("Failed to construct `H160` from sender address");
-                            return;
-                        };
                         let Ok(recipient) = init_log.inner.recipient.parse::<OmniAddress>() else {
                             warn!(
                                 "Failed to parse recipient as OmniAddress: {:?}",
@@ -130,52 +122,10 @@ pub async fn finalize_transfer(
                             return;
                         }
 
-                        let is_fee_sufficient = match utils::fee::is_fee_sufficient(
-                            &config,
-                            &jsonrpc_client,
-                            &OmniAddress::Eth(sender),
-                            &recipient,
-                            &token,
-                            &Fee {
-                                fee: init_log.inner.fee.into(),
-                                native_fee: init_log.inner.nativeFee.into(),
-                            },
-                        )
-                        .await
-                        {
-                            Ok(is_fee_sufficient) => {
-                                if !is_fee_sufficient {
-                                    warn!("Fee is not sufficient for transfer: {:?}", init_log);
-                                }
-
-                                is_fee_sufficient
-                            }
-                            Err(err) => {
-                                warn!("Failed to check fee: {}", err);
-
-                                false
-                            }
-                        };
-
-                        if !is_fee_sufficient {
-                            utils::redis::add_event(
-                                &mut redis_connection,
-                                utils::redis::ETH_WITHDRAW_EVENTS,
-                                tx_hash.to_string(),
-                                InitTransferWithTimestamp {
-                                    block_number: init_transfer_with_timestamp.block_number,
-                                    log: init_transfer_with_timestamp.log,
-                                    tx_logs: init_transfer_with_timestamp.tx_logs,
-                                    creation_timestamp: init_transfer_with_timestamp
-                                        .creation_timestamp,
-                                    last_update_timestamp: Some(current_timestamp),
-                                },
-                            )
-                            .await;
-                            return;
-                        }
+                        // TODO: Use existing API to check if fee is sufficient here
 
                         let vaa = utils::evm::get_vaa(
+                            connector.clone(),
                             init_transfer_with_timestamp.tx_logs,
                             &init_transfer_with_timestamp.log,
                             &config,
@@ -225,16 +175,7 @@ pub async fn finalize_transfer(
                         };
 
                         let storage_deposit_accounts =
-                            if let OmniAddress::Near(near_recipient) = &recipient {
-                                let Ok(recipient_account_id) = near_recipient.parse::<AccountId>()
-                                else {
-                                    warn!(
-                                        "Failed to parse recipient as AccountId: {:?}",
-                                        near_recipient
-                                    );
-                                    return;
-                                };
-
+                            if let OmniAddress::Near(near_recipient) = recipient {
                                 let Ok(sender_has_storage_deposit) =
                                     utils::storage::has_storage_deposit(
                                         &jsonrpc_client,
@@ -250,7 +191,7 @@ pub async fn finalize_transfer(
                                     utils::storage::has_storage_deposit(
                                         &jsonrpc_client,
                                         &token,
-                                        &recipient_account_id,
+                                        &near_recipient,
                                     )
                                     .await
                                 else {
@@ -260,23 +201,23 @@ pub async fn finalize_transfer(
 
                                 vec![
                                     (near_signer.account_id, !sender_has_storage_deposit),
-                                    (recipient_account_id, !recipient_has_storage_deposit),
+                                    (near_recipient, !recipient_has_storage_deposit),
                                 ]
                             } else {
                                 Vec::new()
                             };
 
-                        let fin_transfer_args = FinTransferArgs {
-                            chain_kind: ChainKind::Eth,
-                            native_fee_recipient: Some(config.evm.relayer_address_on_eth.clone()),
-                            storage_deposit_args: StorageDepositArgs {
-                                token,
-                                accounts: storage_deposit_accounts,
-                            },
+                        let storage_deposit_args = StorageDepositArgs {
+                            token,
+                            accounts: storage_deposit_accounts,
+                        };
+                        let fin_transfer_args = omni_connector::FinTransferArgs::NearFinTransfer {
+                            chain_kind: init_transfer_with_timestamp.chain_kind,
+                            storage_deposit_args,
                             prover_args,
                         };
 
-                        match connector.near_fin_transfer(fin_transfer_args).await {
+                        match connector.fin_transfer(fin_transfer_args).await {
                             Ok(tx_hash) => {
                                 info!("Finalized InitTransfer: {:?}", tx_hash);
                                 utils::redis::remove_event(
@@ -302,64 +243,64 @@ pub async fn finalize_transfer(
     }
 }
 
-pub async fn claim_native_fee(
-    redis_client: redis::Client,
-    connector: Arc<OmniConnector>,
-) -> Result<()> {
-    let redis_connection = redis_client.get_multiplexed_tokio_connection().await?;
-
-    loop {
-        let mut redis_connection_clone = redis_connection.clone();
-        let Some(events) = utils::redis::get_events(
-            &mut redis_connection_clone,
-            utils::redis::NEAR_SIGN_CLAIM_NATIVE_FEE_EVENTS.to_string(),
-        )
-        .await
-        else {
-            tokio::time::sleep(tokio::time::Duration::from_secs(
-                utils::redis::SLEEP_TIME_AFTER_EVENTS_PROCESS_SECS,
-            ))
-            .await;
-            continue;
-        };
-
-        let mut handlers = Vec::new();
-        for (key, event) in events {
-            if let Ok(event) = serde_json::from_str::<Nep141LockerEvent>(&event) {
-                handlers.push(tokio::spawn({
-                    let mut redis_connection = redis_connection.clone();
-                    let connector = connector.clone();
-
-                    async move {
-                        let Nep141LockerEvent::SignClaimNativeFeeEvent { .. } = event else {
-                            warn!("Expected SignClaimNativeFeeEvent, got: {:?}", event);
-                            return;
-                        };
-
-                        info!("Received SignClaimNativeFeeEvent log");
-
-                        match connector.evm_claim_native_fee_with_log(event).await {
-                            Ok(tx_hash) => {
-                                info!("Claimed native fee: {:?}", tx_hash);
-                                utils::redis::remove_event(
-                                    &mut redis_connection,
-                                    utils::redis::NEAR_SIGN_CLAIM_NATIVE_FEE_EVENTS,
-                                    key,
-                                )
-                                .await;
-                            }
-                            Err(err) => error!("Failed to claim native fee: {}", err),
-                        }
-                    }
-                }));
-            }
-        }
-
-        join_all(handlers).await;
-
-        tokio::time::sleep(tokio::time::Duration::from_secs(
-            utils::redis::SLEEP_TIME_AFTER_EVENTS_PROCESS_SECS,
-        ))
-        .await;
-    }
-}
+//pub async fn claim_native_fee(
+//    redis_client: redis::Client,
+//    connector: Arc<OmniConnector>,
+//) -> Result<()> {
+//    let redis_connection = redis_client.get_multiplexed_tokio_connection().await?;
+//
+//    loop {
+//        let mut redis_connection_clone = redis_connection.clone();
+//        let Some(events) = utils::redis::get_events(
+//            &mut redis_connection_clone,
+//            utils::redis::NEAR_SIGN_CLAIM_NATIVE_FEE_EVENTS.to_string(),
+//        )
+//        .await
+//        else {
+//            tokio::time::sleep(tokio::time::Duration::from_secs(
+//                utils::redis::SLEEP_TIME_AFTER_EVENTS_PROCESS_SECS,
+//            ))
+//            .await;
+//            continue;
+//        };
+//
+//        let mut handlers = Vec::new();
+//        for (key, event) in events {
+//            if let Ok(event) = serde_json::from_str::<Nep141LockerEvent>(&event) {
+//                handlers.push(tokio::spawn({
+//                    let mut redis_connection = redis_connection.clone();
+//                    let connector = connector.clone();
+//
+//                    async move {
+//                        let Nep141LockerEvent::SignClaimNativeFeeEvent { .. } = event else {
+//                            warn!("Expected SignClaimNativeFeeEvent, got: {:?}", event);
+//                            return;
+//                        };
+//
+//                        info!("Received SignClaimNativeFeeEvent log");
+//
+//                        match connector.evm_claim_native_fee_with_log(event).await {
+//                            Ok(tx_hash) => {
+//                                info!("Claimed native fee: {:?}", tx_hash);
+//                                utils::redis::remove_event(
+//                                    &mut redis_connection,
+//                                    utils::redis::NEAR_SIGN_CLAIM_NATIVE_FEE_EVENTS,
+//                                    key,
+//                                )
+//                                .await;
+//                            }
+//                            Err(err) => error!("Failed to claim native fee: {}", err),
+//                        }
+//                    }
+//                }));
+//            }
+//        }
+//
+//        join_all(handlers).await;
+//
+//        tokio::time::sleep(tokio::time::Duration::from_secs(
+//            utils::redis::SLEEP_TIME_AFTER_EVENTS_PROCESS_SECS,
+//        ))
+//        .await;
+//    }
+//}

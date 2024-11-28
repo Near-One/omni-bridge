@@ -46,7 +46,7 @@ pub async fn get_eth_light_client_last_block_number(
     let request = methods::query::RpcQueryRequest {
         block_reference: BlockReference::latest(),
         request: QueryRequest::CallFunction {
-            account_id: config.evm.eth_light_client.clone(),
+            account_id: config.eth.light_client.clone(),
             method_name: "last_block_number".to_string(),
             args: Vec::new().into(),
         },
@@ -87,7 +87,7 @@ pub async fn handle_streamer_message(
                 utils::redis::add_event(
                     redis_connection,
                     utils::redis::NEAR_INIT_TRANSFER_QUEUE,
-                    transfer_message.origin_nonce.0.to_string(),
+                    transfer_message.origin_nonce.to_string(),
                     crate::workers::near::InitTransferWithTimestamp {
                         event: log,
                         creation_timestamp: chrono::Utc::now().timestamp(),
@@ -103,36 +103,21 @@ pub async fn handle_streamer_message(
                 utils::redis::add_event(
                     redis_connection,
                     utils::redis::NEAR_SIGN_TRANSFER_EVENTS,
-                    message_payload.nonce.0.to_string(),
+                    message_payload.destination_nonce.to_string(),
                     log,
                 )
                 .await;
             }
             Nep141LockerEvent::FinTransferEvent {
-                ref nonce,
                 ref transfer_message,
             } => {
-                if nonce.is_some() {
-                    utils::redis::add_event(
-                        redis_connection,
-                        utils::redis::NEAR_INIT_TRANSFER_QUEUE,
-                        transfer_message.origin_nonce.0.to_string(),
-                        crate::workers::near::InitTransferWithTimestamp {
-                            event: log,
-                            creation_timestamp: chrono::Utc::now().timestamp(),
-                            last_update_timestamp: None,
-                        },
-                    )
-                    .await;
-                } else {
-                    utils::redis::add_event(
-                        redis_connection,
-                        utils::redis::NEAR_SIGN_CLAIM_NATIVE_FEE_QUEUE,
-                        transfer_message.origin_nonce.0.to_string(),
-                        log,
-                    )
-                    .await;
-                }
+                utils::redis::add_event(
+                    redis_connection,
+                    utils::redis::NEAR_SIGN_CLAIM_NATIVE_FEE_QUEUE,
+                    transfer_message.origin_nonce.to_string(),
+                    log,
+                )
+                .await;
             }
             Nep141LockerEvent::ClaimFeeEvent {
                 ref transfer_message,
@@ -140,28 +125,10 @@ pub async fn handle_streamer_message(
                 utils::redis::add_event(
                     redis_connection,
                     utils::redis::NEAR_SIGN_CLAIM_NATIVE_FEE_QUEUE,
-                    transfer_message.origin_nonce.0.to_string(),
+                    transfer_message.origin_nonce.to_string(),
                     log,
                 )
                 .await;
-            }
-            Nep141LockerEvent::SignClaimNativeFeeEvent {
-                ref claim_payload, ..
-            } => {
-                if claim_payload.recipient == config.evm.relayer_address_on_eth {
-                    utils::redis::add_event(
-                        redis_connection,
-                        utils::redis::NEAR_SIGN_CLAIM_NATIVE_FEE_EVENTS,
-                        claim_payload
-                            .nonces
-                            .iter()
-                            .map(|nonce| nonce.0.to_string())
-                            .collect::<Vec<_>>()
-                            .join(","),
-                        log,
-                    )
-                    .await;
-                }
             }
             Nep141LockerEvent::LogMetadataEvent { .. } => {}
         }

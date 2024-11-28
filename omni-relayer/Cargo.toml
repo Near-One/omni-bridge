@@ -22,19 +22,27 @@ tokio = { version = "1", features = ["sync", "time", "macros", "rt-multi-thread"
 tokio-stream = { version = "0.1" }
 
 ethereum-types = "0.14.1"
-omni-types = { git = "https://github.com/near-one/omni-bridge", package = "omni-types", rev = "234cc6af6920027f779b842a6d8afc00530ddbc2" }
+omni-types = { git = "https://github.com/near-one/omni-bridge", package = "omni-types", rev = "303ca7bc7cdb39c4a356b65b10221259a632ac54" }
 
 near-lake-framework = "0.7.9"
 near-jsonrpc-client = "0.13.0"
 near-jsonrpc-primitives = "0.26.0"
 near-primitives = "0.26.0"
 near-crypto = "0.26.0"
-eth-proof = { git = "https://github.com/Near-One/rainbow-bridge-sdk-rs", package = "eth-proof" }
-omni-connector = { git = "https://github.com/Near-One/rainbow-bridge-sdk-rs", package = "omni-connector" }
 
 hex = "0.4.3"
 secp256k1 = "0.30.0"
-alloy = { version = "0.4.2", features = ["node-bindings", "providers", "rpc-types", "sol-types", "provider-ws", "signers", "signer-local"] }
+alloy = { version = "0.6.4", features = ["node-bindings", "providers", "rpc-types", "sol-types", "provider-ws", "signers", "signer-local"] }
 
 redis = { version = "0.27.0", features = ["aio", "tokio-comp"] }
 reqwest = "0.12"
+
+eth-proof = { git = "https://github.com/Near-One/rainbow-bridge-sdk-rs", package = "eth-proof", branch = "refactor/connectors" }
+
+near-bridge-client = { git = "https://github.com/Near-One/rainbow-bridge-sdk-rs", package = "near-bridge-client", branch = "refactor/connectors" }
+evm-bridge-client = { git = "https://github.com/Near-One/rainbow-bridge-sdk-rs", package = "evm-bridge-client", branch = "refactor/connectors" }
+solana-bridge-client = { git = "https://github.com/Near-One/rainbow-bridge-sdk-rs", package = "solana-bridge-client", branch = "refactor/connectors" }
+wormhole-bridge-client = { git = "https://github.com/Near-One/rainbow-bridge-sdk-rs", package = "wormhole-bridge-client", branch = "refactor/connectors" }
+
+omni-connector = { git = "https://github.com/Near-One/rainbow-bridge-sdk-rs", package = "omni-connector", branch = "refactor/connectors" }
+

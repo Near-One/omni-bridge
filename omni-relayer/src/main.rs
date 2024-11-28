@@ -32,7 +32,7 @@ async fn main() -> Result<()> {
     let jsonrpc_client = near_jsonrpc_client::JsonRpcClient::connect(config.near.rpc_url.clone());
     let near_signer = startup::near::create_signer(config.near.credentials_path.clone())?;
 
-    let connector = Arc::new(startup::build_connector(&config, &near_signer)?);
+    let connector = Arc::new(startup::build_omni_connector(&config, &near_signer)?);
 
     let mut handles = Vec::new();
 
@@ -40,10 +40,7 @@ async fn main() -> Result<()> {
         let config = config.clone();
         let redis_client = redis_client.clone();
         let connector = connector.clone();
-        let jsonrpc_client = jsonrpc_client.clone();
-        async move {
-            workers::near::sign_transfer(config, redis_client, connector, jsonrpc_client).await
-        }
+        async move { workers::near::sign_transfer(config, redis_client, connector).await }
     }));
     handles.push(tokio::spawn({
         let redis_client = redis_client.clone();
@@ -81,11 +78,6 @@ async fn main() -> Result<()> {
             .await
         }
     }));
-    handles.push(tokio::spawn({
-        let redis_client = redis_client.clone();
-        let connector = connector.clone();
-        async move { workers::evm::claim_native_fee(redis_client, connector).await }
-    }));
 
     handles.push(tokio::spawn({
         let config = config.clone();
@@ -96,7 +88,17 @@ async fn main() -> Result<()> {
     handles.push(tokio::spawn({
         let config = config.clone();
         let redis_client = redis_client.clone();
-        async move { startup::evm::start_indexer(config, redis_client).await }
+        async move { startup::evm::start_eth_indexer(config, redis_client).await }
+    }));
+    handles.push(tokio::spawn({
+        let config = config.clone();
+        let redis_client = redis_client.clone();
+        async move { startup::evm::start_base_indexer(config, redis_client).await }
+    }));
+    handles.push(tokio::spawn({
+        let config = config.clone();
+        let redis_client = redis_client.clone();
+        async move { startup::evm::start_arb_indexer(config, redis_client).await }
     }));
 
     tokio::select! {
