@@ -486,14 +486,7 @@ pub struct BasicMetadata {
     pub decimals: u8,
 }
 
-#[derive(
-    BorshDeserialize,
-    BorshSerialize,
-    Debug,
-    Clone,
-    PartialEq,
-    Eq,
-)]
+#[derive(BorshDeserialize, BorshSerialize, Debug, Clone, PartialEq, Eq)]
 pub struct FastTransfer {
     pub transfer_id: TransferId,
     pub token: AccountId,
