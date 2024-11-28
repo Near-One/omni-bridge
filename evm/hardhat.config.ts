@@ -145,8 +145,12 @@ task("upgrade-factory", "Upgrades the OmniBridge contract")
   .addParam("factory", "The address of the OmniBridge contract")
   .setAction(async (taskArgs, hre) => {
     const { ethers, upgrades } = hre
+    const networkConfig = hre.network.config as HttpNetworkUserConfig
+    const wormholeAddress = networkConfig.wormholeAddress
+    const isWormholeContract = wormholeAddress ?? false
+    const contractName = isWormholeContract ? "OmniBridgeWormhole" : "OmniBridge"
 
-    const OmniBridgeContract = await ethers.getContractFactory("OmniBridge")
+    const OmniBridgeContract = await ethers.getContractFactory(contractName)
     console.log(
       "Current implementation address:",
       await upgrades.erc1967.getImplementationAddress(taskArgs.factory),
