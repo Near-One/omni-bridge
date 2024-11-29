@@ -11,7 +11,7 @@ class FinTransferWormholeMessage {
     struct: {
       messageType: "u8",
       originChain: "u8",
-      originNonce: "u128",
+      originNonce: "u64",
       omniBridgeChainId: "u8",
       tokenAddress: { array: { type: "u8", len: 20 } },
       amount: "u128",
@@ -42,7 +42,7 @@ class InitTransferWormholeMessage {
       sender: { array: { type: "u8", len: 20 } },
       destinationChainId: "u8",
       tokenAddress: { array: { type: "u8", len: 20 } },
-      originNonce: "u128",
+      originNonce: "u64",
       amount: "u128",
       fee: "u128",
       nativeFee: "u128",
