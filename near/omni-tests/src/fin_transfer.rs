@@ -1,8 +1,8 @@
 #[cfg(test)]
 mod tests {
     use crate::helpers::tests::{
-        account_1, account_2, eth_eoa_address, eth_factory_address, relayer_account_id,
-        LOCKER_PATH, MOCK_PROVER_PATH, MOCK_TOKEN_PATH, NEP141_DEPOSIT,
+        account_n, eth_eoa_address, eth_factory_address, relayer_account_id, LOCKER_PATH,
+        MOCK_PROVER_PATH, MOCK_TOKEN_PATH, NEP141_DEPOSIT,
     };
     use near_sdk::{borsh, json_types::U128, serde_json::json, AccountId};
     use near_workspaces::types::NearToken;
@@ -14,46 +14,46 @@ mod tests {
     use rstest::rstest;
 
     #[rstest]
-    #[case(vec![(account_1(), true), (relayer_account_id(), true)], 1000, 1, None)]
-    #[case(vec![(account_1(), true)], 1000, 0, None)]
+    #[case(vec![(account_n(1), true), (relayer_account_id(), true)], 1000, 1, None)]
+    #[case(vec![(account_n(1), true)], 1000, 0, None)]
     #[case(
         vec![
-            (account_1(), true),
+            (account_n(1), true),
             (relayer_account_id(), true),
-            (account_2(), true),
-            (account_2(), true),
+            (account_n(2), true),
+            (account_n(2), true),
         ],
         1000,
         1,
         Some("Invalid len of accounts for storage deposit")
     )]
     #[case(
-        vec![(relayer_account_id(), true), (account_1(), true)],
+        vec![(relayer_account_id(), true), (account_n(1), true)],
         1000,
         1,
         Some("STORAGE_ERR: The transfer recipient is omitted")
     )]
     #[case(
-        vec![(account_1(), true)],
+        vec![(account_n(1), true)],
         1000,
         1,
         Some("STORAGE_ERR: The fee recipient is omitted")
     )]
     #[case(vec![], 1000, 1, Some("STORAGE_ERR: The transfer recipient is omitted"))]
     #[case(
-        vec![(account_1(), false), (relayer_account_id(), false)],
+        vec![(account_n(1), false), (relayer_account_id(), false)],
         1000,
         1,
         Some("STORAGE_ERR: The transfer recipient is omitted")
     )]
     #[case(
-        vec![(account_1(), true), (relayer_account_id(), false)],
+        vec![(account_n(1), true), (relayer_account_id(), false)],
         1000,
         1,
         Some("STORAGE_ERR: The fee recipient is omitted")
     )]
     #[case(
-        vec![(account_1(), false), (relayer_account_id(), true)],
+        vec![(account_n(1), false), (relayer_account_id(), true)],
         1000,
         1,
         Some("STORAGE_ERR: The transfer recipient is omitted")
@@ -188,7 +188,7 @@ mod tests {
                 prover_args: borsh::to_vec(&ProverResult::InitTransfer(InitTransferMessage {
                     origin_nonce: 1,
                     token: OmniAddress::Near(token_contract.id().clone()),
-                    recipient: OmniAddress::Near(account_1()),
+                    recipient: OmniAddress::Near(account_n(1)),
                     amount: U128(amount),
                     fee: Fee {
                         fee: U128(fee),
@@ -210,7 +210,7 @@ mod tests {
         let recipient_balance: U128 = token_contract
             .view("ft_balance_of")
             .args_json(json!({
-                "account_id": account_1(),
+                "account_id": account_n(1),
             }))
             .await?
             .json()?;

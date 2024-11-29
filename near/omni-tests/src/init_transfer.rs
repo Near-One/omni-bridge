@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod tests {
     use crate::helpers::tests::{
-        account_1, eth_eoa_address, eth_factory_address, eth_token_address, get_bind_token_args,
+        account_n, eth_eoa_address, eth_factory_address, eth_token_address, get_bind_token_args,
         get_claim_fee_args_near, get_event_data, relayer_account_id, LOCKER_PATH, MOCK_PROVER_PATH,
         MOCK_TOKEN_PATH, NEP141_DEPOSIT,
     };
@@ -82,7 +82,7 @@ mod tests {
 
             // Create sender account. (Default account in sandbox has 100 NEAR)
             let sender_account = worker
-                .create_tla(account_1(), worker.dev_generate().await.1)
+                .create_tla(account_n(1), worker.dev_generate().await.1)
                 .await?
                 .unwrap();
 

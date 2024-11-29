@@ -3,9 +3,9 @@ pub mod tests {
     use near_sdk::{borsh, json_types::U128, serde_json, AccountId};
     use near_workspaces::types::NearToken;
     use omni_types::{
-        locker_args::{BindTokenArgs, ClaimFeeArgs},
-        prover_result::{DeployTokenMessage, FinTransferMessage, ProverResult},
-        ChainKind, Nonce, OmniAddress, TransferId,
+        locker_args::{BindTokenArgs, ClaimFeeArgs, DeployTokenArgs},
+        prover_result::{DeployTokenMessage, FinTransferMessage, LogMetadataMessage, ProverResult},
+        BasicMetadata, ChainKind, Nonce, OmniAddress, TransferId,
     };
 
     pub const MOCK_TOKEN_PATH: &str = "./../target/wasm32-unknown-unknown/release/mock_token.wasm";
@@ -13,17 +13,15 @@ pub mod tests {
         "./../target/wasm32-unknown-unknown/release/mock_prover.wasm";
     pub const LOCKER_PATH: &str = "./../target/wasm32-unknown-unknown/release/omni_bridge.wasm";
     pub const NEP141_DEPOSIT: NearToken = NearToken::from_yoctonear(1250000000000000000000);
+    pub const TOKEN_DEPLOYER_PATH: &str =
+        "./../target/wasm32-unknown-unknown/release/token_deployer.wasm";
 
     pub fn relayer_account_id() -> AccountId {
         "relayer".parse().unwrap()
     }
 
-    pub fn account_1() -> AccountId {
-        "account_1".parse().unwrap()
-    }
-
-    pub fn account_2() -> AccountId {
-        "account_2".parse().unwrap()
+    pub fn account_n(n: u8) -> AccountId {
+        format!("account_{}", n).parse().unwrap()
     }
 
     pub fn eth_factory_address() -> OmniAddress {
@@ -40,6 +38,22 @@ pub mod tests {
 
     pub fn eth_token_address() -> OmniAddress {
         "eth:0x1234567890123456789012345678901234567890"
+            .parse()
+            .unwrap()
+    }
+
+    pub fn sol_token_address() -> OmniAddress {
+        "sol:11111111111111111111111111111111".parse().unwrap()
+    }
+
+    pub fn arb_token_address() -> OmniAddress {
+        "arb:0x1234567890123456789012345678901234567890"
+            .parse()
+            .unwrap()
+    }
+
+    pub fn base_token_address() -> OmniAddress {
+        "base:0x1234567890123456789012345678901234567890"
             .parse()
             .unwrap()
     }
@@ -68,6 +82,28 @@ pub mod tests {
 
         ClaimFeeArgs {
             chain_kind: destination_chain,
+            prover_args,
+        }
+    }
+
+    pub fn get_test_deploy_token_args(
+        chain_kind: ChainKind,
+        token_address: &OmniAddress,
+        token_metadata: &BasicMetadata,
+    ) -> DeployTokenArgs {
+        let log_metadata_message = LogMetadataMessage {
+            token_address: token_address.clone(),
+            name: token_metadata.name.clone(),
+            symbol: token_metadata.symbol.clone(),
+            decimals: token_metadata.decimals,
+            emitter_address: token_address.clone(),
+        };
+
+        let prover_result = ProverResult::LogMetadata(log_metadata_message);
+        let prover_args = borsh::to_vec(&prover_result).expect("Failed to serialize prover result");
+
+        DeployTokenArgs {
+            chain_kind,
             prover_args,
         }
     }
