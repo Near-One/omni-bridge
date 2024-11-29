@@ -256,7 +256,7 @@ contract OmniBridge is
     function initTransferExtension(
         address sender,
         address tokenAddress,
-        uint128 originNonce,
+        uint64 originNonce,
         uint128 amount,
         uint128 fee,
         uint128 nativeFee,
