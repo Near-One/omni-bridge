@@ -352,347 +352,16 @@ export type BridgeTokenFactory = {
       ]
     },
     {
-      "name": "finalizeTransferBridged",
+      "name": "finalizeTransfer",
       "discriminator": [
-        9,
-        113,
-        68,
-        220,
-        238,
-        32,
-        44,
-        13
-      ],
-      "accounts": [
-        {
-          "name": "config",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  99,
-                  111,
-                  110,
-                  102,
-                  105,
-                  103
-                ]
-              }
-            ]
-          }
-        },
-        {
-          "name": "usedNonces",
-          "writable": true
-        },
-        {
-          "name": "recipient"
-        },
-        {
-          "name": "authority",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  97,
-                  117,
-                  116,
-                  104,
-                  111,
-                  114,
-                  105,
-                  116,
-                  121
-                ]
-              }
-            ]
-          }
-        },
-        {
-          "name": "mint",
-          "writable": true
-        },
-        {
-          "name": "tokenAccount",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "account",
-                "path": "recipient"
-              },
-              {
-                "kind": "const",
-                "value": [
-                  6,
-                  221,
-                  246,
-                  225,
-                  215,
-                  101,
-                  161,
-                  147,
-                  217,
-                  203,
-                  225,
-                  70,
-                  206,
-                  235,
-                  121,
-                  172,
-                  28,
-                  180,
-                  133,
-                  237,
-                  95,
-                  91,
-                  55,
-                  145,
-                  58,
-                  140,
-                  245,
-                  133,
-                  126,
-                  255,
-                  0,
-                  169
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "mint"
-              }
-            ],
-            "program": {
-              "kind": "const",
-              "value": [
-                140,
-                151,
-                37,
-                143,
-                78,
-                36,
-                137,
-                241,
-                187,
-                61,
-                16,
-                41,
-                20,
-                142,
-                13,
-                131,
-                11,
-                90,
-                19,
-                153,
-                218,
-                255,
-                16,
-                132,
-                4,
-                142,
-                123,
-                216,
-                219,
-                233,
-                248,
-                89
-              ]
-            }
-          }
-        },
-        {
-          "name": "wormhole",
-          "accounts": [
-            {
-              "name": "config",
-              "docs": [
-                "Used as an emitter"
-              ],
-              "pda": {
-                "seeds": [
-                  {
-                    "kind": "const",
-                    "value": [
-                      99,
-                      111,
-                      110,
-                      102,
-                      105,
-                      103
-                    ]
-                  }
-                ]
-              }
-            },
-            {
-              "name": "bridge",
-              "docs": [
-                "Wormhole bridge data account (a.k.a. its config).",
-                "[`wormhole::post_message`] requires this account be mutable."
-              ],
-              "writable": true,
-              "pda": {
-                "seeds": [
-                  {
-                    "kind": "const",
-                    "value": [
-                      66,
-                      114,
-                      105,
-                      100,
-                      103,
-                      101
-                    ]
-                  }
-                ]
-              }
-            },
-            {
-              "name": "feeCollector",
-              "docs": [
-                "Wormhole fee collector account, which requires lamports before the",
-                "program can post a message (if there is a fee).",
-                "[`wormhole::post_message`] requires this account be mutable."
-              ],
-              "writable": true,
-              "pda": {
-                "seeds": [
-                  {
-                    "kind": "const",
-                    "value": [
-                      102,
-                      101,
-                      101,
-                      95,
-                      99,
-                      111,
-                      108,
-                      108,
-                      101,
-                      99,
-                      116,
-                      111,
-                      114
-                    ]
-                  }
-                ]
-              }
-            },
-            {
-              "name": "sequence",
-              "docs": [
-                "message is posted, so it needs to be an [UncheckedAccount] for the",
-                "[`initialize`](crate::initialize) instruction.",
-                "[`wormhole::post_message`] requires this account be mutable."
-              ],
-              "writable": true,
-              "pda": {
-                "seeds": [
-                  {
-                    "kind": "const",
-                    "value": [
-                      83,
-                      101,
-                      113,
-                      117,
-                      101,
-                      110,
-                      99,
-                      101
-                    ]
-                  },
-                  {
-                    "kind": "account",
-                    "path": "config"
-                  }
-                ]
-              }
-            },
-            {
-              "name": "message",
-              "docs": [
-                "account be mutable."
-              ],
-              "writable": true,
-              "signer": true
-            },
-            {
-              "name": "payer",
-              "writable": true,
-              "signer": true
-            },
-            {
-              "name": "clock",
-              "address": "SysvarC1ock11111111111111111111111111111111"
-            },
-            {
-              "name": "rent",
-              "address": "SysvarRent111111111111111111111111111111111"
-            },
-            {
-              "name": "wormholeProgram",
-              "docs": [
-                "Wormhole program."
-              ],
-              "address": "worm2ZoG2kUd4vFXhvjh93UUH596ayRfgQ2MgjNMTth"
-            },
-            {
-              "name": "systemProgram",
-              "address": "11111111111111111111111111111111"
-            }
-          ]
-        },
-        {
-          "name": "associatedTokenProgram",
-          "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
-        },
-        {
-          "name": "systemProgram",
-          "address": "11111111111111111111111111111111"
-        },
-        {
-          "name": "tokenProgram",
-          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
-        }
-      ],
-      "args": [
-        {
-          "name": "data",
-          "type": {
-            "defined": {
-              "name": "signedPayload",
-              "generics": [
-                {
-                  "kind": "type",
-                  "type": {
-                    "defined": {
-                      "name": "finalizeTransferPayload"
-                    }
-                  }
-                }
-              ]
-            }
-          }
-        }
-      ]
-    },
-    {
-      "name": "finalizeTransferNative",
-      "discriminator": [
-        27,
-        208,
-        189,
-        73,
-        113,
-        171,
-        160,
-        204
+        124,
+        126,
+        103,
+        188,
+        144,
+        65,
+        135,
+        51
       ],
       "accounts": [
         {
@@ -749,6 +418,7 @@ export type BridgeTokenFactory = {
         {
           "name": "vault",
           "writable": true,
+          "optional": true,
           "pda": {
             "seeds": [
               {
@@ -1034,16 +704,268 @@ export type BridgeTokenFactory = {
       ]
     },
     {
-      "name": "initTransferBridged",
+      "name": "finalizeTransferSol",
       "discriminator": [
-        102,
-        4,
-        222,
-        127,
-        222,
-        254,
-        91,
-        156
+        104,
+        27,
+        121,
+        69,
+        3,
+        70,
+        217,
+        66
+      ],
+      "accounts": [
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "usedNonces",
+          "writable": true
+        },
+        {
+          "name": "authority",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "recipient",
+          "writable": true
+        },
+        {
+          "name": "solVault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  111,
+                  108,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "wormhole",
+          "accounts": [
+            {
+              "name": "config",
+              "docs": [
+                "Used as an emitter"
+              ],
+              "pda": {
+                "seeds": [
+                  {
+                    "kind": "const",
+                    "value": [
+                      99,
+                      111,
+                      110,
+                      102,
+                      105,
+                      103
+                    ]
+                  }
+                ]
+              }
+            },
+            {
+              "name": "bridge",
+              "docs": [
+                "Wormhole bridge data account (a.k.a. its config).",
+                "[`wormhole::post_message`] requires this account be mutable."
+              ],
+              "writable": true,
+              "pda": {
+                "seeds": [
+                  {
+                    "kind": "const",
+                    "value": [
+                      66,
+                      114,
+                      105,
+                      100,
+                      103,
+                      101
+                    ]
+                  }
+                ]
+              }
+            },
+            {
+              "name": "feeCollector",
+              "docs": [
+                "Wormhole fee collector account, which requires lamports before the",
+                "program can post a message (if there is a fee).",
+                "[`wormhole::post_message`] requires this account be mutable."
+              ],
+              "writable": true,
+              "pda": {
+                "seeds": [
+                  {
+                    "kind": "const",
+                    "value": [
+                      102,
+                      101,
+                      101,
+                      95,
+                      99,
+                      111,
+                      108,
+                      108,
+                      101,
+                      99,
+                      116,
+                      111,
+                      114
+                    ]
+                  }
+                ]
+              }
+            },
+            {
+              "name": "sequence",
+              "docs": [
+                "message is posted, so it needs to be an [UncheckedAccount] for the",
+                "[`initialize`](crate::initialize) instruction.",
+                "[`wormhole::post_message`] requires this account be mutable."
+              ],
+              "writable": true,
+              "pda": {
+                "seeds": [
+                  {
+                    "kind": "const",
+                    "value": [
+                      83,
+                      101,
+                      113,
+                      117,
+                      101,
+                      110,
+                      99,
+                      101
+                    ]
+                  },
+                  {
+                    "kind": "account",
+                    "path": "config"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "message",
+              "docs": [
+                "account be mutable."
+              ],
+              "writable": true,
+              "signer": true
+            },
+            {
+              "name": "payer",
+              "writable": true,
+              "signer": true
+            },
+            {
+              "name": "clock",
+              "address": "SysvarC1ock11111111111111111111111111111111"
+            },
+            {
+              "name": "rent",
+              "address": "SysvarRent111111111111111111111111111111111"
+            },
+            {
+              "name": "wormholeProgram",
+              "docs": [
+                "Wormhole program."
+              ],
+              "address": "worm2ZoG2kUd4vFXhvjh93UUH596ayRfgQ2MgjNMTth"
+            },
+            {
+              "name": "systemProgram",
+              "address": "11111111111111111111111111111111"
+            }
+          ]
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "data",
+          "type": {
+            "defined": {
+              "name": "signedPayload",
+              "generics": [
+                {
+                  "kind": "type",
+                  "type": {
+                    "defined": {
+                      "name": "finalizeTransferPayload"
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "initTransfer",
+      "discriminator": [
+        174,
+        50,
+        134,
+        99,
+        122,
+        243,
+        243,
+        224
       ],
       "accounts": [
         {
@@ -1076,7 +998,53 @@ export type BridgeTokenFactory = {
           "writable": true
         },
         {
+          "name": "vault",
+          "writable": true,
+          "optional": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "solVault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  111,
+                  108,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              }
+            ]
+          }
+        },
+        {
           "name": "user",
+          "writable": true,
           "signer": true
         },
         {
@@ -1222,8 +1190,7 @@ export type BridgeTokenFactory = {
           ]
         },
         {
-          "name": "tokenProgram",
-          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+          "name": "tokenProgram"
         }
       ],
       "args": [
@@ -1238,16 +1205,16 @@ export type BridgeTokenFactory = {
       ]
     },
     {
-      "name": "initTransferNative",
+      "name": "initTransferSol",
       "discriminator": [
-        253,
-        5,
-        175,
-        189,
-        176,
-        62,
-        114,
-        77
+        124,
+        167,
+        164,
+        191,
+        81,
+        140,
+        108,
+        30
       ],
       "accounts": [
         {
@@ -1272,36 +1239,30 @@ export type BridgeTokenFactory = {
           }
         },
         {
-          "name": "mint"
-        },
-        {
-          "name": "from",
-          "writable": true
-        },
-        {
-          "name": "vault",
+          "name": "solVault",
           "writable": true,
           "pda": {
             "seeds": [
               {
                 "kind": "const",
                 "value": [
+                  115,
+                  111,
+                  108,
+                  95,
                   118,
                   97,
                   117,
                   108,
                   116
                 ]
-              },
-              {
-                "kind": "account",
-                "path": "mint"
               }
             ]
           }
         },
         {
           "name": "user",
+          "writable": true,
           "signer": true
         },
         {
@@ -1445,9 +1406,6 @@ export type BridgeTokenFactory = {
               "address": "11111111111111111111111111111111"
             }
           ]
-        },
-        {
-          "name": "tokenProgram"
         }
       ],
       "args": [
@@ -1510,6 +1468,28 @@ export type BridgeTokenFactory = {
                   105,
                   116,
                   121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "solVault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  111,
+                  108,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
                 ]
               }
             ]
@@ -1651,16 +1631,16 @@ export type BridgeTokenFactory = {
       ]
     },
     {
-      "name": "registerMint",
+      "name": "logMetadata",
       "discriminator": [
-        242,
-        43,
-        74,
-        162,
-        217,
-        214,
-        191,
-        171
+        168,
+        157,
+        195,
+        79,
+        96,
+        210,
+        208,
+        2
       ],
       "accounts": [
         {
@@ -1686,11 +1666,6 @@ export type BridgeTokenFactory = {
         },
         {
           "name": "mint"
-        },
-        {
-          "name": "overrideAuthority",
-          "signer": true,
-          "optional": true
         },
         {
           "name": "metadata",
@@ -1872,16 +1847,7 @@ export type BridgeTokenFactory = {
           "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
         }
       ],
-      "args": [
-        {
-          "name": "metadataOverride",
-          "type": {
-            "defined": {
-              "name": "metadataOverride"
-            }
-          }
-        }
-      ]
+      "args": []
     }
   ],
   "accounts": [
@@ -1925,19 +1891,28 @@ export type BridgeTokenFactory = {
     },
     {
       "code": 6002,
-      "name": "nonceAlreadyUsed"
+      "name": "nonceAlreadyUsed",
+      "msg": "Nonce already used"
     },
     {
       "code": 6003,
-      "name": "unauthorized"
+      "name": "tokenMetadataNotProvided",
+      "msg": "Token metadata not provided"
     },
     {
       "code": 6004,
-      "name": "tokenMetadataNotProvided"
+      "name": "invalidTokenMetadataAddress",
+      "msg": "Invalid token metadata address"
     },
     {
       "code": 6005,
-      "name": "solanaTokenParsingFailed"
+      "name": "invalidBridgedToken",
+      "msg": "Invalid bridged token"
+    },
+    {
+      "code": 6006,
+      "name": "invalidFee",
+      "msg": "Invalid fee"
     }
   ],
   "types": [
@@ -1952,7 +1927,7 @@ export type BridgeTokenFactory = {
           },
           {
             "name": "maxUsedNonce",
-            "type": "u128"
+            "type": "u64"
           },
           {
             "name": "derivedNearBridgeAddress",
@@ -1985,6 +1960,10 @@ export type BridgeTokenFactory = {
           },
           {
             "name": "authority",
+            "type": "u8"
+          },
+          {
+            "name": "solVault",
             "type": "u8"
           },
           {
@@ -2028,8 +2007,16 @@ export type BridgeTokenFactory = {
         "kind": "struct",
         "fields": [
           {
-            "name": "nonce",
-            "type": "u128"
+            "name": "destinationNonce",
+            "type": "u64"
+          },
+          {
+            "name": "transferId",
+            "type": {
+              "defined": {
+                "name": "transferId"
+              }
+            }
           },
           {
             "name": "amount",
@@ -2060,22 +2047,10 @@ export type BridgeTokenFactory = {
           {
             "name": "fee",
             "type": "u128"
-          }
-        ]
-      }
-    },
-    {
-      "name": "metadataOverride",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "name",
-            "type": "string"
           },
           {
-            "name": "symbol",
-            "type": "string"
+            "name": "nativeFee",
+            "type": "u64"
           }
         ]
       }
@@ -2105,6 +2080,22 @@ export type BridgeTokenFactory = {
                 65
               ]
             }
+          }
+        ]
+      }
+    },
+    {
+      "name": "transferId",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "originChain",
+            "type": "u8"
+          },
+          {
+            "name": "originNonce",
+            "type": "u64"
           }
         ]
       }
@@ -2156,6 +2147,11 @@ export type BridgeTokenFactory = {
       "name": "solanaOmniBridgeChainId",
       "type": "u8",
       "value": "2"
+    },
+    {
+      "name": "solVaultSeed",
+      "type": "bytes",
+      "value": "[115, 111, 108, 95, 118, 97, 117, 108, 116]"
     },
     {
       "name": "usedNoncesAccountSize",

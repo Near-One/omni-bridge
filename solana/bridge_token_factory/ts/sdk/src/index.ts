@@ -1,4 +1,4 @@
-import {IdlAccounts, Program, Provider} from '@coral-xyz/anchor';
+import {IdlAccounts, IdlTypes, Program, Provider} from '@coral-xyz/anchor';
 
 import {BridgeTokenFactory} from './bridge_token_factory';
 import * as BridgeTokenFactoryIdl from './bridge_token_factory.json';
@@ -26,6 +26,7 @@ export type TransactionData = {
 };
 
 export type ConfigAccount = IdlAccounts<BridgeTokenFactory>['config'];
+export type TransferId = IdlTypes<BridgeTokenFactory>['transferId'];
 
 const MPL_PROGRAM_ID = new PublicKey(
   'metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s',
@@ -46,6 +47,14 @@ export class OmniBridgeSolanaSDK {
     JSON.parse(
       BridgeTokenFactoryIdl.constants.find(
         ({name}) => name === 'AUTHORITY_SEED',
+      )!.value,
+    ),
+  );
+
+  public static readonly SOL_VAULT_SEED = Buffer.from(
+    JSON.parse(
+      BridgeTokenFactoryIdl.constants.find(
+        ({name}) => name === 'SOL_VAULT_SEED',
       )!.value,
     ),
   );
@@ -89,6 +98,13 @@ export class OmniBridgeSolanaSDK {
   authority(): [PublicKey, number] {
     return PublicKey.findProgramAddressSync(
       [OmniBridgeSolanaSDK.AUTHORITY_SEED],
+      this.programId,
+    );
+  }
+
+  solVault(): [PublicKey, number] {
+    return PublicKey.findProgramAddressSync(
+      [OmniBridgeSolanaSDK.SOL_VAULT_SEED],
       this.programId,
     );
   }
@@ -142,16 +158,22 @@ export class OmniBridgeSolanaSDK {
 
   constructor({
     provider,
+    programId,
     wormholeProgramId,
   }: {
     provider: Provider;
+    programId?: PublicKey;
     wormholeProgramId: PublicKey;
   }) {
     this.wormholeProgramId = wormholeProgramId;
-    this.program = new Program(
-      BridgeTokenFactoryIdl as BridgeTokenFactory,
-      provider,
-    );
+    let idl = BridgeTokenFactoryIdl;
+    if (programId) {
+      idl = {
+        ...BridgeTokenFactoryIdl,
+        address: programId.toBase58(),
+      };
+    }
+    this.program = new Program(idl as BridgeTokenFactory, provider);
   }
 
   get programId(): PublicKey {
@@ -181,13 +203,14 @@ export class OmniBridgeSolanaSDK {
     payer?: PublicKey;
     nearBridge: number[];
     admin?: PublicKey;
-  }): Promise<TransactionData> {
+  }): Promise<TransactionData & {message: PublicKey}> {
     const wormholeMessage = Keypair.generate();
     const instruction = await this.program.methods
       .initialize(admin || this.provider.publicKey!, nearBridge)
       .accountsStrict({
         config: this.configId()[0],
         authority: this.authority()[0],
+        solVault: this.solVault()[0],
         payer: payer || this.provider.publicKey!,
         clock: SYSVAR_CLOCK_PUBKEY,
         rent: SYSVAR_RENT_PUBKEY,
@@ -200,7 +223,11 @@ export class OmniBridgeSolanaSDK {
         program: this.programId,
       })
       .instruction();
-    return {instructions: [instruction], signers: [wormholeMessage]};
+    return {
+      instructions: [instruction],
+      signers: [wormholeMessage],
+      message: wormholeMessage.publicKey,
+    };
   }
 
   async deployToken({
@@ -219,7 +246,7 @@ export class OmniBridgeSolanaSDK {
     signature: number[];
     payer?: PublicKey;
     sequenceNumber?: BN;
-  }): Promise<TransactionData> {
+  }): Promise<TransactionData & {message: PublicKey}> {
     const wormholeMessage = Keypair.generate();
     const [mint] = this.wrappedMintId({token});
     const [metadata] = PublicKey.findProgramAddressSync(
@@ -266,161 +293,26 @@ export class OmniBridgeSolanaSDK {
       })
       .instruction();
 
-    return {instructions: [instruction], signers: [wormholeMessage]};
+    return {
+      instructions: [instruction],
+      signers: [wormholeMessage],
+      message: wormholeMessage.publicKey,
+    };
   }
 
-  async finalizeTransferBridged({
-    nonce,
-    token,
-    amount,
-    recipient,
-    feeRecipient = null,
-    signature,
-    payer,
-    sequenceNumber,
-  }: {
-    nonce: BN;
-    token: string;
-    amount: BN;
-    recipient: PublicKey;
-    feeRecipient?: string | null;
-    signature: number[];
-    payer?: PublicKey;
-    sequenceNumber?: BN;
-  }): Promise<TransactionData> {
-    const wormholeMessage = Keypair.generate();
-
-    if (!sequenceNumber) {
-      sequenceNumber = await this.fetchNextSequenceNumber();
-    }
-
-    const [config] = this.configId();
-    const [usedNonces] = this.usedNoncesId({nonce});
-    const [mint] = this.wrappedMintId({token});
-    const tokenAccount = getAssociatedTokenAddressSync(mint, recipient, true);
-
-    const instruction = await this.program.methods
-      .finalizeTransferBridged({
-        payload: {
-          nonce,
-          token,
-          amount,
-          feeRecipient,
-        },
-        signature,
-      })
-      .accountsStrict({
-        config,
-        usedNonces,
-        wormhole: {
-          config,
-          bridge: this.wormholeBridgeId()[0],
-          feeCollector: this.wormholeFeeCollectorId()[0],
-          sequence: this.wormholeSequenceId()[0],
-          clock: SYSVAR_CLOCK_PUBKEY,
-          rent: SYSVAR_RENT_PUBKEY,
-          systemProgram: SystemProgram.programId,
-          wormholeProgram: this.wormholeProgramId,
-          message: wormholeMessage.publicKey,
-          payer: payer || this.provider.publicKey!,
-        },
-        recipient,
-        authority: this.authority()[0],
-        mint,
-        systemProgram: SystemProgram.programId,
-        tokenProgram: TOKEN_PROGRAM_ID,
-        tokenAccount,
-        associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
-      })
-      .instruction();
-
-    return {instructions: [instruction], signers: [wormholeMessage]};
-  }
-
-  async initTransferBridged({
-    token,
-    from,
-    user,
-    amount,
-    recipient,
-    fee,
-    payer,
-    sequenceNumber,
-  }: {
-    token: string;
-    from?: PublicKey;
-    user?: PublicKey;
-    amount: BN;
-    recipient: string;
-    fee: BN;
-    payer?: PublicKey;
-    sequenceNumber?: BN;
-  }): Promise<TransactionData> {
-    const wormholeMessage = Keypair.generate();
-    const [config] = this.configId();
-    const [mint] = this.wrappedMintId({token});
-
-    if (!sequenceNumber) {
-      sequenceNumber = await this.fetchNextSequenceNumber();
-    }
-
-    if (!user) {
-      user = this.provider.publicKey!;
-    }
-
-    if (!from) {
-      from = getAssociatedTokenAddressSync(mint, user, true);
-    }
-
-    const instruction = await this.program.methods
-      .initTransferBridged({
-        amount,
-        recipient,
-        fee,
-      })
-      .accountsStrict({
-        wormhole: {
-          config,
-          bridge: this.wormholeBridgeId()[0],
-          feeCollector: this.wormholeFeeCollectorId()[0],
-          sequence: this.wormholeSequenceId()[0],
-          clock: SYSVAR_CLOCK_PUBKEY,
-          rent: SYSVAR_RENT_PUBKEY,
-          systemProgram: SystemProgram.programId,
-          wormholeProgram: this.wormholeProgramId,
-          message: wormholeMessage.publicKey,
-          payer: payer || this.provider.publicKey!,
-        },
-        authority: this.authority()[0],
-        mint,
-        tokenProgram: TOKEN_PROGRAM_ID,
-        from,
-        user,
-      })
-      .instruction();
-
-    return {instructions: [instruction], signers: [wormholeMessage]};
-  }
-
-  async registerMint({
+  async logMetadata({
     mint,
-    name = '',
-    symbol = '',
     sequenceNumber,
-    overrideAuthority = null,
     useMetaplex,
     payer,
     token22,
   }: {
     mint: PublicKey;
-    name?: string;
-    symbol?: string;
     sequenceNumber?: BN;
-    overrideAuthority?: PublicKey | null;
     useMetaplex?: boolean;
     payer?: PublicKey;
     token22?: boolean;
-  }): Promise<TransactionData> {
+  }): Promise<TransactionData & {message: PublicKey}> {
     const wormholeMessage = Keypair.generate();
     const [config] = this.configId();
     const [metadata] = PublicKey.findProgramAddressSync(
@@ -441,12 +333,12 @@ export class OmniBridgeSolanaSDK {
       token22 = mintInfo?.owner.equals(TOKEN_2022_PROGRAM_ID);
     }
 
-    if (useMetaplex === undefined && !overrideAuthority && !token22) {
+    if (useMetaplex === undefined && !token22) {
       useMetaplex = true;
     }
 
     const instruction = await this.program.methods
-      .registerMint({name, symbol})
+      .logMetadata()
       .accountsStrict({
         authority: this.authority()[0],
         mint,
@@ -465,18 +357,23 @@ export class OmniBridgeSolanaSDK {
         metadata: useMetaplex ? metadata : null,
         systemProgram: SystemProgram.programId,
         tokenProgram: token22 ? TOKEN_2022_PROGRAM_ID : TOKEN_PROGRAM_ID,
-        overrideAuthority,
         vault: this.vaultId({mint})[0],
         associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
       })
       .instruction();
 
-    return {instructions: [instruction], signers: [wormholeMessage]};
+    return {
+      instructions: [instruction],
+      signers: [wormholeMessage],
+      message: wormholeMessage.publicKey,
+    };
   }
 
-  async finalizeTransferNative({
-    nonce,
+  async finalizeTransfer({
+    destinationNonce,
+    transferId,
     mint,
+    token,
     amount,
     recipient,
     feeRecipient = null,
@@ -485,8 +382,10 @@ export class OmniBridgeSolanaSDK {
     sequenceNumber,
     token22,
   }: {
-    nonce: BN;
-    mint: PublicKey;
+    destinationNonce: BN;
+    transferId: TransferId;
+    mint?: PublicKey;
+    token?: string;
     amount: BN;
     recipient: PublicKey;
     feeRecipient?: string | null;
@@ -494,15 +393,24 @@ export class OmniBridgeSolanaSDK {
     payer?: PublicKey;
     sequenceNumber?: BN;
     token22?: boolean;
-  }): Promise<TransactionData> {
+  }): Promise<TransactionData & {message: PublicKey}> {
     const wormholeMessage = Keypair.generate();
+
+    if (!mint) {
+      if (!token) {
+        throw new Error('One of token/mint must be supplied');
+      }
+      mint = this.wrappedMintId({token})[0];
+    }
+
+    const vault = token ? null : this.vaultId({mint})[0];
 
     if (!sequenceNumber) {
       sequenceNumber = await this.fetchNextSequenceNumber();
     }
 
     const [config] = this.configId();
-    const [usedNonces] = this.usedNoncesId({nonce});
+    const [usedNonces] = this.usedNoncesId({nonce: destinationNonce});
 
     if (token22 === undefined) {
       const mintInfo = await this.provider.connection.getAccountInfo(mint);
@@ -517,9 +425,10 @@ export class OmniBridgeSolanaSDK {
     );
 
     const instruction = await this.program.methods
-      .finalizeTransferNative({
+      .finalizeTransfer({
         payload: {
-          nonce,
+          destinationNonce,
+          transferId,
           amount,
           feeRecipient,
         },
@@ -543,7 +452,7 @@ export class OmniBridgeSolanaSDK {
         },
         recipient,
         mint,
-        vault: this.vaultId({mint})[0],
+        vault,
         systemProgram: SystemProgram.programId,
         tokenProgram: token22 ? TOKEN_2022_PROGRAM_ID : TOKEN_PROGRAM_ID,
         associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
@@ -551,31 +460,49 @@ export class OmniBridgeSolanaSDK {
       })
       .instruction();
 
-    return {instructions: [instruction], signers: [wormholeMessage]};
+    return {
+      instructions: [instruction],
+      signers: [wormholeMessage],
+      message: wormholeMessage.publicKey,
+    };
   }
 
-  async initTransferNative({
+  async initTransfer({
     mint,
+    token,
     from,
     user,
     amount,
     recipient,
     fee,
+    nativeFee,
     payer,
     sequenceNumber,
     token22,
   }: {
-    mint: PublicKey;
+    mint?: PublicKey;
+    token?: string;
     from?: PublicKey;
     user?: PublicKey;
     amount: BN;
     recipient: string;
     fee: BN;
+    nativeFee: BN;
     payer?: PublicKey;
     sequenceNumber?: BN;
     token22?: boolean;
-  }): Promise<TransactionData> {
+  }): Promise<TransactionData & {message: PublicKey}> {
     const wormholeMessage = Keypair.generate();
+
+    if (!mint) {
+      if (!token) {
+        throw new Error('One of token/mint must be supplied');
+      }
+      mint = this.wrappedMintId({token})[0];
+    }
+
+    const vault = token ? null : this.vaultId({mint})[0];
+
     const [config] = this.configId();
 
     if (!sequenceNumber) {
@@ -601,9 +528,10 @@ export class OmniBridgeSolanaSDK {
     }
 
     const instruction = await this.program.methods
-      .initTransferNative({
+      .initTransfer({
         amount,
         recipient,
+        nativeFee,
         fee,
       })
       .accountsStrict({
@@ -620,14 +548,143 @@ export class OmniBridgeSolanaSDK {
           payer: payer || this.provider.publicKey!,
         },
         authority: this.authority()[0],
+        solVault: this.solVault()[0],
         mint,
         tokenProgram: token22 ? TOKEN_2022_PROGRAM_ID : TOKEN_PROGRAM_ID,
         from,
         user,
-        vault: this.vaultId({mint})[0],
+        vault,
       })
       .instruction();
 
-    return {instructions: [instruction], signers: [wormholeMessage]};
+    return {
+      instructions: [instruction],
+      signers: [wormholeMessage],
+      message: wormholeMessage.publicKey,
+    };
+  }
+
+  async initTransferSol({
+    user,
+    amount,
+    recipient,
+    nativeFee,
+    payer,
+    sequenceNumber,
+  }: {
+    user?: PublicKey;
+    amount: BN;
+    recipient: string;
+    nativeFee: BN;
+    payer?: PublicKey;
+    sequenceNumber?: BN;
+  }): Promise<TransactionData & {message: PublicKey}> {
+    const wormholeMessage = Keypair.generate();
+    const [config] = this.configId();
+
+    if (!sequenceNumber) {
+      sequenceNumber = await this.fetchNextSequenceNumber();
+    }
+
+    if (!user) {
+      user = this.provider.publicKey!;
+    }
+
+    const instruction = await this.program.methods
+      .initTransferSol({
+        amount,
+        recipient,
+        fee: new BN(0),
+        nativeFee,
+      })
+      .accountsStrict({
+        user,
+        authority: this.authority()[0],
+        solVault: this.solVault()[0],
+        wormhole: {
+          config,
+          bridge: this.wormholeBridgeId()[0],
+          feeCollector: this.wormholeFeeCollectorId()[0],
+          sequence: this.wormholeSequenceId()[0],
+          clock: SYSVAR_CLOCK_PUBKEY,
+          rent: SYSVAR_RENT_PUBKEY,
+          systemProgram: SystemProgram.programId,
+          wormholeProgram: this.wormholeProgramId,
+          message: wormholeMessage.publicKey,
+          payer: payer || this.provider.publicKey!,
+        },
+      })
+      .instruction();
+
+    return {
+      instructions: [instruction],
+      signers: [wormholeMessage],
+      message: wormholeMessage.publicKey,
+    };
+  }
+
+  async finalizeTransferSol({
+    destinationNonce,
+    transferId,
+    amount,
+    recipient,
+    feeRecipient = null,
+    signature,
+    payer,
+    sequenceNumber,
+  }: {
+    destinationNonce: BN;
+    transferId: TransferId;
+    amount: BN;
+    recipient: PublicKey;
+    feeRecipient?: string | null;
+    signature: number[];
+    payer?: PublicKey;
+    sequenceNumber?: BN;
+  }): Promise<TransactionData & {message: PublicKey}> {
+    const wormholeMessage = Keypair.generate();
+    const [config] = this.configId();
+
+    if (!sequenceNumber) {
+      sequenceNumber = await this.fetchNextSequenceNumber();
+    }
+
+    const instruction = await this.program.methods
+      .finalizeTransferSol({
+        payload: {
+          destinationNonce,
+          transferId,
+          amount,
+          feeRecipient,
+        },
+        signature,
+      })
+      .accountsStrict({
+        config,
+        usedNonces: this.usedNoncesId({nonce: destinationNonce})[0],
+        authority: this.authority()[0],
+        solVault: this.solVault()[0],
+        wormhole: {
+          config,
+          bridge: this.wormholeBridgeId()[0],
+          feeCollector: this.wormholeFeeCollectorId()[0],
+          sequence: this.wormholeSequenceId()[0],
+          clock: SYSVAR_CLOCK_PUBKEY,
+          rent: SYSVAR_RENT_PUBKEY,
+          systemProgram: SystemProgram.programId,
+          wormholeProgram: this.wormholeProgramId,
+          message: wormholeMessage.publicKey,
+          payer: payer || this.provider.publicKey!,
+        },
+        recipient,
+        systemProgram: SystemProgram.programId,
+      })
+      .instruction();
+
+    return {
+      instructions: [instruction],
+      signers: [wormholeMessage],
+      message: wormholeMessage.publicKey,
+    };
   }
 }

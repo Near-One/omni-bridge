@@ -14,14 +14,3 @@ url = "https://api.apr.dev"
 cluster = "Localnet"
 wallet = "~/.config/solana/id.json"
 
-[test]
-startup_wait = 20000
-shutdown_wait = 2000
-upgradeable = false
-
-[[test.genesis]]
-address = "worm2ZoG2kUd4vFXhvjh93UUH596ayRfgQ2MgjNMTth"
-program = "assets/wormhole.so"
-
-[scripts]
-test = "yarn run ts-mocha -p ./tsconfig.json -t 1000000 tests/**/*.ts"

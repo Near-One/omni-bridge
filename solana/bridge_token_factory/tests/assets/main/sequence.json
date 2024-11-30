@@ -1,0 +1,13 @@
+{
+  "pubkey": "5d3Lf5F3CNFbGFjz41pzfNWzzEA35SxdjN9BZCKik9yc",
+  "account": {
+    "lamports": 946560,
+    "data": [
+      "AAAAAAAAAAA=",
+      "base64"
+    ],
+    "owner": "worm2ZoG2kUd4vFXhvjh93UUH596ayRfgQ2MgjNMTth",
+    "executable": false,
+    "rentEpoch": 0
+  }
+}

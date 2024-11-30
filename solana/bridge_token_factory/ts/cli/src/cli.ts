@@ -2,12 +2,10 @@ import {Command} from 'commander';
 import {setupContext} from './context';
 import {installInitializeCLI} from './initialize';
 import {installDeployTokenCLI} from './deployToken';
-import {installFinalizeTransferBridgedCLI} from './finalizeTransferBridged';
-import {installInitTransferBridgedCLI} from './initTransferBridged';
-import {installRegisterMintCLI} from './registerMint';
+import {installLogMetadataCLI} from './logMetadata';
 import {installCreateTokenCLI} from './createToken';
-import {installFinalizeTransferNativeCLI} from './finalizeTransferNative';
-import {installInitTransferNativeCLI} from './initTransferNative';
+import {installFinalizeTransferCLI} from './finalizeTransfer';
+import {installInitTransferCLI} from './initTransfer';
 
 export function cli() {
   const program = new Command();
@@ -29,11 +27,9 @@ export function cli() {
   installCreateTokenCLI(program);
   installInitializeCLI(program);
   installDeployTokenCLI(program);
-  installFinalizeTransferBridgedCLI(program);
-  installInitTransferBridgedCLI(program);
-  installRegisterMintCLI(program);
-  installFinalizeTransferNativeCLI(program);
-  installInitTransferNativeCLI(program);
+  installLogMetadataCLI(program);
+  installFinalizeTransferCLI(program);
+  installInitTransferCLI(program);
 
   return program;
 }
