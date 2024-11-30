@@ -223,7 +223,7 @@ async fn process_log(
     if log.log_decode::<utils::evm::InitTransfer>().is_ok() {
         utils::redis::add_event(
             redis_connection,
-            utils::redis::ETH_WITHDRAW_EVENTS,
+            utils::redis::EVM_INIT_TRANSFER_EVENTS,
             tx_hash.to_string(),
             crate::workers::evm::InitTransferWithTimestamp {
                 chain_kind,

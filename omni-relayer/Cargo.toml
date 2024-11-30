@@ -22,7 +22,7 @@ tokio = { version = "1", features = ["sync", "time", "macros", "rt-multi-thread"
 tokio-stream = { version = "0.1" }
 
 ethereum-types = "0.14.1"
-omni-types = { git = "https://github.com/near-one/omni-bridge", package = "omni-types", rev = "303ca7bc7cdb39c4a356b65b10221259a632ac54" }
+omni-types = { git = "https://github.com/near-one/omni-bridge", package = "omni-types", rev = "11ffdb63706ceba175f7581585bd837aad9f1559" }
 
 near-lake-framework = "0.7.9"
 near-jsonrpc-client = "0.13.0"
@@ -45,4 +45,3 @@ solana-bridge-client = { git = "https://github.com/Near-One/rainbow-bridge-sdk-r
 wormhole-bridge-client = { git = "https://github.com/Near-One/rainbow-bridge-sdk-rs", package = "wormhole-bridge-client", branch = "refactor/connectors" }
 
 omni-connector = { git = "https://github.com/Near-One/rainbow-bridge-sdk-rs", package = "omni-connector", branch = "refactor/connectors" }
-

@@ -7,10 +7,10 @@ use omni_connector::OmniConnector;
 use omni_types::{
     prover_args::{EvmVerifyProofArgs, WormholeVerifyProofArgs},
     prover_result::ProofKind,
-    ChainKind, OmniAddress,
+    ChainKind,
 };
 
-use alloy::{rpc::types::Log, sol};
+use alloy::sol;
 use ethereum_types::H256;
 
 use crate::config;
@@ -20,18 +20,19 @@ sol!(
     event InitTransfer(
         address indexed sender,
         address indexed tokenAddress,
-        uint128 indexed nonce,
-        string token,
+        uint64 indexed originNonce,
         uint128 amount,
         uint128 fee,
         uint128 nativeFee,
-        string recipient
+        string recipient,
+        string message
     );
 
     #[derive(Debug, serde::Serialize, serde::Deserialize)]
     event FinTransfer(
-        uint128 indexed nonce,
-        string token,
+        uint8 indexed originChain,
+        uint64 indexed originNonce,
+        address tokenAddress,
         uint128 amount,
         address recipient,
         string feeRecipient

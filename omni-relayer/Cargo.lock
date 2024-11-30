@@ -44,7 +44,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e01ed3140b2f8d422c68afa1ed2e85d996ea619c988ac834d255db32138655cb"
 dependencies = [
  "quote",
- "syn 2.0.89",
+ "syn 2.0.90",
 ]
 
 [[package]]
@@ -65,7 +65,7 @@ checksum = "b6ac1e58cded18cb28ddc17143c4dea5345b3ad575e14f32f66e4054a56eb271"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.89",
+ "syn 2.0.90",
 ]
 
 [[package]]
@@ -257,9 +257,9 @@ dependencies = [
 
 [[package]]
 name = "alloy-core"
-version = "0.8.13"
+version = "0.8.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e8d22df68fa7d9744be0b1a9be3260e9aa089fbf41903ab182328333061ed186"
+checksum = "c3d14d531c99995de71558e8e2206c27d709559ee8e5a0452b965ea82405a013"
 dependencies = [
  "alloy-dyn-abi",
  "alloy-json-abi",
@@ -270,9 +270,9 @@ dependencies = [
 
 [[package]]
 name = "alloy-dyn-abi"
-version = "0.8.13"
+version = "0.8.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1cf633ae9a1f0c82fdb9e559ed2be1c8e415c3e48fc47e1feaf32c6078ec0cdd"
+checksum = "80759b3f57b3b20fa7cd8fef6479930fc95461b58ff8adea6e87e618449c8a1d"
 dependencies = [
  "alloy-json-abi",
  "alloy-primitives",
@@ -339,9 +339,9 @@ dependencies = [
 
 [[package]]
 name = "alloy-json-abi"
-version = "0.8.13"
+version = "0.8.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1a500037938085feed8a20dbfc8fce58c599db68c948cfae711147175dee392c"
+checksum = "ac4b22b3e51cac09fd2adfcc73b55f447b4df669f983c13f7894ec82b607c63f"
 dependencies = [
  "alloy-primitives",
  "alloy-sol-type-parser",
@@ -418,9 +418,9 @@ dependencies = [
 
 [[package]]
 name = "alloy-primitives"
-version = "0.8.13"
+version = "0.8.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3aeeb5825c2fc8c2662167058347cd0cafc3cb15bcb5cdb1758a63c2dca0409e"
+checksum = "9db948902dfbae96a73c2fbf1f7abec62af034ab883e4c777c3fd29702bd6e2c"
 dependencies = [
  "alloy-rlp",
  "bytes",
@@ -525,7 +525,7 @@ checksum = "2b09cae092c27b6f1bde952653a22708691802e57bfef4a2973b80bea21efd3f"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.89",
+ "syn 2.0.90",
 ]
 
 [[package]]
@@ -639,23 +639,23 @@ dependencies = [
 
 [[package]]
 name = "alloy-sol-macro"
-version = "0.8.13"
+version = "0.8.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5c0279d09463a4695788a3622fd95443625f7be307422deba4b55dd491a9c7a1"
+checksum = "3bfd7853b65a2b4f49629ec975fee274faf6dff15ab8894c620943398ef283c0"
 dependencies = [
  "alloy-sol-macro-expander",
  "alloy-sol-macro-input",
  "proc-macro-error2",
  "proc-macro2",
  "quote",
- "syn 2.0.89",
+ "syn 2.0.90",
 ]
 
 [[package]]
 name = "alloy-sol-macro-expander"
-version = "0.8.13"
+version = "0.8.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4feea540fc8233df2ad1156efd744b2075372f43a8f942a68b3b19c8a00e2c12"
+checksum = "82ec42f342d9a9261699f8078e57a7a4fda8aaa73c1a212ed3987080e6a9cd13"
 dependencies = [
  "alloy-sol-macro-input",
  "const-hex",
@@ -664,31 +664,31 @@ dependencies = [
  "proc-macro-error2",
  "proc-macro2",
  "quote",
- "syn 2.0.89",
+ "syn 2.0.90",
  "syn-solidity",
  "tiny-keccak",
 ]
 
 [[package]]
 name = "alloy-sol-macro-input"
-version = "0.8.13"
+version = "0.8.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2a0ad281f3d1b613af814b66977ee698e443d4644a1510962d0241f26e0e53ae"
+checksum = "ed2c50e6a62ee2b4f7ab3c6d0366e5770a21cad426e109c2f40335a1b3aff3df"
 dependencies = [
  "const-hex",
  "dunce",
  "heck 0.5.0",
  "proc-macro2",
  "quote",
- "syn 2.0.89",
+ "syn 2.0.90",
  "syn-solidity",
 ]
 
 [[package]]
 name = "alloy-sol-type-parser"
-version = "0.8.13"
+version = "0.8.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "96eff16c797438add6c37bb335839d015b186c5421ee5626f5559a7bfeb38ef5"
+checksum = "ac17c6e89a50fb4a758012e4b409d9a0ba575228e69b539fe37d7a1bd507ca4a"
 dependencies = [
  "serde",
  "winnow",
@@ -696,9 +696,9 @@ dependencies = [
 
 [[package]]
 name = "alloy-sol-types"
-version = "0.8.13"
+version = "0.8.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cff34e0682d6665da243a3e81da96f07a2dd50f7e64073e382b1a141f5a2a2f6"
+checksum = "c9dc0fffe397aa17628160e16b89f704098bf3c9d74d5d369ebc239575936de5"
 dependencies = [
  "alloy-json-abi",
  "alloy-primitives",
@@ -1149,7 +1149,7 @@ checksum = "c7c24de15d275a1ecfd47a380fb4d5ec9bfe0933f309ed5e705b775596a3574d"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.89",
+ "syn 2.0.90",
 ]
 
 [[package]]
@@ -1160,7 +1160,7 @@ checksum = "721cae7de5c34fbb2acd27e21e6d2cf7b886dce0c27388d46c4e6c47ea4318dd"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.89",
+ "syn 2.0.90",
 ]
 
 [[package]]
@@ -1188,7 +1188,7 @@ checksum = "3c87f3f15e7794432337fc718554eaa4dc8f04c9677a950ffe366f20a162ae42"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.89",
+ "syn 2.0.90",
 ]
 
 [[package]]
@@ -1824,7 +1824,7 @@ dependencies = [
  "proc-macro-crate 3.2.0",
  "proc-macro2",
  "quote",
- "syn 2.0.89",
+ "syn 2.0.90",
 ]
 
 [[package]]
@@ -1852,7 +1852,7 @@ dependencies = [
 [[package]]
 name = "bridge-connector-common"
 version = "0.1.0"
-source = "git+https://github.com/Near-One/rainbow-bridge-sdk-rs?branch=refactor/connectors#3552776b9d5341fddc0c1bbaa083a72b58a42d81"
+source = "git+https://github.com/Near-One/rainbow-bridge-sdk-rs?branch=refactor/connectors#d0e368daeb4e162228eb60ffcfc04c3847cbf49b"
 dependencies = [
  "eth-proof",
  "ethers",
@@ -1960,7 +1960,7 @@ checksum = "bcfcc3cd946cb52f0bbfdbbcfa2f4e24f75ebb6c0e1002f7c25904fada18b9ec"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.89",
+ "syn 2.0.90",
 ]
 
 [[package]]
@@ -1971,9 +1971,9 @@ checksum = "1fd0f2584146f6f2ef48085050886acf353beff7305ebd1ae69500e27c67f64b"
 
 [[package]]
 name = "bytes"
-version = "1.8.0"
+version = "1.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9ac0150caa2ae65ca5bd83f25c7de183dea78d4d366469f148435e2acfbad0da"
+checksum = "325918d6fe32f23b19878fe4b34794ae41fc19ddbe53b10571a4874d44ffd39b"
 dependencies = [
  "serde",
 ]
@@ -2064,9 +2064,9 @@ dependencies = [
 
 [[package]]
 name = "cargo-platform"
-version = "0.1.8"
+version = "0.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "24b1f0365a6c6bb4020cd05806fd0d33c44d38046b8bd7f0e40814b9763cabfc"
+checksum = "e35af189006b9c0f00a064685c727031e3ed2d8020f7ba284d78cc2671bd36ea"
 dependencies = [
  "serde",
 ]
@@ -2087,9 +2087,9 @@ dependencies = [
 
 [[package]]
 name = "cc"
-version = "1.2.1"
+version = "1.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fd9de9f2205d5ef3fd67e685b0df337994ddd4495e2a28d185500d0e1edfea47"
+checksum = "f34d93e62b03caf570cccc334cbc6c2fceca82f39211051345108adcba3eebdc"
 dependencies = [
  "jobserver",
  "libc",
@@ -2128,7 +2128,7 @@ checksum = "45565fc9416b9896014f5732ac776f810ee53a66730c17e4020c3ec064a8f88f"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.89",
+ "syn 2.0.90",
 ]
 
 [[package]]
@@ -2207,7 +2207,7 @@ dependencies = [
  "heck 0.5.0",
  "proc-macro2",
  "quote",
- "syn 2.0.89",
+ "syn 2.0.90",
 ]
 
 [[package]]
@@ -2354,9 +2354,9 @@ dependencies = [
 
 [[package]]
 name = "const-hex"
-version = "1.13.2"
+version = "1.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "487981fa1af147182687064d0a2c336586d337a606595ced9ffb0c685c250c73"
+checksum = "4b0485bab839b018a8f1723fc5391819fea5f8f0f32288ef8a735fd096b6160c"
 dependencies = [
  "cfg-if 1.0.0",
  "cpufeatures",
@@ -2683,7 +2683,7 @@ checksum = "f46882e17999c6cc590af592290432be3bce0428cb0d5f8b6715e4dc7b383eb3"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.89",
+ "syn 2.0.90",
 ]
 
 [[package]]
@@ -2731,7 +2731,7 @@ dependencies = [
  "proc-macro2",
  "quote",
  "strsim 0.11.1",
- "syn 2.0.89",
+ "syn 2.0.90",
 ]
 
 [[package]]
@@ -2753,7 +2753,7 @@ checksum = "d336a2a514f6ccccaa3e09b02d41d35330c07ddf03a62165fcec10bb561c7806"
 dependencies = [
  "darling_core 0.20.10",
  "quote",
- "syn 2.0.89",
+ "syn 2.0.90",
 ]
 
 [[package]]
@@ -2867,7 +2867,7 @@ checksum = "30542c1ad912e0e3d22a1935c290e12e8a29d704a420177a31faad4a601a0800"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.89",
+ "syn 2.0.90",
 ]
 
 [[package]]
@@ -2909,7 +2909,7 @@ dependencies = [
  "darling 0.20.10",
  "proc-macro2",
  "quote",
- "syn 2.0.89",
+ "syn 2.0.90",
 ]
 
 [[package]]
@@ -2929,7 +2929,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ab63b0e2bf4d5928aff72e83a7dace85d7bba5fe12dcc3c5a572d78caffd3f3c"
 dependencies = [
  "derive_builder_core 0.20.2",
- "syn 2.0.89",
+ "syn 2.0.90",
 ]
 
 [[package]]
@@ -2942,7 +2942,7 @@ dependencies = [
  "proc-macro2",
  "quote",
  "rustc_version 0.4.1",
- "syn 2.0.89",
+ "syn 2.0.90",
 ]
 
 [[package]]
@@ -2962,7 +2962,7 @@ checksum = "cb7330aeadfbe296029522e6c40f315320aba36fc43a5b3632f3795348f3bd22"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.89",
+ "syn 2.0.90",
  "unicode-xid",
 ]
 
@@ -3046,7 +3046,7 @@ checksum = "97369cbbc041bc366949bc74d34658d6cda5621039731c6310521892a3a20ae0"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.89",
+ "syn 2.0.90",
 ]
 
 [[package]]
@@ -3075,7 +3075,7 @@ checksum = "a6cbae11b3de8fce2a456e8ea3dada226b35fe791f0dc1d360c0941f0bb681f3"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.89",
+ "syn 2.0.90",
 ]
 
 [[package]]
@@ -3342,7 +3342,7 @@ checksum = "a1ab991c1362ac86c61ab6f556cff143daa22e5a15e4e189df818b2fd19fe65b"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.89",
+ "syn 2.0.90",
 ]
 
 [[package]]
@@ -3362,7 +3362,7 @@ checksum = "f282cfdfe92516eb26c2af8589c274c7c17681f5ecc03c18255fe741c6aa64eb"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.89",
+ "syn 2.0.90",
 ]
 
 [[package]]
@@ -3383,7 +3383,7 @@ dependencies = [
  "darling 0.20.10",
  "proc-macro2",
  "quote",
- "syn 2.0.89",
+ "syn 2.0.90",
 ]
 
 [[package]]
@@ -3418,12 +3418,12 @@ dependencies = [
 
 [[package]]
 name = "errno"
-version = "0.3.9"
+version = "0.3.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "534c5cf6194dfab3db3242765c03bbe257cf92f22b38f6bc0c58d59108a820ba"
+checksum = "33d852cb9b869c2a9b3df2f71a3074817f01e1844f839a144f5fcef059a4eb5d"
 dependencies = [
  "libc",
- "windows-sys 0.52.0",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -3461,7 +3461,7 @@ dependencies = [
 [[package]]
 name = "eth-proof"
 version = "0.1.0"
-source = "git+https://github.com/Near-One/rainbow-bridge-sdk-rs?branch=refactor/connectors#3552776b9d5341fddc0c1bbaa083a72b58a42d81"
+source = "git+https://github.com/Near-One/rainbow-bridge-sdk-rs?branch=refactor/connectors#d0e368daeb4e162228eb60ffcfc04c3847cbf49b"
 dependencies = [
  "borsh 1.5.3",
  "cita_trie",
@@ -3618,7 +3618,7 @@ dependencies = [
  "reqwest 0.11.27",
  "serde",
  "serde_json",
- "syn 2.0.89",
+ "syn 2.0.90",
  "toml 0.8.19",
  "walkdir",
 ]
@@ -3636,7 +3636,7 @@ dependencies = [
  "proc-macro2",
  "quote",
  "serde_json",
- "syn 2.0.89",
+ "syn 2.0.90",
 ]
 
 [[package]]
@@ -3662,7 +3662,7 @@ dependencies = [
  "serde",
  "serde_json",
  "strum 0.26.3",
- "syn 2.0.89",
+ "syn 2.0.90",
  "tempfile",
  "thiserror 1.0.69",
  "tiny-keccak",
@@ -3830,7 +3830,7 @@ dependencies = [
 [[package]]
 name = "evm-bridge-client"
 version = "0.1.0"
-source = "git+https://github.com/Near-One/rainbow-bridge-sdk-rs?branch=refactor/connectors#3552776b9d5341fddc0c1bbaa083a72b58a42d81"
+source = "git+https://github.com/Near-One/rainbow-bridge-sdk-rs?branch=refactor/connectors#d0e368daeb4e162228eb60ffcfc04c3847cbf49b"
 dependencies = [
  "borsh 1.5.3",
  "bridge-connector-common",
@@ -4102,7 +4102,7 @@ checksum = "162ee34ebcb7c64a8abebc059ce0fee27c2262618d7b60ed8faf72fef13c3650"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.89",
+ "syn 2.0.90",
 ]
 
 [[package]]
@@ -4862,7 +4862,7 @@ checksum = "1ec89e9337638ecdc08744df490b221a7399bf8d164eb52a665454e60e075ad6"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.89",
+ "syn 2.0.90",
 ]
 
 [[package]]
@@ -4945,7 +4945,7 @@ checksum = "a0eb5a3343abf848c0984fe4604b2b105da9539376e24fc0a3b0007411ae4fd9"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.89",
+ "syn 2.0.90",
 ]
 
 [[package]]
@@ -5103,9 +5103,9 @@ dependencies = [
 
 [[package]]
 name = "js-sys"
-version = "0.3.72"
+version = "0.3.73"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6a88f1bda2bd75b0452a14784937d796722fdebfe50df998aeb3f0b7603019a9"
+checksum = "fb15147158e79fd8b8afd0252522769c4f48725460b37338544d8379d94fc8f9"
 dependencies = [
  "wasm-bindgen",
 ]
@@ -5225,9 +5225,9 @@ checksum = "884e2677b40cc8c339eaefcb701c32ef1fd2493d71118dc0ca4b6a736c93bd67"
 
 [[package]]
 name = "libc"
-version = "0.2.166"
+version = "0.2.167"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c2ccc108bbc0b1331bd061864e7cd823c0cab660bbe6970e66e2c0614decde36"
+checksum = "09d6582e104315a817dff97f75133544b2e094ee22447d2acf4a74e189ba06fc"
 
 [[package]]
 name = "libm"
@@ -5517,11 +5517,10 @@ dependencies = [
 
 [[package]]
 name = "mio"
-version = "1.0.2"
+version = "1.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "80e04d1dcff3aae0704555fe5fee3bcfaf3d1fdf8a7e521d5b9d2b42acb52cec"
+checksum = "2886843bf800fba2e3377cff24abf6379b4c4d5c6681eaf9ea5b0d15090450bd"
 dependencies = [
- "hermit-abi 0.3.9",
  "libc",
  "wasi 0.11.0+wasi-snapshot-preview1",
  "windows-sys 0.52.0",
@@ -5582,7 +5581,7 @@ dependencies = [
 [[package]]
 name = "near-bridge-client"
 version = "0.1.0"
-source = "git+https://github.com/Near-One/rainbow-bridge-sdk-rs?branch=refactor/connectors#3552776b9d5341fddc0c1bbaa083a72b58a42d81"
+source = "git+https://github.com/Near-One/rainbow-bridge-sdk-rs?branch=refactor/connectors#d0e368daeb4e162228eb60ffcfc04c3847cbf49b"
 dependencies = [
  "borsh 1.5.3",
  "bridge-connector-common",
@@ -5694,7 +5693,7 @@ dependencies = [
 [[package]]
 name = "near-connector"
 version = "0.1.0"
-source = "git+https://github.com/Near-One/rainbow-bridge-sdk-rs?branch=refactor/connectors#3552776b9d5341fddc0c1bbaa083a72b58a42d81"
+source = "git+https://github.com/Near-One/rainbow-bridge-sdk-rs?branch=refactor/connectors#d0e368daeb4e162228eb60ffcfc04c3847cbf49b"
 dependencies = [
  "borsh 1.5.3",
  "bridge-connector-common",
@@ -5945,7 +5944,7 @@ dependencies = [
 [[package]]
 name = "near-light-client-on-eth"
 version = "0.1.0"
-source = "git+https://github.com/Near-One/rainbow-bridge-sdk-rs?branch=refactor/connectors#3552776b9d5341fddc0c1bbaa083a72b58a42d81"
+source = "git+https://github.com/Near-One/rainbow-bridge-sdk-rs?branch=refactor/connectors#d0e368daeb4e162228eb60ffcfc04c3847cbf49b"
 dependencies = [
  "ethereum-types 0.14.1",
  "ethers",
@@ -6228,7 +6227,7 @@ dependencies = [
 [[package]]
 name = "near-rpc-client"
 version = "0.1.0"
-source = "git+https://github.com/Near-One/rainbow-bridge-sdk-rs?branch=refactor/connectors#3552776b9d5341fddc0c1bbaa083a72b58a42d81"
+source = "git+https://github.com/Near-One/rainbow-bridge-sdk-rs?branch=refactor/connectors#d0e368daeb4e162228eb60ffcfc04c3847cbf49b"
 dependencies = [
  "borsh 1.5.3",
  "lazy_static",
@@ -6250,7 +6249,7 @@ checksum = "3610517a56329b7cce0c8c4cf2686fc4bbe0b155181b118acf20d2a301bf29b6"
 dependencies = [
  "quote",
  "serde",
- "syn 2.0.89",
+ "syn 2.0.90",
 ]
 
 [[package]]
@@ -6261,7 +6260,7 @@ checksum = "df598b0785a3e36d7e4fb73afcdf20536988b13d07cead71dfa777db4783e552"
 dependencies = [
  "quote",
  "serde",
- "syn 2.0.89",
+ "syn 2.0.90",
 ]
 
 [[package]]
@@ -6273,7 +6272,7 @@ dependencies = [
  "fs2",
  "near-rpc-error-core 0.21.2",
  "serde",
- "syn 2.0.89",
+ "syn 2.0.90",
 ]
 
 [[package]]
@@ -6284,7 +6283,7 @@ checksum = "647ef261df99ad877c08c97af2f10368c8b8cde0968250d3482a5a249e9f3926"
 dependencies = [
  "near-rpc-error-core 0.26.0",
  "serde",
- "syn 2.0.89",
+ "syn 2.0.90",
 ]
 
 [[package]]
@@ -6343,7 +6342,7 @@ dependencies = [
  "serde_json",
  "strum 0.26.3",
  "strum_macros 0.26.4",
- "syn 2.0.89",
+ "syn 2.0.90",
 ]
 
 [[package]]
@@ -6721,7 +6720,7 @@ checksum = "ed3955f1a9c7c0c15e092f9c887db08b1fc683305fdf6eb6684f22555355e202"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.89",
+ "syn 2.0.90",
 ]
 
 [[package]]
@@ -6807,7 +6806,7 @@ dependencies = [
  "proc-macro-crate 3.2.0",
  "proc-macro2",
  "quote",
- "syn 2.0.89",
+ "syn 2.0.90",
 ]
 
 [[package]]
@@ -6849,7 +6848,7 @@ dependencies = [
 [[package]]
 name = "omni-connector"
 version = "0.1.0"
-source = "git+https://github.com/Near-One/rainbow-bridge-sdk-rs?branch=refactor/connectors#3552776b9d5341fddc0c1bbaa083a72b58a42d81"
+source = "git+https://github.com/Near-One/rainbow-bridge-sdk-rs?branch=refactor/connectors#d0e368daeb4e162228eb60ffcfc04c3847cbf49b"
 dependencies = [
  "borsh 1.5.3",
  "bridge-connector-common",
@@ -6914,7 +6913,7 @@ dependencies = [
 [[package]]
 name = "omni-types"
 version = "2.0.0"
-source = "git+https://github.com/near-one/omni-bridge?rev=303ca7bc7cdb39c4a356b65b10221259a632ac54#303ca7bc7cdb39c4a356b65b10221259a632ac54"
+source = "git+https://github.com/near-one/omni-bridge?rev=11ffdb63706ceba175f7581585bd837aad9f1559#11ffdb63706ceba175f7581585bd837aad9f1559"
 dependencies = [
  "alloy-primitives",
  "alloy-rlp",
@@ -6991,7 +6990,7 @@ checksum = "a948666b637a0f465e8564c73e89d4dde00d72d4d473cc972f390fc3dcee7d9c"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.89",
+ "syn 2.0.90",
 ]
 
 [[package]]
@@ -7145,7 +7144,7 @@ dependencies = [
  "proc-macro-crate 3.2.0",
  "proc-macro2",
  "quote",
- "syn 2.0.89",
+ "syn 2.0.90",
 ]
 
 [[package]]
@@ -7343,7 +7342,7 @@ dependencies = [
  "phf_shared 0.11.2",
  "proc-macro2",
  "quote",
- "syn 2.0.89",
+ "syn 2.0.90",
 ]
 
 [[package]]
@@ -7381,7 +7380,7 @@ checksum = "3c0f5fad0874fc7abcd4d750e76917eaebbecaa2c20bde22e1dbeeba8beb758c"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.89",
+ "syn 2.0.90",
 ]
 
 [[package]]
@@ -7484,7 +7483,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "64d1ec885c64d0457d564db4ec299b2dae3f9c02808b8ad9c3a089c591b18033"
 dependencies = [
  "proc-macro2",
- "syn 2.0.89",
+ "syn 2.0.90",
 ]
 
 [[package]]
@@ -7584,7 +7583,7 @@ dependencies = [
  "proc-macro-error-attr2",
  "proc-macro2",
  "quote",
- "syn 2.0.89",
+ "syn 2.0.90",
 ]
 
 [[package]]
@@ -8404,7 +8403,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d7f649912bc1495e167a6edee79151c84b1bad49748cb4f1f1167f459f6224f6"
 dependencies = [
  "bitflags 2.6.0",
- "errno 0.3.9",
+ "errno 0.3.10",
  "libc",
  "linux-raw-sys",
  "windows-sys 0.52.0",
@@ -8599,7 +8598,7 @@ dependencies = [
  "proc-macro-crate 3.2.0",
  "proc-macro2",
  "quote",
- "syn 2.0.89",
+ "syn 2.0.90",
 ]
 
 [[package]]
@@ -8843,7 +8842,7 @@ checksum = "ad1e866f866923f252f05c889987993144fb74e722403468a4ebd70c3cd756c0"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.89",
+ "syn 2.0.90",
 ]
 
 [[package]]
@@ -8866,7 +8865,7 @@ checksum = "6c64451ba24fc7a6a2d60fc75dd9c83c90903b19028d4eff35e88fc1e86564e9"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.89",
+ "syn 2.0.90",
 ]
 
 [[package]]
@@ -8917,7 +8916,7 @@ dependencies = [
  "darling 0.20.10",
  "proc-macro2",
  "quote",
- "syn 2.0.89",
+ "syn 2.0.90",
 ]
 
 [[package]]
@@ -9096,9 +9095,9 @@ dependencies = [
 
 [[package]]
 name = "socket2"
-version = "0.5.7"
+version = "0.5.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ce305eb0b4296696835b71df73eb912e0f1ffd2556a501fcede6e0c50349191c"
+checksum = "c970269d99b64e60ec3bd6ad27270092a5394c4e309314b18ae3fe575695fbe8"
 dependencies = [
  "libc",
  "windows-sys 0.52.0",
@@ -9221,7 +9220,7 @@ dependencies = [
 [[package]]
 name = "solana-bridge-client"
 version = "0.1.0"
-source = "git+https://github.com/Near-One/rainbow-bridge-sdk-rs?branch=refactor/connectors#3552776b9d5341fddc0c1bbaa083a72b58a42d81"
+source = "git+https://github.com/Near-One/rainbow-bridge-sdk-rs?branch=refactor/connectors#d0e368daeb4e162228eb60ffcfc04c3847cbf49b"
 dependencies = [
  "borsh 1.5.3",
  "derive_builder 0.20.2",
@@ -9994,7 +9993,7 @@ dependencies = [
  "bs58 0.5.1",
  "proc-macro2",
  "quote",
- "syn 2.0.89",
+ "syn 2.0.90",
 ]
 
 [[package]]
@@ -10527,7 +10526,7 @@ checksum = "d9e8418ea6269dcfb01c712f0444d2c75542c04448b480e87de59d2865edc750"
 dependencies = [
  "quote",
  "spl-discriminator-syn",
- "syn 2.0.89",
+ "syn 2.0.90",
 ]
 
 [[package]]
@@ -10539,7 +10538,7 @@ dependencies = [
  "proc-macro2",
  "quote",
  "sha2 0.10.8",
- "syn 2.0.89",
+ "syn 2.0.90",
  "thiserror 1.0.69",
 ]
 
@@ -10648,7 +10647,7 @@ dependencies = [
  "proc-macro2",
  "quote",
  "sha2 0.10.8",
- "syn 2.0.89",
+ "syn 2.0.90",
 ]
 
 [[package]]
@@ -11029,7 +11028,7 @@ dependencies = [
  "proc-macro2",
  "quote",
  "rustversion",
- "syn 2.0.89",
+ "syn 2.0.90",
 ]
 
 [[package]]
@@ -11071,9 +11070,9 @@ dependencies = [
 
 [[package]]
 name = "syn"
-version = "2.0.89"
+version = "2.0.90"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "44d46482f1c1c87acd84dea20c1bf5ebff4c757009ed6bf19cfd36fb10e92c4e"
+checksum = "919d3b74a5dd0ccd15aeb8f93e7006bd9e14c295087c9896a110f490752bcf31"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -11082,14 +11081,14 @@ dependencies = [
 
 [[package]]
 name = "syn-solidity"
-version = "0.8.13"
+version = "0.8.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6bdaa7b9e815582ba343a20c66627437cf45f1c6fba7f69772cbfd1358c7e197"
+checksum = "da0523f59468a2696391f2a772edc089342aacd53c3caa2ac3264e598edf119b"
 dependencies = [
  "paste",
  "proc-macro2",
  "quote",
- "syn 2.0.89",
+ "syn 2.0.90",
 ]
 
 [[package]]
@@ -11127,7 +11126,7 @@ checksum = "c8af7666ab7b6390ab78131fb5b0fce11d6b7a6951602017c35fa82800708971"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.89",
+ "syn 2.0.90",
 ]
 
 [[package]]
@@ -11258,7 +11257,7 @@ checksum = "4fee6c4efc90059e10f81e6d42c60a18f76588c3d74cb83a0b242a2b6c7504c1"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.89",
+ "syn 2.0.90",
 ]
 
 [[package]]
@@ -11269,7 +11268,7 @@ checksum = "f077553d607adc1caf65430528a576c757a71ed73944b66ebb58ef2bbd243568"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.89",
+ "syn 2.0.90",
 ]
 
 [[package]]
@@ -11392,7 +11391,7 @@ checksum = "693d596312e88961bc67d7f1f97af8a70227d9f90c31bba5806eec004978d752"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.89",
+ "syn 2.0.90",
 ]
 
 [[package]]
@@ -11660,7 +11659,7 @@ checksum = "395ae124c09f9e6918a2310af6038fba074bcf474ac352496d5910dd59a2226d"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.89",
+ "syn 2.0.90",
 ]
 
 [[package]]
@@ -11721,9 +11720,9 @@ dependencies = [
 
 [[package]]
 name = "tracing-subscriber"
-version = "0.3.18"
+version = "0.3.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ad0f048c97dbd9faa9b7df56362b8ebcaa52adb06b498c050d2f4e32f90a7a8b"
+checksum = "e8189decb5ac0fa7bc8b96b7cb9b2701d60d48805aca84a238004d665fcc4008"
 dependencies = [
  "matchers",
  "nu-ansi-term",
@@ -12038,9 +12037,9 @@ checksum = "9c8d87e72b64a3b4db28d11ce29237c246188f4f51057d65a7eab63b7987e423"
 
 [[package]]
 name = "wasm-bindgen"
-version = "0.2.95"
+version = "0.2.96"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "128d1e363af62632b8eb57219c8fd7877144af57558fb2ef0368d0087bddeb2e"
+checksum = "21d3b25c3ea1126a2ad5f4f9068483c2af1e64168f847abe863a526b8dbfe00b"
 dependencies = [
  "cfg-if 1.0.0",
  "once_cell",
@@ -12049,36 +12048,37 @@ dependencies = [
 
 [[package]]
 name = "wasm-bindgen-backend"
-version = "0.2.95"
+version = "0.2.96"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cb6dd4d3ca0ddffd1dd1c9c04f94b868c37ff5fac97c30b97cff2d74fce3a358"
+checksum = "52857d4c32e496dc6537646b5b117081e71fd2ff06de792e3577a150627db283"
 dependencies = [
  "bumpalo",
  "log",
  "once_cell",
  "proc-macro2",
  "quote",
- "syn 2.0.89",
+ "syn 2.0.90",
  "wasm-bindgen-shared",
 ]
 
 [[package]]
 name = "wasm-bindgen-futures"
-version = "0.4.45"
+version = "0.4.46"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cc7ec4f8827a71586374db3e87abdb5a2bb3a15afed140221307c3ec06b1f63b"
+checksum = "951fe82312ed48443ac78b66fa43eded9999f738f6022e67aead7b708659e49a"
 dependencies = [
  "cfg-if 1.0.0",
  "js-sys",
+ "once_cell",
  "wasm-bindgen",
  "web-sys",
 ]
 
 [[package]]
 name = "wasm-bindgen-macro"
-version = "0.2.95"
+version = "0.2.96"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e79384be7f8f5a9dd5d7167216f022090cf1f9ec128e6e6a482a2cb5c5422c56"
+checksum = "920b0ffe069571ebbfc9ddc0b36ba305ef65577c94b06262ed793716a1afd981"
 dependencies = [
  "quote",
  "wasm-bindgen-macro-support",
@@ -12086,22 +12086,22 @@ dependencies = [
 
 [[package]]
 name = "wasm-bindgen-macro-support"
-version = "0.2.95"
+version = "0.2.96"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "26c6ab57572f7a24a4985830b120de1594465e5d500f24afe89e16b4e833ef68"
+checksum = "bf59002391099644be3524e23b781fa43d2be0c5aa0719a18c0731b9d195cab6"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.89",
+ "syn 2.0.90",
  "wasm-bindgen-backend",
  "wasm-bindgen-shared",
 ]
 
 [[package]]
 name = "wasm-bindgen-shared"
-version = "0.2.95"
+version = "0.2.96"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "65fc09f10666a9f147042251e0dda9c18f166ff7de300607007e96bdebc1068d"
+checksum = "e5047c5392700766601942795a436d7d2599af60dcc3cc1248c9120bfb0827b0"
 
 [[package]]
 name = "wasm-encoder"
@@ -12537,7 +12537,7 @@ checksum = "09b5575a75e711ca6c36bb9ad647c93541cdc8e34218031acba5da3f35919dd3"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.89",
+ "syn 2.0.90",
 ]
 
 [[package]]
@@ -12562,9 +12562,9 @@ dependencies = [
 
 [[package]]
 name = "web-sys"
-version = "0.3.72"
+version = "0.3.73"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f6488b90108c040df0fe62fa815cbdee25124641df01814dd7282749234c6112"
+checksum = "476364ff87d0ae6bfb661053a9104ab312542658c3d8f963b7ace80b6f9b26b9"
 dependencies = [
  "js-sys",
  "wasm-bindgen",
@@ -12877,7 +12877,7 @@ dependencies = [
 [[package]]
 name = "wormhole-bridge-client"
 version = "0.1.0"
-source = "git+https://github.com/Near-One/rainbow-bridge-sdk-rs?branch=refactor/connectors#3552776b9d5341fddc0c1bbaa083a72b58a42d81"
+source = "git+https://github.com/Near-One/rainbow-bridge-sdk-rs?branch=refactor/connectors#d0e368daeb4e162228eb60ffcfc04c3847cbf49b"
 dependencies = [
  "bridge-connector-common",
  "derive_builder 0.20.2",
@@ -12978,7 +12978,7 @@ checksum = "2380878cad4ac9aac1e2435f3eb4020e8374b5f13c296cb75b4620ff8e229154"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.89",
+ "syn 2.0.90",
  "synstructure 0.13.1",
 ]
 
@@ -13000,7 +13000,7 @@ checksum = "fa4f8080344d4671fb4e831a13ad1e68092748387dfc4f55e356242fae12ce3e"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.89",
+ "syn 2.0.90",
 ]
 
 [[package]]
@@ -13020,7 +13020,7 @@ checksum = "595eed982f7d355beb85837f651fa22e90b3c044842dc7f2c2842c086f295808"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.89",
+ "syn 2.0.90",
  "synstructure 0.13.1",
 ]
 
@@ -13041,7 +13041,7 @@ checksum = "ce36e65b0d2999d2aafac989fb249189a141aee1f53c612c1f37d72631959f69"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.89",
+ "syn 2.0.90",
 ]
 
 [[package]]
@@ -13076,7 +13076,7 @@ checksum = "6eafa6dfb17584ea3e2bd6e76e0cc15ad7af12b09abdd1ca55961bed9b1063c6"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.89",
+ "syn 2.0.90",
 ]
 
 [[package]]
