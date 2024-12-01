@@ -19,5 +19,11 @@ directory = "tests/assets/user/logMetadata/noMetadata"
 [[test.validator.account_dir]]
 directory = "tests/assets/user/logMetadata/mplMetadata"
 
+[[test.validator.account_dir]]
+directory = "tests/assets/user/initTransfer/native"
+
+[[test.validator.account_dir]]
+directory = "tests/assets/user/initTransfer/bridged"
+
 [scripts]
 test = "pnpm _test"

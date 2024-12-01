@@ -1,9 +1,15 @@
 /* eslint-disable n/no-unsupported-features/es-builtins */
-import {Keypair, PublicKey} from '@solana/web3.js';
+import {Keypair, PublicKey, SystemProgram} from '@solana/web3.js';
 import BN from 'bn.js';
 import {OmniBridgeSolanaSDK} from 'omni-bridge-solana-sdk';
 import {Base64} from 'js-base64';
-import {MintLayout, TOKEN_PROGRAM_ID} from '@solana/spl-token';
+import {
+  AccountLayout,
+  AccountState,
+  getAssociatedTokenAddressSync,
+  MintLayout,
+  TOKEN_PROGRAM_ID,
+} from '@solana/spl-token';
 import {
   findMetadataPda,
   getMetadataAccountDataSerializer,
@@ -39,6 +45,25 @@ export const programIdKp = Keypair.fromSecretKey(
   ]),
 ); // 3ZtEZ8xABFbUr4c1FVpXbQiVdqv4vwhvfCc8HMmhEeua
 
+export function systemAccount({
+  address,
+  balance,
+}: {
+  address: PublicKey;
+  balance: BN;
+}) {
+  return {
+    pubkey: address.toBase58(),
+    account: {
+      lamports: balance.toNumber(),
+      data: ['', 'base64'],
+      owner: SystemProgram.programId.toBase58(),
+      executable: false,
+      rentEpoch: 0,
+    },
+  };
+}
+
 export async function omniBridgeAccount<T>({
   sdk,
   account,
@@ -61,19 +86,21 @@ export async function omniBridgeAccount<T>({
   };
 }
 
+export type MintAccountArgs = {
+  mint: PublicKey;
+  decimals: number;
+  supply: BN;
+  mintAuthority?: PublicKey;
+  freezeAuthority?: PublicKey;
+};
+
 export function mintAccount({
   mint,
   decimals,
   supply,
   mintAuthority,
   freezeAuthority,
-}: {
-  mint: PublicKey;
-  decimals: number;
-  supply: BN;
-  mintAuthority?: PublicKey;
-  freezeAuthority?: PublicKey;
-}) {
+}: MintAccountArgs) {
   const data = Buffer.alloc(MintLayout.span);
 
   MintLayout.encode(
@@ -102,10 +129,9 @@ export function mintAccount({
 }
 
 export function metadataAccount({
-  metadata,
   umi,
-}: {
-  metadata: MetadataAccountDataArgs;
+  ...metadata
+}: MetadataAccountDataArgs & {
   umi: Umi;
 }) {
   return {
@@ -119,6 +145,62 @@ export function metadataAccount({
         'base64',
       ],
       owner: MPL_TOKEN_METADATA_PROGRAM_ID,
+      executable: false,
+      rentEpoch: 0,
+    },
+  };
+}
+
+export type TokenAccountArgs = {
+  address?: PublicKey;
+  mint: PublicKey;
+  owner: PublicKey;
+  amount: BN;
+  delegate?: PublicKey | null;
+  isFrozen?: boolean;
+  native?: BN;
+  delegatedAmount?: BN;
+  closeAuthority?: PublicKey | null;
+};
+
+export function tokenAccount({
+  address,
+  mint,
+  owner,
+  amount,
+  delegate,
+  isFrozen = false,
+  native,
+  delegatedAmount = new BN(0),
+  closeAuthority,
+}: TokenAccountArgs) {
+  if (!address) {
+    address = getAssociatedTokenAddressSync(mint, owner, true);
+  }
+  const data = Buffer.alloc(AccountLayout.span);
+  AccountLayout.encode(
+    {
+      mint,
+      owner,
+      amount: BigInt(amount.toString()),
+      delegateOption: delegate ? 1 : 0,
+      delegate: delegate || PublicKey.default,
+      state: isFrozen ? AccountState.Frozen : AccountState.Initialized,
+      isNativeOption: native ? 1 : 0,
+      isNative: BigInt(native?.toString() || 0),
+      delegatedAmount: BigInt(delegatedAmount.toString()),
+      closeAuthorityOption: closeAuthority ? 1 : 0,
+      closeAuthority: closeAuthority || PublicKey.default,
+    },
+    data,
+  );
+
+  return {
+    pubkey: address.toBase58(),
+    account: {
+      lamports: getMinimumBalanceForRentExemption(data.length),
+      data: [Base64.fromUint8Array(data), 'base64'],
+      owner: TOKEN_PROGRAM_ID.toBase58(),
       executable: false,
       rentEpoch: 0,
     },

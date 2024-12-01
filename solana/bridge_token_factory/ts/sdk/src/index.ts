@@ -687,4 +687,103 @@ export class OmniBridgeSolanaSDK {
       message: wormholeMessage.publicKey,
     };
   }
+
+  static parseWormholeMessage(message: Buffer) {
+    let offset = 0;
+    const messageType = message.readInt8(offset);
+    offset += 1;
+    switch (messageType) {
+      case 0: {
+        let chainId = message.readInt8(offset);
+        offset += 1;
+        if (chainId !== 2) {
+          throw new Error(`Sender has not solana chain ID: ${chainId}`);
+        }
+
+        const sender = new PublicKey(message.subarray(offset, offset + 32));
+        offset += 32;
+
+        chainId = message.readInt8(offset);
+        offset += 1;
+        if (chainId !== 2) {
+          throw new Error(`Mint has not solana chain ID: ${chainId}`);
+        }
+
+        const mint = new PublicKey(message.subarray(offset, offset + 32));
+        offset += 32;
+
+        const nonce = new BN(message.subarray(offset, offset + 8), 'le');
+        offset += 8;
+
+        const amount = new BN(message.subarray(offset, offset + 16), 'le');
+        offset += 16;
+
+        const fee = new BN(message.subarray(offset, offset + 16), 'le');
+        offset += 16;
+
+        const nativeFee = new BN(message.subarray(offset, offset + 16), 'le');
+        offset += 16;
+
+        const recipientLength = message.readInt32LE(offset);
+        offset += 4;
+        const recipient = message.toString(
+          'utf-8',
+          offset,
+          offset + recipientLength,
+        );
+        offset += recipientLength;
+
+        const messageLength = message.readUInt32LE(offset);
+        offset += 4;
+        const messageData = message.subarray(offset, offset + messageLength);
+
+        return {
+          messageType: 'initTransfer',
+          sender,
+          mint,
+          nonce,
+          amount,
+          fee,
+          nativeFee,
+          recipient,
+          messageData,
+        };
+      }
+      case 3: {
+        // LogMetadata
+
+        const chainId = message.readInt8(offset);
+        offset += 1;
+        if (chainId !== 2) {
+          throw new Error(`Mint has not solana chain ID: ${chainId}`);
+        }
+
+        const mint = new PublicKey(message.subarray(offset, offset + 32));
+        offset += 32;
+
+        const nameLength = message.readUInt32LE(offset);
+        offset += 4;
+        const name = message.toString('utf-8', offset, offset + nameLength);
+        offset += nameLength;
+
+        const symbolLength = message.readUInt32LE(offset);
+        offset += 4;
+        const symbol = message.toString('utf-8', offset, offset + symbolLength);
+        offset += symbolLength;
+
+        const decimals = message.readInt8(offset);
+        offset += 1;
+
+        return {
+          messageType: 'logMetadata',
+          mint,
+          name,
+          symbol,
+          decimals,
+        };
+      }
+      default:
+        throw new Error(`Unknown message type: ${messageType}`);
+    }
+  }
 }

@@ -26,20 +26,20 @@ describe('logMetadata', () => {
     await expect(
       sdk.provider.sendAndConfirm!(tx, [...signers]),
     ).resolves.toBeTruthy();
-    const messageData = Buffer.alloc(43);
-    messageData.writeInt8(3, 0); // LogMetadata
-    messageData.writeInt8(2, 1); // SOLANA_OMNI_BRIDGE_CHAIN_ID
-    mint.mint.toBuffer().copy(messageData, 2); // mint
-    // Name
-    messageData.writeUint32LE(0, 34);
-    // Symbol
-    messageData.writeUint32LE(0, 38);
-    messageData.writeInt8(mint.decimals, 42); // Decimals
+
     await expect(
       sdk.provider.connection
         .getAccountInfo(message)
-        .then(({data}) => data.subarray(95)),
-    ).resolves.toStrictEqual(messageData);
+        .then(({data}) =>
+          OmniBridgeSolanaSDK.parseWormholeMessage(data.subarray(95)),
+        ),
+    ).resolves.toStrictEqual({
+      messageType: 'logMetadata',
+      mint: mint.mint,
+      name: '',
+      symbol: '',
+      decimals: mint.decimals,
+    });
 
     await expect(
       sdk.provider.connection
@@ -71,29 +71,20 @@ describe('logMetadata', () => {
     await expect(
       sdk.provider.sendAndConfirm!(tx, [...signers]),
     ).resolves.toBeTruthy();
-    const messageData = Buffer.alloc(
-      43 + metadata.name.length + metadata.symbol.length,
-    );
-    messageData.writeInt8(3, 0); // LogMetadata
-    messageData.writeInt8(2, 1); // SOLANA_OMNI_BRIDGE_CHAIN_ID
-    mint.mint.toBuffer().copy(messageData, 2); // mint
-    let offset = 34;
-    // Name
-    messageData.writeUint32LE(metadata.name.length, offset);
-    offset += 4;
-    messageData.write(metadata.name, offset);
-    offset += metadata.name.length;
-    // Symbol
-    messageData.writeUint32LE(metadata.symbol.length, offset);
-    offset += 4;
-    messageData.write(metadata.symbol, offset);
-    offset += metadata.symbol.length;
-    messageData.writeInt8(mint.decimals, offset); // Decimals
+
     await expect(
       sdk.provider.connection
         .getAccountInfo(message)
-        .then(({data}) => data.subarray(95)),
-    ).resolves.toStrictEqual(messageData);
+        .then(({data}) =>
+          OmniBridgeSolanaSDK.parseWormholeMessage(data.subarray(95)),
+        ),
+    ).resolves.toStrictEqual({
+      messageType: 'logMetadata',
+      mint: mint.mint,
+      name: metadata.name,
+      symbol: metadata.symbol,
+      decimals: mint.decimals,
+    });
 
     await expect(
       sdk.provider.connection

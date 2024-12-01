@@ -2,7 +2,7 @@
 import {PublicKey} from '@solana/web3.js';
 import BN from 'bn.js';
 import {writeFile} from 'fs/promises';
-import {mintAccount} from '../../common';
+import {mintAccount} from '../../utils';
 import {OmniBridgeSolanaSDK} from 'omni-bridge-solana-sdk';
 
 export const mint = {
@@ -15,6 +15,6 @@ export const mint = {
 export async function setup(_sdk: OmniBridgeSolanaSDK) {
   await writeFile(
     '../../tests/assets/user/logMetadata/noMetadata/mint.json',
-    JSON.stringify(await mintAccount(mint), undefined, 2),
+    JSON.stringify(mintAccount(mint), undefined, 2),
   );
 }

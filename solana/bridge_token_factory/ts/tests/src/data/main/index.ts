@@ -1,7 +1,11 @@
 import {Keypair} from '@solana/web3.js';
 import BN from 'bn.js';
 import {ConfigAccount, OmniBridgeSolanaSDK} from 'omni-bridge-solana-sdk';
-import {getMinimumBalanceForRentExemption, omniBridgeAccount} from '../common';
+import {
+  getMinimumBalanceForRentExemption,
+  omniBridgeAccount,
+  systemAccount,
+} from '../utils';
 import {Base64} from 'js-base64';
 // eslint-disable-next-line n/no-unsupported-features/node-builtins
 import {writeFile} from 'fs/promises';
@@ -41,6 +45,18 @@ export async function setup(sdk: OmniBridgeSolanaSDK) {
         sdk,
         account: config(sdk),
         accountType: 'config',
+      }),
+      undefined,
+      2,
+    ),
+  );
+
+  await writeFile(
+    '../../tests/assets/main/solVault.json',
+    JSON.stringify(
+      systemAccount({
+        balance: new BN(getMinimumBalanceForRentExemption(0)),
+        address: sdk.solVault()[0],
       }),
       undefined,
       2,

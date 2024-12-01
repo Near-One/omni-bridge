@@ -2,7 +2,7 @@
 import {PublicKey} from '@solana/web3.js';
 import BN from 'bn.js';
 import {writeFile} from 'fs/promises';
-import {metadataAccount, mintAccount} from '../../common';
+import {metadataAccount, mintAccount} from '../../utils';
 import {OmniBridgeSolanaSDK} from 'omni-bridge-solana-sdk';
 import {Program} from '@coral-xyz/anchor';
 import {
@@ -46,6 +46,6 @@ export async function setup({umi}: {sdk: OmniBridgeSolanaSDK; umi: Umi}) {
 
   await writeFile(
     '../../tests/assets/user/logMetadata/mplMetadata/metadata.json',
-    JSON.stringify(metadataAccount({metadata, umi}), undefined, 2),
+    JSON.stringify(metadataAccount({...metadata, umi}), undefined, 2),
   );
 }

@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "test-initialize-simple": "jest -t 'Initializes in the simple case'",
-    "test": "jest -t logMetadata",
+    "test": "jest --testPathPattern=user",
     "lint": "gts lint",
     "clean": "gts clean",
     "compile": "tsc",

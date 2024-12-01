@@ -1,6 +1,6 @@
 import * as admin from './admin';
 import * as user from './user';
-import {programIdKp} from './common';
+import {programIdKp} from './utils';
 import * as main from './main';
 import {OmniBridgeSolanaSDK} from 'omni-bridge-solana-sdk';
 import {Umi} from '@metaplex-foundation/umi';
