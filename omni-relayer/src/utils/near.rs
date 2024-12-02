@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
 use log::info;
 
 use near_jsonrpc_client::{
@@ -46,7 +46,11 @@ pub async fn get_eth_light_client_last_block_number(
     let request = methods::query::RpcQueryRequest {
         block_reference: BlockReference::latest(),
         request: QueryRequest::CallFunction {
-            account_id: config.eth.light_client.clone(),
+            account_id: config
+                .eth
+                .light_client
+                .clone()
+                .context("Failed to get ETH light client")?,
             method_name: "last_block_number".to_string(),
             args: Vec::new().into(),
         },

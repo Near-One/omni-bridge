@@ -17,9 +17,9 @@ pub fn get_evm_private_key(chain_kind: ChainKind) -> String {
 pub struct Config {
     pub redis: Redis,
     pub near: Near,
-    pub eth: Eth,
-    pub base: Base,
-    pub arb: Arb,
+    pub eth: Evm,
+    pub base: Evm,
+    pub arb: Evm,
     pub wormhole: Wormhole,
 }
 
@@ -44,30 +44,12 @@ pub struct Near {
 }
 
 #[derive(Debug, Clone, serde::Deserialize)]
-pub struct Eth {
+pub struct Evm {
     pub rpc_http_url: String,
     pub rpc_ws_url: String,
     pub chain_id: u64,
     pub bridge_token_factory_address: Address,
-    pub light_client: AccountId,
-    pub block_processing_batch_size: u64,
-}
-
-#[derive(Debug, Clone, serde::Deserialize)]
-pub struct Base {
-    pub rpc_http_url: String,
-    pub rpc_ws_url: String,
-    pub chain_id: u64,
-    pub bridge_token_factory_address: Address,
-    pub block_processing_batch_size: u64,
-}
-
-#[derive(Debug, Clone, serde::Deserialize)]
-pub struct Arb {
-    pub rpc_http_url: String,
-    pub rpc_ws_url: String,
-    pub chain_id: u64,
-    pub bridge_token_factory_address: Address,
+    pub light_client: Option<AccountId>,
     pub block_processing_batch_size: u64,
 }
 
