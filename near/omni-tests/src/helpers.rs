@@ -87,7 +87,6 @@ pub mod tests {
     }
 
     pub fn get_test_deploy_token_args(
-        chain_kind: ChainKind,
         token_address: &OmniAddress,
         token_metadata: &BasicMetadata,
     ) -> DeployTokenArgs {
@@ -103,7 +102,7 @@ pub mod tests {
         let prover_args = borsh::to_vec(&prover_result).expect("Failed to serialize prover result");
 
         DeployTokenArgs {
-            chain_kind,
+            chain_kind: token_address.get_chain(),
             prover_args,
         }
     }

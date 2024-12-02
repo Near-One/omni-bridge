@@ -128,7 +128,6 @@ mod tests {
             token_deploy_initiator
                 .call(locker.id(), "deploy_token")
                 .args_borsh(get_test_deploy_token_args(
-                    ChainKind::Eth,
                     init_token_address,
                     token_metadata,
                 ))
