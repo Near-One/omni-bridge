@@ -30,7 +30,6 @@ block_processing_batch_size = 10_000
 
 [wormhole]
 api_url = "https://api.testnet.wormholescan.io/"
-
 sol_chain_id = 1
 near_chain_id = 15
 eth_chain_id = 10_002

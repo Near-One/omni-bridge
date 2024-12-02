@@ -50,7 +50,6 @@ pub struct Eth {
     pub chain_id: u64,
     pub bridge_token_factory_address: Address,
     pub light_client: AccountId,
-
     pub block_processing_batch_size: u64,
 }
 
@@ -60,7 +59,6 @@ pub struct Base {
     pub rpc_ws_url: String,
     pub chain_id: u64,
     pub bridge_token_factory_address: Address,
-
     pub block_processing_batch_size: u64,
 }
 
@@ -70,14 +68,12 @@ pub struct Arb {
     pub rpc_ws_url: String,
     pub chain_id: u64,
     pub bridge_token_factory_address: Address,
-
     pub block_processing_batch_size: u64,
 }
 
 #[derive(Debug, Clone, serde::Deserialize)]
 pub struct Wormhole {
     pub api_url: String,
-
     pub eth_chain_id: u64,
     pub base_chain_id: u64,
     pub arb_chain_id: u64,
