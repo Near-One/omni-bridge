@@ -8,7 +8,6 @@ pub const ARB_LAST_PROCESSED_BLOCK: &str = "arb_last_processed_block";
 
 pub const NEAR_INIT_TRANSFER_QUEUE: &str = "near_init_transfer_queue";
 pub const NEAR_SIGN_TRANSFER_EVENTS: &str = "near_sign_transfer_events";
-pub const NEAR_SIGN_CLAIM_NATIVE_FEE_QUEUE: &str = "near_sign_claim_native_fee_queue";
 
 pub const EVM_INIT_TRANSFER_EVENTS: &str = "evm_init_tranfer_events";
 

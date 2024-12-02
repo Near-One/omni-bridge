@@ -108,29 +108,9 @@ pub async fn handle_streamer_message(
                 )
                 .await;
             }
-            Nep141LockerEvent::FinTransferEvent {
-                ref transfer_message,
-            } => {
-                utils::redis::add_event(
-                    redis_connection,
-                    utils::redis::NEAR_SIGN_CLAIM_NATIVE_FEE_QUEUE,
-                    transfer_message.origin_nonce.to_string(),
-                    log,
-                )
-                .await;
-            }
-            Nep141LockerEvent::ClaimFeeEvent {
-                ref transfer_message,
-            } => {
-                utils::redis::add_event(
-                    redis_connection,
-                    utils::redis::NEAR_SIGN_CLAIM_NATIVE_FEE_QUEUE,
-                    transfer_message.origin_nonce.to_string(),
-                    log,
-                )
-                .await;
-            }
-            Nep141LockerEvent::LogMetadataEvent { .. } => {}
+            Nep141LockerEvent::FinTransferEvent { .. }
+            | Nep141LockerEvent::ClaimFeeEvent { .. }
+            | Nep141LockerEvent::LogMetadataEvent { .. } => {}
         }
     }
 }
