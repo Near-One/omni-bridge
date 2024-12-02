@@ -3,6 +3,7 @@ use std::sync::Arc;
 use anyhow::{Context, Result};
 use clap::Parser;
 use log::{error, info};
+use omni_types::ChainKind;
 
 mod config;
 mod startup;
@@ -80,17 +81,17 @@ async fn main() -> Result<()> {
     handles.push(tokio::spawn({
         let config = config.clone();
         let redis_client = redis_client.clone();
-        async move { startup::evm::start_eth_indexer(config, redis_client).await }
+        async move { startup::evm::start_indexer(config, redis_client, ChainKind::Eth).await }
     }));
     handles.push(tokio::spawn({
         let config = config.clone();
         let redis_client = redis_client.clone();
-        async move { startup::evm::start_base_indexer(config, redis_client).await }
+        async move { startup::evm::start_indexer(config, redis_client, ChainKind::Base).await }
     }));
     handles.push(tokio::spawn({
         let config = config.clone();
         let redis_client = redis_client.clone();
-        async move { startup::evm::start_arb_indexer(config, redis_client).await }
+        async move { startup::evm::start_indexer(config, redis_client, ChainKind::Arb).await }
     }));
 
     tokio::select! {

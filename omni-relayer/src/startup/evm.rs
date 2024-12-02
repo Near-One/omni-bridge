@@ -14,35 +14,66 @@ use ethereum_types::H256;
 
 use crate::{config, utils, workers::near::FinTransfer};
 
-pub async fn start_eth_indexer(config: config::Config, redis_client: redis::Client) -> Result<()> {
+pub async fn start_indexer(
+    config: config::Config,
+    redis_client: redis::Client,
+    chain_kind: ChainKind,
+) -> Result<()> {
     let mut redis_connection = redis_client.get_multiplexed_tokio_connection().await?;
 
+    let (
+        rpc_http_url,
+        rpc_ws_url,
+        bridge_token_factory_address,
+        last_processed_block_key,
+        block_processing_batch_size,
+    ) = match chain_kind {
+        ChainKind::Eth => (
+            config.eth.rpc_http_url.clone(),
+            config.eth.rpc_ws_url.clone(),
+            config.eth.bridge_token_factory_address,
+            utils::redis::ETH_LAST_PROCESSED_BLOCK,
+            config.eth.block_processing_batch_size,
+        ),
+        ChainKind::Base => (
+            config.base.rpc_http_url.clone(),
+            config.base.rpc_ws_url.clone(),
+            config.base.bridge_token_factory_address,
+            utils::redis::BASE_LAST_PROCESSED_BLOCK,
+            config.base.block_processing_batch_size,
+        ),
+        ChainKind::Arb => (
+            config.arb.rpc_http_url.clone(),
+            config.arb.rpc_ws_url.clone(),
+            config.arb.bridge_token_factory_address,
+            utils::redis::ARB_LAST_PROCESSED_BLOCK,
+            config.arb.block_processing_batch_size,
+        ),
+        _ => anyhow::bail!("Unsupported chain kind: {:?}", chain_kind),
+    };
+
     let http_provider = ProviderBuilder::new().on_http(
-        config
-            .eth
-            .rpc_http_url
+        rpc_http_url
             .parse()
             .context("Failed to parse ETH rpc provider as url")?,
     );
 
     let ws_provider = ProviderBuilder::new()
-        .on_ws(WsConnect::new(config.eth.rpc_ws_url.clone()))
+        .on_ws(WsConnect::new(rpc_ws_url))
         .await
         .context("Failed to initialize ETH WS provider")?;
 
     let latest_block = http_provider.get_block_number().await?;
-    let from_block = utils::redis::get_last_processed_block(
-        &mut redis_connection,
-        utils::redis::ETH_LAST_PROCESSED_BLOCK,
-    )
-    .await
-    .map_or_else(
-        || latest_block.saturating_sub(config.eth.block_processing_batch_size),
-        |block| block,
-    );
+    let from_block =
+        utils::redis::get_last_processed_block(&mut redis_connection, last_processed_block_key)
+            .await
+            .map_or_else(
+                || latest_block.saturating_sub(block_processing_batch_size),
+                |block| block,
+            );
 
     let filter = Filter::new()
-        .address(config.eth.bridge_token_factory_address)
+        .address(bridge_token_factory_address)
         .event_signature(
             [
                 utils::evm::InitTransfer::SIGNATURE_HASH,
@@ -51,13 +82,14 @@ pub async fn start_eth_indexer(config: config::Config, redis_client: redis::Clie
             .to_vec(),
         );
 
-    for current_block in
-        (from_block..latest_block).step_by(config.eth.block_processing_batch_size as usize)
-    {
+    for current_block in (from_block..latest_block).step_by(block_processing_batch_size as usize) {
         let logs = http_provider
-            .get_logs(&filter.clone().from_block(current_block).to_block(
-                (current_block + config.eth.block_processing_batch_size).min(latest_block),
-            ))
+            .get_logs(
+                &filter
+                    .clone()
+                    .from_block(current_block)
+                    .to_block((current_block + block_processing_batch_size).min(latest_block)),
+            )
             .await?;
 
         for log in logs {
@@ -70,128 +102,6 @@ pub async fn start_eth_indexer(config: config::Config, redis_client: redis::Clie
     let mut stream = ws_provider.subscribe_logs(&filter).await?.into_stream();
     while let Some(log) = stream.next().await {
         process_log(ChainKind::Eth, &mut redis_connection, &http_provider, log).await;
-    }
-
-    Ok(())
-}
-
-pub async fn start_base_indexer(config: config::Config, redis_client: redis::Client) -> Result<()> {
-    let mut redis_connection = redis_client.get_multiplexed_tokio_connection().await?;
-
-    let http_provider = ProviderBuilder::new().on_http(
-        config
-            .base
-            .rpc_http_url
-            .parse()
-            .context("Failed to parse BASE rpc provider as url")?,
-    );
-
-    let ws_provider = ProviderBuilder::new()
-        .on_ws(WsConnect::new(config.base.rpc_ws_url.clone()))
-        .await
-        .context("Failed to initialize BASE WS provider")?;
-
-    let latest_block = http_provider.get_block_number().await?;
-    let from_block = utils::redis::get_last_processed_block(
-        &mut redis_connection,
-        utils::redis::BASE_LAST_PROCESSED_BLOCK,
-    )
-    .await
-    .map_or_else(
-        || latest_block.saturating_sub(config.base.block_processing_batch_size),
-        |block| block,
-    );
-
-    let filter = Filter::new()
-        .address(config.base.bridge_token_factory_address)
-        .event_signature(
-            [
-                utils::evm::InitTransfer::SIGNATURE_HASH,
-                utils::evm::FinTransfer::SIGNATURE_HASH,
-            ]
-            .to_vec(),
-        );
-
-    for current_block in
-        (from_block..latest_block).step_by(config.base.block_processing_batch_size as usize)
-    {
-        let logs = http_provider
-            .get_logs(&filter.clone().from_block(current_block).to_block(
-                (current_block + config.base.block_processing_batch_size).min(latest_block),
-            ))
-            .await?;
-
-        for log in logs {
-            process_log(ChainKind::Base, &mut redis_connection, &http_provider, log).await;
-        }
-    }
-
-    info!("All historical logs processed, starting BASE WS subscription");
-
-    let mut stream = ws_provider.subscribe_logs(&filter).await?.into_stream();
-    while let Some(log) = stream.next().await {
-        process_log(ChainKind::Base, &mut redis_connection, &http_provider, log).await;
-    }
-
-    Ok(())
-}
-
-pub async fn start_arb_indexer(config: config::Config, redis_client: redis::Client) -> Result<()> {
-    let mut redis_connection = redis_client.get_multiplexed_tokio_connection().await?;
-
-    let http_provider = ProviderBuilder::new().on_http(
-        config
-            .arb
-            .rpc_http_url
-            .parse()
-            .context("Failed to parse ARB rpc provider as url")?,
-    );
-
-    let ws_provider = ProviderBuilder::new()
-        .on_ws(WsConnect::new(config.arb.rpc_ws_url.clone()))
-        .await
-        .context("Failed to initialize ARB WS provider")?;
-
-    let latest_block = http_provider.get_block_number().await?;
-    let from_block = utils::redis::get_last_processed_block(
-        &mut redis_connection,
-        utils::redis::ARB_LAST_PROCESSED_BLOCK,
-    )
-    .await
-    .map_or_else(
-        || latest_block.saturating_sub(config.arb.block_processing_batch_size),
-        |block| block,
-    );
-
-    let filter = Filter::new()
-        .address(config.arb.bridge_token_factory_address)
-        .event_signature(
-            [
-                utils::evm::InitTransfer::SIGNATURE_HASH,
-                utils::evm::FinTransfer::SIGNATURE_HASH,
-            ]
-            .to_vec(),
-        );
-
-    for current_block in
-        (from_block..latest_block).step_by(config.arb.block_processing_batch_size as usize)
-    {
-        let logs = http_provider
-            .get_logs(&filter.clone().from_block(current_block).to_block(
-                (current_block + config.arb.block_processing_batch_size).min(latest_block),
-            ))
-            .await?;
-
-        for log in logs {
-            process_log(ChainKind::Arb, &mut redis_connection, &http_provider, log).await;
-        }
-    }
-
-    info!("All historical logs processed, starting ARB WS subscription");
-
-    let mut stream = ws_provider.subscribe_logs(&filter).await?.into_stream();
-    while let Some(log) = stream.next().await {
-        process_log(ChainKind::Arb, &mut redis_connection, &http_provider, log).await;
     }
 
     Ok(())
