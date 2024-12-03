@@ -351,6 +351,8 @@ async fn get_storage_deposit_actions(
     }
 
     if init_log.nativeFee > 0 {
+        // TODO: Right now `get_native_token_id` is private, so either we make it public in a smart
+        // contract or make the logic manually
         let token_id = connector
             .near_get_native_token_id(init_transfer_with_timestamp.chain_kind)
             .await
