@@ -109,6 +109,11 @@ mod tests {
             })
         }
 
+        async fn new_native(chain_kind: ChainKind) -> anyhow::Result<Self> {
+            let init_token_address = OmniAddress::new_zero(chain_kind).unwrap();
+            Self::new(init_token_address).await
+        }
+
         async fn deploy_token(
             worker: &near_workspaces::Worker<near_workspaces::network::Sandbox>,
             locker: &near_workspaces::Contract,
@@ -125,17 +130,34 @@ mod tests {
                 .await?
                 .json()?;
 
-            token_deploy_initiator
-                .call(locker.id(), "deploy_token")
-                .args_borsh(get_test_deploy_token_args(
-                    init_token_address,
-                    token_metadata,
-                ))
-                .deposit(required_storage)
-                .max_gas()
-                .transact()
-                .await?
-                .into_result()?;
+            if init_token_address == &OmniAddress::new_zero(init_token_address.get_chain()).unwrap()
+            {
+                locker
+                    .call("deploy_native_token")
+                    .args_json(json!({
+                        "chain_kind": init_token_address.get_chain(),
+                        "name": token_metadata.name,
+                        "symbol": token_metadata.symbol,
+                        "decimals": token_metadata.decimals,
+                    }))
+                    .deposit(required_storage)
+                    .max_gas()
+                    .transact()
+                    .await?
+                    .into_result()?;
+            } else {
+                token_deploy_initiator
+                    .call(locker.id(), "deploy_token")
+                    .args_borsh(get_test_deploy_token_args(
+                        init_token_address,
+                        token_metadata,
+                    ))
+                    .deposit(required_storage)
+                    .max_gas()
+                    .transact()
+                    .await?
+                    .into_result()?;
+            }
 
             let token_account_id: AccountId = locker
                 .view("get_token_id")
@@ -181,13 +203,24 @@ mod tests {
     }
 
     #[rstest]
-    #[case(eth_token_address())]
-    #[case(sol_token_address())]
-    #[case(arb_token_address())]
-    #[case(base_token_address())]
+    #[case(eth_token_address(), false)]
+    #[case(sol_token_address(), false)]
+    #[case(arb_token_address(), false)]
+    #[case(base_token_address(), false)]
+    #[case(eth_token_address(), true)]
+    #[case(sol_token_address(), true)]
+    #[case(arb_token_address(), true)]
+    #[case(base_token_address(), true)]
     #[tokio::test]
-    async fn test_token_metadata(#[case] init_token_address: OmniAddress) -> anyhow::Result<()> {
-        let env = TestEnv::new(init_token_address).await?;
+    async fn test_token_metadata(
+        #[case] init_token_address: OmniAddress,
+        #[case] is_native: bool,
+    ) -> anyhow::Result<()> {
+        let env = if is_native {
+            TestEnv::new_native(init_token_address.get_chain()).await?
+        } else {
+            TestEnv::new(init_token_address).await?
+        };
 
         let fetched_metadata: BasicMetadata =
             env.token_contract.view("ft_metadata").await?.json()?;
@@ -200,13 +233,24 @@ mod tests {
     }
 
     #[rstest]
-    #[case(eth_token_address())]
-    #[case(sol_token_address())]
-    #[case(arb_token_address())]
-    #[case(base_token_address())]
+    #[case(eth_token_address(), false)]
+    #[case(sol_token_address(), false)]
+    #[case(arb_token_address(), false)]
+    #[case(base_token_address(), false)]
+    #[case(eth_token_address(), true)]
+    #[case(sol_token_address(), true)]
+    #[case(arb_token_address(), true)]
+    #[case(base_token_address(), true)]
     #[tokio::test]
-    async fn test_token_minting(#[case] init_token_address: OmniAddress) -> anyhow::Result<()> {
-        let env = TestEnv::new(init_token_address).await?;
+    async fn test_token_minting(
+        #[case] init_token_address: OmniAddress,
+        #[case] is_native: bool,
+    ) -> anyhow::Result<()> {
+        let env = if is_native {
+            TestEnv::new_native(init_token_address.get_chain()).await?
+        } else {
+            TestEnv::new(init_token_address).await?
+        };
         let recipient = env.create_registered_account(3).await?;
         let amount = U128(1000000000000000000000000);
 
@@ -242,13 +286,24 @@ mod tests {
     }
 
     #[rstest]
-    #[case(eth_token_address())]
-    #[case(sol_token_address())]
-    #[case(arb_token_address())]
-    #[case(base_token_address())]
+    #[case(eth_token_address(), false)]
+    #[case(sol_token_address(), false)]
+    #[case(arb_token_address(), false)]
+    #[case(base_token_address(), false)]
+    #[case(eth_token_address(), true)]
+    #[case(sol_token_address(), true)]
+    #[case(arb_token_address(), true)]
+    #[case(base_token_address(), true)]
     #[tokio::test]
-    async fn test_token_transfer(#[case] init_token_address: OmniAddress) -> anyhow::Result<()> {
-        let env = TestEnv::new(init_token_address).await?;
+    async fn test_token_transfer(
+        #[case] init_token_address: OmniAddress,
+        #[case] is_native: bool,
+    ) -> anyhow::Result<()> {
+        let env = if is_native {
+            TestEnv::new_native(init_token_address.get_chain()).await?
+        } else {
+            TestEnv::new(init_token_address).await?
+        };
         let sender = env.create_registered_account(3).await?;
         let receiver = env.create_registered_account(4).await?;
         let amount = U128(1000000000000000000000000);
