@@ -351,21 +351,13 @@ async fn get_storage_deposit_actions(
     }
 
     if init_log.nativeFee > 0 {
-        let omni_token_address = OmniAddress::new_zero(init_transfer_with_timestamp.chain_kind)
-            .map_err(|_| {
-                format!(
-                    "Failed to get zero EVM address for chain: {:?}",
-                    init_transfer_with_timestamp.chain_kind
-                )
-            })?;
-
         let token_id = connector
-            .near_get_token_id(omni_token_address.clone())
+            .near_get_native_token_id(init_transfer_with_timestamp.chain_kind)
             .await
             .map_err(|_| {
                 format!(
-                    "Failed to get token id by omni token address: {:?}",
-                    omni_token_address
+                    "Failed to get native token id by chain kind: {:?}",
+                    init_transfer_with_timestamp.chain_kind
                 )
             })?;
 
