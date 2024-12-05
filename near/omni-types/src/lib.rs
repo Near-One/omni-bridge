@@ -358,6 +358,21 @@ impl<'de> Deserialize<'de> for OmniAddress {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
+pub enum BridgeOnTransferMsg {
+    InitTransfer(InitTransferMsg),
+    FastFinTransfer(FastFinTransferMsg),
+}
+
+#[derive(Serialize, Deserialize, BorshSerialize, BorshDeserialize, Debug, Clone)]
+pub struct FastFinTransferMsg {
+    pub transfer_id: TransferId,
+    pub recipient: OmniAddress,
+    pub fee: Fee,
+    pub msg: String,
+    pub storage_deposit_amount: Option<u128>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct InitTransferMsg {
     pub recipient: OmniAddress,
     pub fee: U128,
@@ -486,11 +501,18 @@ pub struct BasicMetadata {
     pub decimals: u8,
 }
 
-#[derive(BorshDeserialize, BorshSerialize, Debug, Clone, PartialEq, Eq)]
+#[derive(BorshDeserialize, BorshSerialize, Debug, Clone)]
 pub struct FastTransfer {
     pub transfer_id: TransferId,
-    pub token: AccountId,
+    pub token_id: AccountId,
     pub amount: U128,
-    pub recipient: AccountId,
+    pub fee: Fee,
+    pub recipient: OmniAddress,
     pub msg: String,
+}
+
+impl FastTransfer {
+    pub fn hash(&self) -> [u8; 32] {
+        utils::keccak256(&borsh::to_vec(self).unwrap())
+    }
 }

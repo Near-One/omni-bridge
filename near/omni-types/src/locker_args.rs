@@ -1,4 +1,4 @@
-use crate::{ChainKind, FastTransfer};
+use crate::ChainKind;
 use near_sdk::{
     borsh::{self, BorshDeserialize, BorshSerialize},
     AccountId,
@@ -34,10 +34,4 @@ pub struct BindTokenArgs {
 pub struct DeployTokenArgs {
     pub chain_kind: ChainKind,
     pub prover_args: Vec<u8>,
-}
-
-#[derive(BorshDeserialize, BorshSerialize, Clone)]
-pub struct FastTransferArgs {
-    pub fast_transfer: FastTransfer,
-    pub storage_deposit_action: StorageDepositAction,
 }
