@@ -8,6 +8,8 @@ spec:
   targets:
     - ./near/omni-prover/omni-prover/.catalog-info.yaml
     - ./near/omni-prover/evm-prover/.catalog-info.yaml
+    - ./near/omni-prover/wormhole-omni-prover-proxy/.catalog-info.yaml
+    - ./near/omni-types/.catalog-info.yaml
     - ./near/omni-bridge/.catalog-info.yaml
     - ./evm/bridge-token-factory/.catalog-info.yaml
     - ./omni-relayer/.catalog-info.yaml

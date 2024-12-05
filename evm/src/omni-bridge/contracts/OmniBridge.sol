@@ -256,7 +256,7 @@ contract OmniBridge is
     function initTransferExtension(
         address sender,
         address tokenAddress,
-        uint128 originNonce,
+        uint64 originNonce,
         uint128 amount,
         uint128 fee,
         uint128 nativeFee,
@@ -286,4 +286,6 @@ contract OmniBridge is
     function _authorizeUpgrade(
         address newImplementation
     ) internal override onlyRole(DEFAULT_ADMIN_ROLE) {}
+
+    uint256[50] private __gap;
 }
