@@ -516,3 +516,16 @@ impl FastTransfer {
         utils::keccak256(&borsh::to_vec(self).unwrap())
     }
 }
+
+impl FastTransfer {
+    pub fn from_transfer(transfer: TransferMessage, token_id: AccountId) -> Self {
+        FastTransfer {
+            transfer_id: transfer.get_transfer_id(),
+            token_id,
+            amount: transfer.amount,
+            fee: transfer.fee,
+            recipient: transfer.recipient,
+            msg: transfer.msg,
+        }
+    }
+}

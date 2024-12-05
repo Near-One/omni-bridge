@@ -556,15 +556,10 @@ impl Contract {
         fast_fin_transfer_msg: FastFinTransferMsg,
     ) -> PromiseOrValue<U128> {
         let token_id = env::predecessor_account_id();
-        let mut finaliser_balance = self
-            .storage_balance_of(&sender_id)
-            .unwrap_or_else(|| env::panic_str("ERR_EMPTY_STORAGE_BALANCE"))
-            .available;
-
         let fast_transfer = FastTransfer {
             token_id: token_id.clone(),
             recipient: fast_fin_transfer_msg.recipient.clone(),
-            amount,
+            amount: U128(amount.0 + fast_fin_transfer_msg.fee.fee.0),
             fee: fast_fin_transfer_msg.fee,
             transfer_id: fast_fin_transfer_msg.transfer_id,
             msg: fast_fin_transfer_msg.msg,
@@ -572,16 +567,29 @@ impl Contract {
 
         match fast_fin_transfer_msg.recipient {
             OmniAddress::Near(recipient) => {
+                let storage_deposit_amount = fast_fin_transfer_msg
+                    .storage_deposit_amount
+                    .unwrap_or_default();
+                if storage_deposit_amount > 0 {
+                    self.update_storage_balance(
+                        sender_id.clone(),
+                        NearToken::from_yoctonear(storage_deposit_amount),
+                        NearToken::from_yoctonear(0),
+                    );
+                }
+
                 let deposit_action = StorageDepositAction {
                     account_id: recipient,
                     token_id,
-                    storage_deposit_amount: fast_fin_transfer_msg.storage_deposit_amount.clone(),
+                    storage_deposit_amount: fast_fin_transfer_msg.storage_deposit_amount,
                 };
-
                 PromiseOrValue::Promise(
-                    Self::check_or_pay_ft_storage(&deposit_action, &mut finaliser_balance).then(
+                    Self::check_or_pay_ft_storage(
+                        &deposit_action,
+                        &mut NearToken::from_yoctonear(storage_deposit_amount),
+                    )
+                    .then(
                         Self::ext(env::current_account_id())
-                            .with_attached_deposit(finaliser_balance)
                             .with_static_gas(VERIFY_PROOF_CALLBACK_GAS)
                             .fast_fin_transfer_to_near_callback(fast_transfer, sender_id),
                     ),
@@ -612,12 +620,12 @@ impl Contract {
         let required_balance = self
             .add_fast_transfer(&fast_transfer, &relayer_id)
             .saturating_add(ONE_YOCTO);
-        self.update_storage_balance(relayer_id, required_balance, env::attached_deposit());
+        self.update_storage_balance(relayer_id, required_balance, NearToken::from_yoctonear(0));
 
         self.send_tokens(
             fast_transfer.token_id,
             recipient,
-            fast_transfer.amount,
+            U128(fast_transfer.amount.0 - fast_transfer.fee.fee.0),
             fast_transfer.msg,
         )
     }
@@ -1015,14 +1023,7 @@ impl Contract {
         let token = self.get_token_id(&transfer_message.token);
 
         // If fast transfer happened, change recipient to the relayer that executed fast transfer
-        let fast_transfer = FastTransfer {
-            transfer_id: transfer_message.get_transfer_id(),
-            token_id: token.clone(),
-            amount: U128(transfer_message.amount.0 - transfer_message.fee.fee.0),
-            fee: transfer_message.fee.clone(),
-            recipient: OmniAddress::Near(recipient.clone()),
-            msg: transfer_message.msg.clone(),
-        };
+        let fast_transfer = FastTransfer::from_transfer(transfer_message.clone(), token.clone());
         let (recipient, is_fast_transfer) = match self.fast_transfers.get(&fast_transfer.hash()) {
             Some(relayer) => {
                 require!(
@@ -1125,15 +1126,7 @@ impl Contract {
         let mut required_balance = self.add_fin_transfer(&transfer_message.get_transfer_id());
         let token = self.get_token_id(&transfer_message.token);
 
-        let fast_transfer = FastTransfer {
-            transfer_id: transfer_message.get_transfer_id(),
-            token_id: token.clone(),
-            amount: U128(transfer_message.amount.0 - transfer_message.fee.fee.0),
-            fee: transfer_message.fee.clone(),
-            recipient: transfer_message.recipient.clone(),
-            msg: transfer_message.msg.clone(),
-        };
-
+        let fast_transfer = FastTransfer::from_transfer(transfer_message.clone(), token.clone());
         let recipient = match self.fast_transfers.get(&fast_transfer.hash()) {
             Some(relayer) => {
                 require!(
@@ -1147,7 +1140,12 @@ impl Contract {
 
         // If fast transfer happened, send tokens to the relayer that executed fast transfer
         if let Some(relayer) = recipient {
-            self.send_tokens(token, relayer, transfer_message.amount, String::new());
+            self.send_tokens(
+                token,
+                relayer,
+                U128(transfer_message.amount.0 - transfer_message.fee.fee.0),
+                String::new(),
+            );
         } else {
             required_balance = self
                 .add_transfer_message(transfer_message.clone(), predecessor_account_id.clone())
@@ -1318,13 +1316,13 @@ impl Contract {
 
     fn add_fast_transfer(
         &mut self,
-        transfer_id: &FastTransfer,
+        fast_transfer: &FastTransfer,
         relayer_id: &AccountId,
     ) -> NearToken {
         let storage_usage = env::storage_usage();
         require!(
             self.fast_transfers
-                .insert(&transfer_id.hash(), relayer_id)
+                .insert(&fast_transfer.hash(), relayer_id)
                 .is_none(),
             "Fast transfer is already performed"
         );
