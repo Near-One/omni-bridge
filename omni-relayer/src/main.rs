@@ -72,21 +72,27 @@ async fn main() -> Result<()> {
         let jsonrpc_client = jsonrpc_client.clone();
         async move { startup::near::start_indexer(config, redis_client, jsonrpc_client).await }
     }));
-    handles.push(tokio::spawn({
-        let config = config.clone();
-        let redis_client = redis_client.clone();
-        async move { startup::evm::start_indexer(config, redis_client, ChainKind::Eth).await }
-    }));
-    handles.push(tokio::spawn({
-        let config = config.clone();
-        let redis_client = redis_client.clone();
-        async move { startup::evm::start_indexer(config, redis_client, ChainKind::Base).await }
-    }));
-    handles.push(tokio::spawn({
-        let config = config.clone();
-        let redis_client = redis_client.clone();
-        async move { startup::evm::start_indexer(config, redis_client, ChainKind::Arb).await }
-    }));
+    if config.eth.is_some() {
+        handles.push(tokio::spawn({
+            let config = config.clone();
+            let redis_client = redis_client.clone();
+            async move { startup::evm::start_indexer(config, redis_client, ChainKind::Eth).await }
+        }));
+    }
+    if config.base.is_some() {
+        handles.push(tokio::spawn({
+            let config = config.clone();
+            let redis_client = redis_client.clone();
+            async move { startup::evm::start_indexer(config, redis_client, ChainKind::Base).await }
+        }));
+    }
+    if config.arb.is_some() {
+        handles.push(tokio::spawn({
+            let config = config.clone();
+            let redis_client = redis_client.clone();
+            async move { startup::evm::start_indexer(config, redis_client, ChainKind::Arb).await }
+        }));
+    }
 
     tokio::select! {
         _ = tokio::signal::ctrl_c() => {

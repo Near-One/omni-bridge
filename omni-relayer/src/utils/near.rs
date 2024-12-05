@@ -43,11 +43,14 @@ pub async fn get_eth_light_client_last_block_number(
     config: &config::Config,
     jsonrpc_client: &JsonRpcClient,
 ) -> Result<u64> {
+    let Some(ref eth) = config.eth else {
+        anyhow::bail!("Failed to get ETH light client");
+    };
+
     let request = methods::query::RpcQueryRequest {
         block_reference: BlockReference::latest(),
         request: QueryRequest::CallFunction {
-            account_id: config
-                .eth
+            account_id: eth
                 .light_client
                 .clone()
                 .context("Failed to get ETH light client")?,

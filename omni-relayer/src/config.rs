@@ -17,9 +17,9 @@ pub fn get_evm_private_key(chain_kind: ChainKind) -> String {
 pub struct Config {
     pub redis: Redis,
     pub near: Near,
-    pub eth: Evm,
-    pub base: Evm,
-    pub arb: Evm,
+    pub eth: Option<Evm>,
+    pub base: Option<Evm>,
+    pub arb: Option<Evm>,
     pub wormhole: Wormhole,
 }
 

@@ -28,27 +28,42 @@ pub async fn start_indexer(
         last_processed_block_key,
         block_processing_batch_size,
     ) = match chain_kind {
-        ChainKind::Eth => (
-            config.eth.rpc_http_url.clone(),
-            config.eth.rpc_ws_url.clone(),
-            config.eth.bridge_token_factory_address,
-            utils::redis::ETH_LAST_PROCESSED_BLOCK,
-            config.eth.block_processing_batch_size,
-        ),
-        ChainKind::Base => (
-            config.base.rpc_http_url.clone(),
-            config.base.rpc_ws_url.clone(),
-            config.base.bridge_token_factory_address,
-            utils::redis::BASE_LAST_PROCESSED_BLOCK,
-            config.base.block_processing_batch_size,
-        ),
-        ChainKind::Arb => (
-            config.arb.rpc_http_url.clone(),
-            config.arb.rpc_ws_url.clone(),
-            config.arb.bridge_token_factory_address,
-            utils::redis::ARB_LAST_PROCESSED_BLOCK,
-            config.arb.block_processing_batch_size,
-        ),
+        ChainKind::Eth => {
+            let Some(ref eth) = config.eth else {
+                anyhow::bail!("Failed to get ETH config");
+            };
+            (
+                eth.rpc_http_url.clone(),
+                eth.rpc_ws_url.clone(),
+                eth.bridge_token_factory_address,
+                utils::redis::ETH_LAST_PROCESSED_BLOCK,
+                eth.block_processing_batch_size,
+            )
+        }
+        ChainKind::Base => {
+            let Some(ref base) = config.base else {
+                anyhow::bail!("Failed to get Base config");
+            };
+            (
+                base.rpc_http_url.clone(),
+                base.rpc_ws_url.clone(),
+                base.bridge_token_factory_address,
+                utils::redis::BASE_LAST_PROCESSED_BLOCK,
+                base.block_processing_batch_size,
+            )
+        }
+        ChainKind::Arb => {
+            let Some(ref arb) = config.arb else {
+                anyhow::bail!("Failed to get Arb config");
+            };
+            (
+                arb.rpc_http_url.clone(),
+                arb.rpc_ws_url.clone(),
+                arb.bridge_token_factory_address,
+                utils::redis::ARB_LAST_PROCESSED_BLOCK,
+                arb.block_processing_batch_size,
+            )
+        }
         _ => anyhow::bail!("Unsupported chain kind: {:?}", chain_kind),
     };
 
@@ -93,7 +108,7 @@ pub async fn start_indexer(
             .await?;
 
         for log in logs {
-            process_log(ChainKind::Eth, &mut redis_connection, &http_provider, log).await;
+            process_log(chain_kind, &mut redis_connection, &http_provider, log).await;
         }
     }
 

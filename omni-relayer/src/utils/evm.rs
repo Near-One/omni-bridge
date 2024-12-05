@@ -60,15 +60,27 @@ pub async fn get_vaa(
         let (chain_id, bridge_token_factory) = match chain_kind {
             ChainKind::Eth => (
                 config.wormhole.eth_chain_id,
-                config.eth.bridge_token_factory_address,
+                if let Some(eth) = &config.eth {
+                    eth.bridge_token_factory_address.clone()
+                } else {
+                    return None;
+                },
             ),
             ChainKind::Base => (
                 config.wormhole.base_chain_id,
-                config.base.bridge_token_factory_address,
+                if let Some(base) = &config.base {
+                    base.bridge_token_factory_address.clone()
+                } else {
+                    return None;
+                },
             ),
             ChainKind::Arb => (
                 config.wormhole.arb_chain_id,
-                config.arb.bridge_token_factory_address,
+                if let Some(arb) = &config.arb {
+                    arb.bridge_token_factory_address.clone()
+                } else {
+                    return None;
+                },
             ),
             _ => unreachable!("VAA is only supported for EVM chains"),
         };
@@ -105,8 +117,13 @@ pub async fn construct_prover_args(
 
         Some(prover_args)
     } else {
+        let Some(ref eth) = config.eth else {
+            warn!("Eth chain is not configured");
+            return None;
+        };
+
         let evm_proof_args =
-            match eth_proof::get_proof_for_event(tx_hash, topic, &config.eth.rpc_http_url).await {
+            match eth_proof::get_proof_for_event(tx_hash, topic, &eth.rpc_http_url).await {
                 Ok(proof) => proof,
                 Err(err) => {
                     warn!("Failed to get proof: {}", err);
