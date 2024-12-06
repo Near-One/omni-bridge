@@ -150,7 +150,7 @@ async fn handle_init_transfer_event(
 
     // TODO: Use existing API to check if fee is sufficient here
 
-    let vaa = utils::evm::get_vaa(
+    let vaa = utils::evm::get_vaa_from_evm_log(
         connector.clone(),
         init_transfer_with_timestamp.chain_kind,
         init_transfer_with_timestamp.tx_logs.clone(),

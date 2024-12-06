@@ -3,7 +3,7 @@ use log::info;
 
 use near_crypto::InMemorySigner;
 
-use evm_bridge_client::EvmBridgeClientBuilder;
+use evm_bridge_client::{EvmBridgeClient, EvmBridgeClientBuilder};
 use near_bridge_client::NearBridgeClientBuilder;
 use omni_connector::{OmniConnector, OmniConnectorBuilder};
 use omni_types::ChainKind;
@@ -13,6 +13,33 @@ use crate::config;
 
 pub mod evm;
 pub mod near;
+
+fn build_evm_bridge_client(
+    config: &config::Config,
+    chain_kind: ChainKind,
+) -> Result<Option<EvmBridgeClient>> {
+    let evm = match chain_kind {
+        ChainKind::Eth => &config.eth,
+        ChainKind::Base => &config.base,
+        ChainKind::Arb => &config.arb,
+        _ => unreachable!("Function `build_evm_bridge_client` supports only EVM chains"),
+    };
+
+    evm.as_ref()
+        .map(|evm| {
+            EvmBridgeClientBuilder::default()
+                .endpoint(Some(evm.rpc_http_url.clone()))
+                .chain_id(Some(evm.chain_id))
+                .private_key(Some(crate::config::get_evm_private_key(chain_kind)))
+                .bridge_token_factory_address(Some(evm.bridge_token_factory_address.to_string()))
+                .build()
+                .context(format!(
+                    "Failed to build EvmBridgeClient ({:?})",
+                    chain_kind
+                ))
+        })
+        .transpose()
+}
 
 pub fn build_omni_connector(
     config: &config::Config,
@@ -28,47 +55,9 @@ pub fn build_omni_connector(
         .build()
         .context("Failed to build NearBridgeClient")?;
 
-    let eth_bridge_client = if let Some(ref eth) = config.eth {
-        Some(
-            EvmBridgeClientBuilder::default()
-                .endpoint(Some(eth.rpc_http_url.clone()))
-                .chain_id(Some(eth.chain_id))
-                .private_key(Some(crate::config::get_evm_private_key(ChainKind::Eth)))
-                .bridge_token_factory_address(Some(eth.bridge_token_factory_address.to_string()))
-                .build()
-                .context("Failed to build EvmBridgeClient (Eth)")?,
-        )
-    } else {
-        None
-    };
-
-    let base_bridge_client = if let Some(ref base) = config.base {
-        Some(
-            EvmBridgeClientBuilder::default()
-                .endpoint(Some(base.rpc_http_url.clone()))
-                .chain_id(Some(base.chain_id))
-                .private_key(Some(crate::config::get_evm_private_key(ChainKind::Base)))
-                .bridge_token_factory_address(Some(base.bridge_token_factory_address.to_string()))
-                .build()
-                .context("Failed to build EvmBridgeClient (Base)")?,
-        )
-    } else {
-        None
-    };
-
-    let arb_bridge_client = if let Some(ref arb) = config.arb {
-        Some(
-            EvmBridgeClientBuilder::default()
-                .endpoint(Some(arb.rpc_http_url.clone()))
-                .chain_id(Some(arb.chain_id))
-                .private_key(Some(crate::config::get_evm_private_key(ChainKind::Arb)))
-                .bridge_token_factory_address(Some(arb.bridge_token_factory_address.to_string()))
-                .build()
-                .context("Failed to build EvmBridgeClient (Arb)")?,
-        )
-    } else {
-        None
-    };
+    let eth_bridge_client = build_evm_bridge_client(config, ChainKind::Eth)?;
+    let base_bridge_client = build_evm_bridge_client(config, ChainKind::Base)?;
+    let arb_bridge_client = build_evm_bridge_client(config, ChainKind::Arb)?;
 
     let wormhole_bridge_client = WormholeBridgeClientBuilder::default()
         .endpoint(Some(config.wormhole.api_url.clone()))
