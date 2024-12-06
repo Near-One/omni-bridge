@@ -6,7 +6,6 @@ use ethereum_types::H256;
 use futures::future::join_all;
 use log::{error, info, warn};
 
-use near_jsonrpc_client::JsonRpcClient;
 use omni_connector::OmniConnector;
 use omni_types::{
     locker_args::ClaimFeeArgs, near_events::Nep141LockerEvent, prover_result::ProofKind, ChainKind,
@@ -25,7 +24,6 @@ pub async fn sign_transfer(
     config: config::Config,
     redis_client: redis::Client,
     connector: Arc<OmniConnector>,
-    jsonrpc_client: JsonRpcClient,
 ) -> Result<()> {
     let redis_connection = redis_client.get_multiplexed_tokio_connection().await?;
 
@@ -53,7 +51,6 @@ pub async fn sign_transfer(
                     let config = config.clone();
                     let mut redis_connection = redis_connection.clone();
                     let connector = connector.clone();
-                    let jsonrpc_client = jsonrpc_client.clone();
 
                     async move {
                         let current_timestamp = chrono::Utc::now().timestamp();
@@ -105,48 +102,11 @@ pub async fn sign_transfer(
                             return;
                         }
 
-                        let is_fee_sufficient = match utils::fee::is_fee_sufficient(
-                                &config,
-                                &jsonrpc_client,
-                                &transfer_message.sender,
-                                &transfer_message.recipient,
-                                &transfer_message.token,
-                                &transfer_message.fee,
-                            )
-                            .await
-                        {
-                            Ok(is_fee_sufficient) => {
-                                if !is_fee_sufficient {
-                                    warn!("Fee is not sufficient for transfer: {:?}", init_transfer_with_timestamp.event);
-                                }
-
-                                is_fee_sufficient
-                            }
-                            Err(err) => {
-                                warn!("Failed to check fee: {}", err);
-
-                                 false
-                            }
-                        };
-
-                        if !is_fee_sufficient {
-                            utils::redis::add_event(
-                                &mut redis_connection,
-                                utils::redis::NEAR_INIT_TRANSFER_QUEUE,
-                                transfer_message.origin_nonce.0.to_string(),
-                                InitTransferWithTimestamp {
-                                    event: init_transfer_with_timestamp.event,
-                                    creation_timestamp: init_transfer_with_timestamp.creation_timestamp,
-                                    last_update_timestamp: Some(current_timestamp),
-                                },
-                            )
-                            .await;
-                            return;
-                        }
+                        // TODO: Use existing API to check if fee is sufficient
 
                         match connector
-                            .sign_transfer(
-                                transfer_message.origin_nonce.into(),
+                            .near_sign_transfer(
+                                transfer_message.origin_nonce,
                                 Some(config.near.token_locker_id),
                                 Some(transfer_message.fee.clone()),
                             )
@@ -208,14 +168,25 @@ pub async fn finalize_transfer(
                     let connector = connector.clone();
 
                     async move {
-                        let Nep141LockerEvent::SignTransferEvent { .. } = &event else {
+                        let Nep141LockerEvent::SignTransferEvent {
+                            message_payload, ..
+                        } = &event
+                        else {
                             error!("Expected SignTransferEvent, got: {:?}", event);
                             return;
                         };
 
                         info!("Received SignTransferEvent");
 
-                        match connector.evm_fin_transfer_with_log(event).await {
+                        let fin_transfer_args = match message_payload.recipient.get_chain() {
+                            ChainKind::Eth => omni_connector::FinTransferArgs::EvmFinTransfer {
+                                chain_kind: message_payload.recipient.get_chain(),
+                                event,
+                            },
+                            _ => todo!(),
+                        };
+
+                        match connector.fin_transfer(fin_transfer_args).await {
                             Ok(tx_hash) => {
                                 info!("Finalized deposit: {}", tx_hash);
                                 utils::redis::remove_event(
@@ -245,6 +216,7 @@ pub async fn finalize_transfer(
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub struct FinTransfer {
+    pub chain_kind: ChainKind,
     pub block_number: u64,
     pub log: Log,
     pub tx_logs: Option<TransactionReceipt>,
@@ -277,8 +249,13 @@ pub async fn claim_fee(
 
         for (key, event) in events {
             if let Ok(fin_transfer) = serde_json::from_str::<FinTransfer>(&event) {
-                let vaa =
-                    utils::evm::get_vaa(fin_transfer.tx_logs, &fin_transfer.log, &config).await;
+                let vaa = utils::evm::get_vaa_from_evm_log(
+                    connector.clone(),
+                    fin_transfer.chain_kind,
+                    fin_transfer.tx_logs,
+                    &config,
+                )
+                .await;
 
                 if vaa.is_none() {
                     let Ok(light_client_latest_block_number) =
@@ -335,12 +312,11 @@ pub async fn claim_fee(
                         };
 
                         let claim_fee_args = ClaimFeeArgs {
-                            chain_kind: ChainKind::Eth,
+                            chain_kind: fin_transfer.chain_kind,
                             prover_args,
-                            native_fee_recipient: Some(config.evm.relayer_address_on_eth),
                         };
 
-                        if let Ok(response) = connector.claim_fee(claim_fee_args).await {
+                        if let Ok(response) = connector.near_claim_fee(claim_fee_args).await {
                             info!("Claimed fee: {:?}", response);
                             utils::redis::remove_event(
                                 &mut redis_connection,
@@ -349,83 +325,6 @@ pub async fn claim_fee(
                             )
                             .await;
                         }
-                    }
-                }));
-            }
-        }
-
-        join_all(handlers).await;
-
-        tokio::time::sleep(tokio::time::Duration::from_secs(
-            utils::redis::SLEEP_TIME_AFTER_EVENTS_PROCESS_SECS,
-        ))
-        .await;
-    }
-}
-
-pub async fn sign_claim_native_fee(
-    config: config::Config,
-    redis_client: redis::Client,
-    connector: Arc<OmniConnector>,
-) -> Result<()> {
-    let redis_connection = redis_client.get_multiplexed_tokio_connection().await?;
-
-    loop {
-        let mut redis_connection_clone = redis_connection.clone();
-        let Some(events) = utils::redis::get_events(
-            &mut redis_connection_clone,
-            utils::redis::NEAR_SIGN_CLAIM_NATIVE_FEE_QUEUE.to_string(),
-        )
-        .await
-        else {
-            tokio::time::sleep(tokio::time::Duration::from_secs(
-                utils::redis::SLEEP_TIME_AFTER_EVENTS_PROCESS_SECS,
-            ))
-            .await;
-            continue;
-        };
-
-        let mut handlers = Vec::new();
-        for (key, event) in events {
-            if let Ok(event) = serde_json::from_str::<Nep141LockerEvent>(&event) {
-                handlers.push(tokio::spawn({
-                    let config = config.clone();
-                    let mut redis_connection = redis_connection.clone();
-                    let connector = connector.clone();
-
-                    async move {
-                        let (Nep141LockerEvent::FinTransferEvent {
-                            ref transfer_message,
-                            ..
-                        }
-                        | Nep141LockerEvent::ClaimFeeEvent {
-                            ref transfer_message,
-                        }) = event
-                        else {
-                            warn!("Expected FinTransferEvent/ClaimFeeEvent, got: {:?}", event);
-                            return;
-                        };
-
-                        info!("Received FinTransferEvent/ClaimFeeEvent log");
-
-                        match connector
-                            .sign_claim_native_fee(
-                                vec![transfer_message.origin_nonce.into()],
-                                config.evm.relayer_address_on_eth,
-                            )
-                            .await
-                        {
-                            Ok(tx_hash) => {
-                                info!("Signed claiming native fee: {:?}", tx_hash);
-                                utils::redis::remove_event(
-                                    &mut redis_connection,
-                                    utils::redis::NEAR_SIGN_CLAIM_NATIVE_FEE_QUEUE,
-                                    key,
-                                )
-                                .await;
-                            }
-                            Err(err) => error!("Failed to sign claiming native fee: {}", err),
-                        };
                     }
                 }));
             }

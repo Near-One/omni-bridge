@@ -3,6 +3,7 @@ use std::sync::Arc;
 use anyhow::{Context, Result};
 use clap::Parser;
 use log::{error, info};
+use omni_types::ChainKind;
 
 mod config;
 mod startup;
@@ -32,7 +33,7 @@ async fn main() -> Result<()> {
     let jsonrpc_client = near_jsonrpc_client::JsonRpcClient::connect(config.near.rpc_url.clone());
     let near_signer = startup::near::create_signer(config.near.credentials_path.clone())?;
 
-    let connector = Arc::new(startup::build_connector(&config, &near_signer)?);
+    let connector = Arc::new(startup::build_omni_connector(&config, &near_signer)?);
 
     let mut handles = Vec::new();
 
@@ -40,10 +41,7 @@ async fn main() -> Result<()> {
         let config = config.clone();
         let redis_client = redis_client.clone();
         let connector = connector.clone();
-        let jsonrpc_client = jsonrpc_client.clone();
-        async move {
-            workers::near::sign_transfer(config, redis_client, connector, jsonrpc_client).await
-        }
+        async move { workers::near::sign_transfer(config, redis_client, connector).await }
     }));
     handles.push(tokio::spawn({
         let redis_client = redis_client.clone();
@@ -57,34 +55,15 @@ async fn main() -> Result<()> {
         let jsonrpc_client = jsonrpc_client.clone();
         async move { workers::near::claim_fee(config, redis_client, connector, jsonrpc_client).await }
     }));
-    handles.push(tokio::spawn({
-        let config = config.clone();
-        let redis_client = redis_client.clone();
-        let connector = connector.clone();
-        async move { workers::near::sign_claim_native_fee(config, redis_client, connector).await }
-    }));
 
     handles.push(tokio::spawn({
         let config = config.clone();
         let redis_client = redis_client.clone();
         let connector = connector.clone();
         let jsonrpc_client = jsonrpc_client.clone();
-        let near_signer = near_signer.clone();
         async move {
-            workers::evm::finalize_transfer(
-                config,
-                redis_client,
-                connector,
-                jsonrpc_client,
-                near_signer,
-            )
-            .await
+            workers::evm::finalize_transfer(config, redis_client, connector, jsonrpc_client).await
         }
-    }));
-    handles.push(tokio::spawn({
-        let redis_client = redis_client.clone();
-        let connector = connector.clone();
-        async move { workers::evm::claim_native_fee(redis_client, connector).await }
     }));
 
     handles.push(tokio::spawn({
@@ -93,11 +72,27 @@ async fn main() -> Result<()> {
         let jsonrpc_client = jsonrpc_client.clone();
         async move { startup::near::start_indexer(config, redis_client, jsonrpc_client).await }
     }));
-    handles.push(tokio::spawn({
-        let config = config.clone();
-        let redis_client = redis_client.clone();
-        async move { startup::evm::start_indexer(config, redis_client).await }
-    }));
+    if config.eth.is_some() {
+        handles.push(tokio::spawn({
+            let config = config.clone();
+            let redis_client = redis_client.clone();
+            async move { startup::evm::start_indexer(config, redis_client, ChainKind::Eth).await }
+        }));
+    }
+    if config.base.is_some() {
+        handles.push(tokio::spawn({
+            let config = config.clone();
+            let redis_client = redis_client.clone();
+            async move { startup::evm::start_indexer(config, redis_client, ChainKind::Base).await }
+        }));
+    }
+    if config.arb.is_some() {
+        handles.push(tokio::spawn({
+            let config = config.clone();
+            let redis_client = redis_client.clone();
+            async move { startup::evm::start_indexer(config, redis_client, ChainKind::Arb).await }
+        }));
+    }
 
     tokio::select! {
         _ = tokio::signal::ctrl_c() => {

@@ -6,12 +6,32 @@ network = "testnet"
 rpc_url = "https://rpc.testnet.near.org/"
 token_locker_id = "omni-locker.testnet"
 
-[evm]
-rpc_http_url = "https://eth-sepolia.g.alchemy.com/v2/API-KEY"
-rpc_ws_url = "wss://eth-sepolia.g.alchemy.com/v2/API-KEY"
+[eth]
+rpc_http_url = "https://sepolia.infura.io/v3/API_KEY"
+rpc_ws_url = "wss://sepolia.infura.io/ws/v3/API_KEY"
 chain_id = 11_155_111
-bridge_token_factory_address = "0xAD167CA3A900c977d9edDf6Ec80d6095381DFD33"
+bridge_token_factory_address = "0x9Bb4BEC352c456183852AfB9b6C4098E20009928"
+light_client = "client-eth2.sepolia.testnet"
 block_processing_batch_size = 10_000
-eth_light_client = "client-eth2.sepolia.testnet"
 
-fin_transfer_gas_estimation = 150_000
+[base]
+rpc_http_url = "https://base-sepolia.infura.io/v3/API_KEY"
+rpc_ws_url = "wss://base-sepolia.infura.io/ws/v3/API_KEY"
+chain_id = 84_532
+bridge_token_factory_address = "0xd565f7CcE0FA1bB8DBe73FCDA281390d545f6200"
+block_processing_batch_size = 10_000
+
+[arb]
+rpc_http_url = "https://arbitrum-sepolia.infura.io/v3/API_KEY"
+rpc_ws_url = "wss://arbitrum-sepolia.infura.io/ws/v3/API_KEY"
+chain_id = 421_614
+bridge_token_factory_address = "0xd565f7CcE0FA1bB8DBe73FCDA281390d545f6200"
+block_processing_batch_size = 10_000
+
+[wormhole]
+api_url = "https://api.testnet.wormholescan.io/"
+sol_chain_id = 1
+near_chain_id = 15
+eth_chain_id = 10_002
+arb_chain_id = 10_003
+base_chain_id = 10_004

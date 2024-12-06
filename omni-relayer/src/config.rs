@@ -1,31 +1,26 @@
 use alloy::primitives::Address;
-use alloy::signers::k256::ecdsa::SigningKey;
-use alloy::signers::local::LocalSigner;
-use near_primitives::{borsh::BorshDeserialize, types::AccountId};
-use omni_types::{OmniAddress, H160};
+use near_primitives::types::AccountId;
+use omni_types::ChainKind;
 
-fn derive_evm_address_from_private_key() -> OmniAddress {
-    let decoded_private_key = hex::decode(
-        std::env::var("ETH_PRIVATE_KEY").expect("Failed to get `ETH_PRIVATE_KEY` env variable"),
-    )
-    .expect("Failed to decode `ETH_PRIVATE_KEY`");
+pub fn get_evm_private_key(chain_kind: ChainKind) -> String {
+    let env_var = match chain_kind {
+        ChainKind::Eth => "ETH_PRIVATE_KEY",
+        ChainKind::Base => "BASE_PRIVATE_KEY",
+        ChainKind::Arb => "ARB_PRIVATE_KEY",
+        _ => unreachable!("Unsupported chain kind"),
+    };
 
-    let secret_key = SigningKey::from_slice(&decoded_private_key)
-        .expect("Failed to create a `SecretKey` from the provided private key");
-
-    let signer = LocalSigner::from_signing_key(secret_key);
-
-    OmniAddress::Eth(
-        H160::try_from_slice(signer.address().as_slice())
-            .expect("Failed to create `OmniAddress` from the derived public key"),
-    )
+    std::env::var(env_var).unwrap_or_else(|_| panic!("Failed to get `{env_var}` env variable"))
 }
 
 #[derive(Debug, Clone, serde::Deserialize)]
 pub struct Config {
     pub redis: Redis,
     pub near: Near,
-    pub evm: Evm,
+    pub eth: Option<Evm>,
+    pub base: Option<Evm>,
+    pub arb: Option<Evm>,
+    pub wormhole: Wormhole,
 }
 
 #[derive(Debug, Clone, serde::Deserialize)]
@@ -54,11 +49,14 @@ pub struct Evm {
     pub rpc_ws_url: String,
     pub chain_id: u64,
     pub bridge_token_factory_address: Address,
+    pub light_client: Option<AccountId>,
     pub block_processing_batch_size: u64,
-    pub fin_transfer_gas_estimation: u64,
+}
 
-    #[serde(default = "derive_evm_address_from_private_key")]
-    pub relayer_address_on_eth: OmniAddress,
-
-    pub eth_light_client: AccountId,
+#[derive(Debug, Clone, serde::Deserialize)]
+pub struct Wormhole {
+    pub api_url: String,
+    pub eth_chain_id: u64,
+    pub base_chain_id: u64,
+    pub arb_chain_id: u64,
 }

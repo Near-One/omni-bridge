@@ -1,34 +1,37 @@
+use std::sync::Arc;
+
 use log::warn;
 
-use near_primitives::borsh::BorshSerialize;
+use omni_connector::OmniConnector;
 use omni_types::{
     prover_args::{EvmVerifyProofArgs, WormholeVerifyProofArgs},
     prover_result::ProofKind,
-    OmniAddress,
+    ChainKind,
 };
 
-use alloy::{rpc::types::Log, sol};
+use alloy::sol;
 use ethereum_types::H256;
 
-use crate::{config, utils};
+use crate::config;
 
 sol!(
     #[derive(Debug, serde::Serialize, serde::Deserialize)]
     event InitTransfer(
         address indexed sender,
         address indexed tokenAddress,
-        uint128 indexed nonce,
-        string token,
+        uint64 indexed originNonce,
         uint128 amount,
         uint128 fee,
         uint128 nativeFee,
-        string recipient
+        string recipient,
+        string message
     );
 
     #[derive(Debug, serde::Serialize, serde::Deserialize)]
     event FinTransfer(
-        uint128 indexed nonce,
-        string token,
+        uint8 indexed originChain,
+        uint64 indexed originNonce,
+        address tokenAddress,
         uint128 amount,
         address recipient,
         string feeRecipient
@@ -36,58 +39,71 @@ sol!(
 
     #[derive(Debug, serde::Serialize, serde::Deserialize)]
     event LogMessagePublished(
+        address sender,
         uint64 sequence,
         uint32 nonce,
+        bytes payload,
         uint8 consistencyLevel
     );
 );
 
-pub async fn get_vaa(
+pub async fn get_vaa_from_evm_log(
+    connector: Arc<OmniConnector>,
+    chain_kind: ChainKind,
     tx_logs: Option<alloy::rpc::types::TransactionReceipt>,
-    log: &Log,
     config: &config::Config,
 ) -> Option<String> {
-    if let Some(tx_logs) = tx_logs {
-        let mut vaa = None;
+    let Some(tx_logs) = tx_logs else {
+        warn!("Tx logs are empty");
+        return None;
+    };
 
-        let recipient = if let Ok(init_log) = log.log_decode::<InitTransfer>() {
-            init_log.inner.recipient.parse::<OmniAddress>().ok()
-        } else if let Ok(fin_log) = log.log_decode::<FinTransfer>() {
-            fin_log
-                .inner
-                .recipient
-                .to_string()
-                .parse::<OmniAddress>()
-                .ok()
-        } else {
-            None
+    let (chain_id, bridge_token_factory) = match chain_kind {
+        ChainKind::Eth => (
+            config.wormhole.eth_chain_id,
+            if let Some(eth) = &config.eth {
+                eth.bridge_token_factory_address
+            } else {
+                return None;
+            },
+        ),
+        ChainKind::Base => (
+            config.wormhole.base_chain_id,
+            if let Some(base) = &config.base {
+                base.bridge_token_factory_address
+            } else {
+                return None;
+            },
+        ),
+        ChainKind::Arb => (
+            config.wormhole.arb_chain_id,
+            if let Some(arb) = &config.arb {
+                arb.bridge_token_factory_address
+            } else {
+                return None;
+            },
+        ),
+        _ => unreachable!(
+            "Function `get_vaa_from_evm_log` supports getting VAA from only EVM chains"
+        ),
+    };
+
+    for log in tx_logs.inner.logs() {
+        let Ok(log) = log.log_decode::<LogMessagePublished>() else {
+            continue;
         };
 
-        if let Some(address) = recipient {
-            let chain_id = match address {
-                OmniAddress::Eth(_) => 2,
-                OmniAddress::Near(_) => 15,
-                OmniAddress::Sol(_) => 1,
-                OmniAddress::Arb(_) | OmniAddress::Base(_) => todo!(),
-            };
+        let Ok(vaa) = connector
+            .wormhole_get_vaa(chain_id, bridge_token_factory, log.inner.sequence)
+            .await
+        else {
+            continue;
+        };
 
-            for log in tx_logs.inner.logs() {
-                if let Ok(log) = log.log_decode::<LogMessagePublished>() {
-                    vaa = utils::wormhole::get_vaa(
-                        chain_id,
-                        config.evm.bridge_token_factory_address,
-                        log.inner.sequence,
-                    )
-                    .await
-                    .ok();
-                }
-            }
-        }
-
-        vaa
-    } else {
-        None
+        return Some(vaa);
     }
+
+    None
 }
 
 pub async fn construct_prover_args(
@@ -100,33 +116,28 @@ pub async fn construct_prover_args(
     if let Some(vaa) = vaa {
         let wormhole_proof_args = WormholeVerifyProofArgs { proof_kind, vaa };
 
-        let mut prover_args = Vec::new();
-        if let Err(err) = wormhole_proof_args.serialize(&mut prover_args) {
-            warn!("Failed to serialize wormhole proof: {}", err);
-        }
+        return borsh::to_vec(&wormhole_proof_args).ok();
+    }
 
-        Some(prover_args)
-    } else {
-        let evm_proof_args =
-            match eth_proof::get_proof_for_event(tx_hash, topic, &config.evm.rpc_http_url).await {
-                Ok(proof) => proof,
-                Err(err) => {
-                    warn!("Failed to get proof: {}", err);
-                    return None;
-                }
-            };
+    // For now only Eth chain is supported since it has a light client
+    let Some(ref eth) = config.eth else {
+        warn!("Eth chain is not configured");
+        return None;
+    };
 
-        let evm_proof_args = EvmVerifyProofArgs {
-            proof_kind,
-            proof: evm_proof_args,
+    let evm_proof_args =
+        match eth_proof::get_proof_for_event(tx_hash, topic, &eth.rpc_http_url).await {
+            Ok(proof) => proof,
+            Err(err) => {
+                warn!("Failed to get proof: {}", err);
+                return None;
+            }
         };
 
-        let mut prover_args = Vec::new();
-        if let Err(err) = evm_proof_args.serialize(&mut prover_args) {
-            warn!("Failed to serialize evm proof: {}", err);
-            return None;
-        }
+    let evm_proof_args = EvmVerifyProofArgs {
+        proof_kind,
+        proof: evm_proof_args,
+    };
 
-        Some(prover_args)
-    }
+    borsh::to_vec(&evm_proof_args).ok()
 }
