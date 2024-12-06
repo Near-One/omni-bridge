@@ -501,6 +501,9 @@ pub struct BasicMetadata {
     pub decimals: u8,
 }
 
+#[derive(BorshDeserialize, BorshSerialize, Debug, Clone, Eq, PartialEq)]
+pub struct FastTransferId(pub [u8; 32]);
+
 #[derive(BorshDeserialize, BorshSerialize, Debug, Clone)]
 pub struct FastTransfer {
     pub transfer_id: TransferId,
@@ -512,8 +515,8 @@ pub struct FastTransfer {
 }
 
 impl FastTransfer {
-    pub fn hash(&self) -> [u8; 32] {
-        utils::keccak256(&borsh::to_vec(self).unwrap())
+    pub fn id(&self) -> FastTransferId {
+        FastTransferId(utils::keccak256(&borsh::to_vec(self).unwrap()))
     }
 }
 

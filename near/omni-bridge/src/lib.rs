@@ -24,9 +24,9 @@ use omni_types::near_events::OmniBridgeEvent;
 use omni_types::prover_args::VerifyProofArgs;
 use omni_types::prover_result::ProverResult;
 use omni_types::{
-    BasicMetadata, BridgeOnTransferMsg, ChainKind, FastFinTransferMsg, FastTransfer, Fee,
-    InitTransferMsg, MetadataPayload, Nonce, OmniAddress, PayloadType, SignRequest, TransferId,
-    TransferMessage, TransferMessagePayload, UpdateFee,
+    BasicMetadata, BridgeOnTransferMsg, ChainKind, FastFinTransferMsg, FastTransfer,
+    FastTransferId, Fee, InitTransferMsg, MetadataPayload, Nonce, OmniAddress, PayloadType,
+    SignRequest, TransferId, TransferMessage, TransferMessagePayload, UpdateFee,
 };
 use storage::{TransferMessageStorage, TransferMessageStorageValue};
 
@@ -164,7 +164,7 @@ pub struct Contract {
     pub factories: LookupMap<ChainKind, OmniAddress>,
     pub pending_transfers: LookupMap<TransferId, TransferMessageStorage>,
     pub finalised_transfers: LookupSet<TransferId>,
-    pub fast_transfers: LookupMap<[u8; 32], AccountId>,
+    pub fast_transfers: LookupMap<FastTransferId, AccountId>,
     pub token_id_to_address: LookupMap<(ChainKind, AccountId), OmniAddress>,
     pub token_address_to_id: LookupMap<OmniAddress, AccountId>,
     pub deployed_tokens: LookupSet<AccountId>,
@@ -186,14 +186,15 @@ impl FungibleTokenReceiver for Contract {
         amount: U128,
         msg: String,
     ) -> PromiseOrValue<U128> {
+        let token_id = env::predecessor_account_id();
         let parsed_msg: BridgeOnTransferMsg =
             serde_json::from_str(&msg).sdk_expect("ERR_PARSE_MSG");
         let promise_or_value = match parsed_msg {
             BridgeOnTransferMsg::InitTransfer(init_transfer_msg) => {
-                PromiseOrValue::Value(self.init_transfer(sender_id, amount, init_transfer_msg))
+                PromiseOrValue::Value(self.init_transfer(sender_id, token_id, amount, init_transfer_msg))
             }
             BridgeOnTransferMsg::FastFinTransfer(fast_fin_transfer_msg) => {
-                self.fast_fin_transfer(sender_id, amount, fast_fin_transfer_msg)
+                self.fast_fin_transfer(sender_id, token_id, amount, fast_fin_transfer_msg)
             }
         };
 
@@ -404,10 +405,10 @@ impl Contract {
     fn init_transfer(
         &mut self,
         sender_id: AccountId,
+        token_id: AccountId,
         amount: U128,
         init_transfer_msg: InitTransferMsg,
     ) -> U128 {
-        let token_id = env::predecessor_account_id();
         require!(
             init_transfer_msg.recipient.get_chain() != ChainKind::Near,
             "ERR_INVALID_RECIPIENT_CHAIN"
@@ -552,10 +553,10 @@ impl Contract {
     fn fast_fin_transfer(
         &mut self,
         sender_id: AccountId,
+        token_id: AccountId,
         amount: U128,
         fast_fin_transfer_msg: FastFinTransferMsg,
     ) -> PromiseOrValue<U128> {
-        let token_id = env::predecessor_account_id();
         let fast_transfer = FastTransfer {
             token_id: token_id.clone(),
             recipient: fast_fin_transfer_msg.recipient.clone(),
@@ -1034,7 +1035,7 @@ impl Contract {
 
         // If fast transfer happened, change recipient to the relayer that executed fast transfer
         let fast_transfer = FastTransfer::from_transfer(transfer_message.clone(), token.clone());
-        let (recipient, is_fast_transfer) = match self.fast_transfers.get(&fast_transfer.hash()) {
+        let (recipient, is_fast_transfer) = match self.fast_transfers.get(&fast_transfer.id()) {
             Some(relayer) => {
                 require!(
                     predecessor_account_id == *relayer,
@@ -1137,7 +1138,7 @@ impl Contract {
         let token = self.get_token_id(&transfer_message.token);
 
         let fast_transfer = FastTransfer::from_transfer(transfer_message.clone(), token.clone());
-        let recipient = match self.fast_transfers.get(&fast_transfer.hash()) {
+        let recipient = match self.fast_transfers.get(&fast_transfer.id()) {
             Some(relayer) => {
                 require!(
                     predecessor_account_id == *relayer,
@@ -1322,7 +1323,7 @@ impl Contract {
         let storage_usage = env::storage_usage();
         require!(
             self.fast_transfers
-                .insert(&fast_transfer.hash(), relayer_id)
+                .insert(&fast_transfer.id(), relayer_id)
                 .is_none(),
             "Fast transfer is already performed"
         );
