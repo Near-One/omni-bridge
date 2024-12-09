@@ -428,6 +428,7 @@ pub struct TransferMessage {
     pub sender: OmniAddress,
     pub msg: String,
     pub destination_nonce: Nonce,
+    pub parent_transfer_id: Option<TransferId>,
 }
 
 impl TransferMessage {

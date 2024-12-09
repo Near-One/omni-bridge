@@ -190,9 +190,9 @@ impl FungibleTokenReceiver for Contract {
         let parsed_msg: BridgeOnTransferMsg =
             serde_json::from_str(&msg).sdk_expect("ERR_PARSE_MSG");
         let promise_or_value = match parsed_msg {
-            BridgeOnTransferMsg::InitTransfer(init_transfer_msg) => {
-                PromiseOrValue::Value(self.init_transfer(sender_id, token_id, amount, init_transfer_msg))
-            }
+            BridgeOnTransferMsg::InitTransfer(init_transfer_msg) => PromiseOrValue::Value(
+                self.init_transfer(sender_id, token_id, amount, init_transfer_msg),
+            ),
             BridgeOnTransferMsg::FastFinTransfer(fast_fin_transfer_msg) => {
                 self.fast_fin_transfer(sender_id, token_id, amount, fast_fin_transfer_msg)
             }
@@ -430,6 +430,7 @@ impl Contract {
             sender: OmniAddress::Near(sender_id.clone()),
             msg: String::new(),
             destination_nonce,
+            parent_transfer_id: None,
         };
         require!(
             transfer_message.fee.fee < transfer_message.amount,
@@ -534,6 +535,7 @@ impl Contract {
             sender: init_transfer.sender,
             msg: init_transfer.msg,
             destination_nonce,
+            parent_transfer_id: None,
         };
 
         if let OmniAddress::Near(recipient) = transfer_message.recipient.clone() {
@@ -640,8 +642,10 @@ impl Contract {
 
         let destination_nonce =
             self.get_next_destination_nonce(fast_transfer.recipient.get_chain());
+        self.current_origin_nonce += 1;
+
         let transfer_message = TransferMessage {
-            origin_nonce: fast_transfer.transfer_id.origin_nonce,
+            origin_nonce: self.current_origin_nonce,
             token: OmniAddress::Near(fast_transfer.token_id.clone()),
             amount: fast_transfer.amount,
             recipient: fast_transfer.recipient,
@@ -649,6 +653,7 @@ impl Contract {
             sender: OmniAddress::Near(relayer_id.clone()),
             msg: fast_transfer.msg,
             destination_nonce,
+            parent_transfer_id: Some(fast_transfer.transfer_id),
         };
 
         required_balance = self
