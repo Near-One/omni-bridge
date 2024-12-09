@@ -806,9 +806,9 @@ impl Contract {
         }
     }
 
-    pub fn get_native_token_id(&self, origin_chain: ChainKind) -> AccountId {
+    pub fn get_native_token_id(&self, chain: ChainKind) -> AccountId {
         let native_token_address =
-            OmniAddress::new_zero(origin_chain).sdk_expect("ERR_FAILED_TO_GET_ZERO_ADDRESS");
+            OmniAddress::new_zero(chain).sdk_expect("ERR_FAILED_TO_GET_ZERO_ADDRESS");
 
         self.get_token_id(&native_token_address)
     }
