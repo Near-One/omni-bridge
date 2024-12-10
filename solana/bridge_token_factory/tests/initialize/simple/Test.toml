@@ -1,0 +1,14 @@
+[test]
+startup_wait = 20000
+shutdown_wait = 2000
+upgradeable = false
+
+[[test.genesis]]
+address = "worm2ZoG2kUd4vFXhvjh93UUH596ayRfgQ2MgjNMTth"
+program = "../../assets/common/wormhole.so"
+
+[[test.validator.account_dir]]
+directory = "tests/assets/common"
+
+[scripts]
+test = "pnpm _test-initialize-simple"
