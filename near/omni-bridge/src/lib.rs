@@ -56,6 +56,7 @@ const DEPLOY_TOKEN_GAS: Gas = Gas::from_tgas(50);
 const BURN_TOKEN_GAS: Gas = Gas::from_tgas(10);
 const MINT_TOKEN_GAS: Gas = Gas::from_tgas(5);
 const SET_METADATA_GAS: Gas = Gas::from_tgas(10);
+const FT_RESOLVE_TRANSFER_GAS: Gas = Gas::from_tgas(3);
 const NO_DEPOSIT: NearToken = NearToken::from_near(0);
 const ONE_YOCTO: NearToken = NearToken::from_yoctonear(1);
 const SIGN_PATH: &str = "bridge-1";
@@ -630,6 +631,10 @@ impl Contract {
             recipient,
             U128(fast_transfer.amount.0 - fast_transfer.fee.fee.0),
             fast_transfer.msg,
+        ).then(
+            Self::ext(env::current_account_id())
+                .with_static_gas(FT_RESOLVE_TRANSFER_GAS)
+                .ft_resolve_transfer(fast_transfer.amount)
         )
     }
 
@@ -1015,6 +1020,17 @@ impl Contract {
 
     pub fn get_current_destination_nonce(&self, chain_kind: ChainKind) -> Nonce {
         self.destination_nonces.get(&chain_kind).unwrap_or_default()
+    }
+
+    #[private]
+    pub fn ft_resolve_transfer(
+        &mut self,
+        amount: U128,
+    ) -> U128 {
+        match env::promise_result(0) {
+            PromiseResult::Successful(_) => U128(0),
+            PromiseResult::Failed => amount,
+        }
     }
 }
 
