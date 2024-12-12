@@ -160,13 +160,30 @@ impl Contract {
     }
 
     pub fn required_balance_for_fin_transfer(&self) -> NearToken {
-        let key_len = borsh::to_vec(&(ChainKind::Eth, 0_u128))
+        let key_len = borsh::to_vec(&(ChainKind::Eth, 0_u64))
             .sdk_expect("ERR_BORSH")
             .len() as u64;
 
         let storage_cost =
             env::storage_byte_cost().saturating_mul((Self::get_basic_storage() + key_len).into());
         let ft_transfers_cost = NearToken::from_yoctonear(2);
+
+        storage_cost.saturating_add(ft_transfers_cost)
+    }
+
+    pub fn required_balance_for_fast_transfer(&self) -> NearToken {
+        let key_len = borsh::to_vec(&[0u8; 32])
+            .sdk_expect("ERR_BORSH")
+            .len() as u64;
+
+        let max_account_id: AccountId = "a".repeat(64).parse().sdk_expect("ERR_PARSE_ACCOUNT_ID");
+        let value_len = borsh::to_vec(&max_account_id)
+            .sdk_expect("ERR_BORSH")
+            .len() as u64;
+
+        let storage_cost =
+            env::storage_byte_cost().saturating_mul((Self::get_basic_storage() + key_len + value_len).into());
+        let ft_transfers_cost = NearToken::from_yoctonear(1);
 
         storage_cost.saturating_add(ft_transfers_cost)
     }

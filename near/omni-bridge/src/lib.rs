@@ -164,7 +164,7 @@ pub struct Contract {
     pub factories: LookupMap<ChainKind, OmniAddress>,
     pub pending_transfers: LookupMap<TransferId, TransferMessageStorage>,
     pub finalised_transfers: LookupSet<TransferId>,
-    pub fast_transfers: LookupMap<FastTransferId, AccountId>,
+    pub fast_transfers: LookupMap<FastTransferId, AccountId>, // value is relayer address that performed the transfer
     pub token_id_to_address: LookupMap<(ChainKind, AccountId), OmniAddress>,
     pub token_address_to_id: LookupMap<OmniAddress, AccountId>,
     pub deployed_tokens: LookupSet<AccountId>,
@@ -191,14 +191,13 @@ impl FungibleTokenReceiver for Contract {
             serde_json::from_str(&msg).sdk_expect("ERR_PARSE_MSG");
         let promise_or_value = match parsed_msg {
             BridgeOnTransferMsg::InitTransfer(init_transfer_msg) => PromiseOrValue::Value(
-                self.init_transfer(sender_id, token_id, amount, init_transfer_msg),
+                self.init_transfer(sender_id, token_id.clone(), amount, init_transfer_msg),
             ),
             BridgeOnTransferMsg::FastFinTransfer(fast_fin_transfer_msg) => {
-                self.fast_fin_transfer(sender_id, token_id, amount, fast_fin_transfer_msg)
+                self.fast_fin_transfer(sender_id, token_id.clone(), amount, fast_fin_transfer_msg)
             }
         };
 
-        let token_id = env::predecessor_account_id();
         if self.deployed_tokens.contains(&token_id) {
             ext_token::ext(token_id)
                 .with_static_gas(BURN_TOKEN_GAS)
@@ -476,6 +475,7 @@ impl Contract {
         }
     }
 
+    #[payable]
     pub fn fin_transfer(&mut self, #[serializer(borsh)] args: FinTransferArgs) -> Promise {
         require!(
             args.storage_deposit_actions.len() <= 3,
@@ -612,7 +612,7 @@ impl Contract {
         #[serializer(borsh)] relayer_id: AccountId,
     ) -> Promise {
         require!(
-            Self::check_storage_balance_result(1),
+            Self::check_storage_balance_result(0),
             "STORAGE_ERR: The transfer recipient is omitted"
         );
 
@@ -660,7 +660,7 @@ impl Contract {
             .add_transfer_message(transfer_message, relayer_id.clone())
             .saturating_add(required_balance);
 
-        self.update_storage_balance(relayer_id, required_balance, env::attached_deposit());
+        self.update_storage_balance(relayer_id, required_balance, NearToken::from_near(0));
     }
 
     #[payable]

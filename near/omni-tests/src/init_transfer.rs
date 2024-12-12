@@ -12,8 +12,8 @@ mod tests {
     };
     use near_workspaces::{result::ExecutionSuccess, types::NearToken, AccountId};
     use omni_types::{
-        near_events::OmniBridgeEvent, ChainKind, Fee, InitTransferMsg, OmniAddress, TransferId,
-        TransferMessage, UpdateFee,
+        near_events::OmniBridgeEvent, BridgeOnTransferMsg, ChainKind, Fee, InitTransferMsg,
+        OmniAddress, TransferId, TransferMessage, UpdateFee,
     };
 
     const DEFAULT_NEAR_SANDBOX_BALANCE: NearToken = NearToken::from_near(100);
@@ -203,7 +203,7 @@ mod tests {
                 "receiver_id": env.locker_contract.id(),
                 "amount": U128(transfer_amount),
                 "memo": None::<String>,
-                "msg": serde_json::to_string(&init_transfer_msg)?,
+                "msg": serde_json::to_string(&BridgeOnTransferMsg::InitTransfer(init_transfer_msg))?,
             }))
             .deposit(NearToken::from_yoctonear(1))
             .max_gas()

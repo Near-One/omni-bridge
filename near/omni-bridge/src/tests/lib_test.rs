@@ -6,7 +6,7 @@ use near_sdk::test_utils::VMContextBuilder;
 use near_sdk::RuntimeFeesConfig;
 use near_sdk::{test_vm_config, testing_env};
 use omni_types::prover_result::{InitTransferMessage, ProverResult};
-use omni_types::{EvmAddress, Nonce, TransferId};
+use omni_types::{BridgeOnTransferMsg, EvmAddress, Nonce, TransferId};
 use std::str::FromStr;
 
 use near_contract_standards::fungible_token::receiver::FungibleTokenReceiver;
@@ -92,7 +92,7 @@ fn run_ft_on_transfer(
     token_id: String,
     amount: U128,
     attached_deposit: Option<NearToken>,
-    msg: InitTransferMsg,
+    msg: BridgeOnTransferMsg,
 ) -> PromiseOrValue<U128> {
     let sender_id = AccountId::try_from(sender_id).expect("Invalid sender ID");
     let token_id = AccountId::try_from(token_id).expect("Invalid token ID");
@@ -125,7 +125,7 @@ fn test_initialize_contract() {
 }
 
 #[test]
-fn test_ft_on_transfer_nonce_increment() {
+fn test_init_transfer_nonce_increment() {
     let mut contract = get_default_contract();
 
     run_ft_on_transfer(
@@ -134,14 +134,14 @@ fn test_ft_on_transfer_nonce_increment() {
         DEFAULT_FT_CONTRACT_ACCOUNT.to_string(),
         U128(100),
         None,
-        get_init_transfer_msg(DEFAULT_ETH_USER_ADDRESS.to_string(), 0, 0),
+        BridgeOnTransferMsg::InitTransfer(get_init_transfer_msg(DEFAULT_ETH_USER_ADDRESS.to_string(), 0, 0)),
     );
 
     assert_eq!(contract.current_origin_nonce, DEFAULT_NONCE + 1);
 }
 
 #[test]
-fn test_ft_on_transfer_stored_transfer_message() {
+fn test_init_transfer_stored_transfer_message() {
     let mut contract = get_default_contract();
 
     let msg = get_init_transfer_msg(DEFAULT_ETH_USER_ADDRESS.to_string(), 0, 0);
@@ -151,7 +151,7 @@ fn test_ft_on_transfer_stored_transfer_message() {
         DEFAULT_FT_CONTRACT_ACCOUNT.to_string(),
         U128(DEFAULT_TRANSFER_AMOUNT),
         None,
-        msg.clone(),
+        BridgeOnTransferMsg::InitTransfer(msg.clone()),
     );
 
     let stored_transfer = contract.get_transfer_message(TransferId {
@@ -185,7 +185,7 @@ fn test_ft_on_transfer_stored_transfer_message() {
 }
 
 #[test]
-fn test_ft_on_transfer_promise_result() {
+fn test_init_transfer_promise_result() {
     let mut contract = get_default_contract();
 
     let promise = run_ft_on_transfer(
@@ -194,7 +194,7 @@ fn test_ft_on_transfer_promise_result() {
         DEFAULT_FT_CONTRACT_ACCOUNT.to_string(),
         U128(DEFAULT_TRANSFER_AMOUNT),
         None,
-        get_init_transfer_msg(DEFAULT_ETH_USER_ADDRESS.to_string(), 0, 0),
+        BridgeOnTransferMsg::InitTransfer(get_init_transfer_msg(DEFAULT_ETH_USER_ADDRESS.to_string(), 0, 0)),
     );
 
     let remaining = match promise {
@@ -206,7 +206,7 @@ fn test_ft_on_transfer_promise_result() {
 
 #[test]
 #[should_panic(expected = "ERR_INVALID_FEE")]
-fn test_ft_on_transfer_invalid_fee() {
+fn test_init_transfer_invalid_fee() {
     let mut contract = get_default_contract();
     run_ft_on_transfer(
         &mut contract,
@@ -214,16 +214,16 @@ fn test_ft_on_transfer_invalid_fee() {
         DEFAULT_FT_CONTRACT_ACCOUNT.to_string(),
         U128(DEFAULT_TRANSFER_AMOUNT),
         None,
-        get_init_transfer_msg(
+        BridgeOnTransferMsg::InitTransfer(get_init_transfer_msg(
             DEFAULT_ETH_USER_ADDRESS.to_string(),
             DEFAULT_TRANSFER_AMOUNT + 1,
             0,
-        ),
+        )),
     );
 }
 
 #[test]
-fn test_ft_on_transfer_balance_updated() {
+fn test_init_transfer_balance_updated() {
     let mut contract = get_default_contract();
 
     let min_storage_balance = contract.required_balance_for_account();
@@ -236,7 +236,7 @@ fn test_ft_on_transfer_balance_updated() {
         DEFAULT_FT_CONTRACT_ACCOUNT.to_string(),
         U128(DEFAULT_TRANSFER_AMOUNT),
         Some(total_balance),
-        get_init_transfer_msg(DEFAULT_ETH_USER_ADDRESS.to_string(), 0, 0),
+        BridgeOnTransferMsg::InitTransfer(get_init_transfer_msg(DEFAULT_ETH_USER_ADDRESS.to_string(), 0, 0)),
     );
 
     let storage_balance = contract
