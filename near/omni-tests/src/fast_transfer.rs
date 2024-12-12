@@ -320,20 +320,27 @@ mod tests {
         let transfer_msg = get_transfer_msg_to_near(&env, transfer_amount);
         let fast_transfer_msg = get_fast_transfer_msg(transfer_msg);
 
-        let relayer_balance_before = get_balance(&env.token_contract, env.relayer_account.id()).await?;
-        let contract_balance_before = get_balance(&env.token_contract, env.bridge_contract.id()).await?;
+        let relayer_balance_before =
+            get_balance(&env.token_contract, env.relayer_account.id()).await?;
+        let contract_balance_before =
+            get_balance(&env.token_contract, env.bridge_contract.id()).await?;
 
         let result = do_fast_transfer(&env, transfer_amount, fast_transfer_msg).await?;
 
         assert_eq!(0, result.failures().len());
 
         let recipient_balance: U128 = get_balance(&env.token_contract, &account_n(1)).await?;
-        let relayer_balance_after = get_balance(&env.token_contract, env.relayer_account.id()).await?;
-        let contract_balance_after = get_balance(&env.token_contract, env.bridge_contract.id()).await?;
+        let relayer_balance_after =
+            get_balance(&env.token_contract, env.relayer_account.id()).await?;
+        let contract_balance_after =
+            get_balance(&env.token_contract, env.bridge_contract.id()).await?;
 
         assert_eq!(transfer_amount, recipient_balance.0);
         assert_eq!(contract_balance_before, contract_balance_after);
-        assert_eq!(relayer_balance_before, U128(relayer_balance_after.0 + transfer_amount));
+        assert_eq!(
+            relayer_balance_before,
+            U128(relayer_balance_after.0 + transfer_amount)
+        );
 
         Ok(())
     }
@@ -348,8 +355,10 @@ mod tests {
 
         do_fast_transfer(&env, transfer_amount, fast_transfer_msg.clone()).await?;
 
-        let relayer_balance_before = get_balance(&env.token_contract, env.relayer_account.id()).await?;
-        let contract_balance_before = get_balance(&env.token_contract, env.bridge_contract.id()).await?;
+        let relayer_balance_before =
+            get_balance(&env.token_contract, env.relayer_account.id()).await?;
+        let contract_balance_before =
+            get_balance(&env.token_contract, env.bridge_contract.id()).await?;
 
         let result = do_fast_transfer(&env, transfer_amount, fast_transfer_msg).await?;
         assert_eq!(1, result.failures().len());
@@ -359,8 +368,10 @@ mod tests {
             format!("{:?}", err).contains("Fast transfer is already performed")
         }));
 
-        let relayer_balance_after = get_balance(&env.token_contract, env.relayer_account.id()).await?;
-        let contract_balance_after = get_balance(&env.token_contract, env.bridge_contract.id()).await?;
+        let relayer_balance_after =
+            get_balance(&env.token_contract, env.relayer_account.id()).await?;
+        let contract_balance_after =
+            get_balance(&env.token_contract, env.bridge_contract.id()).await?;
 
         assert_eq!(relayer_balance_before, relayer_balance_after);
         assert_eq!(contract_balance_before, contract_balance_after);
@@ -426,8 +437,10 @@ mod tests {
         let transfer_msg = get_transfer_msg_to_other_chain(&env, transfer_amount);
         let fast_transfer_msg = get_fast_transfer_msg(transfer_msg.clone());
 
-        let relayer_balance_before = get_balance(&env.token_contract, env.relayer_account.id()).await?;
-        let contract_balance_before = get_balance(&env.token_contract, env.bridge_contract.id()).await?;
+        let relayer_balance_before =
+            get_balance(&env.token_contract, env.relayer_account.id()).await?;
+        let contract_balance_before =
+            get_balance(&env.token_contract, env.bridge_contract.id()).await?;
 
         let result = do_fast_transfer(&env, transfer_amount, fast_transfer_msg.clone()).await?;
 
@@ -459,11 +472,19 @@ mod tests {
             transfer_message.sender
         );
 
-        let relayer_balance_after = get_balance(&env.token_contract, env.relayer_account.id()).await?;
-        let contract_balance_after = get_balance(&env.token_contract, env.bridge_contract.id()).await?;
+        let relayer_balance_after =
+            get_balance(&env.token_contract, env.relayer_account.id()).await?;
+        let contract_balance_after =
+            get_balance(&env.token_contract, env.bridge_contract.id()).await?;
 
-        assert_eq!(contract_balance_before, U128(contract_balance_after.0 - transfer_amount));
-        assert_eq!(relayer_balance_before, U128(relayer_balance_after.0 + transfer_amount));
+        assert_eq!(
+            contract_balance_before,
+            U128(contract_balance_after.0 - transfer_amount)
+        );
+        assert_eq!(
+            relayer_balance_before,
+            U128(relayer_balance_after.0 + transfer_amount)
+        );
 
         Ok(())
     }
@@ -478,8 +499,10 @@ mod tests {
 
         do_fast_transfer(&env, transfer_amount, fast_transfer_msg.clone()).await?;
 
-        let relayer_balance_before = get_balance(&env.token_contract, env.relayer_account.id()).await?;
-        let contract_balance_before = get_balance(&env.token_contract, env.bridge_contract.id()).await?;
+        let relayer_balance_before =
+            get_balance(&env.token_contract, env.relayer_account.id()).await?;
+        let contract_balance_before =
+            get_balance(&env.token_contract, env.bridge_contract.id()).await?;
 
         let result = do_fast_transfer(&env, transfer_amount, fast_transfer_msg).await?;
 
@@ -490,8 +513,10 @@ mod tests {
             format!("{:?}", err).contains("Fast transfer is already performed")
         }));
 
-        let relayer_balance_after = get_balance(&env.token_contract, env.relayer_account.id()).await?;
-        let contract_balance_after = get_balance(&env.token_contract, env.bridge_contract.id()).await?;
+        let relayer_balance_after =
+            get_balance(&env.token_contract, env.relayer_account.id()).await?;
+        let contract_balance_after =
+            get_balance(&env.token_contract, env.bridge_contract.id()).await?;
 
         assert_eq!(relayer_balance_before, relayer_balance_after);
         assert_eq!(contract_balance_before, contract_balance_after);

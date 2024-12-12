@@ -631,10 +631,11 @@ impl Contract {
             recipient,
             U128(fast_transfer.amount.0 - fast_transfer.fee.fee.0),
             fast_transfer.msg,
-        ).then(
+        )
+        .then(
             Self::ext(env::current_account_id())
                 .with_static_gas(FT_RESOLVE_TRANSFER_GAS)
-                .ft_resolve_transfer(fast_transfer.amount)
+                .ft_resolve_transfer(fast_transfer.amount),
         )
     }
 
@@ -1023,10 +1024,7 @@ impl Contract {
     }
 
     #[private]
-    pub fn ft_resolve_transfer(
-        &mut self,
-        amount: U128,
-    ) -> U128 {
+    pub fn ft_resolve_transfer(&mut self, amount: U128) -> U128 {
         match env::promise_result(0) {
             PromiseResult::Successful(_) => U128(0),
             PromiseResult::Failed => amount,
