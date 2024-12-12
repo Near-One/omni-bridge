@@ -947,6 +947,13 @@ impl Contract {
         }
     }
 
+    pub fn get_native_token_id(&self, chain: ChainKind) -> AccountId {
+        let native_token_address =
+            OmniAddress::new_zero(chain).sdk_expect("ERR_FAILED_TO_GET_ZERO_ADDRESS");
+
+        self.get_token_id(&native_token_address)
+    }
+
     pub fn get_transfer_message(&self, transfer_id: TransferId) -> TransferMessage {
         self.pending_transfers
             .get(&transfer_id)
@@ -1209,13 +1216,6 @@ impl Contract {
                     .ft_transfer_call(recipient, amount, None, msg.clone())
             }
         }
-    }
-
-    fn get_native_token_id(&self, origin_chain: ChainKind) -> AccountId {
-        let native_token_address =
-            OmniAddress::new_zero(origin_chain).sdk_expect("ERR_FAILED_TO_GET_ZERO_ADDRESS");
-
-        self.get_token_id(&native_token_address)
     }
 
     fn check_or_pay_ft_storage(
