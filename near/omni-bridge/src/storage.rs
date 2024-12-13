@@ -148,7 +148,6 @@ impl Contract {
                 sender: OmniAddress::Near(max_account_id.clone()),
                 msg: String::new(),
                 destination_nonce: 0,
-                parent_transfer_id: None,
             },
             owner: max_account_id,
         }))

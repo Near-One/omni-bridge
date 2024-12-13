@@ -428,7 +428,6 @@ pub struct TransferMessage {
     pub sender: OmniAddress,
     pub msg: String,
     pub destination_nonce: Nonce,
-    pub parent_transfer_id: Option<TransferId>,
 }
 
 impl TransferMessage {
@@ -505,7 +504,7 @@ pub struct BasicMetadata {
 #[derive(BorshDeserialize, BorshSerialize, Debug, Clone, Eq, PartialEq)]
 pub struct FastTransferId(pub [u8; 32]);
 
-#[derive(BorshDeserialize, BorshSerialize, Debug, Clone)]
+#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Debug, Clone)]
 pub struct FastTransfer {
     pub transfer_id: TransferId,
     pub token_id: AccountId,

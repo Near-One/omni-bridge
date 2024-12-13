@@ -56,7 +56,8 @@ const DEPLOY_TOKEN_GAS: Gas = Gas::from_tgas(50);
 const BURN_TOKEN_GAS: Gas = Gas::from_tgas(10);
 const MINT_TOKEN_GAS: Gas = Gas::from_tgas(5);
 const SET_METADATA_GAS: Gas = Gas::from_tgas(10);
-const FT_RESOLVE_TRANSFER_GAS: Gas = Gas::from_tgas(3);
+const RESOLVE_TRANSFER_GAS: Gas = Gas::from_tgas(3);
+const FAST_TRANSFER_CALLBACK_GAS: Gas = Gas::from_tgas(40);
 const NO_DEPOSIT: NearToken = NearToken::from_near(0);
 const ONE_YOCTO: NearToken = NearToken::from_yoctonear(1);
 const SIGN_PATH: &str = "bridge-1";
@@ -430,7 +431,6 @@ impl Contract {
             sender: OmniAddress::Near(sender_id.clone()),
             msg: String::new(),
             destination_nonce,
-            parent_transfer_id: None,
         };
         require!(
             transfer_message.fee.fee < transfer_message.amount,
@@ -536,7 +536,6 @@ impl Contract {
             sender: init_transfer.sender,
             msg: init_transfer.msg,
             destination_nonce,
-            parent_transfer_id: None,
         };
 
         if let OmniAddress::Near(recipient) = transfer_message.recipient.clone() {
@@ -594,7 +593,7 @@ impl Contract {
                     )
                     .then(
                         Self::ext(env::current_account_id())
-                            .with_static_gas(VERIFY_PROOF_CALLBACK_GAS)
+                            .with_static_gas(FAST_TRANSFER_CALLBACK_GAS)
                             .fast_fin_transfer_to_near_callback(fast_transfer, sender_id),
                     ),
                 )
@@ -626,6 +625,14 @@ impl Contract {
             .saturating_add(ONE_YOCTO);
         self.update_storage_balance(relayer_id, required_balance, NearToken::from_yoctonear(0));
 
+        env::log_str(
+            &OmniBridgeEvent::FastTransferEvent {
+                fast_transfer: fast_transfer.clone(),
+                new_transfer_id: None,
+            }
+            .to_log_string(),
+        );
+
         self.send_tokens(
             fast_transfer.token_id,
             recipient,
@@ -634,8 +641,8 @@ impl Contract {
         )
         .then(
             Self::ext(env::current_account_id())
-                .with_static_gas(FT_RESOLVE_TRANSFER_GAS)
-                .ft_resolve_transfer(fast_transfer.amount),
+                .with_static_gas(RESOLVE_TRANSFER_GAS)
+                .resolve_transfer(fast_transfer.amount),
         )
     }
 
@@ -653,18 +660,26 @@ impl Contract {
         let transfer_message = TransferMessage {
             origin_nonce: self.current_origin_nonce,
             token: OmniAddress::Near(fast_transfer.token_id.clone()),
-            amount: fast_transfer.amount,
-            recipient: fast_transfer.recipient,
-            fee: fast_transfer.fee,
+            amount: fast_transfer.amount.clone(),
+            recipient: fast_transfer.recipient.clone(),
+            fee: fast_transfer.fee.clone(),
             sender: OmniAddress::Near(relayer_id.clone()),
-            msg: fast_transfer.msg,
+            msg: fast_transfer.msg.clone(),
             destination_nonce,
-            parent_transfer_id: Some(fast_transfer.transfer_id),
         };
+        let new_transfer_id = transfer_message.get_transfer_id();
 
         required_balance = self
             .add_transfer_message(transfer_message, relayer_id.clone())
             .saturating_add(required_balance);
+
+        env::log_str(
+            &OmniBridgeEvent::FastTransferEvent {
+                fast_transfer: fast_transfer.clone(),
+                new_transfer_id: Some(new_transfer_id),
+            }
+            .to_log_string(),
+        );
 
         self.update_storage_balance(relayer_id, required_balance, NearToken::from_near(0));
     }
@@ -1024,11 +1039,8 @@ impl Contract {
     }
 
     #[private]
-    pub fn ft_resolve_transfer(&mut self, amount: U128) -> U128 {
-        match env::promise_result(0) {
-            PromiseResult::Successful(_) => U128(0),
-            PromiseResult::Failed => amount,
-        }
+    pub fn resolve_transfer(&mut self, _amount: U128) -> U128 {
+        U128(0)
     }
 }
 
