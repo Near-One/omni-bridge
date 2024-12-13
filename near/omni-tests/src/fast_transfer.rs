@@ -271,8 +271,15 @@ mod tests {
             .await?
             .json()?;
 
-        // let required_deposit_for_fin_transfer = NEP141_DEPOSIT
-        //     .saturating_add(required_balance_for_fin_transfer);
+        let required_balance_for_init_transfer: NearToken = env
+            .bridge_contract
+            .view("required_balance_for_init_transfer")
+            .await?
+            .json()?;
+
+        let attached_deposit = required_balance_for_init_transfer
+            .saturating_add(required_balance_for_fin_transfer)
+            .saturating_add(NEP141_DEPOSIT);
 
         let storage_deposit_action = StorageDepositAction {
             token_id: env.token_contract.id().clone(),
@@ -288,7 +295,7 @@ mod tests {
                 storage_deposit_actions: vec![storage_deposit_action],
                 prover_args: borsh::to_vec(&ProverResult::InitTransfer(transfer_msg)).unwrap(),
             })
-            .deposit(required_balance_for_fin_transfer)
+            .deposit(attached_deposit)
             .max_gas()
             .transact()
             .await?
@@ -578,9 +585,36 @@ mod tests {
         let result = do_fin_transfer(&env, transfer_msg).await;
 
         assert!(result.is_err_and(|err| {
-            println!("err: {:?}", err);
             format!("{:?}", err).contains("The transfer is already finalised")
         }));
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_fast_transfer_to_other_chain_already_finalised() -> anyhow::Result<()> {
+        let env = TestEnv::new(1_000_000).await?;
+
+        let transfer_amount = 100;
+        let transfer_msg = get_transfer_msg_to_other_chain(&env, transfer_amount);
+        let fast_transfer_msg = get_fast_transfer_msg(transfer_msg.clone());
+
+        do_fin_transfer(&env, transfer_msg).await?;
+
+        let relayer_balance_before =
+            get_balance(&env.token_contract, env.relayer_account.id()).await?;
+
+        let result = do_fast_transfer(&env, transfer_amount, fast_transfer_msg).await?;
+
+        let relayer_balance_after =
+            get_balance(&env.token_contract, env.relayer_account.id()).await?;
+
+        assert_eq!(relayer_balance_before, relayer_balance_after);
+
+        assert_eq!(1, result.failures().len());
+        let failure = result.failures()[0].clone().into_result();
+        assert!(failure
+            .is_err_and(|err| { format!("{:?}", err).contains("ERR_TRANSFER_ALREADY_FINALISED") }));
 
         Ok(())
     }

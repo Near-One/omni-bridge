@@ -651,6 +651,10 @@ impl Contract {
         fast_transfer: FastTransfer,
         relayer_id: AccountId,
     ) {
+        if self.is_transfer_finalised(fast_transfer.transfer_id) {
+            env::panic_str("ERR_TRANSFER_ALREADY_FINALISED");
+        }
+
         let mut required_balance = self.add_fast_transfer(&fast_transfer, &relayer_id);
 
         let destination_nonce =
