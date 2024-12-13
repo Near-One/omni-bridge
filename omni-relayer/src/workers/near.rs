@@ -215,11 +215,16 @@ pub async fn finalize_transfer(
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
-pub struct FinTransfer {
-    pub chain_kind: ChainKind,
-    pub block_number: u64,
-    pub log: Log,
-    pub tx_logs: Option<TransactionReceipt>,
+pub enum FinTransfer {
+    Evm {
+        chain_kind: ChainKind,
+        block_number: u64,
+        log: Log,
+        tx_logs: Option<TransactionReceipt>,
+    },
+    Solana {
+        sequence: String,
+    },
 }
 
 pub async fn claim_fee(
@@ -249,84 +254,92 @@ pub async fn claim_fee(
 
         for (key, event) in events {
             if let Ok(fin_transfer) = serde_json::from_str::<FinTransfer>(&event) {
-                let vaa = utils::evm::get_vaa_from_evm_log(
-                    connector.clone(),
-                    fin_transfer.chain_kind,
-                    fin_transfer.tx_logs,
-                    &config,
-                )
-                .await;
+                if let FinTransfer::Evm {
+                    chain_kind,
+                    block_number,
+                    log,
+                    tx_logs,
+                } = fin_transfer
+                {
+                    let vaa = utils::evm::get_vaa_from_evm_log(
+                        connector.clone(),
+                        chain_kind,
+                        tx_logs,
+                        &config,
+                    )
+                    .await;
 
-                if vaa.is_none() {
-                    let Ok(light_client_latest_block_number) =
-                        utils::near::get_eth_light_client_last_block_number(
-                            &config,
-                            &jsonrpc_client,
-                        )
-                        .await
-                    else {
-                        warn!("Failed to get eth light client last block number");
-                        continue;
-                    };
-
-                    if fin_transfer.block_number > light_client_latest_block_number {
-                        tokio::time::sleep(tokio::time::Duration::from_secs(
-                            utils::redis::SLEEP_TIME_AFTER_EVENTS_PROCESS_SECS,
-                        ))
-                        .await;
-                        continue;
-                    }
-                }
-
-                handlers.push(tokio::spawn({
-                    let config = config.clone();
-                    let mut redis_connection = redis_connection.clone();
-                    let connector = connector.clone();
-
-                    async move {
-                        info!("Received finalized transfer");
-
-                        let Some(tx_hash) = fin_transfer.log.transaction_hash else {
-                            warn!("No transaction hash in log: {:?}", fin_transfer.log);
-                            return;
-                        };
-
-                        let Some(topic) = fin_transfer.log.topic0() else {
-                            warn!("No topic0 in log: {:?}", fin_transfer.log);
-                            return;
-                        };
-
-                        let tx_hash = H256::from_slice(tx_hash.as_slice());
-
-                        let Some(prover_args) = utils::evm::construct_prover_args(
-                            &config,
-                            vaa,
-                            tx_hash,
-                            H256::from_slice(topic.as_slice()),
-                            ProofKind::FinTransfer,
-                        )
-                        .await
-                        else {
-                            warn!("Failed to get prover args");
-                            return;
-                        };
-
-                        let claim_fee_args = ClaimFeeArgs {
-                            chain_kind: fin_transfer.chain_kind,
-                            prover_args,
-                        };
-
-                        if let Ok(response) = connector.near_claim_fee(claim_fee_args).await {
-                            info!("Claimed fee: {:?}", response);
-                            utils::redis::remove_event(
-                                &mut redis_connection,
-                                utils::redis::FINALIZED_TRANSFERS,
-                                &key,
+                    if vaa.is_none() {
+                        let Ok(light_client_latest_block_number) =
+                            utils::near::get_eth_light_client_last_block_number(
+                                &config,
+                                &jsonrpc_client,
                             )
+                            .await
+                        else {
+                            warn!("Failed to get eth light client last block number");
+                            continue;
+                        };
+
+                        if block_number > light_client_latest_block_number {
+                            tokio::time::sleep(tokio::time::Duration::from_secs(
+                                utils::redis::SLEEP_TIME_AFTER_EVENTS_PROCESS_SECS,
+                            ))
                             .await;
+                            continue;
                         }
                     }
-                }));
+
+                    handlers.push(tokio::spawn({
+                        let config = config.clone();
+                        let mut redis_connection = redis_connection.clone();
+                        let connector = connector.clone();
+
+                        async move {
+                            info!("Received finalized transfer");
+
+                            let Some(tx_hash) = log.transaction_hash else {
+                                warn!("No transaction hash in log: {:?}", log);
+                                return;
+                            };
+
+                            let Some(topic) = log.topic0() else {
+                                warn!("No topic0 in log: {:?}", log);
+                                return;
+                            };
+
+                            let tx_hash = H256::from_slice(tx_hash.as_slice());
+
+                            let Some(prover_args) = utils::evm::construct_prover_args(
+                                &config,
+                                vaa,
+                                tx_hash,
+                                H256::from_slice(topic.as_slice()),
+                                ProofKind::FinTransfer,
+                            )
+                            .await
+                            else {
+                                warn!("Failed to get prover args");
+                                return;
+                            };
+
+                            let claim_fee_args = ClaimFeeArgs {
+                                chain_kind,
+                                prover_args,
+                            };
+
+                            if let Ok(response) = connector.near_claim_fee(claim_fee_args).await {
+                                info!("Claimed fee: {:?}", response);
+                                utils::redis::remove_event(
+                                    &mut redis_connection,
+                                    utils::redis::FINALIZED_TRANSFERS,
+                                    &key,
+                                )
+                                .await;
+                            }
+                        }
+                    }));
+                }
             }
         }
 

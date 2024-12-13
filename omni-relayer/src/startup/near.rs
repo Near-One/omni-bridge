@@ -8,6 +8,7 @@ use near_crypto::{InMemorySigner, SecretKey};
 use near_jsonrpc_client::JsonRpcClient;
 use near_lake_framework::{LakeConfig, LakeConfigBuilder};
 use near_primitives::types::AccountId;
+use omni_types::ChainKind;
 
 use crate::{config, utils};
 
@@ -71,7 +72,7 @@ async fn create_lake_config(
 ) -> Result<LakeConfig> {
     let start_block_height = match utils::redis::get_last_processed_block(
         redis_connection,
-        utils::redis::NEAR_LAST_PROCESSED_BLOCK,
+        &utils::redis::get_last_processed_block_key(ChainKind::Near).await,
     )
     .await
     {
@@ -123,7 +124,7 @@ pub async fn start_indexer(
 
                 utils::redis::update_last_processed_block(
                     &mut redis_connection,
-                    utils::redis::NEAR_LAST_PROCESSED_BLOCK,
+                    &utils::redis::get_last_processed_block_key(ChainKind::Near).await,
                     streamer_message.block.header.height,
                 )
                 .await;

@@ -1,15 +1,13 @@
 use log::warn;
+use omni_types::ChainKind;
 use redis::{aio::MultiplexedConnection, AsyncCommands};
-
-pub const NEAR_LAST_PROCESSED_BLOCK: &str = "near_last_processed_block";
-pub const ETH_LAST_PROCESSED_BLOCK: &str = "eth_last_processed_block";
-pub const BASE_LAST_PROCESSED_BLOCK: &str = "base_last_processed_block";
-pub const ARB_LAST_PROCESSED_BLOCK: &str = "arb_last_processed_block";
 
 pub const NEAR_INIT_TRANSFER_QUEUE: &str = "near_init_transfer_queue";
 pub const NEAR_SIGN_TRANSFER_EVENTS: &str = "near_sign_transfer_events";
 
 pub const EVM_INIT_TRANSFER_EVENTS: &str = "evm_init_tranfer_events";
+
+pub const SOLANA_INIT_TRANSFER_EVENTS: &str = "solana_init_transfer_events";
 
 pub const FINALIZED_TRANSFERS: &str = "finalized_transfers";
 
@@ -20,6 +18,10 @@ pub const SLEEP_TIME_AFTER_EVENTS_PROCESS_SECS: u64 = 10;
 
 const QUERY_RETRY_ATTEMPTS: u64 = 10;
 const QUERY_RETRY_SLEEP_SECS: u64 = 1;
+
+pub async fn get_last_processed_block_key(chain_kind: ChainKind) -> String {
+    format!("{chain_kind:?}_LAST_PROCESSED_BLOCK")
+}
 
 pub async fn get_last_processed_block(
     redis_connection: &mut MultiplexedConnection,

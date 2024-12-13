@@ -1,6 +1,7 @@
 use alloy::primitives::Address;
 use near_primitives::types::AccountId;
 use omni_types::ChainKind;
+use solana_sdk::pubkey::Pubkey;
 
 pub fn get_evm_private_key(chain_kind: ChainKind) -> String {
     let env_var = match chain_kind {
@@ -20,6 +21,7 @@ pub struct Config {
     pub eth: Option<Evm>,
     pub base: Option<Evm>,
     pub arb: Option<Evm>,
+    pub solana: Option<Solana>,
     pub wormhole: Wormhole,
 }
 
@@ -51,6 +53,16 @@ pub struct Evm {
     pub bridge_token_factory_address: Address,
     pub light_client: Option<AccountId>,
     pub block_processing_batch_size: u64,
+}
+
+#[derive(Debug, Clone, serde::Deserialize)]
+pub struct Solana {
+    pub rpc_http_url: String,
+    pub rpc_ws_url: String,
+    pub program_id: Pubkey,
+    pub wormhole_id: Pubkey,
+    pub init_transfer_discriminator: Vec<u8>,
+    pub finalize_transfer_discriminator: Vec<u8>,
 }
 
 #[derive(Debug, Clone, serde::Deserialize)]

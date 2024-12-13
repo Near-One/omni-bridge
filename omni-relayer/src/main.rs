@@ -94,6 +94,14 @@ async fn main() -> Result<()> {
         }));
     }
 
+    if config.solana.is_some() {
+        handles.push(tokio::spawn({
+            let config = config.clone();
+            let redis_client = redis_client.clone();
+            async move { startup::solana::start_indexer(config, redis_client).await }
+        }));
+    }
+
     tokio::select! {
         _ = tokio::signal::ctrl_c() => {
             info!("Received Ctrl+C signal, shutting down.");

@@ -21,51 +21,45 @@ pub async fn start_indexer(
 ) -> Result<()> {
     let mut redis_connection = redis_client.get_multiplexed_tokio_connection().await?;
 
-    let (
-        rpc_http_url,
-        rpc_ws_url,
-        bridge_token_factory_address,
-        last_processed_block_key,
-        block_processing_batch_size,
-    ) = match chain_kind {
-        ChainKind::Eth => {
-            let Some(ref eth) = config.eth else {
-                anyhow::bail!("Failed to get ETH config");
-            };
-            (
-                eth.rpc_http_url.clone(),
-                eth.rpc_ws_url.clone(),
-                eth.bridge_token_factory_address,
-                utils::redis::ETH_LAST_PROCESSED_BLOCK,
-                eth.block_processing_batch_size,
-            )
-        }
-        ChainKind::Base => {
-            let Some(ref base) = config.base else {
-                anyhow::bail!("Failed to get Base config");
-            };
-            (
-                base.rpc_http_url.clone(),
-                base.rpc_ws_url.clone(),
-                base.bridge_token_factory_address,
-                utils::redis::BASE_LAST_PROCESSED_BLOCK,
-                base.block_processing_batch_size,
-            )
-        }
-        ChainKind::Arb => {
-            let Some(ref arb) = config.arb else {
-                anyhow::bail!("Failed to get Arb config");
-            };
-            (
-                arb.rpc_http_url.clone(),
-                arb.rpc_ws_url.clone(),
-                arb.bridge_token_factory_address,
-                utils::redis::ARB_LAST_PROCESSED_BLOCK,
-                arb.block_processing_batch_size,
-            )
-        }
-        _ => anyhow::bail!("Unsupported chain kind: {:?}", chain_kind),
-    };
+    let (rpc_http_url, rpc_ws_url, bridge_token_factory_address, block_processing_batch_size) =
+        match chain_kind {
+            ChainKind::Eth => {
+                let Some(ref eth) = config.eth else {
+                    anyhow::bail!("Failed to get ETH config");
+                };
+                (
+                    eth.rpc_http_url.clone(),
+                    eth.rpc_ws_url.clone(),
+                    eth.bridge_token_factory_address,
+                    eth.block_processing_batch_size,
+                )
+            }
+            ChainKind::Base => {
+                let Some(ref base) = config.base else {
+                    anyhow::bail!("Failed to get Base config");
+                };
+                (
+                    base.rpc_http_url.clone(),
+                    base.rpc_ws_url.clone(),
+                    base.bridge_token_factory_address,
+                    base.block_processing_batch_size,
+                )
+            }
+            ChainKind::Arb => {
+                let Some(ref arb) = config.arb else {
+                    anyhow::bail!("Failed to get Arb config");
+                };
+                (
+                    arb.rpc_http_url.clone(),
+                    arb.rpc_ws_url.clone(),
+                    arb.bridge_token_factory_address,
+                    arb.block_processing_batch_size,
+                )
+            }
+            _ => anyhow::bail!("Unsupported chain kind: {:?}", chain_kind),
+        };
+
+    let last_processed_block_key = utils::redis::get_last_processed_block_key(chain_kind).await;
 
     let http_provider = ProviderBuilder::new().on_http(
         rpc_http_url
@@ -80,7 +74,7 @@ pub async fn start_indexer(
 
     let latest_block = http_provider.get_block_number().await?;
     let from_block =
-        utils::redis::get_last_processed_block(&mut redis_connection, last_processed_block_key)
+        utils::redis::get_last_processed_block(&mut redis_connection, &last_processed_block_key)
             .await
             .map_or_else(
                 || latest_block.saturating_sub(block_processing_batch_size),
@@ -165,7 +159,7 @@ async fn process_log(
             redis_connection,
             utils::redis::FINALIZED_TRANSFERS,
             tx_hash.to_string(),
-            FinTransfer {
+            FinTransfer::Evm {
                 chain_kind,
                 block_number,
                 log,
@@ -177,7 +171,7 @@ async fn process_log(
 
     utils::redis::update_last_processed_block(
         redis_connection,
-        utils::redis::ETH_LAST_PROCESSED_BLOCK,
+        &utils::redis::get_last_processed_block_key(chain_kind).await,
         block_number,
     )
     .await;

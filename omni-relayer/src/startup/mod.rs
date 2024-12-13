@@ -7,12 +7,15 @@ use evm_bridge_client::{EvmBridgeClient, EvmBridgeClientBuilder};
 use near_bridge_client::NearBridgeClientBuilder;
 use omni_connector::{OmniConnector, OmniConnectorBuilder};
 use omni_types::ChainKind;
+use solana_bridge_client::SolanaBridgeClientBuilder;
+use solana_client::nonblocking::rpc_client::RpcClient;
 use wormhole_bridge_client::WormholeBridgeClientBuilder;
 
 use crate::config;
 
 pub mod evm;
 pub mod near;
+pub mod solana;
 
 fn build_evm_bridge_client(
     config: &config::Config,
@@ -59,6 +62,21 @@ pub fn build_omni_connector(
     let base_bridge_client = build_evm_bridge_client(config, ChainKind::Base)?;
     let arb_bridge_client = build_evm_bridge_client(config, ChainKind::Arb)?;
 
+    let solana_bridge_client = config
+        .solana
+        .as_ref()
+        .map(|solana| {
+            SolanaBridgeClientBuilder::default()
+                .client(Some(RpcClient::new(solana.rpc_http_url.clone())))
+                .program_id(Some(solana.program_id))
+                .wormhole_core(Some(solana.wormhole_id))
+                // TODO: Add a keypair
+                .keypair(None)
+                .build()
+                .context("Failed to build SolanaBridgeClient")
+        })
+        .transpose()?;
+
     let wormhole_bridge_client = WormholeBridgeClientBuilder::default()
         .endpoint(Some(config.wormhole.api_url.clone()))
         .build()
@@ -69,7 +87,7 @@ pub fn build_omni_connector(
         .eth_bridge_client(eth_bridge_client)
         .base_bridge_client(base_bridge_client)
         .arb_bridge_client(arb_bridge_client)
-        .solana_bridge_client(None)
+        .solana_bridge_client(solana_bridge_client)
         .wormhole_bridge_client(Some(wormhole_bridge_client))
         .build()
         .context("Failed to build OmniConnector")

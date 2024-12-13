@@ -2,6 +2,7 @@
 name = "omni-relayer"
 version = "0.1.0"
 edition = "2021"
+resolver = "2"
 
 [dependencies]
 log = "0.4"
@@ -21,6 +22,12 @@ borsh = "1.5.1"
 tokio = { version = "1", features = ["sync", "time", "macros", "rt-multi-thread"] }
 tokio-stream = { version = "0.1" }
 
+solana-sdk = "2.1.5"
+solana-client = "2.1.5"
+solana-transaction-status = "2.1.5"
+
+anchor-lang = "0.24.0"
+
 ethereum-types = "0.14.1"
 omni-types = { git = "https://github.com/near-one/omni-bridge", package = "omni-types", rev = "11ffdb63706ceba175f7581585bd837aad9f1559" }
 
@@ -37,11 +44,11 @@ alloy = { version = "0.6.4", features = ["node-bindings", "providers", "rpc-type
 redis = { version = "0.27.0", features = ["aio", "tokio-comp"] }
 reqwest = "0.12"
 
-eth-proof = { git = "https://github.com/Near-One/rainbow-bridge-sdk-rs", package = "eth-proof", branch = "refactor/connectors" }
+eth-proof = { git = "https://github.com/Near-One/rainbow-bridge-sdk-rs", package = "eth-proof" }
 
-near-bridge-client = { git = "https://github.com/Near-One/rainbow-bridge-sdk-rs", package = "near-bridge-client", branch = "refactor/connectors" }
-evm-bridge-client = { git = "https://github.com/Near-One/rainbow-bridge-sdk-rs", package = "evm-bridge-client", branch = "refactor/connectors" }
-solana-bridge-client = { git = "https://github.com/Near-One/rainbow-bridge-sdk-rs", package = "solana-bridge-client", branch = "refactor/connectors" }
-wormhole-bridge-client = { git = "https://github.com/Near-One/rainbow-bridge-sdk-rs", package = "wormhole-bridge-client", branch = "refactor/connectors" }
+near-bridge-client = { git = "https://github.com/Near-One/rainbow-bridge-sdk-rs", package = "near-bridge-client" }
+evm-bridge-client = { git = "https://github.com/Near-One/rainbow-bridge-sdk-rs", package = "evm-bridge-client" }
+solana-bridge-client = { git = "https://github.com/Near-One/rainbow-bridge-sdk-rs", package = "solana-bridge-client" }
+wormhole-bridge-client = { git = "https://github.com/Near-One/rainbow-bridge-sdk-rs", package = "wormhole-bridge-client" }
 
-omni-connector = { git = "https://github.com/Near-One/rainbow-bridge-sdk-rs", package = "omni-connector", branch = "refactor/connectors" }
+omni-connector = { git = "https://github.com/Near-One/rainbow-bridge-sdk-rs", package = "omni-connector" }
