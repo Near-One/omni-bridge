@@ -8,7 +8,8 @@ use log::{error, info, warn};
 
 use omni_connector::OmniConnector;
 use omni_types::{
-    locker_args::ClaimFeeArgs, near_events::Nep141LockerEvent, prover_result::ProofKind, ChainKind,
+    locker_args::ClaimFeeArgs, near_events::Nep141LockerEvent,
+    prover_args::WormholeVerifyProofArgs, prover_result::ProofKind, ChainKind,
 };
 
 use crate::{config, utils};
@@ -223,7 +224,7 @@ pub enum FinTransfer {
         tx_logs: Option<TransactionReceipt>,
     },
     Solana {
-        sequence: String,
+        sequence: u64,
     },
 }
 
@@ -328,6 +329,47 @@ pub async fn claim_fee(
                                 prover_args,
                             };
 
+                            if let Ok(response) = connector.near_claim_fee(claim_fee_args).await {
+                                info!("Claimed fee: {:?}", response);
+                                utils::redis::remove_event(
+                                    &mut redis_connection,
+                                    utils::redis::FINALIZED_TRANSFERS,
+                                    &key,
+                                )
+                                .await;
+                            }
+                        }
+                    }));
+                } else if let FinTransfer::Solana { sequence } = fin_transfer {
+                    handlers.push(tokio::spawn({
+                        let mut redis_connection = redis_connection.clone();
+                        let connector = connector.clone();
+                        async move {
+                            info!("Received finalized transfer");
+                            let Ok(vaa) = connector
+                                .wormhole_get_vaa(
+                                    config.wormhole.solana_chain_id,
+                                    "GFzUaxaehd89aVidAMAdGUupiC4MXj2yuAH2A9TMEcw2",
+                                    sequence,
+                                )
+                                .await
+                            else {
+                                warn!("Failed to get VAA for sequence: {}", sequence);
+                                return;
+                            };
+
+                            let Ok(prover_args) = borsh::to_vec(&WormholeVerifyProofArgs {
+                                proof_kind: ProofKind::FinTransfer,
+                                vaa,
+                            }) else {
+                                warn!("Failed to serialize prover args to finalize transfer from Solana");
+                                return;
+                            };
+
+                            let claim_fee_args = ClaimFeeArgs {
+                                chain_kind: ChainKind::Sol,
+                                prover_args,
+                            };
                             if let Ok(response) = connector.near_claim_fee(claim_fee_args).await {
                                 info!("Claimed fee: {:?}", response);
                                 utils::redis::remove_event(

@@ -28,6 +28,14 @@ chain_id = 421_614
 bridge_token_factory_address = "0xd565f7CcE0FA1bB8DBe73FCDA281390d545f6200"
 block_processing_batch_size = 10_000
 
+[solana]
+rpc_http_url = "https://api.devnet.solana.com"
+rpc_ws_url = "wss://api.devnet.solana.com"
+program_id = "Gy1XPwYZURfBzHiGAxnw3SYC33SfqsEpGSS5zeBge28p"
+wormhole_id = "3u8hJUVTA4jH1wYAyUur7FFZVQ8H635K3tSHHF4ssjQ5"
+init_transfer_discriminator = [174, 50, 134, 99, 122, 243, 243, 224]
+finalize_transfer_discriminator = [124, 126, 103, 188, 144, 65, 135, 51]
+
 [wormhole]
 api_url = "https://api.testnet.wormholescan.io/"
 sol_chain_id = 1

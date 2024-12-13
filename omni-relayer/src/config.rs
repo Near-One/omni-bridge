@@ -71,4 +71,5 @@ pub struct Wormhole {
     pub eth_chain_id: u64,
     pub base_chain_id: u64,
     pub arb_chain_id: u64,
+    pub solana_chain_id: u64,
 }
