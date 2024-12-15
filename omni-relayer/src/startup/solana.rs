@@ -2,6 +2,7 @@ use std::str::FromStr;
 
 use anyhow::Result;
 use log::{info, warn};
+use solana_transaction_status::option_serializer::OptionSerializer;
 use tokio_stream::StreamExt;
 
 use anchor_lang::prelude::borsh;
@@ -14,13 +15,16 @@ use solana_client::rpc_response::RpcConfirmedTransactionStatusWithSignature;
 use solana_sdk::bs58;
 use solana_sdk::signature::Signature;
 use solana_sdk::{commitment_config::CommitmentConfig, pubkey::Pubkey};
-use solana_transaction_status::{UiMessage, UiRawMessage, UiTransactionEncoding};
+use solana_transaction_status::{
+    EncodedTransactionWithStatusMeta, UiMessage, UiRawMessage, UiTransactionEncoding,
+};
 
 use crate::workers::near::FinTransfer;
+use crate::workers::solana::InitTransferWithTimestamp;
 use crate::{config, utils};
 
-#[derive(Debug, serde::Serialize, serde::Deserialize, AnchorDeserialize)]
-pub struct InitTransferPayload {
+#[derive(Debug, AnchorDeserialize)]
+struct InitTransferPayload {
     pub amount: u128,
     pub recipient: String,
     pub fee: u128,
@@ -36,7 +40,7 @@ pub async fn start_indexer(config: config::Config, redis_client: redis::Client) 
 
     let rpc_http_url = &solana.rpc_http_url;
     let rpc_ws_url = &solana.rpc_ws_url;
-    let program_id = solana.program_id;
+    let program_id = &solana.program_id;
 
     if let Err(e) = process_recent_logs(
         &mut redis_connection,
@@ -108,11 +112,14 @@ async fn process_recent_logs(
                 .get_transaction(&signature, UiTransactionEncoding::Json)
                 .await
             {
-                let transaction = tx.transaction.transaction;
+                let transaction = tx.transaction;
 
-                if let solana_transaction_status::EncodedTransaction::Json(tx) = transaction {
+                if let solana_transaction_status::EncodedTransaction::Json(ref tx) =
+                    transaction.transaction
+                {
                     if let UiMessage::Raw(ref raw) = tx.message {
-                        process_message(redis_connection, solana, &rpc_client, raw, signature).await
+                        process_message(redis_connection, solana, &transaction, raw, signature)
+                            .await
                     }
                 }
             }
@@ -136,7 +143,7 @@ async fn process_recent_logs(
 async fn process_message(
     redis_connection: &mut redis::aio::MultiplexedConnection,
     solana: &config::Solana,
-    rpc_client: &RpcClient,
+    transaction: &EncodedTransactionWithStatusMeta,
     message: &UiRawMessage,
     signature: Signature,
 ) {
@@ -144,9 +151,10 @@ async fn process_message(
         if let Err(err) = decode_instruction(
             redis_connection,
             solana,
-            rpc_client,
-            &instruction.data,
             signature,
+            transaction,
+            &instruction.data,
+            &message.account_keys,
         )
         .await
         {
@@ -158,34 +166,65 @@ async fn process_message(
 async fn decode_instruction(
     redis_connection: &mut redis::aio::MultiplexedConnection,
     solana: &config::Solana,
-    rpc_client: &RpcClient,
-    data: &str,
     signature: Signature,
+    transaction: &EncodedTransactionWithStatusMeta,
+    data: &str,
+    account_keys: &[String],
 ) -> Result<()> {
     let decoded_data = bs58::decode(data).into_vec()?;
 
     if decoded_data.starts_with(&solana.init_transfer_discriminator) {
-        let payload_data = &decoded_data[8..];
+        let mut payload_data = &decoded_data[solana.init_transfer_discriminator.len()..];
 
-        if let Ok(payload) = InitTransferPayload::try_from_slice(payload_data) {
-            utils::redis::add_event(
-                redis_connection,
-                utils::redis::SOLANA_INIT_TRANSFER_EVENTS,
-                signature.to_string(),
-                payload,
-            )
-            .await;
+        if let Ok(payload) = InitTransferPayload::deserialize(&mut payload_data) {
+            let token = &account_keys[solana.init_transfer_token_index];
+            let emitter = &account_keys[solana.init_transfer_emitter_index];
+
+            if let Some(OptionSerializer::Some(logs)) =
+                transaction.clone().meta.map(|meta| meta.log_messages)
+            {
+                for log in logs {
+                    if log.contains("Sequence") {
+                        let Some(sequence) = log
+                            .split_ascii_whitespace()
+                            .last()
+                            .map(|sequence| sequence.to_string())
+                        else {
+                            warn!("Failed to parse sequence number from log: {:?}", log);
+                            continue;
+                        };
+
+                        let Ok(sequence) = sequence.parse() else {
+                            warn!("Failed to parse sequence as a number: {:?}", sequence);
+                            continue;
+                        };
+
+                        utils::redis::add_event(
+                            redis_connection,
+                            utils::redis::SOLANA_INIT_TRANSFER_EVENTS,
+                            signature.to_string(),
+                            InitTransferWithTimestamp {
+                                amount: payload.amount,
+                                token: token.clone(),
+                                recipient: payload.recipient.clone(),
+                                fee: payload.fee,
+                                native_fee: payload.native_fee,
+                                emitter: emitter.clone(),
+                                sequence,
+                                creation_timestamp: chrono::Utc::now().timestamp(),
+                                last_update_timestamp: None,
+                            },
+                        )
+                        .await;
+                    }
+                }
+            }
         }
     } else if decoded_data.starts_with(&solana.finalize_transfer_discriminator) {
-        let Ok(transaction) = rpc_client
-            .get_transaction(&signature, UiTransactionEncoding::Json)
-            .await
-        else {
-            anyhow::bail!("Failed to get transaction for signature: {:?}", signature);
-        };
+        let emitter = &account_keys[solana.finalize_transfer_emitter_index];
 
-        if let Some(solana_transaction_status::option_serializer::OptionSerializer::Some(logs)) =
-            transaction.transaction.meta.map(|meta| meta.log_messages)
+        if let Some(OptionSerializer::Some(logs)) =
+            transaction.clone().meta.map(|meta| meta.log_messages)
         {
             for log in logs {
                 if log.contains("Sequence") {
@@ -198,11 +237,19 @@ async fn decode_instruction(
                         continue;
                     };
 
+                    let Ok(sequence) = sequence.parse() else {
+                        warn!("Failed to parse sequence as a number: {:?}", sequence);
+                        continue;
+                    };
+
                     utils::redis::add_event(
                         redis_connection,
                         utils::redis::FINALIZED_TRANSFERS,
                         signature.to_string(),
-                        FinTransfer::Solana { sequence },
+                        FinTransfer::Solana {
+                            emitter: emitter.clone(),
+                            sequence,
+                        },
                     )
                     .await;
                 }

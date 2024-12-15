@@ -19,8 +19,8 @@ struct CliArgs {
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    pretty_env_logger::init();
     dotenv::dotenv().ok();
+    pretty_env_logger::init();
 
     let args = CliArgs::parse();
 
@@ -65,6 +65,12 @@ async fn main() -> Result<()> {
             workers::evm::finalize_transfer(config, redis_client, connector, jsonrpc_client).await
         }
     }));
+    handles.push(tokio::spawn({
+        let config = config.clone();
+        let redis_client = redis_client.clone();
+        let connector = connector.clone();
+        async move { workers::solana::finalize_transfer(config, redis_client, connector).await }
+    }));
 
     handles.push(tokio::spawn({
         let config = config.clone();
@@ -93,7 +99,6 @@ async fn main() -> Result<()> {
             async move { startup::evm::start_indexer(config, redis_client, ChainKind::Arb).await }
         }));
     }
-
     if config.solana.is_some() {
         handles.push(tokio::spawn({
             let config = config.clone();

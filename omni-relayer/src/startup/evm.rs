@@ -148,7 +148,7 @@ async fn process_log(
                 chain_kind,
                 block_number,
                 log,
-                tx_logs,
+                tx_logs: tx_logs.map(Box::new),
                 creation_timestamp: chrono::Utc::now().timestamp(),
                 last_update_timestamp: None,
             },
@@ -163,7 +163,7 @@ async fn process_log(
                 chain_kind,
                 block_number,
                 log,
-                tx_logs,
+                tx_logs: tx_logs.map(Box::new),
             },
         )
         .await;

@@ -1,15 +1,18 @@
 use std::sync::Arc;
 
-use alloy::rpc::types::{Log, TransactionReceipt};
 use anyhow::Result;
-use ethereum_types::H256;
 use futures::future::join_all;
 use log::{error, info, warn};
+
+use alloy::rpc::types::{Log, TransactionReceipt};
+use ethereum_types::H256;
+
+use solana_sdk::pubkey::Pubkey;
 
 use omni_connector::OmniConnector;
 use omni_types::{
     locker_args::ClaimFeeArgs, near_events::Nep141LockerEvent,
-    prover_args::WormholeVerifyProofArgs, prover_result::ProofKind, ChainKind,
+    prover_args::WormholeVerifyProofArgs, prover_result::ProofKind, ChainKind, OmniAddress,
 };
 
 use crate::{config, utils};
@@ -184,6 +187,21 @@ pub async fn finalize_transfer(
                                 chain_kind: message_payload.recipient.get_chain(),
                                 event,
                             },
+                            ChainKind::Sol => {
+                                let OmniAddress::Sol(token) = message_payload.token_address.clone()
+                                else {
+                                    warn!(
+                                        "Expected Sol token address, got: {:?}",
+                                        message_payload.token_address
+                                    );
+                                    return;
+                                };
+
+                                omni_connector::FinTransferArgs::SolanaFinTransfer {
+                                    event,
+                                    solana_token: Pubkey::new_from_array(token.0),
+                                }
+                            }
                             _ => todo!(),
                         };
 
@@ -221,9 +239,10 @@ pub enum FinTransfer {
         chain_kind: ChainKind,
         block_number: u64,
         log: Log,
-        tx_logs: Option<TransactionReceipt>,
+        tx_logs: Option<Box<TransactionReceipt>>,
     },
     Solana {
+        emitter: String,
         sequence: u64,
     },
 }
@@ -340,7 +359,7 @@ pub async fn claim_fee(
                             }
                         }
                     }));
-                } else if let FinTransfer::Solana { sequence } = fin_transfer {
+                } else if let FinTransfer::Solana { emitter, sequence } = fin_transfer {
                     handlers.push(tokio::spawn({
                         let mut redis_connection = redis_connection.clone();
                         let connector = connector.clone();
@@ -349,7 +368,7 @@ pub async fn claim_fee(
                             let Ok(vaa) = connector
                                 .wormhole_get_vaa(
                                     config.wormhole.solana_chain_id,
-                                    "GFzUaxaehd89aVidAMAdGUupiC4MXj2yuAH2A9TMEcw2",
+                                    emitter,
                                     sequence,
                                 )
                                 .await

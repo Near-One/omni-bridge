@@ -50,7 +50,7 @@ sol!(
 pub async fn get_vaa_from_evm_log(
     connector: Arc<OmniConnector>,
     chain_kind: ChainKind,
-    tx_logs: Option<alloy::rpc::types::TransactionReceipt>,
+    tx_logs: Option<Box<alloy::rpc::types::TransactionReceipt>>,
     config: &config::Config,
 ) -> Option<String> {
     let Some(tx_logs) = tx_logs else {

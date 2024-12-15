@@ -68,8 +68,8 @@ pub fn build_omni_connector(
         .map(|solana| {
             SolanaBridgeClientBuilder::default()
                 .client(Some(RpcClient::new(solana.rpc_http_url.clone())))
-                .program_id(Some(solana.program_id))
-                .wormhole_core(Some(solana.wormhole_id))
+                .program_id(Some(solana.program_id.parse()?))
+                .wormhole_core(Some(solana.wormhole_id.parse()?))
                 // TODO: Add a keypair
                 .keypair(None)
                 .build()

@@ -2085,9 +2085,9 @@ dependencies = [
 [[package]]
 name = "bridge-connector-common"
 version = "0.1.0"
-source = "git+https://github.com/Near-One/rainbow-bridge-sdk-rs#a98ba595e48c8558e3a4922bae34d5d04dde0802"
+source = "git+https://github.com/Near-One/rainbow-bridge-sdk-rs?branch=refactor%2Fsolana-bridge-client#ba93e946ad88eb607bca43f7b2b2a3f6bae5f725"
 dependencies = [
- "eth-proof",
+ "eth-proof 0.1.0 (git+https://github.com/Near-One/rainbow-bridge-sdk-rs?branch=refactor%2Fsolana-bridge-client)",
  "ethers",
  "near-light-client-on-eth",
  "near-rpc-client",
@@ -3713,6 +3713,25 @@ dependencies = [
 [[package]]
 name = "eth-proof"
 version = "0.1.0"
+source = "git+https://github.com/Near-One/rainbow-bridge-sdk-rs?branch=refactor%2Fsolana-bridge-client#ba93e946ad88eb607bca43f7b2b2a3f6bae5f725"
+dependencies = [
+ "borsh 1.5.3",
+ "cita_trie",
+ "ethereum-types 0.14.1",
+ "hasher",
+ "hex",
+ "omni-types",
+ "reqwest 0.11.27",
+ "rlp 0.5.2",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.6",
+ "tokio",
+]
+
+[[package]]
+name = "eth-proof"
+version = "0.1.0"
 source = "git+https://github.com/Near-One/rainbow-bridge-sdk-rs#a98ba595e48c8558e3a4922bae34d5d04dde0802"
 dependencies = [
  "borsh 1.5.3",
@@ -4082,12 +4101,12 @@ dependencies = [
 [[package]]
 name = "evm-bridge-client"
 version = "0.1.0"
-source = "git+https://github.com/Near-One/rainbow-bridge-sdk-rs#a98ba595e48c8558e3a4922bae34d5d04dde0802"
+source = "git+https://github.com/Near-One/rainbow-bridge-sdk-rs?branch=refactor%2Fsolana-bridge-client#ba93e946ad88eb607bca43f7b2b2a3f6bae5f725"
 dependencies = [
  "borsh 1.5.3",
  "bridge-connector-common",
  "derive_builder 0.20.2",
- "eth-proof",
+ "eth-proof 0.1.0 (git+https://github.com/Near-One/rainbow-bridge-sdk-rs?branch=refactor%2Fsolana-bridge-client)",
  "ethers",
  "hex",
  "near-bridge-client",
@@ -5852,7 +5871,7 @@ dependencies = [
 [[package]]
 name = "near-bridge-client"
 version = "0.1.0"
-source = "git+https://github.com/Near-One/rainbow-bridge-sdk-rs#a98ba595e48c8558e3a4922bae34d5d04dde0802"
+source = "git+https://github.com/Near-One/rainbow-bridge-sdk-rs?branch=refactor%2Fsolana-bridge-client#ba93e946ad88eb607bca43f7b2b2a3f6bae5f725"
 dependencies = [
  "borsh 1.5.3",
  "bridge-connector-common",
@@ -6196,7 +6215,7 @@ dependencies = [
 [[package]]
 name = "near-light-client-on-eth"
 version = "0.1.0"
-source = "git+https://github.com/Near-One/rainbow-bridge-sdk-rs#a98ba595e48c8558e3a4922bae34d5d04dde0802"
+source = "git+https://github.com/Near-One/rainbow-bridge-sdk-rs?branch=refactor%2Fsolana-bridge-client#ba93e946ad88eb607bca43f7b2b2a3f6bae5f725"
 dependencies = [
  "ethereum-types 0.14.1",
  "ethers",
@@ -6479,7 +6498,7 @@ dependencies = [
 [[package]]
 name = "near-rpc-client"
 version = "0.1.0"
-source = "git+https://github.com/Near-One/rainbow-bridge-sdk-rs#a98ba595e48c8558e3a4922bae34d5d04dde0802"
+source = "git+https://github.com/Near-One/rainbow-bridge-sdk-rs?branch=refactor%2Fsolana-bridge-client#ba93e946ad88eb607bca43f7b2b2a3f6bae5f725"
 dependencies = [
  "borsh 1.5.3",
  "lazy_static",
@@ -7100,12 +7119,12 @@ dependencies = [
 [[package]]
 name = "omni-connector"
 version = "0.1.0"
-source = "git+https://github.com/Near-One/rainbow-bridge-sdk-rs#a98ba595e48c8558e3a4922bae34d5d04dde0802"
+source = "git+https://github.com/Near-One/rainbow-bridge-sdk-rs?branch=refactor%2Fsolana-bridge-client#ba93e946ad88eb607bca43f7b2b2a3f6bae5f725"
 dependencies = [
  "borsh 1.5.3",
  "bridge-connector-common",
  "derive_builder 0.20.2",
- "eth-proof",
+ "eth-proof 0.1.0 (git+https://github.com/Near-One/rainbow-bridge-sdk-rs?branch=refactor%2Fsolana-bridge-client)",
  "ethers",
  "evm-bridge-client",
  "hex",
@@ -7136,7 +7155,7 @@ dependencies = [
  "chrono",
  "clap",
  "dotenv",
- "eth-proof",
+ "eth-proof 0.1.0 (git+https://github.com/Near-One/rainbow-bridge-sdk-rs)",
  "ethereum-types 0.14.1",
  "evm-bridge-client",
  "futures",
@@ -9535,11 +9554,12 @@ dependencies = [
 [[package]]
 name = "solana-bridge-client"
 version = "0.1.0"
-source = "git+https://github.com/Near-One/rainbow-bridge-sdk-rs#a98ba595e48c8558e3a4922bae34d5d04dde0802"
+source = "git+https://github.com/Near-One/rainbow-bridge-sdk-rs?branch=refactor%2Fsolana-bridge-client#ba93e946ad88eb607bca43f7b2b2a3f6bae5f725"
 dependencies = [
  "borsh 1.5.3",
  "derive_builder 0.20.2",
  "mpl-token-metadata",
+ "omni-types",
  "sha2 0.10.8",
  "solana-client",
  "solana-sdk",
@@ -13333,7 +13353,7 @@ dependencies = [
 [[package]]
 name = "wormhole-bridge-client"
 version = "0.1.0"
-source = "git+https://github.com/Near-One/rainbow-bridge-sdk-rs#a98ba595e48c8558e3a4922bae34d5d04dde0802"
+source = "git+https://github.com/Near-One/rainbow-bridge-sdk-rs?branch=refactor%2Fsolana-bridge-client#ba93e946ad88eb607bca43f7b2b2a3f6bae5f725"
 dependencies = [
  "bridge-connector-common",
  "derive_builder 0.20.2",

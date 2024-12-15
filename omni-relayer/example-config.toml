@@ -33,7 +33,10 @@ rpc_http_url = "https://api.devnet.solana.com"
 rpc_ws_url = "wss://api.devnet.solana.com"
 program_id = "Gy1XPwYZURfBzHiGAxnw3SYC33SfqsEpGSS5zeBge28p"
 wormhole_id = "3u8hJUVTA4jH1wYAyUur7FFZVQ8H635K3tSHHF4ssjQ5"
+init_transfer_emitter_index = 10
+init_transfer_token_index = 2
 init_transfer_discriminator = [174, 50, 134, 99, 122, 243, 243, 224]
+finalize_transfer_emitter_index = 15
 finalize_transfer_discriminator = [124, 126, 103, 188, 144, 65, 135, 51]
 
 [wormhole]
