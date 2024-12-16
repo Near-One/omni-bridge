@@ -15,6 +15,7 @@ import { deriveEVMAddress, mpcRootPublicKeys } from "./utils/kdf"
 
 import "hardhat/types/config"
 import assert from "node:assert"
+import * as fs from "node:fs"
 
 declare module "hardhat/types/config" {
   interface HttpNetworkUserConfig {
@@ -192,6 +193,23 @@ task("update-wormhole-address", "Update the wormhole address")
     const receipt = await tx.wait()
 
     console.log("Address upgraded at tx hash:", receipt?.hash)
+  })
+
+task("deploy-bytecode", "Deploys a contract with a given bytecode")
+  .addParam("bytecode", "The path to the file containing the bytecode of the contract")
+  .setAction(async (taskArgs, hre) => {
+    const { ethers } = hre
+
+    const bytecode = fs.readFileSync(taskArgs.bytecode, "utf8")
+    const [signer] = await ethers.getSigners()
+
+    const contractFactory = new ethers.ContractFactory([], bytecode, signer)
+    const contract = await contractFactory.deploy()
+    await contract.waitForDeployment()
+
+    console.log(JSON.stringify({
+      contractAddress: await contract.getAddress()
+    }))
   })
 
 const config: HardhatUserConfig = {
