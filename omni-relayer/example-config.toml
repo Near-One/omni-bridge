@@ -36,8 +36,10 @@ wormhole_id = "3u8hJUVTA4jH1wYAyUur7FFZVQ8H635K3tSHHF4ssjQ5"
 init_transfer_emitter_index = 10
 init_transfer_token_index = 2
 init_transfer_discriminator = [174, 50, 134, 99, 122, 243, 243, 224]
+init_transfer_sol_discriminator = [124, 167, 164, 191, 81, 140, 108, 30]
 finalize_transfer_emitter_index = 15
 finalize_transfer_discriminator = [124, 126, 103, 188, 144, 65, 135, 51]
+finalize_transfer_sol_discriminator = [104, 27, 121, 69, 3, 70, 217, 66]
 
 [wormhole]
 api_url = "https://api.testnet.wormholescan.io/"

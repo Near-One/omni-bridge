@@ -219,8 +219,20 @@ async fn decode_instruction(
 ) -> Result<()> {
     let decoded_data = bs58::decode(data).into_vec()?;
 
-    if decoded_data.starts_with(&solana.init_transfer_discriminator) {
-        let mut payload_data = &decoded_data[solana.init_transfer_discriminator.len()..];
+    if let Some(offset) = [
+        (
+            &solana.init_transfer_discriminator,
+            solana.init_transfer_discriminator.len(),
+        ),
+        (
+            &solana.init_transfer_sol_discriminator,
+            solana.init_transfer_sol_discriminator.len(),
+        ),
+    ]
+    .into_iter()
+    .find_map(|(disc, len)| decoded_data.starts_with(disc).then_some(len))
+    {
+        let mut payload_data = &decoded_data[offset..];
 
         if let Ok(payload) = InitTransferPayload::deserialize(&mut payload_data) {
             let token = &account_keys[solana.init_transfer_token_index];
@@ -266,7 +278,9 @@ async fn decode_instruction(
                 }
             }
         }
-    } else if decoded_data.starts_with(&solana.finalize_transfer_discriminator) {
+    } else if decoded_data.starts_with(&solana.finalize_transfer_discriminator)
+        || decoded_data.starts_with(&solana.finalize_transfer_sol_discriminator)
+    {
         let emitter = &account_keys[solana.finalize_transfer_emitter_index];
 
         if let Some(OptionSerializer::Some(logs)) =

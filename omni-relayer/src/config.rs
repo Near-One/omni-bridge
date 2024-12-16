@@ -64,8 +64,10 @@ pub struct Solana {
     pub init_transfer_emitter_index: usize,
     pub init_transfer_token_index: usize,
     pub init_transfer_discriminator: Vec<u8>,
+    pub init_transfer_sol_discriminator: Vec<u8>,
     pub finalize_transfer_emitter_index: usize,
     pub finalize_transfer_discriminator: Vec<u8>,
+    pub finalize_transfer_sol_discriminator: Vec<u8>,
 }
 
 #[derive(Debug, Clone, serde::Deserialize)]
