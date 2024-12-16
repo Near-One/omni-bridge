@@ -2,12 +2,13 @@ use alloy::primitives::Address;
 use near_primitives::types::AccountId;
 use omni_types::ChainKind;
 
-pub fn get_evm_private_key(chain_kind: ChainKind) -> String {
+pub fn get_private_key(chain_kind: ChainKind) -> String {
     let env_var = match chain_kind {
+        ChainKind::Near => "NEAR_PRIVATE_KEY",
         ChainKind::Eth => "ETH_PRIVATE_KEY",
         ChainKind::Base => "BASE_PRIVATE_KEY",
         ChainKind::Arb => "ARB_PRIVATE_KEY",
-        _ => unreachable!("Unsupported chain kind"),
+        ChainKind::Sol => "SOLANA_PRIVATE_KEY",
     };
 
     std::env::var(env_var).unwrap_or_else(|_| panic!("Failed to get `{env_var}` env variable"))

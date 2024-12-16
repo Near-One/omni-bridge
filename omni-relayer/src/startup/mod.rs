@@ -9,6 +9,7 @@ use omni_connector::{OmniConnector, OmniConnectorBuilder};
 use omni_types::ChainKind;
 use solana_bridge_client::SolanaBridgeClientBuilder;
 use solana_client::nonblocking::rpc_client::RpcClient;
+use solana_sdk::{bs58, signature::Keypair};
 use wormhole_bridge_client::WormholeBridgeClientBuilder;
 
 use crate::config;
@@ -33,7 +34,7 @@ fn build_evm_bridge_client(
             EvmBridgeClientBuilder::default()
                 .endpoint(Some(evm.rpc_http_url.clone()))
                 .chain_id(Some(evm.chain_id))
-                .private_key(Some(crate::config::get_evm_private_key(chain_kind)))
+                .private_key(Some(crate::config::get_private_key(chain_kind)))
                 .bridge_token_factory_address(Some(evm.bridge_token_factory_address.to_string()))
                 .build()
                 .context(format!(
@@ -70,8 +71,11 @@ pub fn build_omni_connector(
                 .client(Some(RpcClient::new(solana.rpc_http_url.clone())))
                 .program_id(Some(solana.program_id.parse()?))
                 .wormhole_core(Some(solana.wormhole_id.parse()?))
-                // TODO: Add a keypair
-                .keypair(None)
+                .keypair(Some(Keypair::from_bytes(
+                    &bs58::decode(config::get_private_key(ChainKind::Sol))
+                        .into_vec()
+                        .context("Failed to decode Solana keypair")?,
+                )?))
                 .build()
                 .context("Failed to build SolanaBridgeClient")
         })

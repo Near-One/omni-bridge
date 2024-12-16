@@ -46,8 +46,7 @@ fn get_private_key(file: Option<String>) -> Result<SecretKey> {
         }
     }
 
-    let private_key_str = std::env::var("NEAR_PRIVATE_KEY")
-        .context("Failed to get `NEAR_PRIVATE_KEY` environment variable")?;
+    let private_key_str = config::get_private_key(ChainKind::Near);
 
     info!("Retrieved private key from env");
 

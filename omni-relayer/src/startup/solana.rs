@@ -40,22 +40,19 @@ pub async fn start_indexer(config: config::Config, redis_client: redis::Client) 
 
     let rpc_http_url = &solana.rpc_http_url;
     let rpc_ws_url = &solana.rpc_ws_url;
-    let program_id = &solana.program_id;
+    let program_id = Pubkey::from_str(&solana.program_id)?;
 
-    if let Err(e) = process_recent_logs(
-        &mut redis_connection,
-        &solana,
-        rpc_http_url,
-        &program_id.to_string(),
-    )
-    .await
+    let http_client = RpcClient::new(rpc_http_url.to_string());
+
+    if let Err(e) =
+        process_recent_logs(&mut redis_connection, &solana, &http_client, &program_id).await
     {
         warn!("Failed to fetch recent logs: {}", e);
     }
 
     info!("All historical logs processed, starting Solana WS subscription");
 
-    let Ok(client) = PubsubClient::new(rpc_ws_url).await else {
+    let Ok(ws_client) = PubsubClient::new(rpc_ws_url).await else {
         anyhow::bail!("Failed to connect to Solana WebSocket");
     };
 
@@ -64,14 +61,40 @@ pub async fn start_indexer(config: config::Config, redis_client: redis::Client) 
         commitment: Some(CommitmentConfig::processed()),
     };
 
-    let Ok((mut log_stream, _)) = client.logs_subscribe(filter, config).await else {
+    let Ok((mut log_stream, _)) = ws_client.logs_subscribe(filter, config).await else {
         anyhow::bail!("Failed to subscribe to Solana logs");
     };
 
     info!("Subscribed to live Solana logs");
 
     while let Some(log) = log_stream.next().await {
-        info!("{:?}", log.value);
+        let Ok(signature) = Signature::from_str(&log.value.signature) else {
+            warn!("Failed to parse signature: {:?}", log.value.signature);
+            continue;
+        };
+
+        if let Ok(tx) = http_client
+            .get_transaction(&signature, UiTransactionEncoding::Json)
+            .await
+        {
+            let transaction = tx.transaction;
+
+            if let solana_transaction_status::EncodedTransaction::Json(ref tx) =
+                transaction.transaction
+            {
+                if let UiMessage::Raw(ref raw) = tx.message {
+                    process_message(&mut redis_connection, &solana, &transaction, raw, signature)
+                        .await
+                }
+            }
+
+            utils::redis::update_last_processed_block(
+                &mut redis_connection,
+                &utils::redis::get_last_processed_block_key(ChainKind::Sol).await,
+                tx.slot,
+            )
+            .await;
+        }
     }
 
     Ok(())
@@ -80,18 +103,41 @@ pub async fn start_indexer(config: config::Config, redis_client: redis::Client) 
 async fn process_recent_logs(
     redis_connection: &mut redis::aio::MultiplexedConnection,
     solana: &config::Solana,
-    http_url: &str,
-    program_id: &str,
+    http_client: &RpcClient,
+    program_id: &Pubkey,
 ) -> Result<()> {
-    let rpc_client = RpcClient::new(http_url.to_string());
-    let pubkey = Pubkey::from_str(program_id)?;
+    let Some(start_block_height) = utils::redis::get_last_processed_block(
+        redis_connection,
+        &utils::redis::get_last_processed_block_key(ChainKind::Sol).await,
+    )
+    .await
+    else {
+        return Ok(());
+    };
 
-    let mut last_signature = None;
+    let mut last_signature = http_client
+        .get_signatures_for_address_with_config(
+            program_id,
+            GetConfirmedSignaturesForAddress2Config {
+                limit: Some(1000),
+                before: None,
+                until: None,
+                commitment: Some(CommitmentConfig::confirmed()),
+            },
+        )
+        .await?
+        .into_iter()
+        .find(|sig| sig.slot == start_block_height)
+        .and_then(|sig| Signature::from_str(&sig.signature).ok());
+
+    if last_signature.is_none() {
+        return Ok(());
+    }
 
     loop {
-        let signatures: Vec<RpcConfirmedTransactionStatusWithSignature> = rpc_client
+        let signatures: Vec<RpcConfirmedTransactionStatusWithSignature> = http_client
             .get_signatures_for_address_with_config(
-                &pubkey,
+                program_id,
                 GetConfirmedSignaturesForAddress2Config {
                     limit: None,
                     before: last_signature,
@@ -108,7 +154,7 @@ async fn process_recent_logs(
         for signature_status in &signatures {
             let signature = Signature::from_str(&signature_status.signature)?;
 
-            if let Ok(tx) = rpc_client
+            if let Ok(tx) = http_client
                 .get_transaction(&signature, UiTransactionEncoding::Json)
                 .await
             {

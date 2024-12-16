@@ -59,27 +59,22 @@ pub async fn start_indexer(
             _ => anyhow::bail!("Unsupported chain kind: {:?}", chain_kind),
         };
 
-    let last_processed_block_key = utils::redis::get_last_processed_block_key(chain_kind).await;
-
-    let http_provider = ProviderBuilder::new().on_http(
-        rpc_http_url
-            .parse()
-            .context("Failed to parse ETH rpc provider as url")?,
-    );
+    let http_provider = ProviderBuilder::new().on_http(rpc_http_url.parse().context(format!(
+        "Failed to parse {:?} rpc provider as url",
+        chain_kind
+    ))?);
 
     let ws_provider = ProviderBuilder::new()
         .on_ws(WsConnect::new(rpc_ws_url))
         .await
-        .context("Failed to initialize ETH WS provider")?;
+        .context(format!("Failed to initialize {:?} WS provider", chain_kind))?;
 
+    let last_processed_block_key = utils::redis::get_last_processed_block_key(chain_kind).await;
     let latest_block = http_provider.get_block_number().await?;
     let from_block =
         utils::redis::get_last_processed_block(&mut redis_connection, &last_processed_block_key)
             .await
-            .map_or_else(
-                || latest_block.saturating_sub(block_processing_batch_size),
-                |block| block,
-            );
+            .unwrap_or(latest_block);
 
     let filter = Filter::new()
         .address(bridge_token_factory_address)
@@ -106,7 +101,10 @@ pub async fn start_indexer(
         }
     }
 
-    info!("All historical logs processed, starting ETH WS subscription");
+    info!(
+        "All historical logs processed, starting {:?} WS subscription",
+        chain_kind
+    );
 
     let mut stream = ws_provider.subscribe_logs(&filter).await?.into_stream();
     while let Some(log) = stream.next().await {

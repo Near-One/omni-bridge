@@ -116,8 +116,8 @@ pub async fn sign_transfer(
                             )
                             .await
                         {
-                            Ok(outcome) => {
-                                info!("Signed transfer: {:?}", outcome.transaction.hash);
+                            Ok(tx_hash) => {
+                                info!("Signed transfer: {:?}", tx_hash);
                                 utils::redis::remove_event(
                                     &mut redis_connection,
                                     utils::redis::NEAR_INIT_TRANSFER_QUEUE,
@@ -183,10 +183,12 @@ pub async fn finalize_transfer(
                         info!("Received SignTransferEvent");
 
                         let fin_transfer_args = match message_payload.recipient.get_chain() {
-                            ChainKind::Eth => omni_connector::FinTransferArgs::EvmFinTransfer {
-                                chain_kind: message_payload.recipient.get_chain(),
-                                event,
-                            },
+                            ChainKind::Eth | ChainKind::Base | ChainKind::Arb => {
+                                omni_connector::FinTransferArgs::EvmFinTransfer {
+                                    chain_kind: message_payload.recipient.get_chain(),
+                                    event,
+                                }
+                            }
                             ChainKind::Sol => {
                                 let OmniAddress::Sol(token) = message_payload.token_address.clone()
                                 else {
