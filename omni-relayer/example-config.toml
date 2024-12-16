@@ -10,7 +10,7 @@ token_locker_id = "omni-locker.testnet"
 rpc_http_url = "https://sepolia.infura.io/v3/API_KEY"
 rpc_ws_url = "wss://sepolia.infura.io/ws/v3/API_KEY"
 chain_id = 11_155_111
-bridge_token_factory_address = "0x9Bb4BEC352c456183852AfB9b6C4098E20009928"
+bridge_token_factory_address = "0x3701B9859Dbb9a4333A3dd933ab18e9011ddf2C8"
 light_client = "client-eth2.sepolia.testnet"
 block_processing_batch_size = 10_000
 
@@ -18,7 +18,7 @@ block_processing_batch_size = 10_000
 rpc_http_url = "https://base-sepolia.infura.io/v3/API_KEY"
 rpc_ws_url = "wss://base-sepolia.infura.io/ws/v3/API_KEY"
 chain_id = 84_532
-bridge_token_factory_address = "0xd565f7CcE0FA1bB8DBe73FCDA281390d545f6200"
+bridge_token_factory_address = "0x0C981337fFe39a555d3A40dbb32f21aD0eF33FFA"
 block_processing_batch_size = 10_000
 
 [arb]
