@@ -172,13 +172,13 @@ task("etherscan-verify", "Verify contract on etherscan")
 task("update-wormhole-address", "Update the wormhole address")
   .addParam("factory", "The address of the OmniBridge contract")
   .setAction(async (taskArgs, hre) => {
-    const { ethers, upgrades } = hre
+    const { ethers } = hre
     const networkConfig = hre.network.config as HttpNetworkUserConfig
-    const wormholeAddress = networkConfig.wormholeAddress;
+    const wormholeAddress = networkConfig.wormholeAddress
     if (!wormholeAddress) {
-      throw new Error("Wormhole address is not set");
+      throw new Error("Wormhole address is not set")
     }
-    
+
     const OmniBridgeContract = await ethers.getContractFactory("OmniBridgeWormhole")
     const consistencyLevel = 0
     const OmniBridge = OmniBridgeContract.attach(taskArgs.factory) as OmniBridgeWormhole
