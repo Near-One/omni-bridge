@@ -418,3 +418,24 @@ fn test_stringify() {
         "Should stringify custom types with Display implementation"
     );
 }
+
+#[test]
+fn test_get_token_prefix() {
+    for chain_kind in [
+        ChainKind::Near,
+        ChainKind::Sol,
+        ChainKind::Base,
+        ChainKind::Eth,
+        ChainKind::Arb,
+    ] {
+        let prefix = OmniAddress::new_zero(chain_kind)
+            .unwrap()
+            .get_token_prefix();
+        assert_eq!(
+            prefix,
+            chain_kind.as_ref().to_lowercase(),
+            "Should return correct token prefix for {} chain",
+            chain_kind.as_ref()
+        );
+    }
+}
