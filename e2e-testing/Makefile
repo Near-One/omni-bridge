@@ -1,66 +1,40 @@
 .PHONY: ethereum-deploy evm-compile deploy-eth-bridge deploy-eth-token-impl create-near-bridge-id
 
-.PHONY: near-compile
-
 TESTING_ROOT := $(shell dirname $(realpath $(lastword $(MAKEFILE_LIST))))
 
-ETHEREUM_TESTNET := sepolia
 EVM_DIR := $(TESTING_ROOT)/../evm
 ETHEREUM_DEPLOY_RESULTS_DIR := $(TESTING_ROOT)/ethereum_deploy_results
 
 NEAR_DIR := $(TESTING_ROOT)/../near
 NEAR_DEPLOY_RESULTS_DIR := $(TESTING_ROOT)/near_deploy_results
 
-# File outputs
 NEAR_BRIDGE_ID_FILE := $(NEAR_DEPLOY_RESULTS_DIR)/omni_bridge.json
-BRIDGE_CONTRACT_ADDRESS_FILE := $(ETHEREUM_DEPLOY_RESULTS_DIR)/omni_bridge.json
-TOKEN_IMPL_ADDRESS_FILE := $(ETHEREUM_DEPLOY_RESULTS_DIR)/token_factory.json
-FAKE_PROVER_ADDRESS_FILE := $(ETHEREUM_DEPLOY_RESULTS_DIR)/fake_prover.json
+
+EVM_NETWORKS := sepolia arbitrumSepolia baseSepolia
+
+##########################################################
+# EVM
+##########################################################
+
 EVM_COMPILE_STAMP := $(TESTING_ROOT)/.evm-compile.stamp
 
-ENEAR_CREATION_TEMPLATE_FILE := $(TESTING_ROOT)/bin/eNear_creation.template
-ENEAR_CREATION_FILE := $(ENEAR_CREATION_TEMPLATE_FILE:.template=)
-ENEAR_ADDRESS_FILE := $(ETHEREUM_DEPLOY_RESULTS_DIR)/eNear.json
-ENEAR_PROXY_ADDRESS_FILE := $(ETHEREUM_DEPLOY_RESULTS_DIR)/eNearProxy.json
+EVM_DEPLOY_RESULTS_DIR := $(TESTING_ROOT)/evm_deploy_results
 
-# Commands
 DEPLOY_EVM_TOKEN_IMPL = yarn --silent --cwd $(EVM_DIR) hardhat deploy-token-impl --network $(1)
 DEPLOY_EVM_OMNI_BRIDGE_CONTRACT = yarn --silent --cwd $(EVM_DIR) hardhat deploy-bridge-token-factory --network $(1) --bridge-token-impl $(2) --near-bridge-account-id $(3)
 DEPLOY_EVM_FAKE_PROVER = yarn --silent --cwd $(EVM_DIR) hardhat deploy-fake-prover --network $(1)
 DEPLOY_EVM_BYTECODE = yarn --silent --cwd $(EVM_DIR) hardhat deploy-bytecode --network $(1) --bytecode $(2)
 DEPLOY_EVM_ENEAR_PROXY = yarn --silent --cwd $(EVM_DIR) hardhat deploy-e-near-proxy --network $(1) --enear $(2)
 
+ENEAR_CREATION_TEMPLATE_FILE := $(TESTING_ROOT)/bin/eNear_creation.template
+ENEAR_CREATION_FILE := $(ENEAR_CREATION_TEMPLATE_FILE:.template=)
+
 $(ENEAR_CREATION_FILE): $(ENEAR_CREATION_TEMPLATE_FILE) $(FAKE_PROVER_ADDRESS_FILE)
 	cat $< | \
 	sed "s/<PROVER_ADDRESS>/$(shell cat $(FAKE_PROVER_ADDRESS_FILE) | jq -r .fakeProverAddress | sed 's/^0x//')/" > $@
 
-deploy-ethereum-fake-prover: $(FAKE_PROVER_ADDRESS_FILE)
-$(FAKE_PROVER_ADDRESS_FILE): $(EVM_COMPILE_STAMP)
-	$(call DEPLOY_EVM_FAKE_PROVER,$(ETHEREUM_TESTNET)) 2>/dev/stderr 1> $@
-
-deploy-ethereum-enear: $(ENEAR_ADDRESS_FILE)
-$(ENEAR_ADDRESS_FILE): $(ENEAR_CREATION_FILE)
-	$(call DEPLOY_EVM_BYTECODE,$(ETHEREUM_TESTNET),$(ENEAR_CREATION_FILE)) 2>/dev/stderr 1> $@
-
-deploy-ethereum-enear-proxy: $(ENEAR_PROXY_ADDRESS_FILE)
-$(ENEAR_PROXY_ADDRESS_FILE): $(ENEAR_ADDRESS_FILE) $(EVM_COMPILE_STAMP)
-	$(call DEPLOY_EVM_ENEAR_PROXY,$(ETHEREUM_TESTNET),$(shell cat $(ENEAR_ADDRESS_FILE) | jq -r .contractAddress)) 2>/dev/stderr 1> $@
-
-$(ETHEREUM_DEPLOY_RESULTS_DIR):
+$(EVM_DEPLOY_RESULTS_DIR):
 	mkdir -p $@
-
-ethereum-deploy: deploy-eth-bridge
-
-deploy-eth-bridge: $(BRIDGE_CONTRACT_ADDRESS_FILE)
-$(BRIDGE_CONTRACT_ADDRESS_FILE): $(TOKEN_IMPL_ADDRESS_FILE) $(NEAR_BRIDGE_ID_FILE) $(EVM_COMPILE_STAMP) | $(ETHEREUM_DEPLOY_RESULTS_DIR)
-	@echo "Deploying EVM OmniBridge contract"
-	$(call DEPLOY_EVM_OMNI_BRIDGE_CONTRACT,$(ETHEREUM_TESTNET),$(shell cat $(TOKEN_IMPL_ADDRESS_FILE) | jq -r .tokenImplAddress),$(shell cat $(NEAR_BRIDGE_ID_FILE) | jq -r .contract_id)) 2>/dev/stderr 1> $@
-
-deploy-eth-token-impl: $(TOKEN_IMPL_ADDRESS_FILE)
-$(TOKEN_IMPL_ADDRESS_FILE): $(EVM_COMPILE_STAMP) | $(ETHEREUM_DEPLOY_RESULTS_DIR)
-	@echo "Deploying EVM token implementation"
-	$(call DEPLOY_EVM_TOKEN_IMPL,$(ETHEREUM_TESTNET)) 2>/dev/stderr 1> $@
-
 
 evm-compile: $(EVM_COMPILE_STAMP)
 $(EVM_COMPILE_STAMP):
@@ -69,8 +43,54 @@ $(EVM_COMPILE_STAMP):
 	yarn --cwd $(EVM_DIR) hardhat compile
 	touch $@
 
+# Arguments:
+# 		$(1) -  the network name
+define generate_evm_deploy_rules
 
-#### NEAR
+.PHONY: $(1)-deploy-fake-prover $(1)-deploy-enear $(1)-deploy-enear-proxy $(1)-deploy-bridge $(1)-deploy-token-impl
+
+$(1)_DEPLOY_RESULTS_DIR := $(EVM_DEPLOY_RESULTS_DIR)/$(1)
+
+$$($(1)_DEPLOY_RESULTS_DIR): | $(EVM_DEPLOY_RESULTS_DIR)
+	mkdir -p $$@
+
+$(1)-deploy: $(1)-deploy-bridge $(1)-deploy-enear-proxy
+
+$(1)_BRIDGE_CONTRACT_ADDRESS_FILE := $$($(1)_DEPLOY_RESULTS_DIR)/omni_bridge.json
+$(1)_TOKEN_IMPL_ADDRESS_FILE := $$($(1)_DEPLOY_RESULTS_DIR)/token_factory.json
+$(1)_FAKE_PROVER_ADDRESS_FILE := $$($(1)_DEPLOY_RESULTS_DIR)/fake_prover.json
+
+$(1)_ENEAR_ADDRESS_FILE := $$($(1)_DEPLOY_RESULTS_DIR)/eNear.json
+$(1)_ENEAR_PROXY_ADDRESS_FILE := $$($(1)_DEPLOY_RESULTS_DIR)/eNearProxy.json
+
+
+$(1)-deploy-fake-prover: $$($(1)_FAKE_PROVER_ADDRESS_FILE)
+$$($(1)_FAKE_PROVER_ADDRESS_FILE): $(EVM_COMPILE_STAMP) | $$($(1)_DEPLOY_RESULTS_DIR)
+	$$(call DEPLOY_EVM_FAKE_PROVER,$(1)) 2>/dev/stderr 1> $$@
+
+$(1)-deploy-enear: $$($(1)_ENEAR_ADDRESS_FILE)
+$$($(1)_ENEAR_ADDRESS_FILE): $(ENEAR_CREATION_FILE) | $$($(1)_DEPLOY_RESULTS_DIR)
+	$$(call DEPLOY_EVM_BYTECODE,$(1),$(ENEAR_CREATION_FILE)) 2>/dev/stderr 1> $$@
+
+$(1)-deploy-enear-proxy: $$($(1)_ENEAR_PROXY_ADDRESS_FILE)
+$$($(1)_ENEAR_PROXY_ADDRESS_FILE): $$($(1)_ENEAR_ADDRESS_FILE) $(EVM_COMPILE_STAMP) | $$($(1)_DEPLOY_RESULTS_DIR)
+	$$(call DEPLOY_EVM_ENEAR_PROXY,$(1),$$(shell cat $$($(1)_ENEAR_ADDRESS_FILE) | jq -r .contractAddress)) 2>/dev/stderr 1> $$@
+
+$(1)-deploy-bridge: $$($(1)_BRIDGE_CONTRACT_ADDRESS_FILE)
+$$($(1)_BRIDGE_CONTRACT_ADDRESS_FILE): $$($(1)_TOKEN_IMPL_ADDRESS_FILE) $(NEAR_BRIDGE_ID_FILE) $(EVM_COMPILE_STAMP) | $$($(1)_DEPLOY_RESULTS_DIR)
+	$$(call DEPLOY_EVM_OMNI_BRIDGE_CONTRACT,$(1),$$(shell cat $$($(1)_TOKEN_IMPL_ADDRESS_FILE) | jq -r .tokenImplAddress),$$(shell cat $(NEAR_BRIDGE_ID_FILE) | jq -r .contract_id)) 2>/dev/stderr 1> $$@
+
+$(1)-deploy-token-impl: $$($(1)_TOKEN_IMPL_ADDRESS_FILE)
+$$($(1)_TOKEN_IMPL_ADDRESS_FILE): $(EVM_COMPILE_STAMP) | $$($(1)_DEPLOY_RESULTS_DIR)
+	$$(call DEPLOY_EVM_TOKEN_IMPL,$(1)) 2>/dev/stderr 1> $$@
+
+endef
+
+$(foreach network,$(EVM_NETWORKS),$(eval $(call generate_evm_deploy_rules,$(network))))
+
+##########################################################
+# NEAR
+##########################################################
 
 NEAR_BINARY_DIR := $(TESTING_ROOT)/near_binary
 
@@ -95,8 +115,10 @@ $(NEAR_BUILD_STAMP):
 	$(NEAR_DIR)/build.sh --output-dir $(NEAR_BINARY_DIR)
 	touch $@
 
-# Generate rules for each binary deployment
-define generate_deploy_rule
+# Arguments:
+# 		$(1) -  the path to the binary file
+define generate_near_deploy_rules
+
 $(NEAR_DEPLOY_RESULTS_DIR)/$(basename $(notdir $(1))).json: $(1) | $(NEAR_DEPLOY_RESULTS_DIR)
 	./scripts/deploy-near-contract.sh $(1) $$@ $$(basename $$(notdir $(1)))-$(TIMESTAMP).testnet
 
@@ -104,4 +126,4 @@ $(1): $(NEAR_BUILD_STAMP)
  
 endef
 
-$(foreach binary,$(NEAR_BINARY_PATHS),$(eval $(call generate_deploy_rule,$(binary))))
+$(foreach binary,$(NEAR_BINARY_PATHS),$(eval $(call generate_near_deploy_rule,$(binary))))
