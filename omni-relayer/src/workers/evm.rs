@@ -281,7 +281,7 @@ async fn get_storage_deposit_actions(
                 )
             })?;
 
-        let near_recipient_storage_deposit_amount = connector
+        let near_recipient_storage_deposit_amount = match connector
             .near_get_required_storage_deposit(token_id.clone(), near_recipient.clone())
             .await
             .map_err(|_| {
@@ -289,12 +289,15 @@ async fn get_storage_deposit_actions(
                     "Failed to get required storage deposit for recipient: {:?}",
                     near_recipient
                 )
-            })?;
+            })? {
+            amount if amount > 0 => Some(amount),
+            _ => None,
+        };
 
         storage_deposit_actions.push(StorageDepositAction {
             token_id,
             account_id: near_recipient.clone(),
-            storage_deposit_amount: Some(near_recipient_storage_deposit_amount),
+            storage_deposit_amount: near_recipient_storage_deposit_amount,
         });
     };
 
@@ -333,20 +336,23 @@ async fn get_storage_deposit_actions(
             .and_then(|client| client.signer().map(|signer| signer.account_id))
             .map_err(|_| "Failed to get relayer account id".to_string())?;
 
-        let near_relayer_storage_deposit_amount = connector
+        let near_relayer_storage_deposit_amount = match connector
             .near_get_required_storage_deposit(token_id.clone(), relayer.clone())
             .await
             .map_err(|_| {
                 format!(
-                    "Failed to get required storage deposit for recipient: {:?}",
+                    "Failed to get required storage deposit for relayer: {:?}",
                     relayer
                 )
-            })?;
+            })? {
+            amount if amount > 0 => Some(amount),
+            _ => None,
+        };
 
         storage_deposit_actions.push(StorageDepositAction {
             token_id,
             account_id: relayer,
-            storage_deposit_amount: Some(near_relayer_storage_deposit_amount),
+            storage_deposit_amount: near_relayer_storage_deposit_amount,
         });
     }
 
