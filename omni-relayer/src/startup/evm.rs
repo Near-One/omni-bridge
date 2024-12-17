@@ -108,7 +108,7 @@ pub async fn start_indexer(
 
     let mut stream = ws_provider.subscribe_logs(&filter).await?.into_stream();
     while let Some(log) = stream.next().await {
-        process_log(ChainKind::Eth, &mut redis_connection, &http_provider, log).await;
+        process_log(chain_kind, &mut redis_connection, &http_provider, log).await;
     }
 
     Ok(())
