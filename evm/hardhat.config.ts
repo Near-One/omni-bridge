@@ -138,7 +138,7 @@ task("upgrade-bridge-token", "Upgrades a BridgeToken to a new implementation")
       taskArgs.nearTokenAccount,
       await BridgeTokenV2.getAddress(),
     )
-    const receipt = await tx.wait()
+    await tx.wait()
 
     console.log(
       JSON.stringify({
