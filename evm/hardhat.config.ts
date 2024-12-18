@@ -72,12 +72,12 @@ task("deploy-bridge-token-factory", "Deploys the OmniBridge contract")
       OmniBridgeContract,
       isWormholeContract
         ? [
-          taskArgs.bridgeTokenImpl,
-          nearBridgeDerivedAddress,
-          omniChainId,
-          wormholeAddress,
-          consistencyLevel,
-        ]
+            taskArgs.bridgeTokenImpl,
+            nearBridgeDerivedAddress,
+            omniChainId,
+            wormholeAddress,
+            consistencyLevel,
+          ]
         : [taskArgs.bridgeTokenImpl, nearBridgeDerivedAddress, omniChainId],
       {
         initializer: isWormholeContract ? "initializeWormhole" : "initialize",
@@ -96,25 +96,28 @@ task("deploy-bridge-token-factory", "Deploys the OmniBridge contract")
     )[0]
     assert.strictEqual(decodedWormholeAddress, wormholeAddress ?? ethers.ZeroAddress)
 
-    console.log(JSON.stringify({
-      bridgeAddress,
-      implementationAddress,
-      derivedAddress: nearBridgeDerivedAddress,
-      omniChainId,
-      wormholeAddress: wormholeAddress ?? null
-    }))
+    console.log(
+      JSON.stringify({
+        bridgeAddress,
+        implementationAddress,
+        derivedAddress: nearBridgeDerivedAddress,
+        omniChainId,
+        wormholeAddress: wormholeAddress ?? null,
+      }),
+    )
   })
 
-task("deploy-token-impl", "Deploys the BridgeToken implementation")
-  .setAction(async (_, hre) => {
-    const { ethers } = hre
-    const BridgeTokenContractFactory = await ethers.getContractFactory("BridgeToken")
-    const BridgeTokenContract = await BridgeTokenContractFactory.deploy()
-    await BridgeTokenContract.waitForDeployment()
-    console.log(JSON.stringify({
-      tokenImplAddress: await BridgeTokenContract.getAddress()
-    }))
-  })
+task("deploy-token-impl", "Deploys the BridgeToken implementation").setAction(async (_, hre) => {
+  const { ethers } = hre
+  const BridgeTokenContractFactory = await ethers.getContractFactory("BridgeToken")
+  const BridgeTokenContract = await BridgeTokenContractFactory.deploy()
+  await BridgeTokenContract.waitForDeployment()
+  console.log(
+    JSON.stringify({
+      tokenImplAddress: await BridgeTokenContract.getAddress(),
+    }),
+  )
+})
 
 task("upgrade-bridge-token", "Upgrades a BridgeToken to a new implementation")
   .addParam("factory", "The address of the OmniBridge contract")
@@ -137,11 +140,13 @@ task("upgrade-bridge-token", "Upgrades a BridgeToken to a new implementation")
     )
     const receipt = await tx.wait()
 
-    console.log(JSON.stringify({
-      upgradingToken: taskArgs.nearTokenAccount,
-      tokenProxyAddress: await OmniBridge.nearToEthToken(taskArgs.nearTokenAccount),
-      newImplementationAddress: await BridgeTokenV2.getAddress(),
-    }))
+    console.log(
+      JSON.stringify({
+        upgradingToken: taskArgs.nearTokenAccount,
+        tokenProxyAddress: await OmniBridge.nearToEthToken(taskArgs.nearTokenAccount),
+        newImplementationAddress: await BridgeTokenV2.getAddress(),
+      }),
+    )
   })
 
 task("upgrade-factory", "Upgrades the OmniBridge contract")
@@ -159,11 +164,13 @@ task("upgrade-factory", "Upgrades the OmniBridge contract")
     await upgrades.upgradeProxy(taskArgs.factory, OmniBridgeContract)
     const newImpl = await upgrades.erc1967.getImplementationAddress(taskArgs.factory)
 
-    console.log(JSON.stringify({
-      proxyAddress: taskArgs.factory,
-      previousImplementation: currentImpl,
-      newImplementation: newImpl
-    }))
+    console.log(
+      JSON.stringify({
+        proxyAddress: taskArgs.factory,
+        previousImplementation: currentImpl,
+        newImplementation: newImpl,
+      }),
+    )
   })
 
 task("etherscan-verify", "Verify contract on etherscan")
@@ -207,9 +214,11 @@ task("deploy-bytecode", "Deploys a contract with a given bytecode")
     const contract = await contractFactory.deploy()
     await contract.waitForDeployment()
 
-    console.log(JSON.stringify({
-      contractAddress: await contract.getAddress()
-    }))
+    console.log(
+      JSON.stringify({
+        contractAddress: await contract.getAddress(),
+      }),
+    )
   })
 
 const config: HardhatUserConfig = {

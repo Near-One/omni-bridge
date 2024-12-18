@@ -22,10 +22,12 @@ task("deploy-e-near-proxy", "Deploys the ENearProxy contract")
     await eNearProxy.waitForDeployment()
     const proxyAddress = await eNearProxy.getAddress()
     const implementationAddress = await upgrades.erc1967.getImplementationAddress(proxyAddress)
-    console.log(JSON.stringify({
-      proxyAddress,
-      implementationAddress
-    }))
+    console.log(
+      JSON.stringify({
+        proxyAddress,
+        implementationAddress,
+      }),
+    )
   })
 
 task("e-near-set-admin", "Set the proxy as admin for eNear")
@@ -44,8 +46,10 @@ task("deploy-fake-prover", "Deploy fake prover").setAction(
     const FakeProverContract = await FakeProverContractFactory.deploy()
     await FakeProverContract.waitForDeployment()
 
-    console.log(JSON.stringify({
-      fakeProverAddress: await FakeProverContract.getAddress()
-    }))
+    console.log(
+      JSON.stringify({
+        fakeProverAddress: await FakeProverContract.getAddress(),
+      }),
+    )
   },
 )
