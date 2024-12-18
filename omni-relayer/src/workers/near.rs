@@ -283,6 +283,8 @@ pub async fn claim_fee(
                     tx_logs,
                 } = fin_transfer
                 {
+                    info!("Trying to process FinTransfer log on {:?}", chain_kind);
+
                     let vaa = utils::evm::get_vaa_from_evm_log(
                         connector.clone(),
                         chain_kind,
@@ -366,7 +368,7 @@ pub async fn claim_fee(
                         let mut redis_connection = redis_connection.clone();
                         let connector = connector.clone();
                         async move {
-                            info!("Received finalized transfer");
+                            info!("Trying to process FinTransfer log on Solana");
                             let Ok(vaa) = connector
                                 .wormhole_get_vaa(
                                     config.wormhole.solana_chain_id,

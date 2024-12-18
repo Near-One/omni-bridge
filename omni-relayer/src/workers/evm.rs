@@ -111,7 +111,10 @@ async fn handle_init_transfer_event(
         }
     };
 
-    info!("Received InitTransfer log");
+    info!(
+        "Trying to process InitTransfer log on {:?}",
+        init_transfer_with_timestamp.chain_kind
+    );
 
     let tx_hash = match init_transfer_with_timestamp.log.transaction_hash {
         Some(tx_hash) => tx_hash,
@@ -375,7 +378,9 @@ async fn get_storage_deposit_actions(
         storage_deposit_actions.push(StorageDepositAction {
             token_id,
             account_id: relayer,
-            storage_deposit_amount: None,
+            storage_deposit_amount: None, // TODO: As it turned out this shouldn't be always None,
+                                          // so we need to either hardcode a value or add a `storage_minimum_balance` to the
+                                          // token contract
         });
     }
 

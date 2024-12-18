@@ -111,7 +111,7 @@ async fn handle_init_transfer_event(
         return;
     }
 
-    info!("Received InitTransfer log on Solana");
+    info!("Trying to process InitTransfer log on Solana");
 
     let recipient = match init_transfer_with_timestamp
         .recipient

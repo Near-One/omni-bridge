@@ -74,7 +74,8 @@ pub async fn start_indexer(
     let from_block =
         utils::redis::get_last_processed_block(&mut redis_connection, &last_processed_block_key)
             .await
-            .unwrap_or(latest_block);
+            .unwrap_or(latest_block)
+            + 1;
 
     let filter = Filter::new()
         .address(bridge_token_factory_address)
