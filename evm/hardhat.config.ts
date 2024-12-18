@@ -10,11 +10,11 @@ import "solidity-coverage"
 import "./src/eNear/scripts"
 import { task } from "hardhat/config"
 import type { HttpNetworkUserConfig } from "hardhat/types"
-import type { OmniBridge } from "./typechain-types"
+import type { OmniBridge, OmniBridgeWormhole } from "./typechain-types"
 import { deriveEVMAddress, mpcRootPublicKeys } from "./utils/kdf"
 
 import "hardhat/types/config"
-import * as assert from "node:assert"
+import assert from "node:assert"
 
 declare module "hardhat/types/config" {
   interface HttpNetworkUserConfig {
@@ -169,6 +169,25 @@ task("etherscan-verify", "Verify contract on etherscan")
     })
   })
 
+task("update-wormhole-address", "Update the wormhole address")
+  .addParam("factory", "The address of the OmniBridge contract")
+  .setAction(async (taskArgs, hre) => {
+    const { ethers } = hre
+    const networkConfig = hre.network.config as HttpNetworkUserConfig
+    const wormholeAddress = networkConfig.wormholeAddress
+    if (!wormholeAddress) {
+      throw new Error("Wormhole address is not set")
+    }
+
+    const OmniBridgeContract = await ethers.getContractFactory("OmniBridgeWormhole")
+    const consistencyLevel = 0
+    const OmniBridge = OmniBridgeContract.attach(taskArgs.factory) as OmniBridgeWormhole
+    const tx = await OmniBridge.setWormholeAddress(wormholeAddress, consistencyLevel)
+    const receipt = await tx.wait()
+
+    console.log("Address upgraded at tx hash:", receipt?.hash)
+  })
+
 const config: HardhatUserConfig = {
   paths: {
     sources: "./src",
@@ -230,7 +249,7 @@ const config: HardhatUserConfig = {
       accounts: [`${EVM_PRIVATE_KEY}`],
     },
     arbitrumSepolia: {
-      wormholeAddress: "0xC7A204bDBFe983FCD8d8E61D02b475D4073fF97e",
+      wormholeAddress: "0x6b9C8671cdDC8dEab9c719bB87cBd3e782bA6a35",
       omniChainId: 3,
       chainId: 421614,
       url: `https://arbitrum-sepolia.infura.io/v3/${INFURA_API_KEY}`,

@@ -130,4 +130,12 @@ contract OmniBridgeWormhole is OmniBridge {
 
         wormholeNonce++;
     }
+
+    function setWormholeAddress(
+        address wormholeAddress,
+        uint8 consistencyLevel
+    ) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        _wormhole = IWormhole(wormholeAddress);
+        _consistencyLevel = consistencyLevel;
+    }
 }
