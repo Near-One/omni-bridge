@@ -30,6 +30,8 @@ impl Payload for DeployTokenPayload {
 pub struct DeployTokenResponse {
     pub token: String,
     pub solana_mint: Pubkey,
+    pub decimals: u8,
+    pub origin_decimals: u8,
 }
 
 impl Payload for DeployTokenResponse {
