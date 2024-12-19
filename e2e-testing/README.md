@@ -6,6 +6,7 @@
 - cargo
 - [NEAR CLI RS](https://github.com/near/near-cli-rs)
 - docker
+- [Solana CLI and Anchor](https://solana.com/docs/intro/installation)
 
 ## Using the Makefile
 
@@ -36,9 +37,11 @@ The `Makefile` in this project is designed to automate the deployment and compil
 
 These tasks automate the process of setting up the testing environment, ensuring that all necessary components are compiled and deployed correctly.
 
-### Ethereum Deployment
+### Additional Requirements
 
 - **Private Key Requirement**: For Ethereum deployment, ensure that you add your `EVM_PRIVATE_KEY` to the `./evm/.env` file. This key is necessary for authenticating transactions on the Ethereum network.
+
+- **Solana Keypair Requirement**: For Solana bulding and deployment, ensure that for every program you have a keypair in `.e2e-testing/` directory in the format of `<program_name>-keypair.json`. However, this key pair is secret and should not be shared.
 
 ### Deployment Results
 
