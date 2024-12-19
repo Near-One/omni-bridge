@@ -1223,7 +1223,7 @@ impl Contract {
     fn de_normalize_amount(amount: u128, decimals: Option<Decimals>) -> u128 {
         if let Some(decimals) = decimals {
             let diff_decimals: u128 = (decimals.origin_decimals - decimals.decimals).into();
-            amount * 10 ^ diff_decimals
+            amount * (10 ^ diff_decimals)
         } else {
             amount
         }
@@ -1232,7 +1232,7 @@ impl Contract {
     fn normalize_amount(amount: u128, decimals: Option<Decimals>) -> u128 {
         if let Some(decimals) = decimals {
             let diff_decimals: u128 = (decimals.origin_decimals - decimals.decimals).into();
-            amount / 10 ^ diff_decimals
+            amount / (10 ^ diff_decimals)
         } else {
             amount
         }
