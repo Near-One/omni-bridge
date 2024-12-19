@@ -8,15 +8,18 @@ ETHEREUM_DEPLOY_RESULTS_DIR := $(TESTING_ROOT)/ethereum_deploy_results
 NEAR_DIR := $(TESTING_ROOT)/../near
 NEAR_DEPLOY_RESULTS_DIR := $(TESTING_ROOT)/near_deploy_results
 
-NEAR_BRIDGE_ID_FILE := $(NEAR_DEPLOY_RESULTS_DIR)/omni_bridge.json
+SOLANA_DIR := $(TESTING_ROOT)/../solana
+SOLANA_DEPLOY_RESULTS_DIR := $(TESTING_ROOT)/solana_deploy_results
 
-EVM_NETWORKS := sepolia arbitrumSepolia baseSepolia
+NEAR_BRIDGE_ID_FILE := $(NEAR_DEPLOY_RESULTS_DIR)/omni_bridge.json
 
 ##########################################################
 # EVM
 ##########################################################
 
 EVM_COMPILE_STAMP := $(TESTING_ROOT)/.evm-compile.stamp
+
+EVM_NETWORKS := sepolia arbitrumSepolia baseSepolia
 
 EVM_DEPLOY_RESULTS_DIR := $(TESTING_ROOT)/evm_deploy_results
 
@@ -127,3 +130,33 @@ $(1): $(NEAR_BUILD_STAMP)
 endef
 
 $(foreach binary,$(NEAR_BINARY_PATHS),$(eval $(call generate_near_deploy_rule,$(binary))))
+
+
+########################################
+# Solana
+########################################
+
+SOLANA_BUILD_STAMP := $(TESTING_ROOT)/.solana-build.stamp
+
+SOLANA_PROGRAMS := bridge_token_factory
+SOLANA_PROGRAMS_KEYPAIRS := $(foreach program,$(SOLANA_PROGRAMS),$(SOLANA_DIR)/$(program)/target/deploy/$(program)-keypair.json)
+SOLANA_PROGRAMS_BINARIES := $(foreach program,$(SOLANA_PROGRAMS),$(SOLANA_DIR)/$(program)/target/deploy/$(program).so)
+
+solana-build: $(SOLANA_BUILD_STAMP)
+$(SOLANA_BUILD_STAMP): $(SOLANA_PROGRAMS_KEYPAIRS) $(SOLANA_PROGRAMS_BINARIES)
+	touch $@
+
+define generate_solana_build_rules
+
+$(SOLANA_DIR)/$(1)/target/deploy/$(1)-keypair.json: $(TESTING_ROOT)/$(1)-keypair.json
+	mkdir -p $$(dir $$@) && \
+	cp $$< $$@
+
+$(SOLANA_DIR)/$(1)/target/deploy/$(1).so:
+	cd $(SOLANA_DIR)/$(1) && \
+	anchor build
+
+endef 
+
+$(foreach program,$(SOLANA_PROGRAMS),$(eval $(call generate_solana_build_rules,$(program))))
+
