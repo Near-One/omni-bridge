@@ -369,6 +369,7 @@ pub async fn claim_fee(
                         let connector = connector.clone();
                         async move {
                             info!("Trying to process FinTransfer log on Solana");
+
                             let Ok(vaa) = connector
                                 .wormhole_get_vaa(
                                     config.wormhole.solana_chain_id,

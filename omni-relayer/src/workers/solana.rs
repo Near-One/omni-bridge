@@ -1,6 +1,6 @@
-use std::sync::Arc;
+use std::{str::FromStr, sync::Arc};
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use futures::future::join_all;
 use log::{error, info, warn};
 
@@ -9,6 +9,7 @@ use omni_types::{
     locker_args::StorageDepositAction, prover_args::WormholeVerifyProofArgs,
     prover_result::ProofKind, ChainKind, OmniAddress,
 };
+use solana_sdk::pubkey::Pubkey;
 
 use crate::{config, utils};
 
@@ -104,7 +105,7 @@ async fn handle_init_transfer_event(
         );
         utils::redis::remove_event(
             &mut redis_connection,
-            utils::redis::EVM_INIT_TRANSFER_EVENTS,
+            utils::redis::SOLANA_INIT_TRANSFER_EVENTS,
             &key,
         )
         .await;
@@ -178,7 +179,7 @@ async fn handle_init_transfer_event(
             info!("Finalized InitTransfer: {:?}", tx_hash);
             utils::redis::remove_event(
                 &mut redis_connection,
-                utils::redis::EVM_INIT_TRANSFER_EVENTS,
+                utils::redis::SOLANA_INIT_TRANSFER_EVENTS,
                 &key,
             )
             .await;
@@ -195,16 +196,19 @@ async fn get_storage_deposit_actions(
     let mut storage_deposit_actions = Vec::new();
 
     if let OmniAddress::Near(near_recipient) = recipient {
-        let omni_token_address = OmniAddress::new_from_slice(
-            ChainKind::Sol,
-            init_transfer_with_timestamp.token.as_bytes(),
-        )
-        .map_err(|_| {
+        let token = Pubkey::from_str(&init_transfer_with_timestamp.token).map_err(|_| {
             format!(
-                "Failed to convert EVM token address to OmniAddress: {:?}",
+                "Failed to parse token address as Pubkey: {:?}",
                 init_transfer_with_timestamp.token
             )
         })?;
+        let omni_token_address = OmniAddress::new_from_slice(ChainKind::Sol, &token.to_bytes())
+            .map_err(|_| {
+                format!(
+                    "Failed to convert SOL token address to OmniAddress: {:?}",
+                    init_transfer_with_timestamp.token
+                )
+            })?;
 
         let token_id = connector
             .near_get_token_id(omni_token_address.clone())
@@ -237,16 +241,19 @@ async fn get_storage_deposit_actions(
     };
 
     if init_transfer_with_timestamp.fee > 0 {
-        let omni_token_address = OmniAddress::new_from_slice(
-            ChainKind::Sol,
-            init_transfer_with_timestamp.token.as_bytes(),
-        )
-        .map_err(|_| {
+        let token = Pubkey::from_str(&init_transfer_with_timestamp.token).map_err(|_| {
             format!(
-                "Failed to convert EVM token address to OmniAddress: {:?}",
+                "Failed to parse token address as Pubkey: {:?}",
                 init_transfer_with_timestamp.token
             )
         })?;
+        let omni_token_address = OmniAddress::new_from_slice(ChainKind::Sol, &token.to_bytes())
+            .map_err(|_| {
+                format!(
+                    "Failed to convert SOL token address to OmniAddress: {:?}",
+                    init_transfer_with_timestamp.token
+                )
+            })?;
 
         let token_id = connector
             .near_get_token_id(omni_token_address.clone())

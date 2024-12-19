@@ -73,28 +73,45 @@ pub async fn start_indexer(config: config::Config, redis_client: redis::Client) 
             continue;
         };
 
-        if let Ok(tx) = http_client
+        info!("Processing signature: {:?}", signature);
+
+        // TODO: We need to wait for the transaction to be confirmed, but this must be replaced
+        // with a worker
+        tokio::time::sleep(tokio::time::Duration::from_secs(15)).await;
+
+        match http_client
             .get_transaction(&signature, UiTransactionEncoding::Json)
             .await
         {
-            let transaction = tx.transaction;
+            Ok(tx) => {
+                let transaction = tx.transaction;
 
-            if let solana_transaction_status::EncodedTransaction::Json(ref tx) =
-                transaction.transaction
-            {
-                if let UiMessage::Raw(ref raw) = tx.message {
-                    process_message(&mut redis_connection, &solana, &transaction, raw, signature)
+                if let solana_transaction_status::EncodedTransaction::Json(ref tx) =
+                    transaction.transaction
+                {
+                    if let UiMessage::Raw(ref raw) = tx.message {
+                        process_message(
+                            &mut redis_connection,
+                            &solana,
+                            &transaction,
+                            raw,
+                            signature,
+                        )
                         .await
+                    }
                 }
-            }
 
-            utils::redis::update_last_processed_block(
-                &mut redis_connection,
-                &utils::redis::get_last_processed_block_key(ChainKind::Sol).await,
-                tx.slot,
-            )
-            .await;
-        }
+                utils::redis::update_last_processed_block(
+                    &mut redis_connection,
+                    &utils::redis::get_last_processed_block_key(ChainKind::Sol).await,
+                    tx.slot,
+                )
+                .await;
+            }
+            Err(e) => {
+                warn!("Failed to fetch transaction: {}", e);
+            }
+        };
     }
 
     Ok(())
@@ -115,6 +132,7 @@ async fn process_recent_logs(
         return Ok(());
     };
 
+    // TODO: Replace all this simply by saving last signature instead of slot
     let mut last_signature = http_client
         .get_signatures_for_address_with_config(
             program_id,
@@ -232,6 +250,8 @@ async fn decode_instruction(
     .into_iter()
     .find_map(|(disc, len)| decoded_data.starts_with(disc).then_some(len))
     {
+        info!("Received InitTransfer on Solana");
+
         let mut payload_data = &decoded_data[offset..];
 
         if let Ok(payload) = InitTransferPayload::deserialize(&mut payload_data) {
@@ -281,6 +301,8 @@ async fn decode_instruction(
     } else if decoded_data.starts_with(&solana.finalize_transfer_discriminator)
         || decoded_data.starts_with(&solana.finalize_transfer_sol_discriminator)
     {
+        info!("Received FinTransfer on Solana");
+
         let emitter = &account_keys[solana.finalize_transfer_emitter_index];
 
         if let Some(OptionSerializer::Some(logs)) =
