@@ -182,6 +182,7 @@ impl EvmProver {
                 require!(proof_index + 1 == proof.len());
                 get_vec(&node, 16)
             } else {
+                #[allow(clippy::as_conversions)]
                 let new_expected_root = get_vec(&node, key[key_index] as usize);
                 if new_expected_root.is_empty() {
                     // not included in proof
