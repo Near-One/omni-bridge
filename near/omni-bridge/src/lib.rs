@@ -27,7 +27,7 @@ use omni_types::{
     BasicMetadata, ChainKind, Fee, InitTransferMsg, MetadataPayload, Nonce, OmniAddress,
     PayloadType, SignRequest, TransferId, TransferMessage, TransferMessagePayload, UpdateFee,
 };
-use storage::{TransferMessageStorage, TransferMessageStorageValue};
+use storage::{TransferMessageStorage, TransferMessageStorageValue, NEP141_DEPOSIT};
 
 mod errors;
 mod storage;
@@ -702,7 +702,8 @@ impl Contract {
         require!(self.deployed_tokens.insert(&token_id), "ERR_TOKEN_EXIST");
         let required_deposit = env::storage_byte_cost()
             .saturating_mul((env::storage_usage().saturating_sub(storage_usage)).into())
-            .saturating_add(storage::BRIDGE_TOKEN_INIT_BALANCE);
+            .saturating_add(storage::BRIDGE_TOKEN_INIT_BALANCE)
+            .saturating_add(NEP141_DEPOSIT);
 
         require!(
             attached_deposit >= required_deposit,
@@ -712,7 +713,13 @@ impl Contract {
         ext_deployer::ext(deployer)
             .with_static_gas(DEPLOY_TOKEN_GAS)
             .with_attached_deposit(storage::BRIDGE_TOKEN_INIT_BALANCE)
-            .deploy_token(token_id, metadata)
+            .deploy_token(token_id.clone(), metadata)
+            .then(
+                ext_token::ext(token_id)
+                    .with_static_gas(STORAGE_DEPOSIT_GAS)
+                    .with_attached_deposit(NEP141_DEPOSIT)
+                    .storage_deposit(&env::current_account_id(), Some(true)),
+            )
     }
 
     #[payable]
@@ -846,7 +853,13 @@ impl Contract {
     }
 
     #[access_control_any(roles(Role::DAO))]
+    #[payable]
     pub fn add_deployed_tokens(&mut self, tokens: Vec<(OmniAddress, AccountId)>) {
+        require!(
+            env::attached_deposit() >= NEP141_DEPOSIT.saturating_mul(tokens.len() as u128),
+            "ERR_NOT_ENOUGH_ATTACHED_DEPOSIT"
+        );
+
         for (token_address, token_id) in tokens {
             self.deployed_tokens.insert(&token_id);
             self.token_address_to_id.insert(&token_address, &token_id);
@@ -854,6 +867,11 @@ impl Contract {
                 &(token_address.get_chain(), token_id.clone()),
                 &token_address,
             );
+
+            ext_token::ext(token_id)
+                .with_static_gas(STORAGE_DEPOSIT_GAS)
+                .with_attached_deposit(NEP141_DEPOSIT)
+                .storage_deposit(&env::current_account_id(), Some(true));
         }
     }
 
