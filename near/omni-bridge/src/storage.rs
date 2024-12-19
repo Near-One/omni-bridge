@@ -40,6 +40,12 @@ impl TransferMessageStorage {
     }
 }
 
+#[derive(BorshDeserialize, BorshSerialize, Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Decimals {
+    pub decimals: u8,
+    pub origin_decimals: u8,
+}
+
 #[near_bindgen]
 impl Contract {
     #[payable]
