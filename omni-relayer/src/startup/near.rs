@@ -8,6 +8,7 @@ use near_crypto::{InMemorySigner, SecretKey};
 use near_jsonrpc_client::JsonRpcClient;
 use near_lake_framework::{LakeConfig, LakeConfigBuilder};
 use near_primitives::types::AccountId;
+use omni_types::ChainKind;
 
 use crate::{config, utils};
 
@@ -45,8 +46,7 @@ fn get_private_key(file: Option<String>) -> Result<SecretKey> {
         }
     }
 
-    let private_key_str = std::env::var("NEAR_PRIVATE_KEY")
-        .context("Failed to get `NEAR_PRIVATE_KEY` environment variable")?;
+    let private_key_str = config::get_private_key(ChainKind::Near);
 
     info!("Retrieved private key from env");
 
@@ -71,7 +71,7 @@ async fn create_lake_config(
 ) -> Result<LakeConfig> {
     let start_block_height = match utils::redis::get_last_processed_block(
         redis_connection,
-        utils::redis::NEAR_LAST_PROCESSED_BLOCK,
+        &utils::redis::get_last_processed_block_key(ChainKind::Near).await,
     )
     .await
     {
@@ -123,7 +123,7 @@ pub async fn start_indexer(
 
                 utils::redis::update_last_processed_block(
                     &mut redis_connection,
-                    utils::redis::NEAR_LAST_PROCESSED_BLOCK,
+                    &utils::redis::get_last_processed_block_key(ChainKind::Near).await,
                     streamer_message.block.header.height,
                 )
                 .await;
