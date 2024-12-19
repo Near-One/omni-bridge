@@ -188,6 +188,7 @@ async fn handle_init_transfer_event(
     }
 }
 
+// TODO: This is the same as in evm, so it should be reuesd instead of duplicated
 async fn get_storage_deposit_actions(
     connector: &OmniConnector,
     init_transfer_with_timestamp: &InitTransferWithTimestamp,
