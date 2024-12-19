@@ -16,3 +16,4 @@ borsh.workspace = true
 serde.workspace = true
 near-plugins.workspace = true
 omni-types.workspace = true
+omni-token = { path = "../omni-token"}
