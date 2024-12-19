@@ -1,6 +1,6 @@
 use std::{str::FromStr, sync::Arc};
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use futures::future::join_all;
 use log::{error, info, warn};
 
@@ -276,6 +276,37 @@ async fn get_storage_deposit_actions(
             .map_err(|_| {
                 format!(
                     "Failed to get required storage deposit for recipient: {:?}",
+                    relayer
+                )
+            })? {
+            amount if amount > 0 => Some(amount),
+            _ => None,
+        };
+
+        storage_deposit_actions.push(StorageDepositAction {
+            token_id,
+            account_id: relayer,
+            storage_deposit_amount: near_relayer_storage_deposit_amount,
+        });
+    }
+
+    if init_transfer_with_timestamp.native_fee > 0 {
+        let token_id = connector
+            .near_get_native_token_id(ChainKind::Sol)
+            .await
+            .map_err(|_| "Failed to get native token id by chain kind: Sol")?;
+
+        let relayer = connector
+            .near_bridge_client()
+            .and_then(|client| client.signer().map(|signer| signer.account_id))
+            .map_err(|_| "Failed to get relayer account id".to_string())?;
+
+        let near_relayer_storage_deposit_amount = match connector
+            .near_get_required_storage_deposit(token_id.clone(), relayer.clone())
+            .await
+            .map_err(|_| {
+                format!(
+                    "Failed to get required storage deposit for relayer: {:?}",
                     relayer
                 )
             })? {
