@@ -2,18 +2,18 @@ name: Build Contracts
 
 on:
   pull_request:
-    # types: [closed]
+    types: [closed]
     branches: [main]
   
 
 jobs:
   build:
     name: Build Contracts
-    # if: github.event.pull_request.merged == true
+    if: github.event.pull_request.merged == true
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        platform: [evm, near, solana]
+        platform: [evm, near]
 
     steps:
       - name: Checkout code
