@@ -1,5 +1,6 @@
 RUST_LOG=info
 
+# It's used for near-lake-framework
 AWS_ACCESS_KEY_ID=...
 AWS_SECRET_ACCESS_KEY=...
 
