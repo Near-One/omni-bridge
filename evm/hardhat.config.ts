@@ -15,6 +15,7 @@ import { deriveEVMAddress, mpcRootPublicKeys } from "./utils/kdf"
 
 import "hardhat/types/config"
 import assert from "node:assert"
+import * as fs from "node:fs"
 
 declare module "hardhat/types/config" {
   interface HttpNetworkUserConfig {
@@ -62,10 +63,6 @@ task("deploy-bridge-token-factory", "Deploys the OmniBridge contract")
       mpcRootPublicKey,
     )
 
-    console.log(`Derived addres: ${nearBridgeDerivedAddress}`)
-    console.log(`Omni chain id: ${omniChainId}`)
-    console.log(`Wormhole address: ${wormholeAddress}`)
-
     const isWormholeContract = wormholeAddress ?? false
     const contractName = isWormholeContract ? "OmniBridgeWormhole" : "OmniBridge"
     const OmniBridgeContract = await ethers.getContractFactory(contractName)
@@ -90,12 +87,7 @@ task("deploy-bridge-token-factory", "Deploys the OmniBridge contract")
 
     await OmniBridge.waitForDeployment()
     const bridgeAddress = await OmniBridge.getAddress()
-
-    console.log(`OmniBridge deployed at ${bridgeAddress}`)
-    console.log(
-      "Implementation address:",
-      await upgrades.erc1967.getImplementationAddress(await OmniBridge.getAddress()),
-    )
+    const implementationAddress = await upgrades.erc1967.getImplementationAddress(bridgeAddress)
 
     const wormholeAddressStorageValue = await hre.ethers.provider.getStorage(bridgeAddress, 58)
     const decodedWormholeAddress = ethers.AbiCoder.defaultAbiCoder().decode(
@@ -103,15 +95,28 @@ task("deploy-bridge-token-factory", "Deploys the OmniBridge contract")
       wormholeAddressStorageValue,
     )[0]
     assert.strictEqual(decodedWormholeAddress, wormholeAddress ?? ethers.ZeroAddress)
+
+    console.log(
+      JSON.stringify({
+        bridgeAddress,
+        implementationAddress,
+        derivedAddress: nearBridgeDerivedAddress,
+        omniChainId,
+        wormholeAddress: wormholeAddress ?? null,
+      }),
+    )
   })
 
 task("deploy-token-impl", "Deploys the BridgeToken implementation").setAction(async (_, hre) => {
   const { ethers } = hre
-
   const BridgeTokenContractFactory = await ethers.getContractFactory("BridgeToken")
   const BridgeTokenContract = await BridgeTokenContractFactory.deploy()
   await BridgeTokenContract.waitForDeployment()
-  console.log(`BridgeTokenContract deployed at ${await BridgeTokenContract.getAddress()}`)
+  console.log(
+    JSON.stringify({
+      tokenImplAddress: await BridgeTokenContract.getAddress(),
+    }),
+  )
 })
 
 task("upgrade-bridge-token", "Upgrades a BridgeToken to a new implementation")
@@ -123,9 +128,6 @@ task("upgrade-bridge-token", "Upgrades a BridgeToken to a new implementation")
     const OmniBridgeContract = await ethers.getContractFactory("OmniBridge")
     const OmniBridge = OmniBridgeContract.attach(taskArgs.factory) as OmniBridge
 
-    console.log(`Upgrading token ${taskArgs.nearTokenAccount}`)
-    console.log("Token proxy address:", await OmniBridge.nearToEthToken(taskArgs.nearTokenAccount))
-
     const BridgeTokenV2Instance = await ethers.getContractFactory("BridgeTokenV2")
     const BridgeTokenV2 = await BridgeTokenV2Instance.deploy()
     await BridgeTokenV2.waitForDeployment()
@@ -136,9 +138,15 @@ task("upgrade-bridge-token", "Upgrades a BridgeToken to a new implementation")
       taskArgs.nearTokenAccount,
       await BridgeTokenV2.getAddress(),
     )
-    const receipt = await tx.wait()
+    await tx.wait()
 
-    console.log("Token upgraded at tx hash:", receipt?.hash)
+    console.log(
+      JSON.stringify({
+        upgradingToken: taskArgs.nearTokenAccount,
+        tokenProxyAddress: await OmniBridge.nearToEthToken(taskArgs.nearTokenAccount),
+        newImplementationAddress: await BridgeTokenV2.getAddress(),
+      }),
+    )
   })
 
 task("upgrade-factory", "Upgrades the OmniBridge contract")
@@ -151,12 +159,18 @@ task("upgrade-factory", "Upgrades the OmniBridge contract")
     const contractName = isWormholeContract ? "OmniBridgeWormhole" : "OmniBridge"
 
     const OmniBridgeContract = await ethers.getContractFactory(contractName)
-    console.log(
-      "Current implementation address:",
-      await upgrades.erc1967.getImplementationAddress(taskArgs.factory),
-    )
-    console.log("Upgrade factory, proxy address", taskArgs.factory)
+
+    const currentImpl = await upgrades.erc1967.getImplementationAddress(taskArgs.factory)
     await upgrades.upgradeProxy(taskArgs.factory, OmniBridgeContract)
+    const newImpl = await upgrades.erc1967.getImplementationAddress(taskArgs.factory)
+
+    console.log(
+      JSON.stringify({
+        proxyAddress: taskArgs.factory,
+        previousImplementation: currentImpl,
+        newImplementation: newImpl,
+      }),
+    )
   })
 
 task("etherscan-verify", "Verify contract on etherscan")
@@ -186,6 +200,25 @@ task("update-wormhole-address", "Update the wormhole address")
     const receipt = await tx.wait()
 
     console.log("Address upgraded at tx hash:", receipt?.hash)
+  })
+
+task("deploy-bytecode", "Deploys a contract with a given bytecode")
+  .addParam("bytecode", "The path to the file containing the bytecode of the contract")
+  .setAction(async (taskArgs, hre) => {
+    const { ethers } = hre
+
+    const bytecode = fs.readFileSync(taskArgs.bytecode, "utf8")
+    const [signer] = await ethers.getSigners()
+
+    const contractFactory = new ethers.ContractFactory([], bytecode, signer)
+    const contract = await contractFactory.deploy()
+    await contract.waitForDeployment()
+
+    console.log(
+      JSON.stringify({
+        contractAddress: await contract.getAddress(),
+      }),
+    )
   })
 
 const config: HardhatUserConfig = {
