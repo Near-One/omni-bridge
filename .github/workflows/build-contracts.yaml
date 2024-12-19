@@ -40,7 +40,7 @@ jobs:
           curl --proto '=https' --tlsv1.2 -LsSf https://github.com/near/near-cli-rs/releases/download/v0.7.4/near-cli-rs-installer.sh | sh
 
       - name: Install Docker
-        if: matrix.platform == 'solana'
+        if: matrix.platform == 'near'
         uses: docker/setup-buildx-action@v2
 
       - name: Install Solana CLI
@@ -57,11 +57,11 @@ jobs:
       - name: Build Contracts
         run: |
           if [ "${{ matrix.platform }}" == "evm" ]; then
-            make evm-build
+            make -C ${{ github.workspace }}/e2e-testing/ evm-build
           elif [ "${{ matrix.platform }}" == "near" ]; then
-            make near-build
+            make -C ${{ github.workspace }}/e2e-testing/ near-build
           elif [ "${{ matrix.platform }}" == "solana" ]; then
-            make solana-build
+            make -C ${{ github.workspace }}/e2e-testing/ solana-build
           fi
 
       - name: Upload Artifacts
