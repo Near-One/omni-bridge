@@ -362,6 +362,21 @@ impl<'de> Deserialize<'de> for OmniAddress {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
+pub enum BridgeOnTransferMsg {
+    InitTransfer(InitTransferMsg),
+    FastFinTransfer(FastFinTransferMsg),
+}
+
+#[derive(Serialize, Deserialize, BorshSerialize, BorshDeserialize, Debug, Clone)]
+pub struct FastFinTransferMsg {
+    pub transfer_id: TransferId,
+    pub recipient: OmniAddress,
+    pub fee: Fee,
+    pub msg: String,
+    pub storage_deposit_amount: Option<u128>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct InitTransferMsg {
     pub recipient: OmniAddress,
     pub fee: U128,
@@ -488,4 +503,37 @@ pub struct BasicMetadata {
     pub name: String,
     pub symbol: String,
     pub decimals: u8,
+}
+
+#[derive(BorshDeserialize, BorshSerialize, Debug, Clone, Eq, PartialEq)]
+pub struct FastTransferId(pub [u8; 32]);
+
+#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Debug, Clone)]
+pub struct FastTransfer {
+    pub transfer_id: TransferId,
+    pub token_id: AccountId,
+    pub amount: U128,
+    pub fee: Fee,
+    pub recipient: OmniAddress,
+    pub msg: String,
+}
+
+impl FastTransfer {
+    #[allow(clippy::missing_panics_doc)]
+    pub fn id(&self) -> FastTransferId {
+        FastTransferId(utils::keccak256(&borsh::to_vec(self).unwrap()))
+    }
+}
+
+impl FastTransfer {
+    pub fn from_transfer(transfer: TransferMessage, token_id: AccountId) -> Self {
+        FastTransfer {
+            transfer_id: transfer.get_transfer_id(),
+            token_id,
+            amount: transfer.amount,
+            fee: transfer.fee,
+            recipient: transfer.recipient,
+            msg: transfer.msg,
+        }
+    }
 }
