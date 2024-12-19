@@ -5903,6 +5903,7 @@ dependencies = [
  "near-contract-standards",
  "near-plugins",
  "near-sdk",
+ "omni-token",
  "omni-types",
  "serde",
 ]
