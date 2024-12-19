@@ -45,7 +45,7 @@ library BridgeTypes {
         string name,
         string symbol,
         uint8 decimals,
-        uint8 originNonce
+        uint8 originDeciamls
     );
 
     event LogMetadata(
