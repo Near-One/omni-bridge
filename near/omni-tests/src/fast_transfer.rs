@@ -1,5 +1,7 @@
 #[cfg(test)]
 mod tests {
+    use std::str::FromStr;
+
     use near_sdk::{
         borsh,
         json_types::U128,
@@ -13,14 +15,14 @@ mod tests {
     use omni_types::{
         locker_args::{FinTransferArgs, StorageDepositAction},
         prover_result::{InitTransferMessage, ProverResult},
-        BridgeOnTransferMsg, ChainKind, FastFinTransferMsg, Fee, OmniAddress, TransferId,
-        TransferMessage,
+        BasicMetadata, BridgeOnTransferMsg, ChainKind, FastFinTransferMsg, Fee, OmniAddress,
+        TransferId, TransferMessage,
     };
 
     use crate::helpers::tests::{
         account_n, base_eoa_address, base_factory_address, eth_eoa_address, eth_factory_address,
         eth_token_address, get_bind_token_args, relayer_account_id, LOCKER_PATH, MOCK_PROVER_PATH,
-        MOCK_TOKEN_PATH, NEP141_DEPOSIT,
+        MOCK_TOKEN_PATH, NEP141_DEPOSIT, TOKEN_DEPLOYER_PATH,
     };
 
     struct TestEnv {
@@ -30,20 +32,17 @@ mod tests {
     }
 
     impl TestEnv {
-        async fn new(sender_balance_token: u128) -> anyhow::Result<Self> {
+        async fn new_with_native_token() -> anyhow::Result<Self> {
+            Self::new(false).await
+        }
+
+        async fn new_with_bridged_token() -> anyhow::Result<Self> {
+            Self::new(true).await
+        }
+
+        async fn new(is_bridged_token: bool) -> anyhow::Result<Self> {
+            let sender_balance_token = 1_000_000;
             let worker = near_workspaces::sandbox().await?;
-            // Deploy and initialize FT token
-            let token_contract = worker.dev_deploy(&std::fs::read(MOCK_TOKEN_PATH)?).await?;
-            token_contract
-                .call("new_default_meta")
-                .args_json(json!({
-                    "owner_id": token_contract.id(),
-                    "total_supply": U128(u128::MAX)
-                }))
-                .max_gas()
-                .transact()
-                .await?
-                .into_result()?;
 
             let prover_contract = worker.dev_deploy(&std::fs::read(MOCK_PROVER_PATH)?).await?;
             // Deploy and initialize bridge
@@ -61,65 +60,6 @@ mod tests {
                 .await?
                 .into_result()?;
 
-            // Register the bridge contract in the token contract
-            token_contract
-                .call("storage_deposit")
-                .args_json(json!({
-                    "account_id": bridge_contract.id(),
-                    "registration_only": true,
-                }))
-                .deposit(NEP141_DEPOSIT)
-                .max_gas()
-                .transact()
-                .await?
-                .into_result()?;
-
-            // Create relayer account. (Default account in sandbox has 100 NEAR)
-            let relayer_account = worker
-                .create_tla(relayer_account_id(), worker.dev_generate().await.1)
-                .await?
-                .unwrap();
-
-            // Register the relayer in the token contract
-            token_contract
-                .call("storage_deposit")
-                .args_json(json!({
-                    "account_id": relayer_account.id(),
-                    "registration_only": true,
-                }))
-                .deposit(NEP141_DEPOSIT)
-                .max_gas()
-                .transact()
-                .await?
-                .into_result()?;
-
-            // Transfer initial tokens to the relayer account
-            token_contract
-                .call("ft_transfer")
-                .args_json(json!({
-                    "receiver_id": relayer_account.id(),
-                    "amount": U128(sender_balance_token),
-                    "memo": None::<String>,
-                }))
-                .deposit(NearToken::from_yoctonear(1))
-                .max_gas()
-                .transact()
-                .await?
-                .into_result()?;
-
-            // Transfer initial tokens to the bridge contract (locked)
-            token_contract
-                .call("ft_transfer")
-                .args_json(json!({
-                    "receiver_id": bridge_contract.id(),
-                    "amount": U128(sender_balance_token),
-                }))
-                .deposit(NearToken::from_yoctonear(1))
-                .max_gas()
-                .transact()
-                .await?
-                .into_result()?;
-
             // Add ETH factory address to the bridge contract
             let eth_factory_address = eth_factory_address();
             bridge_contract
@@ -132,7 +72,210 @@ mod tests {
                 .await?
                 .into_result()?;
 
-            // Bind the token to the bridge contract
+            let base_factory_address = base_factory_address();
+            bridge_contract
+                .call("add_factory")
+                .args_json(json!({
+                    "address": base_factory_address,
+                }))
+                .max_gas()
+                .transact()
+                .await?
+                .into_result()?;
+
+            let token_deployer = worker
+                .create_tla_and_deploy(
+                    account_n(1),
+                    worker.dev_generate().await.1,
+                    &std::fs::read(TOKEN_DEPLOYER_PATH)?,
+                )
+                .await?
+                .unwrap();
+
+            token_deployer
+                .call("new")
+                .args_json(json!({
+                    "controller": bridge_contract.id(),
+                    "dao": AccountId::from_str("dao.near").unwrap(),
+                }))
+                .max_gas()
+                .transact()
+                .await?
+                .into_result()?;
+
+            bridge_contract
+                .call("add_token_deployer")
+                .args_json(json!({
+                    "chain": eth_factory_address.get_chain(),
+                    "account_id": token_deployer.id(),
+                }))
+                .max_gas()
+                .transact()
+                .await?
+                .into_result()?;
+
+            // Create relayer account. (Default account in sandbox has 100 NEAR)
+            let relayer_account = worker
+                .create_tla(relayer_account_id(), worker.dev_generate().await.1)
+                .await?
+                .unwrap();
+
+            let token_contract = if is_bridged_token {
+                let token_contract = Self::deploy_bridged_token(&worker, &bridge_contract).await?;
+
+                // Mint to relayer account
+                Self::fake_finalize_transfer(
+                    &bridge_contract,
+                    &token_contract,
+                    &relayer_account,
+                    eth_factory_address,
+                    U128(sender_balance_token),
+                )
+                .await?;
+
+                // Register the bridge in the token contract
+                token_contract
+                    .call("storage_deposit")
+                    .args_json(json!({
+                        "account_id": bridge_contract.id(),
+                        "registration_only": true,
+                    }))
+                    .deposit(NEP141_DEPOSIT)
+                    .max_gas()
+                    .transact()
+                    .await?
+                    .into_result()?;
+
+                token_contract
+            } else {
+                let token_contract =
+                    Self::deploy_native_token(worker, &bridge_contract, eth_factory_address)
+                        .await?;
+
+                // Register and send tokens to the relayer account
+                token_contract
+                    .call("storage_deposit")
+                    .args_json(json!({
+                        "account_id": relayer_account.id(),
+                        "registration_only": true,
+                    }))
+                    .deposit(NEP141_DEPOSIT)
+                    .max_gas()
+                    .transact()
+                    .await?
+                    .into_result()?;
+
+                token_contract
+                    .call("ft_transfer")
+                    .args_json(json!({
+                        "receiver_id": relayer_account.id(),
+                        "amount": U128(sender_balance_token),
+                        "memo": None::<String>,
+                    }))
+                    .deposit(NearToken::from_yoctonear(1))
+                    .max_gas()
+                    .transact()
+                    .await?
+                    .into_result()?;
+
+                // Register and send tokens to the bridge contract
+                token_contract
+                    .call("storage_deposit")
+                    .args_json(json!({
+                        "account_id": bridge_contract.id(),
+                        "registration_only": true,
+                    }))
+                    .deposit(NEP141_DEPOSIT)
+                    .max_gas()
+                    .transact()
+                    .await?
+                    .into_result()?;
+
+                token_contract
+                    .call("ft_transfer")
+                    .args_json(json!({
+                        "receiver_id": bridge_contract.id(),
+                        "amount": U128(sender_balance_token),
+                        "memo": None::<String>,
+                    }))
+                    .deposit(NearToken::from_yoctonear(1))
+                    .max_gas()
+                    .transact()
+                    .await?
+                    .into_result()?;
+
+                token_contract
+            };
+
+            Ok(Self {
+                token_contract,
+                bridge_contract,
+                relayer_account,
+            })
+        }
+
+        async fn deploy_bridged_token(
+            worker: &near_workspaces::Worker<near_workspaces::network::Sandbox>,
+            bridge_contract: &near_workspaces::Contract,
+        ) -> anyhow::Result<near_workspaces::Contract> {
+            let init_token_address = OmniAddress::new_zero(ChainKind::Eth).unwrap();
+            let token_metadata = BasicMetadata {
+                name: "ETH from Ethereum".to_string(),
+                symbol: "ETH".to_string(),
+                decimals: 18,
+            };
+
+            let required_storage: NearToken = bridge_contract
+                .view("required_balance_for_deploy_token")
+                .await?
+                .json()?;
+
+            bridge_contract
+                .call("deploy_native_token")
+                .args_json(json!({
+                    "chain_kind": init_token_address.get_chain(),
+                    "name": token_metadata.name,
+                    "symbol": token_metadata.symbol,
+                    "decimals": token_metadata.decimals,
+                }))
+                .deposit(required_storage)
+                .max_gas()
+                .transact()
+                .await?
+                .into_result()?;
+
+            let token_account_id: AccountId = bridge_contract
+                .view("get_token_id")
+                .args_json(json!({
+                    "address": init_token_address
+                }))
+                .await?
+                .json()?;
+
+            let token_contract = worker
+                .import_contract(&token_account_id, worker)
+                .transact()
+                .await?;
+
+            Ok(token_contract)
+        }
+
+        async fn deploy_native_token(
+            worker: near_workspaces::Worker<near_workspaces::network::Sandbox>,
+            bridge_contract: &near_workspaces::Contract,
+            eth_factory_address: OmniAddress,
+        ) -> Result<near_workspaces::Contract, anyhow::Error> {
+            let token_contract = worker.dev_deploy(&std::fs::read(MOCK_TOKEN_PATH)?).await?;
+            token_contract
+                .call("new_default_meta")
+                .args_json(json!({
+                    "owner_id": token_contract.id(),
+                    "total_supply": U128(u128::MAX)
+                }))
+                .max_gas()
+                .transact()
+                .await?
+                .into_result()?;
             let required_deposit_for_bind_token = bridge_contract
                 .view("required_balance_for_bind_token")
                 .await?
@@ -149,24 +292,55 @@ mod tests {
                 .transact()
                 .await?
                 .into_result()?;
+            Ok(token_contract)
+        }
 
-            // Add base factory address to the bridge contract
-            let base_factory_address = base_factory_address();
+        async fn fake_finalize_transfer(
+            bridge_contract: &near_workspaces::Contract,
+            token_contract: &near_workspaces::Contract,
+            recipient: &near_workspaces::Account,
+            emitter_address: OmniAddress,
+            amount: U128,
+        ) -> anyhow::Result<()> {
+            let storage_deposit_actions = vec![StorageDepositAction {
+                token_id: token_contract.id().clone(),
+                account_id: recipient.id().clone(),
+                storage_deposit_amount: Some(NEP141_DEPOSIT.as_yoctonear()),
+            }];
+            let required_balance_for_fin_transfer: NearToken = bridge_contract
+                .view("required_balance_for_fin_transfer")
+                .await?
+                .json()?;
+            let required_deposit_for_fin_transfer =
+                NEP141_DEPOSIT.saturating_add(required_balance_for_fin_transfer);
+
+            // Simulate finalization of transfer through locker
             bridge_contract
-                .call("add_factory")
-                .args_json(json!({
-                    "address": base_factory_address,
-                }))
+                .call("fin_transfer")
+                .args_borsh(FinTransferArgs {
+                    chain_kind: ChainKind::Near,
+                    storage_deposit_actions,
+                    prover_args: borsh::to_vec(&ProverResult::InitTransfer(InitTransferMessage {
+                        origin_nonce: 1,
+                        token: OmniAddress::Near(token_contract.id().clone()),
+                        recipient: OmniAddress::Near(recipient.id().clone()),
+                        amount,
+                        fee: Fee {
+                            fee: U128(0),
+                            native_fee: U128(0),
+                        },
+                        sender: eth_eoa_address(),
+                        msg: String::default(),
+                        emitter_address,
+                    }))?,
+                })
+                .deposit(required_deposit_for_fin_transfer)
                 .max_gas()
                 .transact()
                 .await?
                 .into_result()?;
 
-            Ok(Self {
-                token_contract,
-                bridge_contract,
-                relayer_account,
-            })
+            Ok(())
         }
     }
 
@@ -321,7 +495,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_fast_transfer_to_near() -> anyhow::Result<()> {
-        let env = TestEnv::new(1_000_000).await?;
+        let env = TestEnv::new_with_native_token().await?;
 
         let transfer_amount = 100;
         let transfer_msg = get_transfer_msg_to_near(&env, transfer_amount);
@@ -353,8 +527,80 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_fast_transfer_to_near_bridged_token() -> anyhow::Result<()> {
+        let env = TestEnv::new_with_bridged_token().await?;
+
+        let transfer_amount = 100;
+        let transfer_msg = get_transfer_msg_to_near(&env, transfer_amount);
+        let fast_transfer_msg = get_fast_transfer_msg(transfer_msg);
+
+        let relayer_balance_before =
+            get_balance(&env.token_contract, env.relayer_account.id()).await?;
+        let contract_balance_before =
+            get_balance(&env.token_contract, env.bridge_contract.id()).await?;
+
+        assert_eq!(U128(0), contract_balance_before);
+
+        let result = do_fast_transfer(&env, transfer_amount, fast_transfer_msg).await?;
+
+        assert_eq!(0, result.failures().len());
+
+        let recipient_balance: U128 = get_balance(&env.token_contract, &account_n(1)).await?;
+        let relayer_balance_after =
+            get_balance(&env.token_contract, env.relayer_account.id()).await?;
+        let contract_balance_after =
+            get_balance(&env.token_contract, env.bridge_contract.id()).await?;
+
+        assert_eq!(transfer_amount, recipient_balance.0);
+        assert_eq!(U128(0), contract_balance_after);
+        assert_eq!(
+            relayer_balance_before,
+            U128(relayer_balance_after.0 + transfer_amount)
+        );
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_fast_transfer_to_near_bad_storage_deposit() -> anyhow::Result<()> {
+        let env = TestEnv::new_with_bridged_token().await?;
+
+        let transfer_amount = 100;
+        let transfer_msg = get_transfer_msg_to_near(&env, transfer_amount);
+        let mut fast_transfer_msg = get_fast_transfer_msg(transfer_msg);
+        fast_transfer_msg.storage_deposit_amount =
+            Some(NEP141_DEPOSIT.saturating_mul(100).as_yoctonear());
+
+        let relayer_balance_before =
+            get_balance(&env.token_contract, env.relayer_account.id()).await?;
+        let contract_balance_before =
+            get_balance(&env.token_contract, env.bridge_contract.id()).await?;
+
+        assert_eq!(U128(0), contract_balance_before);
+
+        let result = do_fast_transfer(&env, transfer_amount, fast_transfer_msg).await?;
+
+        assert_eq!(1, result.failures().len());
+        let failure = result.failures()[0].clone().into_result();
+        assert!(failure
+            .is_err_and(|err| { format!("{:?}", err).contains("Not enough storage deposited") }));
+
+        let recipient_balance: U128 = get_balance(&env.token_contract, &account_n(1)).await?;
+        let relayer_balance_after =
+            get_balance(&env.token_contract, env.relayer_account.id()).await?;
+        let contract_balance_after =
+            get_balance(&env.token_contract, env.bridge_contract.id()).await?;
+
+        assert_eq!(0, recipient_balance.0);
+        assert_eq!(U128(0), contract_balance_after);
+        assert_eq!(relayer_balance_before, relayer_balance_after);
+
+        Ok(())
+    }
+
+    #[tokio::test]
     async fn test_fast_transfer_to_near_twice() -> anyhow::Result<()> {
-        let env = TestEnv::new(1_000_000).await?;
+        let env = TestEnv::new_with_native_token().await?;
 
         let transfer_amount = 100;
         let transfer_msg = get_transfer_msg_to_near(&env, transfer_amount);
@@ -362,10 +608,15 @@ mod tests {
 
         do_fast_transfer(&env, transfer_amount, fast_transfer_msg.clone()).await?;
 
+        let OmniAddress::Near(recipient) = fast_transfer_msg.recipient.clone() else {
+            panic!("Recipient is not a Near address");
+        };
+
         let relayer_balance_before =
             get_balance(&env.token_contract, env.relayer_account.id()).await?;
         let contract_balance_before =
             get_balance(&env.token_contract, env.bridge_contract.id()).await?;
+        let recipient_balance_before = get_balance(&env.token_contract, &recipient).await?;
 
         let result = do_fast_transfer(&env, transfer_amount, fast_transfer_msg).await?;
         assert_eq!(1, result.failures().len());
@@ -379,16 +630,61 @@ mod tests {
             get_balance(&env.token_contract, env.relayer_account.id()).await?;
         let contract_balance_after =
             get_balance(&env.token_contract, env.bridge_contract.id()).await?;
+        let recipient_balance_after = get_balance(&env.token_contract, &recipient).await?;
 
         assert_eq!(relayer_balance_before, relayer_balance_after);
         assert_eq!(contract_balance_before, contract_balance_after);
+        assert_eq!(recipient_balance_before, recipient_balance_after);
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_fast_transfer_to_near_twice_bridged_token() -> anyhow::Result<()> {
+        let env = TestEnv::new_with_bridged_token().await?;
+
+        let transfer_amount = 100;
+        let transfer_msg = get_transfer_msg_to_near(&env, transfer_amount);
+        let fast_transfer_msg = get_fast_transfer_msg(transfer_msg);
+
+        do_fast_transfer(&env, transfer_amount, fast_transfer_msg.clone()).await?;
+
+        let OmniAddress::Near(recipient) = fast_transfer_msg.recipient.clone() else {
+            panic!("Recipient is not a Near address");
+        };
+
+        let relayer_balance_before =
+            get_balance(&env.token_contract, env.relayer_account.id()).await?;
+        let contract_balance_before =
+            get_balance(&env.token_contract, env.bridge_contract.id()).await?;
+        let recipient_balance_before = get_balance(&env.token_contract, &recipient).await?;
+
+        assert_eq!(U128(0), contract_balance_before);
+
+        let result = do_fast_transfer(&env, transfer_amount, fast_transfer_msg).await?;
+        assert!(result.failures().len() > 0);
+
+        let failure = result.failures()[0].clone().into_result();
+        assert!(failure.is_err_and(|err| {
+            format!("{:?}", err).contains("Fast transfer is already performed")
+        }));
+
+        let relayer_balance_after =
+            get_balance(&env.token_contract, env.relayer_account.id()).await?;
+        let contract_balance_after =
+            get_balance(&env.token_contract, env.bridge_contract.id()).await?;
+        let recipient_balance_after = get_balance(&env.token_contract, &recipient).await?;
+
+        assert_eq!(relayer_balance_before, relayer_balance_after);
+        assert_eq!(U128(0), contract_balance_after);
+        assert_eq!(recipient_balance_before, recipient_balance_after);
 
         Ok(())
     }
 
     #[tokio::test]
     async fn test_fast_transfer_to_near_finalisation() -> anyhow::Result<()> {
-        let env = TestEnv::new(1_000_000).await?;
+        let env = TestEnv::new_with_native_token().await?;
 
         let transfer_amount = 100;
         let transfer_msg = get_transfer_msg_to_near(&env, transfer_amount);
@@ -417,7 +713,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_fast_transfer_to_near_finalisation_twice() -> anyhow::Result<()> {
-        let env = TestEnv::new(1_000_000).await?;
+        let env = TestEnv::new_with_native_token().await?;
 
         let transfer_amount = 100;
         let transfer_msg = get_transfer_msg_to_near(&env, transfer_amount);
@@ -438,7 +734,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_fast_transfer_to_other_chain() -> anyhow::Result<()> {
-        let env = TestEnv::new(1_000_000).await?;
+        let env = TestEnv::new_with_native_token().await?;
 
         let transfer_amount = 100;
         let transfer_msg = get_transfer_msg_to_other_chain(&env, transfer_amount);
@@ -497,8 +793,41 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_fast_transfer_to_other_chain_bridged_token() -> anyhow::Result<()> {
+        let env = TestEnv::new_with_bridged_token().await?;
+
+        let transfer_amount = 100;
+        let transfer_msg = get_transfer_msg_to_other_chain(&env, transfer_amount);
+        let fast_transfer_msg = get_fast_transfer_msg(transfer_msg.clone());
+
+        let relayer_balance_before =
+            get_balance(&env.token_contract, env.relayer_account.id()).await?;
+        let contract_balance_before =
+            get_balance(&env.token_contract, env.bridge_contract.id()).await?;
+
+        assert_eq!(U128(0), contract_balance_before);
+
+        let result = do_fast_transfer(&env, transfer_amount, fast_transfer_msg.clone()).await?;
+
+        assert_eq!(0, result.failures().len());
+
+        let relayer_balance_after =
+            get_balance(&env.token_contract, env.relayer_account.id()).await?;
+        let contract_balance_after =
+            get_balance(&env.token_contract, env.bridge_contract.id()).await?;
+
+        assert_eq!(U128(0), contract_balance_after);
+        assert_eq!(
+            relayer_balance_before,
+            U128(relayer_balance_after.0 + transfer_amount)
+        );
+
+        Ok(())
+    }
+
+    #[tokio::test]
     async fn test_fast_transfer_to_other_chain_twice() -> anyhow::Result<()> {
-        let env = TestEnv::new(1_000_000).await?;
+        let env = TestEnv::new_with_native_token().await?;
 
         let transfer_amount = 100;
         let transfer_msg = get_transfer_msg_to_other_chain(&env, transfer_amount);
@@ -533,7 +862,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_fast_transfer_to_other_chain_finalisation() -> anyhow::Result<()> {
-        let env = TestEnv::new(1_000_000).await?;
+        let env = TestEnv::new_with_native_token().await?;
 
         let transfer_amount = 100;
         let transfer_msg = get_transfer_msg_to_other_chain(&env, transfer_amount);
@@ -573,7 +902,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_fast_transfer_to_other_chain_finalisation_twice() -> anyhow::Result<()> {
-        let env = TestEnv::new(1_000_000).await?;
+        let env = TestEnv::new_with_native_token().await?;
 
         let transfer_amount = 100;
         let transfer_msg = get_transfer_msg_to_other_chain(&env, transfer_amount);
@@ -593,7 +922,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_fast_transfer_to_other_chain_already_finalised() -> anyhow::Result<()> {
-        let env = TestEnv::new(1_000_000).await?;
+        let env = TestEnv::new_with_bridged_token().await?;
 
         let transfer_amount = 100;
         let transfer_msg = get_transfer_msg_to_other_chain(&env, transfer_amount);
@@ -603,13 +932,20 @@ mod tests {
 
         let relayer_balance_before =
             get_balance(&env.token_contract, env.relayer_account.id()).await?;
+        let contract_balance_before =
+            get_balance(&env.token_contract, env.bridge_contract.id()).await?;
+
+        assert_eq!(U128(0), contract_balance_before);
 
         let result = do_fast_transfer(&env, transfer_amount, fast_transfer_msg).await?;
 
         let relayer_balance_after =
             get_balance(&env.token_contract, env.relayer_account.id()).await?;
+        let contract_balance_after =
+            get_balance(&env.token_contract, env.bridge_contract.id()).await?;
 
         assert_eq!(relayer_balance_before, relayer_balance_after);
+        assert_eq!(U128(0), contract_balance_after);
 
         assert_eq!(1, result.failures().len());
         let failure = result.failures()[0].clone().into_result();

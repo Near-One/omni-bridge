@@ -57,7 +57,7 @@ const BURN_TOKEN_GAS: Gas = Gas::from_tgas(10);
 const MINT_TOKEN_GAS: Gas = Gas::from_tgas(5);
 const SET_METADATA_GAS: Gas = Gas::from_tgas(10);
 const RESOLVE_TRANSFER_GAS: Gas = Gas::from_tgas(3);
-const FAST_TRANSFER_CALLBACK_GAS: Gas = Gas::from_tgas(40);
+const FAST_TRANSFER_CALLBACK_GAS: Gas = Gas::from_tgas(5);
 const NO_DEPOSIT: NearToken = NearToken::from_near(0);
 const ONE_YOCTO: NearToken = NearToken::from_yoctonear(1);
 const SIGN_PATH: &str = "bridge-1";
@@ -200,13 +200,23 @@ impl FungibleTokenReceiver for Contract {
             }
         };
 
-        if self.deployed_tokens.contains(&token_id) {
-            ext_token::ext(token_id)
-                .with_static_gas(BURN_TOKEN_GAS)
-                .burn(amount);
+        if !self.deployed_tokens.contains(&token_id) {
+            return promise_or_value;
         }
 
-        promise_or_value
+        match promise_or_value {
+            PromiseOrValue::Promise(promise) => PromiseOrValue::Promise(
+                promise.then(
+                    Self::ext(env::current_account_id())
+                        .with_static_gas(BURN_TOKEN_GAS)
+                        .burn_tokens(token_id, amount),
+                ),
+            ),
+            PromiseOrValue::Value(_) => {
+                self.burn_tokens(token_id, amount);
+                promise_or_value
+            }
+        }
     }
 }
 
@@ -593,7 +603,9 @@ impl Contract {
                     )
                     .then(
                         Self::ext(env::current_account_id())
-                            .with_static_gas(FAST_TRANSFER_CALLBACK_GAS)
+                            .with_static_gas(
+                                FAST_TRANSFER_CALLBACK_GAS.saturating_add(FT_TRANSFER_CALL_GAS),
+                            )
                             .fast_fin_transfer_to_near_callback(fast_transfer, sender_id),
                     ),
                 )
@@ -1045,6 +1057,22 @@ impl Contract {
     #[private]
     pub fn resolve_transfer(&mut self, _amount: U128) -> U128 {
         U128(0)
+    }
+
+    #[private]
+    pub fn burn_tokens(&self, token: AccountId, amount: U128) -> Promise {
+        if env::promise_results_count() == 0 {
+            return ext_token::ext(token)
+                .with_static_gas(BURN_TOKEN_GAS)
+                .burn(amount);
+        }
+
+        match env::promise_result(0) {
+            PromiseResult::Failed => env::panic_str("ERR_FAST_TRANSFER_FAILED"),
+            PromiseResult::Successful(_) => ext_token::ext(token)
+                .with_static_gas(BURN_TOKEN_GAS)
+                .burn(amount),
+        }
     }
 }
 
