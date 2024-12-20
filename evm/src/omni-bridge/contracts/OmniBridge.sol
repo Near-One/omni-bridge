@@ -24,6 +24,7 @@ contract OmniBridge is
     mapping(address => string) public ethToNearToken;
     mapping(string => address) public nearToEthToken;
     mapping(address => bool) public isBridgeToken;
+    mapping(address => uint8) public tokenOriginDecimals;
 
     address public tokenImplementationAddress;
     address public nearBridgeDerivedAddress;
@@ -59,11 +60,12 @@ contract OmniBridge is
         _grantRole(PAUSABLE_ADMIN_ROLE, _msgSender());
     }
 
-    function addCustomToken(string calldata nearTokenId, address tokenAddress, address customMinter) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    function addCustomToken(string calldata nearTokenId, address tokenAddress, address customMinter, uint8 originDecimals) external onlyRole(DEFAULT_ADMIN_ROLE) {
         isBridgeToken[tokenAddress] = true;
         ethToNearToken[tokenAddress] = nearTokenId;
         nearToEthToken[nearTokenId] = tokenAddress;
         customMinters[tokenAddress] = customMinter;
+        tokenOriginDecimals[tokenAddress] = originDecimals;
     }
 
     function removeCustomToken(address tokenAddress) external onlyRole(DEFAULT_ADMIN_ROLE) {
@@ -71,6 +73,7 @@ contract OmniBridge is
         delete nearToEthToken[ethToNearToken[tokenAddress]];
         delete ethToNearToken[tokenAddress];
         delete customMinters[tokenAddress];
+        delete tokenOriginDecimals[tokenAddress];
     }
 
     function deployToken(bytes calldata signatureData, BridgeTypes.MetadataPayload calldata metadata) payable external returns (address) {
@@ -89,6 +92,8 @@ contract OmniBridge is
 
         require(!isBridgeToken[nearToEthToken[metadata.token]], "ERR_TOKEN_EXIST");
 
+        uint8 decimals = metadata.decimals > 18 ? 18 : metadata.decimals;
+
         address bridgeTokenProxy = address(
             new ERC1967Proxy(
                 tokenImplementationAddress,
@@ -96,7 +101,7 @@ contract OmniBridge is
                     BridgeToken.initialize.selector,
                     metadata.name,
                     metadata.symbol,
-                    metadata.decimals
+                    decimals
                 )
             )
         );
@@ -114,6 +119,7 @@ contract OmniBridge is
         isBridgeToken[address(bridgeTokenProxy)] = true;
         ethToNearToken[address(bridgeTokenProxy)] = metadata.token;
         nearToEthToken[metadata.token] = address(bridgeTokenProxy);
+        tokenOriginDecimals[address(bridgeTokenProxy)] = metadata.decimals;
 
         return bridgeTokenProxy;
     }
@@ -194,12 +200,14 @@ contract OmniBridge is
             revert InvalidSignature();
         }
 
+        uint128 normalizedAmount = normalizeAmount(payload.tokenAddress, payload.amount);
+
         if (customMinters[payload.tokenAddress] != address(0)) {
-            ICustomMinter(customMinters[payload.tokenAddress]).mint(payload.tokenAddress, payload.recipient, payload.amount);
+            ICustomMinter(customMinters[payload.tokenAddress]).mint(payload.tokenAddress, payload.recipient, normalizedAmount);
         } else if (isBridgeToken[payload.tokenAddress]) {
-            BridgeToken(payload.tokenAddress).mint(payload.recipient, payload.amount);
+            BridgeToken(payload.tokenAddress).mint(payload.recipient, normalizedAmount);
         } else {
-            IERC20(payload.tokenAddress).safeTransfer(payload.recipient, payload.amount);
+            IERC20(payload.tokenAddress).safeTransfer(payload.recipient, normalizedAmount);
         }
 
         finTransferExtension(payload);
@@ -248,9 +256,12 @@ contract OmniBridge is
             }
         }
 
-        initTransferExtension(msg.sender, tokenAddress, currentOriginNonce, amount, fee, nativeFee, recipient, message, extensionValue);
+        uint128 denormalizedAmount = denormalizeAmount(tokenAddress, amount);
+        uint128 denormalizedFee = denormalizeAmount(tokenAddress, fee);
 
-        emit BridgeTypes.InitTransfer(msg.sender, tokenAddress, currentOriginNonce, amount, fee, nativeFee, recipient, message);
+        initTransferExtension(msg.sender, tokenAddress, currentOriginNonce, denormalizedAmount, denormalizedFee, nativeFee, recipient, message, extensionValue);
+
+        emit BridgeTypes.InitTransfer(msg.sender, tokenAddress, currentOriginNonce, denormalizedAmount, denormalizedFee, nativeFee, recipient, message);
     }
 
     function initTransferExtension(
@@ -281,6 +292,28 @@ contract OmniBridge is
         require(isBridgeToken[tokenAddress], "ERR_NOT_BRIDGE_TOKEN");
         BridgeToken proxy = BridgeToken(tokenAddress);
         proxy.upgradeToAndCall(implementation, bytes(""));
+    }
+
+    function denormalizeAmount(address tokenAddress, uint128 amount) internal view returns (uint128) {
+        uint8 originDecimals = tokenOriginDecimals[tokenAddress];
+        uint8 decimals = IERC20Metadata(tokenAddress).decimals();
+
+        if (originDecimals > decimals) {
+            return amount * uint128(10) ** (originDecimals - decimals);
+        }
+
+        return amount;
+    }
+
+    function normalizeAmount(address tokenAddress, uint128 amount) internal view returns (uint128) {
+        uint8 originDecimals = tokenOriginDecimals[tokenAddress];
+        uint8 decimals = IERC20Metadata(tokenAddress).decimals();
+
+        if (originDecimals > decimals) {
+            return amount / uint128(10) ** (originDecimals - decimals);
+        }
+
+        return amount;
     }
 
     function _authorizeUpgrade(
