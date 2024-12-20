@@ -31,11 +31,6 @@ DEPLOY_EVM_BYTECODE = yarn --silent --cwd $(EVM_DIR) hardhat deploy-bytecode --n
 DEPLOY_EVM_ENEAR_PROXY = yarn --silent --cwd $(EVM_DIR) hardhat deploy-e-near-proxy --network $(1) --enear $(2)
 
 ENEAR_CREATION_TEMPLATE_FILE := $(TESTING_ROOT)/bin/eNear_creation.template
-ENEAR_CREATION_FILE := $(ENEAR_CREATION_TEMPLATE_FILE:.template=)
-
-$(ENEAR_CREATION_FILE): $(ENEAR_CREATION_TEMPLATE_FILE) $(FAKE_PROVER_ADDRESS_FILE)
-	cat $< | \
-	sed "s/<PROVER_ADDRESS>/$(shell cat $(FAKE_PROVER_ADDRESS_FILE) | jq -r .fakeProverAddress | sed 's/^0x//')/" > $@
 
 $(EVM_DEPLOY_RESULTS_DIR):
 	mkdir -p $@
@@ -68,15 +63,15 @@ $(1)_FAKE_PROVER_ADDRESS_FILE := $$($(1)_DEPLOY_RESULTS_DIR)/fake_prover.json
 
 $(1)_ENEAR_ADDRESS_FILE := $$($(1)_DEPLOY_RESULTS_DIR)/eNear.json
 $(1)_ENEAR_PROXY_ADDRESS_FILE := $$($(1)_DEPLOY_RESULTS_DIR)/eNearProxy.json
-
+$(1)_ENEAR_CREATION_FILE := $$($(1)_DEPLOY_RESULTS_DIR)/eNear_creation
 
 $(1)-deploy-fake-prover: $$($(1)_FAKE_PROVER_ADDRESS_FILE)
 $$($(1)_FAKE_PROVER_ADDRESS_FILE): $(EVM_COMPILE_STAMP) | $$($(1)_DEPLOY_RESULTS_DIR)
 	$$(call DEPLOY_EVM_FAKE_PROVER,$(1)) 2>/dev/stderr 1> $$@
 
 $(1)-deploy-enear: $$($(1)_ENEAR_ADDRESS_FILE)
-$$($(1)_ENEAR_ADDRESS_FILE): $(ENEAR_CREATION_FILE) | $$($(1)_DEPLOY_RESULTS_DIR)
-	$$(call DEPLOY_EVM_BYTECODE,$(1),$(ENEAR_CREATION_FILE)) 2>/dev/stderr 1> $$@
+$$($(1)_ENEAR_ADDRESS_FILE): $$($(1)_ENEAR_CREATION_FILE) | $$($(1)_DEPLOY_RESULTS_DIR)
+	$$(call DEPLOY_EVM_BYTECODE,$(1),$$($(1)_ENEAR_CREATION_FILE)) 2>/dev/stderr 1> $$@
 
 $(1)-deploy-enear-proxy: $$($(1)_ENEAR_PROXY_ADDRESS_FILE)
 $$($(1)_ENEAR_PROXY_ADDRESS_FILE): $$($(1)_ENEAR_ADDRESS_FILE) $(EVM_COMPILE_STAMP) | $$($(1)_DEPLOY_RESULTS_DIR)
@@ -89,6 +84,10 @@ $$($(1)_BRIDGE_CONTRACT_ADDRESS_FILE): $$($(1)_TOKEN_IMPL_ADDRESS_FILE) $(NEAR_B
 $(1)-deploy-token-impl: $$($(1)_TOKEN_IMPL_ADDRESS_FILE)
 $$($(1)_TOKEN_IMPL_ADDRESS_FILE): $(EVM_COMPILE_STAMP) | $$($(1)_DEPLOY_RESULTS_DIR)
 	$$(call DEPLOY_EVM_TOKEN_IMPL,$(1)) 2>/dev/stderr 1> $$@
+
+$$($(1)_ENEAR_CREATION_FILE): $(ENEAR_CREATION_TEMPLATE_FILE) $$($(1)_FAKE_PROVER_ADDRESS_FILE) | $$($(1)_DEPLOY_RESULTS_DIR)
+	cat $$< | \
+	sed "s/<PROVER_ADDRESS>/$$(shell cat $$($(1)_FAKE_PROVER_ADDRESS_FILE) | jq -r .fakeProverAddress | sed 's/^0x//')/" > $$@
 
 endef
 
