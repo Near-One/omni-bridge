@@ -1,16 +1,13 @@
 use std::sync::Arc;
 
-use alloy::rpc::types::{Log, TransactionReceipt};
 use anyhow::Result;
-use borsh::BorshDeserialize;
-use ethereum_types::H256;
 use futures::future::join_all;
 use log::{error, info, warn};
 
+use alloy::rpc::types::{Log, TransactionReceipt};
+use ethereum_types::H256;
 use omni_connector::OmniConnector;
-use omni_types::{
-    locker_args::StorageDepositAction, prover_result::ProofKind, ChainKind, OmniAddress, H160,
-};
+use omni_types::{prover_result::ProofKind, ChainKind, OmniAddress};
 
 use crate::{config, utils};
 
@@ -208,11 +205,13 @@ async fn handle_init_transfer_event(
         }
     };
 
-    let storage_deposit_actions = match get_storage_deposit_actions(
+    let storage_deposit_actions = match utils::storage::get_storage_deposit_actions(
         &connector,
-        &init_log.inner,
+        init_transfer_with_timestamp.chain_kind,
         &recipient,
-        &init_transfer_with_timestamp,
+        &init_log.inner.tokenAddress.to_string(),
+        init_log.inner.fee,
+        init_log.inner.nativeFee,
     )
     .await
     {
@@ -244,156 +243,4 @@ async fn handle_init_transfer_event(
         }
         Err(err) => error!("Failed to finalize InitTransfer: {}", err),
     }
-}
-
-async fn get_storage_deposit_actions(
-    connector: &OmniConnector,
-    init_log: &utils::evm::InitTransfer,
-    recipient: &OmniAddress,
-    init_transfer_with_timestamp: &InitTransferWithTimestamp,
-) -> Result<Vec<StorageDepositAction>, String> {
-    let mut storage_deposit_actions = Vec::new();
-
-    if let OmniAddress::Near(near_recipient) = recipient {
-        let evm_token_address =
-            H160::try_from_slice(init_log.tokenAddress.as_slice()).map_err(|_| {
-                format!(
-                    "Failed to parse token address as H160: {:?}",
-                    init_log.tokenAddress
-                )
-            })?;
-
-        let omni_token_address = OmniAddress::new_from_evm_address(
-            init_transfer_with_timestamp.chain_kind,
-            evm_token_address.clone(),
-        )
-        .map_err(|_| {
-            format!(
-                "Failed to convert EVM token address to OmniAddress: {:?}",
-                evm_token_address
-            )
-        })?;
-
-        let token_id = connector
-            .near_get_token_id(omni_token_address.clone())
-            .await
-            .map_err(|_| {
-                format!(
-                    "Failed to get token id by omni token address: {:?}",
-                    omni_token_address
-                )
-            })?;
-
-        let near_recipient_storage_deposit_amount = match connector
-            .near_get_required_storage_deposit(token_id.clone(), near_recipient.clone())
-            .await
-            .map_err(|_| {
-                format!(
-                    "Failed to get required storage deposit for recipient: {:?}",
-                    near_recipient
-                )
-            })? {
-            amount if amount > 0 => Some(amount),
-            _ => None,
-        };
-
-        storage_deposit_actions.push(StorageDepositAction {
-            token_id,
-            account_id: near_recipient.clone(),
-            storage_deposit_amount: near_recipient_storage_deposit_amount,
-        });
-    };
-
-    if init_log.fee > 0 {
-        let evm_token_address =
-            H160::try_from_slice(init_log.tokenAddress.as_slice()).map_err(|_| {
-                format!(
-                    "Failed to parse token address as H160: {:?}",
-                    init_log.tokenAddress
-                )
-            })?;
-
-        let omni_token_address = OmniAddress::new_from_evm_address(
-            init_transfer_with_timestamp.chain_kind,
-            evm_token_address.clone(),
-        )
-        .map_err(|_| {
-            format!(
-                "Failed to convert EVM token address to OmniAddress: {:?}",
-                evm_token_address
-            )
-        })?;
-
-        let token_id = connector
-            .near_get_token_id(omni_token_address.clone())
-            .await
-            .map_err(|_| {
-                format!(
-                    "Failed to get token id by omni token address: {:?}",
-                    omni_token_address
-                )
-            })?;
-
-        let relayer = connector
-            .near_bridge_client()
-            .and_then(|client| client.signer().map(|signer| signer.account_id))
-            .map_err(|_| "Failed to get relayer account id".to_string())?;
-
-        let near_relayer_storage_deposit_amount = match connector
-            .near_get_required_storage_deposit(token_id.clone(), relayer.clone())
-            .await
-            .map_err(|_| {
-                format!(
-                    "Failed to get required storage deposit for relayer: {:?}",
-                    relayer
-                )
-            })? {
-            amount if amount > 0 => Some(amount),
-            _ => None,
-        };
-
-        storage_deposit_actions.push(StorageDepositAction {
-            token_id,
-            account_id: relayer,
-            storage_deposit_amount: near_relayer_storage_deposit_amount,
-        });
-    }
-
-    if init_log.nativeFee > 0 {
-        let token_id = connector
-            .near_get_native_token_id(init_transfer_with_timestamp.chain_kind)
-            .await
-            .map_err(|_| {
-                format!(
-                    "Failed to get native token id by chain kind: {:?}",
-                    init_transfer_with_timestamp.chain_kind
-                )
-            })?;
-
-        let relayer = connector
-            .near_bridge_client()
-            .and_then(|client| client.signer().map(|signer| signer.account_id))
-            .map_err(|_| "Failed to get relayer account id".to_string())?;
-
-        let near_relayer_storage_deposit_amount = match connector
-            .near_get_required_storage_deposit(token_id.clone(), relayer.clone())
-            .await
-            .map_err(|_| {
-                format!(
-                    "Failed to get required storage deposit for relayer: {:?}",
-                    relayer
-                )
-            })? {
-            amount if amount > 0 => Some(amount),
-            _ => None,
-        };
-
-        storage_deposit_actions.push(StorageDepositAction {
-            token_id,
-            account_id: relayer,
-            storage_deposit_amount: near_relayer_storage_deposit_amount,
-        });
-    }
-
-    Ok(storage_deposit_actions)
 }

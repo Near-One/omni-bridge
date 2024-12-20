@@ -1,4 +1,4 @@
-use std::{str::FromStr, sync::Arc};
+use std::sync::Arc;
 
 use anyhow::Result;
 use futures::future::join_all;
@@ -6,10 +6,8 @@ use log::{error, info, warn};
 
 use omni_connector::OmniConnector;
 use omni_types::{
-    locker_args::StorageDepositAction, prover_args::WormholeVerifyProofArgs,
-    prover_result::ProofKind, ChainKind, OmniAddress,
+    prover_args::WormholeVerifyProofArgs, prover_result::ProofKind, ChainKind, OmniAddress,
 };
-use solana_sdk::pubkey::Pubkey;
 
 use crate::{config, utils};
 
@@ -154,16 +152,22 @@ async fn handle_init_transfer_event(
         return;
     };
 
-    let storage_deposit_actions =
-        match get_storage_deposit_actions(&connector, &init_transfer_with_timestamp, &recipient)
-            .await
-        {
-            Ok(actions) => actions,
-            Err(err) => {
-                warn!("{}", err);
-                return;
-            }
-        };
+    let storage_deposit_actions = match utils::storage::get_storage_deposit_actions(
+        &connector,
+        ChainKind::Sol,
+        &recipient,
+        &init_transfer_with_timestamp.token,
+        init_transfer_with_timestamp.fee,
+        init_transfer_with_timestamp.native_fee as u128,
+    )
+    .await
+    {
+        Ok(actions) => actions,
+        Err(err) => {
+            warn!("{}", err);
+            return;
+        }
+    };
 
     let fin_transfer_args = match recipient.get_chain() {
         ChainKind::Near => omni_connector::FinTransferArgs::NearFinTransfer {
@@ -186,141 +190,4 @@ async fn handle_init_transfer_event(
         }
         Err(err) => error!("Failed to finalize InitTransfer: {}", err),
     }
-}
-
-// TODO: This is the same as in evm, so it should be reuesd instead of duplicated
-async fn get_storage_deposit_actions(
-    connector: &OmniConnector,
-    init_transfer_with_timestamp: &InitTransferWithTimestamp,
-    recipient: &OmniAddress,
-) -> Result<Vec<StorageDepositAction>, String> {
-    let mut storage_deposit_actions = Vec::new();
-
-    if let OmniAddress::Near(near_recipient) = recipient {
-        let token = Pubkey::from_str(&init_transfer_with_timestamp.token).map_err(|_| {
-            format!(
-                "Failed to parse token address as Pubkey: {:?}",
-                init_transfer_with_timestamp.token
-            )
-        })?;
-        let omni_token_address = OmniAddress::new_from_slice(ChainKind::Sol, &token.to_bytes())
-            .map_err(|_| {
-                format!(
-                    "Failed to convert SOL token address to OmniAddress: {:?}",
-                    init_transfer_with_timestamp.token
-                )
-            })?;
-
-        let token_id = connector
-            .near_get_token_id(omni_token_address.clone())
-            .await
-            .map_err(|_| {
-                format!(
-                    "Failed to get token id by omni token address: {:?}",
-                    omni_token_address
-                )
-            })?;
-
-        let near_recipient_storage_deposit_amount = match connector
-            .near_get_required_storage_deposit(token_id.clone(), near_recipient.clone())
-            .await
-            .map_err(|_| {
-                format!(
-                    "Failed to get required storage deposit for recipient: {:?}",
-                    near_recipient
-                )
-            })? {
-            amount if amount > 0 => Some(amount),
-            _ => None,
-        };
-
-        storage_deposit_actions.push(StorageDepositAction {
-            token_id,
-            account_id: near_recipient.clone(),
-            storage_deposit_amount: near_recipient_storage_deposit_amount,
-        });
-    };
-
-    if init_transfer_with_timestamp.fee > 0 {
-        let token = Pubkey::from_str(&init_transfer_with_timestamp.token).map_err(|_| {
-            format!(
-                "Failed to parse token address as Pubkey: {:?}",
-                init_transfer_with_timestamp.token
-            )
-        })?;
-        let omni_token_address = OmniAddress::new_from_slice(ChainKind::Sol, &token.to_bytes())
-            .map_err(|_| {
-                format!(
-                    "Failed to convert SOL token address to OmniAddress: {:?}",
-                    init_transfer_with_timestamp.token
-                )
-            })?;
-
-        let token_id = connector
-            .near_get_token_id(omni_token_address.clone())
-            .await
-            .map_err(|_| {
-                format!(
-                    "Failed to get token id by omni token address: {:?}",
-                    omni_token_address
-                )
-            })?;
-
-        let relayer = connector
-            .near_bridge_client()
-            .and_then(|client| client.signer().map(|signer| signer.account_id))
-            .map_err(|_| "Failed to get relayer account id".to_string())?;
-
-        let near_relayer_storage_deposit_amount = match connector
-            .near_get_required_storage_deposit(token_id.clone(), relayer.clone())
-            .await
-            .map_err(|_| {
-                format!(
-                    "Failed to get required storage deposit for recipient: {:?}",
-                    relayer
-                )
-            })? {
-            amount if amount > 0 => Some(amount),
-            _ => None,
-        };
-
-        storage_deposit_actions.push(StorageDepositAction {
-            token_id,
-            account_id: relayer,
-            storage_deposit_amount: near_relayer_storage_deposit_amount,
-        });
-    }
-
-    if init_transfer_with_timestamp.native_fee > 0 {
-        let token_id = connector
-            .near_get_native_token_id(ChainKind::Sol)
-            .await
-            .map_err(|_| "Failed to get native token id by chain kind: Sol")?;
-
-        let relayer = connector
-            .near_bridge_client()
-            .and_then(|client| client.signer().map(|signer| signer.account_id))
-            .map_err(|_| "Failed to get relayer account id".to_string())?;
-
-        let near_relayer_storage_deposit_amount = match connector
-            .near_get_required_storage_deposit(token_id.clone(), relayer.clone())
-            .await
-            .map_err(|_| {
-                format!(
-                    "Failed to get required storage deposit for relayer: {:?}",
-                    relayer
-                )
-            })? {
-            amount if amount > 0 => Some(amount),
-            _ => None,
-        };
-
-        storage_deposit_actions.push(StorageDepositAction {
-            token_id,
-            account_id: relayer,
-            storage_deposit_amount: near_relayer_storage_deposit_amount,
-        });
-    }
-
-    Ok(storage_deposit_actions)
 }

@@ -53,11 +53,11 @@ wormhole-bridge-client = { path = "../../bridge-sdk-rs/bridge-sdk/bridge-clients
 
 omni-connector = { path = "../../bridge-sdk-rs/bridge-sdk/connectors/omni-connector" }
 
-# eth-proof = { git = "https://github.com/Near-One/rainbow-bridge-sdk-rs", package = "eth-proof" }
-
-# near-bridge-client = { git = "https://github.com/Near-One/rainbow-bridge-sdk-rs", package = "near-bridge-client", branch = "solana-fxies" }
-# evm-bridge-client = { git = "https://github.com/Near-One/rainbow-bridge-sdk-rs", package = "evm-bridge-client", branch = "solana-fxies"}
-# solana-bridge-client = { git = "https://github.com/Near-One/rainbow-bridge-sdk-rs", package = "solana-bridge-client", branch = "solana-fxies" }
-# wormhole-bridge-client = { git = "https://github.com/Near-One/rainbow-bridge-sdk-rs", package = "wormhole-bridge-client", branch = "solana-fxies" }
+# eth-proof = { git = "https://github.com/Near-One/rainbow-bridge-sdk-rs", package = "eth-proof", branch = "refactor/solana-bridge-client" }
 #
-# omni-connector = { git = "https://github.com/Near-One/rainbow-bridge-sdk-rs", package = "omni-connector", branch = "solana-fxies" }
+# near-bridge-client = { git = "https://github.com/Near-One/rainbow-bridge-sdk-rs", package = "near-bridge-client", branch = "refactor/solana-bridge-client" }
+# evm-bridge-client = { git = "https://github.com/Near-One/rainbow-bridge-sdk-rs", package = "evm-bridge-client", branch = "refactor/solana-bridge-client"}
+# solana-bridge-client = { git = "https://github.com/Near-One/rainbow-bridge-sdk-rs", package = "solana-bridge-client", branch = "refactor/solana-bridge-client" }
+# wormhole-bridge-client = { git = "https://github.com/Near-One/rainbow-bridge-sdk-rs", package = "wormhole-bridge-client", branch = "refactor/solana-bridge-client" }
+#
+# omni-connector = { git = "https://github.com/Near-One/rainbow-bridge-sdk-rs", package = "omni-connector", branch = "refactor/solana-bridge-client" }
