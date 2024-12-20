@@ -237,7 +237,7 @@ async fn decode_instruction(
 ) -> Result<()> {
     let decoded_data = bs58::decode(data).into_vec()?;
 
-    if let Some(offset) = [
+    if let Some((discriminator, offset)) = [
         (
             &solana.init_transfer_discriminator,
             solana.init_transfer_discriminator.len(),
@@ -248,15 +248,27 @@ async fn decode_instruction(
         ),
     ]
     .into_iter()
-    .find_map(|(disc, len)| decoded_data.starts_with(disc).then_some(len))
-    {
+    .find_map(|(discriminator, len)| {
+        decoded_data
+            .starts_with(discriminator)
+            .then_some((discriminator, len))
+    }) {
         info!("Received InitTransfer on Solana");
 
         let mut payload_data = &decoded_data[offset..];
 
         if let Ok(payload) = InitTransferPayload::deserialize(&mut payload_data) {
-            let token = &account_keys[solana.init_transfer_token_index];
-            let emitter = &account_keys[solana.init_transfer_emitter_index];
+            let (token, emitter) = if discriminator == &solana.init_transfer_discriminator {
+                (
+                    &account_keys[solana.init_transfer_token_index],
+                    &account_keys[solana.init_transfer_emitter_index],
+                )
+            } else {
+                (
+                    &Pubkey::default().to_string(),
+                    &account_keys[solana.init_transfer_sol_emitter_index],
+                )
+            };
 
             if let Some(OptionSerializer::Some(logs)) =
                 transaction.clone().meta.map(|meta| meta.log_messages)
