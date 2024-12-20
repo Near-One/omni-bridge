@@ -67,6 +67,7 @@ pub struct Solana {
     pub init_transfer_discriminator: Vec<u8>,
     pub init_transfer_sol_discriminator: Vec<u8>,
     pub finalize_transfer_emitter_index: usize,
+    pub finalize_transfer_sol_emitter_index: usize,
     pub finalize_transfer_discriminator: Vec<u8>,
     pub finalize_transfer_sol_discriminator: Vec<u8>,
 }

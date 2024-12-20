@@ -310,12 +310,20 @@ async fn decode_instruction(
                 }
             }
         }
-    } else if decoded_data.starts_with(&solana.finalize_transfer_discriminator)
-        || decoded_data.starts_with(&solana.finalize_transfer_sol_discriminator)
+    } else if let Some(discriminator) = [
+        &solana.finalize_transfer_discriminator,
+        &solana.finalize_transfer_sol_discriminator,
+    ]
+    .into_iter()
+    .find(|discriminator| decoded_data.starts_with(discriminator))
     {
         info!("Received FinTransfer on Solana");
 
-        let emitter = &account_keys[solana.finalize_transfer_emitter_index];
+        let emitter = if discriminator == &solana.finalize_transfer_discriminator {
+            &account_keys[solana.finalize_transfer_emitter_index]
+        } else {
+            &account_keys[solana.finalize_transfer_sol_emitter_index]
+        };
 
         if let Some(OptionSerializer::Some(logs)) =
             transaction.clone().meta.map(|meta| meta.log_messages)
