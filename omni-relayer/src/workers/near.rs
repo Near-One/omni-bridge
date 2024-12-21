@@ -73,7 +73,6 @@ pub async fn sign_transfer(
                         }
                         | Nep141LockerEvent::FinTransferEvent {
                             ref transfer_message,
-                            ..
                         }
                         | Nep141LockerEvent::UpdateFeeEvent {
                             ref transfer_message,
