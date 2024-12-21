@@ -95,7 +95,7 @@ pub async fn process_signature(config: config::Config, redis_client: redis::Clie
                             .await;
                         }
                         Err(e) => {
-                            warn!("Failed to fetch transaction: {}", e);
+                            warn!("Failed to fetch transaction (probably signature wasn't finalized yet): {}", e);
                         }
                     };
                 }

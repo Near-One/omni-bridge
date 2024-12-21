@@ -1,8 +1,7 @@
 use anyhow::Result;
 use log::{info, warn};
 
-use anchor_lang::prelude::borsh;
-use anchor_lang::AnchorDeserialize;
+use borsh::BorshDeserialize;
 use solana_sdk::{bs58, pubkey::Pubkey, signature::Signature};
 use solana_transaction_status::{
     option_serializer::OptionSerializer, EncodedTransactionWithStatusMeta, UiRawMessage,
@@ -12,7 +11,7 @@ use crate::workers::near::FinTransfer;
 use crate::workers::solana::InitTransferWithTimestamp;
 use crate::{config, utils};
 
-#[derive(Debug, AnchorDeserialize)]
+#[derive(Debug, BorshDeserialize)]
 struct InitTransferPayload {
     pub amount: u128,
     pub recipient: String,

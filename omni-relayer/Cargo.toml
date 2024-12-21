@@ -26,8 +26,6 @@ solana-sdk = "2.1.5"
 solana-client = "2.1.5"
 solana-transaction-status = "2.1.5"
 
-anchor-lang = "0.24.0"
-
 ethereum-types = "0.14.1"
 omni-types = { git = "https://github.com/near-one/omni-bridge", package = "omni-types", rev = "11ffdb63706ceba175f7581585bd837aad9f1559" }
 
@@ -39,25 +37,16 @@ near-crypto = "0.26.0"
 
 hex = "0.4.3"
 secp256k1 = "0.30.0"
-alloy = { version = "0.6.4", features = ["node-bindings", "providers", "rpc-types", "sol-types", "provider-ws", "signers", "signer-local"] }
+alloy = { version = "0.8.3", features = ["node-bindings", "providers", "rpc-types", "sol-types", "provider-ws", "signers", "signer-local"] }
 
 redis = { version = "0.27.0", features = ["aio", "tokio-comp"] }
 reqwest = "0.12"
 
-eth-proof = { path = "../../bridge-sdk-rs/bridge-sdk/eth-proof" }
+eth-proof = { git = "https://github.com/Near-One/rainbow-bridge-sdk-rs", package = "eth-proof", branch = "refactor/solana-bridge-client" }
 
-near-bridge-client = { path = "../../bridge-sdk-rs/bridge-sdk/bridge-clients/near-bridge-client" }
-evm-bridge-client = { path = "../../bridge-sdk-rs/bridge-sdk/bridge-clients/evm-bridge-client" }
-solana-bridge-client = { path = "../../bridge-sdk-rs/bridge-sdk/bridge-clients/solana-bridge-client" }
-wormhole-bridge-client = { path = "../../bridge-sdk-rs/bridge-sdk/bridge-clients/wormhole-bridge-client" }
+near-bridge-client = { git = "https://github.com/Near-One/rainbow-bridge-sdk-rs", package = "near-bridge-client", branch = "refactor/solana-bridge-client" }
+evm-bridge-client = { git = "https://github.com/Near-One/rainbow-bridge-sdk-rs", package = "evm-bridge-client", branch = "refactor/solana-bridge-client"}
+solana-bridge-client = { git = "https://github.com/Near-One/rainbow-bridge-sdk-rs", package = "solana-bridge-client", branch = "refactor/solana-bridge-client" }
+wormhole-bridge-client = { git = "https://github.com/Near-One/rainbow-bridge-sdk-rs", package = "wormhole-bridge-client", branch = "refactor/solana-bridge-client" }
 
-omni-connector = { path = "../../bridge-sdk-rs/bridge-sdk/connectors/omni-connector" }
-
-# eth-proof = { git = "https://github.com/Near-One/rainbow-bridge-sdk-rs", package = "eth-proof", branch = "refactor/solana-bridge-client" }
-#
-# near-bridge-client = { git = "https://github.com/Near-One/rainbow-bridge-sdk-rs", package = "near-bridge-client", branch = "refactor/solana-bridge-client" }
-# evm-bridge-client = { git = "https://github.com/Near-One/rainbow-bridge-sdk-rs", package = "evm-bridge-client", branch = "refactor/solana-bridge-client"}
-# solana-bridge-client = { git = "https://github.com/Near-One/rainbow-bridge-sdk-rs", package = "solana-bridge-client", branch = "refactor/solana-bridge-client" }
-# wormhole-bridge-client = { git = "https://github.com/Near-One/rainbow-bridge-sdk-rs", package = "wormhole-bridge-client", branch = "refactor/solana-bridge-client" }
-#
-# omni-connector = { git = "https://github.com/Near-One/rainbow-bridge-sdk-rs", package = "omni-connector", branch = "refactor/solana-bridge-client" }
+omni-connector = { git = "https://github.com/Near-One/rainbow-bridge-sdk-rs", package = "omni-connector", branch = "refactor/solana-bridge-client" }
