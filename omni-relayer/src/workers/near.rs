@@ -191,6 +191,10 @@ pub async fn finalize_transfer(
                         info!("Received SignTransferEvent");
 
                         let fin_transfer_args = match message_payload.recipient.get_chain() {
+                            ChainKind::Near => {
+                                warn!("Near to Near transfers are not supported yet");
+                                return;
+                            }
                             ChainKind::Eth | ChainKind::Base | ChainKind::Arb => {
                                 omni_connector::FinTransferArgs::EvmFinTransfer {
                                     chain_kind: message_payload.recipient.get_chain(),
@@ -212,7 +216,6 @@ pub async fn finalize_transfer(
                                     solana_token: Pubkey::new_from_array(token.0),
                                 }
                             }
-                            _ => todo!(),
                         };
 
                         match connector.fin_transfer(fin_transfer_args).await {

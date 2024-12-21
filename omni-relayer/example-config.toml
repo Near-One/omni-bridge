@@ -45,7 +45,7 @@ finalize_transfer_sol_discriminator = [104, 27, 121, 69, 3, 70, 217, 66]
 
 [wormhole]
 api_url = "https://api.testnet.wormholescan.io/"
-sol_chain_id = 1
+solana_chain_id = 1
 near_chain_id = 15
 eth_chain_id = 10_002
 arb_chain_id = 10_003

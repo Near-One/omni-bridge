@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
 use log::{info, warn};
 
 use borsh::BorshDeserialize;
@@ -70,19 +70,24 @@ async fn decode_instruction(
     }) {
         info!("Received InitTransfer on Solana");
 
-        let mut payload_data = &decoded_data[offset..];
+        let mut payload_data = decoded_data
+            .get(offset..)
+            .context("Decoded data is too short")?;
 
         if let Ok(payload) = InitTransferPayload::deserialize(&mut payload_data) {
             let (token, emitter) = if discriminator == &solana.init_transfer_discriminator {
-                (
-                    &account_keys[solana.init_transfer_token_index],
-                    &account_keys[solana.init_transfer_emitter_index],
-                )
+                let token = account_keys
+                    .get(solana.init_transfer_token_index)
+                    .context("Missing token account key")?;
+                let emitter = account_keys
+                    .get(solana.init_transfer_emitter_index)
+                    .context("Missing emitter account key")?;
+                (token, emitter)
             } else {
-                (
-                    &Pubkey::default().to_string(),
-                    &account_keys[solana.init_transfer_sol_emitter_index],
-                )
+                let emitter = account_keys
+                    .get(solana.init_transfer_sol_emitter_index)
+                    .context("Missing SOL emitter account key")?;
+                (&Pubkey::default().to_string(), emitter)
             };
 
             if let Some(OptionSerializer::Some(logs)) =
@@ -135,9 +140,13 @@ async fn decode_instruction(
         info!("Received FinTransfer on Solana");
 
         let emitter = if discriminator == &solana.finalize_transfer_discriminator {
-            &account_keys[solana.finalize_transfer_emitter_index]
+            account_keys
+                .get(solana.finalize_transfer_emitter_index)
+                .context("Missing emitter account key")?
         } else {
-            &account_keys[solana.finalize_transfer_sol_emitter_index]
+            account_keys
+                .get(solana.finalize_transfer_sol_emitter_index)
+                .context("Missing SOL emitter account key")?
         };
 
         if let Some(OptionSerializer::Some(logs)) =
