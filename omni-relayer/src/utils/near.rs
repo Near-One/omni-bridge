@@ -15,7 +15,7 @@ use near_primitives::{
     types::BlockReference,
     views::QueryRequest,
 };
-use omni_types::near_events::Nep141LockerEvent;
+use omni_types::{near_events::Nep141LockerEvent, ChainKind};
 
 use crate::{config, utils};
 
@@ -115,8 +115,24 @@ pub async fn handle_streamer_message(
                 )
                 .await;
             }
-            Nep141LockerEvent::FinTransferEvent { .. }
-            | Nep141LockerEvent::ClaimFeeEvent { .. }
+            Nep141LockerEvent::FinTransferEvent {
+                ref transfer_message,
+            } => {
+                if transfer_message.recipient.get_chain() != ChainKind::Near {
+                    utils::redis::add_event(
+                        redis_connection,
+                        utils::redis::NEAR_INIT_TRANSFER_QUEUE,
+                        transfer_message.origin_nonce.to_string(),
+                        crate::workers::near::InitTransferWithTimestamp {
+                            event: log,
+                            creation_timestamp: chrono::Utc::now().timestamp(),
+                            last_update_timestamp: None,
+                        },
+                    )
+                    .await;
+                }
+            }
+            Nep141LockerEvent::ClaimFeeEvent { .. }
             | Nep141LockerEvent::LogMetadataEvent { .. } => {}
         }
     }
