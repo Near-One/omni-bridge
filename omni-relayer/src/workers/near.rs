@@ -13,6 +13,7 @@ use omni_connector::OmniConnector;
 use omni_types::{
     locker_args::ClaimFeeArgs, near_events::Nep141LockerEvent,
     prover_args::WormholeVerifyProofArgs, prover_result::ProofKind, ChainKind, OmniAddress,
+    TransferId,
 };
 
 use crate::{config, utils};
@@ -114,7 +115,10 @@ pub async fn sign_transfer(
 
                         match connector
                             .near_sign_transfer(
-                                transfer_message.origin_nonce,
+                                TransferId {
+                                    origin_chain: transfer_message.sender.get_chain(),
+                                    origin_nonce: transfer_message.origin_nonce,
+                                },
                                 Some(fee_recipient),
                                 Some(transfer_message.fee.clone()),
                             )
