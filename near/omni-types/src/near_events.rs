@@ -2,7 +2,7 @@ use near_sdk::serde::{Deserialize, Serialize};
 use near_sdk::serde_json::json;
 
 use crate::mpc_types::SignatureResponse;
-use crate::{MetadataPayload, TransferMessage, TransferMessagePayload};
+use crate::{FastTransfer, MetadataPayload, TransferId, TransferMessage, TransferMessagePayload};
 
 #[derive(Deserialize, Serialize, Clone, Debug)]
 pub enum OmniBridgeEvent {
@@ -25,6 +25,10 @@ pub enum OmniBridgeEvent {
     },
     ClaimFeeEvent {
         transfer_message: TransferMessage,
+    },
+    FastTransferEvent {
+        fast_transfer: FastTransfer,
+        new_transfer_id: Option<TransferId>,
     },
 }
 
