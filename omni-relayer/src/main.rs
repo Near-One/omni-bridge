@@ -40,6 +40,12 @@ async fn main() -> Result<()> {
     handles.push(tokio::spawn({
         let config = config.clone();
         let redis_client = redis_client.clone();
+        let jsonrpc_client = jsonrpc_client.clone();
+        async move { startup::near::start_indexer(config, redis_client, jsonrpc_client).await }
+    }));
+    handles.push(tokio::spawn({
+        let config = config.clone();
+        let redis_client = redis_client.clone();
         let connector = connector.clone();
         async move { workers::near::sign_transfer(config, redis_client, connector).await }
     }));
@@ -48,36 +54,7 @@ async fn main() -> Result<()> {
         let connector = connector.clone();
         async move { workers::near::finalize_transfer(redis_client, connector).await }
     }));
-    handles.push(tokio::spawn({
-        let config = config.clone();
-        let redis_client = redis_client.clone();
-        let connector = connector.clone();
-        let jsonrpc_client = jsonrpc_client.clone();
-        async move { workers::near::claim_fee(config, redis_client, connector, jsonrpc_client).await }
-    }));
 
-    handles.push(tokio::spawn({
-        let config = config.clone();
-        let redis_client = redis_client.clone();
-        let connector = connector.clone();
-        let jsonrpc_client = jsonrpc_client.clone();
-        async move {
-            workers::evm::finalize_transfer(config, redis_client, connector, jsonrpc_client).await
-        }
-    }));
-    handles.push(tokio::spawn({
-        let config = config.clone();
-        let redis_client = redis_client.clone();
-        let connector = connector.clone();
-        async move { workers::solana::finalize_transfer(config, redis_client, connector).await }
-    }));
-
-    handles.push(tokio::spawn({
-        let config = config.clone();
-        let redis_client = redis_client.clone();
-        let jsonrpc_client = jsonrpc_client.clone();
-        async move { startup::near::start_indexer(config, redis_client, jsonrpc_client).await }
-    }));
     if config.eth.is_some() {
         handles.push(tokio::spawn({
             let config = config.clone();
@@ -105,7 +82,39 @@ async fn main() -> Result<()> {
             let redis_client = redis_client.clone();
             async move { startup::solana::start_indexer(config, redis_client).await }
         }));
+        handles.push(tokio::spawn({
+            let config = config.clone();
+            let redis_client = redis_client.clone();
+            async move { workers::solana::process_signature(config, redis_client).await }
+        }));
+        handles.push(tokio::spawn({
+            let config = config.clone();
+            let redis_client = redis_client.clone();
+            let connector = connector.clone();
+            async move { workers::solana::finalize_transfer(config, redis_client, connector).await }
+        }));
     }
+
+    if config.eth.is_some() || config.base.is_some() || config.arb.is_some() {
+        handles.push(tokio::spawn({
+            let config = config.clone();
+            let redis_client = redis_client.clone();
+            let connector = connector.clone();
+            let jsonrpc_client = jsonrpc_client.clone();
+            async move {
+                workers::evm::finalize_transfer(config, redis_client, connector, jsonrpc_client)
+                    .await
+            }
+        }));
+    }
+
+    handles.push(tokio::spawn({
+        let config = config.clone();
+        let redis_client = redis_client.clone();
+        let connector = connector.clone();
+        let jsonrpc_client = jsonrpc_client.clone();
+        async move { workers::near::claim_fee(config, redis_client, connector, jsonrpc_client).await }
+    }));
 
     tokio::select! {
         _ = tokio::signal::ctrl_c() => {

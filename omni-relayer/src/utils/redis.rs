@@ -7,6 +7,7 @@ pub const NEAR_SIGN_TRANSFER_EVENTS: &str = "near_sign_transfer_events";
 
 pub const EVM_INIT_TRANSFER_EVENTS: &str = "evm_init_tranfer_events";
 
+pub const SOLANA_EVENTS: &str = "solana_events";
 pub const SOLANA_INIT_TRANSFER_EVENTS: &str = "solana_init_transfer_events";
 
 pub const FINALIZED_TRANSFERS: &str = "finalized_transfers";
@@ -19,16 +20,23 @@ pub const SLEEP_TIME_AFTER_EVENTS_PROCESS_SECS: u64 = 10;
 const QUERY_RETRY_ATTEMPTS: u64 = 10;
 const QUERY_RETRY_SLEEP_SECS: u64 = 1;
 
-pub async fn get_last_processed_block_key(chain_kind: ChainKind) -> String {
-    format!("{chain_kind:?}_LAST_PROCESSED_BLOCK")
+pub async fn get_last_processed_key(chain_kind: ChainKind) -> String {
+    match chain_kind {
+        ChainKind::Sol => "SOLANA_LAST_PROCESSED_SIGNATURE".to_string(),
+        _ => format!("{:?}_LAST_PROCESSED_BLOCK", chain_kind),
+    }
 }
 
-pub async fn get_last_processed_block(
+pub async fn get_last_processed<K, V>(
     redis_connection: &mut MultiplexedConnection,
-    key: &str,
-) -> Option<u64> {
+    key: K,
+) -> Option<V>
+where
+    K: redis::ToRedisArgs + Copy + Send + Sync,
+    V: redis::FromRedisValue + Send + Sync,
+{
     for _ in 0..QUERY_RETRY_ATTEMPTS {
-        if let Ok(res) = redis_connection.get::<&str, u64>(key).await {
+        if let Ok(res) = redis_connection.get::<K, V>(key).await {
             return Some(res);
         }
 
@@ -39,17 +47,16 @@ pub async fn get_last_processed_block(
     None
 }
 
-pub async fn update_last_processed_block(
+pub async fn update_last_processed<K, V>(
     redis_connection: &mut MultiplexedConnection,
-    key: &str,
-    value: u64,
-) {
+    key: K,
+    value: V,
+) where
+    K: redis::ToRedisArgs + Copy + Send + Sync,
+    V: redis::ToRedisArgs + Copy + Send + Sync,
+{
     for _ in 0..QUERY_RETRY_ATTEMPTS {
-        if redis_connection
-            .set::<&str, u64, ()>(key, value)
-            .await
-            .is_ok()
-        {
+        if redis_connection.set::<K, V, ()>(key, value).await.is_ok() {
             return;
         }
 

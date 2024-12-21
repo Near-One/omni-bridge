@@ -69,10 +69,10 @@ pub async fn start_indexer(
         .await
         .context(format!("Failed to initialize {:?} WS provider", chain_kind))?;
 
-    let last_processed_block_key = utils::redis::get_last_processed_block_key(chain_kind).await;
+    let last_processed_block_key = utils::redis::get_last_processed_key(chain_kind).await;
     let latest_block = http_provider.get_block_number().await?;
     let from_block =
-        utils::redis::get_last_processed_block(&mut redis_connection, &last_processed_block_key)
+        utils::redis::get_last_processed(&mut redis_connection, &last_processed_block_key)
             .await
             .unwrap_or(latest_block)
             + 1;
@@ -168,9 +168,9 @@ async fn process_log(
         .await;
     }
 
-    utils::redis::update_last_processed_block(
+    utils::redis::update_last_processed(
         redis_connection,
-        &utils::redis::get_last_processed_block_key(chain_kind).await,
+        &utils::redis::get_last_processed_key(chain_kind).await,
         block_number,
     )
     .await;

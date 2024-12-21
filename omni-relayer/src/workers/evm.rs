@@ -222,13 +222,10 @@ async fn handle_init_transfer_event(
         }
     };
 
-    let fin_transfer_args = match recipient.get_chain() {
-        ChainKind::Near => omni_connector::FinTransferArgs::NearFinTransfer {
-            chain_kind: init_transfer_with_timestamp.chain_kind,
-            storage_deposit_actions,
-            prover_args,
-        },
-        _ => todo!(),
+    let fin_transfer_args = omni_connector::FinTransferArgs::NearFinTransfer {
+        chain_kind: init_transfer_with_timestamp.chain_kind,
+        storage_deposit_actions,
+        prover_args,
     };
 
     match connector.fin_transfer(fin_transfer_args).await {

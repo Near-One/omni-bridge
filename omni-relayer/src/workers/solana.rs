@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{str::FromStr, sync::Arc};
 
 use anyhow::Result;
 use futures::future::join_all;
@@ -8,8 +8,108 @@ use omni_connector::OmniConnector;
 use omni_types::{
     prover_args::WormholeVerifyProofArgs, prover_result::ProofKind, ChainKind, OmniAddress,
 };
+use solana_client::nonblocking::rpc_client::RpcClient;
+use solana_sdk::signature::Signature;
+use solana_transaction_status::{UiMessage, UiTransactionEncoding};
 
 use crate::{config, utils};
+
+pub async fn process_signature(config: config::Config, redis_client: redis::Client) -> Result<()> {
+    let Some(solana_config) = config.solana else {
+        anyhow::bail!("Failed to get Solana config");
+    };
+
+    let rpc_http_url = &solana_config.rpc_http_url;
+    let http_client = Arc::new(RpcClient::new(rpc_http_url.to_string()));
+
+    let redis_connection = redis_client.get_multiplexed_tokio_connection().await?;
+
+    loop {
+        let mut redis_connection = redis_connection.clone();
+
+        let events = match utils::redis::get_events(
+            &mut redis_connection,
+            utils::redis::SOLANA_EVENTS.to_string(),
+        )
+        .await
+        {
+            Some(events) => events,
+            None => {
+                tokio::time::sleep(tokio::time::Duration::from_secs(
+                    utils::redis::SLEEP_TIME_AFTER_EVENTS_PROCESS_SECS,
+                ))
+                .await;
+                continue;
+            }
+        };
+
+        let mut handlers = Vec::new();
+
+        for (key, _) in events {
+            handlers.push(tokio::spawn({
+                let mut redis_connection = redis_connection.clone();
+                let solana = solana_config.clone();
+                let http_client = http_client.clone();
+
+                async move {
+                    let Ok(signature) = Signature::from_str(&key) else {
+                        warn!("Failed to parse signature: {:?}", key);
+                        return;
+                    };
+
+                    info!("Trying to process signature: {:?}", signature);
+
+                    match http_client
+                        .get_transaction(&signature, UiTransactionEncoding::Json)
+                        .await
+                    {
+                        Ok(tx) => {
+                            let transaction = tx.transaction;
+
+                            if let solana_transaction_status::EncodedTransaction::Json(ref tx) =
+                                transaction.transaction
+                            {
+                                if let UiMessage::Raw(ref raw) = tx.message {
+                                    utils::solana::process_message(
+                                        &mut redis_connection,
+                                        &solana,
+                                        &transaction,
+                                        raw,
+                                        signature,
+                                    )
+                                    .await
+                                }
+                            }
+
+                            utils::redis::remove_event(
+                                &mut redis_connection,
+                                utils::redis::SOLANA_EVENTS,
+                                &signature.to_string(),
+                            )
+                            .await;
+                            utils::redis::update_last_processed(
+                                &mut redis_connection,
+                                &utils::redis::get_last_processed_key(ChainKind::Sol).await,
+                                &signature.to_string(),
+                            )
+                            .await;
+                        }
+                        Err(e) => {
+                            warn!("Failed to fetch transaction: {}", e);
+                        }
+                    };
+                }
+            }));
+        }
+
+        join_all(handlers).await;
+
+        tokio::time::sleep(tokio::time::Duration::from_secs(
+            utils::redis::SLEEP_TIME_AFTER_EVENTS_PROCESS_SECS,
+        ))
+        .await;
+    }
+}
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub struct InitTransferWithTimestamp {
@@ -169,13 +269,10 @@ async fn handle_init_transfer_event(
         }
     };
 
-    let fin_transfer_args = match recipient.get_chain() {
-        ChainKind::Near => omni_connector::FinTransferArgs::NearFinTransfer {
-            chain_kind: ChainKind::Sol,
-            storage_deposit_actions,
-            prover_args,
-        },
-        _ => todo!(),
+    let fin_transfer_args = omni_connector::FinTransferArgs::NearFinTransfer {
+        chain_kind: ChainKind::Sol,
+        storage_deposit_actions,
+        prover_args,
     };
 
     match connector.fin_transfer(fin_transfer_args).await {

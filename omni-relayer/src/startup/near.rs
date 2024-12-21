@@ -69,9 +69,9 @@ async fn create_lake_config(
     redis_connection: &mut redis::aio::MultiplexedConnection,
     jsonrpc_client: &JsonRpcClient,
 ) -> Result<LakeConfig> {
-    let start_block_height = match utils::redis::get_last_processed_block(
+    let start_block_height = match utils::redis::get_last_processed(
         redis_connection,
-        &utils::redis::get_last_processed_block_key(ChainKind::Near).await,
+        &utils::redis::get_last_processed_key(ChainKind::Near).await,
     )
     .await
     {
@@ -121,9 +121,9 @@ pub async fn start_indexer(
                 )
                 .await;
 
-                utils::redis::update_last_processed_block(
+                utils::redis::update_last_processed(
                     &mut redis_connection,
-                    &utils::redis::get_last_processed_block_key(ChainKind::Near).await,
+                    &utils::redis::get_last_processed_key(ChainKind::Near).await,
                     streamer_message.block.header.height,
                 )
                 .await;

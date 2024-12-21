@@ -108,10 +108,15 @@ pub async fn sign_transfer(
 
                         // TODO: Use existing API to check if fee is sufficient
 
+                        let fee_recipient = connector
+                            .near_bridge_client()
+                            .and_then(|connector| connector.signer().map(|signer| signer.account_id))
+                            .unwrap_or(config.near.token_locker_id.clone());
+
                         match connector
                             .near_sign_transfer(
                                 transfer_message.origin_nonce,
-                                Some(config.near.token_locker_id),
+                                Some(fee_recipient),
                                 Some(transfer_message.fee.clone()),
                             )
                             .await
