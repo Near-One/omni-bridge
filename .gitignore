@@ -2,10 +2,3 @@
 **/target
 .history
 node_modules
-
-e2e-testing/evm_artifacts
-e2e-testing/near_artifacts
-e2e-testing/solana_artifacts
-e2e-testing/evm_deploy_results
-e2e-testing/near_deploy_results
-e2e-testing/solana_deploy_results
