@@ -76,7 +76,7 @@ async fn process_recent_signatures(
     http_client: &RpcClient,
     program_id: &Pubkey,
 ) -> Result<()> {
-    let Some(mut last_signature) = utils::redis::get_last_processed::<&str, String>(
+    let Some(last_signature) = utils::redis::get_last_processed::<&str, String>(
         redis_connection,
         &utils::redis::get_last_processed_key(ChainKind::Sol).await,
     )
@@ -85,37 +85,27 @@ async fn process_recent_signatures(
         return Ok(());
     };
 
-    loop {
-        let signatures: Vec<RpcConfirmedTransactionStatusWithSignature> = http_client
-            .get_signatures_for_address_with_config(
-                program_id,
-                GetConfirmedSignaturesForAddress2Config {
-                    limit: None,
-                    before: None,
-                    until: last_signature,
-                    commitment: Some(CommitmentConfig::confirmed()),
-                },
-            )
-            .await?;
+    let signatures: Vec<RpcConfirmedTransactionStatusWithSignature> = http_client
+        .get_signatures_for_address_with_config(
+            program_id,
+            GetConfirmedSignaturesForAddress2Config {
+                limit: None,
+                before: None,
+                until: last_signature,
+                commitment: Some(CommitmentConfig::confirmed()),
+            },
+        )
+        .await?;
 
-        if signatures.is_empty() {
-            break;
-        }
-
-        for signature_status in &signatures {
-            utils::redis::add_event(
-                redis_connection,
-                utils::redis::SOLANA_EVENTS,
-                signature_status.signature.clone(),
-                // TODO: It's better to come up with a solution that wouldn't require storing `Null` value
-                serde_json::Value::Null,
-            )
-            .await;
-        }
-
-        last_signature = signatures
-            .last()
-            .and_then(|signature| Signature::from_str(&signature.signature).ok());
+    for signature_status in &signatures {
+        utils::redis::add_event(
+            redis_connection,
+            utils::redis::SOLANA_EVENTS,
+            signature_status.signature.clone(),
+            // TODO: It's better to come up with a solution that wouldn't require storing `Null` value
+            serde_json::Value::Null,
+        )
+        .await;
     }
 
     Ok(())
