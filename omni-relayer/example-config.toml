@@ -25,7 +25,7 @@ block_processing_batch_size = 10_000
 rpc_http_url = "https://arbitrum-sepolia.infura.io/v3/API_KEY"
 rpc_ws_url = "wss://arbitrum-sepolia.infura.io/ws/v3/API_KEY"
 chain_id = 421_614
-bridge_token_factory_address = "0xd565f7CcE0FA1bB8DBe73FCDA281390d545f6200"
+bridge_token_factory_address = "0xd025b38762B4A4E36F0Cde483b86CB13ea00D989"
 block_processing_batch_size = 10_000
 
 [solana]
