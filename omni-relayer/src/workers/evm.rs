@@ -134,37 +134,35 @@ async fn handle_init_transfer_event(
 
     // TODO: Use existing API to check if fee is sufficient here
 
-    let mut vaa = None;
+    let vaa = utils::evm::get_vaa_from_evm_log(
+        connector.clone(),
+        init_transfer_with_timestamp.chain_kind,
+        init_transfer_with_timestamp.tx_logs.clone(),
+        &config,
+    )
+    .await;
 
-    if init_transfer_with_timestamp.chain_kind == ChainKind::Eth {
-        let light_client_latest_block_number =
-            match utils::near::get_eth_light_client_last_block_number(&config, &jsonrpc_client)
-                .await
-            {
-                Ok(block_number) => block_number,
-                Err(_) => {
-                    warn!("Failed to get eth light client last block number");
-                    return;
-                }
-            };
+    if vaa.is_none() {
+        if init_transfer_with_timestamp.chain_kind == ChainKind::Eth {
+            let light_client_latest_block_number =
+                match utils::near::get_eth_light_client_last_block_number(&config, &jsonrpc_client)
+                    .await
+                {
+                    Ok(block_number) => block_number,
+                    Err(_) => {
+                        warn!("Failed to get eth light client last block number");
+                        return;
+                    }
+                };
 
-        if init_transfer_with_timestamp.block_number > light_client_latest_block_number {
-            tokio::time::sleep(tokio::time::Duration::from_secs(
-                utils::redis::SLEEP_TIME_AFTER_EVENTS_PROCESS_SECS,
-            ))
-            .await;
-            return;
-        }
-    } else {
-        vaa = utils::evm::get_vaa_from_evm_log(
-            connector.clone(),
-            init_transfer_with_timestamp.chain_kind,
-            init_transfer_with_timestamp.tx_logs.clone(),
-            &config,
-        )
-        .await;
-
-        if vaa.is_none() {
+            if init_transfer_with_timestamp.block_number > light_client_latest_block_number {
+                tokio::time::sleep(tokio::time::Duration::from_secs(
+                    utils::redis::SLEEP_TIME_AFTER_EVENTS_PROCESS_SECS,
+                ))
+                .await;
+                return;
+            }
+        } else {
             warn!("VAA is not ready yet");
             tokio::time::sleep(tokio::time::Duration::from_secs(
                 utils::redis::SLEEP_TIME_AFTER_EVENTS_PROCESS_SECS,

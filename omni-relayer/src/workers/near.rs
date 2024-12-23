@@ -305,38 +305,36 @@ pub async fn claim_fee(
                         async move {
                             info!("Received finalized transfer");
 
-                            let mut vaa = None;
+                            let vaa = utils::evm::get_vaa_from_evm_log(
+                                connector.clone(),
+                                chain_kind,
+                                tx_logs,
+                                &config,
+                            )
+                            .await;
 
-                            if chain_kind == ChainKind::Eth {
-                                let Ok(light_client_latest_block_number) =
-                                    utils::near::get_eth_light_client_last_block_number(
-                                        &config,
-                                        &jsonrpc_client,
-                                    )
-                                    .await
-                                else {
-                                    warn!("Failed to get eth light client last block number");
-                                    return;
-                                };
+                            if vaa.is_none() {
+                                if chain_kind == ChainKind::Eth {
+                                    let Ok(light_client_latest_block_number) =
+                                        utils::near::get_eth_light_client_last_block_number(
+                                            &config,
+                                            &jsonrpc_client,
+                                        )
+                                        .await
+                                    else {
+                                        warn!("Failed to get eth light client last block number");
+                                        return;
+                                    };
 
-                                if block_number > light_client_latest_block_number {
-                                    warn!("ETH light client is not synced yet");
-                                    tokio::time::sleep(tokio::time::Duration::from_secs(
-                                        utils::redis::SLEEP_TIME_AFTER_EVENTS_PROCESS_SECS,
-                                    ))
-                                    .await;
-                                    return;
-                                }
-                            } else {
-                                vaa = utils::evm::get_vaa_from_evm_log(
-                                    connector.clone(),
-                                    chain_kind,
-                                    tx_logs,
-                                    &config,
-                                )
-                                .await;
-
-                                if vaa.is_none() {
+                                    if block_number > light_client_latest_block_number {
+                                        warn!("ETH light client is not synced yet");
+                                        tokio::time::sleep(tokio::time::Duration::from_secs(
+                                            utils::redis::SLEEP_TIME_AFTER_EVENTS_PROCESS_SECS,
+                                        ))
+                                        .await;
+                                        return;
+                                    }
+                                } else {
                                     warn!("VAA is not ready yet");
                                     tokio::time::sleep(tokio::time::Duration::from_secs(
                                         utils::redis::SLEEP_TIME_AFTER_EVENTS_PROCESS_SECS,
