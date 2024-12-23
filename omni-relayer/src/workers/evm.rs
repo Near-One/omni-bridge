@@ -132,22 +132,6 @@ async fn handle_init_transfer_event(
         }
     };
 
-    if current_timestamp - init_transfer_with_timestamp.creation_timestamp
-        > utils::redis::KEEP_INSUFFICIENT_FEE_TRANSFERS_FOR
-    {
-        warn!(
-            "Removing an old InitTransfer: {:?}",
-            init_transfer_with_timestamp
-        );
-        utils::redis::remove_event(
-            &mut redis_connection,
-            utils::redis::EVM_INIT_TRANSFER_EVENTS,
-            &key,
-        )
-        .await;
-        return;
-    }
-
     // TODO: Use existing API to check if fee is sufficient here
 
     let mut vaa = None;
@@ -250,5 +234,20 @@ async fn handle_init_transfer_event(
             .await;
         }
         Err(err) => error!("Failed to finalize InitTransfer: {}", err),
+    }
+
+    if current_timestamp - init_transfer_with_timestamp.creation_timestamp
+        > utils::redis::KEEP_INSUFFICIENT_FEE_TRANSFERS_FOR
+    {
+        warn!(
+            "Removing an old InitTransfer: {:?}",
+            init_transfer_with_timestamp
+        );
+        utils::redis::remove_event(
+            &mut redis_connection,
+            utils::redis::EVM_INIT_TRANSFER_EVENTS,
+            &key,
+        )
+        .await;
     }
 }

@@ -194,22 +194,6 @@ async fn handle_init_transfer_event(
         return;
     }
 
-    if current_timestamp - init_transfer_with_timestamp.creation_timestamp
-        > utils::redis::KEEP_INSUFFICIENT_FEE_TRANSFERS_FOR
-    {
-        warn!(
-            "Removing an old InitTransfer on Solana: {:?}",
-            init_transfer_with_timestamp
-        );
-        utils::redis::remove_event(
-            &mut redis_connection,
-            utils::redis::SOLANA_INIT_TRANSFER_EVENTS,
-            &key,
-        )
-        .await;
-        return;
-    }
-
     info!("Trying to process InitTransfer log on Solana");
 
     let recipient = match init_transfer_with_timestamp
@@ -286,5 +270,20 @@ async fn handle_init_transfer_event(
             .await;
         }
         Err(err) => error!("Failed to finalize InitTransfer: {}", err),
+    }
+
+    if current_timestamp - init_transfer_with_timestamp.creation_timestamp
+        > utils::redis::KEEP_INSUFFICIENT_FEE_TRANSFERS_FOR
+    {
+        warn!(
+            "Removing an old InitTransfer on Solana: {:?}",
+            init_transfer_with_timestamp
+        );
+        utils::redis::remove_event(
+            &mut redis_connection,
+            utils::redis::SOLANA_INIT_TRANSFER_EVENTS,
+            &key,
+        )
+        .await;
     }
 }

@@ -90,21 +90,6 @@ pub async fn sign_transfer(
                             "Received InitTransferEvent/FinTransferEvent/UpdateFeeEvent",
                         );
 
-                        if current_timestamp - init_transfer_with_timestamp.creation_timestamp
-                            > utils::redis::KEEP_INSUFFICIENT_FEE_TRANSFERS_FOR
-                        {
-                            warn!(
-                                "Removing an old InitTransfer: {:?}",
-                                init_transfer_with_timestamp
-                            );
-                            utils::redis::remove_event(
-                                &mut redis_connection,
-                                utils::redis::NEAR_INIT_TRANSFER_QUEUE,
-                                &key,
-                            )
-                            .await;
-                            return;
-                        }
 
                         // TODO: Use existing API to check if fee is sufficient
 
@@ -136,6 +121,21 @@ pub async fn sign_transfer(
                             Err(err) => {
                                 error!("Failed to sign transfer: {}", err);
                             }
+                        }
+
+                        if current_timestamp - init_transfer_with_timestamp.creation_timestamp
+                            > utils::redis::KEEP_INSUFFICIENT_FEE_TRANSFERS_FOR
+                        {
+                            warn!(
+                                "Removing an old InitTransfer: {:?}",
+                                init_transfer_with_timestamp
+                            );
+                            utils::redis::remove_event(
+                                &mut redis_connection,
+                                utils::redis::NEAR_INIT_TRANSFER_QUEUE,
+                                &key,
+                            )
+                            .await;
                         }
                     }
                 }));
@@ -418,15 +418,20 @@ pub async fn claim_fee(
                                 chain_kind: ChainKind::Sol,
                                 prover_args,
                             };
-                            if let Ok(response) = connector.near_claim_fee(claim_fee_args).await {
-                                info!("Claimed fee: {:?}", response);
-                                utils::redis::remove_event(
-                                    &mut redis_connection,
-                                    utils::redis::FINALIZED_TRANSFERS,
-                                    &key,
-                                )
-                                .await;
-                            }
+                            match connector.near_claim_fee(claim_fee_args).await {
+                                Ok(tx_hash) => {
+                                    info!("Claimed fee: {:?}", tx_hash);
+                                    utils::redis::remove_event(
+                                        &mut redis_connection,
+                                        utils::redis::FINALIZED_TRANSFERS,
+                                        &key,
+                                    )
+                                    .await;
+                                }
+                                Err(err) => {
+                                    warn!("Failed to claim fee: {}", err);
+                                }
+                            };
                         }
                     }));
                 }
