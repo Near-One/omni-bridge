@@ -16,7 +16,7 @@ use anchor_spl::{
     },
 };
 
-use crate::instructions::wormhole_cpi::*;
+use crate::{constants::BRIDGE_TOKEN_CONFIG_SEED, instructions::wormhole_cpi::*, state::token_config::TokenConfig};
 use crate::{
     constants::{AUTHORITY_SEED, VAULT_SEED},
     state::message::Payload,
@@ -54,6 +54,14 @@ pub struct LogMetadata<'info> {
         token::token_program = token_program,
     )]
     pub vault: Box<InterfaceAccount<'info, TokenAccount>>,
+    #[account(
+        init_if_needed,
+        payer = wormhole.payer,
+        space = 8 + TokenConfig::INIT_SPACE,
+        seeds = [BRIDGE_TOKEN_CONFIG_SEED, mint.key().as_ref()],
+        bump,
+    )]
+    pub bridge_token_config: Box<Account<'info, TokenConfig>>,
 
     pub wormhole: WormholeCPI<'info>,
 
@@ -83,6 +91,11 @@ impl<'info> LogMetadata<'info> {
         }
     }
     pub fn process(&mut self) -> Result<()> {
+        self.bridge_token_config.set_inner(TokenConfig {
+            origin_decimals: self.mint.decimals,
+            dust: 0,
+        });
+
         let (name, symbol) = if self.token_program.key() == token_2022::ID {
             let mint_account_info = self.mint.to_account_info();
             let mint_data = mint_account_info.try_borrow_data()?;

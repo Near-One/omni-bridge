@@ -8,10 +8,10 @@ use anchor_spl::{
 };
 
 use crate::{
-    constants::{AUTHORITY_SEED, SOL_VAULT_SEED, VAULT_SEED},
+    constants::{AUTHORITY_SEED, BRIDGE_TOKEN_CONFIG_SEED, SOL_VAULT_SEED, VAULT_SEED},
     error::ErrorCode,
     instructions::wormhole_cpi::*,
-    state::message::{init_transfer::InitTransferPayload, Payload},
+    state::{message::{init_transfer::InitTransferPayload, Payload}, token_config::TokenConfig},
 };
 
 #[derive(Accounts)]
@@ -56,6 +56,13 @@ pub struct InitTransfer<'info> {
 
     #[account(
         mut,
+        seeds = [BRIDGE_TOKEN_CONFIG_SEED, mint.key().as_ref()],
+        bump,
+    )]
+    pub bridge_token_config: Box<Account<'info, TokenConfig>>,
+
+    #[account(
+        mut,
         owner = wormhole.system_program.key(),
     )]
     pub user: Signer<'info>,
@@ -66,7 +73,7 @@ pub struct InitTransfer<'info> {
 }
 
 impl<'info> InitTransfer<'info> {
-    pub fn process(&self, payload: InitTransferPayload) -> Result<()> {
+    pub fn process(&self, payload: &mut InitTransferPayload) -> Result<()> {
         if payload.native_fee > 0 {
             transfer(
                 CpiContext::new(
@@ -114,6 +121,10 @@ impl<'info> InitTransfer<'info> {
                 payload.amount.try_into().unwrap(),
             )?;
         }
+
+        let origin_decimals = self.bridge_token_config.origin_decimals;
+        payload.fee = payload.fee * 10_u128.pow((origin_decimals - self.mint.decimals) as u32);
+        payload.amount = payload.amount * 10_u128.pow((origin_decimals - self.mint.decimals) as u32);
 
         self.wormhole.post_message(payload.serialize_for_near((
             self.wormhole.sequence.sequence,

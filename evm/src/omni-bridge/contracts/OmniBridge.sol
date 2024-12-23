@@ -25,6 +25,7 @@ contract OmniBridge is
     mapping(string => address) public nearToEthToken;
     mapping(address => bool) public isBridgeToken;
     mapping(address => uint8) public tokenOriginDecimals;
+    mapping(address => uint128) public tokenDust;
 
     address public tokenImplementationAddress;
     address public nearBridgeDerivedAddress;
@@ -201,6 +202,7 @@ contract OmniBridge is
         }
 
         uint128 normalizedAmount = normalizeAmount(payload.tokenAddress, payload.amount);
+        tokenDust[payload.tokenAddress] += payload.amount - denormalizeAmount(payload.tokenAddress, normalizedAmount);
 
         if (customMinters[payload.tokenAddress] != address(0)) {
             ICustomMinter(customMinters[payload.tokenAddress]).mint(payload.tokenAddress, payload.recipient, normalizedAmount);

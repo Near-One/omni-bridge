@@ -96,7 +96,8 @@ pub mod bridge_token_factory {
     pub fn init_transfer(ctx: Context<InitTransfer>, payload: InitTransferPayload) -> Result<()> {
         msg!("Initializing transfer");
 
-        ctx.accounts.process(payload)?;
+        let mut payload = payload;
+        ctx.accounts.process(&mut payload)?;
 
         Ok(())
     }
