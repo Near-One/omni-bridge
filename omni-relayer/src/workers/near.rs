@@ -296,42 +296,55 @@ pub async fn claim_fee(
                 {
                     info!("Trying to process FinTransfer log on {:?}", chain_kind);
 
-                    let vaa = utils::evm::get_vaa_from_evm_log(
-                        connector.clone(),
-                        chain_kind,
-                        tx_logs,
-                        &config,
-                    )
-                    .await;
-
-                    if vaa.is_none() {
-                        let Ok(light_client_latest_block_number) =
-                            utils::near::get_eth_light_client_last_block_number(
-                                &config,
-                                &jsonrpc_client,
-                            )
-                            .await
-                        else {
-                            warn!("Failed to get eth light client last block number");
-                            continue;
-                        };
-
-                        if block_number > light_client_latest_block_number {
-                            tokio::time::sleep(tokio::time::Duration::from_secs(
-                                utils::redis::SLEEP_TIME_AFTER_EVENTS_PROCESS_SECS,
-                            ))
-                            .await;
-                            continue;
-                        }
-                    }
-
                     handlers.push(tokio::spawn({
                         let config = config.clone();
                         let mut redis_connection = redis_connection.clone();
                         let connector = connector.clone();
+                        let jsonrpc_client = jsonrpc_client.clone();
 
                         async move {
                             info!("Received finalized transfer");
+
+                            let mut vaa = None;
+
+                            if chain_kind == ChainKind::Eth {
+                                let Ok(light_client_latest_block_number) =
+                                    utils::near::get_eth_light_client_last_block_number(
+                                        &config,
+                                        &jsonrpc_client,
+                                    )
+                                    .await
+                                else {
+                                    warn!("Failed to get eth light client last block number");
+                                    return;
+                                };
+
+                                if block_number > light_client_latest_block_number {
+                                    warn!("ETH light client is not synced yet");
+                                    tokio::time::sleep(tokio::time::Duration::from_secs(
+                                        utils::redis::SLEEP_TIME_AFTER_EVENTS_PROCESS_SECS,
+                                    ))
+                                    .await;
+                                    return;
+                                }
+                            } else {
+                                vaa = utils::evm::get_vaa_from_evm_log(
+                                    connector.clone(),
+                                    chain_kind,
+                                    tx_logs,
+                                    &config,
+                                )
+                                .await;
+
+                                if vaa.is_none() {
+                                    warn!("VAA is not ready yet");
+                                    tokio::time::sleep(tokio::time::Duration::from_secs(
+                                        utils::redis::SLEEP_TIME_AFTER_EVENTS_PROCESS_SECS,
+                                    ))
+                                    .await;
+                                    return;
+                                }
+                            }
 
                             let Some(tx_hash) = log.transaction_hash else {
                                 warn!("No transaction hash in log: {:?}", log);
