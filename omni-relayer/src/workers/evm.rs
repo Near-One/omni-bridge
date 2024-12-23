@@ -1,16 +1,13 @@
 use std::sync::Arc;
 
-use alloy::rpc::types::{Log, TransactionReceipt};
 use anyhow::Result;
-use borsh::BorshDeserialize;
-use ethereum_types::H256;
 use futures::future::join_all;
 use log::{error, info, warn};
 
+use alloy::rpc::types::{Log, TransactionReceipt};
+use ethereum_types::H256;
 use omni_connector::OmniConnector;
-use omni_types::{
-    locker_args::StorageDepositAction, prover_result::ProofKind, ChainKind, OmniAddress, H160,
-};
+use omni_types::{prover_result::ProofKind, ChainKind, OmniAddress};
 
 use crate::{config, utils};
 
@@ -19,7 +16,7 @@ pub struct InitTransferWithTimestamp {
     pub chain_kind: ChainKind,
     pub block_number: u64,
     pub log: Log,
-    pub tx_logs: Option<TransactionReceipt>,
+    pub tx_logs: Option<Box<TransactionReceipt>>,
     pub creation_timestamp: i64,
     pub last_update_timestamp: Option<i64>,
 }
@@ -111,7 +108,10 @@ async fn handle_init_transfer_event(
         }
     };
 
-    info!("Received InitTransfer log");
+    info!(
+        "Trying to process InitTransfer log on {:?}",
+        init_transfer_with_timestamp.chain_kind
+    );
 
     let tx_hash = match init_transfer_with_timestamp.log.transaction_hash {
         Some(tx_hash) => tx_hash,
@@ -132,22 +132,6 @@ async fn handle_init_transfer_event(
         }
     };
 
-    if current_timestamp - init_transfer_with_timestamp.creation_timestamp
-        > utils::redis::KEEP_INSUFFICIENT_FEE_TRANSFERS_FOR
-    {
-        warn!(
-            "Removing an old InitTransfer: {:?}",
-            init_transfer_with_timestamp
-        );
-        utils::redis::remove_event(
-            &mut redis_connection,
-            utils::redis::EVM_INIT_TRANSFER_EVENTS,
-            &key,
-        )
-        .await;
-        return;
-    }
-
     // TODO: Use existing API to check if fee is sufficient here
 
     let vaa = utils::evm::get_vaa_from_evm_log(
@@ -159,18 +143,27 @@ async fn handle_init_transfer_event(
     .await;
 
     if vaa.is_none() {
-        let light_client_latest_block_number =
-            match utils::near::get_eth_light_client_last_block_number(&config, &jsonrpc_client)
-                .await
-            {
-                Ok(block_number) => block_number,
-                Err(_) => {
-                    warn!("Failed to get eth light client last block number");
-                    return;
-                }
-            };
+        if init_transfer_with_timestamp.chain_kind == ChainKind::Eth {
+            let light_client_latest_block_number =
+                match utils::near::get_eth_light_client_last_block_number(&config, &jsonrpc_client)
+                    .await
+                {
+                    Ok(block_number) => block_number,
+                    Err(_) => {
+                        warn!("Failed to get eth light client last block number");
+                        return;
+                    }
+                };
 
-        if init_transfer_with_timestamp.block_number > light_client_latest_block_number {
+            if init_transfer_with_timestamp.block_number > light_client_latest_block_number {
+                tokio::time::sleep(tokio::time::Duration::from_secs(
+                    utils::redis::SLEEP_TIME_AFTER_EVENTS_PROCESS_SECS,
+                ))
+                .await;
+                return;
+            }
+        } else {
+            warn!("VAA is not ready yet");
             tokio::time::sleep(tokio::time::Duration::from_secs(
                 utils::redis::SLEEP_TIME_AFTER_EVENTS_PROCESS_SECS,
             ))
@@ -205,11 +198,13 @@ async fn handle_init_transfer_event(
         }
     };
 
-    let storage_deposit_actions = match get_storage_deposit_actions(
+    let storage_deposit_actions = match utils::storage::get_storage_deposit_actions(
         &connector,
-        &init_log.inner,
+        init_transfer_with_timestamp.chain_kind,
         &recipient,
-        &init_transfer_with_timestamp,
+        &init_log.inner.tokenAddress.to_string(),
+        init_log.inner.fee,
+        init_log.inner.nativeFee,
     )
     .await
     {
@@ -220,13 +215,10 @@ async fn handle_init_transfer_event(
         }
     };
 
-    let fin_transfer_args = match recipient.get_chain() {
-        ChainKind::Near => omni_connector::FinTransferArgs::NearFinTransfer {
-            chain_kind: init_transfer_with_timestamp.chain_kind,
-            storage_deposit_actions,
-            prover_args,
-        },
-        _ => todo!(),
+    let fin_transfer_args = omni_connector::FinTransferArgs::NearFinTransfer {
+        chain_kind: init_transfer_with_timestamp.chain_kind,
+        storage_deposit_actions,
+        prover_args,
     };
 
     match connector.fin_transfer(fin_transfer_args).await {
@@ -241,139 +233,19 @@ async fn handle_init_transfer_event(
         }
         Err(err) => error!("Failed to finalize InitTransfer: {}", err),
     }
-}
 
-async fn get_storage_deposit_actions(
-    connector: &OmniConnector,
-    init_log: &utils::evm::InitTransfer,
-    recipient: &OmniAddress,
-    init_transfer_with_timestamp: &InitTransferWithTimestamp,
-) -> Result<Vec<StorageDepositAction>, String> {
-    let mut storage_deposit_actions = Vec::new();
-
-    if let OmniAddress::Near(near_recipient) = recipient {
-        let evm_token_address =
-            H160::try_from_slice(init_log.tokenAddress.as_slice()).map_err(|_| {
-                format!(
-                    "Failed to parse token address as H160: {:?}",
-                    init_log.tokenAddress
-                )
-            })?;
-
-        let omni_token_address = OmniAddress::new_from_evm_address(
-            init_transfer_with_timestamp.chain_kind,
-            evm_token_address.clone(),
+    if current_timestamp - init_transfer_with_timestamp.creation_timestamp
+        > utils::redis::KEEP_INSUFFICIENT_FEE_TRANSFERS_FOR
+    {
+        warn!(
+            "Removing an old InitTransfer: {:?}",
+            init_transfer_with_timestamp
+        );
+        utils::redis::remove_event(
+            &mut redis_connection,
+            utils::redis::EVM_INIT_TRANSFER_EVENTS,
+            &key,
         )
-        .map_err(|_| {
-            format!(
-                "Failed to convert EVM token address to OmniAddress: {:?}",
-                evm_token_address
-            )
-        })?;
-
-        let token_id = connector
-            .near_get_token_id(omni_token_address.clone())
-            .await
-            .map_err(|_| {
-                format!(
-                    "Failed to get token id by omni token address: {:?}",
-                    omni_token_address
-                )
-            })?;
-
-        let near_recipient_storage_deposit_amount = connector
-            .near_get_required_storage_deposit(token_id.clone(), near_recipient.clone())
-            .await
-            .map_err(|_| {
-                format!(
-                    "Failed to get required storage deposit for recipient: {:?}",
-                    near_recipient
-                )
-            })?;
-
-        storage_deposit_actions.push(StorageDepositAction {
-            token_id,
-            account_id: near_recipient.clone(),
-            storage_deposit_amount: Some(near_recipient_storage_deposit_amount),
-        });
-    };
-
-    if init_log.fee > 0 {
-        let evm_token_address =
-            H160::try_from_slice(init_log.tokenAddress.as_slice()).map_err(|_| {
-                format!(
-                    "Failed to parse token address as H160: {:?}",
-                    init_log.tokenAddress
-                )
-            })?;
-
-        let omni_token_address = OmniAddress::new_from_evm_address(
-            init_transfer_with_timestamp.chain_kind,
-            evm_token_address.clone(),
-        )
-        .map_err(|_| {
-            format!(
-                "Failed to convert EVM token address to OmniAddress: {:?}",
-                evm_token_address
-            )
-        })?;
-
-        let token_id = connector
-            .near_get_token_id(omni_token_address.clone())
-            .await
-            .map_err(|_| {
-                format!(
-                    "Failed to get token id by omni token address: {:?}",
-                    omni_token_address
-                )
-            })?;
-
-        let relayer = connector
-            .near_bridge_client()
-            .and_then(|client| client.signer().map(|signer| signer.account_id))
-            .map_err(|_| "Failed to get relayer account id".to_string())?;
-
-        let near_relayer_storage_deposit_amount = connector
-            .near_get_required_storage_deposit(token_id.clone(), relayer.clone())
-            .await
-            .map_err(|_| {
-                format!(
-                    "Failed to get required storage deposit for recipient: {:?}",
-                    relayer
-                )
-            })?;
-
-        storage_deposit_actions.push(StorageDepositAction {
-            token_id,
-            account_id: relayer,
-            storage_deposit_amount: Some(near_relayer_storage_deposit_amount),
-        });
+        .await;
     }
-
-    if init_log.nativeFee > 0 {
-        // TODO: Right now `get_native_token_id` is private, so either we make it public in a smart
-        // contract or make the logic manually
-        let token_id = connector
-            .near_get_native_token_id(init_transfer_with_timestamp.chain_kind)
-            .await
-            .map_err(|_| {
-                format!(
-                    "Failed to get native token id by chain kind: {:?}",
-                    init_transfer_with_timestamp.chain_kind
-                )
-            })?;
-
-        let relayer = connector
-            .near_bridge_client()
-            .and_then(|client| client.signer().map(|signer| signer.account_id))
-            .map_err(|_| "Failed to get relayer account id".to_string())?;
-
-        storage_deposit_actions.push(StorageDepositAction {
-            token_id,
-            account_id: relayer,
-            storage_deposit_amount: None,
-        });
-    }
-
-    Ok(storage_deposit_actions)
 }

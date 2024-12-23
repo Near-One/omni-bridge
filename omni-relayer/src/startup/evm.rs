@@ -21,71 +21,61 @@ pub async fn start_indexer(
 ) -> Result<()> {
     let mut redis_connection = redis_client.get_multiplexed_tokio_connection().await?;
 
-    let (
-        rpc_http_url,
-        rpc_ws_url,
-        bridge_token_factory_address,
-        last_processed_block_key,
-        block_processing_batch_size,
-    ) = match chain_kind {
-        ChainKind::Eth => {
-            let Some(ref eth) = config.eth else {
-                anyhow::bail!("Failed to get ETH config");
-            };
-            (
-                eth.rpc_http_url.clone(),
-                eth.rpc_ws_url.clone(),
-                eth.bridge_token_factory_address,
-                utils::redis::ETH_LAST_PROCESSED_BLOCK,
-                eth.block_processing_batch_size,
-            )
-        }
-        ChainKind::Base => {
-            let Some(ref base) = config.base else {
-                anyhow::bail!("Failed to get Base config");
-            };
-            (
-                base.rpc_http_url.clone(),
-                base.rpc_ws_url.clone(),
-                base.bridge_token_factory_address,
-                utils::redis::BASE_LAST_PROCESSED_BLOCK,
-                base.block_processing_batch_size,
-            )
-        }
-        ChainKind::Arb => {
-            let Some(ref arb) = config.arb else {
-                anyhow::bail!("Failed to get Arb config");
-            };
-            (
-                arb.rpc_http_url.clone(),
-                arb.rpc_ws_url.clone(),
-                arb.bridge_token_factory_address,
-                utils::redis::ARB_LAST_PROCESSED_BLOCK,
-                arb.block_processing_batch_size,
-            )
-        }
-        _ => anyhow::bail!("Unsupported chain kind: {:?}", chain_kind),
-    };
+    let (rpc_http_url, rpc_ws_url, bridge_token_factory_address, block_processing_batch_size) =
+        match chain_kind {
+            ChainKind::Eth => {
+                let Some(ref eth) = config.eth else {
+                    anyhow::bail!("Failed to get ETH config");
+                };
+                (
+                    eth.rpc_http_url.clone(),
+                    eth.rpc_ws_url.clone(),
+                    eth.bridge_token_factory_address,
+                    eth.block_processing_batch_size,
+                )
+            }
+            ChainKind::Base => {
+                let Some(ref base) = config.base else {
+                    anyhow::bail!("Failed to get Base config");
+                };
+                (
+                    base.rpc_http_url.clone(),
+                    base.rpc_ws_url.clone(),
+                    base.bridge_token_factory_address,
+                    base.block_processing_batch_size,
+                )
+            }
+            ChainKind::Arb => {
+                let Some(ref arb) = config.arb else {
+                    anyhow::bail!("Failed to get Arb config");
+                };
+                (
+                    arb.rpc_http_url.clone(),
+                    arb.rpc_ws_url.clone(),
+                    arb.bridge_token_factory_address,
+                    arb.block_processing_batch_size,
+                )
+            }
+            _ => anyhow::bail!("Unsupported chain kind: {:?}", chain_kind),
+        };
 
-    let http_provider = ProviderBuilder::new().on_http(
-        rpc_http_url
-            .parse()
-            .context("Failed to parse ETH rpc provider as url")?,
-    );
+    let http_provider = ProviderBuilder::new().on_http(rpc_http_url.parse().context(format!(
+        "Failed to parse {:?} rpc provider as url",
+        chain_kind
+    ))?);
 
     let ws_provider = ProviderBuilder::new()
         .on_ws(WsConnect::new(rpc_ws_url))
         .await
-        .context("Failed to initialize ETH WS provider")?;
+        .context(format!("Failed to initialize {:?} WS provider", chain_kind))?;
 
+    let last_processed_block_key = utils::redis::get_last_processed_key(chain_kind).await;
     let latest_block = http_provider.get_block_number().await?;
     let from_block =
-        utils::redis::get_last_processed_block(&mut redis_connection, last_processed_block_key)
+        utils::redis::get_last_processed(&mut redis_connection, &last_processed_block_key)
             .await
-            .map_or_else(
-                || latest_block.saturating_sub(block_processing_batch_size),
-                |block| block,
-            );
+            .unwrap_or(latest_block)
+            + 1;
 
     let filter = Filter::new()
         .address(bridge_token_factory_address)
@@ -112,11 +102,14 @@ pub async fn start_indexer(
         }
     }
 
-    info!("All historical logs processed, starting ETH WS subscription");
+    info!(
+        "All historical logs processed, starting {:?} WS subscription",
+        chain_kind
+    );
 
     let mut stream = ws_provider.subscribe_logs(&filter).await?.into_stream();
     while let Some(log) = stream.next().await {
-        process_log(ChainKind::Eth, &mut redis_connection, &http_provider, log).await;
+        process_log(chain_kind, &mut redis_connection, &http_provider, log).await;
     }
 
     Ok(())
@@ -154,7 +147,7 @@ async fn process_log(
                 chain_kind,
                 block_number,
                 log,
-                tx_logs,
+                tx_logs: tx_logs.map(Box::new),
                 creation_timestamp: chrono::Utc::now().timestamp(),
                 last_update_timestamp: None,
             },
@@ -165,19 +158,19 @@ async fn process_log(
             redis_connection,
             utils::redis::FINALIZED_TRANSFERS,
             tx_hash.to_string(),
-            FinTransfer {
+            FinTransfer::Evm {
                 chain_kind,
                 block_number,
                 log,
-                tx_logs,
+                tx_logs: tx_logs.map(Box::new),
             },
         )
         .await;
     }
 
-    utils::redis::update_last_processed_block(
+    utils::redis::update_last_processed(
         redis_connection,
-        utils::redis::ETH_LAST_PROCESSED_BLOCK,
+        &utils::redis::get_last_processed_key(chain_kind).await,
         block_number,
     )
     .await;
