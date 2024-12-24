@@ -46,6 +46,14 @@ impl EvmProver {
     ///
     /// This function will panic in the following situations:
     /// - If the log entry at the specified index doesn't match the decoded log entry.
+    /// # Errors
+    ///
+    /// This function returns an error if:
+    /// - The provided proof cannot be parsed.
+    /// - The receipt or log entry cannot be decoded.
+    /// - The log entry doesn't match the receipt.
+    /// - The receipt data doesn't match the proof.
+    /// - The block header hash is not set.
     #[allow(clippy::needless_pass_by_value)]
     #[handle_result]
     pub fn verify_proof(&self, #[serializer(borsh)] input: Vec<u8>) -> Result<Promise, String> {
@@ -87,6 +95,11 @@ impl EvmProver {
             ))
     }
 
+    /// # Errors
+    ///
+    /// This function returns an error if:
+    /// - The block hash does not match the expected hash.
+    /// - The event parsing fails for the provided log entry.
     #[allow(clippy::needless_pass_by_value)]
     #[private]
     #[handle_result]

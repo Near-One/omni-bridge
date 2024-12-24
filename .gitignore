@@ -1,4 +1,5 @@
 .DS_Store
 **/target
+**/.env
 .history
 node_modules
