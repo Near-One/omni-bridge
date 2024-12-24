@@ -156,6 +156,7 @@ async fn handle_init_transfer_event(
                 };
 
             if init_transfer_with_timestamp.block_number > light_client_latest_block_number {
+                warn!("ETH light client is not synced yet");
                 tokio::time::sleep(tokio::time::Duration::from_secs(
                     utils::redis::SLEEP_TIME_AFTER_EVENTS_PROCESS_SECS,
                 ))
