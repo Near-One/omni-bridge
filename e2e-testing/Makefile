@@ -124,7 +124,7 @@ NEAR_BINARY_DIR := $(TESTING_ROOT)/near_artifacts
 .PHONY: near-build near-deploy
 
 # List all expected WASM binaries
-NEAR_BINARIES := evm_prover.wasm omni_bridge.wasm omni_prover.wasm omni_token.wasm token_deployer.wasm wormhole_omni_prover_proxy.wasm
+NEAR_BINARIES := evm_prover.wasm omni_bridge.wasm omni_prover.wasm omni_token.wasm token_deployer.wasm wormhole_omni_prover_proxy.wasm mock_token.wasm
 NEAR_BINARY_PATHS := $(addprefix $(NEAR_BINARY_DIR)/,$(NEAR_BINARIES))
 
 NEAR_BUILD_STAMP := $(TESTING_ROOT)/.near-build.stamp
@@ -152,7 +152,7 @@ $(1): $(NEAR_BUILD_STAMP)
  
 endef
 
-$(foreach binary,$(NEAR_BINARY_PATHS),$(eval $(call generate_near_deploy_rule,$(binary))))
+$(foreach binary,$(NEAR_BINARY_PATHS),$(eval $(call generate_near_deploy_rules,$(binary))))
 
 
 ########################################
