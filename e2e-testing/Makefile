@@ -1,6 +1,16 @@
-.PHONY: evm-compile evm-scripts-build
 
+##########################################################
+# Makefile prologue
+##########################################################
+
+MAKEFLAGS += --no-builtin-rules --no-builtin-variables --warn-undefined-variables
+unexport MAKEFLAGS
 .DELETE_ON_ERROR:
+.SUFFIXES:
+SHELL := bash
+.SHELLFLAGS := -eu -o pipefail -c
+
+#####################################################
 
 TESTING_ROOT := $(shell dirname $(realpath $(lastword $(MAKEFILE_LIST))))
 
@@ -12,15 +22,19 @@ ETHEREUM_DEPLOY_RESULTS_DIR := $(TESTING_ROOT)/ethereum_deploy_results
 
 NEAR_DIR := $(TESTING_ROOT)/../near
 NEAR_DEPLOY_RESULTS_DIR := $(TESTING_ROOT)/near_deploy_results
+NEAR_INIT_PARAMS_FILE := $(TESTING_ROOT)/near_init_params.json
 
 SOLANA_DIR := $(TESTING_ROOT)/../solana
 SOLANA_DEPLOY_RESULTS_DIR := $(TESTING_ROOT)/solana_deploy_results
 
 NEAR_BRIDGE_ID_FILE := $(NEAR_DEPLOY_RESULTS_DIR)/omni_bridge.json
 
+
 ##########################################################
 # EVM
 ##########################################################
+
+.PHONY: evm-build evm-scripts-build
 
 EVM_COMPILE_STAMP := $(TESTING_ROOT)/.evm-compile.stamp
 EVM_ARTIFACTS_DIR := $(TESTING_ROOT)/evm_artifacts
@@ -124,7 +138,7 @@ NEAR_BINARY_DIR := $(TESTING_ROOT)/near_artifacts
 .PHONY: near-build near-deploy
 
 # List all expected WASM binaries
-NEAR_BINARIES := evm_prover.wasm omni_bridge.wasm omni_prover.wasm omni_token.wasm token_deployer.wasm wormhole_omni_prover_proxy.wasm mock_token.wasm
+NEAR_BINARIES := evm_prover.wasm omni_bridge.wasm omni_prover.wasm token_deployer.wasm wormhole_omni_prover_proxy.wasm mock_token.wasm
 NEAR_BINARY_PATHS := $(addprefix $(NEAR_BINARY_DIR)/,$(NEAR_BINARIES))
 
 NEAR_BUILD_STAMP := $(TESTING_ROOT)/.near-build.stamp
@@ -145,11 +159,15 @@ $(NEAR_BUILD_STAMP):
 # 		$(1) -  the path to the binary file
 define generate_near_deploy_rules
 
-$(NEAR_DEPLOY_RESULTS_DIR)/$(basename $(notdir $(1))).json: $(1) | $(NEAR_DEPLOY_RESULTS_DIR)
-	./scripts/deploy-near-contract.sh $(1) $$@ $$(basename $$(notdir $(1)))-$(TIMESTAMP).testnet
+$(1)_NAME := $$(basename $$(notdir $(1)))
+
+$(NEAR_DEPLOY_RESULTS_DIR)/$$($(1)_NAME).json: $(NEAR_INIT_PARAMS_FILE) $(1) | $(NEAR_DEPLOY_RESULTS_DIR)
+	INIT_FUNCTION=$$$$(jq -r '.$$($(1)_NAME).init_function // ""' $$<) && \
+	INIT_ARGS=$$$$(jq -c '.$$($(1)_NAME).init_args // "{}"' $$<) && \
+	./scripts/deploy-near-contract.sh $(1) $$@ $$($(1)_NAME)-$(TIMESTAMP).testnet "$$$$INIT_FUNCTION" "$$$$INIT_ARGS"
 
 $(1): $(NEAR_BUILD_STAMP)
- 
+
 endef
 
 $(foreach binary,$(NEAR_BINARY_PATHS),$(eval $(call generate_near_deploy_rules,$(binary))))
