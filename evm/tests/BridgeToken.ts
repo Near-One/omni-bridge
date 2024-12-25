@@ -101,7 +101,7 @@ describe("BridgeToken", () => {
     ).to.be.revertedWithCustomError(OmniBridge, "AccessControlUnauthorizedAccount")
   })
 
-  it("deposit token", async () => {
+  it("can fin transfer", async () => {
     const { token } = await createToken(wrappedNearId)
     const tokenProxyAddress = await OmniBridge.nearToEthToken(wrappedNearId)
 
@@ -123,7 +123,7 @@ describe("BridgeToken", () => {
     )
   })
 
-  it("can't deposit if the contract is paused", async () => {
+  it("can't fin transfer if the contract is paused", async () => {
     await createToken(wrappedNearId)
     const tokenProxyAddress = await OmniBridge.nearToEthToken(wrappedNearId)
 
@@ -136,7 +136,7 @@ describe("BridgeToken", () => {
     await expect(OmniBridge.finTransfer(signature, payload)).to.be.revertedWith("Pausable: paused")
   })
 
-  it("can't deposit twice with the same signature", async () => {
+  it("can't fin transfer twice with the same signature", async () => {
     await createToken(wrappedNearId)
     const tokenProxyAddress = await OmniBridge.nearToEthToken(wrappedNearId)
 
@@ -149,7 +149,7 @@ describe("BridgeToken", () => {
     )
   })
 
-  it("can't deposit with invalid amount", async () => {
+  it("can't fin transfer with invalid amount", async () => {
     await createToken(wrappedNearId)
     const tokenProxyAddress = await OmniBridge.nearToEthToken(wrappedNearId)
 
@@ -162,7 +162,7 @@ describe("BridgeToken", () => {
     )
   })
 
-  it("can't deposit with invalid nonce", async () => {
+  it("can't fin transfer with invalid nonce", async () => {
     await createToken(wrappedNearId)
     const tokenProxyAddress = await OmniBridge.nearToEthToken(wrappedNearId)
 
@@ -175,7 +175,7 @@ describe("BridgeToken", () => {
     )
   })
 
-  it("can't deposit with invalid token", async () => {
+  it("can't fin transfer with invalid token", async () => {
     await createToken(wrappedNearId)
     const wrappedNearTokenAddress = await OmniBridge.nearToEthToken(wrappedNearId)
 
@@ -189,7 +189,7 @@ describe("BridgeToken", () => {
     )
   })
 
-  it("can't deposit with invalid recipient", async () => {
+  it("can't fin transfer with invalid recipient", async () => {
     await createToken(wrappedNearId)
     const tokenProxyAddress = await OmniBridge.nearToEthToken(wrappedNearId)
 
@@ -202,7 +202,7 @@ describe("BridgeToken", () => {
     )
   })
 
-  it("can't deposit with invalid relayer", async () => {
+  it("can't fin transfer with invalid relayer", async () => {
     await createToken(wrappedNearId)
     const wrappedNearTokenAddress = await OmniBridge.nearToEthToken(wrappedNearId)
 
@@ -215,7 +215,7 @@ describe("BridgeToken", () => {
     )
   })
 
-  it("withdraw token", async () => {
+  it("can init transfer", async () => {
     const { token } = await createToken(wrappedNearId)
     const tokenProxyAddress = await token.getAddress()
 
@@ -242,7 +242,7 @@ describe("BridgeToken", () => {
     expect((await token.balanceOf(user1.address)).toString()).to.be.equal("0")
   })
 
-  it("cant withdraw token when paused", async () => {
+  it("can't init transfer token when paused", async () => {
     await createToken(wrappedNearId)
     const tokenProxyAddress = await OmniBridge.nearToEthToken(wrappedNearId)
 
@@ -250,7 +250,7 @@ describe("BridgeToken", () => {
     await OmniBridge.finTransfer(signature, payload)
 
     const fee = 0
-    const nativeFee = 0
+    const nativeFee = 100
     const message = ""
     await expect(OmniBridge.pause(PauseMode.PausedInitTransfer))
       .to.emit(OmniBridge, "Paused")
@@ -263,11 +263,63 @@ describe("BridgeToken", () => {
         nativeFee,
         "testrecipient.near",
         message,
+        {
+          value: 100,
+        }
       ),
     ).to.be.revertedWith("Pausable: paused")
   })
 
-  it("can deposit and withdraw after unpausing", async () => {
+  it("can't init transfer when value is too low", async () => {
+    await createToken(wrappedNearId)
+    const tokenProxyAddress = await OmniBridge.nearToEthToken(wrappedNearId)
+
+    const { signature, payload } = depositSignature(tokenProxyAddress, user1.address)
+    await OmniBridge.finTransfer(signature, payload)
+
+    const fee = 0
+    const nativeFee = 100
+    const message = ""
+
+    await expect(
+      OmniBridge.initTransfer(
+        tokenProxyAddress,
+        payload.amount,
+        fee,
+        nativeFee,
+        "testrecipient.near",
+        message,
+      ),
+    ).to.be.revertedWithCustomError(OmniBridge, "InvalidValue")
+  })
+
+  it("can't init transfer when value is too high", async () => {
+    await createToken(wrappedNearId)
+    const tokenProxyAddress = await OmniBridge.nearToEthToken(wrappedNearId)
+
+    const { signature, payload } = depositSignature(tokenProxyAddress, user1.address)
+    await OmniBridge.finTransfer(signature, payload)
+
+    const fee = 0
+    const nativeFee = 100
+    const message = ""
+
+    await expect(
+      OmniBridge.initTransfer(
+        tokenProxyAddress,
+        payload.amount,
+        fee,
+        nativeFee,
+        "testrecipient.near",
+        message,
+        {
+          value: 200,
+        }
+      ),
+    ).to.be.revertedWithCustomError(OmniBridge, "InvalidValue")
+  })
+
+  it("can fin and init transfer after unpausing", async () => {
     const { token } = await createToken(wrappedNearId)
     const tokenProxyAddress = await token.getAddress()
 
@@ -313,7 +365,7 @@ describe("BridgeToken", () => {
     expect((await BridgeTokenV2Proxied.decimals()).toString()).to.equal("24")
   })
 
-  it("user cant upgrade token contract", async () => {
+  it("user can't upgrade token contract", async () => {
     await createToken(wrappedNearId)
     const tokenProxyAddress = await OmniBridge.nearToEthToken(wrappedNearId)
 

@@ -11,6 +11,8 @@ interface IWormhole {
         bytes memory payload,
         uint8 consistencyLevel
     ) external payable returns (uint64 sequence);
+
+    function messageFee() external view returns (uint256);
 }
 
 enum MessageType {
@@ -129,6 +131,10 @@ contract OmniBridgeWormhole is OmniBridge {
         );
 
         wormholeNonce++;
+    }
+
+    function valueRequired(address tokenAddress, uint128 amount, uint128 nativeFee) internal override view returns (uint128) {
+        return super.valueRequired(tokenAddress, amount, nativeFee) + uint128(_wormhole.messageFee());
     }
 
     function setWormholeAddress(
