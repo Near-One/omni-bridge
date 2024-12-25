@@ -225,7 +225,7 @@ impl FungibleTokenReceiver for Contract {
         if self.deployed_tokens.contains(&token_id) {
             ext_token::ext(token_id.clone())
                 .with_static_gas(BURN_TOKEN_GAS)
-                .burn(amount);
+                .burn((amount.0 - transfer_message.fee.fee.0).into());
         }
 
         env::log_str(&OmniBridgeEvent::InitTransferEvent { transfer_message }.to_log_string());
