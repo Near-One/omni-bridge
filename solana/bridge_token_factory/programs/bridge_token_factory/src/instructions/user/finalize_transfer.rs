@@ -7,18 +7,15 @@ use anchor_spl::{
 
 use crate::{
     constants::{
-        AUTHORITY_SEED, CONFIG_SEED, USED_NONCES_ACCOUNT_SIZE, USED_NONCES_PER_ACCOUNT,
-        USED_NONCES_SEED, VAULT_SEED,
+        AUTHORITY_SEED, BRIDGE_TOKEN_CONFIG_SEED, CONFIG_SEED, USED_NONCES_ACCOUNT_SIZE, USED_NONCES_PER_ACCOUNT, USED_NONCES_SEED, VAULT_SEED
     },
     error::ErrorCode,
     instructions::wormhole_cpi::*,
     state::{
-        config::Config,
-        message::{
+        config::Config, message::{
             finalize_transfer::{FinalizeTransferPayload, FinalizeTransferResponse},
             Payload, SignedPayload,
-        },
-        used_nonces::UsedNonces,
+        }, token_config::TokenConfig, used_nonces::UsedNonces
     },
 };
 
@@ -72,6 +69,13 @@ pub struct FinalizeTransfer<'info> {
     pub vault: Option<Box<InterfaceAccount<'info, TokenAccount>>>,
 
     #[account(
+        mut,
+        seeds = [BRIDGE_TOKEN_CONFIG_SEED, mint.key().as_ref()],
+        bump,
+    )]
+    pub bridge_token_config: Box<Account<'info, TokenConfig>>,
+
+    #[account(
         init_if_needed,
         payer = wormhole.payer,
         associated_token::mint = mint,
@@ -99,6 +103,10 @@ impl<'info> FinalizeTransfer<'info> {
             self.system_program.to_account_info(),
         )?;
 
+        let normalized_amount = data.amount / 10_u128.pow((self.bridge_token_config.origin_decimals - self.mint.decimals) as u32);
+        let denormalized_amount = normalized_amount * 10_u128.pow((self.bridge_token_config.origin_decimals - self.mint.decimals) as u32);
+        self.bridge_token_config.dust = data.amount - denormalized_amount;
+
         if let Some(vault) = &self.vault {
             // Native version. We have a proof of token registration by vault existence
             transfer_checked(
@@ -112,7 +120,7 @@ impl<'info> FinalizeTransfer<'info> {
                     },
                     &[&[AUTHORITY_SEED, &[self.config.bumps.authority]]],
                 ),
-                data.amount.try_into().unwrap(),
+                normalized_amount.try_into().unwrap(),
                 self.mint.decimals,
             )?;
         } else {
@@ -132,7 +140,7 @@ impl<'info> FinalizeTransfer<'info> {
                     },
                     &[&[AUTHORITY_SEED, &[self.config.bumps.authority]]],
                 ),
-                data.amount.try_into().unwrap(),
+                normalized_amount.try_into().unwrap(),
             )?;
         }
 

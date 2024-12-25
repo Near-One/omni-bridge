@@ -1,10 +1,11 @@
-use crate::constants::{AUTHORITY_SEED, WRAPPED_MINT_SEED};
+use crate::constants::{AUTHORITY_SEED, BRIDGE_TOKEN_CONFIG_SEED, WRAPPED_MINT_SEED};
 use crate::instructions::wormhole_cpi::*;
 use crate::state::message::SignedPayload;
 use crate::state::message::{
     deploy_token::{DeployTokenPayload, DeployTokenResponse},
     Payload,
 };
+use crate::state::token_config::TokenConfig;
 use anchor_lang::prelude::*;
 use anchor_spl::metadata::mpl_token_metadata::types::DataV2;
 use anchor_spl::metadata::{
@@ -25,7 +26,7 @@ pub struct DeployToken<'info> {
         payer = wormhole.payer,
         seeds = [WRAPPED_MINT_SEED, data.payload.token.as_bytes().as_ref()],
         bump,
-        mint::decimals = data.payload.decimals,
+        mint::decimals = if data.payload.decimals > 9 { 9 } else { data.payload.decimals },
         mint::authority = authority,
     )]
     pub mint: Box<Account<'info, Mint>>,
@@ -40,6 +41,14 @@ pub struct DeployToken<'info> {
         seeds::program = MetaplexID,
     )]
     pub metadata: SystemAccount<'info>,
+    #[account(
+        init,
+        payer = wormhole.payer,
+        space = 8 + TokenConfig::INIT_SPACE,
+        seeds = [BRIDGE_TOKEN_CONFIG_SEED, mint.key().as_ref()],
+        bump,
+    )]
+    pub bridge_token_config: Account<'info, TokenConfig>,
 
     pub wormhole: WormholeCPI<'info>,
 
@@ -49,7 +58,12 @@ pub struct DeployToken<'info> {
 }
 
 impl<'info> DeployToken<'info> {
-    pub fn initialize_token_metadata(&self, metadata: DeployTokenPayload) -> Result<()> {
+    pub fn initialize_token_metadata(&mut self, metadata: DeployTokenPayload) -> Result<()> {
+        self.bridge_token_config.set_inner(TokenConfig {
+            origin_decimals: metadata.decimals,
+            dust: 0,
+        });
+
         let bump = &[self.wormhole.config.bumps.authority];
         let signer_seeds = &[&[AUTHORITY_SEED, bump][..]];
 
