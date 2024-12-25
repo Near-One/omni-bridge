@@ -1,0 +1,17 @@
+evm_artifacts/
+near_artifacts/
+solana_artifacts/
+evm_deploy_results/
+near_deploy_results/
+solana_deploy_results/
+
+
+evm_scripts/build/
+evm_scripts/cache/
+evm_scripts/coverage/
+evm_scripts/coverage.json
+evm_scripts/.openzeppelin/
+evm_scripts/node_modules/
+evm_scripts/.env
+evm_scripts/typechain-types/
+evm_scripts/dist/
