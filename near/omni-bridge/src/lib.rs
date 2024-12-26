@@ -590,12 +590,20 @@ impl Contract {
         );
 
         if fee > 0 {
-            PromiseOrValue::Promise(
-                ext_token::ext(token)
-                    .with_static_gas(FT_TRANSFER_GAS)
-                    .with_attached_deposit(ONE_YOCTO)
-                    .ft_transfer(fin_transfer.fee_recipient, U128(fee), None),
-            )
+            if self.deployed_tokens.contains(&token) {
+                PromiseOrValue::Promise(ext_token::ext(token).with_static_gas(MINT_TOKEN_GAS).mint(
+                    fin_transfer.fee_recipient,
+                    U128(fee),
+                    None,
+                ))
+            } else {
+                PromiseOrValue::Promise(
+                    ext_token::ext(token)
+                        .with_static_gas(FT_TRANSFER_GAS)
+                        .with_attached_deposit(ONE_YOCTO)
+                        .ft_transfer(fin_transfer.fee_recipient, U128(fee), None),
+                )
+            }
         } else {
             PromiseOrValue::Value(())
         }

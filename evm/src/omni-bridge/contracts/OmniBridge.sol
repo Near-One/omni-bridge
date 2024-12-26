@@ -43,6 +43,7 @@ contract OmniBridge is
     error NonceAlreadyUsed(uint64 nonce);
     error InvalidFee();
     error InvalidValue();
+    error FailedToSendEther();
 
     function initialize(
         address tokenImplementationAddress_,
@@ -195,7 +196,11 @@ contract OmniBridge is
             revert InvalidSignature();
         }
 
-        if (customMinters[payload.tokenAddress] != address(0)) {
+        if (payload.tokenAddress == address(0)) {
+            (bool success, ) = payload.recipient.call{value: payload.amount}("");
+            if (!success) revert FailedToSendEther();
+        }
+        else if (customMinters[payload.tokenAddress] != address(0)) {
             ICustomMinter(customMinters[payload.tokenAddress]).mint(payload.tokenAddress, payload.recipient, payload.amount);
         } else if (isBridgeToken[payload.tokenAddress]) {
             BridgeToken(payload.tokenAddress).mint(payload.recipient, payload.amount);
