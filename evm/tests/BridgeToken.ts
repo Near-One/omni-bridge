@@ -265,7 +265,7 @@ describe("BridgeToken", () => {
         message,
         {
           value: 100,
-        }
+        },
       ),
     ).to.be.revertedWith("Pausable: paused")
   })
@@ -314,7 +314,7 @@ describe("BridgeToken", () => {
         message,
         {
           value: 200,
-        }
+        },
       ),
     ).to.be.revertedWithCustomError(OmniBridge, "InvalidValue")
   })

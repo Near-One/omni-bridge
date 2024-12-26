@@ -199,7 +199,7 @@ describe("BridgeTokenWormhole", () => {
         message,
         {
           value: 10000,
-        }
+        },
       ),
     )
       .to.emit(TestWormhole, "MessagePublished")
@@ -223,7 +223,6 @@ describe("BridgeTokenWormhole", () => {
         "testrecipient.near",
         "",
       ),
-    )
-      .to.be.revertedWithCustomError(OmniBridgeWormhole, "InvalidValue")
+    ).to.be.revertedWithCustomError(OmniBridgeWormhole, "InvalidValue")
   })
 })
