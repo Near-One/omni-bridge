@@ -235,10 +235,6 @@ contract OmniBridge is
             revert InvalidFee();
         }
 
-        if (msg.value != valueRequired(tokenAddress, amount, nativeFee)) {
-            revert InvalidValue();
-        }
-
         uint256 extensionValue;
         if (tokenAddress == address(0)) {
             if (fee != 0) {
@@ -263,19 +259,19 @@ contract OmniBridge is
     }
 
     function initTransferExtension(
-        address sender,
-        address tokenAddress,
-        uint64 originNonce,
-        uint128 amount,
-        uint128 fee,
-        uint128 nativeFee,
-        string calldata recipient,
-        string calldata message,
+        address /*sender*/,
+        address /*tokenAddress*/,
+        uint64 /*originNonce*/,
+        uint128 /*amount*/,
+        uint128 /*fee*/,
+        uint128 /*nativeFee*/,
+        string calldata /*recipient*/,
+        string calldata /*message*/,
         uint256 value
-    ) internal virtual {}
-
-    function valueRequired(address tokenAddress, uint128 amount, uint128 nativeFee) internal virtual view returns (uint128) {
-        return tokenAddress != address(0) ? nativeFee : amount + nativeFee;
+    ) internal virtual {
+        if (value != 0) {
+            revert InvalidValue();
+        }
     }
 
     function pause(uint flags) external onlyRole(DEFAULT_ADMIN_ROLE) {

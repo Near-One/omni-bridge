@@ -133,10 +133,6 @@ contract OmniBridgeWormhole is OmniBridge {
         wormholeNonce++;
     }
 
-    function valueRequired(address tokenAddress, uint128 amount, uint128 nativeFee) internal override view returns (uint128) {
-        return super.valueRequired(tokenAddress, amount, nativeFee) + uint128(_wormhole.messageFee());
-    }
-
     function setWormholeAddress(
         address wormholeAddress,
         uint8 consistencyLevel
