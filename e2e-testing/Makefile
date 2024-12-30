@@ -87,7 +87,7 @@ $$($(1)_DEPLOY_RESULTS_DIR): | $(EVM_DEPLOY_RESULTS_DIR)
 $(1)-deploy: $(1)-deploy-bridge $(1)-deploy-enear-proxy $(1)-deploy-test-token
 
 $(1)_BRIDGE_CONTRACT_ADDRESS_FILE := $$($(1)_DEPLOY_RESULTS_DIR)/omni_bridge.json
-$(1)_TOKEN_IMPL_ADDRESS_FILE := $$($(1)_DEPLOY_RESULTS_DIR)/token_factory.json
+$(1)_TOKEN_IMPL_ADDRESS_FILE := $$($(1)_DEPLOY_RESULTS_DIR)/token_impl.json
 $(1)_FAKE_PROVER_ADDRESS_FILE := $$($(1)_DEPLOY_RESULTS_DIR)/fake_prover.json
 
 $(1)_ENEAR_ADDRESS_FILE := $$($(1)_DEPLOY_RESULTS_DIR)/eNear.json
@@ -141,19 +141,28 @@ NEAR_BINARY_DIR := $(TESTING_ROOT)/near_artifacts
 NEAR_BINARIES := evm_prover.wasm omni_bridge.wasm omni_prover.wasm token_deployer.wasm wormhole_omni_prover_proxy.wasm mock_token.wasm
 NEAR_BINARY_PATHS := $(addprefix $(NEAR_BINARY_DIR)/,$(NEAR_BINARIES))
 
-NEAR_BUILD_STAMP := $(TESTING_ROOT)/.near-build.stamp
+# List of binaries that require dynamic init args
+BINARIES_WITH_DYNAMIC_ARGS := token_deployer mock_token
+
 
 DEPLOY_RESULTS := $(patsubst $(NEAR_BINARY_DIR)/%.wasm,$(NEAR_DEPLOY_RESULTS_DIR)/%.json,$(NEAR_BINARY_PATHS))
+
+NEAR_INIT_ACCOUNT_CREDENTIALS_FILE := $(NEAR_DEPLOY_RESULTS_DIR)/omni-init-account.json
 
 near-deploy: $(DEPLOY_RESULTS)
 
 $(NEAR_DEPLOY_RESULTS_DIR):
 	mkdir -p $@
 
-near-build: $(NEAR_BUILD_STAMP)
-$(NEAR_BUILD_STAMP):
+
+near-build: $(NEAR_BINARY_PATHS)
+
+$(NEAR_BINARY_PATHS) &:
 	$(NEAR_DIR)/build.sh --output-dir $(NEAR_BINARY_DIR)
-	touch $@
+
+create-near-init-account: $(NEAR_INIT_ACCOUNT_CREDENTIALS_FILE)
+$(NEAR_INIT_ACCOUNT_CREDENTIALS_FILE): | $(NEAR_DEPLOY_RESULTS_DIR)
+	./scripts/create-near-account.sh omni-init-$(TIMESTAMP).testnet $@
 
 # Arguments:
 # 		$(1) -  the path to the binary file
@@ -161,16 +170,35 @@ define generate_near_deploy_rules
 
 $(1)_NAME := $$(basename $$(notdir $(1)))
 
-$(NEAR_DEPLOY_RESULTS_DIR)/$$($(1)_NAME).json: $(NEAR_INIT_PARAMS_FILE) $(1) | $(NEAR_DEPLOY_RESULTS_DIR)
-	INIT_FUNCTION=$$$$(jq -r '.$$($(1)_NAME).init_function // ""' $$<) && \
-	INIT_ARGS=$$$$(jq -c '.$$($(1)_NAME).init_args // "{}"' $$<) && \
-	./scripts/deploy-near-contract.sh $(1) $$@ $$($(1)_NAME)-$(TIMESTAMP).testnet "$$$$INIT_FUNCTION" "$$$$INIT_ARGS"
+# Check if the binary requires dynamic init args
+ifeq ($$(filter $$($(1)_NAME),$(BINARIES_WITH_DYNAMIC_ARGS)),)
 
-$(1): $(NEAR_BUILD_STAMP)
+# Rule for binaries without dynamic init args
+$(NEAR_DEPLOY_RESULTS_DIR)/$$($(1)_NAME).json: $(NEAR_INIT_PARAMS_FILE) $(1) $(NEAR_INIT_ACCOUNT_CREDENTIALS_FILE)  | $(NEAR_DEPLOY_RESULTS_DIR)
+	./scripts/deploy-near-contract.sh $(1) $$@ $$($(1)_NAME)-$(TIMESTAMP).testnet $(NEAR_INIT_PARAMS_FILE) $(NEAR_INIT_ACCOUNT_CREDENTIALS_FILE)
+
+else
+
+# Rule for binaries with dynamic init args
+$(NEAR_DEPLOY_RESULTS_DIR)/$$($(1)_NAME).json: $(NEAR_INIT_PARAMS_FILE) $(1) $(NEAR_INIT_ACCOUNT_CREDENTIALS_FILE) $(TESTING_ROOT)/$$($(1)_NAME)_dyn_init_args.json | $(NEAR_DEPLOY_RESULTS_DIR)
+	./scripts/deploy-near-contract.sh $(1) $$@ $$($(1)_NAME)-$(TIMESTAMP).testnet $(NEAR_INIT_PARAMS_FILE) $(NEAR_INIT_ACCOUNT_CREDENTIALS_FILE) $(TESTING_ROOT)/$$($(1)_NAME)_dyn_init_args.json
+
+endif
 
 endef
 
 $(foreach binary,$(NEAR_BINARY_PATHS),$(eval $(call generate_near_deploy_rules,$(binary))))
+
+# Dynamic init args generation
+$(TESTING_ROOT)/token_deployer_dyn_init_args.json: $(NEAR_DEPLOY_RESULTS_DIR)/omni_bridge.json $(NEAR_INIT_ACCOUNT_CREDENTIALS_FILE)
+	CONTROLLER_ADDRESS=$$(jq -r .contract_id $(NEAR_DEPLOY_RESULTS_DIR)/omni_bridge.json) && \
+	DAO_ADDRESS=$$(jq -r .account_id $(NEAR_INIT_ACCOUNT_CREDENTIALS_FILE)) && \
+	echo "{\"controller\": \"$$CONTROLLER_ADDRESS\", \"dao\": \"$$DAO_ADDRESS\"}" > $@
+
+$(TESTING_ROOT)/mock_token_dyn_init_args.json: $(NEAR_INIT_ACCOUNT_CREDENTIALS_FILE)
+	OWNER_ADDRESS=$$(jq -r .account_id $(NEAR_INIT_ACCOUNT_CREDENTIALS_FILE)) && \
+	echo "{\"owner_id\": \"$$OWNER_ADDRESS\"}" > $@
+
 
 
 ########################################
