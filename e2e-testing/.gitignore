@@ -4,6 +4,12 @@ solana_artifacts/
 evm_deploy_results/
 near_deploy_results/
 solana_deploy_results/
+bridge_new_token_calls/
+
+.evm-compile.stamp
+.solana-build.stamp
+*dyn_init_args.json
+
 
 
 evm_scripts/build/
