@@ -313,6 +313,7 @@ $(NEAR_BIND_TOKEN_CALL_FILE): $(EVM_DEPLOY_TOKEN_CALL_FILE) $(NEAR_RELAYER_ACCOU
 	TX_HASH=$$(jq -r .tx_hash $(EVM_DEPLOY_TOKEN_CALL_FILE)) && \
 	RELAYER_ACCOUNT_ID=$$(jq -r .account_id $(NEAR_RELAYER_ACCOUNT_ID_FILE)) && \
 	RELAYER_PRIVATE_KEY=$$(jq -r .private_key $(NEAR_RELAYER_ACCOUNT_ID_FILE)) && \
+	TOKEN_LOCKER_ID=$$(jq -r .contract_id $(NEAR_OMNI_BRIDGE_CONTRACT_ID_FILE)) && \
 	bridge-cli testnet omni-connector evm-bind-token \
 		--source-chain-id $(SEPOLIA_CHAIN_ID) \
 		--tx-hash $$TX_HASH \
