@@ -243,6 +243,8 @@ create-near-relayer: $(NEAR_RELAYER_ACCOUNT_ID_FILE)
 $(NEAR_RELAYER_ACCOUNT_ID_FILE): | $(NEAR_DEPLOY_RESULTS_DIR)
 	./scripts/create-near-account.sh omni-relayer-$(TIMESTAMP).testnet $@
 
+bridge-new-token-to-ethereum: near-bind-token
+
 # Step 0
 prepare-token-deployment: $(NEAR_TOKEN_DEPLOYMENT_PREPARE_STAMP)
 $(NEAR_TOKEN_DEPLOYMENT_PREPARE_STAMP): $(ADD_DEPLOYER_TO_LOCKER_CALL_FILE) $(ADD_FACTORY_TO_LOCKER_CALL_FILE) | $(BRIDGE_NEW_TOKEN_CALL_DIR)
