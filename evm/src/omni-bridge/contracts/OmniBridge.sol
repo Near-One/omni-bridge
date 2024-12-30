@@ -42,6 +42,7 @@ contract OmniBridge is
     error InvalidSignature();
     error NonceAlreadyUsed(uint64 nonce);
     error InvalidFee();
+    error InvalidValue();
     error FailedToSendEther();
 
     function initialize(
@@ -235,7 +236,6 @@ contract OmniBridge is
         }
 
         uint256 extensionValue;
-
         if (tokenAddress == address(0)) {
             if (fee != 0) {
                 revert InvalidFee();
@@ -259,16 +259,20 @@ contract OmniBridge is
     }
 
     function initTransferExtension(
-        address sender,
-        address tokenAddress,
-        uint64 originNonce,
-        uint128 amount,
-        uint128 fee,
-        uint128 nativeFee,
-        string calldata recipient,
-        string calldata message,
+        address /*sender*/,
+        address /*tokenAddress*/,
+        uint64 /*originNonce*/,
+        uint128 /*amount*/,
+        uint128 /*fee*/,
+        uint128 /*nativeFee*/,
+        string calldata /*recipient*/,
+        string calldata /*message*/,
         uint256 value
-    ) internal virtual {}
+    ) internal virtual {
+        if (value != 0) {
+            revert InvalidValue();
+        }
+    }
 
     function pause(uint flags) external onlyRole(DEFAULT_ADMIN_ROLE) {
         _pause(flags);

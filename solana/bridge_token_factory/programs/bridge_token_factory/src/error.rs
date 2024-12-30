@@ -6,6 +6,8 @@ pub enum ErrorCode {
     InvalidArgs,
     #[msg("Signature verification failed")]
     SignatureVerificationFailed,
+    #[msg("Malleable signature")]
+    MalleableSignature,
     #[msg("Nonce already used")]
     NonceAlreadyUsed,
     #[msg("Token metadata not provided")]

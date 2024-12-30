@@ -138,7 +138,7 @@ describe("BridgeTokenWormhole", () => {
       .withArgs(0, anyValue, consistencyLevel)
   })
 
-  it("deposit token", async () => {
+  it("fin transfer", async () => {
     const { token } = await createToken(wrappedNearId)
     const tokenProxyAddress = await token.getAddress()
     const { signature, payload } = depositSignature(tokenProxyAddress, await user1.getAddress())
@@ -163,7 +163,7 @@ describe("BridgeTokenWormhole", () => {
     )
   })
 
-  it("withdraw token", async () => {
+  it("init transfer", async () => {
     const { token } = await createToken(wrappedNearId)
     const tokenProxyAddress = await token.getAddress()
     const { signature, payload } = depositSignature(tokenProxyAddress, await user1.getAddress())
@@ -197,11 +197,32 @@ describe("BridgeTokenWormhole", () => {
         nativeFee,
         recipient,
         message,
+        {
+          value: 10000,
+        },
       ),
     )
       .to.emit(TestWormhole, "MessagePublished")
       .withArgs(2, expectedWormholeMessage, consistencyLevel)
 
     expect((await token.balanceOf(await user1.getAddress())).toString()).to.be.equal("0")
+  })
+
+  it("can't init transfer without enough value", async () => {
+    const { token } = await createToken(wrappedNearId)
+    const tokenProxyAddress = await token.getAddress()
+    const { signature, payload } = depositSignature(tokenProxyAddress, await user1.getAddress())
+    await OmniBridgeWormhole.finTransfer(signature, payload)
+
+    await expect(
+      OmniBridgeWormhole.connect(user1).initTransfer(
+        tokenProxyAddress,
+        payload.amount,
+        0,
+        0,
+        "testrecipient.near",
+        "",
+      ),
+    ).to.be.revertedWithCustomError(OmniBridgeWormhole, "InvalidValue")
   })
 })

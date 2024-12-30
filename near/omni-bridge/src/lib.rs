@@ -952,30 +952,35 @@ impl Contract {
                     Promise::new(recipient)
                         .transfer(NearToken::from_yoctonear(amount_to_transfer.0)),
                 )
-        } else {
-            let transfer_promise = ext_token::ext(token.clone()).with_attached_deposit(ONE_YOCTO);
-            if is_deployed_token {
-                transfer_promise
-                    .with_static_gas(MINT_TOKEN_GAS.saturating_add(FT_TRANSFER_CALL_GAS))
-                    .mint(
-                        recipient,
-                        amount_to_transfer,
-                        (!transfer_message.msg.is_empty()).then(|| transfer_message.msg.clone()),
-                    )
-            } else if transfer_message.msg.is_empty() {
-                transfer_promise
-                    .with_static_gas(FT_TRANSFER_GAS)
-                    .ft_transfer(recipient, amount_to_transfer, None)
+        } else if is_deployed_token {
+            let deposit = if transfer_message.msg.is_empty() {
+                NO_DEPOSIT
             } else {
-                transfer_promise
-                    .with_static_gas(FT_TRANSFER_CALL_GAS)
-                    .ft_transfer_call(
-                        recipient,
-                        amount_to_transfer,
-                        None,
-                        transfer_message.msg.clone(),
-                    )
-            }
+                ONE_YOCTO
+            };
+            ext_token::ext(token.clone())
+                .with_attached_deposit(deposit)
+                .with_static_gas(MINT_TOKEN_GAS.saturating_add(FT_TRANSFER_CALL_GAS))
+                .mint(
+                    recipient,
+                    amount_to_transfer,
+                    (!transfer_message.msg.is_empty()).then(|| transfer_message.msg.clone()),
+                )
+        } else if transfer_message.msg.is_empty() {
+            ext_token::ext(token.clone())
+                .with_attached_deposit(ONE_YOCTO)
+                .with_static_gas(FT_TRANSFER_GAS)
+                .ft_transfer(recipient, amount_to_transfer, None)
+        } else {
+            ext_token::ext(token.clone())
+                .with_attached_deposit(ONE_YOCTO)
+                .with_static_gas(FT_TRANSFER_CALL_GAS)
+                .ft_transfer_call(
+                    recipient,
+                    amount_to_transfer,
+                    None,
+                    transfer_message.msg.clone(),
+                )
         };
 
         if transfer_message.fee.fee.0 > 0 {
@@ -988,15 +993,15 @@ impl Contract {
             );
             storage_deposit_action_index += 1;
 
-            let transfer_fee_promise = ext_token::ext(token).with_attached_deposit(ONE_YOCTO);
             promise = promise.then(if is_deployed_token {
-                transfer_fee_promise.with_static_gas(MINT_TOKEN_GAS).mint(
+                ext_token::ext(token).with_static_gas(MINT_TOKEN_GAS).mint(
                     predecessor_account_id.clone(),
                     transfer_message.fee.fee,
                     None,
                 )
             } else {
-                transfer_fee_promise
+                ext_token::ext(token)
+                    .with_attached_deposit(ONE_YOCTO)
                     .with_static_gas(FT_TRANSFER_GAS)
                     .ft_transfer(
                         predecessor_account_id.clone(),

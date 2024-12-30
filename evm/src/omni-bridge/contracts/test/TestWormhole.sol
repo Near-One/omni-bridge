@@ -12,4 +12,8 @@ contract TestWormhole {
         emit MessagePublished(nonce, payload, consistencyLevel);
         return 0;
     }
+
+    function messageFee() external pure returns (uint256) {
+        return 10000;
+    }
 }
