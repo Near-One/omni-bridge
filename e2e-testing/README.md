@@ -8,6 +8,7 @@
 - docker
 - [Solana CLI and Anchor](https://solana.com/docs/intro/installation)
 - Bridge SDK CLI: `cargo install  --git https://github.com/Near-One/bridge-sdk-rs/ bridge-cli`
+- jq
 
 ## Using the Makefile
 
