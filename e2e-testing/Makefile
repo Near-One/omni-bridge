@@ -318,6 +318,7 @@ $(NEAR_BIND_TOKEN_CALL_FILE): $(EVM_DEPLOY_TOKEN_CALL_FILE) $(NEAR_RELAYER_ACCOU
 		--tx-hash $$TX_HASH \
 		--near-signer $$RELAYER_ACCOUNT_ID \
 		--near-private-key $$RELAYER_PRIVATE_KEY \
+		--near-token-locker-id $$TOKEN_LOCKER_ID \
 		--config-file $(BRIDGE_SDK_CONFIG_FILE) > $@ && \
 	TX_HASH=$$(grep -o 'tx_hash="[^"]*"' $@ | cut -d'"' -f2) && \
 	echo "{\"tx_hash\": \"$$TX_HASH\"}" > $@
