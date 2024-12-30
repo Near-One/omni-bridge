@@ -7,9 +7,11 @@ solana_deploy_results/
 bridge_new_token_calls/
 
 .evm-compile.stamp
+.near-token-deployment-prepare.stamp
 .solana-build.stamp
 *dyn_init_args.json
-
+bridge-sdk-config.json
+bridge_token_factory-keypair.json
 
 
 evm_scripts/build/

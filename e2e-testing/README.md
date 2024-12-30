@@ -13,6 +13,14 @@
 
 The `Makefile` in this project is designed to automate the deployment and compilation processes for both EVM and NEAR environments. It provides a set of predefined rules that can be executed to perform specific tasks, such as compiling contracts, deploying them to various networks, and setting up necessary infrastructure.
 
+
+### Additional Requirements
+
+- **Private Key Requirement**: For Ethereum deployment, ensure that you add your `EVM_PRIVATE_KEY` to the `./evm/.env` file. This key is necessary for authenticating transactions on the Ethereum network. Also, update the `bridge-sdk-config.example.json` file with your `EVM_PRIVATE_KEY` and `ETH_RPC` and save it as `bridge-sdk-config.json`.
+
+- **Solana Keypair Requirement**: For Solana bulding and deployment, ensure that for every program you have a keypair in `.e2e-testing/` directory in the format of `<program_name>-keypair.json`. However, this key pair is secret and should not be shared.
+
+
 ### Common Tasks
 
 - **Compile EVM Contracts**: To compile the EVM contracts, run:
@@ -36,13 +44,12 @@ The `Makefile` in this project is designed to automate the deployment and compil
   make near-deploy
   ```
 
+- **Bridge New Token to Ethereum**: To deploy a new token to Ethereum, run:
+  ```bash
+  make bridge-new-token-to-ethereum
+  ```
+
 These tasks automate the process of setting up the testing environment, ensuring that all necessary components are compiled and deployed correctly.
-
-### Additional Requirements
-
-- **Private Key Requirement**: For Ethereum deployment, ensure that you add your `EVM_PRIVATE_KEY` to the `./evm/.env` file. This key is necessary for authenticating transactions on the Ethereum network.
-
-- **Solana Keypair Requirement**: For Solana bulding and deployment, ensure that for every program you have a keypair in `.e2e-testing/` directory in the format of `<program_name>-keypair.json`. However, this key pair is secret and should not be shared.
 
 ### Deployment Results
 
