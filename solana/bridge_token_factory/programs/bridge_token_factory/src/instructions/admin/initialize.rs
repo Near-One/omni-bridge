@@ -114,6 +114,7 @@ impl<'info> Initialize<'info> {
                     sequence: wormhole_sequence_bump,
                 },
             },
+            padding: [0; 100],
         });
 
         let rent = Rent::get()?;

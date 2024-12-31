@@ -19,6 +19,9 @@ pub const USED_NONCES_SEED: &[u8] = b"used_nonces";
 pub const WRAPPED_MINT_SEED: &[u8] = b"wrapped_mint";
 
 #[constant]
+pub const METADATA_SEED: &[u8] = b"metadata";
+
+#[constant]
 pub const USED_NONCES_PER_ACCOUNT: u32 = 1024;
 
 #[constant]

@@ -4,7 +4,7 @@ use anchor_lang::{
 };
 
 use crate::{
-    constants::{AUTHORITY_SEED, SOL_VAULT_SEED},
+    constants::SOL_VAULT_SEED,
     error::ErrorCode,
     instructions::wormhole_cpi::*,
     state::message::{init_transfer::InitTransferPayload, Payload},
@@ -12,12 +12,6 @@ use crate::{
 
 #[derive(Accounts)]
 pub struct InitTransferSol<'info> {
-    #[account(
-        seeds = [AUTHORITY_SEED],
-        bump = wormhole.config.bumps.authority,
-    )]
-    pub authority: SystemAccount<'info>,
-
     #[account(
         mut,
         seeds = [SOL_VAULT_SEED],
