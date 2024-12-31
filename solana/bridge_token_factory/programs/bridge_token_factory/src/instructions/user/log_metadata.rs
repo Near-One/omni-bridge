@@ -16,7 +16,7 @@ use anchor_spl::{
     },
 };
 
-use crate::instructions::wormhole_cpi::*;
+use crate::{constants::METADATA_SEED, instructions::wormhole_cpi::*};
 use crate::{
     constants::{AUTHORITY_SEED, VAULT_SEED},
     state::message::Payload,
@@ -113,7 +113,7 @@ impl<'info> LogMetadata<'info> {
             self.parse_metadata_account(
                 Pubkey::find_program_address(
                     &[
-                        b"metadata",
+                        METADATA_SEED,
                         MetaplexID.as_ref(),
                         &self.mint.key().to_bytes(),
                     ],

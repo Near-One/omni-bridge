@@ -56,7 +56,6 @@ pub struct FinalizeTransferSol<'info> {
     pub sol_vault: SystemAccount<'info>,
 
     pub wormhole: WormholeCPI<'info>,
-
     pub system_program: Program<'info, System>,
 }
 

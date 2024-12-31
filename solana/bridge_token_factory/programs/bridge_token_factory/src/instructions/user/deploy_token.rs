@@ -1,4 +1,4 @@
-use crate::constants::{AUTHORITY_SEED, WRAPPED_MINT_SEED};
+use crate::constants::{AUTHORITY_SEED, METADATA_SEED, WRAPPED_MINT_SEED};
 use crate::instructions::wormhole_cpi::*;
 use crate::state::message::SignedPayload;
 use crate::state::message::{
@@ -32,7 +32,7 @@ pub struct DeployToken<'info> {
     #[account(
         mut,
         seeds = [
-            b"metadata",
+            METADATA_SEED,
             MetaplexID.as_ref(),
             &mint.key().to_bytes(),
         ],
