@@ -362,7 +362,7 @@ describe("BridgeToken", () => {
     expect(await BridgeTokenV2Proxied.returnTestString()).to.equal("test")
     expect(await BridgeTokenV2Proxied.name()).to.equal("Wrapped NEAR fungible token")
     expect(await BridgeTokenV2Proxied.symbol()).to.equal("wNEAR")
-    expect((await BridgeTokenV2Proxied.decimals()).toString()).to.equal("24")
+    expect((await BridgeTokenV2Proxied.decimals()).toString()).to.equal("18")
   })
 
   it("user can't upgrade token contract", async () => {
