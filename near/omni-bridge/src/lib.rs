@@ -448,8 +448,12 @@ impl Contract {
             if fee.is_zero() {
                 let message = self.remove_transfer_message(message_payload.transfer_id);
                 let normalization_dust = message.amount.0 - message_payload.amount.0;
-                self.token_normalization_dust
-                    .insert(&self.get_token_id(&message.token), &normalization_dust);
+                let token_id = self.get_token_id(&message.token);
+
+                self.token_normalization_dust.insert(
+                    &token_id,
+                    &(self.get_normalization_dust(&token_id).0 + normalization_dust),
+                );
             }
 
             env::log_str(
@@ -815,6 +819,9 @@ impl Contract {
             },
         );
 
+        self.token_normalization_dust
+            .insert(&deploy_token.token, &0);
+
         let required_deposit = env::storage_byte_cost()
             .saturating_mul((env::storage_usage().saturating_sub(storage_usage)).into());
 
@@ -935,8 +942,11 @@ impl Contract {
         self.destination_nonces.get(&chain_kind).unwrap_or_default()
     }
 
-    pub fn get_normalization_dust(&self, token: &AccountId) -> u128 {
-        self.token_normalization_dust.get(token).unwrap_or_default()
+    pub fn get_normalization_dust(&self, token: &AccountId) -> U128 {
+        self.token_normalization_dust
+            .get(token)
+            .unwrap_or_default()
+            .into()
     }
 }
 
