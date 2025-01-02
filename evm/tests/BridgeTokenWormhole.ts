@@ -6,6 +6,8 @@ import { ethers, upgrades } from "hardhat"
 import type { BridgeToken, OmniBridgeWormhole, TestWormhole } from "../typechain-types"
 import { depositSignature, metadataSignature, testWallet } from "./helpers/signatures"
 
+const WormholeFee = 10000
+
 class FinTransferWormholeMessage {
   static schema = {
     struct: {
@@ -124,7 +126,7 @@ describe("BridgeTokenWormhole", () => {
   ): Promise<{ tokenProxyAddress: string; token: BridgeToken }> {
     const { signature, payload } = metadataSignature(tokenId)
 
-    await OmniBridgeWormhole.deployToken(signature, payload)
+    await OmniBridgeWormhole.deployToken(signature, payload, { value: WormholeFee })
     const tokenProxyAddress = await OmniBridgeWormhole.nearToEthToken(tokenId)
     const token = OmniBridgeInstance.attach(tokenProxyAddress) as BridgeToken
     return { tokenProxyAddress, token }
@@ -133,7 +135,7 @@ describe("BridgeTokenWormhole", () => {
   it("deploy token", async () => {
     const { signature, payload } = metadataSignature(wrappedNearId)
 
-    await expect(await OmniBridgeWormhole.deployToken(signature, payload))
+    await expect(await OmniBridgeWormhole.deployToken(signature, payload, { value: WormholeFee }))
       .to.emit(TestWormhole, "MessagePublished")
       .withArgs(0, anyValue, consistencyLevel)
   })
@@ -154,7 +156,7 @@ describe("BridgeTokenWormhole", () => {
       feeRecipient: payload.feeRecipient,
     })
 
-    await expect(OmniBridgeWormhole.finTransfer(signature, payload))
+    await expect(OmniBridgeWormhole.finTransfer(signature, payload, { value: WormholeFee }))
       .to.emit(TestWormhole, "MessagePublished")
       .withArgs(1, messagePayload, consistencyLevel)
 
@@ -167,7 +169,7 @@ describe("BridgeTokenWormhole", () => {
     const { token } = await createToken(wrappedNearId)
     const tokenProxyAddress = await token.getAddress()
     const { signature, payload } = depositSignature(tokenProxyAddress, await user1.getAddress())
-    await OmniBridgeWormhole.finTransfer(signature, payload)
+    await OmniBridgeWormhole.finTransfer(signature, payload, { value: WormholeFee })
 
     const recipient = "testrecipient.near"
     const fee = 0
@@ -198,7 +200,7 @@ describe("BridgeTokenWormhole", () => {
         recipient,
         message,
         {
-          value: 10000,
+          value: WormholeFee,
         },
       ),
     )
@@ -212,7 +214,7 @@ describe("BridgeTokenWormhole", () => {
     const { token } = await createToken(wrappedNearId)
     const tokenProxyAddress = await token.getAddress()
     const { signature, payload } = depositSignature(tokenProxyAddress, await user1.getAddress())
-    await OmniBridgeWormhole.finTransfer(signature, payload)
+    await OmniBridgeWormhole.finTransfer(signature, payload, { value: WormholeFee })
 
     await expect(
       OmniBridgeWormhole.connect(user1).initTransfer(
@@ -223,6 +225,6 @@ describe("BridgeTokenWormhole", () => {
         "testrecipient.near",
         "",
       ),
-    ).to.be.revertedWithCustomError(OmniBridgeWormhole, "InvalidValue")
+    ).to.be.revertedWith("invalid fee")
   })
 })

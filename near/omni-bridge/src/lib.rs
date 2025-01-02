@@ -27,7 +27,7 @@ use omni_types::{
     BasicMetadata, ChainKind, Fee, InitTransferMsg, MetadataPayload, Nonce, OmniAddress,
     PayloadType, SignRequest, TransferId, TransferMessage, TransferMessagePayload, UpdateFee,
 };
-use storage::{TransferMessageStorage, TransferMessageStorageValue, NEP141_DEPOSIT};
+use storage::{Decimals, TransferMessageStorage, TransferMessageStorageValue, NEP141_DEPOSIT};
 
 mod errors;
 mod storage;
@@ -70,6 +70,8 @@ enum StorageKey {
     TokenDeployerAccounts,
     DeployedTokens,
     DestinationNonces,
+    TokenDecimals,
+    NormalizationDust,
 }
 
 #[derive(AccessControlRole, Deserialize, Serialize, Copy, Clone)]
@@ -164,6 +166,8 @@ pub struct Contract {
     pub finalised_transfers: LookupSet<TransferId>,
     pub token_id_to_address: LookupMap<(ChainKind, AccountId), OmniAddress>,
     pub token_address_to_id: LookupMap<OmniAddress, AccountId>,
+    pub token_decimals: LookupMap<OmniAddress, Decimals>,
+    pub token_normalization_dust: LookupMap<AccountId, u128>,
     pub deployed_tokens: LookupSet<AccountId>,
     pub token_deployer_accounts: LookupMap<ChainKind, AccountId>,
     pub mpc_signer: AccountId,
@@ -248,6 +252,8 @@ impl Contract {
             finalised_transfers: LookupSet::new(StorageKey::FinalisedTransfers),
             token_id_to_address: LookupMap::new(StorageKey::TokenIdToAddress),
             token_address_to_id: LookupMap::new(StorageKey::TokenAddressToId),
+            token_decimals: LookupMap::new(StorageKey::TokenDecimals),
+            token_normalization_dust: LookupMap::new(StorageKey::NormalizationDust),
             deployed_tokens: LookupSet::new(StorageKey::DeployedTokens),
             token_deployer_accounts: LookupMap::new(StorageKey::TokenDeployerAccounts),
             mpc_signer,
@@ -398,12 +404,18 @@ impl Contract {
             )
             .unwrap_or_else(|| env::panic_str("ERR_FAILED_TO_GET_TOKEN_ADDRESS"));
 
+        let decimals = self.token_decimals.get(&token_address);
+        let amount_to_transfer = Self::normalize_amount(
+            transfer_message.amount.0 - transfer_message.fee.fee.0,
+            decimals,
+        );
+
         let transfer_payload = TransferMessagePayload {
             prefix: PayloadType::TransferMessage,
             destination_nonce: transfer_message.destination_nonce,
             transfer_id,
             token_address,
-            amount: U128(transfer_message.amount.0 - transfer_message.fee.fee.0),
+            amount: U128(amount_to_transfer),
             recipient: transfer_message.recipient,
             fee_recipient,
         };
@@ -434,7 +446,14 @@ impl Contract {
     ) {
         if let Ok(signature) = call_result {
             if fee.is_zero() {
-                self.remove_transfer_message(message_payload.transfer_id);
+                let message = self.remove_transfer_message(message_payload.transfer_id);
+                let normalization_dust = message.amount.0 - message_payload.amount.0;
+                let token_id = self.get_token_id(&message.token);
+
+                self.token_normalization_dust.insert(
+                    &token_id,
+                    &(self.get_normalization_dust(&token_id).0 + normalization_dust),
+                );
             }
 
             env::log_str(
@@ -495,14 +514,19 @@ impl Contract {
             "Unknown factory"
         );
 
+        let decimals = self.token_decimals.get(&init_transfer.token);
+
         let destination_nonce =
             self.get_next_destination_nonce(init_transfer.recipient.get_chain());
         let transfer_message = TransferMessage {
             origin_nonce: init_transfer.origin_nonce,
             token: init_transfer.token,
-            amount: init_transfer.amount,
+            amount: Self::de_normalize_amount(init_transfer.amount.0, decimals).into(),
             recipient: init_transfer.recipient,
-            fee: init_transfer.fee,
+            fee: Fee {
+                fee: Self::de_normalize_amount(init_transfer.fee.fee.0, decimals).into(),
+                native_fee: init_transfer.fee.native_fee,
+            },
             sender: init_transfer.sender,
             msg: init_transfer.msg,
             destination_nonce,
@@ -564,7 +588,11 @@ impl Contract {
         );
 
         let message = self.remove_transfer_message(fin_transfer.transfer_id);
-        let fee = message.amount.0 - fin_transfer.amount.0;
+        let de_normalized_amount = Self::de_normalize_amount(
+            fin_transfer.amount.0,
+            self.token_decimals.get(&message.token),
+        );
+        let fee = message.amount.0 - de_normalized_amount;
 
         if message.fee.native_fee.0 != 0 {
             if message.get_origin_chain() == ChainKind::Near {
@@ -782,6 +810,18 @@ impl Contract {
         );
         self.token_address_to_id
             .insert(&deploy_token.token_address, &deploy_token.token);
+
+        self.token_decimals.insert(
+            &deploy_token.token_address,
+            &Decimals {
+                decimals: deploy_token.decimals,
+                origin_decimals: deploy_token.origin_decimals,
+            },
+        );
+
+        self.token_normalization_dust
+            .insert(&deploy_token.token, &0);
+
         let required_deposit = env::storage_byte_cost()
             .saturating_mul((env::storage_usage().saturating_sub(storage_usage)).into());
 
@@ -900,6 +940,13 @@ impl Contract {
 
     pub fn get_current_destination_nonce(&self, chain_kind: ChainKind) -> Nonce {
         self.destination_nonces.get(&chain_kind).unwrap_or_default()
+    }
+
+    pub fn get_normalization_dust(&self, token: &AccountId) -> U128 {
+        self.token_normalization_dust
+            .get(token)
+            .unwrap_or_default()
+            .into()
     }
 }
 
@@ -1209,6 +1256,24 @@ impl Contract {
     fn refund(account_id: AccountId, amount: NearToken) {
         if !amount.is_zero() {
             Promise::new(account_id).transfer(amount);
+        }
+    }
+
+    fn de_normalize_amount(amount: u128, decimals: Option<Decimals>) -> u128 {
+        if let Some(decimals) = decimals {
+            let diff_decimals: u128 = (decimals.origin_decimals - decimals.decimals).into();
+            amount * (10 ^ diff_decimals)
+        } else {
+            amount
+        }
+    }
+
+    fn normalize_amount(amount: u128, decimals: Option<Decimals>) -> u128 {
+        if let Some(decimals) = decimals {
+            let diff_decimals: u128 = (decimals.origin_decimals - decimals.decimals).into();
+            amount / (10 ^ diff_decimals)
+        } else {
+            amount
         }
     }
 }

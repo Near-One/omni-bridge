@@ -9,6 +9,7 @@ contract TestWormhole {
         bytes memory payload,
         uint8 consistencyLevel
     ) external payable returns (uint64) {
+        require(msg.value == this.messageFee(), "invalid fee");
         emit MessagePublished(nonce, payload, consistencyLevel);
         return 0;
     }

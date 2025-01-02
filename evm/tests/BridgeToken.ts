@@ -11,6 +11,7 @@ const PauseMode = {
   PausedFinTransfer: 1 << 1,
 }
 const PauseAll = PauseMode.PausedInitTransfer | PauseMode.PausedFinTransfer
+const PanicCodeArithmeticOperationOverflowed = "0x11"
 
 describe("BridgeToken", () => {
   const wrappedNearId = "wrap.testnet"
@@ -69,7 +70,7 @@ describe("BridgeToken", () => {
     const token = OmniBridgeInstance.attach(tokenProxyAddress) as BridgeToken
     expect(await token.name()).to.be.equal("Wrapped NEAR fungible token")
     expect(await token.symbol()).to.be.equal("wNEAR")
-    expect((await token.decimals()).toString()).to.be.equal("24")
+    expect((await token.decimals()).toString()).to.be.equal("18")
   })
 
   it("can't create token if token already exists", async () => {
@@ -290,7 +291,7 @@ describe("BridgeToken", () => {
         "testrecipient.near",
         message,
       ),
-    ).to.be.revertedWithCustomError(OmniBridge, "InvalidValue")
+    ).to.be.revertedWithPanic(PanicCodeArithmeticOperationOverflowed)
   })
 
   it("can't init transfer when value is too high", async () => {
@@ -305,7 +306,7 @@ describe("BridgeToken", () => {
     const message = ""
 
     await expect(
-      OmniBridge.initTransfer(
+      OmniBridge.connect(user1).initTransfer(
         tokenProxyAddress,
         payload.amount,
         fee,
@@ -362,7 +363,7 @@ describe("BridgeToken", () => {
     expect(await BridgeTokenV2Proxied.returnTestString()).to.equal("test")
     expect(await BridgeTokenV2Proxied.name()).to.equal("Wrapped NEAR fungible token")
     expect(await BridgeTokenV2Proxied.symbol()).to.equal("wNEAR")
-    expect((await BridgeTokenV2Proxied.decimals()).toString()).to.equal("24")
+    expect((await BridgeTokenV2Proxied.decimals()).toString()).to.equal("18")
   })
 
   it("user can't upgrade token contract", async () => {

@@ -118,6 +118,8 @@ struct DeployTokenWh {
     payload_type: ProofKind,
     token: String,
     token_address: OmniAddress,
+    decimals: u8,
+    origin_decimals: u8,
 }
 
 #[derive(Debug, BorshDeserialize)]
@@ -215,6 +217,8 @@ impl TryInto<DeployTokenMessage> for ParsedVAA {
         Ok(DeployTokenMessage {
             token: parsed_payload.token.parse().map_err(stringify)?,
             token_address: parsed_payload.token_address.clone(),
+            decimals: parsed_payload.decimals,
+            origin_decimals: parsed_payload.origin_decimals,
             emitter_address: OmniAddress::new_from_slice(
                 parsed_payload.token_address.get_chain(),
                 &self.emitter_address,

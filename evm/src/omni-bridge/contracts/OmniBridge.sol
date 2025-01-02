@@ -61,11 +61,26 @@ contract OmniBridge is
         _grantRole(PAUSABLE_ADMIN_ROLE, _msgSender());
     }
 
-    function addCustomToken(string calldata nearTokenId, address tokenAddress, address customMinter) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    function addCustomToken(string calldata nearTokenId, address tokenAddress, address customMinter, uint8 originDecimals) external onlyRole(DEFAULT_ADMIN_ROLE) {
         isBridgeToken[tokenAddress] = true;
         ethToNearToken[tokenAddress] = nearTokenId;
         nearToEthToken[nearTokenId] = tokenAddress;
         customMinters[tokenAddress] = customMinter;
+
+        string memory name = IERC20Metadata(tokenAddress).name();
+        string memory symbol = IERC20Metadata(tokenAddress).symbol();
+        uint8 decimals = IERC20Metadata(tokenAddress).decimals();
+    
+        deployTokenExtension(nearTokenId, tokenAddress, decimals, originDecimals);
+
+        emit BridgeTypes.DeployToken(
+            tokenAddress,
+            nearTokenId,
+            name,
+            symbol,
+            decimals,
+            originDecimals
+        );
     }
 
     function removeCustomToken(address tokenAddress) external onlyRole(DEFAULT_ADMIN_ROLE) {
@@ -90,6 +105,7 @@ contract OmniBridge is
         }
 
         require(!isBridgeToken[nearToEthToken[metadata.token]], "ERR_TOKEN_EXIST");
+        uint8 decimals = _normalizeDecimals(metadata.decimals);
 
         address bridgeTokenProxy = address(
             new ERC1967Proxy(
@@ -98,18 +114,19 @@ contract OmniBridge is
                     BridgeToken.initialize.selector,
                     metadata.name,
                     metadata.symbol,
-                    metadata.decimals
+                    decimals
                 )
             )
         );
 
-        deployTokenExtension(metadata.token, bridgeTokenProxy);
+        deployTokenExtension(metadata.token, bridgeTokenProxy, decimals, metadata.decimals);
 
         emit BridgeTypes.DeployToken(
             bridgeTokenProxy,
             metadata.token,
             metadata.name,
             metadata.symbol,
+            decimals,
             metadata.decimals
         );
 
@@ -120,7 +137,7 @@ contract OmniBridge is
         return bridgeTokenProxy;
     }
 
-    function deployTokenExtension(string memory token, address tokenAddress) internal virtual {}
+    function deployTokenExtension(string memory token, address tokenAddress, uint8 decimals, uint8 originDecimals) internal virtual {}
 
     function setMetadata(
         string calldata token,
@@ -290,6 +307,16 @@ contract OmniBridge is
         require(isBridgeToken[tokenAddress], "ERR_NOT_BRIDGE_TOKEN");
         BridgeToken proxy = BridgeToken(tokenAddress);
         proxy.upgradeToAndCall(implementation, bytes(""));
+    }
+
+    function _normalizeDecimals(
+        uint8 decimals
+    ) internal pure returns (uint8) {
+        uint8 maxAllowedDecimals = 18;
+        if (decimals > maxAllowedDecimals) {
+            return maxAllowedDecimals;
+        }
+        return decimals;
     }
 
     function _authorizeUpgrade(
