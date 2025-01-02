@@ -29,8 +29,17 @@ impl<P: Payload> SignedPayload<P> {
         let serialized = self.payload.serialize_for_near(params)?;
         let hash = keccak::hash(&serialized);
 
+        let signature_bytes = &self.signature[0..64];
+
+        let signature = libsecp256k1::Signature::parse_standard_slice(signature_bytes)
+            .map_err(|_| ProgramError::InvalidArgument)?;
+        require!(
+            !signature.s.is_high(),
+            ErrorCode::MalleableSignature
+        );
+
         let signer =
-            secp256k1_recover(&hash.to_bytes(), self.signature[64], &self.signature[0..64])
+            secp256k1_recover(&hash.to_bytes(), self.signature[64], signature_bytes)
                 .map_err(|_| error!(ErrorCode::SignatureVerificationFailed))?;
 
         require!(

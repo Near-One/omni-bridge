@@ -46,7 +46,8 @@ impl<'info> InitTransferSol<'info> {
                     to: self.sol_vault.to_account_info(),
                 },
             ),
-            payload.native_fee + (payload.amount as u64),
+            payload.native_fee.checked_add(payload.amount.try_into().unwrap())
+                .unwrap(),
         )?;
 
         self.wormhole.post_message(payload.serialize_for_near((

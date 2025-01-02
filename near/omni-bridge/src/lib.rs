@@ -614,12 +614,20 @@ impl Contract {
         );
 
         if fee > 0 {
-            PromiseOrValue::Promise(
-                ext_token::ext(token)
-                    .with_static_gas(FT_TRANSFER_GAS)
-                    .with_attached_deposit(ONE_YOCTO)
-                    .ft_transfer(fin_transfer.fee_recipient, U128(fee), None),
-            )
+            if self.deployed_tokens.contains(&token) {
+                PromiseOrValue::Promise(ext_token::ext(token).with_static_gas(MINT_TOKEN_GAS).mint(
+                    fin_transfer.fee_recipient,
+                    U128(fee),
+                    None,
+                ))
+            } else {
+                PromiseOrValue::Promise(
+                    ext_token::ext(token)
+                        .with_static_gas(FT_TRANSFER_GAS)
+                        .with_attached_deposit(ONE_YOCTO)
+                        .ft_transfer(fin_transfer.fee_recipient, U128(fee), None),
+                )
+            }
         } else {
             PromiseOrValue::Value(())
         }
@@ -959,12 +967,14 @@ impl Contract {
 
         let token = self.get_token_id(&transfer_message.token);
 
+        let mut storage_deposit_action_index: usize = 0;
         require!(
-            Self::check_storage_balance_result(1)
-                && storage_deposit_actions[0].account_id == recipient
-                && storage_deposit_actions[0].token_id == token,
+            Self::check_storage_balance_result((storage_deposit_action_index + 1) as u64)
+                && storage_deposit_actions[storage_deposit_action_index].account_id == recipient
+                && storage_deposit_actions[storage_deposit_action_index].token_id == token,
             "STORAGE_ERR: The transfer recipient is omitted"
         );
+        storage_deposit_action_index += 1;
 
         let amount_to_transfer = U128(transfer_message.amount.0 - transfer_message.fee.fee.0);
         let is_deployed_token = self.deployed_tokens.contains(&token);
@@ -979,49 +989,56 @@ impl Contract {
                     Promise::new(recipient)
                         .transfer(NearToken::from_yoctonear(amount_to_transfer.0)),
                 )
-        } else {
-            let transfer_promise = ext_token::ext(token.clone()).with_attached_deposit(ONE_YOCTO);
-            if is_deployed_token {
-                transfer_promise
-                    .with_static_gas(MINT_TOKEN_GAS.saturating_add(FT_TRANSFER_CALL_GAS))
-                    .mint(
-                        recipient,
-                        amount_to_transfer,
-                        (!transfer_message.msg.is_empty()).then(|| transfer_message.msg.clone()),
-                    )
-            } else if transfer_message.msg.is_empty() {
-                transfer_promise
-                    .with_static_gas(FT_TRANSFER_GAS)
-                    .ft_transfer(recipient, amount_to_transfer, None)
+        } else if is_deployed_token {
+            let deposit = if transfer_message.msg.is_empty() {
+                NO_DEPOSIT
             } else {
-                transfer_promise
-                    .with_static_gas(FT_TRANSFER_CALL_GAS)
-                    .ft_transfer_call(
-                        recipient,
-                        amount_to_transfer,
-                        None,
-                        transfer_message.msg.clone(),
-                    )
-            }
+                ONE_YOCTO
+            };
+            ext_token::ext(token.clone())
+                .with_attached_deposit(deposit)
+                .with_static_gas(MINT_TOKEN_GAS.saturating_add(FT_TRANSFER_CALL_GAS))
+                .mint(
+                    recipient,
+                    amount_to_transfer,
+                    (!transfer_message.msg.is_empty()).then(|| transfer_message.msg.clone()),
+                )
+        } else if transfer_message.msg.is_empty() {
+            ext_token::ext(token.clone())
+                .with_attached_deposit(ONE_YOCTO)
+                .with_static_gas(FT_TRANSFER_GAS)
+                .ft_transfer(recipient, amount_to_transfer, None)
+        } else {
+            ext_token::ext(token.clone())
+                .with_attached_deposit(ONE_YOCTO)
+                .with_static_gas(FT_TRANSFER_CALL_GAS)
+                .ft_transfer_call(
+                    recipient,
+                    amount_to_transfer,
+                    None,
+                    transfer_message.msg.clone(),
+                )
         };
 
         if transfer_message.fee.fee.0 > 0 {
             require!(
-                Self::check_storage_balance_result(2)
-                    && storage_deposit_actions[1].account_id == predecessor_account_id
-                    && storage_deposit_actions[1].token_id == token,
+                Self::check_storage_balance_result((storage_deposit_action_index + 1) as u64)
+                    && storage_deposit_actions[storage_deposit_action_index].account_id
+                        == predecessor_account_id
+                    && storage_deposit_actions[storage_deposit_action_index].token_id == token,
                 "STORAGE_ERR: The fee recipient is omitted"
             );
+            storage_deposit_action_index += 1;
 
-            let transfer_fee_promise = ext_token::ext(token).with_attached_deposit(ONE_YOCTO);
             promise = promise.then(if is_deployed_token {
-                transfer_fee_promise.with_static_gas(MINT_TOKEN_GAS).mint(
+                ext_token::ext(token).with_static_gas(MINT_TOKEN_GAS).mint(
                     predecessor_account_id.clone(),
                     transfer_message.fee.fee,
                     None,
                 )
             } else {
-                transfer_fee_promise
+                ext_token::ext(token)
+                    .with_attached_deposit(ONE_YOCTO)
                     .with_static_gas(FT_TRANSFER_GAS)
                     .ft_transfer(
                         predecessor_account_id.clone(),
@@ -1039,9 +1056,11 @@ impl Contract {
             let native_token_id = self.get_native_token_id(transfer_message.get_origin_chain());
 
             require!(
-                Self::check_storage_balance_result(3)
-                    && storage_deposit_actions[2].account_id == predecessor_account_id
-                    && storage_deposit_actions[2].token_id == native_token_id,
+                Self::check_storage_balance_result((storage_deposit_action_index + 1) as u64)
+                    && storage_deposit_actions[storage_deposit_action_index].account_id
+                        == predecessor_account_id
+                    && storage_deposit_actions[storage_deposit_action_index].token_id
+                        == native_token_id,
                 "STORAGE_ERR: The native fee recipient is omitted"
             );
 

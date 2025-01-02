@@ -42,6 +42,8 @@ contract OmniBridge is
     error InvalidSignature();
     error NonceAlreadyUsed(uint64 nonce);
     error InvalidFee();
+    error InvalidValue();
+    error FailedToSendEther();
 
     function initialize(
         address tokenImplementationAddress_,
@@ -159,7 +161,7 @@ contract OmniBridge is
 
     function logMetadata(
         address tokenAddress
-    ) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    ) external {
         string memory name = IERC20Metadata(tokenAddress).name();
         string memory symbol = IERC20Metadata(tokenAddress).symbol();
         uint8 decimals = IERC20Metadata(tokenAddress).decimals();
@@ -211,7 +213,11 @@ contract OmniBridge is
             revert InvalidSignature();
         }
 
-        if (customMinters[payload.tokenAddress] != address(0)) {
+        if (payload.tokenAddress == address(0)) {
+            (bool success, ) = payload.recipient.call{value: payload.amount}("");
+            if (!success) revert FailedToSendEther();
+        }
+        else if (customMinters[payload.tokenAddress] != address(0)) {
             ICustomMinter(customMinters[payload.tokenAddress]).mint(payload.tokenAddress, payload.recipient, payload.amount);
         } else if (isBridgeToken[payload.tokenAddress]) {
             BridgeToken(payload.tokenAddress).mint(payload.recipient, payload.amount);
@@ -247,7 +253,6 @@ contract OmniBridge is
         }
 
         uint256 extensionValue;
-
         if (tokenAddress == address(0)) {
             if (fee != 0) {
                 revert InvalidFee();
@@ -271,16 +276,20 @@ contract OmniBridge is
     }
 
     function initTransferExtension(
-        address sender,
-        address tokenAddress,
-        uint64 originNonce,
-        uint128 amount,
-        uint128 fee,
-        uint128 nativeFee,
-        string calldata recipient,
-        string calldata message,
+        address /*sender*/,
+        address /*tokenAddress*/,
+        uint64 /*originNonce*/,
+        uint128 /*amount*/,
+        uint128 /*fee*/,
+        uint128 /*nativeFee*/,
+        string calldata /*recipient*/,
+        string calldata /*message*/,
         uint256 value
-    ) internal virtual {}
+    ) internal virtual {
+        if (value != 0) {
+            revert InvalidValue();
+        }
+    }
 
     function pause(uint flags) external onlyRole(DEFAULT_ADMIN_ROLE) {
         _pause(flags);

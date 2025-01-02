@@ -85,9 +85,13 @@ pub async fn start_indexer(
         .address(config.eth.bridge_token_factory_address)
         .event_signature([FinTransfer::SIGNATURE_HASH, InitTransfer::SIGNATURE_HASH].to_vec());
 
-    for current_block in
-        (from_block..latest_block).step_by(config.eth.block_processing_batch_size as usize)
-    {
+    for current_block in (from_block..latest_block).step_by(
+        config
+            .eth
+            .block_processing_batch_size
+            .try_into()
+            .unwrap_or(usize::MAX),
+    ) {
         let logs = http_provider
             .get_logs(&filter.clone().from_block(current_block).to_block(
                 (current_block + config.eth.block_processing_batch_size).min(latest_block),
@@ -157,6 +161,7 @@ pub async fn start_indexer(
     Ok(())
 }
 
+#[allow(clippy::too_many_lines)]
 async fn process_log(
     config: &config::Config,
     redis_connection: &mut redis::aio::MultiplexedConnection,
