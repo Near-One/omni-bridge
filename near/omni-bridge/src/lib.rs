@@ -71,6 +71,7 @@ enum StorageKey {
     DeployedTokens,
     DestinationNonces,
     TokenDecimals,
+    NormalizationDust,
 }
 
 #[derive(AccessControlRole, Deserialize, Serialize, Copy, Clone)]
@@ -166,6 +167,7 @@ pub struct Contract {
     pub token_id_to_address: LookupMap<(ChainKind, AccountId), OmniAddress>,
     pub token_address_to_id: LookupMap<OmniAddress, AccountId>,
     pub token_decimals: LookupMap<OmniAddress, Decimals>,
+    pub token_normalization_dust: LookupMap<AccountId, u128>,
     pub deployed_tokens: LookupSet<AccountId>,
     pub token_deployer_accounts: LookupMap<ChainKind, AccountId>,
     pub mpc_signer: AccountId,
@@ -251,6 +253,7 @@ impl Contract {
             token_id_to_address: LookupMap::new(StorageKey::TokenIdToAddress),
             token_address_to_id: LookupMap::new(StorageKey::TokenAddressToId),
             token_decimals: LookupMap::new(StorageKey::TokenDecimals),
+            token_normalization_dust: LookupMap::new(StorageKey::NormalizationDust),
             deployed_tokens: LookupSet::new(StorageKey::DeployedTokens),
             token_deployer_accounts: LookupMap::new(StorageKey::TokenDeployerAccounts),
             mpc_signer,
@@ -443,7 +446,10 @@ impl Contract {
     ) {
         if let Ok(signature) = call_result {
             if fee.is_zero() {
-                self.remove_transfer_message(message_payload.transfer_id);
+                let message = self.remove_transfer_message(message_payload.transfer_id);
+                let normalization_dust = message.amount.0 - message_payload.amount.0;
+                self.token_normalization_dust
+                    .insert(&self.get_token_id(&message.token), &normalization_dust);
             }
 
             env::log_str(
@@ -919,6 +925,10 @@ impl Contract {
 
     pub fn get_current_destination_nonce(&self, chain_kind: ChainKind) -> Nonce {
         self.destination_nonces.get(&chain_kind).unwrap_or_default()
+    }
+
+    pub fn get_normalization_dust(&self, token: &AccountId) -> u128 {
+        self.token_normalization_dust.get(token).unwrap_or_default()
     }
 }
 
