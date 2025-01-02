@@ -111,11 +111,15 @@ pub mod tests {
         token: &AccountId,
         token_address: &OmniAddress,
         emitter_address: &OmniAddress,
+        decimals: u8,
+        origin_decimals: u8,
     ) -> BindTokenArgs {
         let deploy_token_message = DeployTokenMessage {
             token: token.clone(),
             token_address: token_address.clone(),
             emitter_address: emitter_address.clone(),
+            decimals,
+            origin_decimals,
         };
         let prover_result = ProverResult::DeployToken(deploy_token_message);
 

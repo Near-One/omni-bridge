@@ -69,7 +69,7 @@ describe("BridgeToken", () => {
     const token = OmniBridgeInstance.attach(tokenProxyAddress) as BridgeToken
     expect(await token.name()).to.be.equal("Wrapped NEAR fungible token")
     expect(await token.symbol()).to.be.equal("wNEAR")
-    expect((await token.decimals()).toString()).to.be.equal("24")
+    expect((await token.decimals()).toString()).to.be.equal("18")
   })
 
   it("can't create token if token already exists", async () => {
