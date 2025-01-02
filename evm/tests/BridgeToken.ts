@@ -11,6 +11,7 @@ const PauseMode = {
   PausedFinTransfer: 1 << 1,
 }
 const PauseAll = PauseMode.PausedInitTransfer | PauseMode.PausedFinTransfer
+const PanicCodeArithmeticOperationOverflowed = "0x11"
 
 describe("BridgeToken", () => {
   const wrappedNearId = "wrap.testnet"
@@ -290,7 +291,7 @@ describe("BridgeToken", () => {
         "testrecipient.near",
         message,
       ),
-    ).to.be.revertedWithCustomError(OmniBridge, "InvalidValue")
+    ).to.be.revertedWithPanic(PanicCodeArithmeticOperationOverflowed)
   })
 
   it("can't init transfer when value is too high", async () => {
@@ -305,7 +306,7 @@ describe("BridgeToken", () => {
     const message = ""
 
     await expect(
-      OmniBridge.initTransfer(
+      OmniBridge.connect(user1).initTransfer(
         tokenProxyAddress,
         payload.amount,
         fee,
