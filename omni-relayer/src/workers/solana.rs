@@ -217,15 +217,19 @@ async fn handle_init_transfer_event(
 
     #[cfg(not(feature = "disable_fee_check"))]
     {
-        let sender = match init_transfer_with_timestamp.sender.parse::<OmniAddress>() {
-            Ok(sender) => sender,
-            Err(_) => {
-                warn!(
-                    "Failed to parse sender as OmniAddress: {:?}",
-                    init_transfer_with_timestamp.sender
-                );
-                return;
-            }
+        let Ok(sender) = Pubkey::from_str(&init_transfer_with_timestamp.sender) else {
+            warn!(
+                "Failed to parse sender address as Pubkey: {:?}",
+                init_transfer_with_timestamp.sender
+            );
+            return;
+        };
+        let Ok(sender) = OmniAddress::new_from_slice(ChainKind::Sol, &sender.to_bytes()) else {
+            warn!(
+                "Failed to convert sender address to OmniAddress: {:?}",
+                init_transfer_with_timestamp.sender
+            );
+            return;
         };
 
         let Ok(token) = Pubkey::from_str(&init_transfer_with_timestamp.token) else {
