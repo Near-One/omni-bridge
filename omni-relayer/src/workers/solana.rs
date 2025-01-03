@@ -11,6 +11,8 @@ use omni_types::{
     prover_args::WormholeVerifyProofArgs, prover_result::ProofKind, ChainKind, OmniAddress,
 };
 use solana_client::nonblocking::rpc_client::RpcClient;
+#[cfg(not(feature = "disable_fee_check"))]
+use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::Signature;
 use solana_transaction_status::{UiMessage, UiTransactionEncoding};
 
@@ -226,15 +228,19 @@ async fn handle_init_transfer_event(
             }
         };
 
-        let token = match init_transfer_with_timestamp.token.parse::<OmniAddress>() {
-            Ok(token) => token,
-            Err(_) => {
-                warn!(
-                    "Failed to parse token as OmniAddress: {:?}",
-                    init_transfer_with_timestamp.token
-                );
-                return;
-            }
+        let Ok(token) = Pubkey::from_str(&init_transfer_with_timestamp.token) else {
+            warn!(
+                "Failed to parse token address as Pubkey: {:?}",
+                init_transfer_with_timestamp.token
+            );
+            return;
+        };
+        let Ok(token) = OmniAddress::new_from_slice(ChainKind::Sol, &token.to_bytes()) else {
+            warn!(
+                "Failed to convert token address to OmniAddress: {:?}",
+                init_transfer_with_timestamp.token
+            );
+            return;
         };
 
         match utils::fee::is_fee_sufficient(
