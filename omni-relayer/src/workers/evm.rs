@@ -1,4 +1,6 @@
-use std::{str::FromStr, sync::Arc};
+#[cfg(not(feature = "disable_fee_check"))]
+use std::str::FromStr;
+use std::sync::Arc;
 
 use anyhow::Result;
 use futures::future::join_all;
@@ -7,7 +9,9 @@ use log::{error, info, warn};
 use alloy::rpc::types::{Log, TransactionReceipt};
 use ethereum_types::H256;
 use omni_connector::OmniConnector;
-use omni_types::{prover_result::ProofKind, ChainKind, Fee, OmniAddress, H160};
+use omni_types::{prover_result::ProofKind, ChainKind, OmniAddress};
+#[cfg(not(feature = "disable_fee_check"))]
+use omni_types::{Fee, H160};
 
 use crate::{config, utils};
 
@@ -115,23 +119,6 @@ async fn handle_init_transfer_event(
         return;
     };
 
-    let Ok(sender) = H160::from_str(&init_log.inner.sender.to_string()) else {
-        warn!(
-            "Failed to parse sender as H160: {:?}",
-            init_log.inner.sender
-        );
-        return;
-    };
-    let Ok(sender) =
-        OmniAddress::new_from_evm_address(init_transfer_with_timestamp.chain_kind, sender)
-    else {
-        warn!(
-            "Failed to convert sender to OmniAddress: {:?}",
-            init_log.inner.sender
-        );
-        return;
-    };
-
     let Ok(recipient) = init_log.inner.recipient.parse::<OmniAddress>() else {
         warn!(
             "Failed to parse recipient as OmniAddress: {:?}",
@@ -140,47 +127,66 @@ async fn handle_init_transfer_event(
         return;
     };
 
-    let Ok(token) = H160::from_str(&init_log.inner.tokenAddress.to_string()) else {
-        warn!(
-            "Failed to parse token address as H160: {:?}",
-            init_log.inner.tokenAddress
-        );
-        return;
-    };
-    let Ok(token) =
-        OmniAddress::new_from_evm_address(init_transfer_with_timestamp.chain_kind, token)
-    else {
-        warn!(
-            "Failed to convert token address to OmniAddress: {:?}",
-            init_log.inner.tokenAddress
-        );
-        return;
-    };
-
     #[cfg(not(feature = "disable_fee_check"))]
-    match utils::fee::is_fee_sufficient(
-        &config,
-        Fee {
-            fee: init_log.inner.fee.into(),
-            native_fee: init_log.inner.nativeFee.into(),
-        },
-        &sender,
-        &recipient,
-        &token,
-    )
-    .await
     {
-        Ok(true) => {}
-        Ok(false) => {
+        let Ok(sender) = H160::from_str(&init_log.inner.sender.to_string()) else {
             warn!(
-                "Insufficient fee for transfer: {:?}",
-                init_transfer_with_timestamp
+                "Failed to parse sender as H160: {:?}",
+                init_log.inner.sender
             );
             return;
-        }
-        Err(err) => {
-            error!("Failed to check fee sufficiency: {}", err);
+        };
+        let Ok(sender) =
+            OmniAddress::new_from_evm_address(init_transfer_with_timestamp.chain_kind, sender)
+        else {
+            warn!(
+                "Failed to convert sender to OmniAddress: {:?}",
+                init_log.inner.sender
+            );
             return;
+        };
+
+        let Ok(token) = H160::from_str(&init_log.inner.tokenAddress.to_string()) else {
+            warn!(
+                "Failed to parse token address as H160: {:?}",
+                init_log.inner.tokenAddress
+            );
+            return;
+        };
+        let Ok(token) =
+            OmniAddress::new_from_evm_address(init_transfer_with_timestamp.chain_kind, token)
+        else {
+            warn!(
+                "Failed to convert token address to OmniAddress: {:?}",
+                init_log.inner.tokenAddress
+            );
+            return;
+        };
+
+        match utils::fee::is_fee_sufficient(
+            &config,
+            Fee {
+                fee: init_log.inner.fee.into(),
+                native_fee: init_log.inner.nativeFee.into(),
+            },
+            &sender,
+            &recipient,
+            &token,
+        )
+        .await
+        {
+            Ok(true) => {}
+            Ok(false) => {
+                warn!(
+                    "Insufficient fee for transfer: {:?}",
+                    init_transfer_with_timestamp
+                );
+                return;
+            }
+            Err(err) => {
+                error!("Failed to check fee sufficiency: {}", err);
+                return;
+            }
         }
     }
 

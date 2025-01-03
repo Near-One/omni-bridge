@@ -5,8 +5,10 @@ use futures::future::join_all;
 use log::{error, info, warn};
 
 use omni_connector::OmniConnector;
+#[cfg(not(feature = "disable_fee_check"))]
+use omni_types::Fee;
 use omni_types::{
-    prover_args::WormholeVerifyProofArgs, prover_result::ProofKind, ChainKind, Fee, OmniAddress,
+    prover_args::WormholeVerifyProofArgs, prover_result::ProofKind, ChainKind, OmniAddress,
 };
 use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_sdk::signature::Signature;
@@ -197,17 +199,6 @@ async fn handle_init_transfer_event(
 
     info!("Trying to process InitTransfer log on Solana");
 
-    let sender = match init_transfer_with_timestamp.sender.parse::<OmniAddress>() {
-        Ok(sender) => sender,
-        Err(_) => {
-            warn!(
-                "Failed to parse sender as OmniAddress: {:?}",
-                init_transfer_with_timestamp.sender
-            );
-            return;
-        }
-    };
-
     let recipient = match init_transfer_with_timestamp
         .recipient
         .parse::<OmniAddress>()
@@ -222,41 +213,54 @@ async fn handle_init_transfer_event(
         }
     };
 
-    let token = match init_transfer_with_timestamp.token.parse::<OmniAddress>() {
-        Ok(token) => token,
-        Err(_) => {
-            warn!(
-                "Failed to parse token as OmniAddress: {:?}",
-                init_transfer_with_timestamp.token
-            );
-            return;
-        }
-    };
-
     #[cfg(not(feature = "disable_fee_check"))]
-    match utils::fee::is_fee_sufficient(
-        &config,
-        Fee {
-            fee: init_transfer_with_timestamp.fee.into(),
-            native_fee: (init_transfer_with_timestamp.native_fee as u128).into(),
-        },
-        &sender,
-        &recipient,
-        &token,
-    )
-    .await
     {
-        Ok(true) => {}
-        Ok(false) => {
-            warn!(
-                "Insufficient fee for transfer: {:?}",
-                init_transfer_with_timestamp
-            );
-            return;
-        }
-        Err(err) => {
-            error!("Failed to check fee sufficiency: {}", err);
-            return;
+        let sender = match init_transfer_with_timestamp.sender.parse::<OmniAddress>() {
+            Ok(sender) => sender,
+            Err(_) => {
+                warn!(
+                    "Failed to parse sender as OmniAddress: {:?}",
+                    init_transfer_with_timestamp.sender
+                );
+                return;
+            }
+        };
+
+        let token = match init_transfer_with_timestamp.token.parse::<OmniAddress>() {
+            Ok(token) => token,
+            Err(_) => {
+                warn!(
+                    "Failed to parse token as OmniAddress: {:?}",
+                    init_transfer_with_timestamp.token
+                );
+                return;
+            }
+        };
+
+        match utils::fee::is_fee_sufficient(
+            &config,
+            Fee {
+                fee: init_transfer_with_timestamp.fee.into(),
+                native_fee: (init_transfer_with_timestamp.native_fee as u128).into(),
+            },
+            &sender,
+            &recipient,
+            &token,
+        )
+        .await
+        {
+            Ok(true) => {}
+            Ok(false) => {
+                warn!(
+                    "Insufficient fee for transfer: {:?}",
+                    init_transfer_with_timestamp
+                );
+                return;
+            }
+            Err(err) => {
+                error!("Failed to check fee sufficiency: {}", err);
+                return;
+            }
         }
     }
 
