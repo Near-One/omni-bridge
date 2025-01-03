@@ -108,10 +108,12 @@ pub async fn sign_transfer(
                             }
                         }
 
-                        let fee_recipient = connector
+                        let Ok(fee_recipient) = connector
                             .near_bridge_client()
-                            .and_then(|connector| connector.signer().map(|signer| signer.account_id))
-                            .unwrap_or(config.near.token_locker_id.clone());
+                            .and_then(|connector| connector.signer().map(|signer| signer.account_id)) else {
+                                warn!("Failed to set signer account id as fee recipient");
+                                return;
+                            };
 
                         match connector
                             .near_sign_transfer(
@@ -204,6 +206,23 @@ pub async fn finalize_transfer(
                         };
 
                         info!("Received SignTransferEvent");
+
+                        let fee_recipient = connector
+                            .near_bridge_client()
+                            .and_then(|connector| connector.signer().map(|signer| signer.account_id)).ok();
+
+                        if message_payload.fee_recipient != fee_recipient {
+                            warn!(
+                                "Fee recipient mismatch: expected {:?}, got {:?}",
+                                fee_recipient, message_payload.fee_recipient
+                            );
+                            utils::redis::remove_event(
+                                &mut redis_connection,
+                                utils::redis::NEAR_SIGN_TRANSFER_EVENTS,
+                                &key,
+                            ).await;
+                            return;
+                        }
 
                         let fin_transfer_args = match message_payload.recipient.get_chain() {
                             ChainKind::Near => {
