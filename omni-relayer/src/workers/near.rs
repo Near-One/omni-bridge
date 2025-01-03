@@ -26,6 +26,7 @@ pub struct InitTransferWithTimestamp {
 }
 
 pub async fn sign_transfer(
+    #[cfg(not(feature = "disable_fee_check"))]
     config: config::Config,
     redis_client: redis::Client,
     connector: Arc<OmniConnector>,
@@ -53,6 +54,7 @@ pub async fn sign_transfer(
                 serde_json::from_str::<InitTransferWithTimestamp>(&event)
             {
                 handlers.push(tokio::spawn({
+                    #[cfg(not(feature = "disable_fee_check"))]
                     let config = config.clone();
                     let mut redis_connection = redis_connection.clone();
                     let connector = connector.clone();
@@ -90,6 +92,7 @@ pub async fn sign_transfer(
                             "Received InitTransferEvent/FinTransferEvent/UpdateFeeEvent",
                         );
 
+                        #[cfg(not(feature = "disable_fee_check"))]
                         match utils::fee::is_fee_sufficient(
                             &config,
                             transfer_message.fee.clone(), 

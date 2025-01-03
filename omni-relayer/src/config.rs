@@ -17,6 +17,7 @@ pub fn get_private_key(chain_kind: ChainKind) -> String {
 #[derive(Debug, Clone, serde::Deserialize)]
 pub struct Config {
     pub redis: Redis,
+    #[cfg(not(feature = "disable_fee_check"))]
     pub bridge_indexer: BridgeIndexer,
     pub near: Near,
     pub eth: Option<Evm>,
@@ -31,6 +32,7 @@ pub struct Redis {
     pub url: String,
 }
 
+#[cfg(not(feature = "disable_fee_check"))]
 #[derive(Debug, Clone, serde::Deserialize)]
 pub struct BridgeIndexer {
     pub api_url: String,

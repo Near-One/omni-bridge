@@ -49,3 +49,6 @@ solana-bridge-client = { git = "https://github.com/Near-One/rainbow-bridge-sdk-r
 wormhole-bridge-client = { git = "https://github.com/Near-One/rainbow-bridge-sdk-rs", package = "wormhole-bridge-client", branch = "refactor/solana-bridge-client" }
 
 omni-connector = { git = "https://github.com/Near-One/rainbow-bridge-sdk-rs", package = "omni-connector", branch = "refactor/solana-bridge-client" }
+
+[features]
+disable_fee_check = []

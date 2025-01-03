@@ -157,6 +157,7 @@ async fn handle_init_transfer_event(
         return;
     };
 
+    #[cfg(not(feature = "disable_fee_check"))]
     match utils::fee::is_fee_sufficient(
         &config,
         Fee {
