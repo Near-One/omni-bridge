@@ -6,7 +6,7 @@ use log::{error, info, warn};
 
 use omni_connector::OmniConnector;
 use omni_types::{
-    prover_args::WormholeVerifyProofArgs, prover_result::ProofKind, ChainKind, OmniAddress,
+    prover_args::WormholeVerifyProofArgs, prover_result::ProofKind, ChainKind, Fee, OmniAddress,
 };
 use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_sdk::signature::Signature;
@@ -115,6 +115,7 @@ pub async fn process_signature(config: config::Config, redis_client: redis::Clie
 pub struct InitTransferWithTimestamp {
     pub amount: u128,
     pub token: String,
+    pub sender: String,
     pub recipient: String,
     pub fee: u128,
     pub native_fee: u64,
@@ -196,6 +197,17 @@ async fn handle_init_transfer_event(
 
     info!("Trying to process InitTransfer log on Solana");
 
+    let sender = match init_transfer_with_timestamp.sender.parse::<OmniAddress>() {
+        Ok(sender) => sender,
+        Err(_) => {
+            warn!(
+                "Failed to parse sender as OmniAddress: {:?}",
+                init_transfer_with_timestamp.sender
+            );
+            return;
+        }
+    };
+
     let recipient = match init_transfer_with_timestamp
         .recipient
         .parse::<OmniAddress>()
@@ -210,7 +222,42 @@ async fn handle_init_transfer_event(
         }
     };
 
-    // TODO: Use existing API to check if fee is sufficient here
+    let token = match init_transfer_with_timestamp.token.parse::<OmniAddress>() {
+        Ok(token) => token,
+        Err(_) => {
+            warn!(
+                "Failed to parse token as OmniAddress: {:?}",
+                init_transfer_with_timestamp.token
+            );
+            return;
+        }
+    };
+
+    match utils::fee::is_fee_sufficient(
+        &config,
+        Fee {
+            fee: init_transfer_with_timestamp.fee.into(),
+            native_fee: (init_transfer_with_timestamp.native_fee as u128).into(),
+        },
+        &sender,
+        &recipient,
+        &token,
+    )
+    .await
+    {
+        Ok(true) => {}
+        Ok(false) => {
+            warn!(
+                "Insufficient fee for transfer: {:?}",
+                init_transfer_with_timestamp
+            );
+            return;
+        }
+        Err(err) => {
+            error!("Failed to check fee sufficiency: {}", err);
+            return;
+        }
+    }
 
     let Ok(vaa) = connector
         .wormhole_get_vaa(

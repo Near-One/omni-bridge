@@ -90,8 +90,23 @@ pub async fn sign_transfer(
                             "Received InitTransferEvent/FinTransferEvent/UpdateFeeEvent",
                         );
 
-
-                        // TODO: Use existing API to check if fee is sufficient
+                        match utils::fee::is_fee_sufficient(
+                            &config,
+                            transfer_message.fee.clone(), 
+                            &transfer_message.sender,
+                            &transfer_message.recipient, 
+                            &transfer_message.token
+                        ).await {
+                            Ok(true) => {}
+                            Ok(false) => {
+                                warn!("Insufficient fee for transfer: {:?}", transfer_message);
+                                return;
+                            }
+                            Err(err) => {
+                                error!("Failed to check fee sufficiency: {}", err);
+                                return;
+                            }
+                        }
 
                         let fee_recipient = connector
                             .near_bridge_client()

@@ -17,6 +17,7 @@ pub fn get_private_key(chain_kind: ChainKind) -> String {
 #[derive(Debug, Clone, serde::Deserialize)]
 pub struct Config {
     pub redis: Redis,
+    pub bridge_indexer: BridgeIndexer,
     pub near: Near,
     pub eth: Option<Evm>,
     pub base: Option<Evm>,
@@ -28,6 +29,11 @@ pub struct Config {
 #[derive(Debug, Clone, serde::Deserialize)]
 pub struct Redis {
     pub url: String,
+}
+
+#[derive(Debug, Clone, serde::Deserialize)]
+pub struct BridgeIndexer {
+    pub api_url: String,
 }
 
 #[derive(Debug, Clone, serde::Deserialize)]
@@ -61,8 +67,10 @@ pub struct Solana {
     pub rpc_ws_url: String,
     pub program_id: String,
     pub wormhole_id: String,
+    pub init_transfer_sender_index: usize,
     pub init_transfer_token_index: usize,
     pub init_transfer_emitter_index: usize,
+    pub init_transfer_sol_sender_index: usize,
     pub init_transfer_sol_emitter_index: usize,
     pub init_transfer_discriminator: Vec<u8>,
     pub init_transfer_sol_discriminator: Vec<u8>,
