@@ -44,10 +44,19 @@ async fn main() -> Result<()> {
         async move { startup::near::start_indexer(config, redis_client, jsonrpc_client).await }
     }));
     handles.push(tokio::spawn({
+        #[cfg(not(feature = "disable_fee_check"))]
         let config = config.clone();
         let redis_client = redis_client.clone();
         let connector = connector.clone();
-        async move { workers::near::sign_transfer(config, redis_client, connector).await }
+        async move {
+            workers::near::sign_transfer(
+                #[cfg(not(feature = "disable_fee_check"))]
+                config,
+                redis_client,
+                connector,
+            )
+            .await
+        }
     }));
     handles.push(tokio::spawn({
         let redis_client = redis_client.clone();

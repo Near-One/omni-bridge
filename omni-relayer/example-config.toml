@@ -1,6 +1,9 @@
 [redis]
 url = "redis://127.0.0.1/"
 
+[bridge_indexer]
+api_url = "http://127.0.0.1:8080"
+
 [near]
 network = "testnet"
 rpc_url = "https://rpc.testnet.near.org/"
@@ -36,8 +39,10 @@ program_id = "Gy1XPwYZURfBzHiGAxnw3SYC33SfqsEpGSS5zeBge28p"
 # This is the wormhole contract ID on Solana (can be found here https://wormhole.com/docs/build/reference/contract-addresses/#__tabbed_1_2)
 wormhole_id = "3u8hJUVTA4jH1wYAyUur7FFZVQ8H635K3tSHHF4ssjQ5"
 # There's a list of account keys and they are store in a strict order. We need indexes to get the right key
+init_transfer_sender_index = 0
 init_transfer_token_index = 6
 init_transfer_emitter_index = 15
+init_transfer_sol_sender_index = 0
 init_transfer_sol_emitter_index = 11
 # Discriminators are used to identify the type of the event (can be found during the building process of solana's contract)
 init_transfer_discriminator = [174, 50, 134, 99, 122, 243, 243, 224]

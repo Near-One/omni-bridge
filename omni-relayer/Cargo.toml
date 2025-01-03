@@ -36,7 +36,6 @@ near-primitives = "0.26.0"
 near-crypto = "0.26.0"
 
 hex = "0.4.3"
-secp256k1 = "0.30.0"
 alloy = { version = "0.8.3", features = ["node-bindings", "providers", "rpc-types", "sol-types", "provider-ws", "signers", "signer-local"] }
 
 redis = { version = "0.27.0", features = ["aio", "tokio-comp"] }
@@ -50,3 +49,6 @@ solana-bridge-client = { git = "https://github.com/Near-One/rainbow-bridge-sdk-r
 wormhole-bridge-client = { git = "https://github.com/Near-One/rainbow-bridge-sdk-rs", package = "wormhole-bridge-client", branch = "refactor/solana-bridge-client" }
 
 omni-connector = { git = "https://github.com/Near-One/rainbow-bridge-sdk-rs", package = "omni-connector", branch = "refactor/solana-bridge-client" }
+
+[features]
+disable_fee_check = []
