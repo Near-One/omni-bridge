@@ -273,6 +273,7 @@ impl OmniAddress {
                     format!("sol-{hashed_address}")
                 }
             }
+            OmniAddress::Eth(address) => address.to_string(),
             _ => self.encode('-', true),
         }
     }
