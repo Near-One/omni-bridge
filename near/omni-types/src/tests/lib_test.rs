@@ -420,7 +420,7 @@ fn test_stringify() {
 }
 
 #[test]
-fn test_get_token_prefix() {
+fn test_get_native_token_prefix() {
     for chain_kind in [
         ChainKind::Near,
         ChainKind::Sol,
@@ -436,6 +436,23 @@ fn test_get_token_prefix() {
             chain_kind.as_ref().to_lowercase(),
             "Should return correct token prefix for {} chain",
             chain_kind.as_ref()
+        );
+    }
+}
+
+#[test]
+fn test_get_evm_token_prefix() {
+    let address = "0x23ddd3e3692d1861ed57ede224608875809e127f";
+    let eth_address: OmniAddress = format!("eth:{address}").parse().unwrap();
+    let prefix = eth_address.get_token_prefix();
+    assert_eq!(prefix, "23ddd3e3692d1861ed57ede224608875809e127f");
+
+    for chain_kind in [ChainKind::Base, ChainKind::Arb] {
+        let chain_kind_prefix: String = chain_kind.as_ref().to_lowercase();
+        let chain_address: OmniAddress = format!("{chain_kind_prefix}:{address}").parse().unwrap();
+        assert_eq!(
+            chain_address.get_token_prefix(),
+            format!("{chain_kind_prefix}-{address}"),
         );
     }
 }
