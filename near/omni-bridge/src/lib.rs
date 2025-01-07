@@ -588,9 +588,16 @@ impl Contract {
         );
 
         let message = self.remove_transfer_message(fin_transfer.transfer_id);
+        let token_address = self
+            .get_token_address(
+                message.get_destination_chain(),
+                self.get_token_id(&message.token),
+            )
+            .unwrap_or_else(|| env::panic_str("ERR_FAILED_TO_GET_TOKEN_ADDRESS"));
+
         let de_normalized_amount = Self::de_normalize_amount(
             fin_transfer.amount.0,
-            self.token_decimals.get(&message.token),
+            self.token_decimals.get(&token_address),
         );
         let fee = message.amount.0 - de_normalized_amount;
 
