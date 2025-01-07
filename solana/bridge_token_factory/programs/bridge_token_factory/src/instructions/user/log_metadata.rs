@@ -28,7 +28,7 @@ use anchor_spl::metadata::ID as MetaplexID;
 pub struct LogMetadata<'info> {
     #[account(
         seeds = [AUTHORITY_SEED],
-        bump = wormhole.config.bumps.authority,
+        bump = common.config.bumps.authority,
     )]
     pub authority: SystemAccount<'info>,
 
@@ -43,7 +43,7 @@ pub struct LogMetadata<'info> {
 
     #[account(
         init_if_needed,
-        payer = wormhole.payer,
+        payer = common.payer,
         token::mint = mint,
         token::authority = authority,
         seeds = [
@@ -55,7 +55,7 @@ pub struct LogMetadata<'info> {
     )]
     pub vault: Box<InterfaceAccount<'info, TokenAccount>>,
 
-    pub wormhole: WormholeCPI<'info>,
+    pub common: WormholeCPI<'info>,
 
     pub system_program: Program<'info, System>,
     pub token_program: Interface<'info, TokenInterface>,
@@ -131,7 +131,7 @@ impl<'info> LogMetadata<'info> {
         }
         .serialize_for_near(())?;
 
-        self.wormhole.post_message(payload)?;
+        self.common.post_message(payload)?;
 
         Ok(())
     }

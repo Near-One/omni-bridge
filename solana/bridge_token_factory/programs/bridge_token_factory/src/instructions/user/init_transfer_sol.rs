@@ -15,17 +15,17 @@ pub struct InitTransferSol<'info> {
     #[account(
         mut,
         seeds = [SOL_VAULT_SEED],
-        bump = wormhole.config.bumps.sol_vault,
+        bump = common.config.bumps.sol_vault,
     )]
     pub sol_vault: SystemAccount<'info>,
 
     #[account(
         mut,
-        owner = wormhole.system_program.key(),
+        owner = common.system_program.key(),
     )]
     pub user: Signer<'info>,
 
-    pub wormhole: WormholeCPI<'info>,
+    pub common: WormholeCPI<'info>,
 }
 
 impl<'info> InitTransferSol<'info> {
@@ -34,7 +34,7 @@ impl<'info> InitTransferSol<'info> {
 
         transfer(
             CpiContext::new(
-                self.wormhole.system_program.to_account_info(),
+                self.common.system_program.to_account_info(),
                 Transfer {
                     from: self.user.to_account_info(),
                     to: self.sol_vault.to_account_info(),
@@ -44,8 +44,8 @@ impl<'info> InitTransferSol<'info> {
                 .unwrap(),
         )?;
 
-        self.wormhole.post_message(payload.serialize_for_near((
-            self.wormhole.sequence.sequence,
+        self.common.post_message(payload.serialize_for_near((
+            self.common.sequence.sequence,
             self.user.key(),
             Pubkey::default(),
         ))?)?;

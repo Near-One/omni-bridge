@@ -17,12 +17,12 @@ use anchor_spl::token::{Mint, Token};
 pub struct DeployToken<'info> {
     #[account(
         seeds = [AUTHORITY_SEED],
-        bump = wormhole.config.bumps.authority,
+        bump = common.config.bumps.authority,
     )]
     pub authority: SystemAccount<'info>,
     #[account(
         init,
-        payer = wormhole.payer,
+        payer = common.payer,
         seeds = [WRAPPED_MINT_SEED, data.payload.token.as_bytes().as_ref()],
         bump,
         mint::decimals = data.payload.decimals,
@@ -41,7 +41,7 @@ pub struct DeployToken<'info> {
     )]
     pub metadata: SystemAccount<'info>,
 
-    pub wormhole: WormholeCPI<'info>,
+    pub common: WormholeCPI<'info>,
 
     pub system_program: Program<'info, System>,
     pub token_program: Program<'info, Token>,
@@ -50,17 +50,17 @@ pub struct DeployToken<'info> {
 
 impl<'info> DeployToken<'info> {
     pub fn initialize_token_metadata(&self, metadata: DeployTokenPayload) -> Result<()> {
-        let bump = &[self.wormhole.config.bumps.authority];
+        let bump = &[self.common.config.bumps.authority];
         let signer_seeds = &[&[AUTHORITY_SEED, bump][..]];
 
         let cpi_accounts = CreateMetadataAccountsV3 {
-            payer: self.wormhole.payer.to_account_info(),
+            payer: self.common.payer.to_account_info(),
             update_authority: self.authority.to_account_info(),
             mint: self.mint.to_account_info(),
             metadata: self.metadata.to_account_info(),
             mint_authority: self.authority.to_account_info(),
             system_program: self.system_program.to_account_info(),
-            rent: self.wormhole.rent.to_account_info(),
+            rent: self.common.rent.to_account_info(),
         };
         let cpi_ctx = CpiContext::new_with_signer(
             self.token_program.to_account_info(),
@@ -89,7 +89,7 @@ impl<'info> DeployToken<'info> {
         }
         .serialize_for_near(())?;
 
-        self.wormhole.post_message(payload)?;
+        self.common.post_message(payload)?;
 
         Ok(())
     }

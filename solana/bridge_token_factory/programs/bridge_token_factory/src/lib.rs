@@ -46,7 +46,7 @@ pub mod bridge_token_factory {
 
         data.verify_signature(
             (),
-            &ctx.accounts.wormhole.config.derived_near_bridge_address,
+            &ctx.accounts.common.config.derived_near_bridge_address,
         )?;
         ctx.accounts.initialize_token_metadata(data.payload)?;
 
@@ -61,7 +61,7 @@ pub mod bridge_token_factory {
 
         data.verify_signature(
             (ctx.accounts.mint.key(), ctx.accounts.recipient.key()),
-            &ctx.accounts.wormhole.config.derived_near_bridge_address,
+            &ctx.accounts.common.config.derived_near_bridge_address,
         )?;
         ctx.accounts.process(data.payload)?;
 
