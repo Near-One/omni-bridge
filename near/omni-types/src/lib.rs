@@ -279,7 +279,7 @@ impl OmniAddress {
                 } else {
                     address.to_string()[2..].to_string()
                 }
-            },
+            }
             _ => self.encode('-', true),
         }
     }
