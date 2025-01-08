@@ -401,7 +401,10 @@ impl Contract {
             )
             .unwrap_or_else(|| env::panic_str("ERR_FAILED_TO_GET_TOKEN_ADDRESS"));
 
-        let decimals = self.token_decimals.get(&token_address);
+        let decimals = self
+            .token_decimals
+            .get(&token_address)
+            .sdk_expect("ERR_TOKEN_DECIMALS_NOT_FOUND");
         let amount_to_transfer = Self::normalize_amount(
             transfer_message.amount.0 - transfer_message.fee.fee.0,
             decimals,
@@ -504,7 +507,10 @@ impl Contract {
             "Unknown factory"
         );
 
-        let decimals = self.token_decimals.get(&init_transfer.token);
+        let decimals = self
+            .token_decimals
+            .get(&init_transfer.token)
+            .sdk_expect("ERR_TOKEN_DECIMALS_NOT_FOUND");
 
         let destination_nonce =
             self.get_next_destination_nonce(init_transfer.recipient.get_chain());
@@ -587,7 +593,9 @@ impl Contract {
 
         let de_normalized_amount = Self::de_normalize_amount(
             fin_transfer.amount.0,
-            self.token_decimals.get(&token_address),
+            self.token_decimals
+                .get(&token_address)
+                .sdk_expect("ERR_TOKEN_DECIMALS_NOT_FOUND"),
         );
         let fee = message.amount.0 - de_normalized_amount;
 
@@ -729,6 +737,18 @@ impl Contract {
         require!(
             self.token_address_to_id
                 .insert(token_address, &token_id)
+                .is_none(),
+            "ERR_TOKEN_EXIST"
+        );
+        require!(
+            self.token_decimals
+                .insert(
+                    token_address,
+                    &Decimals {
+                        decimals: metadata.decimals,
+                        origin_decimals: metadata.decimals
+                    }
+                )
                 .is_none(),
             "ERR_TOKEN_EXIST"
         );
@@ -1246,21 +1266,13 @@ impl Contract {
         }
     }
 
-    fn de_normalize_amount(amount: u128, decimals: Option<Decimals>) -> u128 {
-        if let Some(decimals) = decimals {
-            let diff_decimals: u128 = (decimals.origin_decimals - decimals.decimals).into();
-            amount * (10 ^ diff_decimals)
-        } else {
-            amount
-        }
+    fn de_normalize_amount(amount: u128, decimals: Decimals) -> u128 {
+        let diff_decimals: u128 = (decimals.origin_decimals - decimals.decimals).into();
+        amount * (10 ^ diff_decimals)
     }
 
-    fn normalize_amount(amount: u128, decimals: Option<Decimals>) -> u128 {
-        if let Some(decimals) = decimals {
-            let diff_decimals: u128 = (decimals.origin_decimals - decimals.decimals).into();
-            amount / (10 ^ diff_decimals)
-        } else {
-            amount
-        }
+    fn normalize_amount(amount: u128, decimals: Decimals) -> u128 {
+        let diff_decimals: u128 = (decimals.origin_decimals - decimals.decimals).into();
+        amount / (10 ^ diff_decimals)
     }
 }
