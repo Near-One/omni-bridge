@@ -189,7 +189,7 @@ impl Contract {
             .len() as u64;
 
         env::storage_byte_cost()
-            .saturating_mul((4 * (Self::get_basic_storage() + key_len + value_len)).into())
+            .saturating_mul((3 * (Self::get_basic_storage() + key_len + value_len)).into())
     }
 
     pub fn required_balance_for_deploy_token(&self) -> NearToken {

@@ -929,6 +929,13 @@ impl Contract {
                 &(token_address.get_chain(), token_id.clone()),
                 &token_address,
             );
+            self.token_decimals.insert(
+                &token_address,
+                &Decimals {
+                    decimals: 0,
+                    origin_decimals: 0,
+                },
+            );
 
             ext_token::ext(token_id)
                 .with_static_gas(STORAGE_DEPOSIT_GAS)
@@ -1267,12 +1274,12 @@ impl Contract {
     }
 
     fn de_normalize_amount(amount: u128, decimals: Decimals) -> u128 {
-        let diff_decimals: u128 = (decimals.origin_decimals - decimals.decimals).into();
-        amount * (10 ^ diff_decimals)
+        let diff_decimals: u32 = (decimals.origin_decimals - decimals.decimals).into();
+        amount * (10_u128.pow(diff_decimals))
     }
 
     fn normalize_amount(amount: u128, decimals: Decimals) -> u128 {
-        let diff_decimals: u128 = (decimals.origin_decimals - decimals.decimals).into();
-        amount / (10 ^ diff_decimals)
+        let diff_decimals: u32 = (decimals.origin_decimals - decimals.decimals).into();
+        amount / (10_u128.pow(diff_decimals))
     }
 }
