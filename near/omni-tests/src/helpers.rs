@@ -30,6 +30,22 @@ pub mod tests {
             .unwrap()
     }
 
+    pub fn arb_factory_address() -> OmniAddress {
+        "arb:0x252e87862A3A720287E7fd527cE6e8d0738427A2"
+            .parse()
+            .unwrap()
+    }
+
+    pub fn base_factory_address() -> OmniAddress {
+        "base:0x252e87862A3A720287E7fd527cE6e8d0738427A2"
+            .parse()
+            .unwrap()
+    }
+
+    pub fn sol_factory_address() -> OmniAddress {
+        "sol:11111111111111111111111111111111".parse().unwrap()
+    }
+
     pub fn eth_eoa_address() -> OmniAddress {
         "eth:0xc5ed912ca6db7b41de4ef3632fa0a5641e42bf09"
             .parse()
@@ -88,6 +104,7 @@ pub mod tests {
 
     pub fn get_test_deploy_token_args(
         token_address: &OmniAddress,
+        factory_contract_address: &OmniAddress,
         token_metadata: &BasicMetadata,
     ) -> DeployTokenArgs {
         let log_metadata_message = LogMetadataMessage {
@@ -95,7 +112,7 @@ pub mod tests {
             name: token_metadata.name.clone(),
             symbol: token_metadata.symbol.clone(),
             decimals: token_metadata.decimals,
-            emitter_address: token_address.clone(),
+            emitter_address: factory_contract_address.clone(),
         };
 
         let prover_result = ProverResult::LogMetadata(log_metadata_message);
