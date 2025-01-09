@@ -708,7 +708,7 @@ fn test_normalize_amount() {
 }
 
 #[test]
-fn test_de_normalize_amount() {
+fn test_denormalize_amount() {
     assert_eq!(
         Contract::denormalize_amount(
             u128::MAX,
