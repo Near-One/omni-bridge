@@ -517,10 +517,10 @@ impl Contract {
         let transfer_message = TransferMessage {
             origin_nonce: init_transfer.origin_nonce,
             token: init_transfer.token,
-            amount: Self::de_normalize_amount(init_transfer.amount.0, decimals).into(),
+            amount: Self::denormalize_amount(init_transfer.amount.0, decimals).into(),
             recipient: init_transfer.recipient,
             fee: Fee {
-                fee: Self::de_normalize_amount(init_transfer.fee.fee.0, decimals).into(),
+                fee: Self::denormalize_amount(init_transfer.fee.fee.0, decimals).into(),
                 native_fee: init_transfer.fee.native_fee,
             },
             sender: init_transfer.sender,
@@ -591,13 +591,13 @@ impl Contract {
             )
             .unwrap_or_else(|| env::panic_str("ERR_FAILED_TO_GET_TOKEN_ADDRESS"));
 
-        let de_normalized_amount = Self::de_normalize_amount(
+        let denormalized_amount = Self::denormalize_amount(
             fin_transfer.amount.0,
             self.token_decimals
                 .get(&token_address)
                 .sdk_expect("ERR_TOKEN_DECIMALS_NOT_FOUND"),
         );
-        let fee = message.amount.0 - de_normalized_amount;
+        let fee = message.amount.0 - denormalized_amount;
 
         if message.fee.native_fee.0 != 0 {
             if message.get_origin_chain() == ChainKind::Near {
@@ -1273,7 +1273,7 @@ impl Contract {
         }
     }
 
-    fn de_normalize_amount(amount: u128, decimals: Decimals) -> u128 {
+    fn denormalize_amount(amount: u128, decimals: Decimals) -> u128 {
         let diff_decimals: u32 = (decimals.origin_decimals - decimals.decimals).into();
         amount * (10_u128.pow(diff_decimals))
     }

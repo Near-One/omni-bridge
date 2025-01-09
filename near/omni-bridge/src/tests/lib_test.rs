@@ -710,7 +710,7 @@ fn test_normalize_amount() {
 #[test]
 fn test_de_normalize_amount() {
     assert_eq!(
-        Contract::de_normalize_amount(
+        Contract::denormalize_amount(
             u128::MAX,
             Decimals {
                 decimals: 18,
@@ -721,7 +721,7 @@ fn test_de_normalize_amount() {
     );
 
     assert_eq!(
-        Contract::de_normalize_amount(
+        Contract::denormalize_amount(
             u64::MAX.into(),
             Decimals {
                 decimals: 18,
@@ -732,7 +732,7 @@ fn test_de_normalize_amount() {
     );
 
     assert_eq!(
-        Contract::de_normalize_amount(
+        Contract::denormalize_amount(
             u64::MAX.into(),
             Decimals {
                 decimals: 9,
