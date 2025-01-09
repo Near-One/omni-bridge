@@ -40,6 +40,12 @@ impl TransferMessageStorage {
     }
 }
 
+#[derive(BorshDeserialize, BorshSerialize, Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Decimals {
+    pub decimals: u8,
+    pub origin_decimals: u8,
+}
+
 #[near_bindgen]
 impl Contract {
     #[payable]
@@ -183,7 +189,7 @@ impl Contract {
             .len() as u64;
 
         env::storage_byte_cost()
-            .saturating_mul((2 * (Self::get_basic_storage() + key_len + value_len)).into())
+            .saturating_mul((3 * (Self::get_basic_storage() + key_len + value_len)).into())
     }
 
     pub fn required_balance_for_deploy_token(&self) -> NearToken {

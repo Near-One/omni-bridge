@@ -1,9 +1,10 @@
 #[cfg(test)]
 mod tests {
     use crate::helpers::tests::{
-        account_n, arb_token_address, base_token_address, eth_eoa_address, eth_token_address,
-        get_test_deploy_token_args, sol_token_address, LOCKER_PATH, MOCK_PROVER_PATH,
-        NEP141_DEPOSIT, TOKEN_DEPLOYER_PATH,
+        account_n, arb_factory_address, arb_token_address, base_factory_address,
+        base_token_address, eth_eoa_address, eth_factory_address, eth_token_address,
+        get_test_deploy_token_args, sol_factory_address, sol_token_address, LOCKER_PATH,
+        MOCK_PROVER_PATH, NEP141_DEPOSIT, TOKEN_DEPLOYER_PATH,
     };
     use anyhow;
     use near_sdk::borsh;
@@ -23,6 +24,7 @@ mod tests {
         locker: near_workspaces::Contract,
         token_contract: near_workspaces::Contract,
         init_token_address: OmniAddress,
+        factory_contract_address: OmniAddress,
         token_metadata: BasicMetadata,
     }
 
@@ -86,10 +88,18 @@ mod tests {
                 .await?
                 .into_result()?;
 
+            let factory_contract_address = match init_token_address.get_chain() {
+                ChainKind::Eth => eth_factory_address(),
+                ChainKind::Sol => sol_factory_address(),
+                ChainKind::Arb => arb_factory_address(),
+                ChainKind::Base => base_factory_address(),
+                _ => panic!("Unsupported chain"),
+            };
+
             locker
                 .call("add_factory")
                 .args_json(json!({
-                    "address": init_token_address,
+                    "address": factory_contract_address,
                 }))
                 .max_gas()
                 .transact()
@@ -97,14 +107,21 @@ mod tests {
                 .into_result()?;
 
             // Deploy token
-            let token_contract =
-                Self::deploy_token(&worker, &locker, &init_token_address, &token_metadata).await?;
+            let token_contract = Self::deploy_token(
+                &worker,
+                &locker,
+                &init_token_address,
+                &factory_contract_address,
+                &token_metadata,
+            )
+            .await?;
 
             Ok(Self {
                 worker,
                 locker,
                 token_contract,
                 init_token_address,
+                factory_contract_address,
                 token_metadata,
             })
         }
@@ -118,6 +135,7 @@ mod tests {
             worker: &near_workspaces::Worker<near_workspaces::network::Sandbox>,
             locker: &near_workspaces::Contract,
             init_token_address: &OmniAddress,
+            factoty_contract_address: &OmniAddress,
             token_metadata: &BasicMetadata,
         ) -> anyhow::Result<near_workspaces::Contract> {
             let token_deploy_initiator = worker
@@ -150,6 +168,7 @@ mod tests {
                     .call(locker.id(), "deploy_token")
                     .args_borsh(get_test_deploy_token_args(
                         init_token_address,
+                        &factoty_contract_address,
                         token_metadata,
                     ))
                     .deposit(required_storage)
@@ -259,6 +278,7 @@ mod tests {
             &env.token_contract,
             &recipient,
             env.init_token_address,
+            env.factory_contract_address,
             amount,
         )
         .await?;
@@ -314,6 +334,7 @@ mod tests {
             &env.token_contract,
             &sender,
             env.init_token_address,
+            env.factory_contract_address,
             amount,
         )
         .await?;
@@ -369,6 +390,7 @@ mod tests {
         locker_contract: &near_workspaces::Contract,
         token_contract: &near_workspaces::Contract,
         recipient: &near_workspaces::Account,
+        token_address: OmniAddress,
         emitter_address: OmniAddress,
         amount: U128,
     ) -> anyhow::Result<()> {
@@ -392,7 +414,7 @@ mod tests {
                 storage_deposit_actions,
                 prover_args: borsh::to_vec(&ProverResult::InitTransfer(InitTransferMessage {
                     origin_nonce: 1,
-                    token: OmniAddress::Near(token_contract.id().clone()),
+                    token: token_address,
                     recipient: OmniAddress::Near(recipient.id().clone()),
                     amount,
                     fee: Fee {

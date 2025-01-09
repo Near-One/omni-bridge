@@ -1,4 +1,4 @@
-use crate::constants::{AUTHORITY_SEED, WRAPPED_MINT_SEED};
+use crate::constants::{AUTHORITY_SEED, MAX_ALLOWED_DECIMALS, WRAPPED_MINT_SEED};
 use crate::instructions::wormhole_cpi::*;
 use crate::state::message::SignedPayload;
 use crate::state::message::{
@@ -25,7 +25,7 @@ pub struct DeployToken<'info> {
         payer = wormhole.payer,
         seeds = [WRAPPED_MINT_SEED, data.payload.token.as_bytes().as_ref()],
         bump,
-        mint::decimals = data.payload.decimals,
+        mint::decimals = std::cmp::min(MAX_ALLOWED_DECIMALS, data.payload.decimals),
         mint::authority = authority,
     )]
     pub mint: Box<Account<'info, Mint>>,
@@ -49,9 +49,11 @@ pub struct DeployToken<'info> {
 }
 
 impl<'info> DeployToken<'info> {
-    pub fn initialize_token_metadata(&self, metadata: DeployTokenPayload) -> Result<()> {
+    pub fn initialize_token_metadata(&self, mut metadata: DeployTokenPayload) -> Result<()> {
         let bump = &[self.wormhole.config.bumps.authority];
         let signer_seeds = &[&[AUTHORITY_SEED, bump][..]];
+        let origin_decimals = metadata.decimals;
+        metadata.decimals = std::cmp::min(MAX_ALLOWED_DECIMALS, metadata.decimals);
 
         let cpi_accounts = CreateMetadataAccountsV3 {
             payer: self.wormhole.payer.to_account_info(),
@@ -86,6 +88,8 @@ impl<'info> DeployToken<'info> {
         let payload = DeployTokenResponse {
             token: metadata.token,
             solana_mint: self.mint.key(),
+            decimals: metadata.decimals,
+            origin_decimals,
         }
         .serialize_for_near(())?;
 

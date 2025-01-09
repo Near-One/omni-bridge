@@ -40,12 +40,14 @@ contract OmniBridgeWormhole is OmniBridge {
         _consistencyLevel = consistencyLevel;
     }
 
-    function deployTokenExtension(string memory token, address tokenAddress) internal override {
+    function deployTokenExtension(string memory token, address tokenAddress, uint8 decimals, uint8 originDecimals) internal override {
         bytes memory payload = bytes.concat(
             bytes1(uint8(MessageType.DeployToken)),
             Borsh.encodeString(token),
             bytes1(omniBridgeChainId),
-            Borsh.encodeAddress(tokenAddress)
+            Borsh.encodeAddress(tokenAddress),
+            bytes1(decimals),
+            bytes1(originDecimals)
         );
         _wormhole.publishMessage{value: msg.value}(
             wormholeNonce,
