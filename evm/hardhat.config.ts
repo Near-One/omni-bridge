@@ -299,8 +299,8 @@ const config: HardhatUserConfig = {
   etherscan: {
     apiKey: {
       mainnet: ETHERSCAN_API_KEY,
-      arbitrumMainnet: ARBISCAN_API_KEY,
-      baseMainnet: BASESCAN_API_KEY,
+      arbitrumOne: ARBISCAN_API_KEY,
+      base: BASESCAN_API_KEY,
       sepolia: ETHERSCAN_API_KEY,
       arbitrumSepolia: ARBISCAN_API_KEY,
       baseSepolia: BASESCAN_API_KEY,
