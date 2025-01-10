@@ -6,10 +6,7 @@ on:
 name: Check WASM files
 jobs:
   test:
-    runs-on: self-hosted
-    strategy:
-      fail-fast: false
-
+    runs-on: ubuntu-latest
     name: Check wasm files
     steps:
       - name: Clone the repository
