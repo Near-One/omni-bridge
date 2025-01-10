@@ -13,8 +13,8 @@ chain_id = 11_155_111
 bridge_token_factory_address = "0x3701B9859Dbb9a4333A3dd933ab18e9011ddf2C8"
 light_client = "client-eth2.sepolia.testnet"
 block_processing_batch_size = 10_000
-https://wormhole.com/docs/build/reference/consistency-levels/
-expected_finalization_time = 109
+# https://wormhole.com/docs/build/reference/consistency-levels/
+expected_finalization_time = 1095
 
 [base]
 rpc_http_url = "https://base-mainnet.infura.io/v3/RPC_API_KEY"
@@ -22,6 +22,7 @@ rpc_ws_url = "wss://base-mainnet.infura.io/ws/v3/RPC_API_KEY"
 chain_id = 8453
 bridge_token_factory_address = "0xd025b38762B4A4E36F0Cde483b86CB13ea00D989"
 block_processing_batch_size = 10_000
+# https://wormhole.com/docs/build/reference/consistency-levels/
 expected_finalization_time = 1026
 
 [arb]
@@ -30,18 +31,23 @@ rpc_ws_url = "wss://arbitrum-sepolia.infura.io/ws/v3/RPC_API_KEY"
 chain_id = 42161
 bridge_token_factory_address = "0xd025b38762B4A4E36F0Cde483b86CB13ea00D989"
 block_processing_batch_size = 10_000
+# https://wormhole.com/docs/build/reference/consistency-levels/
 expected_finalization_time = 1066
 
 [solana]
 rpc_http_url = "https://api.mainnet-beta.solana.com"
 rpc_ws_url = "wss://api.mainnet-beta.solana.com"
+# Program ID on Solana is an account ID whitch the bridge contract (basically bridge_token_factory_address on Solana)
 program_id = ""
+# This is the wormhole contract ID on Solana (can be found here https://wormhole.com/docs/build/reference/contract-addresses/#__tabbed_1_2)
 wormhole_id = ""
+# There's a list of account keys and they are store in a strict order. We need indexes to get the right key
 init_transfer_sender_index = 0
 init_transfer_token_index = 6
 init_transfer_emitter_index = 15
 init_transfer_sol_sender_index = 0
 init_transfer_sol_emitter_index = 11
+# Discriminators are used to identify the type of the event (can be found during the building process of solana's contract)
 init_transfer_discriminator = [174, 50, 134, 99, 122, 243, 243, 224]
 init_transfer_sol_discriminator = [124, 167, 164, 191, 81, 140, 108, 30]
 finalize_transfer_emitter_index = 9
