@@ -91,10 +91,10 @@ docker run \
 mkdir -p $RES_DIR
 
 if [ -z "$COMPONENT" ]; then
-    find $DIR/target/wasm32-unknown-unknown/release/ -name "*.wasm" -exec cp -f {} $RES_DIR/ \;
+    find $DIR/target/wasm32-unknown-unknown/release/ -name "*.wasm" -maxdepth 1 -exec cp -f {} $RES_DIR/ \;
 else
     binary_name=$(basename $COMPONENT | tr '-' '_')
-    find $DIR/target/wasm32-unknown-unknown/release/ -name "$binary_name.wasm" -exec cp -f {} $RES_DIR/ \;
+    find $DIR/target/wasm32-unknown-unknown/release/ -name "$binary_name.wasm" -maxdepth 1 -exec cp -f {} $RES_DIR/ \;
 fi
 
 echo "Build completed! Contract files are in the $RES_DIR directory:"
