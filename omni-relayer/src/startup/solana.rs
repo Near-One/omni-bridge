@@ -17,7 +17,7 @@ use crate::{config, utils};
 pub async fn start_indexer(
     config: config::Config,
     redis_client: redis::Client,
-    solana_start_signature: Option<String>,
+    start_signature: Option<String>,
 ) -> Result<()> {
     let Some(solana_config) = config.solana else {
         anyhow::bail!("Failed to get Solana config");
@@ -35,7 +35,7 @@ pub async fn start_indexer(
         &mut redis_connection,
         &http_client,
         &program_id,
-        solana_start_signature,
+        start_signature,
     )
     .await
     {
@@ -84,9 +84,9 @@ async fn process_recent_signatures(
     redis_connection: &mut redis::aio::MultiplexedConnection,
     http_client: &RpcClient,
     program_id: &Pubkey,
-    solana_start_signature: Option<String>,
+    start_signature: Option<String>,
 ) -> Result<()> {
-    let from_signature = match solana_start_signature {
+    let from_signature = match start_signature {
         Some(signature) => {
             utils::redis::add_event(
                 redis_connection,
