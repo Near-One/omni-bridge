@@ -1,6 +1,7 @@
 use alloy::primitives::Address;
 use near_primitives::types::AccountId;
 use omni_types::ChainKind;
+use serde::Deserialize;
 
 pub fn get_private_key(chain_kind: ChainKind) -> String {
     let env_var = match chain_kind {
@@ -14,7 +15,18 @@ pub fn get_private_key(chain_kind: ChainKind) -> String {
     std::env::var(env_var).unwrap_or_else(|_| panic!("Failed to get `{env_var}` env variable"))
 }
 
-#[derive(Debug, Clone, serde::Deserialize)]
+fn replace_rpc_api_key<'de, D>(deserializer: D) -> Result<String, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let url = String::deserialize(deserializer)?;
+
+    let api_key = std::env::var("RPC_API_KEY").map_err(serde::de::Error::custom)?;
+
+    Ok(url.replace("RPC_API_KEY", &api_key))
+}
+
+#[derive(Debug, Clone, Deserialize)]
 pub struct Config {
     pub redis: Redis,
     #[cfg(not(feature = "disable_fee_check"))]
@@ -27,25 +39,25 @@ pub struct Config {
     pub wormhole: Wormhole,
 }
 
-#[derive(Debug, Clone, serde::Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct Redis {
     pub url: String,
 }
 
 #[cfg(not(feature = "disable_fee_check"))]
-#[derive(Debug, Clone, serde::Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct BridgeIndexer {
     pub api_url: String,
 }
 
-#[derive(Debug, Clone, serde::Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Network {
     Testnet,
     Mainnet,
 }
 
-#[derive(Debug, Clone, serde::Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct Near {
     pub network: Network,
     pub rpc_url: String,
@@ -53,9 +65,11 @@ pub struct Near {
     pub credentials_path: Option<String>,
 }
 
-#[derive(Debug, Clone, serde::Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct Evm {
+    #[serde(deserialize_with = "replace_rpc_api_key")]
     pub rpc_http_url: String,
+    #[serde(deserialize_with = "replace_rpc_api_key")]
     pub rpc_ws_url: String,
     pub chain_id: u64,
     pub bridge_token_factory_address: Address,
@@ -64,9 +78,11 @@ pub struct Evm {
     pub expected_finalization_time: i64,
 }
 
-#[derive(Debug, Clone, serde::Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct Solana {
+    #[serde(deserialize_with = "replace_rpc_api_key")]
     pub rpc_http_url: String,
+    #[serde(deserialize_with = "replace_rpc_api_key")]
     pub rpc_ws_url: String,
     pub program_id: String,
     pub wormhole_id: String,
@@ -83,7 +99,7 @@ pub struct Solana {
     pub finalize_transfer_sol_discriminator: Vec<u8>,
 }
 
-#[derive(Debug, Clone, serde::Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct Wormhole {
     pub api_url: String,
     pub eth_chain_id: u64,
