@@ -1,4 +1,4 @@
-use crate::constants::{AUTHORITY_SEED, MAX_ALLOWED_DECIMALS, WRAPPED_MINT_SEED};
+use crate::constants::{AUTHORITY_SEED, MAX_ALLOWED_DECIMALS, METADATA_SEED, WRAPPED_MINT_SEED};
 use crate::instructions::wormhole_cpi::*;
 use crate::state::message::SignedPayload;
 use crate::state::message::{
@@ -17,12 +17,12 @@ use anchor_spl::token::{Mint, Token};
 pub struct DeployToken<'info> {
     #[account(
         seeds = [AUTHORITY_SEED],
-        bump = wormhole.config.bumps.authority,
+        bump = common.config.bumps.authority,
     )]
     pub authority: SystemAccount<'info>,
     #[account(
         init,
-        payer = wormhole.payer,
+        payer = common.payer,
         seeds = [WRAPPED_MINT_SEED, data.payload.token.as_bytes().as_ref()],
         bump,
         mint::decimals = std::cmp::min(MAX_ALLOWED_DECIMALS, data.payload.decimals),
@@ -32,7 +32,7 @@ pub struct DeployToken<'info> {
     #[account(
         mut,
         seeds = [
-            b"metadata",
+            METADATA_SEED,
             MetaplexID.as_ref(),
             &mint.key().to_bytes(),
         ],
@@ -41,7 +41,7 @@ pub struct DeployToken<'info> {
     )]
     pub metadata: SystemAccount<'info>,
 
-    pub wormhole: WormholeCPI<'info>,
+    pub common: WormholeCPI<'info>,
 
     pub system_program: Program<'info, System>,
     pub token_program: Program<'info, Token>,
@@ -50,19 +50,19 @@ pub struct DeployToken<'info> {
 
 impl<'info> DeployToken<'info> {
     pub fn initialize_token_metadata(&self, mut metadata: DeployTokenPayload) -> Result<()> {
-        let bump = &[self.wormhole.config.bumps.authority];
+        let bump = &[self.common.config.bumps.authority];
         let signer_seeds = &[&[AUTHORITY_SEED, bump][..]];
         let origin_decimals = metadata.decimals;
         metadata.decimals = std::cmp::min(MAX_ALLOWED_DECIMALS, metadata.decimals);
 
         let cpi_accounts = CreateMetadataAccountsV3 {
-            payer: self.wormhole.payer.to_account_info(),
+            payer: self.common.payer.to_account_info(),
             update_authority: self.authority.to_account_info(),
             mint: self.mint.to_account_info(),
             metadata: self.metadata.to_account_info(),
             mint_authority: self.authority.to_account_info(),
             system_program: self.system_program.to_account_info(),
-            rent: self.wormhole.rent.to_account_info(),
+            rent: self.common.rent.to_account_info(),
         };
         let cpi_ctx = CpiContext::new_with_signer(
             self.token_program.to_account_info(),
@@ -93,7 +93,7 @@ impl<'info> DeployToken<'info> {
         }
         .serialize_for_near(())?;
 
-        self.wormhole.post_message(payload)?;
+        self.common.post_message(payload)?;
 
         Ok(())
     }

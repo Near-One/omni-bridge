@@ -22,4 +22,5 @@ pub struct Config {
     pub max_used_nonce: u64,
     pub derived_near_bridge_address: [u8; 64],
     pub bumps: ConfigBumps,
+    pub padding: [u8; 100],
 }
