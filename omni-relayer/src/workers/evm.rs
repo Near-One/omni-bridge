@@ -23,6 +23,7 @@ pub struct InitTransferWithTimestamp {
     pub tx_logs: Option<Box<TransactionReceipt>>,
     pub creation_timestamp: i64,
     pub last_update_timestamp: Option<i64>,
+    pub expected_finalization_time: i64,
 }
 
 pub async fn finalize_transfer(
@@ -88,6 +89,13 @@ async fn handle_init_transfer_event(
     init_transfer_with_timestamp: InitTransferWithTimestamp,
 ) {
     let current_timestamp = chrono::Utc::now().timestamp();
+
+    if current_timestamp
+        < init_transfer_with_timestamp.creation_timestamp
+            + init_transfer_with_timestamp.expected_finalization_time
+    {
+        return;
+    }
 
     if current_timestamp
         - init_transfer_with_timestamp

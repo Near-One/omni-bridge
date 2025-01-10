@@ -68,15 +68,17 @@ async fn create_lake_config(
     config: &config::Config,
     redis_connection: &mut redis::aio::MultiplexedConnection,
     jsonrpc_client: &JsonRpcClient,
+    start_block: Option<u64>,
 ) -> Result<LakeConfig> {
-    let start_block_height = match utils::redis::get_last_processed::<&str, u64>(
-        redis_connection,
-        &utils::redis::get_last_processed_key(ChainKind::Near).await,
-    )
-    .await
-    {
-        Some(block_height) => block_height + 1,
-        None => utils::near::get_final_block(jsonrpc_client).await?,
+    let start_block_height = match start_block {
+        Some(block) => block,
+        None => utils::redis::get_last_processed::<&str, u64>(
+            redis_connection,
+            &utils::redis::get_last_processed_key(ChainKind::Near).await,
+        )
+        .await
+        .map(|block_height| block_height + 1)
+        .unwrap_or(utils::near::get_final_block(jsonrpc_client).await?),
     };
 
     info!("NEAR Lake will start from block: {}", start_block_height);
@@ -99,12 +101,14 @@ pub async fn start_indexer(
     config: config::Config,
     redis_client: redis::Client,
     jsonrpc_client: JsonRpcClient,
+    start_block: Option<u64>,
 ) -> Result<()> {
     info!("Starting NEAR indexer");
 
     let mut redis_connection = redis_client.get_multiplexed_tokio_connection().await?;
 
-    let lake_config = create_lake_config(&config, &mut redis_connection, &jsonrpc_client).await?;
+    let lake_config =
+        create_lake_config(&config, &mut redis_connection, &jsonrpc_client, start_block).await?;
     let (_, stream) = near_lake_framework::streamer(lake_config);
     let stream = tokio_stream::wrappers::ReceiverStream::new(stream);
 
