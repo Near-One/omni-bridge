@@ -87,7 +87,18 @@ async fn process_recent_signatures(
     solana_start_signature: Option<String>,
 ) -> Result<()> {
     let from_signature = match solana_start_signature {
-        Some(signature) => Signature::from_str(&signature)?,
+        Some(signature) => {
+            utils::redis::add_event(
+                redis_connection,
+                utils::redis::SOLANA_EVENTS,
+                signature.clone(),
+                // TODO: It's better to come up with a solution that wouldn't require storing `Null` value
+                serde_json::Value::Null,
+            )
+            .await;
+
+            Signature::from_str(&signature)?
+        }
         None => {
             let Some(signature) = utils::redis::get_last_processed::<&str, String>(
                 redis_connection,

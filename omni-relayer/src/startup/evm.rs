@@ -22,43 +22,51 @@ pub async fn start_indexer(
 ) -> Result<()> {
     let mut redis_connection = redis_client.get_multiplexed_tokio_connection().await?;
 
-    let (rpc_http_url, rpc_ws_url, bridge_token_factory_address, block_processing_batch_size) =
-        match chain_kind {
-            ChainKind::Eth => {
-                let Some(ref eth) = config.eth else {
-                    anyhow::bail!("Failed to get ETH config");
-                };
-                (
-                    eth.rpc_http_url.clone(),
-                    eth.rpc_ws_url.clone(),
-                    eth.bridge_token_factory_address,
-                    eth.block_processing_batch_size,
-                )
-            }
-            ChainKind::Base => {
-                let Some(ref base) = config.base else {
-                    anyhow::bail!("Failed to get Base config");
-                };
-                (
-                    base.rpc_http_url.clone(),
-                    base.rpc_ws_url.clone(),
-                    base.bridge_token_factory_address,
-                    base.block_processing_batch_size,
-                )
-            }
-            ChainKind::Arb => {
-                let Some(ref arb) = config.arb else {
-                    anyhow::bail!("Failed to get Arb config");
-                };
-                (
-                    arb.rpc_http_url.clone(),
-                    arb.rpc_ws_url.clone(),
-                    arb.bridge_token_factory_address,
-                    arb.block_processing_batch_size,
-                )
-            }
-            _ => anyhow::bail!("Unsupported chain kind: {:?}", chain_kind),
-        };
+    let (
+        rpc_http_url,
+        rpc_ws_url,
+        bridge_token_factory_address,
+        block_processing_batch_size,
+        expected_finalization_time,
+    ) = match chain_kind {
+        ChainKind::Eth => {
+            let Some(ref eth) = config.eth else {
+                anyhow::bail!("Failed to get ETH config");
+            };
+            (
+                eth.rpc_http_url.clone(),
+                eth.rpc_ws_url.clone(),
+                eth.bridge_token_factory_address,
+                eth.block_processing_batch_size,
+                eth.expected_finalization_time,
+            )
+        }
+        ChainKind::Base => {
+            let Some(ref base) = config.base else {
+                anyhow::bail!("Failed to get Base config");
+            };
+            (
+                base.rpc_http_url.clone(),
+                base.rpc_ws_url.clone(),
+                base.bridge_token_factory_address,
+                base.block_processing_batch_size,
+                base.expected_finalization_time,
+            )
+        }
+        ChainKind::Arb => {
+            let Some(ref arb) = config.arb else {
+                anyhow::bail!("Failed to get Arb config");
+            };
+            (
+                arb.rpc_http_url.clone(),
+                arb.rpc_ws_url.clone(),
+                arb.bridge_token_factory_address,
+                arb.block_processing_batch_size,
+                arb.expected_finalization_time,
+            )
+        }
+        _ => anyhow::bail!("Unsupported chain kind: {:?}", chain_kind),
+    };
 
     let http_provider = ProviderBuilder::new().on_http(rpc_http_url.parse().context(format!(
         "Failed to parse {:?} rpc provider as url",
@@ -103,7 +111,14 @@ pub async fn start_indexer(
             .await?;
 
         for log in logs {
-            process_log(chain_kind, &mut redis_connection, &http_provider, log).await;
+            process_log(
+                chain_kind,
+                &mut redis_connection,
+                &http_provider,
+                log,
+                expected_finalization_time,
+            )
+            .await;
         }
     }
 
@@ -114,7 +129,14 @@ pub async fn start_indexer(
 
     let mut stream = ws_provider.subscribe_logs(&filter).await?.into_stream();
     while let Some(log) = stream.next().await {
-        process_log(chain_kind, &mut redis_connection, &http_provider, log).await;
+        process_log(
+            chain_kind,
+            &mut redis_connection,
+            &http_provider,
+            log,
+            expected_finalization_time,
+        )
+        .await;
     }
 
     Ok(())
@@ -125,6 +147,7 @@ async fn process_log(
     redis_connection: &mut redis::aio::MultiplexedConnection,
     http_provider: &RootProvider<Http<Client>>,
     log: Log,
+    expected_finalization_time: i64,
 ) {
     let Some(tx_hash) = log.transaction_hash else {
         warn!("No transaction hash in log: {:?}", log);
@@ -155,6 +178,7 @@ async fn process_log(
                 tx_logs: tx_logs.map(Box::new),
                 creation_timestamp: chrono::Utc::now().timestamp(),
                 last_update_timestamp: None,
+                expected_finalization_time,
             },
         )
         .await;
@@ -168,6 +192,8 @@ async fn process_log(
                 block_number,
                 log,
                 tx_logs: tx_logs.map(Box::new),
+                creation_timestamp: chrono::Utc::now().timestamp(),
+                expected_finalization_time,
             },
         )
         .await;

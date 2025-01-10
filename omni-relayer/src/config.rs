@@ -61,6 +61,7 @@ pub struct Evm {
     pub bridge_token_factory_address: Address,
     pub light_client: Option<AccountId>,
     pub block_processing_batch_size: u64,
+    pub expected_finalization_time: i64,
 }
 
 #[derive(Debug, Clone, serde::Deserialize)]

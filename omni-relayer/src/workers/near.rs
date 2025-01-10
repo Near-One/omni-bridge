@@ -290,6 +290,8 @@ pub enum FinTransfer {
         block_number: u64,
         log: Log,
         tx_logs: Option<Box<TransactionReceipt>>,
+        creation_timestamp: i64,
+        expected_finalization_time: i64,
     },
     Solana {
         emitter: String,
@@ -329,10 +331,10 @@ pub async fn claim_fee(
                     block_number,
                     log,
                     tx_logs,
+                    creation_timestamp,
+                    expected_finalization_time
                 } = fin_transfer
                 {
-                    info!("Trying to process FinTransfer log on {:?}", chain_kind);
-
                     handlers.push(tokio::spawn({
                         let config = config.clone();
                         let mut redis_connection = redis_connection.clone();
@@ -340,7 +342,13 @@ pub async fn claim_fee(
                         let jsonrpc_client = jsonrpc_client.clone();
 
                         async move {
-                            info!("Received finalized transfer");
+                            let current_timestamp = chrono::Utc::now().timestamp();
+
+                            if current_timestamp < creation_timestamp + expected_finalization_time {
+                                return;
+                            }
+                            
+                            info!("Trying to process FinTransfer log on {:?}", chain_kind);
 
                             let vaa = utils::evm::get_vaa_from_evm_log(
                                 connector.clone(),
