@@ -82,6 +82,7 @@ pub enum Role {
     UpgradableCodeStager,
     UpgradableCodeDeployer,
     MetadataManager,
+    UnrestrictedRelayer,
 }
 
 #[ext_contract(ext_token)]
@@ -265,6 +266,7 @@ impl Contract {
         contract
     }
 
+    #[pause(except(roles(Role::DAO, Role::UnrestrictedRelayer)))]
     pub fn log_metadata(&self, token_id: &AccountId) -> Promise {
         ext_token::ext(token_id.clone())
             .with_static_gas(LOG_METADATA_GAS)
@@ -335,6 +337,7 @@ impl Contract {
     }
 
     #[payable]
+    #[pause(except(roles(Role::DAO)))]
     pub fn update_transfer_fee(&mut self, transfer_id: TransferId, fee: UpdateFee) {
         match fee {
             UpdateFee::Fee(fee) => {
@@ -383,6 +386,7 @@ impl Contract {
     /// - If the `borsh::to_vec` serialization of the `TransferMessagePayload` fails.
     /// - If a `fee` is provided and it doesn't match the fee in the stored transfer message.
     #[payable]
+    #[pause(except(roles(Role::DAO, Role::UnrestrictedRelayer)))]
     pub fn sign_transfer(
         &mut self,
         transfer_id: TransferId,
@@ -460,6 +464,7 @@ impl Contract {
     }
 
     #[payable]
+    #[pause(except(roles(Role::DAO, Role::UnrestrictedRelayer)))]
     pub fn fin_transfer(&mut self, #[serializer(borsh)] args: FinTransferArgs) -> Promise {
         require!(
             args.storage_deposit_actions.len() <= 3,
@@ -543,6 +548,7 @@ impl Contract {
     }
 
     #[payable]
+    #[pause(except(roles(Role::DAO, Role::UnrestrictedRelayer)))]
     pub fn claim_fee(&mut self, #[serializer(borsh)] args: ClaimFeeArgs) -> Promise {
         ext_prover::ext(self.prover_account.clone())
             .with_static_gas(VERIFY_PROOF_GAS)
@@ -643,6 +649,7 @@ impl Contract {
     }
 
     #[payable]
+    #[pause(except(roles(Role::DAO, Role::UnrestrictedRelayer)))]
     pub fn deploy_token(&mut self, #[serializer(borsh)] args: DeployTokenArgs) -> Promise {
         ext_prover::ext(self.prover_account.clone())
             .with_static_gas(VERIFY_PROOF_GAS)
@@ -711,71 +718,8 @@ impl Contract {
         )
     }
 
-    fn deploy_token_internal(
-        &mut self,
-        chain_kind: ChainKind,
-        token_address: &OmniAddress,
-        metadata: BasicMetadata,
-        attached_deposit: NearToken,
-    ) -> Promise {
-        let deployer = self
-            .token_deployer_accounts
-            .get(&chain_kind)
-            .unwrap_or_else(|| env::panic_str("ERR_DEPLOYER_NOT_SET"));
-        let prefix = token_address.get_token_prefix();
-        let token_id: AccountId = format!("{prefix}.{deployer}")
-            .parse()
-            .unwrap_or_else(|_| env::panic_str("ERR_PARSE_ACCOUNT"));
-
-        let storage_usage = env::storage_usage();
-        require!(
-            self.token_id_to_address
-                .insert(&(chain_kind, token_id.clone()), token_address)
-                .is_none(),
-            "ERR_TOKEN_EXIST"
-        );
-        require!(
-            self.token_address_to_id
-                .insert(token_address, &token_id)
-                .is_none(),
-            "ERR_TOKEN_EXIST"
-        );
-        require!(
-            self.token_decimals
-                .insert(
-                    token_address,
-                    &Decimals {
-                        decimals: metadata.decimals,
-                        origin_decimals: metadata.decimals
-                    }
-                )
-                .is_none(),
-            "ERR_TOKEN_EXIST"
-        );
-        require!(self.deployed_tokens.insert(&token_id), "ERR_TOKEN_EXIST");
-        let required_deposit = env::storage_byte_cost()
-            .saturating_mul((env::storage_usage().saturating_sub(storage_usage)).into())
-            .saturating_add(storage::BRIDGE_TOKEN_INIT_BALANCE)
-            .saturating_add(NEP141_DEPOSIT);
-
-        require!(
-            attached_deposit >= required_deposit,
-            "ERROR: The deposit is not sufficient to cover the storage."
-        );
-
-        ext_deployer::ext(deployer)
-            .with_static_gas(DEPLOY_TOKEN_GAS)
-            .with_attached_deposit(storage::BRIDGE_TOKEN_INIT_BALANCE)
-            .deploy_token(token_id.clone(), metadata)
-            .then(
-                ext_token::ext(token_id)
-                    .with_static_gas(STORAGE_DEPOSIT_GAS)
-                    .with_attached_deposit(NEP141_DEPOSIT)
-                    .storage_deposit(&env::current_account_id(), Some(true)),
-            )
-    }
-
     #[payable]
+    #[pause(except(roles(Role::DAO, Role::UnrestrictedRelayer)))]
     pub fn bind_token(&mut self, #[serializer(borsh)] args: BindTokenArgs) -> Promise {
         ext_prover::ext(self.prover_account.clone())
             .with_static_gas(VERIFY_PROOF_GAS)
@@ -1265,6 +1209,70 @@ impl Contract {
                 env::panic_str("Not enough storage deposited");
             }
         }
+    }
+
+    fn deploy_token_internal(
+        &mut self,
+        chain_kind: ChainKind,
+        token_address: &OmniAddress,
+        metadata: BasicMetadata,
+        attached_deposit: NearToken,
+    ) -> Promise {
+        let deployer = self
+            .token_deployer_accounts
+            .get(&chain_kind)
+            .unwrap_or_else(|| env::panic_str("ERR_DEPLOYER_NOT_SET"));
+        let prefix = token_address.get_token_prefix();
+        let token_id: AccountId = format!("{prefix}.{deployer}")
+            .parse()
+            .unwrap_or_else(|_| env::panic_str("ERR_PARSE_ACCOUNT"));
+
+        let storage_usage = env::storage_usage();
+        require!(
+            self.token_id_to_address
+                .insert(&(chain_kind, token_id.clone()), token_address)
+                .is_none(),
+            "ERR_TOKEN_EXIST"
+        );
+        require!(
+            self.token_address_to_id
+                .insert(token_address, &token_id)
+                .is_none(),
+            "ERR_TOKEN_EXIST"
+        );
+        require!(
+            self.token_decimals
+                .insert(
+                    token_address,
+                    &Decimals {
+                        decimals: metadata.decimals,
+                        origin_decimals: metadata.decimals
+                    }
+                )
+                .is_none(),
+            "ERR_TOKEN_EXIST"
+        );
+        require!(self.deployed_tokens.insert(&token_id), "ERR_TOKEN_EXIST");
+        let required_deposit = env::storage_byte_cost()
+            .saturating_mul((env::storage_usage().saturating_sub(storage_usage)).into())
+            .saturating_add(storage::BRIDGE_TOKEN_INIT_BALANCE)
+            .saturating_add(NEP141_DEPOSIT);
+
+        require!(
+            attached_deposit >= required_deposit,
+            "ERROR: The deposit is not sufficient to cover the storage."
+        );
+
+        ext_deployer::ext(deployer)
+            .with_static_gas(DEPLOY_TOKEN_GAS)
+            .with_attached_deposit(storage::BRIDGE_TOKEN_INIT_BALANCE)
+            .deploy_token(token_id.clone(), metadata)
+            .then(
+                ext_token::ext(token_id)
+                    .with_static_gas(STORAGE_DEPOSIT_GAS)
+                    .with_attached_deposit(NEP141_DEPOSIT)
+                    .storage_deposit(&env::current_account_id(), Some(true)),
+            )
     }
 
     fn refund(account_id: AccountId, amount: NearToken) {
