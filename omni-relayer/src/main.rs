@@ -32,7 +32,7 @@ struct CliArgs {
 #[tokio::main]
 async fn main() -> Result<()> {
     dotenv::dotenv().ok();
-    pretty_env_logger::init();
+    pretty_env_logger::init_timed();
 
     let args = CliArgs::parse();
 
