@@ -1,0 +1,25 @@
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+
+name: Check WASM files
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    name: Check wasm files
+    steps:
+      - name: Clone the repository
+        uses: actions/checkout@v3
+
+      - name: Build NEAR contracts
+        run: |
+          cd near
+          ./build.sh
+          git status
+          changed_files=$(git status --porcelain --untracked-files=no | wc -l)
+          if [ $changed_files -gt 0 ]; then
+            echo 'contract changed, please rebuild contract'
+            exit 1
+          fi
+        timeout-minutes: 40
