@@ -29,6 +29,8 @@ pub struct FinTransferMessage {
 pub struct DeployTokenMessage {
     pub token: AccountId,
     pub token_address: OmniAddress,
+    pub decimals: u8,
+    pub origin_decimals: u8,
     pub emitter_address: OmniAddress,
 }
 

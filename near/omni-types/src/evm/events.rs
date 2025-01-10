@@ -37,7 +37,8 @@ sol! {
         string token,
         string name,
         string symbol,
-        uint8 decimals
+        uint8 decimals,
+        uint8 originDecimals
     );
 
     event LogMetadata(
@@ -128,14 +129,16 @@ impl TryFromLog<Log<DeployToken>> for DeployTokenMessage {
         }
 
         Ok(DeployTokenMessage {
-            emitter_address: OmniAddress::new_from_evm_address(
-                chain_kind,
-                H160(event.address.into()),
-            )?,
             token: event.data.token.parse().map_err(stringify)?,
             token_address: OmniAddress::new_from_evm_address(
                 chain_kind,
                 H160(event.data.tokenAddress.into()),
+            )?,
+            decimals: event.data.decimals,
+            origin_decimals: event.data.originDecimals,
+            emitter_address: OmniAddress::new_from_evm_address(
+                chain_kind,
+                H160(event.address.into()),
             )?,
         })
     }

@@ -27,7 +27,7 @@ use omni_types::{
     BasicMetadata, ChainKind, Fee, InitTransferMsg, MetadataPayload, Nonce, OmniAddress,
     PayloadType, SignRequest, TransferId, TransferMessage, TransferMessagePayload, UpdateFee,
 };
-use storage::{TransferMessageStorage, TransferMessageStorageValue, NEP141_DEPOSIT};
+use storage::{Decimals, TransferMessageStorage, TransferMessageStorageValue, NEP141_DEPOSIT};
 
 mod errors;
 mod storage;
@@ -70,6 +70,7 @@ enum StorageKey {
     TokenDeployerAccounts,
     DeployedTokens,
     DestinationNonces,
+    TokenDecimals,
 }
 
 #[derive(AccessControlRole, Deserialize, Serialize, Copy, Clone)]
@@ -164,6 +165,7 @@ pub struct Contract {
     pub finalised_transfers: LookupSet<TransferId>,
     pub token_id_to_address: LookupMap<(ChainKind, AccountId), OmniAddress>,
     pub token_address_to_id: LookupMap<OmniAddress, AccountId>,
+    pub token_decimals: LookupMap<OmniAddress, Decimals>,
     pub deployed_tokens: LookupSet<AccountId>,
     pub token_deployer_accounts: LookupMap<ChainKind, AccountId>,
     pub mpc_signer: AccountId,
@@ -248,6 +250,7 @@ impl Contract {
             finalised_transfers: LookupSet::new(StorageKey::FinalisedTransfers),
             token_id_to_address: LookupMap::new(StorageKey::TokenIdToAddress),
             token_address_to_id: LookupMap::new(StorageKey::TokenAddressToId),
+            token_decimals: LookupMap::new(StorageKey::TokenDecimals),
             deployed_tokens: LookupSet::new(StorageKey::DeployedTokens),
             token_deployer_accounts: LookupMap::new(StorageKey::TokenDeployerAccounts),
             mpc_signer,
@@ -398,12 +401,21 @@ impl Contract {
             )
             .unwrap_or_else(|| env::panic_str("ERR_FAILED_TO_GET_TOKEN_ADDRESS"));
 
+        let decimals = self
+            .token_decimals
+            .get(&token_address)
+            .sdk_expect("ERR_TOKEN_DECIMALS_NOT_FOUND");
+        let amount_to_transfer = Self::normalize_amount(
+            transfer_message.amount.0 - transfer_message.fee.fee.0,
+            decimals,
+        );
+
         let transfer_payload = TransferMessagePayload {
             prefix: PayloadType::TransferMessage,
             destination_nonce: transfer_message.destination_nonce,
             transfer_id,
             token_address,
-            amount: U128(transfer_message.amount.0 - transfer_message.fee.fee.0),
+            amount: U128(amount_to_transfer),
             recipient: transfer_message.recipient,
             fee_recipient,
         };
@@ -495,14 +507,22 @@ impl Contract {
             "Unknown factory"
         );
 
+        let decimals = self
+            .token_decimals
+            .get(&init_transfer.token)
+            .sdk_expect("ERR_TOKEN_DECIMALS_NOT_FOUND");
+
         let destination_nonce =
             self.get_next_destination_nonce(init_transfer.recipient.get_chain());
         let transfer_message = TransferMessage {
             origin_nonce: init_transfer.origin_nonce,
             token: init_transfer.token,
-            amount: init_transfer.amount,
+            amount: Self::denormalize_amount(init_transfer.amount.0, decimals).into(),
             recipient: init_transfer.recipient,
-            fee: init_transfer.fee,
+            fee: Fee {
+                fee: Self::denormalize_amount(init_transfer.fee.fee.0, decimals).into(),
+                native_fee: init_transfer.fee.native_fee,
+            },
             sender: init_transfer.sender,
             msg: init_transfer.msg,
             destination_nonce,
@@ -564,7 +584,20 @@ impl Contract {
         );
 
         let message = self.remove_transfer_message(fin_transfer.transfer_id);
-        let fee = message.amount.0 - fin_transfer.amount.0;
+        let token_address = self
+            .get_token_address(
+                message.get_destination_chain(),
+                self.get_token_id(&message.token),
+            )
+            .unwrap_or_else(|| env::panic_str("ERR_FAILED_TO_GET_TOKEN_ADDRESS"));
+
+        let denormalized_amount = Self::denormalize_amount(
+            fin_transfer.amount.0,
+            self.token_decimals
+                .get(&token_address)
+                .sdk_expect("ERR_TOKEN_DECIMALS_NOT_FOUND"),
+        );
+        let fee = message.amount.0 - denormalized_amount;
 
         if message.fee.native_fee.0 != 0 {
             if message.get_origin_chain() == ChainKind::Near {
@@ -707,6 +740,18 @@ impl Contract {
                 .is_none(),
             "ERR_TOKEN_EXIST"
         );
+        require!(
+            self.token_decimals
+                .insert(
+                    token_address,
+                    &Decimals {
+                        decimals: metadata.decimals,
+                        origin_decimals: metadata.decimals
+                    }
+                )
+                .is_none(),
+            "ERR_TOKEN_EXIST"
+        );
         require!(self.deployed_tokens.insert(&token_id), "ERR_TOKEN_EXIST");
         let required_deposit = env::storage_byte_cost()
             .saturating_mul((env::storage_usage().saturating_sub(storage_usage)).into())
@@ -782,6 +827,15 @@ impl Contract {
         );
         self.token_address_to_id
             .insert(&deploy_token.token_address, &deploy_token.token);
+
+        self.token_decimals.insert(
+            &deploy_token.token_address,
+            &Decimals {
+                decimals: deploy_token.decimals,
+                origin_decimals: deploy_token.origin_decimals,
+            },
+        );
+
         let required_deposit = env::storage_byte_cost()
             .saturating_mul((env::storage_usage().saturating_sub(storage_usage)).into());
 
@@ -874,6 +928,13 @@ impl Contract {
             self.token_id_to_address.insert(
                 &(token_address.get_chain(), token_id.clone()),
                 &token_address,
+            );
+            self.token_decimals.insert(
+                &token_address,
+                &Decimals {
+                    decimals: 0,
+                    origin_decimals: 0,
+                },
             );
 
             ext_token::ext(token_id)
@@ -1210,5 +1271,15 @@ impl Contract {
         if !amount.is_zero() {
             Promise::new(account_id).transfer(amount);
         }
+    }
+
+    fn denormalize_amount(amount: u128, decimals: Decimals) -> u128 {
+        let diff_decimals: u32 = (decimals.origin_decimals - decimals.decimals).into();
+        amount * (10_u128.pow(diff_decimals))
+    }
+
+    fn normalize_amount(amount: u128, decimals: Decimals) -> u128 {
+        let diff_decimals: u32 = (decimals.origin_decimals - decimals.decimals).into();
+        amount / (10_u128.pow(diff_decimals))
     }
 }

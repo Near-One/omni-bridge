@@ -1,6 +1,7 @@
 use near_contract_standards::storage_management::StorageBalance;
 use omni_types::locker_args::StorageDepositAction;
 
+use crate::storage::Decimals;
 use crate::Contract;
 use near_sdk::test_utils::VMContextBuilder;
 use near_sdk::RuntimeFeesConfig;
@@ -486,6 +487,13 @@ fn test_fin_transfer_callback_near_success() {
         &native_token_address,
         &DEFAULT_FT_CONTRACT_ACCOUNT.parse().unwrap(),
     );
+    contract.token_decimals.insert(
+        &OmniAddress::Near(AccountId::try_from(DEFAULT_FT_CONTRACT_ACCOUNT.to_string()).unwrap()),
+        &Decimals {
+            decimals: 24,
+            origin_decimals: 24,
+        },
+    );
 
     let storage_actions = vec![
         StorageDepositAction {
@@ -563,6 +571,14 @@ fn test_fin_transfer_callback_non_near_success() {
     // Create prover result with ETH recipient
     let eth_recipient = OmniAddress::Eth(EvmAddress::from_str(DEFAULT_ETH_USER_ADDRESS).unwrap());
     let prover_result = get_prover_result(Some(eth_recipient.clone()));
+
+    contract.token_decimals.insert(
+        &OmniAddress::Near(AccountId::try_from(DEFAULT_FT_CONTRACT_ACCOUNT.to_string()).unwrap()),
+        &Decimals {
+            decimals: 24,
+            origin_decimals: 24,
+        },
+    );
 
     setup_test_env(
         predecessor.clone(),
@@ -653,4 +669,76 @@ fn test_is_transfer_finalised() {
 
     contract.finalised_transfers.insert(&transfer_id);
     assert!(contract.is_transfer_finalised(transfer_id));
+}
+
+#[test]
+fn test_normalize_amount() {
+    assert_eq!(
+        Contract::normalize_amount(
+            u128::MAX,
+            Decimals {
+                decimals: 18,
+                origin_decimals: 18
+            }
+        ),
+        u128::MAX
+    );
+
+    assert_eq!(
+        Contract::normalize_amount(
+            u128::MAX,
+            Decimals {
+                decimals: 18,
+                origin_decimals: 24
+            }
+        ),
+        u128::MAX / 1_000_000
+    );
+
+    assert_eq!(
+        Contract::normalize_amount(
+            u128::MAX,
+            Decimals {
+                decimals: 9,
+                origin_decimals: 24
+            }
+        ),
+        u128::MAX / 1_000_000_000_000_000
+    );
+}
+
+#[test]
+fn test_denormalize_amount() {
+    assert_eq!(
+        Contract::denormalize_amount(
+            u128::MAX,
+            Decimals {
+                decimals: 18,
+                origin_decimals: 18
+            }
+        ),
+        u128::MAX
+    );
+
+    assert_eq!(
+        Contract::denormalize_amount(
+            u64::MAX.into(),
+            Decimals {
+                decimals: 18,
+                origin_decimals: 24
+            }
+        ),
+        u64::MAX as u128 * 1_000_000_u128
+    );
+
+    assert_eq!(
+        Contract::denormalize_amount(
+            u64::MAX.into(),
+            Decimals {
+                decimals: 9,
+                origin_decimals: 24
+            }
+        ),
+        u64::MAX as u128 * 1_000_000_000_000_000_u128
+    );
 }
