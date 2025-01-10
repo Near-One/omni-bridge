@@ -337,7 +337,7 @@ impl Contract {
     }
 
     #[payable]
-    #[pause(except(roles(Role::DAO)))]
+    #[pause]
     pub fn update_transfer_fee(&mut self, transfer_id: TransferId, fee: UpdateFee) {
         match fee {
             UpdateFee::Fee(fee) => {
