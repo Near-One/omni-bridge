@@ -18,6 +18,7 @@ pub async fn start_indexer(
     config: config::Config,
     redis_client: redis::Client,
     chain_kind: ChainKind,
+    evm_start_block: Option<u64>,
 ) -> Result<()> {
     let mut redis_connection = redis_client.get_multiplexed_tokio_connection().await?;
 
@@ -71,11 +72,15 @@ pub async fn start_indexer(
 
     let last_processed_block_key = utils::redis::get_last_processed_key(chain_kind).await;
     let latest_block = http_provider.get_block_number().await?;
-    let from_block =
-        utils::redis::get_last_processed(&mut redis_connection, &last_processed_block_key)
-            .await
-            .unwrap_or(latest_block)
-            + 1;
+    let from_block = match evm_start_block {
+        Some(block) => block,
+        None => {
+            utils::redis::get_last_processed(&mut redis_connection, &last_processed_block_key)
+                .await
+                .unwrap_or(latest_block)
+                + 1
+        }
+    };
 
     let filter = Filter::new()
         .address(bridge_token_factory_address)
