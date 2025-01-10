@@ -34,7 +34,7 @@ pub async fn is_fee_sufficient(
         (0, fee) if fee > 0 => Ok(provided_fee.fee.0 >= fee),
         (native_fee, 0) if native_fee > 0 => Ok(provided_fee.native_fee.0 >= native_fee),
         (native_fee, fee) => {
-            let conversion_rate = provided_fee.fee.0 as f64 / provided_fee.native_fee.0 as f64;
+            let conversion_rate = native_fee as f64 / fee as f64;
             Ok((provided_fee.fee.0 as f64)
                 .mul_add(conversion_rate, provided_fee.native_fee.0 as f64)
                 >= (fee as f64).mul_add(conversion_rate, native_fee as f64))
