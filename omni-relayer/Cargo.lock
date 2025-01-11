@@ -1797,7 +1797,7 @@ dependencies = [
 [[package]]
 name = "bridge-connector-common"
 version = "0.1.0"
-source = "git+https://github.com/Near-One/rainbow-bridge-sdk-rs?branch=fix%2Frpc-timeout#5aef974c7dfe5309a111d8626ce6b086a7f73a49"
+source = "git+https://github.com/Near-One/rainbow-bridge-sdk-rs#222303065fa489bb4f8b4a34b0f87e44a1ce3220"
 dependencies = [
  "eth-proof",
  "ethers",
@@ -3129,7 +3129,7 @@ dependencies = [
 [[package]]
 name = "eth-proof"
 version = "0.1.0"
-source = "git+https://github.com/Near-One/rainbow-bridge-sdk-rs?branch=fix%2Frpc-timeout#5aef974c7dfe5309a111d8626ce6b086a7f73a49"
+source = "git+https://github.com/Near-One/rainbow-bridge-sdk-rs#222303065fa489bb4f8b4a34b0f87e44a1ce3220"
 dependencies = [
  "borsh 1.5.3",
  "cita_trie",
@@ -3498,7 +3498,7 @@ dependencies = [
 [[package]]
 name = "evm-bridge-client"
 version = "0.1.0"
-source = "git+https://github.com/Near-One/rainbow-bridge-sdk-rs?branch=fix%2Frpc-timeout#5aef974c7dfe5309a111d8626ce6b086a7f73a49"
+source = "git+https://github.com/Near-One/rainbow-bridge-sdk-rs#222303065fa489bb4f8b4a34b0f87e44a1ce3220"
 dependencies = [
  "borsh 1.5.3",
  "bridge-connector-common",
@@ -5029,7 +5029,7 @@ dependencies = [
 [[package]]
 name = "near-bridge-client"
 version = "0.1.0"
-source = "git+https://github.com/Near-One/rainbow-bridge-sdk-rs?branch=fix%2Frpc-timeout#5aef974c7dfe5309a111d8626ce6b086a7f73a49"
+source = "git+https://github.com/Near-One/rainbow-bridge-sdk-rs#222303065fa489bb4f8b4a34b0f87e44a1ce3220"
 dependencies = [
  "borsh 1.5.3",
  "bridge-connector-common",
@@ -5258,7 +5258,7 @@ dependencies = [
 [[package]]
 name = "near-light-client-on-eth"
 version = "0.1.0"
-source = "git+https://github.com/Near-One/rainbow-bridge-sdk-rs?branch=fix%2Frpc-timeout#5aef974c7dfe5309a111d8626ce6b086a7f73a49"
+source = "git+https://github.com/Near-One/rainbow-bridge-sdk-rs#222303065fa489bb4f8b4a34b0f87e44a1ce3220"
 dependencies = [
  "ethereum-types 0.14.1",
  "ethers",
@@ -5430,7 +5430,7 @@ dependencies = [
 [[package]]
 name = "near-rpc-client"
 version = "0.1.0"
-source = "git+https://github.com/Near-One/rainbow-bridge-sdk-rs?branch=fix%2Frpc-timeout#5aef974c7dfe5309a111d8626ce6b086a7f73a49"
+source = "git+https://github.com/Near-One/rainbow-bridge-sdk-rs#222303065fa489bb4f8b4a34b0f87e44a1ce3220"
 dependencies = [
  "borsh 1.5.3",
  "lazy_static",
@@ -5824,7 +5824,7 @@ dependencies = [
 [[package]]
 name = "omni-connector"
 version = "0.1.0"
-source = "git+https://github.com/Near-One/rainbow-bridge-sdk-rs?branch=fix%2Frpc-timeout#5aef974c7dfe5309a111d8626ce6b086a7f73a49"
+source = "git+https://github.com/Near-One/rainbow-bridge-sdk-rs#222303065fa489bb4f8b4a34b0f87e44a1ce3220"
 dependencies = [
  "borsh 1.5.3",
  "bridge-connector-common",
@@ -6435,9 +6435,9 @@ dependencies = [
 
 [[package]]
 name = "proc-macro2"
-version = "1.0.92"
+version = "1.0.93"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "37d3544b3f2748c54e147655edb5025752e2303145b5aefb3c3ea2c78b973bb0"
+checksum = "60946a68e5f9d28b0dc1c21bb8a97ee7d018a8b322fa57838ba31cc878e22d99"
 dependencies = [
  "unicode-ident",
 ]
@@ -7792,7 +7792,7 @@ dependencies = [
 [[package]]
 name = "solana-bridge-client"
 version = "0.1.0"
-source = "git+https://github.com/Near-One/rainbow-bridge-sdk-rs?branch=fix%2Frpc-timeout#5aef974c7dfe5309a111d8626ce6b086a7f73a49"
+source = "git+https://github.com/Near-One/rainbow-bridge-sdk-rs#222303065fa489bb4f8b4a34b0f87e44a1ce3220"
 dependencies = [
  "borsh 1.5.3",
  "derive_builder 0.20.2",
@@ -10964,7 +10964,7 @@ dependencies = [
 [[package]]
 name = "wormhole-bridge-client"
 version = "0.1.0"
-source = "git+https://github.com/Near-One/rainbow-bridge-sdk-rs?branch=fix%2Frpc-timeout#5aef974c7dfe5309a111d8626ce6b086a7f73a49"
+source = "git+https://github.com/Near-One/rainbow-bridge-sdk-rs#222303065fa489bb4f8b4a34b0f87e44a1ce3220"
 dependencies = [
  "bridge-connector-common",
  "derive_builder 0.20.2",
