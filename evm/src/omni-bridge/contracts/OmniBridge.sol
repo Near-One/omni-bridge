@@ -309,6 +309,12 @@ contract OmniBridge is
         proxy.upgradeToAndCall(implementation, bytes(""));
     }
 
+    function setNearBridgeDerivedAddress(
+        address nearBridgeDerivedAddress_
+    ) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        nearBridgeDerivedAddress = nearBridgeDerivedAddress_;
+    }
+
     function _normalizeDecimals(
         uint8 decimals
     ) internal pure returns (uint8) {
