@@ -395,8 +395,6 @@ impl Contract {
     ) -> Promise {
         let transfer_message = self.get_transfer_message(transfer_id);
 
-        require!(transfer_message.amount.0 > 0, "Invalid amount");
-
         if let Some(fee) = &fee {
             require!(&transfer_message.fee == fee, "Invalid fee");
         }
@@ -416,6 +414,8 @@ impl Contract {
             transfer_message.amount.0 - transfer_message.fee.fee.0,
             decimals,
         );
+
+        require!(amount_to_transfer > 0, "Invalid amount to transfer");
 
         let transfer_payload = TransferMessagePayload {
             prefix: PayloadType::TransferMessage,
