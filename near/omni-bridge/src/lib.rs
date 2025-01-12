@@ -394,6 +394,9 @@ impl Contract {
         fee: &Option<Fee>,
     ) -> Promise {
         let transfer_message = self.get_transfer_message(transfer_id);
+
+        require!(transfer_message.amount.0 > 0, "Invalid amount");
+
         if let Some(fee) = &fee {
             require!(&transfer_message.fee == fee, "Invalid fee");
         }
@@ -905,6 +908,10 @@ impl Contract {
 
     pub fn get_current_destination_nonce(&self, chain_kind: ChainKind) -> Nonce {
         self.destination_nonces.get(&chain_kind).unwrap_or_default()
+    }
+
+    pub fn get_mpc_account(&self) -> AccountId {
+        self.mpc_signer.clone()
     }
 }
 
