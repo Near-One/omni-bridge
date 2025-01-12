@@ -1,12 +1,7 @@
 #[cfg(test)]
 mod tests {
-    use crate::helpers::tests::{
-        account_n, arb_factory_address, arb_token_address, base_factory_address,
-        base_token_address, eth_eoa_address, eth_factory_address, eth_token_address,
-        get_test_deploy_token_args, sol_factory_address, sol_token_address, LOCKER_PATH,
-        MOCK_PROVER_PATH, NEP141_DEPOSIT, TOKEN_DEPLOYER_PATH,
-    };
-    use anyhow;
+    use std::str::FromStr;
+
     use near_sdk::borsh;
     use near_sdk::json_types::U128;
     use near_sdk::serde_json::json;
@@ -17,7 +12,13 @@ mod tests {
     use omni_types::Fee;
     use omni_types::{BasicMetadata, ChainKind, OmniAddress};
     use rstest::rstest;
-    use std::str::FromStr;
+
+    use crate::helpers::tests::{
+        account_n, arb_factory_address, arb_token_address, base_factory_address,
+        base_token_address, eth_eoa_address, eth_factory_address, eth_token_address,
+        get_test_deploy_token_args, sol_factory_address, sol_token_address, LOCKER_WASM,
+        MOCK_PROVER_WASM, NEP141_DEPOSIT, TOKEN_DEPLOYER_WASM,
+    };
 
     struct TestEnv {
         worker: near_workspaces::Worker<near_workspaces::network::Sandbox>,
@@ -38,11 +39,11 @@ mod tests {
             };
 
             // Setup prover
-            let prover_contract = worker.dev_deploy(&std::fs::read(MOCK_PROVER_PATH)?).await?;
+            let prover_contract = worker.dev_deploy(&MOCK_PROVER_WASM).await?;
 
             // Setup locker
-            let locker = worker.dev_deploy(&std::fs::read(LOCKER_PATH)?).await?;
-            locker
+            let locker_contract = worker.dev_deploy(&LOCKER_WASM).await?;
+            locker_contract
                 .call("new")
                 .args_json(json!({
                     "prover_account": prover_contract.id(),
@@ -60,7 +61,7 @@ mod tests {
                 .create_tla_and_deploy(
                     account_n(1),
                     worker.dev_generate().await.1,
-                    &std::fs::read(TOKEN_DEPLOYER_PATH)?,
+                    &TOKEN_DEPLOYER_WASM,
                 )
                 .await?
                 .unwrap();
@@ -68,7 +69,7 @@ mod tests {
             token_deployer
                 .call("new")
                 .args_json(json!({
-                    "controller": locker.id(),
+                    "controller": locker_contract.id(),
                     "dao": AccountId::from_str("dao.near").unwrap(),
                 }))
                 .max_gas()
@@ -77,7 +78,7 @@ mod tests {
                 .into_result()?;
 
             // Configure locker
-            locker
+            locker_contract
                 .call("add_token_deployer")
                 .args_json(json!({
                     "chain": init_token_address.get_chain(),
@@ -96,7 +97,7 @@ mod tests {
                 _ => panic!("Unsupported chain"),
             };
 
-            locker
+            locker_contract
                 .call("add_factory")
                 .args_json(json!({
                     "address": factory_contract_address,
@@ -109,7 +110,7 @@ mod tests {
             // Deploy token
             let token_contract = Self::deploy_token(
                 &worker,
-                &locker,
+                &locker_contract,
                 &init_token_address,
                 &factory_contract_address,
                 &token_metadata,
@@ -118,7 +119,7 @@ mod tests {
 
             Ok(Self {
                 worker,
-                locker,
+                locker: locker_contract,
                 token_contract,
                 init_token_address,
                 factory_contract_address,
@@ -168,7 +169,7 @@ mod tests {
                     .call(locker.id(), "deploy_token")
                     .args_borsh(get_test_deploy_token_args(
                         init_token_address,
-                        &factoty_contract_address,
+                        factoty_contract_address,
                         token_metadata,
                     ))
                     .deposit(required_storage)

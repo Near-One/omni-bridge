@@ -12,8 +12,7 @@ const BRIDGE_TOKEN_INIT_BALANCE: NearToken = NearToken::from_near(3);
 const NO_DEPOSIT: NearToken = NearToken::from_near(0);
 const OMNI_TOKEN_INIT_GAS: Gas = Gas::from_tgas(10);
 
-const BRIDGE_TOKEN_BINARY: &[u8] =
-    include_bytes!("../../target/wasm32-unknown-unknown/release/omni_token.wasm");
+const BRIDGE_TOKEN_BINARY: &[u8] = include_bytes!("../../target/near/omni_token/omni_token.wasm");
 
 #[derive(AccessControlRole, Deserialize, Serialize, Copy, Clone)]
 #[serde(crate = "near_sdk::serde")]

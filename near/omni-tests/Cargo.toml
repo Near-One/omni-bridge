@@ -9,6 +9,7 @@ publish = false
 crate-type = ["cdylib", "rlib"]
 
 [dev-dependencies]
+cargo-near-build = "0.4.2"
 near-sdk.workspace = true
 near-workspaces.workspace = true
 tokio.workspace = true

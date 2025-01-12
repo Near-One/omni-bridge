@@ -2,7 +2,7 @@
 mod tests {
     use crate::helpers::tests::{
         account_n, eth_eoa_address, eth_factory_address, eth_token_address, relayer_account_id,
-        LOCKER_PATH, MOCK_PROVER_PATH, MOCK_TOKEN_PATH, NEP141_DEPOSIT,
+        LOCKER_WASM, MOCK_PROVER_WASM, MOCK_TOKEN_WASM, NEP141_DEPOSIT,
     };
     use near_sdk::{borsh, json_types::U128, serde_json::json, AccountId};
     use near_workspaces::types::NearToken;
@@ -73,9 +73,9 @@ mod tests {
                 "Expected an error but got success"
             ),
             Err(result_error) => {
-                let error = expected_error.expect(&format!(
-                    "Got an error {result_error} when none was expected"
-                ));
+                let error = expected_error.unwrap_or_else(|| {
+                    panic!("Got an error {result_error} when none was expected")
+                });
                 assert!(
                     result_error.to_string().contains(error),
                     "Wrong error. Got: {}, Expected: {}",
@@ -92,8 +92,9 @@ mod tests {
         fee: u128,
     ) -> anyhow::Result<()> {
         let worker = near_workspaces::sandbox().await?;
+
         // Deploy and init FT token
-        let token_contract = worker.dev_deploy(&std::fs::read(MOCK_TOKEN_PATH)?).await?;
+        let token_contract = worker.dev_deploy(&MOCK_TOKEN_WASM).await?;
         token_contract
             .call("new_default_meta")
             .args_json(json!({
@@ -105,9 +106,10 @@ mod tests {
             .await?
             .into_result()?;
 
-        let prover_contract = worker.dev_deploy(&std::fs::read(MOCK_PROVER_PATH)?).await?;
+        let prover_contract = worker.dev_deploy(&MOCK_PROVER_WASM).await?;
+
         // Deploy and init locker
-        let locker_contract = worker.dev_deploy(&std::fs::read(LOCKER_PATH)?).await?;
+        let locker_contract = worker.dev_deploy(&LOCKER_WASM).await?;
         locker_contract
             .call("new")
             .args_json(json!({

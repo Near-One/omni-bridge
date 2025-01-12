@@ -1,5 +1,7 @@
 #[cfg(test)]
 pub mod tests {
+    use std::{str::FromStr, sync::LazyLock};
+
     use near_sdk::{borsh, json_types::U128, serde_json, AccountId};
     use near_workspaces::types::NearToken;
     use omni_types::{
@@ -8,13 +10,67 @@ pub mod tests {
         BasicMetadata, ChainKind, Nonce, OmniAddress, TransferId,
     };
 
-    pub const MOCK_TOKEN_PATH: &str = "./../target/wasm32-unknown-unknown/release/mock_token.wasm";
-    pub const MOCK_PROVER_PATH: &str =
-        "./../target/wasm32-unknown-unknown/release/mock_prover.wasm";
-    pub const LOCKER_PATH: &str = "./../target/wasm32-unknown-unknown/release/omni_bridge.wasm";
+    //pub const MOCK_TOKEN_PATH: &str = "./../target/wasm32-unknown-unknown/release/mock_token.wasm";
+    //pub const MOCK_PROVER_PATH: &str =
+    //    "./../target/wasm32-unknown-unknown/release/mock_prover.wasm";
+    //pub const LOCKER_PATH: &str = "./../target/wasm32-unknown-unknown/release/omni_bridge.wasm";
+    //pub const TOKEN_DEPLOYER_PATH: &str =
+    //    "./../target/wasm32-unknown-unknown/release/token_deployer.wasm";
+
     pub const NEP141_DEPOSIT: NearToken = NearToken::from_yoctonear(1250000000000000000000);
-    pub const TOKEN_DEPLOYER_PATH: &str =
-        "./../target/wasm32-unknown-unknown/release/token_deployer.wasm";
+
+    pub static MOCK_TOKEN_WASM: LazyLock<Vec<u8>> = LazyLock::new(|| {
+        let artifact = cargo_near_build::build(cargo_near_build::BuildOpts {
+            manifest_path: Some(
+                cargo_near_build::camino::Utf8PathBuf::from_str("../mock/mock-token/Cargo.toml")
+                    .expect("camino PathBuf from str"),
+            ),
+            no_abi: true,
+            ..Default::default()
+        })
+        .expect("building `mock-token` contract for tests");
+
+        std::fs::read(&artifact.path).unwrap()
+    });
+
+    pub static MOCK_PROVER_WASM: LazyLock<Vec<u8>> = LazyLock::new(|| {
+        let artifact = cargo_near_build::build(cargo_near_build::BuildOpts {
+            manifest_path: Some(
+                cargo_near_build::camino::Utf8PathBuf::from_str("../mock/mock-prover/Cargo.toml")
+                    .expect("camino PathBuf from str"),
+            ),
+            no_abi: true,
+            ..Default::default()
+        })
+        .expect("building `mock-prover` contract for tests");
+        std::fs::read(&artifact.path).unwrap()
+    });
+
+    pub static LOCKER_WASM: LazyLock<Vec<u8>> = LazyLock::new(|| {
+        let artifact = cargo_near_build::build(cargo_near_build::BuildOpts {
+            manifest_path: Some(
+                cargo_near_build::camino::Utf8PathBuf::from_str("../omni-bridge/Cargo.toml")
+                    .expect("camino PathBuf from str"),
+            ),
+            no_abi: true,
+            ..Default::default()
+        })
+        .expect("building `omni-bridge` contract for tests");
+        std::fs::read(&artifact.path).unwrap()
+    });
+
+    pub static TOKEN_DEPLOYER_WASM: LazyLock<Vec<u8>> = LazyLock::new(|| {
+        let artifact = cargo_near_build::build(cargo_near_build::BuildOpts {
+            manifest_path: Some(
+                cargo_near_build::camino::Utf8PathBuf::from_str("../token-deployer/Cargo.toml")
+                    .expect("camino PathBuf from str"),
+            ),
+            no_abi: true,
+            ..Default::default()
+        })
+        .expect("building `token-deployer` contract for tests");
+        std::fs::read(&artifact.path).unwrap()
+    });
 
     pub fn relayer_account_id() -> AccountId {
         "relayer".parse().unwrap()
@@ -84,8 +140,8 @@ pub mod tests {
     ) -> ClaimFeeArgs {
         let fin_transfer = FinTransferMessage {
             transfer_id: TransferId {
-                origin_chain: origin_chain,
-                origin_nonce: origin_nonce,
+                origin_chain,
+                origin_nonce,
             },
             fee_recipient: fee_recipient.clone(),
             amount: U128(amount),

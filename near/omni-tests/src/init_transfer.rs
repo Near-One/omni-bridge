@@ -2,8 +2,8 @@
 mod tests {
     use crate::helpers::tests::{
         account_n, eth_eoa_address, eth_factory_address, eth_token_address, get_bind_token_args,
-        get_claim_fee_args_near, get_event_data, relayer_account_id, LOCKER_PATH, MOCK_PROVER_PATH,
-        MOCK_TOKEN_PATH, NEP141_DEPOSIT,
+        get_claim_fee_args_near, get_event_data, relayer_account_id, LOCKER_WASM, MOCK_PROVER_WASM,
+        MOCK_TOKEN_WASM, NEP141_DEPOSIT,
     };
     use anyhow::Ok;
     use near_sdk::{
@@ -33,7 +33,7 @@ mod tests {
         async fn new(sender_balance_token: u128) -> anyhow::Result<Self> {
             let worker = near_workspaces::sandbox().await?;
             // Deploy and initialize FT token
-            let token_contract = worker.dev_deploy(&std::fs::read(MOCK_TOKEN_PATH)?).await?;
+            let token_contract = worker.dev_deploy(&MOCK_TOKEN_WASM).await?;
             token_contract
                 .call("new_default_meta")
                 .args_json(json!({
@@ -45,9 +45,9 @@ mod tests {
                 .await?
                 .into_result()?;
 
-            let prover_contract = worker.dev_deploy(&std::fs::read(MOCK_PROVER_PATH)?).await?;
+            let prover_contract = worker.dev_deploy(&MOCK_PROVER_WASM).await?;
             // Deploy and initialize locker
-            let locker_contract = worker.dev_deploy(&std::fs::read(LOCKER_PATH)?).await?;
+            let locker_contract = worker.dev_deploy(&LOCKER_WASM).await?;
             locker_contract
                 .call("new")
                 .args_json(json!({
@@ -146,7 +146,7 @@ mod tests {
             locker_contract
                 .call("bind_token")
                 .args_borsh(get_bind_token_args(
-                    &token_contract.id(),
+                    token_contract.id(),
                     &eth_token_address(),
                     &eth_factory_address,
                     24,
@@ -259,7 +259,7 @@ mod tests {
         let claim_fee_args = get_claim_fee_args_near(
             ChainKind::Near,
             ChainKind::Eth,
-            transfer_message.origin_nonce.into(),
+            transfer_message.origin_nonce,
             env.relayer_account.id().clone(),
             transfer_amount - signing_fee.fee.0,
             env.eth_factory_address.clone(),
@@ -338,8 +338,7 @@ mod tests {
                 update_fee
                     .native_fee
                     .0
-                    .checked_sub(transfer_message.fee.native_fee.0)
-                    .unwrap_or(0),
+                    .saturating_sub(transfer_message.fee.native_fee.0),
             ),
             // To be updated once the proof is implemented
             UpdateFee::Proof(_) => NearToken::from_yoctonear(0),
@@ -373,11 +372,11 @@ mod tests {
     }
     async fn get_test_balances(env: &TestEnv) -> anyhow::Result<(U128, U128, U128, NearToken)> {
         let user_balance_token: U128 =
-            get_token_balance(&env.token_contract, &env.sender_account.id()).await?;
+            get_token_balance(&env.token_contract, env.sender_account.id()).await?;
         let locker_balance_token: U128 =
-            get_token_balance(&env.token_contract, &env.locker_contract.id()).await?;
+            get_token_balance(&env.token_contract, env.locker_contract.id()).await?;
         let relayer_balance_token: U128 =
-            get_token_balance(&env.token_contract, &env.relayer_account.id()).await?;
+            get_token_balance(&env.token_contract, env.relayer_account.id()).await?;
         let relayer_balance_near: NearToken = env
             .worker
             .view_account(env.relayer_account.id())
@@ -662,7 +661,6 @@ mod tests {
         )
         .await
         .unwrap();
-        ()
     }
 
     #[tokio::test]

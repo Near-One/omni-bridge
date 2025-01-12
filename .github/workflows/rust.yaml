@@ -36,7 +36,7 @@ jobs:
           cache-all-crates: true
           shared-key: "lint-${{ matrix.component }}"
           workspaces: ${{ matrix.component }}
-
+          
       - name: Run clippy
         run: make clippy-${{ matrix.component }}
 
@@ -62,17 +62,15 @@ jobs:
           cache-all-crates: true
           shared-key: "build-test"
           workspaces: near
+          
+      - name: Install cargo-near
+        run: |
+          curl --proto '=https' --tlsv1.2 -LsSf https://github.com/near/cargo-near/releases/latest/download/cargo-near-installer.sh | sh
 
       - name: Install nextest
         uses: taiki-e/install-action@v2
         with:
           tool: nextest
 
-      - name: Build token contract
-        run: make rust-build-near
-
-      - name: Build tests
-        run: cargo build --manifest-path ./near/Cargo.toml --tests --all-features
-
-      - name: Run tests
-        run: cargo nextest run --manifest-path ./near/Cargo.toml
+      - name: Rust tests
+        run: make rust-run-tests
