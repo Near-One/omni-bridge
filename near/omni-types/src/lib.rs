@@ -95,7 +95,7 @@ impl<'de> Deserialize<'de> for H160 {
     {
         struct HexVisitor;
 
-        impl<'de> Visitor<'de> for HexVisitor {
+        impl Visitor<'_> for HexVisitor {
             type Value = H160;
 
             fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
@@ -357,7 +357,7 @@ impl<'de> Deserialize<'de> for OmniAddress {
     {
         struct OmniAddressVisitor;
 
-        impl<'de> serde::de::Visitor<'de> for OmniAddressVisitor {
+        impl serde::de::Visitor<'_> for OmniAddressVisitor {
             type Value = OmniAddress;
 
             fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
