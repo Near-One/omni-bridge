@@ -26,18 +26,18 @@ panic = "abort"
 overflow-checks = true
 
 [workspace.dependencies]
-near-sdk = "5.3.0"
-near-contract-standards = "5.3.0"
+near-sdk = "5.7.0"
+near-contract-standards = "5.7.0"
 hex = "0.4.2"
 borsh = "1.5.1"
 serde = { version = "1.0.200", features = ["derive"] }
-near-plugins = { git = "https://github.com/aurora-is-near/near-plugins", tag = "v0.4.0" }
+near-plugins = { git = "https://github.com/aurora-is-near/near-plugins", tag = "v0.4.1" }
 omni-types = { path = "omni-types" }
 strum_macros = "0.26"
-near-workspaces = "0.15.0"
+near-workspaces = "0.16.0"
 tokio = "1.40"
 anyhow = "1"
-alloy-sol-types = "=0.8.13"
+alloy-sol-types = "0.8"
 ethereum-types = { version = "0.15.1", default-features = false, features = ["rlp", "serialize"] }
 rlp = "0.6"
 sha3 = "0.10.0"
