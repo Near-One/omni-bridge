@@ -36,6 +36,10 @@ jobs:
           cache-all-crates: true
           shared-key: "lint-${{ matrix.component }}"
           workspaces: ${{ matrix.component }}
+
+      - name: Install cargo-near
+        run: |
+          curl --proto '=https' --tlsv1.2 -LsSf https://github.com/near/cargo-near/releases/latest/download/cargo-near-installer.sh | sh
           
       - name: Run clippy
         run: make clippy-${{ matrix.component }}

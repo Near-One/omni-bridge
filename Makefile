@@ -13,7 +13,7 @@ OMNI_RELAYER_MANIFEST = ./omni-relayer/Cargo.toml
 
 clippy: clippy-near clippy-omni-relayer
 
-clippy-near: rust-build-token
+clippy-near: rust-build-omni-token
 	cargo clippy --manifest-path $(NEAR_MANIFEST) -- $(LINT_OPTIONS)
 
 fmt-near:
