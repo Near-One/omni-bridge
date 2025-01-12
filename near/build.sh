@@ -86,7 +86,12 @@ docker run \
      -w /host \
      -e RUSTFLAGS='-C link-arg=-s' \
      nearprotocol/contract-builder$tag \
-     /bin/bash -c "rustup target add wasm32-unknown-unknown && $BUILD_CMD"
+     /bin/bash -c "
+         rustup install 1.81.0 && \
+         rustup default 1.81.0 && \
+         rustup target add wasm32-unknown-unknown && \
+         $BUILD_CMD
+     "
 
 mkdir -p $RES_DIR
 
