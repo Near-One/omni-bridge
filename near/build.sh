@@ -68,14 +68,14 @@ else
 fi
 
 if [ -z "$COMPONENT" ]; then
-    BUILD_CMD="cargo build --workspace --target wasm32-unknown-unknown --release"
+    BUILD_CMD="cargo build --workspace --target wasm32-unknown-unknown"
     echo "Building entire workspace..."
 else
     if [ ! -d "$DIR/$COMPONENT" ]; then
         echo "Error: Directory '$COMPONENT' not found in $DIR"
         exit 1
     fi
-    BUILD_CMD="cargo build --manifest-path $COMPONENT/Cargo.toml --target wasm32-unknown-unknown --release"
+    BUILD_CMD="cargo build --manifest-path $COMPONENT/Cargo.toml --target wasm32-unknown-unknown"
     echo "Building component: $COMPONENT"
 fi
 

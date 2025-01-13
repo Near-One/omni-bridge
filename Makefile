@@ -13,7 +13,7 @@ OMNI_RELAYER_MANIFEST = ./omni-relayer/Cargo.toml
 
 clippy: clippy-near clippy-omni-relayer
 
-clippy-near: rust-build-omni-token
+clippy-near:
 	cargo clippy --manifest-path $(NEAR_MANIFEST) -- $(LINT_OPTIONS)
 
 fmt-near:
@@ -40,9 +40,9 @@ rust-build-mock-prover:
 rust-build-mock-token:
 	cargo near build non-reproducible-wasm --manifest-path $(MOCK_TOKEN_MANIFEST) --no-abi
 
-rust-build-near: rust-build-omni-token rust-build-omni-bridge rust-build-token-deployer rust-build-mock-prover rust-build-mock-token
+rust-build-near: rust-build-omni-bridge rust-build-omni-token rust-build-token-deployer rust-build-mock-prover rust-build-mock-token
 
-rust-build-tests: rust-build-omni-token
+rust-build-tests:
 	cargo build --manifest-path $(NEAR_MANIFEST) --tests --all-features
 
 rust-run-tests: rust-build-tests

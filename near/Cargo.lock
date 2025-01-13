@@ -4608,6 +4608,7 @@ name = "token-deployer"
 version = "0.1.0"
 dependencies = [
  "borsh",
+ "cargo-near-build",
  "hex",
  "near-contract-standards",
  "near-plugins",
