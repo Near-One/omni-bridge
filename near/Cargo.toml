@@ -31,7 +31,7 @@ near-contract-standards = "5.2.0"
 hex = "0.4.2"
 borsh = "1.5.1"
 serde = { version = "1.0.200", features = ["derive"] }
-near-plugins = { git = "https://github.com/aurora-is-near/near-plugins", tag = "v0.3.0" }
+near-plugins = { git = "https://github.com/aurora-is-near/near-plugins", tag = "v0.4.1" }
 omni-types = { path = "omni-types" }
 strum_macros = "0.26"
 near-workspaces = "0.12.0"
