@@ -53,7 +53,7 @@ task("deploy-bridge-token-factory", "Deploys the OmniBridge contract")
     const omniChainId = networkConfig.omniChainId
     const wormholeAddress = networkConfig.wormholeAddress
 
-    const mpcRootPublicKey = hre.network.name.endsWith("mainnet")
+    const mpcRootPublicKey = hre.network.name.toLowerCase().endsWith("mainnet")
       ? mpcRootPublicKeys.mainnet.key
       : mpcRootPublicKeys.testnet.key
 
