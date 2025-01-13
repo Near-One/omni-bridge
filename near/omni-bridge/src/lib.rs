@@ -414,6 +414,8 @@ impl Contract {
             decimals,
         );
 
+        require!(amount_to_transfer > 0, "Invalid amount to transfer");
+
         let transfer_payload = TransferMessagePayload {
             prefix: PayloadType::TransferMessage,
             destination_nonce: transfer_message.destination_nonce,
@@ -905,6 +907,10 @@ impl Contract {
 
     pub fn get_current_destination_nonce(&self, chain_kind: ChainKind) -> Nonce {
         self.destination_nonces.get(&chain_kind).unwrap_or_default()
+    }
+
+    pub fn get_mpc_account(&self) -> AccountId {
+        self.mpc_signer.clone()
     }
 }
 
