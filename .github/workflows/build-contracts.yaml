@@ -31,7 +31,7 @@ jobs:
         if: matrix.platform == 'near' || matrix.platform == 'solana'
         uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: 1.79.0
+          toolchain: 1.80.0
           target: wasm32-unknown-unknown
 
       - name: Install NEAR CLI RS
