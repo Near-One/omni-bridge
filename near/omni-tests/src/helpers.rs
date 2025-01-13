@@ -10,13 +10,6 @@ pub mod tests {
         BasicMetadata, ChainKind, Nonce, OmniAddress, TransferId,
     };
 
-    //pub const MOCK_TOKEN_PATH: &str = "./../target/wasm32-unknown-unknown/release/mock_token.wasm";
-    //pub const MOCK_PROVER_PATH: &str =
-    //    "./../target/wasm32-unknown-unknown/release/mock_prover.wasm";
-    //pub const LOCKER_PATH: &str = "./../target/wasm32-unknown-unknown/release/omni_bridge.wasm";
-    //pub const TOKEN_DEPLOYER_PATH: &str =
-    //    "./../target/wasm32-unknown-unknown/release/token_deployer.wasm";
-
     pub const NEP141_DEPOSIT: NearToken = NearToken::from_yoctonear(1250000000000000000000);
 
     pub static MOCK_TOKEN_WASM: LazyLock<Vec<u8>> = LazyLock::new(|| {
@@ -29,7 +22,6 @@ pub mod tests {
             ..Default::default()
         })
         .expect("building `mock-token` contract for tests");
-
         std::fs::read(&artifact.path).unwrap()
     });
 

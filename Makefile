@@ -42,7 +42,7 @@ rust-build-mock-token:
 
 rust-build-near: rust-build-omni-token rust-build-omni-bridge rust-build-token-deployer rust-build-mock-prover rust-build-mock-token
 
-rust-build-tests: rust-build-token-deployer
+rust-build-tests: rust-build-omni-token
 	cargo build --manifest-path $(NEAR_MANIFEST) --tests --all-features
 
 rust-run-tests: rust-build-tests
