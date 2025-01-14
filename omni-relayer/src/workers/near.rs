@@ -26,6 +26,7 @@ pub struct InitTransferWithTimestamp {
 }
 
 pub async fn sign_transfer(
+    #[cfg(not(feature = "disable_fee_check"))]
     config: config::Config,
     redis_client: redis::Client,
     connector: Arc<OmniConnector>,
@@ -53,6 +54,7 @@ pub async fn sign_transfer(
                 serde_json::from_str::<InitTransferWithTimestamp>(&event)
             {
                 handlers.push(tokio::spawn({
+                    #[cfg(not(feature = "disable_fee_check"))]
                     let config = config.clone();
                     let mut redis_connection = redis_connection.clone();
                     let connector = connector.clone();
@@ -90,13 +92,31 @@ pub async fn sign_transfer(
                             "Received InitTransferEvent/FinTransferEvent/UpdateFeeEvent",
                         );
 
+                        #[cfg(not(feature = "disable_fee_check"))]
+                        match utils::fee::is_fee_sufficient(
+                            &config,
+                            transfer_message.fee.clone(), 
+                            &transfer_message.sender,
+                            &transfer_message.recipient, 
+                            &transfer_message.token
+                        ).await {
+                            Ok(true) => {}
+                            Ok(false) => {
+                                warn!("Insufficient fee for transfer: {:?}", transfer_message);
+                                return;
+                            }
+                            Err(err) => {
+                                warn!("Failed to check fee sufficiency: {}", err);
+                                return;
+                            }
+                        }
 
-                        // TODO: Use existing API to check if fee is sufficient
-
-                        let fee_recipient = connector
+                        let Ok(fee_recipient) = connector
                             .near_bridge_client()
-                            .and_then(|connector| connector.signer().map(|signer| signer.account_id))
-                            .unwrap_or(config.near.token_locker_id.clone());
+                            .and_then(|connector| connector.signer().map(|signer| signer.account_id)) else {
+                                warn!("Failed to set signer account id as fee recipient");
+                                return;
+                            };
 
                         match connector
                             .near_sign_transfer(
@@ -119,7 +139,7 @@ pub async fn sign_transfer(
                                 .await;
                             }
                             Err(err) => {
-                                error!("Failed to sign transfer: {}", err);
+                                warn!("Failed to sign transfer: {}", err);
                             }
                         }
 
@@ -190,6 +210,23 @@ pub async fn finalize_transfer(
 
                         info!("Received SignTransferEvent");
 
+                        let fee_recipient = connector
+                            .near_bridge_client()
+                            .and_then(|connector| connector.signer().map(|signer| signer.account_id)).ok();
+
+                        if message_payload.fee_recipient != fee_recipient {
+                            warn!(
+                                "Fee recipient mismatch: expected {:?}, got {:?}",
+                                fee_recipient, message_payload.fee_recipient
+                            );
+                            utils::redis::remove_event(
+                                &mut redis_connection,
+                                utils::redis::NEAR_SIGN_TRANSFER_EVENTS,
+                                &key,
+                            ).await;
+                            return;
+                        }
+
                         let fin_transfer_args = match message_payload.recipient.get_chain() {
                             ChainKind::Near => {
                                 warn!("Near to Near transfers are not supported yet");
@@ -229,7 +266,7 @@ pub async fn finalize_transfer(
                                 .await;
                             }
                             Err(err) => {
-                                error!("Failed to finalize deposit: {}", err);
+                                warn!("Failed to finalize deposit: {}", err);
                             }
                         }
                     }
@@ -253,6 +290,8 @@ pub enum FinTransfer {
         block_number: u64,
         log: Log,
         tx_logs: Option<Box<TransactionReceipt>>,
+        creation_timestamp: i64,
+        expected_finalization_time: i64,
     },
     Solana {
         emitter: String,
@@ -292,10 +331,10 @@ pub async fn claim_fee(
                     block_number,
                     log,
                     tx_logs,
+                    creation_timestamp,
+                    expected_finalization_time
                 } = fin_transfer
                 {
-                    info!("Trying to process FinTransfer log on {:?}", chain_kind);
-
                     handlers.push(tokio::spawn({
                         let config = config.clone();
                         let mut redis_connection = redis_connection.clone();
@@ -303,7 +342,13 @@ pub async fn claim_fee(
                         let jsonrpc_client = jsonrpc_client.clone();
 
                         async move {
-                            info!("Received finalized transfer");
+                            let current_timestamp = chrono::Utc::now().timestamp();
+
+                            if current_timestamp < creation_timestamp + expected_finalization_time {
+                                return;
+                            }
+                            
+                            info!("Trying to process FinTransfer log on {:?}", chain_kind);
 
                             let vaa = utils::evm::get_vaa_from_evm_log(
                                 connector.clone(),

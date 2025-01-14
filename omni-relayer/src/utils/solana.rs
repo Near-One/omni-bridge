@@ -75,19 +75,25 @@ async fn decode_instruction(
             .context("Decoded data is too short")?;
 
         if let Ok(payload) = InitTransferPayload::deserialize(&mut payload_data) {
-            let (token, emitter) = if discriminator == &solana.init_transfer_discriminator {
+            let (sender, token, emitter) = if discriminator == &solana.init_transfer_discriminator {
+                let sender = account_keys
+                    .get(solana.init_transfer_sender_index)
+                    .context("Missing sender account key")?;
                 let token = account_keys
                     .get(solana.init_transfer_token_index)
                     .context("Missing token account key")?;
                 let emitter = account_keys
                     .get(solana.init_transfer_emitter_index)
                     .context("Missing emitter account key")?;
-                (token, emitter)
+                (sender, token, emitter)
             } else {
+                let sender = account_keys
+                    .get(solana.init_transfer_sol_sender_index)
+                    .context("Missing SOL sender account key")?;
                 let emitter = account_keys
                     .get(solana.init_transfer_sol_emitter_index)
                     .context("Missing SOL emitter account key")?;
-                (&Pubkey::default().to_string(), emitter)
+                (sender, &Pubkey::default().to_string(), emitter)
             };
 
             if let Some(OptionSerializer::Some(logs)) =
@@ -116,6 +122,7 @@ async fn decode_instruction(
                             InitTransferWithTimestamp {
                                 amount: payload.amount,
                                 token: token.clone(),
+                                sender: sender.clone(),
                                 recipient: payload.recipient.clone(),
                                 fee: payload.fee,
                                 native_fee: payload.native_fee,

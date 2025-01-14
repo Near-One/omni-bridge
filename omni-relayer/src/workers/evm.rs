@@ -2,11 +2,13 @@ use std::sync::Arc;
 
 use anyhow::Result;
 use futures::future::join_all;
-use log::{error, info, warn};
+use log::{info, warn};
 
 use alloy::rpc::types::{Log, TransactionReceipt};
 use ethereum_types::H256;
 use omni_connector::OmniConnector;
+#[cfg(not(feature = "disable_fee_check"))]
+use omni_types::Fee;
 use omni_types::{prover_result::ProofKind, ChainKind, OmniAddress};
 
 use crate::{config, utils};
@@ -19,6 +21,7 @@ pub struct InitTransferWithTimestamp {
     pub tx_logs: Option<Box<TransactionReceipt>>,
     pub creation_timestamp: i64,
     pub last_update_timestamp: Option<i64>,
+    pub expected_finalization_time: i64,
 }
 
 pub async fn finalize_transfer(
@@ -86,6 +89,13 @@ async fn handle_init_transfer_event(
     let current_timestamp = chrono::Utc::now().timestamp();
 
     if current_timestamp
+        < init_transfer_with_timestamp.creation_timestamp
+            + init_transfer_with_timestamp.expected_finalization_time
+    {
+        return;
+    }
+
+    if current_timestamp
         - init_transfer_with_timestamp
             .last_update_timestamp
             .unwrap_or_default()
@@ -94,18 +104,15 @@ async fn handle_init_transfer_event(
         return;
     }
 
-    let init_log = match init_transfer_with_timestamp
+    let Ok(init_log) = init_transfer_with_timestamp
         .log
         .log_decode::<utils::evm::InitTransfer>()
-    {
-        Ok(init_log) => init_log,
-        Err(_) => {
-            warn!(
-                "Failed to decode log as InitTransfer: {:?}",
-                init_transfer_with_timestamp.log
-            );
-            return;
-        }
+    else {
+        warn!(
+            "Failed to decode log as InitTransfer: {:?}",
+            init_transfer_with_timestamp.log
+        );
+        return;
     };
 
     info!(
@@ -113,26 +120,73 @@ async fn handle_init_transfer_event(
         init_transfer_with_timestamp.chain_kind
     );
 
-    let tx_hash = match init_transfer_with_timestamp.log.transaction_hash {
-        Some(tx_hash) => tx_hash,
-        None => {
-            warn!("No transaction hash in log: {:?}", init_log);
-            return;
-        }
+    let Some(tx_hash) = init_transfer_with_timestamp.log.transaction_hash else {
+        warn!("No transaction hash in log: {:?}", init_log);
+        return;
     };
 
-    let recipient = match init_log.inner.recipient.parse::<OmniAddress>() {
-        Ok(recipient) => recipient,
-        Err(_) => {
-            warn!(
-                "Failed to parse recipient as OmniAddress: {:?}",
-                init_log.inner.recipient
-            );
-            return;
-        }
+    let Ok(recipient) = init_log.inner.recipient.parse::<OmniAddress>() else {
+        warn!(
+            "Failed to parse recipient as OmniAddress: {:?}",
+            init_log.inner.recipient
+        );
+        return;
     };
 
-    // TODO: Use existing API to check if fee is sufficient here
+    #[cfg(not(feature = "disable_fee_check"))]
+    {
+        let sender = match utils::evm::string_to_evm_omniaddress(
+            init_transfer_with_timestamp.chain_kind,
+            init_log.inner.sender.to_string(),
+        )
+        .await
+        {
+            Ok(sender) => sender,
+            Err(err) => {
+                warn!("{}", err);
+                return;
+            }
+        };
+
+        let token = match utils::evm::string_to_evm_omniaddress(
+            init_transfer_with_timestamp.chain_kind,
+            init_log.inner.tokenAddress.to_string(),
+        )
+        .await
+        {
+            Ok(token) => token,
+            Err(err) => {
+                warn!("{}", err);
+                return;
+            }
+        };
+
+        match utils::fee::is_fee_sufficient(
+            &config,
+            Fee {
+                fee: init_log.inner.fee.into(),
+                native_fee: init_log.inner.nativeFee.into(),
+            },
+            &sender,
+            &recipient,
+            &token,
+        )
+        .await
+        {
+            Ok(true) => {}
+            Ok(false) => {
+                warn!(
+                    "Insufficient fee for transfer: {:?}",
+                    init_transfer_with_timestamp
+                );
+                return;
+            }
+            Err(err) => {
+                warn!("Failed to check fee sufficiency: {}", err);
+                return;
+            }
+        }
+    }
 
     let vaa = utils::evm::get_vaa_from_evm_log(
         connector.clone(),
@@ -156,6 +210,7 @@ async fn handle_init_transfer_event(
                 };
 
             if init_transfer_with_timestamp.block_number > light_client_latest_block_number {
+                warn!("ETH light client is not synced yet");
                 tokio::time::sleep(tokio::time::Duration::from_secs(
                     utils::redis::SLEEP_TIME_AFTER_EVENTS_PROCESS_SECS,
                 ))
@@ -231,7 +286,7 @@ async fn handle_init_transfer_event(
             )
             .await;
         }
-        Err(err) => error!("Failed to finalize InitTransfer: {}", err),
+        Err(err) => warn!("Failed to finalize InitTransfer: {}", err),
     }
 
     if current_timestamp - init_transfer_with_timestamp.creation_timestamp

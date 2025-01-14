@@ -14,7 +14,11 @@ use solana_sdk::{commitment_config::CommitmentConfig, pubkey::Pubkey};
 
 use crate::{config, utils};
 
-pub async fn start_indexer(config: config::Config, redis_client: redis::Client) -> Result<()> {
+pub async fn start_indexer(
+    config: config::Config,
+    redis_client: redis::Client,
+    start_signature: Option<String>,
+) -> Result<()> {
     let Some(solana_config) = config.solana else {
         anyhow::bail!("Failed to get Solana config");
     };
@@ -27,8 +31,13 @@ pub async fn start_indexer(config: config::Config, redis_client: redis::Client) 
 
     let http_client = RpcClient::new(rpc_http_url.to_string());
 
-    if let Err(e) =
-        process_recent_signatures(&mut redis_connection, &http_client, &program_id).await
+    if let Err(e) = process_recent_signatures(
+        &mut redis_connection,
+        &http_client,
+        &program_id,
+        start_signature,
+    )
+    .await
     {
         warn!("Failed to fetch recent logs: {}", e);
     }
@@ -75,14 +84,33 @@ async fn process_recent_signatures(
     redis_connection: &mut redis::aio::MultiplexedConnection,
     http_client: &RpcClient,
     program_id: &Pubkey,
+    start_signature: Option<String>,
 ) -> Result<()> {
-    let Some(last_signature) = utils::redis::get_last_processed::<&str, String>(
-        redis_connection,
-        &utils::redis::get_last_processed_key(ChainKind::Sol).await,
-    )
-    .await
-    .map(|s| Signature::from_str(&s).ok()) else {
-        return Ok(());
+    let from_signature = match start_signature {
+        Some(signature) => {
+            utils::redis::add_event(
+                redis_connection,
+                utils::redis::SOLANA_EVENTS,
+                signature.clone(),
+                // TODO: It's better to come up with a solution that wouldn't require storing `Null` value
+                serde_json::Value::Null,
+            )
+            .await;
+
+            Signature::from_str(&signature)?
+        }
+        None => {
+            let Some(signature) = utils::redis::get_last_processed::<&str, String>(
+                redis_connection,
+                &utils::redis::get_last_processed_key(ChainKind::Sol).await,
+            )
+            .await
+            .and_then(|s| Signature::from_str(&s).ok()) else {
+                return Ok(());
+            };
+
+            signature
+        }
     };
 
     let signatures: Vec<RpcConfirmedTransactionStatusWithSignature> = http_client
@@ -91,7 +119,7 @@ async fn process_recent_signatures(
             GetConfirmedSignaturesForAddress2Config {
                 limit: None,
                 before: None,
-                until: last_signature,
+                until: Some(from_signature),
                 commitment: Some(CommitmentConfig::confirmed()),
             },
         )

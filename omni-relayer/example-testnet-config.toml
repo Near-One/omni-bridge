@@ -1,0 +1,67 @@
+[redis]
+url = "redis://127.0.0.1/"
+
+[bridge_indexer]
+api_url = "http://127.0.0.1:8080"
+
+[near]
+network = "testnet"
+rpc_url = "https://rpc.testnet.near.org/"
+token_locker_id = "omni-locker.testnet"
+
+[eth]
+rpc_http_url = "https://sepolia.infura.io/v3/API_KEY"
+rpc_ws_url = "wss://sepolia.infura.io/ws/v3/API_KEY"
+chain_id = 11_155_111
+bridge_token_factory_address = "0x3701B9859Dbb9a4333A3dd933ab18e9011ddf2C8"
+light_client = "client-eth2.sepolia.testnet"
+block_processing_batch_size = 10_000
+# https://wormhole.com/docs/build/reference/consistency-levels/
+expected_finalization_time = 1095
+
+[base]
+rpc_http_url = "https://base-sepolia.infura.io/v3/API_KEY"
+rpc_ws_url = "wss://base-sepolia.infura.io/ws/v3/API_KEY"
+chain_id = 84_532
+bridge_token_factory_address = "0x0C981337fFe39a555d3A40dbb32f21aD0eF33FFA"
+block_processing_batch_size = 10_000
+# https://wormhole.com/docs/build/reference/consistency-levels/
+expected_finalization_time = 1026
+
+[arb]
+rpc_http_url = "https://arbitrum-sepolia.infura.io/v3/API_KEY"
+rpc_ws_url = "wss://arbitrum-sepolia.infura.io/ws/v3/API_KEY"
+chain_id = 421_614
+bridge_token_factory_address = "0xd025b38762B4A4E36F0Cde483b86CB13ea00D989"
+block_processing_batch_size = 10_000
+# https://wormhole.com/docs/build/reference/consistency-levels/
+expected_finalization_time = 1066
+
+[solana]
+rpc_http_url = "https://api.devnet.solana.com"
+rpc_ws_url = "wss://api.devnet.solana.com"
+# Program ID on Solana is an account ID whitch the bridge contract (basically bridge_token_factory_address on Solana)
+program_id = "Gy1XPwYZURfBzHiGAxnw3SYC33SfqsEpGSS5zeBge28p"
+# This is the wormhole contract ID on Solana (can be found here https://wormhole.com/docs/build/reference/contract-addresses/#__tabbed_1_2)
+wormhole_id = "3u8hJUVTA4jH1wYAyUur7FFZVQ8H635K3tSHHF4ssjQ5"
+# There's a list of account keys and they are store in a strict order. We need indexes to get the right key
+init_transfer_sender_index = 0
+init_transfer_token_index = 6
+init_transfer_emitter_index = 15
+init_transfer_sol_sender_index = 0
+init_transfer_sol_emitter_index = 11
+# Discriminators are used to identify the type of the event (can be found during the building process of solana's contract)
+init_transfer_discriminator = [174, 50, 134, 99, 122, 243, 243, 224]
+init_transfer_sol_discriminator = [124, 167, 164, 191, 81, 140, 108, 30]
+finalize_transfer_emitter_index = 9
+finalize_transfer_sol_emitter_index = 8
+finalize_transfer_discriminator = [124, 126, 103, 188, 144, 65, 135, 51]
+finalize_transfer_sol_discriminator = [104, 27, 121, 69, 3, 70, 217, 66]
+
+[wormhole]
+api_url = "https://api.testnet.wormholescan.io/"
+solana_chain_id = 1
+near_chain_id = 15
+eth_chain_id = 10_002
+arb_chain_id = 10_003
+base_chain_id = 10_004

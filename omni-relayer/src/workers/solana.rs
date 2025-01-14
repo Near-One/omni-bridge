@@ -2,13 +2,17 @@ use std::{str::FromStr, sync::Arc};
 
 use anyhow::Result;
 use futures::future::join_all;
-use log::{error, info, warn};
+use log::{info, warn};
 
 use omni_connector::OmniConnector;
+#[cfg(not(feature = "disable_fee_check"))]
+use omni_types::Fee;
 use omni_types::{
     prover_args::WormholeVerifyProofArgs, prover_result::ProofKind, ChainKind, OmniAddress,
 };
 use solana_client::nonblocking::rpc_client::RpcClient;
+#[cfg(not(feature = "disable_fee_check"))]
+use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::Signature;
 use solana_transaction_status::{UiMessage, UiTransactionEncoding};
 
@@ -94,8 +98,8 @@ pub async fn process_signature(config: config::Config, redis_client: redis::Clie
                             )
                             .await;
                         }
-                        Err(e) => {
-                            warn!("Failed to fetch transaction (probably signature wasn't finalized yet): {}", e);
+                        Err(err) => {
+                            warn!("Failed to fetch transaction (probably signature wasn't finalized yet): {}", err);
                         }
                     };
                 }
@@ -115,6 +119,7 @@ pub async fn process_signature(config: config::Config, redis_client: redis::Clie
 pub struct InitTransferWithTimestamp {
     pub amount: u128,
     pub token: String,
+    pub sender: String,
     pub recipient: String,
     pub fee: u128,
     pub native_fee: u64,
@@ -210,7 +215,64 @@ async fn handle_init_transfer_event(
         }
     };
 
-    // TODO: Use existing API to check if fee is sufficient here
+    #[cfg(not(feature = "disable_fee_check"))]
+    {
+        let Ok(sender) = Pubkey::from_str(&init_transfer_with_timestamp.sender) else {
+            warn!(
+                "Failed to parse sender address as Pubkey: {:?}",
+                init_transfer_with_timestamp.sender
+            );
+            return;
+        };
+        let Ok(sender) = OmniAddress::new_from_slice(ChainKind::Sol, &sender.to_bytes()) else {
+            warn!(
+                "Failed to convert sender address to OmniAddress: {:?}",
+                init_transfer_with_timestamp.sender
+            );
+            return;
+        };
+
+        let Ok(token) = Pubkey::from_str(&init_transfer_with_timestamp.token) else {
+            warn!(
+                "Failed to parse token address as Pubkey: {:?}",
+                init_transfer_with_timestamp.token
+            );
+            return;
+        };
+        let Ok(token) = OmniAddress::new_from_slice(ChainKind::Sol, &token.to_bytes()) else {
+            warn!(
+                "Failed to convert token address to OmniAddress: {:?}",
+                init_transfer_with_timestamp.token
+            );
+            return;
+        };
+
+        match utils::fee::is_fee_sufficient(
+            &config,
+            Fee {
+                fee: init_transfer_with_timestamp.fee.into(),
+                native_fee: (init_transfer_with_timestamp.native_fee as u128).into(),
+            },
+            &sender,
+            &recipient,
+            &token,
+        )
+        .await
+        {
+            Ok(true) => {}
+            Ok(false) => {
+                warn!(
+                    "Insufficient fee for transfer: {:?}",
+                    init_transfer_with_timestamp
+                );
+                return;
+            }
+            Err(err) => {
+                warn!("Failed to check fee sufficiency: {}", err);
+                return;
+            }
+        }
+    }
 
     let Ok(vaa) = connector
         .wormhole_get_vaa(
@@ -269,7 +331,7 @@ async fn handle_init_transfer_event(
             )
             .await;
         }
-        Err(err) => error!("Failed to finalize InitTransfer: {}", err),
+        Err(err) => warn!("Failed to finalize InitTransfer: {}", err),
     }
 
     if current_timestamp - init_transfer_with_timestamp.creation_timestamp

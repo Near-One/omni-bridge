@@ -12,7 +12,7 @@ chrono = "0.4"
 anyhow = "1"
 futures = "0.3.5"
 
-clap = "4.5"
+clap = { version = "4.5", features = ["derive"] }
 dotenv = "0.15"
 toml = "0.8.19"
 serde = { version = "1.0", features = ["derive"] }
@@ -30,23 +30,25 @@ ethereum-types = "0.14.1"
 omni-types = { git = "https://github.com/near-one/omni-bridge", package = "omni-types", rev = "11ffdb63706ceba175f7581585bd837aad9f1559" }
 
 near-lake-framework = "0.7.9"
-near-jsonrpc-client = "0.13.0"
-near-jsonrpc-primitives = "0.26.0"
-near-primitives = "0.26.0"
-near-crypto = "0.26.0"
+near-jsonrpc-client = "0.15.1"
+near-jsonrpc-primitives = "0.28.0"
+near-primitives = "0.28.0"
+near-crypto = "0.28.0"
 
 hex = "0.4.3"
-secp256k1 = "0.30.0"
-alloy = { version = "0.8.3", features = ["node-bindings", "providers", "rpc-types", "sol-types", "provider-ws", "signers", "signer-local"] }
+alloy = { version = "0.8", features = ["node-bindings", "providers", "rpc-types", "sol-types", "provider-ws", "signers", "signer-local"] }
 
-redis = { version = "0.27.0", features = ["aio", "tokio-comp"] }
+redis = { version = "0.28.1", features = ["aio", "tokio-comp"] }
 reqwest = "0.12"
 
-eth-proof = { git = "https://github.com/Near-One/rainbow-bridge-sdk-rs", package = "eth-proof", branch = "refactor/solana-bridge-client" }
+eth-proof = { git = "https://github.com/Near-One/rainbow-bridge-sdk-rs", package = "eth-proof" }
 
-near-bridge-client = { git = "https://github.com/Near-One/rainbow-bridge-sdk-rs", package = "near-bridge-client", branch = "refactor/solana-bridge-client" }
-evm-bridge-client = { git = "https://github.com/Near-One/rainbow-bridge-sdk-rs", package = "evm-bridge-client", branch = "refactor/solana-bridge-client"}
-solana-bridge-client = { git = "https://github.com/Near-One/rainbow-bridge-sdk-rs", package = "solana-bridge-client", branch = "refactor/solana-bridge-client" }
-wormhole-bridge-client = { git = "https://github.com/Near-One/rainbow-bridge-sdk-rs", package = "wormhole-bridge-client", branch = "refactor/solana-bridge-client" }
+near-bridge-client = { git = "https://github.com/Near-One/rainbow-bridge-sdk-rs", package = "near-bridge-client" }
+evm-bridge-client = { git = "https://github.com/Near-One/rainbow-bridge-sdk-rs", package = "evm-bridge-client" }
+solana-bridge-client = { git = "https://github.com/Near-One/rainbow-bridge-sdk-rs", package = "solana-bridge-client" }
+wormhole-bridge-client = { git = "https://github.com/Near-One/rainbow-bridge-sdk-rs", package = "wormhole-bridge-client" }
 
-omni-connector = { git = "https://github.com/Near-One/rainbow-bridge-sdk-rs", package = "omni-connector", branch = "refactor/solana-bridge-client" }
+omni-connector = { git = "https://github.com/Near-One/rainbow-bridge-sdk-rs", package = "omni-connector" }
+
+[features]
+disable_fee_check = []
