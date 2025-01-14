@@ -106,7 +106,7 @@ pub async fn sign_transfer(
                                 return;
                             }
                             Err(err) => {
-                                error!("Failed to check fee sufficiency: {}", err);
+                                warn!("Failed to check fee sufficiency: {}", err);
                                 return;
                             }
                         }
@@ -139,7 +139,7 @@ pub async fn sign_transfer(
                                 .await;
                             }
                             Err(err) => {
-                                error!("Failed to sign transfer: {}", err);
+                                warn!("Failed to sign transfer: {}", err);
                             }
                         }
 
@@ -266,7 +266,7 @@ pub async fn finalize_transfer(
                                 .await;
                             }
                             Err(err) => {
-                                error!("Failed to finalize deposit: {}", err);
+                                warn!("Failed to finalize deposit: {}", err);
                             }
                         }
                     }

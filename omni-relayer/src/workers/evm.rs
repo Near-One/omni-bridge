@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use anyhow::Result;
 use futures::future::join_all;
-use log::{error, info, warn};
+use log::{info, warn};
 
 use alloy::rpc::types::{Log, TransactionReceipt};
 use ethereum_types::H256;
@@ -192,7 +192,7 @@ async fn handle_init_transfer_event(
                 return;
             }
             Err(err) => {
-                error!("Failed to check fee sufficiency: {}", err);
+                warn!("Failed to check fee sufficiency: {}", err);
                 return;
             }
         }
@@ -296,7 +296,7 @@ async fn handle_init_transfer_event(
             )
             .await;
         }
-        Err(err) => error!("Failed to finalize InitTransfer: {}", err),
+        Err(err) => warn!("Failed to finalize InitTransfer: {}", err),
     }
 
     if current_timestamp - init_transfer_with_timestamp.creation_timestamp
