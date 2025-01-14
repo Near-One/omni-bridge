@@ -1,12 +1,13 @@
-use std::sync::Arc;
+use std::{str::FromStr, sync::Arc};
 
 use log::warn;
 
+use anyhow::Result;
 use omni_connector::OmniConnector;
 use omni_types::{
     prover_args::{EvmVerifyProofArgs, WormholeVerifyProofArgs},
     prover_result::ProofKind,
-    ChainKind,
+    ChainKind, OmniAddress, H160,
 };
 
 use alloy::sol;
@@ -140,4 +141,16 @@ pub async fn construct_prover_args(
     };
 
     borsh::to_vec(&evm_proof_args).ok()
+}
+
+pub async fn string_to_evm_omniaddress(
+    chain_kind: ChainKind,
+    address: String,
+) -> Result<OmniAddress> {
+    OmniAddress::new_from_evm_address(
+        chain_kind,
+        H160::from_str(&address)
+            .map_err(|err| anyhow::anyhow!("Failed to parse as H160 address: {:?}", err))?,
+    )
+    .map_err(|err| anyhow::anyhow!("Failed to parse as EvmOmniAddress address: {:?}", err))
 }

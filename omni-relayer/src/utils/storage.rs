@@ -4,8 +4,10 @@ use anyhow::Result;
 
 use near_primitives::types::AccountId;
 use omni_connector::OmniConnector;
-use omni_types::{locker_args::StorageDepositAction, ChainKind, OmniAddress, H160};
+use omni_types::{locker_args::StorageDepositAction, ChainKind, OmniAddress};
 use solana_sdk::pubkey::Pubkey;
+
+use crate::utils;
 
 async fn get_token_id(
     connector: &OmniConnector,
@@ -23,10 +25,9 @@ async fn get_token_id(
             Ok(OmniAddress::Near(token))
         }
         ChainKind::Eth | ChainKind::Base | ChainKind::Arb => {
-            let token = H160::from_str(token_address).map_err(|_| {
-                format!("Failed to parse token address as H160: {:?}", token_address)
-            })?;
-            OmniAddress::new_from_evm_address(chain_kind, token)
+            utils::evm::string_to_evm_omniaddress(chain_kind, token_address.to_string())
+                .await
+                .map_err(|err| err.to_string())
         }
         ChainKind::Sol => {
             let token = Pubkey::from_str(token_address).map_err(|_| {

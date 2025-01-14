@@ -1,5 +1,3 @@
-#[cfg(not(feature = "disable_fee_check"))]
-use std::str::FromStr;
 use std::sync::Arc;
 
 use anyhow::Result;
@@ -9,9 +7,9 @@ use log::{info, warn};
 use alloy::rpc::types::{Log, TransactionReceipt};
 use ethereum_types::H256;
 use omni_connector::OmniConnector;
-use omni_types::{prover_result::ProofKind, ChainKind, OmniAddress};
 #[cfg(not(feature = "disable_fee_check"))]
-use omni_types::{Fee, H160};
+use omni_types::Fee;
+use omni_types::{prover_result::ProofKind, ChainKind, OmniAddress};
 
 use crate::{config, utils};
 
@@ -137,38 +135,30 @@ async fn handle_init_transfer_event(
 
     #[cfg(not(feature = "disable_fee_check"))]
     {
-        let Ok(sender) = H160::from_str(&init_log.inner.sender.to_string()) else {
-            warn!(
-                "Failed to parse sender as H160: {:?}",
-                init_log.inner.sender
-            );
-            return;
-        };
-        let Ok(sender) =
-            OmniAddress::new_from_evm_address(init_transfer_with_timestamp.chain_kind, sender)
-        else {
-            warn!(
-                "Failed to convert sender to OmniAddress: {:?}",
-                init_log.inner.sender
-            );
-            return;
+        let sender = match utils::evm::string_to_evm_omniaddress(
+            init_transfer_with_timestamp.chain_kind,
+            init_log.inner.sender.to_string(),
+        )
+        .await
+        {
+            Ok(sender) => sender,
+            Err(err) => {
+                warn!("{}", err);
+                return;
+            }
         };
 
-        let Ok(token) = H160::from_str(&init_log.inner.tokenAddress.to_string()) else {
-            warn!(
-                "Failed to parse token address as H160: {:?}",
-                init_log.inner.tokenAddress
-            );
-            return;
-        };
-        let Ok(token) =
-            OmniAddress::new_from_evm_address(init_transfer_with_timestamp.chain_kind, token)
-        else {
-            warn!(
-                "Failed to convert token address to OmniAddress: {:?}",
-                init_log.inner.tokenAddress
-            );
-            return;
+        let token = match utils::evm::string_to_evm_omniaddress(
+            init_transfer_with_timestamp.chain_kind,
+            init_log.inner.tokenAddress.to_string(),
+        )
+        .await
+        {
+            Ok(token) => token,
+            Err(err) => {
+                warn!("{}", err);
+                return;
+            }
         };
 
         match utils::fee::is_fee_sufficient(
