@@ -19,7 +19,6 @@
     "omni_bridge": {
         "init_function": "new",
         "init_args": {
-            "prover_account": "prover.sepolia.testnet",
             "mpc_signer": "v1.signer-prod.testnet",
             "wnear_account_id": "wrap.testnet"
         }

@@ -33,6 +33,9 @@ NEAR_BRIDGE_ID_FILE := $(NEAR_DEPLOY_RESULTS_DIR)/omni_bridge.json
 
 BRIDGE_SDK_CONFIG_FILE := $(TESTING_ROOT)/bridge-sdk-config.json
 
+SEPOLIA_CHAIN_ID := 0
+SEPOLIA_CHAIN_STR := Eth
+
 
 ##########################################################
 # EVM
@@ -146,12 +149,12 @@ NEAR_BINARIES := evm_prover.wasm omni_bridge.wasm omni_prover.wasm token_deploye
 NEAR_BINARY_PATHS := $(addprefix $(NEAR_BINARY_DIR)/,$(NEAR_BINARIES))
 
 # List of binaries that require dynamic init args
-BINARIES_WITH_DYNAMIC_ARGS := token_deployer mock_token
-
+BINARIES_WITH_DYNAMIC_ARGS := token_deployer mock_token omni_bridge
 
 DEPLOY_RESULTS := $(patsubst $(NEAR_BINARY_DIR)/%.wasm,$(NEAR_DEPLOY_RESULTS_DIR)/%.json,$(NEAR_BINARY_PATHS))
 
 NEAR_INIT_ACCOUNT_CREDENTIALS_FILE := $(NEAR_DEPLOY_RESULTS_DIR)/omni-init-account.json
+NEAR_DAO_ACCOUNT_CREDENTIALS_FILE := $(NEAR_DEPLOY_RESULTS_DIR)/omni-dao-account.json
 
 near-deploy: $(DEPLOY_RESULTS)
 
@@ -169,6 +172,10 @@ $(NEAR_BINARY_PATHS) &:
 create-near-init-account: $(NEAR_INIT_ACCOUNT_CREDENTIALS_FILE)
 $(NEAR_INIT_ACCOUNT_CREDENTIALS_FILE): | $(NEAR_DEPLOY_RESULTS_DIR)
 	./scripts/create-near-account.sh omni-init-$(TIMESTAMP).testnet $@
+
+create-dao-account: $(NEAR_DAO_ACCOUNT_CREDENTIALS_FILE)
+$(NEAR_DAO_ACCOUNT_CREDENTIALS_FILE): | $(NEAR_DEPLOY_RESULTS_DIR)
+	./scripts/create-near-account.sh omni-dao-$(TIMESTAMP).testnet $@
 
 # Arguments:
 # 		$(1) -  the path to the binary file
@@ -205,6 +212,37 @@ $(TESTING_ROOT)/mock_token_dyn_init_args.json: $(NEAR_INIT_ACCOUNT_CREDENTIALS_F
 	OWNER_ADDRESS=$$(jq -r .account_id $(NEAR_INIT_ACCOUNT_CREDENTIALS_FILE)) && \
 	echo "{\"owner_id\": \"$$OWNER_ADDRESS\"}" > $@
 
+$(TESTING_ROOT)/omni_bridge_dyn_init_args.json: $(NEAR_DEPLOY_RESULTS_DIR)/omni_prover.json
+	PROVER_ADDRESS=$$(jq -r .contract_id $(NEAR_DEPLOY_RESULTS_DIR)/omni_prover.json) && \
+	echo "{\"prover_account\": \"$$PROVER_ADDRESS\"}" > $@
+
+PROVER_DAU_GRANT_CALL_FILE := $(NEAR_DEPLOY_RESULTS_DIR)/omni-prover-dau-grant-call.json
+omni-prover-dau-grant: $(PROVER_DAU_GRANT_CALL_FILE)
+$(PROVER_DAU_GRANT_CALL_FILE): $(NEAR_INIT_ACCOUNT_CREDENTIALS_FILE) $(NEAR_DAO_ACCOUNT_CREDENTIALS_FILE) $(NEAR_DEPLOY_RESULTS_DIR)/omni_prover.json
+	OMNI_PROVER_ACCOUNT_ID=$$(jq -r .contract_id $(NEAR_DEPLOY_RESULTS_DIR)/omni_prover.json) && \
+	DAO_ACCOUNT_ID=$$(jq -r .account_id $(NEAR_DAO_ACCOUNT_CREDENTIALS_FILE)) && \
+	./scripts/call-near-contract.sh -c $$OMNI_PROVER_ACCOUNT_ID \
+		-m acl_grant_role \
+		-a "{\"role\": \"DAO\", \"account_id\": \"$$DAO_ACCOUNT_ID\"}" \
+		-f $(NEAR_INIT_ACCOUNT_CREDENTIALS_FILE) \
+		-n testnet 2>&1 | tee $@ && \
+	TX_HASH=$$(grep -o 'Transaction ID: [^ ]*' $@ | cut -d' ' -f3) && \
+	echo "{\"tx_hash\": \"$$TX_HASH\"}" > $@
+
+
+EVM_PROVER_SETUP_CALL_FILE := $(NEAR_DEPLOY_RESULTS_DIR)/evm-prover-setup-call.json
+evm-prover-setup: $(EVM_PROVER_SETUP_CALL_FILE)
+$(EVM_PROVER_SETUP_CALL_FILE): $(NEAR_DEPLOY_RESULTS_DIR)/omni_prover.json $(NEAR_DEPLOY_RESULTS_DIR)/evm_prover.json $(PROVER_DAU_GRANT_CALL_FILE)
+	OMNI_PROVER_ACCOUNT_ID=$$(jq -r .contract_id $(NEAR_DEPLOY_RESULTS_DIR)/omni_prover.json) && \
+	EVM_PROVER_ACCOUNT_ID=$$(jq -r .contract_id $(NEAR_DEPLOY_RESULTS_DIR)/evm_prover.json) && \
+	./scripts/call-near-contract.sh -c $$OMNI_PROVER_ACCOUNT_ID \
+		-m add_prover \
+		-a "{\"account_id\": \"$$EVM_PROVER_ACCOUNT_ID\", \"prover_id\": \"$(SEPOLIA_CHAIN_STR)\"}" \
+		-f $(NEAR_DAO_ACCOUNT_CREDENTIALS_FILE) \
+		-n testnet 2>&1 | tee $@ && \
+	TX_HASH=$$(grep -o 'Transaction ID: [^ ]*' $@ | cut -d' ' -f3) && \
+	echo "{\"tx_hash\": \"$$TX_HASH\"}" > $@
+
 
 ########################################
 # Bridge New Token to Ethereum
@@ -228,9 +266,6 @@ ADD_FACTORY_TO_LOCKER_CALL_FILE := $(BRIDGE_NEW_TOKEN_CALL_DIR)/add-factory-to-l
 
 NEAR_TOKEN_DEPLOYMENT_PREPARE_STAMP := $(BRIDGE_NEW_TOKEN_CALL_DIR)/.near-token-deployment-prepare.stamp
 
-SEPOLIA_CHAIN_ID := 0
-SEPOLIA_CHAIN_STR := Eth
-
 $(BRIDGE_NEW_TOKEN_CALL_DIR):
 	mkdir -p $@
 
@@ -247,7 +282,7 @@ bridge-new-token-to-ethereum: near-bind-token
 
 # Step 0
 prepare-token-deployment: $(NEAR_TOKEN_DEPLOYMENT_PREPARE_STAMP)
-$(NEAR_TOKEN_DEPLOYMENT_PREPARE_STAMP): $(ADD_DEPLOYER_TO_LOCKER_CALL_FILE) $(ADD_FACTORY_TO_LOCKER_CALL_FILE) | $(BRIDGE_NEW_TOKEN_CALL_DIR)
+$(NEAR_TOKEN_DEPLOYMENT_PREPARE_STAMP): $(ADD_DEPLOYER_TO_LOCKER_CALL_FILE) $(ADD_FACTORY_TO_LOCKER_CALL_FILE) $(EVM_PROVER_SETUP_CALL_FILE) | $(BRIDGE_NEW_TOKEN_CALL_DIR)
 	touch $@
 
 # Step 0.1
