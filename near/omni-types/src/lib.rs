@@ -1,3 +1,4 @@
+use borsh::BorshSchema;
 use core::fmt;
 use core::str::FromStr;
 use hex::FromHex;
@@ -5,6 +6,7 @@ use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::json_types::U128;
 use near_sdk::serde::{Deserialize, Serialize};
 use near_sdk::AccountId;
+use schemars::JsonSchema;
 use serde::de::Visitor;
 use sol_address::SolAddress;
 
@@ -20,7 +22,9 @@ pub mod utils;
 #[cfg(test)]
 mod tests;
 
-#[derive(BorshDeserialize, BorshSerialize, Debug, Clone, PartialEq, Eq)]
+#[derive(
+    JsonSchema, BorshSchema, BorshDeserialize, BorshSerialize, Debug, Clone, PartialEq, Eq,
+)]
 pub struct H160(pub [u8; 20]);
 
 impl FromStr for H160 {
@@ -134,6 +138,8 @@ impl Serialize for H160 {
     PartialEq,
     PartialOrd,
     Ord,
+    JsonSchema,
+    BorshSchema,
     BorshSerialize,
     BorshDeserialize,
     Serialize,
@@ -183,7 +189,9 @@ pub type EvmAddress = H160;
 pub const ZERO_ACCOUNT_ID: &str =
     "0000000000000000000000000000000000000000000000000000000000000000";
 
-#[derive(BorshDeserialize, BorshSerialize, Debug, Clone, PartialEq, Eq)]
+#[derive(
+    JsonSchema, BorshSchema, BorshDeserialize, BorshSerialize, Debug, Clone, PartialEq, Eq,
+)]
 pub enum OmniAddress {
     Eth(EvmAddress),
     Near(AccountId),
@@ -390,7 +398,16 @@ pub struct FeeRecipient {
 }
 
 #[derive(
-    BorshDeserialize, BorshSerialize, Serialize, Deserialize, Debug, Clone, PartialEq, Default,
+    JsonSchema,
+    BorshSchema,
+    BorshDeserialize,
+    BorshSerialize,
+    Serialize,
+    Deserialize,
+    Debug,
+    Clone,
+    PartialEq,
+    Default,
 )]
 pub struct Fee {
     pub fee: U128,
@@ -404,6 +421,8 @@ impl Fee {
 }
 
 #[derive(
+    JsonSchema,
+    BorshSchema,
     BorshDeserialize,
     BorshSerialize,
     Serialize,
@@ -422,7 +441,7 @@ pub struct TransferId {
     pub origin_nonce: Nonce,
 }
 
-#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Debug, Clone)]
+#[derive(JsonSchema, BorshDeserialize, BorshSerialize, Serialize, Deserialize, Debug, Clone)]
 pub struct TransferMessage {
     pub origin_nonce: Nonce,
     pub token: OmniAddress,
@@ -451,14 +470,14 @@ impl TransferMessage {
     }
 }
 
-#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Debug, Clone)]
+#[derive(BorshSchema, BorshDeserialize, BorshSerialize, Serialize, Deserialize, Debug, Clone)]
 pub enum PayloadType {
     TransferMessage,
     Metadata,
     ClaimNativeFee,
 }
 
-#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Debug, Clone)]
+#[derive(BorshSchema, BorshDeserialize, BorshSerialize, Serialize, Deserialize, Debug, Clone)]
 pub struct TransferMessagePayload {
     pub prefix: PayloadType,
     pub destination_nonce: Nonce,
@@ -469,7 +488,7 @@ pub struct TransferMessagePayload {
     pub fee_recipient: Option<AccountId>,
 }
 
-#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Debug, Clone)]
+#[derive(BorshSchema, BorshDeserialize, BorshSerialize, Serialize, Deserialize, Debug, Clone)]
 pub struct MetadataPayload {
     pub prefix: PayloadType,
     pub token: String,
@@ -486,7 +505,7 @@ pub struct SignRequest {
     pub key_version: u32,
 }
 
-#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Debug, Clone)]
+#[derive(JsonSchema, BorshDeserialize, BorshSerialize, Serialize, Deserialize, Debug, Clone)]
 pub enum UpdateFee {
     Fee(Fee),
     Proof(Vec<u8>),

@@ -1,11 +1,15 @@
+use borsh::BorshSchema;
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::json_types::U128;
 use near_sdk::serde::{Deserialize, Serialize};
 use near_sdk::AccountId;
+use schemars::JsonSchema;
 
 use crate::{Fee, Nonce, OmniAddress, TransferId};
 
-#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Debug, Clone)]
+#[derive(
+    JsonSchema, BorshSchema, BorshDeserialize, BorshSerialize, Serialize, Deserialize, Debug, Clone,
+)]
 pub struct InitTransferMessage {
     pub origin_nonce: Nonce,
     pub token: OmniAddress,
@@ -17,7 +21,9 @@ pub struct InitTransferMessage {
     pub emitter_address: OmniAddress,
 }
 
-#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Debug, Clone)]
+#[derive(
+    JsonSchema, BorshSchema, BorshDeserialize, BorshSerialize, Serialize, Deserialize, Debug, Clone,
+)]
 pub struct FinTransferMessage {
     pub transfer_id: TransferId,
     pub fee_recipient: AccountId,
@@ -25,7 +31,9 @@ pub struct FinTransferMessage {
     pub emitter_address: OmniAddress,
 }
 
-#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Debug, Clone)]
+#[derive(
+    JsonSchema, BorshSchema, BorshDeserialize, BorshSerialize, Serialize, Deserialize, Debug, Clone,
+)]
 pub struct DeployTokenMessage {
     pub token: AccountId,
     pub token_address: OmniAddress,
@@ -34,7 +42,9 @@ pub struct DeployTokenMessage {
     pub emitter_address: OmniAddress,
 }
 
-#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Debug, Clone)]
+#[derive(
+    JsonSchema, BorshSchema, BorshDeserialize, BorshSerialize, Serialize, Deserialize, Debug, Clone,
+)]
 pub struct LogMetadataMessage {
     pub token_address: OmniAddress,
     pub name: String,
@@ -43,7 +53,9 @@ pub struct LogMetadataMessage {
     pub emitter_address: OmniAddress,
 }
 
-#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Debug, Clone)]
+#[derive(
+    JsonSchema, BorshSchema, BorshDeserialize, BorshSerialize, Serialize, Deserialize, Debug, Clone,
+)]
 pub enum ProverResult {
     InitTransfer(InitTransferMessage),
     FinTransfer(FinTransferMessage),

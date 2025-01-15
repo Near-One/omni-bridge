@@ -2,6 +2,7 @@ use near_contract_standards::storage_management::{StorageBalance, StorageBalance
 use near_sdk::{assert_one_yocto, borsh};
 use near_sdk::{env, near_bindgen, AccountId, NearToken};
 use omni_types::TransferId;
+use schemars::JsonSchema;
 
 use crate::{
     require, BorshDeserialize, BorshSerialize, ChainKind, Contract, ContractExt, Deserialize, Fee,
@@ -11,7 +12,7 @@ use crate::{
 pub const BRIDGE_TOKEN_INIT_BALANCE: NearToken = NearToken::from_near(3);
 pub const NEP141_DEPOSIT: NearToken = NearToken::from_yoctonear(1_250_000_000_000_000_000_000);
 
-#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Debug, Clone)]
+#[derive(JsonSchema, BorshDeserialize, BorshSerialize, Serialize, Deserialize, Debug, Clone)]
 pub struct TransferMessageStorageValue {
     pub message: TransferMessage,
     pub owner: AccountId,
