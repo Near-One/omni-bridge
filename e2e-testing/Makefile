@@ -1,4 +1,3 @@
-
 ##########################################################
 # Makefile prologue
 ##########################################################
@@ -12,26 +11,26 @@ SHELL := bash
 
 #####################################################
 
-TESTING_ROOT := $(shell dirname $(realpath $(lastword $(MAKEFILE_LIST))))
+testing_root := $(shell dirname $(realpath $(lastword $(MAKEFILE_LIST))))
 
-TIMESTAMP := $(shell date -u +%Y%m%d-%H%M%S)
+timestamp := $(shell date -u +%Y%m%d-%H%M%S)
 
-EVM_DIR := $(TESTING_ROOT)/../evm
-EVM_SCRIPT_DIR := $(TESTING_ROOT)/evm_scripts
-ETHEREUM_DEPLOY_RESULTS_DIR := $(TESTING_ROOT)/ethereum_deploy_results
+evm_dir := $(testing_root)/../evm
+evm_script_dir := $(testing_root)/evm_scripts
+ethereum_deploy_results_dir := $(testing_root)/ethereum_deploy_results
 
-NEAR_DIR := $(TESTING_ROOT)/../near
-NEAR_DEPLOY_RESULTS_DIR := $(TESTING_ROOT)/near_deploy_results
-NEAR_CALL_RESULTS_DIR := $(TESTING_ROOT)/near_call_results
+near_dir := $(testing_root)/../near
+near_deploy_results_dir := $(testing_root)/near_deploy_results
+near_call_results_dir := $(testing_root)/near_call_results
 
-NEAR_INIT_PARAMS_FILE := $(TESTING_ROOT)/near_init_params.json
+near_init_params_file := $(testing_root)/near_init_params.json
 
-SOLANA_DIR := $(TESTING_ROOT)/../solana
-SOLANA_DEPLOY_RESULTS_DIR := $(TESTING_ROOT)/solana_deploy_results
+solana_dir := $(testing_root)/../solana
+solana_deploy_results_dir := $(testing_root)/solana_deploy_results
 
-NEAR_BRIDGE_ID_FILE := $(NEAR_DEPLOY_RESULTS_DIR)/omni_bridge.json
+near_bridge_id_file := $(near_deploy_results_dir)/omni_bridge.json
 
-BRIDGE_SDK_CONFIG_FILE := $(TESTING_ROOT)/bridge-sdk-config.json
+bridge_sdk_config_file := $(testing_root)/bridge-sdk-config.json
 
 SEPOLIA_CHAIN_ID := 0
 SEPOLIA_CHAIN_STR := Eth
@@ -43,41 +42,41 @@ SEPOLIA_CHAIN_STR := Eth
 
 .PHONY: evm-build evm-scripts-build
 
-EVM_COMPILE_STAMP := $(TESTING_ROOT)/.evm-compile.stamp
-EVM_ARTIFACTS_DIR := $(TESTING_ROOT)/evm_artifacts
-EVM_SCRIPT_COMPILE_STAMP := $(TESTING_ROOT)/.evm-scripts-compile.stamp
+evm_compile_stamp := $(testing_root)/.evm-compile.stamp
+evm_artifacts_dir := $(testing_root)/evm_artifacts
+evm_script_compile_stamp := $(testing_root)/.evm-scripts-compile.stamp
 
-EVM_NETWORKS := sepolia arbitrumSepolia baseSepolia
+evm_networks := sepolia arbitrumSepolia baseSepolia
 
-EVM_DEPLOY_RESULTS_DIR := $(TESTING_ROOT)/evm_deploy_results
+evm_deploy_results_dir := $(testing_root)/evm_deploy_results
 
-DEPLOY_EVM_TOKEN_IMPL = yarn --silent --cwd $(EVM_DIR) hardhat deploy-token-impl --network $(1)
-DEPLOY_EVM_OMNI_BRIDGE_CONTRACT = yarn --silent --cwd $(EVM_DIR) hardhat deploy-bridge-token-factory --network $(1) --bridge-token-impl $(2) --near-bridge-account-id $(3)
-DEPLOY_EVM_FAKE_PROVER = yarn --silent --cwd $(EVM_DIR) hardhat deploy-fake-prover --network $(1)
-DEPLOY_EVM_ENEAR_PROXY = yarn --silent --cwd $(EVM_DIR) hardhat deploy-e-near-proxy --network $(1) --enear $(2)
+DEPLOY_EVM_TOKEN_IMPL = yarn --silent --cwd $(evm_dir) hardhat deploy-token-impl --network $(1)
+DEPLOY_EVM_OMNI_BRIDGE_CONTRACT = yarn --silent --cwd $(evm_dir) hardhat deploy-bridge-token-factory --network $(1) --bridge-token-impl $(2) --near-bridge-account-id $(3)
+DEPLOY_EVM_FAKE_PROVER = yarn --silent --cwd $(evm_dir) hardhat deploy-fake-prover --network $(1)
+DEPLOY_EVM_ENEAR_PROXY = yarn --silent --cwd $(evm_dir) hardhat deploy-e-near-proxy --network $(1) --enear $(2)
 
-DEPLOY_EVM_BYTECODE = yarn --silent --cwd $(EVM_SCRIPT_DIR) hardhat deploy-bytecode --network $(1) --bytecode $(2)
-DEPLOY_EVM_TEST_TOKEN = yarn --silent --cwd $(EVM_SCRIPT_DIR) hardhat deploy-test-token --network $(1) --name $(2) --symbol $(3)
+DEPLOY_EVM_BYTECODE = yarn --silent --cwd $(evm_script_dir) hardhat deploy-bytecode --network $(1) --bytecode $(2)
+DEPLOY_EVM_TEST_TOKEN = yarn --silent --cwd $(evm_script_dir) hardhat deploy-test-token --network $(1) --name $(2) --symbol $(3)
 
-ENEAR_CREATION_TEMPLATE_FILE := $(TESTING_ROOT)/bin/eNear_creation.template
+enear_creation_template_file := $(testing_root)/bin/eNear_creation.template
 
-$(EVM_DEPLOY_RESULTS_DIR):
+$(evm_deploy_results_dir):
 	mkdir -p $@
 
-evm-build: $(EVM_COMPILE_STAMP)
-$(EVM_COMPILE_STAMP):
+evm-build: $(evm_compile_stamp)
+$(evm_compile_stamp):
 	@echo "Compiling EVM contracts"
-	mkdir -p $(EVM_ARTIFACTS_DIR) && \
-	yarn --cwd $(EVM_DIR) install --frozen-lockfile && \
-	yarn --cwd $(EVM_DIR) hardhat compile && \
-	cp -r $(EVM_DIR)/build/* $(EVM_ARTIFACTS_DIR)
+	mkdir -p $(evm_artifacts_dir) && \
+	yarn --cwd $(evm_dir) install --frozen-lockfile && \
+	yarn --cwd $(evm_dir) hardhat compile && \
+	cp -r $(evm_dir)/build/* $(evm_artifacts_dir)
 	touch $@
 
-evm-scripts-build: $(EVM_SCRIPT_COMPILE_STAMP)
-$(EVM_SCRIPT_COMPILE_STAMP):
+evm-scripts-build: $(evm_script_compile_stamp)
+$(evm_script_compile_stamp):
 	@echo "Compiling EVM scripts"
-	yarn --cwd $(EVM_SCRIPT_DIR) install && \
-	yarn --cwd $(EVM_SCRIPT_DIR) hardhat compile
+	yarn --cwd $(evm_script_dir) install && \
+	yarn --cwd $(evm_script_dir) hardhat compile
 	touch $@
 
 # Arguments:
@@ -86,159 +85,159 @@ define generate_evm_deploy_rules
 
 .PHONY: $(1)-deploy-fake-prover $(1)-deploy-enear $(1)-deploy-enear-proxy $(1)-deploy-bridge $(1)-deploy-token-impl $(1)-deploy-test-token
 
-$(1)_DEPLOY_RESULTS_DIR := $(EVM_DEPLOY_RESULTS_DIR)/$(1)
+$(1)_deploy_results_dir := $(evm_deploy_results_dir)/$(1)
 
-$$($(1)_DEPLOY_RESULTS_DIR): | $(EVM_DEPLOY_RESULTS_DIR)
+$$($(1)_deploy_results_dir): | $(evm_deploy_results_dir)
 	mkdir -p $$@
 
 $(1)-deploy: $(1)-deploy-bridge $(1)-deploy-enear-proxy $(1)-deploy-test-token
 
-$(1)_BRIDGE_CONTRACT_ADDRESS_FILE := $$($(1)_DEPLOY_RESULTS_DIR)/omni_bridge.json
-$(1)_TOKEN_IMPL_ADDRESS_FILE := $$($(1)_DEPLOY_RESULTS_DIR)/token_impl.json
-$(1)_FAKE_PROVER_ADDRESS_FILE := $$($(1)_DEPLOY_RESULTS_DIR)/fake_prover.json
+$(1)_bridge_contract_address_file := $$($(1)_deploy_results_dir)/omni_bridge.json
+$(1)_token_impl_address_file := $$($(1)_deploy_results_dir)/token_impl.json
+$(1)_fake_prover_address_file := $$($(1)_deploy_results_dir)/fake_prover.json
 
-$(1)_ENEAR_ADDRESS_FILE := $$($(1)_DEPLOY_RESULTS_DIR)/eNear.json
-$(1)_ENEAR_PROXY_ADDRESS_FILE := $$($(1)_DEPLOY_RESULTS_DIR)/eNearProxy.json
-$(1)_ENEAR_CREATION_FILE := $$($(1)_DEPLOY_RESULTS_DIR)/eNear_creation
+$(1)_enear_address_file := $$($(1)_deploy_results_dir)/eNear.json
+$(1)_enear_proxy_address_file := $$($(1)_deploy_results_dir)/eNearProxy.json
+$(1)_enear_creation_file := $$($(1)_deploy_results_dir)/eNear_creation
 
-$(1)_TEST_TOKEN_ADDRESS_FILE := $$($(1)_DEPLOY_RESULTS_DIR)/test_token.json
+$(1)_test_token_address_file := $$($(1)_deploy_results_dir)/test_token.json
 
-$(1)-deploy-fake-prover: $$($(1)_FAKE_PROVER_ADDRESS_FILE)
-$$($(1)_FAKE_PROVER_ADDRESS_FILE): $(EVM_COMPILE_STAMP) | $$($(1)_DEPLOY_RESULTS_DIR)
+$(1)-deploy-fake-prover: $$($(1)_fake_prover_address_file)
+$$($(1)_fake_prover_address_file): $(evm_compile_stamp) | $$($(1)_deploy_results_dir)
 	$$(call DEPLOY_EVM_FAKE_PROVER,$(1)) 2>/dev/stderr 1> $$@
 
-$(1)-deploy-enear: $$($(1)_ENEAR_ADDRESS_FILE)
-$$($(1)_ENEAR_ADDRESS_FILE): $$($(1)_ENEAR_CREATION_FILE) $(EVM_SCRIPT_COMPILE_STAMP) | $$($(1)_DEPLOY_RESULTS_DIR)
-	$$(call DEPLOY_EVM_BYTECODE,$(1),$$($(1)_ENEAR_CREATION_FILE)) 2>/dev/stderr 1> $$@
+$(1)-deploy-enear: $$($(1)_enear_address_file)
+$$($(1)_enear_address_file): $$($(1)_enear_creation_file) $(evm_script_compile_stamp) | $$($(1)_deploy_results_dir)
+	$$(call DEPLOY_EVM_BYTECODE,$(1),$$($(1)_enear_creation_file)) 2>/dev/stderr 1> $$@
 
-$(1)-deploy-enear-proxy: $$($(1)_ENEAR_PROXY_ADDRESS_FILE)
-$$($(1)_ENEAR_PROXY_ADDRESS_FILE): $$($(1)_ENEAR_ADDRESS_FILE) $(EVM_COMPILE_STAMP) | $$($(1)_DEPLOY_RESULTS_DIR)
-	$$(call DEPLOY_EVM_ENEAR_PROXY,$(1),$$(shell cat $$($(1)_ENEAR_ADDRESS_FILE) | jq -r .contractAddress)) 2>/dev/stderr 1> $$@
+$(1)-deploy-enear-proxy: $$($(1)_enear_proxy_address_file)
+$$($(1)_enear_proxy_address_file): $$($(1)_enear_address_file) $(evm_compile_stamp) | $$($(1)_deploy_results_dir)
+	$$(call DEPLOY_EVM_ENEAR_PROXY,$(1),$$(shell cat $$($(1)_enear_address_file) | jq -r .contractAddress)) 2>/dev/stderr 1> $$@
 
-$(1)-deploy-bridge: $$($(1)_BRIDGE_CONTRACT_ADDRESS_FILE)
-$$($(1)_BRIDGE_CONTRACT_ADDRESS_FILE): $$($(1)_TOKEN_IMPL_ADDRESS_FILE) $(NEAR_BRIDGE_ID_FILE) $(EVM_COMPILE_STAMP) | $$($(1)_DEPLOY_RESULTS_DIR)
-	$$(call DEPLOY_EVM_OMNI_BRIDGE_CONTRACT,$(1),$$(shell cat $$($(1)_TOKEN_IMPL_ADDRESS_FILE) | jq -r .tokenImplAddress),$$(shell cat $(NEAR_BRIDGE_ID_FILE) | jq -r .contract_id)) 2>/dev/stderr 1> $$@
+$(1)-deploy-bridge: $$($(1)_bridge_contract_address_file)
+$$($(1)_bridge_contract_address_file): $$($(1)_token_impl_address_file) $(near_bridge_id_file) $(evm_compile_stamp) | $$($(1)_deploy_results_dir)
+	$$(call DEPLOY_EVM_OMNI_BRIDGE_CONTRACT,$(1),$$(shell cat $$($(1)_token_impl_address_file) | jq -r .tokenImplAddress),$$(shell cat $(near_bridge_id_file) | jq -r .contract_id)) 2>/dev/stderr 1> $$@
 
-$(1)-deploy-token-impl: $$($(1)_TOKEN_IMPL_ADDRESS_FILE)
-$$($(1)_TOKEN_IMPL_ADDRESS_FILE): $(EVM_COMPILE_STAMP) | $$($(1)_DEPLOY_RESULTS_DIR)
+$(1)-deploy-token-impl: $$($(1)_token_impl_address_file)
+$$($(1)_token_impl_address_file): $(evm_compile_stamp) | $$($(1)_deploy_results_dir)
 	$$(call DEPLOY_EVM_TOKEN_IMPL,$(1)) 2>/dev/stderr 1> $$@
 
-$$($(1)_ENEAR_CREATION_FILE): $(ENEAR_CREATION_TEMPLATE_FILE) $$($(1)_FAKE_PROVER_ADDRESS_FILE) | $$($(1)_DEPLOY_RESULTS_DIR)
+$$($(1)_enear_creation_file): $(enear_creation_template_file) $$($(1)_fake_prover_address_file) | $$($(1)_deploy_results_dir)
 	cat $$< | \
-	sed "s/<PROVER_ADDRESS>/$$(shell cat $$($(1)_FAKE_PROVER_ADDRESS_FILE) | jq -r .fakeProverAddress | sed 's/^0x//')/" > $$@
+	sed "s/<PROVER_ADDRESS>/$$(shell cat $$($(1)_fake_prover_address_file) | jq -r .fakeProverAddress | sed 's/^0x//')/" > $$@
 
 
-$(1)-deploy-test-token: $$($(1)_TEST_TOKEN_ADDRESS_FILE)
-$$($(1)_TEST_TOKEN_ADDRESS_FILE): $(EVM_SCRIPT_COMPILE_STAMP) | $$($(1)_DEPLOY_RESULTS_DIR)
-	$$(call DEPLOY_EVM_TEST_TOKEN,$(1),E2ETestToken-$(TIMESTAMP),E2ETT-$(TIMESTAMP)) 2>/dev/stderr 1> $$@
+$(1)-deploy-test-token: $$($(1)_test_token_address_file)
+$$($(1)_test_token_address_file): $(evm_script_compile_stamp) | $$($(1)_deploy_results_dir)
+	$$(call DEPLOY_EVM_TEST_TOKEN,$(1),E2ETestToken-$(timestamp),E2ETT-$(timestamp)) 2>/dev/stderr 1> $$@
 
 endef
 
-$(foreach network,$(EVM_NETWORKS),$(eval $(call generate_evm_deploy_rules,$(network))))
+$(foreach network,$(evm_networks),$(eval $(call generate_evm_deploy_rules,$(network))))
 
 ##########################################################
 # NEAR
 ##########################################################
 
-NEAR_BINARY_DIR := $(TESTING_ROOT)/near_artifacts
+near_binary_dir := $(testing_root)/near_artifacts
 
 .PHONY: near-build near-deploy
 
 # List all expected WASM binaries
-NEAR_BINARIES := evm_prover.wasm omni_bridge.wasm omni_prover.wasm token_deployer.wasm wormhole_omni_prover_proxy.wasm mock_token.wasm
-NEAR_BINARY_PATHS := $(addprefix $(NEAR_BINARY_DIR)/,$(NEAR_BINARIES))
+near_binaries := evm_prover.wasm omni_bridge.wasm omni_prover.wasm token_deployer.wasm wormhole_omni_prover_proxy.wasm mock_token.wasm
+near_binary_paths := $(addprefix $(near_binary_dir)/,$(near_binaries))
 
 # List of binaries that require dynamic init args
-BINARIES_WITH_DYNAMIC_ARGS := token_deployer mock_token omni_bridge
+binaries_with_dynamic_args := token_deployer mock_token omni_bridge
 
-DEPLOY_RESULTS := $(patsubst $(NEAR_BINARY_DIR)/%.wasm,$(NEAR_DEPLOY_RESULTS_DIR)/%.json,$(NEAR_BINARY_PATHS))
+deploy_results := $(patsubst $(near_binary_dir)/%.wasm,$(near_deploy_results_dir)/%.json,$(near_binary_paths))
 
-NEAR_INIT_ACCOUNT_CREDENTIALS_FILE := $(NEAR_DEPLOY_RESULTS_DIR)/omni-init-account.json
-NEAR_DAO_ACCOUNT_CREDENTIALS_FILE := $(NEAR_DEPLOY_RESULTS_DIR)/omni-dao-account.json
+near_init_account_credentials_file := $(near_deploy_results_dir)/omni-init-account.json
+near_dao_account_credentials_file := $(near_deploy_results_dir)/omni-dao-account.json
 
-near-deploy: $(DEPLOY_RESULTS)
+near-deploy: $(deploy_results)
 
-$(NEAR_DEPLOY_RESULTS_DIR):
+$(near_deploy_results_dir):
 	mkdir -p $@
 
-$(NEAR_CALL_RESULTS_DIR):
+$(near_call_results_dir):
 	mkdir -p $@
 
-near-build: $(NEAR_BINARY_PATHS)
+near-build: $(near_binary_paths)
 
-$(NEAR_BINARY_PATHS) &:
-	$(NEAR_DIR)/build.sh --output-dir $(NEAR_BINARY_DIR)
+$(near_binary_paths) &:
+	$(near_dir)/build.sh --output-dir $(near_binary_dir)
 
-create-near-init-account: $(NEAR_INIT_ACCOUNT_CREDENTIALS_FILE)
-$(NEAR_INIT_ACCOUNT_CREDENTIALS_FILE): | $(NEAR_DEPLOY_RESULTS_DIR)
-	./scripts/create-near-account.sh omni-init-$(TIMESTAMP).testnet $@
+create-near-init-account: $(near_init_account_credentials_file)
+$(near_init_account_credentials_file): | $(near_deploy_results_dir)
+	./scripts/create-near-account.sh omni-init-$(timestamp).testnet $@
 
-create-dao-account: $(NEAR_DAO_ACCOUNT_CREDENTIALS_FILE)
-$(NEAR_DAO_ACCOUNT_CREDENTIALS_FILE): | $(NEAR_DEPLOY_RESULTS_DIR)
-	./scripts/create-near-account.sh omni-dao-$(TIMESTAMP).testnet $@
+create-dao-account: $(near_dao_account_credentials_file)
+$(near_dao_account_credentials_file): | $(near_deploy_results_dir)
+	./scripts/create-near-account.sh omni-dao-$(timestamp).testnet $@
 
 # Arguments:
 # 		$(1) -  the path to the binary file
 define generate_near_deploy_rules
 
-$(1)_NAME := $$(basename $$(notdir $(1)))
+$(1)_name := $$(basename $$(notdir $(1)))
 
 # Check if the binary requires dynamic init args
-ifeq ($$(filter $$($(1)_NAME),$(BINARIES_WITH_DYNAMIC_ARGS)),)
+ifeq ($$(filter $$($(1)_name),$(binaries_with_dynamic_args)),)
 
 # Rule for binaries without dynamic init args
-$(NEAR_DEPLOY_RESULTS_DIR)/$$($(1)_NAME).json: $(NEAR_INIT_PARAMS_FILE) $(1) $(NEAR_INIT_ACCOUNT_CREDENTIALS_FILE)  | $(NEAR_DEPLOY_RESULTS_DIR)
-	./scripts/deploy-near-contract.sh $(1) $$@ $$($(1)_NAME)-$(TIMESTAMP).testnet $(NEAR_INIT_PARAMS_FILE) $(NEAR_INIT_ACCOUNT_CREDENTIALS_FILE)
+$(near_deploy_results_dir)/$$($(1)_name).json: $(near_init_params_file) $(1) $(near_init_account_credentials_file)  | $(near_deploy_results_dir)
+	./scripts/deploy-near-contract.sh $(1) $$@ $$($(1)_name)-$(timestamp).testnet $(near_init_params_file) $(near_init_account_credentials_file)
 
 else
 
 # Rule for binaries with dynamic init args
-$(NEAR_DEPLOY_RESULTS_DIR)/$$($(1)_NAME).json: $(NEAR_INIT_PARAMS_FILE) $(1) $(NEAR_INIT_ACCOUNT_CREDENTIALS_FILE) $(TESTING_ROOT)/$$($(1)_NAME)_dyn_init_args.json | $(NEAR_DEPLOY_RESULTS_DIR)
-	./scripts/deploy-near-contract.sh $(1) $$@ $$($(1)_NAME)-$(TIMESTAMP).testnet $(NEAR_INIT_PARAMS_FILE) $(NEAR_INIT_ACCOUNT_CREDENTIALS_FILE) $(TESTING_ROOT)/$$($(1)_NAME)_dyn_init_args.json
+$(near_deploy_results_dir)/$$($(1)_name).json: $(near_init_params_file) $(1) $(near_init_account_credentials_file) $(testing_root)/$$($(1)_name)_dyn_init_args.json | $(near_deploy_results_dir)
+	./scripts/deploy-near-contract.sh $(1) $$@ $$($(1)_name)-$(timestamp).testnet $(near_init_params_file) $(near_init_account_credentials_file) $(testing_root)/$$($(1)_name)_dyn_init_args.json
 
 endif
 
 endef
 
-$(foreach binary,$(NEAR_BINARY_PATHS),$(eval $(call generate_near_deploy_rules,$(binary))))
+$(foreach binary,$(near_binary_paths),$(eval $(call generate_near_deploy_rules,$(binary))))
 
 # Dynamic init args generation
-$(TESTING_ROOT)/token_deployer_dyn_init_args.json: $(NEAR_DEPLOY_RESULTS_DIR)/omni_bridge.json $(NEAR_INIT_ACCOUNT_CREDENTIALS_FILE)
-	CONTROLLER_ADDRESS=$$(jq -r .contract_id $(NEAR_DEPLOY_RESULTS_DIR)/omni_bridge.json) && \
-	DAO_ADDRESS=$$(jq -r .account_id $(NEAR_INIT_ACCOUNT_CREDENTIALS_FILE)) && \
+$(testing_root)/token_deployer_dyn_init_args.json: $(near_deploy_results_dir)/omni_bridge.json $(near_init_account_credentials_file)
+	CONTROLLER_ADDRESS=$$(jq -r .contract_id $(near_deploy_results_dir)/omni_bridge.json) && \
+	DAO_ADDRESS=$$(jq -r .account_id $(near_init_account_credentials_file)) && \
 	echo "{\"controller\": \"$$CONTROLLER_ADDRESS\", \"dao\": \"$$DAO_ADDRESS\"}" > $@
 
-$(TESTING_ROOT)/mock_token_dyn_init_args.json: $(NEAR_INIT_ACCOUNT_CREDENTIALS_FILE)
-	OWNER_ADDRESS=$$(jq -r .account_id $(NEAR_INIT_ACCOUNT_CREDENTIALS_FILE)) && \
+$(testing_root)/mock_token_dyn_init_args.json: $(near_init_account_credentials_file)
+	OWNER_ADDRESS=$$(jq -r .account_id $(near_init_account_credentials_file)) && \
 	echo "{\"owner_id\": \"$$OWNER_ADDRESS\"}" > $@
 
-$(TESTING_ROOT)/omni_bridge_dyn_init_args.json: $(NEAR_DEPLOY_RESULTS_DIR)/omni_prover.json
-	PROVER_ADDRESS=$$(jq -r .contract_id $(NEAR_DEPLOY_RESULTS_DIR)/omni_prover.json) && \
+$(testing_root)/omni_bridge_dyn_init_args.json: $(near_deploy_results_dir)/omni_prover.json
+	PROVER_ADDRESS=$$(jq -r .contract_id $(near_deploy_results_dir)/omni_prover.json) && \
 	echo "{\"prover_account\": \"$$PROVER_ADDRESS\"}" > $@
 
-PROVER_DAU_GRANT_CALL_FILE := $(NEAR_DEPLOY_RESULTS_DIR)/omni-prover-dau-grant-call.json
-omni-prover-dau-grant: $(PROVER_DAU_GRANT_CALL_FILE)
-$(PROVER_DAU_GRANT_CALL_FILE): $(NEAR_INIT_ACCOUNT_CREDENTIALS_FILE) $(NEAR_DAO_ACCOUNT_CREDENTIALS_FILE) $(NEAR_DEPLOY_RESULTS_DIR)/omni_prover.json
-	OMNI_PROVER_ACCOUNT_ID=$$(jq -r .contract_id $(NEAR_DEPLOY_RESULTS_DIR)/omni_prover.json) && \
-	DAO_ACCOUNT_ID=$$(jq -r .account_id $(NEAR_DAO_ACCOUNT_CREDENTIALS_FILE)) && \
+prover_dau_grant_call_file := $(near_deploy_results_dir)/omni-prover-dau-grant-call.json
+omni-prover-dau-grant: $(prover_dau_grant_call_file)
+$(prover_dau_grant_call_file): $(near_init_account_credentials_file) $(near_dao_account_credentials_file) $(near_deploy_results_dir)/omni_prover.json
+	OMNI_PROVER_ACCOUNT_ID=$$(jq -r .contract_id $(near_deploy_results_dir)/omni_prover.json) && \
+	DAO_ACCOUNT_ID=$$(jq -r .account_id $(near_dao_account_credentials_file)) && \
 	./scripts/call-near-contract.sh -c $$OMNI_PROVER_ACCOUNT_ID \
 		-m acl_grant_role \
 		-a "{\"role\": \"DAO\", \"account_id\": \"$$DAO_ACCOUNT_ID\"}" \
-		-f $(NEAR_INIT_ACCOUNT_CREDENTIALS_FILE) \
+		-f $(near_init_account_credentials_file) \
 		-n testnet 2>&1 | tee $@ && \
 	TX_HASH=$$(grep -o 'Transaction ID: [^ ]*' $@ | cut -d' ' -f3) && \
 	echo "{\"tx_hash\": \"$$TX_HASH\"}" > $@
 
 
-EVM_PROVER_SETUP_CALL_FILE := $(NEAR_DEPLOY_RESULTS_DIR)/evm-prover-setup-call.json
-evm-prover-setup: $(EVM_PROVER_SETUP_CALL_FILE)
-$(EVM_PROVER_SETUP_CALL_FILE): $(NEAR_DEPLOY_RESULTS_DIR)/omni_prover.json $(NEAR_DEPLOY_RESULTS_DIR)/evm_prover.json $(PROVER_DAU_GRANT_CALL_FILE)
-	OMNI_PROVER_ACCOUNT_ID=$$(jq -r .contract_id $(NEAR_DEPLOY_RESULTS_DIR)/omni_prover.json) && \
-	EVM_PROVER_ACCOUNT_ID=$$(jq -r .contract_id $(NEAR_DEPLOY_RESULTS_DIR)/evm_prover.json) && \
+evm_prover_setup_call_file := $(near_deploy_results_dir)/evm-prover-setup-call.json
+evm-prover-setup: $(evm_prover_setup_call_file)
+$(evm_prover_setup_call_file): $(near_deploy_results_dir)/omni_prover.json $(near_deploy_results_dir)/evm_prover.json $(prover_dau_grant_call_file)
+	OMNI_PROVER_ACCOUNT_ID=$$(jq -r .contract_id $(near_deploy_results_dir)/omni_prover.json) && \
+	EVM_PROVER_ACCOUNT_ID=$$(jq -r .contract_id $(near_deploy_results_dir)/evm_prover.json) && \
 	./scripts/call-near-contract.sh -c $$OMNI_PROVER_ACCOUNT_ID \
 		-m add_prover \
 		-a "{\"account_id\": \"$$EVM_PROVER_ACCOUNT_ID\", \"prover_id\": \"$(SEPOLIA_CHAIN_STR)\"}" \
-		-f $(NEAR_DAO_ACCOUNT_CREDENTIALS_FILE) \
+		-f $(near_dao_account_credentials_file) \
 		-n testnet 2>&1 | tee $@ && \
 	TX_HASH=$$(grep -o 'Transaction ID: [^ ]*' $@ | cut -d' ' -f3) && \
 	echo "{\"tx_hash\": \"$$TX_HASH\"}" > $@
@@ -250,112 +249,112 @@ $(EVM_PROVER_SETUP_CALL_FILE): $(NEAR_DEPLOY_RESULTS_DIR)/omni_prover.json $(NEA
 
 .PHONY: near-log-metadata-call create-near-sender
 
-BRIDGE_NEW_TOKEN_CALL_DIR := $(TESTING_ROOT)/bridge_new_token_calls
+bridge_new_token_call_dir := $(testing_root)/bridge_new_token_calls
 
-NEAR_SENDER_ACCOUNT_ID_FILE := $(NEAR_DEPLOY_RESULTS_DIR)/omni-sender.json
-NEAR_OMNI_BRIDGE_CONTRACT_ID_FILE := $(NEAR_DEPLOY_RESULTS_DIR)/omni_bridge.json
-NEAR_TEST_TOKEN_CONTRACT_ID_FILE := $(NEAR_DEPLOY_RESULTS_DIR)/mock_token.json
-NEAR_RELAYER_ACCOUNT_ID_FILE := $(NEAR_DEPLOY_RESULTS_DIR)/omni-relayer.json
-NEAR_TOKEN_DEPLOYER_CONTRACT_ID_FILE := $(NEAR_DEPLOY_RESULTS_DIR)/token_deployer.json
+near_sender_account_id_file := $(near_deploy_results_dir)/omni-sender.json
+near_omni_bridge_contract_id_file := $(near_deploy_results_dir)/omni_bridge.json
+near_test_token_contract_id_file := $(near_deploy_results_dir)/mock_token.json
+near_relayer_account_id_file := $(near_deploy_results_dir)/omni-relayer.json
+near_token_deployer_contract_id_file := $(near_deploy_results_dir)/token_deployer.json
 
-NEAR_LOG_METADATA_CALL_FILE := $(BRIDGE_NEW_TOKEN_CALL_DIR)/omni-log-metadata-call.json
-EVM_DEPLOY_TOKEN_CALL_FILE := $(BRIDGE_NEW_TOKEN_CALL_DIR)/evm-deploy-token-call.json
-NEAR_BIND_TOKEN_CALL_FILE := $(BRIDGE_NEW_TOKEN_CALL_DIR)/near-bind-token-call.json
-ADD_DEPLOYER_TO_LOCKER_CALL_FILE := $(BRIDGE_NEW_TOKEN_CALL_DIR)/add-deployer-to-locker-call.json
-ADD_FACTORY_TO_LOCKER_CALL_FILE := $(BRIDGE_NEW_TOKEN_CALL_DIR)/add-factory-to-locker-call.json
+near_log_metadata_call_file := $(bridge_new_token_call_dir)/omni-log-metadata-call.json
+evm_deploy_token_call_file := $(bridge_new_token_call_dir)/evm-deploy-token-call.json
+near_bind_token_call_file := $(bridge_new_token_call_dir)/near-bind-token-call.json
+add_deployer_to_locker_call_file := $(bridge_new_token_call_dir)/add-deployer-to-locker-call.json
+add_factory_to_locker_call_file := $(bridge_new_token_call_dir)/add-factory-to-locker-call.json
 
-NEAR_TOKEN_DEPLOYMENT_PREPARE_STAMP := $(BRIDGE_NEW_TOKEN_CALL_DIR)/.near-token-deployment-prepare.stamp
+near_token_deployment_prepare_stamp := $(bridge_new_token_call_dir)/.near-token-deployment-prepare.stamp
 
-$(BRIDGE_NEW_TOKEN_CALL_DIR):
+$(bridge_new_token_call_dir):
 	mkdir -p $@
 
 
-create-near-sender: $(NEAR_SENDER_ACCOUNT_ID_FILE)
-$(NEAR_SENDER_ACCOUNT_ID_FILE): | $(NEAR_DEPLOY_RESULTS_DIR)
-	./scripts/create-near-account.sh omni-sender-$(TIMESTAMP).testnet $@
+create-near-sender: $(near_sender_account_id_file)
+$(near_sender_account_id_file): | $(near_deploy_results_dir)
+	./scripts/create-near-account.sh omni-sender-$(timestamp).testnet $@
 
-create-near-relayer: $(NEAR_RELAYER_ACCOUNT_ID_FILE)
-$(NEAR_RELAYER_ACCOUNT_ID_FILE): | $(NEAR_DEPLOY_RESULTS_DIR)
-	./scripts/create-near-account.sh omni-relayer-$(TIMESTAMP).testnet $@
+create-near-relayer: $(near_relayer_account_id_file)
+$(near_relayer_account_id_file): | $(near_deploy_results_dir)
+	./scripts/create-near-account.sh omni-relayer-$(timestamp).testnet $@
 
 bridge-new-token-to-ethereum: near-bind-token
 
 # Step 0
-prepare-token-deployment: $(NEAR_TOKEN_DEPLOYMENT_PREPARE_STAMP)
-$(NEAR_TOKEN_DEPLOYMENT_PREPARE_STAMP): $(ADD_DEPLOYER_TO_LOCKER_CALL_FILE) $(ADD_FACTORY_TO_LOCKER_CALL_FILE) $(EVM_PROVER_SETUP_CALL_FILE) | $(BRIDGE_NEW_TOKEN_CALL_DIR)
+prepare-token-deployment: $(near_token_deployment_prepare_stamp)
+$(near_token_deployment_prepare_stamp): $(add_deployer_to_locker_call_file) $(add_factory_to_locker_call_file) $(evm_prover_setup_call_file) | $(bridge_new_token_call_dir)
 	touch $@
 
 # Step 0.1
-add-deployer-to-locker: $(ADD_DEPLOYER_TO_LOCKER_CALL_FILE)
-$(ADD_DEPLOYER_TO_LOCKER_CALL_FILE): $(NEAR_TOKEN_DEPLOYER_CONTRACT_ID_FILE) $(NEAR_OMNI_BRIDGE_CONTRACT_ID_FILE) $(NEAR_INIT_ACCOUNT_CREDENTIALS_FILE) | $(BRIDGE_NEW_TOKEN_CALL_DIR)
-	TOKEN_DEPLOYER_ID=$$(jq -r .contract_id $(NEAR_TOKEN_DEPLOYER_CONTRACT_ID_FILE)) && \
-	TOKEN_LOCKER_ID=$$(jq -r .contract_id $(NEAR_OMNI_BRIDGE_CONTRACT_ID_FILE)) && \
+add-deployer-to-locker: $(add_deployer_to_locker_call_file)
+$(add_deployer_to_locker_call_file): $(near_token_deployer_contract_id_file) $(near_omni_bridge_contract_id_file) $(near_init_account_credentials_file) | $(bridge_new_token_call_dir)
+	TOKEN_DEPLOYER_ID=$$(jq -r .contract_id $(near_token_deployer_contract_id_file)) && \
+	TOKEN_LOCKER_ID=$$(jq -r .contract_id $(near_omni_bridge_contract_id_file)) && \
 	./scripts/call-near-contract.sh -c $$TOKEN_LOCKER_ID \
 		-m add_token_deployer \
 		-a "{\"chain\": \"$(SEPOLIA_CHAIN_STR)\", \"account_id\": \"$$TOKEN_DEPLOYER_ID\"}" \
-		-f $(NEAR_INIT_ACCOUNT_CREDENTIALS_FILE) \
+		-f $(near_init_account_credentials_file) \
 		-n testnet 2>&1 | tee $@ && \
 	TX_HASH=$$(grep -o 'Transaction ID: [^ ]*' $@ | cut -d' ' -f3) && \
 	echo "{\"tx_hash\": \"$$TX_HASH\"}" > $@
 
 # Step 0.2
-add-ethereum-factory-to-locker: $(ADD_FACTORY_TO_LOCKER_CALL_FILE)
-$(ADD_FACTORY_TO_LOCKER_CALL_FILE): $(NEAR_OMNI_BRIDGE_CONTRACT_ID_FILE) $(NEAR_INIT_ACCOUNT_CREDENTIALS_FILE) $(sepolia_BRIDGE_CONTRACT_ADDRESS_FILE) | $(BRIDGE_NEW_TOKEN_CALL_DIR)
-	FACTORY_ADDRESS=$$(jq -r .bridgeAddress $(sepolia_BRIDGE_CONTRACT_ADDRESS_FILE)) && \
-	TOKEN_LOCKER_ID=$$(jq -r .contract_id $(NEAR_OMNI_BRIDGE_CONTRACT_ID_FILE)) && \
+add-ethereum-factory-to-locker: $(add_factory_to_locker_call_file)
+$(add_factory_to_locker_call_file): $(near_omni_bridge_contract_id_file) $(near_init_account_credentials_file) $(sepolia_bridge_contract_address_file) | $(bridge_new_token_call_dir)
+	FACTORY_ADDRESS=$$(jq -r .bridgeAddress $(sepolia_bridge_contract_address_file)) && \
+	TOKEN_LOCKER_ID=$$(jq -r .contract_id $(near_omni_bridge_contract_id_file)) && \
 	./scripts/call-near-contract.sh -c $$TOKEN_LOCKER_ID \
 		-m add_factory \
 		-a "{\"address\": \"$$FACTORY_ADDRESS\"}" \
-		-f $(NEAR_INIT_ACCOUNT_CREDENTIALS_FILE) \
+		-f $(near_init_account_credentials_file) \
 		-n testnet 2>&1 | tee $@ && \
 	TX_HASH=$$(grep -o 'Transaction ID: [^ ]*' $@ | cut -d' ' -f3) && \
 	echo "{\"tx_hash\": \"$$TX_HASH\"}" > $@
 
 
 # Step 1.1
-near-log-metadata-call: $(NEAR_LOG_METADATA_CALL_FILE)
-$(NEAR_LOG_METADATA_CALL_FILE):  $(NEAR_SENDER_ACCOUNT_ID_FILE) $(NEAR_OMNI_BRIDGE_CONTRACT_ID_FILE) $(NEAR_TEST_TOKEN_CONTRACT_ID_FILE) $(NEAR_TOKEN_DEPLOYMENT_PREPARE_STAMP) | $(BRIDGE_NEW_TOKEN_CALL_DIR)
-	TOKEN_ID=$$(jq -r .contract_id $(NEAR_TEST_TOKEN_CONTRACT_ID_FILE)) && \
-	SENDER_ACCOUNT_ID=$$(jq -r .account_id $(NEAR_SENDER_ACCOUNT_ID_FILE)) && \
-	SENDER_PRIVATE_KEY=$$(jq -r .private_key $(NEAR_SENDER_ACCOUNT_ID_FILE)) && \
-	TOKEN_LOCKER_ID=$$(jq -r .contract_id $(NEAR_OMNI_BRIDGE_CONTRACT_ID_FILE)) && \
+near-log-metadata-call: $(near_log_metadata_call_file)
+$(near_log_metadata_call_file):  $(near_sender_account_id_file) $(near_omni_bridge_contract_id_file) $(near_test_token_contract_id_file) $(near_token_deployment_prepare_stamp) | $(bridge_new_token_call_dir)
+	TOKEN_ID=$$(jq -r .contract_id $(near_test_token_contract_id_file)) && \
+	SENDER_ACCOUNT_ID=$$(jq -r .account_id $(near_sender_account_id_file)) && \
+	SENDER_PRIVATE_KEY=$$(jq -r .private_key $(near_sender_account_id_file)) && \
+	TOKEN_LOCKER_ID=$$(jq -r .contract_id $(near_omni_bridge_contract_id_file)) && \
 	bridge-cli testnet omni-connector near-log-metadata \
 		--token $$TOKEN_ID \
 		--near-signer $$SENDER_ACCOUNT_ID \
 		--near-private-key $$SENDER_PRIVATE_KEY \
 		--near-token-locker-id $$TOKEN_LOCKER_ID \
-		--config-file $(BRIDGE_SDK_CONFIG_FILE) > $@ && \
+		--config-file $(bridge_sdk_config_file) > $@ && \
 	TX_HASH=$$(grep -o 'tx_hash="[^"]*"' $@ | cut -d'"' -f2) && \
 	echo "{\"tx_hash\": \"$$TX_HASH\"}" > $@
 
 # Step 2.2 (ETH PRIVATE KEY AND RPC ARE SUPPLIED IN SDK CONFIG)
-ethereum-deploy-token: $(EVM_DEPLOY_TOKEN_CALL_FILE)
-$(EVM_DEPLOY_TOKEN_CALL_FILE): $(NEAR_LOG_METADATA_CALL_FILE) $(sepolia_BRIDGE_CONTRACT_ADDRESS_FILE) | $(BRIDGE_NEW_TOKEN_CALL_DIR)
-	TX_HASH=$$(jq -r .tx_hash $(NEAR_LOG_METADATA_CALL_FILE)) && \
-	ETH_BRIDGE_TOKEN_FACTORY_ADDRESS=$$(jq -r .bridgeAddress $(sepolia_BRIDGE_CONTRACT_ADDRESS_FILE)) && \
+ethereum-deploy-token: $(evm_deploy_token_call_file)
+$(evm_deploy_token_call_file): $(near_log_metadata_call_file) $(sepolia_bridge_contract_address_file) | $(bridge_new_token_call_dir)
+	TX_HASH=$$(jq -r .tx_hash $(near_log_metadata_call_file)) && \
+	ETH_BRIDGE_TOKEN_FACTORY_ADDRESS=$$(jq -r .bridgeAddress $(sepolia_bridge_contract_address_file)) && \
 	bridge-cli testnet omni-connector evm-deploy-token \
 		--eth-bridge-token-factory-address $$ETH_BRIDGE_TOKEN_FACTORY_ADDRESS \
 		--source-chain-id $(SEPOLIA_CHAIN_ID) \
 		--tx-hash $$TX_HASH \
-		--config-file $(BRIDGE_SDK_CONFIG_FILE) > $@ && \
+		--config-file $(bridge_sdk_config_file) > $@ && \
 	TX_HASH=$$(grep -o 'tx_hash="[^"]*"' $@ | cut -d'"' -f2) && \
 	echo "{\"tx_hash\": \"$$TX_HASH\"}" > $@
 
 # Step 3.2 (ETH PRIVATE KEY AND RPC ARE SUPPLIED IN SDK CONFIG)
-near-bind-token: $(NEAR_BIND_TOKEN_CALL_FILE)
-$(NEAR_BIND_TOKEN_CALL_FILE): $(EVM_DEPLOY_TOKEN_CALL_FILE) $(NEAR_RELAYER_ACCOUNT_ID_FILE) | $(BRIDGE_NEW_TOKEN_CALL_DIR)
+near-bind-token: $(near_bind_token_call_file)
+$(near_bind_token_call_file): $(evm_deploy_token_call_file) $(near_relayer_account_id_file) | $(bridge_new_token_call_dir)
 	sleep 1300 && \
-	TX_HASH=$$(jq -r .tx_hash $(EVM_DEPLOY_TOKEN_CALL_FILE)) && \
-	RELAYER_ACCOUNT_ID=$$(jq -r .account_id $(NEAR_RELAYER_ACCOUNT_ID_FILE)) && \
-	RELAYER_PRIVATE_KEY=$$(jq -r .private_key $(NEAR_RELAYER_ACCOUNT_ID_FILE)) && \
-	TOKEN_LOCKER_ID=$$(jq -r .contract_id $(NEAR_OMNI_BRIDGE_CONTRACT_ID_FILE)) && \
+	TX_HASH=$$(jq -r .tx_hash $(evm_deploy_token_call_file)) && \
+	RELAYER_ACCOUNT_ID=$$(jq -r .account_id $(near_relayer_account_id_file)) && \
+	RELAYER_PRIVATE_KEY=$$(jq -r .private_key $(near_relayer_account_id_file)) && \
+	TOKEN_LOCKER_ID=$$(jq -r .contract_id $(near_omni_bridge_contract_id_file)) && \
 	bridge-cli testnet omni-connector evm-bind-token \
 		--source-chain-id $(SEPOLIA_CHAIN_ID) \
 		--tx-hash $$TX_HASH \
 		--near-signer $$RELAYER_ACCOUNT_ID \
 		--near-private-key $$RELAYER_PRIVATE_KEY \
 		--near-token-locker-id $$TOKEN_LOCKER_ID \
-		--config-file $(BRIDGE_SDK_CONFIG_FILE) > $@ && \
+		--config-file $(bridge_sdk_config_file) > $@ && \
 	TX_HASH=$$(grep -o 'tx_hash="[^"]*"' $@ | cut -d'"' -f2) && \
 	echo "{\"tx_hash\": \"$$TX_HASH\"}" > $@
 
@@ -363,32 +362,32 @@ $(NEAR_BIND_TOKEN_CALL_FILE): $(EVM_DEPLOY_TOKEN_CALL_FILE) $(NEAR_RELAYER_ACCOU
 # Solana
 ########################################
 
-SOLANA_BUILD_STAMP := $(TESTING_ROOT)/.solana-build.stamp
-SOLANA_ARTIFACTS_DIR := $(TESTING_ROOT)/solana_artifacts
+solana_build_stamp := $(testing_root)/.solana-build.stamp
+solana_artifacts_dir := $(testing_root)/solana_artifacts
 
-SOLANA_PROGRAMS := bridge_token_factory
-SOLANA_PROGRAMS_KEYPAIRS := $(foreach program,$(SOLANA_PROGRAMS),$(SOLANA_DIR)/$(program)/target/deploy/$(program)-keypair.json)
-SOLANA_PROGRAMS_BINARIES := $(foreach program,$(SOLANA_PROGRAMS),$(SOLANA_ARTIFACTS_DIR)/$(program)/target/deploy/$(program).so)
+solana_programs := bridge_token_factory
+solana_programs_keypairs := $(foreach program,$(solana_programs),$(solana_dir)/$(program)/target/deploy/$(program)-keypair.json)
+solana_programs_binaries := $(foreach program,$(solana_programs),$(solana_artifacts_dir)/$(program)/target/deploy/$(program).so)
 
-solana-build: $(SOLANA_BUILD_STAMP)
-$(SOLANA_BUILD_STAMP): $(SOLANA_PROGRAMS_KEYPAIRS) $(SOLANA_PROGRAMS_BINARIES)
+solana-build: $(solana_build_stamp)
+$(solana_build_stamp): $(solana_programs_keypairs) $(solana_programs_binaries)
 	touch $@
 
 # Arguments:
 # 		$(1) -  the program name
 define generate_solana_build_rules
 
-$(SOLANA_DIR)/$(1)/target/deploy/$(1)-keypair.json: $(TESTING_ROOT)/$(1)-keypair.json
+$(solana_dir)/$(1)/target/deploy/$(1)-keypair.json: $(testing_root)/$(1)-keypair.json
 	mkdir -p $$(dir $$@) && \
 	cp $$< $$@
 
-$(SOLANA_ARTIFACTS_DIR)/$(1)/target/deploy/$(1).so: $(SOLANA_DIR)/$(1)/target/deploy/$(1)-keypair.json
-	mkdir -p $(SOLANA_ARTIFACTS_DIR)/$(1) && \
-	cd $(SOLANA_DIR)/$(1) && \
+$(solana_artifacts_dir)/$(1)/target/deploy/$(1).so: $(solana_dir)/$(1)/target/deploy/$(1)-keypair.json
+	mkdir -p $(solana_artifacts_dir)/$(1) && \
+	cd $(solana_dir)/$(1) && \
 	anchor build && \
-	cp -r $(SOLANA_DIR)/$(1)/target/* $(SOLANA_ARTIFACTS_DIR)/$(1)
+	cp -r $(solana_dir)/$(1)/target/* $(solana_artifacts_dir)/$(1)
 
 endef 
 
-$(foreach program,$(SOLANA_PROGRAMS),$(eval $(call generate_solana_build_rules,$(program))))
+$(foreach program,$(solana_programs),$(eval $(call generate_solana_build_rules,$(program))))
 
