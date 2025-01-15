@@ -1,0 +1,14 @@
+[package]
+name = "omni-token"
+version = "0.1.0"
+authors = ["Karim Alabtakh <karim.alabtakh@nearone.org>"]
+edition = "2021"
+publish = false
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+near-sdk.workspace = true
+near-contract-standards.workspace = true
+omni-types.workspace = true

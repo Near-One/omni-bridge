@@ -3,8 +3,10 @@ use alloy_rlp::Decodable;
 use alloy_sol_types::{sol, SolEvent};
 
 use crate::{
-    prover_result::{DeployTokenMessage, FinTransferMessage, InitTransferMessage},
-    stringify, ChainKind, Fee, OmniAddress, TransferMessage, H160,
+    prover_result::{
+        DeployTokenMessage, FinTransferMessage, InitTransferMessage, LogMetadataMessage,
+    },
+    stringify, ChainKind, Fee, OmniAddress, H160,
 };
 
 const ERR_INVALIDE_SIGNATURE_HASH: &str = "ERR_INVALIDE_SIGNATURE_HASH";
@@ -13,17 +15,18 @@ sol! {
     event InitTransfer(
         address indexed sender,
         address indexed tokenAddress,
-        uint128 indexed nonce,
-        string token,
+        uint64 indexed originNonce,
         uint128 amount,
         uint128 fee,
         uint128 nativeTokenFee,
-        string recipient
+        string recipient,
+        string message
     );
 
     event FinTransfer(
-        uint128 indexed nonce,
-        string token,
+        uint8 indexed originChain,
+        uint64 indexed originNonce,
+        address tokenAddress,
         uint128 amount,
         address recipient,
         string feeRecipient
@@ -34,10 +37,19 @@ sol! {
         string token,
         string name,
         string symbol,
+        uint8 decimals,
+        uint8 originDecimals
+    );
+
+    event LogMetadata(
+        address indexed tokenAddress,
+        string name,
+        string symbol,
         uint8 decimals
     );
 }
 
+#[allow(clippy::needless_pass_by_value)]
 pub fn parse_evm_event<T: SolEvent, V: TryFromLog<Log<T>>>(
     chain_kind: ChainKind,
     log_rlp: Vec<u8>,
@@ -67,10 +79,16 @@ impl TryFromLog<Log<FinTransfer>> for FinTransferMessage {
         }
 
         Ok(FinTransferMessage {
-            nonce: near_sdk::json_types::U128(event.data.nonce),
+            transfer_id: crate::TransferId {
+                origin_chain: event.data.originChain.try_into()?,
+                origin_nonce: event.data.originNonce,
+            },
             amount: near_sdk::json_types::U128(event.data.amount),
             fee_recipient: event.data.feeRecipient.parse().map_err(stringify)?,
-            emitter_address: OmniAddress::from_evm_address(chain_kind, H160(event.address.into()))?,
+            emitter_address: OmniAddress::new_from_evm_address(
+                chain_kind,
+                H160(event.address.into()),
+            )?,
         })
     }
 }
@@ -84,18 +102,20 @@ impl TryFromLog<Log<InitTransfer>> for InitTransferMessage {
         }
 
         Ok(InitTransferMessage {
-            emitter_address: OmniAddress::from_evm_address(chain_kind, H160(event.address.into()))?,
-            transfer: TransferMessage {
-                origin_nonce: near_sdk::json_types::U128(event.data.nonce),
-                token: event.data.token.parse().map_err(stringify)?,
-                amount: near_sdk::json_types::U128(event.data.amount),
-                recipient: event.data.recipient.parse().map_err(stringify)?,
-                fee: Fee {
-                    fee: near_sdk::json_types::U128(event.data.fee),
-                    native_fee: near_sdk::json_types::U128(event.data.nativeTokenFee),
-                },
-                sender: OmniAddress::from_evm_address(chain_kind, H160(event.data.sender.into()))?,
+            emitter_address: OmniAddress::new_from_evm_address(
+                chain_kind,
+                H160(event.address.into()),
+            )?,
+            origin_nonce: event.data.originNonce,
+            token: OmniAddress::new_from_evm_address(chain_kind, H160(event.tokenAddress.into()))?,
+            amount: near_sdk::json_types::U128(event.data.amount),
+            recipient: event.data.recipient.parse().map_err(stringify)?,
+            fee: Fee {
+                fee: near_sdk::json_types::U128(event.data.fee),
+                native_fee: near_sdk::json_types::U128(event.data.nativeTokenFee),
             },
+            sender: OmniAddress::new_from_evm_address(chain_kind, H160(event.data.sender.into()))?,
+            msg: event.data.message,
         })
     }
 }
@@ -109,11 +129,41 @@ impl TryFromLog<Log<DeployToken>> for DeployTokenMessage {
         }
 
         Ok(DeployTokenMessage {
-            emitter_address: OmniAddress::from_evm_address(chain_kind, H160(event.address.into()))?,
             token: event.data.token.parse().map_err(stringify)?,
-            token_address: OmniAddress::from_evm_address(
+            token_address: OmniAddress::new_from_evm_address(
                 chain_kind,
                 H160(event.data.tokenAddress.into()),
+            )?,
+            decimals: event.data.decimals,
+            origin_decimals: event.data.originDecimals,
+            emitter_address: OmniAddress::new_from_evm_address(
+                chain_kind,
+                H160(event.address.into()),
+            )?,
+        })
+    }
+}
+
+impl TryFromLog<Log<LogMetadata>> for LogMetadataMessage {
+    type Error = String;
+
+    fn try_from_log(chain_kind: ChainKind, event: Log<LogMetadata>) -> Result<Self, Self::Error> {
+        if event.topics().0 != LogMetadata::SIGNATURE_HASH {
+            return Err(ERR_INVALIDE_SIGNATURE_HASH.to_string());
+        }
+
+        Ok(LogMetadataMessage {
+            token_address: OmniAddress::new_from_evm_address(
+                chain_kind,
+                H160(event.data.tokenAddress.into()),
+            )?,
+            name: event.data.name,
+            symbol: event.data.symbol,
+            decimals: event.data.decimals,
+
+            emitter_address: OmniAddress::new_from_evm_address(
+                chain_kind,
+                H160(event.address.into()),
             )?,
         })
     }
@@ -126,8 +176,9 @@ mod tests {
     use super::*;
     sol! {
         event TestFinTransfer(
-            uint128 indexed nonce,
-            string token,
+            uint8 indexed originChain,
+            uint64 indexed originNonce,
+            address tokenAddress,
             uint128 amount,
             address recipient,
             string feeRecipient
@@ -137,16 +188,18 @@ mod tests {
     #[test]
     fn test_decode_log_with_same_params_with_validation() {
         let event = FinTransfer {
-            nonce: 55,
+            originChain: 1,
+            originNonce: 50,
             amount: 100,
-            token: "some_token".to_owned(),
+            tokenAddress: [0; 20].into(),
             recipient: [0; 20].into(),
             feeRecipient: "some_fee_recipient".to_owned(),
         };
         let test_event = TestFinTransfer {
-            nonce: event.nonce,
+            originChain: event.originChain,
+            originNonce: event.originNonce,
             amount: event.amount,
-            token: event.token.clone(),
+            tokenAddress: event.tokenAddress,
             recipient: event.recipient,
             feeRecipient: event.feeRecipient.clone(),
         };

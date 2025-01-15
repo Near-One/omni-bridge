@@ -72,6 +72,7 @@ impl OmniProver {
         self.provers.remove(&prover_id);
     }
 
+    #[must_use]
     pub fn get_provers(&self) -> Vec<(ProverId, AccountId)> {
         self.provers.iter().collect::<Vec<_>>()
     }

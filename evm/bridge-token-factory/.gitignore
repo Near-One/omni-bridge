@@ -1,6 +1,0 @@
-build/
-cache/
-coverage/
-coverage.json
-.openzeppelin/
-node_modules/

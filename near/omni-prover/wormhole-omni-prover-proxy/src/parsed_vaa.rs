@@ -2,16 +2,19 @@
 
 use {
     crate::byte_utils::ByteUtils,
-    alloy_sol_types::{sol, SolType},
-    near_sdk::{bs58, env},
+    borsh::BorshDeserialize,
+    near_sdk::env,
     omni_types::{
-        prover_result::{DeployTokenMessage, FinTransferMessage, InitTransferMessage},
-        stringify, EvmAddress, Fee, OmniAddress, TransferMessage, H160,
+        prover_result::{
+            DeployTokenMessage, FinTransferMessage, InitTransferMessage, LogMetadataMessage,
+            ProofKind,
+        },
+        stringify, Fee, Nonce, OmniAddress, TransferId,
     },
 };
 
 // Validator Action Approval(VAA) data
-
+#[allow(dead_code)]
 pub struct ParsedVAA {
     pub version: u8,
     pub guardian_set_index: u32,
@@ -69,7 +72,7 @@ impl ParsedVAA {
         // Load 4 bytes starting from index 1
         let guardian_set_index: u32 = data.get_u32(Self::GUARDIAN_SET_INDEX_POS);
         let len_signers = data.get_u8(Self::LEN_SIGNER_POS) as usize;
-        let body_offset: usize = Self::HEADER_LEN + Self::SIGNATURE_LEN * len_signers as usize;
+        let body_offset: usize = Self::HEADER_LEN + Self::SIGNATURE_LEN * len_signers;
 
         // Hash the body
         if body_offset >= data.len() {
@@ -99,7 +102,7 @@ impl ParsedVAA {
             guardian_set_index,
             timestamp,
             nonce,
-            len_signers: len_signers as usize,
+            len_signers,
             emitter_chain,
             emitter_address,
             sequence,
@@ -110,50 +113,71 @@ impl ParsedVAA {
     }
 }
 
-sol! {
-    struct InitTransferWh {
-        uint128 nonce;
-        string token;
-        uint128 amount;
-        uint128 fee;
-        uint128 nativeFee;
-        string recipient;
-        address sender;
-    }
+#[derive(Debug, BorshDeserialize)]
+struct DeployTokenWh {
+    payload_type: ProofKind,
+    token: String,
+    token_address: OmniAddress,
+    decimals: u8,
+    origin_decimals: u8,
+}
 
-    struct FinTransferWh {
-        string token;
-        uint128 amount;
-        string recipient;
-        uint128 nonce;
-    }
+#[derive(Debug, BorshDeserialize)]
+struct LogMetadataWh {
+    payload_type: ProofKind,
+    token_address: OmniAddress,
+    name: String,
+    symbol: String,
+    decimals: u8,
+}
 
-    struct DeployTokenWh {
-        string token;
-        address tokenAddress;
-    }
+#[derive(Debug, BorshDeserialize)]
+struct FinTransferWh {
+    payload_type: ProofKind,
+    transfer_id: TransferId,
+    token_address: OmniAddress,
+    amount: u128,
+    fee_recipient: String,
+}
+
+#[derive(Debug, BorshDeserialize)]
+struct InitTransferWh {
+    payload_type: ProofKind,
+    sender: OmniAddress,
+    token_address: OmniAddress,
+    origin_nonce: Nonce,
+    amount: u128,
+    fee: u128,
+    native_fee: u128,
+    recipient: String,
+    message: String,
 }
 
 impl TryInto<InitTransferMessage> for ParsedVAA {
     type Error = String;
 
     fn try_into(self) -> Result<InitTransferMessage, String> {
-        let data: &[u8] = &self.payload[1..];
-        let transfer = InitTransferWh::abi_decode(data, true).map_err(stringify)?;
+        let transfer: InitTransferWh = borsh::from_slice(&self.payload).map_err(stringify)?;
+
+        if transfer.payload_type != ProofKind::InitTransfer {
+            return Err("Invalid proof kind".to_owned());
+        }
 
         Ok(InitTransferMessage {
-            transfer: TransferMessage {
-                token: transfer.token.parse().map_err(stringify)?,
-                amount: transfer.amount.into(),
-                fee: Fee {
-                    fee: transfer.fee.into(),
-                    native_fee: transfer.nativeFee.into(),
-                },
-                recipient: transfer.recipient.parse().map_err(stringify)?,
-                origin_nonce: transfer.nonce.into(),
-                sender: to_omni_address(self.emitter_chain, &transfer.sender.0 .0),
+            token: transfer.token_address.clone(),
+            amount: transfer.amount.into(),
+            fee: Fee {
+                fee: transfer.fee.into(),
+                native_fee: transfer.native_fee.into(),
             },
-            emitter_address: to_omni_address(self.emitter_chain, &self.emitter_address),
+            recipient: transfer.recipient.parse().map_err(stringify)?,
+            origin_nonce: transfer.origin_nonce,
+            sender: transfer.sender,
+            msg: transfer.message,
+            emitter_address: OmniAddress::new_from_slice(
+                transfer.token_address.get_chain(),
+                &self.emitter_address,
+            )?,
         })
     }
 }
@@ -162,14 +186,20 @@ impl TryInto<FinTransferMessage> for ParsedVAA {
     type Error = String;
 
     fn try_into(self) -> Result<FinTransferMessage, String> {
-        let data: &[u8] = &self.payload[1..];
-        let transfer = FinTransferWh::abi_decode(data, true).map_err(stringify)?;
+        let transfer: FinTransferWh = borsh::from_slice(&self.payload).map_err(stringify)?;
+
+        if transfer.payload_type != ProofKind::FinTransfer {
+            return Err("Invalid proof kind".to_owned());
+        }
 
         Ok(FinTransferMessage {
-            nonce: transfer.nonce.into(),
-            fee_recipient: transfer.recipient.parse().map_err(stringify)?,
+            transfer_id: transfer.transfer_id,
+            fee_recipient: transfer.fee_recipient.parse().map_err(stringify)?,
             amount: transfer.amount.into(),
-            emitter_address: to_omni_address(self.emitter_chain, &self.emitter_address),
+            emitter_address: OmniAddress::new_from_slice(
+                transfer.token_address.get_chain(),
+                &self.emitter_address,
+            )?,
         })
     }
 }
@@ -178,30 +208,42 @@ impl TryInto<DeployTokenMessage> for ParsedVAA {
     type Error = String;
 
     fn try_into(self) -> Result<DeployTokenMessage, String> {
-        let data: &[u8] = &self.payload[1..];
-        let transfer = DeployTokenWh::abi_decode(data, true).map_err(stringify)?;
+        let parsed_payload: DeployTokenWh = borsh::from_slice(&self.payload).map_err(stringify)?;
+
+        if parsed_payload.payload_type != ProofKind::DeployToken {
+            return Err("Invalid proof kind".to_owned());
+        }
 
         Ok(DeployTokenMessage {
-            token: transfer.token.parse().map_err(stringify)?,
-            token_address: to_omni_address(self.emitter_chain, &transfer.tokenAddress.0 .0),
-            emitter_address: to_omni_address(self.emitter_chain, &self.emitter_address),
+            token: parsed_payload.token.parse().map_err(stringify)?,
+            token_address: parsed_payload.token_address.clone(),
+            decimals: parsed_payload.decimals,
+            origin_decimals: parsed_payload.origin_decimals,
+            emitter_address: OmniAddress::new_from_slice(
+                parsed_payload.token_address.get_chain(),
+                &self.emitter_address,
+            )?,
         })
     }
 }
 
-fn to_omni_address(emitter_chain: u16, address: &[u8]) -> OmniAddress {
-    match emitter_chain {
-        1 => OmniAddress::Sol(bs58::encode(address).into_string()),
-        2 => OmniAddress::Eth(to_evm_address(address)),
-        23 => OmniAddress::Arb(to_evm_address(address)),
-        30 => OmniAddress::Base(to_evm_address(address)),
-        _ => env::panic_str("Chain not supported"),
-    }
-}
+impl TryInto<LogMetadataMessage> for ParsedVAA {
+    type Error = String;
 
-fn to_evm_address(address: &[u8]) -> EvmAddress {
-    match address.try_into() {
-        Ok(bytes) => H160(bytes),
-        Err(_) => env::panic_str("Invalid EVM address"),
+    fn try_into(self) -> Result<LogMetadataMessage, String> {
+        let parsed_payload: LogMetadataWh = borsh::from_slice(&self.payload).map_err(stringify)?;
+
+        if parsed_payload.payload_type != ProofKind::LogMetadata {
+            return Err("Invalid proof kind".to_owned());
+        }
+
+        let chain_kind = parsed_payload.token_address.get_chain();
+        Ok(LogMetadataMessage {
+            token_address: parsed_payload.token_address,
+            name: parsed_payload.name,
+            symbol: parsed_payload.symbol,
+            decimals: parsed_payload.decimals,
+            emitter_address: OmniAddress::new_from_slice(chain_kind, &self.emitter_address)?,
+        })
     }
 }

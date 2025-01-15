@@ -2,3 +2,8 @@
 **/target
 **/config.toml
 **/.env
+.history
+node_modules
+near/res/mock_token.wasm
+near/res/mock_prover.wasm
+near/res/omni_tests.wasm

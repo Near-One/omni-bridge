@@ -24,20 +24,23 @@ impl Default for OmniProver {
 
 #[near]
 impl OmniProver {
-    pub fn add_prover(&mut self, prover_id: ProverId, account_id: AccountId) {
-        self.provers.insert(&prover_id, &account_id);
+    pub fn add_prover(&mut self, prover_id: &ProverId, account_id: &AccountId) {
+        self.provers.insert(prover_id, account_id);
     }
 
-    pub fn remove_prover(&mut self, prover_id: ProverId) {
-        self.provers.remove(&prover_id);
+    pub fn remove_prover(&mut self, prover_id: &ProverId) {
+        self.provers.remove(prover_id);
     }
 
     pub fn get_provers(&self) -> Vec<(ProverId, AccountId)> {
         self.provers.iter().collect::<Vec<_>>()
     }
 
+    /// # Panics
+    ///
+    /// This function will panic if the prover args are not valid.
     #[result_serializer(borsh)]
-    pub fn verify_proof(&self, #[serializer(borsh)] args: VerifyProofArgs) -> ProverResult {
+    pub fn verify_proof(&self, #[serializer(borsh)] args: &VerifyProofArgs) -> ProverResult {
         ProverResult::try_from_slice(&args.prover_args).unwrap()
     }
 }
