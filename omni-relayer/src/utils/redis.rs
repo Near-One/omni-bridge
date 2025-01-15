@@ -20,10 +20,10 @@ pub const SLEEP_TIME_AFTER_EVENTS_PROCESS_SECS: u64 = 10;
 const QUERY_RETRY_ATTEMPTS: u64 = 10;
 const QUERY_RETRY_SLEEP_SECS: u64 = 1;
 
-pub async fn get_last_processed_key(chain_kind: ChainKind) -> String {
+pub fn get_last_processed_key(chain_kind: ChainKind) -> String {
     match chain_kind {
         ChainKind::Sol => "SOLANA_LAST_PROCESSED_SIGNATURE".to_string(),
-        _ => format!("{:?}_LAST_PROCESSED_BLOCK", chain_kind),
+        _ => format!("{chain_kind:?}_LAST_PROCESSED_BLOCK"),
     }
 }
 

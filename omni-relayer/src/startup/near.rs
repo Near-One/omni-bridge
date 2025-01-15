@@ -74,11 +74,13 @@ async fn create_lake_config(
         Some(block) => block,
         None => utils::redis::get_last_processed::<&str, u64>(
             redis_connection,
-            &utils::redis::get_last_processed_key(ChainKind::Near).await,
+            &utils::redis::get_last_processed_key(ChainKind::Near),
         )
         .await
-        .map(|block_height| block_height + 1)
-        .unwrap_or(utils::near::get_final_block(jsonrpc_client).await?),
+        .map_or(
+            utils::near::get_final_block(jsonrpc_client).await?,
+            |block_height| block_height + 1,
+        ),
     };
 
     info!("NEAR Lake will start from block: {}", start_block_height);
@@ -127,7 +129,7 @@ pub async fn start_indexer(
 
                 utils::redis::update_last_processed(
                     &mut redis_connection,
-                    &utils::redis::get_last_processed_key(ChainKind::Near).await,
+                    &utils::redis::get_last_processed_key(ChainKind::Near),
                     streamer_message.block.header.height,
                 )
                 .await;

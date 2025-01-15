@@ -27,13 +27,19 @@ pub async fn process_message(
     signature: Signature,
 ) {
     for instruction in message.instructions.clone() {
+        let account_keys = instruction
+            .accounts
+            .into_iter()
+            .map(|i| message.account_keys.get(usize::from(i)).cloned())
+            .collect::<Vec<_>>();
+
         if let Err(err) = decode_instruction(
             redis_connection,
             solana,
             signature,
             transaction,
             &instruction.data,
-            &message.account_keys,
+            account_keys,
         )
         .await
         {
@@ -48,7 +54,7 @@ async fn decode_instruction(
     signature: Signature,
     transaction: &EncodedTransactionWithStatusMeta,
     data: &str,
-    account_keys: &[String],
+    account_keys: Vec<Option<String>>,
 ) -> Result<()> {
     let decoded_data = bs58::decode(data).into_vec()?;
 
@@ -78,21 +84,31 @@ async fn decode_instruction(
             let (sender, token, emitter) = if discriminator == &solana.init_transfer_discriminator {
                 let sender = account_keys
                     .get(solana.init_transfer_sender_index)
-                    .context("Missing sender account key")?;
+                    .context("Missing sender account key")?
+                    .as_ref()
+                    .context("Sender account key is None")?;
                 let token = account_keys
                     .get(solana.init_transfer_token_index)
-                    .context("Missing token account key")?;
+                    .context("Missing token account key")?
+                    .as_ref()
+                    .context("Sender account key is None")?;
                 let emitter = account_keys
                     .get(solana.init_transfer_emitter_index)
-                    .context("Missing emitter account key")?;
+                    .context("Missing emitter account key")?
+                    .as_ref()
+                    .context("Emitter key is None")?;
                 (sender, token, emitter)
             } else {
                 let sender = account_keys
                     .get(solana.init_transfer_sol_sender_index)
-                    .context("Missing SOL sender account key")?;
+                    .context("Missing SOL sender account key")?
+                    .as_ref()
+                    .context("SOL sender account key is None")?;
                 let emitter = account_keys
                     .get(solana.init_transfer_sol_emitter_index)
-                    .context("Missing SOL emitter account key")?;
+                    .context("Missing SOL emitter account key")?
+                    .as_ref()
+                    .context("Sol emitter key is None")?;
                 (sender, &Pubkey::default().to_string(), emitter)
             };
 
@@ -104,7 +120,7 @@ async fn decode_instruction(
                         let Some(sequence) = log
                             .split_ascii_whitespace()
                             .last()
-                            .map(|sequence| sequence.to_string())
+                            .map(std::string::ToString::to_string)
                         else {
                             warn!("Failed to parse sequence number from log: {:?}", log);
                             continue;
@@ -150,10 +166,14 @@ async fn decode_instruction(
             account_keys
                 .get(solana.finalize_transfer_emitter_index)
                 .context("Missing emitter account key")?
+                .as_ref()
+                .context("Emitter account key is None")?
         } else {
             account_keys
                 .get(solana.finalize_transfer_sol_emitter_index)
                 .context("Missing SOL emitter account key")?
+                .as_ref()
+                .context("SOL emitter account key is None")?
         };
 
         if let Some(OptionSerializer::Some(logs)) =
@@ -164,7 +184,7 @@ async fn decode_instruction(
                     let Some(sequence) = log
                         .split_ascii_whitespace()
                         .last()
-                        .map(|sequence| sequence.to_string())
+                        .map(std::string::ToString::to_string)
                     else {
                         warn!("Failed to parse sequence number from log: {:?}", log);
                         continue;

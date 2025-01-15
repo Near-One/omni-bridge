@@ -17,43 +17,28 @@ async fn get_token_id(
     let omni_token_address = match chain_kind {
         ChainKind::Near => {
             let token = AccountId::from_str(token_address).map_err(|_| {
-                format!(
-                    "Failed to parse token address as AccountId: {:?}",
-                    token_address
-                )
+                format!("Failed to parse token address as AccountId: {token_address:?}",)
             })?;
             Ok(OmniAddress::Near(token))
         }
         ChainKind::Eth | ChainKind::Base | ChainKind::Arb => {
-            utils::evm::string_to_evm_omniaddress(chain_kind, token_address.to_string())
-                .await
+            utils::evm::string_to_evm_omniaddress(chain_kind, token_address)
                 .map_err(|err| err.to_string())
         }
         ChainKind::Sol => {
             let token = Pubkey::from_str(token_address).map_err(|_| {
-                format!(
-                    "Failed to parse token address as Pubkey: {:?}",
-                    token_address
-                )
+                format!("Failed to parse token address as Pubkey: {token_address:?}",)
             })?;
             OmniAddress::new_from_slice(ChainKind::Sol, &token.to_bytes())
         }
     }
-    .map_err(|_| {
-        format!(
-            "Failed to convert token address to OmniAddress: {:?}",
-            token_address
-        )
-    })?;
+    .map_err(|_| format!("Failed to convert token address to OmniAddress: {token_address:?}",))?;
 
     let token_id = connector
         .near_get_token_id(omni_token_address.clone())
         .await
         .map_err(|_| {
-            format!(
-                "Failed to get token id by omni token address: {:?}",
-                omni_token_address
-            )
+            format!("Failed to get token id by omni token address: {omni_token_address:?}",)
         })?;
 
     Ok(token_id)
@@ -69,10 +54,7 @@ async fn add_storage_deposit_action(
         .near_get_required_storage_deposit(token_id.clone(), account_id.clone())
         .await
         .map_err(|_| {
-            format!(
-                "Failed to get required storage deposit for account: {:?}",
-                account_id
-            )
+            format!("Failed to get required storage deposit for account: {account_id:?}",)
         })? {
         amount if amount > 0 => Some(amount),
         _ => None,
@@ -124,12 +106,7 @@ pub async fn get_storage_deposit_actions(
         let token_id = connector
             .near_get_native_token_id(chain_kind)
             .await
-            .map_err(|_| {
-                format!(
-                    "Failed to get native token id by chain kind: {:?}",
-                    chain_kind
-                )
-            })?;
+            .map_err(|_| format!("Failed to get native token id by chain kind: {chain_kind:?}",))?;
 
         let relayer = connector
             .near_bridge_client()
