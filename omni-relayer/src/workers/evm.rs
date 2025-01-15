@@ -35,20 +35,17 @@ pub async fn finalize_transfer(
     loop {
         let mut redis_connection = redis_connection.clone();
 
-        let events = match utils::redis::get_events(
+        let Some(events) = utils::redis::get_events(
             &mut redis_connection,
             utils::redis::EVM_INIT_TRANSFER_EVENTS.to_string(),
         )
         .await
-        {
-            Some(events) => events,
-            None => {
-                tokio::time::sleep(tokio::time::Duration::from_secs(
-                    utils::redis::SLEEP_TIME_AFTER_EVENTS_PROCESS_SECS,
-                ))
-                .await;
-                continue;
-            }
+        else {
+            tokio::time::sleep(tokio::time::Duration::from_secs(
+                utils::redis::SLEEP_TIME_AFTER_EVENTS_PROCESS_SECS,
+            ))
+            .await;
+            continue;
         };
 
         let mut handlers = Vec::new();
@@ -137,10 +134,8 @@ async fn handle_init_transfer_event(
     {
         let sender = match utils::evm::string_to_evm_omniaddress(
             init_transfer_with_timestamp.chain_kind,
-            init_log.inner.sender.to_string(),
-        )
-        .await
-        {
+            &init_log.inner.sender.to_string(),
+        ) {
             Ok(sender) => sender,
             Err(err) => {
                 warn!("{}", err);
@@ -150,10 +145,8 @@ async fn handle_init_transfer_event(
 
         let token = match utils::evm::string_to_evm_omniaddress(
             init_transfer_with_timestamp.chain_kind,
-            init_log.inner.tokenAddress.to_string(),
-        )
-        .await
-        {
+            &init_log.inner.tokenAddress.to_string(),
+        ) {
             Ok(token) => token,
             Err(err) => {
                 warn!("{}", err);
@@ -198,16 +191,12 @@ async fn handle_init_transfer_event(
 
     if vaa.is_none() {
         if init_transfer_with_timestamp.chain_kind == ChainKind::Eth {
-            let light_client_latest_block_number =
-                match utils::near::get_eth_light_client_last_block_number(&config, &jsonrpc_client)
-                    .await
-                {
-                    Ok(block_number) => block_number,
-                    Err(_) => {
-                        warn!("Failed to get eth light client last block number");
-                        return;
-                    }
-                };
+            let Ok(light_client_latest_block_number) =
+                utils::near::get_eth_light_client_last_block_number(&config, &jsonrpc_client).await
+            else {
+                warn!("Failed to get eth light client last block number");
+                return;
+            };
 
             if init_transfer_with_timestamp.block_number > light_client_latest_block_number {
                 warn!("ETH light client is not synced yet");
@@ -227,17 +216,14 @@ async fn handle_init_transfer_event(
         }
     }
 
-    let topic = match init_transfer_with_timestamp.log.topic0() {
-        Some(topic) => topic,
-        None => {
-            warn!("No topic0 in log: {:?}", init_transfer_with_timestamp.log);
-            return;
-        }
+    let Some(topic) = init_transfer_with_timestamp.log.topic0() else {
+        warn!("No topic0 in log: {:?}", init_transfer_with_timestamp.log);
+        return;
     };
 
     let tx_hash = H256::from_slice(tx_hash.as_slice());
 
-    let prover_args = match utils::evm::construct_prover_args(
+    let Some(prover_args) = utils::evm::construct_prover_args(
         &config,
         vaa,
         tx_hash,
@@ -245,12 +231,9 @@ async fn handle_init_transfer_event(
         ProofKind::InitTransfer,
     )
     .await
-    {
-        Some(prover_args) => prover_args,
-        None => {
-            warn!("Failed to construct prover args");
-            return;
-        }
+    else {
+        warn!("Failed to construct prover args");
+        return;
     };
 
     let storage_deposit_actions = match utils::storage::get_storage_deposit_actions(

@@ -143,13 +143,10 @@ pub async fn construct_prover_args(
     borsh::to_vec(&evm_proof_args).ok()
 }
 
-pub async fn string_to_evm_omniaddress(
-    chain_kind: ChainKind,
-    address: String,
-) -> Result<OmniAddress> {
+pub fn string_to_evm_omniaddress(chain_kind: ChainKind, address: &str) -> Result<OmniAddress> {
     OmniAddress::new_from_evm_address(
         chain_kind,
-        H160::from_str(&address)
+        H160::from_str(address)
             .map_err(|err| anyhow::anyhow!("Failed to parse as H160 address: {:?}", err))?,
     )
     .map_err(|err| anyhow::anyhow!("Failed to parse as EvmOmniAddress address: {:?}", err))

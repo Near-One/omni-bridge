@@ -37,10 +37,7 @@ fn build_evm_bridge_client(
                 .private_key(Some(crate::config::get_private_key(chain_kind)))
                 .bridge_token_factory_address(Some(evm.bridge_token_factory_address.to_string()))
                 .build()
-                .context(format!(
-                    "Failed to build EvmBridgeClient ({:?})",
-                    chain_kind
-                ))
+                .context(format!("Failed to build EvmBridgeClient ({chain_kind:?})"))
         })
         .transpose()
 }

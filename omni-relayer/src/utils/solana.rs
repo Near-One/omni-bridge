@@ -30,7 +30,7 @@ pub async fn process_message(
         let account_keys = instruction
             .accounts
             .into_iter()
-            .map(|i| message.account_keys.get(i as usize).cloned())
+            .map(|i| message.account_keys.get(usize::from(i)).cloned())
             .collect::<Vec<_>>();
 
         if let Err(err) = decode_instruction(
@@ -120,7 +120,7 @@ async fn decode_instruction(
                         let Some(sequence) = log
                             .split_ascii_whitespace()
                             .last()
-                            .map(|sequence| sequence.to_string())
+                            .map(std::string::ToString::to_string)
                         else {
                             warn!("Failed to parse sequence number from log: {:?}", log);
                             continue;
@@ -184,7 +184,7 @@ async fn decode_instruction(
                     let Some(sequence) = log
                         .split_ascii_whitespace()
                         .last()
-                        .map(|sequence| sequence.to_string())
+                        .map(std::string::ToString::to_string)
                     else {
                         warn!("Failed to parse sequence number from log: {:?}", log);
                         continue;

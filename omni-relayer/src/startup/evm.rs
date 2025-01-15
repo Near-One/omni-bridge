@@ -65,20 +65,19 @@ pub async fn start_indexer(
                 arb.expected_finalization_time,
             )
         }
-        _ => anyhow::bail!("Unsupported chain kind: {:?}", chain_kind),
+        _ => anyhow::bail!("Unsupported chain kind: {chain_kind:?}"),
     };
 
     let http_provider = ProviderBuilder::new().on_http(rpc_http_url.parse().context(format!(
-        "Failed to parse {:?} rpc provider as url",
-        chain_kind
+        "Failed to parse {chain_kind:?} rpc provider as url",
     ))?);
 
     let ws_provider = ProviderBuilder::new()
         .on_ws(WsConnect::new(rpc_ws_url))
         .await
-        .context(format!("Failed to initialize {:?} WS provider", chain_kind))?;
+        .context(format!("Failed to initialize {chain_kind:?} WS provider"))?;
 
-    let last_processed_block_key = utils::redis::get_last_processed_key(chain_kind).await;
+    let last_processed_block_key = utils::redis::get_last_processed_key(chain_kind);
     let latest_block = http_provider.get_block_number().await?;
     let from_block = match start_block {
         Some(block) => block,
@@ -100,7 +99,9 @@ pub async fn start_indexer(
             .to_vec(),
         );
 
-    for current_block in (from_block..latest_block).step_by(block_processing_batch_size as usize) {
+    for current_block in
+        (from_block..latest_block).step_by(usize::try_from(block_processing_batch_size)?)
+    {
         let logs = http_provider
             .get_logs(
                 &filter
@@ -201,7 +202,7 @@ async fn process_log(
 
     utils::redis::update_last_processed(
         redis_connection,
-        &utils::redis::get_last_processed_key(chain_kind).await,
+        &utils::redis::get_last_processed_key(chain_kind),
         block_number,
     )
     .await;

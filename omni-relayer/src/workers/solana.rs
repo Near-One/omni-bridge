@@ -31,20 +31,17 @@ pub async fn process_signature(config: config::Config, redis_client: redis::Clie
     loop {
         let mut redis_connection = redis_connection.clone();
 
-        let events = match utils::redis::get_events(
+        let Some(events) = utils::redis::get_events(
             &mut redis_connection,
             utils::redis::SOLANA_EVENTS.to_string(),
         )
         .await
-        {
-            Some(events) => events,
-            None => {
-                tokio::time::sleep(tokio::time::Duration::from_secs(
-                    utils::redis::SLEEP_TIME_AFTER_EVENTS_PROCESS_SECS,
-                ))
-                .await;
-                continue;
-            }
+        else {
+            tokio::time::sleep(tokio::time::Duration::from_secs(
+                utils::redis::SLEEP_TIME_AFTER_EVENTS_PROCESS_SECS,
+            ))
+            .await;
+            continue;
         };
 
         let mut handlers = Vec::new();
@@ -81,7 +78,7 @@ pub async fn process_signature(config: config::Config, redis_client: redis::Clie
                                         raw,
                                         signature,
                                     )
-                                    .await
+                                    .await;
                                 }
                             }
 
@@ -93,7 +90,7 @@ pub async fn process_signature(config: config::Config, redis_client: redis::Clie
                             .await;
                             utils::redis::update_last_processed(
                                 &mut redis_connection,
-                                &utils::redis::get_last_processed_key(ChainKind::Sol).await,
+                                &utils::redis::get_last_processed_key(ChainKind::Sol),
                                 &signature.to_string(),
                             )
                             .await;
@@ -139,20 +136,17 @@ pub async fn finalize_transfer(
     loop {
         let mut redis_connection = redis_connection.clone();
 
-        let events = match utils::redis::get_events(
+        let Some(events) = utils::redis::get_events(
             &mut redis_connection,
             utils::redis::SOLANA_INIT_TRANSFER_EVENTS.to_string(),
         )
         .await
-        {
-            Some(events) => events,
-            None => {
-                tokio::time::sleep(tokio::time::Duration::from_secs(
-                    utils::redis::SLEEP_TIME_AFTER_EVENTS_PROCESS_SECS,
-                ))
-                .await;
-                continue;
-            }
+        else {
+            tokio::time::sleep(tokio::time::Duration::from_secs(
+                utils::redis::SLEEP_TIME_AFTER_EVENTS_PROCESS_SECS,
+            ))
+            .await;
+            continue;
         };
 
         let mut handlers = Vec::new();
@@ -201,18 +195,15 @@ async fn handle_init_transfer_event(
 
     info!("Trying to process InitTransfer log on Solana");
 
-    let recipient = match init_transfer_with_timestamp
+    let Ok(recipient) = init_transfer_with_timestamp
         .recipient
         .parse::<OmniAddress>()
-    {
-        Ok(recipient) => recipient,
-        Err(_) => {
-            warn!(
-                "Failed to parse recipient as OmniAddress: {:?}",
-                init_transfer_with_timestamp.recipient
-            );
-            return;
-        }
+    else {
+        warn!(
+            "Failed to parse recipient as OmniAddress: {:?}",
+            init_transfer_with_timestamp.recipient
+        );
+        return;
     };
 
     #[cfg(not(feature = "disable_fee_check"))]
@@ -251,7 +242,7 @@ async fn handle_init_transfer_event(
             &config,
             Fee {
                 fee: init_transfer_with_timestamp.fee.into(),
-                native_fee: (init_transfer_with_timestamp.native_fee as u128).into(),
+                native_fee: u128::from(init_transfer_with_timestamp.native_fee).into(),
             },
             &sender,
             &recipient,
@@ -304,7 +295,7 @@ async fn handle_init_transfer_event(
         &recipient,
         &init_transfer_with_timestamp.token,
         init_transfer_with_timestamp.fee,
-        init_transfer_with_timestamp.native_fee as u128,
+        u128::from(init_transfer_with_timestamp.native_fee),
     )
     .await
     {
