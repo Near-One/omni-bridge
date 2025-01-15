@@ -544,7 +544,7 @@ impl Contract {
             )
             .into()
         } else {
-            self.process_fin_transfer_to_other_cahin(predecessor_account_id, transfer_message);
+            self.process_fin_transfer_to_other_chain(predecessor_account_id, transfer_message);
             PromiseOrValue::Value(destination_nonce)
         }
     }
@@ -1060,7 +1060,7 @@ impl Contract {
         promise
     }
 
-    fn process_fin_transfer_to_other_cahin(
+    fn process_fin_transfer_to_other_chain(
         &mut self,
         predecessor_account_id: AccountId,
         transfer_message: TransferMessage,
