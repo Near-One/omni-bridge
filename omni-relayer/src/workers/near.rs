@@ -26,8 +26,7 @@ pub struct InitTransferWithTimestamp {
 }
 
 pub async fn sign_transfer(
-    #[cfg(not(feature = "disable_fee_check"))]
-    config: config::Config,
+    #[cfg(not(feature = "disable_fee_check"))] config: config::Config,
     redis_client: redis::Client,
     connector: Arc<OmniConnector>,
 ) -> Result<()> {
@@ -212,7 +211,10 @@ pub async fn finalize_transfer(
 
                         let fee_recipient = connector
                             .near_bridge_client()
-                            .and_then(|connector| connector.signer().map(|signer| signer.account_id)).ok();
+                            .and_then(|connector| {
+                                connector.signer().map(|signer| signer.account_id)
+                            })
+                            .ok();
 
                         if message_payload.fee_recipient != fee_recipient {
                             warn!(
@@ -223,7 +225,8 @@ pub async fn finalize_transfer(
                                 &mut redis_connection,
                                 utils::redis::NEAR_SIGN_TRANSFER_EVENTS,
                                 &key,
-                            ).await;
+                            )
+                            .await;
                             return;
                         }
 
@@ -332,7 +335,7 @@ pub async fn claim_fee(
                     log,
                     tx_logs,
                     creation_timestamp,
-                    expected_finalization_time
+                    expected_finalization_time,
                 } = fin_transfer
                 {
                     handlers.push(tokio::spawn({
@@ -347,7 +350,7 @@ pub async fn claim_fee(
                             if current_timestamp < creation_timestamp + expected_finalization_time {
                                 return;
                             }
-                            
+
                             info!("Trying to process FinTransfer log on {:?}", chain_kind);
 
                             let vaa = utils::evm::get_vaa_from_evm_log(
