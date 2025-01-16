@@ -636,14 +636,15 @@ dependencies = [
 
 [[package]]
 name = "cargo-near-build"
-version = "0.3.2"
+version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "33da359f840830cccaedd09d58f78d468c948b9d17e31e3d8e83bf0859f6a38b"
+checksum = "5e79fd27a64c34c965d14a81c28c93e512f77439fa4a8a501bb6c262e9e792fe"
 dependencies = [
  "bon",
  "bs58 0.5.1",
  "camino",
  "cargo_metadata",
+ "cc",
  "colored",
  "dunce",
  "eyre",
@@ -657,6 +658,7 @@ dependencies = [
  "serde_json",
  "sha2",
  "symbolic-debuginfo",
+ "tempfile",
  "tracing",
  "wasm-opt",
  "zstd 0.13.2",
@@ -687,9 +689,9 @@ dependencies = [
 
 [[package]]
 name = "cc"
-version = "1.2.9"
+version = "1.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c8293772165d9345bdaaa39b45b2109591e63fe5e6fbc23c6ff930a048aa310b"
+checksum = "fd9de9f2205d5ef3fd67e685b0df337994ddd4495e2a28d185500d0e1edfea47"
 dependencies = [
  "jobserver",
  "libc",
