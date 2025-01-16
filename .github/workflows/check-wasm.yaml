@@ -11,31 +11,13 @@ jobs:
     steps:
       - name: Clone the repository
         uses: actions/checkout@v3
-        with:
-          ref: ${{ github.event.pull_request.head.sha }}
-          fetch-depth: 0
           
-      - name: Fetch git history
-        run: |
-          git fetch
-
       - name: Install cargo-near
         run: |
           curl --proto '=https' --tlsv1.2 -LsSf https://github.com/near/cargo-near/releases/latest/download/cargo-near-installer.sh | sh
 
-      - name: Find Last Commit Modifying `res/` Directory
-        run: |
-          PREV_COMMIT_HASH=$(git log -1 --format=format:%H -- ./near/res/)
-          PARENT_COMMIT_HASH=$(git rev-parse ${PREV_COMMIT_HASH}^)
-          echo "$PREV_COMMIT_HASH"
-          echo "$PARENT_COMMIT_HASH"
-          echo "NEP330_BUILD_INFO_SOURCE_CODE_SNAPSHOT=git+https://github.com/${{ github.repository }}?rev=${PARENT_COMMIT_HASH}" >> $GITHUB_ENV
-
       - name: Build NEAR contracts
-        env:
-          NEP330_BUILD_INFO_SOURCE_CODE_SNAPSHOT: ${{ env.NEP330_BUILD_INFO_SOURCE_CODE_SNAPSHOT }}
         run: |
-          echo "NEP330_BUILD_INFO_SOURCE_CODE_SNAPSHOT=${{ env.NEP330_BUILD_INFO_SOURCE_CODE_SNAPSHOT }}"
           make rust-build-near
           git status
           changed_files=$(git status --porcelain --untracked-files=no | wc -l)
