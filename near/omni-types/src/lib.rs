@@ -150,6 +150,14 @@ pub enum ChainKind {
     Base,
 }
 
+impl FromStr for ChainKind {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<ChainKind, Self::Err> {
+        near_sdk::serde_json::from_str(&format!("\"{s}\"")).map_err(stringify)
+    }
+}
+
 impl From<&OmniAddress> for ChainKind {
     fn from(input: &OmniAddress) -> Self {
         input.get_chain()
