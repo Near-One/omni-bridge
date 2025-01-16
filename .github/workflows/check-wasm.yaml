@@ -14,8 +14,7 @@ jobs:
 
       - name: Build NEAR contracts
         run: |
-          cd near
-          ./build.sh
+          make rust-build-near
           git status
           changed_files=$(git status --porcelain --untracked-files=no | wc -l)
           if [ $changed_files -gt 0 ]; then
