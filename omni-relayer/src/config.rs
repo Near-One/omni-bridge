@@ -21,9 +21,9 @@ where
 {
     let url = String::deserialize(deserializer)?;
 
-    let api_key = std::env::var("RPC_API_KEY").map_err(serde::de::Error::custom)?;
+    let api_key = std::env::var("INFURA_API_KEY").map_err(serde::de::Error::custom)?;
 
-    Ok(url.replace("RPC_API_KEY", &api_key))
+    Ok(url.replace("INFURA_API_KEY", &api_key))
 }
 
 #[derive(Debug, Clone, Deserialize)]

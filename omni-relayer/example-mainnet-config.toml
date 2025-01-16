@@ -10,8 +10,8 @@ token_locker_id = "omni.bridge.near"
 # credentials_path = "/Users/frolik/Documents/Backup Codes/qq"
 
 [eth]
-rpc_http_url = "https://mainnet.infura.io/v3/RPC_API_KEY"
-rpc_ws_url = "wss://mainnet.infura.io/ws/v3/RPC_API_KEY"
+rpc_http_url = "https://mainnet.infura.io/v3/INFURA_API_KEY"
+rpc_ws_url = "wss://mainnet.infura.io/ws/v3/INFURA_API_KEY"
 chain_id = 1
 bridge_token_factory_address = ""
 light_client = ""
@@ -20,8 +20,8 @@ block_processing_batch_size = 10_000
 expected_finalization_time = 1095
 
 [base]
-rpc_http_url = "https://base-mainnet.infura.io/v3/RPC_API_KEY"
-rpc_ws_url = "wss://base-mainnet.infura.io/ws/v3/RPC_API_KEY"
+rpc_http_url = "https://base-mainnet.infura.io/v3/INFURA_API_KEY"
+rpc_ws_url = "wss://base-mainnet.infura.io/ws/v3/INFURA_API_KEY"
 chain_id = 8453
 bridge_token_factory_address = "0xd025b38762B4A4E36F0Cde483b86CB13ea00D989"
 block_processing_batch_size = 10_000
@@ -29,8 +29,8 @@ block_processing_batch_size = 10_000
 expected_finalization_time = 1026
 
 [arb]
-rpc_http_url = "https://arbitrum-mainnet.infura.io/v3/RPC_API_KEY"
-rpc_ws_url = "wss://arbitrum-mainnet.infura.io/ws/v3/RPC_API_KEY"
+rpc_http_url = "https://arbitrum-mainnet.infura.io/v3/INFURA_API_KEY"
+rpc_ws_url = "wss://arbitrum-mainnet.infura.io/ws/v3/INFURA_API_KEY"
 chain_id = 42_161
 bridge_token_factory_address = "0xd025b38762B4A4E36F0Cde483b86CB13ea00D989"
 block_processing_batch_size = 10_000
