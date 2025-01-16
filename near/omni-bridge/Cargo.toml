@@ -15,7 +15,6 @@ hex.workspace = true
 borsh.workspace = true
 serde.workspace = true
 near-plugins.workspace = true
-schemars.workspace = true
 omni-types.workspace = true
 
 [dev-dependencies]

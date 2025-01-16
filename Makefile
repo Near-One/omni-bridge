@@ -26,19 +26,19 @@ clippy-omni-relayer:
 	cargo clippy --manifest-path $(OMNI_RELAYER_MANIFEST) -- $(LINT_OPTIONS)
 
 rust-build-omni-bridge:
-	cargo near build non-reproducible-wasm --manifest-path $(OMNI_BRIDGE_MANIFEST) --no-abi
+	cargo near build non-reproducible-wasm --manifest-path $(OMNI_BRIDGE_MANIFEST)
 	
 rust-build-omni-token:
-	cargo near build non-reproducible-wasm --manifest-path $(OMNI_TOKEN_MANIFEST) --no-abi
+	cargo near build non-reproducible-wasm --manifest-path $(OMNI_TOKEN_MANIFEST)
 	
 rust-build-token-deployer:
-	cargo near build non-reproducible-wasm --manifest-path $(TOKEN_DEPLOYER) --no-abi
+	cargo near build non-reproducible-wasm --manifest-path $(TOKEN_DEPLOYER)
 	
 rust-build-mock-prover:
-	cargo near build non-reproducible-wasm --manifest-path $(MOCK_PROVER_MANIFEST) --no-abi
+	cargo near build non-reproducible-wasm --manifest-path $(MOCK_PROVER_MANIFEST)
 	
 rust-build-mock-token:
-	cargo near build non-reproducible-wasm --manifest-path $(MOCK_TOKEN_MANIFEST) --no-abi
+	cargo near build non-reproducible-wasm --manifest-path $(MOCK_TOKEN_MANIFEST)
 
 rust-build-near: rust-build-omni-bridge rust-build-omni-token rust-build-token-deployer rust-build-mock-prover rust-build-mock-token
 

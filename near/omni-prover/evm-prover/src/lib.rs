@@ -1,5 +1,7 @@
-use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
-use near_sdk::{env, ext_contract, near_bindgen, require, AccountId, Gas, PanicOnDefault, Promise};
+use borsh::BorshDeserialize;
+use near_sdk::{
+    env, ext_contract, near, near_bindgen, require, AccountId, Gas, PanicOnDefault, Promise,
+};
 use omni_types::evm::events::parse_evm_event;
 use omni_types::evm::header::BlockHeader;
 use omni_types::evm::receipt::{LogEntry, Receipt};
@@ -23,8 +25,8 @@ pub trait EvmClient {
     fn block_hash_safe(&self, #[serializer(borsh)] index: u64) -> Option<H256>;
 }
 
-#[near_bindgen]
-#[derive(BorshDeserialize, BorshSerialize, PanicOnDefault)]
+#[near(contract_state)]
+#[derive(PanicOnDefault)]
 pub struct EvmProver {
     pub light_client: AccountId,
     pub chain_kind: ChainKind,

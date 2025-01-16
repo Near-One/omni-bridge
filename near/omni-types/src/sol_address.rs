@@ -1,16 +1,12 @@
 use core::fmt;
 use core::str::FromStr;
 
-use borsh::BorshSchema;
-use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
-use near_sdk::bs58;
 use near_sdk::serde::{Deserialize, Serialize};
-use schemars::JsonSchema;
+use near_sdk::{bs58, near};
 use serde::de::Visitor;
 
-#[derive(
-    JsonSchema, BorshSchema, BorshDeserialize, BorshSerialize, Debug, Clone, PartialEq, Eq,
-)]
+#[near(serializers=[borsh])]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SolAddress(pub [u8; 32]);
 
 impl SolAddress {

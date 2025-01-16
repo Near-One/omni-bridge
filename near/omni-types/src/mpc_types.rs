@@ -1,18 +1,19 @@
-use near_sdk::serde::{Deserialize, Serialize};
-use schemars::JsonSchema;
+use near_sdk::near;
 
-#[derive(JsonSchema, Serialize, Deserialize, Clone, Debug)]
+#[near(serializers = [json])]
+#[derive(Clone, Debug)]
 pub struct AffinePoint {
     pub affine_point: String,
 }
 
-#[derive(JsonSchema, Serialize, Deserialize, Clone, Debug)]
+#[near(serializers = [json])]
+#[derive(Clone, Debug)]
 pub struct Scalar {
     pub scalar: String,
 }
 
-#[derive(JsonSchema, Serialize, Deserialize, Clone, Debug)]
-#[serde(crate = "near_sdk::serde")]
+#[near(serializers = [json])]
+#[derive(Clone, Debug)]
 pub struct SignatureResponse {
     pub big_r: AffinePoint,
     pub s: Scalar,

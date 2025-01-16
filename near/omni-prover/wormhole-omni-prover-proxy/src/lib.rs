@@ -1,6 +1,7 @@
-use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
+use near_sdk::borsh::BorshDeserialize;
 use near_sdk::{
-    env, ext_contract, near_bindgen, require, AccountId, Gas, PanicOnDefault, Promise, PromiseError,
+    env, ext_contract, near, near_bindgen, require, AccountId, Gas, PanicOnDefault, Promise,
+    PromiseError,
 };
 use omni_types::prover_args::WormholeVerifyProofArgs;
 use omni_types::prover_result::{ProofKind, ProverResult};
@@ -16,8 +17,8 @@ pub trait Prover {
     fn verify_vaa(&self, vaa: &str) -> u32;
 }
 
-#[near_bindgen]
-#[derive(BorshDeserialize, BorshSerialize, PanicOnDefault)]
+#[near(contract_state)]
+#[derive(PanicOnDefault)]
 pub struct WormholeOmniProverProxy {
     pub prover_account: AccountId,
 }

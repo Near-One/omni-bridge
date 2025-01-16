@@ -3,7 +3,6 @@ use near_plugins::{
 };
 use near_sdk::borsh::BorshDeserialize;
 use near_sdk::json_types::Base58CryptoHash;
-use near_sdk::serde::{Deserialize, Serialize};
 use near_sdk::serde_json::json;
 use near_sdk::{env, near, require, AccountId, Gas, NearToken, PanicOnDefault, Promise};
 use omni_types::BasicMetadata;
@@ -14,8 +13,8 @@ const OMNI_TOKEN_INIT_GAS: Gas = Gas::from_tgas(10);
 
 const BRIDGE_TOKEN_BINARY: &[u8] = include_bytes!(env!("OMNI_TOKEN_WASM"));
 
-#[derive(AccessControlRole, Deserialize, Serialize, Copy, Clone)]
-#[serde(crate = "near_sdk::serde")]
+#[near(serializers = [json])]
+#[derive(AccessControlRole, Copy, Clone)]
 pub enum Role {
     DAO,
     PauseManager,

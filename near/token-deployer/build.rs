@@ -14,7 +14,6 @@ fn main() -> Result<(), Box<dyn std::error::Error + 'static>> {
                 cargo_near_build::camino::Utf8PathBuf::from_str("../omni-token/Cargo.toml")
                     .expect("camino PathBuf from str"),
             ),
-            no_abi: true,
             ..Default::default()
         },
         build_script_opts: BuildScriptOpts {

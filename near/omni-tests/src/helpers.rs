@@ -18,7 +18,6 @@ pub mod tests {
                 cargo_near_build::camino::Utf8PathBuf::from_str("../mock/mock-token/Cargo.toml")
                     .expect("camino PathBuf from str"),
             ),
-            no_abi: true,
             ..Default::default()
         })
         .expect("building `mock-token` contract for tests");
@@ -31,7 +30,6 @@ pub mod tests {
                 cargo_near_build::camino::Utf8PathBuf::from_str("../mock/mock-prover/Cargo.toml")
                     .expect("camino PathBuf from str"),
             ),
-            no_abi: true,
             ..Default::default()
         })
         .expect("building `mock-prover` contract for tests");
@@ -44,7 +42,6 @@ pub mod tests {
                 cargo_near_build::camino::Utf8PathBuf::from_str("../omni-bridge/Cargo.toml")
                     .expect("camino PathBuf from str"),
             ),
-            no_abi: true,
             ..Default::default()
         })
         .expect("building `omni-bridge` contract for tests");
@@ -57,7 +54,6 @@ pub mod tests {
                 cargo_near_build::camino::Utf8PathBuf::from_str("../token-deployer/Cargo.toml")
                     .expect("camino PathBuf from str"),
             ),
-            no_abi: true,
             ..Default::default()
         })
         .expect("building `token-deployer` contract for tests");
