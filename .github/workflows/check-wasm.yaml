@@ -14,13 +14,10 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0
-
-      - name: Fetch full history (if needed)
+          
+      - name: Fetch git history
         run: |
-          git status
           git fetch
-          echo "Fetched full commit history"
-          git log --oneline | head -n 20
 
       - name: Install cargo-near
         run: |
@@ -29,13 +26,16 @@ jobs:
       - name: Find Last Commit Modifying `res/` Directory
         run: |
           PREV_COMMIT_HASH=$(git log -1 --format=format:%H -- ./near/res/)
-          echo "PREV_COMMIT_HASH=${PREV_COMMIT_HASH}" >> $GITHUB_ENV
-          echo "NEP330_BUILD_INFO_SOURCE_CODE_SNAPSHOT=git+https://github.com/${{ github.repository }}?rev=${PREV_COMMIT_HASH}" >> $GITHUB_ENV
+          PARENT_COMMIT_HASH=$(git rev-parse ${PREV_COMMIT_HASH}^)
+          echo "$PREV_COMMIT_HASH"
+          echo "$PARENT_COMMIT_HASH"
+          echo "NEP330_BUILD_INFO_SOURCE_CODE_SNAPSHOT=git+https://github.com/${{ github.repository }}?rev=${PARENT_COMMIT_HASH}" >> $GITHUB_ENV
 
       - name: Build NEAR contracts
         env:
           NEP330_BUILD_INFO_SOURCE_CODE_SNAPSHOT: ${{ env.NEP330_BUILD_INFO_SOURCE_CODE_SNAPSHOT }}
         run: |
+          echo "NEP330_BUILD_INFO_SOURCE_CODE_SNAPSHOT=${{ env.NEP330_BUILD_INFO_SOURCE_CODE_SNAPSHOT }}"
           make rust-build-near
           git status
           changed_files=$(git status --porcelain --untracked-files=no | wc -l)
