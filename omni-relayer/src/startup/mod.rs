@@ -69,7 +69,7 @@ pub fn build_omni_connector(
                 .wormhole_core(Some(solana.wormhole_id.parse()?))
                 .keypair(Some(startup::solana::get_keypair(
                     solana.credentials_path.as_ref(),
-                )?))
+                )))
                 .build()
                 .context("Failed to build SolanaBridgeClient")
         })

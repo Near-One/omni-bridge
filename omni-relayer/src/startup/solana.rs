@@ -15,19 +15,17 @@ use solana_sdk::{commitment_config::CommitmentConfig, pubkey::Pubkey};
 
 use crate::{config, utils};
 
-pub fn get_keypair(file: Option<&String>) -> Result<Keypair> {
+pub fn get_keypair(file: Option<&String>) -> Keypair {
     if let Some(file) = file {
         if let Ok(keypair) = Keypair::read_from_file(file) {
             info!("Retrieved keypair from file");
-            return Ok(keypair);
+            return keypair;
         }
     }
 
     info!("Retrieving Solana keypair from env");
 
-    Ok(Keypair::from_base58_string(&config::get_private_key(
-        ChainKind::Sol,
-    )))
+    Keypair::from_base58_string(&config::get_private_key(ChainKind::Sol))
 }
 
 pub async fn start_indexer(
