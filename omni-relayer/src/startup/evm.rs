@@ -5,6 +5,7 @@ use reqwest::Client;
 use tokio_stream::StreamExt;
 
 use alloy::{
+    primitives::Address,
     providers::{Provider, ProviderBuilder, RootProvider, WsConnect},
     rpc::types::{Filter, Log},
     sol_types::SolEvent,
@@ -13,6 +14,16 @@ use alloy::{
 use ethereum_types::H256;
 
 use crate::{config, utils, workers::near::FinTransfer};
+
+fn extract_evm_config(evm: config::Evm) -> (String, String, Address, u64, i64) {
+    (
+        evm.rpc_http_url,
+        evm.rpc_ws_url,
+        evm.bridge_token_factory_address,
+        evm.block_processing_batch_size,
+        evm.expected_finalization_time,
+    )
+}
 
 pub async fn start_indexer(
     config: config::Config,
@@ -29,42 +40,9 @@ pub async fn start_indexer(
         block_processing_batch_size,
         expected_finalization_time,
     ) = match chain_kind {
-        ChainKind::Eth => {
-            let Some(ref eth) = config.eth else {
-                anyhow::bail!("Failed to get ETH config");
-            };
-            (
-                eth.rpc_http_url.clone(),
-                eth.rpc_ws_url.clone(),
-                eth.bridge_token_factory_address,
-                eth.block_processing_batch_size,
-                eth.expected_finalization_time,
-            )
-        }
-        ChainKind::Base => {
-            let Some(ref base) = config.base else {
-                anyhow::bail!("Failed to get Base config");
-            };
-            (
-                base.rpc_http_url.clone(),
-                base.rpc_ws_url.clone(),
-                base.bridge_token_factory_address,
-                base.block_processing_batch_size,
-                base.expected_finalization_time,
-            )
-        }
-        ChainKind::Arb => {
-            let Some(ref arb) = config.arb else {
-                anyhow::bail!("Failed to get Arb config");
-            };
-            (
-                arb.rpc_http_url.clone(),
-                arb.rpc_ws_url.clone(),
-                arb.bridge_token_factory_address,
-                arb.block_processing_batch_size,
-                arb.expected_finalization_time,
-            )
-        }
+        ChainKind::Eth => extract_evm_config(config.eth.context("Failed to get Eth config")?),
+        ChainKind::Base => extract_evm_config(config.base.context("Failed to get Base config")?),
+        ChainKind::Arb => extract_evm_config(config.arb.context("Failed to get Arb config")?),
         _ => anyhow::bail!("Unsupported chain kind: {chain_kind:?}"),
     };
 
