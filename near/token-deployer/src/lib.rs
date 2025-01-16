@@ -11,7 +11,7 @@ const BRIDGE_TOKEN_INIT_BALANCE: NearToken = NearToken::from_near(3);
 const NO_DEPOSIT: NearToken = NearToken::from_near(0);
 const OMNI_TOKEN_INIT_GAS: Gas = Gas::from_tgas(10);
 
-const BRIDGE_TOKEN_BINARY: &[u8] = include_bytes!(env!("OMNI_TOKEN_WASM"));
+const BRIDGE_TOKEN_BINARY: &[u8] = include_bytes!(env!("BUILD_RS_SUB_BUILD_OMNI-TOKEN"));
 
 #[near(serializers = [json])]
 #[derive(AccessControlRole, Copy, Clone)]
