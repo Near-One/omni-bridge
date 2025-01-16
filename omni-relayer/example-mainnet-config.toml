@@ -5,6 +5,9 @@ api_url = "http://127.0.0.1:8080"
 network = "mainnet"
 rpc_url = "https://rpc.mainnet.near.org/"
 token_locker_id = "omni.bridge.near"
+# Either provide a path to a credentials file or set it in the environment
+# Note: the path must be absolute
+# credentials_path = "/Users/frolik/Documents/Backup Codes/qq"
 
 [eth]
 rpc_http_url = "https://mainnet.infura.io/v3/RPC_API_KEY"
@@ -54,6 +57,9 @@ finalize_transfer_emitter_index = 6
 finalize_transfer_sol_emitter_index = 5
 finalize_transfer_discriminator = [124, 126, 103, 188, 144, 65, 135, 51]
 finalize_transfer_sol_discriminator = [104, 27, 121, 69, 3, 70, 217, 66]
+# Either provide a path to a keypair file or set it in the environment
+# Note: the path must be absolute
+# credentials_path = "/Users/.../my-solana-keypair.json"
 
 [wormhole]
 api_url = "https://api.wormholescan.io/"

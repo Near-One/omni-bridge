@@ -46,7 +46,7 @@ async fn main() -> Result<()> {
 
     let redis_client = redis::Client::open(config.redis.url.clone())?;
     let jsonrpc_client = near_jsonrpc_client::JsonRpcClient::connect(config.near.rpc_url.clone());
-    let near_signer = startup::near::create_signer(config.near.credentials_path.clone())?;
+    let near_signer = startup::near::get_signer(config.near.credentials_path.as_ref())?;
 
     let connector = Arc::new(startup::build_omni_connector(&config, &near_signer)?);
 

@@ -97,6 +97,7 @@ pub struct Solana {
     pub finalize_transfer_sol_emitter_index: usize,
     pub finalize_transfer_discriminator: Vec<u8>,
     pub finalize_transfer_sol_discriminator: Vec<u8>,
+    pub credentials_path: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]

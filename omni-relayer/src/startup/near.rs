@@ -32,7 +32,7 @@ fn get_account_id(file: Option<&String>) -> Result<AccountId> {
         .context("Failed to parse `NEAR_ACCOUNT_ID`")
 }
 
-fn get_private_key(file: Option<String>) -> Result<SecretKey> {
+fn get_private_key(file: Option<&String>) -> Result<SecretKey> {
     if let Some(file) = file {
         if let Ok(file_content) = std::fs::read_to_string(file) {
             if let Ok(key_data) = serde_json::from_str::<HashMap<String, String>>(&file_content) {
@@ -55,10 +55,10 @@ fn get_private_key(file: Option<String>) -> Result<SecretKey> {
         .context("Failed to parse private key")
 }
 
-pub fn create_signer(file: Option<String>) -> Result<InMemorySigner> {
+pub fn get_signer(file: Option<&String>) -> Result<InMemorySigner> {
     info!("Creating NEAR signer");
 
-    let account_id = get_account_id(file.as_ref())?;
+    let account_id = get_account_id(file)?;
     let private_key = get_private_key(file)?;
 
     Ok(InMemorySigner::from_secret_key(account_id, private_key))

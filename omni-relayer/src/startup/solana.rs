@@ -1,6 +1,6 @@
 use std::str::FromStr;
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use log::{info, warn};
 use tokio_stream::StreamExt;
 
@@ -9,10 +9,34 @@ use solana_client::nonblocking::{pubsub_client::PubsubClient, rpc_client::RpcCli
 use solana_client::rpc_client::GetConfirmedSignaturesForAddress2Config;
 use solana_client::rpc_config::{RpcTransactionLogsConfig, RpcTransactionLogsFilter};
 use solana_client::rpc_response::RpcConfirmedTransactionStatusWithSignature;
-use solana_sdk::signature::Signature;
+use solana_sdk::{
+    bs58,
+    signature::{Keypair, Signature},
+};
 use solana_sdk::{commitment_config::CommitmentConfig, pubkey::Pubkey};
 
 use crate::{config, utils};
+
+pub fn get_keypair(file: Option<&String>) -> Result<Keypair> {
+    if let Some(file) = file {
+        if let Ok(file_content) = std::fs::read_to_string(file) {
+            if let Ok(keypair_bytes) = serde_json::from_str::<Vec<u8>>(&file_content) {
+                if let Ok(keypair) = Keypair::from_bytes(&keypair_bytes) {
+                    info!("Retrieved keypair from file");
+                    return Ok(keypair);
+                }
+            }
+        }
+    }
+
+    let keypair = &bs58::decode(config::get_private_key(ChainKind::Sol))
+        .into_vec()
+        .context("Failed to decode Solana keypair")?;
+
+    info!("Retrieved private key from env");
+
+    Keypair::from_bytes(keypair).context("Failed to parse keypair")
+}
 
 pub async fn start_indexer(
     config: config::Config,
