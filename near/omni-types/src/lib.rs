@@ -154,7 +154,7 @@ impl FromStr for ChainKind {
     type Err = String;
 
     fn from_str(s: &str) -> Result<ChainKind, Self::Err> {
-        near_sdk::serde_json::from_str(&format!("\"{}\"", s)).map_err(stringify)
+        near_sdk::serde_json::from_str(&format!("\"{s}\"")).map_err(stringify)
     }
 }
 
