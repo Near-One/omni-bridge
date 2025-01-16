@@ -456,3 +456,12 @@ fn test_get_evm_token_prefix() {
         );
     }
 }
+
+#[test]
+fn test_chain_kind_from_str() {
+    let chain: ChainKind = "Eth".parse().unwrap();
+    assert_eq!(chain, ChainKind::Eth);
+
+    let chain: ChainKind = "Base".parse().unwrap();
+    assert_eq!(chain, ChainKind::Base);
+}
