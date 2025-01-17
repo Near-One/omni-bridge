@@ -1,26 +1,34 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Usage: ./deploy-near-contract.sh <wasm_path> <output_json> <contract_id> <near_init_params_file> <init_account_id> [<dyn_init_args_file>]
+# Usage: ./deploy-near-contract.sh <near_init_params_file> <init_account_credentials_file> [<dyn_init_args_file>] <wasm_path> <contract_id> <output_json>
 
 if [ "$#" -lt 5 ]; then
-    echo "Usage: $0 <wasm_path> <output_json> <contract_id> <near_init_params_file> <init_account_id> [<dyn_init_args_file>]"
+    echo "Usage: $0 <near_init_params_file> <init_account_credentials_file> [<dyn_init_args_file>] <wasm_path> <contract_id> <output_json>"
     exit 1
 fi
 
-WASM_PATH="$1"
-OUTPUT_JSON="$2"
-CONTRACT_ID="$3"
-NEAR_INIT_PARAMS_FILE="$4"
-INIT_ACCOUNT_CREDENTIALS_FILE="$5"
-DYN_INIT_ARGS_FILE="${6:-}"
+if [ "$#" -eq 5 ]; then
+    NEAR_INIT_PARAMS_FILE="$1"
+    INIT_ACCOUNT_CREDENTIALS_FILE="$2"
+    WASM_PATH="$3"
+    CONTRACT_ID="$4"
+    OUTPUT_JSON="$5"
+    DYN_INIT_ARGS_FILE=""
+else
+    NEAR_INIT_PARAMS_FILE="$1"
+    INIT_ACCOUNT_CREDENTIALS_FILE="$2"
+    DYN_INIT_ARGS_FILE="$3"
+    WASM_PATH="$4"
+    CONTRACT_ID="$5"
+    OUTPUT_JSON="$6"
+fi
 
 INIT_ACCOUNT_ID=$(jq -r .account_id "$INIT_ACCOUNT_CREDENTIALS_FILE")
 INIT_ACCOUNT_PUBLIC_KEY=$(jq -r .public_key "$INIT_ACCOUNT_CREDENTIALS_FILE")
 INIT_ACCOUNT_PRIVATE_KEY=$(jq -r .private_key "$INIT_ACCOUNT_CREDENTIALS_FILE")
 
-CONTRACT_NAME=$(basename "$2" .json)
-
+CONTRACT_NAME=$(basename "$OUTPUT_JSON" .json)
 
 # Extract init function and merge init args
 INIT_FUNCTION=$(jq -rc ".$CONTRACT_NAME.init_function // \"\"" "$NEAR_INIT_PARAMS_FILE")

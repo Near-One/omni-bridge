@@ -4,7 +4,7 @@ solana_artifacts/
 evm_deploy_results/
 near_deploy_results/
 solana_deploy_results/
-bridge_new_token_calls/
+bridge-token-near-to-evm/
 
 .evm-compile.stamp
 .near-token-deployment-prepare.stamp
