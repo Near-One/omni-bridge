@@ -4,6 +4,7 @@ version = "0.1.0"
 authors = ["Karim Alabtakh <karim.alabtakh@nearone.org>"]
 edition = "2021"
 publish = false
+repository.workspace = true
 
 # fields to configure build with WASM reproducibility, according to specs  
 # in https://github.com/near/NEPs/blob/master/neps/nep-0330.md 
