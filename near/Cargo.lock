@@ -637,14 +637,12 @@ dependencies = [
 [[package]]
 name = "cargo-near-build"
 version = "0.4.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5e79fd27a64c34c965d14a81c28c93e512f77439fa4a8a501bb6c262e9e792fe"
+source = "git+https://github.com/dj8yfo/cargo-near?branch=shorten_2nd_phase_of_build_on_rebuild_to_fast#e91bd0364f3b03559e2426ed561e24c6ee37720b"
 dependencies = [
  "bon",
  "bs58 0.5.1",
  "camino",
  "cargo_metadata",
- "cc",
  "colored",
  "dunce",
  "eyre",
