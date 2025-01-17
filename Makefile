@@ -62,8 +62,5 @@ rust-build-mock-token: $(RES_DIR)
 
 rust-build-near: rust-build-omni-bridge rust-build-omni-token rust-build-token-deployer rust-build-omni-prover rust-build-evm-prover rust-build-wormhole-omni-prover-proxy rust-build-mock-prover rust-build-mock-token
 
-rust-build-tests:
-	cargo build --manifest-path $(NEAR_MANIFEST) --tests --all-features
-
-rust-run-tests: rust-build-tests
+rust-run-tests:
 	cargo nextest run --manifest-path $(NEAR_MANIFEST)
