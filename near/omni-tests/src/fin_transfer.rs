@@ -65,6 +65,7 @@ mod tests {
         #[case] fee: u128,
         #[case] expected_error: Option<&str>,
     ) {
+        let start = std::time::Instant::now();
         let result = test_fin_transfer(storage_deposit_accounts, amount, fee).await;
 
         match result {
@@ -84,6 +85,7 @@ mod tests {
                 );
             }
         }
+        println!("Elapsed: {:?}", start.elapsed());
     }
 
     async fn test_fin_transfer(
