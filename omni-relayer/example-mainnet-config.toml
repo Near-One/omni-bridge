@@ -1,0 +1,70 @@
+[bridge_indexer]
+api_url = "http://127.0.0.1:8080"
+
+[near]
+network = "mainnet"
+rpc_url = "https://rpc.mainnet.near.org/"
+token_locker_id = "omni.bridge.near"
+# Either provide a path to a credentials file or set it in the environment
+# Note: the path must be absolute
+# credentials_path = "/Users/username/.near-credentials/mainnet/omni-relayer.bridge.near.json"
+
+[eth]
+rpc_http_url = "https://mainnet.infura.io/v3/INFURA_API_KEY"
+rpc_ws_url = "wss://mainnet.infura.io/ws/v3/INFURA_API_KEY"
+chain_id = 1
+bridge_token_factory_address = ""
+light_client = ""
+block_processing_batch_size = 10_000
+# https://wormhole.com/docs/build/reference/consistency-levels/
+expected_finalization_time = 1095
+
+[base]
+rpc_http_url = "https://base-mainnet.infura.io/v3/INFURA_API_KEY"
+rpc_ws_url = "wss://base-mainnet.infura.io/ws/v3/INFURA_API_KEY"
+chain_id = 8453
+bridge_token_factory_address = "0xd025b38762B4A4E36F0Cde483b86CB13ea00D989"
+block_processing_batch_size = 10_000
+# https://wormhole.com/docs/build/reference/consistency-levels/
+expected_finalization_time = 1026
+
+[arb]
+rpc_http_url = "https://arbitrum-mainnet.infura.io/v3/INFURA_API_KEY"
+rpc_ws_url = "wss://arbitrum-mainnet.infura.io/ws/v3/INFURA_API_KEY"
+chain_id = 42_161
+bridge_token_factory_address = "0xd025b38762B4A4E36F0Cde483b86CB13ea00D989"
+block_processing_batch_size = 10_000
+# https://wormhole.com/docs/build/reference/consistency-levels/
+expected_finalization_time = 1066
+
+[solana]
+rpc_http_url = "https://api.mainnet-beta.solana.com"
+rpc_ws_url = "wss://api.mainnet-beta.solana.com"
+# Program ID on Solana is an account ID whitch the bridge contract (basically bridge_token_factory_address on Solana)
+program_id = "dahPEoZGXfyV58JqqH85okdHmpN8U2q8owgPUXSCPxe"
+# This is the wormhole contract ID on Solana (can be found here https://wormhole.com/docs/build/reference/contract-addresses/#__tabbed_1_2)
+wormhole_id = "worm2ZoG2kUd4vFXhvjh93UUH596ayRfgQ2MgjNMTth"
+# There's a list of account keys and they are store in a strict order. We need indexes to get the right key
+init_transfer_sender_index = 5
+init_transfer_token_index = 1
+init_transfer_emitter_index = 6
+init_transfer_sol_sender_index = 1
+init_transfer_sol_emitter_index = 3
+# Discriminators are used to identify the type of the event (can be found during the building process of solana's contract)
+init_transfer_discriminator = [174, 50, 134, 99, 122, 243, 243, 224]
+init_transfer_sol_discriminator = [124, 167, 164, 191, 81, 140, 108, 30]
+finalize_transfer_emitter_index = 6
+finalize_transfer_sol_emitter_index = 5
+finalize_transfer_discriminator = [124, 126, 103, 188, 144, 65, 135, 51]
+finalize_transfer_sol_discriminator = [104, 27, 121, 69, 3, 70, 217, 66]
+# Either provide a path to a keypair file or set it in the environment
+# Note: the path must be absolute
+# credentials_path = "/Users/username/my-solana-keypair.json"
+
+[wormhole]
+api_url = "https://api.wormholescan.io/"
+solana_chain_id = 1
+near_chain_id = 15
+eth_chain_id = 2
+arb_chain_id = 23
+base_chain_id = 30

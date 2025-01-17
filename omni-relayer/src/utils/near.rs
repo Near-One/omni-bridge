@@ -1,12 +1,21 @@
-use anyhow::Result;
-use log::{info, warn};
+use anyhow::{Context, Result};
+use log::info;
 
-use near_jsonrpc_client::{methods::block::RpcBlockRequest, JsonRpcClient};
+use near_jsonrpc_client::{
+    methods::{self, block::RpcBlockRequest},
+    JsonRpcClient,
+};
+use near_jsonrpc_primitives::types::query::QueryResponseKind;
 use near_lake_framework::near_indexer_primitives::{
     views::{ActionView, ReceiptEnumView, ReceiptView},
     IndexerExecutionOutcomeWithReceipt, StreamerMessage,
 };
-use omni_types::near_events::Nep141LockerEvent;
+use near_primitives::{
+    borsh::{from_slice, BorshDeserialize},
+    types::BlockReference,
+    views::QueryRequest,
+};
+use omni_types::{near_events::OmniBridgeEvent, ChainKind};
 
 use crate::{config, utils};
 
@@ -25,10 +34,43 @@ pub async fn get_final_block(jsonrpc_client: &JsonRpcClient) -> Result<u64> {
         .map_err(Into::into)
 }
 
+#[derive(BorshDeserialize)]
+struct EthLightClientResponse {
+    last_block_number: u64,
+}
+
+pub async fn get_eth_light_client_last_block_number(
+    config: &config::Config,
+    jsonrpc_client: &JsonRpcClient,
+) -> Result<u64> {
+    let Some(ref eth) = config.eth else {
+        anyhow::bail!("Failed to get ETH light client");
+    };
+
+    let request = methods::query::RpcQueryRequest {
+        block_reference: BlockReference::latest(),
+        request: QueryRequest::CallFunction {
+            account_id: eth
+                .light_client
+                .clone()
+                .context("Failed to get ETH light client")?,
+            method_name: "last_block_number".to_string(),
+            args: Vec::new().into(),
+        },
+    };
+
+    let response = jsonrpc_client.call(request).await?;
+
+    if let QueryResponseKind::CallResult(result) = response.kind {
+        Ok(from_slice::<EthLightClientResponse>(&result.result)?.last_block_number)
+    } else {
+        anyhow::bail!("Failed to get token decimals")
+    }
+}
+
 pub async fn handle_streamer_message(
     config: &config::Config,
     redis_connection: &mut redis::aio::MultiplexedConnection,
-    jsonrpc_client: &JsonRpcClient,
     streamer_message: &StreamerMessage,
 ) {
     let nep_locker_event_outcomes = find_nep_locker_event_outcomes(config, streamer_message);
@@ -36,64 +78,61 @@ pub async fn handle_streamer_message(
     let nep_locker_event_logs = nep_locker_event_outcomes
         .iter()
         .flat_map(|outcome| outcome.execution_outcome.outcome.logs.clone())
-        .filter_map(|log| serde_json::from_str::<Nep141LockerEvent>(&log).ok())
+        .filter_map(|log| serde_json::from_str::<OmniBridgeEvent>(&log).ok())
         .collect::<Vec<_>>();
 
     for log in nep_locker_event_logs {
-        info!("Processing Nep141LockerEvent: {:?}", log);
+        info!("Processing OmniBridgeEvent: {:?}", log);
 
         match log {
-            Nep141LockerEvent::InitTransferEvent {
+            OmniBridgeEvent::InitTransferEvent {
                 ref transfer_message,
             }
-            // TODO: Later it's better to add a separate key in db for storing events with any
-            // troubles there. For now we just update whole event with a new fee for the same nonce
-            | Nep141LockerEvent::UpdateFeeEvent {
+            | OmniBridgeEvent::UpdateFeeEvent {
                 ref transfer_message,
             } => {
-                // TODO: If fee is insufficient, it should be handled later. For example,
-                // add to redis and try again in 1 hour
-                match utils::fee::is_fee_sufficient(
-                    jsonrpc_client,
-                    &transfer_message.sender,
-                    &transfer_message.recipient,
-                    &transfer_message.token,
-                    transfer_message.fee.into(),
-                )
-                .await
-                {
-                    Ok(res) => {
-                        if !res {
-                            warn!("Fee is insufficient");
-                        }
-                    }
-                    Err(err) => {
-                        warn!("Failed to check fee: {}", err);
-                    }
-                }
-
                 utils::redis::add_event(
                     redis_connection,
-                    utils::redis::NEAR_INIT_TRANSFER_EVENTS,
-                    transfer_message.origin_nonce.0.to_string(),
-                    log,
+                    utils::redis::NEAR_INIT_TRANSFER_QUEUE,
+                    transfer_message.origin_nonce.to_string(),
+                    crate::workers::near::InitTransferWithTimestamp {
+                        event: log,
+                        creation_timestamp: chrono::Utc::now().timestamp(),
+                        last_update_timestamp: None,
+                    },
                 )
                 .await;
             }
-            Nep141LockerEvent::SignTransferEvent {
+            OmniBridgeEvent::SignTransferEvent {
                 ref message_payload,
                 ..
             } => {
                 utils::redis::add_event(
                     redis_connection,
                     utils::redis::NEAR_SIGN_TRANSFER_EVENTS,
-                    message_payload.nonce.0.to_string(),
+                    message_payload.destination_nonce.to_string(),
                     log,
                 )
                 .await;
             }
-            Nep141LockerEvent::FinTransferEvent { .. }
-            | Nep141LockerEvent::LogMetadataEvent { .. } => {}
+            OmniBridgeEvent::FinTransferEvent {
+                ref transfer_message,
+            } => {
+                if transfer_message.recipient.get_chain() != ChainKind::Near {
+                    utils::redis::add_event(
+                        redis_connection,
+                        utils::redis::NEAR_INIT_TRANSFER_QUEUE,
+                        transfer_message.origin_nonce.to_string(),
+                        crate::workers::near::InitTransferWithTimestamp {
+                            event: log,
+                            creation_timestamp: chrono::Utc::now().timestamp(),
+                            last_update_timestamp: None,
+                        },
+                    )
+                    .await;
+                }
+            }
+            OmniBridgeEvent::ClaimFeeEvent { .. } | OmniBridgeEvent::LogMetadataEvent { .. } => {}
         }
     }
 }
