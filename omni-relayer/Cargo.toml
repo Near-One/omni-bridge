@@ -27,7 +27,7 @@ solana-client = "2.1.5"
 solana-transaction-status = "2.1.5"
 
 ethereum-types = "0.14.1"
-omni-types = { git = "https://github.com/near-one/omni-bridge", package = "omni-types", rev = "11ffdb63706ceba175f7581585bd837aad9f1559" }
+omni-types = { git = "https://github.com/near-one/omni-bridge", package = "omni-types", rev = "b0ca4e1fb6a34086076511d1162747b154fa8a55" }
 
 near-lake-framework = "0.7.9"
 near-jsonrpc-client = "0.15.1"

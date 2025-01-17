@@ -11,7 +11,7 @@ use solana_sdk::pubkey::Pubkey;
 
 use omni_connector::OmniConnector;
 use omni_types::{
-    locker_args::ClaimFeeArgs, near_events::Nep141LockerEvent,
+    locker_args::ClaimFeeArgs, near_events::OmniBridgeEvent,
     prover_args::WormholeVerifyProofArgs, prover_result::ProofKind, ChainKind, OmniAddress,
     TransferId,
 };
@@ -20,7 +20,7 @@ use crate::{config, utils};
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub struct InitTransferWithTimestamp {
-    pub event: Nep141LockerEvent,
+    pub event: OmniBridgeEvent,
     pub creation_timestamp: i64,
     pub last_update_timestamp: Option<i64>,
 }
@@ -70,13 +70,13 @@ pub async fn sign_transfer(
                             return;
                         }
 
-                        let (Nep141LockerEvent::InitTransferEvent {
+                        let (OmniBridgeEvent::InitTransferEvent {
                             ref transfer_message,
                         }
-                        | Nep141LockerEvent::FinTransferEvent {
+                        | OmniBridgeEvent::FinTransferEvent {
                             ref transfer_message,
                         }
-                        | Nep141LockerEvent::UpdateFeeEvent {
+                        | OmniBridgeEvent::UpdateFeeEvent {
                             ref transfer_message,
                         }) = init_transfer_with_timestamp.event
                         else {
@@ -193,13 +193,13 @@ pub async fn finalize_transfer(
 
         let mut handlers = Vec::new();
         for (key, event) in events {
-            if let Ok(event) = serde_json::from_str::<Nep141LockerEvent>(&event) {
+            if let Ok(event) = serde_json::from_str::<OmniBridgeEvent>(&event) {
                 handlers.push(tokio::spawn({
                     let mut redis_connection = redis_connection.clone();
                     let connector = connector.clone();
 
                     async move {
-                        let Nep141LockerEvent::SignTransferEvent {
+                        let OmniBridgeEvent::SignTransferEvent {
                             message_payload, ..
                         } = &event
                         else {

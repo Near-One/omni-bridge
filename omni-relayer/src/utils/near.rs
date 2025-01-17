@@ -15,7 +15,7 @@ use near_primitives::{
     types::BlockReference,
     views::QueryRequest,
 };
-use omni_types::{near_events::Nep141LockerEvent, ChainKind};
+use omni_types::{near_events::OmniBridgeEvent, ChainKind};
 
 use crate::{config, utils};
 
@@ -78,17 +78,17 @@ pub async fn handle_streamer_message(
     let nep_locker_event_logs = nep_locker_event_outcomes
         .iter()
         .flat_map(|outcome| outcome.execution_outcome.outcome.logs.clone())
-        .filter_map(|log| serde_json::from_str::<Nep141LockerEvent>(&log).ok())
+        .filter_map(|log| serde_json::from_str::<OmniBridgeEvent>(&log).ok())
         .collect::<Vec<_>>();
 
     for log in nep_locker_event_logs {
-        info!("Processing Nep141LockerEvent: {:?}", log);
+        info!("Processing OmniBridgeEvent: {:?}", log);
 
         match log {
-            Nep141LockerEvent::InitTransferEvent {
+            OmniBridgeEvent::InitTransferEvent {
                 ref transfer_message,
             }
-            | Nep141LockerEvent::UpdateFeeEvent {
+            | OmniBridgeEvent::UpdateFeeEvent {
                 ref transfer_message,
             } => {
                 utils::redis::add_event(
@@ -103,7 +103,7 @@ pub async fn handle_streamer_message(
                 )
                 .await;
             }
-            Nep141LockerEvent::SignTransferEvent {
+            OmniBridgeEvent::SignTransferEvent {
                 ref message_payload,
                 ..
             } => {
@@ -115,7 +115,7 @@ pub async fn handle_streamer_message(
                 )
                 .await;
             }
-            Nep141LockerEvent::FinTransferEvent {
+            OmniBridgeEvent::FinTransferEvent {
                 ref transfer_message,
             } => {
                 if transfer_message.recipient.get_chain() != ChainKind::Near {
@@ -132,8 +132,7 @@ pub async fn handle_streamer_message(
                     .await;
                 }
             }
-            Nep141LockerEvent::ClaimFeeEvent { .. }
-            | Nep141LockerEvent::LogMetadataEvent { .. } => {}
+            OmniBridgeEvent::ClaimFeeEvent { .. } | OmniBridgeEvent::LogMetadataEvent { .. } => {}
         }
     }
 }
