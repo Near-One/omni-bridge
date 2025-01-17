@@ -9,6 +9,8 @@ TOKEN_DEPLOYER = ./near/token-deployer/Cargo.toml
 OMNI_PROVER_MANIFEST = ./near/omni-prover/omni-prover/Cargo.toml
 EVM_PROVER_MANIFEST = ./near/omni-prover/evm-prover/Cargo.toml
 WORMHOLE_OMNI_PROVER_PROXY_MANIFEST = ./near/omni-prover/wormhole-omni-prover-proxy/Cargo.toml
+MOCK_PROVER_MANIFEST = ./near/omni-prover/mock/mock-prover/Cargo.toml
+MOCK_TOKEN_MANIFEST = ./near/omni-prover/mock/mock-token/Cargo.toml
 
 OMNI_RELAYER_MANIFEST = ./omni-relayer/Cargo.toml
 
@@ -50,7 +52,15 @@ rust-build-wormhole-omni-prover-proxy: $(RES_DIR)
 	cargo near build reproducible-wasm --manifest-path $(WORMHOLE_OMNI_PROVER_PROXY_MANIFEST)
 	cp $(TARGET_WASM_DIR)/wormhole_omni_prover_proxy/wormhole_omni_prover_proxy.wasm $(RES_DIR)/wormhole_omni_prover_proxy.wasm
 
-rust-build-near: rust-build-omni-bridge rust-build-omni-token rust-build-token-deployer rust-build-omni-prover rust-build-evm-prover rust-build-wormhole-omni-prover-proxy
+rust-build-mock-prover: $(RES_DIR)
+	cargo near build reproducible-wasm --manifest-path $(MOCK_PROVER_MANIFEST)
+	cp $(TARGET_WASM_DIR)/mock_prover/mock_prover.wasm $(RES_DIR)/mock_prover.wasm
+
+rust-build-mock-token: $(RES_DIR)
+	cargo near build reproducible-wasm --manifest-path $(MOCK_TOKEN_MANIFEST)
+	cp $(TARGET_WASM_DIR)/mock_token/mock_token.wasm $(RES_DIR)/mock_token.wasm
+
+rust-build-near: rust-build-omni-bridge rust-build-omni-token rust-build-token-deployer rust-build-omni-prover rust-build-evm-prover rust-build-wormhole-omni-prover-proxy rust-build-mock-prover rust-build-mock-token
 
 rust-build-tests:
 	cargo build --manifest-path $(NEAR_MANIFEST) --tests --all-features
