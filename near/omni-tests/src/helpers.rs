@@ -1,6 +1,6 @@
 #[cfg(test)]
 pub mod tests {
-    use std::{str::FromStr, sync::LazyLock};
+    use std::{path::Path, str::FromStr, sync::LazyLock};
 
     use near_sdk::{borsh, json_types::U128, serde_json, AccountId};
     use near_workspaces::types::NearToken;
@@ -13,11 +13,15 @@ pub mod tests {
     pub const NEP141_DEPOSIT: NearToken = NearToken::from_yoctonear(1250000000000000000000);
 
     pub static MOCK_TOKEN_WASM: LazyLock<Vec<u8>> = LazyLock::new(|| {
+        let pwd = Path::new("./").canonicalize().expect("new path");
+        let sub_target = pwd.join("target/test-target-for-mock-token");
+
         let artifact = cargo_near_build::build(cargo_near_build::BuildOpts {
             manifest_path: Some(
                 cargo_near_build::camino::Utf8PathBuf::from_str("../mock/mock-token/Cargo.toml")
                     .expect("camino PathBuf from str"),
             ),
+            override_cargo_target_dir: Some(sub_target.to_string_lossy().to_string()),
             ..Default::default()
         })
         .expect("building `mock-token` contract for tests");
@@ -25,11 +29,15 @@ pub mod tests {
     });
 
     pub static MOCK_PROVER_WASM: LazyLock<Vec<u8>> = LazyLock::new(|| {
+        let pwd = Path::new("./").canonicalize().expect("new path");
+        let sub_target = pwd.join("target/test-target-for-mock-prover");
+
         let artifact = cargo_near_build::build(cargo_near_build::BuildOpts {
             manifest_path: Some(
                 cargo_near_build::camino::Utf8PathBuf::from_str("../mock/mock-prover/Cargo.toml")
                     .expect("camino PathBuf from str"),
             ),
+            override_cargo_target_dir: Some(sub_target.to_string_lossy().to_string()),
             ..Default::default()
         })
         .expect("building `mock-prover` contract for tests");
@@ -37,11 +45,15 @@ pub mod tests {
     });
 
     pub static LOCKER_WASM: LazyLock<Vec<u8>> = LazyLock::new(|| {
+        let pwd = Path::new("./").canonicalize().expect("new path");
+        let sub_target = pwd.join("target/test-target-for-locker");
+
         let artifact = cargo_near_build::build(cargo_near_build::BuildOpts {
             manifest_path: Some(
                 cargo_near_build::camino::Utf8PathBuf::from_str("../omni-bridge/Cargo.toml")
                     .expect("camino PathBuf from str"),
             ),
+            override_cargo_target_dir: Some(sub_target.to_string_lossy().to_string()),
             ..Default::default()
         })
         .expect("building `omni-bridge` contract for tests");
@@ -49,11 +61,15 @@ pub mod tests {
     });
 
     pub static TOKEN_DEPLOYER_WASM: LazyLock<Vec<u8>> = LazyLock::new(|| {
+        let pwd = Path::new("./").canonicalize().expect("new path");
+        let sub_target = pwd.join("target/test-target-for-token-deployer");
+
         let artifact = cargo_near_build::build(cargo_near_build::BuildOpts {
             manifest_path: Some(
                 cargo_near_build::camino::Utf8PathBuf::from_str("../token-deployer/Cargo.toml")
                     .expect("camino PathBuf from str"),
             ),
+            override_cargo_target_dir: Some(sub_target.to_string_lossy().to_string()),
             ..Default::default()
         })
         .expect("building `token-deployer` contract for tests");
