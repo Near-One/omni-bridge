@@ -30,38 +30,30 @@ clippy-omni-relayer:
 
 rust-build-omni-bridge: $(RES_DIR)
 	cargo near build reproducible-wasm --manifest-path $(OMNI_BRIDGE_MANIFEST)
-	cp $(TARGET_WASM_DIR)/omni_bridge/omni_bridge.wasm $(RES_DIR)/omni_bridge.wasm
 	
 rust-build-omni-token: $(RES_DIR)
 	cargo near build reproducible-wasm --manifest-path $(OMNI_TOKEN_MANIFEST)
-	cp $(TARGET_WASM_DIR)/omni_token/omni_token.wasm $(RES_DIR)/omni_token.wasm
 	
 rust-build-token-deployer: $(RES_DIR)
 	cargo near build reproducible-wasm --manifest-path $(TOKEN_DEPLOYER)
-	cp $(TARGET_WASM_DIR)/token_deployer/token_deployer.wasm $(RES_DIR)/token_deployer.wasm
 	
 rust-build-omni-prover: $(RES_DIR)
 	cargo near build reproducible-wasm --manifest-path $(OMNI_PROVER_MANIFEST)
-	cp $(TARGET_WASM_DIR)/omni_prover/omni_prover.wasm $(RES_DIR)/omni_prover.wasm
 	
 rust-build-evm-prover: $(RES_DIR)
 	cargo near build reproducible-wasm --manifest-path $(EVM_PROVER_MANIFEST)
-	cp $(TARGET_WASM_DIR)/evm_prover/evm_prover.wasm $(RES_DIR)/evm_prover.wasm
 	
 rust-build-wormhole-omni-prover-proxy: $(RES_DIR)
 	cargo near build reproducible-wasm --manifest-path $(WORMHOLE_OMNI_PROVER_PROXY_MANIFEST)
-	cp $(TARGET_WASM_DIR)/wormhole_omni_prover_proxy/wormhole_omni_prover_proxy.wasm $(RES_DIR)/wormhole_omni_prover_proxy.wasm
 
 rust-build-mock-prover: $(RES_DIR)
 	cargo near build reproducible-wasm --manifest-path $(MOCK_PROVER_MANIFEST)
-	cp $(TARGET_WASM_DIR)/mock_prover/mock_prover.wasm $(RES_DIR)/mock_prover.wasm
 
 rust-build-mock-token: $(RES_DIR)
 	cargo near build reproducible-wasm --manifest-path $(MOCK_TOKEN_MANIFEST)
-	cp $(TARGET_WASM_DIR)/mock_token/mock_token.wasm $(RES_DIR)/mock_token.wasm
 
 rust-build-near: rust-build-omni-bridge rust-build-omni-token rust-build-token-deployer rust-build-omni-prover rust-build-evm-prover rust-build-wormhole-omni-prover-proxy rust-build-mock-prover rust-build-mock-token
+	find $(TARGET_WASM_DIR) -name "*.wasm" -maxdepth 1 -exec cp -f {} $(RES_DIR)/ \;
 
 rust-run-tests:
-	# cargo nextest run --manifest-path $(NEAR_MANIFEST)
-	cargo test --manifest-path $(NEAR_MANIFEST)
+	cargo nextest run --manifest-path $(NEAR_MANIFEST)
