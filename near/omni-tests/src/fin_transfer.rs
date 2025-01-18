@@ -1,7 +1,5 @@
 #[cfg(test)]
 mod tests {
-    use std::sync::LazyLock;
-
     use near_sdk::{borsh, json_types::U128, serde_json::json, AccountId};
     use near_workspaces::types::NearToken;
     use omni_types::{
@@ -13,16 +11,8 @@ mod tests {
 
     use crate::helpers::tests::{
         account_n, eth_eoa_address, eth_factory_address, eth_token_address, relayer_account_id,
-        LOCKER_WASM, MOCK_PROVER_WASM, MOCK_TOKEN_WASM, NEP141_DEPOSIT, TOKEN_DEPLOYER_WASM,
+        LOCKER_WASM, MOCK_PROVER_WASM, MOCK_TOKEN_WASM, NEP141_DEPOSIT,
     };
-
-    #[tokio::test]
-    async fn compile_all_contracts() {
-        LazyLock::force(&MOCK_TOKEN_WASM);
-        LazyLock::force(&MOCK_PROVER_WASM);
-        LazyLock::force(&LOCKER_WASM);
-        LazyLock::force(&TOKEN_DEPLOYER_WASM);
-    }
 
     #[rstest]
     #[case(vec![(account_n(1), true), (relayer_account_id(), true)], 1000, 1, None)]

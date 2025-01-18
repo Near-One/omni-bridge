@@ -13,8 +13,6 @@ pub mod tests {
     pub const NEP141_DEPOSIT: NearToken = NearToken::from_yoctonear(1250000000000000000000);
 
     pub static MOCK_TOKEN_WASM: LazyLock<Vec<u8>> = LazyLock::new(|| {
-        println!("Compiling mock-token contract");
-        let start = std::time::Instant::now();
         let pwd = Path::new("./").canonicalize().expect("new path");
         let sub_target = pwd.join("target/test-target-for-mock-token");
 
@@ -27,13 +25,11 @@ pub mod tests {
             ..Default::default()
         })
         .expect("building `mock-token` contract for tests");
-        println!("Mock token contract compiled: {:?}", start.elapsed());
+
         std::fs::read(&artifact.path).unwrap()
     });
 
     pub static MOCK_PROVER_WASM: LazyLock<Vec<u8>> = LazyLock::new(|| {
-        println!("Compiling mock-prover contract");
-        let start = std::time::Instant::now();
         let pwd = Path::new("./").canonicalize().expect("new path");
         let sub_target = pwd.join("target/test-target-for-mock-prover");
 
@@ -46,13 +42,11 @@ pub mod tests {
             ..Default::default()
         })
         .expect("building `mock-prover` contract for tests");
-        println!("Mock prover contract compiled: {:?}", start.elapsed());
+
         std::fs::read(&artifact.path).unwrap()
     });
 
     pub static LOCKER_WASM: LazyLock<Vec<u8>> = LazyLock::new(|| {
-        println!("Compiling locker contract");
-        let start = std::time::Instant::now();
         let pwd = Path::new("./").canonicalize().expect("new path");
         let sub_target = pwd.join("target/test-target-for-locker");
 
@@ -65,13 +59,11 @@ pub mod tests {
             ..Default::default()
         })
         .expect("building `omni-bridge` contract for tests");
-        println!("Locker contract compiled: {:?}", start.elapsed());
+
         std::fs::read(&artifact.path).unwrap()
     });
 
     pub static TOKEN_DEPLOYER_WASM: LazyLock<Vec<u8>> = LazyLock::new(|| {
-        println!("Compiling token-deployer contract");
-        let start = std::time::Instant::now();
         let pwd = Path::new("./").canonicalize().expect("new path");
         let sub_target = pwd.join("target/test-target-for-token-deployer");
 
@@ -84,7 +76,7 @@ pub mod tests {
             ..Default::default()
         })
         .expect("building `token-deployer` contract for tests");
-        println!("Token deployer contract compiled: {:?}", start.elapsed());
+
         std::fs::read(&artifact.path).unwrap()
     });
 
