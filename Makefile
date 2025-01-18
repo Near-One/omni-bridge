@@ -56,4 +56,4 @@ rust-build-near: $(RES_DIR) rust-build-omni-bridge # rust-build-omni-token rust-
 	find $(TARGET_WASM_DIR) -name "*.wasm" -maxdepth 2 -exec cp -f {} $(RES_DIR)/ \;
 
 rust-run-tests:
-	cargo nextest run --manifest-path $(NEAR_MANIFEST)
+	cargo nextest run --manifest-path $(NEAR_MANIFEST) --success-output=immediate
