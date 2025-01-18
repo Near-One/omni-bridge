@@ -35,11 +35,6 @@ jobs:
 
       - name: Run sccache-cache
         uses: mozilla-actions/sccache-action@v0.0.7
-        with:
-          cache-on-failure: true
-          cache-all-crates: true
-          shared-key: "lint-${{ matrix.component }}"
-          workspaces: ${{ matrix.component }}
 
       - name: Install cargo-near
         run: |
@@ -65,11 +60,6 @@ jobs:
 
       - name: Run sccache-cache
         uses: mozilla-actions/sccache-action@v0.0.7
-        with:
-          cache-on-failure: true
-          cache-all-crates: true
-          shared-key: "build-test"
-          workspaces: near
           
       - name: Install cargo-near
         run: |
