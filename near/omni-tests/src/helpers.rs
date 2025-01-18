@@ -14,8 +14,6 @@ pub mod tests {
     pub const NEP141_DEPOSIT: NearToken = NearToken::from_yoctonear(1250000000000000000000);
 
     fn build_wasm(path: &str, target_dir: &str) -> Vec<u8> {
-        println!("Building contract from {}", path);
-        let start = std::time::Instant::now();
         let pwd = Path::new("./").canonicalize().expect("new path");
         let sub_target = pwd.join(format!("target/{}", target_dir));
 
@@ -28,12 +26,6 @@ pub mod tests {
             ..Default::default()
         })
         .unwrap_or_else(|_| panic!("building contract from {}", path));
-
-        println!(
-            "Built contract from {} in {:?}",
-            path,
-            start.elapsed().as_secs_f64()
-        );
 
         std::fs::read(&artifact.path).unwrap()
     }

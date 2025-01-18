@@ -69,7 +69,6 @@ mod tests {
         mock_prover_wasm: Vec<u8>,
         locker_wasm: Vec<u8>,
     ) {
-        let start = std::time::Instant::now();
         let result = test_fin_transfer(
             storage_deposit_accounts,
             amount,
@@ -97,7 +96,6 @@ mod tests {
                 );
             }
         }
-        println!("Elapsed: {:?}", start.elapsed());
     }
 
     async fn test_fin_transfer(
