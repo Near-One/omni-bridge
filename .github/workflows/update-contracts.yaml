@@ -19,18 +19,11 @@ jobs:
       - name: Build NEAR contracts
         run: |
           make rust-build-near
-          
-          git status
-          changed_files=$(git status --porcelain --untracked-files=no | wc -l)
-          
-          if [ $changed_files -gt 0 ]; then
-            echo 'Contract changed. Rebuilding and committing changes to the current branch.'
-            git config --global user.name "GitHub Actions"
-            git config --global user.email "actions@github.com"
-            git add .
-            git commit -m "chore: updated contracts [ci skip]"
-            git push origin HEAD
-          else
-            echo 'No changes detected in contracts.'
-          
         timeout-minutes: 60
+ 
+      - name: Commit and Push Changes
+        uses: stefanzweifel/git-auto-commit-action@v4
+        with:
+          file_pattern: "./near/res/*.wasm"
+          commit_message: "chore: updated contracts [ci skip]"
+          commit_author: ${{ steps.last-commit.outputs.author }}
