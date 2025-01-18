@@ -1,10 +1,5 @@
 #[cfg(test)]
 mod tests {
-    use crate::helpers::tests::{
-        account_n, eth_eoa_address, eth_factory_address, eth_token_address, get_bind_token_args,
-        get_claim_fee_args_near, get_event_data, relayer_account_id, LOCKER_WASM, MOCK_PROVER_WASM,
-        MOCK_TOKEN_WASM, NEP141_DEPOSIT,
-    };
     use anyhow::Ok;
     use near_sdk::{
         json_types::U128,
@@ -14,6 +9,12 @@ mod tests {
     use omni_types::{
         near_events::OmniBridgeEvent, ChainKind, Fee, InitTransferMsg, OmniAddress, TransferId,
         TransferMessage, UpdateFee,
+    };
+
+    use crate::helpers::tests::{
+        account_n, eth_eoa_address, eth_factory_address, eth_token_address, get_bind_token_args,
+        get_claim_fee_args_near, get_event_data, relayer_account_id, LOCKER_WASM, MOCK_PROVER_WASM,
+        MOCK_TOKEN_WASM, NEP141_DEPOSIT,
     };
 
     const DEFAULT_NEAR_SANDBOX_BALANCE: NearToken = NearToken::from_near(100);

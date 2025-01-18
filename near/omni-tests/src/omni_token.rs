@@ -22,7 +22,7 @@ mod tests {
 
     struct TestEnv {
         worker: near_workspaces::Worker<near_workspaces::network::Sandbox>,
-        locker: near_workspaces::Contract,
+        locker_contract: near_workspaces::Contract,
         token_contract: near_workspaces::Contract,
         init_token_address: OmniAddress,
         factory_contract_address: OmniAddress,
@@ -119,7 +119,7 @@ mod tests {
 
             Ok(Self {
                 worker,
-                locker: locker_contract,
+                locker_contract,
                 token_contract,
                 init_token_address,
                 factory_contract_address,
@@ -275,7 +275,7 @@ mod tests {
         let amount = U128(1000000000000000000000000);
 
         fake_finalize_transfer(
-            &env.locker,
+            &env.locker_contract,
             &env.token_contract,
             &recipient,
             env.init_token_address,
@@ -331,7 +331,7 @@ mod tests {
 
         // Mint tokens to sender
         fake_finalize_transfer(
-            &env.locker,
+            &env.locker_contract,
             &env.token_contract,
             &sender,
             env.init_token_address,
