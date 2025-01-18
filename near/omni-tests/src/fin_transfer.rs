@@ -10,8 +10,8 @@ mod tests {
     use rstest::rstest;
 
     use crate::helpers::tests::{
-        account_n, eth_eoa_address, eth_factory_address, eth_token_address, relayer_account_id,
-        LOCKER_WASM, MOCK_PROVER_WASM, MOCK_TOKEN_WASM, NEP141_DEPOSIT,
+        account_n, eth_eoa_address, eth_factory_address, eth_token_address, locker_wasm,
+        mock_prover_wasm, mock_token_wasm, relayer_account_id, NEP141_DEPOSIT,
     };
 
     #[rstest]
@@ -65,9 +65,20 @@ mod tests {
         #[case] amount: u128,
         #[case] fee: u128,
         #[case] expected_error: Option<&str>,
+        mock_token_wasm: Vec<u8>,
+        mock_prover_wasm: Vec<u8>,
+        locker_wasm: Vec<u8>,
     ) {
         let start = std::time::Instant::now();
-        let result = test_fin_transfer(storage_deposit_accounts, amount, fee).await;
+        let result = test_fin_transfer(
+            storage_deposit_accounts,
+            amount,
+            fee,
+            mock_token_wasm,
+            mock_prover_wasm,
+            locker_wasm,
+        )
+        .await;
 
         match result {
             Ok(_) => assert!(
@@ -93,11 +104,14 @@ mod tests {
         storage_deposit_accounts: Vec<(AccountId, bool)>,
         amount: u128,
         fee: u128,
+        mock_token_wasm: Vec<u8>,
+        mock_prover_wasm: Vec<u8>,
+        locker_wasm: Vec<u8>,
     ) -> anyhow::Result<()> {
         let worker = near_workspaces::sandbox().await?;
 
         // Deploy and init FT token
-        let token_contract = worker.dev_deploy(&MOCK_TOKEN_WASM).await?;
+        let token_contract = worker.dev_deploy(&mock_token_wasm).await?;
         token_contract
             .call("new_default_meta")
             .args_json(json!({
@@ -109,10 +123,10 @@ mod tests {
             .await?
             .into_result()?;
 
-        let prover_contract = worker.dev_deploy(&MOCK_PROVER_WASM).await?;
+        let prover_contract = worker.dev_deploy(&mock_prover_wasm).await?;
 
         // Deploy and init locker
-        let locker_contract = worker.dev_deploy(&LOCKER_WASM).await?;
+        let locker_contract = worker.dev_deploy(&locker_wasm).await?;
         locker_contract
             .call("new")
             .args_json(json!({

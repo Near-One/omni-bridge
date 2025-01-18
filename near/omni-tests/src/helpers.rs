@@ -1,6 +1,6 @@
 #[cfg(test)]
 pub mod tests {
-    use std::{path::Path, str::FromStr, sync::LazyLock};
+    use std::{path::Path, str::FromStr};
 
     use near_sdk::{borsh, json_types::U128, serde_json, AccountId};
     use near_workspaces::types::NearToken;
@@ -9,76 +9,55 @@ pub mod tests {
         prover_result::{DeployTokenMessage, FinTransferMessage, LogMetadataMessage, ProverResult},
         BasicMetadata, ChainKind, Nonce, OmniAddress, TransferId,
     };
+    use rstest::fixture;
 
     pub const NEP141_DEPOSIT: NearToken = NearToken::from_yoctonear(1250000000000000000000);
 
-    pub static MOCK_TOKEN_WASM: LazyLock<Vec<u8>> = LazyLock::new(|| {
+    fn build_wasm(path: &str, target_dir: &str) -> Vec<u8> {
         let pwd = Path::new("./").canonicalize().expect("new path");
-        let sub_target = pwd.join("target/test-target-for-mock-token");
+        let sub_target = pwd.join(format!("target/{}", target_dir));
 
         let artifact = cargo_near_build::build(cargo_near_build::BuildOpts {
             manifest_path: Some(
-                cargo_near_build::camino::Utf8PathBuf::from_str("../mock/mock-token/Cargo.toml")
+                cargo_near_build::camino::Utf8PathBuf::from_str(path)
                     .expect("camino PathBuf from str"),
             ),
             override_cargo_target_dir: Some(sub_target.to_string_lossy().to_string()),
             ..Default::default()
         })
-        .expect("building `mock-token` contract for tests");
+        .unwrap_or_else(|_| panic!("building contract from {}", path));
 
         std::fs::read(&artifact.path).unwrap()
-    });
+    }
 
-    pub static MOCK_PROVER_WASM: LazyLock<Vec<u8>> = LazyLock::new(|| {
-        let pwd = Path::new("./").canonicalize().expect("new path");
-        let sub_target = pwd.join("target/test-target-for-mock-prover");
+    #[fixture]
+    pub fn mock_token_wasm() -> Vec<u8> {
+        build_wasm(
+            "../mock/mock-token/Cargo.toml",
+            "test-target-for-mock-token",
+        )
+    }
 
-        let artifact = cargo_near_build::build(cargo_near_build::BuildOpts {
-            manifest_path: Some(
-                cargo_near_build::camino::Utf8PathBuf::from_str("../mock/mock-prover/Cargo.toml")
-                    .expect("camino PathBuf from str"),
-            ),
-            override_cargo_target_dir: Some(sub_target.to_string_lossy().to_string()),
-            ..Default::default()
-        })
-        .expect("building `mock-prover` contract for tests");
+    #[fixture]
+    pub fn mock_prover_wasm() -> Vec<u8> {
+        build_wasm(
+            "../mock/mock-prover/Cargo.toml",
+            "test-target-for-mock-prover",
+        )
+    }
 
-        std::fs::read(&artifact.path).unwrap()
-    });
+    #[fixture]
+    pub fn locker_wasm() -> Vec<u8> {
+        build_wasm("../omni-bridge/Cargo.toml", "test-target-for-locker")
+    }
 
-    pub static LOCKER_WASM: LazyLock<Vec<u8>> = LazyLock::new(|| {
-        let pwd = Path::new("./").canonicalize().expect("new path");
-        let sub_target = pwd.join("target/test-target-for-locker");
-
-        let artifact = cargo_near_build::build(cargo_near_build::BuildOpts {
-            manifest_path: Some(
-                cargo_near_build::camino::Utf8PathBuf::from_str("../omni-bridge/Cargo.toml")
-                    .expect("camino PathBuf from str"),
-            ),
-            override_cargo_target_dir: Some(sub_target.to_string_lossy().to_string()),
-            ..Default::default()
-        })
-        .expect("building `omni-bridge` contract for tests");
-
-        std::fs::read(&artifact.path).unwrap()
-    });
-
-    pub static TOKEN_DEPLOYER_WASM: LazyLock<Vec<u8>> = LazyLock::new(|| {
-        let pwd = Path::new("./").canonicalize().expect("new path");
-        let sub_target = pwd.join("target/test-target-for-token-deployer");
-
-        let artifact = cargo_near_build::build(cargo_near_build::BuildOpts {
-            manifest_path: Some(
-                cargo_near_build::camino::Utf8PathBuf::from_str("../token-deployer/Cargo.toml")
-                    .expect("camino PathBuf from str"),
-            ),
-            override_cargo_target_dir: Some(sub_target.to_string_lossy().to_string()),
-            ..Default::default()
-        })
-        .expect("building `token-deployer` contract for tests");
-
-        std::fs::read(&artifact.path).unwrap()
-    });
+    #[fixture]
+    pub fn token_deployer_wasm() -> Vec<u8> {
+        build_wasm(
+            "../token-deployer/Cargo.toml",
+            "test-target-for-token-deployer",
+        )
+    }
 
     pub fn relayer_account_id() -> AccountId {
         "relayer".parse().unwrap()
