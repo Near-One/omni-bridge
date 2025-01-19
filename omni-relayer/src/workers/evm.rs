@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use anyhow::Result;
+use bridge_connector_common::result::BridgeSdkError;
 use futures::future::join_all;
 use log::{info, warn};
 
@@ -269,7 +270,17 @@ async fn handle_init_transfer_event(
             )
             .await;
         }
-        Err(err) => warn!("Failed to finalize InitTransfer: {}", err),
+        Err(err) => {
+            if let BridgeSdkError::EvmGasEstimateError(_) = err {
+                utils::redis::remove_event(
+                    &mut redis_connection,
+                    utils::redis::EVM_INIT_TRANSFER_EVENTS,
+                    &key,
+                )
+                .await;
+            }
+            warn!("Failed to finalize InitTransfer: {}", err);
+        }
     }
 
     if current_timestamp - init_transfer_with_timestamp.creation_timestamp

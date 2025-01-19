@@ -22,9 +22,9 @@ borsh = "1.5.1"
 tokio = { version = "1", features = ["sync", "time", "macros", "rt-multi-thread"] }
 tokio-stream = { version = "0.1" }
 
-solana-sdk = "2.1.5"
-solana-client = "2.1.5"
-solana-transaction-status = "2.1.5"
+solana-sdk = "2.1.9"
+solana-client = "2.1.9"
+solana-transaction-status = "2.1.9"
 
 ethereum-types = "0.14.1"
 omni-types = { git = "https://github.com/near-one/omni-bridge", package = "omni-types", rev = "b0ca4e1fb6a34086076511d1162747b154fa8a55" }
@@ -36,19 +36,21 @@ near-primitives = "0.28.0"
 near-crypto = "0.28.0"
 
 hex = "0.4.3"
-alloy = { version = "0.8", features = ["node-bindings", "providers", "rpc-types", "sol-types", "provider-ws", "signers", "signer-local"] }
+alloy = { version = "0.9", features = ["node-bindings", "providers", "rpc-types", "sol-types", "provider-ws", "signers", "signer-local"] }
 
 redis = { version = "0.28.1", features = ["aio", "tokio-comp"] }
 reqwest = "0.12"
 
-eth-proof = { git = "https://github.com/Near-One/rainbow-bridge-sdk-rs", package = "eth-proof" }
+eth-proof = { git = "https://github.com/Near-One/bridge-sdk-rs", package = "eth-proof", branch = "feat/added-gas-estimation" }
 
-near-bridge-client = { git = "https://github.com/Near-One/rainbow-bridge-sdk-rs", package = "near-bridge-client" }
-evm-bridge-client = { git = "https://github.com/Near-One/rainbow-bridge-sdk-rs", package = "evm-bridge-client" }
-solana-bridge-client = { git = "https://github.com/Near-One/rainbow-bridge-sdk-rs", package = "solana-bridge-client" }
-wormhole-bridge-client = { git = "https://github.com/Near-One/rainbow-bridge-sdk-rs", package = "wormhole-bridge-client" }
+bridge-connector-common = { git = "https://github.com/Near-One/bridge-sdk-rs", package = "bridge-connector-common", branch = "feat/added-gas-estimation" }
 
-omni-connector = { git = "https://github.com/Near-One/rainbow-bridge-sdk-rs", package = "omni-connector" }
+near-bridge-client = { git = "https://github.com/Near-One/bridge-sdk-rs", package = "near-bridge-client", branch = "feat/added-gas-estimation" }
+evm-bridge-client = { git = "https://github.com/Near-One/bridge-sdk-rs", package = "evm-bridge-client", branch = "feat/added-gas-estimation" }
+solana-bridge-client = { git = "https://github.com/Near-One/bridge-sdk-rs", package = "solana-bridge-client", branch = "feat/added-gas-estimation" }
+wormhole-bridge-client = { git = "https://github.com/Near-One/bridge-sdk-rs", package = "wormhole-bridge-client", branch = "feat/added-gas-estimation" }
+
+omni-connector = { git = "https://github.com/Near-One/bridge-sdk-rs", package = "omni-connector", branch = "feat/added-gas-estimation" }
 
 [features]
 disable_fee_check = []
