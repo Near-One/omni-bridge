@@ -76,8 +76,8 @@ $$($(1)_fake_prover_address_file): $(evm_compile_stamp) | $$($(1)_deploy_results
 
 $$($(1)_enear_creation_file): $$($(1)_fake_prover_address_file) $(evm_enear_creation_template_file) | $$($(1)_deploy_results_dir)
 	$(call description,Creating eNear creation file for $(1))
-	cat $$< | \
-	sed "s/<PROVER_ADDRESS>/$$(shell cat $$< | jq -r .fakeProverAddress | sed 's/^0x//')/" > $$@
+	cat $(evm_enear_creation_template_file) | \
+	sed "s/<PROVER_ADDRESS>/$$(shell cat $$($(1)_fake_prover_address_file) | jq -r .fakeProverAddress | sed 's/^0x//')/" > $$@
 
 .PHONY: $(1)-deploy-enear
 $(1)-deploy-enear: $$($(1)_enear_address_file)

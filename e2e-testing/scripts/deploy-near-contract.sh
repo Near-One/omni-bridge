@@ -3,7 +3,8 @@ set -euo pipefail
 
 # Usage: ./deploy-near-contract.sh <near_init_params_file> <init_account_credentials_file> [<dyn_init_args_file>] <wasm_path> <contract_id> <output_json>
 
-if [ "$#" -lt 5 ]; then
+if [ "$#" -ne 5 ] && [ "$#" -ne 6 ]; then
+    echo "Error: Invalid number of arguments"
     echo "Usage: $0 <near_init_params_file> <init_account_credentials_file> [<dyn_init_args_file>] <wasm_path> <contract_id> <output_json>"
     exit 1
 fi
@@ -64,18 +65,22 @@ fi
 # Delay to allow the account to be deployed
 sleep 3
 
-# Init the contract
-echo "Init the contract"
-if ! near contract call-function as-transaction "$CONTRACT_ID" \
-    "$INIT_FUNCTION" \
-    json-args "$INIT_ARGS" \
-    prepaid-gas '100.0 Tgas' attached-deposit '0 NEAR' \
-    sign-as "$INIT_ACCOUNT_ID" \
-    network-config testnet \
-    sign-with-plaintext-private-key --signer-public-key "$INIT_ACCOUNT_PUBLIC_KEY" --signer-private-key "$INIT_ACCOUNT_PRIVATE_KEY" \
-    send; then
-    echo "Failed to init ${CONTRACT_NAME}"
-    exit 1
+# Init the contract only if init function is specified
+if [ -n "$INIT_FUNCTION" ]; then
+    echo "Init the contract"
+    if ! near contract call-function as-transaction "$CONTRACT_ID" \
+        "$INIT_FUNCTION" \
+        json-args "$INIT_ARGS" \
+        prepaid-gas '100.0 Tgas' attached-deposit '0 NEAR' \
+        sign-as "$INIT_ACCOUNT_ID" \
+        network-config testnet \
+        sign-with-plaintext-private-key --signer-public-key "$INIT_ACCOUNT_PUBLIC_KEY" --signer-private-key "$INIT_ACCOUNT_PRIVATE_KEY" \
+        send; then
+        echo "Failed to init ${CONTRACT_NAME}"
+        exit 1
+    fi
+else
+    echo "No init function specified, skipping contract initialization"
 fi
 
 echo "{\"contract_id\": \"$CONTRACT_ID\"}" > "$OUTPUT_JSON"

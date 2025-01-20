@@ -108,26 +108,6 @@ const config: HardhatUserConfig = {
         interval: 0,
       },
     },
-    mainnet: {
-      omniChainId: 0,
-      chainId: 1,
-      url: `https://mainnet.infura.io/v3/${INFURA_API_KEY}`,
-      accounts: [`${EVM_PRIVATE_KEY}`],
-    },
-    arbitrumMainnet: {
-      wormholeAddress: "0xa5f208e072434bC67592E4C49C1B991BA79BCA46",
-      omniChainId: 3,
-      chainId: 42161,
-      url: `https://arbitrum-mainnet.infura.io/v3/${INFURA_API_KEY}`,
-      accounts: [`${EVM_PRIVATE_KEY}`],
-    },
-    baseMainnet: {
-      wormholeAddress: "0xbebdb6C8ddC678FfA9f8748f85C815C556Dd8ac6",
-      omniChainId: 4,
-      chainId: 8453,
-      url: `https://base-mainnet.infura.io/v3/${INFURA_API_KEY}`,
-      accounts: [`${EVM_PRIVATE_KEY}`],
-    },
     sepolia: {
       omniChainId: 0,
       chainId: 11155111,
