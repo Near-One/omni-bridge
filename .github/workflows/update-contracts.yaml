@@ -1,7 +1,6 @@
 on:
   push:
     branches: [ main, develop ]
-  pull_request:
 
 name: Update Contracts
 jobs:
@@ -11,8 +10,6 @@ jobs:
     steps:
       - name: Clone the repository
         uses: actions/checkout@v3
-        with:
-          token: ${{ secrets.PAT }}
         
       - name: Install cargo-near
         run: |
@@ -23,8 +20,20 @@ jobs:
           make rust-build-near
         timeout-minutes: 60
  
-      - name: Commit and Push Changes
-        uses: stefanzweifel/git-auto-commit-action@v5
+      - name: Archive built WASM files
+        run: |
+          mkdir -p artifacts
+          find ./near/target/near -name "*.wasm" -exec cp {} artifacts/ \;
+          zip -j contracts.zip artifacts/*.wasm
+        shell: bash
+
+      - name: Create Release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          file_pattern: "./near/res/*.wasm"
-          commit_message: "chore: updated contracts [ci skip]"
+          tag_name: v${{ github.run_number }}
+          release_name: NEAR Contracts v${{ github.run_number }}
+          draft: false
+          prerelease: false
+          files: contracts.zip

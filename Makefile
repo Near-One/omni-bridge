@@ -52,8 +52,7 @@ rust-build-mock-prover:
 rust-build-mock-token:
 	cargo near build reproducible-wasm --manifest-path $(MOCK_TOKEN_MANIFEST)
 
-rust-build-near: $(RES_DIR) rust-build-omni-bridge rust-build-omni-token rust-build-token-deployer rust-build-omni-prover rust-build-evm-prover rust-build-wormhole-omni-prover-proxy rust-build-mock-prover rust-build-mock-token
-	find $(TARGET_WASM_DIR) -name "*.wasm" -maxdepth 2 -exec cp -f {} $(RES_DIR)/ \;
+rust-build-near: rust-build-omni-bridge rust-build-omni-token rust-build-token-deployer rust-build-omni-prover rust-build-evm-prover rust-build-wormhole-omni-prover-proxy rust-build-mock-prover rust-build-mock-token
 
 rust-run-tests:
 	cargo nextest run --manifest-path $(NEAR_MANIFEST)
