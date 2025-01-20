@@ -11,6 +11,8 @@ jobs:
     steps:
       - name: Clone the repository
         uses: actions/checkout@v3
+        with:
+          token: ${{ secrets.PAT }}
         
       - name: Install cargo-near
         run: |
@@ -26,4 +28,3 @@ jobs:
         with:
           file_pattern: "./near/res/*.wasm"
           commit_message: "chore: updated contracts [ci skip]"
-          commit_author: ${{ steps.last-commit.outputs.author }}
