@@ -1236,7 +1236,7 @@ dependencies = [
  "percent-encoding",
  "pin-project-lite",
  "tracing",
- "uuid 1.12.0",
+ "uuid 1.12.1",
 ]
 
 [[package]]
@@ -1815,7 +1815,7 @@ dependencies = [
 [[package]]
 name = "bridge-connector-common"
 version = "0.1.0"
-source = "git+https://github.com/Near-One/bridge-sdk-rs?branch=feat%2Fadded-gas-estimation#bfffa661b94b0f59de3ddd8bceaf67f26f4c673f"
+source = "git+https://github.com/Near-One/bridge-sdk-rs?branch=feat%2Fnear-fin-transfer-with-evm-proof#41d1387fdba336bcca2de83fa4f31ae59c6375ca"
 dependencies = [
  "eth-proof",
  "ethers",
@@ -3183,7 +3183,7 @@ dependencies = [
 [[package]]
 name = "eth-proof"
 version = "0.1.0"
-source = "git+https://github.com/Near-One/bridge-sdk-rs?branch=feat%2Fadded-gas-estimation#bfffa661b94b0f59de3ddd8bceaf67f26f4c673f"
+source = "git+https://github.com/Near-One/bridge-sdk-rs?branch=feat%2Fnear-fin-transfer-with-evm-proof#41d1387fdba336bcca2de83fa4f31ae59c6375ca"
 dependencies = [
  "borsh 1.5.5",
  "cita_trie",
@@ -3552,7 +3552,7 @@ dependencies = [
 [[package]]
 name = "evm-bridge-client"
 version = "0.1.0"
-source = "git+https://github.com/Near-One/bridge-sdk-rs?branch=feat%2Fadded-gas-estimation#bfffa661b94b0f59de3ddd8bceaf67f26f4c673f"
+source = "git+https://github.com/Near-One/bridge-sdk-rs?branch=feat%2Fnear-fin-transfer-with-evm-proof#41d1387fdba336bcca2de83fa4f31ae59c6375ca"
 dependencies = [
  "borsh 1.5.5",
  "bridge-connector-common",
@@ -5063,7 +5063,7 @@ dependencies = [
 [[package]]
 name = "near-bridge-client"
 version = "0.1.0"
-source = "git+https://github.com/Near-One/bridge-sdk-rs?branch=feat%2Fadded-gas-estimation#bfffa661b94b0f59de3ddd8bceaf67f26f4c673f"
+source = "git+https://github.com/Near-One/bridge-sdk-rs?branch=feat%2Fnear-fin-transfer-with-evm-proof#41d1387fdba336bcca2de83fa4f31ae59c6375ca"
 dependencies = [
  "borsh 1.5.5",
  "bridge-connector-common",
@@ -5292,7 +5292,7 @@ dependencies = [
 [[package]]
 name = "near-light-client-on-eth"
 version = "0.1.0"
-source = "git+https://github.com/Near-One/bridge-sdk-rs?branch=feat%2Fadded-gas-estimation#bfffa661b94b0f59de3ddd8bceaf67f26f4c673f"
+source = "git+https://github.com/Near-One/bridge-sdk-rs?branch=feat%2Fnear-fin-transfer-with-evm-proof#41d1387fdba336bcca2de83fa4f31ae59c6375ca"
 dependencies = [
  "ethereum-types 0.14.1",
  "ethers",
@@ -5464,7 +5464,7 @@ dependencies = [
 [[package]]
 name = "near-rpc-client"
 version = "0.1.0"
-source = "git+https://github.com/Near-One/bridge-sdk-rs?branch=feat%2Fadded-gas-estimation#bfffa661b94b0f59de3ddd8bceaf67f26f4c673f"
+source = "git+https://github.com/Near-One/bridge-sdk-rs?branch=feat%2Fnear-fin-transfer-with-evm-proof#41d1387fdba336bcca2de83fa4f31ae59c6375ca"
 dependencies = [
  "borsh 1.5.5",
  "lazy_static",
@@ -5857,7 +5857,7 @@ dependencies = [
 [[package]]
 name = "omni-connector"
 version = "0.1.0"
-source = "git+https://github.com/Near-One/bridge-sdk-rs?branch=feat%2Fadded-gas-estimation#bfffa661b94b0f59de3ddd8bceaf67f26f4c673f"
+source = "git+https://github.com/Near-One/bridge-sdk-rs?branch=feat%2Fnear-fin-transfer-with-evm-proof#41d1387fdba336bcca2de83fa4f31ae59c6375ca"
 dependencies = [
  "borsh 1.5.5",
  "bridge-connector-common",
@@ -7813,7 +7813,7 @@ dependencies = [
 [[package]]
 name = "solana-bridge-client"
 version = "0.1.0"
-source = "git+https://github.com/Near-One/bridge-sdk-rs?branch=feat%2Fadded-gas-estimation#bfffa661b94b0f59de3ddd8bceaf67f26f4c673f"
+source = "git+https://github.com/Near-One/bridge-sdk-rs?branch=feat%2Fnear-fin-transfer-with-evm-proof#41d1387fdba336bcca2de83fa4f31ae59c6375ca"
 dependencies = [
  "borsh 1.5.5",
  "derive_builder 0.20.2",
@@ -10405,9 +10405,9 @@ dependencies = [
 
 [[package]]
 name = "uuid"
-version = "1.12.0"
+version = "1.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "744018581f9a3454a9e15beb8a33b017183f1e7c0cd170232a2d1453b23a51c4"
+checksum = "b3758f5e68192bb96cc8f9b7e2c2cfdabb435499a28499a42f8f984092adad4b"
 
 [[package]]
 name = "valuable"
@@ -10869,7 +10869,7 @@ dependencies = [
 [[package]]
 name = "wormhole-bridge-client"
 version = "0.1.0"
-source = "git+https://github.com/Near-One/bridge-sdk-rs?branch=feat%2Fadded-gas-estimation#bfffa661b94b0f59de3ddd8bceaf67f26f4c673f"
+source = "git+https://github.com/Near-One/bridge-sdk-rs?branch=feat%2Fnear-fin-transfer-with-evm-proof#41d1387fdba336bcca2de83fa4f31ae59c6375ca"
 dependencies = [
  "bridge-connector-common",
  "derive_builder 0.20.2",
