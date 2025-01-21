@@ -13,7 +13,7 @@ You will need the following tools installed on your environment before proceedin
 - **Docker**. Required to build NEAR contracts in consistent environment.
 - **Solana CLI and Anchor**. For compiling and deploying Solana programs.
 - **Bridge SDK CLI**. Install with:
-`cargo install --git https://github.com/Near-One/bridge-sdk-rs/ bridge-cli`
+`cargo install --git https://github.com/Near-One/bridge-sdk-rs/ --rev e2c86d5 bridge-cli`
 Enables bridging functionality for various blockchain environments.
 - **jq**. A command-line JSON processor used by many scripts in this project.
 
