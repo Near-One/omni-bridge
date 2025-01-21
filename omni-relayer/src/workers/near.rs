@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use anyhow::Result;
+use bridge_connector_common::result::BridgeSdkError;
 use futures::future::join_all;
 use log::{error, info, warn};
 
@@ -269,6 +270,15 @@ pub async fn finalize_transfer(
                                 .await;
                             }
                             Err(err) => {
+                                if let BridgeSdkError::EvmGasEstimateError(_) = err {
+                                    utils::redis::remove_event(
+                                        &mut redis_connection,
+                                        utils::redis::NEAR_SIGN_TRANSFER_EVENTS,
+                                        &key,
+                                    )
+                                    .await;
+                                }
+
                                 warn!("Failed to finalize deposit: {}", err);
                             }
                         }
