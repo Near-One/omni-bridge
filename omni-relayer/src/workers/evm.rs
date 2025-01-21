@@ -244,7 +244,7 @@ async fn handle_init_transfer_event(
     } else {
         omni_connector::FinTransferArgs::NearFinTransferWithEvmProof {
             chain_kind: init_transfer_with_timestamp.chain_kind,
-            near_tx_hash: tx_hash,
+            tx_hash,
             storage_deposit_actions,
         }
     };
