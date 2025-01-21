@@ -12,9 +12,8 @@ use solana_sdk::pubkey::Pubkey;
 
 use omni_connector::OmniConnector;
 use omni_types::{
-    locker_args::ClaimFeeArgs, near_events::OmniBridgeEvent,
-    prover_args::WormholeVerifyProofArgs, prover_result::ProofKind, ChainKind, OmniAddress,
-    TransferId,
+    locker_args::ClaimFeeArgs, near_events::OmniBridgeEvent, prover_args::WormholeVerifyProofArgs,
+    prover_result::ProofKind, ChainKind, OmniAddress, TransferId,
 };
 
 use crate::{config, utils};
@@ -95,9 +94,9 @@ pub async fn sign_transfer(
                         #[cfg(not(feature = "disable_fee_check"))]
                         match utils::fee::is_fee_sufficient(
                             &config,
-                            transfer_message.fee.clone(), 
+                            transfer_message.fee.clone(),
                             &transfer_message.sender,
-                            &transfer_message.recipient, 
+                            &transfer_message.recipient,
                             &transfer_message.token
                         ).await {
                             Ok(true) => {}

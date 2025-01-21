@@ -269,9 +269,7 @@ async fn handle_init_transfer_event(
             )
             .await;
         }
-        Err(err) => {
-            warn!("Failed to finalize InitTransfer: {}", err);
-        }
+        Err(err) => warn!("Failed to finalize InitTransfer: {}", err),
     }
 
     if current_timestamp - init_transfer_with_timestamp.creation_timestamp
