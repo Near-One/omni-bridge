@@ -1,3 +1,6 @@
+[redis]
+url = "redis://127.0.0.1/"
+
 [bridge_indexer]
 api_url = "http://127.0.0.1:8080"
 
