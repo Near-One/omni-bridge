@@ -7,18 +7,20 @@ use near_contract_standards::fungible_token::{
 use near_contract_standards::storage_management::{
     StorageBalance, StorageBalanceBounds, StorageManagement,
 };
+use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::collections::LazyOption;
 use near_sdk::json_types::{Base64VecU8, U128};
 use near_sdk::serde_json::json;
 use near_sdk::{
-    env, ext_contract, near, require, AccountId, Gas, NearToken, PanicOnDefault, Promise,
-    PromiseOrValue, PublicKey,
+    env, near, require, AccountId, Gas, NearToken, PanicOnDefault, Promise, PromiseOrValue,
+    PublicKey, StorageUsage,
 };
 use omni_ft::{MetadataManagment, MintAndBurn, UpgradeAndMigrate};
-use omni_types::{BasicMetadata, OmniAddress};
+use omni_types::BasicMetadata;
+
 const OUTER_UPGRADE_GAS: Gas = Gas::from_tgas(15);
 const NO_DEPOSIT: NearToken = NearToken::from_yoctonear(0);
-const CURRENT_STATE_VERSION: u32 = 1;
+const CURRENT_STATE_VERSION: u32 = 2;
 
 pub mod omni_ft;
 
@@ -28,18 +30,6 @@ pub struct OmniToken {
     controller: AccountId,
     token: FungibleToken,
     metadata: LazyOption<FungibleTokenMetadata>,
-}
-
-#[ext_contract(ext_omni_factory)]
-pub trait ExtOmniTokenFactory {
-    fn init_transfer(
-        &self,
-        sender: AccountId,
-        amount: U128,
-        recipient: OmniAddress,
-        fee: U128,
-        native_fee: U128,
-    ) -> Promise;
 }
 
 #[near]
@@ -74,13 +64,6 @@ impl OmniToken {
         }
     }
 
-    #[private]
-    #[init(ignore_state)]
-    #[allow(unused_variables)]
-    pub fn migrate(from_version: u32) -> Self {
-        env::state_read().unwrap_or_else(|| env::panic_str("ERR_FAILED_TO_READ_STATE"))
-    }
-
     /// Attach a new full access to the current contract.
     pub fn attach_full_access_key(&mut self, public_key: PublicKey) -> Promise {
         self.assert_controller();
@@ -94,6 +77,26 @@ impl OmniToken {
     fn assert_controller(&self) {
         let caller = env::predecessor_account_id();
         require!(caller == self.controller, "ERR_MISSING_PERMISSION");
+    }
+
+    //Withdraw to Ethereum. Deprecated function for backward compatibility
+    #[payable]
+    pub fn withdraw(&mut self, amount: U128, recipient: String) -> Promise {
+        let pov: PromiseOrValue<U128> = self.token.ft_transfer_call(
+            self.controller.clone(),
+            amount,
+            None,
+            "eth:".to_string() + &recipient,
+        );
+
+        match pov {
+            near_sdk::PromiseOrValue::Promise(promise) => promise,
+            near_sdk::PromiseOrValue::Value(_) => env::panic_str("Expected Promise")
+        }
+    }
+
+    pub fn account_storage_usage(&self) -> StorageUsage {
+        self.token.account_storage_usage
     }
 }
 
@@ -283,5 +286,58 @@ impl FungibleTokenMetadataProvider for OmniToken {
                 reference_hash: None,
                 decimals: 0,
             })
+    }
+}
+
+pub type Mask = u128;
+
+#[derive(BorshDeserialize, BorshSerialize)]
+pub struct BridgeTokenV1 {
+    controller: AccountId,
+    token: FungibleToken,
+    name: String,
+    symbol: String,
+    reference: String,
+    reference_hash: Base64VecU8,
+    decimals: u8,
+    paused: Mask,
+    icon: Option<String>,
+}
+
+impl From<BridgeTokenV1> for OmniToken {
+    fn from(obj: BridgeTokenV1) -> Self {
+        #[allow(deprecated)]
+        Self {
+            controller: obj.controller,
+            token: obj.token,
+            metadata: LazyOption::new(
+                b"m".to_vec(),
+                Some(&FungibleTokenMetadata {
+                    spec: FT_METADATA_SPEC.to_string(),
+                    name: obj.name,
+                    symbol: obj.symbol,
+                    icon: obj.icon,
+                    reference: Some(obj.reference),
+                    reference_hash: Some(obj.reference_hash.into()),
+                    decimals: obj.decimals,
+                }),
+            ),
+        }
+    }
+}
+
+#[near]
+impl OmniToken {
+    /// This function can only be called from the factory or from the contract itself.
+    #[init(ignore_state)]
+    pub fn migrate(from_version: u32) -> Self {
+        if from_version == 1 {
+            let old_state: BridgeTokenV1 = env::state_read().expect("Contract isn't initialized");
+            let new_state: OmniToken = old_state.into();
+            new_state.assert_controller();
+            new_state
+        } else {
+            env::state_read().unwrap()
+        }
     }
 }

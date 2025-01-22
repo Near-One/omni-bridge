@@ -9,6 +9,7 @@ publish = false
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
+borsh.workspace = true
 near-sdk.workspace = true
 near-contract-standards.workspace = true
 omni-types.workspace = true
