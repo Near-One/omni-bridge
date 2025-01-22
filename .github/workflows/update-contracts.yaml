@@ -21,7 +21,7 @@ jobs:
 
       - name: Build NEAR contracts
         run: |
-          make -j2 rust-build-near
+          make -j4 rust-build-near
         timeout-minutes: 60
  
       - name: Archive built WASM files
