@@ -2,7 +2,7 @@
 
 MAKEFILE_DIR :=  $(shell dirname $(realpath $(lastword $(MAKEFILE_LIST))))
 
-OUT_DIR ?= $(MAKEFILE_DIR)/target/near
+OUT_DIR ?= $(MAKEFILE_DIR)/near/target/near
 
 LINT_OPTIONS = -D warnings -D clippy::pedantic -A clippy::missing_errors_doc -A clippy::must_use_candidate -A clippy::module_name_repetitions
 
