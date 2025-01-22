@@ -1,63 +1,128 @@
-# End-to-end testing
+# Omni Bridge End-to-End Tests
+
+## General description
+
+The E2E tests cover an entire workflow involving multiple blockchain components (NEAR, EVM-based chains, Solana) and cross-chain communication. These tests ensure that all parts (smart contracts, scripts, etc.) integrate correctly. The Makefiles in this project orchestrate each step in the workflow, from compiling and deploying contracts on various chains to executing and verifying cross-chain transactions.
 
 ## Prerequisites
 
-- yarn
-- cargo
-- [NEAR CLI RS](https://github.com/near/near-cli-rs)
-- docker
-- [Solana CLI and Anchor](https://solana.com/docs/intro/installation)
-- Bridge SDK CLI: `cargo install  --git https://github.com/Near-One/bridge-sdk-rs/ bridge-cli`
+You will need the following tools installed on your environment before proceeding:
+- **Yarn**. Used for installing TypeScript dependencies for EVM contracts and scripts.
+- **Cargo**. The Rust package manager, required for building Rust-based components.
+- **NEAR CLI RS**. A command-line interface for interacting with NEAR protocols.
+- **Docker**. Required to build NEAR contracts in consistent environment.
+- **Solana CLI and Anchor**. For compiling and deploying Solana programs.
+- **Bridge SDK CLI**. Install with:
+`cargo install --git https://github.com/Near-One/bridge-sdk-rs/ --rev e2c86d5 bridge-cli`
+Enables bridging functionality for various blockchain environments.
+- **jq**. A command-line JSON processor used by many scripts in this project.
 
-## Using the Makefile
+## User guide
 
-The `Makefile` in this project is designed to automate the deployment and compilation processes for both EVM and NEAR environments. It provides a set of predefined rules that can be executed to perform specific tasks, such as compiling contracts, deploying them to various networks, and setting up necessary infrastructure.
+### How to Run Builds and Pipelines
 
-### Common Tasks
+This repository contains multiple Makefiles, each focusing on a particular chain or pipeline.
 
-- **Compile EVM Contracts**: To compile the EVM contracts, run:
-  ```bash
-  make evm-compile
-  ```
+You can explore all the available targets by running:
+```
+make help
+```
 
-- **Deploy to EVM Networks**: To deploy contracts to a specific EVM network, use the following pattern:
-  ```bash
-  make <network>-deploy
-  ```
-  Replace `<network>` with the desired network name, such as `sepolia` or `arbitrumSepolia`.
+Typical usage involves calling a specific pipeline target, for example:
 
-- **Build NEAR Contracts**: To build the NEAR contracts, execute:
-  ```bash
+```
+make bridge-token-near-to-evm
+```
+
+This command triggers a multi-step process that compiles, deploys, and binds tokens across NEAR and an EVM-based network.
+
+### Environment variables and configuration
+
+You need to create a `.env` files from:
+- `./evm-scripts/.env.example`
+- `../evm/.env.example` (`INFURA_API_KEY` and `EVM_PRIVATE_KEY` only)
+
+Also you need to copy or rename the provided `bridge-sdk-config.example.json` to `bridge-sdk-config.json`. And update it with your `ETH_PRIVATE_KEY` and your `ETH_RPC` endpoint.
+
+For Solana bulding and deployment, ensure that for every program you have a keypair in `.e2e-testing/` directory in the format of `<program_name>-keypair.json`. However, this key pair is secret and should not be shared.
+
+### Result artifacts
+
+Throughout the pipelines, you will see JSON files containing addresses, transaction hashes, and other relevant data.
+These files serve as evidence that each step or deployment was successfully executed. They are automatically generated and stored in dedicated directories such as `evm_deploy_results` or `near_deploy_results`.
+
+### Handling Pipeline Failures
+
+If a pipeline fails at a certain step, fix the underlying issue and rerun the same target. Make will pick up from the point of failure if the previous steps have created their artifact files or “stamp” files.
+
+### Rebuilding Binaries
+
+Each build step depends on “stamp” files that mark the completion of the step. Simply calling the relevant build target again will skip the build if the stamp file exists.
+
+To perform a clean rebuild, run the corresponding clean target. For example:
+```
+  make clean-near
   make near-build
-  ```
+```
 
-- **Deploy NEAR Contracts**: To deploy NEAR contracts, run:
-  ```bash
-  make near-deploy
-  ```
+This removes the old artifacts and stamps, forcing a complete recompile.
 
-These tasks automate the process of setting up the testing environment, ensuring that all necessary components are compiled and deployed correctly.
+## Developer Guide
 
-### Additional Requirements
+### Introduction to Make
 
-- **Private Key Requirement**: For Ethereum deployment, ensure that you add your `EVM_PRIVATE_KEY` to the `./evm/.env` file. This key is necessary for authenticating transactions on the Ethereum network.
+- If you are new to Make, the [[GNU Make Manual](https://www.gnu.org/software/make/manual/make.html)] is an excellent place to start.
+- Make allows us to define rules that specify how to build or process files and manage dependencies.
 
-- **Solana Keypair Requirement**: For Solana bulding and deployment, ensure that for every program you have a keypair in `.e2e-testing/` directory in the format of `<program_name>-keypair.json`. However, this key pair is secret and should not be shared.
 
-### Deployment Results
+### Structure of the Makefiles
 
-- **Storage of Results**: The addresses of deployed contracts are stored in JSON files in their corresponding locations. For example, the token factory deployed on the `arbitrumSepolia` network will be stored in `evm_deploy_results/arbitrumSepolia/token_factory.json`. This is done to reuse these addresses across different runs of the tests.
+- Makefiles here are split into modules for different chains (e.g., `near.mk`, `evm.mk`, `solana.mk`) and pipelines (e.g., `pipelines/bridge_token_near_to_evm.mk`).  
+- Each of these is included into a master Makefile.
+- Variables are in a global namespace. Therefore, every variable should be prefixed to avoid naming collisions, such as `evm_compile_stamp`, `solana_build_stamp`, etc.
 
-### General Working Principles
+### Pipelines Organization
 
-- **Phony Targets**: The `Makefile` uses `.PHONY` targets to define tasks that do not correspond to actual files. This ensures that these tasks are always executed when called, regardless of the presence of files with the same name.
+- Each pipeline typically has a prefix, such as pipeline1, pipeline2, and so on.
+- Consider adding new pipelines in separate `.mk` files.
+- Number the generated files for clarity (e.g., `01_step.json`, `02_step.json`) to keep track of the pipeline steps.
 
-- **Variables**: The `Makefile` defines several variables to manage paths and configurations, such as `TESTING_ROOT`, `EVM_DIR`, and `NEAR_DIR`. These variables help in organizing the file structure and making the `Makefile` adaptable to different environments.
+### Targets and Phony Targets
 
-- **Rule Expansion**: The `Makefile` uses a combination of static and dynamic rule definitions. Dynamic rules are generated using the `define` directive, which allows for the creation of rules based on the networks specified in the `EVM_NETWORKS` variable. This approach reduces redundancy and makes it easy to add support for additional networks.
+Most steps have two targets:
 
-- **Dependencies**: Each target in the `Makefile` specifies its dependencies, ensuring that all necessary steps are completed before executing a task. For example, deploying a contract requires that it is compiled first.
+1. A “file” target (e.g., a JSON artifact) or a “stamp” file target to indicate completion.
+2. A `.PHONY` target to run that step directly.
 
-- **Command Execution**: The `Makefile` uses shell commands to execute tasks, such as running `yarn` for EVM contract compilation and deployment, and custom scripts for NEAR contract deployment.
+The phony target typically depends on the file target, ensuring that the command is performed when necessary.
 
-In order to see which commands will be executed without actually executing them, you can add `--dry-run` to the command.
+Each step usually prints a brief description before execution using a helper function like `description`, so you know what is happening.
+
+### Order of prerequsites
+
+In certain cases, the order in which prerequisites are listed (and thus passed to scripts) can matter. Pay special attention to the scripts that rely on positional arguments.
+
+### Special targets
+
+- Every module or feature should provide a custom `clean-{custom-name}` target that removes the artifacts and stamp files it generates.
+- Remember to add that clean target to the help target or a consolidated list of “clean” targets so that users can discover and run it easily.
+- After adding module, don't forget to add it to the `help` target.
+
+### Debugging
+
+- Run `make --dry-run` to print the commands that would be executed without actually running them.
+- Use `make  -d` for a more verbose explanation of why each command runs (or doesn’t run). It could be used with `make --dry-run` in order not to run the commands.
+
+## General recommendations for Makefiles in this project
+
+Below are some guidelines to maintain consistency and clarity:
+1. Internal variables (not environment or inherited from parent Makefile) should use lowercase.
+2. Prefer `:=` (immediate assignment) over `=` (delayed assignment) for most variable definitions.
+3. Use `.INTERMEDIATE` and `.PHONY` to define targets properly.
+4. Make each phony target a prerequisite of `.PHONY` right before declaring the target.
+5. Avoid using phony targets as prerequisites for file targets.
+6. When a Makefile grows large, consider splitting it into multiple files, each handling a distinct set of tasks or a single pipeline.
+7. Use automatic variables like `$^`, `$@`, `$<`, and `$(word n,$^)` wisely to simplify commands.
+8. Directories often work best as order-only prerequisites (using the pipe symbol `|`) to avoid rebuilding them unnecessarily.
+9. Try to avoid recursive Make patterns; a single dependency graph is often clearer.
+10. Control verbosity to suit the needs of the project, for example by hiding command echoes and only printing the essential logs.
