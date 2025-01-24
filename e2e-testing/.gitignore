@@ -4,6 +4,14 @@ solana_artifacts/
 evm_deploy_results/
 near_deploy_results/
 solana_deploy_results/
+bridge-token-near-to-evm/
+
+.evm-compile.stamp
+.near-token-deployment-prepare.stamp
+.solana-build.stamp
+*dyn_init_args.json
+bridge-sdk-config.json
+bridge_token_factory-keypair.json
 
 
 evm_scripts/build/
