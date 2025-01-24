@@ -43,13 +43,13 @@ $(near_binary_paths) &:
 create-near-init-account: $(near_init_account_credentials_file)
 $(near_init_account_credentials_file): | $(common_near_deploy_results_dir)
 	$(call description,Creating NEAR init account)
-	./scripts/create-near-account.sh omni-init-$(common_timestamp).testnet $@
+	$(common_scripts_dir)/create-near-account.sh omni-init-$(common_timestamp).testnet $@
 
 .PHONY: create-dao-account
 create-dao-account: $(near_dao_account_credentials_file)
 $(near_dao_account_credentials_file): | $(common_near_deploy_results_dir)
 	$(call description,Creating NEAR DAO account)
-	./scripts/create-near-account.sh omni-dao-$(common_timestamp).testnet $@
+	$(common_scripts_dir)/create-near-account.sh omni-dao-$(common_timestamp).testnet $@
 
 # Contract deployment rules
 define generate_near_deploy_rules
@@ -62,14 +62,14 @@ ifeq ($$(filter $$($(1)_name),$(near_binaries_with_dynamic_args)),)
 # Rule for binaries without dynamic init args
 $(common_near_deploy_results_dir)/$$($(1)_name).json: $(near_init_params_file) $(near_init_account_credentials_file) $(1) | $(common_near_deploy_results_dir)
 	$(call description,Deploying $$($(1)_name) contract)
-	./scripts/deploy-near-contract.sh $$^ $$($(1)_name)-$(common_timestamp).testnet $$@
+	$(common_scripts_dir)/deploy-near-contract.sh $$^ $$($(1)_name)-$(common_timestamp).testnet $$@
 
 else
 
 # Rule for binaries with dynamic init args
 $(common_near_deploy_results_dir)/$$($(1)_name).json: $(near_init_params_file) $(near_init_account_credentials_file) $(common_testing_root)/$$($(1)_name)_dyn_init_args.json $(1) | $(common_near_deploy_results_dir)
 	$(call description,Deploying $$($(1)_name) contract with dynamic init args)
-	./scripts/deploy-near-contract.sh $$^ $$($(1)_name)-$(common_timestamp).testnet $$@
+	$(common_scripts_dir)/deploy-near-contract.sh $$^ $$($(1)_name)-$(common_timestamp).testnet $$@
 
 endif
 
@@ -101,7 +101,7 @@ $(near_prover_dau_grant_call_file): $(near_init_account_credentials_file) $(near
 	$(call description,Granting DAO role to omni prover)
 	OMNI_PROVER_ACCOUNT_ID=$$(jq -r .contract_id $(common_near_deploy_results_dir)/omni_prover.json) && \
 	DAO_ACCOUNT_ID=$$(jq -r .account_id $(near_dao_account_credentials_file)) && \
-	./scripts/call-near-contract.sh -c $$OMNI_PROVER_ACCOUNT_ID \
+	$(common_scripts_dir)/call-near-contract.sh -c $$OMNI_PROVER_ACCOUNT_ID \
 		-m acl_grant_role \
 		-a "{\"role\": \"DAO\", \"account_id\": \"$$DAO_ACCOUNT_ID\"}" \
 		-f $(near_init_account_credentials_file) \
@@ -116,7 +116,7 @@ $(near_evm_prover_setup_call_file): $(common_near_deploy_results_dir)/omni_prove
 	$(call description,Setting up EVM prover)
 	OMNI_PROVER_ACCOUNT_ID=$$(jq -r .contract_id $(common_near_deploy_results_dir)/omni_prover.json) && \
 	EVM_PROVER_ACCOUNT_ID=$$(jq -r .contract_id $(common_near_deploy_results_dir)/evm_prover.json) && \
-	./scripts/call-near-contract.sh -c $$OMNI_PROVER_ACCOUNT_ID \
+	$(common_scripts_dir)/call-near-contract.sh -c $$OMNI_PROVER_ACCOUNT_ID \
 		-m add_prover \
 		-a "{\"account_id\": \"$$EVM_PROVER_ACCOUNT_ID\", \"prover_id\": \"$(COMMON_SEPOLIA_CHAIN_STR)\"}" \
 		-f $(near_dao_account_credentials_file) \

@@ -29,10 +29,14 @@ endef
 common_near_deploy_results_dir := $(common_testing_root)/near_deploy_results
 common_evm_deploy_results_dir := $(common_testing_root)/evm_deploy_results
 common_solana_deploy_results_dir := $(common_testing_root)/solana_deploy_results
+common_tools_dir := $(common_testing_root)/tools
+common_scripts_dir := $(common_tools_dir)/src/scripts
 
 # Common files
 common_near_bridge_id_file := $(common_near_deploy_results_dir)/omni_bridge.json
 common_bridge_sdk_config_file := $(common_testing_root)/bridge-sdk-config.json
+
+common_tools_compile_stamp := $(common_testing_root)/.tools-compile.stamp
 
 # Chain identifiers
 COMMON_SEPOLIA_CHAIN_ID := 0
@@ -43,6 +47,16 @@ $(common_near_deploy_results_dir) $(common_evm_deploy_results_dir) $(common_sola
 	$(call description,Creating directory to store deploy results: $@)
 	mkdir -p $@
 
+# Build tools
+.PHONY: tools-build
+tools-build: $(common_tools_compile_stamp)
+$(common_tools_compile_stamp):
+	$(call description,Building tools)
+	yarn --cwd $(common_tools_dir) install && \
+	yarn --cwd $(common_tools_dir) hardhat compile
+	touch $@
+
+
 # Clean targets
 .PHONY: clean-deploy-results
 clean-deploy-results:
@@ -50,3 +64,4 @@ clean-deploy-results:
 	rm -rf $(common_near_deploy_results_dir)
 	rm -rf $(common_evm_deploy_results_dir)
 	rm -rf $(common_solana_deploy_results_dir) 
+	rm -rf $(common_tools_compile_stamp)

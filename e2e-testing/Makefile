@@ -61,9 +61,10 @@ help:
 	@echo "    {network}-deploy-test-token  Deploy test token to specific network"
 	@echo
 	@echo "Bridge pipeline:"
-	@echo "    bridge-token-near-to-evm     Run complete NEAR to ETH bridge test"
-	@echo "    prepare-token-deployment     Prepare token deployment (Step 0)"
-	@echo "    near-log-metadata-call       Log token metadata (Step 1)"
-	@echo "    ethereum-deploy-token        Deploy token on Ethereum (Step 2)"
-	@echo "    near-bind-token              Bind token on NEAR (Step 3)"
+	@echo "    bridge-token-near-to-evm             Run complete NEAR to ETH bridge test"
+	@echo "    prepare-token-deployment             Prepare token deployment (Step 0)"
+	@echo "    near-log-metadata-call               Log token metadata (Step 1)"
+	@echo "    ethereum-deploy-token                Deploy token on Ethereum (Step 2)"
+	@echo "    near-bind-token                      Bind token on NEAR (Step 3)"
+	@echo "    verify-bridge-token-near-to-evm      Verify the correctness of deployment and binding"
 

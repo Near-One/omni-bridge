@@ -6,6 +6,8 @@ near_deploy_results/
 solana_deploy_results/
 bridge-token-near-to-evm/
 
+.near-build.stamp
+.tools-compile.stamp
 .evm-compile.stamp
 .near-token-deployment-prepare.stamp
 .solana-build.stamp
@@ -14,12 +16,13 @@ bridge-sdk-config.json
 bridge_token_factory-keypair.json
 
 
-evm_scripts/build/
-evm_scripts/cache/
-evm_scripts/coverage/
-evm_scripts/coverage.json
-evm_scripts/.openzeppelin/
-evm_scripts/node_modules/
-evm_scripts/.env
-evm_scripts/typechain-types/
-evm_scripts/dist/
+tools/build/
+tools/cache/
+tools/coverage/
+tools/coverage.json
+tools/.openzeppelin/
+tools/node_modules/
+tools/.env
+tools/typechain-types/
+tools/dist/
+tools/node_modules/
