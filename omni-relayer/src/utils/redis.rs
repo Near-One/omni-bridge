@@ -2,6 +2,8 @@ use log::warn;
 use omni_types::ChainKind;
 use redis::{aio::MultiplexedConnection, AsyncCommands};
 
+pub const DEPLOY_TOKEN_EVENTS: &str = "deploy_token_events";
+
 pub const NEAR_INIT_TRANSFER_QUEUE: &str = "near_init_transfer_queue";
 pub const NEAR_SIGN_TRANSFER_EVENTS: &str = "near_sign_transfer_events";
 
