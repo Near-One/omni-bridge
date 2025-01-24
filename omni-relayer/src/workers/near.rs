@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use anyhow::Result;
+use bridge_connector_common::result::BridgeSdkError;
 use futures::future::join_all;
 use log::{error, info, warn};
 
@@ -11,9 +12,8 @@ use solana_sdk::pubkey::Pubkey;
 
 use omni_connector::OmniConnector;
 use omni_types::{
-    locker_args::ClaimFeeArgs, near_events::OmniBridgeEvent,
-    prover_args::WormholeVerifyProofArgs, prover_result::ProofKind, ChainKind, OmniAddress,
-    TransferId,
+    locker_args::ClaimFeeArgs, near_events::OmniBridgeEvent, prover_args::WormholeVerifyProofArgs,
+    prover_result::ProofKind, ChainKind, OmniAddress, TransferId,
 };
 
 use crate::{config, utils};
@@ -94,9 +94,9 @@ pub async fn sign_transfer(
                         #[cfg(not(feature = "disable_fee_check"))]
                         match utils::fee::is_fee_sufficient(
                             &config,
-                            transfer_message.fee.clone(), 
+                            transfer_message.fee.clone(),
                             &transfer_message.sender,
-                            &transfer_message.recipient, 
+                            &transfer_message.recipient,
                             &transfer_message.token
                         ).await {
                             Ok(true) => {}
@@ -269,6 +269,15 @@ pub async fn finalize_transfer(
                                 .await;
                             }
                             Err(err) => {
+                                if let BridgeSdkError::EvmGasEstimateError(_) = err {
+                                    utils::redis::remove_event(
+                                        &mut redis_connection,
+                                        utils::redis::NEAR_SIGN_TRANSFER_EVENTS,
+                                        &key,
+                                    )
+                                    .await;
+                                }
+
                                 warn!("Failed to finalize deposit: {}", err);
                             }
                         }
