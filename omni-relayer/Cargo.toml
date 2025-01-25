@@ -41,16 +41,16 @@ alloy = { version = "0.9", features = ["node-bindings", "providers", "rpc-types"
 redis = { version = "0.28.1", features = ["aio", "tokio-comp"] }
 reqwest = "0.12"
 
-eth-proof = { git = "https://github.com/Near-One/bridge-sdk-rs", package = "eth-proof", branch = "feat/bind-with-args" }
+eth-proof = { git = "https://github.com/Near-One/bridge-sdk-rs", package = "eth-proof" }
 
-bridge-connector-common = { git = "https://github.com/Near-One/bridge-sdk-rs", package = "bridge-connector-common", branch = "feat/bind-with-args" }
+bridge-connector-common = { git = "https://github.com/Near-One/bridge-sdk-rs", package = "bridge-connector-common" }
 
-near-bridge-client = { git = "https://github.com/Near-One/bridge-sdk-rs", package = "near-bridge-client", branch = "feat/bind-with-args" }
-evm-bridge-client = { git = "https://github.com/Near-One/bridge-sdk-rs", package = "evm-bridge-client", branch = "feat/bind-with-args" }
-solana-bridge-client = { git = "https://github.com/Near-One/bridge-sdk-rs", package = "solana-bridge-client", branch = "feat/bind-with-args" }
-wormhole-bridge-client = { git = "https://github.com/Near-One/bridge-sdk-rs", package = "wormhole-bridge-client", branch = "feat/bind-with-args" }
+near-bridge-client = { git = "https://github.com/Near-One/bridge-sdk-rs", package = "near-bridge-client" }
+evm-bridge-client = { git = "https://github.com/Near-One/bridge-sdk-rs", package = "evm-bridge-client" }
+solana-bridge-client = { git = "https://github.com/Near-One/bridge-sdk-rs", package = "solana-bridge-client" }
+wormhole-bridge-client = { git = "https://github.com/Near-One/bridge-sdk-rs", package = "wormhole-bridge-client" }
 
-omni-connector = { git = "https://github.com/Near-One/bridge-sdk-rs", package = "omni-connector", branch = "feat/bind-with-args" }
+omni-connector = { git = "https://github.com/Near-One/bridge-sdk-rs", package = "omni-connector" }
 
 [features]
 disable_fee_check = []
