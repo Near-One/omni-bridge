@@ -13,7 +13,10 @@ use alloy::{
 };
 use ethereum_types::H256;
 
-use crate::{config, utils, workers::near::FinTransfer};
+use crate::{
+    config, utils,
+    workers::near::{DeployToken, FinTransfer},
+};
 
 fn extract_evm_config(evm: config::Evm) -> (String, String, Address, u64, i64) {
     (
@@ -182,7 +185,7 @@ async fn process_log(
             redis_connection,
             utils::redis::DEPLOY_TOKEN_EVENTS,
             tx_hash.to_string(),
-            FinTransfer::Evm {
+            DeployToken::Evm {
                 chain_kind,
                 block_number,
                 log,
