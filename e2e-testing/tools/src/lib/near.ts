@@ -2,9 +2,6 @@ import { connect, providers } from 'near-api-js';
 import type { TokenMetadata } from './types';
 import { VerificationError } from './types';
 
-// TODO: define config globally or through some class.
-// TODO: try avoiding using KeyStore as the calls are view only.
-
 class NearClient {
     private provider: providers.JsonRpcProvider;
 

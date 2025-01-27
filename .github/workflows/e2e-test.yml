@@ -9,9 +9,81 @@ on:
         default: "bridge_token_near_to_evm"
 
 jobs:
-  e2e-tests:
-    name: E2E Tests
+  get-pipelines-matrix:
+    name: Get Pipelines Matrix
     runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+    steps:
+      - name: Parse input pipelines and create matrix
+        id: set-matrix
+        run: |
+          # Convert space-separated input into JSON array for matrix
+          PIPELINES="${{ github.event.inputs.selected_pipelines }}"
+          JSON_ARRAY=$(echo "$PIPELINES" | jq -R -c 'split(" ")')
+          echo "matrix={\"pipeline\":$JSON_ARRAY}" >> $GITHUB_OUTPUT
+
+  analyze-dependencies:
+    name: Analyze Dependencies
+    if: ${{ contains(github.event.inputs.selected_pipelines, ' ') }}
+    runs-on: ubuntu-latest
+    outputs:
+      common_deps: ${{ steps.get_deps.outputs.common_deps }}
     steps:
       - name: Check out repository
         uses: actions/checkout@v3
+
+      - name: Setup E2E environment
+        uses: ./.github/e2e-setup
+
+      - name: Get dependencies for each pipeline
+        id: get_deps
+        run: |
+          COMMON_DEPS=$(./e2e-testing/tools/src/scripts/get_common_dependencies.sh ./e2e-testing/Makefile ${{ github.event.inputs.selected_pipelines }})
+          echo "common_deps=$COMMON_DEPS" >> $GITHUB_OUTPUT
+
+      - name: Build common dependencies
+        run: |
+          echo "Building common dependencies"
+          if [ -n "${{ steps.get_deps.outputs.common_deps }}" ]; then
+            make ${{ steps.get_deps.outputs.common_deps }}
+          fi
+
+      - name: Upload common dependencies
+        uses: actions/upload-artifact@v3
+        with:
+          name: common-dependencies
+          path: |
+            e2e-testing/generated/*
+
+  run-tests:
+    needs: [get-pipelines-matrix, analyze-dependencies]
+    if: ${{ always() && needs.analyze-dependencies.result != 'failure' }}
+    name: Run ${{ matrix.pipeline }}
+    runs-on: ubuntu-latest
+    strategy:
+      matrix: ${{fromJson(needs.get-pipelines-matrix.outputs.matrix)}}
+      fail-fast: false
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v3
+
+      - name: Setup E2E environment
+        uses: ./.github/e2e-setup
+
+      - name: Download common dependencies
+        uses: actions/download-artifact@v3
+        with:
+          name: common-dependencies
+
+      - name: Run pipeline
+        run: |
+          echo "Running pipeline: ${{ matrix.pipeline }}"
+          make ${{ matrix.pipeline }}
+
+      - name: Upload test artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: e2e-test-results-${{ matrix.pipeline }}
+          path: |
+            e2e-testing/generated/*.json
