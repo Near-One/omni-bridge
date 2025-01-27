@@ -1,6 +1,7 @@
 # Common variables and settings
 common_testing_root := $(shell dirname $(realpath $(lastword $(MAKEFILE_LIST))))/..
 common_timestamp := $(shell date -u +%Y%m%d-%H%M%S)
+common_generated_dir := $(common_testing_root)/generated
 
 # ASCII box formatting for step descriptions
 define description
@@ -26,25 +27,24 @@ define progress_wait
 endef
 
 # Common directories
-common_near_deploy_results_dir := $(common_testing_root)/near_deploy_results
-common_evm_deploy_results_dir := $(common_testing_root)/evm_deploy_results
-common_solana_deploy_results_dir := $(common_testing_root)/solana_deploy_results
+common_near_deploy_results_dir := $(common_generated_dir)/near_deploy_results
+common_evm_deploy_results_dir := $(common_generated_dir)/evm_deploy_results
+common_solana_deploy_results_dir := $(common_generated_dir)/solana_deploy_results
 common_tools_dir := $(common_testing_root)/tools
 common_scripts_dir := $(common_tools_dir)/src/scripts
 
 # Common files
 common_near_bridge_id_file := $(common_near_deploy_results_dir)/omni_bridge.json
-common_bridge_sdk_config_file := $(common_testing_root)/bridge-sdk-config.json
-
-common_tools_compile_stamp := $(common_testing_root)/.tools-compile.stamp
+common_bridge_sdk_config_file := $(common_generated_dir)/bridge-sdk-config.json
+common_tools_compile_stamp := $(common_generated_dir)/.tools-compile.stamp
 
 # Chain identifiers
 COMMON_SEPOLIA_CHAIN_ID := 0
 COMMON_SEPOLIA_CHAIN_STR := Eth
 
 # Create required directories
-$(common_near_deploy_results_dir) $(common_evm_deploy_results_dir) $(common_solana_deploy_results_dir):
-	$(call description,Creating directory to store deploy results: $@)
+$(common_generated_dir) $(common_near_deploy_results_dir) $(common_evm_deploy_results_dir) $(common_solana_deploy_results_dir):
+	$(call description,Creating directory to store generated files: $@)
 	mkdir -p $@
 
 # Build tools

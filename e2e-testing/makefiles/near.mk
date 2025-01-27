@@ -1,6 +1,6 @@
 # NEAR-specific variables and rules
 near_dir := $(common_testing_root)/../near
-near_binary_dir := $(common_testing_root)/near_artifacts
+near_binary_dir := $(common_generated_dir)/near_artifacts
 
 near_init_params_file := $(common_testing_root)/near_init_params.json
 
@@ -67,7 +67,7 @@ $(common_near_deploy_results_dir)/$$($(1)_name).json: $(near_init_params_file) $
 else
 
 # Rule for binaries with dynamic init args
-$(common_near_deploy_results_dir)/$$($(1)_name).json: $(near_init_params_file) $(near_init_account_credentials_file) $(common_testing_root)/$$($(1)_name)_dyn_init_args.json $(1) | $(common_near_deploy_results_dir)
+$(common_near_deploy_results_dir)/$$($(1)_name).json: $(near_init_params_file) $(near_init_account_credentials_file) $(common_generated_dir)/$$($(1)_name)_dyn_init_args.json $(1) | $(common_near_deploy_results_dir)
 	$(call description,Deploying $$($(1)_name) contract with dynamic init args)
 	$(common_scripts_dir)/deploy-near-contract.sh $$^ $$($(1)_name)-$(common_timestamp).testnet $$@
 
@@ -78,18 +78,18 @@ endef
 $(foreach binary,$(near_binary_paths),$(eval $(call generate_near_deploy_rules,$(binary))))
 
 # Dynamic init args generation
-$(common_testing_root)/token_deployer_dyn_init_args.json: $(common_near_deploy_results_dir)/omni_bridge.json $(near_init_account_credentials_file)
+$(common_generated_dir)/token_deployer_dyn_init_args.json: $(common_near_deploy_results_dir)/omni_bridge.json $(near_init_account_credentials_file)
 	$(call description,Generating token deployer init args)
 	CONTROLLER_ADDRESS=$$(jq -r .contract_id $(common_near_deploy_results_dir)/omni_bridge.json) && \
 	DAO_ADDRESS=$$(jq -r .account_id $(near_init_account_credentials_file)) && \
 	echo "{\"controller\": \"$$CONTROLLER_ADDRESS\", \"dao\": \"$$DAO_ADDRESS\"}" > $@
 
-$(common_testing_root)/mock_token_dyn_init_args.json: $(near_init_account_credentials_file)
+$(common_generated_dir)/mock_token_dyn_init_args.json: $(near_init_account_credentials_file)
 	$(call description,Generating mock token init args)
 	OWNER_ADDRESS=$$(jq -r .account_id $<) && \
 	echo "{\"owner_id\": \"$$OWNER_ADDRESS\"}" > $@
 
-$(common_testing_root)/omni_bridge_dyn_init_args.json: $(common_near_deploy_results_dir)/omni_prover.json
+$(common_generated_dir)/omni_bridge_dyn_init_args.json: $(common_near_deploy_results_dir)/omni_prover.json
 	$(call description,Generating omni bridge init args)
 	PROVER_ADDRESS=$$(jq -r .contract_id $<) && \
 	echo "{\"prover_account\": \"$$PROVER_ADDRESS\"}" > $@

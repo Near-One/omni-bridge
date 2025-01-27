@@ -1,5 +1,5 @@
 # Pipeline: Bridge NEAR Token to Ethereum
-pipeline1_call_dir := $(common_testing_root)/bridge-token-near-to-evm
+pipeline1_call_dir := $(common_generated_dir)/bridge-token-near-to-evm
 
 # Clean target
 .PHONY: clean-bridge-token-near-to-evm

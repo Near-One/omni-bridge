@@ -1,8 +1,8 @@
 # EVM-specific variables and rules
 evm_dir := $(common_testing_root)/../evm
 
-evm_compile_stamp := $(common_testing_root)/.evm-compile.stamp
-evm_artifacts_dir := $(common_testing_root)/evm_artifacts
+evm_compile_stamp := $(common_generated_dir)/.evm-compile.stamp
+evm_artifacts_dir := $(common_generated_dir)/evm_artifacts
 
 evm_networks := sepolia arbitrumSepolia baseSepolia
 
