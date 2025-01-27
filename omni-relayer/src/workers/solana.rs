@@ -7,9 +7,7 @@ use log::{info, warn};
 use omni_connector::OmniConnector;
 #[cfg(not(feature = "disable_fee_check"))]
 use omni_types::Fee;
-use omni_types::{
-    prover_args::WormholeVerifyProofArgs, prover_result::ProofKind, ChainKind, OmniAddress,
-};
+use omni_types::{ChainKind, OmniAddress};
 use solana_client::nonblocking::rpc_client::RpcClient;
 #[cfg(not(feature = "disable_fee_check"))]
 use solana_sdk::pubkey::Pubkey;
@@ -280,15 +278,6 @@ async fn handle_init_transfer_event(
         return;
     };
 
-    let wormhole_proof_args = WormholeVerifyProofArgs {
-        proof_kind: ProofKind::InitTransfer,
-        vaa,
-    };
-    let Ok(prover_args) = borsh::to_vec(&wormhole_proof_args) else {
-        warn!("Failed to serialize WormholeVerifyProofArgs");
-        return;
-    };
-
     let storage_deposit_actions = match utils::storage::get_storage_deposit_actions(
         &connector,
         ChainKind::Sol,
@@ -306,10 +295,10 @@ async fn handle_init_transfer_event(
         }
     };
 
-    let fin_transfer_args = omni_connector::FinTransferArgs::NearFinTransfer {
+    let fin_transfer_args = omni_connector::FinTransferArgs::NearFinTransferWithVaa {
         chain_kind: ChainKind::Sol,
         storage_deposit_actions,
-        prover_args,
+        vaa,
     };
 
     match connector.fin_transfer(fin_transfer_args).await {
