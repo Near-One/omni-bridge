@@ -1,0 +1,17 @@
+name: E2E Tests
+
+on:
+  workflow_dispatch:
+    inputs:
+      selected_pipelines:
+        description: "Space-separated list of pipelines to run (e.g. 'bridge_token_near_to_evm another_pipeline')"
+        required: false
+        default: "bridge_token_near_to_evm"
+
+jobs:
+  e2e-tests:
+    name: E2E Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v3
