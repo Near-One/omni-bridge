@@ -6,11 +6,30 @@ use crate::state::message::{
     Payload,
 };
 use anchor_lang::prelude::*;
+use anchor_lang::solana_program::hash::hash;
 use anchor_spl::metadata::mpl_token_metadata::types::DataV2;
 use anchor_spl::metadata::{
     create_metadata_accounts_v3, CreateMetadataAccountsV3, Metadata as Metaplex, ID as MetaplexID,
 };
 use anchor_spl::token::{Mint, Token};
+
+pub trait StringExt {
+    fn to_hashed_bytes(&self) -> [u8; 32];
+}
+
+impl StringExt for String {
+    fn to_hashed_bytes(&self) -> [u8; 32] {
+        let bytes = self.as_bytes();
+        if bytes.len() > 32 {
+            let hash = hash(bytes);
+            hash.to_bytes()
+        } else {
+            let mut padded_bytes = [0u8; 32];
+            padded_bytes[..bytes.len()].copy_from_slice(bytes);
+            padded_bytes
+        }
+    }
+}
 
 #[derive(Accounts)]
 #[instruction(data: SignedPayload<DeployTokenPayload>)]
@@ -23,7 +42,7 @@ pub struct DeployToken<'info> {
     #[account(
         init,
         payer = common.payer,
-        seeds = [WRAPPED_MINT_SEED, data.payload.token.as_bytes().as_ref()],
+        seeds = [WRAPPED_MINT_SEED, data.payload.token.to_hashed_bytes().as_ref()],
         bump,
         mint::decimals = std::cmp::min(MAX_ALLOWED_DECIMALS, data.payload.decimals),
         mint::authority = authority,
