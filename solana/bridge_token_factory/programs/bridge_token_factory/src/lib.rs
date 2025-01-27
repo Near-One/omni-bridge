@@ -15,17 +15,21 @@ include!(concat!(env!("OUT_DIR"), "/program_id.rs"));
 
 #[program]
 pub mod bridge_token_factory {
+    use constants::{FINALIZE_TRANSFER_PAUSED, INIT_TRANSFER_PAUSED};
+
     use super::*;
 
     pub fn initialize(
         ctx: Context<Initialize>,
         admin: Pubkey,
+        pausable_admin: Pubkey,
         derived_near_bridge_address: [u8; 64],
     ) -> Result<()> {
         msg!("Initializing");
 
         ctx.accounts.process(
             admin,
+            pausable_admin,
             derived_near_bridge_address,
             ctx.bumps.config,
             ctx.bumps.authority,
@@ -57,6 +61,10 @@ pub mod bridge_token_factory {
         ctx: Context<FinalizeTransfer>,
         data: SignedPayload<FinalizeTransferPayload>,
     ) -> Result<()> {
+        require!(
+            ctx.accounts.common.config.paused & FINALIZE_TRANSFER_PAUSED == 0,
+            error::ErrorCode::Paused
+        );
         msg!("Finalizing transfer");
 
         data.verify_signature(
@@ -72,6 +80,10 @@ pub mod bridge_token_factory {
         ctx: Context<FinalizeTransferSol>,
         data: SignedPayload<FinalizeTransferPayload>,
     ) -> Result<()> {
+        require!(
+            ctx.accounts.common.config.paused & FINALIZE_TRANSFER_PAUSED == 0,
+            error::ErrorCode::Paused
+        );
         msg!("Finalizing transfer");
 
         data.verify_signature(
@@ -94,6 +106,10 @@ pub mod bridge_token_factory {
     }
 
     pub fn init_transfer(ctx: Context<InitTransfer>, payload: InitTransferPayload) -> Result<()> {
+        require!(
+            ctx.accounts.common.config.paused & INIT_TRANSFER_PAUSED == 0,
+            error::ErrorCode::Paused
+        );
         msg!("Initializing transfer");
 
         ctx.accounts.process(payload)?;
@@ -105,9 +121,45 @@ pub mod bridge_token_factory {
         ctx: Context<InitTransferSol>,
         payload: InitTransferPayload,
     ) -> Result<()> {
+        require!(
+            ctx.accounts.common.config.paused & INIT_TRANSFER_PAUSED == 0,
+            error::ErrorCode::Paused
+        );
         msg!("Initializing transfer");
 
         ctx.accounts.process(payload)?;
+
+        Ok(())
+    }
+
+    pub fn pause(ctx: Context<Pause>) -> Result<()> {
+        msg!("Pausing");
+
+        ctx.accounts.process()?;
+
+        Ok(())
+    }
+
+    pub fn unpause(ctx: Context<ChangeConfig>, paused: u8) -> Result<()> {
+        msg!("Unpausing");
+
+        ctx.accounts.set_paused(paused)?;
+
+        Ok(())
+    }
+
+    pub fn set_admin(ctx: Context<ChangeConfig>, admin: Pubkey) -> Result<()> {
+        msg!("Setting admin");
+
+        ctx.accounts.set_admin(admin)?;
+
+        Ok(())
+    }
+
+    pub fn set_pausable_admin(ctx: Context<ChangeConfig>, pausable_admin: Pubkey) -> Result<()> {
+        msg!("Setting pausable admin");
+
+        ctx.accounts.set_pausable_admin(pausable_admin)?;
 
         Ok(())
     }
