@@ -6,7 +6,7 @@ on:
       selected_pipelines:
         description: "Space-separated list of pipelines to run (e.g. 'bridge_token_near_to_evm another_pipeline')"
         required: false
-        default: "bridge_token_near_to_evm"
+        default: "bridge-token-near-to-evm"
 
 jobs:
   get-pipelines-matrix:
@@ -35,6 +35,10 @@ jobs:
 
       - name: Setup E2E environment
         uses: ./.github/e2e-setup
+        with:
+          infura_api_key: ${{ secrets.E2E_INFURA_API_KEY }}
+          evm_private_key: ${{ secrets.E2E_EVM_PRIVATE_KEY }}
+          eth_rpc_url: ${{ secrets.E2E_ETH_RPC_URL }}
 
       - name: Get dependencies for each pipeline
         id: get_deps
@@ -46,15 +50,15 @@ jobs:
         run: |
           echo "Building common dependencies"
           if [ -n "${{ steps.get_deps.outputs.common_deps }}" ]; then
-            make ${{ steps.get_deps.outputs.common_deps }}
+            cd e2e-testing && make ${{ steps.get_deps.outputs.common_deps }}
           fi
 
       - name: Upload common dependencies
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: common-dependencies
           path: |
-            e2e-testing/generated/*
+            e2e-testing/generated/
 
   run-tests:
     needs: [get-pipelines-matrix, analyze-dependencies]
@@ -64,26 +68,34 @@ jobs:
     strategy:
       matrix: ${{fromJson(needs.get-pipelines-matrix.outputs.matrix)}}
       fail-fast: false
+      max-parallel: 1
     steps:
       - name: Check out repository
         uses: actions/checkout@v3
 
       - name: Setup E2E environment
         uses: ./.github/e2e-setup
+        with:
+          infura_api_key: ${{ secrets.E2E_INFURA_API_KEY }}
+          evm_private_key: ${{ secrets.E2E_EVM_PRIVATE_KEY }}
+          eth_rpc_url: ${{ secrets.E2E_ETH_RPC_URL }}
 
       - name: Download common dependencies
-        uses: actions/download-artifact@v3
+        if: ${{ needs.analyze-dependencies.result == 'success' }}
+        uses: actions/download-artifact@v4
         with:
           name: common-dependencies
+          path: e2e-testing/generated/
 
       - name: Run pipeline
         run: |
           echo "Running pipeline: ${{ matrix.pipeline }}"
-          make ${{ matrix.pipeline }}
+          cd e2e-testing && make ${{ matrix.pipeline }}
 
       - name: Upload test artifacts
-        uses: actions/upload-artifact@v3
+        if: always()
+        uses: actions/upload-artifact@v4
         with:
           name: e2e-test-results-${{ matrix.pipeline }}
           path: |
-            e2e-testing/generated/*.json
+            e2e-testing/generated/*

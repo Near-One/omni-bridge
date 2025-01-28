@@ -12,3 +12,5 @@ tools/.env
 tools/typechain-types/
 tools/dist/
 tools/node_modules/
+
+bridge-sdk-config.json

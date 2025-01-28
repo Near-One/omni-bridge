@@ -12,18 +12,11 @@ endef
 
 # Progress bar for waiting operations
 define progress_wait
-	@tput civis; \
-	for i in $$(seq 1 $(1)); do \
-		printf "\033[2K\rWaiting: ["; \
-		p=$$((i * 100 / $(1))); \
-		for j in $$(seq 1 $$p); do printf "="; done; \
-		if [ $$p -lt 100 ]; then printf ">"; fi; \
-		for j in $$(seq $$(($$p + 1)) 100); do printf " "; done; \
-		printf "] $$p%% ($$i/$(1) seconds)"; \
+	@for i in $$(seq 1 $(1)); do \
+		printf "\rProgress: [%-$(1)s] %d%%" "$$(printf '#%.0s' $$(seq 1 $$i))" "$$((i * 100 / $(1)))"; \
 		sleep 1; \
 	done; \
-	printf "\n"; \
-	tput cnorm
+	printf '\n'
 endef
 
 # Common directories
@@ -35,12 +28,13 @@ common_scripts_dir := $(common_tools_dir)/src/scripts
 
 # Common files
 common_near_bridge_id_file := $(common_near_deploy_results_dir)/omni_bridge.json
-common_bridge_sdk_config_file := $(common_generated_dir)/bridge-sdk-config.json
+common_bridge_sdk_config_file := $(common_testing_root)/bridge-sdk-config.json
 common_tools_compile_stamp := $(common_generated_dir)/.tools-compile.stamp
 
 # Chain identifiers
 COMMON_SEPOLIA_CHAIN_ID := 0
 COMMON_SEPOLIA_CHAIN_STR := Eth
+COMMON_NEAR_CHAIN_STR := Near
 
 # Create required directories
 $(common_generated_dir) $(common_near_deploy_results_dir) $(common_evm_deploy_results_dir) $(common_solana_deploy_results_dir):

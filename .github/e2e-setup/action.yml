@@ -1,20 +1,68 @@
 name: E2E Setup
 description: Setup environment for E2E tests
 
+inputs:
+  infura_api_key:
+    description: 'Infura API Key for EVM interactions'
+    required: true
+  evm_private_key:
+    description: 'EVM Private Key for transactions'
+    required: true
+  eth_rpc_url:
+    description: 'Ethereum RPC URL'
+    required: true
+
 runs:
   using: composite
   steps:
     - name: Check out repository
       uses: actions/checkout@v3
 
+    - name: Setup EVM environment file
+      shell: bash
+      run: |
+        cd evm
+        cp .env.example .env
+        sed -i "s/INFURA_API_KEY=/INFURA_API_KEY=${{ inputs.infura_api_key }}/" .env
+        sed -i "s/EVM_PRIVATE_KEY=/EVM_PRIVATE_KEY=${{ inputs.evm_private_key }}/" .env
+
+    - name: Setup E2E testing tools environment file
+      shell: bash
+      run: |
+        cd e2e-testing/tools
+        cp .env.example .env
+        sed -i "s/INFURA_API_KEY=/INFURA_API_KEY=${{ inputs.infura_api_key }}/" .env
+        sed -i "s/EVM_PRIVATE_KEY=/EVM_PRIVATE_KEY=${{ inputs.evm_private_key }}/" .env
+        sed -i "s|ETH_RPC_URL=|ETH_RPC_URL=${{ inputs.eth_rpc_url }}|" .env
+
+    - name: Setup Bridge SDK config
+      shell: bash
+      run: |
+        cd e2e-testing
+        cp bridge-sdk-config.example.json bridge-sdk-config.json
+        sed -i "s/<ETH_PRIVATE_KEY>/${{ inputs.evm_private_key }}/" bridge-sdk-config.json
+        sed -i "s|<ETH_RPC>|${{ inputs.eth_rpc_url }}/${{ inputs.infura_api_key }}|" bridge-sdk-config.json
+
     - name: Set up Node.js
       uses: actions/setup-node@v3
       with:
-        node-version: '16'
+        node-version: '18'
 
     - name: Install Yarn
       shell: bash
       run: sudo npm install -g yarn
+
+    - name: Install Node.js dependencies
+      shell: bash
+      run: |
+        cd evm && yarn install
+        cd ../e2e-testing/tools && yarn install
+
+    - name: Install optional additional packages
+      shell: bash
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y jq libudev-dev
 
     - name: Setup Rust toolchain
       uses: dtolnay/rust-toolchain@stable
@@ -22,18 +70,41 @@ runs:
         toolchain: 1.81.0
         target: wasm32-unknown-unknown
 
-    - name: Install NEAR CLI
-      shell: bash
-      run: |
-        cargo install --git https://github.com/Near-One/bridge-sdk-rs/ --rev 543a46a bridge-cli
+    - name: Cache Rust dependencies
+      uses: Swatinem/rust-cache@v2
+      with:
+        shared-key: "e2e-setup-cache"
+        cache-on-failure: true
+        cache-all-crates: true
+        cache-directories: |
+          ~/.cargo/registry/index/
+          ~/.cargo/registry/cache/
+          ~/.cargo/git/db/
+          target/
 
-    - name: Install optional additional packages
-      shell: bash
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y jq
+    - name: Install Bridge SDK
+      uses: taiki-e/cache-cargo-install-action@v2
+      with:
+        tool: bridge-cli
+        git: https://github.com/Near-One/bridge-sdk-rs/
+        rev: b7c5acf
     
+    - name: Install NEAR CLI
+      uses: taiki-e/cache-cargo-install-action@v2
+      with:
+        tool: near-cli-rs@0.18.0
+    
+    - name: Cache Solana CLI and Anchor
+      uses: actions/cache@v3
+      id: solana-cache
+      with:
+        path: |
+          ~/.local/share/solana
+          ~/.cargo/bin/anchor
+        key: ${{ runner.os }}-solana-anchor-v0.30.1
+
     - name: Install Solana CLI and Anchor
+      if: steps.solana-cache.outputs.cache-hit != 'true'
       shell: bash
       run: |
         sh -c "$(curl -sSfL https://release.anza.xyz/stable/install)"

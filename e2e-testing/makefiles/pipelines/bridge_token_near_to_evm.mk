@@ -107,8 +107,9 @@ $(pipeline1_evm_deploy_token_file): $(pipeline1_log_metadata_file) $(sepolia_bri
 	$(call description,Bridge NEAR Token to Ethereum. Step 2: Deploying token on Ethereum)
 	TX_HASH=$$(jq -r .tx_hash $(pipeline1_log_metadata_file)) && \
 	ETH_BRIDGE_TOKEN_FACTORY_ADDRESS=$$(jq -r .bridgeAddress $(sepolia_bridge_contract_address_file)) && \
-	bridge-cli testnet omni-connector evm-deploy-token \
+	bridge-cli testnet omni-connector deploy-token \
 		--chain $(COMMON_SEPOLIA_CHAIN_STR) \
+		--source-chain $(COMMON_NEAR_CHAIN_STR) \
 		--tx-hash $$TX_HASH \
 		--eth-bridge-token-factory-address $$ETH_BRIDGE_TOKEN_FACTORY_ADDRESS \
 		--config-file $(common_bridge_sdk_config_file) > $@ && \
@@ -121,13 +122,13 @@ $(pipeline1_evm_deploy_token_file): $(pipeline1_log_metadata_file) $(sepolia_bri
 near-bind-token: $(pipeline1_near_bind_token_file)
 $(pipeline1_near_bind_token_file): $(pipeline1_evm_deploy_token_file) $(pipeline1_relayer_account_file) | $(pipeline1_call_dir)
 	$(call description,Waiting for Ethereum transaction being captured by relayer)
-	# $(call progress_wait,1300)
+	$(call progress_wait,1300)
 	$(call description,Bridge NEAR Token to Ethereum. Step 3: Binding token on NEAR)
 	TX_HASH=$$(jq -r .tx_hash $(pipeline1_evm_deploy_token_file)) && \
 	RELAYER_ACCOUNT_ID=$$(jq -r .account_id $(pipeline1_relayer_account_file)) && \
 	RELAYER_PRIVATE_KEY=$$(jq -r .private_key $(pipeline1_relayer_account_file)) && \
 	TOKEN_LOCKER_ID=$$(jq -r .contract_id $(pipeline1_bridge_contract_file)) && \
-	bridge-cli testnet omni-connector near-bind-token \
+	bridge-cli testnet omni-connector bind-token \
 		--chain $(COMMON_SEPOLIA_CHAIN_STR) \
 		--tx-hash $$TX_HASH \
 		--near-signer $$RELAYER_ACCOUNT_ID \
