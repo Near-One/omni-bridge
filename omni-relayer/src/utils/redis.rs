@@ -13,6 +13,7 @@ pub const SOLANA_EVENTS: &str = "solana_events";
 pub const SOLANA_INIT_TRANSFER_EVENTS: &str = "solana_init_transfer_events";
 
 pub const FINALIZED_TRANSFERS: &str = "finalized_transfers";
+pub const STUCK_TRANSFERS: &str = "stuck_transfers";
 
 pub const KEEP_INSUFFICIENT_FEE_TRANSFERS_FOR: i64 = 60 * 60 * 24 * 14; // 14 days
 pub const CHECK_INSUFFICIENT_FEE_TRANSFERS_EVERY_SECS: i64 = 60 * 30; // 30 minutes
