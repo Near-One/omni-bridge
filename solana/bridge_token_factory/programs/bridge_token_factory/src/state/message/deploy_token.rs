@@ -30,6 +30,8 @@ impl Payload for DeployTokenPayload {
 pub struct DeployTokenResponse {
     pub token: String,
     pub solana_mint: Pubkey,
+    pub decimals: u8,
+    pub origin_decimals: u8,
 }
 
 impl Payload for DeployTokenResponse {
@@ -44,6 +46,10 @@ impl Payload for DeployTokenResponse {
         // 2. solana_mint
         writer.write_all(&[SOLANA_OMNI_BRIDGE_CHAIN_ID])?;
         self.solana_mint.serialize(&mut writer)?;
+        // 3. decimals
+        self.decimals.serialize(&mut writer)?;
+        // 4. origin_decimals
+        self.origin_decimals.serialize(&mut writer)?;
 
         writer
             .into_inner()

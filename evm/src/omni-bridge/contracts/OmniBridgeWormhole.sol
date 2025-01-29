@@ -11,6 +11,8 @@ interface IWormhole {
         bytes memory payload,
         uint8 consistencyLevel
     ) external payable returns (uint64 sequence);
+
+    function messageFee() external view returns (uint256);
 }
 
 enum MessageType {
@@ -38,12 +40,14 @@ contract OmniBridgeWormhole is OmniBridge {
         _consistencyLevel = consistencyLevel;
     }
 
-    function deployTokenExtension(string memory token, address tokenAddress) internal override {
+    function deployTokenExtension(string memory token, address tokenAddress, uint8 decimals, uint8 originDecimals) internal override {
         bytes memory payload = bytes.concat(
             bytes1(uint8(MessageType.DeployToken)),
             Borsh.encodeString(token),
             bytes1(omniBridgeChainId),
-            Borsh.encodeAddress(tokenAddress)
+            Borsh.encodeAddress(tokenAddress),
+            bytes1(decimals),
+            bytes1(originDecimals)
         );
         _wormhole.publishMessage{value: msg.value}(
             wormholeNonce,
@@ -129,5 +133,13 @@ contract OmniBridgeWormhole is OmniBridge {
         );
 
         wormholeNonce++;
+    }
+
+    function setWormholeAddress(
+        address wormholeAddress,
+        uint8 consistencyLevel
+    ) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        _wormhole = IWormhole(wormholeAddress);
+        _consistencyLevel = consistencyLevel;
     }
 }

@@ -28,7 +28,7 @@ use omni_types::{
     FastTransferId, Fee, InitTransferMsg, MetadataPayload, Nonce, OmniAddress, PayloadType,
     SignRequest, TransferId, TransferMessage, TransferMessagePayload, UpdateFee,
 };
-use storage::{TransferMessageStorage, TransferMessageStorageValue};
+use storage::{Decimals, TransferMessageStorage, TransferMessageStorageValue, NEP141_DEPOSIT};
 
 mod errors;
 mod storage;
@@ -74,6 +74,7 @@ enum StorageKey {
     DeployedTokens,
     DestinationNonces,
     FastTransfers,
+    TokenDecimals,
 }
 
 #[derive(AccessControlRole, Deserialize, Serialize, Copy, Clone)]
@@ -85,6 +86,7 @@ pub enum Role {
     UpgradableCodeStager,
     UpgradableCodeDeployer,
     MetadataManager,
+    UnrestrictedRelayer,
 }
 
 #[ext_contract(ext_token)]
@@ -169,6 +171,7 @@ pub struct Contract {
     pub fast_transfers: LookupMap<FastTransferId, AccountId>, // value is relayer address that performed the transfer
     pub token_id_to_address: LookupMap<(ChainKind, AccountId), OmniAddress>,
     pub token_address_to_id: LookupMap<OmniAddress, AccountId>,
+    pub token_decimals: LookupMap<OmniAddress, Decimals>,
     pub deployed_tokens: LookupSet<AccountId>,
     pub token_deployer_accounts: LookupMap<ChainKind, AccountId>,
     pub mpc_signer: AccountId,
@@ -236,6 +239,7 @@ impl Contract {
             fast_transfers: LookupMap::new(StorageKey::FastTransfers),
             token_id_to_address: LookupMap::new(StorageKey::TokenIdToAddress),
             token_address_to_id: LookupMap::new(StorageKey::TokenAddressToId),
+            token_decimals: LookupMap::new(StorageKey::TokenDecimals),
             deployed_tokens: LookupSet::new(StorageKey::DeployedTokens),
             token_deployer_accounts: LookupMap::new(StorageKey::TokenDeployerAccounts),
             mpc_signer,
@@ -250,6 +254,7 @@ impl Contract {
         contract
     }
 
+    #[pause(except(roles(Role::DAO, Role::UnrestrictedRelayer)))]
     pub fn log_metadata(&self, token_id: &AccountId) -> Promise {
         ext_token::ext(token_id.clone())
             .with_static_gas(LOG_METADATA_GAS)
@@ -320,6 +325,7 @@ impl Contract {
     }
 
     #[payable]
+    #[pause]
     pub fn update_transfer_fee(&mut self, transfer_id: TransferId, fee: UpdateFee) {
         match fee {
             UpdateFee::Fee(fee) => {
@@ -368,6 +374,7 @@ impl Contract {
     /// - If the `borsh::to_vec` serialization of the `TransferMessagePayload` fails.
     /// - If a `fee` is provided and it doesn't match the fee in the stored transfer message.
     #[payable]
+    #[pause(except(roles(Role::DAO, Role::UnrestrictedRelayer)))]
     pub fn sign_transfer(
         &mut self,
         transfer_id: TransferId,
@@ -386,12 +393,23 @@ impl Contract {
             )
             .unwrap_or_else(|| env::panic_str("ERR_FAILED_TO_GET_TOKEN_ADDRESS"));
 
+        let decimals = self
+            .token_decimals
+            .get(&token_address)
+            .sdk_expect("ERR_TOKEN_DECIMALS_NOT_FOUND");
+        let amount_to_transfer = Self::normalize_amount(
+            transfer_message.amount.0 - transfer_message.fee.fee.0,
+            decimals,
+        );
+
+        require!(amount_to_transfer > 0, "Invalid amount to transfer");
+
         let transfer_payload = TransferMessagePayload {
             prefix: PayloadType::TransferMessage,
             destination_nonce: transfer_message.destination_nonce,
             transfer_id,
             token_address,
-            amount: U128(transfer_message.amount.0 - transfer_message.fee.fee.0),
+            amount: U128(amount_to_transfer),
             recipient: transfer_message.recipient,
             fee_recipient,
         };
@@ -487,6 +505,7 @@ impl Contract {
     }
 
     #[payable]
+    #[pause(except(roles(Role::DAO, Role::UnrestrictedRelayer)))]
     pub fn fin_transfer(&mut self, #[serializer(borsh)] args: FinTransferArgs) -> Promise {
         require!(
             args.storage_deposit_actions.len() <= 3,
@@ -535,14 +554,22 @@ impl Contract {
             "Unknown factory"
         );
 
+        let decimals = self
+            .token_decimals
+            .get(&init_transfer.token)
+            .sdk_expect("ERR_TOKEN_DECIMALS_NOT_FOUND");
+
         let destination_nonce =
             self.get_next_destination_nonce(init_transfer.recipient.get_chain());
         let transfer_message = TransferMessage {
             origin_nonce: init_transfer.origin_nonce,
             token: init_transfer.token,
-            amount: init_transfer.amount,
+            amount: Self::denormalize_amount(init_transfer.amount.0, decimals).into(),
             recipient: init_transfer.recipient,
-            fee: init_transfer.fee,
+            fee: Fee {
+                fee: Self::denormalize_amount(init_transfer.fee.fee.0, decimals).into(),
+                native_fee: init_transfer.fee.native_fee,
+            },
             sender: init_transfer.sender,
             msg: init_transfer.msg,
             destination_nonce,
@@ -701,6 +728,7 @@ impl Contract {
     }
 
     #[payable]
+    #[pause(except(roles(Role::DAO, Role::UnrestrictedRelayer)))]
     pub fn claim_fee(&mut self, #[serializer(borsh)] args: ClaimFeeArgs) -> Promise {
         ext_prover::ext(self.prover_account.clone())
             .with_static_gas(VERIFY_PROOF_GAS)
@@ -742,7 +770,20 @@ impl Contract {
         );
 
         let message = self.remove_transfer_message(fin_transfer.transfer_id);
-        let fee = message.amount.0 - fin_transfer.amount.0;
+        let token_address = self
+            .get_token_address(
+                message.get_destination_chain(),
+                self.get_token_id(&message.token),
+            )
+            .unwrap_or_else(|| env::panic_str("ERR_FAILED_TO_GET_TOKEN_ADDRESS"));
+
+        let denormalized_amount = Self::denormalize_amount(
+            fin_transfer.amount.0,
+            self.token_decimals
+                .get(&token_address)
+                .sdk_expect("ERR_TOKEN_DECIMALS_NOT_FOUND"),
+        );
+        let fee = message.amount.0 - denormalized_amount;
 
         if message.fee.native_fee.0 != 0 {
             if message.get_origin_chain() == ChainKind::Near {
@@ -768,18 +809,27 @@ impl Contract {
         );
 
         if fee > 0 {
-            PromiseOrValue::Promise(
-                ext_token::ext(token)
-                    .with_static_gas(FT_TRANSFER_GAS)
-                    .with_attached_deposit(ONE_YOCTO)
-                    .ft_transfer(fin_transfer.fee_recipient, U128(fee), None),
-            )
+            if self.deployed_tokens.contains(&token) {
+                PromiseOrValue::Promise(ext_token::ext(token).with_static_gas(MINT_TOKEN_GAS).mint(
+                    fin_transfer.fee_recipient,
+                    U128(fee),
+                    None,
+                ))
+            } else {
+                PromiseOrValue::Promise(
+                    ext_token::ext(token)
+                        .with_static_gas(FT_TRANSFER_GAS)
+                        .with_attached_deposit(ONE_YOCTO)
+                        .ft_transfer(fin_transfer.fee_recipient, U128(fee), None),
+                )
+            }
         } else {
             PromiseOrValue::Value(())
         }
     }
 
     #[payable]
+    #[pause(except(roles(Role::DAO, Role::UnrestrictedRelayer)))]
     pub fn deploy_token(&mut self, #[serializer(borsh)] args: DeployTokenArgs) -> Promise {
         ext_prover::ext(self.prover_account.clone())
             .with_static_gas(VERIFY_PROOF_GAS)
@@ -848,52 +898,8 @@ impl Contract {
         )
     }
 
-    fn deploy_token_internal(
-        &mut self,
-        chain_kind: ChainKind,
-        token_address: &OmniAddress,
-        metadata: BasicMetadata,
-        attached_deposit: NearToken,
-    ) -> Promise {
-        let deployer = self
-            .token_deployer_accounts
-            .get(&chain_kind)
-            .unwrap_or_else(|| env::panic_str("ERR_DEPLOYER_NOT_SET"));
-        let prefix = token_address.get_token_prefix();
-        let token_id: AccountId = format!("{prefix}.{deployer}")
-            .parse()
-            .unwrap_or_else(|_| env::panic_str("ERR_PARSE_ACCOUNT"));
-
-        let storage_usage = env::storage_usage();
-        require!(
-            self.token_id_to_address
-                .insert(&(chain_kind, token_id.clone()), token_address)
-                .is_none(),
-            "ERR_TOKEN_EXIST"
-        );
-        require!(
-            self.token_address_to_id
-                .insert(token_address, &token_id)
-                .is_none(),
-            "ERR_TOKEN_EXIST"
-        );
-        require!(self.deployed_tokens.insert(&token_id), "ERR_TOKEN_EXIST");
-        let required_deposit = env::storage_byte_cost()
-            .saturating_mul((env::storage_usage().saturating_sub(storage_usage)).into())
-            .saturating_add(storage::BRIDGE_TOKEN_INIT_BALANCE);
-
-        require!(
-            attached_deposit >= required_deposit,
-            "ERROR: The deposit is not sufficient to cover the storage."
-        );
-
-        ext_deployer::ext(deployer)
-            .with_static_gas(DEPLOY_TOKEN_GAS)
-            .with_attached_deposit(storage::BRIDGE_TOKEN_INIT_BALANCE)
-            .deploy_token(token_id, metadata)
-    }
-
     #[payable]
+    #[pause(except(roles(Role::DAO, Role::UnrestrictedRelayer)))]
     pub fn bind_token(&mut self, #[serializer(borsh)] args: BindTokenArgs) -> Promise {
         ext_prover::ext(self.prover_account.clone())
             .with_static_gas(VERIFY_PROOF_GAS)
@@ -945,6 +951,15 @@ impl Contract {
         );
         self.token_address_to_id
             .insert(&deploy_token.token_address, &deploy_token.token);
+
+        self.token_decimals.insert(
+            &deploy_token.token_address,
+            &Decimals {
+                decimals: deploy_token.decimals,
+                origin_decimals: deploy_token.origin_decimals,
+            },
+        );
+
         let required_deposit = env::storage_byte_cost()
             .saturating_mul((env::storage_usage().saturating_sub(storage_usage)).into());
 
@@ -1024,7 +1039,13 @@ impl Contract {
     }
 
     #[access_control_any(roles(Role::DAO))]
+    #[payable]
     pub fn add_deployed_tokens(&mut self, tokens: Vec<(OmniAddress, AccountId)>) {
+        require!(
+            env::attached_deposit() >= NEP141_DEPOSIT.saturating_mul(tokens.len() as u128),
+            "ERR_NOT_ENOUGH_ATTACHED_DEPOSIT"
+        );
+
         for (token_address, token_id) in tokens {
             self.deployed_tokens.insert(&token_id);
             self.token_address_to_id.insert(&token_address, &token_id);
@@ -1032,6 +1053,18 @@ impl Contract {
                 &(token_address.get_chain(), token_id.clone()),
                 &token_address,
             );
+            self.token_decimals.insert(
+                &token_address,
+                &Decimals {
+                    decimals: 0,
+                    origin_decimals: 0,
+                },
+            );
+
+            ext_token::ext(token_id)
+                .with_static_gas(STORAGE_DEPOSIT_GAS)
+                .with_attached_deposit(NEP141_DEPOSIT)
+                .storage_deposit(&env::current_account_id(), Some(true));
         }
     }
 
@@ -1073,6 +1106,10 @@ impl Contract {
                 .with_static_gas(BURN_TOKEN_GAS)
                 .burn(amount),
         }
+    }
+
+    pub fn get_mpc_account(&self) -> AccountId {
+        self.mpc_signer.clone()
     }
 }
 
@@ -1116,12 +1153,14 @@ impl Contract {
             None => (recipient, false),
         };
 
+        let mut storage_deposit_action_index: usize = 0;
         require!(
-            Self::check_storage_balance_result(1)
-                && storage_deposit_actions[0].account_id == recipient
-                && storage_deposit_actions[0].token_id == token,
+            Self::check_storage_balance_result((storage_deposit_action_index + 1) as u64)
+                && storage_deposit_actions[storage_deposit_action_index].account_id == recipient
+                && storage_deposit_actions[storage_deposit_action_index].token_id == token,
             "STORAGE_ERR: The transfer recipient is omitted"
         );
+        storage_deposit_action_index += 1;
 
         let amount_to_transfer = U128(transfer_message.amount.0 - transfer_message.fee.fee.0);
         let is_deployed_token = self.deployed_tokens.contains(&token);
@@ -1139,21 +1178,23 @@ impl Contract {
 
         if transfer_message.fee.fee.0 > 0 {
             require!(
-                Self::check_storage_balance_result(2)
-                    && storage_deposit_actions[1].account_id == predecessor_account_id
-                    && storage_deposit_actions[1].token_id == token,
+                Self::check_storage_balance_result((storage_deposit_action_index + 1) as u64)
+                    && storage_deposit_actions[storage_deposit_action_index].account_id
+                        == predecessor_account_id
+                    && storage_deposit_actions[storage_deposit_action_index].token_id == token,
                 "STORAGE_ERR: The fee recipient is omitted"
             );
+            storage_deposit_action_index += 1;
 
-            let transfer_fee_promise = ext_token::ext(token).with_attached_deposit(ONE_YOCTO);
             promise = promise.then(if is_deployed_token {
-                transfer_fee_promise.with_static_gas(MINT_TOKEN_GAS).mint(
+                ext_token::ext(token).with_static_gas(MINT_TOKEN_GAS).mint(
                     predecessor_account_id.clone(),
                     transfer_message.fee.fee,
                     None,
                 )
             } else {
-                transfer_fee_promise
+                ext_token::ext(token)
+                    .with_attached_deposit(ONE_YOCTO)
                     .with_static_gas(FT_TRANSFER_GAS)
                     .ft_transfer(
                         predecessor_account_id.clone(),
@@ -1171,9 +1212,11 @@ impl Contract {
             let native_token_id = self.get_native_token_id(transfer_message.get_origin_chain());
 
             require!(
-                Self::check_storage_balance_result(3)
-                    && storage_deposit_actions[2].account_id == predecessor_account_id
-                    && storage_deposit_actions[2].token_id == native_token_id,
+                Self::check_storage_balance_result((storage_deposit_action_index + 1) as u64)
+                    && storage_deposit_actions[storage_deposit_action_index].account_id
+                        == predecessor_account_id
+                    && storage_deposit_actions[storage_deposit_action_index].token_id
+                        == native_token_id,
                 "STORAGE_ERR: The native fee recipient is omitted"
             );
 
@@ -1257,22 +1300,39 @@ impl Contract {
                 .with_static_gas(WNEAR_WITHDRAW_GAS)
                 .with_attached_deposit(ONE_YOCTO)
                 .near_withdraw(amount)
-                .then(Promise::new(recipient).transfer(NearToken::from_yoctonear(amount.0)))
-        } else {
-            let transfer_promise = ext_token::ext(token.clone()).with_attached_deposit(ONE_YOCTO);
-            if is_deployed_token {
-                transfer_promise
-                    .with_static_gas(MINT_TOKEN_GAS.saturating_add(FT_TRANSFER_CALL_GAS))
-                    .mint(recipient, amount, (!msg.is_empty()).then(|| msg.clone()))
-            } else if msg.is_empty() {
-                transfer_promise
-                    .with_static_gas(FT_TRANSFER_GAS)
-                    .ft_transfer(recipient, amount, None)
+                .then(
+                    Promise::new(recipient)
+                        .transfer(NearToken::from_yoctonear(amount.0)),
+                )
+        } else if is_deployed_token {
+            let deposit = if msg.is_empty() {
+                NO_DEPOSIT
             } else {
-                transfer_promise
-                    .with_static_gas(FT_TRANSFER_CALL_GAS)
-                    .ft_transfer_call(recipient, amount, None, msg.clone())
-            }
+                ONE_YOCTO
+            };
+            ext_token::ext(token.clone())
+                .with_attached_deposit(deposit)
+                .with_static_gas(MINT_TOKEN_GAS.saturating_add(FT_TRANSFER_CALL_GAS))
+                .mint(
+                    recipient,
+                    amount,
+                    (!msg.is_empty()).then(|| msg.clone()),
+                )
+        } else if msg.is_empty() {
+            ext_token::ext(token.clone())
+                .with_attached_deposit(ONE_YOCTO)
+                .with_static_gas(FT_TRANSFER_GAS)
+                .ft_transfer(recipient, amount, None)
+        } else {
+            ext_token::ext(token.clone())
+                .with_attached_deposit(ONE_YOCTO)
+                .with_static_gas(FT_TRANSFER_CALL_GAS)
+                .ft_transfer_call(
+                    recipient,
+                    amount,
+                    None,
+                    msg.clone(),
+                )
         }
     }
 
@@ -1422,9 +1482,83 @@ impl Contract {
         }
     }
 
+    fn deploy_token_internal(
+        &mut self,
+        chain_kind: ChainKind,
+        token_address: &OmniAddress,
+        metadata: BasicMetadata,
+        attached_deposit: NearToken,
+    ) -> Promise {
+        let deployer = self
+            .token_deployer_accounts
+            .get(&chain_kind)
+            .unwrap_or_else(|| env::panic_str("ERR_DEPLOYER_NOT_SET"));
+        let prefix = token_address.get_token_prefix();
+        let token_id: AccountId = format!("{prefix}.{deployer}")
+            .parse()
+            .unwrap_or_else(|_| env::panic_str("ERR_PARSE_ACCOUNT"));
+
+        let storage_usage = env::storage_usage();
+        require!(
+            self.token_id_to_address
+                .insert(&(chain_kind, token_id.clone()), token_address)
+                .is_none(),
+            "ERR_TOKEN_EXIST"
+        );
+        require!(
+            self.token_address_to_id
+                .insert(token_address, &token_id)
+                .is_none(),
+            "ERR_TOKEN_EXIST"
+        );
+        require!(
+            self.token_decimals
+                .insert(
+                    token_address,
+                    &Decimals {
+                        decimals: metadata.decimals,
+                        origin_decimals: metadata.decimals
+                    }
+                )
+                .is_none(),
+            "ERR_TOKEN_EXIST"
+        );
+        require!(self.deployed_tokens.insert(&token_id), "ERR_TOKEN_EXIST");
+        let required_deposit = env::storage_byte_cost()
+            .saturating_mul((env::storage_usage().saturating_sub(storage_usage)).into())
+            .saturating_add(storage::BRIDGE_TOKEN_INIT_BALANCE)
+            .saturating_add(NEP141_DEPOSIT);
+
+        require!(
+            attached_deposit >= required_deposit,
+            "ERROR: The deposit is not sufficient to cover the storage."
+        );
+
+        ext_deployer::ext(deployer)
+            .with_static_gas(DEPLOY_TOKEN_GAS)
+            .with_attached_deposit(storage::BRIDGE_TOKEN_INIT_BALANCE)
+            .deploy_token(token_id.clone(), metadata)
+            .then(
+                ext_token::ext(token_id)
+                    .with_static_gas(STORAGE_DEPOSIT_GAS)
+                    .with_attached_deposit(NEP141_DEPOSIT)
+                    .storage_deposit(&env::current_account_id(), Some(true)),
+            )
+    }
+
     fn refund(account_id: AccountId, amount: NearToken) {
         if !amount.is_zero() {
             Promise::new(account_id).transfer(amount);
         }
+    }
+
+    fn denormalize_amount(amount: u128, decimals: Decimals) -> u128 {
+        let diff_decimals: u32 = (decimals.origin_decimals - decimals.decimals).into();
+        amount * (10_u128.pow(diff_decimals))
+    }
+
+    fn normalize_amount(amount: u128, decimals: Decimals) -> u128 {
+        let diff_decimals: u32 = (decimals.origin_decimals - decimals.decimals).into();
+        amount / (10_u128.pow(diff_decimals))
     }
 }

@@ -1,2 +1,3 @@
-pub mod eth;
+pub mod evm;
 pub mod near;
+pub mod solana;

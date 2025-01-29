@@ -19,6 +19,9 @@ pub const USED_NONCES_SEED: &[u8] = b"used_nonces";
 pub const WRAPPED_MINT_SEED: &[u8] = b"wrapped_mint";
 
 #[constant]
+pub const METADATA_SEED: &[u8] = b"metadata";
+
+#[constant]
 pub const USED_NONCES_PER_ACCOUNT: u32 = 1024;
 
 #[constant]
@@ -26,3 +29,6 @@ pub const USED_NONCES_ACCOUNT_SIZE: u32 = 8 + (USED_NONCES_PER_ACCOUNT + 7) / 8;
 
 #[constant]
 pub const SOLANA_OMNI_BRIDGE_CHAIN_ID: u8 = 2;
+
+#[constant]
+pub const MAX_ALLOWED_DECIMALS: u8 = 9;

@@ -42,6 +42,8 @@ contract OmniBridge is
     error InvalidSignature();
     error NonceAlreadyUsed(uint64 nonce);
     error InvalidFee();
+    error InvalidValue();
+    error FailedToSendEther();
 
     function initialize(
         address tokenImplementationAddress_,
@@ -59,11 +61,26 @@ contract OmniBridge is
         _grantRole(PAUSABLE_ADMIN_ROLE, _msgSender());
     }
 
-    function addCustomToken(string calldata nearTokenId, address tokenAddress, address customMinter) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    function addCustomToken(string calldata nearTokenId, address tokenAddress, address customMinter, uint8 originDecimals) external onlyRole(DEFAULT_ADMIN_ROLE) {
         isBridgeToken[tokenAddress] = true;
         ethToNearToken[tokenAddress] = nearTokenId;
         nearToEthToken[nearTokenId] = tokenAddress;
         customMinters[tokenAddress] = customMinter;
+
+        string memory name = IERC20Metadata(tokenAddress).name();
+        string memory symbol = IERC20Metadata(tokenAddress).symbol();
+        uint8 decimals = IERC20Metadata(tokenAddress).decimals();
+    
+        deployTokenExtension(nearTokenId, tokenAddress, decimals, originDecimals);
+
+        emit BridgeTypes.DeployToken(
+            tokenAddress,
+            nearTokenId,
+            name,
+            symbol,
+            decimals,
+            originDecimals
+        );
     }
 
     function removeCustomToken(address tokenAddress) external onlyRole(DEFAULT_ADMIN_ROLE) {
@@ -88,6 +105,7 @@ contract OmniBridge is
         }
 
         require(!isBridgeToken[nearToEthToken[metadata.token]], "ERR_TOKEN_EXIST");
+        uint8 decimals = _normalizeDecimals(metadata.decimals);
 
         address bridgeTokenProxy = address(
             new ERC1967Proxy(
@@ -96,18 +114,19 @@ contract OmniBridge is
                     BridgeToken.initialize.selector,
                     metadata.name,
                     metadata.symbol,
-                    metadata.decimals
+                    decimals
                 )
             )
         );
 
-        deployTokenExtension(metadata.token, bridgeTokenProxy);
+        deployTokenExtension(metadata.token, bridgeTokenProxy, decimals, metadata.decimals);
 
         emit BridgeTypes.DeployToken(
             bridgeTokenProxy,
             metadata.token,
             metadata.name,
             metadata.symbol,
+            decimals,
             metadata.decimals
         );
 
@@ -118,7 +137,7 @@ contract OmniBridge is
         return bridgeTokenProxy;
     }
 
-    function deployTokenExtension(string memory token, address tokenAddress) internal virtual {}
+    function deployTokenExtension(string memory token, address tokenAddress, uint8 decimals, uint8 originDecimals) internal virtual {}
 
     function setMetadata(
         string calldata token,
@@ -142,7 +161,7 @@ contract OmniBridge is
 
     function logMetadata(
         address tokenAddress
-    ) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    ) external {
         string memory name = IERC20Metadata(tokenAddress).name();
         string memory symbol = IERC20Metadata(tokenAddress).symbol();
         uint8 decimals = IERC20Metadata(tokenAddress).decimals();
@@ -194,7 +213,11 @@ contract OmniBridge is
             revert InvalidSignature();
         }
 
-        if (customMinters[payload.tokenAddress] != address(0)) {
+        if (payload.tokenAddress == address(0)) {
+            (bool success, ) = payload.recipient.call{value: payload.amount}("");
+            if (!success) revert FailedToSendEther();
+        }
+        else if (customMinters[payload.tokenAddress] != address(0)) {
             ICustomMinter(customMinters[payload.tokenAddress]).mint(payload.tokenAddress, payload.recipient, payload.amount);
         } else if (isBridgeToken[payload.tokenAddress]) {
             BridgeToken(payload.tokenAddress).mint(payload.recipient, payload.amount);
@@ -230,7 +253,6 @@ contract OmniBridge is
         }
 
         uint256 extensionValue;
-
         if (tokenAddress == address(0)) {
             if (fee != 0) {
                 revert InvalidFee();
@@ -254,16 +276,20 @@ contract OmniBridge is
     }
 
     function initTransferExtension(
-        address sender,
-        address tokenAddress,
-        uint64 originNonce,
-        uint128 amount,
-        uint128 fee,
-        uint128 nativeFee,
-        string calldata recipient,
-        string calldata message,
+        address /*sender*/,
+        address /*tokenAddress*/,
+        uint64 /*originNonce*/,
+        uint128 /*amount*/,
+        uint128 /*fee*/,
+        uint128 /*nativeFee*/,
+        string calldata /*recipient*/,
+        string calldata /*message*/,
         uint256 value
-    ) internal virtual {}
+    ) internal virtual {
+        if (value != 0) {
+            revert InvalidValue();
+        }
+    }
 
     function pause(uint flags) external onlyRole(DEFAULT_ADMIN_ROLE) {
         _pause(flags);
@@ -281,6 +307,22 @@ contract OmniBridge is
         require(isBridgeToken[tokenAddress], "ERR_NOT_BRIDGE_TOKEN");
         BridgeToken proxy = BridgeToken(tokenAddress);
         proxy.upgradeToAndCall(implementation, bytes(""));
+    }
+
+    function setNearBridgeDerivedAddress(
+        address nearBridgeDerivedAddress_
+    ) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        nearBridgeDerivedAddress = nearBridgeDerivedAddress_;
+    }
+
+    function _normalizeDecimals(
+        uint8 decimals
+    ) internal pure returns (uint8) {
+        uint8 maxAllowedDecimals = 18;
+        if (decimals > maxAllowedDecimals) {
+            return maxAllowedDecimals;
+        }
+        return decimals;
     }
 
     function _authorizeUpgrade(

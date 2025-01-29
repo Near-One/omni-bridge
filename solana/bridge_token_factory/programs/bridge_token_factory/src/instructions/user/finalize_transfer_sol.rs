@@ -30,7 +30,7 @@ pub struct FinalizeTransferSol<'info> {
     #[account(
         init_if_needed,
         space = USED_NONCES_ACCOUNT_SIZE as usize,
-        payer = wormhole.payer,
+        payer = common.payer,
         seeds = [
             USED_NONCES_SEED,
             &(data.payload.destination_nonce / USED_NONCES_PER_ACCOUNT as u64).to_le_bytes(),
@@ -55,8 +55,7 @@ pub struct FinalizeTransferSol<'info> {
     )]
     pub sol_vault: SystemAccount<'info>,
 
-    pub wormhole: WormholeCPI<'info>,
-
+    pub common: WormholeCPI<'info>,
     pub system_program: Program<'info, System>,
 }
 
@@ -67,14 +66,14 @@ impl<'info> FinalizeTransferSol<'info> {
             &self.used_nonces,
             &mut self.config,
             self.authority.to_account_info(),
-            self.wormhole.payer.to_account_info(),
+            self.common.payer.to_account_info(),
             &Rent::get()?,
             self.system_program.to_account_info(),
         )?;
 
         transfer(
             CpiContext::new_with_signer(
-                self.wormhole.system_program.to_account_info(),
+                self.common.system_program.to_account_info(),
                 Transfer {
                     from: self.sol_vault.to_account_info(),
                     to: self.recipient.to_account_info(),
@@ -92,7 +91,7 @@ impl<'info> FinalizeTransferSol<'info> {
         }
         .serialize_for_near(())?;
 
-        self.wormhole.post_message(payload)?;
+        self.common.post_message(payload)?;
 
         Ok(())
     }

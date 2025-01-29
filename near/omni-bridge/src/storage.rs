@@ -9,6 +9,7 @@ use crate::{
 };
 
 pub const BRIDGE_TOKEN_INIT_BALANCE: NearToken = NearToken::from_near(3);
+pub const NEP141_DEPOSIT: NearToken = NearToken::from_yoctonear(1_250_000_000_000_000_000_000);
 
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Debug, Clone)]
 pub struct TransferMessageStorageValue {
@@ -37,6 +38,12 @@ impl TransferMessageStorage {
             owner,
         }))
     }
+}
+
+#[derive(BorshDeserialize, BorshSerialize, Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Decimals {
+    pub decimals: u8,
+    pub origin_decimals: u8,
 }
 
 #[near_bindgen]
@@ -195,7 +202,7 @@ impl Contract {
             .len() as u64;
 
         env::storage_byte_cost()
-            .saturating_mul((2 * (Self::get_basic_storage() + key_len + value_len)).into())
+            .saturating_mul((3 * (Self::get_basic_storage() + key_len + value_len)).into())
     }
 
     pub fn required_balance_for_deploy_token(&self) -> NearToken {
@@ -207,6 +214,7 @@ impl Contract {
         bind_token_required_balance
             .saturating_add(deployed_tokens_required_balance)
             .saturating_add(BRIDGE_TOKEN_INIT_BALANCE)
+            .saturating_add(NEP141_DEPOSIT)
     }
 
     fn get_basic_storage() -> u64 {

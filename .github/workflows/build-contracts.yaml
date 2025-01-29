@@ -1,0 +1,72 @@
+name: Build Contracts
+
+on:
+  pull_request:
+    types: [closed]
+    branches: [main]
+  
+
+jobs:
+  build:
+    name: Build Contracts
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        platform: [evm, near]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        if: matrix.platform == 'evm'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'yarn'
+          cache-dependency-path: evm/yarn.lock
+
+      - name: Setup Rust toolchain
+        if: matrix.platform == 'near' || matrix.platform == 'solana'
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.80.0
+          target: wasm32-unknown-unknown
+
+      - name: Install NEAR CLI RS
+        if: matrix.platform == 'near'
+        run: |
+          curl --proto '=https' --tlsv1.2 -LsSf https://github.com/near/near-cli-rs/releases/download/v0.7.4/near-cli-rs-installer.sh | sh
+
+      - name: Install Docker
+        if: matrix.platform == 'near'
+        uses: docker/setup-buildx-action@v2
+
+      - name: Install Solana CLI
+        if: matrix.platform == 'solana'
+        run: |
+          sh -c "$(curl -sSfL https://release.anza.xyz/stable/install)"
+          export PATH="/home/runner/.local/share/solana/install/active_release/bin:$PATH"
+
+      - name: Install Anchor
+        if: matrix.platform == 'solana'
+        run: |
+          cargo install --git https://github.com/coral-xyz/anchor --tag v0.30.1 anchor-cli
+
+      - name: Build Contracts
+        run: |
+          if [ "${{ matrix.platform }}" == "evm" ]; then
+            make -C ${{ github.workspace }}/e2e-testing/ evm-build
+          elif [ "${{ matrix.platform }}" == "near" ]; then
+            make -C ${{ github.workspace }}/e2e-testing/ near-build
+          elif [ "${{ matrix.platform }}" == "solana" ]; then
+            make -C ${{ github.workspace }}/e2e-testing/ solana-build
+          fi
+
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: ${{ matrix.platform }}-artifacts
+          path: |
+            ${{ github.workspace }}/e2e-testing/${{ matrix.platform }}_artifacts

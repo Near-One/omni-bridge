@@ -18,7 +18,7 @@ use crate::{
 pub struct InitTransfer<'info> {
     #[account(
         seeds = [AUTHORITY_SEED],
-        bump = wormhole.config.bumps.authority,
+        bump = common.config.bumps.authority,
     )]
     pub authority: SystemAccount<'info>,
 
@@ -50,17 +50,17 @@ pub struct InitTransfer<'info> {
     #[account(
         mut,
         seeds = [SOL_VAULT_SEED],
-        bump = wormhole.config.bumps.sol_vault,
+        bump = common.config.bumps.sol_vault,
     )]
     pub sol_vault: SystemAccount<'info>,
 
     #[account(
         mut,
-        owner = wormhole.system_program.key(),
+        owner = common.system_program.key(),
     )]
     pub user: Signer<'info>,
 
-    pub wormhole: WormholeCPI<'info>,
+    pub common: WormholeCPI<'info>,
 
     pub token_program: Interface<'info, TokenInterface>,
 }
@@ -70,7 +70,7 @@ impl<'info> InitTransfer<'info> {
         if payload.native_fee > 0 {
             transfer(
                 CpiContext::new(
-                    self.wormhole.system_program.to_account_info(),
+                    self.common.system_program.to_account_info(),
                     Transfer {
                         from: self.user.to_account_info(),
                         to: self.sol_vault.to_account_info(),
@@ -115,8 +115,8 @@ impl<'info> InitTransfer<'info> {
             )?;
         }
 
-        self.wormhole.post_message(payload.serialize_for_near((
-            self.wormhole.sequence.sequence,
+        self.common.post_message(payload.serialize_for_near((
+            self.common.sequence.sequence,
             self.user.key(),
             self.mint.key(),
         ))?)?;
