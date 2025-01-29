@@ -8,6 +8,7 @@ use log::{error, info, warn};
 use alloy::rpc::types::{Log, TransactionReceipt};
 use ethereum_types::H256;
 
+use near_jsonrpc_client::JsonRpcClient;
 use solana_sdk::pubkey::Pubkey;
 
 use omni_connector::OmniConnector;
@@ -29,6 +30,7 @@ pub async fn sign_transfer(
     #[cfg(not(feature = "disable_fee_check"))] config: config::Config,
     redis_client: redis::Client,
     connector: Arc<OmniConnector>,
+    jsonrpc_client: JsonRpcClient,
 ) -> Result<()> {
     let redis_connection = redis_client.get_multiplexed_tokio_connection().await?;
 
@@ -57,6 +59,7 @@ pub async fn sign_transfer(
                     let config = config.clone();
                     let mut redis_connection = redis_connection.clone();
                     let connector = connector.clone();
+                    let jsonrpc_client = jsonrpc_client.clone();
 
                     async move {
                         let current_timestamp = chrono::Utc::now().timestamp();
@@ -110,7 +113,7 @@ pub async fn sign_transfer(
                             }
                         }
 
-                        let Ok(fee_recipient) = connector
+                        let Ok(signer) = connector
                             .near_bridge_client()
                             .and_then(|connector| connector.signer().map(|signer| signer.account_id)) else {
                                 warn!("Failed to set signer account id as fee recipient");
@@ -123,19 +126,21 @@ pub async fn sign_transfer(
                                     origin_chain: transfer_message.sender.get_chain(),
                                     origin_nonce: transfer_message.origin_nonce,
                                 },
-                                Some(fee_recipient),
+                                Some(signer.clone()),
                                 Some(transfer_message.fee.clone()),
                             )
                             .await
                         {
                             Ok(tx_hash) => {
                                 info!("Signed transfer: {:?}", tx_hash);
-                                utils::redis::remove_event(
-                                    &mut redis_connection,
-                                    utils::redis::NEAR_INIT_TRANSFER_QUEUE,
-                                    &key,
-                                )
-                                .await;
+                                if utils::near::is_tx_successful(&jsonrpc_client, tx_hash, signer).await {
+                                    utils::redis::remove_event(
+                                        &mut redis_connection,
+                                        utils::redis::NEAR_INIT_TRANSFER_QUEUE,
+                                        &key,
+                                    )
+                                    .await;
+                                }
                             }
                             Err(err) => {
                                 warn!("Failed to sign transfer: {}", err);
