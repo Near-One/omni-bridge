@@ -20,13 +20,12 @@ mod tests {
     };
 
     use crate::helpers::tests::{
-        account_n, base_eoa_address, base_factory_address, eth_eoa_address, eth_factory_address,
-        eth_token_address, get_bind_token_args, relayer_account_id, LOCKER_PATH, MOCK_PROVER_PATH,
-        MOCK_TOKEN_PATH, NEP141_DEPOSIT, TOKEN_DEPLOYER_PATH,
+        account_n, base_eoa_address, base_factory_address, eth_eoa_address, eth_factory_address, eth_token_address, get_bind_token_args, relayer_account_id, LOCKER_PATH, MOCK_PROVER_PATH, MOCK_TOKEN_PATH, NEP141_DEPOSIT, TOKEN_DEPLOYER_PATH
     };
 
     struct TestEnv {
         token_contract: near_workspaces::Contract,
+        eth_token_address: OmniAddress,
         bridge_contract: near_workspaces::Contract,
         relayer_account: near_workspaces::Account,
     }
@@ -120,13 +119,14 @@ mod tests {
                 .await?
                 .unwrap();
 
-            let token_contract = if is_bridged_token {
-                let token_contract = Self::deploy_bridged_token(&worker, &bridge_contract).await?;
+            let (token_contract, eth_token_address) = if is_bridged_token {
+                let (token_contract, eth_token_address) = Self::deploy_bridged_token(&worker, &bridge_contract).await?;
 
                 // Mint to relayer account
                 Self::fake_finalize_transfer(
                     &bridge_contract,
                     &token_contract,
+                    eth_token_address.clone(),
                     &relayer_account,
                     eth_factory_address,
                     U128(sender_balance_token),
@@ -146,9 +146,9 @@ mod tests {
                     .await?
                     .into_result()?;
 
-                token_contract
+                (token_contract, eth_token_address)
             } else {
-                let token_contract =
+                let (token_contract, eth_token_address) =
                     Self::deploy_native_token(worker, &bridge_contract, eth_factory_address)
                         .await?;
 
@@ -204,11 +204,12 @@ mod tests {
                     .await?
                     .into_result()?;
 
-                token_contract
+                (token_contract, eth_token_address)
             };
 
             Ok(Self {
                 token_contract,
+                eth_token_address,
                 bridge_contract,
                 relayer_account,
             })
@@ -217,7 +218,7 @@ mod tests {
         async fn deploy_bridged_token(
             worker: &near_workspaces::Worker<near_workspaces::network::Sandbox>,
             bridge_contract: &near_workspaces::Contract,
-        ) -> anyhow::Result<near_workspaces::Contract> {
+        ) -> anyhow::Result<(near_workspaces::Contract, OmniAddress)> {
             let init_token_address = OmniAddress::new_zero(ChainKind::Eth).unwrap();
             let token_metadata = BasicMetadata {
                 name: "ETH from Ethereum".to_string(),
@@ -257,14 +258,14 @@ mod tests {
                 .transact()
                 .await?;
 
-            Ok(token_contract)
+            Ok((token_contract, init_token_address))
         }
 
         async fn deploy_native_token(
             worker: near_workspaces::Worker<near_workspaces::network::Sandbox>,
             bridge_contract: &near_workspaces::Contract,
             eth_factory_address: OmniAddress,
-        ) -> Result<near_workspaces::Contract, anyhow::Error> {
+        ) -> Result<(near_workspaces::Contract, OmniAddress), anyhow::Error> {
             let token_contract = worker.dev_deploy(&std::fs::read(MOCK_TOKEN_PATH)?).await?;
             token_contract
                 .call("new_default_meta")
@@ -280,6 +281,7 @@ mod tests {
                 .view("required_balance_for_bind_token")
                 .await?
                 .json()?;
+
             bridge_contract
                 .call("bind_token")
                 .args_borsh(get_bind_token_args(
@@ -294,12 +296,13 @@ mod tests {
                 .transact()
                 .await?
                 .into_result()?;
-            Ok(token_contract)
+            Ok((token_contract, eth_token_address()))
         }
 
         async fn fake_finalize_transfer(
             bridge_contract: &near_workspaces::Contract,
             token_contract: &near_workspaces::Contract,
+            eth_token_address: OmniAddress,
             recipient: &near_workspaces::Account,
             emitter_address: OmniAddress,
             amount: U128,
@@ -324,7 +327,7 @@ mod tests {
                     storage_deposit_actions,
                     prover_args: borsh::to_vec(&ProverResult::InitTransfer(InitTransferMessage {
                         origin_nonce: 1,
-                        token: OmniAddress::Near(token_contract.id().clone()),
+                        token: eth_token_address,
                         recipient: OmniAddress::Near(recipient.id().clone()),
                         amount,
                         fee: Fee {
@@ -960,7 +963,7 @@ mod tests {
     fn get_transfer_msg_to_near(env: &TestEnv, amount: u128) -> InitTransferMessage {
         InitTransferMessage {
             origin_nonce: 0,
-            token: OmniAddress::Near(env.token_contract.id().clone()),
+            token: env.eth_token_address.clone(),
             recipient: OmniAddress::Near(account_n(1)),
             amount: U128(amount),
             fee: Fee {
@@ -976,16 +979,16 @@ mod tests {
     fn get_transfer_msg_to_other_chain(env: &TestEnv, amount: u128) -> InitTransferMessage {
         InitTransferMessage {
             origin_nonce: 0,
-            token: OmniAddress::Near(env.token_contract.id().clone()),
-            recipient: eth_eoa_address(),
+            token: env.eth_token_address.clone(),
+            recipient: base_eoa_address(),
             amount: U128(amount),
             fee: Fee {
                 fee: U128(0),
                 native_fee: U128(0),
             },
-            sender: base_eoa_address(),
+            sender: eth_eoa_address(),
             msg: String::default(),
-            emitter_address: base_factory_address(),
+            emitter_address: eth_factory_address(),
         }
     }
 

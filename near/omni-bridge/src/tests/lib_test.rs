@@ -282,6 +282,7 @@ fn run_update_transfer_fee(
         sender: OmniAddress::Near(sender_id.clone().parse().unwrap()),
         msg: "".to_string(),
         destination_nonce: 1,
+        origin_transfer_id: None,
     };
 
     contract.insert_raw_transfer(

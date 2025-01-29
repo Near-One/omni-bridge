@@ -1,7 +1,7 @@
 use near_contract_standards::storage_management::{StorageBalance, StorageBalanceBounds};
 use near_sdk::{assert_one_yocto, borsh};
 use near_sdk::{env, near_bindgen, AccountId, NearToken};
-use omni_types::TransferId;
+use omni_types::{FastTransferStatus, TransferId};
 
 use crate::{
     require, BorshDeserialize, BorshSerialize, ChainKind, Contract, ContractExt, Deserialize, Fee,
@@ -155,6 +155,10 @@ impl Contract {
                 sender: OmniAddress::Near(max_account_id.clone()),
                 msg: String::new(),
                 destination_nonce: 0,
+                origin_transfer_id: Some(TransferId {
+                    origin_chain: ChainKind::Near,
+                    origin_nonce: 0,
+                }),
             },
             owner: max_account_id,
         }))
@@ -181,7 +185,12 @@ impl Contract {
         let key_len = borsh::to_vec(&[0u8; 32]).sdk_expect("ERR_BORSH").len() as u64;
 
         let max_account_id: AccountId = "a".repeat(64).parse().sdk_expect("ERR_PARSE_ACCOUNT_ID");
-        let value_len = borsh::to_vec(&max_account_id).sdk_expect("ERR_BORSH").len() as u64;
+        let value_len = borsh::to_vec(&FastTransferStatus {
+            relayer: max_account_id,
+            finalised: false,
+        })
+        .sdk_expect("ERR_BORSH")
+        .len() as u64;
 
         let storage_cost = env::storage_byte_cost()
             .saturating_mul((Self::get_basic_storage() + key_len + value_len).into());

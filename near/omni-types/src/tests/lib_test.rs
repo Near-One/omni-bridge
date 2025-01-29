@@ -345,6 +345,7 @@ fn test_transfer_message_getters() {
                 fee: Fee::default(),
                 sender: OmniAddress::Eth(evm_addr.clone()),
                 msg: "".to_string(),
+                origin_transfer_id: None,
             },
             ChainKind::Eth,
             TransferId {
@@ -363,6 +364,7 @@ fn test_transfer_message_getters() {
                 fee: Fee::default(),
                 sender: OmniAddress::Near("alice.near".parse().unwrap()),
                 msg: "".to_string(),
+                origin_transfer_id: None,
             },
             ChainKind::Near,
             TransferId {
@@ -381,6 +383,7 @@ fn test_transfer_message_getters() {
                 fee: Fee::default(),
                 sender: OmniAddress::Sol("11111111111111111111111111111111".parse().unwrap()),
                 msg: "".to_string(),
+                origin_transfer_id: None,
             },
             ChainKind::Sol,
             TransferId {

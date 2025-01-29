@@ -459,6 +459,7 @@ impl Contract {
             sender: OmniAddress::Near(sender_id.clone()),
             msg: String::new(),
             destination_nonce,
+            origin_transfer_id: None,
         };
         require!(
             transfer_message.fee.fee < transfer_message.amount,
@@ -573,6 +574,7 @@ impl Contract {
             sender: init_transfer.sender,
             msg: init_transfer.msg,
             destination_nonce,
+            origin_transfer_id: None,
         };
 
         if let OmniAddress::Near(recipient) = transfer_message.recipient.clone() {
@@ -709,6 +711,7 @@ impl Contract {
             sender: OmniAddress::Near(relayer_id.clone()),
             msg: fast_transfer.msg.clone(),
             destination_nonce,
+            origin_transfer_id: Some(fast_transfer.transfer_id),
         };
         let new_transfer_id = transfer_message.get_transfer_id();
 
@@ -770,23 +773,23 @@ impl Contract {
         );
 
         let message = self.remove_transfer_message(fin_transfer.transfer_id);
-        let token_address = self
-            .get_token_address(
-                message.get_destination_chain(),
-                self.get_token_id(&message.token),
-            )
-            .unwrap_or_else(|| env::panic_str("ERR_FAILED_TO_GET_TOKEN_ADDRESS"));
 
-        let denormalized_amount = Self::denormalize_amount(
-            fin_transfer.amount.0,
-            self.token_decimals
-                .get(&token_address)
-                .sdk_expect("ERR_TOKEN_DECIMALS_NOT_FOUND"),
-        );
-        let fee = message.amount.0 - denormalized_amount;
+        // Need to make sure fast transfer is finalised because it means transfer parameters are correct. Otherwise, fee can be set as anything.
+        if let Some(origin_transfer_id) = message.origin_transfer_id {
+            let mut fast_transfer = FastTransfer::from_transfer(message.clone(), self.get_token_id(&message.token));
+            fast_transfer.transfer_id = origin_transfer_id;
+            require!(
+                self.is_fast_transfer_finalised(fast_transfer.id()),
+                "ERR_FAST_TRANSFER_NOT_FINALISED"
+            );
+        }
 
         if message.fee.native_fee.0 != 0 {
-            if message.get_origin_chain() == ChainKind::Near {
+            let origin_chain = match message.origin_transfer_id {
+                Some(origin_transfer_id) => origin_transfer_id.origin_chain,
+                None => message.get_origin_chain(),
+            };
+            if origin_chain == ChainKind::Near {
                 Promise::new(fin_transfer.fee_recipient.clone())
                     .transfer(NearToken::from_yoctonear(message.fee.native_fee.0));
             } else {
@@ -803,10 +806,25 @@ impl Contract {
         let token = self.get_token_id(&message.token);
         env::log_str(
             &OmniBridgeEvent::ClaimFeeEvent {
-                transfer_message: message,
+                transfer_message: message.clone(),
             }
             .to_log_string(),
         );
+
+        let token_address = self
+            .get_token_address(
+                message.get_destination_chain(),
+                token.clone(),
+            )
+            .unwrap_or_else(|| env::panic_str("ERR_FAILED_TO_GET_TOKEN_ADDRESS"));
+
+        let denormalized_amount = Self::denormalize_amount(
+            fin_transfer.amount.0,
+            self.token_decimals
+                .get(&token_address)
+                .sdk_expect("ERR_TOKEN_DECIMALS_NOT_FOUND"),
+        );
+        let fee = message.amount.0 - denormalized_amount;
 
         if fee > 0 {
             if self.deployed_tokens.contains(&token) {
@@ -1026,6 +1044,10 @@ impl Contract {
 
     pub fn is_transfer_finalised(&self, transfer_id: TransferId) -> bool {
         self.finalised_transfers.contains(&transfer_id)
+    }
+
+    pub fn is_fast_transfer_finalised(&self, fast_transfer_id: FastTransferId) -> bool {
+        self.fast_transfers.get(&fast_transfer_id).map(|status| status.finalised).unwrap_or(false)
     }
 
     #[access_control_any(roles(Role::DAO))]
@@ -1439,7 +1461,7 @@ impl Contract {
                     &fast_transfer.id(),
                     &FastTransferStatus {
                         relayer,
-                        completed: false,
+                        finalised: false,
                     },
                 )
                 .is_none(),
@@ -1451,7 +1473,7 @@ impl Contract {
 
     fn complete_fast_transfer(&mut self, fast_transfer_id: &FastTransferId) {
         let mut fast_transfer = self.fast_transfers.get(fast_transfer_id).unwrap();
-        fast_transfer.completed = true;
+        fast_transfer.finalised = true;
         self.fast_transfers.insert(fast_transfer_id, &fast_transfer);
     }
 
