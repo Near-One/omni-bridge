@@ -76,6 +76,7 @@ pub async fn is_tx_successful(
     jsonrpc_client: &JsonRpcClient,
     tx_hash: CryptoHash,
     sender_account_id: AccountId,
+    specific_errors: Option<Vec<String>>,
 ) -> bool {
     let request = near_jsonrpc_client::methods::tx::RpcTransactionStatusRequest {
         transaction_info: near_jsonrpc_client::methods::tx::TransactionInfo::TransactionId {
@@ -106,11 +107,23 @@ pub async fn is_tx_successful(
     )) = response.final_execution_outcome
     {
         for receipt_outcome in final_execution_outcome.receipts_outcome {
-            if let near_primitives::views::ExecutionStatusView::Failure(err) =
+            if let near_primitives::views::ExecutionStatusView::Failure(tx_execution_error) =
                 receipt_outcome.outcome.status
             {
-                warn!("Found failed receipt in the transaction ({tx_hash}): {err:?}");
-                return false;
+                warn!(
+                    "Found failed receipt in the transaction ({tx_hash}): {tx_execution_error:?}"
+                );
+
+                if let Some(ref specific_errors) = specific_errors {
+                    if specific_errors.iter().any(|specific_error| {
+                        tx_execution_error.to_string().contains(specific_error)
+                    }) {
+                        println!("Found specific error");
+                        return false;
+                    }
+                } else {
+                    return false;
+                }
             }
         }
     }

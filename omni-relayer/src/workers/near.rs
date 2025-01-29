@@ -133,7 +133,17 @@ pub async fn sign_transfer(
                         {
                             Ok(tx_hash) => {
                                 info!("Signed transfer: {:?}", tx_hash);
-                                if utils::near::is_tx_successful(&jsonrpc_client, tx_hash, signer).await {
+                                if utils::near::is_tx_successful(
+                                    &jsonrpc_client,
+                                    tx_hash,
+                                    signer,
+                                    Some(
+                                        vec![
+                                            "Signature request has already been submitted. Please try again later.".to_string(),
+                                            "Signature request has timed out.".to_string()
+                                        ]
+                                    )
+                                ).await {
                                     utils::redis::remove_event(
                                         &mut redis_connection,
                                         utils::redis::NEAR_INIT_TRANSFER_QUEUE,
@@ -483,7 +493,7 @@ pub async fn claim_fee(
                                 chain_kind: ChainKind::Sol,
                                 prover_args,
                             };
-                            
+
                             match connector.near_claim_fee(claim_fee_args).await {
                                 Ok(tx_hash) => {
                                     info!("Claimed fee: {:?}", tx_hash);
@@ -497,7 +507,7 @@ pub async fn claim_fee(
                                 Err(err) => {
                                     warn!("Failed to claim fee: {}", err);
                                 }
-                            };    
+                            };
                         }
                     }));
                 }
@@ -644,10 +654,11 @@ pub async fn bind_token(
                                 return;
                             };
 
-                            let bind_token_args = omni_connector::BindTokenArgs::BindTokenWithArgs {
-                                chain_kind,
-                                prover_args,
-                            };
+                            let bind_token_args =
+                                omni_connector::BindTokenArgs::BindTokenWithArgs {
+                                    chain_kind,
+                                    prover_args,
+                                };
 
                             match connector.bind_token(bind_token_args).await {
                                 Ok(tx_hash) => {
