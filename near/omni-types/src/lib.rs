@@ -552,3 +552,9 @@ impl FastTransfer {
         }
     }
 }
+
+#[derive(BorshDeserialize, BorshSerialize, Debug, Clone)]
+pub struct FastTransferStatus {
+    pub completed: bool,
+    pub relayer: AccountId,
+}

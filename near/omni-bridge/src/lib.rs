@@ -25,8 +25,8 @@ use omni_types::prover_args::VerifyProofArgs;
 use omni_types::prover_result::ProverResult;
 use omni_types::{
     BasicMetadata, BridgeOnTransferMsg, ChainKind, FastFinTransferMsg, FastTransfer,
-    FastTransferId, Fee, InitTransferMsg, MetadataPayload, Nonce, OmniAddress, PayloadType,
-    SignRequest, TransferId, TransferMessage, TransferMessagePayload, UpdateFee,
+    FastTransferId, FastTransferStatus, Fee, InitTransferMsg, MetadataPayload, Nonce, OmniAddress,
+    PayloadType, SignRequest, TransferId, TransferMessage, TransferMessagePayload, UpdateFee,
 };
 use storage::{Decimals, TransferMessageStorage, TransferMessageStorageValue, NEP141_DEPOSIT};
 
@@ -168,7 +168,7 @@ pub struct Contract {
     pub factories: LookupMap<ChainKind, OmniAddress>,
     pub pending_transfers: LookupMap<TransferId, TransferMessageStorage>,
     pub finalised_transfers: LookupSet<TransferId>,
-    pub fast_transfers: LookupMap<FastTransferId, AccountId>, // value is relayer address that performed the transfer
+    pub fast_transfers: LookupMap<FastTransferId, FastTransferStatus>,
     pub token_id_to_address: LookupMap<(ChainKind, AccountId), OmniAddress>,
     pub token_address_to_id: LookupMap<OmniAddress, AccountId>,
     pub token_decimals: LookupMap<OmniAddress, Decimals>,
@@ -660,7 +660,7 @@ impl Contract {
         };
 
         let required_balance = self
-            .add_fast_transfer(&fast_transfer, &relayer_id)
+            .add_fast_transfer(&fast_transfer, relayer_id.clone())
             .saturating_add(ONE_YOCTO);
         self.update_storage_balance(relayer_id, required_balance, NearToken::from_yoctonear(0));
 
@@ -694,7 +694,7 @@ impl Contract {
             env::panic_str("ERR_TRANSFER_ALREADY_FINALISED");
         }
 
-        let mut required_balance = self.add_fast_transfer(&fast_transfer, &relayer_id);
+        let mut required_balance = self.add_fast_transfer(&fast_transfer, relayer_id.clone());
 
         let destination_nonce =
             self.get_next_destination_nonce(fast_transfer.recipient.get_chain());
@@ -1143,15 +1143,19 @@ impl Contract {
         // If fast transfer happened, change recipient to the relayer that executed fast transfer
         let fast_transfer = FastTransfer::from_transfer(transfer_message.clone(), token.clone());
         let (recipient, is_fast_transfer) = match self.fast_transfers.get(&fast_transfer.id()) {
-            Some(relayer) => {
+            Some(status) => {
                 require!(
-                    predecessor_account_id == *relayer,
+                    predecessor_account_id == *status.relayer,
                     "ERR_FAST_TRANSFER_PERFORMED_BY_ANOTHER_RELAYER"
                 );
-                (relayer, true)
+                (status.relayer, true)
             }
             None => (recipient, false),
         };
+
+        if is_fast_transfer {
+            self.complete_fast_transfer(&fast_transfer.id());
+        }
 
         let mut storage_deposit_action_index: usize = 0;
         require!(
@@ -1252,12 +1256,12 @@ impl Contract {
 
         let fast_transfer = FastTransfer::from_transfer(transfer_message.clone(), token.clone());
         let recipient = match self.fast_transfers.get(&fast_transfer.id()) {
-            Some(relayer) => {
+            Some(status) => {
                 require!(
-                    predecessor_account_id == *relayer,
+                    predecessor_account_id == *status.relayer,
                     "ERR_FAST_TRANSFER_PERFORMED_BY_ANOTHER_RELAYER"
                 );
-                Some(relayer)
+                Some(status.relayer)
             }
             None => None,
         };
@@ -1266,10 +1270,11 @@ impl Contract {
         if let Some(relayer) = recipient {
             self.send_tokens(
                 token,
-                relayer,
+                relayer.clone(),
                 U128(transfer_message.amount.0 - transfer_message.fee.fee.0),
                 String::new(),
             );
+            self.complete_fast_transfer(&fast_transfer.id());
         } else {
             required_balance = self
                 .add_transfer_message(transfer_message.clone(), predecessor_account_id.clone())
@@ -1300,10 +1305,7 @@ impl Contract {
                 .with_static_gas(WNEAR_WITHDRAW_GAS)
                 .with_attached_deposit(ONE_YOCTO)
                 .near_withdraw(amount)
-                .then(
-                    Promise::new(recipient)
-                        .transfer(NearToken::from_yoctonear(amount.0)),
-                )
+                .then(Promise::new(recipient).transfer(NearToken::from_yoctonear(amount.0)))
         } else if is_deployed_token {
             let deposit = if msg.is_empty() {
                 NO_DEPOSIT
@@ -1313,11 +1315,7 @@ impl Contract {
             ext_token::ext(token.clone())
                 .with_attached_deposit(deposit)
                 .with_static_gas(MINT_TOKEN_GAS.saturating_add(FT_TRANSFER_CALL_GAS))
-                .mint(
-                    recipient,
-                    amount,
-                    (!msg.is_empty()).then(|| msg.clone()),
-                )
+                .mint(recipient, amount, (!msg.is_empty()).then(|| msg.clone()))
         } else if msg.is_empty() {
             ext_token::ext(token.clone())
                 .with_attached_deposit(ONE_YOCTO)
@@ -1327,12 +1325,7 @@ impl Contract {
             ext_token::ext(token.clone())
                 .with_attached_deposit(ONE_YOCTO)
                 .with_static_gas(FT_TRANSFER_CALL_GAS)
-                .ft_transfer_call(
-                    recipient,
-                    amount,
-                    None,
-                    msg.clone(),
-                )
+                .ft_transfer_call(recipient, amount, None, msg.clone())
         }
     }
 
@@ -1438,20 +1431,28 @@ impl Contract {
             .saturating_mul((env::storage_usage().saturating_sub(storage_usage)).into())
     }
 
-    fn add_fast_transfer(
-        &mut self,
-        fast_transfer: &FastTransfer,
-        relayer_id: &AccountId,
-    ) -> NearToken {
+    fn add_fast_transfer(&mut self, fast_transfer: &FastTransfer, relayer: AccountId) -> NearToken {
         let storage_usage = env::storage_usage();
         require!(
             self.fast_transfers
-                .insert(&fast_transfer.id(), relayer_id)
+                .insert(
+                    &fast_transfer.id(),
+                    &FastTransferStatus {
+                        relayer,
+                        completed: false,
+                    },
+                )
                 .is_none(),
             "Fast transfer is already performed"
         );
         env::storage_byte_cost()
             .saturating_mul((env::storage_usage().saturating_sub(storage_usage)).into())
+    }
+
+    fn complete_fast_transfer(&mut self, fast_transfer_id: &FastTransferId) {
+        let mut fast_transfer = self.fast_transfers.get(fast_transfer_id).unwrap();
+        fast_transfer.completed = true;
+        self.fast_transfers.insert(fast_transfer_id, &fast_transfer);
     }
 
     fn update_storage_balance(

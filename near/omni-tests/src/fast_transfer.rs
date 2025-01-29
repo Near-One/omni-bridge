@@ -286,6 +286,8 @@ mod tests {
                     &token_contract.id(),
                     &eth_token_address(),
                     &eth_factory_address,
+                    18,
+                    18,
                 ))
                 .deposit(required_deposit_for_bind_token)
                 .max_gas()

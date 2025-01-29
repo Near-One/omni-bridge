@@ -80,12 +80,6 @@ pub mod tests {
             .unwrap()
     }
 
-    pub fn base_factory_address() -> OmniAddress {
-        "base:0x252e87862A3A720287E7fd527cE6e8d0738427A2"
-            .parse()
-            .unwrap()
-    }
-
     pub fn get_claim_fee_args_near(
         origin_chain: ChainKind,
         destination_chain: ChainKind,
