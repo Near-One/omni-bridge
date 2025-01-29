@@ -173,7 +173,7 @@ pub async fn handle_streamer_message(
                 utils::redis::add_event(
                     redis_connection,
                     utils::redis::NEAR_SIGN_TRANSFER_EVENTS,
-                    message_payload.destination_nonce.to_string(),
+                    message_payload.transfer_id.origin_nonce.to_string(),
                     log,
                 )
                 .await;
