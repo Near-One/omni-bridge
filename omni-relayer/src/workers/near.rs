@@ -9,6 +9,7 @@ use alloy::rpc::types::{Log, TransactionReceipt};
 use ethereum_types::H256;
 
 use near_jsonrpc_client::JsonRpcClient;
+use solana_rpc_client_api::{client_error::ErrorKind, request::RpcError};
 use solana_sdk::pubkey::Pubkey;
 
 use omni_connector::OmniConnector;
@@ -18,6 +19,8 @@ use omni_types::{
 };
 
 use crate::{config, utils};
+
+const NONCE_ALREADY_USED_ERROR: i64 = -32002;
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub struct InitTransferWithTimestamp {
@@ -291,6 +294,23 @@ pub async fn finalize_transfer(
                                         &key,
                                     )
                                     .await;
+                                }
+
+                                if let BridgeSdkError::SolanaRpcError(ref client_error) = err {
+                                    if let ErrorKind::RpcError(RpcError::RpcResponseError {
+                                        code,
+                                        ..
+                                    }) = client_error.kind
+                                    {
+                                        if code == NONCE_ALREADY_USED_ERROR {
+                                            utils::redis::remove_event(
+                                                &mut redis_connection,
+                                                utils::redis::NEAR_SIGN_TRANSFER_EVENTS,
+                                                &key,
+                                            )
+                                            .await;
+                                        }
+                                    }
                                 }
 
                                 warn!("Failed to finalize deposit: {}", err);
