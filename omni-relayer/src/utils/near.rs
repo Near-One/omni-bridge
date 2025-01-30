@@ -118,7 +118,9 @@ pub async fn is_tx_successful(
                     if specific_errors.iter().any(|specific_error| {
                         tx_execution_error.to_string().contains(specific_error)
                     }) {
-                        println!("Found specific error");
+                        info!(
+                            "Transaction ({tx_hash}) failed with specific error: {tx_execution_error:?}"
+                        );
                         return false;
                     }
                 } else {
