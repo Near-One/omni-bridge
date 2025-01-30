@@ -5548,3 +5548,8 @@ dependencies = [
  "cc",
  "pkg-config",
 ]
+
+[[patch.unused]]
+name = "cargo-near-build"
+version = "0.4.2"
+source = "git+https://github.com/near/cargo-near?rev=2851dc60945bb9da25b38bd46b3ba7b445db33d6#2851dc60945bb9da25b38bd46b3ba7b445db33d6"
