@@ -45,6 +45,3 @@ ethereum-types = { version = "0.15.1", default-features = false, features = ["rl
 rlp = "0.6"
 sha3 = "0.10.0"
 rstest = "0.24.0"
-
-[patch.crates-io]
-cargo-near-build = { git = "https://github.com/dj8yfo/cargo-near", rev = "0fdf154175b6f62d6a3fee460dd43658aab68d53" }
