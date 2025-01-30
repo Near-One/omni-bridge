@@ -330,7 +330,7 @@ pub async fn finalize_transfer(
     }
 }
 
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
 pub enum FinTransfer {
     Evm {
         chain_kind: ChainKind,
@@ -373,164 +373,21 @@ pub async fn claim_fee(
 
         for (key, event) in events {
             if let Ok(fin_transfer) = serde_json::from_str::<FinTransfer>(&event) {
-                if let FinTransfer::Evm {
-                    chain_kind,
-                    block_number,
-                    log,
-                    tx_logs,
-                    creation_timestamp,
-                    expected_finalization_time,
-                } = fin_transfer
-                {
-                    handlers.push(tokio::spawn({
-                        let config = config.clone();
-                        let mut redis_connection = redis_connection.clone();
-                        let connector = connector.clone();
-                        let jsonrpc_client = jsonrpc_client.clone();
-
-                        async move {
-                            let current_timestamp = chrono::Utc::now().timestamp();
-
-                            if current_timestamp < creation_timestamp + expected_finalization_time {
-                                return;
-                            }
-
-                            info!("Trying to process FinTransfer log on {:?}", chain_kind);
-
-                            let vaa = utils::evm::get_vaa_from_evm_log(
-                                connector.clone(),
-                                chain_kind,
-                                tx_logs,
-                                &config,
-                            )
-                            .await;
-
-                            if vaa.is_none() {
-                                if chain_kind == ChainKind::Eth {
-                                    let Ok(light_client_latest_block_number) =
-                                        utils::near::get_eth_light_client_last_block_number(
-                                            &config,
-                                            &jsonrpc_client,
-                                        )
-                                        .await
-                                    else {
-                                        warn!("Failed to get eth light client last block number");
-                                        return;
-                                    };
-
-                                    if block_number > light_client_latest_block_number {
-                                        warn!("ETH light client is not synced yet");
-                                        tokio::time::sleep(tokio::time::Duration::from_secs(
-                                            utils::redis::SLEEP_TIME_AFTER_EVENTS_PROCESS_SECS,
-                                        ))
-                                        .await;
-                                        return;
-                                    }
-                                } else {
-                                    warn!("VAA is not ready yet");
-                                    tokio::time::sleep(tokio::time::Duration::from_secs(
-                                        utils::redis::SLEEP_TIME_AFTER_EVENTS_PROCESS_SECS,
-                                    ))
-                                    .await;
-                                    return;
-                                }
-                            }
-
-                            let Some(tx_hash) = log.transaction_hash else {
-                                warn!("No transaction hash in log: {:?}", log);
-                                return;
-                            };
-
-                            let Some(topic) = log.topic0() else {
-                                warn!("No topic0 in log: {:?}", log);
-                                return;
-                            };
-
-                            let tx_hash = H256::from_slice(tx_hash.as_slice());
-
-                            let Some(prover_args) = utils::evm::construct_prover_args(
-                                &config,
-                                vaa,
-                                tx_hash,
-                                H256::from_slice(topic.as_slice()),
-                                ProofKind::FinTransfer,
-                            )
-                            .await
-                            else {
-                                warn!("Failed to get prover args");
-                                return;
-                            };
-
-                            let claim_fee_args = ClaimFeeArgs {
-                                chain_kind,
-                                prover_args,
-                            };
-
-                            match connector.near_claim_fee(claim_fee_args).await {
-                                Ok(tx_hash) => {
-                                    info!("Claimed fee: {:?}", tx_hash);
-                                    utils::redis::remove_event(
-                                        &mut redis_connection,
-                                        utils::redis::FINALIZED_TRANSFERS,
-                                        &key,
-                                    )
-                                    .await;
-                                }
-                                Err(err) => {
-                                    warn!("Failed to claim fee: {}", err);
-                                }
-                            };
-                        }
-                    }));
-                } else if let FinTransfer::Solana { emitter, sequence } = fin_transfer {
-                    handlers.push(tokio::spawn({
-                        let mut redis_connection = redis_connection.clone();
-                        let connector = connector.clone();
-                        async move {
-                            info!("Trying to process FinTransfer log on Solana");
-
-                            let Ok(vaa) = connector
-                                .wormhole_get_vaa(
-                                    config.wormhole.solana_chain_id,
-                                    emitter,
-                                    sequence,
-                                )
-                                .await
-                            else {
-                                warn!("Failed to get VAA for sequence: {}", sequence);
-                                return;
-                            };
-
-                            let Ok(prover_args) = borsh::to_vec(&WormholeVerifyProofArgs {
-                                proof_kind: ProofKind::FinTransfer,
-                                vaa,
-                            }) else {
-                                warn!("Failed to serialize prover args to finalize transfer from Solana");
-                                return;
-                            };
-
-                            let claim_fee_args = ClaimFeeArgs {
-                                chain_kind: ChainKind::Sol,
-                                prover_args,
-                            };
-
-                            match connector.near_claim_fee(claim_fee_args).await {
-                                Ok(tx_hash) => {
-                                    info!("Claimed fee: {:?}", tx_hash);
-                                    utils::redis::remove_event(
-                                        &mut redis_connection,
-                                        utils::redis::FINALIZED_TRANSFERS,
-                                        &key,
-                                    )
-                                    .await;
-                                }
-                                Err(err) => {
-                                    warn!("Failed to claim fee: {}", err);
-                                }
-                            };
-                        }
-                    }));
-                }
+                handlers.push(tokio::spawn(handle_evm_fin_transfer(
+                    config.clone(),
+                    connector.clone(),
+                    jsonrpc_client.clone(),
+                    redis_connection.clone(),
+                    key.clone(),
+                    fin_transfer.clone(),
+                )));
+                handlers.push(tokio::spawn(handle_solana_fin_transfer(
+                    config.clone(),
+                    connector.clone(),
+                    redis_connection.clone(),
+                    key.clone(),
+                    fin_transfer.clone(),
+                )));
             }
         }
 
@@ -543,7 +400,161 @@ pub async fn claim_fee(
     }
 }
 
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
+async fn handle_evm_fin_transfer(
+    config: config::Config,
+    connector: Arc<OmniConnector>,
+    jsonrpc_client: JsonRpcClient,
+    mut redis_connection: redis::aio::MultiplexedConnection,
+    key: String,
+    fin_transfer: FinTransfer,
+) {
+    let FinTransfer::Evm {
+        chain_kind,
+        block_number,
+        log,
+        tx_logs,
+        creation_timestamp,
+        expected_finalization_time,
+    } = fin_transfer
+    else {
+        return;
+    };
+
+    let current_timestamp = chrono::Utc::now().timestamp();
+
+    if current_timestamp < creation_timestamp + expected_finalization_time {
+        return;
+    }
+
+    info!("Trying to process FinTransfer log on {:?}", chain_kind);
+
+    let vaa =
+        utils::evm::get_vaa_from_evm_log(connector.clone(), chain_kind, tx_logs, &config).await;
+
+    if vaa.is_none() {
+        if chain_kind == ChainKind::Eth {
+            let Ok(light_client_latest_block_number) =
+                utils::near::get_eth_light_client_last_block_number(&config, &jsonrpc_client).await
+            else {
+                warn!("Failed to get eth light client last block number");
+                return;
+            };
+
+            if block_number > light_client_latest_block_number {
+                warn!("ETH light client is not synced yet");
+                tokio::time::sleep(tokio::time::Duration::from_secs(
+                    utils::redis::SLEEP_TIME_AFTER_EVENTS_PROCESS_SECS,
+                ))
+                .await;
+                return;
+            }
+        } else {
+            warn!("VAA is not ready yet");
+            tokio::time::sleep(tokio::time::Duration::from_secs(
+                utils::redis::SLEEP_TIME_AFTER_EVENTS_PROCESS_SECS,
+            ))
+            .await;
+            return;
+        }
+    }
+
+    let Some(tx_hash) = log.transaction_hash else {
+        warn!("No transaction hash in log: {:?}", log);
+        return;
+    };
+
+    let Some(topic) = log.topic0() else {
+        warn!("No topic0 in log: {:?}", log);
+        return;
+    };
+
+    let tx_hash = H256::from_slice(tx_hash.as_slice());
+
+    let Some(prover_args) = utils::evm::construct_prover_args(
+        &config,
+        vaa,
+        tx_hash,
+        H256::from_slice(topic.as_slice()),
+        ProofKind::FinTransfer,
+    )
+    .await
+    else {
+        warn!("Failed to get prover args");
+        return;
+    };
+
+    let claim_fee_args = ClaimFeeArgs {
+        chain_kind,
+        prover_args,
+    };
+
+    match connector.near_claim_fee(claim_fee_args).await {
+        Ok(tx_hash) => {
+            info!("Claimed fee: {:?}", tx_hash);
+            utils::redis::remove_event(
+                &mut redis_connection,
+                utils::redis::FINALIZED_TRANSFERS,
+                &key,
+            )
+            .await;
+        }
+        Err(err) => {
+            warn!("Failed to claim fee: {}", err);
+        }
+    };
+}
+
+async fn handle_solana_fin_transfer(
+    config: config::Config,
+    connector: Arc<OmniConnector>,
+    mut redis_connection: redis::aio::MultiplexedConnection,
+    key: String,
+    fin_transfer: FinTransfer,
+) {
+    let FinTransfer::Solana { emitter, sequence } = fin_transfer else {
+        return;
+    };
+
+    info!("Trying to process FinTransfer log on Solana");
+
+    let Ok(vaa) = connector
+        .wormhole_get_vaa(config.wormhole.solana_chain_id, emitter, sequence)
+        .await
+    else {
+        warn!("Failed to get VAA for sequence: {}", sequence);
+        return;
+    };
+
+    let Ok(prover_args) = borsh::to_vec(&WormholeVerifyProofArgs {
+        proof_kind: ProofKind::FinTransfer,
+        vaa,
+    }) else {
+        warn!("Failed to serialize prover args to finalize transfer from Solana");
+        return;
+    };
+
+    let claim_fee_args = ClaimFeeArgs {
+        chain_kind: ChainKind::Sol,
+        prover_args,
+    };
+
+    match connector.near_claim_fee(claim_fee_args).await {
+        Ok(tx_hash) => {
+            info!("Claimed fee: {:?}", tx_hash);
+            utils::redis::remove_event(
+                &mut redis_connection,
+                utils::redis::FINALIZED_TRANSFERS,
+                &key,
+            )
+            .await;
+        }
+        Err(err) => {
+            warn!("Failed to claim fee: {}", err);
+        }
+    };
+}
+
+#[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
 pub enum DeployToken {
     Evm {
         chain_kind: ChainKind,
@@ -586,166 +597,21 @@ pub async fn bind_token(
 
         for (key, event) in events {
             if let Ok(deploy_token_event) = serde_json::from_str::<DeployToken>(&event) {
-                if let DeployToken::Evm {
-                    chain_kind,
-                    block_number,
-                    log,
-                    tx_logs,
-                    creation_timestamp,
-                    expected_finalization_time,
-                } = deploy_token_event
-                {
-                    handlers.push(tokio::spawn({
-                        let config = config.clone();
-                        let mut redis_connection = redis_connection.clone();
-                        let connector = connector.clone();
-                        let jsonrpc_client = jsonrpc_client.clone();
-
-                        async move {
-                            let current_timestamp = chrono::Utc::now().timestamp();
-
-                            if current_timestamp < creation_timestamp + expected_finalization_time {
-                                return;
-                            }
-
-                            info!("Trying to process DeployToken log on {:?}", chain_kind);
-
-                            let vaa = utils::evm::get_vaa_from_evm_log(
-                                connector.clone(),
-                                chain_kind,
-                                tx_logs,
-                                &config,
-                            )
-                            .await;
-
-                            if vaa.is_none() {
-                                if chain_kind == ChainKind::Eth {
-                                    let Ok(light_client_latest_block_number) =
-                                        utils::near::get_eth_light_client_last_block_number(
-                                            &config,
-                                            &jsonrpc_client,
-                                        )
-                                        .await
-                                    else {
-                                        warn!("Failed to get eth light client last block number");
-                                        return;
-                                    };
-
-                                    if block_number > light_client_latest_block_number {
-                                        warn!("ETH light client is not synced yet");
-                                        tokio::time::sleep(tokio::time::Duration::from_secs(
-                                            utils::redis::SLEEP_TIME_AFTER_EVENTS_PROCESS_SECS,
-                                        ))
-                                        .await;
-                                        return;
-                                    }
-                                } else {
-                                    warn!("VAA is not ready yet");
-                                    tokio::time::sleep(tokio::time::Duration::from_secs(
-                                        utils::redis::SLEEP_TIME_AFTER_EVENTS_PROCESS_SECS,
-                                    ))
-                                    .await;
-                                    return;
-                                }
-                            }
-
-                            let Some(tx_hash) = log.transaction_hash else {
-                                warn!("No transaction hash in log: {:?}", log);
-                                return;
-                            };
-
-                            let Some(topic) = log.topic0() else {
-                                warn!("No topic0 in log: {:?}", log);
-                                return;
-                            };
-
-                            let tx_hash = H256::from_slice(tx_hash.as_slice());
-
-                            let Some(prover_args) = utils::evm::construct_prover_args(
-                                &config,
-                                vaa,
-                                tx_hash,
-                                H256::from_slice(topic.as_slice()),
-                                ProofKind::DeployToken,
-                            )
-                            .await
-                            else {
-                                warn!("Failed to get prover args");
-                                return;
-                            };
-
-                            let bind_token_args =
-                                omni_connector::BindTokenArgs::BindTokenWithArgs {
-                                    chain_kind,
-                                    prover_args,
-                                };
-
-                            match connector.bind_token(bind_token_args).await {
-                                Ok(tx_hash) => {
-                                    info!("Bound token: {:?}", tx_hash);
-                                    utils::redis::remove_event(
-                                        &mut redis_connection,
-                                        utils::redis::DEPLOY_TOKEN_EVENTS,
-                                        &key,
-                                    )
-                                    .await;
-                                }
-                                Err(err) => {
-                                    warn!("Failed to bind token: {}", err);
-                                }
-                            };
-                        }
-                    }));
-                } else if let DeployToken::Solana { emitter, sequence } = deploy_token_event {
-                    handlers.push(tokio::spawn({
-                        let mut redis_connection = redis_connection.clone();
-                        let connector = connector.clone();
-                        async move {
-                            info!("Trying to process DeployToken log on Solana");
-
-                            let Ok(vaa) = connector
-                                .wormhole_get_vaa(
-                                    config.wormhole.solana_chain_id,
-                                    emitter,
-                                    sequence,
-                                )
-                                .await
-                            else {
-                                warn!("Failed to get VAA for sequence: {}", sequence);
-                                return;
-                            };
-
-                            let Ok(prover_args) = borsh::to_vec(&WormholeVerifyProofArgs {
-                                proof_kind: ProofKind::DeployToken,
-                                vaa,
-                            }) else {
-                                warn!("Failed to serialize prover args to bind token");
-                                return;
-                            };
-
-                            let bind_token_args =
-                                omni_connector::BindTokenArgs::BindTokenWithArgs {
-                                    chain_kind: ChainKind::Sol,
-                                    prover_args,
-                                };
-
-                            match connector.bind_token(bind_token_args).await {
-                                Ok(tx_hash) => {
-                                    info!("Bound token: {:?}", tx_hash);
-                                    utils::redis::remove_event(
-                                        &mut redis_connection,
-                                        utils::redis::DEPLOY_TOKEN_EVENTS,
-                                        &key,
-                                    )
-                                    .await;
-                                }
-                                Err(err) => {
-                                    warn!("Failed to bind token: {}", err);
-                                }
-                            };
-                        }
-                    }));
-                }
+                handlers.push(tokio::spawn(handle_evm_deploy_token_event(
+                    config.clone(),
+                    connector.clone(),
+                    jsonrpc_client.clone(),
+                    redis_connection.clone(),
+                    key.clone(),
+                    deploy_token_event.clone(),
+                )));
+                handlers.push(tokio::spawn(handle_solana_deploy_token_event(
+                    config.clone(),
+                    connector.clone(),
+                    redis_connection.clone(),
+                    key.clone(),
+                    deploy_token_event.clone(),
+                )));
             }
         }
 
@@ -756,4 +622,158 @@ pub async fn bind_token(
         ))
         .await;
     }
+}
+
+async fn handle_evm_deploy_token_event(
+    config: config::Config,
+    connector: Arc<OmniConnector>,
+    jsonrpc_client: JsonRpcClient,
+    mut redis_connection: redis::aio::MultiplexedConnection,
+    key: String,
+    deploy_token_event: DeployToken,
+) {
+    let DeployToken::Evm {
+        chain_kind,
+        block_number,
+        log,
+        tx_logs,
+        creation_timestamp,
+        expected_finalization_time,
+    } = deploy_token_event
+    else {
+        return;
+    };
+
+    let current_timestamp = chrono::Utc::now().timestamp();
+
+    if current_timestamp < creation_timestamp + expected_finalization_time {
+        return;
+    }
+
+    info!("Trying to process DeployToken log on {:?}", chain_kind);
+
+    let vaa =
+        utils::evm::get_vaa_from_evm_log(connector.clone(), chain_kind, tx_logs, &config).await;
+
+    if vaa.is_none() {
+        if chain_kind == ChainKind::Eth {
+            let Ok(light_client_latest_block_number) =
+                utils::near::get_eth_light_client_last_block_number(&config, &jsonrpc_client).await
+            else {
+                warn!("Failed to get eth light client last block number");
+                return;
+            };
+
+            if block_number > light_client_latest_block_number {
+                warn!("ETH light client is not synced yet");
+                tokio::time::sleep(tokio::time::Duration::from_secs(
+                    utils::redis::SLEEP_TIME_AFTER_EVENTS_PROCESS_SECS,
+                ))
+                .await;
+                return;
+            }
+        } else {
+            warn!("VAA is not ready yet");
+            tokio::time::sleep(tokio::time::Duration::from_secs(
+                utils::redis::SLEEP_TIME_AFTER_EVENTS_PROCESS_SECS,
+            ))
+            .await;
+            return;
+        }
+    }
+
+    let Some(tx_hash) = log.transaction_hash else {
+        warn!("No transaction hash in log: {:?}", log);
+        return;
+    };
+
+    let Some(topic) = log.topic0() else {
+        warn!("No topic0 in log: {:?}", log);
+        return;
+    };
+
+    let tx_hash = H256::from_slice(tx_hash.as_slice());
+
+    let Some(prover_args) = utils::evm::construct_prover_args(
+        &config,
+        vaa,
+        tx_hash,
+        H256::from_slice(topic.as_slice()),
+        ProofKind::DeployToken,
+    )
+    .await
+    else {
+        warn!("Failed to get prover args");
+        return;
+    };
+
+    let bind_token_args = omni_connector::BindTokenArgs::BindTokenWithArgs {
+        chain_kind,
+        prover_args,
+    };
+
+    match connector.bind_token(bind_token_args).await {
+        Ok(tx_hash) => {
+            info!("Bound token: {:?}", tx_hash);
+            utils::redis::remove_event(
+                &mut redis_connection,
+                utils::redis::DEPLOY_TOKEN_EVENTS,
+                &key,
+            )
+            .await;
+        }
+        Err(err) => {
+            warn!("Failed to bind token: {}", err);
+        }
+    };
+}
+
+async fn handle_solana_deploy_token_event(
+    config: config::Config,
+    connector: Arc<OmniConnector>,
+    mut redis_connection: redis::aio::MultiplexedConnection,
+    key: String,
+    deploy_token_event: DeployToken,
+) {
+    let DeployToken::Solana { emitter, sequence } = deploy_token_event else {
+        return;
+    };
+
+    info!("Trying to process DeployToken log on Solana");
+
+    let Ok(vaa) = connector
+        .wormhole_get_vaa(config.wormhole.solana_chain_id, emitter, sequence)
+        .await
+    else {
+        warn!("Failed to get VAA for sequence: {}", sequence);
+        return;
+    };
+
+    let Ok(prover_args) = borsh::to_vec(&WormholeVerifyProofArgs {
+        proof_kind: ProofKind::DeployToken,
+        vaa,
+    }) else {
+        warn!("Failed to serialize prover args to bind token");
+        return;
+    };
+
+    let bind_token_args = omni_connector::BindTokenArgs::BindTokenWithArgs {
+        chain_kind: ChainKind::Sol,
+        prover_args,
+    };
+
+    match connector.bind_token(bind_token_args).await {
+        Ok(tx_hash) => {
+            info!("Bound token: {:?}", tx_hash);
+            utils::redis::remove_event(
+                &mut redis_connection,
+                utils::redis::DEPLOY_TOKEN_EVENTS,
+                &key,
+            )
+            .await;
+        }
+        Err(err) => {
+            warn!("Failed to bind token: {}", err);
+        }
+    };
 }
