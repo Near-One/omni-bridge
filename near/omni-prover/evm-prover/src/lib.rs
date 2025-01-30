@@ -9,8 +9,8 @@ use omni_types::utils::keccak256;
 use omni_types::ChainKind;
 use rlp::Rlp;
 
-const VERIFY_PROOF_CALLBACK_GAS: Gas = Gas::from_tgas(20);
-const BLOCK_HASH_SAFE_GAS: Gas = Gas::from_tgas(10);
+const VERIFY_PROOF_CALLBACK_GAS: Gas = Gas::from_tgas(5);
+const BLOCK_HASH_SAFE_GAS: Gas = Gas::from_tgas(5);
 
 type H256 = [u8; 32];
 
