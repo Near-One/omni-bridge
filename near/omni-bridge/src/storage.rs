@@ -1,23 +1,25 @@
 use near_contract_standards::storage_management::{StorageBalance, StorageBalanceBounds};
-use near_sdk::{assert_one_yocto, borsh};
+use near_sdk::{assert_one_yocto, borsh, near};
 use near_sdk::{env, near_bindgen, AccountId, NearToken};
 use omni_types::TransferId;
 
 use crate::{
-    require, BorshDeserialize, BorshSerialize, ChainKind, Contract, ContractExt, Deserialize, Fee,
-    OmniAddress, Promise, SdkExpect, Serialize, TransferMessage, U128,
+    require, ChainKind, Contract, ContractExt, Fee, OmniAddress, Promise, SdkExpect,
+    TransferMessage, U128,
 };
 
 pub const BRIDGE_TOKEN_INIT_BALANCE: NearToken = NearToken::from_near(3);
 pub const NEP141_DEPOSIT: NearToken = NearToken::from_yoctonear(1_250_000_000_000_000_000_000);
 
-#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Debug, Clone)]
+#[near(serializers=[borsh, json])]
+#[derive(Debug, Clone)]
 pub struct TransferMessageStorageValue {
     pub message: TransferMessage,
     pub owner: AccountId,
 }
 
-#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Debug, Clone)]
+#[near(serializers=[borsh, json])]
+#[derive(Debug, Clone)]
 pub enum TransferMessageStorage {
     V0(TransferMessageStorageValue),
 }
@@ -40,7 +42,8 @@ impl TransferMessageStorage {
     }
 }
 
-#[derive(BorshDeserialize, BorshSerialize, Debug, Clone, Copy, PartialEq, Eq)]
+#[near(serializers=[borsh, json])]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Decimals {
     pub decimals: u8,
     pub origin_decimals: u8,

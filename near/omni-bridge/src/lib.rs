@@ -399,6 +399,7 @@ impl Contract {
         fee: &Option<Fee>,
     ) -> Promise {
         let transfer_message = self.get_transfer_message(transfer_id);
+
         if let Some(fee) = &fee {
             require!(&transfer_message.fee == fee, "Invalid fee");
         }

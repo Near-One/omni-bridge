@@ -1,9 +1,5 @@
 #[cfg(test)]
 mod tests {
-    use crate::helpers::tests::{
-        account_n, eth_eoa_address, eth_factory_address, eth_token_address, relayer_account_id,
-        LOCKER_PATH, MOCK_PROVER_PATH, MOCK_TOKEN_PATH, NEP141_DEPOSIT,
-    };
     use near_sdk::{borsh, json_types::U128, serde_json::json, AccountId};
     use near_workspaces::types::NearToken;
     use omni_types::{
@@ -12,6 +8,11 @@ mod tests {
         Fee, OmniAddress,
     };
     use rstest::rstest;
+
+    use crate::helpers::tests::{
+        account_n, eth_eoa_address, eth_factory_address, eth_token_address, locker_wasm,
+        mock_prover_wasm, mock_token_wasm, relayer_account_id, NEP141_DEPOSIT,
+    };
 
     #[rstest]
     #[case(vec![(account_n(1), true), (relayer_account_id(), true)], 1000, 1, None)]
@@ -64,8 +65,19 @@ mod tests {
         #[case] amount: u128,
         #[case] fee: u128,
         #[case] expected_error: Option<&str>,
+        mock_token_wasm: Vec<u8>,
+        mock_prover_wasm: Vec<u8>,
+        locker_wasm: Vec<u8>,
     ) {
-        let result = test_fin_transfer(storage_deposit_accounts, amount, fee).await;
+        let result = test_fin_transfer(
+            storage_deposit_accounts,
+            amount,
+            fee,
+            mock_token_wasm,
+            mock_prover_wasm,
+            locker_wasm,
+        )
+        .await;
 
         match result {
             Ok(_) => assert!(
@@ -73,9 +85,9 @@ mod tests {
                 "Expected an error but got success"
             ),
             Err(result_error) => {
-                let error = expected_error.expect(&format!(
-                    "Got an error {result_error} when none was expected"
-                ));
+                let error = expected_error.unwrap_or_else(|| {
+                    panic!("Got an error {result_error} when none was expected")
+                });
                 assert!(
                     result_error.to_string().contains(error),
                     "Wrong error. Got: {}, Expected: {}",
@@ -90,10 +102,14 @@ mod tests {
         storage_deposit_accounts: Vec<(AccountId, bool)>,
         amount: u128,
         fee: u128,
+        mock_token_wasm: Vec<u8>,
+        mock_prover_wasm: Vec<u8>,
+        locker_wasm: Vec<u8>,
     ) -> anyhow::Result<()> {
         let worker = near_workspaces::sandbox().await?;
+
         // Deploy and init FT token
-        let token_contract = worker.dev_deploy(&std::fs::read(MOCK_TOKEN_PATH)?).await?;
+        let token_contract = worker.dev_deploy(&mock_token_wasm).await?;
         token_contract
             .call("new_default_meta")
             .args_json(json!({
@@ -105,9 +121,10 @@ mod tests {
             .await?
             .into_result()?;
 
-        let prover_contract = worker.dev_deploy(&std::fs::read(MOCK_PROVER_PATH)?).await?;
+        let prover_contract = worker.dev_deploy(&mock_prover_wasm).await?;
+
         // Deploy and init locker
-        let locker_contract = worker.dev_deploy(&std::fs::read(LOCKER_PATH)?).await?;
+        let locker_contract = worker.dev_deploy(&locker_wasm).await?;
         locker_contract
             .call("new")
             .args_json(json!({

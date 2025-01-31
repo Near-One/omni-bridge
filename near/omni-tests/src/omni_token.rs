@@ -1,12 +1,7 @@
 #[cfg(test)]
 mod tests {
-    use crate::helpers::tests::{
-        account_n, arb_factory_address, arb_token_address, base_factory_address,
-        base_token_address, eth_eoa_address, eth_factory_address, eth_token_address,
-        get_test_deploy_token_args, sol_factory_address, sol_token_address, LOCKER_PATH,
-        MOCK_PROVER_PATH, NEP141_DEPOSIT, TOKEN_DEPLOYER_PATH,
-    };
-    use anyhow;
+    use std::str::FromStr;
+
     use near_sdk::borsh;
     use near_sdk::json_types::U128;
     use near_sdk::serde_json::json;
@@ -17,11 +12,17 @@ mod tests {
     use omni_types::Fee;
     use omni_types::{BasicMetadata, ChainKind, OmniAddress};
     use rstest::rstest;
-    use std::str::FromStr;
+
+    use crate::helpers::tests::{
+        account_n, arb_factory_address, arb_token_address, base_factory_address,
+        base_token_address, eth_eoa_address, eth_factory_address, eth_token_address,
+        get_test_deploy_token_args, locker_wasm, mock_prover_wasm, sol_factory_address,
+        sol_token_address, token_deployer_wasm, NEP141_DEPOSIT,
+    };
 
     struct TestEnv {
         worker: near_workspaces::Worker<near_workspaces::network::Sandbox>,
-        locker: near_workspaces::Contract,
+        locker_contract: near_workspaces::Contract,
         token_contract: near_workspaces::Contract,
         init_token_address: OmniAddress,
         factory_contract_address: OmniAddress,
@@ -29,7 +30,12 @@ mod tests {
     }
 
     impl TestEnv {
-        async fn new(init_token_address: OmniAddress) -> anyhow::Result<Self> {
+        async fn new(
+            init_token_address: OmniAddress,
+            mock_prover_wasm: Vec<u8>,
+            locker_wasm: Vec<u8>,
+            token_deployer_wasm: Vec<u8>,
+        ) -> anyhow::Result<Self> {
             let worker = near_workspaces::sandbox().await?;
             let token_metadata = BasicMetadata {
                 name: "Test Token".to_string(),
@@ -38,11 +44,11 @@ mod tests {
             };
 
             // Setup prover
-            let prover_contract = worker.dev_deploy(&std::fs::read(MOCK_PROVER_PATH)?).await?;
+            let prover_contract = worker.dev_deploy(&mock_prover_wasm).await?;
 
-            // Setup locker
-            let locker = worker.dev_deploy(&std::fs::read(LOCKER_PATH)?).await?;
-            locker
+            // setup locker
+            let locker_contract = worker.dev_deploy(&locker_wasm).await?;
+            locker_contract
                 .call("new")
                 .args_json(json!({
                     "prover_account": prover_contract.id(),
@@ -60,7 +66,7 @@ mod tests {
                 .create_tla_and_deploy(
                     account_n(1),
                     worker.dev_generate().await.1,
-                    &std::fs::read(TOKEN_DEPLOYER_PATH)?,
+                    &token_deployer_wasm,
                 )
                 .await?
                 .unwrap();
@@ -68,7 +74,7 @@ mod tests {
             token_deployer
                 .call("new")
                 .args_json(json!({
-                    "controller": locker.id(),
+                    "controller": locker_contract.id(),
                     "dao": AccountId::from_str("dao.near").unwrap(),
                 }))
                 .max_gas()
@@ -77,7 +83,7 @@ mod tests {
                 .into_result()?;
 
             // Configure locker
-            locker
+            locker_contract
                 .call("add_token_deployer")
                 .args_json(json!({
                     "chain": init_token_address.get_chain(),
@@ -96,7 +102,7 @@ mod tests {
                 _ => panic!("Unsupported chain"),
             };
 
-            locker
+            locker_contract
                 .call("add_factory")
                 .args_json(json!({
                     "address": factory_contract_address,
@@ -109,7 +115,7 @@ mod tests {
             // Deploy token
             let token_contract = Self::deploy_token(
                 &worker,
-                &locker,
+                &locker_contract,
                 &init_token_address,
                 &factory_contract_address,
                 &token_metadata,
@@ -118,7 +124,7 @@ mod tests {
 
             Ok(Self {
                 worker,
-                locker,
+                locker_contract,
                 token_contract,
                 init_token_address,
                 factory_contract_address,
@@ -126,9 +132,20 @@ mod tests {
             })
         }
 
-        async fn new_native(chain_kind: ChainKind) -> anyhow::Result<Self> {
+        async fn new_native(
+            chain_kind: ChainKind,
+            mock_prover_wasm: Vec<u8>,
+            locker_wasm: Vec<u8>,
+            token_deployer_wasm: Vec<u8>,
+        ) -> anyhow::Result<Self> {
             let init_token_address = OmniAddress::new_zero(chain_kind).unwrap();
-            Self::new(init_token_address).await
+            Self::new(
+                init_token_address,
+                mock_prover_wasm,
+                locker_wasm,
+                token_deployer_wasm,
+            )
+            .await
         }
 
         async fn deploy_token(
@@ -168,7 +185,7 @@ mod tests {
                     .call(locker.id(), "deploy_token")
                     .args_borsh(get_test_deploy_token_args(
                         init_token_address,
-                        &factoty_contract_address,
+                        factoty_contract_address,
                         token_metadata,
                     ))
                     .deposit(required_storage)
@@ -234,11 +251,26 @@ mod tests {
     async fn test_token_metadata(
         #[case] init_token_address: OmniAddress,
         #[case] is_native: bool,
+        mock_prover_wasm: Vec<u8>,
+        locker_wasm: Vec<u8>,
+        token_deployer_wasm: Vec<u8>,
     ) -> anyhow::Result<()> {
         let env = if is_native {
-            TestEnv::new_native(init_token_address.get_chain()).await?
+            TestEnv::new_native(
+                init_token_address.get_chain(),
+                mock_prover_wasm,
+                locker_wasm,
+                token_deployer_wasm,
+            )
+            .await?
         } else {
-            TestEnv::new(init_token_address).await?
+            TestEnv::new(
+                init_token_address,
+                mock_prover_wasm,
+                locker_wasm,
+                token_deployer_wasm,
+            )
+            .await?
         };
 
         let fetched_metadata: BasicMetadata =
@@ -264,17 +296,32 @@ mod tests {
     async fn test_token_minting(
         #[case] init_token_address: OmniAddress,
         #[case] is_native: bool,
+        mock_prover_wasm: Vec<u8>,
+        locker_wasm: Vec<u8>,
+        token_deployer_wasm: Vec<u8>,
     ) -> anyhow::Result<()> {
         let env = if is_native {
-            TestEnv::new_native(init_token_address.get_chain()).await?
+            TestEnv::new_native(
+                init_token_address.get_chain(),
+                mock_prover_wasm,
+                locker_wasm,
+                token_deployer_wasm,
+            )
+            .await?
         } else {
-            TestEnv::new(init_token_address).await?
+            TestEnv::new(
+                init_token_address,
+                mock_prover_wasm,
+                locker_wasm,
+                token_deployer_wasm,
+            )
+            .await?
         };
         let recipient = env.create_registered_account(3).await?;
         let amount = U128(1000000000000000000000000);
 
         fake_finalize_transfer(
-            &env.locker,
+            &env.locker_contract,
             &env.token_contract,
             &recipient,
             env.init_token_address,
@@ -318,11 +365,26 @@ mod tests {
     async fn test_token_transfer(
         #[case] init_token_address: OmniAddress,
         #[case] is_native: bool,
+        mock_prover_wasm: Vec<u8>,
+        locker_wasm: Vec<u8>,
+        token_deployer_wasm: Vec<u8>,
     ) -> anyhow::Result<()> {
         let env = if is_native {
-            TestEnv::new_native(init_token_address.get_chain()).await?
+            TestEnv::new_native(
+                init_token_address.get_chain(),
+                mock_prover_wasm,
+                locker_wasm,
+                token_deployer_wasm,
+            )
+            .await?
         } else {
-            TestEnv::new(init_token_address).await?
+            TestEnv::new(
+                init_token_address,
+                mock_prover_wasm,
+                locker_wasm,
+                token_deployer_wasm,
+            )
+            .await?
         };
         let sender = env.create_registered_account(3).await?;
         let receiver = env.create_registered_account(4).await?;
@@ -330,7 +392,7 @@ mod tests {
 
         // Mint tokens to sender
         fake_finalize_transfer(
-            &env.locker,
+            &env.locker_contract,
             &env.token_contract,
             &sender,
             env.init_token_address,
