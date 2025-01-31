@@ -809,6 +809,7 @@ impl Contract {
         Self::refund(predecessor_account_id, refund_amount);
     }
 
+    #[allow(clippy::needless_pass_by_value)]
     pub fn finish_withdraw(
         &mut self,
         #[serializer(borsh)] sender_id: &AccountId,
