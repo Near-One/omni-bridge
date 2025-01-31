@@ -1,11 +1,12 @@
 use core::fmt;
 use core::str::FromStr;
-use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
-use near_sdk::bs58;
+
 use near_sdk::serde::{Deserialize, Serialize};
+use near_sdk::{bs58, near};
 use serde::de::Visitor;
 
-#[derive(BorshDeserialize, BorshSerialize, Debug, Clone, PartialEq, Eq)]
+#[near(serializers=[borsh])]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SolAddress(pub [u8; 32]);
 
 impl SolAddress {
@@ -43,7 +44,7 @@ impl<'de> Deserialize<'de> for SolAddress {
     {
         struct Base58Visitor;
 
-        impl<'de> Visitor<'de> for Base58Visitor {
+        impl Visitor<'_> for Base58Visitor {
             type Value = SolAddress;
 
             fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {

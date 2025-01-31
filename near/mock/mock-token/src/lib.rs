@@ -14,8 +14,8 @@ use near_sdk::{
     env, log, near, require, AccountId, BorshStorageKey, NearToken, PanicOnDefault, PromiseOrValue,
 };
 
-#[derive(PanicOnDefault)]
 #[near(contract_state)]
+#[derive(PanicOnDefault)]
 pub struct Contract {
     token: FungibleToken,
     metadata: LazyOption<FungibleTokenMetadata>,
