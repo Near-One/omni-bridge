@@ -7,6 +7,10 @@ on:
         description: "Space-separated list of pipelines to run (e.g. 'bridge_token_near_to_evm another_pipeline')"
         required: false
         default: "bridge-token-near-to-evm"
+      release_tag:
+        description: "Release tag to download artifacts from (optional)"
+        required: false
+        type: string
 
 jobs:
   get-pipelines-matrix:
@@ -33,6 +37,16 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v3
+
+      - name: Download release artifacts
+        if: ${{ inputs.release_tag != '' }}
+        uses: robinraju/release-downloader@v1
+        with:
+          repository: ${{ github.repository }}
+          tag: ${{ inputs.release_tag }}
+          fileName: "contracts.zip"
+          out-file-path: "e2e-testing/generated/near_artifacts"
+          extract: true
 
       - name: Setup E2E environment
         uses: ./.github/e2e-setup

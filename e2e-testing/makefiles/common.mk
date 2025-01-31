@@ -13,7 +13,18 @@ endef
 # Progress bar for waiting operations
 define progress_wait
 	@for i in $$(seq 1 $(1)); do \
-		printf "\rProgress: [%-$(1)s] %d%%" "$$(printf '#%.0s' $$(seq 1 $$i))" "$$((i * 100 / $(1)))"; \
+		if [ $$((i % 30)) -eq 0 ] || [ $$i -eq 1 ] || [ $$i -eq $(1) ]; then \
+			remaining_secs=$$(( $(1) - i )); \
+			remaining_mins=$$((remaining_secs / 60)); \
+			elapsed_secs=$$i; \
+			elapsed_mins=$$((elapsed_secs / 60)); \
+			printf "\r%d%% | Elapsed: %dm %ds | Remaining: %dm %ds" \
+				"$$((i * 100 / $(1)))" \
+				"$$elapsed_mins" \
+				"$$((elapsed_secs % 60))" \
+				"$$remaining_mins" \
+				"$$((remaining_secs % 60))"; \
+		fi; \
 		sleep 1; \
 	done; \
 	printf '\n'
