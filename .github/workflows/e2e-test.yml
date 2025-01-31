@@ -23,52 +23,13 @@ jobs:
           JSON_ARRAY=$(echo "$PIPELINES" | jq -R -c 'split(" ")')
           echo "matrix={\"pipeline\":$JSON_ARRAY}" >> $GITHUB_OUTPUT
 
-  analyze-dependencies:
-    name: Analyze Dependencies
-    if: ${{ contains(github.event.inputs.selected_pipelines, ' ') }}
-    runs-on: ubuntu-latest
-    outputs:
-      common_deps: ${{ steps.get_deps.outputs.common_deps }}
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@v3
-
-      - name: Setup E2E environment
-        uses: ./.github/e2e-setup
-        with:
-          infura_api_key: ${{ secrets.E2E_INFURA_API_KEY }}
-          evm_private_key: ${{ secrets.E2E_EVM_PRIVATE_KEY }}
-          eth_rpc_url: ${{ secrets.E2E_ETH_RPC_URL }}
-
-      - name: Get dependencies for each pipeline
-        id: get_deps
-        run: |
-          COMMON_DEPS=$(./e2e-testing/tools/src/scripts/get_common_dependencies.sh ./e2e-testing/Makefile ${{ github.event.inputs.selected_pipelines }})
-          echo "common_deps=$COMMON_DEPS" >> $GITHUB_OUTPUT
-
-      - name: Build common dependencies
-        run: |
-          echo "Building common dependencies"
-          if [ -n "${{ steps.get_deps.outputs.common_deps }}" ]; then
-            cd e2e-testing && make ${{ steps.get_deps.outputs.common_deps }}
-          fi
-
-      - name: Upload common dependencies
-        uses: actions/upload-artifact@v4
-        with:
-          name: common-dependencies
-          path: |
-            e2e-testing/generated/
-
   run-tests:
-    needs: [get-pipelines-matrix, analyze-dependencies]
-    if: ${{ always() && needs.analyze-dependencies.result != 'failure' }}
+    needs: [get-pipelines-matrix]
     name: Run ${{ matrix.pipeline }}
     runs-on: ubuntu-latest
     strategy:
       matrix: ${{fromJson(needs.get-pipelines-matrix.outputs.matrix)}}
       fail-fast: false
-      max-parallel: 1
     steps:
       - name: Check out repository
         uses: actions/checkout@v3
@@ -79,13 +40,6 @@ jobs:
           infura_api_key: ${{ secrets.E2E_INFURA_API_KEY }}
           evm_private_key: ${{ secrets.E2E_EVM_PRIVATE_KEY }}
           eth_rpc_url: ${{ secrets.E2E_ETH_RPC_URL }}
-
-      - name: Download common dependencies
-        if: ${{ needs.analyze-dependencies.result == 'success' }}
-        uses: actions/download-artifact@v4
-        with:
-          name: common-dependencies
-          path: e2e-testing/generated/
 
       - name: Run pipeline
         run: |
@@ -98,4 +52,4 @@ jobs:
         with:
           name: e2e-test-results-${{ matrix.pipeline }}
           path: |
-            e2e-testing/generated/*
+            e2e-testing/generated/
