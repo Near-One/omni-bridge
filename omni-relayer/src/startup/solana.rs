@@ -1,7 +1,7 @@
 use std::str::FromStr;
 
 use anyhow::Result;
-use log::{info, warn};
+use log::{error, info, warn};
 use solana_sdk::signer::EncodableKey;
 use tokio_stream::StreamExt;
 
@@ -58,40 +58,55 @@ pub async fn start_indexer(
 
     info!("All historical logs processed, starting Solana WS subscription");
 
-    let Ok(ws_client) = PubsubClient::new(rpc_ws_url).await else {
-        anyhow::bail!("Failed to connect to Solana WebSocket");
-    };
-
     let filter = RpcTransactionLogsFilter::Mentions(vec![program_id.to_string()]);
     let config = RpcTransactionLogsConfig {
         commitment: Some(CommitmentConfig::processed()),
     };
 
-    let Ok((mut log_stream, _)) = ws_client.logs_subscribe(filter, config).await else {
-        anyhow::bail!("Failed to subscribe to Solana logs");
-    };
-
-    info!("Subscribed to live Solana logs");
-
-    while let Some(log) = log_stream.next().await {
-        let Ok(signature) = Signature::from_str(&log.value.signature) else {
-            warn!("Failed to parse signature: {:?}", log.value.signature);
-            continue;
+    loop {
+        let ws_client = match PubsubClient::new(rpc_ws_url).await {
+            Ok(client) => client,
+            Err(err) => {
+                error!("Solana WebSocket connection failed: {}, retrying...", err);
+                tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
+                continue;
+            }
         };
 
-        info!("Found a signature on Solana: {:?}", signature);
+        let (mut log_stream, _) = match ws_client
+            .logs_subscribe(filter.clone(), config.clone())
+            .await
+        {
+            Ok(subscription) => subscription,
+            Err(err) => {
+                error!(
+                    "Subscription to logs on Solana chain failed: {}, retrying...",
+                    err
+                );
+                tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
+                continue;
+            }
+        };
 
-        utils::redis::add_event(
-            &mut redis_connection,
-            utils::redis::SOLANA_EVENTS,
-            signature.to_string(),
-            // TODO: It's better to come up with a solution that wouldn't require storing `Null` value
-            serde_json::Value::Null,
-        )
-        .await;
+        info!("Subscribed to Solana logs");
+
+        while let Some(log) = log_stream.next().await {
+            if let Ok(signature) = Signature::from_str(&log.value.signature) {
+                info!("Found a signature on Solana: {:?}", signature);
+                utils::redis::add_event(
+                    &mut redis_connection,
+                    utils::redis::SOLANA_EVENTS,
+                    signature.to_string(),
+                    serde_json::Value::Null,
+                )
+                .await;
+            } else {
+                warn!("Failed to parse signature: {:?}", log.value.signature);
+            }
+        }
+
+        error!("Solana WebSocket stream closed, reconnecting...");
     }
-
-    Ok(())
 }
 
 async fn process_recent_signatures(
