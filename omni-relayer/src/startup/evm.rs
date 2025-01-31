@@ -1,5 +1,5 @@
 use anyhow::{Context, Result};
-use log::{info, warn};
+use log::{error, info, warn};
 use omni_types::ChainKind;
 use reqwest::Client;
 use tokio_stream::StreamExt;
@@ -126,7 +126,7 @@ pub async fn start_indexer(
         {
             Ok(provider) => provider,
             Err(err) => {
-                warn!(
+                error!(
                     "{chain_kind:?} WebSocket connection failed: {}, retrying...",
                     err
                 );
@@ -138,7 +138,7 @@ pub async fn start_indexer(
         let mut stream = match ws_provider.subscribe_logs(&filter).await {
             Ok(subscription) => subscription.into_stream(),
             Err(err) => {
-                warn!(
+                error!(
                     "Subscription to logs on {chain_kind:?} chain failed: {}, retrying...",
                     err
                 );
@@ -160,7 +160,7 @@ pub async fn start_indexer(
             .await;
         }
 
-        warn!("{chain_kind:?} WebSocket stream closed unexpectedly, reconnecting...");
+        error!("{chain_kind:?} WebSocket stream closed unexpectedly, reconnecting...");
         tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
     }
 }
