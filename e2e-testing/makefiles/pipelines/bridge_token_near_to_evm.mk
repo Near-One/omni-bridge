@@ -104,6 +104,8 @@ $(pipeline1_log_metadata_file): $(pipeline1_sender_account_file) $(pipeline1_bri
 .PHONY: ethereum-deploy-token
 ethereum-deploy-token: $(pipeline1_evm_deploy_token_file)
 $(pipeline1_evm_deploy_token_file): $(pipeline1_log_metadata_file) $(sepolia_bridge_contract_address_file) | $(pipeline1_call_dir)
+	$(call description,Waiting for NEAR transaction being executed)
+	$(call progress_wait,10)
 	$(call description,Bridge NEAR Token to Ethereum. Step 2: Deploying token on Ethereum)
 	TX_HASH=$$(jq -r .tx_hash $(pipeline1_log_metadata_file)) && \
 	ETH_BRIDGE_TOKEN_FACTORY_ADDRESS=$$(jq -r .bridgeAddress $(sepolia_bridge_contract_address_file)) && \
