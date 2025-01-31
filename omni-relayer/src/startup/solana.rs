@@ -64,29 +64,19 @@ pub async fn start_indexer(
     };
 
     loop {
-        let ws_client = match PubsubClient::new(rpc_ws_url).await {
-            Ok(client) => client,
-            Err(err) => {
-                error!("Solana WebSocket connection failed: {}, retrying...", err);
-                tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
-                continue;
-            }
-        };
+        let ws_client = crate::skip_fail!(
+            PubsubClient::new(rpc_ws_url).await,
+            "Solana WebSocket connection failed",
+            5
+        );
 
-        let (mut log_stream, _) = match ws_client
-            .logs_subscribe(filter.clone(), config.clone())
-            .await
-        {
-            Ok(subscription) => subscription,
-            Err(err) => {
-                error!(
-                    "Subscription to logs on Solana chain failed: {}, retrying...",
-                    err
-                );
-                tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
-                continue;
-            }
-        };
+        let (mut log_stream, _) = crate::skip_fail!(
+            ws_client
+                .logs_subscribe(filter.clone(), config.clone())
+                .await,
+            "Subscription to logs on Solana chain failed",
+            5
+        );
 
         info!("Subscribed to Solana logs");
 

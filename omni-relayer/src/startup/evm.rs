@@ -120,32 +120,20 @@ pub async fn start_indexer(
     );
 
     loop {
-        let ws_provider = match ProviderBuilder::new()
-            .on_ws(WsConnect::new(&rpc_ws_url))
-            .await
-        {
-            Ok(provider) => provider,
-            Err(err) => {
-                error!(
-                    "{chain_kind:?} WebSocket connection failed: {}, retrying...",
-                    err
-                );
-                tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
-                continue;
-            }
-        };
+        let ws_provider = crate::skip_fail!(
+            ProviderBuilder::new()
+                .on_ws(WsConnect::new(&rpc_ws_url))
+                .await,
+            format!("{chain_kind:?} WebSocket connection failed"),
+            5
+        );
 
-        let mut stream = match ws_provider.subscribe_logs(&filter).await {
-            Ok(subscription) => subscription.into_stream(),
-            Err(err) => {
-                error!(
-                    "Subscription to logs on {chain_kind:?} chain failed: {}, retrying...",
-                    err
-                );
-                tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
-                continue;
-            }
-        };
+        let mut stream = crate::skip_fail!(
+            ws_provider.subscribe_logs(&filter).await,
+            format!("{chain_kind:?} WebSocket subscription failed"),
+            5
+        )
+        .into_stream();
 
         info!("Subscribed to {:?} logs", chain_kind);
 
