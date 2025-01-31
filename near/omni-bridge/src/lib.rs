@@ -810,15 +810,15 @@ impl Contract {
 
     pub fn finish_withdraw(
         &mut self,
-        #[serializer(borsh)] sender_id: AccountId,
+        #[serializer(borsh)] sender_id: &AccountId,
         #[serializer(borsh)] amount: u128,
-        #[serializer(borsh)] recipient: String,
+        #[serializer(borsh)] recipient: &str,
     ) {
         let token_id = env::predecessor_account_id();
         require!(self.deployed_tokens.contains(&token_id));
         let parsed_msg = InitTransferMsg {
             recipient: OmniAddress::Eth(
-                H160::from_str(&recipient).sdk_expect("Error on recipient parsing"),
+                H160::from_str(recipient).sdk_expect("Error on recipient parsing"),
             ),
             fee: U128(0),
             native_token_fee: U128(0),
