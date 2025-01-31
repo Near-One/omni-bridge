@@ -12,6 +12,6 @@ spec:
     - ./near/omni-types/.catalog-info.yaml
     - ./near/omni-bridge/.catalog-info.yaml
     - ./near/omni-token/.catalog-info.yaml
-    - ./evm/bridge-token-factory/.catalog-info.yaml
+    - ./evm/.catalog-info.yaml
     - ./omni-relayer/.catalog-info.yaml
     - ./solana/bridge_token_factory/.catalog-info.yaml
