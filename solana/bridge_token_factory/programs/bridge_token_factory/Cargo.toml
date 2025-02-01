@@ -22,9 +22,6 @@ idl-build = [
 ]
 devnet = ["wormhole-anchor-sdk/solana-devnet"]
 mainnet = ["wormhole-anchor-sdk/mainnet"]
-anchor-debug = [] 
-custom-heap = [] 
-custom-panic = []
 
 [dependencies]
 anchor-lang = { version = "0.30.1", features = ["init-if-needed"] }
