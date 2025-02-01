@@ -62,3 +62,14 @@ pub enum ProofKind {
     DeployToken,
     LogMetadata,
 }
+
+impl From<ProofKind> for u8 {
+    fn from(kind: ProofKind) -> Self {
+        match kind {
+            ProofKind::InitTransfer => 0,
+            ProofKind::FinTransfer => 1,
+            ProofKind::DeployToken => 2,
+            ProofKind::LogMetadata => 3,
+        }
+    }
+}

@@ -72,7 +72,7 @@ impl WormholeOmniProverProxy {
         let parsed_vaa = parsed_vaa::ParsedVAA::parse(&h);
 
         require!(
-            proof_kind as u8 == parsed_vaa.payload[0],
+            u8::from(proof_kind) == parsed_vaa.payload[0],
             "Invalid proof kind"
         );
 
