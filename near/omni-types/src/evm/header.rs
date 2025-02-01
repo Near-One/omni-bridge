@@ -3,6 +3,7 @@ use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
 
 use crate::utils::keccak256;
 
+#[allow(clippy::module_name_repetitions)]
 #[derive(Default, Debug, Clone)]
 pub struct BlockHeader {
     pub parent_hash: H256,
