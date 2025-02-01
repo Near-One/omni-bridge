@@ -18,6 +18,7 @@ pub struct TransferMessageStorageValue {
     pub owner: AccountId,
 }
 
+#[allow(clippy::module_name_repetitions)]
 #[near(serializers=[borsh, json])]
 #[derive(Debug, Clone)]
 pub enum TransferMessageStorage {
