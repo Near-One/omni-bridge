@@ -37,6 +37,7 @@ near-plugins = { git = "https://github.com/aurora-is-near/near-plugins", tag = "
 omni-types = { path = "omni-types" }
 strum_macros = "0.26"
 near-workspaces = "0.16.0"
+num_enum = "0.7.3"
 tokio = "1.40"
 anyhow = "1"
 schemars = "0.8"

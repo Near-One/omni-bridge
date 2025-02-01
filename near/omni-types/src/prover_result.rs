@@ -1,5 +1,6 @@
 use near_sdk::json_types::U128;
 use near_sdk::{near, AccountId};
+use num_enum::IntoPrimitive;
 
 use crate::{Fee, Nonce, OmniAddress, TransferId};
 
@@ -55,21 +56,11 @@ pub enum ProverResult {
 }
 
 #[near(serializers=[borsh, json])]
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, IntoPrimitive)]
+#[repr(u8)]
 pub enum ProofKind {
     InitTransfer,
     FinTransfer,
     DeployToken,
     LogMetadata,
-}
-
-impl From<ProofKind> for u8 {
-    fn from(kind: ProofKind) -> Self {
-        match kind {
-            ProofKind::InitTransfer => 0,
-            ProofKind::FinTransfer => 1,
-            ProofKind::DeployToken => 2,
-            ProofKind::LogMetadata => 3,
-        }
-    }
 }
