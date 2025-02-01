@@ -725,7 +725,7 @@ fn test_denormalize_amount() {
                 origin_decimals: 24
             }
         ),
-        u64::MAX as u128 * 1_000_000_u128
+        u128::from(u64::MAX) * 1_000_000_u128
     );
 
     assert_eq!(
@@ -736,6 +736,6 @@ fn test_denormalize_amount() {
                 origin_decimals: 24
             }
         ),
-        u64::MAX as u128 * 1_000_000_000_000_000_u128
+        u128::from(u64::MAX) * 1_000_000_000_000_000_u128
     );
 }
