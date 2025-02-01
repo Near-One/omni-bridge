@@ -29,7 +29,7 @@ use crate::{
 pub struct FinalizeTransfer<'info> {
     #[account(
         init_if_needed,
-        space = USED_NONCES_ACCOUNT_SIZE as usize,
+        space = usize::try_from(USED_NONCES_ACCOUNT_SIZE).unwrap(),
         payer = common.payer,
         seeds = [
             USED_NONCES_SEED,

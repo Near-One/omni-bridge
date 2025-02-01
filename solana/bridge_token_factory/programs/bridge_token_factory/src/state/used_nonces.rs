@@ -12,6 +12,7 @@ use crate::error::ErrorCode;
 use super::config::Config;
 
 #[cfg(not(feature = "idl-build"))]
+#[allow(clippy::as_conversions)]
 #[account(zero_copy(unsafe))]
 #[repr(C)]
 pub struct UsedNonces {
@@ -24,6 +25,7 @@ pub struct UsedNonces {
 pub struct UsedNonces {}
 
 impl UsedNonces {
+    #[allow(clippy::as_conversions)]
     pub fn full_rent(rent: &Rent) -> u64 {
         rent.minimum_balance(USED_NONCES_ACCOUNT_SIZE as usize)
     }

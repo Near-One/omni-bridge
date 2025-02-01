@@ -19,8 +19,13 @@ pub mod state;
 include!(concat!(env!("OUT_DIR"), "/program_id.rs"));
 
 #[program]
+#[allow(clippy::needless_pass_by_value)]
 pub mod bridge_token_factory {
-    use super::*;
+    use super::{
+        msg, Context, DeployToken, DeployTokenPayload, FinalizeTransfer, FinalizeTransferPayload,
+        FinalizeTransferSol, InitTransfer, InitTransferPayload, InitTransferSol, Initialize, Key,
+        LogMetadata, Pubkey, Result, SignedPayload,
+    };
 
     pub fn initialize(
         ctx: Context<Initialize>,
