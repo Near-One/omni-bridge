@@ -10,7 +10,10 @@ use anchor_spl::{
 use crate::{
     constants::{AUTHORITY_SEED, SOL_VAULT_SEED, VAULT_SEED},
     error::ErrorCode,
-    instructions::wormhole_cpi::*,
+    instructions::wormhole_cpi::{
+        WormholeCPI, WormholeCPIBumps, __client_accounts_wormhole_cpi,
+        __cpi_client_accounts_wormhole_cpi,
+    },
     state::message::{init_transfer::InitTransferPayload, Payload},
 };
 
@@ -65,8 +68,8 @@ pub struct InitTransfer<'info> {
     pub token_program: Interface<'info, TokenInterface>,
 }
 
-impl<'info> InitTransfer<'info> {
-    pub fn process(&self, payload: InitTransferPayload) -> Result<()> {
+impl InitTransfer<'_> {
+    pub fn process(&self, payload: &InitTransferPayload) -> Result<()> {
         if payload.native_fee > 0 {
             transfer(
                 CpiContext::new(

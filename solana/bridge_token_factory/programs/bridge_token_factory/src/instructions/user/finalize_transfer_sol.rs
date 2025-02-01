@@ -3,7 +3,10 @@ use crate::{
         AUTHORITY_SEED, CONFIG_SEED, SOL_VAULT_SEED, USED_NONCES_ACCOUNT_SIZE,
         USED_NONCES_PER_ACCOUNT, USED_NONCES_SEED,
     },
-    instructions::wormhole_cpi::*,
+    instructions::wormhole_cpi::{
+        WormholeCPI, WormholeCPIBumps, __client_accounts_wormhole_cpi,
+        __cpi_client_accounts_wormhole_cpi,
+    },
     state::{
         config::Config,
         message::{
@@ -33,7 +36,7 @@ pub struct FinalizeTransferSol<'info> {
         payer = common.payer,
         seeds = [
             USED_NONCES_SEED,
-            &(data.payload.destination_nonce / USED_NONCES_PER_ACCOUNT as u64).to_le_bytes(),
+            &(data.payload.destination_nonce / u64::from(USED_NONCES_PER_ACCOUNT)).to_le_bytes(),
         ],
         bump,
     )]
@@ -59,7 +62,7 @@ pub struct FinalizeTransferSol<'info> {
     pub system_program: Program<'info, System>,
 }
 
-impl<'info> FinalizeTransferSol<'info> {
+impl FinalizeTransferSol<'_> {
     pub fn process(&mut self, data: FinalizeTransferPayload) -> Result<()> {
         UsedNonces::use_nonce(
             data.destination_nonce,

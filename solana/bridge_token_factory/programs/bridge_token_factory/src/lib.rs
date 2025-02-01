@@ -1,5 +1,11 @@
 use anchor_lang::prelude::*;
-use instructions::*;
+use instructions::{
+    DeployToken, FinalizeTransfer, FinalizeTransferSol, InitTransfer, InitTransferSol, Initialize,
+    LogMetadata, __client_accounts_deploy_token, __client_accounts_finalize_transfer,
+    __client_accounts_finalize_transfer_sol, __client_accounts_init_transfer,
+    __client_accounts_init_transfer_sol, __client_accounts_initialize,
+    __client_accounts_log_metadata,
+};
 use state::message::{
     deploy_token::DeployTokenPayload, finalize_transfer::FinalizeTransferPayload,
     init_transfer::InitTransferPayload, SignedPayload,
@@ -90,7 +96,7 @@ pub mod bridge_token_factory {
     pub fn init_transfer(ctx: Context<InitTransfer>, payload: InitTransferPayload) -> Result<()> {
         msg!("Initializing transfer");
 
-        ctx.accounts.process(payload)?;
+        ctx.accounts.process(&payload)?;
 
         Ok(())
     }
@@ -101,7 +107,7 @@ pub mod bridge_token_factory {
     ) -> Result<()> {
         msg!("Initializing transfer");
 
-        ctx.accounts.process(payload)?;
+        ctx.accounts.process(&payload)?;
 
         Ok(())
     }

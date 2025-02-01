@@ -7,11 +7,14 @@ use anchor_spl::{
 
 use crate::{
     constants::{
-        AUTHORITY_SEED, USED_NONCES_ACCOUNT_SIZE, USED_NONCES_PER_ACCOUNT,
-        USED_NONCES_SEED, VAULT_SEED,
+        AUTHORITY_SEED, USED_NONCES_ACCOUNT_SIZE, USED_NONCES_PER_ACCOUNT, USED_NONCES_SEED,
+        VAULT_SEED,
     },
     error::ErrorCode,
-    instructions::wormhole_cpi::*,
+    instructions::wormhole_cpi::{
+        WormholeCPI, WormholeCPIBumps, __client_accounts_wormhole_cpi,
+        __cpi_client_accounts_wormhole_cpi,
+    },
     state::{
         message::{
             finalize_transfer::{FinalizeTransferPayload, FinalizeTransferResponse},
@@ -30,7 +33,7 @@ pub struct FinalizeTransfer<'info> {
         payer = common.payer,
         seeds = [
             USED_NONCES_SEED,
-            &(data.payload.destination_nonce / USED_NONCES_PER_ACCOUNT as u64).to_le_bytes(),
+            &(data.payload.destination_nonce / u64::from(USED_NONCES_PER_ACCOUNT)).to_le_bytes(),
         ],
         bump,
     )]
@@ -80,7 +83,7 @@ pub struct FinalizeTransfer<'info> {
     pub token_program: Interface<'info, TokenInterface>,
 }
 
-impl<'info> FinalizeTransfer<'info> {
+impl FinalizeTransfer<'_> {
     pub fn process(&mut self, data: FinalizeTransferPayload) -> Result<()> {
         UsedNonces::use_nonce(
             data.destination_nonce,

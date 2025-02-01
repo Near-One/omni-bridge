@@ -20,14 +20,14 @@ impl Payload for LogMetadataPayload {
         // 0. Message type
         OutgoingMessageType::LogMetadata.serialize(&mut writer)?;
         // 1. token
-        writer.write(&[SOLANA_OMNI_BRIDGE_CHAIN_ID])?;
+        writer.write_all(&[SOLANA_OMNI_BRIDGE_CHAIN_ID])?;
         self.token.serialize(&mut writer)?;
         // 2. name
         self.name.serialize(&mut writer)?;
         // 3. symbol
         self.symbol.serialize(&mut writer)?;
         // 4. decimals
-        writer.write(&[self.decimals])?;
+        writer.write_all(&[self.decimals])?;
 
         writer
             .into_inner()
