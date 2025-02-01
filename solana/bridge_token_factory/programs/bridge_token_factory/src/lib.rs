@@ -1,15 +1,14 @@
 use anchor_lang::prelude::*;
 use instructions::*;
+use state::message::{
+    deploy_token::DeployTokenPayload, finalize_transfer::FinalizeTransferPayload,
+    init_transfer::InitTransferPayload, SignedPayload,
+};
 
 pub mod constants;
 pub mod error;
 pub mod instructions;
 pub mod state;
-
-use state::message::{
-    deploy_token::DeployTokenPayload, finalize_transfer::FinalizeTransferPayload,
-    init_transfer::InitTransferPayload, SignedPayload,
-};
 
 include!(concat!(env!("OUT_DIR"), "/program_id.rs"));
 
@@ -44,10 +43,7 @@ pub mod bridge_token_factory {
     ) -> Result<()> {
         msg!("Deploying token");
 
-        data.verify_signature(
-            (),
-            &ctx.accounts.common.config.derived_near_bridge_address,
-        )?;
+        data.verify_signature((), &ctx.accounts.common.config.derived_near_bridge_address)?;
         ctx.accounts.initialize_token_metadata(data.payload)?;
 
         Ok(())
@@ -83,9 +79,7 @@ pub mod bridge_token_factory {
         Ok(())
     }
 
-    pub fn log_metadata(
-        ctx: Context<LogMetadata>,
-    ) -> Result<()> {
+    pub fn log_metadata(ctx: Context<LogMetadata>) -> Result<()> {
         msg!("Logging metadata");
 
         ctx.accounts.process()?;
