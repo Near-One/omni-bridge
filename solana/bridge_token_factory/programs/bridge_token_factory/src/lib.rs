@@ -1,21 +1,31 @@
 use anchor_lang::prelude::*;
-use instructions::*;
+use instructions::{
+    DeployToken, FinalizeTransfer, FinalizeTransferSol, InitTransfer, InitTransferSol, Initialize,
+    LogMetadata, __client_accounts_deploy_token, __client_accounts_finalize_transfer,
+    __client_accounts_finalize_transfer_sol, __client_accounts_init_transfer,
+    __client_accounts_init_transfer_sol, __client_accounts_initialize,
+    __client_accounts_log_metadata,
+};
+use state::message::{
+    deploy_token::DeployTokenPayload, finalize_transfer::FinalizeTransferPayload,
+    init_transfer::InitTransferPayload, SignedPayload,
+};
 
 pub mod constants;
 pub mod error;
 pub mod instructions;
 pub mod state;
 
-use state::message::{
-    deploy_token::DeployTokenPayload, finalize_transfer::FinalizeTransferPayload,
-    init_transfer::InitTransferPayload, SignedPayload,
-};
-
 include!(concat!(env!("OUT_DIR"), "/program_id.rs"));
 
 #[program]
+#[allow(clippy::needless_pass_by_value)]
 pub mod bridge_token_factory {
-    use super::*;
+    use super::{
+        msg, Context, DeployToken, DeployTokenPayload, FinalizeTransfer, FinalizeTransferPayload,
+        FinalizeTransferSol, InitTransfer, InitTransferPayload, InitTransferSol, Initialize, Key,
+        LogMetadata, Pubkey, Result, SignedPayload,
+    };
 
     pub fn initialize(
         ctx: Context<Initialize>,
@@ -44,10 +54,7 @@ pub mod bridge_token_factory {
     ) -> Result<()> {
         msg!("Deploying token");
 
-        data.verify_signature(
-            (),
-            &ctx.accounts.common.config.derived_near_bridge_address,
-        )?;
+        data.verify_signature((), &ctx.accounts.common.config.derived_near_bridge_address)?;
         ctx.accounts.initialize_token_metadata(data.payload)?;
 
         Ok(())
@@ -83,9 +90,7 @@ pub mod bridge_token_factory {
         Ok(())
     }
 
-    pub fn log_metadata(
-        ctx: Context<LogMetadata>,
-    ) -> Result<()> {
+    pub fn log_metadata(ctx: Context<LogMetadata>) -> Result<()> {
         msg!("Logging metadata");
 
         ctx.accounts.process()?;
@@ -96,7 +101,7 @@ pub mod bridge_token_factory {
     pub fn init_transfer(ctx: Context<InitTransfer>, payload: InitTransferPayload) -> Result<()> {
         msg!("Initializing transfer");
 
-        ctx.accounts.process(payload)?;
+        ctx.accounts.process(&payload)?;
 
         Ok(())
     }
@@ -107,7 +112,7 @@ pub mod bridge_token_factory {
     ) -> Result<()> {
         msg!("Initializing transfer");
 
-        ctx.accounts.process(payload)?;
+        ctx.accounts.process(&payload)?;
 
         Ok(())
     }

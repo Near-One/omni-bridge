@@ -1,5 +1,6 @@
 use near_sdk::json_types::U128;
 use near_sdk::{near, AccountId};
+use num_enum::IntoPrimitive;
 
 use crate::{Fee, Nonce, OmniAddress, TransferId};
 
@@ -55,7 +56,8 @@ pub enum ProverResult {
 }
 
 #[near(serializers=[borsh, json])]
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, IntoPrimitive)]
+#[repr(u8)]
 pub enum ProofKind {
     InitTransfer,
     FinTransfer,

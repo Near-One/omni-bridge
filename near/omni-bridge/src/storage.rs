@@ -18,6 +18,7 @@ pub struct TransferMessageStorageValue {
     pub owner: AccountId,
 }
 
+#[allow(clippy::module_name_repetitions)]
 #[near(serializers=[borsh, json])]
 #[derive(Debug, Clone)]
 pub enum TransferMessageStorage {
@@ -132,46 +133,57 @@ impl Contract {
 
     pub fn required_balance_for_account(&self) -> NearToken {
         let key_len = Self::max_key_len_of_account_id();
-        let value_len = borsh::to_vec(&StorageBalance {
+        let value_len: u64 = borsh::to_vec(&StorageBalance {
             total: NearToken::from_yoctonear(0),
             available: NearToken::from_yoctonear(0),
         })
         .sdk_expect("ERR_BORSH")
-        .len() as u64;
+        .len()
+        .try_into()
+        .sdk_expect("ERR_CAST");
 
         env::storage_byte_cost()
             .saturating_mul((Self::get_basic_storage() + key_len + value_len).into())
     }
 
     pub fn required_balance_for_init_transfer(&self) -> NearToken {
-        let key_len = borsh::to_vec(&TransferId::default())
-            .sdk_expect("ERR_BORSH")
-            .len() as u64;
         let max_account_id: AccountId = "a".repeat(64).parse().sdk_expect("ERR_PARSE_ACCOUNT_ID");
-        let value_len = borsh::to_vec(&TransferMessageStorage::V0(TransferMessageStorageValue {
-            message: TransferMessage {
-                origin_nonce: 0,
-                token: OmniAddress::Near(max_account_id.clone()),
-                amount: U128(0),
-                recipient: OmniAddress::Near(max_account_id.clone()),
-                fee: Fee::default(),
-                sender: OmniAddress::Near(max_account_id.clone()),
-                msg: String::new(),
-                destination_nonce: 0,
-            },
-            owner: max_account_id,
-        }))
-        .sdk_expect("ERR_BORSH")
-        .len() as u64;
+
+        let key_len: u64 = borsh::to_vec(&TransferId::default())
+            .sdk_expect("ERR_BORSH")
+            .len()
+            .try_into()
+            .sdk_expect("ERR_CAST");
+
+        let value_len: u64 =
+            borsh::to_vec(&TransferMessageStorage::V0(TransferMessageStorageValue {
+                message: TransferMessage {
+                    origin_nonce: 0,
+                    token: OmniAddress::Near(max_account_id.clone()),
+                    amount: U128(0),
+                    recipient: OmniAddress::Near(max_account_id.clone()),
+                    fee: Fee::default(),
+                    sender: OmniAddress::Near(max_account_id.clone()),
+                    msg: String::new(),
+                    destination_nonce: 0,
+                },
+                owner: max_account_id,
+            }))
+            .sdk_expect("ERR_BORSH")
+            .len()
+            .try_into()
+            .sdk_expect("ERR_CAST");
 
         env::storage_byte_cost()
             .saturating_mul((Self::get_basic_storage() + key_len + value_len).into())
     }
 
     pub fn required_balance_for_fin_transfer(&self) -> NearToken {
-        let key_len = borsh::to_vec(&(ChainKind::Eth, 0_u128))
+        let key_len: u64 = borsh::to_vec(&(ChainKind::Eth, 0_u128))
             .sdk_expect("ERR_BORSH")
-            .len() as u64;
+            .len()
+            .try_into()
+            .sdk_expect("ERR_CAST");
 
         let storage_cost =
             env::storage_byte_cost().saturating_mul((Self::get_basic_storage() + key_len).into());
@@ -183,13 +195,17 @@ impl Contract {
     pub fn required_balance_for_bind_token(&self) -> NearToken {
         let max_token_id: AccountId = "a".repeat(64).parse().sdk_expect("ERR_PARSE_ACCOUNT_ID");
 
-        let key_len = borsh::to_vec(&(ChainKind::Near, &max_token_id))
+        let key_len: u64 = borsh::to_vec(&(ChainKind::Near, &max_token_id))
             .sdk_expect("ERR_BORSH")
-            .len() as u64;
+            .len()
+            .try_into()
+            .sdk_expect("ERR_CAST");
 
-        let value_len = borsh::to_vec(&OmniAddress::Near(max_token_id))
+        let value_len: u64 = borsh::to_vec(&OmniAddress::Near(max_token_id))
             .sdk_expect("ERR_BORSH")
-            .len() as u64;
+            .len()
+            .try_into()
+            .sdk_expect("ERR_CAST");
 
         env::storage_byte_cost()
             .saturating_mul((3 * (Self::get_basic_storage() + key_len + value_len)).into())
@@ -215,6 +231,11 @@ impl Contract {
 
     fn max_key_len_of_account_id() -> u64 {
         let max_account_id: AccountId = "a".repeat(64).parse().sdk_expect("ERR_PARSE_ACCOUNT_ID");
-        borsh::to_vec(&max_account_id).sdk_expect("ERR_BORSH").len() as u64
+
+        borsh::to_vec(&max_account_id)
+            .sdk_expect("ERR_BORSH")
+            .len()
+            .try_into()
+            .sdk_expect("ERR_CAST")
     }
 }
