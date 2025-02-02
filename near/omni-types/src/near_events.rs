@@ -1,10 +1,11 @@
-use near_sdk::serde::{Deserialize, Serialize};
+use near_sdk::near;
 use near_sdk::serde_json::json;
 
 use crate::mpc_types::SignatureResponse;
 use crate::{MetadataPayload, TransferMessage, TransferMessagePayload};
 
-#[derive(Deserialize, Serialize, Clone, Debug)]
+#[near(serializers=[json])]
+#[derive(Clone, Debug)]
 pub enum OmniBridgeEvent {
     InitTransferEvent {
         transfer_message: TransferMessage,

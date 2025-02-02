@@ -1,5 +1,8 @@
 use crate::constants::{AUTHORITY_SEED, MAX_ALLOWED_DECIMALS, METADATA_SEED, WRAPPED_MINT_SEED};
-use crate::instructions::wormhole_cpi::*;
+use crate::instructions::wormhole_cpi::{
+    WormholeCPI, WormholeCPIBumps, __client_accounts_wormhole_cpi,
+    __cpi_client_accounts_wormhole_cpi,
+};
 use crate::state::message::SignedPayload;
 use crate::state::message::{
     deploy_token::{DeployTokenPayload, DeployTokenResponse},
@@ -67,7 +70,7 @@ pub struct DeployToken<'info> {
     pub token_metadata_program: Program<'info, Metaplex>,
 }
 
-impl<'info> DeployToken<'info> {
+impl DeployToken<'_> {
     pub fn initialize_token_metadata(&self, mut metadata: DeployTokenPayload) -> Result<()> {
         let bump = &[self.common.config.bumps.authority];
         let signer_seeds = &[&[AUTHORITY_SEED, bump][..]];

@@ -1,0 +1,39 @@
+on:
+  push:
+    tags:
+      - '*'
+  
+  workflow_dispatch:
+
+name: Update Contracts
+jobs:
+  update-contracts:
+    runs-on: ubuntu-latest
+    name: Update Contracts
+    permissions:
+      contents: write
+    steps:
+      - name: Clone the repository
+        uses: actions/checkout@v3
+        
+      - name: Install cargo-near
+        run: |
+          curl --proto '=https' --tlsv1.2 -LsSf https://github.com/near/cargo-near/releases/latest/download/cargo-near-installer.sh | sh
+
+      - name: Build NEAR contracts
+        run: |
+          make rust-build-near
+        timeout-minutes: 60
+ 
+      - name: Archive built WASM files
+        run: |
+          mkdir -p artifacts
+          find ./near/target/near -name "*.wasm" -exec cp {} artifacts/ \;
+          zip -j contracts.zip artifacts/*.wasm
+        shell: bash
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          files: contracts.zip

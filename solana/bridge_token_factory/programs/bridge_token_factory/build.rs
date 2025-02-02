@@ -8,5 +8,5 @@ fn main() {
 
     let out_dir = env::var_os("OUT_DIR").unwrap();
     let dest_path = Path::new(&out_dir).join("program_id.rs");
-    fs::write(&dest_path, format!("declare_id!(\"{}\");", program_id)).unwrap();
+    fs::write(&dest_path, format!("declare_id!(\"{program_id}\");")).unwrap();
 }

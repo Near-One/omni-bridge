@@ -46,7 +46,7 @@ pub struct WormholeCPI<'info> {
         seeds::program = wormhole_program.key
     )]
     /// CHECK: Emitter's sequence account. This is not created until the first
-    /// message is posted, so it needs to be an [UncheckedAccount] for the
+    /// message is posted, so it needs to be an [`UncheckedAccount`] for the
     /// [`initialize`](crate::initialize) instruction.
     /// [`wormhole::post_message`] requires this account be mutable.
     pub sequence: Account<'info, wormhole::SequenceTracker>,
@@ -67,7 +67,7 @@ pub struct WormholeCPI<'info> {
     pub system_program: Program<'info, System>,
 }
 
-impl<'info> WormholeCPI<'info> {
+impl WormholeCPI<'_> {
     pub fn post_message(&self, data: Vec<u8>) -> Result<()> {
         // If Wormhole requires a fee before posting a message, we need to
         // transfer lamports to the fee collector. Otherwise
