@@ -13,7 +13,10 @@ use alloy::{
 };
 use ethereum_types::H256;
 
-use crate::{config, utils, workers::near::FinTransfer};
+use crate::{
+    config, utils,
+    workers::near::{DeployToken, FinTransfer},
+};
 
 fn extract_evm_config(evm: config::Evm) -> (String, String, Address, u64, i64) {
     (
@@ -73,6 +76,7 @@ pub async fn start_indexer(
             [
                 utils::evm::InitTransfer::SIGNATURE_HASH,
                 utils::evm::FinTransfer::SIGNATURE_HASH,
+                utils::evm::DeployToken::SIGNATURE_HASH,
             ]
             .to_vec(),
         );
@@ -167,6 +171,21 @@ async fn process_log(
             utils::redis::FINALIZED_TRANSFERS,
             tx_hash.to_string(),
             FinTransfer::Evm {
+                chain_kind,
+                block_number,
+                log,
+                tx_logs: tx_logs.map(Box::new),
+                creation_timestamp: chrono::Utc::now().timestamp(),
+                expected_finalization_time,
+            },
+        )
+        .await;
+    } else if log.log_decode::<utils::evm::DeployToken>().is_ok() {
+        utils::redis::add_event(
+            redis_connection,
+            utils::redis::DEPLOY_TOKEN_EVENTS,
+            tx_hash.to_string(),
+            DeployToken::Evm {
                 chain_kind,
                 block_number,
                 log,

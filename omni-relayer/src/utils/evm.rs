@@ -39,6 +39,16 @@ sol!(
     );
 
     #[derive(Debug, serde::Serialize, serde::Deserialize)]
+    event DeployToken(
+        address indexed tokenAddress,
+        string token,
+        string name,
+        string symbol,
+        uint8 decimals,
+        uint8 originDecimals
+    );
+
+    #[derive(Debug, serde::Serialize, serde::Deserialize)]
     event LogMessagePublished(
         address sender,
         uint64 sequence,
