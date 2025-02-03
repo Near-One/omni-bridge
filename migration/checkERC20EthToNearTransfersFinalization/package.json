@@ -1,0 +1,13 @@
+{
+  "name": "check-erc20-eth-to-near-transfers-finalization",
+  "version": "0.0.1",
+  "main": "index.js",
+  "author": "dev@near.org",
+  "license": "MIT",
+  "dependencies": {
+    "@ethersproject/providers": "5.7.2",
+    "dotenv": "^16.4.7",
+    "eth-object": "https://github.com/near/eth-object#378b8dbf44a71f7049666cea5a16ab88d45aed06",
+    "near-api-js": "5.0.1"
+  }
+}
