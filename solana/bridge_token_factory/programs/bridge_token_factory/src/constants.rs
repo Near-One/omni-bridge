@@ -32,3 +32,15 @@ pub const SOLANA_OMNI_BRIDGE_CHAIN_ID: u8 = 2;
 
 #[constant]
 pub const MAX_ALLOWED_DECIMALS: u8 = 9;
+
+#[constant]
+pub const INIT_TRANSFER_PAUSED: u8 = 1 << 0;
+
+#[constant]
+pub const FINALIZE_TRANSFER_PAUSED: u8 = 1 << 1;
+
+#[constant]
+pub const ALL_PAUSED: u8 = INIT_TRANSFER_PAUSED | FINALIZE_TRANSFER_PAUSED;
+
+#[constant]
+pub const ALL_UNPAUSED: u8 = 0;
