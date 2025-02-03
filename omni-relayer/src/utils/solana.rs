@@ -17,6 +17,7 @@ struct InitTransferPayload {
     pub recipient: String,
     pub fee: u128,
     pub native_fee: u64,
+    pub message: String,
 }
 
 pub async fn process_message(
@@ -142,6 +143,7 @@ async fn decode_instruction(
                                 recipient: payload.recipient.clone(),
                                 fee: payload.fee,
                                 native_fee: payload.native_fee,
+                                message: payload.message.clone(),
                                 emitter: emitter.clone(),
                                 sequence,
                                 creation_timestamp: chrono::Utc::now().timestamp(),

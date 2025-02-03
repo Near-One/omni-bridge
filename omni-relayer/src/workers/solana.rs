@@ -118,6 +118,7 @@ pub struct InitTransferWithTimestamp {
     pub recipient: String,
     pub fee: u128,
     pub native_fee: u64,
+    pub message: String,
     pub emitter: String,
     pub sequence: u64,
     pub creation_timestamp: i64,
