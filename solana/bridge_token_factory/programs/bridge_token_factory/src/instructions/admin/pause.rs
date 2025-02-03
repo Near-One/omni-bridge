@@ -22,7 +22,7 @@ pub struct Pause<'info> {
     pub signer: Signer<'info>,
 }
 
-impl<'info> Pause<'info> {
+impl Pause<'_> {
     pub fn process(&mut self) -> Result<()> {
         self.config.paused = ALL_PAUSED;
 

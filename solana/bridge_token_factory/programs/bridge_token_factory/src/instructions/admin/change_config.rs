@@ -21,7 +21,7 @@ pub struct ChangeConfig<'info> {
     pub signer: Signer<'info>,
 }
 
-impl<'info> ChangeConfig<'info> {
+impl ChangeConfig<'_> {
     pub fn set_admin(&mut self, admin: Pubkey) -> Result<()> {
         self.config.admin = admin;
 
