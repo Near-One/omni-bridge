@@ -45,7 +45,7 @@ jobs:
           repository: ${{ github.repository }}
           tag: ${{ inputs.release_tag }}
           fileName: "contracts.zip"
-          out-file-path: "e2e-testing/generated/near_artifacts"
+          out-file-path: "./e2e-testing/generated/near_artifacts"
           extract: true
 
       - name: Setup E2E environment
@@ -54,9 +54,19 @@ jobs:
           infura_api_key: ${{ secrets.E2E_INFURA_API_KEY }}
           evm_private_key: ${{ secrets.E2E_EVM_PRIVATE_KEY }}
           eth_rpc_url: ${{ secrets.E2E_ETH_RPC_URL }}
-
+      
+      - name: Debug directory
+        run: |
+          pwd
+          ls -la ./e2e-testing/generated/near_artifacts
+          find . -name "near_artifacts"
+  
       - name: Run pipeline
         run: |
+          pwd
+          ls -la ./e2e-testing/generated/near_artifacts
+          find . -name "near_artifacts"
+
           echo "Running pipeline: ${{ matrix.pipeline }}"
           cd e2e-testing && make ${{ matrix.pipeline }}
 
