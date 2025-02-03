@@ -33,7 +33,7 @@ impl Payload for InitTransferPayload {
         // 5. fee
         self.fee.serialize(&mut writer)?;
         // 6. native_fee
-        (self.native_fee as u128).serialize(&mut writer)?;
+        u128::from(self.native_fee).serialize(&mut writer)?;
         // 7. recipient
         self.recipient.serialize(&mut writer)?;
         // 8. message

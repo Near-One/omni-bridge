@@ -16,7 +16,13 @@ use anchor_spl::{
     },
 };
 
-use crate::{constants::METADATA_SEED, instructions::wormhole_cpi::*};
+use crate::{
+    constants::METADATA_SEED,
+    instructions::wormhole_cpi::{
+        WormholeCPI, WormholeCPIBumps, __client_accounts_wormhole_cpi,
+        __cpi_client_accounts_wormhole_cpi,
+    },
+};
 use crate::{
     constants::{AUTHORITY_SEED, VAULT_SEED},
     state::message::Payload,
@@ -62,7 +68,7 @@ pub struct LogMetadata<'info> {
     pub associated_token_program: Program<'info, AssociatedToken>,
 }
 
-impl<'info> LogMetadata<'info> {
+impl LogMetadata<'_> {
     fn parse_metadata_account(&self, address: Pubkey) -> Result<(String, String)> {
         let metadata = self
             .metadata
@@ -89,9 +95,7 @@ impl<'info> LogMetadata<'info> {
             let mint_with_extension =
                 StateWithExtensions::<spl_token_2022::state::Mint>::unpack(&mint_data)?;
 
-            if let Some(metadata_pointer) =
-                mint_with_extension.get_extension::<MetadataPointer>().ok()
-            {
+            if let Ok(metadata_pointer) = mint_with_extension.get_extension::<MetadataPointer>() {
                 if metadata_pointer.metadata_address.0 == self.mint.key() {
                     // Embedded metadata
                     let metadata =

@@ -7,7 +7,7 @@ use solana_transaction_status::{
     option_serializer::OptionSerializer, EncodedTransactionWithStatusMeta, UiRawMessage,
 };
 
-use crate::workers::near::FinTransfer;
+use crate::workers::near::{DeployToken, FinTransfer};
 use crate::workers::solana::InitTransferWithTimestamp;
 use crate::{config, utils};
 
@@ -201,6 +201,45 @@ async fn decode_instruction(
                         signature.to_string(),
                         FinTransfer::Solana {
                             emitter: emitter.clone(),
+                            sequence,
+                        },
+                    )
+                    .await;
+                }
+            }
+        }
+    } else if decoded_data.starts_with(&solana.deploy_token_discriminator) {
+        info!("Received DeployToken on Solana");
+
+        if let Some(OptionSerializer::Some(logs)) =
+            transaction.clone().meta.map(|meta| meta.log_messages)
+        {
+            for log in logs {
+                if log.contains("Sequence") {
+                    let Some(sequence) = log
+                        .split_ascii_whitespace()
+                        .last()
+                        .map(std::string::ToString::to_string)
+                    else {
+                        warn!("Failed to parse sequence number from log: {:?}", log);
+                        continue;
+                    };
+                    let Ok(sequence) = sequence.parse() else {
+                        warn!("Failed to parse sequence as a number: {:?}", sequence);
+                        continue;
+                    };
+
+                    utils::redis::add_event(
+                        redis_connection,
+                        utils::redis::DEPLOY_TOKEN_EVENTS,
+                        signature.to_string(),
+                        DeployToken::Solana {
+                            emitter: account_keys
+                                .get(solana.deploy_token_emitter_index)
+                                .context("Missing emitter account key")?
+                                .as_ref()
+                                .context("Emitter account key is None")?
+                                .clone(),
                             sequence,
                         },
                     )

@@ -33,8 +33,8 @@ enum StorageKey {
     RegisteredProvers,
 }
 
-#[near_bindgen]
-#[derive(BorshDeserialize, BorshSerialize, PanicOnDefault, Pausable, Upgradable)]
+#[near(contract_state)]
+#[derive(PanicOnDefault, Pausable, Upgradable)]
 #[access_control(role_type(Role))]
 #[pausable(manager_roles(Role::PauseManager, Role::DAO))]
 #[upgradable(access_control_roles(

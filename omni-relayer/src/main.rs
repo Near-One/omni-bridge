@@ -71,12 +71,14 @@ async fn main() -> Result<()> {
         let config = config.clone();
         let redis_client = redis_client.clone();
         let connector = connector.clone();
+        let jsonrpc_client = jsonrpc_client.clone();
         async move {
             workers::near::sign_transfer(
                 #[cfg(not(feature = "disable_fee_check"))]
                 config,
                 redis_client,
                 connector,
+                jsonrpc_client,
             )
             .await
         }
@@ -173,6 +175,14 @@ async fn main() -> Result<()> {
         let connector = connector.clone();
         let jsonrpc_client = jsonrpc_client.clone();
         async move { workers::near::claim_fee(config, redis_client, connector, jsonrpc_client).await }
+    }));
+
+    handles.push(tokio::spawn({
+        let config = config.clone();
+        let redis_client = redis_client.clone();
+        let connector = connector.clone();
+        let jsonrpc_client = jsonrpc_client.clone();
+        async move { workers::near::bind_token(config, redis_client, connector, jsonrpc_client).await }
     }));
 
     tokio::select! {

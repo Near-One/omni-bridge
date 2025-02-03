@@ -9,7 +9,7 @@ use ethereum_types::H256;
 use omni_connector::OmniConnector;
 #[cfg(not(feature = "disable_fee_check"))]
 use omni_types::Fee;
-use omni_types::{prover_result::ProofKind, ChainKind, OmniAddress};
+use omni_types::{ChainKind, OmniAddress};
 
 use crate::{config, utils};
 
@@ -216,25 +216,7 @@ async fn handle_init_transfer_event(
         }
     }
 
-    let Some(topic) = init_transfer_with_timestamp.log.topic0() else {
-        warn!("No topic0 in log: {:?}", init_transfer_with_timestamp.log);
-        return;
-    };
-
     let tx_hash = H256::from_slice(tx_hash.as_slice());
-
-    let Some(prover_args) = utils::evm::construct_prover_args(
-        &config,
-        vaa,
-        tx_hash,
-        H256::from_slice(topic.as_slice()),
-        ProofKind::InitTransfer,
-    )
-    .await
-    else {
-        warn!("Failed to construct prover args");
-        return;
-    };
 
     let storage_deposit_actions = match utils::storage::get_storage_deposit_actions(
         &connector,
@@ -249,14 +231,35 @@ async fn handle_init_transfer_event(
         Ok(actions) => actions,
         Err(err) => {
             warn!("{}", err);
+            utils::redis::remove_event(
+                &mut redis_connection,
+                utils::redis::EVM_INIT_TRANSFER_EVENTS,
+                &key,
+            )
+            .await;
+            utils::redis::add_event(
+                &mut redis_connection,
+                utils::redis::STUCK_TRANSFERS,
+                key,
+                init_transfer_with_timestamp,
+            )
+            .await;
             return;
         }
     };
 
-    let fin_transfer_args = omni_connector::FinTransferArgs::NearFinTransfer {
-        chain_kind: init_transfer_with_timestamp.chain_kind,
-        storage_deposit_actions,
-        prover_args,
+    let fin_transfer_args = if let Some(vaa) = vaa {
+        omni_connector::FinTransferArgs::NearFinTransferWithVaa {
+            chain_kind: init_transfer_with_timestamp.chain_kind,
+            storage_deposit_actions,
+            vaa,
+        }
+    } else {
+        omni_connector::FinTransferArgs::NearFinTransferWithEvmProof {
+            chain_kind: init_transfer_with_timestamp.chain_kind,
+            tx_hash,
+            storage_deposit_actions,
+        }
     };
 
     match connector.fin_transfer(fin_transfer_args).await {
