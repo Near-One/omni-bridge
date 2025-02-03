@@ -9,8 +9,9 @@ use alloy::rpc::types::{Log, TransactionReceipt};
 use ethereum_types::H256;
 
 use near_jsonrpc_client::JsonRpcClient;
+use solana_client::rpc_request::RpcResponseErrorData;
 use solana_rpc_client_api::{client_error::ErrorKind, request::RpcError};
-use solana_sdk::pubkey::Pubkey;
+use solana_sdk::{instruction::InstructionError, pubkey::Pubkey, transaction::TransactionError};
 
 use omni_connector::OmniConnector;
 use omni_types::{
@@ -20,7 +21,7 @@ use omni_types::{
 
 use crate::{config, utils};
 
-const NONCE_ALREADY_USED_ERROR: i64 = -32002;
+pub const NONCE_ALREADY_USED: u32 = 6003;
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub struct InitTransferWithTimestamp {
@@ -298,11 +299,19 @@ pub async fn finalize_transfer(
 
                                 if let BridgeSdkError::SolanaRpcError(ref client_error) = err {
                                     if let ErrorKind::RpcError(RpcError::RpcResponseError {
-                                        code,
+                                        data:
+                                            RpcResponseErrorData::SendTransactionPreflightFailure(
+                                                ref result,
+                                            ),
                                         ..
                                     }) = client_error.kind
                                     {
-                                        if code == NONCE_ALREADY_USED_ERROR {
+                                        if result.err
+                                            == Some(TransactionError::InstructionError(
+                                                0,
+                                                InstructionError::Custom(NONCE_ALREADY_USED),
+                                            ))
+                                        {
                                             utils::redis::remove_event(
                                                 &mut redis_connection,
                                                 utils::redis::NEAR_SIGN_TRANSFER_EVENTS,
