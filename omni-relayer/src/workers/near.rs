@@ -21,7 +21,7 @@ use omni_types::{
 
 use crate::{config, utils};
 
-pub const NONCE_ALREADY_USED: u32 = 6003;
+const NONCE_ALREADY_USED: u32 = 6003;
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub struct InitTransferWithTimestamp {
