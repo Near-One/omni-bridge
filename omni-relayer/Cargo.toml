@@ -25,6 +25,7 @@ tokio-stream = { version = "0.1" }
 solana-sdk = "2.1.9"
 solana-client = "2.1.9"
 solana-transaction-status = "2.1.9"
+solana-rpc-client-api = "2.1.9"
 
 ethereum-types = "0.14.1"
 omni-types = { git = "https://github.com/near-one/omni-bridge", package = "omni-types", rev = "b0ca4e1fb6a34086076511d1162747b154fa8a55" }

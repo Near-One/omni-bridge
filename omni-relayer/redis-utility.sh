@@ -69,6 +69,9 @@ case "$1" in
   get_finalized_transfers)
 	redis-cli -h "$REDIS_HOST" -p "$REDIS_PORT" hgetall "finalized_transfers" | sed -n 'n;p' | sed G
     ;;
+  get_stuck_transfers)
+	redis-cli -h "$REDIS_HOST" -p "$REDIS_PORT" hgetall "stuck_transfers" | sed -n 'n;p' | sed G
+    ;;
   *)
     echo "Unknown command: $1"
     echo
@@ -89,6 +92,7 @@ case "$1" in
     echo "  get_solana_init_transfer_events     - Retrieve init transfer events for Solana"
     echo "  get_sign_events                     - Retrieve all sign events for Near"
     echo "  get_finalized_transfers             - Retrieve finalized transfer events"
+    echo "  get_stuck_transfers                 - Retrieve stuck transfer events"
     exit 1
     ;;
 esac
