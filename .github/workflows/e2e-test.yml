@@ -55,12 +55,6 @@ jobs:
           evm_private_key: ${{ secrets.E2E_EVM_PRIVATE_KEY }}
           eth_rpc_url: ${{ secrets.E2E_ETH_RPC_URL }}
       
-      - name: Debug directory
-        run: |
-          pwd
-          ls -la ./e2e-testing/generated/near_artifacts
-          find . -name "near_artifacts"
-  
       - name: Run pipeline
         run: |
           pwd
