@@ -90,7 +90,12 @@ runs:
       uses: taiki-e/cache-cargo-install-action@v2
       with:
         tool: near-cli-rs@0.18.0
-    
+
+    - name: Install Cargo Near
+      uses: taiki-e/cache-cargo-install-action@v2
+      with:
+        tool: cargo-near
+
     - name: Cache Solana CLI and Anchor
       uses: actions/cache@v3
       id: solana-cache

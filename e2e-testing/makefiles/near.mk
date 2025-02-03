@@ -36,7 +36,7 @@ near-build: $(near_binary_paths)
 
 $(near_binary_paths) &:
 	$(call description,Building NEAR contracts)
-	$(near_dir)/build.sh --output-dir $(near_binary_dir)
+	OUT_DIR=$(near_binary_dir) make -f $(common_testing_root)/../Makefile rust-build-near
 
 # Account creation rules
 .PHONY: create-near-init-account

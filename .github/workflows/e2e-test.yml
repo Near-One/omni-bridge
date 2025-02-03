@@ -57,10 +57,6 @@ jobs:
       
       - name: Run pipeline
         run: |
-          pwd
-          ls -la ./e2e-testing/generated/near_artifacts
-          find . -name "near_artifacts"
-
           echo "Running pipeline: ${{ matrix.pipeline }}"
           cd e2e-testing && make ${{ matrix.pipeline }}
 
