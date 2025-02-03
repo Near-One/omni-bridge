@@ -20,7 +20,9 @@ mod tests {
     };
 
     use crate::helpers::tests::{
-        account_n, base_eoa_address, base_factory_address, eth_eoa_address, eth_factory_address, eth_token_address, get_bind_token_args, relayer_account_id, LOCKER_PATH, MOCK_PROVER_PATH, MOCK_TOKEN_PATH, NEP141_DEPOSIT, TOKEN_DEPLOYER_PATH
+        account_n, base_eoa_address, base_factory_address, eth_eoa_address, eth_factory_address,
+        eth_token_address, get_bind_token_args, locker_wasm, mock_prover_wasm, mock_token_wasm,
+        relayer_account_id, token_deployer_wasm, NEP141_DEPOSIT,
     };
 
     struct TestEnv {
@@ -43,9 +45,9 @@ mod tests {
             let sender_balance_token = 1_000_000;
             let worker = near_workspaces::sandbox().await?;
 
-            let prover_contract = worker.dev_deploy(&std::fs::read(MOCK_PROVER_PATH)?).await?;
+            let prover_contract = worker.dev_deploy(&mock_prover_wasm()).await?;
             // Deploy and initialize bridge
-            let bridge_contract = worker.dev_deploy(&std::fs::read(LOCKER_PATH)?).await?;
+            let bridge_contract = worker.dev_deploy(&locker_wasm()).await?;
             bridge_contract
                 .call("new")
                 .args_json(json!({
@@ -86,7 +88,7 @@ mod tests {
                 .create_tla_and_deploy(
                     account_n(1),
                     worker.dev_generate().await.1,
-                    &std::fs::read(TOKEN_DEPLOYER_PATH)?,
+                    &token_deployer_wasm(),
                 )
                 .await?
                 .unwrap();
@@ -120,7 +122,8 @@ mod tests {
                 .unwrap();
 
             let (token_contract, eth_token_address) = if is_bridged_token {
-                let (token_contract, eth_token_address) = Self::deploy_bridged_token(&worker, &bridge_contract).await?;
+                let (token_contract, eth_token_address) =
+                    Self::deploy_bridged_token(&worker, &bridge_contract).await?;
 
                 // Mint to relayer account
                 Self::fake_finalize_transfer(
@@ -266,7 +269,7 @@ mod tests {
             bridge_contract: &near_workspaces::Contract,
             eth_factory_address: OmniAddress,
         ) -> Result<(near_workspaces::Contract, OmniAddress), anyhow::Error> {
-            let token_contract = worker.dev_deploy(&std::fs::read(MOCK_TOKEN_PATH)?).await?;
+            let token_contract = worker.dev_deploy(&mock_token_wasm()).await?;
             token_contract
                 .call("new_default_meta")
                 .args_json(json!({

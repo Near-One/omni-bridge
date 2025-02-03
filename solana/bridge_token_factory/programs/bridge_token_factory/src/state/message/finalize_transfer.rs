@@ -24,15 +24,15 @@ impl Payload for FinalizeTransferPayload {
         // 1. destination_nonce
         self.destination_nonce.serialize(&mut writer)?;
         // 2. transfer_id
-        writer.write(&[self.transfer_id.origin_chain])?;
+        writer.write_all(&[self.transfer_id.origin_chain])?;
         self.transfer_id.origin_nonce.serialize(&mut writer)?;
         // 3. token
-        writer.write(&[SOLANA_OMNI_BRIDGE_CHAIN_ID])?;
+        writer.write_all(&[SOLANA_OMNI_BRIDGE_CHAIN_ID])?;
         params.0.serialize(&mut writer)?;
         // 4. amount
         self.amount.serialize(&mut writer)?;
         // 5. recipient
-        writer.write(&[SOLANA_OMNI_BRIDGE_CHAIN_ID])?;
+        writer.write_all(&[SOLANA_OMNI_BRIDGE_CHAIN_ID])?;
         params.1.serialize(&mut writer)?;
         // 6. fee_recipient
         self.fee_recipient.serialize(&mut writer)?;
@@ -58,10 +58,10 @@ impl Payload for FinalizeTransferResponse {
         // 0. OutgoingMessageType::FinTransfer
         OutgoingMessageType::FinTransfer.serialize(&mut writer)?;
         // 1. transfer_id
-        writer.write(&[self.transfer_id.origin_chain])?;
+        writer.write_all(&[self.transfer_id.origin_chain])?;
         self.transfer_id.origin_nonce.serialize(&mut writer)?;
         // 2. token
-        writer.write(&[SOLANA_OMNI_BRIDGE_CHAIN_ID])?;
+        writer.write_all(&[SOLANA_OMNI_BRIDGE_CHAIN_ID])?;
         self.token.serialize(&mut writer)?;
         // 3. amount
         self.amount.serialize(&mut writer)?;

@@ -12,6 +12,7 @@ use crate::error::ErrorCode;
 use super::config::Config;
 
 #[cfg(not(feature = "idl-build"))]
+#[allow(clippy::as_conversions)]
 #[account(zero_copy(unsafe))]
 #[repr(C)]
 pub struct UsedNonces {
@@ -24,14 +25,15 @@ pub struct UsedNonces {
 pub struct UsedNonces {}
 
 impl UsedNonces {
+    #[allow(clippy::as_conversions)]
     pub fn full_rent(rent: &Rent) -> u64 {
         rent.minimum_balance(USED_NONCES_ACCOUNT_SIZE as usize)
     }
 
     pub fn rent_level(nonce: u64, rent: &Rent) -> Result<u64> {
         let full = Self::full_rent(rent);
-        Ok((nonce % USED_NONCES_PER_ACCOUNT as u64 + 1) * full as u64
-            / USED_NONCES_PER_ACCOUNT as u64)
+        Ok((nonce % u64::from(USED_NONCES_PER_ACCOUNT) + 1) * full
+            / u64::from(USED_NONCES_PER_ACCOUNT))
     }
 
     pub fn use_nonce<'info>(
@@ -97,7 +99,7 @@ impl UsedNonces {
             let mut nonce_slot = unsafe {
                 used_nonces
                     .used
-                    .get_unchecked_mut((nonce % USED_NONCES_PER_ACCOUNT as u64) as usize)
+                    .get_unchecked_mut(usize::try_from(nonce % u64::from(USED_NONCES_PER_ACCOUNT))?)
             };
             require!(!nonce_slot.replace(true), ErrorCode::NonceAlreadyUsed);
         }

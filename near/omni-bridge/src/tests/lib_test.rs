@@ -1,20 +1,22 @@
-use near_contract_standards::storage_management::StorageBalance;
-use omni_types::locker_args::StorageDepositAction;
+use std::collections::HashMap;
+use std::str::FromStr;
+
+use near_contract_standards::{
+    fungible_token::receiver::FungibleTokenReceiver, storage_management::StorageBalance,
+};
+use near_sdk::{
+    borsh, json_types::U128, serde_json, test_utils::VMContextBuilder, test_vm_config, testing_env,
+    AccountId, NearToken, PromiseOrValue, PromiseResult, RuntimeFeesConfig,
+};
+use omni_types::{
+    locker_args::StorageDepositAction,
+    prover_result::{InitTransferMessage, ProverResult},
+    BridgeOnTransferMsg, ChainKind, EvmAddress, Fee, InitTransferMsg, Nonce, OmniAddress,
+    TransferId, TransferMessage, UpdateFee,
+};
 
 use crate::storage::Decimals;
 use crate::Contract;
-use near_sdk::test_utils::VMContextBuilder;
-use near_sdk::RuntimeFeesConfig;
-use near_sdk::{test_vm_config, testing_env};
-use omni_types::prover_result::{InitTransferMessage, ProverResult};
-use omni_types::{BridgeOnTransferMsg, EvmAddress, Nonce, TransferId};
-use std::str::FromStr;
-
-use near_contract_standards::fungible_token::receiver::FungibleTokenReceiver;
-use near_sdk::borsh;
-use near_sdk::json_types::U128;
-use near_sdk::{serde_json, AccountId, NearToken, PromiseOrValue, PromiseResult};
-use omni_types::{ChainKind, Fee, InitTransferMsg, OmniAddress, TransferMessage, UpdateFee};
 
 const DEFAULT_NONCE: Nonce = 0;
 const DEFAULT_TRANSFER_ID: TransferId = TransferId {
@@ -46,7 +48,7 @@ fn setup_test_env(
             context,
             test_vm_config(),
             RuntimeFeesConfig::test(),
-            Default::default(),
+            HashMap::default(),
             results,
         );
     } else {
@@ -79,9 +81,9 @@ fn run_storage_deposit(
     contract.storage_deposit(Some(account_id));
 }
 
-fn get_init_transfer_msg(recipient: String, fee: u128, native_token_fee: u128) -> InitTransferMsg {
+fn get_init_transfer_msg(recipient: &str, fee: u128, native_token_fee: u128) -> InitTransferMsg {
     InitTransferMsg {
-        recipient: OmniAddress::Eth(EvmAddress::from_str(&recipient).unwrap()),
+        recipient: OmniAddress::Eth(EvmAddress::from_str(recipient).unwrap()),
         fee: U128(fee),
         native_token_fee: U128(native_token_fee),
     }
@@ -93,24 +95,23 @@ fn run_ft_on_transfer(
     token_id: String,
     amount: U128,
     attached_deposit: Option<NearToken>,
-    msg: BridgeOnTransferMsg,
+    msg: &BridgeOnTransferMsg,
 ) -> PromiseOrValue<U128> {
     let sender_id = AccountId::try_from(sender_id).expect("Invalid sender ID");
     let token_id = AccountId::try_from(token_id).expect("Invalid token ID");
 
-    let attached_deposit = match attached_deposit {
-        Some(deposit) => deposit,
-        None => {
-            let min_storage_balance = contract.required_balance_for_account();
-            let init_transfer_balance = contract.required_balance_for_init_transfer();
-            min_storage_balance.saturating_add(init_transfer_balance)
-        }
+    let attached_deposit = if let Some(deplosit) = attached_deposit {
+        deplosit
+    } else {
+        let min_storage_balance = contract.required_balance_for_account();
+        let init_transfer_balance = contract.required_balance_for_init_transfer();
+        min_storage_balance.saturating_add(init_transfer_balance)
     };
 
     run_storage_deposit(contract, sender_id.clone(), attached_deposit);
     setup_test_env(token_id.clone(), NearToken::from_yoctonear(0), None);
 
-    let msg = serde_json::to_string(&msg).expect("Failed to serialize transfer message");
+    let msg = serde_json::to_string(msg).expect("Failed to serialize transfer message");
 
     contract.ft_on_transfer(sender_id, amount, msg)
 }
@@ -135,11 +136,7 @@ fn test_init_transfer_nonce_increment() {
         DEFAULT_FT_CONTRACT_ACCOUNT.to_string(),
         U128(100),
         None,
-        BridgeOnTransferMsg::InitTransfer(get_init_transfer_msg(
-            DEFAULT_ETH_USER_ADDRESS.to_string(),
-            0,
-            0,
-        )),
+        &BridgeOnTransferMsg::InitTransfer(get_init_transfer_msg(&DEFAULT_ETH_USER_ADDRESS, 0, 0)),
     );
 
     assert_eq!(contract.current_origin_nonce, DEFAULT_NONCE + 1);
@@ -149,14 +146,14 @@ fn test_init_transfer_nonce_increment() {
 fn test_init_transfer_stored_transfer_message() {
     let mut contract = get_default_contract();
 
-    let msg = get_init_transfer_msg(DEFAULT_ETH_USER_ADDRESS.to_string(), 0, 0);
+    let msg = get_init_transfer_msg(DEFAULT_ETH_USER_ADDRESS, 0, 0);
     run_ft_on_transfer(
         &mut contract,
         DEFAULT_NEAR_USER_ACCOUNT.to_string(),
         DEFAULT_FT_CONTRACT_ACCOUNT.to_string(),
         U128(DEFAULT_TRANSFER_AMOUNT),
         None,
-        BridgeOnTransferMsg::InitTransfer(msg.clone()),
+        &BridgeOnTransferMsg::InitTransfer(msg.clone()),
     );
 
     let stored_transfer = contract.get_transfer_message(TransferId {
@@ -199,11 +196,7 @@ fn test_init_transfer_promise_result() {
         DEFAULT_FT_CONTRACT_ACCOUNT.to_string(),
         U128(DEFAULT_TRANSFER_AMOUNT),
         None,
-        BridgeOnTransferMsg::InitTransfer(get_init_transfer_msg(
-            DEFAULT_ETH_USER_ADDRESS.to_string(),
-            0,
-            0,
-        )),
+        &BridgeOnTransferMsg::InitTransfer(get_init_transfer_msg(&DEFAULT_ETH_USER_ADDRESS, 0, 0)),
     );
 
     let remaining = match promise {
@@ -223,8 +216,8 @@ fn test_init_transfer_invalid_fee() {
         DEFAULT_FT_CONTRACT_ACCOUNT.to_string(),
         U128(DEFAULT_TRANSFER_AMOUNT),
         None,
-        BridgeOnTransferMsg::InitTransfer(get_init_transfer_msg(
-            DEFAULT_ETH_USER_ADDRESS.to_string(),
+        &BridgeOnTransferMsg::InitTransfer(get_init_transfer_msg(
+            &DEFAULT_ETH_USER_ADDRESS,
             DEFAULT_TRANSFER_AMOUNT + 1,
             0,
         )),
@@ -245,11 +238,7 @@ fn test_init_transfer_balance_updated() {
         DEFAULT_FT_CONTRACT_ACCOUNT.to_string(),
         U128(DEFAULT_TRANSFER_AMOUNT),
         Some(total_balance),
-        BridgeOnTransferMsg::InitTransfer(get_init_transfer_msg(
-            DEFAULT_ETH_USER_ADDRESS.to_string(),
-            0,
-            0,
-        )),
+        &BridgeOnTransferMsg::InitTransfer(get_init_transfer_msg(&DEFAULT_ETH_USER_ADDRESS, 0, 0)),
     );
 
     let storage_balance = contract
@@ -265,7 +254,7 @@ fn test_init_transfer_balance_updated() {
 fn run_update_transfer_fee(
     contract: &mut Contract,
     sender_id: String,
-    init_fee: Fee,
+    init_fee: &Fee,
     new_fee: UpdateFee,
     attached_deposit: Option<NearToken>,
 ) {
@@ -280,7 +269,7 @@ fn run_update_transfer_fee(
         recipient: OmniAddress::Eth(EvmAddress::from_str(DEFAULT_ETH_USER_ADDRESS).unwrap()),
         fee: init_fee.clone(),
         sender: OmniAddress::Near(sender_id.clone().parse().unwrap()),
-        msg: "".to_string(),
+        msg: String::new(),
         destination_nonce: 1,
         origin_transfer_id: None,
     };
@@ -294,7 +283,7 @@ fn run_update_transfer_fee(
         UpdateFee::Fee(new_fee) => {
             NearToken::from_yoctonear(new_fee.native_fee.0.saturating_sub(init_fee.native_fee.0))
         }
-        _ => panic!("Not supported fee type"),
+        UpdateFee::Proof(_) => panic!("Not supported fee type"),
     });
 
     setup_test_env(
@@ -317,7 +306,7 @@ fn test_update_transfer_fee_same_fee() {
     run_update_transfer_fee(
         &mut contract,
         DEFAULT_NEAR_USER_ACCOUNT.to_string(),
-        fee.clone(),
+        &fee,
         UpdateFee::Fee(fee.clone()),
         Some(NearToken::from_yoctonear(0)),
     );
@@ -343,7 +332,7 @@ fn test_update_transfer_fee_valid() {
     run_update_transfer_fee(
         &mut contract,
         DEFAULT_NEAR_USER_ACCOUNT.to_string(),
-        fee.clone(),
+        &fee,
         UpdateFee::Fee(new_fee.clone()),
         None,
     );
@@ -370,7 +359,7 @@ fn test_update_transfer_fee_exceeds_amount() {
     run_update_transfer_fee(
         &mut contract,
         DEFAULT_NEAR_USER_ACCOUNT.to_string(),
-        init_fee,
+        &init_fee,
         UpdateFee::Fee(new_fee),
         None,
     );
@@ -394,7 +383,7 @@ fn test_update_transfer_fee_lower_native_fee() {
     run_update_transfer_fee(
         &mut contract,
         DEFAULT_NEAR_USER_ACCOUNT.to_string(),
-        init_fee,
+        &init_fee,
         UpdateFee::Fee(new_fee),
         None,
     );
@@ -419,7 +408,7 @@ fn test_update_transfer_fee_invalid_deposit() {
     run_update_transfer_fee(
         &mut contract,
         DEFAULT_NEAR_USER_ACCOUNT.to_string(),
-        init_fee,
+        &init_fee,
         UpdateFee::Fee(new_fee),
         Some(NearToken::from_yoctonear(2)), // Wrong deposit amount
     );
@@ -443,7 +432,7 @@ fn test_update_transfer_fee_wrong_sender() {
     run_update_transfer_fee(
         &mut contract,
         DEFAULT_NEAR_USER_ACCOUNT.to_string(), // Original sender
-        init_fee,
+        &init_fee,
         UpdateFee::Fee(new_fee.clone()),
         None,
     );
@@ -482,7 +471,7 @@ fn get_prover_result(recipient: Option<OmniAddress>) -> ProverResult {
             native_fee: U128(5),
         },
         sender: OmniAddress::Eth(EvmAddress::from_str(DEFAULT_ETH_USER_ADDRESS).unwrap()),
-        msg: "".to_string(),
+        msg: String::new(),
         emitter_address: OmniAddress::Eth(EvmAddress::from_str(DEFAULT_ETH_USER_ADDRESS).unwrap()),
     })
 }
@@ -636,7 +625,7 @@ fn test_fin_transfer_callback_invalid_proof() {
             .build(),
         test_vm_config(),
         RuntimeFeesConfig::test(),
-        Default::default(),
+        HashMap::default(),
         vec![PromiseResult::Failed],
     );
 
@@ -659,7 +648,7 @@ fn test_fin_transfer_callback_unknown_factory() {
             .build(),
         test_vm_config(),
         RuntimeFeesConfig::test(),
-        Default::default(),
+        HashMap::default(),
         vec![PromiseResult::Successful(
             borsh::to_vec(&get_prover_result(None)).unwrap()
         )],
@@ -741,7 +730,7 @@ fn test_denormalize_amount() {
                 origin_decimals: 24
             }
         ),
-        u64::MAX as u128 * 1_000_000_u128
+        u128::from(u64::MAX) * 1_000_000_u128
     );
 
     assert_eq!(
@@ -752,6 +741,6 @@ fn test_denormalize_amount() {
                 origin_decimals: 24
             }
         ),
-        u64::MAX as u128 * 1_000_000_000_000_000_u128
+        u128::from(u64::MAX) * 1_000_000_000_000_000_u128
     );
 }

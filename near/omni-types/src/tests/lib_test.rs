@@ -137,7 +137,7 @@ fn test_h160_serialization() {
     );
 
     assert_eq!(
-        format!(r#""{}""#, h160.to_string()),
+        format!(r#""{h160}""#),
         serialized,
         "Serialization does not preserve format from to_string()"
     );
@@ -182,7 +182,7 @@ fn test_omni_address_from_evm_address() {
     );
 
     for chain_kind in [ChainKind::Near, ChainKind::Sol] {
-        let expected_error = format!("{:?} is not an EVM chain", chain_kind);
+        let expected_error = format!("{chain_kind:?} is not an EVM chain");
         assert_eq!(
             OmniAddress::new_from_evm_address(chain_kind, evm_address.clone()),
             Err(expected_error)
@@ -195,7 +195,7 @@ fn test_omni_address_from_str() {
     let evm_addr = "0x5a08feed678c056650b3eb4a5cb1b9bb6f0fe265";
     let test_cases = vec![
         (
-            format!("eth:{}", evm_addr),
+            format!("eth:{evm_addr}"),
             Ok(OmniAddress::Eth(H160::from_str(evm_addr).unwrap())),
             "Should parse ETH address",
         ),
@@ -212,12 +212,12 @@ fn test_omni_address_from_str() {
             "Should parse SOL address",
         ),
         (
-            format!("arb:{}", evm_addr),
+            format!("arb:{evm_addr}"),
             Ok(OmniAddress::Arb(H160::from_str(evm_addr).unwrap())),
             "Should parse ARB address",
         ),
         (
-            format!("base:{}", evm_addr),
+            format!("base:{evm_addr}"),
             Ok(OmniAddress::Base(H160::from_str(evm_addr).unwrap())),
             "Should parse BASE address",
         ),
@@ -235,7 +235,7 @@ fn test_omni_address_from_str() {
 
     for (input, expected, message) in test_cases {
         let result = OmniAddress::from_str(&input);
-        assert_eq!(result, expected, "{}", message);
+        assert_eq!(result, expected, "{message}");
     }
 }
 
@@ -246,7 +246,7 @@ fn test_omni_address_display() {
     let test_cases = vec![
         (
             OmniAddress::Eth(evm_addr.clone()),
-            format!("eth:{}", evm_addr),
+            format!("eth:{evm_addr}"),
             "ETH address should format as eth:0x...",
         ),
         (
@@ -261,18 +261,18 @@ fn test_omni_address_display() {
         ),
         (
             OmniAddress::Arb(evm_addr.clone()),
-            format!("arb:{}", evm_addr),
+            format!("arb:{evm_addr}"),
             "ARB address should format as arb:0x...",
         ),
         (
             OmniAddress::Base(evm_addr.clone()),
-            format!("base:{}", evm_addr),
+            format!("base:{evm_addr}"),
             "BASE address should format as base:0x...",
         ),
     ];
 
     for (address, expected, message) in test_cases {
-        assert_eq!(address.to_string(), expected, "{}", message);
+        assert_eq!(address.to_string(), expected, "{message}");
     }
 }
 
@@ -285,7 +285,7 @@ fn test_omni_address_visitor_expecting() {
 
     let result: Result<OmniAddress, _> = serde_json::from_value(serde_json::json!(invalid_value));
     let error = result.unwrap_err().to_string();
-    assert_eq!(error, expected_error, "{}", message);
+    assert_eq!(error, expected_error, "{message}");
 }
 
 #[test]
@@ -326,7 +326,7 @@ fn test_fee_is_zero() {
     ];
 
     for (fee, expected, message) in test_cases {
-        assert_eq!(fee.is_zero(), expected, "{}", message);
+        assert_eq!(fee.is_zero(), expected, "{message}");
     }
 }
 
@@ -344,7 +344,7 @@ fn test_transfer_message_getters() {
                 recipient: OmniAddress::Near("bob.near".parse().unwrap()),
                 fee: Fee::default(),
                 sender: OmniAddress::Eth(evm_addr.clone()),
-                msg: "".to_string(),
+                msg: String::new(),
                 origin_transfer_id: None,
             },
             ChainKind::Eth,
@@ -363,7 +363,7 @@ fn test_transfer_message_getters() {
                 recipient: OmniAddress::Eth(evm_addr.clone()),
                 fee: Fee::default(),
                 sender: OmniAddress::Near("alice.near".parse().unwrap()),
-                msg: "".to_string(),
+                msg: String::new(),
                 origin_transfer_id: None,
             },
             ChainKind::Near,
@@ -382,7 +382,7 @@ fn test_transfer_message_getters() {
                 recipient: OmniAddress::Near("carol.near".parse().unwrap()),
                 fee: Fee::default(),
                 sender: OmniAddress::Sol("11111111111111111111111111111111".parse().unwrap()),
-                msg: "".to_string(),
+                msg: String::new(),
                 origin_transfer_id: None,
             },
             ChainKind::Sol,
@@ -395,8 +395,8 @@ fn test_transfer_message_getters() {
     ];
 
     for (message, expected_chain, expected_id, error_msg) in test_cases {
-        assert_eq!(message.get_origin_chain(), expected_chain, "{}", error_msg);
-        assert_eq!(message.get_transfer_id(), expected_id, "{}", error_msg);
+        assert_eq!(message.get_origin_chain(), expected_chain, "{error_msg}");
+        assert_eq!(message.get_transfer_id(), expected_id, "{error_msg}");
     }
 }
 
@@ -407,6 +407,7 @@ fn test_stringify() {
     assert_eq!(stringify(true), "true", "Should stringify booleans");
     assert_eq!(stringify('a'), "a", "Should stringify chars");
 
+    #[allow(clippy::items_after_statements)]
     #[derive(Debug)]
     struct CustomType(i32);
     impl std::fmt::Display for CustomType {

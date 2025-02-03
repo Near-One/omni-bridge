@@ -1,5 +1,7 @@
 #[cfg(test)]
 pub mod tests {
+    use std::{path::Path, str::FromStr};
+
     use near_sdk::{borsh, json_types::U128, serde_json, AccountId};
     use near_workspaces::types::NearToken;
     use omni_types::{
@@ -7,14 +9,55 @@ pub mod tests {
         prover_result::{DeployTokenMessage, FinTransferMessage, LogMetadataMessage, ProverResult},
         BasicMetadata, ChainKind, Nonce, OmniAddress, TransferId,
     };
+    use rstest::fixture;
 
-    pub const MOCK_TOKEN_PATH: &str = "./../target/wasm32-unknown-unknown/release/mock_token.wasm";
-    pub const MOCK_PROVER_PATH: &str =
-        "./../target/wasm32-unknown-unknown/release/mock_prover.wasm";
-    pub const LOCKER_PATH: &str = "./../target/wasm32-unknown-unknown/release/omni_bridge.wasm";
     pub const NEP141_DEPOSIT: NearToken = NearToken::from_yoctonear(1250000000000000000000);
-    pub const TOKEN_DEPLOYER_PATH: &str =
-        "./../target/wasm32-unknown-unknown/release/token_deployer.wasm";
+
+    fn build_wasm(path: &str, target_dir: &str) -> Vec<u8> {
+        let pwd = Path::new("./").canonicalize().expect("new path");
+        let sub_target = pwd.join(format!("target/{}", target_dir));
+
+        let artifact = cargo_near_build::build(cargo_near_build::BuildOpts {
+            manifest_path: Some(
+                cargo_near_build::camino::Utf8PathBuf::from_str(path)
+                    .expect("camino PathBuf from str"),
+            ),
+            override_cargo_target_dir: Some(sub_target.to_string_lossy().to_string()),
+            ..Default::default()
+        })
+        .unwrap_or_else(|_| panic!("building contract from {}", path));
+
+        std::fs::read(&artifact.path).unwrap()
+    }
+
+    #[fixture]
+    pub fn mock_token_wasm() -> Vec<u8> {
+        build_wasm(
+            "../mock/mock-token/Cargo.toml",
+            "test-target-for-mock-token",
+        )
+    }
+
+    #[fixture]
+    pub fn mock_prover_wasm() -> Vec<u8> {
+        build_wasm(
+            "../mock/mock-prover/Cargo.toml",
+            "test-target-for-mock-prover",
+        )
+    }
+
+    #[fixture]
+    pub fn locker_wasm() -> Vec<u8> {
+        build_wasm("../omni-bridge/Cargo.toml", "test-target-for-locker")
+    }
+
+    #[fixture]
+    pub fn token_deployer_wasm() -> Vec<u8> {
+        build_wasm(
+            "../token-deployer/Cargo.toml",
+            "test-target-for-token-deployer",
+        )
+    }
 
     pub fn relayer_account_id() -> AccountId {
         "relayer".parse().unwrap()
@@ -90,8 +133,8 @@ pub mod tests {
     ) -> ClaimFeeArgs {
         let fin_transfer = FinTransferMessage {
             transfer_id: TransferId {
-                origin_chain: origin_chain,
-                origin_nonce: origin_nonce,
+                origin_chain,
+                origin_nonce,
             },
             fee_recipient: fee_recipient.clone(),
             amount: U128(amount),

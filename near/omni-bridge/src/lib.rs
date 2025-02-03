@@ -382,6 +382,7 @@ impl Contract {
         fee: &Option<Fee>,
     ) -> Promise {
         let transfer_message = self.get_transfer_message(transfer_id);
+
         if let Some(fee) = &fee {
             require!(&transfer_message.fee == fee, "Invalid fee");
         }
@@ -705,7 +706,7 @@ impl Contract {
         let transfer_message = TransferMessage {
             origin_nonce: self.current_origin_nonce,
             token: OmniAddress::Near(fast_transfer.token_id.clone()),
-            amount: fast_transfer.amount.clone(),
+            amount: fast_transfer.amount,
             recipient: fast_transfer.recipient.clone(),
             fee: fast_transfer.fee.clone(),
             sender: OmniAddress::Near(relayer_id.clone()),
@@ -776,7 +777,8 @@ impl Contract {
 
         // Need to make sure fast transfer is finalised because it means transfer parameters are correct. Otherwise, fee can be set as anything.
         if let Some(origin_transfer_id) = message.origin_transfer_id {
-            let mut fast_transfer = FastTransfer::from_transfer(message.clone(), self.get_token_id(&message.token));
+            let mut fast_transfer =
+                FastTransfer::from_transfer(message.clone(), self.get_token_id(&message.token));
             fast_transfer.transfer_id = origin_transfer_id;
             require!(
                 self.is_fast_transfer_finalised(fast_transfer.id()),
@@ -812,10 +814,7 @@ impl Contract {
         );
 
         let token_address = self
-            .get_token_address(
-                message.get_destination_chain(),
-                token.clone(),
-            )
+            .get_token_address(message.get_destination_chain(), token.clone())
             .unwrap_or_else(|| env::panic_str("ERR_FAILED_TO_GET_TOKEN_ADDRESS"));
 
         let denormalized_amount = Self::denormalize_amount(
@@ -1047,7 +1046,10 @@ impl Contract {
     }
 
     pub fn is_fast_transfer_finalised(&self, fast_transfer_id: FastTransferId) -> bool {
-        self.fast_transfers.get(&fast_transfer_id).map(|status| status.finalised).unwrap_or(false)
+        self.fast_transfers
+            .get(&fast_transfer_id)
+            .map(|status| status.finalised)
+            .unwrap_or(false)
     }
 
     #[access_control_any(roles(Role::DAO))]
@@ -1064,7 +1066,8 @@ impl Contract {
     #[payable]
     pub fn add_deployed_tokens(&mut self, tokens: Vec<(OmniAddress, AccountId)>) {
         require!(
-            env::attached_deposit() >= NEP141_DEPOSIT.saturating_mul(tokens.len() as u128),
+            env::attached_deposit()
+                >= NEP141_DEPOSIT.saturating_mul(tokens.len().try_into().sdk_expect("ERR_CAST")),
             "ERR_NOT_ENOUGH_ATTACHED_DEPOSIT"
         );
 
@@ -1181,8 +1184,11 @@ impl Contract {
 
         let mut storage_deposit_action_index: usize = 0;
         require!(
-            Self::check_storage_balance_result((storage_deposit_action_index + 1) as u64)
-                && storage_deposit_actions[storage_deposit_action_index].account_id == recipient
+            Self::check_storage_balance_result(
+                (storage_deposit_action_index + 1)
+                    .try_into()
+                    .sdk_expect("ERR_CAST")
+            ) && storage_deposit_actions[storage_deposit_action_index].account_id == recipient
                 && storage_deposit_actions[storage_deposit_action_index].token_id == token,
             "STORAGE_ERR: The transfer recipient is omitted"
         );
@@ -1204,9 +1210,12 @@ impl Contract {
 
         if transfer_message.fee.fee.0 > 0 {
             require!(
-                Self::check_storage_balance_result((storage_deposit_action_index + 1) as u64)
-                    && storage_deposit_actions[storage_deposit_action_index].account_id
-                        == predecessor_account_id
+                Self::check_storage_balance_result(
+                    (storage_deposit_action_index + 1)
+                        .try_into()
+                        .sdk_expect("ERR_CAST")
+                ) && storage_deposit_actions[storage_deposit_action_index].account_id
+                    == predecessor_account_id
                     && storage_deposit_actions[storage_deposit_action_index].token_id == token,
                 "STORAGE_ERR: The fee recipient is omitted"
             );
@@ -1238,9 +1247,12 @@ impl Contract {
             let native_token_id = self.get_native_token_id(transfer_message.get_origin_chain());
 
             require!(
-                Self::check_storage_balance_result((storage_deposit_action_index + 1) as u64)
-                    && storage_deposit_actions[storage_deposit_action_index].account_id
-                        == predecessor_account_id
+                Self::check_storage_balance_result(
+                    (storage_deposit_action_index + 1)
+                        .try_into()
+                        .sdk_expect("ERR_CAST")
+                ) && storage_deposit_actions[storage_deposit_action_index].account_id
+                    == predecessor_account_id
                     && storage_deposit_actions[storage_deposit_action_index].token_id
                         == native_token_id,
                 "STORAGE_ERR: The native fee recipient is omitted"

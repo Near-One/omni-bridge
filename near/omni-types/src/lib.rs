@@ -1,10 +1,11 @@
+use borsh::{BorshDeserialize, BorshSerialize};
 use core::fmt;
 use core::str::FromStr;
 use hex::FromHex;
-use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::json_types::U128;
 use near_sdk::serde::{Deserialize, Serialize};
-use near_sdk::AccountId;
+use near_sdk::{near, AccountId};
+use schemars::JsonSchema;
 use serde::de::Visitor;
 use sol_address::SolAddress;
 
@@ -20,7 +21,8 @@ pub mod utils;
 #[cfg(test)]
 mod tests;
 
-#[derive(BorshDeserialize, BorshSerialize, Debug, Clone, PartialEq, Eq)]
+#[near(serializers = [borsh])]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct H160(pub [u8; 20]);
 
 impl FromStr for H160 {
@@ -95,7 +97,7 @@ impl<'de> Deserialize<'de> for H160 {
     {
         struct HexVisitor;
 
-        impl<'de> Visitor<'de> for HexVisitor {
+        impl Visitor<'_> for HexVisitor {
             type Value = H160;
 
             fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
@@ -126,21 +128,8 @@ impl Serialize for H160 {
     }
 }
 
-#[derive(
-    Debug,
-    Eq,
-    Clone,
-    Copy,
-    PartialEq,
-    PartialOrd,
-    Ord,
-    BorshSerialize,
-    BorshDeserialize,
-    Serialize,
-    Deserialize,
-    strum_macros::AsRefStr,
-    Default,
-)]
+#[near(serializers = [borsh, json])]
+#[derive(Debug, Eq, Clone, Copy, PartialEq, PartialOrd, Ord, strum_macros::AsRefStr, Default)]
 pub enum ChainKind {
     #[default]
     Eth,
@@ -183,7 +172,8 @@ pub type EvmAddress = H160;
 pub const ZERO_ACCOUNT_ID: &str =
     "0000000000000000000000000000000000000000000000000000000000000000";
 
-#[derive(BorshDeserialize, BorshSerialize, Debug, Clone, PartialEq, Eq)]
+#[near(serializers=[borsh])]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum OmniAddress {
     Eth(EvmAddress),
     Near(AccountId),
@@ -341,6 +331,20 @@ impl fmt::Display for OmniAddress {
     }
 }
 
+impl JsonSchema for OmniAddress {
+    fn is_referenceable() -> bool {
+        false
+    }
+
+    fn schema_name() -> String {
+        String::schema_name()
+    }
+
+    fn json_schema(gen: &mut schemars::gen::SchemaGenerator) -> schemars::schema::Schema {
+        String::json_schema(gen)
+    }
+}
+
 impl Serialize for OmniAddress {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
@@ -357,7 +361,7 @@ impl<'de> Deserialize<'de> for OmniAddress {
     {
         struct OmniAddressVisitor;
 
-        impl<'de> serde::de::Visitor<'de> for OmniAddressVisitor {
+        impl serde::de::Visitor<'_> for OmniAddressVisitor {
             type Value = OmniAddress;
 
             fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
@@ -398,15 +402,15 @@ pub struct InitTransferMsg {
     pub native_token_fee: U128,
 }
 
-#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Debug, Clone)]
+#[near(serializers=[borsh, json])]
+#[derive(Debug, Clone)]
 pub struct FeeRecipient {
     pub recipient: AccountId,
     pub native_fee_recipient: OmniAddress,
 }
 
-#[derive(
-    BorshDeserialize, BorshSerialize, Serialize, Deserialize, Debug, Clone, PartialEq, Default,
-)]
+#[near(serializers=[borsh, json])]
+#[derive(Debug, Clone, PartialEq, Default)]
 pub struct Fee {
     pub fee: U128,
     pub native_fee: U128,
@@ -418,18 +422,8 @@ impl Fee {
     }
 }
 
-#[derive(
-    BorshDeserialize,
-    BorshSerialize,
-    Serialize,
-    Deserialize,
-    Debug,
-    Clone,
-    PartialEq,
-    Eq,
-    Default,
-    Copy,
-)]
+#[near(serializers = [borsh, json])]
+#[derive(Debug, Clone, PartialEq, Eq, Default, Copy)]
 pub struct TransferId {
     // The origin chain kind
     pub origin_chain: ChainKind,
@@ -437,7 +431,8 @@ pub struct TransferId {
     pub origin_nonce: Nonce,
 }
 
-#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Debug, Clone)]
+#[near(serializers=[borsh, json])]
+#[derive(Debug, Clone)]
 pub struct TransferMessage {
     pub origin_nonce: Nonce,
     pub token: OmniAddress,
@@ -467,14 +462,16 @@ impl TransferMessage {
     }
 }
 
-#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Debug, Clone)]
+#[near(serializers = [borsh, json])]
+#[derive(Debug, Clone)]
 pub enum PayloadType {
     TransferMessage,
     Metadata,
     ClaimNativeFee,
 }
 
-#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Debug, Clone)]
+#[near(serializers=[borsh, json])]
+#[derive(Debug, Clone)]
 pub struct TransferMessagePayload {
     pub prefix: PayloadType,
     pub destination_nonce: Nonce,
@@ -485,7 +482,8 @@ pub struct TransferMessagePayload {
     pub fee_recipient: Option<AccountId>,
 }
 
-#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Debug, Clone)]
+#[near(serializers = [borsh, json])]
+#[derive(Debug, Clone)]
 pub struct MetadataPayload {
     pub prefix: PayloadType,
     pub token: String,
@@ -494,15 +492,16 @@ pub struct MetadataPayload {
     pub decimals: u8,
 }
 
-#[derive(Deserialize, Serialize, Clone)]
-#[serde(crate = "near_sdk::serde")]
+#[near(serializers=[borsh, json])]
+#[derive(Clone)]
 pub struct SignRequest {
     pub payload: [u8; 32],
     pub path: String,
     pub key_version: u32,
 }
 
-#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Debug, Clone)]
+#[near(serializers=[borsh, json])]
+#[derive(Debug, Clone)]
 pub enum UpdateFee {
     Fee(Fee),
     Proof(Vec<u8>),
@@ -514,17 +513,20 @@ pub fn stringify<T: std::fmt::Display>(item: T) -> String {
     item.to_string()
 }
 
-#[derive(Deserialize, Serialize, Clone)]
+#[near(serializers=[json])]
+#[derive(Clone)]
 pub struct BasicMetadata {
     pub name: String,
     pub symbol: String,
     pub decimals: u8,
 }
 
-#[derive(BorshDeserialize, BorshSerialize, Serialize, Debug, Clone, Eq, PartialEq)]
+#[near(serializers=[borsh, json])]
+#[derive(Debug, Clone)]
 pub struct FastTransferId(pub [u8; 32]);
 
-#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Debug, Clone)]
+#[near(serializers=[borsh, json])]
+#[derive(Debug, Clone)]
 pub struct FastTransfer {
     pub transfer_id: TransferId,
     pub token_id: AccountId,

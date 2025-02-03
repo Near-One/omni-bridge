@@ -231,6 +231,19 @@ async fn handle_init_transfer_event(
         Ok(actions) => actions,
         Err(err) => {
             warn!("{}", err);
+            utils::redis::remove_event(
+                &mut redis_connection,
+                utils::redis::EVM_INIT_TRANSFER_EVENTS,
+                &key,
+            )
+            .await;
+            utils::redis::add_event(
+                &mut redis_connection,
+                utils::redis::STUCK_TRANSFERS,
+                key,
+                init_transfer_with_timestamp,
+            )
+            .await;
             return;
         }
     };
