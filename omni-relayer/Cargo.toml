@@ -3,7 +3,7 @@ name = "omni-relayer"
 version = "0.1.0"
 edition = "2021"
 resolver = "2"
-repository = "https://github.com/Near-One/omni-bridge"
+repository = "https://github.com/Near-One/omni-bridge/omni-relayer"
 
 [dependencies]
 log = "0.4"
