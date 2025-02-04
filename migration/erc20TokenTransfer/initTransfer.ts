@@ -1,3 +1,4 @@
+import { connect, keyStores, Contract } from "near-api-js";
 import { ethers, JsonRpcProvider, parseUnits, Interface } from 'ethers'
 import EthersAdapter from '@safe-global/protocol-kit'
 import dotenv from 'dotenv'
@@ -25,6 +26,37 @@ const erc20BalanceOfAbi = [
     "type": "function"
   }
 ];
+
+async function initNear() {
+  const keyStore = new keyStores.InMemoryKeyStore();
+  const near_config = {
+    networkId: config.near_network_id,
+    keyStore,
+    nodeUrl: `https://rpc.${config.near_network_id}.near.org`,
+    walletUrl: `https://wallet.${config.near_network_id}.near.org`,
+    helperUrl: `https://helper.${config.near_network_id}.near.org`
+  };
+
+  return await connect(near_config);
+}
+
+async function getTotalSupply(token_id: string) {
+    const near = await initNear();
+    const account = await near.account("script_account.near"); 
+    
+    const contract = new Contract(account, token_id, {
+      viewMethods: ["ft_total_supply"],
+      changeMethods: [],
+      useLocalViewExecution: true          
+    });
+
+    const result = await account.viewFunction({
+        contractId:  token_id, 
+        methodName: "ft_total_supply", 
+        args: {}});
+
+    return result
+}
 
 (async () => {
     dotenv.config()
@@ -54,8 +86,9 @@ const erc20BalanceOfAbi = [
     for (let i = 0; i < tokens_list.length; i++) {
         const contract = new web3.eth.Contract(erc20BalanceOfAbi, tokens_list[i]);    
         const balance = await contract.methods.balanceOf(destination).call();
-        console.log("ERC20 token: ", tokens_list[i], ", balance=", balance);
-        const data = erc20Interface.encodeFunctionData("adminTransfer", [tokens_list[i], config.omni_locker, balance]);
+        const total_supply = await getTotalSupply(tokens_list[i] + "." + config.bridge_factory);
+        console.log("ERC20 token: ", tokens_list[i], ", balance=", balance, "total_supply=", total_supply);
+        const data = erc20Interface.encodeFunctionData("adminTransfer", [tokens_list[i], config.omni_locker, total_supply]);
 
         const safeTransactionData: MetaTransactionData = {
             to: destination,

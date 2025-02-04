@@ -4,4 +4,6 @@ export const config = {
     "safe_address": "",
     "erc20_locker": "",
     "omni_locker": "",
+    "near_network_id": "testnet",
+    "bridge_factory": "factory.sepolia.testnet"
 };
