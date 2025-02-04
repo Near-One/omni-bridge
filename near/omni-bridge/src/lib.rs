@@ -813,7 +813,7 @@ impl Contract {
     }
 
     #[allow(clippy::needless_pass_by_value)]
-    pub fn finish_withdraw(
+    pub fn finish_withdraw_v2(
         &mut self,
         #[serializer(borsh)] sender_id: &AccountId,
         #[serializer(borsh)] amount: u128,
@@ -821,13 +821,6 @@ impl Contract {
     ) {
         let token_id = env::predecessor_account_id();
         require!(self.deployed_tokens.contains(&token_id));
-        let parsed_msg = InitTransferMsg {
-            recipient: OmniAddress::Eth(
-                H160::from_str(&recipient).sdk_expect("Error on recipient parsing"),
-            ),
-            fee: U128(0),
-            native_token_fee: U128(0),
-        };
 
         self.current_origin_nonce += 1;
         let destination_nonce = self.get_next_destination_nonce(ChainKind::Eth);
@@ -836,10 +829,12 @@ impl Contract {
             origin_nonce: self.current_origin_nonce,
             token: OmniAddress::Near(token_id.clone()),
             amount: U128(amount),
-            recipient: parsed_msg.recipient,
+            recipient: OmniAddress::Eth(
+                H160::from_str(&recipient).sdk_expect("Error on recipient parsing"),
+            ),
             fee: Fee {
-                fee: parsed_msg.fee,
-                native_fee: parsed_msg.native_token_fee,
+                fee: U128(0),
+                native_fee: U128(0),
             },
             sender: OmniAddress::Near(sender_id.clone()),
             msg: String::new(),
