@@ -95,7 +95,7 @@ pub async fn sign_transfer(
                         };
 
                         info!(
-                            "Received InitTransferEvent/FinTransferEvent/UpdateFeeEvent",
+                            "Trying to process InitTransferEvent/FinTransferEvent/UpdateFeeEvent",
                         );
 
                         #[cfg(not(feature = "disable_fee_check"))]
@@ -442,8 +442,14 @@ async fn handle_evm_fin_transfer(
 
     if vaa.is_none() {
         if chain_kind == ChainKind::Eth {
+            let Some(Some(light_client)) = config.eth.clone().map(|eth| eth.light_client) else {
+                warn!("Eth chain is not configured or light client account id is missing");
+                return;
+            };
+
             let Ok(light_client_latest_block_number) =
-                utils::near::get_eth_light_client_last_block_number(&config, &jsonrpc_client).await
+                utils::near::get_evm_light_client_last_block_number(&jsonrpc_client, light_client)
+                    .await
             else {
                 warn!("Failed to get eth light client last block number");
                 return;
@@ -666,8 +672,14 @@ async fn handle_evm_deploy_token_event(
 
     if vaa.is_none() {
         if chain_kind == ChainKind::Eth {
+            let Some(Some(light_client)) = config.eth.clone().map(|eth| eth.light_client) else {
+                warn!("Eth chain is not configured or light client account id is missing");
+                return;
+            };
+
             let Ok(light_client_latest_block_number) =
-                utils::near::get_eth_light_client_last_block_number(&config, &jsonrpc_client).await
+                utils::near::get_evm_light_client_last_block_number(&jsonrpc_client, light_client)
+                    .await
             else {
                 warn!("Failed to get eth light client last block number");
                 return;

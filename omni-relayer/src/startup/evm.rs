@@ -178,6 +178,7 @@ async fn process_log(
     };
 
     if log.log_decode::<utils::evm::InitTransfer>().is_ok() {
+        info!("Received InitTransfer on {:?} ({})", chain_kind, tx_hash);
         utils::redis::add_event(
             redis_connection,
             utils::redis::EVM_INIT_TRANSFER_EVENTS,
@@ -194,6 +195,8 @@ async fn process_log(
         )
         .await;
     } else if log.log_decode::<utils::evm::FinTransfer>().is_ok() {
+        info!("Received FinTransfer on {:?} ({})", chain_kind, tx_hash);
+
         utils::redis::add_event(
             redis_connection,
             utils::redis::FINALIZED_TRANSFERS,
@@ -209,6 +212,8 @@ async fn process_log(
         )
         .await;
     } else if log.log_decode::<utils::evm::DeployToken>().is_ok() {
+        info!("Received DeployToken on {:?} ({})", chain_kind, tx_hash);
+
         utils::redis::add_event(
             redis_connection,
             utils::redis::DEPLOY_TOKEN_EVENTS,
@@ -223,6 +228,8 @@ async fn process_log(
             },
         )
         .await;
+    } else {
+        warn!("Received unknown log on {:?}: {:?}", chain_kind, log);
     }
 
     utils::redis::update_last_processed(
