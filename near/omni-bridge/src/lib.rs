@@ -846,7 +846,15 @@ impl Contract {
             destination_nonce,
         };
 
-        let _ = self.add_transfer_message(transfer_message.clone(), sender_id.clone());
+        let required_storage_balance =
+            self.add_transfer_message(transfer_message.clone(), sender_id.clone());
+
+        self.update_storage_balance(
+            env::current_account_id(),
+            required_storage_balance,
+            NearToken::from_yoctonear(0),
+        );
+
         env::log_str(&OmniBridgeEvent::InitTransferEvent { transfer_message }.to_log_string());
     }
 
