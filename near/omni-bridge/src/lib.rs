@@ -48,7 +48,7 @@ const BIND_TOKEN_CALLBACK_GAS: Gas = Gas::from_tgas(25);
 const BIND_TOKEN_REFUND_GAS: Gas = Gas::from_tgas(5);
 const FT_TRANSFER_CALL_GAS: Gas = Gas::from_tgas(125);
 const FT_TRANSFER_GAS: Gas = Gas::from_tgas(5);
-const UPDATE_CONTROLLER_GAS: Gas = Gas::from_tgas(5);
+const UPDATE_CONTROLLER_GAS: Gas = Gas::from_tgas(250);
 const WNEAR_WITHDRAW_GAS: Gas = Gas::from_tgas(10);
 const STORAGE_BALANCE_OF_GAS: Gas = Gas::from_tgas(3);
 const STORAGE_DEPOSIT_GAS: Gas = Gas::from_tgas(3);
@@ -128,8 +128,11 @@ pub trait ExtToken {
         decimals: Option<u8>,
         icon: Option<String>,
     );
+}
 
-    fn update_controller(&mut self);
+#[ext_contract(ext_bridge_token_facory)]
+pub trait ExtBridgeTokenFactory {
+    fn set_controller_for_tokens(&self, tokens_account_id: Vec<AccountId>);
 }
 
 #[ext_contract(ext_signer)]
@@ -960,13 +963,12 @@ impl Contract {
     #[access_control_any(roles(Role::DAO, Role::TokenControllerUpdater))]
     pub fn update_tokens_controller(
         &self,
-        #[serializer(borsh)] tokens_accounts_id: Vec<AccountId>,
+        factory_account_id: AccountId,
+        tokens_accounts_id: Vec<AccountId>,
     ) {
-        for token_id in tokens_accounts_id {
-            ext_token::ext(token_id)
-                .with_static_gas(UPDATE_CONTROLLER_GAS)
-                .update_controller();
-        }
+        ext_bridge_token_facory::ext(factory_account_id)
+            .with_static_gas(UPDATE_CONTROLLER_GAS)
+            .set_controller_for_tokens(tokens_accounts_id);
     }
 }
 
