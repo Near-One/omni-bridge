@@ -14,7 +14,6 @@ import {
 import Web3 from 'web3';
 
 
-import { tokens_list } from './tokensList'
 import { config } from './config'
 
 const erc20BalanceOfAbi = [
@@ -41,6 +40,8 @@ async function initNear() {
 }
 
 async function getTotalSupply(token_id: string) {
+    console.log(token_id)
+    
     const near = await initNear();
     const account = await near.account("script_account.near"); 
     
@@ -53,6 +54,24 @@ async function getTotalSupply(token_id: string) {
     const result = await account.viewFunction({
         contractId:  token_id, 
         methodName: "ft_total_supply", 
+        args: {}});
+
+    return result
+}
+
+async function extractTokensList() {
+    const near = await initNear();
+    const account = await near.account("script_account.near"); 
+    
+    const contract = new Contract(account, config.bridge_factory, {
+      viewMethods: ["get_tokens"],
+      changeMethods: [],
+      useLocalViewExecution: true          
+    });
+
+    const result = await account.viewFunction({
+        contractId:  config.bridge_factory, 
+        methodName: "get_tokens", 
         args: {}});
 
     return result
@@ -82,6 +101,8 @@ async function getTotalSupply(token_id: string) {
     const erc20Abi = ["function adminTransfer(address,address,uint256)", "function balanceOf(address) view returns (uint256)"];
     const erc20Interface = new Interface(erc20Abi);
     
+    const tokens_list = await extractTokensList();
+    console.log(tokens_list)
     const txs = [];
     for (let i = 0; i < tokens_list.length; i++) {
         const contract = new web3.eth.Contract(erc20BalanceOfAbi, tokens_list[i]);    
