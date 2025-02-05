@@ -497,7 +497,7 @@ pub fn stringify<T: std::fmt::Display>(item: T) -> String {
 }
 
 #[near(serializers=[json])]
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct BasicMetadata {
     pub name: String,
     pub symbol: String,
