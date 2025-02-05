@@ -27,7 +27,7 @@ pub enum OmniBridgeEvent {
     ClaimFeeEvent {
         transfer_message: TransferMessage,
     },
-    DeployTokneEvent {
+    DeployTokenEvent {
         token_id: AccountId,
         token_address: OmniAddress,
         metadata: BasicMetadata,

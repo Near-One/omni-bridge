@@ -1292,7 +1292,7 @@ impl Contract {
         );
 
         env::log_str(
-            &OmniBridgeEvent::DeployTokneEvent {
+            &OmniBridgeEvent::DeployTokenEvent {
                 token_id: token_id.clone(),
                 token_address: token_address.clone(),
                 metadata: metadata.clone(),
