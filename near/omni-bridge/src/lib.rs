@@ -790,6 +790,17 @@ impl Contract {
             attached_deposit >= required_deposit,
             "ERROR: The deposit is not sufficient to cover the storage."
         );
+
+        env::log_str(
+            &OmniBridgeEvent::BindTokneEvent {
+                token_id: deploy_token.token,
+                token_address: deploy_token.token_address,
+                decimals: deploy_token.decimals,
+                origin_decimals: deploy_token.origin_decimals,
+            }
+            .to_log_string(),
+        );
+
         attached_deposit.saturating_sub(required_deposit)
     }
 
@@ -1278,6 +1289,15 @@ impl Contract {
         require!(
             attached_deposit >= required_deposit,
             "ERROR: The deposit is not sufficient to cover the storage."
+        );
+
+        env::log_str(
+            &OmniBridgeEvent::DeployTokneEvent {
+                token_id: token_id.clone(),
+                token_address: token_address.clone(),
+                metadata: metadata.clone(),
+            }
+            .to_log_string(),
         );
 
         ext_deployer::ext(deployer)
