@@ -1,0 +1,60 @@
+import { ethers } from 'ethers';
+import type { TokenMetadata } from './types';
+import { VerificationError } from './types';
+
+const ERC20_ABI = [
+    'function name() view returns (string)',
+    'function symbol() view returns (string)',
+    'function decimals() view returns (uint8)'
+];
+
+const DEPLOY_TOKEN_EVENT_SIGNATURE = 'DeployToken(address,string,string,string,uint8,uint8)';
+
+function getInfuraProvider() {
+    return new ethers.JsonRpcProvider(`${process.env.ETH_RPC_URL}/${process.env.INFURA_API_KEY}`);
+}
+
+export async function verifyEvmTransaction(txHash: string): Promise<void> {
+    const provider = getInfuraProvider();
+    const receipt = await provider.getTransactionReceipt(txHash);
+
+    if (!receipt) {
+        throw new VerificationError(`Transaction ${txHash} not found`);
+    }
+
+    if (receipt.status === 0) {
+        throw new VerificationError(`Transaction ${txHash} failed`);
+    }
+}
+
+export async function getEvmTokenAddressFromTx(txHash: string): Promise<string> {
+    const provider = getInfuraProvider();
+    const receipt = await provider.getTransactionReceipt(txHash);
+    if (!receipt) {
+        throw new VerificationError(`Transaction ${txHash} not found`);
+    }
+    const tokenCreatedLog = receipt.logs.find(log => log.topics[0] === ethers.id(DEPLOY_TOKEN_EVENT_SIGNATURE));
+    if (!tokenCreatedLog) {
+        throw new VerificationError('TokenCreated event not found in transaction logs');
+    }
+    const evmTokenAddress = ethers.dataSlice(tokenCreatedLog.topics[1], 12);
+    return evmTokenAddress;
+}
+
+export async function getEvmTokenMetadata(tokenAddress: string): Promise<TokenMetadata> {
+    const provider = getInfuraProvider();
+    const formattedAddress = ethers.getAddress(tokenAddress);
+    const contract = new ethers.Contract(formattedAddress, ERC20_ABI, provider);
+
+    const [name, symbol, decimals] = await Promise.all([
+        contract.name(),
+        contract.symbol(),
+        contract.decimals()
+    ]);
+
+    return {
+        name,
+        symbol,
+        decimals
+    };
+} 

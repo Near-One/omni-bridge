@@ -1,8 +1,8 @@
 # Solana-specific variables and rules
 solana_dir := $(common_testing_root)/../solana
 
-solana_build_stamp := $(common_testing_root)/.solana-build.stamp
-solana_artifacts_dir := $(common_testing_root)/solana_artifacts
+solana_build_stamp := $(common_generated_dir)/.solana-build.stamp
+solana_artifacts_dir := $(common_generated_dir)/solana_artifacts
 
 solana_programs := bridge_token_factory
 solana_programs_keypairs := $(foreach program,$(solana_programs),$(solana_dir)/$(program)/target/deploy/$(program)-keypair.json)
