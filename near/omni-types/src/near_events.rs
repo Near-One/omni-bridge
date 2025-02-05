@@ -32,7 +32,7 @@ pub enum OmniBridgeEvent {
         token_address: OmniAddress,
         metadata: BasicMetadata,
     },
-    BindTokneEvent {
+    BindTokenEvent {
         token_id: AccountId,
         token_address: OmniAddress,
         decimals: u8,

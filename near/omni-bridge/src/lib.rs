@@ -792,7 +792,7 @@ impl Contract {
         );
 
         env::log_str(
-            &OmniBridgeEvent::BindTokneEvent {
+            &OmniBridgeEvent::BindTokenEvent {
                 token_id: deploy_token.token,
                 token_address: deploy_token.token_address,
                 decimals: deploy_token.decimals,
