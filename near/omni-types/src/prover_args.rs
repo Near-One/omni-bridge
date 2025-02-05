@@ -25,7 +25,7 @@ pub struct WormholeVerifyProofArgs {
     pub vaa: String,
 }
 
-#[near(serializers=[borsh])]
+#[near(serializers=[borsh, json])]
 #[derive(Default, Debug, Clone)]
 pub struct EvmProof {
     pub log_index: u64,
