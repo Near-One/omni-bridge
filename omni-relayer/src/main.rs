@@ -4,6 +4,7 @@ use anyhow::{Context, Result};
 use clap::Parser;
 use log::{error, info};
 use omni_types::ChainKind;
+use solana_sdk::signature::Signature;
 
 mod config;
 mod startup;
@@ -29,7 +30,7 @@ struct CliArgs {
     arb_start_block: Option<u64>,
     /// Start signature for Solana indexer
     #[clap(long)]
-    solana_start_signature: Option<String>,
+    solana_start_signature: Option<Signature>,
 }
 
 #[tokio::main]
