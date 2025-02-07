@@ -17,6 +17,7 @@ struct InitTransferPayload {
     pub recipient: String,
     pub fee: u128,
     pub native_fee: u64,
+    pub message: String,
 }
 
 pub async fn process_message(
@@ -74,7 +75,7 @@ async fn decode_instruction(
             .starts_with(discriminator)
             .then_some((discriminator, len))
     }) {
-        info!("Received InitTransfer on Solana");
+        info!("Received InitTransfer on Solana ({})", signature);
 
         let mut payload_data = decoded_data
             .get(offset..)
@@ -142,6 +143,7 @@ async fn decode_instruction(
                                 recipient: payload.recipient.clone(),
                                 fee: payload.fee,
                                 native_fee: payload.native_fee,
+                                message: payload.message.clone(),
                                 emitter: emitter.clone(),
                                 sequence,
                                 creation_timestamp: chrono::Utc::now().timestamp(),
@@ -160,7 +162,7 @@ async fn decode_instruction(
     .into_iter()
     .find(|discriminator| decoded_data.starts_with(discriminator))
     {
-        info!("Received FinTransfer on Solana");
+        info!("Received FinTransfer on Solana: {}", signature);
 
         let emitter = if discriminator == &solana.finalize_transfer_discriminator {
             account_keys
@@ -209,7 +211,7 @@ async fn decode_instruction(
             }
         }
     } else if decoded_data.starts_with(&solana.deploy_token_discriminator) {
-        info!("Received DeployToken on Solana");
+        info!("Received DeployToken on Solana ({})", signature);
 
         if let Some(OptionSerializer::Some(logs)) =
             transaction.clone().meta.map(|meta| meta.log_messages)

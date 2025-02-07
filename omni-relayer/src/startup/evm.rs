@@ -32,7 +32,7 @@ pub async fn start_indexer(
     config: config::Config,
     redis_client: redis::Client,
     chain_kind: ChainKind,
-    start_block: Option<u64>,
+    mut start_block: Option<u64>,
 ) -> Result<()> {
     let mut redis_connection = redis_client.get_multiplexed_tokio_connection().await?;
 
@@ -49,36 +49,6 @@ pub async fn start_indexer(
         _ => anyhow::bail!("Unsupported chain kind: {chain_kind:?}"),
     };
 
-    let http_provider = ProviderBuilder::new().on_http(rpc_http_url.parse().context(format!(
-        "Failed to parse {chain_kind:?} rpc provider as url",
-    ))?);
-
-    let last_processed_block_key = utils::redis::get_last_processed_key(chain_kind);
-    let latest_block = http_provider.get_block_number().await?;
-    let from_block = match start_block {
-        Some(block) => block,
-        None => {
-            if let Some(block) = utils::redis::get_last_processed::<&str, u64>(
-                &mut redis_connection,
-                &last_processed_block_key,
-            )
-            .await
-            {
-                block + 1
-            } else {
-                utils::redis::update_last_processed(
-                    &mut redis_connection,
-                    &last_processed_block_key,
-                    latest_block + 1,
-                )
-                .await;
-                latest_block + 1
-            }
-        }
-    };
-
-    info!("{chain_kind:?} indexer will start from block: {from_block}");
-
     let filter = Filter::new()
         .address(bridge_token_factory_address)
         .event_signature(
@@ -90,36 +60,27 @@ pub async fn start_indexer(
             .to_vec(),
         );
 
-    for current_block in
-        (from_block..latest_block).step_by(usize::try_from(block_processing_batch_size)?)
-    {
-        let logs = http_provider
-            .get_logs(
-                &filter
-                    .clone()
-                    .from_block(current_block)
-                    .to_block((current_block + block_processing_batch_size).min(latest_block)),
-            )
-            .await?;
-
-        for log in logs {
-            process_log(
-                chain_kind,
-                &mut redis_connection,
-                &http_provider,
-                log,
-                expected_finalization_time,
-            )
-            .await;
-        }
-    }
-
-    info!(
-        "All historical logs processed, starting {:?} WS subscription",
-        chain_kind
-    );
-
     loop {
+        let http_provider = ProviderBuilder::new().on_http(rpc_http_url.parse().context(
+            format!("Failed to parse {chain_kind:?} rpc provider as url",),
+        )?);
+
+        process_recent_blocks(
+            &mut redis_connection,
+            &http_provider,
+            &filter,
+            chain_kind,
+            start_block,
+            block_processing_batch_size,
+            expected_finalization_time,
+        )
+        .await?;
+
+        info!(
+            "All historical logs processed, starting {:?} WS subscription",
+            chain_kind
+        );
+
         let ws_provider = crate::skip_fail!(
             ProviderBuilder::new()
                 .on_ws(WsConnect::new(&rpc_ws_url))
@@ -149,8 +110,72 @@ pub async fn start_indexer(
         }
 
         error!("{chain_kind:?} WebSocket stream closed unexpectedly, reconnecting...");
+        start_block = None;
+
         tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
     }
+}
+
+async fn process_recent_blocks(
+    redis_connection: &mut redis::aio::MultiplexedConnection,
+    http_provider: &RootProvider<Http<Client>>,
+    filter: &Filter,
+    chain_kind: ChainKind,
+    start_block: Option<u64>,
+    block_processing_batch_size: u64,
+    expected_finalization_time: i64,
+) -> Result<()> {
+    let last_processed_block_key = utils::redis::get_last_processed_key(chain_kind);
+    let latest_block = http_provider.get_block_number().await?;
+    let from_block = match start_block {
+        Some(block) => block,
+        None => {
+            if let Some(block) = utils::redis::get_last_processed::<&str, u64>(
+                redis_connection,
+                &last_processed_block_key,
+            )
+            .await
+            {
+                block + 1
+            } else {
+                utils::redis::update_last_processed(
+                    redis_connection,
+                    &last_processed_block_key,
+                    latest_block + 1,
+                )
+                .await;
+                latest_block + 1
+            }
+        }
+    };
+
+    info!("{chain_kind:?} indexer will start from block: {from_block}");
+
+    for current_block in
+        (from_block..latest_block).step_by(usize::try_from(block_processing_batch_size)?)
+    {
+        let logs = http_provider
+            .get_logs(
+                &filter
+                    .clone()
+                    .from_block(current_block)
+                    .to_block((current_block + block_processing_batch_size).min(latest_block)),
+            )
+            .await?;
+
+        for log in logs {
+            process_log(
+                chain_kind,
+                redis_connection,
+                http_provider,
+                log,
+                expected_finalization_time,
+            )
+            .await;
+        }
+    }
+
+    Ok(())
 }
 
 async fn process_log(
@@ -178,6 +203,7 @@ async fn process_log(
     };
 
     if log.log_decode::<utils::evm::InitTransfer>().is_ok() {
+        info!("Received InitTransfer on {:?} ({})", chain_kind, tx_hash);
         utils::redis::add_event(
             redis_connection,
             utils::redis::EVM_INIT_TRANSFER_EVENTS,
@@ -194,6 +220,8 @@ async fn process_log(
         )
         .await;
     } else if log.log_decode::<utils::evm::FinTransfer>().is_ok() {
+        info!("Received FinTransfer on {:?} ({})", chain_kind, tx_hash);
+
         utils::redis::add_event(
             redis_connection,
             utils::redis::FINALIZED_TRANSFERS,
@@ -209,6 +237,8 @@ async fn process_log(
         )
         .await;
     } else if log.log_decode::<utils::evm::DeployToken>().is_ok() {
+        info!("Received DeployToken on {:?} ({})", chain_kind, tx_hash);
+
         utils::redis::add_event(
             redis_connection,
             utils::redis::DEPLOY_TOKEN_EVENTS,
@@ -223,6 +253,8 @@ async fn process_log(
             },
         )
         .await;
+    } else {
+        warn!("Received unknown log on {:?}: {:?}", chain_kind, log);
     }
 
     utils::redis::update_last_processed(
