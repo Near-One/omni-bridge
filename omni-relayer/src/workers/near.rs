@@ -144,7 +144,8 @@ pub async fn sign_transfer(
                                     Some(
                                         vec![
                                             "Signature request has already been submitted. Please try again later.".to_string(),
-                                            "Signature request has timed out.".to_string()
+                                            "Signature request has timed out.".to_string(),
+                                            "Attached deposit is lower than required".to_string()
                                         ]
                                     )
                                 ).await {
