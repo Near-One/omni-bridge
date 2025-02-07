@@ -21,6 +21,7 @@ use omni_types::{
 
 use crate::{config, utils};
 
+const SIGNATURE_VERIFICATION_FAILED: u32 = 6001;
 const NONCE_ALREADY_USED: u32 = 6003;
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
@@ -312,6 +313,13 @@ pub async fn finalize_transfer(
                                                 0,
                                                 InstructionError::Custom(NONCE_ALREADY_USED),
                                             ))
+                                            || result.err
+                                                == Some(TransactionError::InstructionError(
+                                                    0,
+                                                    InstructionError::Custom(
+                                                        SIGNATURE_VERIFICATION_FAILED,
+                                                    ),
+                                                ))
                                         {
                                             utils::redis::remove_event(
                                                 &mut redis_connection,
