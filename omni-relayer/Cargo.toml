@@ -3,6 +3,7 @@ name = "omni-relayer"
 version = "0.1.0"
 edition = "2021"
 resolver = "2"
+repository = "https://github.com/Near-One/omni-bridge"
 
 [dependencies]
 log = "0.4"
@@ -55,3 +56,8 @@ omni-connector = { git = "https://github.com/Near-One/bridge-sdk-rs", package = 
 
 [features]
 disable_fee_check = []
+
+# The profile that 'dist' will build with
+[profile.dist]
+inherits = "release"
+lto = "thin"
