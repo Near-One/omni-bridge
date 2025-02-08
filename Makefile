@@ -58,5 +58,8 @@ rust-build-mock-token:
 
 rust-build-near: rust-build-omni-bridge rust-build-omni-token rust-build-token-deployer rust-build-omni-prover rust-build-evm-prover rust-build-wormhole-omni-prover-proxy rust-build-mock-prover rust-build-mock-token
 
+rust-build-solana:
+	cd solana/bridge_token_factory && RUSTUP_TOOLCHAIN="nightly-2024-11-19" anchor build --verifiable
+
 rust-run-tests:
 	cargo nextest run --manifest-path $(NEAR_MANIFEST)
