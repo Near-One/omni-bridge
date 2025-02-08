@@ -38,8 +38,7 @@ jobs:
           mkdir -p artifacts
           find ./near/target/near -name "*.wasm" -exec cp {} artifacts/ \;
           cp ./solana/bridge_token_factory/target/verifiable/bridge_token_factory.so artifacts
-          ls artifacts
-          zip -j contracts.zip artifacts/*.wasm
+          zip -j contracts.zip artifacts/*
         shell: bash
 
       - name: Create Release
