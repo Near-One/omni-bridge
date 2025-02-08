@@ -7,6 +7,7 @@ members = ["cargo:omni-relayer"]
 cargo-dist-version = "0.28.0"
 # CI backends to support
 ci = "github"
+allow-dirty = ["ci"]
 # The installers to generate for each app
 installers = ["shell"]
 # Target platforms to build apps for (Rust target-triple syntax)
