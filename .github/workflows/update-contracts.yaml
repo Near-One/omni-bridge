@@ -25,6 +25,9 @@ jobs:
           make rust-build-near
         timeout-minutes: 60
 
+      - name: Install Anchor
+        uses: metadaoproject/setup-anchor@v3
+
       - name: Build Solana contract
         run: |
           make rust-build-solana
