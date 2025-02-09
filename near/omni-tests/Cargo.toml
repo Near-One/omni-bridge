@@ -1,7 +1,7 @@
 [package]
 name = "omni-tests"
 version = "0.1.0"
-authors = ["Karim Alabtakh <karim.alabtakh@nearone.org>"]
+authors = ["Near One <info@nearone.org>"]
 edition = "2021"
 publish = false
 
