@@ -22,5 +22,7 @@ pub struct Config {
     pub max_used_nonce: u64,
     pub derived_near_bridge_address: [u8; 64],
     pub bumps: ConfigBumps,
-    pub padding: [u8; 100],
+    pub paused: u8,
+    pub pausable_admin: Pubkey,
+    pub padding: [u8; 67],
 }

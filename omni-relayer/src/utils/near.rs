@@ -1,5 +1,5 @@
-use anyhow::{Context, Result};
-use log::info;
+use anyhow::Result;
+use log::{info, warn};
 
 use near_jsonrpc_client::{
     methods::{self, block::RpcBlockRequest},
@@ -12,12 +12,16 @@ use near_lake_framework::near_indexer_primitives::{
 };
 use near_primitives::{
     borsh::{from_slice, BorshDeserialize},
-    types::BlockReference,
+    hash::CryptoHash,
+    types::{AccountId, BlockReference},
     views::QueryRequest,
 };
 use omni_types::{near_events::OmniBridgeEvent, ChainKind};
 
 use crate::{config, utils};
+
+pub const RETRY_ATTEMPTS: u64 = 10;
+pub const RETRY_SLEEP_SECS: u64 = 5;
 
 pub async fn get_final_block(jsonrpc_client: &JsonRpcClient) -> Result<u64> {
     info!("Getting final block");
@@ -27,6 +31,7 @@ pub async fn get_final_block(jsonrpc_client: &JsonRpcClient) -> Result<u64> {
             near_primitives::types::Finality::Final,
         ),
     };
+
     jsonrpc_client
         .call(block_response)
         .await
@@ -39,21 +44,14 @@ struct EthLightClientResponse {
     last_block_number: u64,
 }
 
-pub async fn get_eth_light_client_last_block_number(
-    config: &config::Config,
+pub async fn get_evm_light_client_last_block_number(
     jsonrpc_client: &JsonRpcClient,
+    light_client: AccountId,
 ) -> Result<u64> {
-    let Some(ref eth) = config.eth else {
-        anyhow::bail!("Failed to get ETH light client");
-    };
-
     let request = methods::query::RpcQueryRequest {
         block_reference: BlockReference::latest(),
         request: QueryRequest::CallFunction {
-            account_id: eth
-                .light_client
-                .clone()
-                .context("Failed to get ETH light client")?,
+            account_id: light_client,
             method_name: "last_block_number".to_string(),
             args: Vec::new().into(),
         },
@@ -66,6 +64,67 @@ pub async fn get_eth_light_client_last_block_number(
     } else {
         anyhow::bail!("Failed to get token decimals")
     }
+}
+
+pub async fn is_tx_successful(
+    jsonrpc_client: &JsonRpcClient,
+    tx_hash: CryptoHash,
+    sender_account_id: AccountId,
+    specific_errors: Option<Vec<String>>,
+) -> bool {
+    let request = near_jsonrpc_client::methods::tx::RpcTransactionStatusRequest {
+        transaction_info: near_jsonrpc_client::methods::tx::TransactionInfo::TransactionId {
+            tx_hash,
+            sender_account_id,
+        },
+        wait_until: near_primitives::views::TxExecutionStatus::Final,
+    };
+
+    let mut response = None;
+
+    for _ in 0..RETRY_ATTEMPTS {
+        if let Ok(res) = jsonrpc_client.call(&request).await {
+            response = Some(res);
+            break;
+        }
+
+        tokio::time::sleep(tokio::time::Duration::from_secs(RETRY_SLEEP_SECS)).await;
+    }
+
+    let Some(response) = response else {
+        warn!("Failed to get transaction status");
+        return false;
+    };
+
+    if let Some(near_primitives::views::FinalExecutionOutcomeViewEnum::FinalExecutionOutcome(
+        final_execution_outcome,
+    )) = response.final_execution_outcome
+    {
+        for receipt_outcome in final_execution_outcome.receipts_outcome {
+            if let near_primitives::views::ExecutionStatusView::Failure(tx_execution_error) =
+                receipt_outcome.outcome.status
+            {
+                warn!(
+                    "Found failed receipt in the transaction ({tx_hash}): {tx_execution_error:?}"
+                );
+
+                if let Some(ref specific_errors) = specific_errors {
+                    if specific_errors.iter().any(|specific_error| {
+                        tx_execution_error.to_string().contains(specific_error)
+                    }) {
+                        info!(
+                            "Transaction ({tx_hash}) failed with specific error: {tx_execution_error:?}"
+                        );
+                        return false;
+                    }
+                } else {
+                    return false;
+                }
+            }
+        }
+    }
+
+    true
 }
 
 pub async fn handle_streamer_message(
@@ -82,7 +141,7 @@ pub async fn handle_streamer_message(
         .collect::<Vec<_>>();
 
     for log in nep_locker_event_logs {
-        info!("Processing OmniBridgeEvent: {:?}", log);
+        info!("Received OmniBridgeEvent: {:?}", log);
 
         match log {
             OmniBridgeEvent::InitTransferEvent {
@@ -132,7 +191,10 @@ pub async fn handle_streamer_message(
                     .await;
                 }
             }
-            OmniBridgeEvent::ClaimFeeEvent { .. } | OmniBridgeEvent::LogMetadataEvent { .. } => {}
+            OmniBridgeEvent::ClaimFeeEvent { .. }
+            | OmniBridgeEvent::LogMetadataEvent { .. }
+            | OmniBridgeEvent::DeployTokenEvent { .. }
+            | OmniBridgeEvent::BindTokenEvent { .. } => {}
         }
     }
 }

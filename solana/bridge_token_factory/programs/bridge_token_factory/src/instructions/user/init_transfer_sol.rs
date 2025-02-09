@@ -6,7 +6,10 @@ use anchor_lang::{
 use crate::{
     constants::SOL_VAULT_SEED,
     error::ErrorCode,
-    instructions::wormhole_cpi::*,
+    instructions::wormhole_cpi::{
+        WormholeCPI, WormholeCPIBumps, __client_accounts_wormhole_cpi,
+        __cpi_client_accounts_wormhole_cpi,
+    },
     state::message::{init_transfer::InitTransferPayload, Payload},
 };
 
@@ -28,8 +31,8 @@ pub struct InitTransferSol<'info> {
     pub common: WormholeCPI<'info>,
 }
 
-impl<'info> InitTransferSol<'info> {
-    pub fn process(&self, payload: InitTransferPayload) -> Result<()> {
+impl InitTransferSol<'_> {
+    pub fn process(&self, payload: &InitTransferPayload) -> Result<()> {
         require!(payload.fee == 0, ErrorCode::InvalidFee);
 
         transfer(
@@ -40,7 +43,9 @@ impl<'info> InitTransferSol<'info> {
                     to: self.sol_vault.to_account_info(),
                 },
             ),
-            payload.native_fee.checked_add(payload.amount.try_into().unwrap())
+            payload
+                .native_fee
+                .checked_add(payload.amount.try_into().unwrap())
                 .unwrap(),
         )?;
 

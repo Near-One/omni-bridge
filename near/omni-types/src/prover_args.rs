@@ -1,29 +1,32 @@
-use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
-use near_sdk::serde::{Deserialize, Serialize};
+use near_sdk::near;
 
 use crate::prover_result::ProofKind;
 
 pub type ProverId = String;
 
-#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone)]
+#[near(serializers=[borsh, json])]
+#[derive(Debug, Clone)]
 pub struct VerifyProofArgs {
     pub prover_id: ProverId,
     pub prover_args: Vec<u8>,
 }
 
-#[derive(BorshDeserialize, BorshSerialize, Clone)]
+#[near(serializers=[borsh])]
+#[derive(Debug, Clone)]
 pub struct EvmVerifyProofArgs {
     pub proof_kind: ProofKind,
     pub proof: EvmProof,
 }
 
-#[derive(BorshDeserialize, BorshSerialize, Clone)]
+#[near(serializers=[borsh])]
+#[derive(Debug, Clone)]
 pub struct WormholeVerifyProofArgs {
     pub proof_kind: ProofKind,
     pub vaa: String,
 }
 
-#[derive(Default, BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone)]
+#[near(serializers=[borsh, json])]
+#[derive(Default, Debug, Clone)]
 pub struct EvmProof {
     pub log_index: u64,
     pub log_entry_data: Vec<u8>,

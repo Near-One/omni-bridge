@@ -1,5 +1,6 @@
 [workspace.package]
 authors = ["Karim Alabtakh <karim.alabtakh@nearone.org>"]
+repository = "https://github.com/Near-One/omni-bridge"
 
 [workspace]
 resolver = "2"
@@ -26,19 +27,22 @@ panic = "abort"
 overflow-checks = true
 
 [workspace.dependencies]
-near-sdk = "5.2.0"
-near-contract-standards = "5.2.0"
+cargo-near-build = "0.4.3"
+near-sdk = "5.7.0"
+near-contract-standards = "5.7.0"
 hex = "0.4.2"
 borsh = "1.5.1"
 serde = { version = "1.0.200", features = ["derive"] }
 near-plugins = { git = "https://github.com/aurora-is-near/near-plugins", tag = "v0.4.1" }
 omni-types = { path = "omni-types" }
 strum_macros = "0.26"
-near-workspaces = "0.12.0"
+near-workspaces = "0.16.0"
+num_enum = "0.7.3"
 tokio = "1.40"
 anyhow = "1"
+schemars = "0.8"
+alloy-sol-types = "0.8"
 ethereum-types = { version = "0.15.1", default-features = false, features = ["rlp", "serialize"] }
 rlp = "0.6"
 sha3 = "0.10.0"
-alloy-sol-types = "0.8"
-rstest = "0.18.2"
+rstest = "0.24.0"

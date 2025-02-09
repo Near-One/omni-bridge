@@ -47,6 +47,8 @@ rpc_ws_url = "wss://api.devnet.solana.com"
 program_id = "Gy1XPwYZURfBzHiGAxnw3SYC33SfqsEpGSS5zeBge28p"
 # This is the wormhole contract ID on Solana (can be found here https://wormhole.com/docs/build/reference/contract-addresses/#__tabbed_1_2)
 wormhole_id = "3u8hJUVTA4jH1wYAyUur7FFZVQ8H635K3tSHHF4ssjQ5"
+deploy_token_emitter_index = 3
+deploy_token_discriminator = [144, 104, 20, 192, 18, 112, 224, 140]
 # There's a list of account keys and they are store in a strict order. We need indexes to get the right key
 init_transfer_sender_index = 5
 init_transfer_token_index = 1

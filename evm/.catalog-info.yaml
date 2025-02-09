@@ -1,0 +1,13 @@
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: omni-evm-bridge-token-factory
+  tags:
+    - ethereum
+  links: []
+  annotations:
+    aurora.dev/security-tier: "1"
+spec:
+  owner: nearone-team
+  type: contract
+  lifecycle: production

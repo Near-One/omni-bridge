@@ -66,7 +66,7 @@ pub struct Initialize<'info> {
         seeds::program = wormhole_program.key
     )]
     /// CHECK: Emitter's sequence account. This is not created until the first
-    /// message is posted, so it needs to be an [UncheckedAccount] for the
+    /// message is posted, so it needs to be an [`UncheckedAccount`] for the
     /// [`initialize`](crate::initialize) instruction.
     /// [`wormhole::post_message`] requires this account be mutable.
     pub wormhole_sequence: UncheckedAccount<'info>,
@@ -88,10 +88,12 @@ pub struct Initialize<'info> {
     pub program: Signer<'info>,
 }
 
-impl<'info> Initialize<'info> {
+impl Initialize<'_> {
+    #[allow(clippy::too_many_arguments)]
     pub fn process(
         &mut self,
         admin: Pubkey,
+        pausable_admin: Pubkey,
         derived_near_bridge_address: [u8; 64],
         config_bump: u8,
         authority_bump: u8,
@@ -101,8 +103,8 @@ impl<'info> Initialize<'info> {
         wormhole_sequence_bump: u8,
     ) -> Result<()> {
         self.config.set_inner(Config {
-            admin,
             max_used_nonce: 0,
+            admin,
             derived_near_bridge_address,
             bumps: ConfigBumps {
                 config: config_bump,
@@ -114,7 +116,9 @@ impl<'info> Initialize<'info> {
                     sequence: wormhole_sequence_bump,
                 },
             },
-            padding: [0; 100],
+            paused: 0,
+            pausable_admin,
+            padding: [0; 67],
         });
 
         let rent = Rent::get()?;
@@ -140,7 +144,7 @@ impl<'info> Initialize<'info> {
                 },
             ),
             rent.minimum_balance(0) // for account creation
-                + UsedNonces::rent_level(USED_NONCES_PER_ACCOUNT as u64 - 1, &rent)?,
+                + UsedNonces::rent_level(u64::from(USED_NONCES_PER_ACCOUNT) - 1, &rent)?,
         )?;
 
         // If Wormhole requires a fee before posting a message, we need to

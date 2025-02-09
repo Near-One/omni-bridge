@@ -6,12 +6,64 @@ on:
       selected_pipelines:
         description: "Space-separated list of pipelines to run (e.g. 'bridge_token_near_to_evm another_pipeline')"
         required: false
-        default: "bridge_token_near_to_evm"
+        default: "bridge-token-near-to-evm"
+      release_tag:
+        description: "Release tag to download artifacts from (optional)"
+        required: false
+        type: string
 
 jobs:
-  e2e-tests:
-    name: E2E Tests
+  get-pipelines-matrix:
+    name: Get Pipelines Matrix
     runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+    steps:
+      - name: Parse input pipelines and create matrix
+        id: set-matrix
+        run: |
+          # Convert space-separated input into JSON array for matrix
+          PIPELINES="${{ github.event.inputs.selected_pipelines }}"
+          JSON_ARRAY=$(echo "$PIPELINES" | jq -R -c 'split(" ")')
+          echo "matrix={\"pipeline\":$JSON_ARRAY}" >> $GITHUB_OUTPUT
+
+  run-tests:
+    needs: [get-pipelines-matrix]
+    name: Run ${{ matrix.pipeline }}
+    runs-on: ubuntu-latest
+    strategy:
+      matrix: ${{fromJson(needs.get-pipelines-matrix.outputs.matrix)}}
+      fail-fast: false
     steps:
       - name: Check out repository
         uses: actions/checkout@v3
+
+      - name: Download release artifacts
+        if: ${{ inputs.release_tag != '' }}
+        uses: robinraju/release-downloader@v1
+        with:
+          repository: ${{ github.repository }}
+          tag: ${{ inputs.release_tag }}
+          fileName: "contracts.zip"
+          out-file-path: "./e2e-testing/generated/near_artifacts"
+          extract: true
+
+      - name: Setup E2E environment
+        uses: ./.github/e2e-setup
+        with:
+          infura_api_key: ${{ secrets.E2E_INFURA_API_KEY }}
+          evm_private_key: ${{ secrets.E2E_EVM_PRIVATE_KEY }}
+          eth_rpc_url: ${{ secrets.E2E_ETH_RPC_URL }}
+      
+      - name: Run pipeline
+        run: |
+          echo "Running pipeline: ${{ matrix.pipeline }}"
+          cd e2e-testing && make ${{ matrix.pipeline }}
+
+      - name: Upload test artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-test-results-${{ matrix.pipeline }}
+          path: |
+            e2e-testing/generated/

@@ -9,6 +9,7 @@ unexport MAKEFLAGS
 SHELL := bash
 .SHELLFLAGS := -eu -o pipefail -c
 .DEFAULT_GOAL := help
+MAKEFILE_DIR := $(shell dirname $(realpath $(lastword $(MAKEFILE_LIST))))
 
 # Master clean target
 .PHONY: clean
@@ -16,15 +17,15 @@ clean: clean-deploy-results clean-evm clean-near clean-solana clean-bridge-token
 	$(call description,Cleaning all build artifacts and deploy results)
 
 # Include common module
-include makefiles/common.mk
+include $(MAKEFILE_DIR)/makefiles/common.mk
 
 # Include chain-specific modules
-include makefiles/evm.mk
-include makefiles/near.mk
-include makefiles/solana.mk
+include $(MAKEFILE_DIR)/makefiles/evm.mk
+include $(MAKEFILE_DIR)/makefiles/near.mk
+include $(MAKEFILE_DIR)/makefiles/solana.mk
 
 # Include test pipelines
-include makefiles/pipelines/bridge_token_near_to_evm.mk
+include $(MAKEFILE_DIR)/makefiles/pipelines/bridge_token_near_to_evm.mk
 
 # Help target
 .PHONY: help
@@ -61,9 +62,10 @@ help:
 	@echo "    {network}-deploy-test-token  Deploy test token to specific network"
 	@echo
 	@echo "Bridge pipeline:"
-	@echo "    bridge-token-near-to-evm     Run complete NEAR to ETH bridge test"
-	@echo "    prepare-token-deployment     Prepare token deployment (Step 0)"
-	@echo "    near-log-metadata-call       Log token metadata (Step 1)"
-	@echo "    ethereum-deploy-token        Deploy token on Ethereum (Step 2)"
-	@echo "    near-bind-token              Bind token on NEAR (Step 3)"
+	@echo "    bridge-token-near-to-evm             Run complete NEAR to ETH bridge test"
+	@echo "    prepare-token-deployment             Prepare token deployment (Step 0)"
+	@echo "    near-log-metadata-call               Log token metadata (Step 1)"
+	@echo "    ethereum-deploy-token                Deploy token on Ethereum (Step 2)"
+	@echo "    near-bind-token                      Bind token on NEAR (Step 3)"
+	@echo "    verify-bridge-token-near-to-evm      Verify the correctness of deployment and binding"
 

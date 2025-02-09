@@ -31,7 +31,7 @@ jobs:
         if: matrix.platform == 'near' || matrix.platform == 'solana'
         uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: 1.80.0
+          toolchain: 1.84.0
           target: wasm32-unknown-unknown
 
       - name: Install NEAR CLI RS
@@ -65,7 +65,7 @@ jobs:
           fi
 
       - name: Upload Artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.platform }}-artifacts
           path: |

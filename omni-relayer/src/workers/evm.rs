@@ -191,8 +191,14 @@ async fn handle_init_transfer_event(
 
     if vaa.is_none() {
         if init_transfer_with_timestamp.chain_kind == ChainKind::Eth {
+            let Some(Some(light_client)) = config.eth.map(|eth| eth.light_client) else {
+                warn!("Eth chain is not configured or light client account id is missing");
+                return;
+            };
+
             let Ok(light_client_latest_block_number) =
-                utils::near::get_eth_light_client_last_block_number(&config, &jsonrpc_client).await
+                utils::near::get_evm_light_client_last_block_number(&jsonrpc_client, light_client)
+                    .await
             else {
                 warn!("Failed to get eth light client last block number");
                 return;
@@ -231,6 +237,19 @@ async fn handle_init_transfer_event(
         Ok(actions) => actions,
         Err(err) => {
             warn!("{}", err);
+            utils::redis::remove_event(
+                &mut redis_connection,
+                utils::redis::EVM_INIT_TRANSFER_EVENTS,
+                &key,
+            )
+            .await;
+            utils::redis::add_event(
+                &mut redis_connection,
+                utils::redis::STUCK_TRANSFERS,
+                key,
+                init_transfer_with_timestamp,
+            )
+            .await;
             return;
         }
     };

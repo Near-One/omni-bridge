@@ -17,6 +17,20 @@ pub mod evm;
 pub mod near;
 pub mod solana;
 
+#[macro_export]
+macro_rules! skip_fail {
+    ($res:expr, $msg:expr, $dur:expr) => {
+        match $res {
+            Ok(val) => val,
+            Err(err) => {
+                error!("{}: {}", $msg, err);
+                tokio::time::sleep(tokio::time::Duration::from_secs($dur)).await;
+                continue;
+            }
+        }
+    };
+}
+
 fn build_evm_bridge_client(
     config: &config::Config,
     chain_kind: ChainKind,
