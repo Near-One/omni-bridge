@@ -65,7 +65,8 @@ jobs:
           fi
 
       - name: Upload Artifacts
-        uses: softprops/action-gh-release@v2
+        uses: actions/upload-artifact@v3
         with:
           name: ${{ matrix.platform }}-artifacts
-          files: ${{ github.workspace }}/e2e-testing/${{ matrix.platform }}_artifacts
+          path: |
+            ${{ github.workspace }}/e2e-testing/${{ matrix.platform }}_artifacts
