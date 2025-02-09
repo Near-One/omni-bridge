@@ -24,12 +24,21 @@ jobs:
         run: |
           make rust-build-near
         timeout-minutes: 60
+
+      - name: Install Anchor
+        uses: metadaoproject/setup-anchor@v3
+
+      - name: Build Solana contract
+        run: |
+          make rust-build-solana
+        timeout-minutes: 60
  
       - name: Archive built WASM files
         run: |
           mkdir -p artifacts
           find ./near/target/near -name "*.wasm" -exec cp {} artifacts/ \;
-          zip -j contracts.zip artifacts/*.wasm
+          cp ./solana/bridge_token_factory/target/verifiable/bridge_token_factory.so artifacts
+          zip -j contracts.zip artifacts/*
         shell: bash
 
       - name: Create Release
