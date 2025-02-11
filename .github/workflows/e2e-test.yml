@@ -47,6 +47,16 @@ jobs:
           fileName: "contracts.zip"
           out-file-path: "./e2e-testing/generated/near_artifacts"
           extract: true
+      
+      - name: Download artifacts for 02-bridge-migration
+        if: matrix.pipeline == '02-bridge-migration'
+        run: |
+          mkdir -p e2e-testing/generated/near_artifacts
+          wget https://github.com/Near-One/rainbow-token-connector/raw/refs/heads/master/res/bridge_token.wasm
+          mv bridge_token.wasm e2e-testing/generated/near_artifacts/
+          wget https://github.com/Near-One/rainbow-token-connector/raw/refs/heads/master/res/bridge_token_factory.wasm
+          mv bridge_token_factory.wasm e2e-testing/generated/near_artifacts/
+  
 
       - name: Setup E2E environment
         uses: ./.github/e2e-setup

@@ -26,7 +26,7 @@ include $(MAKEFILE_DIR)/makefiles/solana.mk
 
 # Include test pipelines
 include $(MAKEFILE_DIR)/makefiles/pipelines/bridge_token_near_to_evm.mk
-
+include $(MAKEFILE_DIR)/makefiles/pipelines/02_bridge_migration.mk
 # Help target
 .PHONY: help
 help:

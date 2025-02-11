@@ -14,6 +14,8 @@ EVM_DEPLOY_ENEAR_PROXY = yarn --silent --cwd $(evm_dir) hardhat deploy-e-near-pr
 
 EVM_DEPLOY_BYTECODE = yarn --silent --cwd $(common_tools_dir) hardhat deploy-bytecode --network $(1) --bytecode $(2)
 EVM_DEPLOY_TEST_TOKEN = yarn --silent --cwd $(common_tools_dir) hardhat deploy-test-token --network $(1) --name $(2) --symbol $(3)
+EVM_MINT_TEST_TOKEN = yarn --silent --cwd $(common_tools_dir) hardhat mint-test-token --network $(1) --contract $(2) --to $(3) --amount $(4)
+EVM_CREATE_EOA = yarn --silent --cwd $(common_tools_dir) hardhat create-eoa --network $(1)
 
 evm_enear_creation_template_file := $(common_testing_root)/bin/eNear_creation.template
 

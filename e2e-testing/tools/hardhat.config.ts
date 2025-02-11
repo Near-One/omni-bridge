@@ -57,8 +57,6 @@ task("deploy-test-token", "Deploys the E2ETestToken contract")
     // Convert supply to tokens with 18 decimals
     const supply = ethers.parseEther(taskArgs.supply);
 
-    const [deployer] = await ethers.getSigners();
-
     const TestToken = await ethers.getContractFactory("E2ETestToken");
     const token = await TestToken.deploy(taskArgs.name, taskArgs.symbol, supply);
     await token.waitForDeployment();
@@ -73,6 +71,42 @@ task("deploy-test-token", "Deploys the E2ETestToken contract")
     }));
   });
 
+task("mint-test-token", "Mints tokens to a specified address")
+  .addParam("contract", "The address of the deployed token contract")
+  .addParam("to", "The address to mint tokens to")
+  .addParam("amount", "Amount of tokens to mint")
+  .setAction(async (taskArgs, hre) => {
+    const { ethers } = hre;
+
+    const amount = ethers.parseEther(taskArgs.amount);
+
+    const [signer] = await ethers.getSigners();
+
+    const token = await ethers.getContractAt("E2ETestToken", taskArgs.contract, signer);
+
+    const tx = await token.mint(taskArgs.to, amount);
+    await tx.wait();
+
+    console.log(JSON.stringify({
+      success: true,
+      contractAddress: taskArgs.contract,
+      to: taskArgs.to,
+      amount: taskArgs.amount
+    }));
+  });
+
+task("create-eoa", "Creates a new EOA account and prints its credentials")
+  .setAction(async (_, hre) => {
+    const { ethers } = hre;
+
+    const wallet = ethers.Wallet.createRandom();
+
+    console.log(JSON.stringify({
+      address: wallet.address,
+      privateKey: wallet.privateKey,
+      mnemonic: wallet.mnemonic?.phrase
+    }, null, 2));
+  });
 
 const config: HardhatUserConfig = {
   paths: {
