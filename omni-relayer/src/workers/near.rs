@@ -39,8 +39,6 @@ pub async fn sign_transfer(
     jsonrpc_client: JsonRpcClient,
     near_nonce: Arc<utils::nonce::NonceManager>,
 ) -> Result<()> {
-    tokio::time::sleep(tokio::time::Duration::from_secs(60)).await;
-
     let redis_connection = redis_client.get_multiplexed_tokio_connection().await?;
 
     loop {
