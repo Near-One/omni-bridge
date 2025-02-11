@@ -119,29 +119,29 @@ impl NonceManager {
 }
 
 pub struct EvmNonceManagers {
-    pub eth_nonce: Option<NonceManager>,
-    pub base_nonce: Option<NonceManager>,
-    pub arb_nonce: Option<NonceManager>,
+    pub eth: Option<NonceManager>,
+    pub base: Option<NonceManager>,
+    pub arb: Option<NonceManager>,
 }
 
 impl EvmNonceManagers {
     pub fn new(config: &config::Config) -> Self {
         Self {
-            eth_nonce: config.eth.as_ref().map(|eth_config| {
+            eth: config.eth.as_ref().map(|eth_config| {
                 NonceManager::new(ChainClient::Evm {
                     provider: ProviderBuilder::new()
                         .on_http(eth_config.rpc_http_url.parse().unwrap()),
                     address: eth_config.bridge_token_factory_address,
                 })
             }),
-            base_nonce: config.eth.as_ref().map(|base_config| {
+            base: config.eth.as_ref().map(|base_config| {
                 NonceManager::new(ChainClient::Evm {
                     provider: ProviderBuilder::new()
                         .on_http(base_config.rpc_http_url.parse().unwrap()),
                     address: base_config.bridge_token_factory_address,
                 })
             }),
-            arb_nonce: config.eth.as_ref().map(|arb_config| {
+            arb: config.eth.as_ref().map(|arb_config| {
                 NonceManager::new(ChainClient::Evm {
                     provider: ProviderBuilder::new()
                         .on_http(arb_config.rpc_http_url.parse().unwrap()),
@@ -154,21 +154,21 @@ impl EvmNonceManagers {
     pub async fn reserve_nonce(&self, chain_kind: ChainKind) -> Result<u64> {
         match chain_kind {
             ChainKind::Eth => {
-                self.eth_nonce
+                self.eth
                     .as_ref()
                     .ok_or_else(|| anyhow::anyhow!("Eth nonce manager is not initialized"))?
                     .reserve_nonce()
                     .await
             }
             ChainKind::Base => {
-                self.base_nonce
+                self.base
                     .as_ref()
                     .ok_or_else(|| anyhow::anyhow!("Base nonce manager is not initialized"))?
                     .reserve_nonce()
                     .await
             }
             ChainKind::Arb => {
-                self.arb_nonce
+                self.arb
                     .as_ref()
                     .ok_or_else(|| anyhow::anyhow!("Arb nonce manager is not initialized"))?
                     .reserve_nonce()
