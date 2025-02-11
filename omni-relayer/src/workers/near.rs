@@ -233,10 +233,6 @@ pub async fn finalize_transfer(
             continue;
         };
 
-        if let Err(err) = evm_nonces.resync_nonces().await {
-            warn!("Failed to resync nonces: {}", err);
-        }
-
         let mut handlers = Vec::new();
 
         for (key, event) in events {
@@ -295,6 +291,10 @@ pub async fn finalize_transfer(
                                     }
                                 };
 
+                                println!(
+                                    "origin_nonce: {}, nonce: {}",
+                                    message_payload.transfer_id.origin_nonce, nonce
+                                );
                                 omni_connector::FinTransferArgs::EvmFinTransfer {
                                     chain_kind: message_payload.recipient.get_chain(),
                                     event,

@@ -162,20 +162,6 @@ impl EvmNonceManagers {
         }
     }
 
-    pub async fn resync_nonces(&self) -> Result<()> {
-        if let Some(eth) = self.eth.as_ref() {
-            eth.resync_nonce().await?;
-        }
-        if let Some(base) = self.base.as_ref() {
-            base.resync_nonce().await?;
-        }
-        if let Some(arb) = self.arb.as_ref() {
-            arb.resync_nonce().await?;
-        }
-
-        Ok(())
-    }
-
     pub async fn reserve_nonce(&self, chain_kind: ChainKind) -> Result<u64> {
         match chain_kind {
             ChainKind::Eth => {
