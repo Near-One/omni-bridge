@@ -29,7 +29,7 @@ solana-transaction-status = "2.1.9"
 solana-rpc-client-api = "2.1.9"
 
 ethereum-types = "0.14.1"
-omni-types = { git = "https://github.com/near-one/omni-bridge", package = "omni-types", rev = "49b2c98023be430148fc048046632fee0ad7f3d7" }
+omni-types = { git = "https://github.com/near-one/omni-bridge", package = "omni-types", rev = "4e741af2e233b8764dc56a5205f7bb1155c34b2f" }
 
 near-lake-framework = "0.7.9"
 near-jsonrpc-client = "0.15.1"
@@ -43,16 +43,16 @@ alloy = { version = "0.9", features = ["node-bindings", "providers", "rpc-types"
 redis = { version = "0.28.1", features = ["aio", "tokio-comp"] }
 reqwest = "0.12"
 
-eth-proof = { git = "https://github.com/Near-One/bridge-sdk-rs", package = "eth-proof" }
+eth-proof = { git = "https://github.com/Near-One/bridge-sdk-rs", package = "eth-proof", branch = "feat/preparing-for-async-compatibility" }
 
-bridge-connector-common = { git = "https://github.com/Near-One/bridge-sdk-rs", package = "bridge-connector-common" }
+bridge-connector-common = { git = "https://github.com/Near-One/bridge-sdk-rs", package = "bridge-connector-common", branch = "feat/preparing-for-async-compatibility" }
 
-near-bridge-client = { git = "https://github.com/Near-One/bridge-sdk-rs", package = "near-bridge-client" }
-evm-bridge-client = { git = "https://github.com/Near-One/bridge-sdk-rs", package = "evm-bridge-client" }
-solana-bridge-client = { git = "https://github.com/Near-One/bridge-sdk-rs", package = "solana-bridge-client" }
-wormhole-bridge-client = { git = "https://github.com/Near-One/bridge-sdk-rs", package = "wormhole-bridge-client" }
+near-bridge-client = { git = "https://github.com/Near-One/bridge-sdk-rs", package = "near-bridge-client", branch = "feat/preparing-for-async-compatibility" }
+evm-bridge-client = { git = "https://github.com/Near-One/bridge-sdk-rs", package = "evm-bridge-client", branch = "feat/preparing-for-async-compatibility" }
+solana-bridge-client = { git = "https://github.com/Near-One/bridge-sdk-rs", package = "solana-bridge-client", branch = "feat/preparing-for-async-compatibility" }
+wormhole-bridge-client = { git = "https://github.com/Near-One/bridge-sdk-rs", package = "wormhole-bridge-client", branch = "feat/preparing-for-async-compatibility" }
 
-omni-connector = { git = "https://github.com/Near-One/bridge-sdk-rs", package = "omni-connector" }
+omni-connector = { git = "https://github.com/Near-One/bridge-sdk-rs", package = "omni-connector", branch = "feat/preparing-for-async-compatibility" }
 
 [features]
 disable_fee_check = []

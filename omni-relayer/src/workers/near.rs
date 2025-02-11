@@ -8,6 +8,7 @@ use log::{error, info, warn};
 use alloy::rpc::types::{Log, TransactionReceipt};
 use ethereum_types::H256;
 
+use near_bridge_client::TransactionOptions;
 use near_jsonrpc_client::JsonRpcClient;
 use solana_client::rpc_request::RpcResponseErrorData;
 use solana_rpc_client_api::{client_error::ErrorKind, request::RpcError};
@@ -36,7 +37,10 @@ pub async fn sign_transfer(
     redis_client: redis::Client,
     connector: Arc<OmniConnector>,
     jsonrpc_client: JsonRpcClient,
+    near_nonce: Arc<utils::nonce::NonceManager>,
 ) -> Result<()> {
+    tokio::time::sleep(tokio::time::Duration::from_secs(60)).await;
+
     let redis_connection = redis_client.get_multiplexed_tokio_connection().await?;
 
     loop {
@@ -65,6 +69,7 @@ pub async fn sign_transfer(
                     let mut redis_connection = redis_connection.clone();
                     let connector = connector.clone();
                     let jsonrpc_client = jsonrpc_client.clone();
+                    let near_nonce = near_nonce.clone();
 
                     async move {
                         let current_timestamp = chrono::Utc::now().timestamp();
@@ -125,6 +130,14 @@ pub async fn sign_transfer(
                                 return;
                             };
 
+                        let nonce = match near_nonce.reserve_nonce().await {
+                            Ok(nonce) => Some(nonce),
+                            Err(err) => {
+                                warn!("Failed to reserve nonce: {}", err);
+                                return;
+                            }
+                        };
+
                         match connector
                             .near_sign_transfer(
                                 TransferId {
@@ -133,6 +146,10 @@ pub async fn sign_transfer(
                                 },
                                 Some(signer.clone()),
                                 Some(transfer_message.fee.clone()),
+                                TransactionOptions {
+                                    nonce,
+                                    wait_until: near_primitives::views::TxExecutionStatus::Final
+                                }
                             )
                             .await
                         {
@@ -194,6 +211,7 @@ pub async fn sign_transfer(
 pub async fn finalize_transfer(
     redis_client: redis::Client,
     connector: Arc<OmniConnector>,
+    evm_nonces: Arc<utils::nonce::EvmNonceManagers>,
 ) -> Result<()> {
     let redis_connection = redis_client.get_multiplexed_tokio_connection().await?;
 
@@ -218,6 +236,7 @@ pub async fn finalize_transfer(
                 handlers.push(tokio::spawn({
                     let mut redis_connection = redis_connection.clone();
                     let connector = connector.clone();
+                    let evm_nonces = evm_nonces.clone();
 
                     async move {
                         let OmniBridgeEvent::SignTransferEvent {
@@ -257,9 +276,21 @@ pub async fn finalize_transfer(
                                 return;
                             }
                             ChainKind::Eth | ChainKind::Base | ChainKind::Arb => {
+                                let nonce = match evm_nonces
+                                    .reserve_nonce(message_payload.recipient.get_chain())
+                                    .await
+                                {
+                                    Ok(nonce) => nonce,
+                                    Err(err) => {
+                                        warn!("Failed to reserve nonce: {}", err);
+                                        return;
+                                    }
+                                };
+
                                 omni_connector::FinTransferArgs::EvmFinTransfer {
                                     chain_kind: message_payload.recipient.get_chain(),
                                     event,
+                                    tx_nonce: Some(nonce.into()),
                                 }
                             }
                             ChainKind::Sol => {
@@ -369,6 +400,7 @@ pub async fn claim_fee(
     redis_client: redis::Client,
     connector: Arc<OmniConnector>,
     jsonrpc_client: near_jsonrpc_client::JsonRpcClient,
+    near_nonce: Arc<utils::nonce::NonceManager>,
 ) -> Result<()> {
     let redis_connection = redis_client.get_multiplexed_tokio_connection().await?;
 
@@ -395,6 +427,7 @@ pub async fn claim_fee(
                     config.clone(),
                     connector.clone(),
                     jsonrpc_client.clone(),
+                    near_nonce.clone(),
                     redis_connection.clone(),
                     key.clone(),
                     fin_transfer.clone(),
@@ -402,6 +435,7 @@ pub async fn claim_fee(
                 handlers.push(tokio::spawn(handle_solana_fin_transfer(
                     config.clone(),
                     connector.clone(),
+                    near_nonce.clone(),
                     redis_connection.clone(),
                     key.clone(),
                     fin_transfer.clone(),
@@ -422,6 +456,7 @@ async fn handle_evm_fin_transfer(
     config: config::Config,
     connector: Arc<OmniConnector>,
     jsonrpc_client: JsonRpcClient,
+    near_nonce: Arc<utils::nonce::NonceManager>,
     mut redis_connection: redis::aio::MultiplexedConnection,
     key: String,
     fin_transfer: FinTransfer,
@@ -512,7 +547,24 @@ async fn handle_evm_fin_transfer(
         prover_args,
     };
 
-    match connector.near_claim_fee(claim_fee_args).await {
+    let nonce = match near_nonce.reserve_nonce().await {
+        Ok(nonce) => Some(nonce),
+        Err(err) => {
+            warn!("Failed to reserve nonce: {}", err);
+            return;
+        }
+    };
+
+    match connector
+        .near_claim_fee(
+            claim_fee_args,
+            TransactionOptions {
+                nonce,
+                wait_until: near_primitives::views::TxExecutionStatus::Included,
+            },
+        )
+        .await
+    {
         Ok(tx_hash) => {
             info!("Claimed fee: {:?}", tx_hash);
             utils::redis::remove_event(
@@ -531,6 +583,7 @@ async fn handle_evm_fin_transfer(
 async fn handle_solana_fin_transfer(
     config: config::Config,
     connector: Arc<OmniConnector>,
+    near_nonce: Arc<utils::nonce::NonceManager>,
     mut redis_connection: redis::aio::MultiplexedConnection,
     key: String,
     fin_transfer: FinTransfer,
@@ -562,7 +615,24 @@ async fn handle_solana_fin_transfer(
         prover_args,
     };
 
-    match connector.near_claim_fee(claim_fee_args).await {
+    let nonce = match near_nonce.reserve_nonce().await {
+        Ok(nonce) => Some(nonce),
+        Err(err) => {
+            warn!("Failed to reserve nonce: {}", err);
+            return;
+        }
+    };
+
+    match connector
+        .near_claim_fee(
+            claim_fee_args,
+            TransactionOptions {
+                nonce,
+                wait_until: near_primitives::views::TxExecutionStatus::Included,
+            },
+        )
+        .await
+    {
         Ok(tx_hash) => {
             info!("Claimed fee: {:?}", tx_hash);
             utils::redis::remove_event(
@@ -599,6 +669,7 @@ pub async fn bind_token(
     redis_client: redis::Client,
     connector: Arc<OmniConnector>,
     jsonrpc_client: near_jsonrpc_client::JsonRpcClient,
+    near_nonce: Arc<utils::nonce::NonceManager>,
 ) -> Result<()> {
     let redis_connection = redis_client.get_multiplexed_tokio_connection().await?;
 
@@ -625,6 +696,7 @@ pub async fn bind_token(
                     config.clone(),
                     connector.clone(),
                     jsonrpc_client.clone(),
+                    near_nonce.clone(),
                     redis_connection.clone(),
                     key.clone(),
                     deploy_token_event.clone(),
@@ -632,6 +704,7 @@ pub async fn bind_token(
                 handlers.push(tokio::spawn(handle_solana_deploy_token_event(
                     config.clone(),
                     connector.clone(),
+                    near_nonce.clone(),
                     redis_connection.clone(),
                     key.clone(),
                     deploy_token_event.clone(),
@@ -652,6 +725,7 @@ async fn handle_evm_deploy_token_event(
     config: config::Config,
     connector: Arc<OmniConnector>,
     jsonrpc_client: JsonRpcClient,
+    near_nonce: Arc<utils::nonce::NonceManager>,
     mut redis_connection: redis::aio::MultiplexedConnection,
     key: String,
     deploy_token_event: DeployToken,
@@ -737,9 +811,21 @@ async fn handle_evm_deploy_token_event(
         return;
     };
 
+    let nonce = match near_nonce.reserve_nonce().await {
+        Ok(nonce) => Some(nonce),
+        Err(err) => {
+            warn!("Failed to reserve nonce: {}", err);
+            return;
+        }
+    };
+
     let bind_token_args = omni_connector::BindTokenArgs::BindTokenWithArgs {
         chain_kind,
         prover_args,
+        transaction_options: TransactionOptions {
+            nonce,
+            wait_until: near_primitives::views::TxExecutionStatus::Included,
+        },
     };
 
     match connector.bind_token(bind_token_args).await {
@@ -761,6 +847,7 @@ async fn handle_evm_deploy_token_event(
 async fn handle_solana_deploy_token_event(
     config: config::Config,
     connector: Arc<OmniConnector>,
+    near_nonce: Arc<utils::nonce::NonceManager>,
     mut redis_connection: redis::aio::MultiplexedConnection,
     key: String,
     deploy_token_event: DeployToken,
@@ -787,9 +874,21 @@ async fn handle_solana_deploy_token_event(
         return;
     };
 
+    let nonce = match near_nonce.reserve_nonce().await {
+        Ok(nonce) => Some(nonce),
+        Err(err) => {
+            warn!("Failed to reserve nonce: {}", err);
+            return;
+        }
+    };
+
     let bind_token_args = omni_connector::BindTokenArgs::BindTokenWithArgs {
         chain_kind: ChainKind::Sol,
         prover_args,
+        transaction_options: TransactionOptions {
+            nonce,
+            wait_until: near_primitives::views::TxExecutionStatus::Included,
+        },
     };
 
     match connector.bind_token(bind_token_args).await {

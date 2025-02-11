@@ -51,6 +51,14 @@ async fn main() -> Result<()> {
 
     let connector = Arc::new(startup::build_omni_connector(&config, &near_signer)?);
 
+    let near_nonce = Arc::new(utils::nonce::NonceManager::new(
+        utils::nonce::ChainClient::Near {
+            jsonrpc_client: jsonrpc_client.clone(),
+            signer: near_signer,
+        },
+    ));
+    let evm_nonces = Arc::new(utils::nonce::EvmNonceManagers::new(&config));
+
     let mut handles = Vec::new();
 
     handles.push(tokio::spawn({
@@ -73,6 +81,7 @@ async fn main() -> Result<()> {
         let redis_client = redis_client.clone();
         let connector = connector.clone();
         let jsonrpc_client = jsonrpc_client.clone();
+        let near_nonce = near_nonce.clone();
         async move {
             workers::near::sign_transfer(
                 #[cfg(not(feature = "disable_fee_check"))]
@@ -80,6 +89,7 @@ async fn main() -> Result<()> {
                 redis_client,
                 connector,
                 jsonrpc_client,
+                near_nonce,
             )
             .await
         }
@@ -87,7 +97,8 @@ async fn main() -> Result<()> {
     handles.push(tokio::spawn({
         let redis_client = redis_client.clone();
         let connector = connector.clone();
-        async move { workers::near::finalize_transfer(redis_client, connector).await }
+        let evm_nonces = evm_nonces.clone();
+        async move { workers::near::finalize_transfer(redis_client, connector, evm_nonces).await }
     }));
 
     if config.eth.is_some() {
@@ -153,7 +164,11 @@ async fn main() -> Result<()> {
             let config = config.clone();
             let redis_client = redis_client.clone();
             let connector = connector.clone();
-            async move { workers::solana::finalize_transfer(config, redis_client, connector).await }
+            let near_nonce = near_nonce.clone();
+            async move {
+                workers::solana::finalize_transfer(config, redis_client, connector, near_nonce)
+                    .await
+            }
         }));
     }
 
@@ -163,9 +178,16 @@ async fn main() -> Result<()> {
             let redis_client = redis_client.clone();
             let connector = connector.clone();
             let jsonrpc_client = jsonrpc_client.clone();
+            let near_nonce = near_nonce.clone();
             async move {
-                workers::evm::finalize_transfer(config, redis_client, connector, jsonrpc_client)
-                    .await
+                workers::evm::finalize_transfer(
+                    config,
+                    redis_client,
+                    connector,
+                    jsonrpc_client,
+                    near_nonce,
+                )
+                .await
             }
         }));
     }
@@ -175,7 +197,11 @@ async fn main() -> Result<()> {
         let redis_client = redis_client.clone();
         let connector = connector.clone();
         let jsonrpc_client = jsonrpc_client.clone();
-        async move { workers::near::claim_fee(config, redis_client, connector, jsonrpc_client).await }
+        let near_nonce = near_nonce.clone();
+        async move {
+            workers::near::claim_fee(config, redis_client, connector, jsonrpc_client, near_nonce)
+                .await
+        }
     }));
 
     handles.push(tokio::spawn({
@@ -183,7 +209,11 @@ async fn main() -> Result<()> {
         let redis_client = redis_client.clone();
         let connector = connector.clone();
         let jsonrpc_client = jsonrpc_client.clone();
-        async move { workers::near::bind_token(config, redis_client, connector, jsonrpc_client).await }
+        let near_nonce = near_nonce.clone();
+        async move {
+            workers::near::bind_token(config, redis_client, connector, jsonrpc_client, near_nonce)
+                .await
+        }
     }));
 
     tokio::select! {
