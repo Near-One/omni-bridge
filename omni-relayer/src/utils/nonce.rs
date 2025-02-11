@@ -1,7 +1,7 @@
 use std::sync::Mutex;
 
 use alloy::{
-    primitives::Address,
+    primitives::{Address, U64},
     providers::{Provider, ProviderBuilder, RootProvider},
     transports::http::Http,
 };
@@ -116,7 +116,13 @@ impl NonceManager {
         address: Address,
     ) -> Result<u64> {
         for _ in 0..RETRY_ATTEMPTS {
-            let Ok(nonce) = provider.get_transaction_count(address).await else {
+            let response = provider
+                .client()
+                .request("eth_getTransactionCount", (address, "pending"))
+                .map_resp(|x: U64| x.to::<u64>())
+                .await;
+
+            let Ok(nonce) = response else {
                 warn!("Failed to get transaction count, retrying...");
                 tokio::time::sleep(tokio::time::Duration::from_secs(RETRY_SLEEP_SECS)).await;
                 continue;
@@ -145,14 +151,14 @@ impl EvmNonceManagers {
                     address: config::get_evm_address(ChainKind::Eth),
                 })
             }),
-            base: config.eth.as_ref().map(|base_config| {
+            base: config.base.as_ref().map(|base_config| {
                 NonceManager::new(ChainClient::Evm {
                     provider: ProviderBuilder::new()
                         .on_http(base_config.rpc_http_url.parse().unwrap()),
                     address: config::get_evm_address(ChainKind::Base),
                 })
             }),
-            arb: config.eth.as_ref().map(|arb_config| {
+            arb: config.arb.as_ref().map(|arb_config| {
                 NonceManager::new(ChainClient::Evm {
                     provider: ProviderBuilder::new()
                         .on_http(arb_config.rpc_http_url.parse().unwrap()),
