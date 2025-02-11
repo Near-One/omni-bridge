@@ -43,16 +43,16 @@ alloy = { version = "0.9", features = ["node-bindings", "providers", "rpc-types"
 redis = { version = "0.28.1", features = ["aio", "tokio-comp"] }
 reqwest = "0.12"
 
-eth-proof = { git = "https://github.com/Near-One/bridge-sdk-rs", package = "eth-proof", branch = "feat/preparing-for-async-compatibility" }
+eth-proof = { git = "https://github.com/Near-One/bridge-sdk-rs", package = "eth-proof" }
 
-bridge-connector-common = { git = "https://github.com/Near-One/bridge-sdk-rs", package = "bridge-connector-common", branch = "feat/preparing-for-async-compatibility" }
+bridge-connector-common = { git = "https://github.com/Near-One/bridge-sdk-rs", package = "bridge-connector-common" }
 
-near-bridge-client = { git = "https://github.com/Near-One/bridge-sdk-rs", package = "near-bridge-client", branch = "feat/preparing-for-async-compatibility" }
-evm-bridge-client = { git = "https://github.com/Near-One/bridge-sdk-rs", package = "evm-bridge-client", branch = "feat/preparing-for-async-compatibility" }
-solana-bridge-client = { git = "https://github.com/Near-One/bridge-sdk-rs", package = "solana-bridge-client", branch = "feat/preparing-for-async-compatibility" }
-wormhole-bridge-client = { git = "https://github.com/Near-One/bridge-sdk-rs", package = "wormhole-bridge-client", branch = "feat/preparing-for-async-compatibility" }
+near-bridge-client = { git = "https://github.com/Near-One/bridge-sdk-rs", package = "near-bridge-client" }
+evm-bridge-client = { git = "https://github.com/Near-One/bridge-sdk-rs", package = "evm-bridge-client" }
+solana-bridge-client = { git = "https://github.com/Near-One/bridge-sdk-rs", package = "solana-bridge-client" }
+wormhole-bridge-client = { git = "https://github.com/Near-One/bridge-sdk-rs", package = "wormhole-bridge-client" }
 
-omni-connector = { git = "https://github.com/Near-One/bridge-sdk-rs", package = "omni-connector", branch = "feat/preparing-for-async-compatibility" }
+omni-connector = { git = "https://github.com/Near-One/bridge-sdk-rs", package = "omni-connector" }
 
 [features]
 disable_fee_check = []
