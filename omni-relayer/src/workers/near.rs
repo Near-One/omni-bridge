@@ -291,10 +291,6 @@ pub async fn finalize_transfer(
                                     }
                                 };
 
-                                println!(
-                                    "origin_nonce: {}, nonce: {}",
-                                    message_payload.transfer_id.origin_nonce, nonce
-                                );
                                 omni_connector::FinTransferArgs::EvmFinTransfer {
                                     chain_kind: message_payload.recipient.get_chain(),
                                     event,
