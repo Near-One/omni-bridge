@@ -2,6 +2,7 @@
 
 [![Build Status](https://img.shields.io/badge/build-passing-brightgreen.svg)](https://github.com/Near-One/omni-bridge/actions)
 [![Release](https://img.shields.io/github/v/release/Near-One/omni-bridge)](https://github.com/Near-One/omni-bridge/releases)
+[![Dev Support](https://img.shields.io/badge/Dev_Support-8B0000)](https://t.me/chain_abstraction)
 
 The Omni Bridge is a multi-chain asset bridge that facilitates secure and efficient asset transfers between different blockchain networks. It leverages NEAR Multi-Party Computation (MPC) and Chain Signatures technology to ensure trustless and decentralized cross-chain asset transfers.
 
