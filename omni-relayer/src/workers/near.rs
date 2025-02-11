@@ -233,6 +233,10 @@ pub async fn finalize_transfer(
             continue;
         };
 
+        if let Err(err) = evm_nonces.resync_nonces().await {
+            warn!("Failed to resync nonces: {}", err);
+        }
+
         let mut handlers = Vec::new();
 
         for (key, event) in events {
