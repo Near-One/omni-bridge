@@ -10,11 +10,11 @@ For more information on how it works, please see [Omni Bridge Documentation](htt
 
 ## Supported Networks
 
-- Arbitrum
-- Base
-- Ethereum
-- NEAR
-- Solana
+- Ethereum (Light client + Chain Signatures)
+- Bitcoin (Light client + Chain Signatures)
+- Solana (Currently Wormhole, transitioning to Chain Signatures)
+- Base (Currently Wormhole, transitioning to Chain Signatures)
+- Arbitrum (Currently Wormhole, transitioning to Chain Signatures)
 
 ## Contract Addresses
 
