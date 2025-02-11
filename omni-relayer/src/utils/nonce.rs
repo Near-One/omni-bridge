@@ -43,6 +43,17 @@ impl NonceManager {
         }
     }
 
+    pub async fn resync_nonce(&self) -> Result<()> {
+        let current_nonce = self.get_current_nonce().await?;
+        let mut local_nonce = self
+            .nonce
+            .lock()
+            .map_err(|_| anyhow::anyhow!("Mutex lock error during nonce update"))?;
+        *local_nonce = current_nonce;
+
+        Ok(())
+    }
+
     pub async fn reserve_nonce(&self) -> Result<u64> {
         let current_nonce = self.get_current_nonce().await?;
 
@@ -149,6 +160,20 @@ impl EvmNonceManagers {
                 })
             }),
         }
+    }
+
+    pub async fn resync_nonces(&self) -> Result<()> {
+        if let Some(eth) = self.eth.as_ref() {
+            eth.resync_nonce().await?;
+        }
+        if let Some(base) = self.base.as_ref() {
+            base.resync_nonce().await?;
+        }
+        if let Some(arb) = self.arb.as_ref() {
+            arb.resync_nonce().await?;
+        }
+
+        Ok(())
     }
 
     pub async fn reserve_nonce(&self, chain_kind: ChainKind) -> Result<u64> {

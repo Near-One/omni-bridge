@@ -56,7 +56,12 @@ pub async fn sign_transfer(
             continue;
         };
 
+        if let Err(err) = near_nonce.resync_nonce().await {
+            warn!("Failed to resync nonce: {}", err);
+        }
+
         let mut handlers = Vec::new();
+
         for (key, event) in events {
             if let Ok(init_transfer_with_timestamp) =
                 serde_json::from_str::<InitTransferWithTimestamp>(&event)
@@ -228,7 +233,12 @@ pub async fn finalize_transfer(
             continue;
         };
 
+        if let Err(err) = evm_nonces.resync_nonces().await {
+            warn!("Failed to resync nonces: {}", err);
+        }
+
         let mut handlers = Vec::new();
+
         for (key, event) in events {
             if let Ok(event) = serde_json::from_str::<OmniBridgeEvent>(&event) {
                 handlers.push(tokio::spawn({
@@ -416,6 +426,10 @@ pub async fn claim_fee(
             .await;
             continue;
         };
+
+        if let Err(err) = near_nonce.resync_nonce().await {
+            warn!("Failed to resync nonce: {}", err);
+        }
 
         let mut handlers = Vec::new();
 
@@ -685,6 +699,10 @@ pub async fn bind_token(
             .await;
             continue;
         };
+
+        if let Err(err) = near_nonce.resync_nonce().await {
+            warn!("Failed to resync nonce: {}", err);
+        }
 
         let mut handlers = Vec::new();
 

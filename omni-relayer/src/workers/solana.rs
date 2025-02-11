@@ -151,6 +151,10 @@ pub async fn finalize_transfer(
             continue;
         };
 
+        if let Err(err) = near_nonce.resync_nonce().await {
+            warn!("Failed to resync nonce: {}", err);
+        }
+
         let mut handlers = Vec::new();
 
         for (key, event) in events {
