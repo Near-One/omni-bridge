@@ -17,7 +17,7 @@ use crate::{
     workers::near::{DeployToken, FinTransfer},
 };
 
-fn hide_api_key<E: ToString>(err: E) -> String {
+fn hide_api_key<E: ToString>(err: &E) -> String {
     let env_key = "INFURA_API_KEY";
     let api_key = std::env::var(env_key).unwrap_or_default();
     err.to_string().replace(&api_key, env_key)
@@ -81,7 +81,7 @@ pub async fn start_indexer(
                 expected_finalization_time,
             )
             .await
-            .map_err(hide_api_key),
+            .map_err(|err| hide_api_key(&err)),
             format!(
                 "Failed to process recent blocks for {:?} indexer",
                 chain_kind
@@ -98,7 +98,7 @@ pub async fn start_indexer(
             ProviderBuilder::new()
                 .on_ws(WsConnect::new(&rpc_ws_url))
                 .await
-                .map_err(hide_api_key),
+                .map_err(|err| hide_api_key(&err)),
             format!("{chain_kind:?} WebSocket connection failed"),
             5
         );
@@ -107,7 +107,7 @@ pub async fn start_indexer(
             ws_provider
                 .subscribe_logs(&filter)
                 .await
-                .map_err(hide_api_key),
+                .map_err(|err| hide_api_key(&err)),
             format!("{chain_kind:?} WebSocket subscription failed"),
             5
         )
