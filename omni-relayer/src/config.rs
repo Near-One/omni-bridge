@@ -18,7 +18,7 @@ pub fn get_private_key(chain_kind: ChainKind) -> String {
     std::env::var(env_var).unwrap_or_else(|_| panic!("Failed to get `{env_var}` env variable"))
 }
 
-pub fn get_evm_address(chain_kind: ChainKind) -> Address {
+pub fn get_relayer_evm_address(chain_kind: ChainKind) -> Address {
     let decoded_private_key =
         hex::decode(get_private_key(chain_kind)).expect("Failed to decode EVM private key");
 
