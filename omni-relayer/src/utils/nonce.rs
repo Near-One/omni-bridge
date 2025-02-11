@@ -51,8 +51,11 @@ impl NonceManager {
             .lock()
             .map_err(|_| anyhow::anyhow!("Mutex lock error during nonce update"))?;
 
-        *local_nonce = current_nonce;
-        let reserved = current_nonce;
+        if *local_nonce < current_nonce {
+            *local_nonce = current_nonce;
+        }
+
+        let reserved = *local_nonce;
         *local_nonce += 1;
 
         Ok(reserved)
