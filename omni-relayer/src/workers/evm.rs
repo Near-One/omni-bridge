@@ -6,6 +6,8 @@ use log::{info, warn};
 
 use alloy::rpc::types::{Log, TransactionReceipt};
 use ethereum_types::H256;
+use near_bridge_client::TransactionOptions;
+use near_primitives::views::TxExecutionStatus;
 use omni_connector::OmniConnector;
 #[cfg(not(feature = "disable_fee_check"))]
 use omni_types::Fee;
@@ -29,6 +31,7 @@ pub async fn finalize_transfer(
     redis_client: redis::Client,
     connector: Arc<OmniConnector>,
     jsonrpc_client: near_jsonrpc_client::JsonRpcClient,
+    near_nonce: Arc<utils::nonce::NonceManager>,
 ) -> Result<()> {
     let redis_connection = redis_client.get_multiplexed_tokio_connection().await?;
 
@@ -48,6 +51,10 @@ pub async fn finalize_transfer(
             continue;
         };
 
+        if let Err(err) = near_nonce.resync_nonce().await {
+            warn!("Failed to resync nonce: {}", err);
+        }
+
         let mut handlers = Vec::new();
 
         for (key, event) in events {
@@ -58,6 +65,7 @@ pub async fn finalize_transfer(
                     config.clone(),
                     connector.clone(),
                     jsonrpc_client.clone(),
+                    near_nonce.clone(),
                     redis_connection.clone(),
                     key.clone(),
                     init_transfer_with_timestamp,
@@ -79,6 +87,7 @@ async fn handle_init_transfer_event(
     config: config::Config,
     connector: Arc<OmniConnector>,
     jsonrpc_client: near_jsonrpc_client::JsonRpcClient,
+    near_nonce: Arc<utils::nonce::NonceManager>,
     mut redis_connection: redis::aio::MultiplexedConnection,
     key: String,
     init_transfer_with_timestamp: InitTransferWithTimestamp,
@@ -254,17 +263,33 @@ async fn handle_init_transfer_event(
         }
     };
 
+    let nonce = match near_nonce.reserve_nonce().await {
+        Ok(nonce) => Some(nonce),
+        Err(err) => {
+            warn!("Failed to reserve nonce: {}", err);
+            return;
+        }
+    };
+
     let fin_transfer_args = if let Some(vaa) = vaa {
         omni_connector::FinTransferArgs::NearFinTransferWithVaa {
             chain_kind: init_transfer_with_timestamp.chain_kind,
             storage_deposit_actions,
             vaa,
+            transaction_options: TransactionOptions {
+                nonce,
+                wait_until: TxExecutionStatus::Included,
+            },
         }
     } else {
         omni_connector::FinTransferArgs::NearFinTransferWithEvmProof {
             chain_kind: init_transfer_with_timestamp.chain_kind,
             tx_hash,
             storage_deposit_actions,
+            transaction_options: TransactionOptions {
+                nonce,
+                wait_until: TxExecutionStatus::Included,
+            },
         }
     };
 

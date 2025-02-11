@@ -4,6 +4,8 @@ use anyhow::Result;
 use futures::future::join_all;
 use log::{info, warn};
 
+use near_bridge_client::TransactionOptions;
+use near_primitives::views::TxExecutionStatus;
 use omni_connector::OmniConnector;
 #[cfg(not(feature = "disable_fee_check"))]
 use omni_types::Fee;
@@ -135,6 +137,7 @@ pub async fn finalize_transfer(
     config: config::Config,
     redis_client: redis::Client,
     connector: Arc<OmniConnector>,
+    near_nonce: Arc<utils::nonce::NonceManager>,
 ) -> Result<()> {
     let redis_connection = redis_client.get_multiplexed_tokio_connection().await?;
 
@@ -154,6 +157,10 @@ pub async fn finalize_transfer(
             continue;
         };
 
+        if let Err(err) = near_nonce.resync_nonce().await {
+            warn!("Failed to resync nonce: {}", err);
+        }
+
         let mut handlers = Vec::new();
 
         for (key, event) in events {
@@ -163,6 +170,7 @@ pub async fn finalize_transfer(
                 let handler = handle_init_transfer_event(
                     config.clone(),
                     connector.clone(),
+                    near_nonce.clone(),
                     redis_connection.clone(),
                     key.clone(),
                     init_transfer_with_timestamp,
@@ -183,6 +191,7 @@ pub async fn finalize_transfer(
 async fn handle_init_transfer_event(
     config: config::Config,
     connector: Arc<OmniConnector>,
+    near_nonce: Arc<utils::nonce::NonceManager>,
     mut redis_connection: redis::aio::MultiplexedConnection,
     key: String,
     init_transfer_with_timestamp: InitTransferWithTimestamp,
@@ -315,10 +324,22 @@ async fn handle_init_transfer_event(
         }
     };
 
+    let nonce = match near_nonce.reserve_nonce().await {
+        Ok(nonce) => Some(nonce),
+        Err(err) => {
+            warn!("Failed to reserve nonce: {}", err);
+            return;
+        }
+    };
+
     let fin_transfer_args = omni_connector::FinTransferArgs::NearFinTransferWithVaa {
         chain_kind: ChainKind::Sol,
         storage_deposit_actions,
         vaa,
+        transaction_options: TransactionOptions {
+            nonce,
+            wait_until: TxExecutionStatus::Included,
+        },
     };
 
     match connector.fin_transfer(fin_transfer_args).await {
