@@ -8,10 +8,10 @@ use omni_connector::OmniConnector;
 #[cfg(not(feature = "disable_fee_check"))]
 use omni_types::Fee;
 use omni_types::{ChainKind, OmniAddress};
-use solana_client::nonblocking::rpc_client::RpcClient;
+use solana_client::{nonblocking::rpc_client::RpcClient, rpc_config::RpcTransactionConfig};
 #[cfg(not(feature = "disable_fee_check"))]
 use solana_sdk::pubkey::Pubkey;
-use solana_sdk::signature::Signature;
+use solana_sdk::{commitment_config::CommitmentConfig, signature::Signature};
 use solana_transaction_status::{UiMessage, UiTransactionEncoding};
 
 use crate::{config, utils};
@@ -23,6 +23,12 @@ pub async fn process_signature(config: config::Config, redis_client: redis::Clie
 
     let rpc_http_url = &solana_config.rpc_http_url;
     let http_client = Arc::new(RpcClient::new(rpc_http_url.to_string()));
+
+    let fetching_config = RpcTransactionConfig {
+        encoding: Some(UiTransactionEncoding::Json),
+        commitment: Some(CommitmentConfig::confirmed()),
+        max_supported_transaction_version: Some(0),
+    };
 
     let redis_connection = redis_client.get_multiplexed_tokio_connection().await?;
 
@@ -59,7 +65,7 @@ pub async fn process_signature(config: config::Config, redis_client: redis::Clie
                     info!("Trying to process signature: {:?}", signature);
 
                     match http_client
-                        .get_transaction(&signature, UiTransactionEncoding::Json)
+                        .get_transaction_with_config(&signature, fetching_config)
                         .await
                     {
                         Ok(tx) => {
