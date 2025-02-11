@@ -1,4 +1,7 @@
-use alloy::primitives::Address;
+use alloy::{
+    primitives::Address,
+    signers::{k256::ecdsa::SigningKey, local::LocalSigner},
+};
 use near_primitives::types::AccountId;
 use omni_types::ChainKind;
 use serde::Deserialize;
@@ -13,6 +16,18 @@ pub fn get_private_key(chain_kind: ChainKind) -> String {
     };
 
     std::env::var(env_var).unwrap_or_else(|_| panic!("Failed to get `{env_var}` env variable"))
+}
+
+pub fn get_evm_address(chain_kind: ChainKind) -> Address {
+    let decoded_private_key =
+        hex::decode(get_private_key(chain_kind)).expect("Failed to decode EVM private key");
+
+    let secret_key = SigningKey::from_slice(&decoded_private_key)
+        .expect("Failed to create a `SecretKey` from the provided private key");
+
+    let signer = LocalSigner::from_signing_key(secret_key);
+
+    signer.address()
 }
 
 fn replace_rpc_api_key<'de, D>(deserializer: D) -> Result<String, D::Error>

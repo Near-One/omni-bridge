@@ -142,21 +142,21 @@ impl EvmNonceManagers {
                 NonceManager::new(ChainClient::Evm {
                     provider: ProviderBuilder::new()
                         .on_http(eth_config.rpc_http_url.parse().unwrap()),
-                    address: eth_config.bridge_token_factory_address,
+                    address: config::get_evm_address(ChainKind::Eth),
                 })
             }),
             base: config.eth.as_ref().map(|base_config| {
                 NonceManager::new(ChainClient::Evm {
                     provider: ProviderBuilder::new()
                         .on_http(base_config.rpc_http_url.parse().unwrap()),
-                    address: base_config.bridge_token_factory_address,
+                    address: config::get_evm_address(ChainKind::Base),
                 })
             }),
             arb: config.eth.as_ref().map(|arb_config| {
                 NonceManager::new(ChainClient::Evm {
                     provider: ProviderBuilder::new()
                         .on_http(arb_config.rpc_http_url.parse().unwrap()),
-                    address: arb_config.bridge_token_factory_address,
+                    address: config::get_evm_address(ChainKind::Arb),
                 })
             }),
         }
