@@ -14,7 +14,7 @@ use tokio_stream::StreamExt;
 
 use crate::{
     config, utils,
-    workers::near::{DeployToken, FinTransfer},
+    workers::{DeployToken, FinTransfer},
 };
 
 fn hide_api_key<E: ToString>(err: &E) -> String {
@@ -223,9 +223,9 @@ async fn process_log(
         info!("Received InitTransfer on {:?} ({:?})", chain_kind, tx_hash);
         utils::redis::add_event(
             redis_connection,
-            utils::redis::EVM_INIT_TRANSFER_EVENTS,
+            utils::redis::EVENTS,
             tx_hash.to_string(),
-            crate::workers::evm::InitTransferWithTimestamp {
+            crate::workers::Transfer::Evm {
                 chain_kind,
                 block_number,
                 log,
@@ -241,7 +241,7 @@ async fn process_log(
 
         utils::redis::add_event(
             redis_connection,
-            utils::redis::FINALIZED_TRANSFERS,
+            utils::redis::EVENTS,
             tx_hash.to_string(),
             FinTransfer::Evm {
                 chain_kind,
@@ -258,7 +258,7 @@ async fn process_log(
 
         utils::redis::add_event(
             redis_connection,
-            utils::redis::DEPLOY_TOKEN_EVENTS,
+            utils::redis::EVENTS,
             tx_hash.to_string(),
             DeployToken::Evm {
                 chain_kind,
