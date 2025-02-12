@@ -228,3 +228,16 @@ Note: Custom relayers can process transfers with zero fees.
 - [Bridge SDK (Rust)](https://github.com/Near-One/bridge-sdk-js)
 - [Bridge SDK (JavaScript)](https://github.com/Near-One/bridge-sdk-rs)
 
+## Get Involved
+
+We welcome contributions from the community! The code is open source and there are many ways to make meaningful contributions.
+
+### Key Areas for Contribution
+- **Chain Integrations**: Help expand support for new blockchain networks
+- **Performance Optimization**: Improve transaction speeds and efficiency
+- **Security Analysis**: Strengthen the security infrastructure
+- **Developer Tools**: Build better tooling and documentation
+
+Bridge infrastructure is a fundamental component of a multi-chain future. Through Chain Signatures, we're creating a more efficient, secure, and scalable approach to cross-chain communication.
+
+Join us in building the future of cross-chain interoperability!
