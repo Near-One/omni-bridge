@@ -35,6 +35,7 @@ enum EventAction {
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[serde(tag = "init_transfer")]
 pub enum Transfer {
     Near {
         event: OmniBridgeEvent,
@@ -66,6 +67,7 @@ pub enum Transfer {
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
+#[serde(tag = "fin_transfer")]
 pub enum FinTransfer {
     Evm {
         chain_kind: ChainKind,
@@ -82,6 +84,7 @@ pub enum FinTransfer {
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
+#[serde(tag = "deploy_token")]
 pub enum DeployToken {
     Evm {
         chain_kind: ChainKind,
