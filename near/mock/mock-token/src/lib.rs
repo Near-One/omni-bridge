@@ -11,7 +11,8 @@ use near_sdk::borsh::BorshSerialize;
 use near_sdk::collections::LazyOption;
 use near_sdk::json_types::U128;
 use near_sdk::{
-    env, log, near, require, AccountId, BorshStorageKey, NearToken, PanicOnDefault, PromiseOrValue,
+    env, log, near, require, AccountId, BorshStorageKey, NearToken, PanicOnDefault, Promise,
+    PromiseOrValue, PromiseResult,
 };
 
 #[near(contract_state)]
@@ -72,6 +73,16 @@ impl Contract {
         .emit();
 
         this
+    }
+
+    #[payable]
+    pub fn near_withdraw(&mut self, amount: U128) -> Promise {
+        require!(
+            matches!(env::promise_result(0), PromiseResult::Successful(data) if data.is_empty()),
+            "near_withdraw failed",
+        );
+
+        Promise::new(env::predecessor_account_id()).transfer(NearToken::from_yoctonear(amount.0))
     }
 }
 
