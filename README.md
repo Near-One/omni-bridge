@@ -7,7 +7,7 @@
 
 The Omni Bridge is a multi-chain asset bridge that facilitates secure and efficient asset transfers between different blockchain networks. It leverages [Chain Signatures](https://docs.near.org/concepts/abstraction/chain-signatures) and it's decentralized [Multi-Party Computation (MPC) service](https://docs.near.org/concepts/abstraction/chain-signatures#multi-party-computation-service) to ensure trustless and decentralized cross-chain asset transfers. 
 
-For more information on how it works, please see [Omni Bridge Documentation](https://docs.near.org/concepts/abstraction/omnibridge/overview).
+For more information on how it works, please see [Omni Bridge Documentation](https://docs.near.org/chain-abstraction/omnibridge/overview).
 
 ## Supported Networks
 
