@@ -11,11 +11,11 @@ pub mod tests {
     };
     use rstest::fixture;
 
-    pub const NEP141_DEPOSIT: NearToken = NearToken::from_yoctonear(1250000000000000000000);
+    pub const NEP141_DEPOSIT: NearToken = NearToken::from_yoctonear(1_250_000_000_000_000_000_000);
 
     fn build_wasm(path: &str, target_dir: &str) -> Vec<u8> {
         let pwd = Path::new("./").canonicalize().expect("new path");
-        let sub_target = pwd.join(format!("target/{}", target_dir));
+        let sub_target = pwd.join(format!("target/{target_dir}"));
 
         let artifact = cargo_near_build::build(cargo_near_build::BuildOpts {
             manifest_path: Some(
@@ -25,7 +25,7 @@ pub mod tests {
             override_cargo_target_dir: Some(sub_target.to_string_lossy().to_string()),
             ..Default::default()
         })
-        .unwrap_or_else(|_| panic!("building contract from {}", path));
+        .unwrap_or_else(|_| panic!("building contract from {path}"));
 
         std::fs::read(&artifact.path).unwrap()
     }
@@ -64,7 +64,7 @@ pub mod tests {
     }
 
     pub fn account_n(n: u8) -> AccountId {
-        format!("account_{}", n).parse().unwrap()
+        format!("account_{n}").parse().unwrap()
     }
 
     pub fn eth_factory_address() -> OmniAddress {
@@ -121,7 +121,7 @@ pub mod tests {
         origin_chain: ChainKind,
         destination_chain: ChainKind,
         origin_nonce: Nonce,
-        fee_recipient: AccountId,
+        fee_recipient: &AccountId,
         amount: u128,
         emitter_address: OmniAddress,
     ) -> ClaimFeeArgs {

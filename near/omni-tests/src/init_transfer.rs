@@ -32,6 +32,7 @@ mod tests {
     }
 
     impl TestEnv {
+        #[allow(clippy::too_many_lines)]
         async fn new(
             sender_balance_token: u128,
             mock_token_wasm: Vec<u8>,
@@ -267,7 +268,7 @@ mod tests {
             ChainKind::Near,
             ChainKind::Eth,
             transfer_message.origin_nonce,
-            env.relayer_account.id().clone(),
+            env.relayer_account.id(),
             transfer_amount - signing_fee.fee.0,
             env.eth_factory_address.clone(),
         );
@@ -326,9 +327,8 @@ mod tests {
             get_event_data("InitTransferEvent", &logs)?
                 .ok_or_else(|| anyhow::anyhow!("InitTransferEvent not found"))?,
         )?;
-        let transfer_message = match omni_bridge_event {
-            OmniBridgeEvent::InitTransferEvent { transfer_message } => transfer_message,
-            _ => anyhow::bail!("InitTransferEvent is found in unexpected event"),
+        let OmniBridgeEvent::InitTransferEvent { transfer_message } = omni_bridge_event else {
+            anyhow::bail!("InitTransferEvent is found in unexpected event")
         };
 
         Ok(transfer_message)

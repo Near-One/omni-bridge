@@ -80,7 +80,7 @@ mod tests {
         .await;
 
         match result {
-            Ok(_) => assert!(
+            Ok(()) => assert!(
                 expected_error.is_none(),
                 "Expected an error but got success"
             ),
@@ -90,14 +90,13 @@ mod tests {
                 });
                 assert!(
                     result_error.to_string().contains(error),
-                    "Wrong error. Got: {}, Expected: {}",
-                    result_error,
-                    error
+                    "Wrong error. Got: {result_error}, Expected: {error}"
                 );
             }
         }
     }
 
+    #[allow(clippy::too_many_lines)]
     async fn test_fin_transfer(
         storage_deposit_accounts: Vec<(AccountId, bool)>,
         amount: u128,
