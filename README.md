@@ -218,7 +218,7 @@ pub fn init_transfer_sol(ctx: Context<InitTransferSol>, payload: InitTransferPay
 **API Endpoints:**
 - Mainnet: `https://mainnet.api.bridge.nearone.org/api/v1`
 - Testnet: `https://testnet.api.bridge.nearone.org/api/v1`
-- [OpenAPI Specification](https://gist.github.com/karim-en/16e88a6cd39665803f7e77a756d24e96)
+- [OpenAPI Specification](https://near-one.github.io/bridge-indexer-rs)
 
 Note: Custom relayers can process transfers with zero fees.
 </details>
