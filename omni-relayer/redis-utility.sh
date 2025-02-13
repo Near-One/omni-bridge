@@ -44,7 +44,7 @@ case "$1" in
 	get_last_processed "Solana" "SOLANA_LAST_PROCESSED_SIGNATURE"
     ;;
   get_events)
-	redis-cli -h "$REDIS_HOST" -p "$REDIS_PORT" hgetall "events" | sed -n '1~2p'
+	redis-cli -h "$REDIS_HOST" -p "$REDIS_PORT" hgetall "events" | sed -n 'n;p' | sed G
     ;;
   get_solana_events)
 	redis-cli -h "$REDIS_HOST" -p "$REDIS_PORT" hgetall "solana_events" | sed -n '1~2p'

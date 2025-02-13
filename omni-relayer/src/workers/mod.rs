@@ -12,7 +12,7 @@ use ethereum_types::H256;
 
 use near_bridge_client::TransactionOptions;
 use near_jsonrpc_client::JsonRpcClient;
-use near_primitives::{types::AccountId, views::TxExecutionStatus};
+use near_primitives::{hash::CryptoHash, types::AccountId, views::TxExecutionStatus};
 use solana_client::rpc_request::RpcResponseErrorData;
 use solana_rpc_client_api::{client_error::ErrorKind, request::RpcError};
 use solana_sdk::{instruction::InstructionError, pubkey::Pubkey, transaction::TransactionError};
@@ -97,6 +97,15 @@ pub enum DeployToken {
     },
 }
 
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+struct UnverifiedNearTrasfer {
+    tx_hash: CryptoHash,
+    signer: AccountId,
+    specific_errors: Option<Vec<String>>,
+    original_key: String,
+    original_event: Transfer,
+}
+
 pub async fn process_events(
     config: config::Config,
     redis_client: redis::Client,
@@ -145,7 +154,6 @@ pub async fn process_events(
                         let config = config.clone();
                         let mut redis_connection = redis_connection.clone();
                         let connector = connector.clone();
-                        let jsonrpc_client = jsonrpc_client.clone();
                         let signer = signer.clone();
                         let near_nonce = near_nonce.clone();
 
@@ -153,8 +161,9 @@ pub async fn process_events(
                             match process_near_transfer_event(
                                 #[cfg(not(feature = "disable_fee_check"))]
                                 config,
+                                &mut redis_connection,
+                                key.clone(),
                                 connector,
-                                jsonrpc_client,
                                 signer,
                                 transfer,
                                 near_nonce,
@@ -194,7 +203,7 @@ pub async fn process_events(
                         async move {
                             match process_evm_init_transfer_event(
                                 config,
-                                redis_connection.clone(),
+                                &mut redis_connection,
                                 key.clone(),
                                 connector,
                                 jsonrpc_client,
@@ -235,7 +244,7 @@ pub async fn process_events(
                         async move {
                             match process_solana_init_transfer_event(
                                 config,
-                                redis_connection.clone(),
+                                &mut redis_connection,
                                 key.clone(),
                                 connector,
                                 transfer,
@@ -460,6 +469,22 @@ pub async fn process_events(
                         }
                     }));
                 }
+            } else if let Ok(unverified_event) =
+                serde_json::from_str::<UnverifiedNearTrasfer>(&event)
+            {
+                tokio::spawn({
+                    let mut redis_connection = redis_connection.clone();
+                    let jsonrpc_client = jsonrpc_client.clone();
+
+                    async move {
+                        process_unverified_near_transfer_event(
+                            &mut redis_connection,
+                            jsonrpc_client,
+                            unverified_event,
+                        )
+                        .await
+                    }
+                });
             }
         }
 
@@ -474,14 +499,15 @@ pub async fn process_events(
 
 async fn process_near_transfer_event(
     #[cfg(not(feature = "disable_fee_check"))] config: config::Config,
+    redis_connection: &mut redis::aio::MultiplexedConnection,
+    key: String,
     connector: Arc<OmniConnector>,
-    jsonrpc_client: JsonRpcClient,
     signer: AccountId,
     transfer: Transfer,
     near_nonce: Arc<utils::nonce::NonceManager>,
 ) -> Result<EventAction> {
     let Transfer::Near {
-        event,
+        ref event,
         creation_timestamp,
         last_update_timestamp,
     } = transfer
@@ -551,26 +577,29 @@ async fn process_near_transfer_event(
             Some(transfer_message.fee.clone()),
             TransactionOptions {
                 nonce: Some(nonce),
-                wait_until: near_primitives::views::TxExecutionStatus::Final,
+                wait_until: near_primitives::views::TxExecutionStatus::Included,
             },
         )
         .await
         .context("Failed to sign transfer")?;
 
-    if utils::near::is_tx_successful(
-        &jsonrpc_client,
-        tx_hash,
-        signer,
-        Some(vec![
-            "Signature request has already been submitted. Please try again later.".to_string(),
-            "Signature request has timed out.".to_string(),
-            "Attached deposit is lower than required".to_string(),
-        ]),
+    utils::redis::add_event(
+        redis_connection,
+        utils::redis::EVENTS,
+        tx_hash.to_string(),
+        UnverifiedNearTrasfer {
+            tx_hash,
+            signer,
+            specific_errors: Some(vec![
+                "Signature request has already been submitted. Please try again later.".to_string(),
+                "Signature request has timed out.".to_string(),
+                "Attached deposit is lower than required".to_string(),
+            ]),
+            original_key: key,
+            original_event: transfer,
+        },
     )
-    .await
-    {
-        anyhow::bail!("Found a failed receipt in the transaction");
-    }
+    .await;
 
     info!("Signed transfer: {:?}", tx_hash);
 
@@ -669,7 +698,7 @@ async fn process_sign_transfer_event(
 
 async fn process_evm_init_transfer_event(
     config: config::Config,
-    mut redis_connection: redis::aio::MultiplexedConnection,
+    redis_connection: &mut redis::aio::MultiplexedConnection,
     key: String,
     connector: Arc<OmniConnector>,
     jsonrpc_client: near_jsonrpc_client::JsonRpcClient,
@@ -821,8 +850,7 @@ async fn process_evm_init_transfer_event(
     {
         Ok(actions) => actions,
         Err(err) => {
-            utils::redis::add_event(&mut redis_connection, utils::redis::EVENTS, key, transfer)
-                .await;
+            utils::redis::add_event(redis_connection, utils::redis::EVENTS, key, transfer).await;
             anyhow::bail!("Failed to get storage deposit actions: {}", err);
         }
     };
@@ -866,7 +894,7 @@ async fn process_evm_init_transfer_event(
 
 async fn process_solana_init_transfer_event(
     config: config::Config,
-    mut redis_connection: redis::aio::MultiplexedConnection,
+    redis_connection: &mut redis::aio::MultiplexedConnection,
     key: String,
     connector: Arc<OmniConnector>,
     transfer: Transfer,
@@ -969,13 +997,8 @@ async fn process_solana_init_transfer_event(
     {
         Ok(actions) => actions,
         Err(err) => {
-            utils::redis::add_event(
-                &mut redis_connection,
-                utils::redis::STUCK_EVENTS,
-                &key,
-                transfer,
-            )
-            .await;
+            utils::redis::add_event(redis_connection, utils::redis::STUCK_EVENTS, &key, transfer)
+                .await;
             anyhow::bail!("Failed to get storage deposit actions: {}", err);
         }
     };
@@ -1314,4 +1337,34 @@ async fn process_solana_deploy_token_event(
     info!("Bound token: {:?}", tx_hash);
 
     Ok(EventAction::Remove)
+}
+
+async fn process_unverified_near_transfer_event(
+    redis_connection: &mut redis::aio::MultiplexedConnection,
+    jsonrpc_client: JsonRpcClient,
+    unverified_event: UnverifiedNearTrasfer,
+) {
+    utils::redis::remove_event(
+        redis_connection,
+        utils::redis::EVENTS,
+        unverified_event.tx_hash.to_string(),
+    )
+    .await;
+
+    if !utils::near::is_tx_successful(
+        &jsonrpc_client,
+        unverified_event.tx_hash,
+        unverified_event.signer,
+        unverified_event.specific_errors,
+    )
+    .await
+    {
+        utils::redis::add_event(
+            redis_connection,
+            utils::redis::EVENTS,
+            unverified_event.original_key,
+            unverified_event.original_event,
+        )
+        .await;
+    }
 }
