@@ -106,6 +106,7 @@ struct UnverifiedNearTrasfer {
     original_event: Transfer,
 }
 
+#[allow(clippy::too_many_lines)]
 pub async fn process_events(
     config: config::Config,
     redis_client: redis::Client,
@@ -482,7 +483,7 @@ pub async fn process_events(
                             jsonrpc_client,
                             unverified_event,
                         )
-                        .await
+                        .await;
                     }
                 });
             }
@@ -684,9 +685,9 @@ async fn process_sign_transfer_event(
                         if error_code == PAUSED_ERROR {
                             warn!("Solana bridge is paused");
                             return Ok(EventAction::Retry);
-                        } else {
-                            anyhow::bail!("Failed to finalize deposit: {}", err);
                         }
+
+                        anyhow::bail!("Failed to finalize deposit: {err}");
                     }
                 }
             }
