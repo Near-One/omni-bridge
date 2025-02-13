@@ -225,7 +225,7 @@ Note: Custom relayers can process transfers with zero fees.
 
 ## SDKs & Tools
 
-- [Bridge SDK (Rust)](https://github.com/Near-One/bridge-sdk-js)
+- [Bridge SDK (Rust)](https://github.com/Near-One/bridge-sdk-rs)
 - [Bridge SDK (JavaScript)](https://github.com/Near-One/bridge-sdk-rs)
 
 ## Get Involved
