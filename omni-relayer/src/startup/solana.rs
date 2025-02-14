@@ -1,14 +1,19 @@
 use std::str::FromStr;
+use std::sync::Arc;
 
 use anyhow::Result;
+use futures::future::join_all;
 use log::{error, info, warn};
 use solana_sdk::signer::EncodableKey;
+use solana_transaction_status::{UiMessage, UiTransactionEncoding};
 use tokio_stream::StreamExt;
 
 use omni_types::ChainKind;
 use solana_client::nonblocking::{pubsub_client::PubsubClient, rpc_client::RpcClient};
 use solana_client::rpc_client::GetConfirmedSignaturesForAddress2Config;
-use solana_client::rpc_config::{RpcTransactionLogsConfig, RpcTransactionLogsFilter};
+use solana_client::rpc_config::{
+    RpcTransactionConfig, RpcTransactionLogsConfig, RpcTransactionLogsFilter,
+};
 use solana_client::rpc_response::RpcConfirmedTransactionStatusWithSignature;
 use solana_sdk::signature::{Keypair, Signature};
 use solana_sdk::{commitment_config::CommitmentConfig, pubkey::Pubkey};
@@ -157,4 +162,104 @@ async fn process_recent_signatures(
     }
 
     Ok(())
+}
+
+pub async fn process_signature(config: config::Config, redis_client: redis::Client) -> Result<()> {
+    let Some(solana_config) = config.solana else {
+        anyhow::bail!("Failed to get Solana config");
+    };
+
+    let rpc_http_url = &solana_config.rpc_http_url;
+    let http_client = Arc::new(RpcClient::new(rpc_http_url.to_string()));
+
+    let fetching_config = RpcTransactionConfig {
+        encoding: Some(UiTransactionEncoding::Json),
+        commitment: Some(CommitmentConfig::confirmed()),
+        max_supported_transaction_version: Some(0),
+    };
+
+    let redis_connection = redis_client.get_multiplexed_tokio_connection().await?;
+
+    loop {
+        let mut redis_connection = redis_connection.clone();
+
+        let Some(events) = utils::redis::get_events(
+            &mut redis_connection,
+            utils::redis::SOLANA_EVENTS.to_string(),
+        )
+        .await
+        else {
+            tokio::time::sleep(tokio::time::Duration::from_secs(
+                utils::redis::SLEEP_TIME_AFTER_EVENTS_PROCESS_SECS,
+            ))
+            .await;
+            continue;
+        };
+
+        let mut handlers = Vec::new();
+
+        for (key, _) in events {
+            handlers.push(tokio::spawn({
+                let mut redis_connection = redis_connection.clone();
+                let solana = solana_config.clone();
+                let http_client = http_client.clone();
+
+                async move {
+                    let Ok(signature) = Signature::from_str(&key) else {
+                        warn!("Failed to parse signature: {:?}", key);
+                        return;
+                    };
+
+                    info!("Trying to process signature: {:?}", signature);
+
+                    match http_client
+                        .get_transaction_with_config(&signature, fetching_config)
+                        .await
+                    {
+                        Ok(tx) => {
+                            let transaction = tx.transaction;
+
+                            if let solana_transaction_status::EncodedTransaction::Json(ref tx) =
+                                transaction.transaction
+                            {
+                                if let UiMessage::Raw(ref raw) = tx.message {
+                                    utils::solana::process_message(
+                                        &mut redis_connection,
+                                        &solana,
+                                        &transaction,
+                                        raw,
+                                        signature,
+                                    )
+                                    .await;
+                                }
+                            }
+
+                            utils::redis::remove_event(
+                                &mut redis_connection,
+                                utils::redis::SOLANA_EVENTS,
+                                &signature.to_string(),
+                            )
+                            .await;
+                            utils::redis::update_last_processed(
+                                &mut redis_connection,
+                                &utils::redis::get_last_processed_key(ChainKind::Sol),
+                                &signature.to_string(),
+                            )
+                            .await;
+                        }
+                        Err(err) => {
+                            warn!("Failed to fetch transaction (probably signature wasn't finalized yet): {}", err);
+                        }
+                    };
+                }
+            }));
+        }
+
+        join_all(handlers).await;
+
+        tokio::time::sleep(tokio::time::Duration::from_secs(
+            utils::redis::SLEEP_TIME_AFTER_EVENTS_PROCESS_SECS,
+        ))
+        .await;
+    }
 }

@@ -7,8 +7,7 @@ use solana_transaction_status::{
     option_serializer::OptionSerializer, EncodedTransactionWithStatusMeta, UiRawMessage,
 };
 
-use crate::workers::near::{DeployToken, FinTransfer};
-use crate::workers::solana::InitTransferWithTimestamp;
+use crate::workers::{DeployToken, FinTransfer, Transfer};
 use crate::{config, utils};
 
 #[derive(Debug, BorshDeserialize)]
@@ -134,9 +133,9 @@ async fn decode_instruction(
 
                         utils::redis::add_event(
                             redis_connection,
-                            utils::redis::SOLANA_INIT_TRANSFER_EVENTS,
+                            utils::redis::EVENTS,
                             signature.to_string(),
-                            InitTransferWithTimestamp {
+                            Transfer::Solana {
                                 amount: payload.amount,
                                 token: token.clone(),
                                 sender: sender.clone(),
@@ -199,7 +198,7 @@ async fn decode_instruction(
 
                     utils::redis::add_event(
                         redis_connection,
-                        utils::redis::FINALIZED_TRANSFERS,
+                        utils::redis::EVENTS,
                         signature.to_string(),
                         FinTransfer::Solana {
                             emitter: emitter.clone(),
@@ -233,7 +232,7 @@ async fn decode_instruction(
 
                     utils::redis::add_event(
                         redis_connection,
-                        utils::redis::DEPLOY_TOKEN_EVENTS,
+                        utils::redis::EVENTS,
                         signature.to_string(),
                         DeployToken::Solana {
                             emitter: account_keys
