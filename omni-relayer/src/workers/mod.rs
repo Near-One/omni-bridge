@@ -894,6 +894,10 @@ async fn process_evm_init_transfer_event(
 
     info!("Finalized InitTransfer: {:?}", tx_hash);
 
+    if current_timestamp - creation_timestamp > utils::redis::KEEP_INSUFFICIENT_FEE_TRANSFERS_FOR {
+        anyhow::bail!("Transfer is too old");
+    }
+
     Ok(EventAction::Remove)
 }
 
@@ -1133,6 +1137,10 @@ async fn process_evm_fin_transfer_event(
 
     info!("Claimed fee: {:?}", tx_hash);
 
+    if current_timestamp - creation_timestamp > utils::redis::KEEP_INSUFFICIENT_FEE_TRANSFERS_FOR {
+        anyhow::bail!("Transfer is too old");
+    }
+
     Ok(EventAction::Remove)
 }
 
@@ -1286,6 +1294,10 @@ async fn process_evm_deploy_token_event(
         .context("Failed to bind token")?;
 
     info!("Bound token: {:?}", tx_hash);
+
+    if current_timestamp - creation_timestamp > utils::redis::KEEP_INSUFFICIENT_FEE_TRANSFERS_FOR {
+        anyhow::bail!("Transfer is too old");
+    }
 
     Ok(EventAction::Remove)
 }
