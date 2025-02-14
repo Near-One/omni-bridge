@@ -545,7 +545,7 @@ async fn process_near_transfer_event(
         );
     };
 
-    info!("Trying to process InitTransferEvent/FinTransferEvent/UpdateFeeEvent",);
+    info!("Trying to process InitTransferEvent/FinTransferEvent/UpdateFeeEvent");
 
     #[cfg(not(feature = "disable_fee_check"))]
     match utils::fee::is_fee_sufficient(
