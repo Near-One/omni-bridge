@@ -290,7 +290,7 @@ mod tests {
 
     #[rstest]
     #[case(50)]
-    #[case(1000000)]
+    #[case(1_000_000)]
     #[tokio::test]
     async fn test_near_withdrawal(#[case] near_amount: u128) -> anyhow::Result<()> {
         let TestSetup {
@@ -364,16 +364,14 @@ mod tests {
             .transact()
             .await?;
 
-        assert!(result.is_success(), "Fin transfer failed {:?}", result);
+        assert!(result.is_success(), "Fin transfer failed {result:?}");
 
         // Check that the NEAR balance of the recipient is greater or equal to 1000 NEAR
         let recipient_balance: NearToken =
-            worker.view_account(&recipient_account.id()).await?.balance;
+            worker.view_account(recipient_account.id()).await?.balance;
         assert!(
             recipient_balance >= wnear_amount,
-            "Recipient balance is {} while it should be at least {}",
-            recipient_balance,
-            wnear_amount
+            "Recipient balance is {recipient_balance} while it should be at least {wnear_amount}"
         );
 
         Ok(())
