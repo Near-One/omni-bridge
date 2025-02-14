@@ -564,7 +564,7 @@ impl Contract {
     pub fn near_withdraw_callback(&self, recipient: AccountId, amount: NearToken) -> Promise {
         match env::promise_result(0) {
             PromiseResult::Successful(_) => Promise::new(recipient).transfer(amount),
-            _ => env::panic_str("ERR_NEAR_WITHDRAW_FAILED"),
+            PromiseResult::Failed => env::panic_str("ERR_NEAR_WITHDRAW_FAILED"),
         }
     }
 
