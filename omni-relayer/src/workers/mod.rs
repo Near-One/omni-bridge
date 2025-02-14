@@ -573,7 +573,7 @@ async fn process_near_transfer_event(
         .await
         .context("Failed to reserve nonce for near transaction")?;
 
-    let tx_hash = connector
+    match connector
         .near_sign_transfer(
             TransferId {
                 origin_chain: transfer_message.sender.get_chain(),
@@ -588,33 +588,52 @@ async fn process_near_transfer_event(
             None,
         )
         .await
-        .context("Failed to sign transfer")?;
+    {
+        Ok(tx_hash) => {
+            utils::redis::add_event(
+                redis_connection,
+                utils::redis::EVENTS,
+                tx_hash.to_string(),
+                UnverifiedNearTrasfer {
+                    tx_hash,
+                    signer,
+                    specific_errors: Some(vec![
+                        "Signature request has already been submitted. Please try again later."
+                            .to_string(),
+                        "Signature request has timed out.".to_string(),
+                        "Attached deposit is lower than required".to_string(),
+                    ]),
+                    original_key: key,
+                    original_event: transfer,
+                },
+            )
+            .await;
 
-    utils::redis::add_event(
-        redis_connection,
-        utils::redis::EVENTS,
-        tx_hash.to_string(),
-        UnverifiedNearTrasfer {
-            tx_hash,
-            signer,
-            specific_errors: Some(vec![
-                "Signature request has already been submitted. Please try again later.".to_string(),
-                "Signature request has timed out.".to_string(),
-                "Attached deposit is lower than required".to_string(),
-            ]),
-            original_key: key,
-            original_event: transfer,
-        },
-    )
-    .await;
+            info!("Signed transfer: {:?}", tx_hash);
 
-    info!("Signed transfer: {:?}", tx_hash);
+            Ok(EventAction::Remove)
+        }
+        Err(err) => {
+            if current_timestamp - creation_timestamp
+                > utils::redis::KEEP_INSUFFICIENT_FEE_TRANSFERS_FOR
+            {
+                anyhow::bail!("Transfer is too old");
+            }
 
-    if current_timestamp - creation_timestamp > utils::redis::KEEP_INSUFFICIENT_FEE_TRANSFERS_FOR {
-        anyhow::bail!("Transfer is too old");
+            if let BridgeSdkError::NearRpcError(near_rpc_error) = err {
+                match near_rpc_error {
+                    NearRpcError::NonceError | NearRpcError::FinalizationError => {
+                        warn!("Failed to sign transfer, retrying: {}", near_rpc_error);
+                        return Ok(EventAction::Retry);
+                    }
+                    _ => {
+                        anyhow::bail!("Failed to sign transfer: {}", near_rpc_error);
+                    }
+                };
+            }
+            anyhow::bail!("Failed to sign transfer: {}", err);
+        }
     }
-
-    Ok(EventAction::Remove)
 }
 
 async fn process_sign_transfer_event(
@@ -891,18 +910,26 @@ async fn process_evm_init_transfer_event(
         }
     };
 
-    let tx_hash = connector
-        .fin_transfer(fin_transfer_args)
-        .await
-        .context("Failed to finalize transfer")?;
-
-    info!("Finalized InitTransfer: {:?}", tx_hash);
-
-    if current_timestamp - creation_timestamp > utils::redis::KEEP_INSUFFICIENT_FEE_TRANSFERS_FOR {
-        anyhow::bail!("Transfer is too old");
+    match connector.fin_transfer(fin_transfer_args).await {
+        Ok(tx_hash) => {
+            info!("Finalized InitTransfer: {:?}", tx_hash);
+            Ok(EventAction::Remove)
+        }
+        Err(err) => {
+            if let BridgeSdkError::NearRpcError(near_rpc_error) = err {
+                match near_rpc_error {
+                    NearRpcError::NonceError | NearRpcError::FinalizationError => {
+                        warn!("Failed to finalize transfer, retrying: {}", near_rpc_error);
+                        return Ok(EventAction::Retry);
+                    }
+                    _ => {
+                        anyhow::bail!("Failed to finalize transfer: {}", near_rpc_error);
+                    }
+                };
+            }
+            anyhow::bail!("Failed to finalize transfer: {}", err);
+        }
     }
-
-    Ok(EventAction::Remove)
 }
 
 async fn process_solana_init_transfer_event(
