@@ -304,6 +304,14 @@ mod tests {
 
         // Provide locker contract with large wNEAR balance
         let wnear_amount = NearToken::from_near(near_amount);
+
+        // top up wNEAR contract with NEAR
+        assert!(worker
+            .root_account()?
+            .transfer_near(token_contract.id(), wnear_amount)
+            .await?
+            .is_success());
+
         token_contract
             .call("ft_transfer")
             .args_json(json!({
@@ -332,7 +340,7 @@ mod tests {
             .saturating_add(required_balance_for_fin_transfer);
 
         // Try to finalize a large NEAR withdrawal
-        let _result = relayer_account
+        let result = relayer_account
             .call(locker_contract.id(), "fin_transfer")
             .args_borsh(FinTransferArgs {
                 chain_kind: omni_types::ChainKind::Eth,
@@ -355,7 +363,9 @@ mod tests {
             .deposit(required_deposit_for_fin_transfer)
             .max_gas()
             .transact()
-            .await;
+            .await?;
+
+        assert!(result.is_success(), "Fin transfer failed {:?}", result);
 
         // Check that the NEAR balance of the recipient is greater or equal to 1000 NEAR
         let recipient_balance: NearToken =
