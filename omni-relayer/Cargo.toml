@@ -1,6 +1,6 @@
 [package]
 name = "omni-relayer"
-version = "0.3.1"
+version = "0.3.2"
 edition = "2021"
 resolver = "2"
 repository = "https://github.com/Near-One/omni-bridge"
@@ -36,6 +36,7 @@ near-jsonrpc-client = "0.15.1"
 near-jsonrpc-primitives = "0.28.0"
 near-primitives = "0.28.0"
 near-crypto = "0.28.0"
+near-sdk = "5.8.0"
 
 hex = "0.4.3"
 alloy = { version = "0.9", features = ["node-bindings", "providers", "rpc-types", "sol-types", "provider-ws", "signers", "signer-local"] }
