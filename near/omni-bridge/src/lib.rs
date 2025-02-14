@@ -51,6 +51,7 @@ const FT_TRANSFER_CALL_GAS: Gas = Gas::from_tgas(125);
 const FT_TRANSFER_GAS: Gas = Gas::from_tgas(5);
 const UPDATE_CONTROLLER_GAS: Gas = Gas::from_tgas(250);
 const WNEAR_WITHDRAW_GAS: Gas = Gas::from_tgas(10);
+const NEAR_WITHDRAW_CALLBACK_GAS: Gas = Gas::from_tgas(5);
 const STORAGE_BALANCE_OF_GAS: Gas = Gas::from_tgas(3);
 const STORAGE_DEPOSIT_GAS: Gas = Gas::from_tgas(3);
 const DEPLOY_TOKEN_CALLBACK_GAS: Gas = Gas::from_tgas(75);
@@ -559,6 +560,14 @@ impl Contract {
         }
     }
 
+    #[private]
+    pub fn near_withdraw_callback(&self, recipient: AccountId, amount: NearToken) -> Promise {
+        match env::promise_result(0) {
+            PromiseResult::Successful(_) => Promise::new(recipient).transfer(amount),
+            PromiseResult::Failed => env::panic_str("ERR_NEAR_WITHDRAW_FAILED"),
+        }
+    }
+
     #[payable]
     #[pause(except(roles(Role::DAO, Role::UnrestrictedRelayer)))]
     pub fn claim_fee(&mut self, #[serializer(borsh)] args: ClaimFeeArgs) -> Promise {
@@ -1041,8 +1050,12 @@ impl Contract {
                 .with_attached_deposit(ONE_YOCTO)
                 .near_withdraw(amount_to_transfer)
                 .then(
-                    Promise::new(recipient)
-                        .transfer(NearToken::from_yoctonear(amount_to_transfer.0)),
+                    Self::ext(env::current_account_id())
+                        .with_static_gas(NEAR_WITHDRAW_CALLBACK_GAS)
+                        .near_withdraw_callback(
+                            recipient,
+                            NearToken::from_yoctonear(amount_to_transfer.0),
+                        ),
                 )
         } else if is_deployed_token {
             let deposit = if transfer_message.msg.is_empty() {
