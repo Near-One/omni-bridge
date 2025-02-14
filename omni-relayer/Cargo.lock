@@ -1815,7 +1815,7 @@ dependencies = [
 [[package]]
 name = "bridge-connector-common"
 version = "0.2.0"
-source = "git+https://github.com/Near-One/bridge-sdk-rs#96660902f6cf29f8139f0d93059e4774fba4ea0c"
+source = "git+https://github.com/Near-One/bridge-sdk-rs#bb46cbb8f1019f63fd0eecc16fbf385151a64522"
 dependencies = [
  "eth-proof",
  "ethers",
@@ -2039,9 +2039,9 @@ dependencies = [
 
 [[package]]
 name = "cc"
-version = "1.2.13"
+version = "1.2.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c7777341816418c02e033934a09f20dc0ccaf65a5201ef8a450ae0105a573fda"
+checksum = "0c3d1b2e905a3a7b00a6141adb0e4c0bb941d11caf55349d863942a1cc44e3c9"
 dependencies = [
  "jobserver",
  "libc",
@@ -3209,7 +3209,7 @@ dependencies = [
 [[package]]
 name = "eth-proof"
 version = "0.2.0"
-source = "git+https://github.com/Near-One/bridge-sdk-rs#96660902f6cf29f8139f0d93059e4774fba4ea0c"
+source = "git+https://github.com/Near-One/bridge-sdk-rs#bb46cbb8f1019f63fd0eecc16fbf385151a64522"
 dependencies = [
  "borsh 1.5.5",
  "cita_trie",
@@ -3578,7 +3578,7 @@ dependencies = [
 [[package]]
 name = "evm-bridge-client"
 version = "0.2.0"
-source = "git+https://github.com/Near-One/bridge-sdk-rs#96660902f6cf29f8139f0d93059e4774fba4ea0c"
+source = "git+https://github.com/Near-One/bridge-sdk-rs#bb46cbb8f1019f63fd0eecc16fbf385151a64522"
 dependencies = [
  "borsh 1.5.5",
  "bridge-connector-common",
@@ -5101,7 +5101,7 @@ dependencies = [
 [[package]]
 name = "near-bridge-client"
 version = "0.2.0"
-source = "git+https://github.com/Near-One/bridge-sdk-rs#96660902f6cf29f8139f0d93059e4774fba4ea0c"
+source = "git+https://github.com/Near-One/bridge-sdk-rs#bb46cbb8f1019f63fd0eecc16fbf385151a64522"
 dependencies = [
  "borsh 1.5.5",
  "bridge-connector-common",
@@ -5330,7 +5330,7 @@ dependencies = [
 [[package]]
 name = "near-light-client-on-eth"
 version = "0.2.0"
-source = "git+https://github.com/Near-One/bridge-sdk-rs#96660902f6cf29f8139f0d93059e4774fba4ea0c"
+source = "git+https://github.com/Near-One/bridge-sdk-rs#bb46cbb8f1019f63fd0eecc16fbf385151a64522"
 dependencies = [
  "ethereum-types 0.14.1",
  "ethers",
@@ -5502,7 +5502,7 @@ dependencies = [
 [[package]]
 name = "near-rpc-client"
 version = "0.2.0"
-source = "git+https://github.com/Near-One/bridge-sdk-rs#96660902f6cf29f8139f0d93059e4774fba4ea0c"
+source = "git+https://github.com/Near-One/bridge-sdk-rs#bb46cbb8f1019f63fd0eecc16fbf385151a64522"
 dependencies = [
  "borsh 1.5.5",
  "lazy_static",
@@ -5895,7 +5895,7 @@ dependencies = [
 [[package]]
 name = "omni-connector"
 version = "0.2.4"
-source = "git+https://github.com/Near-One/bridge-sdk-rs#96660902f6cf29f8139f0d93059e4774fba4ea0c"
+source = "git+https://github.com/Near-One/bridge-sdk-rs#bb46cbb8f1019f63fd0eecc16fbf385151a64522"
 dependencies = [
  "borsh 1.5.5",
  "bridge-connector-common",
@@ -5943,6 +5943,7 @@ dependencies = [
  "near-jsonrpc-primitives",
  "near-lake-framework",
  "near-primitives 0.28.0",
+ "near-rpc-client",
  "near-sdk",
  "omni-connector",
  "omni-types",
@@ -6602,9 +6603,9 @@ dependencies = [
 
 [[package]]
 name = "quinn-udp"
-version = "0.5.9"
+version = "0.5.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1c40286217b4ba3a71d644d752e6a0b71f13f1b6a2c5311acfcbe0c2418ed904"
+checksum = "e46f3055866785f6b92bc6164b76be02ca8f2eb4b002c0354b28cf4c119e5944"
 dependencies = [
  "cfg_aliases",
  "libc",
@@ -7882,7 +7883,7 @@ dependencies = [
 [[package]]
 name = "solana-bridge-client"
 version = "0.2.0"
-source = "git+https://github.com/Near-One/bridge-sdk-rs#96660902f6cf29f8139f0d93059e4774fba4ea0c"
+source = "git+https://github.com/Near-One/bridge-sdk-rs#bb46cbb8f1019f63fd0eecc16fbf385151a64522"
 dependencies = [
  "borsh 1.5.5",
  "derive_builder 0.20.2",
@@ -10949,7 +10950,7 @@ dependencies = [
 [[package]]
 name = "wormhole-bridge-client"
 version = "0.2.0"
-source = "git+https://github.com/Near-One/bridge-sdk-rs#96660902f6cf29f8139f0d93059e4774fba4ea0c"
+source = "git+https://github.com/Near-One/bridge-sdk-rs#bb46cbb8f1019f63fd0eecc16fbf385151a64522"
 dependencies = [
  "bridge-connector-common",
  "derive_builder 0.20.2",
