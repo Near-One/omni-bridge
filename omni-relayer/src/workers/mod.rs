@@ -13,6 +13,7 @@ use ethereum_types::H256;
 use near_bridge_client::TransactionOptions;
 use near_jsonrpc_client::JsonRpcClient;
 use near_primitives::{hash::CryptoHash, types::AccountId, views::TxExecutionStatus};
+use near_sdk::json_types::U128;
 use solana_client::rpc_request::RpcResponseErrorData;
 use solana_rpc_client_api::{client_error::ErrorKind, request::RpcError};
 use solana_sdk::{instruction::InstructionError, pubkey::Pubkey, transaction::TransactionError};
@@ -52,11 +53,11 @@ pub enum Transfer {
         expected_finalization_time: i64,
     },
     Solana {
-        amount: String,
+        amount: U128,
         token: String,
         sender: String,
         recipient: String,
-        fee: String,
+        fee: U128,
         native_fee: u64,
         message: String,
         emitter: String,
@@ -909,7 +910,7 @@ async fn process_solana_init_transfer_event(
         ref sender,
         ref token,
         ref recipient,
-        ref fee,
+        fee,
         native_fee,
         ref emitter,
         sequence,
@@ -960,10 +961,7 @@ async fn process_solana_init_transfer_event(
         match utils::fee::is_fee_sufficient(
             &config,
             Fee {
-                fee: fee
-                    .parse::<u128>()
-                    .context("Failed to parse fee as u128")?
-                    .into(),
+                fee,
                 native_fee: u128::from(native_fee).into(),
             },
             &sender,
@@ -997,7 +995,7 @@ async fn process_solana_init_transfer_event(
         ChainKind::Sol,
         &recipient,
         token,
-        fee.parse().context("Failed to parse fee as u128")?,
+        fee.0,
         u128::from(native_fee),
     )
     .await
