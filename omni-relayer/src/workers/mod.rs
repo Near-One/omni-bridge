@@ -185,7 +185,7 @@ pub async fn process_events(
                                     .await;
                                 }
                                 Err(err) => {
-                                    warn!("{err}");
+                                    warn!("{err:?}");
                                     utils::redis::remove_event(
                                         &mut redis_connection,
                                         utils::redis::EVENTS,
@@ -227,7 +227,7 @@ pub async fn process_events(
                                     .await;
                                 }
                                 Err(err) => {
-                                    warn!("{err}");
+                                    warn!("{err:?}");
                                     utils::redis::remove_event(
                                         &mut redis_connection,
                                         utils::redis::EVENTS,
@@ -267,7 +267,7 @@ pub async fn process_events(
                                     .await;
                                 }
                                 Err(err) => {
-                                    warn!("{err}");
+                                    warn!("{err:?}");
                                     utils::redis::remove_event(
                                         &mut redis_connection,
                                         utils::redis::EVENTS,
@@ -306,7 +306,7 @@ pub async fn process_events(
                                     .await;
                                 }
                                 Err(err) => {
-                                    warn!("{err}");
+                                    warn!("{err:?}");
                                     utils::redis::remove_event(
                                         &mut redis_connection,
                                         utils::redis::EVENTS,
@@ -347,7 +347,7 @@ pub async fn process_events(
                                     .await;
                                 }
                                 Err(err) => {
-                                    warn!("{err}");
+                                    warn!("{err:?}");
                                     utils::redis::remove_event(
                                         &mut redis_connection,
                                         utils::redis::EVENTS,
@@ -384,7 +384,7 @@ pub async fn process_events(
                                     .await;
                                 }
                                 Err(err) => {
-                                    warn!("{err}");
+                                    warn!("{err:?}");
                                     utils::redis::remove_event(
                                         &mut redis_connection,
                                         utils::redis::EVENTS,
@@ -425,7 +425,7 @@ pub async fn process_events(
                                     .await;
                                 }
                                 Err(err) => {
-                                    warn!("{err}");
+                                    warn!("{err:?}");
                                     utils::redis::remove_event(
                                         &mut redis_connection,
                                         utils::redis::EVENTS,
@@ -462,7 +462,7 @@ pub async fn process_events(
                                     .await;
                                 }
                                 Err(err) => {
-                                    warn!("{err}");
+                                    warn!("{err:?}");
                                     utils::redis::remove_event(
                                         &mut redis_connection,
                                         utils::redis::EVENTS,
