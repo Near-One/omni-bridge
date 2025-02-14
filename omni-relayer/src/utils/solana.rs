@@ -136,11 +136,11 @@ async fn decode_instruction(
                             utils::redis::EVENTS,
                             signature.to_string(),
                             Transfer::Solana {
-                                amount: payload.amount,
+                                amount: payload.amount.to_string(),
                                 token: token.clone(),
                                 sender: sender.clone(),
                                 recipient: payload.recipient.clone(),
-                                fee: payload.fee,
+                                fee: payload.fee.to_string(),
                                 native_fee: payload.native_fee,
                                 message: payload.message.clone(),
                                 emitter: emitter.clone(),

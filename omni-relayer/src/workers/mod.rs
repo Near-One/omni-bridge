@@ -52,11 +52,11 @@ pub enum Transfer {
         expected_finalization_time: i64,
     },
     Solana {
-        amount: u128,
+        amount: String,
         token: String,
         sender: String,
         recipient: String,
-        fee: u128,
+        fee: String,
         native_fee: u64,
         message: String,
         emitter: String,
@@ -909,7 +909,7 @@ async fn process_solana_init_transfer_event(
         ref sender,
         ref token,
         ref recipient,
-        fee,
+        ref fee,
         native_fee,
         ref emitter,
         sequence,
@@ -960,7 +960,10 @@ async fn process_solana_init_transfer_event(
         match utils::fee::is_fee_sufficient(
             &config,
             Fee {
-                fee: fee.into(),
+                fee: fee
+                    .parse::<u128>()
+                    .context("Failed to parse fee as u128")?
+                    .into(),
                 native_fee: u128::from(native_fee).into(),
             },
             &sender,
@@ -994,7 +997,7 @@ async fn process_solana_init_transfer_event(
         ChainKind::Sol,
         &recipient,
         token,
-        fee,
+        fee.parse().context("Failed to parse fee as u128")?,
         u128::from(native_fee),
     )
     .await
