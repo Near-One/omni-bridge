@@ -13,6 +13,7 @@ use ethereum_types::H256;
 use near_bridge_client::TransactionOptions;
 use near_jsonrpc_client::JsonRpcClient;
 use near_primitives::{hash::CryptoHash, types::AccountId, views::TxExecutionStatus};
+use near_rpc_client::NearRpcError;
 use near_sdk::json_types::U128;
 use solana_client::rpc_request::RpcResponseErrorData;
 use solana_rpc_client_api::{client_error::ErrorKind, request::RpcError};
@@ -185,7 +186,7 @@ pub async fn process_events(
                                     .await;
                                 }
                                 Err(err) => {
-                                    warn!("{err}");
+                                    warn!("{err:?}");
                                     utils::redis::remove_event(
                                         &mut redis_connection,
                                         utils::redis::EVENTS,
@@ -227,7 +228,7 @@ pub async fn process_events(
                                     .await;
                                 }
                                 Err(err) => {
-                                    warn!("{err}");
+                                    warn!("{err:?}");
                                     utils::redis::remove_event(
                                         &mut redis_connection,
                                         utils::redis::EVENTS,
@@ -267,7 +268,7 @@ pub async fn process_events(
                                     .await;
                                 }
                                 Err(err) => {
-                                    warn!("{err}");
+                                    warn!("{err:?}");
                                     utils::redis::remove_event(
                                         &mut redis_connection,
                                         utils::redis::EVENTS,
@@ -306,7 +307,7 @@ pub async fn process_events(
                                     .await;
                                 }
                                 Err(err) => {
-                                    warn!("{err}");
+                                    warn!("{err:?}");
                                     utils::redis::remove_event(
                                         &mut redis_connection,
                                         utils::redis::EVENTS,
@@ -347,7 +348,7 @@ pub async fn process_events(
                                     .await;
                                 }
                                 Err(err) => {
-                                    warn!("{err}");
+                                    warn!("{err:?}");
                                     utils::redis::remove_event(
                                         &mut redis_connection,
                                         utils::redis::EVENTS,
@@ -384,7 +385,7 @@ pub async fn process_events(
                                     .await;
                                 }
                                 Err(err) => {
-                                    warn!("{err}");
+                                    warn!("{err:?}");
                                     utils::redis::remove_event(
                                         &mut redis_connection,
                                         utils::redis::EVENTS,
@@ -425,7 +426,7 @@ pub async fn process_events(
                                     .await;
                                 }
                                 Err(err) => {
-                                    warn!("{err}");
+                                    warn!("{err:?}");
                                     utils::redis::remove_event(
                                         &mut redis_connection,
                                         utils::redis::EVENTS,
@@ -462,7 +463,7 @@ pub async fn process_events(
                                     .await;
                                 }
                                 Err(err) => {
-                                    warn!("{err}");
+                                    warn!("{err:?}");
                                     utils::redis::remove_event(
                                         &mut redis_connection,
                                         utils::redis::EVENTS,
@@ -572,7 +573,7 @@ async fn process_near_transfer_event(
         .await
         .context("Failed to reserve nonce for near transaction")?;
 
-    let tx_hash = connector
+    match connector
         .near_sign_transfer(
             TransferId {
                 origin_chain: transfer_message.sender.get_chain(),
@@ -584,35 +585,55 @@ async fn process_near_transfer_event(
                 nonce: Some(nonce),
                 wait_until: near_primitives::views::TxExecutionStatus::Included,
             },
+            None,
         )
         .await
-        .context("Failed to sign transfer")?;
+    {
+        Ok(tx_hash) => {
+            utils::redis::add_event(
+                redis_connection,
+                utils::redis::EVENTS,
+                tx_hash.to_string(),
+                UnverifiedNearTrasfer {
+                    tx_hash,
+                    signer,
+                    specific_errors: Some(vec![
+                        "Signature request has already been submitted. Please try again later."
+                            .to_string(),
+                        "Signature request has timed out.".to_string(),
+                        "Attached deposit is lower than required".to_string(),
+                    ]),
+                    original_key: key,
+                    original_event: transfer,
+                },
+            )
+            .await;
 
-    utils::redis::add_event(
-        redis_connection,
-        utils::redis::EVENTS,
-        tx_hash.to_string(),
-        UnverifiedNearTrasfer {
-            tx_hash,
-            signer,
-            specific_errors: Some(vec![
-                "Signature request has already been submitted. Please try again later.".to_string(),
-                "Signature request has timed out.".to_string(),
-                "Attached deposit is lower than required".to_string(),
-            ]),
-            original_key: key,
-            original_event: transfer,
-        },
-    )
-    .await;
+            info!("Signed transfer: {:?}", tx_hash);
 
-    info!("Signed transfer: {:?}", tx_hash);
+            Ok(EventAction::Remove)
+        }
+        Err(err) => {
+            if current_timestamp - creation_timestamp
+                > utils::redis::KEEP_INSUFFICIENT_FEE_TRANSFERS_FOR
+            {
+                anyhow::bail!("Transfer is too old");
+            }
 
-    if current_timestamp - creation_timestamp > utils::redis::KEEP_INSUFFICIENT_FEE_TRANSFERS_FOR {
-        anyhow::bail!("Transfer is too old");
+            if let BridgeSdkError::NearRpcError(near_rpc_error) = err {
+                match near_rpc_error {
+                    NearRpcError::NonceError | NearRpcError::FinalizationError => {
+                        warn!("Failed to sign transfer, retrying: {}", near_rpc_error);
+                        return Ok(EventAction::Retry);
+                    }
+                    _ => {
+                        anyhow::bail!("Failed to sign transfer: {}", near_rpc_error);
+                    }
+                };
+            }
+            anyhow::bail!("Failed to sign transfer: {}", err);
+        }
     }
-
-    Ok(EventAction::Remove)
 }
 
 async fn process_sign_transfer_event(
@@ -874,6 +895,7 @@ async fn process_evm_init_transfer_event(
                 nonce: Some(nonce),
                 wait_until: TxExecutionStatus::Included,
             },
+            wait_final_outcome_timeout_sec: None,
         }
     } else {
         omni_connector::FinTransferArgs::NearFinTransferWithEvmProof {
@@ -884,17 +906,30 @@ async fn process_evm_init_transfer_event(
                 nonce: Some(nonce),
                 wait_until: TxExecutionStatus::Included,
             },
+            wait_final_outcome_timeout_sec: None,
         }
     };
 
-    let tx_hash = connector
-        .fin_transfer(fin_transfer_args)
-        .await
-        .context("Failed to finalize transfer")?;
-
-    info!("Finalized InitTransfer: {:?}", tx_hash);
-
-    Ok(EventAction::Remove)
+    match connector.fin_transfer(fin_transfer_args).await {
+        Ok(tx_hash) => {
+            info!("Finalized InitTransfer: {:?}", tx_hash);
+            Ok(EventAction::Remove)
+        }
+        Err(err) => {
+            if let BridgeSdkError::NearRpcError(near_rpc_error) = err {
+                match near_rpc_error {
+                    NearRpcError::NonceError | NearRpcError::FinalizationError => {
+                        warn!("Failed to finalize transfer, retrying: {}", near_rpc_error);
+                        return Ok(EventAction::Retry);
+                    }
+                    _ => {
+                        anyhow::bail!("Failed to finalize transfer: {}", near_rpc_error);
+                    }
+                };
+            }
+            anyhow::bail!("Failed to finalize transfer: {}", err);
+        }
+    }
 }
 
 async fn process_solana_init_transfer_event(
@@ -1021,16 +1056,30 @@ async fn process_solana_init_transfer_event(
             nonce: Some(nonce),
             wait_until: TxExecutionStatus::Included,
         },
+        wait_final_outcome_timeout_sec: None,
     };
 
-    let tx_hash = connector
-        .fin_transfer(fin_transfer_args)
-        .await
-        .context("Failed to finalize transfer")?;
+    match connector.fin_transfer(fin_transfer_args).await {
+        Ok(tx_hash) => {
+            info!("Finalized InitTransfer: {:?}", tx_hash);
+            Ok(EventAction::Remove)
+        }
+        Err(err) => {
+            if let BridgeSdkError::NearRpcError(near_rpc_error) = err {
+                match near_rpc_error {
+                    NearRpcError::NonceError | NearRpcError::FinalizationError => {
+                        warn!("Failed to finalize transfer, retrying: {}", near_rpc_error);
+                        return Ok(EventAction::Retry);
+                    }
+                    _ => {
+                        anyhow::bail!("Failed to finalize transfer: {}", near_rpc_error);
+                    }
+                };
+            }
 
-    info!("Finalized InitTransfer: {:?}", tx_hash);
-
-    Ok(EventAction::Remove)
+            anyhow::bail!("Failed to finalize transfer: {}", err);
+        }
+    }
 }
 
 async fn process_evm_fin_transfer_event(
@@ -1120,20 +1169,42 @@ async fn process_evm_fin_transfer_event(
         .await
         .context("Failed to reserve nonce for near transaction")?;
 
-    let tx_hash = connector
+    match connector
         .near_claim_fee(
             claim_fee_args,
             TransactionOptions {
                 nonce: Some(nonce),
                 wait_until: near_primitives::views::TxExecutionStatus::Included,
             },
+            None,
         )
         .await
-        .context("Failed to claim fee for evm finalized transfer")?;
+    {
+        Ok(tx_hash) => {
+            info!("Claimed fee: {:?}", tx_hash);
+            Ok(EventAction::Remove)
+        }
+        Err(err) => {
+            if current_timestamp - creation_timestamp
+                > utils::redis::KEEP_INSUFFICIENT_FEE_TRANSFERS_FOR
+            {
+                anyhow::bail!("Transfer is too old");
+            }
 
-    info!("Claimed fee: {:?}", tx_hash);
-
-    Ok(EventAction::Remove)
+            if let BridgeSdkError::NearRpcError(near_rpc_error) = err {
+                match near_rpc_error {
+                    NearRpcError::NonceError | NearRpcError::FinalizationError => {
+                        warn!("Failed to claim fee, retrying: {}", near_rpc_error);
+                        return Ok(EventAction::Retry);
+                    }
+                    _ => {
+                        anyhow::bail!("Failed to claim fee: {}", near_rpc_error);
+                    }
+                };
+            }
+            anyhow::bail!("Failed to claim fee: {}", err);
+        }
+    }
 }
 
 async fn process_solana_fin_transfer_event(
@@ -1173,20 +1244,36 @@ async fn process_solana_fin_transfer_event(
         .await
         .context("Failed to reserve nonce for near transaction")?;
 
-    let tx_hash = connector
+    match connector
         .near_claim_fee(
             claim_fee_args,
             TransactionOptions {
                 nonce: Some(nonce),
                 wait_until: near_primitives::views::TxExecutionStatus::Included,
             },
+            None,
         )
         .await
-        .context("Failed to claim fee for solana finalized transfer")?;
-
-    info!("Claimed fee: {:?}", tx_hash);
-
-    Ok(EventAction::Remove)
+    {
+        Ok(tx_hash) => {
+            info!("Claimed fee: {:?}", tx_hash);
+            Ok(EventAction::Remove)
+        }
+        Err(err) => {
+            if let BridgeSdkError::NearRpcError(near_rpc_error) = err {
+                match near_rpc_error {
+                    NearRpcError::NonceError | NearRpcError::FinalizationError => {
+                        warn!("Failed to claim fee, retrying: {}", near_rpc_error);
+                        return Ok(EventAction::Retry);
+                    }
+                    _ => {
+                        anyhow::bail!("Failed to claim fee: {}", near_rpc_error);
+                    }
+                };
+            }
+            anyhow::bail!("Failed to claim fee: {}", err);
+        }
+    }
 }
 
 async fn process_evm_deploy_token_event(
@@ -1278,16 +1365,36 @@ async fn process_evm_deploy_token_event(
             nonce: Some(nonce),
             wait_until: near_primitives::views::TxExecutionStatus::Included,
         },
+        wait_final_outcome_timeout_sec: None,
     };
 
-    let tx_hash = connector
-        .bind_token(bind_token_args)
-        .await
-        .context("Failed to bind token")?;
+    match connector.bind_token(bind_token_args).await {
+        Ok(tx_hash) => {
+            info!("Bound token: {:?}", tx_hash);
+            Ok(EventAction::Remove)
+        }
+        Err(err) => {
+            if current_timestamp - creation_timestamp
+                > utils::redis::KEEP_INSUFFICIENT_FEE_TRANSFERS_FOR
+            {
+                anyhow::bail!("Transfer is too old");
+            }
 
-    info!("Bound token: {:?}", tx_hash);
+            if let BridgeSdkError::NearRpcError(near_rpc_error) = err {
+                match near_rpc_error {
+                    NearRpcError::NonceError | NearRpcError::FinalizationError => {
+                        warn!("Failed to bind token, retrying: {}", near_rpc_error);
+                        return Ok(EventAction::Retry);
+                    }
+                    _ => {
+                        anyhow::bail!("Failed to bind token: {}", near_rpc_error);
+                    }
+                };
+            }
 
-    Ok(EventAction::Remove)
+            anyhow::bail!("Failed to bind token: {}", err);
+        }
+    }
 }
 
 async fn process_solana_deploy_token_event(
@@ -1332,16 +1439,30 @@ async fn process_solana_deploy_token_event(
             nonce,
             wait_until: near_primitives::views::TxExecutionStatus::Included,
         },
+        wait_final_outcome_timeout_sec: None,
     };
 
-    let tx_hash = connector
-        .bind_token(bind_token_args)
-        .await
-        .context("Failed to bind token")?;
+    match connector.bind_token(bind_token_args).await {
+        Ok(tx_hash) => {
+            info!("Bound token: {:?}", tx_hash);
+            Ok(EventAction::Remove)
+        }
+        Err(err) => {
+            if let BridgeSdkError::NearRpcError(near_rpc_error) = err {
+                match near_rpc_error {
+                    NearRpcError::NonceError | NearRpcError::FinalizationError => {
+                        warn!("Failed to bind token, retrying: {}", near_rpc_error);
+                        return Ok(EventAction::Retry);
+                    }
+                    _ => {
+                        anyhow::bail!("Failed to bind token: {}", near_rpc_error);
+                    }
+                };
+            }
 
-    info!("Bound token: {:?}", tx_hash);
-
-    Ok(EventAction::Remove)
+            anyhow::bail!("Failed to bind token: {}", err);
+        }
+    }
 }
 
 async fn process_unverified_near_transfer_event(

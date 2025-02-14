@@ -1,6 +1,6 @@
 [package]
 name = "omni-relayer"
-version = "0.3.2"
+version = "0.3.3"
 edition = "2021"
 resolver = "2"
 repository = "https://github.com/Near-One/omni-bridge"
@@ -47,6 +47,7 @@ reqwest = "0.12"
 eth-proof = { git = "https://github.com/Near-One/bridge-sdk-rs", package = "eth-proof" }
 
 bridge-connector-common = { git = "https://github.com/Near-One/bridge-sdk-rs", package = "bridge-connector-common" }
+near-rpc-client = { git = "https://github.com/Near-One/bridge-sdk-rs", package = "near-rpc-client" }
 
 near-bridge-client = { git = "https://github.com/Near-One/bridge-sdk-rs", package = "near-bridge-client" }
 evm-bridge-client = { git = "https://github.com/Near-One/bridge-sdk-rs", package = "evm-bridge-client" }
