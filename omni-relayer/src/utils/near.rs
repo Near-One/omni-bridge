@@ -152,9 +152,9 @@ pub async fn handle_streamer_message(
             } => {
                 utils::redis::add_event(
                     redis_connection,
-                    utils::redis::NEAR_INIT_TRANSFER_QUEUE,
+                    utils::redis::EVENTS,
                     transfer_message.origin_nonce.to_string(),
-                    crate::workers::near::InitTransferWithTimestamp {
+                    crate::workers::Transfer::Near {
                         event: log,
                         creation_timestamp: chrono::Utc::now().timestamp(),
                         last_update_timestamp: None,
@@ -168,7 +168,7 @@ pub async fn handle_streamer_message(
             } => {
                 utils::redis::add_event(
                     redis_connection,
-                    utils::redis::NEAR_SIGN_TRANSFER_EVENTS,
+                    utils::redis::EVENTS,
                     message_payload.transfer_id.origin_nonce.to_string(),
                     log,
                 )
@@ -180,9 +180,9 @@ pub async fn handle_streamer_message(
                 if transfer_message.recipient.get_chain() != ChainKind::Near {
                     utils::redis::add_event(
                         redis_connection,
-                        utils::redis::NEAR_INIT_TRANSFER_QUEUE,
+                        utils::redis::EVENTS,
                         transfer_message.origin_nonce.to_string(),
-                        crate::workers::near::InitTransferWithTimestamp {
+                        crate::workers::Transfer::Near {
                             event: log,
                             creation_timestamp: chrono::Utc::now().timestamp(),
                             last_update_timestamp: None,

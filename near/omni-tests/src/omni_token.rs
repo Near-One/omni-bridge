@@ -99,7 +99,7 @@ mod tests {
                 ChainKind::Sol => sol_factory_address(),
                 ChainKind::Arb => arb_factory_address(),
                 ChainKind::Base => base_factory_address(),
-                _ => panic!("Unsupported chain"),
+                ChainKind::Near => panic!("Unsupported chain"),
             };
 
             locker_contract
@@ -318,7 +318,7 @@ mod tests {
             .await?
         };
         let recipient = env.create_registered_account(3).await?;
-        let amount = U128(1000000000000000000000000);
+        let amount = U128(1_000_000_000_000_000_000_000_000);
 
         fake_finalize_transfer(
             &env.locker_contract,
@@ -388,7 +388,7 @@ mod tests {
         };
         let sender = env.create_registered_account(3).await?;
         let receiver = env.create_registered_account(4).await?;
-        let amount = U128(1000000000000000000000000);
+        let amount = U128(1_000_000_000_000_000_000_000_000);
 
         // Mint tokens to sender
         fake_finalize_transfer(
