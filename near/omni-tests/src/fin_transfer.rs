@@ -227,7 +227,7 @@ mod tests {
             .into_result()?;
 
         let required_deposit_for_fin_transfer = NEP141_DEPOSIT
-            .saturating_mul(storage_deposit_accounts.len() as u128)
+            .saturating_mul(u128::try_from(storage_deposit_accounts.len())?)
             .saturating_add(required_balance_for_fin_transfer);
 
         let storage_deposit_actions = storage_deposit_accounts
@@ -335,7 +335,7 @@ mod tests {
         }];
 
         let required_deposit_for_fin_transfer = NEP141_DEPOSIT
-            .saturating_mul(storage_deposit_actions.len() as u128)
+            .saturating_mul(u128::try_from(storage_deposit_actions.len())?)
             .saturating_add(required_balance_for_fin_transfer);
 
         // Try to finalize a large NEAR withdrawal
