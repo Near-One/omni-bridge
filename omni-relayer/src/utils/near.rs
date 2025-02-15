@@ -141,7 +141,7 @@ pub async fn handle_streamer_message(
         .collect::<Vec<_>>();
 
     for log in nep_locker_event_logs {
-        info!("Received OmniBridgeEvent: {:?}", log);
+        info!("Received OmniBridgeEvent: {}", log.to_log_string());
 
         match log {
             OmniBridgeEvent::InitTransferEvent {

@@ -545,7 +545,7 @@ async fn process_near_transfer_event(
         );
     };
 
-    info!("Trying to process InitTransferEvent/FinTransferEvent/UpdateFeeEvent",);
+    info!("Trying to process InitTransferEvent/FinTransferEvent/UpdateFeeEvent");
 
     #[cfg(not(feature = "disable_fee_check"))]
     match utils::fee::is_fee_sufficient(
@@ -623,15 +623,15 @@ async fn process_near_transfer_event(
             if let BridgeSdkError::NearRpcError(near_rpc_error) = err {
                 match near_rpc_error {
                     NearRpcError::NonceError | NearRpcError::FinalizationError => {
-                        warn!("Failed to sign transfer, retrying: {}", near_rpc_error);
+                        warn!("Failed to sign transfer, retrying: {near_rpc_error:?}");
                         return Ok(EventAction::Retry);
                     }
                     _ => {
-                        anyhow::bail!("Failed to sign transfer: {}", near_rpc_error);
+                        anyhow::bail!("Failed to sign transfer: {near_rpc_error:?}");
                     }
                 };
             }
-            anyhow::bail!("Failed to sign transfer: {}", err);
+            anyhow::bail!("Failed to sign transfer: {err:?}");
         }
     }
 }
@@ -919,15 +919,15 @@ async fn process_evm_init_transfer_event(
             if let BridgeSdkError::NearRpcError(near_rpc_error) = err {
                 match near_rpc_error {
                     NearRpcError::NonceError | NearRpcError::FinalizationError => {
-                        warn!("Failed to finalize transfer, retrying: {}", near_rpc_error);
+                        warn!("Failed to finalize transfer, retrying: {near_rpc_error:?}");
                         return Ok(EventAction::Retry);
                     }
                     _ => {
-                        anyhow::bail!("Failed to finalize transfer: {}", near_rpc_error);
+                        anyhow::bail!("Failed to finalize transfer: {near_rpc_error:?}");
                     }
                 };
             }
-            anyhow::bail!("Failed to finalize transfer: {}", err);
+            anyhow::bail!("Failed to finalize transfer: {err:?}");
         }
     }
 }
@@ -1068,16 +1068,16 @@ async fn process_solana_init_transfer_event(
             if let BridgeSdkError::NearRpcError(near_rpc_error) = err {
                 match near_rpc_error {
                     NearRpcError::NonceError | NearRpcError::FinalizationError => {
-                        warn!("Failed to finalize transfer, retrying: {}", near_rpc_error);
+                        warn!("Failed to finalize transfer, retrying: {near_rpc_error:?}");
                         return Ok(EventAction::Retry);
                     }
                     _ => {
-                        anyhow::bail!("Failed to finalize transfer: {}", near_rpc_error);
+                        anyhow::bail!("Failed to finalize transfer: {near_rpc_error:?}");
                     }
                 };
             }
 
-            anyhow::bail!("Failed to finalize transfer: {}", err);
+            anyhow::bail!("Failed to finalize transfer: {err:?}");
         }
     }
 }
@@ -1194,15 +1194,15 @@ async fn process_evm_fin_transfer_event(
             if let BridgeSdkError::NearRpcError(near_rpc_error) = err {
                 match near_rpc_error {
                     NearRpcError::NonceError | NearRpcError::FinalizationError => {
-                        warn!("Failed to claim fee, retrying: {}", near_rpc_error);
+                        warn!("Failed to claim fee, retrying: {near_rpc_error:?}");
                         return Ok(EventAction::Retry);
                     }
                     _ => {
-                        anyhow::bail!("Failed to claim fee: {}", near_rpc_error);
+                        anyhow::bail!("Failed to claim fee: {near_rpc_error:?}");
                     }
                 };
             }
-            anyhow::bail!("Failed to claim fee: {}", err);
+            anyhow::bail!("Failed to claim fee: {err:?}");
         }
     }
 }
@@ -1260,18 +1260,18 @@ async fn process_solana_fin_transfer_event(
             Ok(EventAction::Remove)
         }
         Err(err) => {
-            if let BridgeSdkError::NearRpcError(near_rpc_error) = err {
+            if let BridgeSdkError::NearRpcError(ref near_rpc_error) = err {
                 match near_rpc_error {
                     NearRpcError::NonceError | NearRpcError::FinalizationError => {
-                        warn!("Failed to claim fee, retrying: {}", near_rpc_error);
+                        warn!("Failed to claim fee, retrying: {near_rpc_error:?}");
                         return Ok(EventAction::Retry);
                     }
                     _ => {
-                        anyhow::bail!("Failed to claim fee: {}", near_rpc_error);
+                        anyhow::bail!("Failed to claim fee: {err:?}");
                     }
                 };
             }
-            anyhow::bail!("Failed to claim fee: {}", err);
+            anyhow::bail!("Failed to claim fee: {err:?}");
         }
     }
 }
@@ -1383,16 +1383,16 @@ async fn process_evm_deploy_token_event(
             if let BridgeSdkError::NearRpcError(near_rpc_error) = err {
                 match near_rpc_error {
                     NearRpcError::NonceError | NearRpcError::FinalizationError => {
-                        warn!("Failed to bind token, retrying: {}", near_rpc_error);
+                        warn!("Failed to bind token, retrying: {near_rpc_error:?}");
                         return Ok(EventAction::Retry);
                     }
                     _ => {
-                        anyhow::bail!("Failed to bind token: {}", near_rpc_error);
+                        anyhow::bail!("Failed to bind token: {near_rpc_error:?}");
                     }
                 };
             }
 
-            anyhow::bail!("Failed to bind token: {}", err);
+            anyhow::bail!("Failed to bind token: {err:?}");
         }
     }
 }
@@ -1451,16 +1451,16 @@ async fn process_solana_deploy_token_event(
             if let BridgeSdkError::NearRpcError(near_rpc_error) = err {
                 match near_rpc_error {
                     NearRpcError::NonceError | NearRpcError::FinalizationError => {
-                        warn!("Failed to bind token, retrying: {}", near_rpc_error);
+                        warn!("Failed to bind token, retrying: {near_rpc_error:?}");
                         return Ok(EventAction::Retry);
                     }
                     _ => {
-                        anyhow::bail!("Failed to bind token: {}", near_rpc_error);
+                        anyhow::bail!("Failed to bind token: {near_rpc_error:?}");
                     }
                 };
             }
 
-            anyhow::bail!("Failed to bind token: {}", err);
+            anyhow::bail!("Failed to bind token: {err:?}");
         }
     }
 }
