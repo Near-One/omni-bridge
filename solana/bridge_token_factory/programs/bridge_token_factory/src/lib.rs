@@ -1,10 +1,12 @@
 use anchor_lang::prelude::*;
 use instructions::{
-    DeployToken, FinalizeTransfer, FinalizeTransferSol, InitTransfer, InitTransferSol, Initialize,
-    LogMetadata, ChangeConfig, Pause, __client_accounts_deploy_token, __client_accounts_finalize_transfer,
-    __client_accounts_finalize_transfer_sol, __client_accounts_init_transfer,
-    __client_accounts_init_transfer_sol, __client_accounts_initialize,
-    __client_accounts_log_metadata, __client_accounts_change_config, __client_accounts_pause,
+    ChangeConfig, DeployToken, FinalizeTransfer, FinalizeTransferSol, InitTransfer,
+    InitTransferSol, Initialize, LogMetadata, Pause, UpdateMetadata,
+    __client_accounts_change_config, __client_accounts_deploy_token,
+    __client_accounts_finalize_transfer, __client_accounts_finalize_transfer_sol,
+    __client_accounts_init_transfer, __client_accounts_init_transfer_sol,
+    __client_accounts_initialize, __client_accounts_log_metadata, __client_accounts_pause,
+    __client_accounts_update_metadata,
 };
 use state::message::{
     deploy_token::DeployTokenPayload, finalize_transfer::FinalizeTransferPayload,
@@ -21,20 +23,22 @@ include!(concat!(env!("OUT_DIR"), "/program_id.rs"));
 #[program]
 #[allow(clippy::needless_pass_by_value)]
 pub mod bridge_token_factory {
-    use anchor_lang::require;
     use crate::error;
+    use anchor_lang::require;
 
     use super::constants::{FINALIZE_TRANSFER_PAUSED, INIT_TRANSFER_PAUSED};
     use super::{
-        msg, Context, DeployToken, DeployTokenPayload, FinalizeTransfer, FinalizeTransferPayload,
-        FinalizeTransferSol, InitTransfer, InitTransferPayload, InitTransferSol, Initialize, Key,
-        LogMetadata, Pubkey, Result, SignedPayload, ChangeConfig, Pause,
+        msg, ChangeConfig, Context, DeployToken, DeployTokenPayload, FinalizeTransfer,
+        FinalizeTransferPayload, FinalizeTransferSol, InitTransfer, InitTransferPayload,
+        InitTransferSol, Initialize, Key, LogMetadata, Pause, Pubkey, Result, SignedPayload,
+        UpdateMetadata,
     };
 
     pub fn initialize(
         ctx: Context<Initialize>,
         admin: Pubkey,
         pausable_admin: Pubkey,
+        metadata_admin: Pubkey,
         derived_near_bridge_address: [u8; 64],
     ) -> Result<()> {
         msg!("Initializing");
@@ -42,6 +46,7 @@ pub mod bridge_token_factory {
         ctx.accounts.process(
             admin,
             pausable_admin,
+            metadata_admin,
             derived_near_bridge_address,
             ctx.bumps.config,
             ctx.bumps.authority,
@@ -167,6 +172,22 @@ pub mod bridge_token_factory {
         msg!("Setting pausable admin");
 
         ctx.accounts.set_pausable_admin(pausable_admin)?;
+
+        Ok(())
+    }
+
+    pub fn set_metadata_admin(ctx: Context<ChangeConfig>, metadata_admin: Pubkey) -> Result<()> {
+        msg!("Setting metadata admin");
+
+        ctx.accounts.set_metadata_admin(metadata_admin)?;
+
+        Ok(())
+    }
+
+    pub fn update_metadata(ctx: Context<UpdateMetadata>, uri: String) -> Result<()> {
+        msg!("Updating metadata uri");
+
+        ctx.accounts.process(uri)?;
 
         Ok(())
     }
