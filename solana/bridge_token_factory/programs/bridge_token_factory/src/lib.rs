@@ -1,10 +1,10 @@
 use anchor_lang::prelude::*;
 use instructions::{
     DeployToken, FinalizeTransfer, FinalizeTransferSol, InitTransfer, InitTransferSol, Initialize,
-    LogMetadata, __client_accounts_deploy_token, __client_accounts_finalize_transfer,
+    LogMetadata, ChangeConfig, Pause, __client_accounts_deploy_token, __client_accounts_finalize_transfer,
     __client_accounts_finalize_transfer_sol, __client_accounts_init_transfer,
     __client_accounts_init_transfer_sol, __client_accounts_initialize,
-    __client_accounts_log_metadata,
+    __client_accounts_log_metadata, __client_accounts_change_config, __client_accounts_pause,
 };
 use state::message::{
     deploy_token::DeployTokenPayload, finalize_transfer::FinalizeTransferPayload,
@@ -21,21 +21,27 @@ include!(concat!(env!("OUT_DIR"), "/program_id.rs"));
 #[program]
 #[allow(clippy::needless_pass_by_value)]
 pub mod bridge_token_factory {
+    use anchor_lang::require;
+    use crate::error;
+
+    use super::constants::{FINALIZE_TRANSFER_PAUSED, INIT_TRANSFER_PAUSED};
     use super::{
         msg, Context, DeployToken, DeployTokenPayload, FinalizeTransfer, FinalizeTransferPayload,
         FinalizeTransferSol, InitTransfer, InitTransferPayload, InitTransferSol, Initialize, Key,
-        LogMetadata, Pubkey, Result, SignedPayload,
+        LogMetadata, Pubkey, Result, SignedPayload, ChangeConfig, Pause,
     };
 
     pub fn initialize(
         ctx: Context<Initialize>,
         admin: Pubkey,
+        pausable_admin: Pubkey,
         derived_near_bridge_address: [u8; 64],
     ) -> Result<()> {
         msg!("Initializing");
 
         ctx.accounts.process(
             admin,
+            pausable_admin,
             derived_near_bridge_address,
             ctx.bumps.config,
             ctx.bumps.authority,
@@ -64,6 +70,10 @@ pub mod bridge_token_factory {
         ctx: Context<FinalizeTransfer>,
         data: SignedPayload<FinalizeTransferPayload>,
     ) -> Result<()> {
+        require!(
+            ctx.accounts.common.config.paused & FINALIZE_TRANSFER_PAUSED == 0,
+            error::ErrorCode::Paused
+        );
         msg!("Finalizing transfer");
 
         data.verify_signature(
@@ -79,6 +89,10 @@ pub mod bridge_token_factory {
         ctx: Context<FinalizeTransferSol>,
         data: SignedPayload<FinalizeTransferPayload>,
     ) -> Result<()> {
+        require!(
+            ctx.accounts.common.config.paused & FINALIZE_TRANSFER_PAUSED == 0,
+            error::ErrorCode::Paused
+        );
         msg!("Finalizing transfer");
 
         data.verify_signature(
@@ -99,6 +113,10 @@ pub mod bridge_token_factory {
     }
 
     pub fn init_transfer(ctx: Context<InitTransfer>, payload: InitTransferPayload) -> Result<()> {
+        require!(
+            ctx.accounts.common.config.paused & INIT_TRANSFER_PAUSED == 0,
+            error::ErrorCode::Paused
+        );
         msg!("Initializing transfer");
 
         ctx.accounts.process(&payload)?;
@@ -110,9 +128,45 @@ pub mod bridge_token_factory {
         ctx: Context<InitTransferSol>,
         payload: InitTransferPayload,
     ) -> Result<()> {
+        require!(
+            ctx.accounts.common.config.paused & INIT_TRANSFER_PAUSED == 0,
+            error::ErrorCode::Paused
+        );
         msg!("Initializing transfer");
 
         ctx.accounts.process(&payload)?;
+
+        Ok(())
+    }
+
+    pub fn pause(ctx: Context<Pause>) -> Result<()> {
+        msg!("Pausing");
+
+        ctx.accounts.process()?;
+
+        Ok(())
+    }
+
+    pub fn unpause(ctx: Context<ChangeConfig>, paused: u8) -> Result<()> {
+        msg!("Unpausing");
+
+        ctx.accounts.set_paused(paused)?;
+
+        Ok(())
+    }
+
+    pub fn set_admin(ctx: Context<ChangeConfig>, admin: Pubkey) -> Result<()> {
+        msg!("Setting admin");
+
+        ctx.accounts.set_admin(admin)?;
+
+        Ok(())
+    }
+
+    pub fn set_pausable_admin(ctx: Context<ChangeConfig>, pausable_admin: Pubkey) -> Result<()> {
+        msg!("Setting pausable admin");
+
+        ctx.accounts.set_pausable_admin(pausable_admin)?;
 
         Ok(())
     }

@@ -13,9 +13,41 @@ You will need the following tools installed on your environment before proceedin
 - **Docker**. Required to build NEAR contracts in consistent environment.
 - **Solana CLI and Anchor**. For compiling and deploying Solana programs.
 - **Bridge SDK CLI**. Install with:
-`cargo install --git https://github.com/Near-One/bridge-sdk-rs/ --rev e2c86d5 bridge-cli`
+`cargo install --git https://github.com/Near-One/bridge-sdk-rs/ --rev b7c5acf bridge-cli`
+- **Cargo Near**. Used to build NEAR contracts. Install with:
+`cargo install --locked cargo-near`
 Enables bridging functionality for various blockchain environments.
 - **jq**. A command-line JSON processor used by many scripts in this project.
+
+## Project Structure
+
+The E2E testing project is organized into several key directories:
+
+### Main Directories
+- `tools/` - TypeScript-based utilities and scripts that support the E2E testing process:
+  - `src/lib/` - Contains shared libraries and utilities used across different scripts
+  - `src/scripts/` - Contains the main scripts for deployment, testing, and chain interaction
+  - `src/E2ETestToken/` - Contains token-related implementations and utilities
+
+- `makefiles/` - Contains modular Makefiles split by functionality:
+  - `near.mk`, `evm.mk`, `solana.mk` - Chain-specific build and deployment rules
+  - `pipelines/` - Complex multi-chain testing scenarios (e.g., `bridge_token_near_to_evm.mk`)
+  - `common.mk` - Shared variables and utility functions
+
+- `generated/` - **All generated files and artifacts are stored here**, including:
+  - Build outputs
+  - Deployment results
+  - Test artifacts
+  - Transaction receipts
+  - Contract addresses
+  This directory is automatically created and managed by the build system.
+
+- `bin/` - Contains compiled binaries and executables used by the testing process
+
+### Configuration Files
+- `bridge-sdk-config.example.json` - Template for bridge SDK configuration
+- `near_init_params.json` - NEAR contract initialization parameters
+- Various keypair files for Solana program deployment
 
 ## User guide
 
@@ -38,8 +70,8 @@ This command triggers a multi-step process that compiles, deploys, and binds tok
 
 ### Environment variables and configuration
 
-You need to create a `.env` files from:
-- `./evm-scripts/.env.example`
+You need to create a `.env` files from the examples provided in:
+- `./tools/.env.example`
 - `../evm/.env.example` (`INFURA_API_KEY` and `EVM_PRIVATE_KEY` only)
 
 Also you need to copy or rename the provided `bridge-sdk-config.example.json` to `bridge-sdk-config.json`. And update it with your `ETH_PRIVATE_KEY` and your `ETH_RPC` endpoint.
@@ -126,3 +158,4 @@ Below are some guidelines to maintain consistency and clarity:
 8. Directories often work best as order-only prerequisites (using the pipe symbol `|`) to avoid rebuilding them unnecessarily.
 9. Try to avoid recursive Make patterns; a single dependency graph is often clearer.
 10. Control verbosity to suit the needs of the project, for example by hiding command echoes and only printing the essential logs.
+

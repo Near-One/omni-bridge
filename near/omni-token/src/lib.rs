@@ -18,7 +18,7 @@ use omni_ft::{MetadataManagment, MintAndBurn, UpgradeAndMigrate};
 use omni_types::{BasicMetadata, OmniAddress};
 const OUTER_UPGRADE_GAS: Gas = Gas::from_tgas(15);
 const NO_DEPOSIT: NearToken = NearToken::from_yoctonear(0);
-const CURRENT_STATE_VERSION: u32 = 1;
+const CURRENT_STATE_VERSION: u32 = 3;
 
 pub mod omni_ft;
 

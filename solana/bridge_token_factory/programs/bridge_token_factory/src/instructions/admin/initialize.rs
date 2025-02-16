@@ -93,6 +93,7 @@ impl Initialize<'_> {
     pub fn process(
         &mut self,
         admin: Pubkey,
+        pausable_admin: Pubkey,
         derived_near_bridge_address: [u8; 64],
         config_bump: u8,
         authority_bump: u8,
@@ -102,8 +103,8 @@ impl Initialize<'_> {
         wormhole_sequence_bump: u8,
     ) -> Result<()> {
         self.config.set_inner(Config {
-            admin,
             max_used_nonce: 0,
+            admin,
             derived_near_bridge_address,
             bumps: ConfigBumps {
                 config: config_bump,
@@ -115,7 +116,9 @@ impl Initialize<'_> {
                     sequence: wormhole_sequence_bump,
                 },
             },
-            padding: [0; 100],
+            paused: 0,
+            pausable_admin,
+            padding: [0; 67],
         });
 
         let rent = Rent::get()?;

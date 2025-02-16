@@ -1,4 +1,4 @@
-use anyhow::{Context, Result};
+use anyhow::Result;
 use log::{info, warn};
 
 use near_jsonrpc_client::{
@@ -31,6 +31,7 @@ pub async fn get_final_block(jsonrpc_client: &JsonRpcClient) -> Result<u64> {
             near_primitives::types::Finality::Final,
         ),
     };
+
     jsonrpc_client
         .call(block_response)
         .await
@@ -43,21 +44,14 @@ struct EthLightClientResponse {
     last_block_number: u64,
 }
 
-pub async fn get_eth_light_client_last_block_number(
-    config: &config::Config,
+pub async fn get_evm_light_client_last_block_number(
     jsonrpc_client: &JsonRpcClient,
+    light_client: AccountId,
 ) -> Result<u64> {
-    let Some(ref eth) = config.eth else {
-        anyhow::bail!("Failed to get ETH light client");
-    };
-
     let request = methods::query::RpcQueryRequest {
         block_reference: BlockReference::latest(),
         request: QueryRequest::CallFunction {
-            account_id: eth
-                .light_client
-                .clone()
-                .context("Failed to get ETH light client")?,
+            account_id: light_client,
             method_name: "last_block_number".to_string(),
             args: Vec::new().into(),
         },
@@ -147,7 +141,7 @@ pub async fn handle_streamer_message(
         .collect::<Vec<_>>();
 
     for log in nep_locker_event_logs {
-        info!("Processing OmniBridgeEvent: {:?}", log);
+        info!("Received OmniBridgeEvent: {}", log.to_log_string());
 
         match log {
             OmniBridgeEvent::InitTransferEvent {
@@ -158,9 +152,9 @@ pub async fn handle_streamer_message(
             } => {
                 utils::redis::add_event(
                     redis_connection,
-                    utils::redis::NEAR_INIT_TRANSFER_QUEUE,
+                    utils::redis::EVENTS,
                     transfer_message.origin_nonce.to_string(),
-                    crate::workers::near::InitTransferWithTimestamp {
+                    crate::workers::Transfer::Near {
                         event: log,
                         creation_timestamp: chrono::Utc::now().timestamp(),
                         last_update_timestamp: None,
@@ -174,7 +168,7 @@ pub async fn handle_streamer_message(
             } => {
                 utils::redis::add_event(
                     redis_connection,
-                    utils::redis::NEAR_SIGN_TRANSFER_EVENTS,
+                    utils::redis::EVENTS,
                     message_payload.transfer_id.origin_nonce.to_string(),
                     log,
                 )
@@ -186,9 +180,9 @@ pub async fn handle_streamer_message(
                 if transfer_message.recipient.get_chain() != ChainKind::Near {
                     utils::redis::add_event(
                         redis_connection,
-                        utils::redis::NEAR_INIT_TRANSFER_QUEUE,
+                        utils::redis::EVENTS,
                         transfer_message.origin_nonce.to_string(),
-                        crate::workers::near::InitTransferWithTimestamp {
+                        crate::workers::Transfer::Near {
                             event: log,
                             creation_timestamp: chrono::Utc::now().timestamp(),
                             last_update_timestamp: None,
@@ -197,7 +191,10 @@ pub async fn handle_streamer_message(
                     .await;
                 }
             }
-            OmniBridgeEvent::ClaimFeeEvent { .. } | OmniBridgeEvent::LogMetadataEvent { .. } => {}
+            OmniBridgeEvent::ClaimFeeEvent { .. }
+            | OmniBridgeEvent::LogMetadataEvent { .. }
+            | OmniBridgeEvent::DeployTokenEvent { .. }
+            | OmniBridgeEvent::BindTokenEvent { .. } => {}
         }
     }
 }

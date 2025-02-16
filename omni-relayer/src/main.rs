@@ -4,6 +4,7 @@ use anyhow::{Context, Result};
 use clap::Parser;
 use log::{error, info};
 use omni_types::ChainKind;
+use solana_sdk::signature::Signature;
 
 mod config;
 mod startup;
@@ -29,7 +30,7 @@ struct CliArgs {
     arb_start_block: Option<u64>,
     /// Start signature for Solana indexer
     #[clap(long)]
-    solana_start_signature: Option<String>,
+    solana_start_signature: Option<Signature>,
 }
 
 #[tokio::main]
@@ -50,6 +51,14 @@ async fn main() -> Result<()> {
 
     let connector = Arc::new(startup::build_omni_connector(&config, &near_signer)?);
 
+    let near_nonce = Arc::new(utils::nonce::NonceManager::new(
+        utils::nonce::ChainClient::Near {
+            jsonrpc_client: jsonrpc_client.clone(),
+            signer: near_signer,
+        },
+    ));
+    let evm_nonces = Arc::new(utils::nonce::EvmNonceManagers::new(&config));
+
     let mut handles = Vec::new();
 
     handles.push(tokio::spawn({
@@ -65,28 +74,6 @@ async fn main() -> Result<()> {
             )
             .await
         }
-    }));
-    handles.push(tokio::spawn({
-        #[cfg(not(feature = "disable_fee_check"))]
-        let config = config.clone();
-        let redis_client = redis_client.clone();
-        let connector = connector.clone();
-        let jsonrpc_client = jsonrpc_client.clone();
-        async move {
-            workers::near::sign_transfer(
-                #[cfg(not(feature = "disable_fee_check"))]
-                config,
-                redis_client,
-                connector,
-                jsonrpc_client,
-            )
-            .await
-        }
-    }));
-    handles.push(tokio::spawn({
-        let redis_client = redis_client.clone();
-        let connector = connector.clone();
-        async move { workers::near::finalize_transfer(redis_client, connector).await }
     }));
 
     if config.eth.is_some() {
@@ -146,26 +133,7 @@ async fn main() -> Result<()> {
         handles.push(tokio::spawn({
             let config = config.clone();
             let redis_client = redis_client.clone();
-            async move { workers::solana::process_signature(config, redis_client).await }
-        }));
-        handles.push(tokio::spawn({
-            let config = config.clone();
-            let redis_client = redis_client.clone();
-            let connector = connector.clone();
-            async move { workers::solana::finalize_transfer(config, redis_client, connector).await }
-        }));
-    }
-
-    if config.eth.is_some() || config.base.is_some() || config.arb.is_some() {
-        handles.push(tokio::spawn({
-            let config = config.clone();
-            let redis_client = redis_client.clone();
-            let connector = connector.clone();
-            let jsonrpc_client = jsonrpc_client.clone();
-            async move {
-                workers::evm::finalize_transfer(config, redis_client, connector, jsonrpc_client)
-                    .await
-            }
+            async move { startup::solana::process_signature(config, redis_client).await }
         }));
     }
 
@@ -174,15 +142,20 @@ async fn main() -> Result<()> {
         let redis_client = redis_client.clone();
         let connector = connector.clone();
         let jsonrpc_client = jsonrpc_client.clone();
-        async move { workers::near::claim_fee(config, redis_client, connector, jsonrpc_client).await }
-    }));
+        let near_nonce = near_nonce.clone();
+        let evm_nonces = evm_nonces.clone();
 
-    handles.push(tokio::spawn({
-        let config = config.clone();
-        let redis_client = redis_client.clone();
-        let connector = connector.clone();
-        let jsonrpc_client = jsonrpc_client.clone();
-        async move { workers::near::bind_token(config, redis_client, connector, jsonrpc_client).await }
+        async move {
+            workers::process_events(
+                config,
+                redis_client,
+                connector,
+                jsonrpc_client,
+                near_nonce,
+                evm_nonces,
+            )
+            .await
+        }
     }));
 
     tokio::select! {

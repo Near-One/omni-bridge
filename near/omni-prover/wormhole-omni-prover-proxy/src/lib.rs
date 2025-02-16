@@ -10,7 +10,7 @@ mod byte_utils;
 mod parsed_vaa;
 
 pub const VERIFY_VAA_GAS: Gas = Gas::from_tgas(10);
-pub const VERIFY_VAA_CALLBACK_GAS: Gas = Gas::from_tgas(10);
+pub const VERIFY_VAA_CALLBACK_GAS: Gas = Gas::from_tgas(5);
 
 #[ext_contract(ext_prover)]
 pub trait Prover {

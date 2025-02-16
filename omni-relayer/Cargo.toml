@@ -1,8 +1,9 @@
 [package]
 name = "omni-relayer"
-version = "0.1.0"
+version = "0.3.4"
 edition = "2021"
 resolver = "2"
+repository = "https://github.com/Near-One/omni-bridge"
 
 [dependencies]
 log = "0.4"
@@ -28,13 +29,14 @@ solana-transaction-status = "2.1.9"
 solana-rpc-client-api = "2.1.9"
 
 ethereum-types = "0.14.1"
-omni-types = { git = "https://github.com/near-one/omni-bridge", package = "omni-types", rev = "b0ca4e1fb6a34086076511d1162747b154fa8a55" }
+omni-types = { git = "https://github.com/near-one/omni-bridge", package = "omni-types", rev = "4e741af2e233b8764dc56a5205f7bb1155c34b2f" }
 
 near-lake-framework = "0.7.9"
 near-jsonrpc-client = "0.15.1"
 near-jsonrpc-primitives = "0.28.0"
 near-primitives = "0.28.0"
 near-crypto = "0.28.0"
+near-sdk = "5.8.0"
 
 hex = "0.4.3"
 alloy = { version = "0.9", features = ["node-bindings", "providers", "rpc-types", "sol-types", "provider-ws", "signers", "signer-local"] }
@@ -45,6 +47,7 @@ reqwest = "0.12"
 eth-proof = { git = "https://github.com/Near-One/bridge-sdk-rs", package = "eth-proof" }
 
 bridge-connector-common = { git = "https://github.com/Near-One/bridge-sdk-rs", package = "bridge-connector-common" }
+near-rpc-client = { git = "https://github.com/Near-One/bridge-sdk-rs", package = "near-rpc-client" }
 
 near-bridge-client = { git = "https://github.com/Near-One/bridge-sdk-rs", package = "near-bridge-client" }
 evm-bridge-client = { git = "https://github.com/Near-One/bridge-sdk-rs", package = "evm-bridge-client" }
@@ -55,3 +58,8 @@ omni-connector = { git = "https://github.com/Near-One/bridge-sdk-rs", package = 
 
 [features]
 disable_fee_check = []
+
+# The profile that 'dist' will build with
+[profile.dist]
+inherits = "release"
+lto = "thin"

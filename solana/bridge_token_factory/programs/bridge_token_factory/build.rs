@@ -4,7 +4,7 @@ fn main() {
     println!("cargo:rerun-if-changed=build.rs");
 
     let program_id =
-        env::var("PROGRAM_ID").unwrap_or("3ZtEZ8xABFbUr4c1FVpXbQiVdqv4vwhvfCc8HMmhEeua".into());
+        env::var("PROGRAM_ID").unwrap_or("dahPEoZGXfyV58JqqH85okdHmpN8U2q8owgPUXSCPxe".into());
 
     let out_dir = env::var_os("OUT_DIR").unwrap();
     let dest_path = Path::new(&out_dir).join("program_id.rs");

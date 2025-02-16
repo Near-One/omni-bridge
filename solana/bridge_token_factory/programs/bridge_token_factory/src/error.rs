@@ -18,4 +18,8 @@ pub enum ErrorCode {
     InvalidBridgedToken,
     #[msg("Invalid fee")]
     InvalidFee,
+    #[msg("Paused")]
+    Paused,
+    #[msg("Unauthorized")]
+    Unauthorized,
 }

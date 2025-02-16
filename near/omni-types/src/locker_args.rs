@@ -1,6 +1,6 @@
 use near_sdk::{near, AccountId};
 
-use crate::ChainKind;
+use crate::{ChainKind, OmniAddress};
 
 #[near(serializers = [borsh, json])]
 #[derive(Clone)]
@@ -37,4 +37,12 @@ pub struct BindTokenArgs {
 pub struct DeployTokenArgs {
     pub chain_kind: ChainKind,
     pub prover_args: Vec<u8>,
+}
+
+#[near(serializers = [borsh, json])]
+#[derive(Clone)]
+pub struct AddDeployedTokenArgs {
+    pub token_id: AccountId,
+    pub token_address: OmniAddress,
+    pub decimals: u8,
 }

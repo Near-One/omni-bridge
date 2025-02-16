@@ -9,7 +9,8 @@
     "moduleResolution": "node",
     "resolveJsonModule": true,
     "outDir": "dist",
-    "declaration": true
+    "declaration": true,
+    "types": ["node"]
   },
   "include": ["./tests", "./scripts", "./typechain-types"],
   "files": ["hardhat.config.ts"]

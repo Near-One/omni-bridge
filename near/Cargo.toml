@@ -1,5 +1,5 @@
 [workspace.package]
-authors = ["Karim Alabtakh <karim.alabtakh@nearone.org>"]
+authors = ["Near One <info@nearone.org>"]
 repository = "https://github.com/Near-One/omni-bridge"
 
 [workspace]

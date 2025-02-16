@@ -17,7 +17,8 @@ use near_sdk::{
     PanicOnDefault, Promise, PromiseError, PromiseOrValue, PromiseResult,
 };
 use omni_types::locker_args::{
-    BindTokenArgs, ClaimFeeArgs, DeployTokenArgs, FinTransferArgs, StorageDepositAction,
+    AddDeployedTokenArgs, BindTokenArgs, ClaimFeeArgs, DeployTokenArgs, FinTransferArgs,
+    StorageDepositAction,
 };
 use omni_types::mpc_types::SignatureResponse;
 use omni_types::near_events::OmniBridgeEvent;
@@ -26,8 +27,9 @@ use omni_types::prover_result::ProverResult;
 use omni_types::{
     BasicMetadata, BridgeOnTransferMsg, ChainKind, FastFinTransferMsg, FastTransfer,
     FastTransferId, FastTransferStatus, Fee, InitTransferMsg, MetadataPayload, Nonce, OmniAddress,
-    PayloadType, SignRequest, TransferId, TransferMessage, TransferMessagePayload, UpdateFee,
+    PayloadType, SignRequest, TransferId, TransferMessage, TransferMessagePayload, UpdateFee, H160,
 };
+use std::str::FromStr;
 use storage::{Decimals, TransferMessageStorage, TransferMessageStorageValue, NEP141_DEPOSIT};
 
 mod errors;
@@ -48,7 +50,9 @@ const BIND_TOKEN_CALLBACK_GAS: Gas = Gas::from_tgas(25);
 const BIND_TOKEN_REFUND_GAS: Gas = Gas::from_tgas(5);
 const FT_TRANSFER_CALL_GAS: Gas = Gas::from_tgas(125);
 const FT_TRANSFER_GAS: Gas = Gas::from_tgas(5);
+const UPDATE_CONTROLLER_GAS: Gas = Gas::from_tgas(250);
 const WNEAR_WITHDRAW_GAS: Gas = Gas::from_tgas(10);
+const NEAR_WITHDRAW_CALLBACK_GAS: Gas = Gas::from_tgas(5);
 const STORAGE_BALANCE_OF_GAS: Gas = Gas::from_tgas(3);
 const STORAGE_DEPOSIT_GAS: Gas = Gas::from_tgas(3);
 const DEPLOY_TOKEN_CALLBACK_GAS: Gas = Gas::from_tgas(75);
@@ -87,6 +91,7 @@ pub enum Role {
     UpgradableCodeDeployer,
     MetadataManager,
     UnrestrictedRelayer,
+    TokenControllerUpdater,
 }
 
 #[ext_contract(ext_token)]
@@ -129,6 +134,11 @@ pub trait ExtToken {
         decimals: Option<u8>,
         icon: Option<String>,
     );
+}
+
+#[ext_contract(ext_bridge_token_facory)]
+pub trait ExtBridgeTokenFactory {
+    fn set_controller_for_tokens(&self, tokens_account_id: Vec<AccountId>);
 }
 
 #[ext_contract(ext_signer)]
@@ -731,6 +741,14 @@ impl Contract {
         self.update_storage_balance(relayer_id, required_balance, NearToken::from_near(0));
     }
 
+    #[private]
+    pub fn near_withdraw_callback(&self, recipient: AccountId, amount: NearToken) -> Promise {
+        match env::promise_result(0) {
+            PromiseResult::Successful(_) => Promise::new(recipient).transfer(amount),
+            PromiseResult::Failed => env::panic_str("ERR_NEAR_WITHDRAW_FAILED"),
+        }
+    }
+
     #[payable]
     #[pause(except(roles(Role::DAO, Role::UnrestrictedRelayer)))]
     pub fn claim_fee(&mut self, #[serializer(borsh)] args: ClaimFeeArgs) -> Promise {
@@ -984,6 +1002,17 @@ impl Contract {
             attached_deposit >= required_deposit,
             "ERROR: The deposit is not sufficient to cover the storage."
         );
+
+        env::log_str(
+            &OmniBridgeEvent::BindTokenEvent {
+                token_id: deploy_token.token,
+                token_address: deploy_token.token_address,
+                decimals: deploy_token.decimals,
+                origin_decimals: deploy_token.origin_decimals,
+            }
+            .to_log_string(),
+        );
+
         attached_deposit.saturating_sub(required_deposit)
     }
 
@@ -996,6 +1025,48 @@ impl Contract {
     ) {
         let refund_amount = call_result.unwrap_or(env::attached_deposit());
         Self::refund(predecessor_account_id, refund_amount);
+    }
+
+    #[allow(clippy::needless_pass_by_value)]
+    pub fn finish_withdraw_v2(
+        &mut self,
+        #[serializer(borsh)] sender_id: &AccountId,
+        #[serializer(borsh)] amount: u128,
+        #[serializer(borsh)] recipient: String,
+    ) {
+        let token_id = env::predecessor_account_id();
+        require!(self.deployed_tokens.contains(&token_id));
+
+        self.current_origin_nonce += 1;
+        let destination_nonce = self.get_next_destination_nonce(ChainKind::Eth);
+
+        let transfer_message = TransferMessage {
+            origin_nonce: self.current_origin_nonce,
+            token: OmniAddress::Near(token_id.clone()),
+            amount: U128(amount),
+            recipient: OmniAddress::Eth(
+                H160::from_str(&recipient).sdk_expect("Error on recipient parsing"),
+            ),
+            fee: Fee {
+                fee: U128(0),
+                native_fee: U128(0),
+            },
+            sender: OmniAddress::Near(sender_id.clone()),
+            msg: String::new(),
+            destination_nonce,
+            origin_transfer_id: None,
+        };
+
+        let required_storage_balance =
+            self.add_transfer_message(transfer_message.clone(), sender_id.clone());
+
+        self.update_storage_balance(
+            env::current_account_id(),
+            required_storage_balance,
+            NearToken::from_yoctonear(0),
+        );
+
+        env::log_str(&OmniBridgeEvent::InitTransferEvent { transfer_message }.to_log_string());
     }
 
     pub fn get_token_address(
@@ -1064,29 +1135,33 @@ impl Contract {
 
     #[access_control_any(roles(Role::DAO))]
     #[payable]
-    pub fn add_deployed_tokens(&mut self, tokens: Vec<(OmniAddress, AccountId)>) {
+    pub fn add_deployed_tokens(&mut self, tokens: Vec<AddDeployedTokenArgs>) {
         require!(
             env::attached_deposit()
                 >= NEP141_DEPOSIT.saturating_mul(tokens.len().try_into().sdk_expect("ERR_CAST")),
             "ERR_NOT_ENOUGH_ATTACHED_DEPOSIT"
         );
 
-        for (token_address, token_id) in tokens {
-            self.deployed_tokens.insert(&token_id);
-            self.token_address_to_id.insert(&token_address, &token_id);
+        for token_info in tokens {
+            self.deployed_tokens.insert(&token_info.token_id);
+            self.token_address_to_id
+                .insert(&token_info.token_address, &token_info.token_id);
             self.token_id_to_address.insert(
-                &(token_address.get_chain(), token_id.clone()),
-                &token_address,
+                &(
+                    token_info.token_address.get_chain(),
+                    token_info.token_id.clone(),
+                ),
+                &token_info.token_address,
             );
             self.token_decimals.insert(
-                &token_address,
+                &token_info.token_address,
                 &Decimals {
-                    decimals: 0,
-                    origin_decimals: 0,
+                    decimals: token_info.decimals,
+                    origin_decimals: token_info.decimals,
                 },
             );
 
-            ext_token::ext(token_id)
+            ext_token::ext(token_info.token_id)
                 .with_static_gas(STORAGE_DEPOSIT_GAS)
                 .with_attached_deposit(NEP141_DEPOSIT)
                 .storage_deposit(&env::current_account_id(), Some(true));
@@ -1135,6 +1210,17 @@ impl Contract {
 
     pub fn get_mpc_account(&self) -> AccountId {
         self.mpc_signer.clone()
+    }
+
+    #[access_control_any(roles(Role::DAO, Role::TokenControllerUpdater))]
+    pub fn update_tokens_controller(
+        &self,
+        factory_account_id: AccountId,
+        tokens_accounts_id: Vec<AccountId>,
+    ) {
+        ext_bridge_token_facory::ext(factory_account_id)
+            .with_static_gas(UPDATE_CONTROLLER_GAS)
+            .set_controller_for_tokens(tokens_accounts_id);
     }
 }
 
@@ -1339,7 +1425,11 @@ impl Contract {
                 .with_static_gas(WNEAR_WITHDRAW_GAS)
                 .with_attached_deposit(ONE_YOCTO)
                 .near_withdraw(amount)
-                .then(Promise::new(recipient).transfer(NearToken::from_yoctonear(amount.0)))
+                .then(
+                    Self::ext(env::current_account_id())
+                        .with_static_gas(NEAR_WITHDRAW_CALLBACK_GAS)
+                        .near_withdraw_callback(recipient, NearToken::from_yoctonear(amount.0)),
+                )
         } else if is_deployed_token {
             let deposit = if msg.is_empty() {
                 NO_DEPOSIT
@@ -1567,6 +1657,15 @@ impl Contract {
         require!(
             attached_deposit >= required_deposit,
             "ERROR: The deposit is not sufficient to cover the storage."
+        );
+
+        env::log_str(
+            &OmniBridgeEvent::DeployTokenEvent {
+                token_id: token_id.clone(),
+                token_address: token_address.clone(),
+                metadata: metadata.clone(),
+            }
+            .to_log_string(),
         );
 
         ext_deployer::ext(deployer)
