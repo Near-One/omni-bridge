@@ -65,7 +65,7 @@ pub async fn start_indexer(
 
         let filter = RpcTransactionLogsFilter::Mentions(vec![program_id.to_string()]);
         let config = RpcTransactionLogsConfig {
-            commitment: Some(CommitmentConfig::processed()),
+            commitment: Some(CommitmentConfig::confirmed()),
         };
 
         let ws_client = crate::skip_fail!(
