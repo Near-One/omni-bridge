@@ -54,7 +54,12 @@ pub struct UpdateMetadata<'info> {
 }
 
 impl UpdateMetadata<'_> {
-    pub fn process(&mut self, uri: String) -> Result<()> {
+    pub fn process(
+        &mut self,
+        name: Option<String>,
+        symbol: Option<String>,
+        uri: Option<String>,
+    ) -> Result<()> {
         let bump = &[self.config.bumps.authority];
         let signer_seeds = &[&[AUTHORITY_SEED, bump][..]];
         let cpi_accounts = UpdateMetadataAccountsV2 {
@@ -71,9 +76,9 @@ impl UpdateMetadata<'_> {
             cpi_ctx,
             None,
             Some(DataV2 {
-                name: self.metadata.name.clone(),
-                symbol: self.metadata.symbol.clone(),
-                uri,
+                name: name.unwrap_or(self.metadata.name.clone()),
+                symbol: symbol.unwrap_or(self.metadata.symbol.clone()),
+                uri: uri.unwrap_or(self.metadata.uri.clone()),
                 seller_fee_basis_points: self.metadata.seller_fee_basis_points,
                 creators: self.metadata.creators.clone(),
                 collection: self.metadata.collection.clone(),

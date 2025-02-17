@@ -184,10 +184,15 @@ pub mod bridge_token_factory {
         Ok(())
     }
 
-    pub fn update_metadata(ctx: Context<UpdateMetadata>, uri: String) -> Result<()> {
-        msg!("Updating metadata uri");
+    pub fn update_metadata(
+        ctx: Context<UpdateMetadata>,
+        name: Option<String>,
+        symbol: Option<String>,
+        uri: Option<String>,
+    ) -> Result<()> {
+        msg!("Updating metadata");
 
-        ctx.accounts.process(uri)?;
+        ctx.accounts.process(name, symbol, uri)?;
 
         Ok(())
     }
