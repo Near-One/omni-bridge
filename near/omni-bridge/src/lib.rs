@@ -25,9 +25,9 @@ use omni_types::near_events::OmniBridgeEvent;
 use omni_types::prover_args::VerifyProofArgs;
 use omni_types::prover_result::ProverResult;
 use omni_types::{
-    BasicMetadata, BridgeOnTransferMsg, ChainKind, FastFinTransferMsg, FastTransfer,
-    FastTransferId, FastTransferStatus, Fee, InitTransferMsg, MetadataPayload, Nonce, OmniAddress,
-    PayloadType, SignRequest, TransferId, TransferMessage, TransferMessagePayload, UpdateFee, H160,
+    BasicMetadata, BridgeOnTransferMsg, ChainKind, FastFinTransferMsg, FastRelayer, FastTransfer, FastTransferId, FastTransferStatus, Fee, InitTransferMsg,
+    MetadataPayload, Nonce, OmniAddress, PayloadType, SignRequest, TransferId, TransferMessage,
+    TransferMessagePayload, UpdateFee, H160,
 };
 use std::str::FromStr;
 use storage::{Decimals, TransferMessageStorage, TransferMessageStorageValue, NEP141_DEPOSIT};
@@ -209,7 +209,7 @@ impl FungibleTokenReceiver for Contract {
                 self.init_transfer(sender_id, token_id.clone(), amount, init_transfer_msg),
             ),
             BridgeOnTransferMsg::FastFinTransfer(fast_fin_transfer_msg) => {
-                self.fast_fin_transfer(sender_id, token_id.clone(), amount, fast_fin_transfer_msg)
+                self.fast_fin_transfer(token_id.clone(), amount, fast_fin_transfer_msg)
             }
         };
 
@@ -604,7 +604,6 @@ impl Contract {
 
     fn fast_fin_transfer(
         &mut self,
-        sender_id: AccountId,
         token_id: AccountId,
         amount: U128,
         fast_fin_transfer_msg: FastFinTransferMsg,
@@ -625,7 +624,7 @@ impl Contract {
                     .unwrap_or_default();
                 if storage_deposit_amount > 0 {
                     self.update_storage_balance(
-                        sender_id.clone(),
+                        fast_fin_transfer_msg.relayer.relayer_id.clone(),
                         NearToken::from_yoctonear(storage_deposit_amount),
                         NearToken::from_yoctonear(0),
                     );
@@ -646,12 +645,15 @@ impl Contract {
                             .with_static_gas(
                                 FAST_TRANSFER_CALLBACK_GAS.saturating_add(FT_TRANSFER_CALL_GAS),
                             )
-                            .fast_fin_transfer_to_near_callback(fast_transfer, sender_id),
+                            .fast_fin_transfer_to_near_callback(
+                                fast_transfer,
+                                fast_fin_transfer_msg.relayer,
+                            ),
                     ),
                 )
             }
             _ => {
-                self.fast_fin_transfer_to_other_chain(fast_transfer, sender_id);
+                self.fast_fin_transfer_to_other_chain(fast_transfer, fast_fin_transfer_msg.relayer);
                 PromiseOrValue::Value(U128(0))
             }
         }
@@ -661,7 +663,7 @@ impl Contract {
     pub fn fast_fin_transfer_to_near_callback(
         &mut self,
         #[serializer(borsh)] fast_transfer: FastTransfer,
-        #[serializer(borsh)] relayer_id: AccountId,
+        #[serializer(borsh)] fast_relayer: FastRelayer,
     ) -> Promise {
         require!(
             Self::check_storage_balance_result(0),
@@ -673,9 +675,13 @@ impl Contract {
         };
 
         let required_balance = self
-            .add_fast_transfer(&fast_transfer, relayer_id.clone())
+            .add_fast_transfer(&fast_transfer, fast_relayer.clone())
             .saturating_add(ONE_YOCTO);
-        self.update_storage_balance(relayer_id, required_balance, NearToken::from_yoctonear(0));
+        self.update_storage_balance(
+            fast_relayer.relayer_id,
+            required_balance,
+            NearToken::from_yoctonear(0),
+        );
 
         env::log_str(
             &OmniBridgeEvent::FastTransferEvent {
@@ -701,13 +707,13 @@ impl Contract {
     fn fast_fin_transfer_to_other_chain(
         &mut self,
         fast_transfer: FastTransfer,
-        relayer_id: AccountId,
+        fast_relayer: FastRelayer,
     ) {
         if self.is_transfer_finalised(fast_transfer.transfer_id) {
             env::panic_str("ERR_TRANSFER_ALREADY_FINALISED");
         }
 
-        let mut required_balance = self.add_fast_transfer(&fast_transfer, relayer_id.clone());
+        let mut required_balance = self.add_fast_transfer(&fast_transfer, fast_relayer.clone());
 
         let destination_nonce =
             self.get_next_destination_nonce(fast_transfer.recipient.get_chain());
@@ -719,7 +725,7 @@ impl Contract {
             amount: fast_transfer.amount,
             recipient: fast_transfer.recipient.clone(),
             fee: fast_transfer.fee.clone(),
-            sender: OmniAddress::Near(relayer_id.clone()),
+            sender: OmniAddress::Near(fast_relayer.relayer_id.clone()),
             msg: fast_transfer.msg.clone(),
             destination_nonce,
             origin_transfer_id: Some(fast_transfer.transfer_id),
@@ -727,7 +733,7 @@ impl Contract {
         let new_transfer_id = transfer_message.get_transfer_id();
 
         required_balance = self
-            .add_transfer_message(transfer_message, relayer_id.clone())
+            .add_transfer_message(transfer_message, fast_relayer.relayer_id.clone())
             .saturating_add(required_balance);
 
         env::log_str(
@@ -738,7 +744,11 @@ impl Contract {
             .to_log_string(),
         );
 
-        self.update_storage_balance(relayer_id, required_balance, NearToken::from_near(0));
+        self.update_storage_balance(
+            fast_relayer.relayer_id,
+            required_balance,
+            NearToken::from_near(0),
+        );
     }
 
     #[private]
@@ -1253,15 +1263,16 @@ impl Contract {
 
         // If fast transfer happened, change recipient to the relayer that executed fast transfer
         let fast_transfer = FastTransfer::from_transfer(transfer_message.clone(), token.clone());
-        let (recipient, is_fast_transfer) = match self.fast_transfers.get(&fast_transfer.id()) {
+        let (recipient, msg, is_fast_transfer) = match self.fast_transfers.get(&fast_transfer.id())
+        {
             Some(status) => {
                 require!(
-                    predecessor_account_id == *status.relayer,
+                    predecessor_account_id == *status.relayer.relayer_id,
                     "ERR_FAST_TRANSFER_PERFORMED_BY_ANOTHER_RELAYER"
                 );
-                (status.relayer, true)
+                (status.relayer.relayer_id, status.relayer.msg, true)
             }
-            None => (recipient, false),
+            None => (recipient, transfer_message.msg.clone(), false),
         };
 
         if is_fast_transfer {
@@ -1283,16 +1294,7 @@ impl Contract {
         let amount_to_transfer = U128(transfer_message.amount.0 - transfer_message.fee.fee.0);
         let is_deployed_token = self.deployed_tokens.contains(&token);
 
-        let mut promise = self.send_tokens(
-            token.clone(),
-            recipient,
-            amount_to_transfer,
-            if is_fast_transfer {
-                String::new()
-            } else {
-                transfer_message.msg.clone()
-            },
-        );
+        let mut promise = self.send_tokens(token.clone(), recipient, amount_to_transfer, msg);
 
         if transfer_message.fee.fee.0 > 0 {
             require!(
@@ -1375,10 +1377,10 @@ impl Contract {
         let token = self.get_token_id(&transfer_message.token);
 
         let fast_transfer = FastTransfer::from_transfer(transfer_message.clone(), token.clone());
-        let recipient = match self.fast_transfers.get(&fast_transfer.id()) {
+        let fast_relayer = match self.fast_transfers.get(&fast_transfer.id()) {
             Some(status) => {
                 require!(
-                    predecessor_account_id == *status.relayer,
+                    predecessor_account_id == *status.relayer.relayer_id,
                     "ERR_FAST_TRANSFER_PERFORMED_BY_ANOTHER_RELAYER"
                 );
                 Some(status.relayer)
@@ -1387,12 +1389,12 @@ impl Contract {
         };
 
         // If fast transfer happened, send tokens to the relayer that executed fast transfer
-        if let Some(relayer) = recipient {
+        if let Some(fast_relayer) = fast_relayer {
             self.send_tokens(
                 token,
-                relayer.clone(),
+                fast_relayer.relayer_id,
                 U128(transfer_message.amount.0 - transfer_message.fee.fee.0),
-                String::new(),
+                fast_relayer.msg,
             );
             self.complete_fast_transfer(&fast_transfer.id());
         } else {
@@ -1555,15 +1557,19 @@ impl Contract {
             .saturating_mul((env::storage_usage().saturating_sub(storage_usage)).into())
     }
 
-    fn add_fast_transfer(&mut self, fast_transfer: &FastTransfer, relayer: AccountId) -> NearToken {
+    fn add_fast_transfer(
+        &mut self,
+        fast_transfer: &FastTransfer,
+        relayer: FastRelayer,
+    ) -> NearToken {
         let storage_usage = env::storage_usage();
         require!(
             self.fast_transfers
                 .insert(
                     &fast_transfer.id(),
                     &FastTransferStatus {
-                        relayer,
                         finalised: false,
+                        relayer
                     },
                 )
                 .is_none(),

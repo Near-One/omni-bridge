@@ -1,7 +1,7 @@
 use near_contract_standards::storage_management::{StorageBalance, StorageBalanceBounds};
 use near_sdk::{assert_one_yocto, borsh, near};
 use near_sdk::{env, near_bindgen, AccountId, NearToken};
-use omni_types::{FastTransferStatus, TransferId};
+use omni_types::{FastRelayer, FastTransferStatus, TransferId};
 
 use crate::{
     require, ChainKind, Contract, ContractExt, Fee, OmniAddress, Promise, SdkExpect,
@@ -196,12 +196,15 @@ impl Contract {
         storage_cost.saturating_add(ft_transfers_cost)
     }
 
-    pub fn required_balance_for_fast_transfer(&self) -> NearToken {
+    pub fn required_balance_for_fast_transfer(&self, msg: String) -> NearToken {
         let key_len = borsh::to_vec(&[0u8; 32]).sdk_expect("ERR_BORSH").len() as u64;
 
         let max_account_id: AccountId = "a".repeat(64).parse().sdk_expect("ERR_PARSE_ACCOUNT_ID");
         let value_len = borsh::to_vec(&FastTransferStatus {
-            relayer: max_account_id,
+            relayer: FastRelayer {
+                relayer_id: max_account_id.clone(),
+                msg,
+            },
             finalised: false,
         })
         .sdk_expect("ERR_BORSH")
