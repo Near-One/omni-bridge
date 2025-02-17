@@ -393,7 +393,7 @@ pub struct FastFinTransferMsg {
     pub fee: Fee,
     pub msg: String,
     pub storage_deposit_amount: Option<u128>,
-    pub relayer: FastRelayer,
+    pub relayer_id: AccountId,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -552,14 +552,7 @@ impl FastTransfer {
 
 #[near(serializers=[borsh, json])]
 #[derive(Debug, Clone)]
-pub struct FastRelayer {
-    pub relayer_id: AccountId,
-    pub msg: String,
-}
-
-#[near(serializers=[borsh, json])]
-#[derive(Debug, Clone)]
 pub struct FastTransferStatus {
     pub finalised: bool,
-    pub relayer: FastRelayer,
+    pub relayer_id: AccountId,
 }
