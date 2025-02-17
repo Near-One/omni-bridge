@@ -989,6 +989,10 @@ impl Contract {
         self.mpc_signer.clone()
     }
 
+    pub fn get_token_decimals(&self, address: &OmniAddress) -> Option<Decimals> {
+        self.token_decimals.get(address)
+    }
+
     #[access_control_any(roles(Role::DAO, Role::TokenControllerUpdater))]
     pub fn update_tokens_controller(
         &self,
