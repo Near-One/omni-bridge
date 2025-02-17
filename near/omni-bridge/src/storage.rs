@@ -201,8 +201,8 @@ impl Contract {
 
         let max_account_id: AccountId = "a".repeat(64).parse().sdk_expect("ERR_PARSE_ACCOUNT_ID");
         let value_len = borsh::to_vec(&FastTransferStatus {
+            relayer: max_account_id.clone(),
             finalised: false,
-            relayer_id: max_account_id.clone(),
         })
         .sdk_expect("ERR_BORSH")
         .len() as u64;

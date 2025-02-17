@@ -624,7 +624,7 @@ impl Contract {
                     .unwrap_or_default();
                 if storage_deposit_amount > 0 {
                     self.update_storage_balance(
-                        fast_fin_transfer_msg.relayer_id.clone(),
+                        fast_fin_transfer_msg.relayer.clone(),
                         NearToken::from_yoctonear(storage_deposit_amount),
                         NearToken::from_yoctonear(0),
                     );
@@ -647,7 +647,7 @@ impl Contract {
                             )
                             .fast_fin_transfer_to_near_callback(
                                 fast_transfer,
-                                fast_fin_transfer_msg.relayer_id,
+                                fast_fin_transfer_msg.relayer,
                             ),
                     ),
                 )
@@ -655,7 +655,7 @@ impl Contract {
             _ => {
                 self.fast_fin_transfer_to_other_chain(
                     fast_transfer,
-                    fast_fin_transfer_msg.relayer_id,
+                    fast_fin_transfer_msg.relayer,
                 );
                 PromiseOrValue::Value(U128(0))
             }
@@ -1262,10 +1262,10 @@ impl Contract {
         {
             Some(status) => {
                 require!(
-                    predecessor_account_id == *status.relayer_id,
+                    predecessor_account_id == *status.relayer,
                     "ERR_FAST_TRANSFER_PERFORMED_BY_ANOTHER_RELAYER"
                 );
-                (status.relayer_id, String::new(), true)
+                (status.relayer, String::new(), true)
             }
             None => (recipient, transfer_message.msg.clone(), false),
         };
@@ -1375,19 +1375,19 @@ impl Contract {
         let recipient = match self.fast_transfers.get(&fast_transfer.id()) {
             Some(status) => {
                 require!(
-                    predecessor_account_id == *status.relayer_id,
+                    predecessor_account_id == *status.relayer,
                     "ERR_FAST_TRANSFER_PERFORMED_BY_ANOTHER_RELAYER"
                 );
-                Some(status.relayer_id)
+                Some(status.relayer)
             }
             None => None,
         };
 
         // If fast transfer happened, send tokens to the relayer that executed fast transfer
-        if let Some(recipient) = recipient {
+        if let Some(relayer) = recipient {
             self.send_tokens(
                 token,
-                recipient,
+                relayer,
                 U128(transfer_message.amount.0 - transfer_message.fee.fee.0),
                 String::new(),
             );
@@ -1552,19 +1552,15 @@ impl Contract {
             .saturating_mul((env::storage_usage().saturating_sub(storage_usage)).into())
     }
 
-    fn add_fast_transfer(
-        &mut self,
-        fast_transfer: &FastTransfer,
-        relayer_id: AccountId,
-    ) -> NearToken {
+    fn add_fast_transfer(&mut self, fast_transfer: &FastTransfer, relayer: AccountId) -> NearToken {
         let storage_usage = env::storage_usage();
         require!(
             self.fast_transfers
                 .insert(
                     &fast_transfer.id(),
                     &FastTransferStatus {
+                        relayer,
                         finalised: false,
-                        relayer_id
                     },
                 )
                 .is_none(),

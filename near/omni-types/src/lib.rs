@@ -393,7 +393,7 @@ pub struct FastFinTransferMsg {
     pub fee: Fee,
     pub msg: String,
     pub storage_deposit_amount: Option<u128>,
-    pub relayer_id: AccountId,
+    pub relayer: AccountId,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -554,5 +554,5 @@ impl FastTransfer {
 #[derive(Debug, Clone)]
 pub struct FastTransferStatus {
     pub finalised: bool,
-    pub relayer_id: AccountId,
+    pub relayer: AccountId,
 }
