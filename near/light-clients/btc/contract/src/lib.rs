@@ -1,7 +1,7 @@
 use btc_types::contract_args::{InitArgs, ProofArgs};
 use btc_types::hash::H256;
 use btc_types::header::{
-    ExtendedHeader, Header, BLOCKS_PER_ADJUSTMENT, EXPECTED_TIME, MAX_ADJUSTMENT_FACTOR,
+    ExtendedHeader, Header, BLOCKS_PER_ADJUSTMENT, EXPECTED_TIME, MAX_ADJUSTMENT_FACTOR, POW_LIMIT,
 };
 use btc_types::u256::U256;
 use near_plugins::{
@@ -499,6 +499,10 @@ impl BtcLightClient {
         let (mut new_target, new_target_overflow) = last_target.overflowing_mul(actual_time_taken);
         require!(!new_target_overflow, "new target overflow");
         new_target = new_target / U256::from(EXPECTED_TIME);
+
+        if new_target > POW_LIMIT {
+            new_target = POW_LIMIT;
+        }
 
         let expected_bits = new_target.target_to_bits();
 

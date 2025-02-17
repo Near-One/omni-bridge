@@ -29,6 +29,10 @@ impl U256 {
 
     pub const ONE: U256 = U256(0, 1);
 
+    pub const fn new(a: u128, b: u128) -> Self {
+        U256(a, b)
+    }
+
     /// Creates `U256` from a big-endian array of `u8`s.
     #[must_use]
     pub fn from_be_bytes(a: &[u8; 32]) -> U256 {
