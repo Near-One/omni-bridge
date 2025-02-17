@@ -4,10 +4,12 @@
   "main": "index.js",
   "author": "dev@near.org",
   "license": "MIT",
+  "type": "module",
   "dependencies": {
     "@ethersproject/providers": "5.7.2",
     "dotenv": "^16.4.7",
     "eth-object": "https://github.com/near/eth-object#378b8dbf44a71f7049666cea5a16ab88d45aed06",
-    "near-api-js": "5.0.1"
+    "near-api-js": "5.0.1",
+    "ethers": "^6"
   }
 }
