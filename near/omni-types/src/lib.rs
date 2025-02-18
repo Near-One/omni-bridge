@@ -4,6 +4,7 @@ use hex::FromHex;
 use near_sdk::json_types::U128;
 use near_sdk::serde::{Deserialize, Serialize};
 use near_sdk::{near, AccountId};
+use num_enum::IntoPrimitive;
 use schemars::JsonSchema;
 use serde::de::Visitor;
 use sol_address::SolAddress;
@@ -128,7 +129,19 @@ impl Serialize for H160 {
 }
 
 #[near(serializers = [borsh, json])]
-#[derive(Debug, Eq, Clone, Copy, PartialEq, PartialOrd, Ord, strum_macros::AsRefStr, Default)]
+#[derive(
+    Debug,
+    Eq,
+    Clone,
+    Copy,
+    PartialEq,
+    PartialOrd,
+    Ord,
+    strum_macros::AsRefStr,
+    Default,
+    IntoPrimitive,
+)]
+#[repr(u8)]
 pub enum ChainKind {
     #[default]
     Eth,
