@@ -892,7 +892,7 @@ impl Contract {
         }
     }
 
-    pub fn get_bridged_token_address(
+    pub fn get_bridged_token(
         &self,
         address: &OmniAddress,
         chain: ChainKind,
