@@ -910,7 +910,7 @@ impl Contract {
             (foreign_addr, ChainKind::Near) => self
                 .token_address_to_id
                 .get(foreign_addr)
-                .map(|near_id| OmniAddress::Near(near_id)),
+                .map(OmniAddress::Near),
             // foreign chain -> foreign chain
             (foreign_addr, _) => {
                 // First get the NEAR token ID
