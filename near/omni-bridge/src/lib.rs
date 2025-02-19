@@ -202,8 +202,12 @@ impl FungibleTokenReceiver for Contract {
         msg: String,
     ) -> PromiseOrValue<U128> {
         let token_id = env::predecessor_account_id();
-        let parsed_msg: BridgeOnTransferMsg =
-            serde_json::from_str(&msg).sdk_expect("ERR_PARSE_MSG");
+        let parsed_msg: BridgeOnTransferMsg = serde_json::from_str(&msg)
+            .or_else(|_| {
+                serde_json::from_str(&msg).map(BridgeOnTransferMsg::InitTransfer)
+            })
+            .sdk_expect("ERR_PARSE_MSG");
+
         let promise_or_value = match parsed_msg {
             BridgeOnTransferMsg::InitTransfer(init_transfer_msg) => PromiseOrValue::Value(
                 self.init_transfer(sender_id, token_id.clone(), amount, init_transfer_msg),
