@@ -892,6 +892,35 @@ impl Contract {
         }
     }
 
+    pub fn get_bridged_token(
+        &self,
+        address: &OmniAddress,
+        chain: ChainKind,
+    ) -> Option<OmniAddress> {
+        match (address, chain) {
+            // NEAR -> NEAR case
+            (OmniAddress::Near(near_id), ChainKind::Near) => {
+                Some(OmniAddress::Near(near_id.clone()))
+            }
+            // NEAR -> foreign chain
+            (OmniAddress::Near(near_id), _) => {
+                self.token_id_to_address.get(&(chain, near_id.clone()))
+            }
+            // foreign chain -> NEAR
+            (foreign_addr, ChainKind::Near) => self
+                .token_address_to_id
+                .get(foreign_addr)
+                .map(OmniAddress::Near),
+            // foreign chain -> foreign chain
+            (foreign_addr, _) => {
+                // First get the NEAR token ID
+                let near_id = self.token_address_to_id.get(foreign_addr)?;
+                // Then look up the address on target chain
+                self.token_id_to_address.get(&(chain, near_id))
+            }
+        }
+    }
+
     pub fn get_native_token_id(&self, chain: ChainKind) -> AccountId {
         let native_token_address =
             OmniAddress::new_zero(chain).sdk_expect("ERR_FAILED_TO_GET_ZERO_ADDRESS");

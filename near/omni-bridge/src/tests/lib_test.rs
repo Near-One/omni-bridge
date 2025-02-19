@@ -11,6 +11,7 @@ use near_sdk::{
 use omni_types::{
     locker_args::StorageDepositAction,
     prover_result::{InitTransferMessage, ProverResult},
+    sol_address::SolAddress,
     ChainKind, EvmAddress, Fee, InitTransferMsg, Nonce, OmniAddress, TransferId, TransferMessage,
     UpdateFee,
 };
@@ -737,5 +738,96 @@ fn test_denormalize_amount() {
             }
         ),
         u128::from(u64::MAX) * 1_000_000_000_000_000_u128
+    );
+}
+
+#[test]
+fn test_get_bridged_token() {
+    let mut contract = get_default_contract();
+
+    // Set up test data
+    let near_token_id: AccountId = DEFAULT_FT_CONTRACT_ACCOUNT.parse().unwrap();
+    let eth_address = EvmAddress::from_str(DEFAULT_ETH_USER_ADDRESS).unwrap();
+    let solana_address: SolAddress = "2xNweLHLqbS9YpP3UyaPrxKqgqoC6yPBFyuLxA8qtgr4"
+        .parse()
+        .expect("Invalid Solana address");
+
+    // First insert token addresses for each chain target (NEAR token -> chain addresses)
+    contract.token_id_to_address.insert(
+        &(ChainKind::Eth, near_token_id.clone()),
+        &OmniAddress::Eth(eth_address.clone()),
+    );
+    contract.token_id_to_address.insert(
+        &(ChainKind::Sol, near_token_id.clone()),
+        &OmniAddress::Sol(solana_address.clone()),
+    );
+
+    // Then insert reverse mappings (chain addresses -> NEAR token)
+    contract.token_address_to_id.insert(
+        &OmniAddress::Eth(eth_address.clone()),
+        &near_token_id.clone(),
+    );
+    contract.token_address_to_id.insert(
+        &OmniAddress::Sol(solana_address.clone()),
+        &near_token_id.clone(),
+    );
+
+    // Test Case 1: NEAR to Ethereum
+    let near_source = OmniAddress::Near(near_token_id.clone());
+    let eth_result = contract.get_bridged_token(&near_source, ChainKind::Eth);
+    assert_eq!(
+        eth_result,
+        Some(OmniAddress::Eth(eth_address.clone())),
+        "Failed to resolve NEAR to ETH address"
+    );
+
+    // Test Case 2: NEAR to Solana
+    let solana_result = contract.get_bridged_token(&near_source, ChainKind::Sol);
+    assert_eq!(
+        solana_result,
+        Some(OmniAddress::Sol(solana_address.clone())),
+        "Failed to resolve NEAR to Solana address"
+    );
+
+    // Test Case 3: Ethereum to NEAR
+    let eth_source = OmniAddress::Eth(eth_address.clone());
+    let near_result = contract.get_bridged_token(&eth_source, ChainKind::Near);
+    assert_eq!(
+        near_result,
+        Some(OmniAddress::Near(near_token_id.clone())),
+        "Failed to resolve ETH to NEAR address"
+    );
+
+    // Test Case 4: Ethereum to Solana (cross-chain)
+    let solana_cross_result = contract.get_bridged_token(&eth_source, ChainKind::Sol);
+    assert_eq!(
+        solana_cross_result,
+        Some(OmniAddress::Sol(solana_address.clone())),
+        "Failed to resolve ETH to Solana address"
+    );
+
+    // Test Case 5: Unmapped token
+    let unmapped_eth = OmniAddress::Eth(
+        EvmAddress::from_str("0x9999999999999999999999999999999999999999").unwrap(),
+    );
+    let unmapped_result = contract.get_bridged_token(&unmapped_eth, ChainKind::Sol);
+    assert_eq!(
+        unmapped_result, None,
+        "Expected None for unmapped token address"
+    );
+
+    // Test Case 6: Same chain resolution attempt
+    let same_chain_result = contract.get_bridged_token(&eth_source, ChainKind::Eth);
+    assert_eq!(
+        same_chain_result,
+        Some(OmniAddress::Eth(eth_address.clone())),
+        "Failed to handle same chain resolution"
+    );
+
+    // Test Case 7:  NEAR -> NEAR (no storage needed)
+    assert_eq!(
+        contract.get_bridged_token(&near_source, ChainKind::Near),
+        Some(near_source.clone()),
+        "Failed to handle NEAR to NEAR resolution"
     );
 }
