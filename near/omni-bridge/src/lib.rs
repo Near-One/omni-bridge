@@ -892,6 +892,27 @@ impl Contract {
         }
     }
 
+    pub fn resolve_token_address(
+        &self,
+        source_address: &OmniAddress,
+        target_chain: ChainKind,
+    ) -> Option<OmniAddress> {
+        match source_address {
+            // If source is NEAR, directly look up in token_id_to_address
+            OmniAddress::Near(near_id) => self
+                .token_id_to_address
+                .get(&(target_chain, near_id.clone())),
+            // If source is foreign chain, first get NEAR id from token_address_to_id
+            foreign_addr => {
+                // Get the NEAR token ID for this foreign address
+                let near_id = self.token_address_to_id.get(foreign_addr)?;
+
+                // Look up the target chain address
+                self.token_id_to_address.get(&(target_chain, near_id))
+            }
+        }
+    }
+
     pub fn get_native_token_id(&self, chain: ChainKind) -> AccountId {
         let native_token_address =
             OmniAddress::new_zero(chain).sdk_expect("ERR_FAILED_TO_GET_ZERO_ADDRESS");
