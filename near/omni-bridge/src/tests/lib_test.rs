@@ -761,10 +761,6 @@ fn test_get_bridged_token_address() {
         &(ChainKind::Sol, near_token_id.clone()),
         &OmniAddress::Sol(solana_address.clone()),
     );
-    contract.token_id_to_address.insert(
-        &(ChainKind::Near, near_token_id.clone()),
-        &OmniAddress::Near(near_token_id.clone()),
-    );
 
     // Then insert reverse mappings (chain addresses -> NEAR token)
     contract.token_address_to_id.insert(
@@ -826,5 +822,12 @@ fn test_get_bridged_token_address() {
         same_chain_result,
         Some(OmniAddress::Eth(eth_address.clone())),
         "Failed to handle same chain resolution"
+    );
+
+    // Test Case 7:  NEAR -> NEAR (no storage needed)
+    assert_eq!(
+        contract.get_bridged_token_address(&near_source, ChainKind::Near),
+        Some(near_source.clone()),
+        "Failed to handle NEAR to NEAR resolution"
     );
 }

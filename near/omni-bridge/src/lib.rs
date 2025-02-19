@@ -897,15 +897,25 @@ impl Contract {
         address: &OmniAddress,
         chain: ChainKind,
     ) -> Option<OmniAddress> {
-        match address {
-            // If source is NEAR, directly look up in token_id_to_address
-            OmniAddress::Near(near_id) => self.token_id_to_address.get(&(chain, near_id.clone())),
-            // If source is foreign chain, first get NEAR id from token_address_to_id
-            foreign_address => {
-                // Get the NEAR token ID for this foreign address
-                let near_id = self.token_address_to_id.get(foreign_address)?;
-
-                // Look up the target chain address
+        match (address, chain) {
+            // NEAR -> NEAR case
+            (OmniAddress::Near(near_id), ChainKind::Near) => {
+                Some(OmniAddress::Near(near_id.clone()))
+            }
+            // NEAR -> foreign chain
+            (OmniAddress::Near(near_id), _) => {
+                self.token_id_to_address.get(&(chain, near_id.clone()))
+            }
+            // foreign chain -> NEAR
+            (foreign_addr, ChainKind::Near) => self
+                .token_address_to_id
+                .get(foreign_addr)
+                .map(|near_id| OmniAddress::Near(near_id)),
+            // foreign chain -> foreign chain
+            (foreign_addr, _) => {
+                // First get the NEAR token ID
+                let near_id = self.token_address_to_id.get(foreign_addr)?;
+                // Then look up the address on target chain
                 self.token_id_to_address.get(&(chain, near_id))
             }
         }
