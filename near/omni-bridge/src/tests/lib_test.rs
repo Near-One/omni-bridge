@@ -742,7 +742,7 @@ fn test_denormalize_amount() {
 }
 
 #[test]
-fn test_resolve_token_address() {
+fn test_get_bridged_token_address() {
     let mut contract = get_default_contract();
 
     // Set up test data
@@ -778,7 +778,7 @@ fn test_resolve_token_address() {
 
     // Test Case 1: NEAR to Ethereum
     let near_source = OmniAddress::Near(near_token_id.clone());
-    let eth_result = contract.resolve_token_address(&near_source, ChainKind::Eth);
+    let eth_result = contract.get_bridged_token_address(&near_source, ChainKind::Eth);
     assert_eq!(
         eth_result,
         Some(OmniAddress::Eth(eth_address.clone())),
@@ -786,7 +786,7 @@ fn test_resolve_token_address() {
     );
 
     // Test Case 2: NEAR to Solana
-    let solana_result = contract.resolve_token_address(&near_source, ChainKind::Sol);
+    let solana_result = contract.get_bridged_token_address(&near_source, ChainKind::Sol);
     assert_eq!(
         solana_result,
         Some(OmniAddress::Sol(solana_address.clone())),
@@ -795,7 +795,7 @@ fn test_resolve_token_address() {
 
     // Test Case 3: Ethereum to NEAR
     let eth_source = OmniAddress::Eth(eth_address.clone());
-    let near_result = contract.resolve_token_address(&eth_source, ChainKind::Near);
+    let near_result = contract.get_bridged_token_address(&eth_source, ChainKind::Near);
     assert_eq!(
         near_result,
         Some(OmniAddress::Near(near_token_id.clone())),
@@ -803,7 +803,7 @@ fn test_resolve_token_address() {
     );
 
     // Test Case 4: Ethereum to Solana (cross-chain)
-    let solana_cross_result = contract.resolve_token_address(&eth_source, ChainKind::Sol);
+    let solana_cross_result = contract.get_bridged_token_address(&eth_source, ChainKind::Sol);
     assert_eq!(
         solana_cross_result,
         Some(OmniAddress::Sol(solana_address.clone())),
@@ -814,14 +814,14 @@ fn test_resolve_token_address() {
     let unmapped_eth = OmniAddress::Eth(
         EvmAddress::from_str("0x9999999999999999999999999999999999999999").unwrap(),
     );
-    let unmapped_result = contract.resolve_token_address(&unmapped_eth, ChainKind::Sol);
+    let unmapped_result = contract.get_bridged_token_address(&unmapped_eth, ChainKind::Sol);
     assert_eq!(
         unmapped_result, None,
         "Expected None for unmapped token address"
     );
 
     // Test Case 6: Same chain resolution attempt
-    let same_chain_result = contract.resolve_token_address(&eth_source, ChainKind::Eth);
+    let same_chain_result = contract.get_bridged_token_address(&eth_source, ChainKind::Eth);
     assert_eq!(
         same_chain_result,
         Some(OmniAddress::Eth(eth_address.clone())),

@@ -892,23 +892,21 @@ impl Contract {
         }
     }
 
-    pub fn resolve_token_address(
+    pub fn get_bridged_token_address(
         &self,
-        source_address: &OmniAddress,
-        target_chain: ChainKind,
+        address: &OmniAddress,
+        chain: ChainKind,
     ) -> Option<OmniAddress> {
-        match source_address {
+        match address {
             // If source is NEAR, directly look up in token_id_to_address
-            OmniAddress::Near(near_id) => self
-                .token_id_to_address
-                .get(&(target_chain, near_id.clone())),
+            OmniAddress::Near(near_id) => self.token_id_to_address.get(&(chain, near_id.clone())),
             // If source is foreign chain, first get NEAR id from token_address_to_id
-            foreign_addr => {
+            foreign_address => {
                 // Get the NEAR token ID for this foreign address
-                let near_id = self.token_address_to_id.get(foreign_addr)?;
+                let near_id = self.token_address_to_id.get(foreign_address)?;
 
                 // Look up the target chain address
-                self.token_id_to_address.get(&(target_chain, near_id))
+                self.token_id_to_address.get(&(chain, near_id))
             }
         }
     }
