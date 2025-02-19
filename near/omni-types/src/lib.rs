@@ -393,6 +393,7 @@ pub struct FastFinTransferMsg {
     pub fee: Fee,
     pub msg: String,
     pub storage_deposit_amount: Option<u128>,
+    pub relayer: AccountId,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -400,13 +401,6 @@ pub struct InitTransferMsg {
     pub recipient: OmniAddress,
     pub fee: U128,
     pub native_token_fee: U128,
-}
-
-#[near(serializers=[borsh, json])]
-#[derive(Debug, Clone)]
-pub struct FeeRecipient {
-    pub recipient: AccountId,
-    pub native_fee_recipient: OmniAddress,
 }
 
 #[near(serializers=[borsh, json])]
@@ -556,7 +550,8 @@ impl FastTransfer {
     }
 }
 
-#[derive(BorshDeserialize, BorshSerialize, Debug, Clone)]
+#[near(serializers=[borsh, json])]
+#[derive(Debug, Clone)]
 pub struct FastTransferStatus {
     pub finalised: bool,
     pub relayer: AccountId,
