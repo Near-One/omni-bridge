@@ -507,7 +507,7 @@ mod tests {
 
         let transfer_amount = 100;
         let transfer_msg = get_transfer_msg_to_near(&env, transfer_amount);
-        let fast_transfer_msg = get_fast_transfer_msg(transfer_msg);
+        let fast_transfer_msg = get_fast_transfer_msg(&env, transfer_msg);
 
         let relayer_balance_before =
             get_balance(&env.token_contract, env.relayer_account.id()).await?;
@@ -540,7 +540,7 @@ mod tests {
 
         let transfer_amount = 100;
         let transfer_msg = get_transfer_msg_to_near(&env, transfer_amount);
-        let fast_transfer_msg = get_fast_transfer_msg(transfer_msg);
+        let fast_transfer_msg = get_fast_transfer_msg(&env, transfer_msg);
 
         let relayer_balance_before =
             get_balance(&env.token_contract, env.relayer_account.id()).await?;
@@ -575,7 +575,7 @@ mod tests {
 
         let transfer_amount = 100;
         let transfer_msg = get_transfer_msg_to_near(&env, transfer_amount);
-        let mut fast_transfer_msg = get_fast_transfer_msg(transfer_msg);
+        let mut fast_transfer_msg = get_fast_transfer_msg(&env, transfer_msg);
         fast_transfer_msg.storage_deposit_amount =
             Some(NEP141_DEPOSIT.saturating_mul(100).as_yoctonear());
 
@@ -612,7 +612,7 @@ mod tests {
 
         let transfer_amount = 100;
         let transfer_msg = get_transfer_msg_to_near(&env, transfer_amount);
-        let fast_transfer_msg = get_fast_transfer_msg(transfer_msg);
+        let fast_transfer_msg = get_fast_transfer_msg(&env, transfer_msg);
 
         do_fast_transfer(&env, transfer_amount, fast_transfer_msg.clone()).await?;
 
@@ -653,7 +653,7 @@ mod tests {
 
         let transfer_amount = 100;
         let transfer_msg = get_transfer_msg_to_near(&env, transfer_amount);
-        let fast_transfer_msg = get_fast_transfer_msg(transfer_msg);
+        let fast_transfer_msg = get_fast_transfer_msg(&env, transfer_msg);
 
         do_fast_transfer(&env, transfer_amount, fast_transfer_msg.clone()).await?;
 
@@ -696,7 +696,7 @@ mod tests {
 
         let transfer_amount = 100;
         let transfer_msg = get_transfer_msg_to_near(&env, transfer_amount);
-        let fast_transfer_msg = get_fast_transfer_msg(transfer_msg.clone());
+        let fast_transfer_msg = get_fast_transfer_msg(&env, transfer_msg.clone());
 
         do_fast_transfer(&env, transfer_amount, fast_transfer_msg.clone()).await?;
 
@@ -725,7 +725,7 @@ mod tests {
 
         let transfer_amount = 100;
         let transfer_msg = get_transfer_msg_to_near(&env, transfer_amount);
-        let fast_transfer_msg = get_fast_transfer_msg(transfer_msg.clone());
+        let fast_transfer_msg = get_fast_transfer_msg(&env, transfer_msg.clone());
 
         do_fast_transfer(&env, transfer_amount, fast_transfer_msg.clone()).await?;
 
@@ -746,7 +746,7 @@ mod tests {
 
         let transfer_amount = 100;
         let transfer_msg = get_transfer_msg_to_other_chain(&env, transfer_amount);
-        let fast_transfer_msg = get_fast_transfer_msg(transfer_msg.clone());
+        let fast_transfer_msg = get_fast_transfer_msg(&env, transfer_msg.clone());
 
         let relayer_balance_before =
             get_balance(&env.token_contract, env.relayer_account.id()).await?;
@@ -806,7 +806,7 @@ mod tests {
 
         let transfer_amount = 100;
         let transfer_msg = get_transfer_msg_to_other_chain(&env, transfer_amount);
-        let fast_transfer_msg = get_fast_transfer_msg(transfer_msg.clone());
+        let fast_transfer_msg = get_fast_transfer_msg(&env, transfer_msg.clone());
 
         let relayer_balance_before =
             get_balance(&env.token_contract, env.relayer_account.id()).await?;
@@ -839,7 +839,7 @@ mod tests {
 
         let transfer_amount = 100;
         let transfer_msg = get_transfer_msg_to_other_chain(&env, transfer_amount);
-        let fast_transfer_msg = get_fast_transfer_msg(transfer_msg.clone());
+        let fast_transfer_msg = get_fast_transfer_msg(&env, transfer_msg.clone());
 
         do_fast_transfer(&env, transfer_amount, fast_transfer_msg.clone()).await?;
 
@@ -874,7 +874,7 @@ mod tests {
 
         let transfer_amount = 100;
         let transfer_msg = get_transfer_msg_to_other_chain(&env, transfer_amount);
-        let fast_transfer_msg = get_fast_transfer_msg(transfer_msg.clone());
+        let fast_transfer_msg = get_fast_transfer_msg(&env, transfer_msg.clone());
 
         do_fast_transfer(&env, transfer_amount, fast_transfer_msg.clone()).await?;
 
@@ -914,7 +914,7 @@ mod tests {
 
         let transfer_amount = 100;
         let transfer_msg = get_transfer_msg_to_other_chain(&env, transfer_amount);
-        let fast_transfer_msg = get_fast_transfer_msg(transfer_msg.clone());
+        let fast_transfer_msg = get_fast_transfer_msg(&env, transfer_msg.clone());
 
         do_fast_transfer(&env, transfer_amount, fast_transfer_msg.clone()).await?;
 
@@ -934,7 +934,7 @@ mod tests {
 
         let transfer_amount = 100;
         let transfer_msg = get_transfer_msg_to_other_chain(&env, transfer_amount);
-        let fast_transfer_msg = get_fast_transfer_msg(transfer_msg.clone());
+        let fast_transfer_msg = get_fast_transfer_msg(&env, transfer_msg.clone());
 
         do_fin_transfer(&env, transfer_msg).await?;
 
@@ -995,7 +995,7 @@ mod tests {
         }
     }
 
-    fn get_fast_transfer_msg(transfer_msg: InitTransferMessage) -> FastFinTransferMsg {
+    fn get_fast_transfer_msg(env: &TestEnv, transfer_msg: InitTransferMessage) -> FastFinTransferMsg {
         FastFinTransferMsg {
             transfer_id: TransferId {
                 origin_chain: transfer_msg.sender.get_chain(),
@@ -1008,6 +1008,7 @@ mod tests {
                 ChainKind::Near => Some(NEP141_DEPOSIT.as_yoctonear()),
                 _ => None,
             },
+            relayer: env.relayer_account.id().clone(),
         }
     }
 }
