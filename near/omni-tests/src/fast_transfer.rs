@@ -41,6 +41,7 @@ mod tests {
             Self::new(true).await
         }
 
+        #[allow(clippy::too_many_lines)]
         async fn new(is_bridged_token: bool) -> anyhow::Result<Self> {
             let sender_balance_token = 1_000_000;
             let worker = near_workspaces::sandbox().await?;
@@ -288,7 +289,7 @@ mod tests {
             bridge_contract
                 .call("bind_token")
                 .args_borsh(get_bind_token_args(
-                    &token_contract.id(),
+                    token_contract.id(),
                     &eth_token_address(),
                     &eth_factory_address,
                     18,
@@ -591,7 +592,7 @@ mod tests {
         assert_eq!(1, result.failures().len());
         let failure = result.failures()[0].clone().into_result();
         assert!(failure
-            .is_err_and(|err| { format!("{:?}", err).contains("Not enough storage deposited") }));
+            .is_err_and(|err| { format!("{err:?}").contains("Not enough storage deposited") }));
 
         let recipient_balance: U128 = get_balance(&env.token_contract, &account_n(1)).await?;
         let relayer_balance_after =
@@ -631,7 +632,7 @@ mod tests {
 
         let failure = result.failures()[0].clone().into_result();
         assert!(failure.is_err_and(|err| {
-            format!("{:?}", err).contains("Fast transfer is already performed")
+            format!("{err:?}").contains("Fast transfer is already performed")
         }));
 
         let relayer_balance_after =
@@ -670,11 +671,11 @@ mod tests {
         assert_eq!(U128(0), contract_balance_before);
 
         let result = do_fast_transfer(&env, transfer_amount, fast_transfer_msg).await?;
-        assert!(result.failures().len() > 0);
+        assert!(!result.failures().is_empty());
 
         let failure = result.failures()[0].clone().into_result();
         assert!(failure.is_err_and(|err| {
-            format!("{:?}", err).contains("Fast transfer is already performed")
+            format!("{err:?}").contains("Fast transfer is already performed")
         }));
 
         let relayer_balance_after =
@@ -733,8 +734,8 @@ mod tests {
         let result = do_fin_transfer(&env, transfer_msg).await;
 
         assert!(result.is_err_and(|err| {
-            println!("err: {:?}", err);
-            format!("{:?}", err).contains("The transfer is already finalised")
+            println!("err: {err:?}");
+            format!("{err:?}").contains("The transfer is already finalised")
         }));
 
         Ok(())
@@ -854,7 +855,7 @@ mod tests {
 
         let failure = result.failures()[0].clone().into_result();
         assert!(failure.is_err_and(|err| {
-            format!("{:?}", err).contains("Fast transfer is already performed")
+            format!("{err:?}").contains("Fast transfer is already performed")
         }));
 
         let relayer_balance_after =
@@ -895,7 +896,7 @@ mod tests {
             .await;
 
         assert!(transfer_message
-            .is_err_and(|err| { format!("{:?}", err).contains("The transfer does not exist") }));
+            .is_err_and(|err| { format!("{err:?}").contains("The transfer does not exist") }));
 
         let relayer_balance_after =
             get_balance(&env.token_contract, env.relayer_account.id()).await?;
@@ -922,7 +923,7 @@ mod tests {
         let result = do_fin_transfer(&env, transfer_msg).await;
 
         assert!(result.is_err_and(|err| {
-            format!("{:?}", err).contains("The transfer is already finalised")
+            format!("{err:?}").contains("The transfer is already finalised")
         }));
 
         Ok(())
@@ -958,7 +959,7 @@ mod tests {
         assert_eq!(1, result.failures().len());
         let failure = result.failures()[0].clone().into_result();
         assert!(failure
-            .is_err_and(|err| { format!("{:?}", err).contains("ERR_TRANSFER_ALREADY_FINALISED") }));
+            .is_err_and(|err| { format!("{err:?}").contains("ERR_TRANSFER_ALREADY_FINALISED") }));
 
         Ok(())
     }
@@ -995,7 +996,10 @@ mod tests {
         }
     }
 
-    fn get_fast_transfer_msg(env: &TestEnv, transfer_msg: InitTransferMessage) -> FastFinTransferMsg {
+    fn get_fast_transfer_msg(
+        env: &TestEnv,
+        transfer_msg: InitTransferMessage,
+    ) -> FastFinTransferMsg {
         FastFinTransferMsg {
             transfer_id: TransferId {
                 origin_chain: transfer_msg.sender.get_chain(),

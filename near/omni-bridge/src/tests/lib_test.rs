@@ -137,7 +137,7 @@ fn test_init_transfer_nonce_increment() {
         DEFAULT_FT_CONTRACT_ACCOUNT.to_string(),
         U128(100),
         None,
-        &BridgeOnTransferMsg::InitTransfer(get_init_transfer_msg(&DEFAULT_ETH_USER_ADDRESS, 0, 0)),
+        &BridgeOnTransferMsg::InitTransfer(get_init_transfer_msg(DEFAULT_ETH_USER_ADDRESS, 0, 0)),
     );
 
     assert_eq!(contract.current_origin_nonce, DEFAULT_NONCE + 1);
@@ -197,7 +197,7 @@ fn test_init_transfer_promise_result() {
         DEFAULT_FT_CONTRACT_ACCOUNT.to_string(),
         U128(DEFAULT_TRANSFER_AMOUNT),
         None,
-        &BridgeOnTransferMsg::InitTransfer(get_init_transfer_msg(&DEFAULT_ETH_USER_ADDRESS, 0, 0)),
+        &BridgeOnTransferMsg::InitTransfer(get_init_transfer_msg(DEFAULT_ETH_USER_ADDRESS, 0, 0)),
     );
 
     let remaining = match promise {
@@ -218,7 +218,7 @@ fn test_init_transfer_invalid_fee() {
         U128(DEFAULT_TRANSFER_AMOUNT),
         None,
         &BridgeOnTransferMsg::InitTransfer(get_init_transfer_msg(
-            &DEFAULT_ETH_USER_ADDRESS,
+            DEFAULT_ETH_USER_ADDRESS,
             DEFAULT_TRANSFER_AMOUNT + 1,
             0,
         )),
@@ -239,7 +239,7 @@ fn test_init_transfer_balance_updated() {
         DEFAULT_FT_CONTRACT_ACCOUNT.to_string(),
         U128(DEFAULT_TRANSFER_AMOUNT),
         Some(total_balance),
-        &BridgeOnTransferMsg::InitTransfer(get_init_transfer_msg(&DEFAULT_ETH_USER_ADDRESS, 0, 0)),
+        &BridgeOnTransferMsg::InitTransfer(get_init_transfer_msg(DEFAULT_ETH_USER_ADDRESS, 0, 0)),
     );
 
     let storage_balance = contract

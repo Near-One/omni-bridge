@@ -197,15 +197,21 @@ impl Contract {
     }
 
     pub fn required_balance_for_fast_transfer(&self) -> NearToken {
-        let key_len = borsh::to_vec(&[0u8; 32]).sdk_expect("ERR_BORSH").len() as u64;
+        let key_len: u64 = borsh::to_vec(&[0u8; 32])
+            .sdk_expect("ERR_BORSH")
+            .len()
+            .try_into()
+            .sdk_expect("ERR_CAST");
 
         let max_account_id: AccountId = "a".repeat(64).parse().sdk_expect("ERR_PARSE_ACCOUNT_ID");
-        let value_len = borsh::to_vec(&FastTransferStatus {
+        let value_len: u64 = borsh::to_vec(&FastTransferStatus {
             relayer: max_account_id,
             finalised: false,
         })
         .sdk_expect("ERR_BORSH")
-        .len() as u64;
+        .len()
+        .try_into()
+        .sdk_expect("ERR_CAST");
 
         let storage_cost = env::storage_byte_cost()
             .saturating_mul((Self::get_basic_storage() + key_len + value_len).into());
