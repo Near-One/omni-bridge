@@ -70,7 +70,7 @@ contract OmniBridge is
         string memory name = IERC20Metadata(tokenAddress).name();
         string memory symbol = IERC20Metadata(tokenAddress).symbol();
         uint8 decimals = IERC20Metadata(tokenAddress).decimals();
-    
+
         deployTokenExtension(nearTokenId, tokenAddress, decimals, originDecimals);
 
         emit BridgeTypes.DeployToken(
@@ -314,6 +314,8 @@ contract OmniBridge is
     ) external onlyRole(DEFAULT_ADMIN_ROLE) {
         nearBridgeDerivedAddress = nearBridgeDerivedAddress_;
     }
+
+    receive() external payable {}
 
     function _normalizeDecimals(
         uint8 decimals
