@@ -107,6 +107,18 @@ task("deploy-bridge-token-factory", "Deploys the OmniBridge contract")
     )
   })
 
+task("deploy-token-factory-impl", "Deploys the BridgeToken Factory implementation").setAction(async (_, hre) => {
+  const { ethers } = hre
+  const OmniBridgeContractFactory = await ethers.getContractFactory("OmniBridge")
+  const OmniBridgeContract = await OmniBridgeContractFactory.deploy()
+  await OmniBridgeContract.waitForDeployment()
+  console.log(
+    JSON.stringify({
+      tokenImplAddress: await OmniBridgeContract.getAddress(),
+    }),
+  )
+})
+
 task("deploy-token-impl", "Deploys the BridgeToken implementation").setAction(async (_, hre) => {
   const { ethers } = hre
   const BridgeTokenContractFactory = await ethers.getContractFactory("BridgeToken")
