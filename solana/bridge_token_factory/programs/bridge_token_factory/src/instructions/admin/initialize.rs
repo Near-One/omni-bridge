@@ -94,6 +94,7 @@ impl Initialize<'_> {
         &mut self,
         admin: Pubkey,
         pausable_admin: Pubkey,
+        metadata_admin: Pubkey,
         derived_near_bridge_address: [u8; 64],
         config_bump: u8,
         authority_bump: u8,
@@ -118,7 +119,8 @@ impl Initialize<'_> {
             },
             paused: 0,
             pausable_admin,
-            padding: [0; 67],
+            metadata_admin,
+            padding: [0; 35],
         });
 
         let rent = Rent::get()?;

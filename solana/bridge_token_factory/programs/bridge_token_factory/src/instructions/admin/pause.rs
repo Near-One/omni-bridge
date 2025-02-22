@@ -16,7 +16,7 @@ pub struct Pause<'info> {
 
     #[account(
         mut,
-        constraint = signer.key() == config.pausable_admin || signer.key() == config.admin @ 
+        constraint = signer.key() == config.pausable_admin || signer.key() == config.admin @
             crate::error::ErrorCode::Unauthorized,
     )]
     pub signer: Signer<'info>,
