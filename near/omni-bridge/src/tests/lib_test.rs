@@ -117,6 +117,33 @@ fn run_ft_on_transfer(
     contract.ft_on_transfer(sender_id, amount, msg)
 }
 
+fn run_ft_on_transfer_legacy(
+    contract: &mut Contract,
+    sender_id: String,
+    token_id: String,
+    amount: U128,
+    attached_deposit: Option<NearToken>,
+    msg: &InitTransferMsg,
+) -> PromiseOrValue<U128> {
+    let sender_id = AccountId::try_from(sender_id).expect("Invalid sender ID");
+    let token_id = AccountId::try_from(token_id).expect("Invalid token ID");
+
+    let attached_deposit = if let Some(deplosit) = attached_deposit {
+        deplosit
+    } else {
+        let min_storage_balance = contract.required_balance_for_account();
+        let init_transfer_balance = contract.required_balance_for_init_transfer();
+        min_storage_balance.saturating_add(init_transfer_balance)
+    };
+
+    run_storage_deposit(contract, sender_id.clone(), attached_deposit);
+    setup_test_env(token_id.clone(), NearToken::from_yoctonear(0), None);
+
+    let msg = serde_json::to_string(msg).expect("Failed to serialize transfer message");
+
+    contract.ft_on_transfer(sender_id, amount, msg)
+}
+
 #[test]
 fn test_initialize_contract() {
     let contract = get_default_contract();
@@ -834,5 +861,19 @@ fn test_get_bridged_token() {
         contract.get_bridged_token(&near_source, ChainKind::Near),
         Some(near_source.clone()),
         "Failed to handle NEAR to NEAR resolution"
+    );
+}
+
+#[test]
+fn test_legacy_ft_on_transfer() {
+    let mut contract = get_default_contract();
+
+    run_ft_on_transfer_legacy(
+        &mut contract,
+        DEFAULT_NEAR_USER_ACCOUNT.to_string(),
+        DEFAULT_FT_CONTRACT_ACCOUNT.to_string(),
+        U128(100),
+        None,
+        &get_init_transfer_msg(DEFAULT_ETH_USER_ADDRESS, 0, 0),
     );
 }
