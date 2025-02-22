@@ -5217,8 +5217,9 @@ dependencies = [
 
 [[package]]
 name = "near-lake-framework"
-version = "0.0.0"
-source = "git+https://github.com/near/near-lake-framework-rs?rev=acce8ea4f801df17f36991d1480af2a948ba6c73#acce8ea4f801df17f36991d1480af2a948ba6c73"
+version = "0.7.11"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5b71ff26c06b518f1e0c3ac7435cd735d93057362b22446dd01a27308e024720"
 dependencies = [
  "anyhow",
  "async-stream",
