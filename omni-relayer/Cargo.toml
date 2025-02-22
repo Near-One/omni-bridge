@@ -1,6 +1,6 @@
 [package]
 name = "omni-relayer"
-version = "0.3.4"
+version = "0.3.5"
 edition = "2021"
 resolver = "2"
 repository = "https://github.com/Near-One/omni-bridge"
@@ -29,7 +29,7 @@ solana-transaction-status = "2.1.9"
 solana-rpc-client-api = "2.1.9"
 
 ethereum-types = "0.14.1"
-omni-types = { git = "https://github.com/near-one/omni-bridge", package = "omni-types", rev = "4e741af2e233b8764dc56a5205f7bb1155c34b2f" }
+omni-types = { git = "https://github.com/near-one/omni-bridge", package = "omni-types", rev = "06b273b9986abf42e0e9a52ca279c6c3a941c405" }
 
 near-lake-framework = "0.7.11"
 near-jsonrpc-client = "0.15.1"

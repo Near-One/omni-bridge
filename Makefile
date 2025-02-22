@@ -58,8 +58,27 @@ rust-build-mock-token:
 
 rust-build-near: rust-build-omni-bridge rust-build-omni-token rust-build-token-deployer rust-build-omni-prover rust-build-evm-prover rust-build-wormhole-omni-prover-proxy rust-build-mock-prover rust-build-mock-token
 
-rust-build-solana:
-	cd solana/bridge_token_factory && RUSTUP_TOOLCHAIN="nightly-2024-11-19" anchor build --verifiable
+solana-generate-program-id:
+	solana-keygen new -o solana/bridge_token_factory/target/deploy/bridge_token_factory-keypair.json --no-passphrase
+
+solana-build-dev: ENV = devnet
+solana-build: ENV = mainnet
+solana-build-dev solana-build:
+	cd solana/bridge_token_factory && \
+	PROGRAM_ID=$$(solana address -k target/deploy/bridge_token_factory-keypair.json) && \
+	RUSTUP_TOOLCHAIN="nightly-2024-11-19" anchor build --verifiable --env "PROGRAM_ID=$$PROGRAM_ID" -- --no-default-features --features $(ENV)
+
+solana-build-ci:
+	cd solana/bridge_token_factory && \
+	export PROGRAM_ID=dahPEoZGXfyV58JqqH85okdHmpN8U2q8owgPUXSCPxe && \
+	RUSTUP_TOOLCHAIN="nightly-2024-11-19" anchor build --env "PROGRAM_ID=$$PROGRAM_ID" -- --no-default-features --features mainnet
+
+solana-deploy-dev: ENV = devnet
+solana-deploy: ENV = mainnet
+solana-deploy-dev solana-deploy:
+	cd solana/bridge_token_factory && \
+	RUSTUP_TOOLCHAIN="nightly-2024-11-19" \
+	anchor deploy --verifiable --program-name bridge_token_factory --provider.cluster $(ENV)
 
 rust-run-tests:
 	cargo nextest run --manifest-path $(NEAR_MANIFEST)
