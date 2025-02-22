@@ -1198,7 +1198,7 @@ dependencies = [
  "fastrand",
  "hex",
  "http 0.2.12",
- "ring 0.17.9",
+ "ring 0.17.10",
  "time",
  "tokio",
  "tracing",
@@ -1366,7 +1366,7 @@ dependencies = [
  "once_cell",
  "p256",
  "percent-encoding",
- "ring 0.17.9",
+ "ring 0.17.10",
  "sha2 0.10.8",
  "subtle",
  "time",
@@ -1821,7 +1821,7 @@ dependencies = [
 [[package]]
 name = "bridge-connector-common"
 version = "0.2.0"
-source = "git+https://github.com/Near-One/bridge-sdk-rs#b49b99dc25a280e118596e3478046a31a074b060"
+source = "git+https://github.com/Near-One/bridge-sdk-rs#e2c09080a7bff92e04229592b77815f2798cd01e"
 dependencies = [
  "eth-proof",
  "ethers",
@@ -3142,7 +3142,7 @@ dependencies = [
 [[package]]
 name = "eth-proof"
 version = "0.2.0"
-source = "git+https://github.com/Near-One/bridge-sdk-rs#b49b99dc25a280e118596e3478046a31a074b060"
+source = "git+https://github.com/Near-One/bridge-sdk-rs#e2c09080a7bff92e04229592b77815f2798cd01e"
 dependencies = [
  "borsh 1.5.5",
  "cita_trie",
@@ -3511,7 +3511,7 @@ dependencies = [
 [[package]]
 name = "evm-bridge-client"
 version = "0.2.0"
-source = "git+https://github.com/Near-One/bridge-sdk-rs#b49b99dc25a280e118596e3478046a31a074b060"
+source = "git+https://github.com/Near-One/bridge-sdk-rs#e2c09080a7bff92e04229592b77815f2798cd01e"
 dependencies = [
  "borsh 1.5.5",
  "bridge-connector-common",
@@ -5007,9 +5007,9 @@ checksum = "68354c5c6bd36d73ff3feceb05efa59b6acb7626617f4962be322a825e61f79a"
 
 [[package]]
 name = "miniz_oxide"
-version = "0.8.4"
+version = "0.8.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b3b1c9bd4fe1f0f8b387f6eb9eb3b4a1aa26185e5750efb9140301703f62cd1b"
+checksum = "8e3e04debbb59698c15bacbb6d93584a8c0ca9cc3213cb423d31f760d8843ce5"
 dependencies = [
  "adler2",
 ]
@@ -5068,7 +5068,7 @@ dependencies = [
 [[package]]
 name = "near-bridge-client"
 version = "0.2.0"
-source = "git+https://github.com/Near-One/bridge-sdk-rs#b49b99dc25a280e118596e3478046a31a074b060"
+source = "git+https://github.com/Near-One/bridge-sdk-rs#e2c09080a7bff92e04229592b77815f2798cd01e"
 dependencies = [
  "borsh 1.5.5",
  "bridge-connector-common",
@@ -5251,7 +5251,7 @@ dependencies = [
 [[package]]
 name = "near-light-client-on-eth"
 version = "0.2.0"
-source = "git+https://github.com/Near-One/bridge-sdk-rs#b49b99dc25a280e118596e3478046a31a074b060"
+source = "git+https://github.com/Near-One/bridge-sdk-rs#e2c09080a7bff92e04229592b77815f2798cd01e"
 dependencies = [
  "ethereum-types 0.14.1",
  "ethers",
@@ -5344,7 +5344,7 @@ dependencies = [
 [[package]]
 name = "near-rpc-client"
 version = "0.2.0"
-source = "git+https://github.com/Near-One/bridge-sdk-rs#b49b99dc25a280e118596e3478046a31a074b060"
+source = "git+https://github.com/Near-One/bridge-sdk-rs#e2c09080a7bff92e04229592b77815f2798cd01e"
 dependencies = [
  "borsh 1.5.5",
  "lazy_static",
@@ -5700,7 +5700,7 @@ dependencies = [
 [[package]]
 name = "omni-connector"
 version = "0.2.5"
-source = "git+https://github.com/Near-One/bridge-sdk-rs#b49b99dc25a280e118596e3478046a31a074b060"
+source = "git+https://github.com/Near-One/bridge-sdk-rs#e2c09080a7bff92e04229592b77815f2798cd01e"
 dependencies = [
  "borsh 1.5.5",
  "bridge-connector-common",
@@ -6394,7 +6394,7 @@ dependencies = [
  "bytes",
  "getrandom 0.2.15",
  "rand 0.8.5",
- "ring 0.17.9",
+ "ring 0.17.10",
  "rustc-hash",
  "rustls 0.23.23",
  "rustls-pki-types",
@@ -6764,9 +6764,9 @@ dependencies = [
 
 [[package]]
 name = "ring"
-version = "0.17.9"
+version = "0.17.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e75ec5e92c4d8aede845126adc388046234541629e76029599ed35a003c7ed24"
+checksum = "d34b5020fcdea098ef7d95e9f89ec15952123a4a039badd09fabebe9e963e839"
 dependencies = [
  "cc",
  "cfg-if 1.0.0",
@@ -6914,7 +6914,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3f56a14d1f48b391359b22f731fd4bd7e43c97f3c50eee276f3aa09c94784d3e"
 dependencies = [
  "log",
- "ring 0.17.9",
+ "ring 0.17.10",
  "rustls-webpki 0.101.7",
  "sct",
 ]
@@ -6926,7 +6926,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "47796c98c480fce5406ef69d1c76378375492c3b0a0de587be0c1d9feb12f395"
 dependencies = [
  "once_cell",
- "ring 0.17.9",
+ "ring 0.17.10",
  "rustls-pki-types",
  "rustls-webpki 0.102.8",
  "subtle",
@@ -7018,7 +7018,7 @@ version = "0.101.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8b6275d1ee7a1cd780b64aca7726599a1dbc893b1e64144529e55c3c2f745765"
 dependencies = [
- "ring 0.17.9",
+ "ring 0.17.10",
  "untrusted 0.9.0",
 ]
 
@@ -7028,7 +7028,7 @@ version = "0.102.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "64ca1bc8749bd4cf37b5ce386cc146580777b4e8572c7b97baf22c83f444bee9"
 dependencies = [
- "ring 0.17.9",
+ "ring 0.17.10",
  "rustls-pki-types",
  "untrusted 0.9.0",
 ]
@@ -7167,7 +7167,7 @@ version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "da046153aa2352493d6cb7da4b6e5c0c057d8a1d0a9aa8560baffdd945acd414"
 dependencies = [
- "ring 0.17.9",
+ "ring 0.17.10",
  "untrusted 0.9.0",
 ]
 
@@ -7750,7 +7750,7 @@ dependencies = [
 [[package]]
 name = "solana-bridge-client"
 version = "0.2.1"
-source = "git+https://github.com/Near-One/bridge-sdk-rs#b49b99dc25a280e118596e3478046a31a074b060"
+source = "git+https://github.com/Near-One/bridge-sdk-rs#e2c09080a7bff92e04229592b77815f2798cd01e"
 dependencies = [
  "borsh 1.5.5",
  "derive_builder",
@@ -11516,7 +11516,7 @@ dependencies = [
 [[package]]
 name = "wormhole-bridge-client"
 version = "0.2.0"
-source = "git+https://github.com/Near-One/bridge-sdk-rs#b49b99dc25a280e118596e3478046a31a074b060"
+source = "git+https://github.com/Near-One/bridge-sdk-rs#e2c09080a7bff92e04229592b77815f2798cd01e"
 dependencies = [
  "bridge-connector-common",
  "derive_builder",
