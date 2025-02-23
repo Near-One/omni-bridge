@@ -533,7 +533,7 @@ pub struct FastTransfer {
 impl FastTransfer {
     #[allow(clippy::missing_panics_doc)]
     pub fn id(&self) -> FastTransferId {
-        FastTransferId(utils::keccak256(&borsh::to_vec(self).unwrap()))
+        FastTransferId(near_sdk::env::sha256_array(&borsh::to_vec(self).unwrap()))
     }
 }
 
