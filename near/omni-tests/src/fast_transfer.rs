@@ -502,507 +502,527 @@ mod tests {
         Ok(balance)
     }
 
-    #[tokio::test]
-    async fn test_fast_transfer_to_near() -> anyhow::Result<()> {
-        let env = TestEnv::new_with_native_token().await?;
+    mod transfer_to_near {
+        use super::*;
 
-        let transfer_amount = 100;
-        let transfer_msg = get_transfer_msg_to_near(&env, transfer_amount);
-        let fast_transfer_msg = get_fast_transfer_msg(&env, transfer_msg);
+        #[tokio::test]
+        async fn succeeds_with_native_token() -> anyhow::Result<()> {
+            let env = TestEnv::new_with_native_token().await?;
 
-        let relayer_balance_before =
-            get_balance(&env.token_contract, env.relayer_account.id()).await?;
-        let contract_balance_before =
-            get_balance(&env.token_contract, env.bridge_contract.id()).await?;
+            let transfer_amount = 100;
+            let transfer_msg = get_transfer_msg_to_near(&env, transfer_amount);
+            let fast_transfer_msg = get_fast_transfer_msg(&env, transfer_msg);
 
-        let result = do_fast_transfer(&env, transfer_amount, fast_transfer_msg).await?;
+            let relayer_balance_before =
+                get_balance(&env.token_contract, env.relayer_account.id()).await?;
+            let contract_balance_before =
+                get_balance(&env.token_contract, env.bridge_contract.id()).await?;
 
-        assert_eq!(0, result.failures().len());
+            let result = do_fast_transfer(&env, transfer_amount, fast_transfer_msg).await?;
 
-        let recipient_balance: U128 = get_balance(&env.token_contract, &account_n(1)).await?;
-        let relayer_balance_after =
-            get_balance(&env.token_contract, env.relayer_account.id()).await?;
-        let contract_balance_after =
-            get_balance(&env.token_contract, env.bridge_contract.id()).await?;
+            assert_eq!(0, result.failures().len());
 
-        assert_eq!(transfer_amount, recipient_balance.0);
-        assert_eq!(contract_balance_before, contract_balance_after);
-        assert_eq!(
-            relayer_balance_before,
-            U128(relayer_balance_after.0 + transfer_amount)
-        );
+            let recipient_balance: U128 = get_balance(&env.token_contract, &account_n(1)).await?;
+            let relayer_balance_after =
+                get_balance(&env.token_contract, env.relayer_account.id()).await?;
+            let contract_balance_after =
+                get_balance(&env.token_contract, env.bridge_contract.id()).await?;
 
-        Ok(())
+            assert_eq!(transfer_amount, recipient_balance.0);
+            assert_eq!(contract_balance_before, contract_balance_after);
+            assert_eq!(
+                relayer_balance_before,
+                U128(relayer_balance_after.0 + transfer_amount)
+            );
+
+            Ok(())
+        }
+
+        #[tokio::test]
+        async fn succeeds_with_bridged_token() -> anyhow::Result<()> {
+            let env = TestEnv::new_with_bridged_token().await?;
+
+            let transfer_amount = 100;
+            let transfer_msg = get_transfer_msg_to_near(&env, transfer_amount);
+            let fast_transfer_msg = get_fast_transfer_msg(&env, transfer_msg);
+
+            let relayer_balance_before =
+                get_balance(&env.token_contract, env.relayer_account.id()).await?;
+            let contract_balance_before =
+                get_balance(&env.token_contract, env.bridge_contract.id()).await?;
+
+            assert_eq!(U128(0), contract_balance_before);
+
+            let result = do_fast_transfer(&env, transfer_amount, fast_transfer_msg).await?;
+
+            assert_eq!(0, result.failures().len());
+
+            let recipient_balance: U128 = get_balance(&env.token_contract, &account_n(1)).await?;
+            let relayer_balance_after =
+                get_balance(&env.token_contract, env.relayer_account.id()).await?;
+            let contract_balance_after =
+                get_balance(&env.token_contract, env.bridge_contract.id()).await?;
+
+            assert_eq!(transfer_amount, recipient_balance.0);
+            assert_eq!(U128(0), contract_balance_after);
+            assert_eq!(
+                relayer_balance_before,
+                U128(relayer_balance_after.0 + transfer_amount)
+            );
+
+            Ok(())
+        }
+
+        #[tokio::test]
+        async fn fails_due_to_bad_storage_deposit() -> anyhow::Result<()> {
+            let env = TestEnv::new_with_bridged_token().await?;
+
+            let transfer_amount = 100;
+            let transfer_msg = get_transfer_msg_to_near(&env, transfer_amount);
+            let mut fast_transfer_msg = get_fast_transfer_msg(&env, transfer_msg);
+            fast_transfer_msg.storage_deposit_amount =
+                Some(NEP141_DEPOSIT.saturating_mul(100).as_yoctonear());
+
+            let relayer_balance_before =
+                get_balance(&env.token_contract, env.relayer_account.id()).await?;
+            let contract_balance_before =
+                get_balance(&env.token_contract, env.bridge_contract.id()).await?;
+
+            assert_eq!(U128(0), contract_balance_before);
+
+            let result = do_fast_transfer(&env, transfer_amount, fast_transfer_msg).await?;
+
+            assert_eq!(1, result.failures().len());
+            let failure = result.failures()[0].clone().into_result();
+            assert!(failure
+                .is_err_and(|err| { format!("{err:?}").contains("Not enough storage deposited") }));
+
+            let recipient_balance: U128 = get_balance(&env.token_contract, &account_n(1)).await?;
+            let relayer_balance_after =
+                get_balance(&env.token_contract, env.relayer_account.id()).await?;
+            let contract_balance_after =
+                get_balance(&env.token_contract, env.bridge_contract.id()).await?;
+
+            assert_eq!(0, recipient_balance.0);
+            assert_eq!(U128(0), contract_balance_after);
+            assert_eq!(relayer_balance_before, relayer_balance_after);
+
+            Ok(())
+        }
+
+        #[tokio::test]
+        async fn succeeds_with_different_amount() -> anyhow::Result<()> {
+            let env = TestEnv::new_with_native_token().await?;
+
+            let transfer_amount = 100;
+            let transfer_msg = get_transfer_msg_to_near(&env, transfer_amount);
+            let fast_transfer_msg = get_fast_transfer_msg(&env, transfer_msg);
+
+            do_fast_transfer(&env, transfer_amount, fast_transfer_msg.clone()).await?;
+
+            let OmniAddress::Near(recipient) = fast_transfer_msg.recipient.clone() else {
+                panic!("Recipient is not a Near address");
+            };
+
+            let relayer_balance_before =
+                get_balance(&env.token_contract, env.relayer_account.id()).await?;
+            let contract_balance_before =
+                get_balance(&env.token_contract, env.bridge_contract.id()).await?;
+            let recipient_balance_before = get_balance(&env.token_contract, &recipient).await?;
+
+            let transfer_amount = transfer_amount + 10;
+            let result = do_fast_transfer(&env, transfer_amount, fast_transfer_msg).await?;
+
+            assert_eq!(0, result.failures().len());
+
+            let recipient_balance: U128 = get_balance(&env.token_contract, &account_n(1)).await?;
+            let relayer_balance_after =
+                get_balance(&env.token_contract, env.relayer_account.id()).await?;
+            let contract_balance_after =
+                get_balance(&env.token_contract, env.bridge_contract.id()).await?;
+
+            assert_eq!(
+                recipient_balance_before.0 + transfer_amount,
+                recipient_balance.0
+            );
+            assert_eq!(contract_balance_before, contract_balance_after);
+            assert_eq!(
+                relayer_balance_before,
+                U128(relayer_balance_after.0 + transfer_amount)
+            );
+
+            Ok(())
+        }
+
+        #[tokio::test]
+        async fn fails_due_to_duplicate_transfer() -> anyhow::Result<()> {
+            let env = TestEnv::new_with_native_token().await?;
+
+            let transfer_amount = 100;
+            let transfer_msg = get_transfer_msg_to_near(&env, transfer_amount);
+            let fast_transfer_msg = get_fast_transfer_msg(&env, transfer_msg);
+
+            do_fast_transfer(&env, transfer_amount, fast_transfer_msg.clone()).await?;
+
+            let OmniAddress::Near(recipient) = fast_transfer_msg.recipient.clone() else {
+                panic!("Recipient is not a Near address");
+            };
+
+            let relayer_balance_before =
+                get_balance(&env.token_contract, env.relayer_account.id()).await?;
+            let contract_balance_before =
+                get_balance(&env.token_contract, env.bridge_contract.id()).await?;
+            let recipient_balance_before = get_balance(&env.token_contract, &recipient).await?;
+
+            let result = do_fast_transfer(&env, transfer_amount, fast_transfer_msg).await?;
+            assert_eq!(1, result.failures().len());
+
+            let failure = result.failures()[0].clone().into_result();
+            assert!(failure.is_err_and(|err| {
+                format!("{err:?}").contains("Fast transfer is already performed")
+            }));
+
+            let relayer_balance_after =
+                get_balance(&env.token_contract, env.relayer_account.id()).await?;
+            let contract_balance_after =
+                get_balance(&env.token_contract, env.bridge_contract.id()).await?;
+            let recipient_balance_after = get_balance(&env.token_contract, &recipient).await?;
+
+            assert_eq!(relayer_balance_before, relayer_balance_after);
+            assert_eq!(contract_balance_before, contract_balance_after);
+            assert_eq!(recipient_balance_before, recipient_balance_after);
+
+            Ok(())
+        }
+
+        #[tokio::test]
+        async fn fails_due_to_duplicate_transfer_with_bridged_token() -> anyhow::Result<()> {
+            let env = TestEnv::new_with_bridged_token().await?;
+
+            let transfer_amount = 100;
+            let transfer_msg = get_transfer_msg_to_near(&env, transfer_amount);
+            let fast_transfer_msg = get_fast_transfer_msg(&env, transfer_msg);
+
+            do_fast_transfer(&env, transfer_amount, fast_transfer_msg.clone()).await?;
+
+            let OmniAddress::Near(recipient) = fast_transfer_msg.recipient.clone() else {
+                panic!("Recipient is not a Near address");
+            };
+
+            let relayer_balance_before =
+                get_balance(&env.token_contract, env.relayer_account.id()).await?;
+            let contract_balance_before =
+                get_balance(&env.token_contract, env.bridge_contract.id()).await?;
+            let recipient_balance_before = get_balance(&env.token_contract, &recipient).await?;
+
+            assert_eq!(U128(0), contract_balance_before);
+
+            let result = do_fast_transfer(&env, transfer_amount, fast_transfer_msg).await?;
+            assert!(!result.failures().is_empty());
+
+            let failure = result.failures()[0].clone().into_result();
+            assert!(failure.is_err_and(|err| {
+                format!("{err:?}").contains("Fast transfer is already performed")
+            }));
+
+            let relayer_balance_after =
+                get_balance(&env.token_contract, env.relayer_account.id()).await?;
+            let contract_balance_after =
+                get_balance(&env.token_contract, env.bridge_contract.id()).await?;
+            let recipient_balance_after = get_balance(&env.token_contract, &recipient).await?;
+
+            assert_eq!(relayer_balance_before, relayer_balance_after);
+            assert_eq!(U128(0), contract_balance_after);
+            assert_eq!(recipient_balance_before, recipient_balance_after);
+
+            Ok(())
+        }
     }
 
-    #[tokio::test]
-    async fn test_fast_transfer_to_near_bridged_token() -> anyhow::Result<()> {
-        let env = TestEnv::new_with_bridged_token().await?;
+    mod finalisation_to_near {
+        use super::*;
 
-        let transfer_amount = 100;
-        let transfer_msg = get_transfer_msg_to_near(&env, transfer_amount);
-        let fast_transfer_msg = get_fast_transfer_msg(&env, transfer_msg);
+        #[tokio::test]
+        async fn succeeds() -> anyhow::Result<()> {
+            let env = TestEnv::new_with_native_token().await?;
 
-        let relayer_balance_before =
-            get_balance(&env.token_contract, env.relayer_account.id()).await?;
-        let contract_balance_before =
-            get_balance(&env.token_contract, env.bridge_contract.id()).await?;
+            let transfer_amount = 100;
+            let transfer_msg = get_transfer_msg_to_near(&env, transfer_amount);
+            let fast_transfer_msg = get_fast_transfer_msg(&env, transfer_msg.clone());
 
-        assert_eq!(U128(0), contract_balance_before);
+            do_fast_transfer(&env, transfer_amount, fast_transfer_msg.clone()).await?;
 
-        let result = do_fast_transfer(&env, transfer_amount, fast_transfer_msg).await?;
+            let relayer_balance_before =
+                get_balance(&env.token_contract, env.relayer_account.id()).await?;
+            let recipient_balance_before = get_balance(&env.token_contract, &account_n(1)).await?;
 
-        assert_eq!(0, result.failures().len());
+            do_fin_transfer(&env, transfer_msg).await?;
 
-        let recipient_balance: U128 = get_balance(&env.token_contract, &account_n(1)).await?;
-        let relayer_balance_after =
-            get_balance(&env.token_contract, env.relayer_account.id()).await?;
-        let contract_balance_after =
-            get_balance(&env.token_contract, env.bridge_contract.id()).await?;
+            let relayer_balance_after =
+                get_balance(&env.token_contract, env.relayer_account.id()).await?;
+            let recipient_balance_after = get_balance(&env.token_contract, &account_n(1)).await?;
 
-        assert_eq!(transfer_amount, recipient_balance.0);
-        assert_eq!(U128(0), contract_balance_after);
-        assert_eq!(
-            relayer_balance_before,
-            U128(relayer_balance_after.0 + transfer_amount)
-        );
+            assert_eq!(
+                transfer_amount,
+                relayer_balance_after.0 - relayer_balance_before.0
+            );
+            assert_eq!(recipient_balance_after, recipient_balance_before);
 
-        Ok(())
+            Ok(())
+        }
+
+        #[tokio::test]
+        async fn fails_due_to_duplicate_finalisation() -> anyhow::Result<()> {
+            let env = TestEnv::new_with_native_token().await?;
+
+            let transfer_amount = 100;
+            let transfer_msg = get_transfer_msg_to_near(&env, transfer_amount);
+            let fast_transfer_msg = get_fast_transfer_msg(&env, transfer_msg.clone());
+
+            do_fast_transfer(&env, transfer_amount, fast_transfer_msg.clone()).await?;
+
+            do_fin_transfer(&env, transfer_msg.clone()).await?;
+            let result = do_fin_transfer(&env, transfer_msg).await;
+
+            assert!(result.is_err_and(|err| {
+                println!("err: {err:?}");
+                format!("{err:?}").contains("The transfer is already finalised")
+            }));
+
+            Ok(())
+        }
     }
 
-    #[tokio::test]
-    async fn test_fast_transfer_to_near_bad_storage_deposit() -> anyhow::Result<()> {
-        let env = TestEnv::new_with_bridged_token().await?;
+    mod transfer_to_other_chain {
+        use super::*;
 
-        let transfer_amount = 100;
-        let transfer_msg = get_transfer_msg_to_near(&env, transfer_amount);
-        let mut fast_transfer_msg = get_fast_transfer_msg(&env, transfer_msg);
-        fast_transfer_msg.storage_deposit_amount =
-            Some(NEP141_DEPOSIT.saturating_mul(100).as_yoctonear());
+        #[tokio::test]
+        async fn succeeds_with_native_token() -> anyhow::Result<()> {
+            let env = TestEnv::new_with_native_token().await?;
 
-        let relayer_balance_before =
-            get_balance(&env.token_contract, env.relayer_account.id()).await?;
-        let contract_balance_before =
-            get_balance(&env.token_contract, env.bridge_contract.id()).await?;
+            let transfer_amount = 100;
+            let transfer_msg = get_transfer_msg_to_other_chain(&env, transfer_amount);
+            let fast_transfer_msg = get_fast_transfer_msg(&env, transfer_msg.clone());
 
-        assert_eq!(U128(0), contract_balance_before);
+            let relayer_balance_before =
+                get_balance(&env.token_contract, env.relayer_account.id()).await?;
+            let contract_balance_before =
+                get_balance(&env.token_contract, env.bridge_contract.id()).await?;
 
-        let result = do_fast_transfer(&env, transfer_amount, fast_transfer_msg).await?;
+            let result = do_fast_transfer(&env, transfer_amount, fast_transfer_msg.clone()).await?;
 
-        assert_eq!(1, result.failures().len());
-        let failure = result.failures()[0].clone().into_result();
-        assert!(failure
-            .is_err_and(|err| { format!("{err:?}").contains("Not enough storage deposited") }));
+            assert_eq!(0, result.failures().len());
 
-        let recipient_balance: U128 = get_balance(&env.token_contract, &account_n(1)).await?;
-        let relayer_balance_after =
-            get_balance(&env.token_contract, env.relayer_account.id()).await?;
-        let contract_balance_after =
-            get_balance(&env.token_contract, env.bridge_contract.id()).await?;
+            //get_transfer_message
+            let transfer_message: TransferMessage = env
+                .bridge_contract
+                .view("get_transfer_message")
+                .args_json(json!({
+                    "transfer_id": TransferId {
+                        origin_chain: ChainKind::Near,
+                        origin_nonce: 1,
+                    },
+                }))
+                .await?
+                .json()?;
 
-        assert_eq!(0, recipient_balance.0);
-        assert_eq!(U128(0), contract_balance_after);
-        assert_eq!(relayer_balance_before, relayer_balance_after);
+            assert_eq!(
+                OmniAddress::Near(env.token_contract.id().clone()),
+                transfer_message.token
+            );
+            assert_eq!(transfer_amount, transfer_message.amount.0);
+            assert_eq!(fast_transfer_msg.recipient, transfer_message.recipient);
+            assert_eq!(fast_transfer_msg.fee, transfer_message.fee);
+            assert_eq!(fast_transfer_msg.msg, transfer_message.msg);
+            assert_eq!(
+                OmniAddress::Near(env.relayer_account.id().clone()),
+                transfer_message.sender
+            );
 
-        Ok(())
+            let relayer_balance_after =
+                get_balance(&env.token_contract, env.relayer_account.id()).await?;
+            let contract_balance_after =
+                get_balance(&env.token_contract, env.bridge_contract.id()).await?;
+
+            assert_eq!(
+                contract_balance_before,
+                U128(contract_balance_after.0 - transfer_amount)
+            );
+            assert_eq!(
+                relayer_balance_before,
+                U128(relayer_balance_after.0 + transfer_amount)
+            );
+
+            Ok(())
+        }
+
+        #[tokio::test]
+        async fn succeeds_with_bridged_token() -> anyhow::Result<()> {
+            let env = TestEnv::new_with_bridged_token().await?;
+
+            let transfer_amount = 100;
+            let transfer_msg = get_transfer_msg_to_other_chain(&env, transfer_amount);
+            let fast_transfer_msg = get_fast_transfer_msg(&env, transfer_msg.clone());
+
+            let relayer_balance_before =
+                get_balance(&env.token_contract, env.relayer_account.id()).await?;
+            let contract_balance_before =
+                get_balance(&env.token_contract, env.bridge_contract.id()).await?;
+
+            assert_eq!(U128(0), contract_balance_before);
+
+            let result = do_fast_transfer(&env, transfer_amount, fast_transfer_msg.clone()).await?;
+
+            assert_eq!(0, result.failures().len());
+
+            let relayer_balance_after =
+                get_balance(&env.token_contract, env.relayer_account.id()).await?;
+            let contract_balance_after =
+                get_balance(&env.token_contract, env.bridge_contract.id()).await?;
+
+            assert_eq!(U128(0), contract_balance_after);
+            assert_eq!(
+                relayer_balance_before,
+                U128(relayer_balance_after.0 + transfer_amount)
+            );
+
+            Ok(())
+        }
+
+        #[tokio::test]
+        async fn fails_due_to_duplicate_transfer() -> anyhow::Result<()> {
+            let env = TestEnv::new_with_native_token().await?;
+
+            let transfer_amount = 100;
+            let transfer_msg = get_transfer_msg_to_other_chain(&env, transfer_amount);
+            let fast_transfer_msg = get_fast_transfer_msg(&env, transfer_msg.clone());
+
+            do_fast_transfer(&env, transfer_amount, fast_transfer_msg.clone()).await?;
+
+            let relayer_balance_before =
+                get_balance(&env.token_contract, env.relayer_account.id()).await?;
+            let contract_balance_before =
+                get_balance(&env.token_contract, env.bridge_contract.id()).await?;
+
+            let result = do_fast_transfer(&env, transfer_amount, fast_transfer_msg).await?;
+
+            assert_eq!(1, result.failures().len());
+
+            let failure = result.failures()[0].clone().into_result();
+            assert!(failure.is_err_and(|err| {
+                format!("{err:?}").contains("Fast transfer is already performed")
+            }));
+
+            let relayer_balance_after =
+                get_balance(&env.token_contract, env.relayer_account.id()).await?;
+            let contract_balance_after =
+                get_balance(&env.token_contract, env.bridge_contract.id()).await?;
+
+            assert_eq!(relayer_balance_before, relayer_balance_after);
+            assert_eq!(contract_balance_before, contract_balance_after);
+
+            Ok(())
+        }
+
+        #[tokio::test]
+        async fn fails_due_to_already_finalised() -> anyhow::Result<()> {
+            let env = TestEnv::new_with_bridged_token().await?;
+
+            let transfer_amount = 100;
+            let transfer_msg = get_transfer_msg_to_other_chain(&env, transfer_amount);
+            let fast_transfer_msg = get_fast_transfer_msg(&env, transfer_msg.clone());
+
+            do_fin_transfer(&env, transfer_msg).await?;
+
+            let relayer_balance_before =
+                get_balance(&env.token_contract, env.relayer_account.id()).await?;
+            let contract_balance_before =
+                get_balance(&env.token_contract, env.bridge_contract.id()).await?;
+
+            assert_eq!(U128(0), contract_balance_before);
+
+            let result = do_fast_transfer(&env, transfer_amount, fast_transfer_msg).await?;
+
+            let relayer_balance_after =
+                get_balance(&env.token_contract, env.relayer_account.id()).await?;
+            let contract_balance_after =
+                get_balance(&env.token_contract, env.bridge_contract.id()).await?;
+
+            assert_eq!(relayer_balance_before, relayer_balance_after);
+            assert_eq!(U128(0), contract_balance_after);
+
+            assert_eq!(1, result.failures().len());
+            let failure = result.failures()[0].clone().into_result();
+            assert!(failure.is_err_and(|err| {
+                format!("{err:?}").contains("ERR_TRANSFER_ALREADY_FINALISED")
+            }));
+
+            Ok(())
+        }
     }
 
-    #[tokio::test]
-    async fn test_fast_transfer_to_near_different_amount() -> anyhow::Result<()> {
-        let env = TestEnv::new_with_native_token().await?;
-
-        let transfer_amount = 100;
-        let transfer_msg = get_transfer_msg_to_near(&env, transfer_amount);
-        let fast_transfer_msg = get_fast_transfer_msg(&env, transfer_msg);
+    mod finalisation_to_other_chain {
+        use super::*;
 
-        do_fast_transfer(&env, transfer_amount, fast_transfer_msg.clone()).await?;
-
-        let OmniAddress::Near(recipient) = fast_transfer_msg.recipient.clone() else {
-            panic!("Recipient is not a Near address");
-        };
-
-        let relayer_balance_before =
-            get_balance(&env.token_contract, env.relayer_account.id()).await?;
-        let contract_balance_before =
-            get_balance(&env.token_contract, env.bridge_contract.id()).await?;
-        let recipient_balance_before = get_balance(&env.token_contract, &recipient).await?;
-
-        let transfer_amount = transfer_amount + 10;
-        let result = do_fast_transfer(&env, transfer_amount, fast_transfer_msg).await?;
-
-        assert_eq!(0, result.failures().len());
-
-        let recipient_balance: U128 = get_balance(&env.token_contract, &account_n(1)).await?;
-        let relayer_balance_after =
-            get_balance(&env.token_contract, env.relayer_account.id()).await?;
-        let contract_balance_after =
-            get_balance(&env.token_contract, env.bridge_contract.id()).await?;
-
-        assert_eq!(recipient_balance_before.0 + transfer_amount, recipient_balance.0);
-        assert_eq!(contract_balance_before, contract_balance_after);
-        assert_eq!(
-            relayer_balance_before,
-            U128(relayer_balance_after.0 + transfer_amount)
-        );
-
-        Ok(())
-    }
+        #[tokio::test]
+        async fn succeeds() -> anyhow::Result<()> {
+            let env = TestEnv::new_with_native_token().await?;
 
-    #[tokio::test]
-    async fn test_fast_transfer_to_near_twice() -> anyhow::Result<()> {
-        let env = TestEnv::new_with_native_token().await?;
+            let transfer_amount = 100;
+            let transfer_msg = get_transfer_msg_to_other_chain(&env, transfer_amount);
+            let fast_transfer_msg = get_fast_transfer_msg(&env, transfer_msg.clone());
 
-        let transfer_amount = 100;
-        let transfer_msg = get_transfer_msg_to_near(&env, transfer_amount);
-        let fast_transfer_msg = get_fast_transfer_msg(&env, transfer_msg);
+            do_fast_transfer(&env, transfer_amount, fast_transfer_msg.clone()).await?;
 
-        do_fast_transfer(&env, transfer_amount, fast_transfer_msg.clone()).await?;
-
-        let OmniAddress::Near(recipient) = fast_transfer_msg.recipient.clone() else {
-            panic!("Recipient is not a Near address");
-        };
+            let relayer_balance_before =
+                get_balance(&env.token_contract, env.relayer_account.id()).await?;
 
-        let relayer_balance_before =
-            get_balance(&env.token_contract, env.relayer_account.id()).await?;
-        let contract_balance_before =
-            get_balance(&env.token_contract, env.bridge_contract.id()).await?;
-        let recipient_balance_before = get_balance(&env.token_contract, &recipient).await?;
+            do_fin_transfer(&env, transfer_msg).await?;
 
-        let result = do_fast_transfer(&env, transfer_amount, fast_transfer_msg).await?;
-        assert_eq!(1, result.failures().len());
+            let transfer_message = env
+                .bridge_contract
+                .view("get_transfer_message")
+                .args_json(json!({
+                    "transfer_id": TransferId {
+                        origin_chain: ChainKind::Base,
+                        origin_nonce: 0,
+                    },
+                }))
+                .await;
 
-        let failure = result.failures()[0].clone().into_result();
-        assert!(failure.is_err_and(|err| {
-            format!("{err:?}").contains("Fast transfer is already performed")
-        }));
+            assert!(transfer_message
+                .is_err_and(|err| { format!("{err:?}").contains("The transfer does not exist") }));
 
-        let relayer_balance_after =
-            get_balance(&env.token_contract, env.relayer_account.id()).await?;
-        let contract_balance_after =
-            get_balance(&env.token_contract, env.bridge_contract.id()).await?;
-        let recipient_balance_after = get_balance(&env.token_contract, &recipient).await?;
+            let relayer_balance_after =
+                get_balance(&env.token_contract, env.relayer_account.id()).await?;
 
-        assert_eq!(relayer_balance_before, relayer_balance_after);
-        assert_eq!(contract_balance_before, contract_balance_after);
-        assert_eq!(recipient_balance_before, recipient_balance_after);
+            assert_eq!(
+                transfer_amount,
+                relayer_balance_after.0 - relayer_balance_before.0
+            );
 
-        Ok(())
-    }
+            Ok(())
+        }
 
-    #[tokio::test]
-    async fn test_fast_transfer_to_near_twice_bridged_token() -> anyhow::Result<()> {
-        let env = TestEnv::new_with_bridged_token().await?;
+        #[tokio::test]
+        async fn fails_due_to_duplicate_finalisation() -> anyhow::Result<()> {
+            let env = TestEnv::new_with_native_token().await?;
 
-        let transfer_amount = 100;
-        let transfer_msg = get_transfer_msg_to_near(&env, transfer_amount);
-        let fast_transfer_msg = get_fast_transfer_msg(&env, transfer_msg);
+            let transfer_amount = 100;
+            let transfer_msg = get_transfer_msg_to_other_chain(&env, transfer_amount);
+            let fast_transfer_msg = get_fast_transfer_msg(&env, transfer_msg.clone());
 
-        do_fast_transfer(&env, transfer_amount, fast_transfer_msg.clone()).await?;
+            do_fast_transfer(&env, transfer_amount, fast_transfer_msg.clone()).await?;
 
-        let OmniAddress::Near(recipient) = fast_transfer_msg.recipient.clone() else {
-            panic!("Recipient is not a Near address");
-        };
+            do_fin_transfer(&env, transfer_msg.clone()).await?;
+            let result = do_fin_transfer(&env, transfer_msg).await;
 
-        let relayer_balance_before =
-            get_balance(&env.token_contract, env.relayer_account.id()).await?;
-        let contract_balance_before =
-            get_balance(&env.token_contract, env.bridge_contract.id()).await?;
-        let recipient_balance_before = get_balance(&env.token_contract, &recipient).await?;
+            assert!(result.is_err_and(|err| {
+                format!("{err:?}").contains("The transfer is already finalised")
+            }));
 
-        assert_eq!(U128(0), contract_balance_before);
-
-        let result = do_fast_transfer(&env, transfer_amount, fast_transfer_msg).await?;
-        assert!(!result.failures().is_empty());
-
-        let failure = result.failures()[0].clone().into_result();
-        assert!(failure.is_err_and(|err| {
-            format!("{err:?}").contains("Fast transfer is already performed")
-        }));
-
-        let relayer_balance_after =
-            get_balance(&env.token_contract, env.relayer_account.id()).await?;
-        let contract_balance_after =
-            get_balance(&env.token_contract, env.bridge_contract.id()).await?;
-        let recipient_balance_after = get_balance(&env.token_contract, &recipient).await?;
-
-        assert_eq!(relayer_balance_before, relayer_balance_after);
-        assert_eq!(U128(0), contract_balance_after);
-        assert_eq!(recipient_balance_before, recipient_balance_after);
-
-        Ok(())
-    }
-
-    #[tokio::test]
-    async fn test_fast_transfer_to_near_finalisation() -> anyhow::Result<()> {
-        let env = TestEnv::new_with_native_token().await?;
-
-        let transfer_amount = 100;
-        let transfer_msg = get_transfer_msg_to_near(&env, transfer_amount);
-        let fast_transfer_msg = get_fast_transfer_msg(&env, transfer_msg.clone());
-
-        do_fast_transfer(&env, transfer_amount, fast_transfer_msg.clone()).await?;
-
-        let relayer_balance_before =
-            get_balance(&env.token_contract, env.relayer_account.id()).await?;
-        let recipient_balance_before = get_balance(&env.token_contract, &account_n(1)).await?;
-
-        do_fin_transfer(&env, transfer_msg).await?;
-
-        let relayer_balance_after =
-            get_balance(&env.token_contract, env.relayer_account.id()).await?;
-        let recipient_balance_after = get_balance(&env.token_contract, &account_n(1)).await?;
-
-        assert_eq!(
-            transfer_amount,
-            relayer_balance_after.0 - relayer_balance_before.0
-        );
-        assert_eq!(recipient_balance_after, recipient_balance_before);
-
-        Ok(())
-    }
-
-    #[tokio::test]
-    async fn test_fast_transfer_to_near_finalisation_twice() -> anyhow::Result<()> {
-        let env = TestEnv::new_with_native_token().await?;
-
-        let transfer_amount = 100;
-        let transfer_msg = get_transfer_msg_to_near(&env, transfer_amount);
-        let fast_transfer_msg = get_fast_transfer_msg(&env, transfer_msg.clone());
-
-        do_fast_transfer(&env, transfer_amount, fast_transfer_msg.clone()).await?;
-
-        do_fin_transfer(&env, transfer_msg.clone()).await?;
-        let result = do_fin_transfer(&env, transfer_msg).await;
-
-        assert!(result.is_err_and(|err| {
-            println!("err: {err:?}");
-            format!("{err:?}").contains("The transfer is already finalised")
-        }));
-
-        Ok(())
-    }
-
-    #[tokio::test]
-    async fn test_fast_transfer_to_other_chain() -> anyhow::Result<()> {
-        let env = TestEnv::new_with_native_token().await?;
-
-        let transfer_amount = 100;
-        let transfer_msg = get_transfer_msg_to_other_chain(&env, transfer_amount);
-        let fast_transfer_msg = get_fast_transfer_msg(&env, transfer_msg.clone());
-
-        let relayer_balance_before =
-            get_balance(&env.token_contract, env.relayer_account.id()).await?;
-        let contract_balance_before =
-            get_balance(&env.token_contract, env.bridge_contract.id()).await?;
-
-        let result = do_fast_transfer(&env, transfer_amount, fast_transfer_msg.clone()).await?;
-
-        assert_eq!(0, result.failures().len());
-
-        //get_transfer_message
-        let transfer_message: TransferMessage = env
-            .bridge_contract
-            .view("get_transfer_message")
-            .args_json(json!({
-                "transfer_id": TransferId {
-                    origin_chain: ChainKind::Near,
-                    origin_nonce: 1,
-                },
-            }))
-            .await?
-            .json()?;
-
-        assert_eq!(
-            OmniAddress::Near(env.token_contract.id().clone()),
-            transfer_message.token
-        );
-        assert_eq!(transfer_amount, transfer_message.amount.0);
-        assert_eq!(fast_transfer_msg.recipient, transfer_message.recipient);
-        assert_eq!(fast_transfer_msg.fee, transfer_message.fee);
-        assert_eq!(fast_transfer_msg.msg, transfer_message.msg);
-        assert_eq!(
-            OmniAddress::Near(env.relayer_account.id().clone()),
-            transfer_message.sender
-        );
-
-        let relayer_balance_after =
-            get_balance(&env.token_contract, env.relayer_account.id()).await?;
-        let contract_balance_after =
-            get_balance(&env.token_contract, env.bridge_contract.id()).await?;
-
-        assert_eq!(
-            contract_balance_before,
-            U128(contract_balance_after.0 - transfer_amount)
-        );
-        assert_eq!(
-            relayer_balance_before,
-            U128(relayer_balance_after.0 + transfer_amount)
-        );
-
-        Ok(())
-    }
-
-    #[tokio::test]
-    async fn test_fast_transfer_to_other_chain_bridged_token() -> anyhow::Result<()> {
-        let env = TestEnv::new_with_bridged_token().await?;
-
-        let transfer_amount = 100;
-        let transfer_msg = get_transfer_msg_to_other_chain(&env, transfer_amount);
-        let fast_transfer_msg = get_fast_transfer_msg(&env, transfer_msg.clone());
-
-        let relayer_balance_before =
-            get_balance(&env.token_contract, env.relayer_account.id()).await?;
-        let contract_balance_before =
-            get_balance(&env.token_contract, env.bridge_contract.id()).await?;
-
-        assert_eq!(U128(0), contract_balance_before);
-
-        let result = do_fast_transfer(&env, transfer_amount, fast_transfer_msg.clone()).await?;
-
-        assert_eq!(0, result.failures().len());
-
-        let relayer_balance_after =
-            get_balance(&env.token_contract, env.relayer_account.id()).await?;
-        let contract_balance_after =
-            get_balance(&env.token_contract, env.bridge_contract.id()).await?;
-
-        assert_eq!(U128(0), contract_balance_after);
-        assert_eq!(
-            relayer_balance_before,
-            U128(relayer_balance_after.0 + transfer_amount)
-        );
-
-        Ok(())
-    }
-
-    #[tokio::test]
-    async fn test_fast_transfer_to_other_chain_twice() -> anyhow::Result<()> {
-        let env = TestEnv::new_with_native_token().await?;
-
-        let transfer_amount = 100;
-        let transfer_msg = get_transfer_msg_to_other_chain(&env, transfer_amount);
-        let fast_transfer_msg = get_fast_transfer_msg(&env, transfer_msg.clone());
-
-        do_fast_transfer(&env, transfer_amount, fast_transfer_msg.clone()).await?;
-
-        let relayer_balance_before =
-            get_balance(&env.token_contract, env.relayer_account.id()).await?;
-        let contract_balance_before =
-            get_balance(&env.token_contract, env.bridge_contract.id()).await?;
-
-        let result = do_fast_transfer(&env, transfer_amount, fast_transfer_msg).await?;
-
-        assert_eq!(1, result.failures().len());
-
-        let failure = result.failures()[0].clone().into_result();
-        assert!(failure.is_err_and(|err| {
-            format!("{err:?}").contains("Fast transfer is already performed")
-        }));
-
-        let relayer_balance_after =
-            get_balance(&env.token_contract, env.relayer_account.id()).await?;
-        let contract_balance_after =
-            get_balance(&env.token_contract, env.bridge_contract.id()).await?;
-
-        assert_eq!(relayer_balance_before, relayer_balance_after);
-        assert_eq!(contract_balance_before, contract_balance_after);
-
-        Ok(())
-    }
-
-    #[tokio::test]
-    async fn test_fast_transfer_to_other_chain_finalisation() -> anyhow::Result<()> {
-        let env = TestEnv::new_with_native_token().await?;
-
-        let transfer_amount = 100;
-        let transfer_msg = get_transfer_msg_to_other_chain(&env, transfer_amount);
-        let fast_transfer_msg = get_fast_transfer_msg(&env, transfer_msg.clone());
-
-        do_fast_transfer(&env, transfer_amount, fast_transfer_msg.clone()).await?;
-
-        let relayer_balance_before =
-            get_balance(&env.token_contract, env.relayer_account.id()).await?;
-
-        do_fin_transfer(&env, transfer_msg).await?;
-
-        let transfer_message = env
-            .bridge_contract
-            .view("get_transfer_message")
-            .args_json(json!({
-                "transfer_id": TransferId {
-                    origin_chain: ChainKind::Base,
-                    origin_nonce: 0,
-                },
-            }))
-            .await;
-
-        assert!(transfer_message
-            .is_err_and(|err| { format!("{err:?}").contains("The transfer does not exist") }));
-
-        let relayer_balance_after =
-            get_balance(&env.token_contract, env.relayer_account.id()).await?;
-
-        assert_eq!(
-            transfer_amount,
-            relayer_balance_after.0 - relayer_balance_before.0
-        );
-
-        Ok(())
-    }
-
-    #[tokio::test]
-    async fn test_fast_transfer_to_other_chain_finalisation_twice() -> anyhow::Result<()> {
-        let env = TestEnv::new_with_native_token().await?;
-
-        let transfer_amount = 100;
-        let transfer_msg = get_transfer_msg_to_other_chain(&env, transfer_amount);
-        let fast_transfer_msg = get_fast_transfer_msg(&env, transfer_msg.clone());
-
-        do_fast_transfer(&env, transfer_amount, fast_transfer_msg.clone()).await?;
-
-        do_fin_transfer(&env, transfer_msg.clone()).await?;
-        let result = do_fin_transfer(&env, transfer_msg).await;
-
-        assert!(result.is_err_and(|err| {
-            format!("{err:?}").contains("The transfer is already finalised")
-        }));
-
-        Ok(())
-    }
-
-    #[tokio::test]
-    async fn test_fast_transfer_to_other_chain_already_finalised() -> anyhow::Result<()> {
-        let env = TestEnv::new_with_bridged_token().await?;
-
-        let transfer_amount = 100;
-        let transfer_msg = get_transfer_msg_to_other_chain(&env, transfer_amount);
-        let fast_transfer_msg = get_fast_transfer_msg(&env, transfer_msg.clone());
-
-        do_fin_transfer(&env, transfer_msg).await?;
-
-        let relayer_balance_before =
-            get_balance(&env.token_contract, env.relayer_account.id()).await?;
-        let contract_balance_before =
-            get_balance(&env.token_contract, env.bridge_contract.id()).await?;
-
-        assert_eq!(U128(0), contract_balance_before);
-
-        let result = do_fast_transfer(&env, transfer_amount, fast_transfer_msg).await?;
-
-        let relayer_balance_after =
-            get_balance(&env.token_contract, env.relayer_account.id()).await?;
-        let contract_balance_after =
-            get_balance(&env.token_contract, env.bridge_contract.id()).await?;
-
-        assert_eq!(relayer_balance_before, relayer_balance_after);
-        assert_eq!(U128(0), contract_balance_after);
-
-        assert_eq!(1, result.failures().len());
-        let failure = result.failures()[0].clone().into_result();
-        assert!(failure
-            .is_err_and(|err| { format!("{err:?}").contains("ERR_TRANSFER_ALREADY_FINALISED") }));
-
-        Ok(())
+            Ok(())
+        }
     }
 
     fn get_transfer_msg_to_near(env: &TestEnv, amount: u128) -> InitTransferMessage {
