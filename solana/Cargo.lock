@@ -635,18 +635,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "bridge_token_factory"
-version = "0.2.1"
-dependencies = [
- "anchor-lang",
- "anchor-spl",
- "bitvec",
- "cfg-if",
- "libsecp256k1 0.7.1",
- "wormhole-anchor-sdk",
-]
-
-[[package]]
 name = "bs58"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1457,6 +1445,18 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.96",
+]
+
+[[package]]
+name = "omni_bridge"
+version = "0.2.1"
+dependencies = [
+ "anchor-lang",
+ "anchor-spl",
+ "bitvec",
+ "cfg-if",
+ "libsecp256k1 0.7.1",
+ "wormhole-anchor-sdk",
 ]
 
 [[package]]

@@ -1,12 +1,12 @@
 [package]
-name = "bridge_token_factory"
+name = "omni_bridge"
 version = "0.2.1"
 description = "Created with Anchor"
 edition = "2021"
 
 [lib]
 crate-type = ["cdylib", "lib"]
-name = "bridge_token_factory"
+name = "omni_bridge"
 
 [features]
 default = ["mainnet"]

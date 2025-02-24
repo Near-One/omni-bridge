@@ -22,7 +22,7 @@ include!(concat!(env!("OUT_DIR"), "/program_id.rs"));
 
 #[program]
 #[allow(clippy::needless_pass_by_value)]
-pub mod bridge_token_factory {
+pub mod omni_bridge {
     use crate::error;
     use anchor_lang::require;
 
