@@ -44,6 +44,20 @@ impl TransferMessageStorage {
 }
 
 #[near(serializers=[borsh, json])]
+#[derive(Debug, Clone)]
+pub enum FastTransferStatusStorage {
+    V0(FastTransferStatus),
+}
+
+impl FastTransferStatusStorage {
+    pub fn into_main(self) -> FastTransferStatus {
+        match self {
+            FastTransferStatusStorage::V0(status) => status,
+        }
+    }
+}
+
+#[near(serializers=[borsh, json])]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Decimals {
     pub decimals: u8,
@@ -204,10 +218,10 @@ impl Contract {
             .sdk_expect("ERR_CAST");
 
         let max_account_id: AccountId = "a".repeat(64).parse().sdk_expect("ERR_PARSE_ACCOUNT_ID");
-        let value_len: u64 = borsh::to_vec(&FastTransferStatus {
+        let value_len: u64 = borsh::to_vec(&FastTransferStatusStorage::V0(FastTransferStatus {
             relayer: max_account_id,
             finalised: false,
-        })
+        }))
         .sdk_expect("ERR_BORSH")
         .len()
         .try_into()

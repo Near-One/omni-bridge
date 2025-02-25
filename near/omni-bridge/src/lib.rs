@@ -30,7 +30,10 @@ use omni_types::{
     PayloadType, SignRequest, TransferId, TransferMessage, TransferMessagePayload, UpdateFee, H160,
 };
 use std::str::FromStr;
-use storage::{Decimals, TransferMessageStorage, TransferMessageStorageValue, NEP141_DEPOSIT};
+use storage::{
+    Decimals, FastTransferStatusStorage, TransferMessageStorage, TransferMessageStorageValue,
+    NEP141_DEPOSIT,
+};
 
 mod errors;
 mod storage;
@@ -178,7 +181,7 @@ pub struct Contract {
     pub factories: LookupMap<ChainKind, OmniAddress>,
     pub pending_transfers: LookupMap<TransferId, TransferMessageStorage>,
     pub finalised_transfers: LookupSet<TransferId>,
-    pub fast_transfers: LookupMap<FastTransferId, FastTransferStatus>,
+    pub fast_transfers: LookupMap<FastTransferId, FastTransferStatusStorage>,
     pub token_id_to_address: LookupMap<(ChainKind, AccountId), OmniAddress>,
     pub token_address_to_id: LookupMap<OmniAddress, AccountId>,
     pub token_decimals: LookupMap<OmniAddress, Decimals>,
@@ -1149,12 +1152,6 @@ impl Contract {
         self.finalised_transfers.contains(&transfer_id)
     }
 
-    pub fn is_fast_transfer_finalised(&self, fast_transfer_id: &FastTransferId) -> bool {
-        self.fast_transfers
-            .get(fast_transfer_id)
-            .is_some_and(|status| status.finalised)
-    }
-
     #[access_control_any(roles(Role::DAO))]
     pub fn add_factory(&mut self, address: OmniAddress) {
         self.factories.insert(&(&address).into(), &address);
@@ -1289,17 +1286,17 @@ impl Contract {
 
         // If fast transfer happened, change recipient to the relayer that executed fast transfer
         let fast_transfer = FastTransfer::from_transfer(transfer_message.clone(), token.clone());
-        let (recipient, msg, is_fast_transfer) = match self.fast_transfers.get(&fast_transfer.id())
-        {
-            Some(status) => {
-                require!(
-                    predecessor_account_id == *status.relayer,
-                    "ERR_FAST_TRANSFER_PERFORMED_BY_ANOTHER_RELAYER"
-                );
-                (status.relayer, String::new(), true)
-            }
-            None => (recipient, transfer_message.msg.clone(), false),
-        };
+        let (recipient, msg, is_fast_transfer) =
+            match self.get_fast_transfer_status(&fast_transfer.id()) {
+                Some(status) => {
+                    require!(
+                        predecessor_account_id == status.relayer,
+                        "ERR_FAST_TRANSFER_PERFORMED_BY_ANOTHER_RELAYER"
+                    );
+                    (status.relayer, String::new(), true)
+                }
+                None => (recipient, transfer_message.msg.clone(), false),
+            };
 
         if is_fast_transfer {
             self.remove_fast_transfer(&fast_transfer.id());
@@ -1403,10 +1400,10 @@ impl Contract {
         let token = self.get_token_id(&transfer_message.token);
 
         let fast_transfer = FastTransfer::from_transfer(transfer_message.clone(), token.clone());
-        let recipient = match self.fast_transfers.get(&fast_transfer.id()) {
+        let recipient = match self.get_fast_transfer_status(&fast_transfer.id()) {
             Some(status) => {
                 require!(
-                    predecessor_account_id == *status.relayer,
+                    predecessor_account_id == status.relayer,
                     "ERR_FAST_TRANSFER_PERFORMED_BY_ANOTHER_RELAYER"
                 );
                 Some(status.relayer)
@@ -1422,7 +1419,7 @@ impl Contract {
                 U128(transfer_message.amount.0 - transfer_message.fee.fee.0),
                 "",
             );
-            self.complete_fast_transfer(&fast_transfer.id());
+            self.mark_fast_transfer_as_finalised(&fast_transfer.id());
         } else {
             required_balance = self
                 .add_transfer_message(transfer_message.clone(), predecessor_account_id.clone())
@@ -1593,10 +1590,10 @@ impl Contract {
             self.fast_transfers
                 .insert(
                     &fast_transfer.id(),
-                    &FastTransferStatus {
+                    &FastTransferStatusStorage::V0(FastTransferStatus {
                         relayer,
                         finalised: false,
-                    },
+                    }),
                 )
                 .is_none(),
             "Fast transfer is already performed"
@@ -1605,10 +1602,27 @@ impl Contract {
             .saturating_mul((env::storage_usage().saturating_sub(storage_usage)).into())
     }
 
-    fn complete_fast_transfer(&mut self, fast_transfer_id: &FastTransferId) {
-        let mut fast_transfer = self.fast_transfers.get(fast_transfer_id).unwrap();
-        fast_transfer.finalised = true;
-        self.fast_transfers.insert(fast_transfer_id, &fast_transfer);
+    fn get_fast_transfer_status(
+        &self,
+        fast_transfer_id: &FastTransferId,
+    ) -> Option<FastTransferStatus> {
+        self.fast_transfers
+            .get(fast_transfer_id)
+            .map(storage::FastTransferStatusStorage::into_main)
+    }
+
+    pub fn is_fast_transfer_finalised(&self, fast_transfer_id: &FastTransferId) -> bool {
+        self.fast_transfers
+            .get(fast_transfer_id)
+            .map(storage::FastTransferStatusStorage::into_main)
+            .is_some_and(|status| status.finalised)
+    }
+
+    fn mark_fast_transfer_as_finalised(&mut self, fast_transfer_id: &FastTransferId) {
+        let mut status = self.get_fast_transfer_status(fast_transfer_id).unwrap();
+        status.finalised = true;
+        self.fast_transfers
+            .insert(fast_transfer_id, &FastTransferStatusStorage::V0(status));
     }
 
     fn remove_fast_transfer(&mut self, fast_transfer_id: &FastTransferId) {
@@ -1616,6 +1630,7 @@ impl Contract {
         let fast_transfer = self
             .fast_transfers
             .remove(&fast_transfer_id)
+            .map(storage::FastTransferStatusStorage::into_main)
             .sdk_expect("ERR_TRANSFER_NOT_EXIST");
 
         let refund =
@@ -1623,7 +1638,8 @@ impl Contract {
 
         if let Some(mut storage) = self.accounts_balances.get(&fast_transfer.relayer) {
             storage.available = storage.available.saturating_add(refund);
-            self.accounts_balances.insert(&fast_transfer.relayer, &storage);
+            self.accounts_balances
+                .insert(&fast_transfer.relayer, &storage);
         }
     }
 
