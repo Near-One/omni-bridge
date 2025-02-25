@@ -799,10 +799,13 @@ impl Contract {
             let mut fast_transfer =
                 FastTransfer::from_transfer(message.clone(), self.get_token_id(&message.token));
             fast_transfer.transfer_id = origin_transfer_id;
+
             require!(
                 self.is_fast_transfer_finalised(&fast_transfer.id()),
                 "ERR_FAST_TRANSFER_NOT_FINALISED"
             );
+
+            self.remove_fast_transfer(&fast_transfer.id());
         }
 
         if message.fee.native_fee.0 != 0 {
@@ -1299,7 +1302,7 @@ impl Contract {
         };
 
         if is_fast_transfer {
-            self.complete_fast_transfer(&fast_transfer.id());
+            self.remove_fast_transfer(&fast_transfer.id());
         }
 
         let mut storage_deposit_action_index: usize = 0;
@@ -1606,6 +1609,22 @@ impl Contract {
         let mut fast_transfer = self.fast_transfers.get(fast_transfer_id).unwrap();
         fast_transfer.finalised = true;
         self.fast_transfers.insert(fast_transfer_id, &fast_transfer);
+    }
+
+    fn remove_fast_transfer(&mut self, fast_transfer_id: &FastTransferId) {
+        let storage_usage = env::storage_usage();
+        let fast_transfer = self
+            .fast_transfers
+            .remove(&fast_transfer_id)
+            .sdk_expect("ERR_TRANSFER_NOT_EXIST");
+
+        let refund =
+            env::storage_byte_cost().saturating_mul((storage_usage - env::storage_usage()).into());
+
+        if let Some(mut storage) = self.accounts_balances.get(&fast_transfer.relayer) {
+            storage.available = storage.available.saturating_add(refund);
+            self.accounts_balances.insert(&fast_transfer.relayer, &storage);
+        }
     }
 
     fn update_storage_balance(
