@@ -219,16 +219,17 @@ async fn process_log(
         return;
     };
 
-    let timestamp = if let Ok(Some(block)) = http_provider
+    let mut timestamp = chrono::Utc::now().timestamp();
+    if let Ok(Some(block)) = http_provider
         .get_block(
             alloy::eips::BlockId::Number(alloy::eips::BlockNumberOrTag::Number(block_number)),
             alloy::rpc::types::BlockTransactionsKind::Full,
         )
         .await
     {
-        block.header.timestamp as i64
-    } else {
-        chrono::Utc::now().timestamp()
+        if let Ok(block_timestamp) = i64::try_from(block.header.timestamp) {
+            timestamp = block_timestamp;
+        }
     };
 
     if log.log_decode::<utils::evm::InitTransfer>().is_ok() {
