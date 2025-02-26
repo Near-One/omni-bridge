@@ -244,7 +244,7 @@ mod tests {
                 let contains_expected_error =
                     transfer_result.receipt_outcomes().iter().any(|outcome| {
                         // Convert outcome to string to check for the error message
-                        let outcome_str = format!("{:?}", outcome);
+                        let outcome_str = format!("{outcome:?}");
                         outcome_str.contains("ERR_ACCOUNT_RESTRICTED_FROM_USING_NATIVE_FEE")
                     });
 
@@ -257,7 +257,7 @@ mod tests {
             let logs = transfer_result
                 .logs()
                 .iter()
-                .map(|s| s.to_string())
+                .map(|s| (*s).to_string())
                 .collect::<Vec<String>>();
 
             let log_refs = logs.iter().collect::<Vec<&String>>();
