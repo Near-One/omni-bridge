@@ -447,7 +447,7 @@ mod tests {
             .unwrap();
 
         // Try to grant NativeFeeRestricted role using unauthorized account
-        unauthorized_account
+        let _result = unauthorized_account
             .call(env.locker_contract.id(), "acl_grant_role")
             .args_json(json!({
                 "role": "NativeFeeRestricted",
