@@ -177,25 +177,28 @@ mod tests {
             Ok(())
         }
 
-        async fn initialize_transfer(&self, 
+        async fn initialize_transfer(
+            &self,
             amount: u128,
             native_fee: u128,
             token_fee: u128,
-            should_succeed: bool
+            should_succeed: bool,
         ) -> anyhow::Result<Option<TransferMessage>> {
             // Prepare storage deposit for the sender
-            let required_balance_account: NearToken = self.locker_contract
+            let required_balance_account: NearToken = self
+                .locker_contract
                 .view("required_balance_for_account")
                 .await?
                 .json()?;
-        
+
             let init_transfer_msg = InitTransferMsg {
                 native_token_fee: U128(native_fee),
                 fee: U128(token_fee),
                 recipient: eth_eoa_address(),
             };
-        
-            let required_balance_init_transfer: NearToken = self.locker_contract
+
+            let required_balance_init_transfer: NearToken = self
+                .locker_contract
                 .view("required_balance_for_init_transfer")
                 .args_json(json!({
                     "recipient": init_transfer_msg.recipient,
@@ -203,12 +206,12 @@ mod tests {
                 }))
                 .await?
                 .json()?;
-        
+
             // Deposit to storage
             let storage_deposit_amount = required_balance_account
                 .saturating_add(NearToken::from_yoctonear(native_fee))
                 .saturating_add(required_balance_init_transfer);
-        
+
             self.sender_account
                 .call(self.locker_contract.id(), "storage_deposit")
                 .args_json(json!({
@@ -219,9 +222,10 @@ mod tests {
                 .transact()
                 .await?
                 .into_result()?;
-        
+
             // Initiate the transfer
-            let transfer_result = self.sender_account
+            let transfer_result = self
+                .sender_account
                 .call(self.token_contract.id(), "ft_transfer_call")
                 .args_json(json!({
                     "receiver_id": self.locker_contract.id(),
@@ -233,42 +237,40 @@ mod tests {
                 .max_gas()
                 .transact()
                 .await?;
-        
+
             // For the case where we expect failure
             if !should_succeed {
                 // Check if any of the receipt outcomes contain our expected error message
-                let contains_expected_error = transfer_result
-                    .receipt_outcomes()
-                    .iter()
-                    .any(|outcome| {
+                let contains_expected_error =
+                    transfer_result.receipt_outcomes().iter().any(|outcome| {
                         // Convert outcome to string to check for the error message
                         let outcome_str = format!("{:?}", outcome);
                         outcome_str.contains("ERR_ACCOUNT_RESTRICTED_FROM_USING_NATIVE_FEE")
                     });
-                
-                assert!(contains_expected_error, 
+
+                assert!(contains_expected_error,
                     "Expected to find ERR_ACCOUNT_RESTRICTED_FROM_USING_NATIVE_FEE error in receipts");
                 return Ok(None);
             }
-            
+
             // For successful case, extract the transfer message
             let logs = transfer_result
                 .logs()
                 .iter()
                 .map(|s| s.to_string())
                 .collect::<Vec<String>>();
-            
+
             let log_refs = logs.iter().collect::<Vec<&String>>();
-            
+
             let omni_bridge_event: OmniBridgeEvent = serde_json::from_value(
                 get_event_data("InitTransferEvent", &log_refs)?
                     .ok_or_else(|| anyhow::anyhow!("InitTransferEvent not found"))?,
             )?;
-            
+
             let OmniBridgeEvent::InitTransferEvent { transfer_message } = omni_bridge_event else {
                 anyhow::bail!("InitTransferEvent is found in unexpected event")
             };
-            
+
             Ok(Some(transfer_message))
         }
     }
