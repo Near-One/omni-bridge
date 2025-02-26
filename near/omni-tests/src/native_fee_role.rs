@@ -447,7 +447,7 @@ mod tests {
             .unwrap();
 
         // Try to grant NativeFeeRestricted role using unauthorized account
-        let result = unauthorized_account
+        unauthorized_account
             .call(env.locker_contract.id(), "acl_grant_role")
             .args_json(json!({
                 "role": "NativeFeeRestricted",
@@ -457,10 +457,20 @@ mod tests {
             .transact()
             .await;
 
-        // Should fail due to lack of permissions
+        // Verify that the role was NOT granted, regardless of whether the call succeeded or failed
+        let role_granted: bool = env
+            .locker_contract
+            .view("acl_has_role")
+            .args_json(json!({
+                "role": "NativeFeeRestricted",
+                "account_id": env.sender_account.id()
+            }))
+            .await?
+            .json()?;
+
         assert!(
-            result.is_err() || result.as_ref().unwrap().is_failure(),
-            "Unauthorized account should not be able to grant roles"
+            !role_granted,
+            "Role should not be granted by unauthorized account"
         );
 
         // Verify that authorized admin can grant the role
