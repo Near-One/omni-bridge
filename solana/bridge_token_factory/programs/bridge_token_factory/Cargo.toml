@@ -9,7 +9,7 @@ crate-type = ["cdylib", "lib"]
 name = "bridge_token_factory"
 
 [features]
-default = ["mainnet"]
+default = ["devnet"]
 cpi = ["no-entrypoint"]
 no-entrypoint = []
 no-idl = []
