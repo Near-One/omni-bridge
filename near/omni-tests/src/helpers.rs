@@ -111,6 +111,12 @@ pub mod tests {
             .unwrap()
     }
 
+    pub fn base_eoa_address() -> OmniAddress {
+        "base:0xc5ed912ca6db7b41de4ef3632fa0a5641e42bf09"
+            .parse()
+            .unwrap()
+    }
+
     pub fn base_token_address() -> OmniAddress {
         "base:0x1234567890123456789012345678901234567890"
             .parse()
