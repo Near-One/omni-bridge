@@ -5,7 +5,8 @@ import { VerificationError } from './types';
 const ERC20_ABI = [
     'function name() view returns (string)',
     'function symbol() view returns (string)',
-    'function decimals() view returns (uint8)'
+    'function decimals() view returns (uint8)',
+    'function balanceOf(address) view returns (uint256)'
 ];
 
 const DEPLOY_TOKEN_EVENT_SIGNATURE = 'DeployToken(address,string,string,string,uint8,uint8)';
@@ -57,4 +58,20 @@ export async function getEvmTokenMetadata(tokenAddress: string): Promise<TokenMe
         symbol,
         decimals
     };
+}
+
+export async function verifyEvmTokenBalance(tokenAddress: string, accountAddress: string, expectedAmount: string): Promise<void> {
+    const provider = getInfuraProvider();
+    const formattedTokenAddress = ethers.getAddress(tokenAddress);
+    const formattedAccountAddress = ethers.getAddress(accountAddress);
+    const contract = new ethers.Contract(formattedTokenAddress, ERC20_ABI, provider);
+
+    const balance = await contract.balanceOf(formattedAccountAddress);
+    const actualBalance = balance.toString();
+
+    if (actualBalance !== expectedAmount) {
+        throw new VerificationError(
+            `Token balance mismatch: expected ${expectedAmount}, but got ${actualBalance}`
+        );
+    }
 } 
