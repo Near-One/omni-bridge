@@ -222,7 +222,7 @@ async fn process_log(
     let timestamp = http_provider
         .get_block(
             alloy::eips::BlockId::Number(alloy::eips::BlockNumberOrTag::Number(block_number)),
-            alloy::rpc::types::BlockTransactionsKind::Full,
+            alloy::rpc::types::BlockTransactionsKind::Hashes,
         )
         .await
         .ok()
