@@ -75,7 +75,6 @@ async fn main() -> Result<()> {
             .await
         }
     }));
-
     if config.eth.is_some() {
         handles.push(tokio::spawn({
             let config = config.clone();

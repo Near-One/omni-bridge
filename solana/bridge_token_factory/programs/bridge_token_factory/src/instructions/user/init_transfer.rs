@@ -70,6 +70,8 @@ pub struct InitTransfer<'info> {
 
 impl InitTransfer<'_> {
     pub fn process(&self, payload: &InitTransferPayload) -> Result<()> {
+        require!(payload.amount > payload.fee, ErrorCode::InvalidFee);
+
         if payload.native_fee > 0 {
             transfer(
                 CpiContext::new(
