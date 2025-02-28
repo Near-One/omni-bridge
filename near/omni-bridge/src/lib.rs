@@ -224,13 +224,16 @@ impl FungibleTokenReceiver for Contract {
             "ERR_INVALID_FEE"
         );
 
+        // Sender has to pay for storage and we can't trust sender_id. 
+        let signer_id = env::signer_account_id();
+
         let mut required_storage_balance =
-            self.add_transfer_message(transfer_message.clone(), sender_id.clone());
+            self.add_transfer_message(transfer_message.clone(), signer_id.clone());
         required_storage_balance = required_storage_balance
             .saturating_add(NearToken::from_yoctonear(parsed_msg.native_token_fee.0));
 
         self.update_storage_balance(
-            sender_id,
+            signer_id,
             required_storage_balance,
             NearToken::from_yoctonear(0),
         );
