@@ -224,7 +224,7 @@ impl FungibleTokenReceiver for Contract {
             "ERR_INVALID_FEE"
         );
 
-        // Sender has to pay for storage and we can't trust sender_id. 
+        // User has to pay for storage and we can't trust sender_id. 
         let signer_id = env::signer_account_id();
 
         let mut required_storage_balance =

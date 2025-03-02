@@ -42,6 +42,7 @@ fn setup_test_env(
     let context = VMContextBuilder::new()
         .predecessor_account_id(predecessor_account_id)
         .attached_deposit(attached_deposit)
+        .signer_account_id(DEFAULT_NEAR_USER_ACCOUNT.parse().unwrap())
         .build();
 
     if let Some(results) = promise_results {
@@ -101,8 +102,8 @@ fn run_ft_on_transfer(
     let sender_id = AccountId::try_from(sender_id).expect("Invalid sender ID");
     let token_id = AccountId::try_from(token_id).expect("Invalid token ID");
 
-    let attached_deposit = if let Some(deplosit) = attached_deposit {
-        deplosit
+    let attached_deposit = if let Some(deposit) = attached_deposit {
+        deposit
     } else {
         let min_storage_balance = contract.required_balance_for_account();
         let init_transfer_balance = contract.required_balance_for_init_transfer();
