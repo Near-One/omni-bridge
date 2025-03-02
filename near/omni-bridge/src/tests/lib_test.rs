@@ -255,6 +255,7 @@ fn run_update_transfer_fee(
     init_fee: &Fee,
     new_fee: UpdateFee,
     attached_deposit: Option<NearToken>,
+    new_sender_id: Option<String>,
 ) {
     use std::str::FromStr;
 
@@ -284,7 +285,7 @@ fn run_update_transfer_fee(
     });
 
     setup_test_env(
-        AccountId::try_from(sender_id).unwrap(),
+        AccountId::try_from(new_sender_id.unwrap_or(sender_id)).unwrap(),
         attached_deposit,
         None,
     );
@@ -306,6 +307,7 @@ fn test_update_transfer_fee_same_fee() {
         &fee,
         UpdateFee::Fee(fee.clone()),
         Some(NearToken::from_yoctonear(0)),
+        None,
     );
 
     let updated_transfer = contract.get_transfer_message(DEFAULT_TRANSFER_ID);
@@ -331,6 +333,7 @@ fn test_update_transfer_fee_valid() {
         DEFAULT_NEAR_USER_ACCOUNT.to_string(),
         &fee,
         UpdateFee::Fee(new_fee.clone()),
+        None,
         None,
     );
 
@@ -359,6 +362,7 @@ fn test_update_transfer_fee_exceeds_amount() {
         &init_fee,
         UpdateFee::Fee(new_fee),
         None,
+        None,
     );
 }
 
@@ -382,6 +386,7 @@ fn test_update_transfer_fee_lower_native_fee() {
         DEFAULT_NEAR_USER_ACCOUNT.to_string(),
         &init_fee,
         UpdateFee::Fee(new_fee),
+        None,
         None,
     );
 }
@@ -408,11 +413,12 @@ fn test_update_transfer_fee_invalid_deposit() {
         &init_fee,
         UpdateFee::Fee(new_fee),
         Some(NearToken::from_yoctonear(2)), // Wrong deposit amount
+        None,
     );
 }
 
 #[test]
-#[should_panic(expected = "Only sender can update fee")]
+#[should_panic(expected = "Only sender can update token fee")]
 fn test_update_transfer_fee_wrong_sender() {
     let mut contract = get_default_contract();
 
@@ -423,7 +429,7 @@ fn test_update_transfer_fee_wrong_sender() {
 
     let new_fee = Fee {
         fee: U128(DEFAULT_TRANSFER_AMOUNT - 1),
-        native_fee: U128(15),
+        native_fee: U128(10),
     };
 
     run_update_transfer_fee(
@@ -432,15 +438,32 @@ fn test_update_transfer_fee_wrong_sender() {
         &init_fee,
         UpdateFee::Fee(new_fee.clone()),
         None,
+        Some("different_user.testnet".to_string()),
     );
+}
 
-    // Try to update with different sender
-    setup_test_env(
-        AccountId::try_from("different_user.testnet".to_string()).unwrap(),
-        NearToken::from_yoctonear(5),
+#[test]
+fn test_update_transfer_native_fee_different_sender() {
+    let mut contract = get_default_contract();
+
+    let init_fee = Fee {
+        fee: U128(DEFAULT_TRANSFER_AMOUNT - 1),
+        native_fee: U128(10),
+    };
+
+    let new_fee = Fee {
+        fee: U128(DEFAULT_TRANSFER_AMOUNT - 1),
+        native_fee: U128(15),
+    };
+
+    run_update_transfer_fee(
+        &mut contract,
+        DEFAULT_NEAR_USER_ACCOUNT.to_string(),
+        &init_fee,
+        UpdateFee::Fee(new_fee.clone()),
         None,
+        Some("different_user.testnet".to_string()),
     );
-    contract.update_transfer_fee(DEFAULT_TRANSFER_ID, UpdateFee::Fee(new_fee));
 }
 
 fn get_default_storage_deposit_actions() -> Vec<StorageDepositAction> {

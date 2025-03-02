@@ -224,7 +224,7 @@ impl FungibleTokenReceiver for Contract {
             "ERR_INVALID_FEE"
         );
 
-        // User has to pay for storage and we can't trust sender_id. 
+        // User has to pay for storage and we can't trust sender_id.
         let signer_id = env::signer_account_id();
 
         let mut required_storage_balance =
@@ -356,15 +356,17 @@ impl Contract {
             UpdateFee::Fee(fee) => {
                 let mut transfer = self.get_transfer_message_storage(transfer_id);
 
-                require!(
-                    OmniAddress::Near(env::predecessor_account_id()) == transfer.message.sender,
-                    "Only sender can update fee"
-                );
-
                 let current_fee = transfer.message.fee;
                 require!(
                     fee.fee >= current_fee.fee && fee.fee < transfer.message.amount,
                     "ERR_INVALID_FEE"
+                );
+
+                require!(
+                    fee.fee == current_fee.fee
+                        || OmniAddress::Near(env::predecessor_account_id())
+                            == transfer.message.sender,
+                    "Only sender can update token fee"
                 );
 
                 let diff_native_fee = fee
