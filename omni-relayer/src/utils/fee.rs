@@ -1,13 +1,14 @@
 use alloy::primitives::U256;
 use anyhow::Result;
+use near_sdk::json_types::U128;
 use omni_types::{Fee, OmniAddress};
 
 use crate::config;
 
 #[derive(Debug, serde::Deserialize)]
 struct TransferFeeResponse {
-    native_token_fee: Option<u128>,
-    transferred_token_fee: Option<u128>,
+    native_token_fee: Option<U128>,
+    transferred_token_fee: Option<U128>,
 }
 
 pub async fn is_fee_sufficient(
@@ -27,8 +28,8 @@ pub async fn is_fee_sufficient(
         .json::<TransferFeeResponse>()
         .await?;
 
-    let native_fee = response.native_token_fee.unwrap_or_default();
-    let transferred_fee = response.transferred_token_fee.unwrap_or_default();
+    let native_fee = response.native_token_fee.unwrap_or_default().0;
+    let transferred_fee = response.transferred_token_fee.unwrap_or_default().0;
 
     match (native_fee, transferred_fee) {
         (0, 0) => anyhow::bail!("No fee information found"),

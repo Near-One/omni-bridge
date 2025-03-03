@@ -2,7 +2,7 @@
 url = "redis://127.0.0.1/"
 
 [bridge_indexer]
-api_url = "http://127.0.0.1:8080"
+api_url = "https://mainnet.api.bridge.nearone.org/"
 
 [near]
 network = "mainnet"
@@ -12,15 +12,15 @@ token_locker_id = "omni.bridge.near"
 # Note: the path must be absolute
 # credentials_path = "/Users/username/.near-credentials/mainnet/omni-relayer.bridge.near.json"
 
-[eth]
-rpc_http_url = "https://mainnet.infura.io/v3/INFURA_API_KEY"
-rpc_ws_url = "wss://mainnet.infura.io/ws/v3/INFURA_API_KEY"
-chain_id = 1
-bridge_token_factory_address = ""
-light_client = ""
-block_processing_batch_size = 10_000
-# https://wormhole.com/docs/build/reference/consistency-levels/
-expected_finalization_time = 1095
+# [eth]
+# rpc_http_url = "https://mainnet.infura.io/v3/INFURA_API_KEY"
+# rpc_ws_url = "wss://mainnet.infura.io/ws/v3/INFURA_API_KEY"
+# chain_id = 1
+# bridge_token_factory_address = ""
+# light_client = ""
+# block_processing_batch_size = 10_000
+# # https://wormhole.com/docs/build/reference/consistency-levels/
+# expected_finalization_time = 1095
 
 [base]
 rpc_http_url = "https://base-mainnet.infura.io/v3/INFURA_API_KEY"

@@ -2,7 +2,7 @@
 url = "redis://127.0.0.1/"
 
 [bridge_indexer]
-api_url = "http://127.0.0.1:8080"
+api_url = "https://testnet.api.bridge.nearone.org/"
 
 [near]
 network = "testnet"
