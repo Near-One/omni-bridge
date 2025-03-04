@@ -14,3 +14,6 @@ tools/dist/
 tools/node_modules/
 
 bridge-sdk-config.json
+
+.snakemake/
+__pycache__/
