@@ -56,9 +56,6 @@ wormhole-bridge-client = { git = "https://github.com/Near-One/bridge-sdk-rs", pa
 
 omni-connector = { git = "https://github.com/Near-One/bridge-sdk-rs", package = "omni-connector" }
 
-[features]
-disable_fee_check = []
-
 # The profile that 'dist' will build with
 [profile.dist]
 inherits = "release"

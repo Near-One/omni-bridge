@@ -1,5 +1,5 @@
 use alloy::primitives::U256;
-use anyhow::Result;
+use anyhow::{Context, Result};
 use near_sdk::json_types::U128;
 use omni_types::{Fee, OmniAddress};
 
@@ -20,7 +20,14 @@ pub async fn is_fee_sufficient(
 ) -> Result<bool> {
     let url = format!(
         "{}/api/v1/transfer-fee?sender={}&recipient={}&token={}",
-        config.bridge_indexer.api_url, sender, recipient, token
+        config
+            .bridge_indexer
+            .api_url
+            .as_ref()
+            .context("No api url was provided")?,
+        sender,
+        recipient,
+        token
     );
 
     let response = reqwest::get(&url)
