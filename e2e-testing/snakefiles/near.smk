@@ -1,0 +1,186 @@
+import pathlib
+import const
+from const import NearContract as NC, NearTestAccount as NTA
+from utils import get_json_field, extract_tx_hash
+
+module common_module:
+    snakefile: "common.smk"
+use rule * from common_module as common_*
+
+# NEAR-specific variables and paths
+near_dir = const.common_testing_root / "../near"
+near_binary_dir = const.common_generated_dir / "near_artifacts"
+near_init_params_file = const.common_testing_root / "near_init_params.json"
+near_deploy_results_dir = const.near_deploy_results_dir
+
+# All expected WASM binaries
+near_binaries = [f"{contract}.wasm" for contract in NC]
+
+# List of binaries that require dynamic init args
+near_contracts_with_dynamic_args = [NC.TOKEN_DEPLOYER, NC.MOCK_TOKEN, NC.OMNI_BRIDGE]
+
+# Account credential files
+near_init_account_credentials_file = const.near_account_dir / f"{NTA.INIT_ACCOUNT}.json"
+near_dao_account_credentials_file = const.near_account_dir / f"{NTA.DAO_ACCOUNT}.json"
+
+# Call result files
+near_prover_dau_grant_call_file = near_deploy_results_dir / "omni-prover-dau-grant-call.json"
+near_evm_prover_setup_call_file = near_deploy_results_dir / "evm-prover-setup-call.json"
+
+# Contract / account files
+omni_bridge_file = near_deploy_results_dir / f"{NC.OMNI_BRIDGE}.json"
+omni_prover_file = near_deploy_results_dir / f"{NC.OMNI_PROVER}.json"
+token_deployer_file = near_deploy_results_dir / f"{NC.TOKEN_DEPLOYER}.json"
+mock_token_file = near_deploy_results_dir / f"{NC.MOCK_TOKEN}.json"
+evm_prover_file = near_deploy_results_dir / f"{NC.EVM_PROVER}.json"
+
+
+def get_dyn_init_args_path(contract_name):
+    return f"{const.common_generated_dir}/{contract_name}_dyn_init_args.json"
+
+def get_mkdir_cmd(directory):
+    return f"mkdir -p {directory}"
+
+
+rule deploy_all:
+    message: "Deploying all NEAR contracts"
+    input:
+        expand(near_deploy_results_dir / "{contract}.json", 
+               contract=[binary.replace(".wasm", "") for binary in near_binaries]),
+        near_prover_dau_grant_call_file,
+        near_evm_prover_setup_call_file
+    default_target: True
+
+
+rule build:
+    message: "Building NEAR contracts"
+    output:
+        expand(near_binary_dir / "{binary}", binary=near_binaries)
+    shell: f"""
+    OUT_DIR={near_binary_dir} make -f {const.common_testing_root}/../Makefile rust-build-near
+    """
+
+rule create_account:
+    message: "Creating {wildcards.account} account"
+    output: const.near_account_dir / "{account}.json"
+    params:
+        mkdir=get_mkdir_cmd(const.near_account_dir),
+        scripts_dir=const.common_scripts_dir,
+        ts=const.common_timestamp
+    shell: """
+    {params.mkdir} && \
+    {params.scripts_dir}/create-near-account.sh omni-{wildcards.account}-{params.ts}.testnet {output}
+    """
+
+
+rule generate_token_deployer_init_args:
+    message: "Generating token deployer init args"
+    input:
+        omni_bridge=omni_bridge_file,
+        init_account=near_init_account_credentials_file
+    output: const.common_generated_dir / "token_deployer_dyn_init_args.json"
+    params:
+        mkdir=get_mkdir_cmd(const.common_generated_dir),
+        controller_address=lambda wc, input: get_json_field(input.omni_bridge, "contract_id"),
+        dao_address=lambda wc, input: get_json_field(input.init_account, "account_id")
+    shell: """
+    {params.mkdir} && \
+    echo '{{\"controller\": \"{params.controller_address}\", \"dao\": \"{params.dao_address}\"}}' > {output}
+    """
+
+
+rule generate_mock_token_init_args:
+    message: "Generating mock token init args"
+    input: near_init_account_credentials_file
+    output: const.common_generated_dir / "mock_token_dyn_init_args.json"
+    params:
+        mkdir=get_mkdir_cmd(const.common_generated_dir),
+        owner_address=lambda wc, input: get_json_field(input, "account_id")
+    shell: """
+    {params.mkdir} && \
+    echo '{{\"owner_id\": \"{params.owner_address}\"}}' > {output}
+    """
+
+
+rule generate_omni_bridge_init_args:
+    message: "Generating omni bridge init args"
+    input: omni_prover_file
+    output: const.common_generated_dir / "omni_bridge_dyn_init_args.json"
+    params:
+        mkdir=get_mkdir_cmd(const.common_generated_dir),
+        prover_address=lambda wc, input: get_json_field(input, "contract_id")
+    shell: """
+    {params.mkdir} && \
+    echo '{{\"prover_account\": \"{params.prover_address}\"}}' > {output}
+    """
+
+
+rule omni_prover_dau_grant:
+    message: "Granting DAO role to omni prover"
+    input:
+        init_account=near_init_account_credentials_file,
+        dao_account=near_dao_account_credentials_file,
+        omni_prover=omni_prover_file
+    output: near_prover_dau_grant_call_file
+    params:
+        mkdir=get_mkdir_cmd(near_deploy_results_dir),
+        omni_prover_address=lambda wc, input: get_json_field(input.omni_prover, "contract_id"),
+        dao_account_id=lambda wc, input: get_json_field(input.dao_account, "account_id"),
+        extract_tx=lambda wc, output: extract_tx_hash("near", output)
+    shell: """
+    {params.mkdir} && \
+    {const.common_scripts_dir}/call-near-contract.sh -c {params.omni_prover_address} \
+        -m acl_grant_role \
+        -a '{{\"role\": \"DAO\", \"account_id\": \"{params.dao_account_id}\"}}' \
+        -f {input.init_account} \
+        -n testnet 2>&1 | tee {output} && \
+    {params.extract_tx}
+    """
+
+
+rule evm_prover_setup:
+    message: "Setting up EVM prover"
+    input:
+        omni_prover=omni_prover_file,
+        evm_prover=evm_prover_file,
+        dau_grant=rules.omni_prover_dau_grant.output,
+        dao_account=near_dao_account_credentials_file
+    output: near_evm_prover_setup_call_file
+    params:
+        mkdir=get_mkdir_cmd(near_deploy_results_dir),
+        sepolia_chain_str=const.Chain.ETH,
+        omni_prover_account_id=lambda wc, input: get_json_field(input.omni_prover, "contract_id"),
+        evm_prover_account_id=lambda wc, input: get_json_field(input.evm_prover, "contract_id"),
+        extract_tx=lambda wc, output: extract_tx_hash("near", output)
+    shell: """
+    {params.mkdir} && \
+    {const.common_scripts_dir}/call-near-contract.sh -c {params.omni_prover_account_id} \
+        -m add_prover \
+        -a '{{\"account_id\": \"{params.evm_prover_account_id}\", \"prover_id\": \"{params.sepolia_chain_str}\"}}' \
+        -f {input.dao_account} \
+        -n testnet 2>&1 | tee {output} && \
+    {params.extract_tx}
+    """
+
+
+rule deploy_contract:
+    message: "Deploying {wildcards.contract} contract"
+    input:
+        init_params=near_init_params_file,
+        init_account=near_init_account_credentials_file,
+        binary=near_binary_dir / "{contract}.wasm",
+        dyn_args=(lambda wc: const.common_generated_dir / f"{wc.contract}_dyn_init_args.json" if wc.contract in near_contracts_with_dynamic_args else []),
+    output: near_deploy_results_dir / "{contract}.json"
+    params:
+        mkdir=get_mkdir_cmd(near_deploy_results_dir),
+        base_name="{contract}",
+        scripts_dir=const.common_scripts_dir,
+        ts=const.common_timestamp
+    shell: """
+    {params.mkdir} && \
+    if [ -f {input.dyn_args} ]; then
+        {params.scripts_dir}/deploy-near-contract.sh {input.init_params} {input.init_account} {input.dyn_args} {input.binary} {params.base_name}-{params.ts}.testnet {output}
+    else
+        {params.scripts_dir}/deploy-near-contract.sh {input.init_params} {input.init_account} {input.binary} {params.base_name}-{params.ts}.testnet {output}
+    fi
+    """
