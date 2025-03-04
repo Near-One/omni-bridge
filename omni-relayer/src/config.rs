@@ -30,6 +30,27 @@ pub fn get_relayer_evm_address(chain_kind: ChainKind) -> Address {
     signer.address()
 }
 
+fn replace_mongodb_credentials<'de, D>(deserializer: D) -> Result<Option<String>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let uri = Option::<String>::deserialize(deserializer)?;
+
+    if let Some(uri) = uri {
+        let username = std::env::var("MONGODB_USERNAME").map_err(serde::de::Error::custom)?;
+        let password = std::env::var("MONGODB_PASSWORD").map_err(serde::de::Error::custom)?;
+        let host = std::env::var("MONGODB_HOST").map_err(serde::de::Error::custom)?;
+
+        Ok(Some(
+            uri.replace("MONGODB_USERNAME", &username)
+                .replace("MONGODB_PASSWORD", &password)
+                .replace("MONGODB_HOST", &host),
+        ))
+    } else {
+        Ok(None)
+    }
+}
+
 fn replace_rpc_api_key<'de, D>(deserializer: D) -> Result<String, D::Error>
 where
     D: serde::Deserializer<'de>,
@@ -76,6 +97,8 @@ pub struct Redis {
 #[derive(Debug, Clone, Deserialize)]
 pub struct BridgeIndexer {
     pub api_url: Option<String>,
+    #[serde(default, deserialize_with = "replace_mongodb_credentials")]
+    pub mongodb_uri: Option<String>,
 
     #[serde(default, deserialize_with = "validate_fee_discount")]
     pub fee_discount: u8,

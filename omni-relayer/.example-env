@@ -1,5 +1,11 @@
 RUST_LOG=info
 
+# Required for the bridge-indexer
+# You can leave this empty and delete `mongo_uri` from config to use regular indexers
+MONGODB_USERNAME=
+MONGODB_PASSWORD=
+MONGODB_HOST=
+
 # It's used for near-lake-framework
 AWS_ACCESS_KEY_ID=
 AWS_SECRET_ACCESS_KEY=
