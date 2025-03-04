@@ -3,6 +3,8 @@ url = "redis://127.0.0.1/"
 
 [bridge_indexer]
 api_url = "https://mainnet.api.bridge.nearone.org/"
+# Discount that relayer can accept [default: 0]
+# fee_discount = 20
 
 [near]
 network = "mainnet"

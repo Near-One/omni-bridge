@@ -41,6 +41,20 @@ where
     Ok(url.replace("INFURA_API_KEY", &api_key))
 }
 
+#[cfg(not(feature = "disable_fee_check"))]
+fn validate_fee_discount<'de, D>(deserializer: D) -> Result<u8, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let fee_discount = u8::deserialize(deserializer)?;
+    if fee_discount > 100 {
+        return Err(serde::de::Error::custom(
+            "Fee discount should be less than 100",
+        ));
+    }
+    Ok(fee_discount)
+}
+
 #[derive(Debug, Clone, Deserialize)]
 pub struct Config {
     pub redis: Redis,
@@ -63,6 +77,9 @@ pub struct Redis {
 #[derive(Debug, Clone, Deserialize)]
 pub struct BridgeIndexer {
     pub api_url: String,
+
+    #[serde(deserialize_with = "validate_fee_discount", default)]
+    pub fee_discount: u8,
 }
 
 #[derive(Debug, Clone, Deserialize)]
