@@ -568,4 +568,5 @@ impl FastTransfer {
 pub struct FastTransferStatus {
     pub finalised: bool,
     pub relayer: AccountId,
+    pub storage_owner: AccountId,
 }
