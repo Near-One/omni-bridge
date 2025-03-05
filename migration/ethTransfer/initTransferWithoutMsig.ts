@@ -57,12 +57,15 @@ async function getTotalSupply() {
     const ethCustodianProxyInterface = new Interface(ethCustodianProxyAbi);
     const callImplData = ethCustodianProxyInterface.encodeFunctionData("callImpl", [data]);
 
+    const feeData = await provider.getFeeData();
+    const gasPrice = feeData.gasPrice || ethers.parseUnits("10", "gwei");
+
     const tx = {
         to: destination,
         value: ethers.parseEther("0"),
         data: callImplData,
         gasLimit: 500000,
-        gasPrice: await provider.getGasPrice()
+        gasPrice: gasPrice
     };
 
     console.log("Sending transaction...", tx);
@@ -71,5 +74,5 @@ async function getTotalSupply() {
     console.log("Transaction sent, waiting for confirmation...");
     const receipt = await txResponse.wait();
 
-    console.log(`Transaction confirmed! Hash: ${receipt.transactionHash}`);
+    console.log(`Transaction confirmed! Hash: ${receipt.hash}`);
 })()
