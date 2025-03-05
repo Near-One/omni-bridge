@@ -1,16 +1,22 @@
 RUST_LOG=info
 
+# Required for the bridge-indexer
+# You can leave this empty and delete `mongo_uri` from config to use regular indexers
+MONGODB_USERNAME=
+MONGODB_PASSWORD=
+MONGODB_HOST=
+
 # It's used for near-lake-framework
-AWS_ACCESS_KEY_ID=...
-AWS_SECRET_ACCESS_KEY=...
+AWS_ACCESS_KEY_ID=
+AWS_SECRET_ACCESS_KEY=
 
-NEAR_ACCOUNT_ID=...
-NEAR_PRIVATE_KEY=...
+NEAR_ACCOUNT_ID=
+NEAR_PRIVATE_KEY=
 
-INFURA_API_KEY=...
-ETH_PRIVATE_KEY=...
-BASE_PRIVATE_KEY=...
-ARB_PRIVATE_KEY=...
+INFURA_API_KEY=
+ETH_PRIVATE_KEY=
+BASE_PRIVATE_KEY=
+ARB_PRIVATE_KEY=
 
 # Note that solana private key must be encoded to bs58 string in order to use it
-SOLANA_PRIVATE_KEY=...
+SOLANA_PRIVATE_KEY=

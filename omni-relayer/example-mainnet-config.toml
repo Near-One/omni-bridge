@@ -2,7 +2,12 @@
 url = "redis://127.0.0.1/"
 
 [bridge_indexer]
+# Used to check if provided fee is sufficient to complete the transfer
 api_url = "https://mainnet.api.bridge.nearone.org/"
+# Used for the bridge-indexer (optional)
+mongodb_uri = "mongodb+srv://MONGODB_USERNAME:MONGODB_PASSWORD@MONGODB_HOST/?retryWrites=true&w=majority"
+# Discount that relayer can accept [default: 0]
+# fee_discount = 20
 
 [near]
 network = "mainnet"

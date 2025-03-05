@@ -30,6 +30,27 @@ pub fn get_relayer_evm_address(chain_kind: ChainKind) -> Address {
     signer.address()
 }
 
+fn replace_mongodb_credentials<'de, D>(deserializer: D) -> Result<Option<String>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let uri = Option::<String>::deserialize(deserializer)?;
+
+    if let Some(uri) = uri {
+        let username = std::env::var("MONGODB_USERNAME").map_err(serde::de::Error::custom)?;
+        let password = std::env::var("MONGODB_PASSWORD").map_err(serde::de::Error::custom)?;
+        let host = std::env::var("MONGODB_HOST").map_err(serde::de::Error::custom)?;
+
+        Ok(Some(
+            uri.replace("MONGODB_USERNAME", &username)
+                .replace("MONGODB_PASSWORD", &password)
+                .replace("MONGODB_HOST", &host),
+        ))
+    } else {
+        Ok(None)
+    }
+}
+
 fn replace_rpc_api_key<'de, D>(deserializer: D) -> Result<String, D::Error>
 where
     D: serde::Deserializer<'de>,
@@ -41,10 +62,24 @@ where
     Ok(url.replace("INFURA_API_KEY", &api_key))
 }
 
+fn validate_fee_discount<'de, D>(deserializer: D) -> Result<u8, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let fee_discount = u8::deserialize(deserializer)?;
+
+    if fee_discount > 100 {
+        return Err(serde::de::Error::custom(
+            "Fee discount should be less than 100",
+        ));
+    }
+
+    Ok(fee_discount)
+}
+
 #[derive(Debug, Clone, Deserialize)]
 pub struct Config {
     pub redis: Redis,
-    #[cfg(not(feature = "disable_fee_check"))]
     pub bridge_indexer: BridgeIndexer,
     pub near: Near,
     pub eth: Option<Evm>,
@@ -59,10 +94,14 @@ pub struct Redis {
     pub url: String,
 }
 
-#[cfg(not(feature = "disable_fee_check"))]
 #[derive(Debug, Clone, Deserialize)]
 pub struct BridgeIndexer {
-    pub api_url: String,
+    pub api_url: Option<String>,
+    #[serde(default, deserialize_with = "replace_mongodb_credentials")]
+    pub mongodb_uri: Option<String>,
+
+    #[serde(default, deserialize_with = "validate_fee_discount")]
+    pub fee_discount: u8,
 }
 
 #[derive(Debug, Clone, Deserialize)]
