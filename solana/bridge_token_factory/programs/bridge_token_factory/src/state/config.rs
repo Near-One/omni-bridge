@@ -24,5 +24,6 @@ pub struct Config {
     pub bumps: ConfigBumps,
     pub paused: u8,
     pub pausable_admin: Pubkey,
-    pub padding: [u8; 67],
+    pub metadata_admin: Pubkey,
+    pub padding: [u8; 35],
 }

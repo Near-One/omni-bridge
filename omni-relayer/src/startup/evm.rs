@@ -219,6 +219,17 @@ async fn process_log(
         return;
     };
 
+    let timestamp = http_provider
+        .get_block(
+            alloy::eips::BlockId::Number(alloy::eips::BlockNumberOrTag::Number(block_number)),
+            alloy::rpc::types::BlockTransactionsKind::Hashes,
+        )
+        .await
+        .ok()
+        .flatten()
+        .and_then(|block| i64::try_from(block.header.timestamp).ok())
+        .unwrap_or_else(|| chrono::Utc::now().timestamp());
+
     if log.log_decode::<utils::evm::InitTransfer>().is_ok() {
         info!("Received InitTransfer on {:?} ({:?})", chain_kind, tx_hash);
         utils::redis::add_event(
@@ -230,7 +241,7 @@ async fn process_log(
                 block_number,
                 log,
                 tx_logs: tx_logs.map(Box::new),
-                creation_timestamp: chrono::Utc::now().timestamp(),
+                creation_timestamp: timestamp,
                 last_update_timestamp: None,
                 expected_finalization_time,
             },
@@ -248,7 +259,7 @@ async fn process_log(
                 block_number,
                 log,
                 tx_logs: tx_logs.map(Box::new),
-                creation_timestamp: chrono::Utc::now().timestamp(),
+                creation_timestamp: timestamp,
                 expected_finalization_time,
             },
         )
@@ -265,7 +276,7 @@ async fn process_log(
                 block_number,
                 log,
                 tx_logs: tx_logs.map(Box::new),
-                creation_timestamp: chrono::Utc::now().timestamp(),
+                creation_timestamp: timestamp,
                 expected_finalization_time,
             },
         )

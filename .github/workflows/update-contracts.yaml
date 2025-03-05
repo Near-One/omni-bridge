@@ -30,7 +30,7 @@ jobs:
 
       - name: Build Solana contract
         run: |
-          make rust-build-solana
+          make solana-build-ci
         timeout-minutes: 60
  
       - name: Archive built WASM files

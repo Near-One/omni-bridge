@@ -1,9 +1,6 @@
 use anchor_lang::prelude::*;
 
-use crate::{
-    constants::CONFIG_SEED,
-    state::config::Config,
-};
+use crate::{constants::CONFIG_SEED, state::config::Config};
 
 #[derive(Accounts)]
 pub struct ChangeConfig<'info> {
@@ -36,6 +33,12 @@ impl ChangeConfig<'_> {
 
     pub fn set_paused(&mut self, paused: u8) -> Result<()> {
         self.config.paused = paused;
+
+        Ok(())
+    }
+
+    pub fn set_metadata_admin(&mut self, metadata_admin: Pubkey) -> Result<()> {
+        self.config.metadata_admin = metadata_admin;
 
         Ok(())
     }
