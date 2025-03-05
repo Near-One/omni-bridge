@@ -10,7 +10,7 @@ use alloy::rpc::types::{Log, TransactionReceipt};
 use ethereum_types::H256;
 
 use near_bridge_client::TransactionOptions;
-use near_jsonrpc_client::JsonRpcClient;
+use near_jsonrpc_client::{errors::JsonRpcError, JsonRpcClient};
 use near_primitives::{hash::CryptoHash, types::AccountId, views::TxExecutionStatus};
 use near_rpc_client::NearRpcError;
 use near_sdk::json_types::U128;
@@ -613,21 +613,32 @@ async fn process_near_transfer_event(
             if current_timestamp - creation_timestamp
                 > utils::redis::KEEP_INSUFFICIENT_FEE_TRANSFERS_FOR
             {
-                anyhow::bail!("Transfer is too old");
+                anyhow::bail!("Transfer ({}) is too old", transfer_message.origin_nonce);
             }
 
             if let BridgeSdkError::NearRpcError(near_rpc_error) = err {
                 match near_rpc_error {
-                    NearRpcError::NonceError | NearRpcError::FinalizationError => {
-                        warn!("Failed to sign transfer, retrying: {near_rpc_error:?}");
+                    NearRpcError::NonceError
+                    | NearRpcError::FinalizationError
+                    | NearRpcError::RpcTransactionError(JsonRpcError::TransportError(_)) => {
+                        warn!(
+                            "Failed to sign transfer ({}), retrying: {near_rpc_error:?}",
+                            transfer_message.origin_nonce
+                        );
                         return Ok(EventAction::Retry);
                     }
                     _ => {
-                        anyhow::bail!("Failed to sign transfer: {near_rpc_error:?}");
+                        anyhow::bail!(
+                            "Failed to sign transfer ({}): {near_rpc_error:?}",
+                            transfer_message.origin_nonce
+                        );
                     }
                 };
             }
-            anyhow::bail!("Failed to sign transfer: {err:?}");
+            anyhow::bail!(
+                "Failed to sign transfer ({}): {err:?}",
+                transfer_message.origin_nonce
+            );
         }
     }
 }
@@ -913,16 +924,27 @@ async fn process_evm_init_transfer_event(
         Err(err) => {
             if let BridgeSdkError::NearRpcError(near_rpc_error) = err {
                 match near_rpc_error {
-                    NearRpcError::NonceError | NearRpcError::FinalizationError => {
-                        warn!("Failed to finalize transfer, retrying: {near_rpc_error:?}");
+                    NearRpcError::NonceError
+                    | NearRpcError::FinalizationError
+                    | NearRpcError::RpcTransactionError(JsonRpcError::TransportError(_)) => {
+                        warn!(
+                            "Failed to finalize transfer ({}), retrying: {near_rpc_error:?}",
+                            init_log.inner.originNonce
+                        );
                         return Ok(EventAction::Retry);
                     }
                     _ => {
-                        anyhow::bail!("Failed to finalize transfer: {near_rpc_error:?}");
+                        anyhow::bail!(
+                            "Failed to finalize transfer ({}): {near_rpc_error:?}",
+                            init_log.inner.originNonce
+                        );
                     }
                 };
             }
-            anyhow::bail!("Failed to finalize transfer: {err:?}");
+            anyhow::bail!(
+                "Failed to finalize transfer ({}): {err:?}",
+                init_log.inner.originNonce
+            );
         }
     }
 }
@@ -1060,8 +1082,10 @@ async fn process_solana_init_transfer_event(
         Err(err) => {
             if let BridgeSdkError::NearRpcError(near_rpc_error) = err {
                 match near_rpc_error {
-                    NearRpcError::NonceError | NearRpcError::FinalizationError => {
-                        warn!("Failed to finalize transfer, retrying: {near_rpc_error:?}");
+                    NearRpcError::NonceError
+                    | NearRpcError::FinalizationError
+                    | NearRpcError::RpcTransactionError(JsonRpcError::TransportError(_)) => {
+                        warn!("Failed to finalize transfer, retrying: {near_rpc_error:?}",);
                         return Ok(EventAction::Retry);
                     }
                     _ => {
@@ -1186,7 +1210,9 @@ async fn process_evm_fin_transfer_event(
 
             if let BridgeSdkError::NearRpcError(near_rpc_error) = err {
                 match near_rpc_error {
-                    NearRpcError::NonceError | NearRpcError::FinalizationError => {
+                    NearRpcError::NonceError
+                    | NearRpcError::FinalizationError
+                    | NearRpcError::RpcTransactionError(JsonRpcError::TransportError(_)) => {
                         warn!("Failed to claim fee, retrying: {near_rpc_error:?}");
                         return Ok(EventAction::Retry);
                     }
@@ -1255,7 +1281,9 @@ async fn process_solana_fin_transfer_event(
         Err(err) => {
             if let BridgeSdkError::NearRpcError(ref near_rpc_error) = err {
                 match near_rpc_error {
-                    NearRpcError::NonceError | NearRpcError::FinalizationError => {
+                    NearRpcError::NonceError
+                    | NearRpcError::FinalizationError
+                    | NearRpcError::RpcTransactionError(JsonRpcError::TransportError(_)) => {
                         warn!("Failed to claim fee, retrying: {near_rpc_error:?}");
                         return Ok(EventAction::Retry);
                     }
@@ -1375,7 +1403,9 @@ async fn process_evm_deploy_token_event(
 
             if let BridgeSdkError::NearRpcError(near_rpc_error) = err {
                 match near_rpc_error {
-                    NearRpcError::NonceError | NearRpcError::FinalizationError => {
+                    NearRpcError::NonceError
+                    | NearRpcError::FinalizationError
+                    | NearRpcError::RpcTransactionError(JsonRpcError::TransportError(_)) => {
                         warn!("Failed to bind token, retrying: {near_rpc_error:?}");
                         return Ok(EventAction::Retry);
                     }
@@ -1443,7 +1473,9 @@ async fn process_solana_deploy_token_event(
         Err(err) => {
             if let BridgeSdkError::NearRpcError(near_rpc_error) = err {
                 match near_rpc_error {
-                    NearRpcError::NonceError | NearRpcError::FinalizationError => {
+                    NearRpcError::NonceError
+                    | NearRpcError::FinalizationError
+                    | NearRpcError::RpcTransactionError(JsonRpcError::TransportError(_)) => {
                         warn!("Failed to bind token, retrying: {near_rpc_error:?}");
                         return Ok(EventAction::Retry);
                     }
