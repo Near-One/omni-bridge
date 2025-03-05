@@ -1,4 +1,3 @@
-#[cfg(not(feature = "disable_fee_check"))]
 use std::str::FromStr;
 use std::sync::Arc;
 
@@ -20,11 +19,9 @@ use solana_rpc_client_api::{client_error::ErrorKind, request::RpcError};
 use solana_sdk::{instruction::InstructionError, pubkey::Pubkey, transaction::TransactionError};
 
 use omni_connector::OmniConnector;
-#[cfg(not(feature = "disable_fee_check"))]
-use omni_types::Fee;
 use omni_types::{
     locker_args::ClaimFeeArgs, near_events::OmniBridgeEvent, prover_args::WormholeVerifyProofArgs,
-    prover_result::ProofKind, ChainKind, OmniAddress, TransferId,
+    prover_result::ProofKind, ChainKind, Fee, OmniAddress, TransferId,
 };
 
 use crate::{config, utils};
@@ -156,7 +153,6 @@ pub async fn process_events(
             if let Ok(transfer) = serde_json::from_str::<Transfer>(&event) {
                 if let Transfer::Near { .. } = transfer {
                     handlers.push(tokio::spawn({
-                        #[cfg(not(feature = "disable_fee_check"))]
                         let config = config.clone();
                         let mut redis_connection = redis_connection.clone();
                         let connector = connector.clone();
@@ -165,7 +161,6 @@ pub async fn process_events(
 
                         async move {
                             match process_near_transfer_event(
-                                #[cfg(not(feature = "disable_fee_check"))]
                                 config,
                                 &mut redis_connection,
                                 key.clone(),
@@ -504,7 +499,7 @@ pub async fn process_events(
 }
 
 async fn process_near_transfer_event(
-    #[cfg(not(feature = "disable_fee_check"))] config: config::Config,
+    config: config::Config,
     redis_connection: &mut redis::aio::MultiplexedConnection,
     key: String,
     connector: Arc<OmniConnector>,
@@ -547,24 +542,25 @@ async fn process_near_transfer_event(
 
     info!("Trying to process InitTransferEvent/FinTransferEvent/UpdateFeeEvent");
 
-    #[cfg(not(feature = "disable_fee_check"))]
-    match utils::fee::is_fee_sufficient(
-        &config,
-        transfer_message.fee.clone(),
-        &transfer_message.sender,
-        &transfer_message.recipient,
-        &transfer_message.token,
-    )
-    .await
-    {
-        Ok(true) => {}
-        Ok(false) => {
-            warn!("Insufficient fee for transfer: {:?}", transfer_message);
-            return Ok(EventAction::Retry);
-        }
-        Err(err) => {
-            warn!("Failed to check fee sufficiency: {}", err);
-            return Ok(EventAction::Retry);
+    if config.bridge_indexer.api_url.is_some() {
+        match utils::fee::is_fee_sufficient(
+            &config,
+            transfer_message.fee.clone(),
+            &transfer_message.sender,
+            &transfer_message.recipient,
+            &transfer_message.token,
+        )
+        .await
+        {
+            Ok(true) => {}
+            Ok(false) => {
+                warn!("Insufficient fee for transfer: {:?}", transfer_message);
+                return Ok(EventAction::Retry);
+            }
+            Err(err) => {
+                warn!("Failed to check fee sufficiency: {}", err);
+                return Ok(EventAction::Retry);
+            }
         }
     }
 
@@ -778,8 +774,7 @@ async fn process_evm_init_transfer_event(
             )
         })?;
 
-    #[cfg(not(feature = "disable_fee_check"))]
-    {
+    if config.bridge_indexer.api_url.is_some() {
         let sender =
             utils::evm::string_to_evm_omniaddress(chain_kind, &init_log.inner.sender.to_string())
                 .map_err(|err| {
@@ -941,7 +936,6 @@ async fn process_solana_init_transfer_event(
     near_nonce: Arc<utils::nonce::NonceManager>,
 ) -> Result<EventAction> {
     let Transfer::Solana {
-        #[cfg(not(feature = "disable_fee_check"))]
         ref sender,
         ref token,
         ref recipient,
@@ -977,8 +971,7 @@ async fn process_solana_init_transfer_event(
         )
     })?;
 
-    #[cfg(not(feature = "disable_fee_check"))]
-    {
+    if config.bridge_indexer.api_url.is_some() {
         let sender = Pubkey::from_str(sender)?;
 
         let sender =
