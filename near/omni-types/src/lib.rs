@@ -1,3 +1,4 @@
+use borsh::{BorshDeserialize, BorshSerialize};
 use core::fmt;
 use core::str::FromStr;
 use hex::FromHex;
@@ -393,17 +394,26 @@ impl<'de> Deserialize<'de> for OmniAddress {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
+pub enum BridgeOnTransferMsg {
+    InitTransfer(InitTransferMsg),
+    FastFinTransfer(FastFinTransferMsg),
+}
+
+#[derive(Serialize, Deserialize, BorshSerialize, BorshDeserialize, Debug, Clone)]
+pub struct FastFinTransferMsg {
+    pub transfer_id: TransferId,
+    pub recipient: OmniAddress,
+    pub fee: Fee,
+    pub msg: String,
+    pub storage_deposit_amount: Option<u128>,
+    pub relayer: AccountId,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct InitTransferMsg {
     pub recipient: OmniAddress,
     pub fee: U128,
     pub native_token_fee: U128,
-}
-
-#[near(serializers=[borsh, json])]
-#[derive(Debug, Clone)]
-pub struct FeeRecipient {
-    pub recipient: AccountId,
-    pub native_fee_recipient: OmniAddress,
 }
 
 #[near(serializers=[borsh, json])]
@@ -439,6 +449,7 @@ pub struct TransferMessage {
     pub sender: OmniAddress,
     pub msg: String,
     pub destination_nonce: Nonce,
+    pub origin_transfer_id: Option<TransferId>,
 }
 
 impl TransferMessage {
@@ -515,4 +526,47 @@ pub struct BasicMetadata {
     pub name: String,
     pub symbol: String,
     pub decimals: u8,
+}
+
+#[near(serializers=[borsh, json])]
+#[derive(Debug, Clone)]
+pub struct FastTransferId(pub [u8; 32]);
+
+#[near(serializers=[borsh, json])]
+#[derive(Debug, Clone)]
+pub struct FastTransfer {
+    pub transfer_id: TransferId,
+    pub token_id: AccountId,
+    pub amount: U128,
+    pub fee: Fee,
+    pub recipient: OmniAddress,
+    pub msg: String,
+}
+
+impl FastTransfer {
+    #[allow(clippy::missing_panics_doc)]
+    pub fn id(&self) -> FastTransferId {
+        FastTransferId(near_sdk::env::sha256_array(&borsh::to_vec(self).unwrap()))
+    }
+}
+
+impl FastTransfer {
+    pub fn from_transfer(transfer: TransferMessage, token_id: AccountId) -> Self {
+        FastTransfer {
+            transfer_id: transfer.get_transfer_id(),
+            token_id,
+            amount: transfer.amount,
+            fee: transfer.fee,
+            recipient: transfer.recipient,
+            msg: transfer.msg,
+        }
+    }
+}
+
+#[near(serializers=[borsh, json])]
+#[derive(Debug, Clone)]
+pub struct FastTransferStatus {
+    pub finalised: bool,
+    pub relayer: AccountId,
+    pub storage_owner: AccountId,
 }

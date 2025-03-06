@@ -1,7 +1,7 @@
 use near_contract_standards::storage_management::{StorageBalance, StorageBalanceBounds};
 use near_sdk::{assert_one_yocto, borsh, near};
 use near_sdk::{env, near_bindgen, AccountId, NearToken};
-use omni_types::TransferId;
+use omni_types::{FastTransferStatus, TransferId};
 
 use crate::{
     require, ChainKind, Contract, ContractExt, Fee, OmniAddress, Promise, SdkExpect,
@@ -40,6 +40,20 @@ impl TransferMessageStorage {
             message,
             owner,
         }))
+    }
+}
+
+#[near(serializers=[borsh, json])]
+#[derive(Debug, Clone)]
+pub enum FastTransferStatusStorage {
+    V0(FastTransferStatus),
+}
+
+impl FastTransferStatusStorage {
+    pub fn into_main(self) -> FastTransferStatus {
+        match self {
+            FastTransferStatusStorage::V0(status) => status,
+        }
     }
 }
 
@@ -166,6 +180,10 @@ impl Contract {
                     sender: OmniAddress::Near(max_account_id.clone()),
                     msg: String::new(),
                     destination_nonce: 0,
+                    origin_transfer_id: Some(TransferId {
+                        origin_chain: ChainKind::Near,
+                        origin_nonce: 0,
+                    }),
                 },
                 owner: max_account_id,
             }))
@@ -179,7 +197,7 @@ impl Contract {
     }
 
     pub fn required_balance_for_fin_transfer(&self) -> NearToken {
-        let key_len: u64 = borsh::to_vec(&(ChainKind::Eth, 0_u128))
+        let key_len: u64 = borsh::to_vec(&(ChainKind::Eth, 0_u64))
             .sdk_expect("ERR_BORSH")
             .len()
             .try_into()
@@ -188,6 +206,31 @@ impl Contract {
         let storage_cost =
             env::storage_byte_cost().saturating_mul((Self::get_basic_storage() + key_len).into());
         let ft_transfers_cost = NearToken::from_yoctonear(2);
+
+        storage_cost.saturating_add(ft_transfers_cost)
+    }
+
+    pub fn required_balance_for_fast_transfer(&self) -> NearToken {
+        let key_len: u64 = borsh::to_vec(&[0u8; 32])
+            .sdk_expect("ERR_BORSH")
+            .len()
+            .try_into()
+            .sdk_expect("ERR_CAST");
+
+        let max_account_id: AccountId = "a".repeat(64).parse().sdk_expect("ERR_PARSE_ACCOUNT_ID");
+        let value_len: u64 = borsh::to_vec(&FastTransferStatusStorage::V0(FastTransferStatus {
+            relayer: max_account_id.clone(),
+            finalised: false,
+            storage_owner: max_account_id,
+        }))
+        .sdk_expect("ERR_BORSH")
+        .len()
+        .try_into()
+        .sdk_expect("ERR_CAST");
+
+        let storage_cost = env::storage_byte_cost()
+            .saturating_mul((Self::get_basic_storage() + key_len + value_len).into());
+        let ft_transfers_cost = NearToken::from_yoctonear(1);
 
         storage_cost.saturating_add(ft_transfers_cost)
     }

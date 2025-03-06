@@ -12,8 +12,8 @@ use omni_types::{
     locker_args::StorageDepositAction,
     prover_result::{InitTransferMessage, ProverResult},
     sol_address::SolAddress,
-    ChainKind, EvmAddress, Fee, InitTransferMsg, Nonce, OmniAddress, TransferId, TransferMessage,
-    UpdateFee,
+    BridgeOnTransferMsg, ChainKind, EvmAddress, Fee, InitTransferMsg, Nonce, OmniAddress,
+    TransferId, TransferMessage, UpdateFee,
 };
 
 use crate::storage::Decimals;
@@ -97,6 +97,33 @@ fn run_ft_on_transfer(
     token_id: String,
     amount: U128,
     attached_deposit: Option<NearToken>,
+    msg: &BridgeOnTransferMsg,
+) -> PromiseOrValue<U128> {
+    let sender_id = AccountId::try_from(sender_id).expect("Invalid sender ID");
+    let token_id = AccountId::try_from(token_id).expect("Invalid token ID");
+
+    let attached_deposit = if let Some(deplosit) = attached_deposit {
+        deplosit
+    } else {
+        let min_storage_balance = contract.required_balance_for_account();
+        let init_transfer_balance = contract.required_balance_for_init_transfer();
+        min_storage_balance.saturating_add(init_transfer_balance)
+    };
+
+    run_storage_deposit(contract, sender_id.clone(), attached_deposit);
+    setup_test_env(token_id.clone(), NearToken::from_yoctonear(0), None);
+
+    let msg = serde_json::to_string(msg).expect("Failed to serialize transfer message");
+
+    contract.ft_on_transfer(sender_id, amount, msg)
+}
+
+fn run_ft_on_transfer_legacy(
+    contract: &mut Contract,
+    sender_id: String,
+    token_id: String,
+    amount: U128,
+    attached_deposit: Option<NearToken>,
     msg: &InitTransferMsg,
 ) -> PromiseOrValue<U128> {
     let sender_id = AccountId::try_from(sender_id).expect("Invalid sender ID");
@@ -113,7 +140,7 @@ fn run_ft_on_transfer(
     run_storage_deposit(contract, sender_id.clone(), attached_deposit);
     setup_test_env(token_id.clone(), NearToken::from_yoctonear(0), None);
 
-    let msg = serde_json::to_string(&msg).expect("Failed to serialize transfer message");
+    let msg = serde_json::to_string(msg).expect("Failed to serialize transfer message");
 
     contract.ft_on_transfer(sender_id, amount, msg)
 }
@@ -129,7 +156,7 @@ fn test_initialize_contract() {
 }
 
 #[test]
-fn test_ft_on_transfer_nonce_increment() {
+fn test_init_transfer_nonce_increment() {
     let mut contract = get_default_contract();
 
     run_ft_on_transfer(
@@ -138,14 +165,14 @@ fn test_ft_on_transfer_nonce_increment() {
         DEFAULT_FT_CONTRACT_ACCOUNT.to_string(),
         U128(100),
         None,
-        &get_init_transfer_msg(DEFAULT_ETH_USER_ADDRESS, 0, 0),
+        &BridgeOnTransferMsg::InitTransfer(get_init_transfer_msg(DEFAULT_ETH_USER_ADDRESS, 0, 0)),
     );
 
     assert_eq!(contract.current_origin_nonce, DEFAULT_NONCE + 1);
 }
 
 #[test]
-fn test_ft_on_transfer_stored_transfer_message() {
+fn test_init_transfer_stored_transfer_message() {
     let mut contract = get_default_contract();
 
     let msg = get_init_transfer_msg(DEFAULT_ETH_USER_ADDRESS, 0, 0);
@@ -155,7 +182,7 @@ fn test_ft_on_transfer_stored_transfer_message() {
         DEFAULT_FT_CONTRACT_ACCOUNT.to_string(),
         U128(DEFAULT_TRANSFER_AMOUNT),
         None,
-        &msg,
+        &BridgeOnTransferMsg::InitTransfer(msg.clone()),
     );
 
     let stored_transfer = contract.get_transfer_message(TransferId {
@@ -189,7 +216,7 @@ fn test_ft_on_transfer_stored_transfer_message() {
 }
 
 #[test]
-fn test_ft_on_transfer_promise_result() {
+fn test_init_transfer_promise_result() {
     let mut contract = get_default_contract();
 
     let promise = run_ft_on_transfer(
@@ -198,7 +225,7 @@ fn test_ft_on_transfer_promise_result() {
         DEFAULT_FT_CONTRACT_ACCOUNT.to_string(),
         U128(DEFAULT_TRANSFER_AMOUNT),
         None,
-        &get_init_transfer_msg(DEFAULT_ETH_USER_ADDRESS, 0, 0),
+        &BridgeOnTransferMsg::InitTransfer(get_init_transfer_msg(DEFAULT_ETH_USER_ADDRESS, 0, 0)),
     );
 
     let remaining = match promise {
@@ -210,7 +237,7 @@ fn test_ft_on_transfer_promise_result() {
 
 #[test]
 #[should_panic(expected = "ERR_INVALID_FEE")]
-fn test_ft_on_transfer_invalid_fee() {
+fn test_init_transfer_invalid_fee() {
     let mut contract = get_default_contract();
     run_ft_on_transfer(
         &mut contract,
@@ -218,12 +245,16 @@ fn test_ft_on_transfer_invalid_fee() {
         DEFAULT_FT_CONTRACT_ACCOUNT.to_string(),
         U128(DEFAULT_TRANSFER_AMOUNT),
         None,
-        &get_init_transfer_msg(DEFAULT_ETH_USER_ADDRESS, DEFAULT_TRANSFER_AMOUNT + 1, 0),
+        &BridgeOnTransferMsg::InitTransfer(get_init_transfer_msg(
+            DEFAULT_ETH_USER_ADDRESS,
+            DEFAULT_TRANSFER_AMOUNT + 1,
+            0,
+        )),
     );
 }
 
 #[test]
-fn test_ft_on_transfer_balance_updated() {
+fn test_init_transfer_balance_updated() {
     let mut contract = get_default_contract();
 
     let min_storage_balance = contract.required_balance_for_account();
@@ -236,7 +267,7 @@ fn test_ft_on_transfer_balance_updated() {
         DEFAULT_FT_CONTRACT_ACCOUNT.to_string(),
         U128(DEFAULT_TRANSFER_AMOUNT),
         Some(total_balance),
-        &get_init_transfer_msg(DEFAULT_ETH_USER_ADDRESS, 0, 0),
+        &BridgeOnTransferMsg::InitTransfer(get_init_transfer_msg(DEFAULT_ETH_USER_ADDRESS, 0, 0)),
     );
 
     let storage_balance = contract
@@ -270,6 +301,7 @@ fn run_update_transfer_fee(
         sender: OmniAddress::Near(sender_id.clone().parse().unwrap()),
         msg: String::new(),
         destination_nonce: 1,
+        origin_transfer_id: None,
     };
 
     contract.insert_raw_transfer(
@@ -853,5 +885,19 @@ fn test_get_bridged_token() {
         contract.get_bridged_token(&near_source, ChainKind::Near),
         Some(near_source.clone()),
         "Failed to handle NEAR to NEAR resolution"
+    );
+}
+
+#[test]
+fn test_legacy_ft_on_transfer() {
+    let mut contract = get_default_contract();
+
+    run_ft_on_transfer_legacy(
+        &mut contract,
+        DEFAULT_NEAR_USER_ACCOUNT.to_string(),
+        DEFAULT_FT_CONTRACT_ACCOUNT.to_string(),
+        U128(100),
+        None,
+        &get_init_transfer_msg(DEFAULT_ETH_USER_ADDRESS, 0, 0),
     );
 }
