@@ -212,12 +212,21 @@ impl FungibleTokenReceiver for Contract {
         // We can't trust sender_id to pay for storage as it can be spoofed.
         let storage_payer = env::signer_account_id();
         let promise_or_value = match parsed_msg {
-            BridgeOnTransferMsg::InitTransfer(init_transfer_msg) => PromiseOrValue::Value(
-                self.init_transfer(sender_id, storage_payer, token_id.clone(), amount, init_transfer_msg),
-            ),
-            BridgeOnTransferMsg::FastFinTransfer(fast_fin_transfer_msg) => {
-                self.fast_fin_transfer(token_id.clone(), amount, storage_payer, fast_fin_transfer_msg)
+            BridgeOnTransferMsg::InitTransfer(init_transfer_msg) => {
+                PromiseOrValue::Value(self.init_transfer(
+                    sender_id,
+                    storage_payer,
+                    token_id.clone(),
+                    amount,
+                    init_transfer_msg,
+                ))
             }
+            BridgeOnTransferMsg::FastFinTransfer(fast_fin_transfer_msg) => self.fast_fin_transfer(
+                token_id.clone(),
+                amount,
+                storage_payer,
+                fast_fin_transfer_msg,
+            ),
         };
 
         if !self.deployed_tokens.contains(&token_id) {
@@ -477,7 +486,7 @@ impl Contract {
                 fee: init_transfer_msg.fee,
                 native_fee: init_transfer_msg.native_token_fee,
             },
-            sender: OmniAddress::Near(sender_id.clone()),
+            sender: OmniAddress::Near(sender_id),
             msg: String::new(),
             destination_nonce,
             origin_transfer_id: None,
@@ -663,7 +672,11 @@ impl Contract {
                 ),
             )
         } else {
-            self.fast_fin_transfer_to_other_chain(&fast_transfer, storage_payer, fast_fin_transfer_msg.relayer);
+            self.fast_fin_transfer_to_other_chain(
+                &fast_transfer,
+                storage_payer,
+                fast_fin_transfer_msg.relayer,
+            );
             PromiseOrValue::Value(U128(0))
         }
     }
@@ -685,9 +698,13 @@ impl Contract {
         };
 
         let required_balance = self
-            .add_fast_transfer(fast_transfer, relayer_id.clone(), storage_payer.clone())
+            .add_fast_transfer(fast_transfer, relayer_id, storage_payer.clone())
             .saturating_add(ONE_YOCTO);
-        self.update_storage_balance(storage_payer, required_balance, NearToken::from_yoctonear(0));
+        self.update_storage_balance(
+            storage_payer,
+            required_balance,
+            NearToken::from_yoctonear(0),
+        );
 
         env::log_str(
             &OmniBridgeEvent::FastTransferEvent {
@@ -720,7 +737,8 @@ impl Contract {
             env::panic_str("ERR_TRANSFER_ALREADY_FINALISED");
         }
 
-        let mut required_balance = self.add_fast_transfer(fast_transfer, relayer_id.clone(), storage_payer.clone());
+        let mut required_balance =
+            self.add_fast_transfer(fast_transfer, relayer_id.clone(), storage_payer.clone());
 
         let destination_nonce =
             self.get_next_destination_nonce(fast_transfer.recipient.get_chain());
@@ -732,7 +750,7 @@ impl Contract {
             amount: fast_transfer.amount,
             recipient: fast_transfer.recipient.clone(),
             fee: fast_transfer.fee.clone(),
-            sender: OmniAddress::Near(relayer_id.clone()),
+            sender: OmniAddress::Near(relayer_id),
             msg: fast_transfer.msg.clone(),
             destination_nonce,
             origin_transfer_id: Some(fast_transfer.transfer_id),
@@ -1593,7 +1611,12 @@ impl Contract {
             .saturating_mul((env::storage_usage().saturating_sub(storage_usage)).into())
     }
 
-    fn add_fast_transfer(&mut self, fast_transfer: &FastTransfer, relayer: AccountId, storage_owner: AccountId) -> NearToken {
+    fn add_fast_transfer(
+        &mut self,
+        fast_transfer: &FastTransfer,
+        relayer: AccountId,
+        storage_owner: AccountId,
+    ) -> NearToken {
         let storage_usage = env::storage_usage();
         require!(
             self.fast_transfers
@@ -1639,7 +1662,7 @@ impl Contract {
         let storage_usage = env::storage_usage();
         let fast_transfer = self
             .fast_transfers
-            .remove(&fast_transfer_id)
+            .remove(fast_transfer_id)
             .map(storage::FastTransferStatusStorage::into_main)
             .sdk_expect("ERR_TRANSFER_NOT_EXIST");
 
