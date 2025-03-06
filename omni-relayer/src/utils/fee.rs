@@ -39,7 +39,7 @@ pub async fn is_fee_sufficient(
     let transferred_fee = response.transferred_token_fee.unwrap_or_default().0;
 
     match (native_fee, transferred_fee) {
-        (0, 0) => anyhow::bail!("No fee information found"),
+        (0, 0) => Ok(true),
         (0, fee) if fee > 0 => {
             Ok(provided_fee.fee.0
                 >= fee * u128::from(100 - config.bridge_indexer.fee_discount) / 100)
