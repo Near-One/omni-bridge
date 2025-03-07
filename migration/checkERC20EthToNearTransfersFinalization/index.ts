@@ -123,9 +123,8 @@ async function getLatestEvents() {
     let notFinalizedCount = 0;
     
     // Process each event
-    for (let i = 0; i < events.length; i++) {
-      const event = events[i];
-      console.log(chalk.cyan(`\nProcessing transaction ${i+1}/${events.length}: ${event.transactionHash}`));
+    for (const event of events) {
+      console.log(chalk.cyan(`\nProcessing transaction ${event.transactionHash}`));
       
       try {
         // Get block data
