@@ -1,36 +1,10 @@
 import 'dotenv/config';
 import { Command } from 'commander';
-import * as fs from 'node:fs';
-import * as path from 'node:path';
-import { verifyNearReceipt, getNearTokenMetadata, getLockerTokenAddress } from '../lib/near';
-import { verifyEvmTransaction, getEvmTokenMetadata, getEvmTokenAddressFromTx } from '../lib/evm';
-import type { TransactionInfo, TokenBridgeVerificationConfig } from '../lib/types';
+import { getNearTokenMetadata, getLockerTokenAddress } from '../lib/near';
+import { getEvmTokenMetadata, getEvmTokenAddressFromTx } from '../lib/evm';
+import { loadTransactions, verifyTransactions } from '../lib/common';
+import type { TokenBridgeVerificationConfig } from '../lib/types';
 import { VerificationError } from '../lib/types';
-
-async function loadTransactions(dir: string): Promise<TransactionInfo[]> {
-    const files = fs.readdirSync(dir).filter(file => file.endsWith('.json'));
-    const transactions: TransactionInfo[] = [];
-
-    for (const file of files) {
-        const content = JSON.parse(fs.readFileSync(path.join(dir, file), 'utf-8'));
-        if (content.tx_hash) {
-            const network = content.tx_hash.startsWith('0x') ? 'evm' : 'near';
-            transactions.push({ hash: content.tx_hash, network });
-        }
-    }
-
-    return transactions;
-}
-
-async function verifyTransactions(transactions: TransactionInfo[]): Promise<void> {
-    for (const tx of transactions) {
-        if (tx.network === 'near') {
-            await verifyNearReceipt(tx.hash);
-        } else {
-            await verifyEvmTransaction(tx.hash);
-        }
-    }
-}
 
 async function verifyTokenMetadata(nearToken: string, evmToken: string): Promise<void> {
     const [nearMetadata, evmMetadata] = await Promise.all([
