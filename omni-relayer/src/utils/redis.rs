@@ -7,6 +7,9 @@ pub const SOLANA_EVENTS: &str = "solana_events";
 
 pub const STUCK_EVENTS: &str = "stuck_events";
 
+pub const OMNI_TRANSACTION_EVENTS_RT: &str = "omni_transaction_events_rt";
+pub const OMNI_META_EVENTS_RT: &str = "omni_meta_events_rt";
+
 pub const KEEP_INSUFFICIENT_FEE_TRANSFERS_FOR: i64 = 60 * 60 * 24 * 14; // 14 days
 pub const CHECK_INSUFFICIENT_FEE_TRANSFERS_EVERY_SECS: i64 = 60 * 30; // 30 minutes
 

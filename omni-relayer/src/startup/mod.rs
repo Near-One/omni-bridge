@@ -13,6 +13,7 @@ use wormhole_bridge_client::WormholeBridgeClientBuilder;
 
 use crate::{config, startup};
 
+pub mod bridge_indexer;
 pub mod evm;
 pub mod near;
 pub mod solana;

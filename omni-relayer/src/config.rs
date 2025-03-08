@@ -99,6 +99,7 @@ pub struct BridgeIndexer {
     pub api_url: Option<String>,
     #[serde(default, deserialize_with = "replace_mongodb_credentials")]
     pub mongodb_uri: Option<String>,
+    pub db_name: Option<String>,
 
     #[serde(default, deserialize_with = "validate_fee_discount")]
     pub fee_discount: u8,

@@ -21,7 +21,7 @@ use solana_sdk::{instruction::InstructionError, pubkey::Pubkey, transaction::Tra
 use omni_connector::OmniConnector;
 use omni_types::{
     locker_args::ClaimFeeArgs, near_events::OmniBridgeEvent, prover_args::WormholeVerifyProofArgs,
-    prover_result::ProofKind, ChainKind, Fee, OmniAddress, TransferId,
+    prover_result::ProofKind, ChainKind, Fee, OmniAddress, TransferId, TransferMessage,
 };
 
 use crate::{config, utils};
@@ -37,7 +37,7 @@ enum EventAction {
 #[serde(tag = "init_transfer")]
 pub enum Transfer {
     Near {
-        event: OmniBridgeEvent,
+        transfer_message: TransferMessage,
         creation_timestamp: i64,
         last_update_timestamp: Option<i64>,
     },
@@ -508,7 +508,7 @@ async fn process_near_transfer_event(
     near_nonce: Arc<utils::nonce::NonceManager>,
 ) -> Result<EventAction> {
     let Transfer::Near {
-        ref event,
+        ref transfer_message,
         creation_timestamp,
         last_update_timestamp,
     } = transfer
@@ -523,22 +523,6 @@ async fn process_near_transfer_event(
     {
         return Ok(EventAction::Retry);
     }
-
-    let (OmniBridgeEvent::InitTransferEvent {
-        ref transfer_message,
-    }
-    | OmniBridgeEvent::FinTransferEvent {
-        ref transfer_message,
-    }
-    | OmniBridgeEvent::UpdateFeeEvent {
-        ref transfer_message,
-    }) = event
-    else {
-        anyhow::bail!(
-            "Expected InitTransferEvent/FinTransferEvent/UpdateFeeEvent, got: {:?}",
-            event
-        );
-    };
 
     info!("Trying to process InitTransferEvent/FinTransferEvent/UpdateFeeEvent");
 
