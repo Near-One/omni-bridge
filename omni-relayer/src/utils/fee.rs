@@ -1,45 +1,14 @@
 use alloy::primitives::U256;
 use anyhow::{Context, Result};
 use near_sdk::json_types::U128;
-use omni_types::{Fee, OmniAddress, TransferId};
+use omni_types::{Fee, OmniAddress};
 
 use crate::config;
-
-#[derive(Debug, serde::Deserialize)]
-pub struct TransferResponse {
-    pub transfer_message: TransferMessage,
-}
-
-#[derive(Debug, serde::Deserialize)]
-pub struct TransferMessage {
-    pub token: OmniAddress,
-    pub recipient: OmniAddress,
-    pub fee: Fee,
-    pub sender: OmniAddress,
-}
 
 #[derive(Debug, serde::Deserialize)]
 pub struct TransferFeeResponse {
     pub native_token_fee: Option<U128>,
     pub transferred_token_fee: Option<U128>,
-}
-
-pub async fn get_transfer(
-    config: &config::Config,
-    transfer_id: TransferId,
-) -> Result<TransferResponse> {
-    let url = format!(
-        "{}/api/v1/transfers/transfer?origin_chain={:?}&origin_nonce={}",
-        config
-            .bridge_indexer
-            .api_url
-            .as_ref()
-            .context("No api url was provided")?,
-        transfer_id.origin_chain,
-        transfer_id.origin_nonce,
-    );
-
-    Ok(reqwest::get(&url).await?.json().await?)
 }
 
 pub async fn is_fee_sufficient(

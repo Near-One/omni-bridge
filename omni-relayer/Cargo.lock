@@ -1912,9 +1912,9 @@ dependencies = [
 [[package]]
 name = "bridge-connector-common"
 version = "0.2.0"
-source = "git+https://github.com/Near-One/bridge-sdk-rs?rev=edd62c95e2b201a6ce8ceaf62f379ee8d41578c7#edd62c95e2b201a6ce8ceaf62f379ee8d41578c7"
+source = "git+https://github.com/Near-One/bridge-sdk-rs?rev=b838a28be06cabf04f7f256df79e4cfeadd2d012#b838a28be06cabf04f7f256df79e4cfeadd2d012"
 dependencies = [
- "eth-proof 0.2.1 (git+https://github.com/Near-One/bridge-sdk-rs?rev=edd62c95e2b201a6ce8ceaf62f379ee8d41578c7)",
+ "eth-proof 0.2.1 (git+https://github.com/Near-One/bridge-sdk-rs?rev=b838a28be06cabf04f7f256df79e4cfeadd2d012)",
  "ethers",
  "near-light-client-on-eth",
  "near-rpc-client",
@@ -2631,7 +2631,7 @@ dependencies = [
 [[package]]
 name = "crypto-utils"
 version = "0.2.0"
-source = "git+https://github.com/Near-One/bridge-sdk-rs?rev=edd62c95e2b201a6ce8ceaf62f379ee8d41578c7#edd62c95e2b201a6ce8ceaf62f379ee8d41578c7"
+source = "git+https://github.com/Near-One/bridge-sdk-rs?rev=b838a28be06cabf04f7f256df79e4cfeadd2d012#b838a28be06cabf04f7f256df79e4cfeadd2d012"
 dependencies = [
  "crypto-shared",
  "ethers",
@@ -3321,7 +3321,7 @@ dependencies = [
 [[package]]
 name = "eth-proof"
 version = "0.2.1"
-source = "git+https://github.com/Near-One/bridge-sdk-rs?rev=edd62c95e2b201a6ce8ceaf62f379ee8d41578c7#edd62c95e2b201a6ce8ceaf62f379ee8d41578c7"
+source = "git+https://github.com/Near-One/bridge-sdk-rs?rev=b838a28be06cabf04f7f256df79e4cfeadd2d012#b838a28be06cabf04f7f256df79e4cfeadd2d012"
 dependencies = [
  "borsh 1.5.5",
  "cita_trie",
@@ -3709,12 +3709,12 @@ dependencies = [
 [[package]]
 name = "evm-bridge-client"
 version = "0.2.1"
-source = "git+https://github.com/Near-One/bridge-sdk-rs?rev=edd62c95e2b201a6ce8ceaf62f379ee8d41578c7#edd62c95e2b201a6ce8ceaf62f379ee8d41578c7"
+source = "git+https://github.com/Near-One/bridge-sdk-rs?rev=b838a28be06cabf04f7f256df79e4cfeadd2d012#b838a28be06cabf04f7f256df79e4cfeadd2d012"
 dependencies = [
  "borsh 1.5.5",
  "bridge-connector-common",
  "derive_builder",
- "eth-proof 0.2.1 (git+https://github.com/Near-One/bridge-sdk-rs?rev=edd62c95e2b201a6ce8ceaf62f379ee8d41578c7)",
+ "eth-proof 0.2.1 (git+https://github.com/Near-One/bridge-sdk-rs?rev=b838a28be06cabf04f7f256df79e4cfeadd2d012)",
  "ethers",
  "hex",
  "near-crypto",
@@ -5287,7 +5287,7 @@ dependencies = [
 [[package]]
 name = "near-bridge-client"
 version = "0.2.0"
-source = "git+https://github.com/Near-One/bridge-sdk-rs?rev=edd62c95e2b201a6ce8ceaf62f379ee8d41578c7#edd62c95e2b201a6ce8ceaf62f379ee8d41578c7"
+source = "git+https://github.com/Near-One/bridge-sdk-rs?rev=b838a28be06cabf04f7f256df79e4cfeadd2d012#b838a28be06cabf04f7f256df79e4cfeadd2d012"
 dependencies = [
  "borsh 1.5.5",
  "bridge-connector-common",
@@ -5470,7 +5470,7 @@ dependencies = [
 [[package]]
 name = "near-light-client-on-eth"
 version = "0.2.0"
-source = "git+https://github.com/Near-One/bridge-sdk-rs?rev=edd62c95e2b201a6ce8ceaf62f379ee8d41578c7#edd62c95e2b201a6ce8ceaf62f379ee8d41578c7"
+source = "git+https://github.com/Near-One/bridge-sdk-rs?rev=b838a28be06cabf04f7f256df79e4cfeadd2d012#b838a28be06cabf04f7f256df79e4cfeadd2d012"
 dependencies = [
  "ethereum-types 0.14.1",
  "ethers",
@@ -5563,7 +5563,7 @@ dependencies = [
 [[package]]
 name = "near-rpc-client"
 version = "0.2.0"
-source = "git+https://github.com/Near-One/bridge-sdk-rs?rev=edd62c95e2b201a6ce8ceaf62f379ee8d41578c7#edd62c95e2b201a6ce8ceaf62f379ee8d41578c7"
+source = "git+https://github.com/Near-One/bridge-sdk-rs?rev=b838a28be06cabf04f7f256df79e4cfeadd2d012#b838a28be06cabf04f7f256df79e4cfeadd2d012"
 dependencies = [
  "borsh 1.5.5",
  "lazy_static",
@@ -5919,13 +5919,13 @@ dependencies = [
 [[package]]
 name = "omni-connector"
 version = "0.2.8"
-source = "git+https://github.com/Near-One/bridge-sdk-rs?rev=edd62c95e2b201a6ce8ceaf62f379ee8d41578c7#edd62c95e2b201a6ce8ceaf62f379ee8d41578c7"
+source = "git+https://github.com/Near-One/bridge-sdk-rs?rev=b838a28be06cabf04f7f256df79e4cfeadd2d012#b838a28be06cabf04f7f256df79e4cfeadd2d012"
 dependencies = [
  "borsh 1.5.5",
  "bridge-connector-common",
  "crypto-utils",
  "derive_builder",
- "eth-proof 0.2.1 (git+https://github.com/Near-One/bridge-sdk-rs?rev=edd62c95e2b201a6ce8ceaf62f379ee8d41578c7)",
+ "eth-proof 0.2.1 (git+https://github.com/Near-One/bridge-sdk-rs?rev=b838a28be06cabf04f7f256df79e4cfeadd2d012)",
  "ethers",
  "evm-bridge-client",
  "hex",
@@ -8037,7 +8037,7 @@ dependencies = [
 [[package]]
 name = "solana-bridge-client"
 version = "0.2.3"
-source = "git+https://github.com/Near-One/bridge-sdk-rs?rev=edd62c95e2b201a6ce8ceaf62f379ee8d41578c7#edd62c95e2b201a6ce8ceaf62f379ee8d41578c7"
+source = "git+https://github.com/Near-One/bridge-sdk-rs?rev=b838a28be06cabf04f7f256df79e4cfeadd2d012#b838a28be06cabf04f7f256df79e4cfeadd2d012"
 dependencies = [
  "borsh 1.5.5",
  "derive_builder",
@@ -11886,7 +11886,7 @@ dependencies = [
 [[package]]
 name = "wormhole-bridge-client"
 version = "0.2.0"
-source = "git+https://github.com/Near-One/bridge-sdk-rs?rev=edd62c95e2b201a6ce8ceaf62f379ee8d41578c7#edd62c95e2b201a6ce8ceaf62f379ee8d41578c7"
+source = "git+https://github.com/Near-One/bridge-sdk-rs?rev=b838a28be06cabf04f7f256df79e4cfeadd2d012#b838a28be06cabf04f7f256df79e4cfeadd2d012"
 dependencies = [
  "bridge-connector-common",
  "derive_builder",

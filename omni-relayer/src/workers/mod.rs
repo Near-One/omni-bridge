@@ -672,18 +672,30 @@ async fn process_sign_transfer_event(
     }
 
     if config.bridge_indexer.api_url.is_some() {
-        let Ok(transfer) = utils::fee::get_transfer(&config, message_payload.transfer_id).await
-        else {
-            warn!("Failed to get transfer: {:?}", message_payload.transfer_id);
-            return Ok(EventAction::Retry);
+        let transfer_message = match connector
+            .near_get_transfer_message(message_payload.transfer_id)
+            .await
+        {
+            Ok(transfer_message) => transfer_message,
+            Err(err) => {
+                if err.to_string().contains("The transfer does not exist") {
+                    anyhow::bail!("Transfer does not exist: {:?} (probably fee is 0 or transfer was already finalized)", message_payload.transfer_id);
+                } else {
+                    warn!(
+                        "Failed to get transfer message: {:?}",
+                        message_payload.transfer_id
+                    );
+                    return Ok(EventAction::Retry);
+                }
+            }
         };
 
         match utils::fee::is_fee_sufficient(
             &config,
-            transfer.transfer_message.fee,
-            &transfer.transfer_message.sender,
-            &transfer.transfer_message.recipient,
-            &transfer.transfer_message.token,
+            transfer_message.fee,
+            &transfer_message.sender,
+            &transfer_message.recipient,
+            &transfer_message.token,
         )
         .await
         {
