@@ -3,7 +3,7 @@ use alloy::{
     signers::{k256::ecdsa::SigningKey, local::LocalSigner},
 };
 use near_primitives::types::AccountId;
-use omni_types::ChainKind;
+use omni_types::{ChainKind, OmniAddress};
 use serde::Deserialize;
 
 pub fn get_private_key(chain_kind: ChainKind) -> String {
@@ -68,6 +68,12 @@ pub struct Config {
     pub wormhole: Wormhole,
 }
 
+impl Config {
+    pub fn is_check_fee_enabled(&self) -> bool {
+        self.bridge_indexer.api_url.is_some()
+    }
+}
+
 #[derive(Debug, Clone, Deserialize)]
 pub struct Redis {
     pub url: String,
@@ -94,6 +100,7 @@ pub struct Near {
     pub rpc_url: String,
     pub token_locker_id: AccountId,
     pub credentials_path: Option<String>,
+    pub sign_without_checking_fee: Option<Vec<OmniAddress>>,
 }
 
 #[derive(Debug, Clone, Deserialize)]

@@ -14,6 +14,8 @@ token_locker_id = "omni.n-bridge.testnet"
 # Either provide a path to a credentials file or set it in the environment
 # Note: the path must be absolute
 # credentials_path = "/Users/username/.near-credentials/testnet/omni-relayer.testnet.json"
+# We won't check fee before signing transfer if account id matches on in array
+sign_without_checking_fee = ["near:aurora"]
 
 [eth]
 rpc_http_url = "https://sepolia.infura.io/v3/INFURA_API_KEY"

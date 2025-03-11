@@ -278,6 +278,7 @@ pub async fn process_events(
             } else if let Ok(omni_bridge_event) = serde_json::from_str::<OmniBridgeEvent>(&event) {
                 if let OmniBridgeEvent::SignTransferEvent { .. } = omni_bridge_event {
                     handlers.push(tokio::spawn({
+                        let config = config.clone();
                         let mut redis_connection = redis_connection.clone();
                         let connector = connector.clone();
                         let signer = signer.clone();
@@ -285,6 +286,7 @@ pub async fn process_events(
 
                         async move {
                             match process_sign_transfer_event(
+                                config,
                                 connector,
                                 signer,
                                 omni_bridge_event,
@@ -542,7 +544,13 @@ async fn process_near_transfer_event(
 
     info!("Trying to process InitTransferEvent/FinTransferEvent/UpdateFeeEvent");
 
-    if config.bridge_indexer.api_url.is_some() {
+    if config.is_check_fee_enabled()
+        && !config
+            .near
+            .sign_without_checking_fee
+            .as_ref()
+            .is_some_and(|list| list.contains(&transfer_message.sender))
+    {
         match utils::fee::is_fee_sufficient(
             &config,
             transfer_message.fee.clone(),
@@ -644,6 +652,7 @@ async fn process_near_transfer_event(
 }
 
 async fn process_sign_transfer_event(
+    config: config::Config,
     connector: Arc<OmniConnector>,
     signer: AccountId,
     sign_transfer_event: OmniBridgeEvent,
@@ -660,6 +669,47 @@ async fn process_sign_transfer_event(
 
     if message_payload.fee_recipient != Some(signer) {
         anyhow::bail!("Fee recipient mismatch");
+    }
+
+    if config.is_check_fee_enabled() {
+        let transfer_message = match connector
+            .near_get_transfer_message(message_payload.transfer_id)
+            .await
+        {
+            Ok(transfer_message) => transfer_message,
+            Err(err) => {
+                if err.to_string().contains("The transfer does not exist") {
+                    anyhow::bail!("Transfer does not exist: {:?} (probably fee is 0 or transfer was already finalized)", message_payload.transfer_id);
+                }
+
+                warn!(
+                    "Failed to get transfer message: {:?}",
+                    message_payload.transfer_id
+                );
+
+                return Ok(EventAction::Retry);
+            }
+        };
+
+        match utils::fee::is_fee_sufficient(
+            &config,
+            transfer_message.fee,
+            &transfer_message.sender,
+            &transfer_message.recipient,
+            &transfer_message.token,
+        )
+        .await
+        {
+            Ok(true) => {}
+            Ok(false) => {
+                warn!("Insufficient fee for transfer: {:?}", message_payload);
+                return Ok(EventAction::Retry);
+            }
+            Err(err) => {
+                warn!("Failed to check fee sufficiency: {}", err);
+                return Ok(EventAction::Retry);
+            }
+        }
     }
 
     let fin_transfer_args = match message_payload.recipient.get_chain() {
@@ -785,7 +835,7 @@ async fn process_evm_init_transfer_event(
             )
         })?;
 
-    if config.bridge_indexer.api_url.is_some() {
+    if config.is_check_fee_enabled() {
         let sender =
             utils::evm::string_to_evm_omniaddress(chain_kind, &init_log.inner.sender.to_string())
                 .map_err(|err| {
@@ -993,7 +1043,7 @@ async fn process_solana_init_transfer_event(
         )
     })?;
 
-    if config.bridge_indexer.api_url.is_some() {
+    if config.is_check_fee_enabled() {
         let sender = Pubkey::from_str(sender)?;
 
         let sender =

@@ -6,9 +6,9 @@ use omni_types::{Fee, OmniAddress};
 use crate::config;
 
 #[derive(Debug, serde::Deserialize)]
-struct TransferFeeResponse {
-    native_token_fee: Option<U128>,
-    transferred_token_fee: Option<U128>,
+pub struct TransferFeeResponse {
+    pub native_token_fee: Option<U128>,
+    pub transferred_token_fee: Option<U128>,
 }
 
 pub async fn is_fee_sufficient(
