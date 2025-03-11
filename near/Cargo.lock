@@ -1373,7 +1373,7 @@ dependencies = [
 
 [[package]]
 name = "evm-prover"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "borsh",
  "near-sdk",
@@ -3099,7 +3099,7 @@ dependencies = [
 
 [[package]]
 name = "omni-types"
-version = "2.0.1"
+version = "2.0.2"
 dependencies = [
  "alloy-primitives",
  "alloy-rlp",

@@ -26,6 +26,8 @@ pub struct BlockHeader {
     pub blob_gas_used: Option<U64>,
     pub excess_blob_gas: Option<U64>,
     pub parent_beacon_block_root: Option<H256>,
+    pub requests_hash: Option<H256>,
+
     pub hash: Option<H256>,
 }
 
@@ -91,6 +93,7 @@ impl Decodable for BlockHeader {
             blob_gas_used: iter.next_option()?,
             excess_blob_gas: iter.next_option()?,
             parent_beacon_block_root: iter.next_option()?,
+            requests_hash: iter.next_option()?,
             hash: None,
         };
 
@@ -131,6 +134,7 @@ impl Encodable for BlockHeader {
         self.parent_beacon_block_root
             .as_ref()
             .map(|v| stream.append(v));
+        self.requests_hash.as_ref().map(|v| stream.append(v));
 
         stream.finalize_unbounded_list();
     }
