@@ -68,6 +68,12 @@ pub struct Config {
     pub wormhole: Wormhole,
 }
 
+impl Config {
+    pub fn is_check_fee_enabled(&self) -> bool {
+        self.bridge_indexer.api_url.is_some()
+    }
+}
+
 #[derive(Debug, Clone, Deserialize)]
 pub struct Redis {
     pub url: String,

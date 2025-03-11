@@ -544,7 +544,7 @@ async fn process_near_transfer_event(
 
     info!("Trying to process InitTransferEvent/FinTransferEvent/UpdateFeeEvent");
 
-    if config.bridge_indexer.api_url.is_some()
+    if config.is_check_fee_enabled()
         && !config
             .near
             .sign_without_checking_fee
@@ -671,7 +671,7 @@ async fn process_sign_transfer_event(
         anyhow::bail!("Fee recipient mismatch");
     }
 
-    if config.bridge_indexer.api_url.is_some() {
+    if config.is_check_fee_enabled() {
         let transfer_message = match connector
             .near_get_transfer_message(message_payload.transfer_id)
             .await
@@ -835,7 +835,7 @@ async fn process_evm_init_transfer_event(
             )
         })?;
 
-    if config.bridge_indexer.api_url.is_some() {
+    if config.is_check_fee_enabled() {
         let sender =
             utils::evm::string_to_evm_omniaddress(chain_kind, &init_log.inner.sender.to_string())
                 .map_err(|err| {
@@ -1043,7 +1043,7 @@ async fn process_solana_init_transfer_event(
         )
     })?;
 
-    if config.bridge_indexer.api_url.is_some() {
+    if config.is_check_fee_enabled() {
         let sender = Pubkey::from_str(sender)?;
 
         let sender =
