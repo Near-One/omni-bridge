@@ -680,13 +680,14 @@ async fn process_sign_transfer_event(
             Err(err) => {
                 if err.to_string().contains("The transfer does not exist") {
                     anyhow::bail!("Transfer does not exist: {:?} (probably fee is 0 or transfer was already finalized)", message_payload.transfer_id);
-                } else {
-                    warn!(
-                        "Failed to get transfer message: {:?}",
-                        message_payload.transfer_id
-                    );
-                    return Ok(EventAction::Retry);
                 }
+
+                warn!(
+                    "Failed to get transfer message: {:?}",
+                    message_payload.transfer_id
+                );
+
+                return Ok(EventAction::Retry);
             }
         };
 
