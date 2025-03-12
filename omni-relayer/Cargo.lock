@@ -108,9 +108,9 @@ checksum = "683d7910e743518b0e34f1186f92494becacb047c7b6bf616c96772180fef923"
 
 [[package]]
 name = "alloy"
-version = "0.9.2"
+version = "0.12.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bbcc41e8a11a4975b18ec6afba2cc48d591fa63336a4c526dacb50479a8d6b35"
+checksum = "89ec9b8795b2083585293bd3d19033e9d67e725917c95c44cb154e3400529ccd"
 dependencies = [
  "alloy-consensus",
  "alloy-contract",
@@ -144,9 +144,9 @@ dependencies = [
 
 [[package]]
 name = "alloy-consensus"
-version = "0.9.2"
+version = "0.12.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f4138dc275554afa6f18c4217262ac9388790b2fc393c2dfe03c51d357abf013"
+checksum = "a84efb7b8ddb9223346bfad9d8094e1a100c254037a3b5913243bfa8e04be266"
 dependencies = [
  "alloy-eips",
  "alloy-primitives",
@@ -155,15 +155,21 @@ dependencies = [
  "alloy-trie",
  "auto_impl",
  "c-kzg",
- "derive_more 1.0.0",
+ "derive_more 2.0.1",
+ "either",
+ "k256",
+ "once_cell",
+ "rand 0.8.5",
  "serde",
+ "serde_with",
+ "thiserror 2.0.12",
 ]
 
 [[package]]
 name = "alloy-consensus-any"
-version = "0.9.2"
+version = "0.12.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0fa04e1882c31288ce1028fdf31b6ea94cfa9eafa2e497f903ded631c8c6a42c"
+checksum = "fafded0c1ff8f0275c4a484239058e1c01c0c2589f8a16e03669ef7094a06f9b"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
@@ -175,10 +181,11 @@ dependencies = [
 
 [[package]]
 name = "alloy-contract"
-version = "0.9.2"
+version = "0.12.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5f21886c1fea0626f755a49b2ac653b396fb345233f6170db2da3d0ada31560c"
+checksum = "7a0fa0584d13dd0c4e79288d411222c4d7c3411c71b7fa637cefda9dcf9bb1f9"
 dependencies = [
+ "alloy-consensus",
  "alloy-dyn-abi",
  "alloy-json-abi",
  "alloy-network",
@@ -225,6 +232,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "alloy-eip2124"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "675264c957689f0fd75f5993a73123c2cc3b5c235a38f5b9037fe6c826bfb2c0"
+dependencies = [
+ "alloy-primitives",
+ "alloy-rlp",
+ "crc",
+ "serde",
+ "thiserror 2.0.12",
+]
+
+[[package]]
 name = "alloy-eip2930"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -249,17 +269,20 @@ dependencies = [
 
 [[package]]
 name = "alloy-eips"
-version = "0.9.2"
+version = "0.12.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "52dd5869ed09e399003e0e0ec6903d981b2a92e74c5d37e6b40890bad2517526"
+checksum = "5f4bffedaddc627520eabdcbfe27a2d2c2f716e15295e2ed1010df3feae67040"
 dependencies = [
+ "alloy-eip2124",
  "alloy-eip2930",
  "alloy-eip7702",
  "alloy-primitives",
  "alloy-rlp",
  "alloy-serde",
+ "auto_impl",
  "c-kzg",
- "derive_more 1.0.0",
+ "derive_more 2.0.1",
+ "either",
  "once_cell",
  "serde",
  "sha2 0.10.8",
@@ -267,9 +290,9 @@ dependencies = [
 
 [[package]]
 name = "alloy-genesis"
-version = "0.9.2"
+version = "0.12.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e7d2a7fe5c1a9bd6793829ea21a636f30fc2b3f5d2e7418ba86d96e41dd1f460"
+checksum = "96b11774716152a5204aff0e86a8c841df499ea81464e2b1f82b3f72d6a2ef32"
 dependencies = [
  "alloy-eips",
  "alloy-primitives",
@@ -292,9 +315,9 @@ dependencies = [
 
 [[package]]
 name = "alloy-json-rpc"
-version = "0.9.2"
+version = "0.12.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2008bedb8159a255b46b7c8614516eda06679ea82f620913679afbd8031fea72"
+checksum = "6929e607b0a56803c69c68adc6e8aae1644c94e37ea458aa2d0713fc77490e70"
 dependencies = [
  "alloy-primitives",
  "alloy-sol-types",
@@ -306,9 +329,9 @@ dependencies = [
 
 [[package]]
 name = "alloy-network"
-version = "0.9.2"
+version = "0.12.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4556f01fe41d0677495df10a648ddcf7ce118b0e8aa9642a0e2b6dd1fb7259de"
+checksum = "c2b14524c3605ed5ee173b966333089474415416a8cfd80ceb003c18fd6d1736"
 dependencies = [
  "alloy-consensus",
  "alloy-consensus-any",
@@ -323,6 +346,7 @@ dependencies = [
  "alloy-sol-types",
  "async-trait",
  "auto_impl",
+ "derive_more 2.0.1",
  "futures-utils-wasm",
  "serde",
  "serde_json",
@@ -331,9 +355,9 @@ dependencies = [
 
 [[package]]
 name = "alloy-network-primitives"
-version = "0.9.2"
+version = "0.12.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f31c3c6b71340a1d076831823f09cb6e02de01de5c6630a9631bdb36f947ff80"
+checksum = "4c06932646544ea341f0fda48d2c0fe4fda75bc132379cb84019cdfb6ddcb0fb"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
@@ -344,12 +368,15 @@ dependencies = [
 
 [[package]]
 name = "alloy-node-bindings"
-version = "0.9.2"
+version = "0.12.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4520cd4bc5cec20c32c98e4bc38914c7fb96bf4a712105e44da186a54e65e3ba"
+checksum = "cb8702df5255ed061ccb452511328edf267ff8b1c356623e8f93a5b708d57273"
 dependencies = [
  "alloy-genesis",
+ "alloy-network",
  "alloy-primitives",
+ "alloy-signer",
+ "alloy-signer-local",
  "k256",
  "rand 0.8.5",
  "serde_json",
@@ -388,9 +415,9 @@ dependencies = [
 
 [[package]]
 name = "alloy-provider"
-version = "0.9.2"
+version = "0.12.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5a22c4441b3ebe2d77fa9cf629ba68c3f713eb91779cff84275393db97eddd82"
+checksum = "ff1ec2eabd9b3acc46e59247c35f75545960372431c68f7fdbfcfb970a486c30"
 dependencies = [
  "alloy-chains",
  "alloy-consensus",
@@ -404,8 +431,7 @@ dependencies = [
  "alloy-rpc-client",
  "alloy-rpc-types-anvil",
  "alloy-rpc-types-eth",
- "alloy-signer",
- "alloy-signer-local",
+ "alloy-sol-types",
  "alloy-transport",
  "alloy-transport-http",
  "alloy-transport-ws",
@@ -415,11 +441,10 @@ dependencies = [
  "dashmap 6.1.0",
  "futures",
  "futures-utils-wasm",
- "lru",
+ "lru 0.13.0",
  "parking_lot",
  "pin-project",
  "reqwest 0.12.14",
- "schnellru",
  "serde",
  "serde_json",
  "thiserror 2.0.12",
@@ -431,9 +456,9 @@ dependencies = [
 
 [[package]]
 name = "alloy-pubsub"
-version = "0.9.2"
+version = "0.12.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2269fd635f7b505f27c63a3cb293148cd02301efce4c8bdd9ff54fbfc4a20e23"
+checksum = "b1cf194abddb88b034d22ab41449ed8532e5113e58699cd055bf21d98a0991ab"
 dependencies = [
  "alloy-json-rpc",
  "alloy-primitives",
@@ -472,9 +497,9 @@ dependencies = [
 
 [[package]]
 name = "alloy-rpc-client"
-version = "0.9.2"
+version = "0.12.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d06a292b37e182e514903ede6e623b9de96420e8109ce300da288a96d88b7e4b"
+checksum = "6213829d8eabc239c2f9572452a5993ebdf78b04c020abc450ae48c54261d4ce"
 dependencies = [
  "alloy-json-rpc",
  "alloy-primitives",
@@ -497,9 +522,9 @@ dependencies = [
 
 [[package]]
 name = "alloy-rpc-types"
-version = "0.9.2"
+version = "0.12.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9383845dd924939e7ab0298bbfe231505e20928907d7905aa3bf112287305e06"
+checksum = "a153db94cf231b03238fe4da48f59dc6f36e01b5e4d5a2e30de33b95395380fa"
 dependencies = [
  "alloy-primitives",
  "alloy-rpc-types-eth",
@@ -509,9 +534,9 @@ dependencies = [
 
 [[package]]
 name = "alloy-rpc-types-anvil"
-version = "0.9.2"
+version = "0.12.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "11495cb8c8d3141fc27556a4c9188b81531ad5ec3076a0394c61a6dcfbce9f34"
+checksum = "5462937f088889c337c236c2509226e87a26301d2b01f9fafee246bd84cb0407"
 dependencies = [
  "alloy-primitives",
  "alloy-rpc-types-eth",
@@ -521,9 +546,9 @@ dependencies = [
 
 [[package]]
 name = "alloy-rpc-types-any"
-version = "0.9.2"
+version = "0.12.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ca445cef0eb6c2cf51cfb4e214fbf1ebd00893ae2e6f3b944c8101b07990f988"
+checksum = "2cd4ceea38ea27eeb26f021df34ed5b7b793704ad7a2a009f16137a19461e7ca"
 dependencies = [
  "alloy-consensus-any",
  "alloy-rpc-types-eth",
@@ -532,9 +557,9 @@ dependencies = [
 
 [[package]]
 name = "alloy-rpc-types-eth"
-version = "0.9.2"
+version = "0.12.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0938bc615c02421bd86c1733ca7205cc3d99a122d9f9bff05726bd604b76a5c2"
+checksum = "8e18d94b1036302720b987564560e4a5b85035a17553c53a50afa2bd8762b487"
 dependencies = [
  "alloy-consensus",
  "alloy-consensus-any",
@@ -544,7 +569,7 @@ dependencies = [
  "alloy-rlp",
  "alloy-serde",
  "alloy-sol-types",
- "itertools 0.13.0",
+ "itertools 0.14.0",
  "serde",
  "serde_json",
  "thiserror 2.0.12",
@@ -552,9 +577,9 @@ dependencies = [
 
 [[package]]
 name = "alloy-serde"
-version = "0.9.2"
+version = "0.12.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ae0465c71d4dced7525f408d84873aeebb71faf807d22d74c4a426430ccd9b55"
+checksum = "9824e1bf92cd7848ca6fabb01c9aca15c9c5fb0ab96da5514ef0543f021c69f6"
 dependencies = [
  "alloy-primitives",
  "serde",
@@ -563,13 +588,14 @@ dependencies = [
 
 [[package]]
 name = "alloy-signer"
-version = "0.9.2"
+version = "0.12.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9bfa395ad5cc952c82358d31e4c68b27bf4a89a5456d9b27e226e77dac50e4ff"
+checksum = "81755ed6a6a33061302ac95e9bb7b40ebf7078e4568397168024242bc31a3e58"
 dependencies = [
  "alloy-primitives",
  "async-trait",
  "auto_impl",
+ "either",
  "elliptic-curve 0.13.8",
  "k256",
  "thiserror 2.0.12",
@@ -577,9 +603,9 @@ dependencies = [
 
 [[package]]
 name = "alloy-signer-local"
-version = "0.9.2"
+version = "0.12.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fbdc63ce9eda1283fcbaca66ba4a414b841c0e3edbeef9c86a71242fc9e84ccc"
+checksum = "aa857621a5c95c13e640e18bb9c4720f4338a666d6276f55446477a6bc3912ff"
 dependencies = [
  "alloy-consensus",
  "alloy-network",
@@ -611,6 +637,7 @@ version = "0.8.22"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "46ff7aa715eb2404cb87fa94390d2c5d5addd70d9617e20b2398ee6f48cb21f0"
 dependencies = [
+ "alloy-json-abi",
  "alloy-sol-macro-input",
  "const-hex",
  "heck 0.5.0",
@@ -629,11 +656,13 @@ version = "0.8.22"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6f105fa700140c0cc6e2c3377adef650c389ac57b8ead8318a2e6bd52f1ae841"
 dependencies = [
+ "alloy-json-abi",
  "const-hex",
  "dunce",
  "heck 0.5.0",
  "proc-macro2",
  "quote",
+ "serde_json",
  "syn 2.0.100",
  "syn-solidity",
 ]
@@ -663,13 +692,12 @@ dependencies = [
 
 [[package]]
 name = "alloy-transport"
-version = "0.9.2"
+version = "0.12.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d17722a198f33bbd25337660787aea8b8f57814febb7c746bc30407bdfc39448"
+checksum = "6c74598eb65cefa886be6ba624c14a6856d9d84339ec720520f3efcc03311716"
 dependencies = [
  "alloy-json-rpc",
  "base64 0.22.1",
- "futures-util",
  "futures-utils-wasm",
  "serde",
  "serde_json",
@@ -683,9 +711,9 @@ dependencies = [
 
 [[package]]
 name = "alloy-transport-http"
-version = "0.9.2"
+version = "0.12.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6e1509599021330a31c4a6816b655e34bf67acb1cc03c564e09fd8754ff6c5de"
+checksum = "cfcd2f8ab2f053cd848ead5d625cb1b63716562951101588c1fa49300e3c6418"
 dependencies = [
  "alloy-json-rpc",
  "alloy-transport",
@@ -698,9 +726,9 @@ dependencies = [
 
 [[package]]
 name = "alloy-transport-ws"
-version = "0.9.2"
+version = "0.12.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "58011745b2f17b334db40df9077d75b181f78360a5bc5c35519e15d4bfce15e2"
+checksum = "67ddcf4b98b3448eb998e057dc5a27345997863d6544ee7f0f79957616768dd3"
 dependencies = [
  "alloy-pubsub",
  "alloy-transport",
@@ -709,7 +737,7 @@ dependencies = [
  "rustls 0.23.23",
  "serde_json",
  "tokio",
- "tokio-tungstenite 0.24.0",
+ "tokio-tungstenite 0.26.2",
  "tracing",
  "ws_stream_wasm",
 ]
@@ -1293,7 +1321,7 @@ dependencies = [
  "http 0.2.12",
  "http 1.3.1",
  "http-body 0.4.6",
- "lru",
+ "lru 0.12.5",
  "once_cell",
  "percent-encoding",
  "regex-lite",
@@ -1893,9 +1921,9 @@ dependencies = [
 [[package]]
 name = "bridge-connector-common"
 version = "0.2.0"
-source = "git+https://github.com/Near-One/bridge-sdk-rs?rev=957698c65bab6ad5f9b6e3d6b72dd62599138e1e#957698c65bab6ad5f9b6e3d6b72dd62599138e1e"
+source = "git+https://github.com/Near-One/bridge-sdk-rs?rev=912e4db2168df8a2f5d5a07a844b1916d78ae12b#912e4db2168df8a2f5d5a07a844b1916d78ae12b"
 dependencies = [
- "eth-proof 0.2.1 (git+https://github.com/Near-One/bridge-sdk-rs?rev=957698c65bab6ad5f9b6e3d6b72dd62599138e1e)",
+ "eth-proof",
  "ethers",
  "near-light-client-on-eth",
  "near-rpc-client",
@@ -2612,12 +2640,12 @@ dependencies = [
 [[package]]
 name = "crypto-utils"
 version = "0.2.0"
-source = "git+https://github.com/Near-One/bridge-sdk-rs?rev=957698c65bab6ad5f9b6e3d6b72dd62599138e1e#957698c65bab6ad5f9b6e3d6b72dd62599138e1e"
+source = "git+https://github.com/Near-One/bridge-sdk-rs?rev=912e4db2168df8a2f5d5a07a844b1916d78ae12b#912e4db2168df8a2f5d5a07a844b1916d78ae12b"
 dependencies = [
  "crypto-shared",
  "ethers",
- "near-crypto",
- "near-primitives",
+ "near-crypto 0.29.1",
+ "near-primitives 0.29.1",
 ]
 
 [[package]]
@@ -3112,6 +3140,9 @@ name = "either"
 version = "1.15.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "48c757948c5ede0e46177b7add2e67155f70e33c07fea8284df6576da70b3719"
+dependencies = [
+ "serde",
+]
 
 [[package]]
 name = "elliptic-curve"
@@ -3302,26 +3333,7 @@ dependencies = [
 [[package]]
 name = "eth-proof"
 version = "0.2.1"
-source = "git+https://github.com/Near-One/bridge-sdk-rs?rev=957698c65bab6ad5f9b6e3d6b72dd62599138e1e#957698c65bab6ad5f9b6e3d6b72dd62599138e1e"
-dependencies = [
- "borsh 1.5.5",
- "cita_trie",
- "ethereum-types 0.14.1",
- "hasher",
- "hex",
- "omni-types",
- "reqwest 0.12.14",
- "rlp 0.5.2",
- "serde",
- "serde_json",
- "thiserror 2.0.12",
- "tokio",
-]
-
-[[package]]
-name = "eth-proof"
-version = "0.2.1"
-source = "git+https://github.com/Near-One/bridge-sdk-rs#957698c65bab6ad5f9b6e3d6b72dd62599138e1e"
+source = "git+https://github.com/Near-One/bridge-sdk-rs?rev=912e4db2168df8a2f5d5a07a844b1916d78ae12b#912e4db2168df8a2f5d5a07a844b1916d78ae12b"
 dependencies = [
  "borsh 1.5.5",
  "cita_trie",
@@ -3690,17 +3702,17 @@ dependencies = [
 [[package]]
 name = "evm-bridge-client"
 version = "0.2.1"
-source = "git+https://github.com/Near-One/bridge-sdk-rs?rev=957698c65bab6ad5f9b6e3d6b72dd62599138e1e#957698c65bab6ad5f9b6e3d6b72dd62599138e1e"
+source = "git+https://github.com/Near-One/bridge-sdk-rs?rev=912e4db2168df8a2f5d5a07a844b1916d78ae12b#912e4db2168df8a2f5d5a07a844b1916d78ae12b"
 dependencies = [
  "borsh 1.5.5",
  "bridge-connector-common",
  "derive_builder",
- "eth-proof 0.2.1 (git+https://github.com/Near-One/bridge-sdk-rs?rev=957698c65bab6ad5f9b6e3d6b72dd62599138e1e)",
+ "eth-proof",
  "ethers",
  "hex",
- "near-crypto",
+ "near-crypto 0.29.1",
  "near-jsonrpc-client",
- "near-primitives",
+ "near-primitives 0.29.1",
  "near-rpc-client",
  "near-token",
  "omni-types",
@@ -4845,9 +4857,9 @@ dependencies = [
 
 [[package]]
 name = "itertools"
-version = "0.13.0"
+version = "0.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "413ee7dfc52ee1a4949ceeb7dbc8a33f2d6c088194d9f922fb8318faf1f01186"
+checksum = "2b192c782037fadd9cfa75548310488aabdbf3d2da73885b31bd0abd03351285"
 dependencies = [
  "either",
 ]
@@ -5132,6 +5144,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "lru"
+version = "0.13.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "227748d55f2f0ab4735d87fd623798cb6b664512fe979705f829c9f81c934465"
+dependencies = [
+ "hashbrown 0.15.2",
+]
+
+[[package]]
 name = "md-5"
 version = "0.10.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5268,15 +5289,15 @@ dependencies = [
 [[package]]
 name = "near-bridge-client"
 version = "0.2.0"
-source = "git+https://github.com/Near-One/bridge-sdk-rs?rev=957698c65bab6ad5f9b6e3d6b72dd62599138e1e#957698c65bab6ad5f9b6e3d6b72dd62599138e1e"
+source = "git+https://github.com/Near-One/bridge-sdk-rs?rev=912e4db2168df8a2f5d5a07a844b1916d78ae12b#912e4db2168df8a2f5d5a07a844b1916d78ae12b"
 dependencies = [
  "borsh 1.5.5",
  "bridge-connector-common",
  "derive_builder",
  "near-contract-standards",
- "near-crypto",
+ "near-crypto 0.29.1",
  "near-jsonrpc-client",
- "near-primitives",
+ "near-primitives 0.29.1",
  "near-rpc-client",
  "near-token",
  "omni-types",
@@ -5287,24 +5308,24 @@ dependencies = [
 
 [[package]]
 name = "near-chain-configs"
-version = "0.28.0"
+version = "0.29.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4c1f312b5e1cdb6d6eb8a753de5798fe70fc2aa048b37d9a08a8d63f5623707d"
+checksum = "97fbc0ca140fff8cee481a158b4c8fb6941cc32bf17f69548067bcd6c61e3e41"
 dependencies = [
  "anyhow",
  "bytesize",
  "chrono",
- "derive_more 0.99.19",
- "near-config-utils",
- "near-crypto",
- "near-parameters",
- "near-primitives",
- "near-time",
+ "derive_more 1.0.0",
+ "near-config-utils 0.29.1",
+ "near-crypto 0.29.1",
+ "near-parameters 0.29.1",
+ "near-primitives 0.29.1",
+ "near-time 0.29.1",
  "num-rational 0.3.2",
  "serde",
  "serde_json",
  "sha2 0.10.8",
- "smart-default",
+ "smart-default 0.7.1",
  "time",
  "tracing",
 ]
@@ -5314,6 +5335,18 @@ name = "near-config-utils"
 version = "0.28.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bedc768765dd8229a1d960c94f517317f40771a003e78916124784c7d6ea9d74"
+dependencies = [
+ "anyhow",
+ "json_comments",
+ "thiserror 2.0.12",
+ "tracing",
+]
+
+[[package]]
+name = "near-config-utils"
+version = "0.29.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "18f9b46b53fb224e1cd770c6d25f0158f7fb56f76155bf3376a3f87df2d8821a"
 dependencies = [
  "anyhow",
  "json_comments",
@@ -5344,9 +5377,34 @@ dependencies = [
  "ed25519-dalek 2.1.1",
  "hex",
  "near-account-id",
- "near-config-utils",
- "near-schema-checker-lib",
- "near-stdx",
+ "near-config-utils 0.28.0",
+ "near-schema-checker-lib 0.28.0",
+ "near-stdx 0.28.0",
+ "primitive-types 0.10.1",
+ "secp256k1",
+ "serde",
+ "serde_json",
+ "subtle",
+ "thiserror 2.0.12",
+]
+
+[[package]]
+name = "near-crypto"
+version = "0.29.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c8c1f2937cf0aa0d345cb1c66946d4cb3b6367d0a97063152200ca1573c10ef0"
+dependencies = [
+ "blake2",
+ "borsh 1.5.5",
+ "bs58 0.4.0",
+ "curve25519-dalek 4.1.3",
+ "derive_more 1.0.0",
+ "ed25519-dalek 2.1.1",
+ "hex",
+ "near-account-id",
+ "near-config-utils 0.29.1",
+ "near-schema-checker-lib 0.29.1",
+ "near-stdx 0.29.1",
  "primitive-types 0.10.1",
  "rand 0.8.5",
  "secp256k1",
@@ -5362,7 +5420,16 @@ version = "0.28.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f14f36eee2dcb0ecd8febb9f198e0e1fa768c834db9e1982ad2acfcd04b45acf"
 dependencies = [
- "near-primitives-core",
+ "near-primitives-core 0.28.0",
+]
+
+[[package]]
+name = "near-fmt"
+version = "0.29.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "913b8f3d375cad633cf609bdeecedbd51711ca6243e478afc57915b427386020"
+dependencies = [
+ "near-primitives-core 0.29.1",
 ]
 
 [[package]]
@@ -5381,24 +5448,24 @@ version = "0.28.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "008a7f45c5ffb9e65f7e44b60fb6128a3022aaf304010a9b72090391d7788f6b"
 dependencies = [
- "near-primitives",
+ "near-primitives 0.28.0",
  "serde",
  "serde_json",
 ]
 
 [[package]]
 name = "near-jsonrpc-client"
-version = "0.15.1"
+version = "0.16.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e66a0c4c47f2fbbfa11ea8317fce2288d70d4aa8231e77fd213721ffcc1c334f"
+checksum = "1e1b675cc4b1515472621d81d4ab724bd5d3d3b9974c575cdef2b7a477c5baff"
 dependencies = [
  "borsh 1.5.5",
  "lazy_static",
  "log",
  "near-chain-configs",
- "near-crypto",
+ "near-crypto 0.29.1",
  "near-jsonrpc-primitives",
- "near-primitives",
+ "near-primitives 0.29.1",
  "reqwest 0.12.14",
  "serde",
  "serde_json",
@@ -5407,15 +5474,15 @@ dependencies = [
 
 [[package]]
 name = "near-jsonrpc-primitives"
-version = "0.28.0"
+version = "0.29.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "90f445f809d1f227f0f61f38c14271635c0bc9a28a8f74a803a4fb25292d5ea7"
+checksum = "21da8cfb88828b88ffb45d54c4dfff7882c9d310437103c6904a4ecce0ea6ba1"
 dependencies = [
  "arbitrary",
  "near-chain-configs",
- "near-crypto",
- "near-primitives",
- "near-schema-checker-lib",
+ "near-crypto 0.29.1",
+ "near-primitives 0.29.1",
+ "near-schema-checker-lib 0.29.1",
  "serde",
  "serde_json",
  "thiserror 2.0.12",
@@ -5451,7 +5518,7 @@ dependencies = [
 [[package]]
 name = "near-light-client-on-eth"
 version = "0.2.0"
-source = "git+https://github.com/Near-One/bridge-sdk-rs?rev=957698c65bab6ad5f9b6e3d6b72dd62599138e1e#957698c65bab6ad5f9b6e3d6b72dd62599138e1e"
+source = "git+https://github.com/Near-One/bridge-sdk-rs?rev=912e4db2168df8a2f5d5a07a844b1916d78ae12b#912e4db2168df8a2f5d5a07a844b1916d78ae12b"
 dependencies = [
  "ethereum-types 0.14.1",
  "ethers",
@@ -5468,8 +5535,27 @@ dependencies = [
  "borsh 1.5.5",
  "enum-map",
  "near-account-id",
- "near-primitives-core",
- "near-schema-checker-lib",
+ "near-primitives-core 0.28.0",
+ "near-schema-checker-lib 0.28.0",
+ "num-rational 0.3.2",
+ "serde",
+ "serde_repr",
+ "serde_yaml",
+ "strum 0.24.1",
+ "thiserror 2.0.12",
+]
+
+[[package]]
+name = "near-parameters"
+version = "0.29.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3de756a75428855c490aa311a4bdd949e0c1a3a4ce7b52b1259243f31b5ffcda"
+dependencies = [
+ "borsh 1.5.5",
+ "enum-map",
+ "near-account-id",
+ "near-primitives-core 0.29.1",
+ "near-schema-checker-lib 0.29.1",
  "num-rational 0.3.2",
  "serde",
  "serde_repr",
@@ -5497,13 +5583,53 @@ dependencies = [
  "enum-map",
  "hex",
  "itertools 0.10.5",
- "near-crypto",
- "near-fmt",
- "near-parameters",
- "near-primitives-core",
- "near-schema-checker-lib",
- "near-stdx",
- "near-time",
+ "near-crypto 0.28.0",
+ "near-fmt 0.28.0",
+ "near-parameters 0.28.0",
+ "near-primitives-core 0.28.0",
+ "near-schema-checker-lib 0.28.0",
+ "near-stdx 0.28.0",
+ "near-time 0.28.0",
+ "num-rational 0.3.2",
+ "ordered-float",
+ "primitive-types 0.10.1",
+ "serde",
+ "serde_json",
+ "serde_with",
+ "sha3",
+ "smart-default 0.6.0",
+ "strum 0.24.1",
+ "thiserror 2.0.12",
+ "tracing",
+ "zstd 0.13.3",
+]
+
+[[package]]
+name = "near-primitives"
+version = "0.29.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a1ce9c175be8d84580f90d0230cb6d4b3717b455983e0b20f88b0a927ff88820"
+dependencies = [
+ "arbitrary",
+ "base64 0.21.7",
+ "bitvec",
+ "borsh 1.5.5",
+ "bytes",
+ "bytesize",
+ "cfg-if 1.0.0",
+ "chrono",
+ "derive_more 1.0.0",
+ "easy-ext",
+ "enum-map",
+ "hex",
+ "itertools 0.12.1",
+ "near-crypto 0.29.1",
+ "near-fmt 0.29.1",
+ "near-parameters 0.29.1",
+ "near-primitives-core 0.29.1",
+ "near-schema-checker-lib 0.29.1",
+ "near-stdx 0.29.1",
+ "near-time 0.29.1",
  "num-rational 0.3.2",
  "ordered-float",
  "primitive-types 0.10.1",
@@ -5513,7 +5639,7 @@ dependencies = [
  "serde_json",
  "serde_with",
  "sha3",
- "smart-default",
+ "smart-default 0.7.1",
  "strum 0.24.1",
  "thiserror 2.0.12",
  "tracing",
@@ -5533,7 +5659,28 @@ dependencies = [
  "derive_more 0.99.19",
  "enum-map",
  "near-account-id",
- "near-schema-checker-lib",
+ "near-schema-checker-lib 0.28.0",
+ "num-rational 0.3.2",
+ "serde",
+ "serde_repr",
+ "sha2 0.10.8",
+ "thiserror 2.0.12",
+]
+
+[[package]]
+name = "near-primitives-core"
+version = "0.29.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "84e870e229a74dcc989321cacb96a79d57919d2995c81ae729d1dde3bf5f1b13"
+dependencies = [
+ "arbitrary",
+ "base64 0.21.7",
+ "borsh 1.5.5",
+ "bs58 0.4.0",
+ "derive_more 1.0.0",
+ "enum-map",
+ "near-account-id",
+ "near-schema-checker-lib 0.29.1",
  "num-rational 0.3.2",
  "serde",
  "serde_repr",
@@ -5544,14 +5691,14 @@ dependencies = [
 [[package]]
 name = "near-rpc-client"
 version = "0.2.0"
-source = "git+https://github.com/Near-One/bridge-sdk-rs?rev=957698c65bab6ad5f9b6e3d6b72dd62599138e1e#957698c65bab6ad5f9b6e3d6b72dd62599138e1e"
+source = "git+https://github.com/Near-One/bridge-sdk-rs?rev=912e4db2168df8a2f5d5a07a844b1916d78ae12b#912e4db2168df8a2f5d5a07a844b1916d78ae12b"
 dependencies = [
  "borsh 1.5.5",
  "lazy_static",
- "near-crypto",
+ "near-crypto 0.29.1",
  "near-jsonrpc-client",
  "near-jsonrpc-primitives",
- "near-primitives",
+ "near-primitives 0.29.1",
  "reqwest 0.12.14",
  "serde_json",
  "thiserror 2.0.12",
@@ -5565,13 +5712,29 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a48405425eca34de98e680416310df33fdb75768a78481cc75b43172b2748613"
 
 [[package]]
+name = "near-schema-checker-core"
+version = "0.29.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "943ce3e4f7e8bf6ccd757dd4eb2bfa7de0fba198c4f53db86a5f4e03e807be7e"
+
+[[package]]
 name = "near-schema-checker-lib"
 version = "0.28.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dfb720bf5cc256af687a9eb7a6e05baf3668dc75cfd43098e83ba1b3d3900f08"
 dependencies = [
- "near-schema-checker-core",
- "near-schema-checker-macro",
+ "near-schema-checker-core 0.28.0",
+ "near-schema-checker-macro 0.28.0",
+]
+
+[[package]]
+name = "near-schema-checker-lib"
+version = "0.29.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5cded00cc174e6d70d8503784ac46a947ecb8eb06b1a75653fc46a15f4bdfc73"
+dependencies = [
+ "near-schema-checker-core 0.29.1",
+ "near-schema-checker-macro 0.29.1",
 ]
 
 [[package]]
@@ -5579,6 +5742,12 @@ name = "near-schema-checker-macro"
 version = "0.28.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b41a159cbf732acc0279febdde046d9036330a32a951796bce42f9529bce799d"
+
+[[package]]
+name = "near-schema-checker-macro"
+version = "0.29.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d0906c4a3962bc31e9737da0884e3595065b37eb3117848c6d73be3746cc734b"
 
 [[package]]
 name = "near-sdk"
@@ -5624,6 +5793,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7a91674768828a593f4bac4aeca9334c4b56fe19344a2ccf7bd795b2325f0b5e"
 
 [[package]]
+name = "near-stdx"
+version = "0.29.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9259168eb4953dddd96a27aafdeabae2c3909658ea66f60f6836859662cfdf2f"
+
+[[package]]
 name = "near-sys"
 version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5634,6 +5809,16 @@ name = "near-time"
 version = "0.28.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c92bf9dffb11126e8db9a6a51bcb330c8584d0bab0d6d14c20cf2ff1f16d684d"
+dependencies = [
+ "serde",
+ "time",
+]
+
+[[package]]
+name = "near-time"
+version = "0.29.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ed079661e2bd03c60d858ba2b2991adb59749b971c36bce0758dffedb59315df"
 dependencies = [
  "serde",
  "time",
@@ -5900,21 +6085,21 @@ dependencies = [
 [[package]]
 name = "omni-connector"
 version = "0.2.8"
-source = "git+https://github.com/Near-One/bridge-sdk-rs?rev=957698c65bab6ad5f9b6e3d6b72dd62599138e1e#957698c65bab6ad5f9b6e3d6b72dd62599138e1e"
+source = "git+https://github.com/Near-One/bridge-sdk-rs?rev=912e4db2168df8a2f5d5a07a844b1916d78ae12b#912e4db2168df8a2f5d5a07a844b1916d78ae12b"
 dependencies = [
  "borsh 1.5.5",
  "bridge-connector-common",
  "crypto-utils",
  "derive_builder",
- "eth-proof 0.2.1 (git+https://github.com/Near-One/bridge-sdk-rs?rev=957698c65bab6ad5f9b6e3d6b72dd62599138e1e)",
+ "eth-proof",
  "ethers",
  "evm-bridge-client",
  "hex",
  "near-bridge-client",
  "near-contract-standards",
- "near-crypto",
+ "near-crypto 0.29.1",
  "near-jsonrpc-client",
- "near-primitives",
+ "near-primitives 0.29.1",
  "near-rpc-client",
  "near-token",
  "omni-types",
@@ -5937,18 +6122,18 @@ dependencies = [
  "chrono",
  "clap",
  "dotenv",
- "eth-proof 0.2.1 (git+https://github.com/Near-One/bridge-sdk-rs)",
+ "eth-proof",
  "ethereum-types 0.14.1",
  "evm-bridge-client",
  "futures",
  "hex",
  "log",
  "near-bridge-client",
- "near-crypto",
+ "near-crypto 0.29.1",
  "near-jsonrpc-client",
  "near-jsonrpc-primitives",
  "near-lake-framework",
- "near-primitives",
+ "near-primitives 0.29.1",
  "near-rpc-client",
  "near-sdk",
  "omni-connector",
@@ -6663,6 +6848,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "rand"
+version = "0.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3779b94aeb87e8bd4e834cee3650289ee9e0d5677f976ecdb6d219e5f4f6cd94"
+dependencies = [
+ "rand_chacha 0.9.0",
+ "rand_core 0.9.3",
+ "zerocopy 0.8.23",
+]
+
+[[package]]
 name = "rand_chacha"
 version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6683,6 +6879,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "rand_chacha"
+version = "0.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d3022b5f1df60f26e1ffddd6c66e8aa15de382ae63b3a0c1bfc0e4d3e3f325cb"
+dependencies = [
+ "ppv-lite86",
+ "rand_core 0.9.3",
+]
+
+[[package]]
 name = "rand_core"
 version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6699,6 +6905,15 @@ checksum = "ec0be4795e2f6a28069bec0b5ff3e2ac9bafc99e6a9a7dc3547996c5c816922c"
 dependencies = [
  "getrandom 0.2.15",
  "serde",
+]
+
+[[package]]
+name = "rand_core"
+version = "0.9.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "99d9a13982dcf210057a8a78572b2217b667c3beacbf3a0d8b454f6f82837d38"
+dependencies = [
+ "getrandom 0.3.1",
 ]
 
 [[package]]
@@ -6750,9 +6965,9 @@ dependencies = [
 
 [[package]]
 name = "redis"
-version = "0.28.2"
+version = "0.29.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e37ec3fd44bea2ec947ba6cc7634d7999a6590aca7c35827c250bc0de502bda6"
+checksum = "8034fb926579ff49d3fe58d288d5dcb580bf11e9bccd33224b45adebf0fd0c23"
 dependencies = [
  "arc-swap",
  "bytes",
@@ -7368,17 +7583,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "schnellru"
-version = "0.2.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "356285bbf17bea63d9e52e96bd18f039672ac92b55b8cb997d6162a2a37d1649"
-dependencies = [
- "ahash",
- "cfg-if 1.0.0",
- "hashbrown 0.13.2",
-]
-
-[[package]]
 name = "scopeguard"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7836,6 +8040,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "smart-default"
+version = "0.7.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0eb01866308440fc64d6c44d9e86c5cc17adfe33c4d6eed55da9145044d0ffc1"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.100",
+]
+
+[[package]]
 name = "socket2"
 version = "0.5.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8019,7 +8234,7 @@ dependencies = [
 [[package]]
 name = "solana-bridge-client"
 version = "0.2.3"
-source = "git+https://github.com/Near-One/bridge-sdk-rs?rev=957698c65bab6ad5f9b6e3d6b72dd62599138e1e#957698c65bab6ad5f9b6e3d6b72dd62599138e1e"
+source = "git+https://github.com/Near-One/bridge-sdk-rs?rev=912e4db2168df8a2f5d5a07a844b1916d78ae12b#912e4db2168df8a2f5d5a07a844b1916d78ae12b"
 dependencies = [
  "borsh 1.5.5",
  "derive_builder",
@@ -10953,9 +11168,9 @@ dependencies = [
 
 [[package]]
 name = "tokio-tungstenite"
-version = "0.24.0"
+version = "0.26.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "edc5f74e248dc973e0dbb7b74c7e0d6fcc301c694ff50049504004ef4d0cdcd9"
+checksum = "7a9daff607c6d2bf6c16fd681ccb7eecc83e4e2cdc1ca067ffaadfca5de7f084"
 dependencies = [
  "futures-util",
  "log",
@@ -10963,7 +11178,7 @@ dependencies = [
  "rustls-pki-types",
  "tokio",
  "tokio-rustls 0.26.2",
- "tungstenite 0.24.0",
+ "tungstenite 0.26.2",
  "webpki-roots 0.26.8",
 ]
 
@@ -11121,21 +11336,20 @@ dependencies = [
 
 [[package]]
 name = "tungstenite"
-version = "0.24.0"
+version = "0.26.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "18e5b8366ee7a95b16d32197d0b2604b43a0be89dc5fac9f8e96ccafbaedda8a"
+checksum = "4793cb5e56680ecbb1d843515b23b6de9a75eb04b66643e256a396d43be33c13"
 dependencies = [
- "byteorder",
  "bytes",
  "data-encoding",
  "http 1.3.1",
  "httparse",
  "log",
- "rand 0.8.5",
+ "rand 0.9.0",
  "rustls 0.23.23",
  "rustls-pki-types",
  "sha1",
- "thiserror 1.0.69",
+ "thiserror 2.0.12",
  "utf-8",
 ]
 
@@ -11868,12 +12082,12 @@ dependencies = [
 [[package]]
 name = "wormhole-bridge-client"
 version = "0.2.0"
-source = "git+https://github.com/Near-One/bridge-sdk-rs?rev=957698c65bab6ad5f9b6e3d6b72dd62599138e1e#957698c65bab6ad5f9b6e3d6b72dd62599138e1e"
+source = "git+https://github.com/Near-One/bridge-sdk-rs?rev=912e4db2168df8a2f5d5a07a844b1916d78ae12b#912e4db2168df8a2f5d5a07a844b1916d78ae12b"
 dependencies = [
  "bridge-connector-common",
  "derive_builder",
  "hex",
- "near-primitives",
+ "near-primitives 0.29.1",
  "reqwest 0.12.14",
  "serde",
  "serde_json",
