@@ -38,6 +38,10 @@ async fn main() -> Result<()> {
     dotenv::dotenv().ok();
     pretty_env_logger::init_timed();
 
+    rustls::crypto::ring::default_provider()
+        .install_default()
+        .expect("Failed to install rustls crypto provider");
+
     let args = CliArgs::parse();
 
     let config = toml::from_str::<config::Config>(
