@@ -1,0 +1,6 @@
+[bans]
+
+deny = [
+  { crate = "aws-lc-rs", reason = "this crate introduces exorbitant build effort and breaks cross-compilation" },
+  { crate = "aws-lc-sys", reason = "this crate introduces exorbitant build effort and breaks cross-compilation" },
+]
