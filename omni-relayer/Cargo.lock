@@ -1225,7 +1225,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dabb68eb3a7aa08b46fddfd59a3d55c978243557a90ab804769f7e20e67d2b01"
 dependencies = [
  "aws-lc-sys",
- "untrusted 0.7.1",
  "zeroize",
 ]
 
@@ -5933,7 +5932,6 @@ version = "0.3.8"
 dependencies = [
  "alloy",
  "anyhow",
- "aws-lc-rs",
  "borsh 1.5.5",
  "bridge-connector-common",
  "chrono",
