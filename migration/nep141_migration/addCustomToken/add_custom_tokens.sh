@@ -24,7 +24,7 @@ for near_token in "${tokens[@]}"; do
   fi
 
   cast send "$OMNI_BRIDGE_ETH" "addCustomToken(string,address,address,uint8)" \
-    "$near_token" "$token_address" "$BRIDGE_TOKEN_FACTORY" "$decimals" --private-key "$OMNI_BRIDGE_ADMIN_PRIVATE_KEY" --rpc-url $RPC_URL
+    "$near_token" "$token_address" "0x0000000000000000000000000000000000000000" "$decimals" --private-key "$OMNI_BRIDGE_ADMIN_PRIVATE_KEY" --rpc-url $RPC_URL
 
 done
 
