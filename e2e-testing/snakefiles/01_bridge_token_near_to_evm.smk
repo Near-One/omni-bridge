@@ -2,7 +2,7 @@ import pathlib
 import const
 import time
 from const import NearContract as NC, NearTestAccount as NTA, EvmContract as EC
-from utils import progress_wait, get_json_field, extract_tx_hash
+from utils import progress_wait, get_json_field, extract_tx_hash, get_mkdir_cmd
 
 module evm:
     snakefile: "./evm.smk"
@@ -29,11 +29,8 @@ near_bind_token_file = call_dir / "03_near-bind-token-call.json"
 prepare_stamp = call_dir / ".prepare.stamp"
 verify_bridge_token_report = call_dir / "verify-bridge-token-report.txt"
 
-def get_mkdir_cmd(directory):
-    return f"mkdir -p {directory}"
-
 # Main pipeline rule
-rule bridge_token_near_to_evm:
+rule all:
     input:
         verify_bridge_token_report
     message: "Bridge NEAR Token to Ethereum pipeline completed"
@@ -126,7 +123,7 @@ rule near_log_metadata_call:
         --near-signer {params.sender_account_id} \
         --near-private-key {params.sender_private_key} \
         --near-token-locker-id {params.token_locker_id} \
-        --config-file {params.config_file} > {output} && \
+        --config {params.config_file} > {output} && \
     {params.extract_tx}
     """
 
@@ -154,7 +151,7 @@ rule ethereum_deploy_token:
             --source-chain {params.near_chain_str} \
             --tx-hash {params.log_metadata_tx_hash} \
             --eth-bridge-token-factory-address {params.ethereum_bridge_token_factory_address} \
-            --config-file {params.config_file} > {output} && \
+            --config {params.config_file} > {output} && \
         {params.extract_tx}
         """
 
@@ -184,7 +181,7 @@ rule near_bind_token:
             --near-signer {params.relayer_account_id} \
             --near-private-key {params.relayer_private_key} \
             --near-token-locker-id {params.token_locker_id} \
-            --config-file {params.config_file} > {output} && \
+            --config {params.config_file} > {output} && \
         {params.extract_tx}
         """
 

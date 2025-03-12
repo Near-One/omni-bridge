@@ -1,13 +1,13 @@
 import pathlib
 import const
-from const import EvmContract as EC, NearContract as NC
+from const import EvmContract as EC, NearContract as NC, EvmNetwork as EN, get_evm_deploy_results_dir, get_evm_account_dir
 from utils import get_json_field
 
 module near_module:
     snakefile: "near.smk"
 use rule * from near_module as near_*
 
-EVM_NETWORKS = ["sepolia", "arbitrumSepolia", "baseSepolia"]
+EVM_NETWORKS = [network for network in EN]
 
 evm_dir = const.common_testing_root / "../evm"
 evm_build_stamp = const.common_generated_dir / ".evm_compile.stamp"
@@ -37,22 +37,22 @@ def evm_deploy_bytecode(network, bytecode_file):
 def evm_deploy_test_token(network, name, symbol):
     return f"yarn --silent --cwd {const.common_tools_dir} hardhat deploy-test-token --network {network} --name {name} --symbol {symbol}"
 
-def get_network_dir(wildcards):
-    return f"{const.evm_deploy_results_dir}/{wildcards.network}"
+def evm_create_eoa(network):
+    return f"yarn --silent --cwd {const.common_tools_dir} hardhat create-eoa --network {network}"
 
 def get_mkdir_cmd(wildcards):
-    return f"mkdir -p {get_network_dir(wildcards)}"
+    return f"mkdir -p {get_evm_deploy_results_dir(wildcards.network)}"
 
 def get_full_path(file_name):
-    return f"{const.evm_deploy_results_dir}/{{network}}/{file_name}"
+    return f"{get_evm_deploy_results_dir("{network}")}/{file_name}"
 
 
 # Rule to deploy all networks
 rule deploy_all:
     input:
-        f"{const.evm_deploy_results_dir}/sepolia/{network_deployed_stamp}",
-        f"{const.evm_deploy_results_dir}/arbitrumSepolia/{network_deployed_stamp}",
-        f"{const.evm_deploy_results_dir}/baseSepolia/{network_deployed_stamp}",
+        f"{get_evm_deploy_results_dir(EN.SEPOLIA)}/{network_deployed_stamp}",
+        f"{get_evm_deploy_results_dir(EN.ARBITRUM_SEPOLIA)}/{network_deployed_stamp}",
+        f"{get_evm_deploy_results_dir(EN.BASE_SEPOLIA)}/{network_deployed_stamp}",
     default_target: True
 
 
@@ -65,6 +65,17 @@ rule build:
     yarn --cwd {evm_dir} hardhat compile && \
     cp -r {evm_dir}/build/* {evm_artifacts_dir} && \
     touch {{output}}
+    """
+
+rule create_eoa_account:
+    message: "Creating EOA account"
+    output: pathlib.Path(get_evm_account_dir("{network}")) / "{account}.json"
+    params:
+        evm_account_dir = lambda wc: get_evm_account_dir(wc.network),
+        create_cmd = lambda wc: evm_create_eoa(wc.network)
+    shell: """
+    mkdir -p {params.evm_account_dir} && \
+    {params.create_cmd} 2>/dev/stderr 1> {output}
     """
 
 rule deploy_fake_prover:
@@ -192,13 +203,13 @@ rule deploy_to_network:
 
 rule deploy_sepolia:
     input:
-        f"{const.evm_deploy_results_dir}/sepolia/{network_deployed_stamp}"
+        f"{const.evm_deploy_results_dir}/{EN.SEPOLIA}/{network_deployed_stamp}"
 
 rule deploy_arbitrumSepolia:
     input:
-        f"{const.evm_deploy_results_dir}/arbitrumSepolia/{network_deployed_stamp}"
+        f"{const.evm_deploy_results_dir}/{EN.ARBITRUM_SEPOLIA}/{network_deployed_stamp}"
 
 rule deploy_baseSepolia:
     input:
-        f"{const.evm_deploy_results_dir}/baseSepolia/{network_deployed_stamp}"
+        f"{const.evm_deploy_results_dir}/{EN.BASE_SEPOLIA}/{network_deployed_stamp}"
 

@@ -9,8 +9,8 @@ use rule * from common_module as common_*
 
 # NEAR-specific variables and paths
 near_dir = const.common_testing_root / "../near"
-near_binary_dir = const.common_generated_dir / "near_artifacts"
-near_init_params_file = const.common_testing_root / "near_init_params.json"
+near_binary_dir = const.near_binary_dir
+near_init_params_file = const.near_init_params_file
 near_deploy_results_dir = const.near_deploy_results_dir
 
 # All expected WASM binaries
@@ -69,7 +69,7 @@ rule create_account:
         ts=const.common_timestamp
     shell: """
     {params.mkdir} && \
-    {params.scripts_dir}/create-near-account.sh omni-{wildcards.account}-{params.ts}.testnet {output}
+    {params.scripts_dir}/create-near-account.sh {wildcards.account}-{params.ts}.testnet {output}
     """
 
 

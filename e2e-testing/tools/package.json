@@ -39,6 +39,7 @@
   "scripts": {
     "build": "tsc",
     "verify-bridge-token-near-to-evm": "ts-node src/scripts/verify-bridge-token-near-to-evm.ts",
+    "verify-pipeline-2": "ts-node src/scripts/verify-pipeline-2.ts",
     "test": "yarn hardhat test",
     "coverage": "yarn hardhat coverage",
     "lint:js": "biome check",

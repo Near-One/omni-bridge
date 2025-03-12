@@ -1,5 +1,6 @@
 import json
 
+
 def get_json_field(json_file, field):
     # Conversion to string is necessary to avoid issues with snakemake.io.Namedlist which can come as input
     with open(str(json_file)) as f:
@@ -34,12 +35,12 @@ def progress_wait(seconds):
 def extract_tx_hash(pattern_type, output_file):
     """
     Generates a shell command to extract transaction hash from command output and format as JSON.
-    
+
     Parameters:
         pattern_type: The type of output pattern to match:
             - "near": Matches 'Transaction ID: HASH' pattern (for near-cli contract calls)
             - "bridge": Matches 'tx_hash="HASH"' pattern (for bridge-cli calls)
-            
+
     Returns:
         Shell command string that extracts the hash and writes it to the output file
     """
@@ -55,3 +56,7 @@ def extract_tx_hash(pattern_type, output_file):
     """
     else:
         raise ValueError(f"Unknown pattern type: {pattern_type}")
+
+
+def get_mkdir_cmd(directory):
+    return f"mkdir -p {directory}"
