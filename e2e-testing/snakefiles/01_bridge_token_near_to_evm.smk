@@ -175,6 +175,7 @@ rule near_bind_token:
         extract_tx=lambda wc, output: extract_tx_hash("bridge", output)
     shell:"""
         {params.mkdir} && \
+        {params.progress_wait_cmd} \
         bridge-cli testnet bind-token \
             --chain {params.sepolia_chain_str} \
             --tx-hash {params.evm_deploy_token_tx_hash} \
