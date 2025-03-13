@@ -14,3 +14,7 @@ interface IENear {
     function admin() external view returns (address);
     function adminPause(uint256 flags) external;
 }
+
+interface INearProver {
+    function proveOutcome(bytes calldata proofData, uint64 blockHeight) external view returns (bool);
+}
