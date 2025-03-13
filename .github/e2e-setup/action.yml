@@ -84,7 +84,7 @@ runs:
       with:
         tool: bridge-cli
         git: https://github.com/Near-One/bridge-sdk-rs/
-        rev: 8f9e3be
+        rev: 8f1a290c162a91b0314f363759fdc0e210e48d89
     
     - name: Install NEAR CLI
       uses: taiki-e/cache-cargo-install-action@v2
