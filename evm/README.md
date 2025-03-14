@@ -12,7 +12,7 @@ yarn hardhat check
 
 **Deploy eNearProxy**
 ```shell
-yarn hardhat deploy-e-near-proxy --enear "<eNear address>" --network=sepolia
+yarn hardhat deploy-e-near-proxy --enear "<eNear address>" --admin "<admin address>" --network=sepolia
 ```
 
 **Deploy ERC20 token implementation**
