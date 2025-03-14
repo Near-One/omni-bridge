@@ -203,10 +203,11 @@ impl FungibleTokenReceiver for Contract {
         // User has to pay for storage and we can't trust sender_id.
         let signer_id = env::signer_account_id();
 
-        if self.acl_has_role(Role::NativeFeeRestricted.into(), signer_id.clone())
-            && parsed_msg.native_token_fee.0 > 0
-        {
-            env::panic_str("ERR_ACCOUNT_RESTRICTED_FROM_USING_NATIVE_FEE");
+        // Avoid extra storage read by verifying native fee before checking the role
+        if parsed_msg.native_token_fee.0 > 0 {
+            if self.acl_has_role(Role::NativeFeeRestricted.into(), signer_id.clone()) {
+                env::panic_str("ERR_ACCOUNT_RESTRICTED_FROM_USING_NATIVE_FEE");
+            }
         }
 
         require!(
