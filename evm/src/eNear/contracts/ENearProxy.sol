@@ -19,13 +19,13 @@ contract ENearProxy is UUPSUpgradeable, AccessControlUpgradeable, ICustomMinter 
         _disableInitializers();
     }
 
-    function initialize(address _eNear, bytes memory _nearConnector, uint256 _currentReceiptId) public initializer {
+    function initialize(address _eNear, bytes memory _nearConnector, uint256 _currentReceiptId, address _adminAddress) public initializer {
         __UUPSUpgradeable_init();
         __AccessControl_init();
         eNear = IENear(_eNear);
         nearConnector = _nearConnector;
         currentReceiptId = _currentReceiptId;
-        _grantRole(DEFAULT_ADMIN_ROLE, _msgSender());
+        _grantRole(DEFAULT_ADMIN_ROLE, _adminAddress);
     }
 
     function mint(address token, address to, uint128 amount) public onlyRole(MINTER_ROLE) {
