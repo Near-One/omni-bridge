@@ -2,8 +2,7 @@ use std::sync::Mutex;
 
 use alloy::{
     primitives::{Address, U64},
-    providers::{Provider, ProviderBuilder, RootProvider},
-    transports::http::Http,
+    providers::{Provider, ProviderBuilder},
 };
 use anyhow::Result;
 use log::warn;
@@ -12,9 +11,8 @@ use near_jsonrpc_client::{methods, JsonRpcClient};
 use near_jsonrpc_primitives::types::query::QueryResponseKind;
 use near_primitives::types::BlockReference;
 use omni_types::ChainKind;
-use reqwest::Client;
 
-use crate::config;
+use crate::{config, startup};
 
 const RETRY_ATTEMPTS: u64 = 10;
 const RETRY_SLEEP_SECS: u64 = 1;
@@ -25,7 +23,7 @@ pub enum ChainClient {
         signer: InMemorySigner,
     },
     Evm {
-        provider: RootProvider<Http<Client>>,
+        provider: startup::evm::EvmProvider,
         address: Address,
     },
 }
@@ -112,7 +110,7 @@ impl NonceManager {
     }
 
     async fn get_current_nonce_evm(
-        provider: RootProvider<Http<Client>>,
+        provider: startup::evm::EvmProvider,
         address: Address,
     ) -> Result<u64> {
         for _ in 0..RETRY_ATTEMPTS {

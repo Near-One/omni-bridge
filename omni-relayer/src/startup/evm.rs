@@ -1,21 +1,31 @@
 use alloy::{
     primitives::Address,
-    providers::{Provider, ProviderBuilder, RootProvider, WsConnect},
+    providers::{
+        fillers::{BlobGasFiller, ChainIdFiller, FillProvider, GasFiller, JoinFill, NonceFiller},
+        Identity, Provider, ProviderBuilder, RootProvider, WsConnect,
+    },
     rpc::types::{Filter, Log},
     sol_types::SolEvent,
-    transports::http::Http,
 };
 use anyhow::{Context, Result};
 use ethereum_types::H256;
 use log::{error, info, warn};
 use omni_types::ChainKind;
-use reqwest::{Client, Url};
+use reqwest::Url;
 use tokio_stream::StreamExt;
 
 use crate::{
     config, utils,
     workers::{DeployToken, FinTransfer},
 };
+
+pub type EvmProvider = FillProvider<
+    JoinFill<
+        Identity,
+        JoinFill<GasFiller, JoinFill<BlobGasFiller, JoinFill<NonceFiller, ChainIdFiller>>>,
+    >,
+    RootProvider,
+>;
 
 fn hide_api_key<E: ToString>(err: &E) -> String {
     let env_key = "INFURA_API_KEY";
@@ -135,7 +145,7 @@ pub async fn start_indexer(
 
 async fn process_recent_blocks(
     redis_connection: &mut redis::aio::MultiplexedConnection,
-    http_provider: &RootProvider<Http<Client>>,
+    http_provider: &EvmProvider,
     filter: &Filter,
     chain_kind: ChainKind,
     start_block: Option<u64>,
@@ -198,7 +208,7 @@ async fn process_recent_blocks(
 async fn process_log(
     chain_kind: ChainKind,
     redis_connection: &mut redis::aio::MultiplexedConnection,
-    http_provider: &RootProvider<Http<Client>>,
+    http_provider: &EvmProvider,
     log: Log,
     expected_finalization_time: i64,
 ) {
@@ -220,10 +230,9 @@ async fn process_log(
     };
 
     let timestamp = http_provider
-        .get_block(
-            alloy::eips::BlockId::Number(alloy::eips::BlockNumberOrTag::Number(block_number)),
-            alloy::rpc::types::BlockTransactionsKind::Hashes,
-        )
+        .get_block(alloy::eips::BlockId::Number(
+            alloy::eips::BlockNumberOrTag::Number(block_number),
+        ))
         .await
         .ok()
         .flatten()
