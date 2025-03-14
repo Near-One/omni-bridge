@@ -88,6 +88,7 @@ pub enum Role {
     MetadataManager,
     UnrestrictedRelayer,
     TokenControllerUpdater,
+    NativeFeeRestricted,
 }
 
 #[ext_contract(ext_token)]
@@ -198,6 +199,17 @@ impl FungibleTokenReceiver for Contract {
     ) -> PromiseOrValue<U128> {
         let parsed_msg: InitTransferMsg = serde_json::from_str(&msg).sdk_expect("ERR_PARSE_MSG");
         let token_id = env::predecessor_account_id();
+
+        // User has to pay for storage and we can't trust sender_id.
+        let signer_id = env::signer_account_id();
+
+        // Avoid extra storage read by verifying native fee before checking the role
+        if parsed_msg.native_token_fee.0 > 0
+            && self.acl_has_role(Role::NativeFeeRestricted.into(), signer_id.clone())
+        {
+            env::panic_str("ERR_ACCOUNT_RESTRICTED_FROM_USING_NATIVE_FEE");
+        }
+
         require!(
             parsed_msg.recipient.get_chain() != ChainKind::Near,
             "ERR_INVALID_RECIPIENT_CHAIN"
@@ -223,9 +235,6 @@ impl FungibleTokenReceiver for Contract {
             transfer_message.fee.fee < transfer_message.amount,
             "ERR_INVALID_FEE"
         );
-
-        // User has to pay for storage and we can't trust sender_id.
-        let signer_id = env::signer_account_id();
 
         let mut required_storage_balance =
             self.add_transfer_message(transfer_message.clone(), signer_id.clone());
