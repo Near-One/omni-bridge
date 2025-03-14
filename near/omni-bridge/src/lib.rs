@@ -204,7 +204,9 @@ impl FungibleTokenReceiver for Contract {
         let signer_id = env::signer_account_id();
 
         // Avoid extra storage read by verifying native fee before checking the role
-        if parsed_msg.native_token_fee.0 > 0 && self.acl_has_role(Role::NativeFeeRestricted.into(), signer_id.clone()) {
+        if parsed_msg.native_token_fee.0 > 0
+            && self.acl_has_role(Role::NativeFeeRestricted.into(), signer_id.clone())
+        {
             env::panic_str("ERR_ACCOUNT_RESTRICTED_FROM_USING_NATIVE_FEE");
         }
 
