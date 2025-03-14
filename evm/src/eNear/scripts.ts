@@ -3,6 +3,7 @@ import type { HardhatRuntimeEnvironment } from "hardhat/types"
 
 task("deploy-e-near-proxy", "Deploys the ENearProxy contract")
   .addParam("enear", "Address of eNear contract")
+  .addParam("prover", "Address of prover contract")
   .setAction(async (taskArgs, hre: HardhatRuntimeEnvironment) => {
     const { ethers, upgrades } = hre
 
@@ -12,7 +13,7 @@ task("deploy-e-near-proxy", "Deploys the ENearProxy contract")
     const eNearProxyContract = await ethers.getContractFactory("ENearProxy")
     const eNearProxy = await upgrades.deployProxy(
       eNearProxyContract,
-      [taskArgs.enear, nearConnector, 0],
+      [taskArgs.enear, taskArgs.prover, nearConnector, 0],
       {
         initializer: "initialize",
         timeout: 0,
