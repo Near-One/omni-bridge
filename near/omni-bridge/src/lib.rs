@@ -200,7 +200,7 @@ impl FungibleTokenReceiver for Contract {
         let parsed_msg: InitTransferMsg = serde_json::from_str(&msg).sdk_expect("ERR_PARSE_MSG");
         let token_id = env::predecessor_account_id();
 
-        if self.acl_has_role(Role::NativeFeeRestricted.into(), sender_id.clone())
+        if self.acl_has_role(Role::NativeFeeRestricted.into(), signer_id.clone())
             && parsed_msg.native_token_fee.0 > 0
         {
             env::panic_str("ERR_ACCOUNT_RESTRICTED_FROM_USING_NATIVE_FEE");
