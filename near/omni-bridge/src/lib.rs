@@ -199,7 +199,7 @@ impl FungibleTokenReceiver for Contract {
     ) -> PromiseOrValue<U128> {
         let parsed_msg: InitTransferMsg = serde_json::from_str(&msg).sdk_expect("ERR_PARSE_MSG");
         let token_id = env::predecessor_account_id();
-        
+
         // User has to pay for storage and we can't trust sender_id.
         let signer_id = env::signer_account_id();
 
