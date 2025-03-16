@@ -2,6 +2,8 @@ use log::warn;
 use omni_types::ChainKind;
 use redis::{aio::MultiplexedConnection, AsyncCommands};
 
+pub const MONGODB_OMNI_EVENTS_RT: &str = "mongodb_omni_events_rt";
+
 pub const EVENTS: &str = "events";
 pub const SOLANA_EVENTS: &str = "solana_events";
 

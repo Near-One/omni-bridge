@@ -144,18 +144,14 @@ pub async fn handle_streamer_message(
         info!("Received OmniBridgeEvent: {}", log.to_log_string());
 
         match log {
-            OmniBridgeEvent::InitTransferEvent {
-                ref transfer_message,
-            }
-            | OmniBridgeEvent::UpdateFeeEvent {
-                ref transfer_message,
-            } => {
+            OmniBridgeEvent::InitTransferEvent { transfer_message }
+            | OmniBridgeEvent::UpdateFeeEvent { transfer_message } => {
                 utils::redis::add_event(
                     redis_connection,
                     utils::redis::EVENTS,
                     transfer_message.origin_nonce.to_string(),
                     crate::workers::Transfer::Near {
-                        event: log,
+                        transfer_message,
                         creation_timestamp: chrono::Utc::now().timestamp(),
                         last_update_timestamp: None,
                     },
@@ -174,16 +170,14 @@ pub async fn handle_streamer_message(
                 )
                 .await;
             }
-            OmniBridgeEvent::FinTransferEvent {
-                ref transfer_message,
-            } => {
+            OmniBridgeEvent::FinTransferEvent { transfer_message } => {
                 if transfer_message.recipient.get_chain() != ChainKind::Near {
                     utils::redis::add_event(
                         redis_connection,
                         utils::redis::EVENTS,
                         transfer_message.origin_nonce.to_string(),
                         crate::workers::Transfer::Near {
-                            event: log,
+                            transfer_message,
                             creation_timestamp: chrono::Utc::now().timestamp(),
                             last_update_timestamp: None,
                         },
