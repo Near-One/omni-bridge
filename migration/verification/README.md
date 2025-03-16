@@ -60,6 +60,11 @@ The script provides a clear status report showing:
 - If methods are paused (✓) or not paused (✗)
 - A checklist for what should be paused for a safe migration
 
+### Screenshot
+
+![freeze](https://github.com/user-attachments/assets/774a66fe-7200-4c50-ae35-7981a4420fef)
+
+
 ### Next steps
 
 After verifying the pause status, you can proceed with the migration process by following the next steps in the migration checklist.
