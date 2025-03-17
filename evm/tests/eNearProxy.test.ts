@@ -57,6 +57,7 @@ describe("eNearProxy contract", () => {
         await nearProver.getAddress(),
         Buffer.from("eNearBridge", "utf-8"),
         0,
+        await deployer.getAddress(),
       ],
       { initializer: "initialize" },
     )) as unknown as ENearProxy

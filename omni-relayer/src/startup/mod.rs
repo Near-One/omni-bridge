@@ -1,10 +1,9 @@
 use anyhow::{Context, Result};
 use log::info;
 
-use near_crypto::InMemorySigner;
-
 use evm_bridge_client::{EvmBridgeClient, EvmBridgeClientBuilder};
 use near_bridge_client::NearBridgeClientBuilder;
+use near_crypto::InMemorySigner;
 use omni_connector::{OmniConnector, OmniConnectorBuilder};
 use omni_types::ChainKind;
 use solana_bridge_client::SolanaBridgeClientBuilder;

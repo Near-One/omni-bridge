@@ -13,7 +13,7 @@ task("deploy-e-near-proxy", "Deploys the ENearProxy contract")
     const eNearProxyContract = await ethers.getContractFactory("ENearProxy")
     const eNearProxy = await upgrades.deployProxy(
       eNearProxyContract,
-      [taskArgs.enear, taskArgs.prover, nearConnector, 0],
+      [taskArgs.enear, taskArgs.prover, nearConnector, 0, taskArgs.admin],
       {
         initializer: "initialize",
         timeout: 0,
