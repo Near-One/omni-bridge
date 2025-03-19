@@ -1,7 +1,7 @@
 use std::str::FromStr;
 
 use alloy::{primitives::Address, sol_types::SolEvent};
-use anyhow::Result;
+use anyhow::{Context, Result};
 use bridge_indexer_types::documents_types::{
     OmniEvent, OmniEventData, OmniMetaEvent, OmniMetaEventDetails, OmniTransactionEvent,
     OmniTransactionOrigin, OmniTransferMessage,
@@ -10,6 +10,7 @@ use ethereum_types::H256;
 use log::{info, warn};
 use mongodb::{change_stream::event::ResumeToken, options::ClientOptions, Client, Collection};
 use omni_types::{near_events::OmniBridgeEvent, ChainKind, OmniAddress};
+use solana_sdk::pubkey::Pubkey;
 use tokio_stream::StreamExt;
 
 use crate::{config, utils, workers};
@@ -30,17 +31,19 @@ async fn handle_transaction_event(
                 transfer_message.origin_nonce
             );
 
-            utils::redis::add_event(
-                &mut redis_connection,
-                utils::redis::EVENTS,
-                transfer_message.origin_nonce.to_string(),
-                crate::workers::Transfer::Near {
-                    transfer_message,
-                    creation_timestamp: chrono::Utc::now().timestamp(),
-                    last_update_timestamp: None,
-                },
-            )
-            .await;
+            if transfer_message.recipient.get_chain() != ChainKind::Near {
+                utils::redis::add_event(
+                    &mut redis_connection,
+                    utils::redis::EVENTS,
+                    transfer_message.origin_nonce.to_string(),
+                    crate::workers::Transfer::Near {
+                        transfer_message,
+                        creation_timestamp: chrono::Utc::now().timestamp(),
+                        last_update_timestamp: None,
+                    },
+                )
+                .await;
+            }
         }
         OmniTransferMessage::NearSignTransferEvent(sign_event) => {
             info!("Received NearSignTransferEvent");
@@ -202,6 +205,9 @@ async fn handle_transaction_event(
                 init_transfer.origin_nonce
             );
 
+            let OmniAddress::Sol(ref token) = init_transfer.token else {
+                anyhow::bail!("Unexpected token address: {}", init_transfer.token);
+            };
             let Ok(native_fee) = u64::try_from(init_transfer.fee.native_fee.0) else {
                 anyhow::bail!(
                     "Failed to parse native fee for Solana transfer: {:?}",
@@ -221,13 +227,13 @@ async fn handle_transaction_event(
                 transaction_id,
                 crate::workers::Transfer::Solana {
                     amount: init_transfer.amount.0.into(),
-                    token: init_transfer.token.to_string(),
-                    sender: init_transfer.sender.to_string(),
-                    recipient: init_transfer.recipient.to_string(),
+                    token: Pubkey::new_from_array(token.0),
+                    sender: init_transfer.sender,
+                    recipient: init_transfer.recipient,
                     fee: init_transfer.fee.fee,
                     native_fee,
-                    message: init_transfer.message,
-                    emitter,
+                    message: init_transfer.message.unwrap_or_default(),
+                    emitter: Pubkey::from_str(&emitter).context("Failed to parse emitter")?,
                     sequence: init_transfer.origin_nonce,
                     creation_timestamp: chrono::Utc::now().timestamp(),
                     last_update_timestamp: None,
