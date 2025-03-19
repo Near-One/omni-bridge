@@ -852,7 +852,7 @@ async fn process_evm_init_transfer_event(
     }
 
     let vaa = connector
-        .wormhole_get_vaa_by_tx_hash(transaction_hash.to_string())
+        .wormhole_get_vaa_by_tx_hash(format!("{:?}", transaction_hash))
         .await
         .ok();
 
@@ -1142,7 +1142,7 @@ async fn process_evm_fin_transfer_event(
     info!("Trying to process FinTransfer log on {:?}", chain_kind);
 
     let vaa = connector
-        .wormhole_get_vaa_by_tx_hash(transaction_hash.to_string())
+        .wormhole_get_vaa_by_tx_hash(format!("{:?}", transaction_hash))
         .await
         .ok();
 
@@ -1332,7 +1332,7 @@ async fn process_evm_deploy_token_event(
     info!("Trying to process DeployToken log on {:?}", chain_kind);
 
     let vaa = connector
-        .wormhole_get_vaa_by_tx_hash(transaction_hash.to_string())
+        .wormhole_get_vaa_by_tx_hash(format!("{:?}", transaction_hash))
         .await
         .ok();
 
