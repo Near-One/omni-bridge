@@ -1,4 +1,3 @@
-use std::str::FromStr;
 use std::sync::Arc;
 
 use alloy::primitives::B256;
@@ -52,13 +51,13 @@ pub enum Transfer {
     },
     Solana {
         amount: U128,
-        token: String,
-        sender: String,
-        recipient: String,
+        token: Pubkey,
+        sender: OmniAddress,
+        recipient: OmniAddress,
         fee: U128,
         native_fee: u64,
         message: String,
-        emitter: String,
+        emitter: Pubkey,
         sequence: u64,
         creation_timestamp: i64,
         last_update_timestamp: Option<i64>,
@@ -526,7 +525,7 @@ async fn process_near_transfer_event(
         return Ok(EventAction::Retry);
     }
 
-    info!("Trying to process TransferMessage");
+    info!("Trying to process TransferMessage on NEAR");
 
     if config.is_check_fee_enabled()
         && !config
@@ -649,7 +648,7 @@ async fn process_sign_transfer_event(
         anyhow::bail!("Expected SignTransferEvent, got: {:?}", sign_transfer_event);
     };
 
-    info!("Received SignTransferEvent");
+    info!("Trying to process SignTransferEvent log on NEAR");
 
     if message_payload.fee_recipient != Some(signer) {
         anyhow::bail!("Fee recipient mismatch");
@@ -1000,24 +999,7 @@ async fn process_solana_init_transfer_event(
 
     info!("Trying to process InitTransfer log on Solana");
 
-    let recipient = recipient.parse::<OmniAddress>().map_err(|err| {
-        anyhow::anyhow!(
-            "Failed to parse \"{}\" as `OmniAddress`: {:?}",
-            recipient,
-            err
-        )
-    })?;
-
     if config.is_check_fee_enabled() {
-        let sender = Pubkey::from_str(sender)?;
-
-        let sender =
-            OmniAddress::new_from_slice(ChainKind::Sol, &sender.to_bytes()).map_err(|err| {
-                anyhow::anyhow!("Failed to parse \"{}\" as `OmniAddress`: {:?}", sender, err)
-            })?;
-
-        let token = Pubkey::from_str(token)?;
-
         let token =
             OmniAddress::new_from_slice(ChainKind::Sol, &token.to_bytes()).map_err(|err| {
                 anyhow::anyhow!("Failed to parse \"{}\" as `OmniAddress`: {:?}", sender, err)
@@ -1029,8 +1011,8 @@ async fn process_solana_init_transfer_event(
                 fee,
                 native_fee: u128::from(native_fee).into(),
             },
-            &sender,
-            &recipient,
+            sender,
+            recipient,
             &token,
         )
         .await
@@ -1058,8 +1040,8 @@ async fn process_solana_init_transfer_event(
     let storage_deposit_actions = match utils::storage::get_storage_deposit_actions(
         &connector,
         ChainKind::Sol,
-        &recipient,
-        token,
+        recipient,
+        &token.to_string(),
         fee.0,
         u128::from(native_fee),
     )
