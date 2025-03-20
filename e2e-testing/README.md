@@ -176,3 +176,14 @@ snakemake -s snakefiles/<pipeline_name>.smk --delete-all-output <rule_name>
 
 - Use `-n` flag to print the jobs that will be executed without actually running them. Additionally, Snakefile will check if there're any errors which could be detected before the actual execution.
 - DAG visualization can also be helpful to understand the dependencies between the rules (see command above).
+
+## Further improvements
+
+The following improvements are nice to be done in the future. They are presented in the subjective order of priority.
+
+- **Unified configuration**. Currently, the values of the config files are scattered and even intersected in different files (see [Configuration Files](#configuration-files) section). It should be refactored to have a single config file for end-to-end tests.
+- **Transparent variables reusage**. If we want that some rule A is triggered by rule B, we need to ensure that the path in the `output` of rule A matches the path in the `input` of rule B. 
+Currently, we simply define variables with the same paths in different Snakefiles. It's error-prone and should be refactored. Since variables can't be directled imported between Snakefiles, one possible solution is to create a centralized **Python** file(s) (like `const.py` or `utils.py`) and move all paths variables there.
+- **Docker containerization**. Put all the dependencies and their installation into a Docker container and run the tests in a consistent environment.
+- **Parallel execution of the pipelines**. Even though the dependency graph and Snakemake itself are ready for parallel execution of the tasks, currently, the pipelines are executed sequentially. The reason for this is that parallel execution causes race conditions when the same account tries to submit transactions with the same nonce. However, be aware that this improvement will speed up the execution of the pipelines only locally, since our Github Actions runners are single-threaded at the moment.
+- **Reuse contracts/accounts from previous GA runs**. Currently, the contracts are deployed from scratch. However, sometimes it may be useful and cost-effective to reuse the contracts/accounts from previous GA runs. To achieve this, we need to store the desired deployment results and then put them in a corresponding location in the next run.
