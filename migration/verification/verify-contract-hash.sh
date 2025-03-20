@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Usage:
-#   ./compare_hashes.sh <wasm_file> <account_id>
+#   ./verify-contract-hash.sh <wasm_file> <account_id>
 #
 #   <wasm_file>   - Path to the WASM file.
 #   <account_id>  - NEAR account ID to query.
