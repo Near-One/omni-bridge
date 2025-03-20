@@ -163,6 +163,7 @@ snakemake -s snakefiles/<pipeline_name>.smk --delete-all-output <rule_name>
 - If you are new to Snakemake, the [Snakemake documentation](https://snakemake.readthedocs.io/en/stable/) is an excellent place to start.
 - Snakemake allows us to define rules that specify how to build or process files and manage dependencies in a declarative way.
 - Comparing to Makefile, Snakemake has friendlier syntax and more powerful features such as DAGs visualization, effective parallel execution, modularization, built-in message printing and parameters definition.
+- In order to have a better experience writing Snakemake, it's recommended to use Snakemake extension for IDE. E.g. [extension for VSCode](https://marketplace.visualstudio.com/items?itemName=Snakemake.snakemake-lang).
 
 ### Structure of the Snakefiles
 
