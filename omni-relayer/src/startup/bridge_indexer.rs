@@ -193,6 +193,8 @@ async fn handle_transaction_event(
                     block_number,
                     tx_hash,
                     topic: utils::evm::FinTransfer::SIGNATURE_HASH,
+                    origin_chain: fin_transfer.transfer_id.origin_chain,
+                    origin_nonce: fin_transfer.transfer_id.origin_nonce,
                     creation_timestamp,
                     expected_finalization_time,
                 },

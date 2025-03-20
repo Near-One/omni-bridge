@@ -72,6 +72,8 @@ pub enum FinTransfer {
         block_number: u64,
         tx_hash: H256,
         topic: B256,
+        origin_chain: ChainKind,
+        origin_nonce: u64,
         creation_timestamp: i64,
         expected_finalization_time: i64,
     },
@@ -527,14 +529,26 @@ async fn process_near_transfer_event(
 
     info!("Trying to process TransferMessage on NEAR");
 
-    if config.is_check_fee_enabled()
+    match connector
+        .near_is_transfer_finalised(transfer_message.get_transfer_id())
+        .await
+    {
+        Ok(true) => anyhow::bail!("Transfer is already finalised: {:?}", transfer_message),
+        Ok(false) => {}
+        Err(err) => {
+            warn!("Failed to check if transfer is finalised: {:?}", err);
+            return Ok(EventAction::Retry);
+        }
+    }
+
+    if config.is_bridge_api_enabled()
         && !config
             .near
             .sign_without_checking_fee
             .as_ref()
             .is_some_and(|list| list.contains(&transfer_message.sender))
     {
-        match utils::fee::is_fee_sufficient(
+        match utils::bridge_api::is_fee_sufficient(
             &config,
             transfer_message.fee.clone(),
             &transfer_message.sender,
@@ -650,11 +664,26 @@ async fn process_sign_transfer_event(
 
     info!("Trying to process SignTransferEvent log on NEAR");
 
+    match connector
+        .near_is_transfer_finalised(message_payload.transfer_id)
+        .await
+    {
+        Ok(true) => anyhow::bail!(
+            "Transfer is already finalised: {:?}",
+            message_payload.transfer_id
+        ),
+        Ok(false) => {}
+        Err(err) => {
+            warn!("Failed to check if transfer is finalised: {:?}", err);
+            return Ok(EventAction::Retry);
+        }
+    }
+
     if message_payload.fee_recipient != Some(signer) {
         anyhow::bail!("Fee recipient mismatch");
     }
 
-    if config.is_check_fee_enabled() {
+    if config.is_bridge_api_enabled() {
         let transfer_message = match connector
             .near_get_transfer_message(message_payload.transfer_id)
             .await
@@ -674,7 +703,7 @@ async fn process_sign_transfer_event(
             }
         };
 
-        match utils::fee::is_fee_sufficient(
+        match utils::bridge_api::is_fee_sufficient(
             &config,
             transfer_message.fee,
             &transfer_message.sender,
@@ -798,6 +827,19 @@ async fn process_evm_init_transfer_event(
 
     info!("Trying to process InitTransfer log on {:?}", chain_kind);
 
+    let transfer_id = TransferId {
+        origin_chain: chain_kind,
+        origin_nonce: log.originNonce,
+    };
+    match connector.near_is_transfer_finalised(transfer_id).await {
+        Ok(true) => anyhow::bail!("Transfer is already finalised: {:?}", transfer_id),
+        Ok(false) => {}
+        Err(err) => {
+            warn!("Failed to check if transfer is finalised: {:?}", err);
+            return Ok(EventAction::Retry);
+        }
+    }
+
     let recipient = log.recipient.parse::<OmniAddress>().map_err(|err| {
         anyhow::anyhow!(
             "Failed to parse \"{}\" as `OmniAddress`: {:?}",
@@ -806,7 +848,7 @@ async fn process_evm_init_transfer_event(
         )
     })?;
 
-    if config.is_check_fee_enabled() {
+    if config.is_bridge_api_enabled() {
         let sender = utils::evm::string_to_evm_omniaddress(chain_kind, &log.sender.to_string())
             .map_err(|err| {
                 anyhow::anyhow!(
@@ -826,7 +868,7 @@ async fn process_evm_init_transfer_event(
                     )
                 })?;
 
-        match utils::fee::is_fee_sufficient(
+        match utils::bridge_api::is_fee_sufficient(
             &config,
             Fee {
                 fee: log.fee.into(),
@@ -999,13 +1041,26 @@ async fn process_solana_init_transfer_event(
 
     info!("Trying to process InitTransfer log on Solana");
 
-    if config.is_check_fee_enabled() {
+    let transfer_id = TransferId {
+        origin_chain: ChainKind::Sol,
+        origin_nonce: sequence,
+    };
+    match connector.near_is_transfer_finalised(transfer_id).await {
+        Ok(true) => anyhow::bail!("Transfer is already finalised: {:?}", transfer_id),
+        Ok(false) => {}
+        Err(err) => {
+            warn!("Failed to check if transfer is finalised: {:?}", err);
+            return Ok(EventAction::Retry);
+        }
+    }
+
+    if config.is_bridge_api_enabled() {
         let token =
             OmniAddress::new_from_slice(ChainKind::Sol, &token.to_bytes()).map_err(|err| {
                 anyhow::anyhow!("Failed to parse \"{}\" as `OmniAddress`: {:?}", sender, err)
             })?;
 
-        match utils::fee::is_fee_sufficient(
+        match utils::bridge_api::is_fee_sufficient(
             &config,
             Fee {
                 fee,
@@ -1108,6 +1163,8 @@ async fn process_evm_fin_transfer_event(
         block_number,
         tx_hash: transaction_hash,
         topic,
+        origin_chain,
+        origin_nonce,
         creation_timestamp,
         expected_finalization_time,
     } = fin_transfer
@@ -1122,6 +1179,19 @@ async fn process_evm_fin_transfer_event(
     }
 
     info!("Trying to process FinTransfer log on {:?}", chain_kind);
+
+    let transfer_id = TransferId {
+        origin_chain,
+        origin_nonce,
+    };
+    match connector.near_is_transfer_finalised(transfer_id).await {
+        Ok(true) => anyhow::bail!("Transfer is already finalised: {:?}", transfer_id),
+        Ok(false) => {}
+        Err(err) => {
+            warn!("Failed to check if transfer is finalised: {:?}", err);
+            return Ok(EventAction::Retry);
+        }
+    }
 
     let vaa = connector
         .wormhole_get_vaa_by_tx_hash(format!("{:?}", transaction_hash))
