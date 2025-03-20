@@ -43,5 +43,15 @@
         "init_args": {
             "total_supply": "1000000000"
         }
+    },
+    "bridge_token": {
+        "init_function": "new"
+    },
+    "bridge_token_factory": {
+        "init_function": "new",
+        "init_args": {
+            "prover_account": "prover.sepolia.testnet",
+            "locker_address": "d42c7b1d5c014c66e0dd31dca0e53758bb19ed16"
+        }
     }
 }

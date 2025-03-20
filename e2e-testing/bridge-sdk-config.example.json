@@ -1,5 +1,5 @@
 {
-    "near_rpc": "https://rpc.testnet.near.org/",
+    "near_rpc": "https://test.rpc.fastnear.com",
     "near_token_locker_id": "omni-locker.testnet",
     "near_light_client_eth_address": "0x202cdf10bfa45a3d2190901373edd864f071d707",
     "near_signer": "omni-sender.testnet",
@@ -8,10 +8,10 @@
     "eth_bridge_token_factory_address": "0xa9108f7F83Fb661e611991116D526fCa1a9585ab",
     "eth_connector_account_id": "aurora",
     "eth_custodian_address": "0xe0320b199863D7f6D5bBa62741aACB312110DEf7",
-    "base_rpc": "https://base-sepolia.blockpi.network/v1/rpc/public",
+    "base_rpc": "https://base-sepolia-rpc.publicnode.com",
     "base_chain_id": 84532,
     "base_bridge_token_factory_address": "0x0C981337fFe39a555d3A40dbb32f21aD0eF33FFA",
-    "arb_rpc": "https://arbitrum-sepolia.blockpi.network/v1/rpc/public",
+    "arb_rpc": "https://arbitrum-sepolia-rpc.publicnode.com",
     "arb_chain_id": 421614,
     "arb_bridge_token_factory_address": "0xd565f7CcE0FA1bB8DBe73FCDA281390d545f6200",
     "solana_rpc": "https://api.devnet.solana.com",
@@ -20,6 +20,8 @@
     "solana_keypair": "6Tyktf6mEqUMEKm2ZpLn3srEwk9zsT5jiE54EgPgToikMFYww1LGFUXgwgr6hvc9CikpaNaBH2vmkmqN3Usrxpd",
     "fast_bridge_account_id": "fastbridge.testnet",
     "fast_bridge_address": "0x0B2C4871C9bAD795746C05c1539A8B1f26c26357",
+    "eth_rpc": "<ETH_RPC>",
     "eth_private_key": "<ETH_PRIVATE_KEY>",
-    "eth_rpc": "<ETH_RPC>"
+    "base_private_key": "<ETH_PRIVATE_KEY>",
+    "arb_private_key": "<ETH_PRIVATE_KEY>"
 }
