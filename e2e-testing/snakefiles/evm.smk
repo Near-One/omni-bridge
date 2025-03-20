@@ -50,7 +50,7 @@ def get_full_path(file_name):
 # Rule to deploy all networks
 rule deploy_all:
     input:
-        f"{get_evm_deploy_results_dir(EN.SEPOLIA)}/{network_deployed_stamp}",
+        f"{get_evm_deploy_results_dir(EN.ETH_SEPOLIA)}/{network_deployed_stamp}",
         f"{get_evm_deploy_results_dir(EN.ARBITRUM_SEPOLIA)}/{network_deployed_stamp}",
         f"{get_evm_deploy_results_dir(EN.BASE_SEPOLIA)}/{network_deployed_stamp}",
     default_target: True
@@ -81,11 +81,11 @@ rule create_eoa_account:
 rule deploy_fake_prover:
     message: "Deploying fake prover to {wildcards.network}"
     input:
-        build_stamp=evm_build_stamp
+        build_stamp = evm_build_stamp
     output: get_full_path(f"{EC.FAKE_PROVER}.json")
     params:
-        mkdir=get_mkdir_cmd,
-        deploy_cmd=lambda wc: evm_deploy_fake_prover(wc.network)
+        mkdir = get_mkdir_cmd,
+        deploy_cmd = lambda wc: evm_deploy_fake_prover(wc.network)
     shell: """
     {params.mkdir} && \
     {params.deploy_cmd} 2>/dev/stderr 1> {output}
@@ -95,11 +95,11 @@ rule deploy_fake_prover:
 rule create_enear_creation_file:
     message: "Creating eNear creation file for {wildcards.network}"
     input:
-        fake_prover=rules.deploy_fake_prover.output,
-        template=evm_enear_creation_template_file
+        fake_prover = rules.deploy_fake_prover.output,
+        template = evm_enear_creation_template_file
     output: get_full_path(enear_creation_file)
     params:
-        mkdir=get_mkdir_cmd
+        mkdir = get_mkdir_cmd
     shell: """
     {params.mkdir} && \
     cat {input.template} | \
@@ -110,12 +110,12 @@ rule create_enear_creation_file:
 rule deploy_enear:
     message: "Deploying eNear to {wildcards.network}"
     input:
-        creation_file=get_full_path(enear_creation_file),
-        tools_stamp=const.common_tools_compile_stamp
+        creation_file = get_full_path(enear_creation_file),
+        tools_stamp = const.common_tools_compile_stamp
     output: get_full_path(f"{EC.ENEAR}.json")
     params:
-        mkdir=get_mkdir_cmd,
-        deploy_cmd=lambda wildcards: evm_deploy_bytecode(wildcards.network, input.creation_file)
+        mkdir = get_mkdir_cmd,
+        deploy_cmd = lambda wildcards: evm_deploy_bytecode(wildcards.network, input.creation_file)
     shell: """
     {params.mkdir} && \
     {params.deploy_cmd} 2>/dev/stderr 1> {output}
@@ -125,8 +125,8 @@ rule deploy_enear:
 rule deploy_enear_proxy:
     message: "Deploying eNear proxy to {wildcards.network}"
     input:
-        enear=rules.deploy_enear.output,
-        build_stamp=rules.build.output
+        rules.build.output,
+        enear = rules.deploy_enear.output
     output: get_full_path(f"{EC.ENEAR_PROXY}.json")
     params:
         mkdir=get_mkdir_cmd,
@@ -140,11 +140,11 @@ rule deploy_enear_proxy:
 rule deploy_token_impl:
     message: "Deploying token implementation to {wildcards.network}"
     input:
-        build_stamp=rules.build.output
+        rules.build.output
     output: get_full_path(f"{EC.TOKEN_IMPL}.json")
     params:
-        mkdir=get_mkdir_cmd,
-        deploy_cmd=lambda wc: evm_deploy_token_impl(wc.network)
+        mkdir = get_mkdir_cmd,
+        deploy_cmd = lambda wc: evm_deploy_token_impl(wc.network)
     shell: """
     {params.mkdir} && \
     {params.deploy_cmd} 2>/dev/stderr 1> {output}
@@ -154,13 +154,13 @@ rule deploy_token_impl:
 rule deploy_bridge:
     message: "Deploying bridge contract to {wildcards.network}"
     input:
-        token_impl=rules.deploy_token_impl.output,
-        near_bridge_file=near_bridge_file,
-        build_stamp=rules.build.output
+        rules.build.output,
+        token_impl = rules.deploy_token_impl.output,
+        near_bridge_file = near_bridge_file,
     output: get_full_path(f"{EC.OMNI_BRIDGE}.json")
     params:
-        mkdir=get_mkdir_cmd,
-        deploy_cmd=lambda wc, input: evm_deploy_bridge_contract(wc.network,
+        mkdir = get_mkdir_cmd,
+        deploy_cmd = lambda wc, input: evm_deploy_bridge_contract(wc.network,
                                                                 get_json_field(input.token_impl, "tokenImplAddress"),
                                                                 get_json_field(input.near_bridge_file, "contract_id"))
     shell: """
@@ -172,11 +172,11 @@ rule deploy_bridge:
 rule deploy_test_token:
     message: "Deploying test token to {wildcards.network}"
     input:
-        tools_stamp=const.common_tools_compile_stamp
+        const.common_tools_compile_stamp
     output: get_full_path(f"{EC.TEST_TOKEN}.json")
     params:
-        mkdir=get_mkdir_cmd,
-        deploy_cmd=lambda wc: evm_deploy_test_token(wc.network,
+        mkdir = get_mkdir_cmd,
+        deploy_cmd = lambda wc: evm_deploy_test_token(wc.network,
                                                     f"E2ETestToken-{const.common_timestamp}",
                                                     f"E2ETT-{const.common_timestamp}")
     shell: """
@@ -189,13 +189,13 @@ rule deploy_test_token:
 rule deploy_to_network:
     message: "Deploying network {wildcards.network}"
     input:
-        bridge=rules.deploy_bridge.output,
-        enear_proxy=rules.deploy_enear_proxy.output,
-        test_token=rules.deploy_test_token.output
+        bridge = rules.deploy_bridge.output,
+        enear_proxy = rules.deploy_enear_proxy.output,
+        test_token = rules.deploy_test_token.output
     output:
         touch(f"{const.evm_deploy_results_dir}/{{network}}/{network_deployed_stamp}")
     params:
-        mkdir=get_mkdir_cmd
+        mkdir = get_mkdir_cmd
     shell: """
     {params.mkdir}
     touch {output}
@@ -203,7 +203,7 @@ rule deploy_to_network:
 
 rule deploy_sepolia:
     input:
-        f"{const.evm_deploy_results_dir}/{EN.SEPOLIA}/{network_deployed_stamp}"
+        f"{const.evm_deploy_results_dir}/{EN.ETH_SEPOLIA}/{network_deployed_stamp}"
 
 rule deploy_arbitrumSepolia:
     input:

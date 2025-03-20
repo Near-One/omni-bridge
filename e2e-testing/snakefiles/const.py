@@ -33,6 +33,20 @@ def get_evm_account_dir(network):
 class Chain(StrEnum):
     ETH = "Eth"
     NEAR = "Near"
+    SOL = "Sol"
+    BASE = "Base"
+    ARB = "Arb"
+
+    @classmethod
+    def from_evm_network(cls, evm_network):
+        if evm_network == EvmNetwork.ETH_SEPOLIA:
+            return cls.ETH
+        elif evm_network == EvmNetwork.ARBITRUM_SEPOLIA:
+            return cls.ARB
+        elif evm_network == EvmNetwork.BASE_SEPOLIA:
+            return cls.BASE
+        else:
+            raise ValueError(f"Unknown EVM network: {evm_network}")
 
 
 class NearContract(StrEnum):
@@ -51,6 +65,7 @@ class NearTestAccount(StrEnum):
     RELAYER_ACCOUNT = "omni_relayer_account"
     SENDER_ACCOUNT = "omni_sender_account"
     USER_ACCOUNT = "omni_user_account"
+    RECIPIENT_ACCOUNT = "omni_recipient_account"
 
 
 class EvmContract(StrEnum):
@@ -63,6 +78,6 @@ class EvmContract(StrEnum):
 
 
 class EvmNetwork(StrEnum):
-    SEPOLIA = "sepolia"
+    ETH_SEPOLIA = "sepolia"
     ARBITRUM_SEPOLIA = "arbitrumSepolia"
     BASE_SEPOLIA = "baseSepolia"
