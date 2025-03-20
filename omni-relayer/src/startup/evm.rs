@@ -265,11 +265,16 @@ async fn process_log(
             },
         )
         .await;
-    } else if log.log_decode::<utils::evm::FinTransfer>().is_ok() {
+    } else if let Ok(fin_log) = log.log_decode::<utils::evm::FinTransfer>() {
         info!("Received FinTransfer on {:?} ({:?})", chain_kind, tx_hash);
 
         let Some(&topic) = topic else {
             warn!("Topic is empty for log: {:?}", log);
+            return;
+        };
+
+        let Ok(origin_chain) = ChainKind::try_from(fin_log.inner.originChain) else {
+            warn!("Failed to parse origin chain from log: {:?}", log);
             return;
         };
 
@@ -282,6 +287,8 @@ async fn process_log(
                 block_number,
                 tx_hash,
                 topic,
+                origin_chain,
+                origin_nonce: fin_log.inner.originNonce,
                 creation_timestamp: timestamp,
                 expected_finalization_time,
             },
