@@ -28,7 +28,7 @@ This script checks that necessary contract methods are properly paused before pr
    ```
 
 3. **Configure environment**:
-   Create a `.env` file with contract addresses. A consolidated `.env` has been prepared that works for **ALL** migration scripts.
+   Create a `.env` file with contract addresses. Copy the `.env.testnet` or `.env.mainnet` file into `.env` in this directory
 
    ```bash
    # Ethereum network configuration
