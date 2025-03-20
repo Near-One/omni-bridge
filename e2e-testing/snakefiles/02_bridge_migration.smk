@@ -7,12 +7,16 @@ from utils import get_mkdir_cmd, get_json_field, extract_tx_hash
 
 module evm:
     snakefile: "./evm.smk"
-use rule * from evm as evm_*
+use rule * from evm
+
+module near:
+    snakefile: "./near.smk"
+use rule * from near
 
 # Directories
 call_dir = const.common_generated_dir / "02-bridge-migration"
-sepolia_call_dir = pathlib.Path(get_evm_deploy_results_dir(EN.SEPOLIA))
-sepolia_account_dir = pathlib.Path(get_evm_account_dir(EN.SEPOLIA))
+sepolia_call_dir = pathlib.Path(get_evm_deploy_results_dir(EN.ETH_SEPOLIA))
+sepolia_account_dir = pathlib.Path(get_evm_account_dir(EN.ETH_SEPOLIA))
 
 # NEAR contract deployment
 rainbow_bridge_token_factory_file = const.near_deploy_results_dir / f"{NC.RB_BRIDGE_TOKEN_FACTORY}.json"

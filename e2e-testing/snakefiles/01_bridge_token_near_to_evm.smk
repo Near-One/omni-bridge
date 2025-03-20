@@ -6,7 +6,11 @@ from utils import progress_wait, get_json_field, extract_tx_hash, get_mkdir_cmd
 
 module evm:
     snakefile: "./evm.smk"
-use rule * from evm as evm_*
+use rule * from evm
+
+module near:
+    snakefile: "./near.smk"
+use rule * from near
 
 call_dir = const.common_generated_dir / "01-bridge-token-near-to-evm"
 evm_deploy_results_dir = pathlib.Path(const.get_evm_deploy_results_dir("{network}"))
