@@ -217,11 +217,6 @@ async fn process_log(
         return;
     };
 
-    let Ok(tx_logs) = http_provider.get_transaction_receipt(tx_hash).await else {
-        warn!("Failed to get transaction receipt for tx: {:?}", tx_hash);
-        return;
-    };
-
     let tx_hash = H256::from_slice(tx_hash.as_slice());
 
     let Some(block_number) = log.block_number else {
@@ -239,8 +234,22 @@ async fn process_log(
         .and_then(|block| i64::try_from(block.header.timestamp).ok())
         .unwrap_or_else(|| chrono::Utc::now().timestamp());
 
-    if log.log_decode::<utils::evm::InitTransfer>().is_ok() {
+    let topic = log.topic0();
+
+    if let Ok(init_log) = log.log_decode::<utils::evm::InitTransfer>() {
         info!("Received InitTransfer on {:?} ({:?})", chain_kind, tx_hash);
+
+        let log = utils::evm::InitTransfer {
+            sender: init_log.inner.sender,
+            tokenAddress: init_log.inner.tokenAddress,
+            originNonce: init_log.inner.originNonce,
+            amount: init_log.inner.amount,
+            fee: init_log.inner.fee,
+            nativeFee: init_log.inner.nativeFee,
+            recipient: init_log.inner.recipient.clone(),
+            message: init_log.inner.message.clone(),
+        };
+
         utils::redis::add_event(
             redis_connection,
             utils::redis::EVENTS,
@@ -248,16 +257,26 @@ async fn process_log(
             crate::workers::Transfer::Evm {
                 chain_kind,
                 block_number,
+                tx_hash,
                 log,
-                tx_logs: tx_logs.map(Box::new),
                 creation_timestamp: timestamp,
                 last_update_timestamp: None,
                 expected_finalization_time,
             },
         )
         .await;
-    } else if log.log_decode::<utils::evm::FinTransfer>().is_ok() {
+    } else if let Ok(fin_log) = log.log_decode::<utils::evm::FinTransfer>() {
         info!("Received FinTransfer on {:?} ({:?})", chain_kind, tx_hash);
+
+        let Some(&topic) = topic else {
+            warn!("Topic is empty for log: {:?}", log);
+            return;
+        };
+
+        let Ok(origin_chain) = ChainKind::try_from(fin_log.inner.originChain) else {
+            warn!("Failed to parse origin chain from log: {:?}", log);
+            return;
+        };
 
         utils::redis::add_event(
             redis_connection,
@@ -266,8 +285,10 @@ async fn process_log(
             FinTransfer::Evm {
                 chain_kind,
                 block_number,
-                log,
-                tx_logs: tx_logs.map(Box::new),
+                tx_hash,
+                topic,
+                origin_chain,
+                origin_nonce: fin_log.inner.originNonce,
                 creation_timestamp: timestamp,
                 expected_finalization_time,
             },
@@ -276,6 +297,11 @@ async fn process_log(
     } else if log.log_decode::<utils::evm::DeployToken>().is_ok() {
         info!("Received DeployToken on {:?} ({:?})", chain_kind, tx_hash);
 
+        let Some(&topic) = topic else {
+            warn!("Topic is empty for log: {:?}", log);
+            return;
+        };
+
         utils::redis::add_event(
             redis_connection,
             utils::redis::EVENTS,
@@ -283,8 +309,8 @@ async fn process_log(
             DeployToken::Evm {
                 chain_kind,
                 block_number,
-                log,
-                tx_logs: tx_logs.map(Box::new),
+                tx_hash,
+                topic,
                 creation_timestamp: timestamp,
                 expected_finalization_time,
             },
