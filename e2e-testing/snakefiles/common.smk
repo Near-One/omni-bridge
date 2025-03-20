@@ -1,6 +1,6 @@
 import const
 
-rule tools_build:
+rule common_tools_build:
     output: const.common_tools_compile_stamp
     message: "Building tools"
     shell: """

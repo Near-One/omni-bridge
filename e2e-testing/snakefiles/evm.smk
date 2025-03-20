@@ -5,7 +5,7 @@ from utils import get_json_field
 
 module near_module:
     snakefile: "near.smk"
-use rule * from near_module as near_*
+use rule * from near_module
 
 EVM_NETWORKS = [network for network in EN]
 
@@ -48,7 +48,7 @@ def get_full_path(file_name):
 
 
 # Rule to deploy all networks
-rule deploy_all:
+rule evm_deploy_all:
     input:
         f"{get_evm_deploy_results_dir(EN.ETH_SEPOLIA)}/{network_deployed_stamp}",
         f"{get_evm_deploy_results_dir(EN.ARBITRUM_SEPOLIA)}/{network_deployed_stamp}",
@@ -56,7 +56,7 @@ rule deploy_all:
     default_target: True
 
 
-rule build:
+rule evm_build:
     message: "Building EVM contracts"
     output: evm_build_stamp
     shell: f"""
@@ -67,7 +67,7 @@ rule build:
     touch {{output}}
     """
 
-rule create_eoa_account:
+rule evm_create_eoa_account:
     message: "Creating EOA account"
     output: pathlib.Path(get_evm_account_dir("{network}")) / "{account}.json"
     params:
@@ -78,7 +78,7 @@ rule create_eoa_account:
     {params.create_cmd} 2>/dev/stderr 1> {output}
     """
 
-rule deploy_fake_prover:
+rule evm_deploy_fake_prover:
     message: "Deploying fake prover to {wildcards.network}"
     input:
         build_stamp = evm_build_stamp
@@ -92,10 +92,10 @@ rule deploy_fake_prover:
     """
 
 
-rule create_enear_creation_file:
+rule evm_create_enear_creation_file:
     message: "Creating eNear creation file for {wildcards.network}"
     input:
-        fake_prover = rules.deploy_fake_prover.output,
+        fake_prover = rules.evm_deploy_fake_prover.output,
         template = evm_enear_creation_template_file
     output: get_full_path(enear_creation_file)
     params:
@@ -107,7 +107,7 @@ rule create_enear_creation_file:
     """
 
 
-rule deploy_enear:
+rule evm_deploy_enear:
     message: "Deploying eNear to {wildcards.network}"
     input:
         creation_file = get_full_path(enear_creation_file),
@@ -122,11 +122,11 @@ rule deploy_enear:
     """
 
 
-rule deploy_enear_proxy:
+rule evm_deploy_enear_proxy:
     message: "Deploying eNear proxy to {wildcards.network}"
     input:
-        rules.build.output,
-        enear = rules.deploy_enear.output
+        rules.evm_build.output,
+        enear = rules.evm_deploy_enear.output
     output: get_full_path(f"{EC.ENEAR_PROXY}.json")
     params:
         mkdir=get_mkdir_cmd,
@@ -137,10 +137,10 @@ rule deploy_enear_proxy:
     """
 
 
-rule deploy_token_impl:
+rule evm_deploy_token_impl:
     message: "Deploying token implementation to {wildcards.network}"
     input:
-        rules.build.output
+        rules.evm_build.output
     output: get_full_path(f"{EC.TOKEN_IMPL}.json")
     params:
         mkdir = get_mkdir_cmd,
@@ -151,11 +151,11 @@ rule deploy_token_impl:
     """
 
 
-rule deploy_bridge:
+rule evm_deploy_bridge:
     message: "Deploying bridge contract to {wildcards.network}"
     input:
-        rules.build.output,
-        token_impl = rules.deploy_token_impl.output,
+        rules.evm_build.output,
+        token_impl = rules.evm_deploy_token_impl.output,
         near_bridge_file = near_bridge_file,
     output: get_full_path(f"{EC.OMNI_BRIDGE}.json")
     params:
@@ -169,7 +169,7 @@ rule deploy_bridge:
     """
 
 
-rule deploy_test_token:
+rule evm_deploy_test_token:
     message: "Deploying test token to {wildcards.network}"
     input:
         const.common_tools_compile_stamp
@@ -186,12 +186,12 @@ rule deploy_test_token:
 
 
 # Aggregate rules for each network
-rule deploy_to_network:
+rule evm_deploy_to_network:
     message: "Deploying network {wildcards.network}"
     input:
-        bridge = rules.deploy_bridge.output,
-        enear_proxy = rules.deploy_enear_proxy.output,
-        test_token = rules.deploy_test_token.output
+        bridge = rules.evm_deploy_bridge.output,
+        enear_proxy = rules.evm_deploy_enear_proxy.output,
+        test_token = rules.evm_deploy_test_token.output
     output:
         touch(f"{const.evm_deploy_results_dir}/{{network}}/{network_deployed_stamp}")
     params:

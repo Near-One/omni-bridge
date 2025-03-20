@@ -5,7 +5,7 @@ from utils import get_json_field, extract_tx_hash
 
 module common_module:
     snakefile: "common.smk"
-use rule * from common_module as common_*
+use rule * from common_module
 
 # NEAR-specific variables and paths
 near_dir = const.common_testing_root / "../near"
@@ -41,7 +41,7 @@ def get_mkdir_cmd(directory):
     return f"mkdir -p {directory}"
 
 
-rule deploy_all:
+rule near_deploy_all:
     message: "Deploying all NEAR contracts"
     input:
         expand(const.near_deploy_results_dir / "{contract}.json", 
@@ -51,7 +51,7 @@ rule deploy_all:
     default_target: True
 
 
-rule build:
+rule near_build:
     message: "Building NEAR contracts"
     output:
         expand(near_binary_dir / "{binary}", binary=near_binaries)
@@ -59,7 +59,7 @@ rule build:
     OUT_DIR={near_binary_dir} make -f {const.common_testing_root}/../Makefile rust-build-near
     """
 
-rule create_account:
+rule near_create_account:
     message: "Creating {wildcards.account} account"
     output: const.near_account_dir / "{account}.json"
     params:
@@ -72,7 +72,7 @@ rule create_account:
     """
 
 
-rule generate_token_deployer_init_args:
+rule near_generate_token_deployer_init_args:
     message: "Generating token deployer init args"
     input:
         omni_bridge = omni_bridge_file,
@@ -88,7 +88,7 @@ rule generate_token_deployer_init_args:
     """
 
 
-rule generate_mock_token_init_args:
+rule near_generate_mock_token_init_args:
     message: "Generating mock token init args"
     input: near_init_account_credentials_file
     output: const.common_generated_dir / "mock_token_dyn_init_args.json"
@@ -101,7 +101,7 @@ rule generate_mock_token_init_args:
     """
 
 
-rule generate_omni_bridge_init_args:
+rule near_generate_omni_bridge_init_args:
     message: "Generating omni bridge init args"
     input: omni_prover_file
     output: const.common_generated_dir / "omni_bridge_dyn_init_args.json"
@@ -114,7 +114,7 @@ rule generate_omni_bridge_init_args:
     """
 
 
-rule omni_prover_dau_grant:
+rule near_omni_prover_dau_grant:
     message: "Granting DAO role to omni prover"
     input:
         init_account = near_init_account_credentials_file,
@@ -137,12 +137,12 @@ rule omni_prover_dau_grant:
     """
 
 
-rule evm_prover_setup:
+rule near_evm_prover_setup:
     message: "Setting up EVM prover"
     input:
         omni_prover = omni_prover_file,
         evm_prover = evm_prover_file,
-        dau_grant = rules.omni_prover_dau_grant.output,
+        dau_grant = rules.near_omni_prover_dau_grant.output,
         dao_account = near_dao_account_credentials_file
     output: near_evm_prover_setup_call_file
     params:
@@ -162,7 +162,7 @@ rule evm_prover_setup:
     """
 
 
-rule deploy_contract:
+rule near_deploy_contract:
     message: "Deploying {wildcards.contract} contract"
     input:
         init_params=near_init_params_file,
