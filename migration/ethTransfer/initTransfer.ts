@@ -33,7 +33,7 @@ async function getTotalSupply() {
     const account = await near.account("script_account.near");
 
     const result = await account.viewFunction({
-        contractId:  process.env.ETH_ACCOUNT_ID || '',
+        contractId:  process.env.AURORA_ACCOUNT_ID || '',
         methodName: "ft_total_supply",
         args: {}});
 
@@ -47,52 +47,38 @@ async function getTotalSupply() {
     const web3 = new Web3(RPC_URL);
 
     const provider = new JsonRpcProvider(RPC_URL)
-    const owner1Signer = new ethers.Wallet(process.env.PRIVATE_KEY || '', provider)
+    const owner1Signer = new ethers.Wallet(process.env.EVM_PRIVATE_KEY || '', provider)
     const apiKit = new SafeApiKit({
         chainId: BigInt(process.env.CHAIN_ID || '0')
     })
 
     const protocolKitOwner1 = await Safe.init({
         provider: RPC_URL,
-        signer: process.env.PRIVATE_KEY || '',
-        safeAddress: process.env.SAFE_ADDRESS || ''
+        signer: process.env.EVM_PRIVATE_KEY || '',
+        safeAddress: process.env.MULTISIG_ADDRESS || ''
     })
 
     const balance = await provider.getBalance(process.env.ETH_CUSTODIAN || '');
     const total_supply = await getTotalSupply();
+    const transfer_value = total_supply;
     console.log("Eth Custodian Balance:", balance, "; Total Supply Eth Account on Near: ", total_supply);
 
     const ethCustodianInterface = new ethers.Interface(abiEthCustodian);
-    const data = ethCustodianInterface.encodeFunctionData("adminSendEth", [process.env.SAFE_ADDRESS || '', total_supply]);
+    const data = ethCustodianInterface.encodeFunctionData("adminSendEth", [process.env.MULTISIG_ADDRESS || '', transfer_value]);
 
     console.log("Encoded data for admin send eth: ", data);
 
-    const destination = process.env.ETH_CUSTODIAN_PROXY || '';
-    const ethCustodianProxyAbi = ["function callImpl(bytes)"];
-    const ethCustodianProxyInterface = new Interface(ethCustodianProxyAbi);
-
-    const txs = [];
-    const callImplData = ethCustodianProxyInterface.encodeFunctionData("callImpl", [data]);
-
+    const destination = process.env.ETH_CUSTODIAN || '';
+    const nonce = await protocolKitOwner1.getNonce(); 
     const safeTransactionData: MetaTransactionData = {
         to: destination,
         value: '0',
-        data: callImplData,
+        data: data,
         operation: OperationType.Call
     };
 
-    txs.push(safeTransactionData);
-
-    const safeTransactionSendEthData: MetaTransactionData = {
-        to: process.env.OMNI_LOCKER,
-        value: total_supply,
-        data: "0x"
-    };
-
-    txs.push(safeTransactionSendEthData);
-
     const safeTransaction = await protocolKitOwner1.createTransaction({
-       transactions: txs
+       transactions: [safeTransactionData]
     });
 
     const safeTxHash = await protocolKitOwner1.getTransactionHash(safeTransaction)
@@ -100,7 +86,7 @@ async function getTotalSupply() {
 
     // Propose transaction to the service
     await apiKit.proposeTransaction({
-       safeAddress: process.env.SAFE_ADDRESS || '',
+       safeAddress: process.env.MULTISIG_ADDRESS || '',
        safeTransactionData: safeTransaction.data,
        safeTxHash,
        senderAddress: owner1Signer.address,
@@ -108,4 +94,32 @@ async function getTotalSupply() {
     })
 
     console.log(safeTxHash);
+
+    const safeTransactionSendEthData: MetaTransactionData = {
+        to: process.env.OMNI_BRIDGE_ETH,
+        value: transfer_value,
+        data: "0x",
+	operation: OperationType.Call
+    };
+
+    const safeTransaction2 = await protocolKitOwner1.createTransaction({
+       transactions: [safeTransactionSendEthData],
+       options: {
+           nonce: nonce + 1
+       }
+    });
+
+    const safeTxHash2 = await protocolKitOwner1.getTransactionHash(safeTransaction2)
+    const signature2 = await protocolKitOwner1.signHash(safeTxHash2)
+
+    // Propose transaction to the service
+    await apiKit.proposeTransaction({
+       safeAddress: process.env.MULTISIG_ADDRESS || '',
+       safeTransactionData: safeTransaction2.data,
+       safeTxHash: safeTxHash2,
+       senderAddress: owner1Signer.address,
+       senderSignature: signature2.data
+    })
+
+    console.log(safeTxHash2);
 })()
