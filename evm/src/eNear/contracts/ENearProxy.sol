@@ -12,6 +12,7 @@ contract ENearProxy is UUPSUpgradeable, AccessControlUpgradeable, ICustomMinter,
     IENear public eNear;
 
     bytes32 public constant MINTER_ROLE = keccak256("MINTER_ROLE");
+    bytes32 public constant PAUSE_ROLE = keccak256("PAUSE_ROLE");
     bytes public nearConnector;
     uint256 public currentReceiptId;
     INearProver public prover;
@@ -31,6 +32,7 @@ contract ENearProxy is UUPSUpgradeable, AccessControlUpgradeable, ICustomMinter,
         currentReceiptId = _currentReceiptId;
         prover = INearProver(_prover);
         _grantRole(DEFAULT_ADMIN_ROLE, _adminAddress);
+        _grantRole(PAUSE_ROLE, _msgSender());
     }
 
     function mint(address token, address to, uint128 amount) public onlyRole(MINTER_ROLE) {
@@ -68,6 +70,10 @@ contract ENearProxy is UUPSUpgradeable, AccessControlUpgradeable, ICustomMinter,
         );
 
         eNear.finaliseNearToEthTransfer(proofData, proofBlockHeight);
+    }
+
+    function pauseAll() external onlyRole(PAUSE_ROLE) {
+        _pause(PAUSED_LEGACY_FIN_TRANSFER);
     }
 
     function pause(uint flags) external onlyRole(DEFAULT_ADMIN_ROLE) {
