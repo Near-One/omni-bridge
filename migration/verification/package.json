@@ -1,0 +1,26 @@
+{
+	"name": "verification",
+	"version": "1.0.0",
+	"description": "",
+	"main": "index.js",
+	"scripts": {
+		"test": "echo \"Error: no test specified\" && exit 1",
+		"lint": "biome lint . --fix",
+		"format": "biome format . --fix",
+		"start": "tsx verify-paused-methods.ts"
+	},
+	"keywords": [],
+	"author": "",
+	"license": "ISC",
+	"devDependencies": {
+		"@biomejs/biome": "^1.9.4",
+		"tsx": "^4.19.3",
+		"typescript": "^5.8.2"
+	},
+	"dependencies": {
+		"chalk": "^5.4.1",
+		"dotenv": "^16.4.7",
+		"ethers": "^6.13.5",
+		"near-api-js": "^5.1.0"
+	}
+}
