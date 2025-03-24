@@ -12,7 +12,7 @@ contract ENearProxy is UUPSUpgradeable, AccessControlUpgradeable, ICustomMinter,
     IENear public eNear;
 
     bytes32 public constant MINTER_ROLE = keccak256("MINTER_ROLE");
-    bytes32 public constant PAUSE_ROLE = keccak256("PAUSE_ROLE");
+    bytes32 public constant PAUSABLE_ADMIN_ROLE = keccak256("PAUSABLE_ADMIN_ROLE");
     bytes public nearConnector;
     uint256 public currentReceiptId;
     INearProver public prover;
@@ -72,7 +72,7 @@ contract ENearProxy is UUPSUpgradeable, AccessControlUpgradeable, ICustomMinter,
         eNear.finaliseNearToEthTransfer(proofData, proofBlockHeight);
     }
 
-    function pauseAll() external onlyRole(PAUSE_ROLE) {
+    function pauseAll() external onlyRole(PAUSABLE_ADMIN_ROLE) {
         _pause(PAUSED_LEGACY_FIN_TRANSFER);
     }
 
