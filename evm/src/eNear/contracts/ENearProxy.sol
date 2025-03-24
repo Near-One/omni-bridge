@@ -32,7 +32,7 @@ contract ENearProxy is UUPSUpgradeable, AccessControlUpgradeable, ICustomMinter,
         currentReceiptId = _currentReceiptId;
         prover = INearProver(_prover);
         _grantRole(DEFAULT_ADMIN_ROLE, _adminAddress);
-        _grantRole(PAUSE_ROLE, _msgSender());
+        _grantRole(PAUSABLE_ADMIN_ROLE, _msgSender());
     }
 
     function mint(address token, address to, uint128 amount) public onlyRole(MINTER_ROLE) {
