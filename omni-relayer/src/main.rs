@@ -63,6 +63,9 @@ async fn main() -> Result<()> {
     ));
     let evm_nonces = Arc::new(utils::nonce::EvmNonceManagers::new(&config));
 
+    let meter_provider = config::get_meter_provider().await?;
+    opentelemetry::global::set_meter_provider(meter_provider.clone());
+
     let mut handles = Vec::new();
 
     if config.is_bridge_indexer_enabled() {
@@ -185,5 +188,5 @@ async fn main() -> Result<()> {
         }
     }
 
-    Ok(())
+    meter_provider.shutdown().map_err(From::from)
 }

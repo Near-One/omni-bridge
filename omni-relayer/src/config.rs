@@ -2,8 +2,16 @@ use alloy::{
     primitives::Address,
     signers::{k256::ecdsa::SigningKey, local::LocalSigner},
 };
+use anyhow::Context;
 use near_primitives::types::AccountId;
+use near_sdk::base64::{prelude::BASE64_STANDARD, Engine};
 use omni_types::{ChainKind, OmniAddress};
+use opentelemetry::KeyValue;
+use opentelemetry_otlp::WithHttpConfig as _;
+use opentelemetry_sdk::{
+    metrics::{Aggregation, Instrument, PeriodicReader, SdkMeterProvider, Stream, Temporality},
+    Resource,
+};
 use serde::Deserialize;
 
 pub fn get_private_key(chain_kind: ChainKind) -> String {
@@ -173,4 +181,70 @@ pub struct Solana {
 pub struct Wormhole {
     pub api_url: String,
     pub solana_chain_id: u64,
+}
+
+async fn get_gcp_instance_id() -> anyhow::Result<String> {
+    Ok(reqwest::Client::new()
+        .get("http://metadata.google.internal/computeMetadata/v1/instance/id")
+        .header("Metadata-Flavor", "Google")
+        .send()
+        .await?
+        .text()
+        .await?)
+}
+
+pub async fn get_meter_provider() -> anyhow::Result<SdkMeterProvider> {
+    let metrics_exporter = opentelemetry_otlp::MetricExporter::builder()
+        .with_http()
+        .with_headers(std::collections::HashMap::from([(
+            "Authorization".to_string(),
+            // https://datatracker.ietf.org/doc/html/rfc7617#section-2
+            format!(
+                "Basic {}",
+                BASE64_STANDARD.encode(format!(
+                    "{}:{}",
+                    std::env::var("GRAFANA_CLOUD_INSTANCE_ID")
+                        .context("GRAFANA_CLOUD_INSTANCE_ID env variable is not set")?,
+                    std::env::var("GRAFANA_CLOUD_API_KEY")
+                        .context("GRAFANA_CLOUD_API_KEY env variable is not set")?,
+                ))
+            ),
+        )]))
+        .with_temporality(Temporality::default())
+        .build()?;
+
+    let reader = PeriodicReader::builder(
+        metrics_exporter,
+        opentelemetry_sdk::runtime::TokioCurrentThread,
+    )
+    .build();
+
+    Ok(SdkMeterProvider::builder()
+        .with_reader(reader)
+        .with_resource(Resource::new([
+            // K_SERVICE and K_REVISION should be set by cloud run, so we provide defaults for
+            // local runs.
+            // https://cloud.google.com/run/docs/container-contract#services-env-vars
+            KeyValue::new("service.name", std::env::var("K_SERVICE").context("K_SERVICE env variable is not set")?),
+            KeyValue::new("service.version", std::env::var("K_REVISION").context("K_REVISION env variable is not set")?),
+            KeyValue::new("service.namespace", std::env::var("SERVICE_NAMESPACE").context("SERVICE_NAMESPACE env variable is not set")?),
+            KeyValue::new(
+                "service.instance.id",
+                get_gcp_instance_id().await.unwrap_or_else(|err| {
+                    log::warn!("Failed to get instance id. Shouldn't happen if running in GCP. Error: {err:?}");
+                    "local-instance".to_string()
+                }),
+            ),
+        ]))
+        .with_view(opentelemetry_sdk::metrics::new_view(
+            // https://github.com/open-telemetry/semantic-conventions/blob/b865f63bc7ba3039ad87504d75ee40104149d1bd/docs/http/http-metrics.md#metric-httpserverrequestduration
+            Instrument::new().name("http.server.duration"),
+            Stream::new().aggregation(Aggregation::ExplicitBucketHistogram {
+                boundaries: vec![
+                    0.005, 0.01, 0.025, 0.05, 0.075, 0.1, 0.25, 0.5, 0.75, 1.0, 2.5, 5.0, 7.5, 10.0,
+                ],
+                record_min_max: true,
+            }),
+        )?)
+        .build())
 }
