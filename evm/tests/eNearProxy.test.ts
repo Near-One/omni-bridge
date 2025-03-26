@@ -54,6 +54,7 @@ describe("eNearProxy contract", () => {
       eNearProxyFactory,
       [
         await eNear.getAddress(),
+        await nearProver.getAddress(),
         Buffer.from("eNearBridge", "utf-8"),
         0,
         await deployer.getAddress(),
