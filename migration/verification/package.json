@@ -18,6 +18,7 @@
 		"typescript": "^5.8.2"
 	},
 	"dependencies": {
+		"bs58": "^6.0.0",
 		"chalk": "^5.4.1",
 		"dotenv": "^16.4.7",
 		"ethers": "^6.13.5",
