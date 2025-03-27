@@ -21,12 +21,12 @@ pub trait Prover {
 #[serde(crate = "near_sdk::serde")]
 pub enum Role {
     PauseManager,
-    UnpauseManager,
     UpgradableCodeStager,
     UpgradableCodeDeployer,
     DAO,
     ProversManager,
     UnrestrictedValidateProof,
+    UnpauseManager,
 }
 
 #[derive(BorshSerialize, near_sdk::BorshStorageKey)]

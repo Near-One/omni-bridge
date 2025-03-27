@@ -18,11 +18,11 @@ const BRIDGE_TOKEN_BINARY: &[u8] = include_bytes!(env!("BUILD_RS_SUB_BUILD_OMNI-
 pub enum Role {
     DAO,
     PauseManager,
-    UnpauseManager,
     UnrestrictedDeposit,
     UpgradableCodeStager,
     UpgradableCodeDeployer,
     Controller,
+    UnpauseManager,
 }
 
 #[near(contract_state)]

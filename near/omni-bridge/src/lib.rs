@@ -82,7 +82,6 @@ enum StorageKey {
 pub enum Role {
     DAO,
     PauseManager,
-    UnpauseManager,
     UnrestrictedDeposit,
     UpgradableCodeStager,
     UpgradableCodeDeployer,
@@ -90,6 +89,7 @@ pub enum Role {
     UnrestrictedRelayer,
     TokenControllerUpdater,
     NativeFeeRestricted,
+    UnpauseManager,
 }
 
 #[ext_contract(ext_token)]
