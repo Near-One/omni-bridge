@@ -24,10 +24,6 @@ rustls = { version = "0.23.23", default-features = false }
 tokio = { version = "1", features = ["sync", "time", "macros", "rt-multi-thread"] }
 tokio-stream = { version = "0.1" }
 
-opentelemetry = "0.27.0"
-opentelemetry_sdk = { version = "0.27.0", features = [ "spec_unstable_metrics_views", "metrics", "rt-tokio-current-thread" ] }
-opentelemetry-otlp = { version = "0.27.0", features = [ "http-proto", "reqwest-client" ] }
-
 solana-sdk = "2.1.9"
 solana-client = "2.1.9"
 solana-transaction-status = "2.1.9"
