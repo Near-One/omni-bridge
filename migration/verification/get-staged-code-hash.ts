@@ -1,7 +1,7 @@
 import { connect, keyStores } from "near-api-js";
 import dotenv from "dotenv";
 import chalk from "chalk";
-import { Buffer } from "buffer";
+import { Buffer } from "node:buffer";
 import bs58 from "bs58";
 
 dotenv.config();
@@ -12,13 +12,12 @@ interface NearConfig {
 }
 
 async function get_staged_code_hash(config: NearConfig): Promise<void> {
-	const contractId = process.env.OMNI_BRIDGE_ACCOUNT_ID || ""
+	const contractId = process.env.OMNI_BRIDGE_ACCOUNT_ID || "";
 
 	if (!contractId) {
 		console.log(chalk.yellow(`${contractId} ID not provided, skipping...`));
 		return;
 	}
-
 
 	const keyStore = new keyStores.InMemoryKeyStore();
 	const nearConnection = await connect({
@@ -44,9 +43,7 @@ async function get_staged_code_hash(config: NearConfig): Promise<void> {
 		console.log("Base58:", base58Encoded);
 	} catch (e) {
 		console.log(
-			chalk.yellow(
-				`up_staged_code_hash function not found or failed`,
-			),
+			chalk.yellow("up_staged_code_hash function not found or failed"),
 		);
 	}
 }
@@ -55,4 +52,4 @@ const nearConfig: NearConfig = {
 	networkId: process.env.NETWORK_NEAR || "testnet",
 	nodeUrl: `https://rpc.${process.env.NETWORK_NEAR || "testnet"}.near.org`,
 };
-get_staged_code_hash(nearConfig)
+get_staged_code_hash(nearConfig);
