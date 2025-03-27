@@ -3054,7 +3054,7 @@ dependencies = [
 
 [[package]]
 name = "omni-bridge"
-version = "0.2.3"
+version = "0.2.6"
 dependencies = [
  "borsh",
  "hex",
