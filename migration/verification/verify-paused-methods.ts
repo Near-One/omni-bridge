@@ -381,7 +381,10 @@ async function verifyNearContracts(config: NearConfig): Promise<void> {
 			account,
 			"Token Locker",
 			config.contracts.tokenLocker,
-			[{ feature: "ft_on_transfer", description: "NEAR→ETH transfers" }],
+			[
+				{ feature: "ft_on_transfer", description: "NEAR→ETH transfers" },
+				{ feature: "withdraw", description: "ETH→NEAR transfers" }
+			],
 		);
 
 		// Check eNEAR on NEAR
@@ -398,6 +401,27 @@ async function verifyNearContracts(config: NearConfig): Promise<void> {
 			],
 		);
 
+		// Check Bridge Token Factory on NEAR
+		await checkNearContract(
+			account,
+			"Bridge Token Factory",
+			config.contracts.bridgeTokenFactoryNear,
+			[
+				{
+					feature: "deposit",
+					description: "ETH→NEAR transfers",
+				},
+				{
+					feature: "deploy_bridge_token",
+					description: "Deploy bridge token",
+				},
+				{
+					feature: "update_metadata",
+					description: "Update metadata",
+				},
+			],
+		);
+
 		// Check OmniBridge on NEAR
 		await checkNearContract(
 			account,
@@ -405,8 +429,16 @@ async function verifyNearContracts(config: NearConfig): Promise<void> {
 			config.contracts.omniBridgeNear,
 			[
 				{
-					feature: "ft_transfer_call",
-					description: "Token transfers via OmniBridge",
+					feature: "ft_on_transfer",
+					description: "NEAR→ETH transfers",
+				},
+				{
+					feature: "fin_transfer",
+					description: "ETH→NEAR transfers",
+				},
+				{
+					feature: "log_metadata",
+					description: "Log metadata",
 				},
 			],
 		);
