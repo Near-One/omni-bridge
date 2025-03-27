@@ -2,6 +2,7 @@ import { connect, keyStores } from "near-api-js";
 import dotenv from "dotenv";
 import chalk from "chalk";
 import { Buffer } from "buffer";
+import bs58 from "bs58";
 
 dotenv.config();
 
@@ -38,6 +39,9 @@ async function get_staged_code_hash(config: NearConfig): Promise<void> {
 		const base64Encoded = buffer.toString("base64");
 
 		console.log("Base64:", base64Encoded);
+
+		const base58Encoded = bs58.encode(buffer);
+		console.log("Base58:", base58Encoded);
 	} catch (e) {
 		console.log(
 			chalk.yellow(
