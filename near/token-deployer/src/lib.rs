@@ -18,6 +18,7 @@ const BRIDGE_TOKEN_BINARY: &[u8] = include_bytes!(env!("BUILD_RS_SUB_BUILD_OMNI-
 pub enum Role {
     DAO,
     PauseManager,
+    UnpauseManager,
     UnrestrictedDeposit,
     UpgradableCodeStager,
     UpgradableCodeDeployer,
@@ -26,7 +27,7 @@ pub enum Role {
 
 #[near(contract_state)]
 #[derive(Pausable, Upgradable, PanicOnDefault)]
-#[pausable(manager_roles(Role::PauseManager))]
+#[pausable(pause_roles(Role::PauseManager), unpause_roles(Role::UnpauseManager))]
 #[access_control(role_type(Role))]
 #[upgradable(access_control_roles(
     code_stagers(Role::UpgradableCodeStager, Role::DAO),
