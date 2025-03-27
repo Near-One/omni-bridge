@@ -15,14 +15,24 @@ Checks that the transactions initiated in the Rainbow Bridge from Ethereum over 
    pnpm install
    ```
 
-3. Create an `.env` file in the project root with the following variables:
+3. Use the provided environment configuration files:
+   ```bash
+   # For mainnet
+   cp ../.env.mainnet .env
+   # OR for testnet
+   cp ../.env.testnet .env
    ```
-   INFURA_API_KEY=your_infura_api_key
-   NETWORK_ETH=goerli_or_mainnet
-   ERC20_LOCKER=erc20_locker_contract_address
-   NETWORK_NEAR=testnet_or_mainnet
-   BRIDGE_TOKEN_FACTORY_ACCOUNT_ID=bridge_token_factory_account
-   NEAR_ACCOUNT_ID=your_near_account.near
+
+   The environment files already contain the necessary configuration variables:
+   - `INFURA_API_KEY`: Your Infura API key for Ethereum network access
+   - `NETWORK_ETH`: Ethereum network name (mainnet/sepolia)
+   - `ERC20_LOCKER`: Address of the ERC20 Locker contract on Ethereum
+   - `NETWORK_NEAR`: NEAR network name (mainnet/testnet)
+   - `BRIDGE_TOKEN_FACTORY_ACCOUNT_ID`: Bridge token factory account on NEAR
+
+   You only need to update the `INFURA_API_KEY` value in the copied file or set it in your terminal session:
+   ```bash
+   export INFURA_API_KEY=your_infura_key
    ```
 
 ## Usage
@@ -47,13 +57,14 @@ After initiating a transfer from Ethereum to NEAR:
    All transactions are finalized! You can move to the next step!
    ```
 
-## Environment Variables Explained
+## Environment Variables
 
-| Variable | Description |
+The project uses environment variables from either `.env.mainnet` or `.env.testnet` files located in the `migration` directory. These files contain all necessary configuration for both networks.
+
+| Key Variable | Description |
 |----------|-------------|
 | `INFURA_API_KEY` | Your Infura API key for Ethereum network access |
-| `NETWORK_ETH` | Ethereum network name (e.g., `mainnet`, `goerli`) |
+| `NETWORK_ETH` | Ethereum network name (mainnet or sepolia) |
 | `ERC20_LOCKER` | Address of the ERC20 Locker contract on Ethereum |
-| `NETWORK_NEAR` | NEAR network name (`testnet` or `mainnet`) |
+| `NETWORK_NEAR` | NEAR network name (mainnet or testnet) |
 | `BRIDGE_TOKEN_FACTORY_ACCOUNT_ID` | Bridge token factory account on NEAR |
-| `NEAR_ACCOUNT_ID` | Your NEAR account for making view calls |
