@@ -90,6 +90,7 @@ async function verifyPausedMethods(): Promise<void> {
 			eNearAccount: process.env.E_NEAR_ACCOUNT_ID || "",
 			omniBridgeNear: process.env.OMNI_BRIDGE_ACCOUNT_ID || "",
 			bridgeTokenFactoryNear: process.env.BRIDGE_TOKEN_FACTORY_ACCOUNT_ID || "",
+			aurora: process.env.AURORA_ACCOUNT_ID || "aurora",
 		},
 	};
 
@@ -100,6 +101,10 @@ async function verifyPausedMethods(): Promise<void> {
 	// Verify NEAR contracts
 	console.log(chalk.cyan.bold("\n=== NEAR Contracts ==="));
 	await verifyNearContracts(nearConfig);
+
+	// Special check for Aurora Engine precompiles
+	console.log(chalk.cyan.bold("\n=== Aurora Engine Precompiles ==="));
+	await checkAuroraPrecompiles(nearConfig);
 }
 
 async function verifyEthereumContracts(config: EthereumConfig): Promise<void> {
@@ -362,6 +367,143 @@ async function checkPausedFlags(
 	);
 }
 
+// New function to check Aurora Engine precompiles
+async function checkAuroraPrecompiles(config: NearConfig): Promise<void> {
+	try {
+		// Initialize NEAR connection
+		const keyStore = new keyStores.InMemoryKeyStore();
+		const nearConnection = await connect({
+			networkId: config.networkId,
+			keyStore,
+			nodeUrl: config.nodeUrl,
+			headers: {},
+		});
+
+		// For view-only operations, we can use any dummy account
+		const account = await nearConnection.account("dummy.near");
+		const auroraContractId = config.contracts.aurora;
+
+		if (!auroraContractId) {
+			console.log(
+				chalk.yellow("Aurora Engine contract ID not provided, skipping..."),
+			);
+			return;
+		}
+
+		console.log(
+			chalk.cyan(`\nChecking Aurora Engine Precompiles (${auroraContractId}):`),
+		);
+
+		// Check paused precompiles flags
+		try {
+			const pausedPrecompiles = await account.viewFunction({
+				contractId: auroraContractId,
+				methodName: "paused_precompiles",
+				args: {},
+				parse: (result) => {
+					return Buffer.from(result).readUInt32LE();
+				},
+			});
+
+			console.log(`  - Paused precompiles flags: ${pausedPrecompiles}`);
+
+			// Interpret flags based on PrecompileFlags in the Rust code
+			const flags = pausedPrecompiles;
+
+			// EXIT_TO_NEAR = 0b01 (1 in decimal)
+			// EXIT_TO_ETHEREUM = 0b10 (2 in decimal)
+			const exitToNearPaused = (flags & 1) === 1;
+			const exitToEthereumPaused = (flags & 2) === 2;
+
+			console.log(
+				`  - EXIT_TO_NEAR precompile (bit 0) paused: ${formatPauseStatus(exitToNearPaused)}`,
+			);
+			console.log(
+				`  - EXIT_TO_ETHEREUM precompile (bit 1) paused: ${formatPauseStatus(exitToEthereumPaused)}`,
+			);
+
+			// If both are paused, we should have flags = 3
+			if (flags === 3) {
+				console.log(
+					chalk.green(
+						"  ✓ Both EXIT_TO_NEAR and EXIT_TO_ETHEREUM precompiles are paused",
+					),
+				);
+			} else if (flags === 0) {
+				console.log(chalk.red("  ✗ No precompiles are paused"));
+			} else {
+				console.log(chalk.yellow("  ⚠ Only some precompiles are paused"));
+			}
+		} catch (e) {
+			console.log(chalk.red(`  - Error checking paused_precompiles: ${e}`));
+		}
+
+		// Check FT transfer methods in ETH connector
+		try {
+			// This checks the pause flags for the internal_ft_methods in the ETH connector
+			const etherConnectorFlags = await account.viewFunction({
+				contractId: auroraContractId,
+				methodName: "get_paused_flags",
+				parse: (result) => {
+					return Buffer.from(result).readUint8();
+				},
+			});
+
+			console.log(`\n  - ETH Connector paused flags: ${etherConnectorFlags}`);
+
+			// Based on the provided flags:
+			// UNPAUSE_ALL = 0
+			// PAUSE_DEPOSIT = 1 << 0 (1)
+			// PAUSE_WITHDRAW = 1 << 1 (2)
+			// PAUSE_FT = 1 << 2 (4)
+
+			const flags = etherConnectorFlags;
+			const depositPaused = (flags & 1) === 1;
+			const withdrawPaused = (flags & 2) === 2;
+			const ftPaused = (flags & 4) === 4;
+
+			console.log(
+				`  - Deposit methods paused: ${formatPauseStatus(depositPaused)}`,
+			);
+			console.log(
+				`  - Withdraw methods paused: ${formatPauseStatus(withdrawPaused)}`,
+			);
+			console.log(
+				`  - FT transfer methods paused: ${formatPauseStatus(ftPaused)}`,
+			);
+
+			// If all flags are set (255), all methods should be paused
+			if (flags === 255) {
+				console.log(chalk.green("  ✓ All ETH connector methods are paused"));
+			} else if (flags === 0) {
+				console.log(chalk.red("  ✗ No ETH connector methods are paused"));
+			} else {
+				console.log(
+					chalk.yellow("  ⚠ Only some ETH connector methods are paused"),
+				);
+
+				// For more specific information
+				if (ftPaused) {
+					console.log(
+						chalk.green("  ✓ FT transfer methods are paused (bit 2 set)"),
+					);
+				} else {
+					console.log(
+						chalk.red("  ✗ FT transfer methods are NOT paused (bit 2 not set)"),
+					);
+				}
+			}
+		} catch (e) {
+			console.log(chalk.red(`  - Error checking ETH connector flags: ${e}`));
+		}
+	} catch (error) {
+		console.error(
+			chalk.red("Error verifying Aurora Engine precompiles:"),
+			error,
+		);
+	}
+}
+
 async function verifyNearContracts(config: NearConfig): Promise<void> {
 	try {
 		// Initialize NEAR connection
@@ -383,7 +525,7 @@ async function verifyNearContracts(config: NearConfig): Promise<void> {
 			config.contracts.tokenLocker,
 			[
 				{ feature: "ft_on_transfer", description: "NEAR→ETH transfers" },
-				{ feature: "withdraw", description: "ETH→NEAR transfers" }
+				{ feature: "withdraw", description: "ETH→NEAR transfers" },
 			],
 		);
 
@@ -496,7 +638,6 @@ function explainPauseFlags(flags: bigint): string {
 function formatPauseStatus(isPaused: boolean): string {
 	return isPaused ? chalk.green("✓ PAUSED") : chalk.red("✗ NOT PAUSED");
 }
-
 
 // Execute the verification
 verifyPausedMethods()
