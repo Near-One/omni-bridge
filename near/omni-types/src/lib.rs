@@ -142,12 +142,18 @@ impl Serialize for H160 {
     IntoPrimitive,
 )]
 #[repr(u8)]
+#[serde(rename_all = "lowercase")]
 pub enum ChainKind {
     #[default]
+    #[serde(alias = "Eth")]
     Eth,
+    #[serde(alias = "Near")]
     Near,
+    #[serde(alias = "Sol")]
     Sol,
+    #[serde(alias = "Arb")]
     Arb,
+    #[serde(alias = "Base")]
     Base,
 }
 
