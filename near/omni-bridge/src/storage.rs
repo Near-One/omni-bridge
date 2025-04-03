@@ -110,6 +110,7 @@ impl Contract {
         storage
     }
 
+    #[payable]
     pub fn storage_unregister(&mut self, force: Option<bool>) -> bool {
         assert_one_yocto();
         let account_id = env::predecessor_account_id();

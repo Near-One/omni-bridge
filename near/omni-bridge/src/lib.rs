@@ -443,7 +443,9 @@ impl Contract {
             fee_recipient,
         };
 
-        let payload = near_sdk::env::keccak256_array(&borsh::to_vec(&transfer_payload).unwrap());
+        let payload = near_sdk::env::keccak256_array(
+            &borsh::to_vec(&transfer_payload).sdk_expect("ERR_BORSH"),
+        );
 
         ext_signer::ext(self.mpc_signer.clone())
             .with_static_gas(MPC_SIGNING_GAS)
@@ -640,6 +642,7 @@ impl Contract {
         if let OmniAddress::Near(recipient) = fast_fin_transfer_msg.recipient {
             let storage_deposit_amount = fast_fin_transfer_msg
                 .storage_deposit_amount
+                .map(|amount| amount.0)
                 .unwrap_or_default();
             if storage_deposit_amount > 0 {
                 self.update_storage_balance(
@@ -652,7 +655,9 @@ impl Contract {
             let deposit_action = StorageDepositAction {
                 account_id: recipient,
                 token_id,
-                storage_deposit_amount: fast_fin_transfer_msg.storage_deposit_amount,
+                storage_deposit_amount: fast_fin_transfer_msg
+                    .storage_deposit_amount
+                    .map(|amount| amount.0),
             };
             PromiseOrValue::Promise(
                 Self::check_or_pay_ft_storage(
@@ -1320,6 +1325,7 @@ impl Contract {
                         predecessor_account_id == status.relayer,
                         "ERR_FAST_TRANSFER_PERFORMED_BY_ANOTHER_RELAYER"
                     );
+                    require!(!status.finalised, "ERR_FAST_TRANSFER_ALREADY_FINALISED");
                     (status.relayer, String::new(), true)
                 }
                 None => (recipient, transfer_message.msg.clone(), false),
@@ -1433,6 +1439,7 @@ impl Contract {
                     predecessor_account_id == status.relayer,
                     "ERR_FAST_TRANSFER_PERFORMED_BY_ANOTHER_RELAYER"
                 );
+                require!(!status.finalised, "ERR_FAST_TRANSFER_ALREADY_FINALISED");
                 Some(status.relayer)
             }
             None => None,
@@ -1652,7 +1659,9 @@ impl Contract {
     }
 
     fn mark_fast_transfer_as_finalised(&mut self, fast_transfer_id: &FastTransferId) {
-        let mut status = self.get_fast_transfer_status(fast_transfer_id).unwrap();
+        let mut status = self
+            .get_fast_transfer_status(fast_transfer_id)
+            .sdk_expect("ERR_FAST_TRANSFER_NOT_FOUND");
         status.finalised = true;
         self.fast_transfers
             .insert(fast_transfer_id, &FastTransferStatusStorage::V0(status));
