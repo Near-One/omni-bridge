@@ -107,6 +107,9 @@ impl Contract {
             .sdk_expect("The amount is greater than the available storage balance");
 
         self.accounts_balances.insert(&account_id, &storage);
+
+        Promise::new(account_id).transfer(to_withdraw);
+
         storage
     }
 
