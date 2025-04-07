@@ -1,15 +1,29 @@
 {
-  "name": "check-erc20-eth-to-near-transfers-finalization",
-  "version": "0.0.1",
-  "main": "index.js",
-  "author": "dev@near.org",
-  "license": "MIT",
-  "type": "module",
-  "dependencies": {
-    "@ethersproject/providers": "5.7.2",
-    "dotenv": "^16.4.7",
-    "eth-object": "https://github.com/near/eth-object#378b8dbf44a71f7049666cea5a16ab88d45aed06",
-    "near-api-js": "5.0.1",
-    "ethers": "^6"
-  }
+	"name": "check-erc20-eth-to-near-transfers-finalization",
+	"version": "0.0.1",
+	"main": "index.js",
+	"author": "dev@near.org",
+	"license": "MIT",
+	"type": "module",
+	"dependencies": {
+		"@ethersproject/providers": "5.7.2",
+		"@zorsh/zorsh": "^0.3.1",
+		"chalk": "^5.4.1",
+		"dotenv": "^16.4.7",
+		"envalid": "^8.0.0",
+		"eth-object": "https://github.com/near/eth-object#c8d641a61279ea8fd709d5fd3010b7dc39991e65",
+		"ethers": "^6",
+		"near-api-js": "5.0.1"
+	},
+	"devDependencies": {
+		"@biomejs/biome": "^1.9.4",
+		"tsx": "^4.19.3",
+		"types-node": "0.0.1-security",
+		"typescript": "^5.8.2"
+	},
+	"scripts": {
+		"start": "tsx index.ts",
+		"lint": "biome lint . --fix",
+		"format": "biome format . --fix"
+	}
 }
