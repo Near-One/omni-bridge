@@ -24,6 +24,7 @@ const ENV = cleanEnv(process.env, {
 	NETWORK_ETH: str({ choices: ["mainnet", "goerli", "sepolia"] }),
 	NETWORK_NEAR: str({ choices: ["mainnet", "testnet"] }),
 	BRIDGE_TOKEN_FACTORY_ACCOUNT_ID: str(),
+	INFURA_API_KEY: str(),
 });
 
 // Contract ABI for the ERC20 Locker
