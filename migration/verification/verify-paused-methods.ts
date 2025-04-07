@@ -196,7 +196,7 @@ async function checkContract(
 				if (
 					storageValue &&
 					storageValue !==
-						"0x0000000000000000000000000000000000000000000000000000000000000000"
+					"0x0000000000000000000000000000000000000000000000000000000000000000"
 				) {
 					implementationAddress = `0x${storageValue.slice(26)}`;
 					console.log(
@@ -383,7 +383,7 @@ async function verifyNearContracts(config: NearConfig): Promise<void> {
 			config.contracts.tokenLocker,
 			[
 				{ feature: "ft_on_transfer", description: "NEAR→ETH transfers" },
-				{ feature: "withdraw", description: "ETH→NEAR transfers" }
+				{ feature: "withdraw", description: "ETH→NEAR transfers" },
 			],
 		);
 
@@ -439,6 +439,26 @@ async function verifyNearContracts(config: NearConfig): Promise<void> {
 				{
 					feature: "log_metadata",
 					description: "Log metadata",
+				},
+				{
+					feature: "update_transfer_fee",
+					description: "Update transfer fee",
+				},
+				{
+					feature: "sign_transfer",
+					description: "Sign transfer",
+				},
+				{
+					feature: "claim_fee",
+					description: "Claim fee",
+				},
+				{
+					feature: "deploy_token",
+					description: "Deploy token",
+				},
+				{
+					feature: "bind_token",
+					description: "Bind token",
 				},
 			],
 		);
@@ -496,7 +516,6 @@ function explainPauseFlags(flags: bigint): string {
 function formatPauseStatus(isPaused: boolean): string {
 	return isPaused ? chalk.green("✓ PAUSED") : chalk.red("✗ NOT PAUSED");
 }
-
 
 // Execute the verification
 verifyPausedMethods()
