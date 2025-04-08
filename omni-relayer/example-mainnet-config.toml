@@ -17,15 +17,15 @@ token_locker_id = "omni.bridge.near"
 # We won't check fee before signing transfer if account id matches on in array
 sign_without_checking_fee = ["near:aurora"]
 
-# [eth]
-# rpc_http_url = "https://mainnet.infura.io/v3/INFURA_API_KEY"
-# rpc_ws_url = "wss://mainnet.infura.io/ws/v3/INFURA_API_KEY"
-# chain_id = 1
-# bridge_token_factory_address = ""
-# light_client = ""
-# block_processing_batch_size = 10_000
-# # https://wormhole.com/docs/build/reference/consistency-levels/
-# expected_finalization_time = 1095
+[eth]
+rpc_http_url = "https://mainnet.infura.io/v3/INFURA_API_KEY"
+rpc_ws_url = "wss://mainnet.infura.io/ws/v3/INFURA_API_KEY"
+chain_id = 1
+bridge_token_factory_address = "0xe00c629aFaCCb0510995A2B95560E446A24c85B9"
+light_client = "client-eth2.bridge.near"
+block_processing_batch_size = 10_000
+# https://wormhole.com/docs/build/reference/consistency-levels/
+expected_finalization_time = 1095
 
 [base]
 rpc_http_url = "https://base-mainnet.infura.io/v3/INFURA_API_KEY"
