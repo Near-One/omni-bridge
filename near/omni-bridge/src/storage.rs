@@ -107,9 +107,13 @@ impl Contract {
             .sdk_expect("The amount is greater than the available storage balance");
 
         self.accounts_balances.insert(&account_id, &storage);
+
+        Promise::new(account_id).transfer(to_withdraw);
+
         storage
     }
 
+    #[payable]
     pub fn storage_unregister(&mut self, force: Option<bool>) -> bool {
         assert_one_yocto();
         let account_id = env::predecessor_account_id();

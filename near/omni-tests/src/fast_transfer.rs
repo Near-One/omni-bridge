@@ -581,7 +581,7 @@ mod tests {
             let transfer_msg = get_transfer_msg_to_near(&env, transfer_amount);
             let mut fast_transfer_msg = get_fast_transfer_msg(&env, transfer_msg);
             fast_transfer_msg.storage_deposit_amount =
-                Some(NEP141_DEPOSIT.saturating_mul(100).as_yoctonear());
+                Some(U128(NEP141_DEPOSIT.saturating_mul(100).as_yoctonear()));
 
             let relayer_balance_before =
                 get_balance(&env.token_contract, env.relayer_account.id()).await?;
@@ -1070,7 +1070,7 @@ mod tests {
             fee: transfer_msg.fee,
             msg: transfer_msg.msg,
             storage_deposit_amount: match transfer_msg.recipient.get_chain() {
-                ChainKind::Near => Some(NEP141_DEPOSIT.as_yoctonear()),
+                ChainKind::Near => Some(U128(NEP141_DEPOSIT.as_yoctonear())),
                 _ => None,
             },
             relayer: env.relayer_account.id().clone(),
