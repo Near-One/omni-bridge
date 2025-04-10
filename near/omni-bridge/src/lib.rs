@@ -95,6 +95,7 @@ pub enum Role {
     MetadataManager,
     UnrestrictedRelayer,
     TokenControllerUpdater,
+    NativeFeeRestricted,
 }
 
 #[ext_contract(ext_token)]
@@ -470,6 +471,13 @@ impl Contract {
         amount: U128,
         init_transfer_msg: InitTransferMsg,
     ) -> U128 {
+        // Avoid extra storage read by verifying native fee before checking the role
+        if init_transfer_msg.native_token_fee.0 > 0
+            && self.acl_has_role(Role::NativeFeeRestricted.into(), storage_payer.clone())
+        {
+            env::panic_str("ERR_ACCOUNT_RESTRICTED_FROM_USING_NATIVE_FEE");
+        }
+
         require!(
             init_transfer_msg.recipient.get_chain() != ChainKind::Near,
             "ERR_INVALID_RECIPIENT_CHAIN"
