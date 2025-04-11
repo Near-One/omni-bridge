@@ -37,6 +37,7 @@ use storage::{
 
 mod errors;
 mod storage;
+mod migrate;
 
 #[cfg(test)]
 mod tests;
