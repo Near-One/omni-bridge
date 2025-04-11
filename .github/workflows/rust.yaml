@@ -34,7 +34,7 @@ jobs:
           target: wasm32-unknown-unknown
 
       - name: Run sccache-cache
-        uses: mozilla-actions/sccache-action@v0.0.7
+        uses: mozilla-actions/sccache-action@v0.0.9
 
       - name: Install cargo-near
         run: |
@@ -59,7 +59,7 @@ jobs:
           target: wasm32-unknown-unknown
 
       - name: Run sccache-cache
-        uses: mozilla-actions/sccache-action@v0.0.7
+        uses: mozilla-actions/sccache-action@v0.0.9
           
       - name: Install cargo-near
         run: |
