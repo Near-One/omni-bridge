@@ -17,7 +17,7 @@ use crate::{config, utils, workers};
 
 const OMNI_EVENTS: &str = "omni_events";
 
-fn get_expected_finalization_time(config: &config::Config, chain_kind: ChainKind) -> Result<i64> {
+fn get_expected_finalization_time(config: config::Config, chain_kind: ChainKind) -> Result<i64> {
     let Some(expected_finalization_time) = (match chain_kind {
         ChainKind::Eth => config.eth.map(|eth| eth.expected_finalization_time),
         ChainKind::Base => config.base.map(|base| base.expected_finalization_time),
@@ -134,7 +134,7 @@ async fn handle_transaction_event(
             };
 
             let expected_finalization_time =
-                get_expected_finalization_time(&config, chain_kind).unwrap();
+                get_expected_finalization_time(config, chain_kind).unwrap();
 
             utils::redis::add_event(
                 &mut redis_connection,
@@ -180,7 +180,7 @@ async fn handle_transaction_event(
             };
 
             let expected_finalization_time =
-                get_expected_finalization_time(&config, chain_kind).unwrap();
+                get_expected_finalization_time(config, chain_kind).unwrap();
 
             utils::redis::add_event(
                 &mut redis_connection,
@@ -276,7 +276,7 @@ async fn handle_meta_event(
 ) -> Result<()> {
     match event.details {
         OmniMetaEventDetails::EVMDeployToken(deploy_token_event) => {
-            info!("Received EVMDeployToken: {:?}", deploy_token_event);
+            info!("Received EVMDeployToken: {deploy_token_event:?}");
 
             let OmniTransactionOrigin::EVMLog {
                 block_number,
@@ -306,7 +306,7 @@ async fn handle_meta_event(
             };
 
             let expected_finalization_time =
-                get_expected_finalization_time(&config, chain_kind).unwrap();
+                get_expected_finalization_time(config, chain_kind).unwrap();
 
             utils::redis::add_event(
                 &mut redis_connection,
@@ -326,7 +326,7 @@ async fn handle_meta_event(
         OmniMetaEventDetails::SolanaDeployToken {
             emitter, sequence, ..
         } => {
-            info!("Received EVMDeployToken: {}", sequence);
+            info!("Received EVMDeployToken: {sequence}");
             utils::redis::add_event(
                 &mut redis_connection,
                 utils::redis::EVENTS,
@@ -380,7 +380,7 @@ async fn watch_omni_events_collection(
                                     )
                                     .await
                                     {
-                                        warn!("Failed to handle transaction event: {}", err);
+                                        warn!("Failed to handle transaction event: {err:?}");
                                     }
                                 }
                             });
@@ -400,7 +400,7 @@ async fn watch_omni_events_collection(
                                     )
                                     .await
                                     {
-                                        warn!("Failed to handle meta event: {}", err);
+                                        warn!("Failed to handle meta event: {err:?}");
                                     }
                                 }
                             });
@@ -408,7 +408,7 @@ async fn watch_omni_events_collection(
                     }
                 }
             }
-            Err(e) => warn!("Error watching changes: {}", e),
+            Err(err) => warn!("Error watching changes: {err:?}"),
         }
 
         if let Some(ref resume_token) = stream
@@ -444,10 +444,7 @@ pub async fn start_indexer(config: config::Config, redis_client: redis::Client) 
     let omni_events_collection = db.collection::<OmniEvent>(OMNI_EVENTS);
 
     loop {
-        info!(
-            "Starting a mongodb stream that track changes in {}",
-            OMNI_EVENTS
-        );
+        info!("Starting a mongodb stream that track changes in {OMNI_EVENTS}");
 
         watch_omni_events_collection(&omni_events_collection, redis_connection.clone(), &config)
             .await;

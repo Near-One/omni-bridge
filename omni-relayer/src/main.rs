@@ -180,7 +180,7 @@ async fn main() -> Result<()> {
         result = futures::future::select_all(handles) => {
             let (res, _, _) = result;
             if let Ok(Err(err)) = res {
-                error!("A worker encountered an error: {:?}", err);
+                error!("A worker encountered an error: {err:?}");
             }
         }
     }

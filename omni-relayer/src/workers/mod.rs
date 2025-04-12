@@ -141,11 +141,11 @@ pub async fn process_events(
         };
 
         if let Err(err) = near_nonce.resync_nonce().await {
-            warn!("Failed to resync near nonce: {}", err);
+            warn!("Failed to resync near nonce: {err:?}");
         }
 
         if let Err(err) = evm_nonces.resync_nonces().await {
-            warn!("Failed to resync evm nonces: {}", err);
+            warn!("Failed to resync evm nonces: {err:?}");
         }
 
         let mut handlers = Vec::new();
@@ -313,7 +313,7 @@ pub async fn process_events(
                                     )
                                     .await;
                                 }
-                            };
+                            }
                         }
                     }));
                 }
@@ -354,7 +354,7 @@ pub async fn process_events(
                                     )
                                     .await;
                                 }
-                            };
+                            }
                         }
                     }));
                 } else if let FinTransfer::Solana { .. } = fin_transfer_event {
@@ -391,7 +391,7 @@ pub async fn process_events(
                                     )
                                     .await;
                                 }
-                            };
+                            }
                         }
                     }));
                 }
@@ -432,7 +432,7 @@ pub async fn process_events(
                                     )
                                     .await;
                                 }
-                            };
+                            }
                         }
                     }));
                 } else if let DeployToken::Solana { .. } = deploy_token_event {
@@ -469,7 +469,7 @@ pub async fn process_events(
                                     )
                                     .await;
                                 }
-                            };
+                            }
                         }
                     }));
                 }
@@ -536,7 +536,7 @@ async fn process_near_transfer_event(
         Ok(true) => anyhow::bail!("Transfer is already finalised: {:?}", transfer_message),
         Ok(false) => {}
         Err(err) => {
-            warn!("Failed to check if transfer is finalised: {:?}", err);
+            warn!("Failed to check if transfer is finalised: {err:?}");
             return Ok(EventAction::Retry);
         }
     }
@@ -559,11 +559,11 @@ async fn process_near_transfer_event(
         {
             Ok(true) => {}
             Ok(false) => {
-                warn!("Insufficient fee for transfer: {:?}", transfer_message);
+                warn!("Insufficient fee for transfer: {transfer_message:?}");
                 return Ok(EventAction::Retry);
             }
             Err(err) => {
-                warn!("Failed to check fee sufficiency: {}", err);
+                warn!("Failed to check fee sufficiency: {err:?}");
                 return Ok(EventAction::Retry);
             }
         }
@@ -610,7 +610,7 @@ async fn process_near_transfer_event(
             )
             .await;
 
-            info!("Signed transfer: {:?}", tx_hash);
+            info!("Signed transfer: {tx_hash:?}");
 
             Ok(EventAction::Remove)
         }
@@ -674,7 +674,7 @@ async fn process_sign_transfer_event(
         ),
         Ok(false) => {}
         Err(err) => {
-            warn!("Failed to check if transfer is finalised: {:?}", err);
+            warn!("Failed to check if transfer is finalised: {err:?}");
             return Ok(EventAction::Retry);
         }
     }
@@ -714,11 +714,11 @@ async fn process_sign_transfer_event(
         {
             Ok(true) => {}
             Ok(false) => {
-                warn!("Insufficient fee for transfer: {:?}", message_payload);
+                warn!("Insufficient fee for transfer: {message_payload:?}");
                 return Ok(EventAction::Retry);
             }
             Err(err) => {
-                warn!("Failed to check fee sufficiency: {}", err);
+                warn!("Failed to check fee sufficiency: {err:?}");
                 return Ok(EventAction::Retry);
             }
         }
@@ -757,7 +757,7 @@ async fn process_sign_transfer_event(
 
     match connector.fin_transfer(fin_transfer_args).await {
         Ok(tx_hash) => {
-            info!("Finalized deposit: {}", tx_hash);
+            info!("Finalized deposit: {tx_hash}");
             Ok(EventAction::Remove)
         }
         Err(err) => {
@@ -825,7 +825,7 @@ async fn process_evm_init_transfer_event(
         return Ok(EventAction::Retry);
     }
 
-    info!("Trying to process InitTransfer log on {:?}", chain_kind);
+    info!("Trying to process InitTransfer log on {chain_kind:?}");
 
     let transfer_id = TransferId {
         origin_chain: chain_kind,
@@ -835,7 +835,7 @@ async fn process_evm_init_transfer_event(
         Ok(true) => anyhow::bail!("Transfer is already finalised: {:?}", transfer_id),
         Ok(false) => {}
         Err(err) => {
-            warn!("Failed to check if transfer is finalised: {:?}", err);
+            warn!("Failed to check if transfer is finalised: {err:?}");
             return Ok(EventAction::Retry);
         }
     }
@@ -882,18 +882,18 @@ async fn process_evm_init_transfer_event(
         {
             Ok(true) => {}
             Ok(false) => {
-                warn!("Insufficient fee for transfer: {:?}", transfer);
+                warn!("Insufficient fee for transfer: {transfer:?}");
                 return Ok(EventAction::Retry);
             }
             Err(err) => {
-                warn!("Failed to check fee sufficiency: {}", err);
+                warn!("Failed to check fee sufficiency: {err:?}");
                 return Ok(EventAction::Retry);
             }
         }
     }
 
     let vaa = connector
-        .wormhole_get_vaa_by_tx_hash(format!("{:?}", transaction_hash))
+        .wormhole_get_vaa_by_tx_hash(format!("{transaction_hash:?}"))
         .await
         .ok();
 
@@ -977,7 +977,7 @@ async fn process_evm_init_transfer_event(
 
     match connector.fin_transfer(fin_transfer_args).await {
         Ok(tx_hash) => {
-            info!("Finalized InitTransfer: {:?}", tx_hash);
+            info!("Finalized InitTransfer: {tx_hash:?}");
             Ok(EventAction::Remove)
         }
         Err(err) => {
@@ -1049,7 +1049,7 @@ async fn process_solana_init_transfer_event(
         Ok(true) => anyhow::bail!("Transfer is already finalised: {:?}", transfer_id),
         Ok(false) => {}
         Err(err) => {
-            warn!("Failed to check if transfer is finalised: {:?}", err);
+            warn!("Failed to check if transfer is finalised: {err:?}");
             return Ok(EventAction::Retry);
         }
     }
@@ -1074,11 +1074,11 @@ async fn process_solana_init_transfer_event(
         {
             Ok(true) => {}
             Ok(false) => {
-                warn!("Insufficient fee for transfer: {:?}", transfer);
+                warn!("Insufficient fee for transfer: {transfer:?}");
                 return Ok(EventAction::Retry);
             }
             Err(err) => {
-                warn!("Failed to check fee sufficiency: {}", err);
+                warn!("Failed to check fee sufficiency: {err:?}");
                 return Ok(EventAction::Retry);
             }
         }
@@ -1088,7 +1088,7 @@ async fn process_solana_init_transfer_event(
         .wormhole_get_vaa(config.wormhole.solana_chain_id, &emitter, sequence)
         .await
     else {
-        warn!("Failed to get VAA for sequence: {}", sequence);
+        warn!("Failed to get VAA for sequence: {sequence}");
         return Ok(EventAction::Retry);
     };
 
@@ -1128,7 +1128,7 @@ async fn process_solana_init_transfer_event(
 
     match connector.fin_transfer(fin_transfer_args).await {
         Ok(tx_hash) => {
-            info!("Finalized InitTransfer: {:?}", tx_hash);
+            info!("Finalized InitTransfer: {tx_hash:?}");
             Ok(EventAction::Remove)
         }
         Err(err) => {
@@ -1178,7 +1178,7 @@ async fn process_evm_fin_transfer_event(
         return Ok(EventAction::Retry);
     }
 
-    info!("Trying to process FinTransfer log on {:?}", chain_kind);
+    info!("Trying to process FinTransfer log on {chain_kind:?}");
 
     let transfer_id = TransferId {
         origin_chain,
@@ -1188,13 +1188,13 @@ async fn process_evm_fin_transfer_event(
         Ok(true) => anyhow::bail!("Transfer is already finalised: {:?}", transfer_id),
         Ok(false) => {}
         Err(err) => {
-            warn!("Failed to check if transfer is finalised: {:?}", err);
+            warn!("Failed to check if transfer is finalised: {err:?}");
             return Ok(EventAction::Retry);
         }
     }
 
     let vaa = connector
-        .wormhole_get_vaa_by_tx_hash(format!("{:?}", transaction_hash))
+        .wormhole_get_vaa_by_tx_hash(format!("{transaction_hash:?}"))
         .await
         .ok();
 
@@ -1231,7 +1231,7 @@ async fn process_evm_fin_transfer_event(
     )
     .await
     else {
-        warn!("Failed to get prover args for {:?}", transaction_hash);
+        warn!("Failed to get prover args for {transaction_hash:?}");
         return Ok(EventAction::Retry);
     };
 
@@ -1257,7 +1257,7 @@ async fn process_evm_fin_transfer_event(
         .await
     {
         Ok(tx_hash) => {
-            info!("Claimed fee: {:?}", tx_hash);
+            info!("Claimed fee: {tx_hash:?}");
             Ok(EventAction::Remove)
         }
         Err(err) => {
@@ -1301,7 +1301,7 @@ async fn process_solana_fin_transfer_event(
         .wormhole_get_vaa(config.wormhole.solana_chain_id, emitter, sequence)
         .await
     else {
-        warn!("Failed to get VAA for sequence: {}", sequence);
+        warn!("Failed to get VAA for sequence: {sequence}");
         return Ok(EventAction::Retry);
     };
 
@@ -1334,7 +1334,7 @@ async fn process_solana_fin_transfer_event(
         .await
     {
         Ok(tx_hash) => {
-            info!("Claimed fee: {:?}", tx_hash);
+            info!("Claimed fee: {tx_hash:?}");
             Ok(EventAction::Remove)
         }
         Err(err) => {
@@ -1381,10 +1381,10 @@ async fn process_evm_deploy_token_event(
         return Ok(EventAction::Retry);
     }
 
-    info!("Trying to process DeployToken log on {:?}", chain_kind);
+    info!("Trying to process DeployToken log on {chain_kind:?}");
 
     let vaa = connector
-        .wormhole_get_vaa_by_tx_hash(format!("{:?}", transaction_hash))
+        .wormhole_get_vaa_by_tx_hash(format!("{transaction_hash:?}"))
         .await
         .ok();
 
@@ -1442,7 +1442,7 @@ async fn process_evm_deploy_token_event(
 
     match connector.bind_token(bind_token_args).await {
         Ok(tx_hash) => {
-            info!("Bound token: {:?}", tx_hash);
+            info!("Bound token: {tx_hash:?}");
             Ok(EventAction::Remove)
         }
         Err(err) => {
@@ -1487,7 +1487,7 @@ async fn process_solana_deploy_token_event(
         .wormhole_get_vaa(config.wormhole.solana_chain_id, emitter, sequence)
         .await
     else {
-        warn!("Failed to get VAA for sequence: {}", sequence);
+        warn!("Failed to get VAA for sequence: {sequence}");
         return Ok(EventAction::Retry);
     };
 
@@ -1501,7 +1501,7 @@ async fn process_solana_deploy_token_event(
     let nonce = match near_nonce.reserve_nonce().await {
         Ok(nonce) => Some(nonce),
         Err(err) => {
-            warn!("Failed to reserve nonce: {}", err);
+            warn!("Failed to reserve nonce: {err:?}");
             return Ok(EventAction::Retry);
         }
     };
@@ -1518,7 +1518,7 @@ async fn process_solana_deploy_token_event(
 
     match connector.bind_token(bind_token_args).await {
         Ok(tx_hash) => {
-            info!("Bound token: {:?}", tx_hash);
+            info!("Bound token: {tx_hash:?}");
             Ok(EventAction::Remove)
         }
         Err(err) => {

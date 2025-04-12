@@ -80,7 +80,7 @@ pub async fn construct_prover_args(
         match eth_proof::get_proof_for_event(tx_hash, topic, &eth.rpc_http_url).await {
             Ok(proof) => proof,
             Err(err) => {
-                warn!("Failed to get proof: {}", err);
+                warn!("Failed to get proof: {err:?}");
                 return None;
             }
         };

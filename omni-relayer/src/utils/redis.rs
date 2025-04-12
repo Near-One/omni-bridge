@@ -98,7 +98,7 @@ pub async fn add_event<F, E>(
     E: serde::Serialize + std::fmt::Debug + Send,
 {
     let Ok(serialized_event) = serde_json::to_string(&event) else {
-        warn!("Failed to serialize event: {:?}", event);
+        warn!("Failed to serialize event: {event:?}");
         return;
     };
 

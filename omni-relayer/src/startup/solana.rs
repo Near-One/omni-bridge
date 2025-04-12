@@ -86,7 +86,7 @@ pub async fn start_indexer(
 
         while let Some(log) = log_stream.next().await {
             if let Ok(signature) = Signature::from_str(&log.value.signature) {
-                info!("Found a signature on Solana: {:?}", signature);
+                info!("Found a signature on Solana: {signature:?}");
                 utils::redis::add_event(
                     &mut redis_connection,
                     utils::redis::SOLANA_EVENTS,
@@ -206,11 +206,11 @@ pub async fn process_signature(config: config::Config, redis_client: redis::Clie
 
                 async move {
                     let Ok(signature) = Signature::from_str(&key) else {
-                        warn!("Failed to parse signature: {:?}", key);
+                        warn!("Failed to parse signature: {key:?}");
                         return;
                     };
 
-                    info!("Trying to process signature: {:?}", signature);
+                    info!("Trying to process signature: {signature:?}");
 
                     match http_client
                         .get_transaction_with_config(&signature, fetching_config)
@@ -248,7 +248,7 @@ pub async fn process_signature(config: config::Config, redis_client: redis::Clie
                             .await;
                         }
                         Err(err) => {
-                            warn!("Failed to fetch transaction (probably signature wasn't finalized yet): {}", err);
+                            warn!("Failed to fetch transaction (probably signature wasn't finalized yet): {err:?}");
                         }
                     };
                 }
