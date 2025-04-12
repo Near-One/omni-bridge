@@ -340,7 +340,7 @@ async fn handle_meta_event(
         | OmniMetaEventDetails::NearLogMetadataEvent { .. }
         | OmniMetaEventDetails::NearDeployTokenEvent { .. }
         | OmniMetaEventDetails::NearBindTokenEvent { .. } => {}
-    };
+    }
 
     Ok(())
 }

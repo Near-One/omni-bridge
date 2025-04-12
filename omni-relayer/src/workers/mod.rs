@@ -1421,7 +1421,7 @@ async fn process_evm_deploy_token_event(
     )
     .await
     else {
-        warn!("Failed to get prover args for {:?}", transaction_hash);
+        warn!("Failed to get prover args for {transaction_hash:?}");
         return Ok(EventAction::Retry);
     };
 
