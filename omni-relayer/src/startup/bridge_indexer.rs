@@ -133,7 +133,8 @@ async fn handle_transaction_event(
                 );
             };
 
-            let expected_finalization_time = get_expected_finalization_time(&config, chain_kind)?;
+            let expected_finalization_time =
+                get_expected_finalization_time(&config, chain_kind).unwrap();
 
             utils::redis::add_event(
                 &mut redis_connection,
@@ -178,7 +179,8 @@ async fn handle_transaction_event(
                 );
             };
 
-            let expected_finalization_time = get_expected_finalization_time(&config, chain_kind)?;
+            let expected_finalization_time =
+                get_expected_finalization_time(&config, chain_kind).unwrap();
 
             utils::redis::add_event(
                 &mut redis_connection,
@@ -303,7 +305,8 @@ async fn handle_meta_event(
                 );
             };
 
-            let expected_finalization_time = get_expected_finalization_time(&config, chain_kind)?;
+            let expected_finalization_time =
+                get_expected_finalization_time(&config, chain_kind).unwrap();
 
             utils::redis::add_event(
                 &mut redis_connection,
