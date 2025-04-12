@@ -17,6 +17,22 @@ use crate::{config, utils, workers};
 
 const OMNI_EVENTS: &str = "omni_events";
 
+fn get_expected_finalization_time(config: &config::Config, chain_kind: ChainKind) -> Result<i64> {
+    let Some(expected_finalization_time) = (match chain_kind {
+        ChainKind::Eth => config.eth.map(|eth| eth.expected_finalization_time),
+        ChainKind::Base => config.base.map(|base| base.expected_finalization_time),
+        ChainKind::Arb => config.arb.map(|arb| arb.expected_finalization_time),
+        _ => None,
+    }) else {
+        anyhow::bail!(
+            "Failed to get expected_finalization_time, since config for {:?} is not set",
+            chain_kind
+        );
+    };
+
+    Ok(expected_finalization_time)
+}
+
 async fn handle_transaction_event(
     mut redis_connection: redis::aio::MultiplexedConnection,
     config: config::Config,
@@ -117,17 +133,7 @@ async fn handle_transaction_event(
                 );
             };
 
-            let Some(expected_finalization_time) = (match chain_kind {
-                ChainKind::Eth => config.eth.map(|eth| eth.expected_finalization_time),
-                ChainKind::Base => config.base.map(|base| base.expected_finalization_time),
-                ChainKind::Arb => config.arb.map(|arb| arb.expected_finalization_time),
-                _ => None,
-            }) else {
-                anyhow::bail!(
-                    "Failed to get expected_finalization_time, since config for {:?} is not set",
-                    chain_kind
-                );
-            };
+            let expected_finalization_time = get_expected_finalization_time(&config, chain_kind)?;
 
             utils::redis::add_event(
                 &mut redis_connection,
@@ -172,17 +178,7 @@ async fn handle_transaction_event(
                 );
             };
 
-            let Some(expected_finalization_time) = (match chain_kind {
-                ChainKind::Eth => config.eth.map(|eth| eth.expected_finalization_time),
-                ChainKind::Base => config.base.map(|base| base.expected_finalization_time),
-                ChainKind::Arb => config.arb.map(|arb| arb.expected_finalization_time),
-                _ => None,
-            }) else {
-                anyhow::bail!(
-                    "Failed to get expected_finalization_time, since config for {:?} is not set",
-                    chain_kind
-                );
-            };
+            let expected_finalization_time = get_expected_finalization_time(&config, chain_kind)?;
 
             utils::redis::add_event(
                 &mut redis_connection,
@@ -307,17 +303,7 @@ async fn handle_meta_event(
                 );
             };
 
-            let Some(expected_finalization_time) = (match chain_kind {
-                ChainKind::Eth => config.eth.map(|eth| eth.expected_finalization_time),
-                ChainKind::Base => config.base.map(|base| base.expected_finalization_time),
-                ChainKind::Arb => config.arb.map(|arb| arb.expected_finalization_time),
-                _ => None,
-            }) else {
-                anyhow::bail!(
-                    "Failed to get expected_finalization_time, since config for {:?} is not set",
-                    chain_kind
-                );
-            };
+            let expected_finalization_time = get_expected_finalization_time(&config, chain_kind)?;
 
             utils::redis::add_event(
                 &mut redis_connection,
