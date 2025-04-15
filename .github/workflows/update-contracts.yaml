@@ -13,6 +13,13 @@ jobs:
     permissions:
       contents: write
     steps:
+      - name: Setup SSH
+        uses: webfactory/ssh-agent@v0.7.0
+        with:
+          ssh-private-key: |
+            ${{ secrets.SSH_BRIDGE_INDEXER }}
+            ${{ secrets.SSH_BOREALIS }}
+          
       - name: Clone the repository
         uses: actions/checkout@v3
         

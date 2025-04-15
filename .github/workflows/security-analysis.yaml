@@ -17,3 +17,6 @@ jobs:
     uses: aurora-is-near/.github/.github/workflows/security_analysis.yml@master
     secrets:
       DD_API_KEY: ${{secrets.DD_API_KEY}}
+      SSH_PRIVATE_KEY: |
+        ${{ secrets.SSH_BRIDGE_INDEXER }}
+        ${{ secrets.SSH_BOREALIS }}

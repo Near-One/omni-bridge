@@ -15,7 +15,7 @@ pub fn get_signer(file: Option<&String>) -> Result<InMemorySigner> {
     info!("Creating NEAR signer");
 
     if let Some(file) = file {
-        info!("Using NEAR credentials file: {}", file);
+        info!("Using NEAR credentials file: {file}");
         if let Ok(Signer::InMemory(signer)) = InMemorySigner::from_file(Path::new(file)) {
             return Ok(signer);
         }
@@ -58,7 +58,7 @@ async fn create_lake_config(
         ),
     };
 
-    info!("NEAR Lake will start from block: {}", start_block_height);
+    info!("NEAR Lake will start from block: {start_block_height}");
 
     let lake_config = LakeConfigBuilder::default().start_block_height(start_block_height);
 
