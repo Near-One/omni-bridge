@@ -154,6 +154,8 @@ pub enum ChainKind {
     Arb,
     #[serde(alias = "base")]
     Base,
+    #[serde(alias = "aurora")]
+    Aurora,
 }
 
 impl FromStr for ChainKind {
@@ -179,6 +181,7 @@ impl TryFrom<u8> for ChainKind {
             2 => Ok(ChainKind::Sol),
             3 => Ok(ChainKind::Arb),
             4 => Ok(ChainKind::Base),
+            5 => Ok(ChainKind::Aurora),
             _ => Err(format!("{input:?} invalid chain kind")),
         }
     }
@@ -210,6 +213,7 @@ impl OmniAddress {
             ChainKind::Sol => Ok(OmniAddress::Sol(SolAddress::ZERO)),
             ChainKind::Arb => Ok(OmniAddress::Arb(H160::ZERO)),
             ChainKind::Base => Ok(OmniAddress::Base(H160::ZERO)),
+            ChainKind::Aurora => Err("Aurora is not supported".to_string()),
         }
     }
 
@@ -232,6 +236,7 @@ impl OmniAddress {
                 Self::new_from_evm_address(chain_kind, Self::to_evm_address(address)?)
             }
             ChainKind::Near => Ok(Self::Near(Self::to_near_account_id(address)?)),
+            ChainKind::Aurora => Err("Aurora is not supported".to_string()),
         }
     }
 
