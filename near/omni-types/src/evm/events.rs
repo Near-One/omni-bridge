@@ -47,6 +47,28 @@ sol! {
         string symbol,
         uint8 decimals
     );
+
+    event ExitToNear(
+        address indexed sender,
+        address indexed erc20_address,
+        string indexed dest,
+        uint amount
+    );
+
+    event ExitToNearOmni(
+        address indexed sender,
+        address indexed erc20_address,
+        string indexed dest,
+        uint amount,
+        string msg
+    );
+
+    event ExitToEth(
+        address indexed sender,
+        address indexed erc20_address,
+        address indexed dest,
+        uint amount
+    );
 }
 
 #[allow(clippy::needless_pass_by_value)]

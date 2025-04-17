@@ -154,6 +154,8 @@ pub enum ChainKind {
     Arb,
     #[serde(alias = "base")]
     Base,
+    #[serde(alias = "aurora")]
+    Aurora,
 }
 
 impl FromStr for ChainKind {
@@ -197,6 +199,7 @@ pub enum OmniAddress {
     Sol(SolAddress),
     Arb(EvmAddress),
     Base(EvmAddress),
+    Aurora(EvmAddress),
 }
 
 impl OmniAddress {
@@ -210,6 +213,7 @@ impl OmniAddress {
             ChainKind::Sol => Ok(OmniAddress::Sol(SolAddress::ZERO)),
             ChainKind::Arb => Ok(OmniAddress::Arb(H160::ZERO)),
             ChainKind::Base => Ok(OmniAddress::Base(H160::ZERO)),
+            ChainKind::Aurora => Ok(OmniAddress::Aurora(H160::ZERO)),
         }
     }
 
@@ -228,7 +232,7 @@ impl OmniAddress {
     pub fn new_from_slice(chain_kind: ChainKind, address: &[u8]) -> Result<Self, String> {
         match chain_kind {
             ChainKind::Sol => Ok(Self::Sol(Self::to_sol_address(address)?)),
-            ChainKind::Eth | ChainKind::Arb | ChainKind::Base => {
+            ChainKind::Eth | ChainKind::Arb | ChainKind::Base | ChainKind::Aurora => {
                 Self::new_from_evm_address(chain_kind, Self::to_evm_address(address)?)
             }
             ChainKind::Near => Ok(Self::Near(Self::to_near_account_id(address)?)),
@@ -242,6 +246,7 @@ impl OmniAddress {
             OmniAddress::Sol(_) => ChainKind::Sol,
             OmniAddress::Arb(_) => ChainKind::Arb,
             OmniAddress::Base(_) => ChainKind::Base,
+            OmniAddress::Aurora(_) => ChainKind::Aurora,
         }
     }
 
@@ -252,6 +257,7 @@ impl OmniAddress {
             OmniAddress::Sol(address) => ("sol", address.to_string()),
             OmniAddress::Arb(address) => ("arb", address.to_string()),
             OmniAddress::Base(address) => ("base", address.to_string()),
+            OmniAddress::Aurora(address) => ("aurora", address.to_string()),
         };
 
         if skip_zero_address && self.is_zero() {
@@ -263,9 +269,10 @@ impl OmniAddress {
 
     pub fn is_zero(&self) -> bool {
         match self {
-            OmniAddress::Eth(address) | OmniAddress::Arb(address) | OmniAddress::Base(address) => {
-                address.is_zero()
-            }
+            OmniAddress::Eth(address)
+            | OmniAddress::Arb(address)
+            | OmniAddress::Base(address)
+            | OmniAddress::Aurora(address) => address.is_zero(),
             OmniAddress::Near(address) => *address == ZERO_ACCOUNT_ID,
             OmniAddress::Sol(address) => address.is_zero(),
         }
