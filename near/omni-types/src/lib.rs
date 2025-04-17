@@ -181,6 +181,7 @@ impl TryFrom<u8> for ChainKind {
             2 => Ok(ChainKind::Sol),
             3 => Ok(ChainKind::Arb),
             4 => Ok(ChainKind::Base),
+            5 => Ok(ChainKind::Aurora),
             _ => Err(format!("{input:?} invalid chain kind")),
         }
     }
