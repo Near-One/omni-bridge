@@ -37,6 +37,7 @@ use storage::{
 
 mod errors;
 mod storage;
+mod migrate;
 
 #[cfg(test)]
 mod tests;
@@ -80,8 +81,8 @@ enum StorageKey {
     TokenDeployerAccounts,
     DeployedTokens,
     DestinationNonces,
-    FastTransfers,
     TokenDecimals,
+    FastTransfers,
 }
 
 #[derive(AccessControlRole, Deserialize, Serialize, Copy, Clone)]
