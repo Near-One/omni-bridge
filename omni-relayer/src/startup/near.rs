@@ -1,12 +1,11 @@
 use std::path::Path;
 
 use anyhow::{Context, Result};
-use futures::StreamExt;
 use log::info;
 
 use near_crypto::{InMemorySigner, Signer};
 use near_jsonrpc_client::JsonRpcClient;
-use near_lake_framework::{LakeConfig, LakeConfigBuilder};
+use near_lake_framework::{Lake, LakeBuilder};
 use omni_types::ChainKind;
 
 use crate::{config, utils};
@@ -39,12 +38,12 @@ pub fn get_signer(file: Option<&String>) -> Result<InMemorySigner> {
     }
 }
 
-async fn create_lake_config(
+async fn create_lake(
     config: &config::Config,
     redis_connection: &mut redis::aio::MultiplexedConnection,
     jsonrpc_client: &JsonRpcClient,
     start_block: Option<u64>,
-) -> Result<LakeConfig> {
+) -> Result<Lake> {
     let start_block_height = match start_block {
         Some(block) => block,
         None => utils::redis::get_last_processed::<&str, u64>(
@@ -60,7 +59,7 @@ async fn create_lake_config(
 
     info!("NEAR Lake will start from block: {}", start_block_height);
 
-    let lake_config = LakeConfigBuilder::default().start_block_height(start_block_height);
+    let lake_config = LakeBuilder::default().start_block_height(start_block_height);
 
     match config.near.network {
         config::Network::Testnet => lake_config
@@ -84,35 +83,29 @@ pub async fn start_indexer(
 
     let mut redis_connection = redis_client.get_multiplexed_tokio_connection().await?;
 
-    let lake_config =
-        create_lake_config(&config, &mut redis_connection, &jsonrpc_client, start_block).await?;
-    let (_, stream) = near_lake_framework::streamer(lake_config);
-    let stream = tokio_stream::wrappers::ReceiverStream::new(stream);
+    let lake = create_lake(&config, &mut redis_connection, &jsonrpc_client, start_block).await?;
+    lake.run(move |block| {
+        let config = config.clone();
+        let mut redis_connection = redis_connection.clone();
 
-    stream
-        .map(move |streamer_message| {
-            let config = config.clone();
-            let mut redis_connection = redis_connection.clone();
+        async move {
+            utils::near::handle_streamer_message(
+                &config,
+                &mut redis_connection,
+                block.streamer_message(),
+            )
+            .await;
 
-            async move {
-                utils::near::handle_streamer_message(
-                    &config,
-                    &mut redis_connection,
-                    &streamer_message,
-                )
-                .await;
+            utils::redis::update_last_processed(
+                &mut redis_connection,
+                &utils::redis::get_last_processed_key(ChainKind::Near),
+                block.streamer_message().block.header.height,
+            )
+            .await;
 
-                utils::redis::update_last_processed(
-                    &mut redis_connection,
-                    &utils::redis::get_last_processed_key(ChainKind::Near),
-                    streamer_message.block.header.height,
-                )
-                .await;
-            }
-        })
-        .buffer_unordered(10)
-        .for_each(|()| async {})
-        .await;
+            Ok::<(), Box<dyn std::error::Error>>(())
+        }
+    })?;
 
     Ok(())
 }
