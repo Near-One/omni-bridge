@@ -128,11 +128,11 @@ pub async fn is_tx_successful(
 }
 
 pub async fn handle_streamer_message(
-    config: &config::Config,
-    redis_connection: &mut redis::aio::MultiplexedConnection,
-    streamer_message: &StreamerMessage,
-) {
-    let nep_locker_event_outcomes = find_nep_locker_event_outcomes(config, streamer_message);
+    config: config::Config,
+    mut redis_connection: redis::aio::MultiplexedConnection,
+    streamer_message: StreamerMessage,
+) -> Result<()> {
+    let nep_locker_event_outcomes = find_nep_locker_event_outcomes(&config, &streamer_message);
 
     let nep_locker_event_logs = nep_locker_event_outcomes
         .iter()
@@ -151,7 +151,7 @@ pub async fn handle_streamer_message(
                 ref transfer_message,
             } => {
                 utils::redis::add_event(
-                    redis_connection,
+                    &mut redis_connection,
                     utils::redis::EVENTS,
                     transfer_message.origin_nonce.to_string(),
                     crate::workers::Transfer::Near {
@@ -167,7 +167,7 @@ pub async fn handle_streamer_message(
                 ..
             } => {
                 utils::redis::add_event(
-                    redis_connection,
+                    &mut redis_connection,
                     utils::redis::EVENTS,
                     message_payload.transfer_id.origin_nonce.to_string(),
                     log,
@@ -179,7 +179,7 @@ pub async fn handle_streamer_message(
             } => {
                 if transfer_message.recipient.get_chain() != ChainKind::Near {
                     utils::redis::add_event(
-                        redis_connection,
+                        &mut redis_connection,
                         utils::redis::EVENTS,
                         transfer_message.origin_nonce.to_string(),
                         crate::workers::Transfer::Near {
@@ -197,6 +197,15 @@ pub async fn handle_streamer_message(
             | OmniBridgeEvent::BindTokenEvent { .. } => {}
         }
     }
+
+    utils::redis::update_last_processed(
+        &mut redis_connection,
+        &utils::redis::get_last_processed_key(ChainKind::Near),
+        streamer_message.block.header.height,
+    )
+    .await;
+
+    Ok(())
 }
 
 fn find_nep_locker_event_outcomes(

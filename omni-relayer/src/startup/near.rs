@@ -85,26 +85,11 @@ pub async fn start_indexer(
 
     let lake = create_lake(&config, &mut redis_connection, &jsonrpc_client, start_block).await?;
     lake.run(move |block| {
-        let config = config.clone();
-        let mut redis_connection = redis_connection.clone();
-
-        async move {
-            utils::near::handle_streamer_message(
-                &config,
-                &mut redis_connection,
-                block.streamer_message(),
-            )
-            .await;
-
-            utils::redis::update_last_processed(
-                &mut redis_connection,
-                &utils::redis::get_last_processed_key(ChainKind::Near),
-                block.streamer_message().block.header.height,
-            )
-            .await;
-
-            Ok::<(), Box<dyn std::error::Error>>(())
-        }
+        utils::near::handle_streamer_message(
+            config.clone(),
+            redis_connection.clone(),
+            block.streamer_message().clone(),
+        )
     })?;
 
     Ok(())
