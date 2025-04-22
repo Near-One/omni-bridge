@@ -7,6 +7,7 @@ use near_crypto::{InMemorySigner, Signer};
 use near_jsonrpc_client::JsonRpcClient;
 use near_lake_framework::{Lake, LakeBuilder};
 use omni_types::ChainKind;
+use tokio::task;
 
 use crate::{config, utils};
 
@@ -84,13 +85,16 @@ pub async fn start_indexer(
     let mut redis_connection = redis_client.get_multiplexed_tokio_connection().await?;
 
     let lake = create_lake(&config, &mut redis_connection, &jsonrpc_client, start_block).await?;
-    lake.run(move |block| {
-        utils::near::handle_streamer_message(
-            config.clone(),
-            redis_connection.clone(),
-            block.streamer_message().clone(),
-        )
-    })?;
+    let run_lake = task::spawn_blocking(move || {
+        lake.run(move |block| {
+            utils::near::handle_streamer_message(
+                config.clone(),
+                redis_connection.clone(),
+                block.streamer_message().clone(),
+            )
+        })
+    })
+    .await?;
 
-    Ok(())
+    run_lake.context("Failed to run NEAR Lake")
 }
