@@ -32,7 +32,7 @@ solana-rpc-client-api = "2.1.9"
 ethereum-types = "0.14.1"
 omni-types = { git = "https://github.com/near-one/omni-bridge", package = "omni-types", rev = "303facdae820faef114282d99c1cabd24787b93c" }
 
-near-lake-framework = "0.7.11"
+near-lake-framework = "0.7.12"
 near-jsonrpc-client = "0.16.0"
 near-jsonrpc-primitives = "0.29.1"
 near-primitives = "0.29.1"
