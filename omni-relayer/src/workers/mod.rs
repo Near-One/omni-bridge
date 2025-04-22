@@ -10,7 +10,7 @@ use alloy::rpc::types::{Log, TransactionReceipt};
 use ethereum_types::H256;
 
 use near_bridge_client::TransactionOptions;
-use near_jsonrpc_client::{errors::JsonRpcError, JsonRpcClient};
+use near_jsonrpc_client::{JsonRpcClient, errors::JsonRpcError};
 use near_primitives::{hash::CryptoHash, types::AccountId, views::TxExecutionStatus};
 use near_rpc_client::NearRpcError;
 use near_sdk::json_types::U128;
@@ -20,8 +20,8 @@ use solana_sdk::{instruction::InstructionError, pubkey::Pubkey, transaction::Tra
 
 use omni_connector::OmniConnector;
 use omni_types::{
-    locker_args::ClaimFeeArgs, near_events::OmniBridgeEvent, prover_args::WormholeVerifyProofArgs,
-    prover_result::ProofKind, ChainKind, Fee, OmniAddress, TransferId,
+    ChainKind, Fee, OmniAddress, TransferId, locker_args::ClaimFeeArgs,
+    near_events::OmniBridgeEvent, prover_args::WormholeVerifyProofArgs, prover_result::ProofKind,
 };
 
 use crate::{config, utils};
@@ -526,15 +526,9 @@ async fn process_near_transfer_event(
         return Ok(EventAction::Retry);
     }
 
-    let (OmniBridgeEvent::InitTransferEvent {
-        ref transfer_message,
-    }
-    | OmniBridgeEvent::FinTransferEvent {
-        ref transfer_message,
-    }
-    | OmniBridgeEvent::UpdateFeeEvent {
-        ref transfer_message,
-    }) = event
+    let (OmniBridgeEvent::InitTransferEvent { transfer_message }
+    | OmniBridgeEvent::FinTransferEvent { transfer_message }
+    | OmniBridgeEvent::UpdateFeeEvent { transfer_message }) = event
     else {
         anyhow::bail!(
             "Expected InitTransferEvent/FinTransferEvent/UpdateFeeEvent, got: {:?}",
@@ -679,7 +673,10 @@ async fn process_sign_transfer_event(
             Ok(transfer_message) => transfer_message,
             Err(err) => {
                 if err.to_string().contains("The transfer does not exist") {
-                    anyhow::bail!("Transfer does not exist: {:?} (probably fee is 0 or transfer was already finalized)", message_payload.transfer_id);
+                    anyhow::bail!(
+                        "Transfer does not exist: {:?} (probably fee is 0 or transfer was already finalized)",
+                        message_payload.transfer_id
+                    );
                 }
 
                 warn!(

@@ -2722,8 +2722,8 @@ source = "git+https://github.com/Near-One/bridge-sdk-rs?rev=8f1a290c162a91b0314f
 dependencies = [
  "crypto-shared",
  "ethers",
- "near-crypto",
- "near-primitives",
+ "near-crypto 0.29.2",
+ "near-primitives 0.29.2",
 ]
 
 [[package]]
@@ -3841,9 +3841,9 @@ dependencies = [
  "eth-proof",
  "ethers",
  "hex",
- "near-crypto",
+ "near-crypto 0.29.2",
  "near-jsonrpc-client",
- "near-primitives",
+ "near-primitives 0.29.2",
  "near-rpc-client",
  "near-token",
  "omni-types",
@@ -5444,9 +5444,9 @@ dependencies = [
  "bridge-connector-common",
  "derive_builder 0.20.2",
  "near-contract-standards",
- "near-crypto",
+ "near-crypto 0.29.2",
  "near-jsonrpc-client",
- "near-primitives",
+ "near-primitives 0.29.2",
  "near-rpc-client",
  "near-token",
  "omni-types",
@@ -5465,11 +5465,11 @@ dependencies = [
  "bytesize",
  "chrono",
  "derive_more 1.0.0",
- "near-config-utils",
- "near-crypto",
- "near-parameters",
- "near-primitives",
- "near-time",
+ "near-config-utils 0.29.2",
+ "near-crypto 0.29.2",
+ "near-parameters 0.29.2",
+ "near-primitives 0.29.2",
+ "near-time 0.29.2",
  "num-rational 0.3.2",
  "serde",
  "serde_json",
@@ -5484,6 +5484,18 @@ name = "near-config-utils"
 version = "0.29.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6b992cca8d3b00f34b37f638c9632a97b734656151294e7a29b60b93b8a92948"
+dependencies = [
+ "anyhow",
+ "json_comments",
+ "thiserror 2.0.12",
+ "tracing",
+]
+
+[[package]]
+name = "near-config-utils"
+version = "0.30.0-rc.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ce8f9a28d2bf159980eedfeaf328cf745c4f46902b1c48c30d1e1f3f25ae6d44"
 dependencies = [
  "anyhow",
  "json_comments",
@@ -5514,9 +5526,35 @@ dependencies = [
  "ed25519-dalek 2.1.1",
  "hex",
  "near-account-id",
- "near-config-utils",
- "near-schema-checker-lib",
- "near-stdx",
+ "near-config-utils 0.29.2",
+ "near-schema-checker-lib 0.29.2",
+ "near-stdx 0.29.2",
+ "primitive-types 0.10.1",
+ "rand 0.8.5",
+ "secp256k1",
+ "serde",
+ "serde_json",
+ "subtle",
+ "thiserror 2.0.12",
+]
+
+[[package]]
+name = "near-crypto"
+version = "0.30.0-rc.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ca7e0145152fd593cab4fae4fb399e42b8e605c55d0c720d3557c74045553089"
+dependencies = [
+ "blake2",
+ "borsh 1.5.7",
+ "bs58 0.4.0",
+ "curve25519-dalek 4.1.3",
+ "derive_more 1.0.0",
+ "ed25519-dalek 2.1.1",
+ "hex",
+ "near-account-id",
+ "near-config-utils 0.30.0-rc.1",
+ "near-schema-checker-lib 0.30.0-rc.1",
+ "near-stdx 0.30.0-rc.1",
  "primitive-types 0.10.1",
  "rand 0.8.5",
  "secp256k1",
@@ -5532,7 +5570,16 @@ version = "0.29.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0599477a38b5596c283212d4db8eb11c6cc33fb43d02002db9cd3f141ba735f1"
 dependencies = [
- "near-primitives-core",
+ "near-primitives-core 0.29.2",
+]
+
+[[package]]
+name = "near-fmt"
+version = "0.30.0-rc.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d0f4737600cbd57cbf51b076ea30c94c221746147168ccd430a3ae89b205948b"
+dependencies = [
+ "near-primitives-core 0.30.0-rc.1",
 ]
 
 [[package]]
@@ -5547,11 +5594,11 @@ dependencies = [
 
 [[package]]
 name = "near-indexer-primitives"
-version = "0.29.2"
+version = "0.30.0-rc.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cf3ac9f6c8a43b941776120b25abb1b387e98ced51991e79961b581fe9014a95"
+checksum = "8c5ae16dac70742eec686ead73a686f18ac64d06b0375ebc7b440a56b5afaf66"
 dependencies = [
- "near-primitives",
+ "near-primitives 0.30.0-rc.1",
  "serde",
  "serde_json",
 ]
@@ -5566,9 +5613,9 @@ dependencies = [
  "lazy_static",
  "log",
  "near-chain-configs",
- "near-crypto",
+ "near-crypto 0.29.2",
  "near-jsonrpc-primitives",
- "near-primitives",
+ "near-primitives 0.29.2",
  "reqwest 0.12.15",
  "serde",
  "serde_json",
@@ -5583,9 +5630,9 @@ checksum = "6f003113d08e1f0ab9e6335efb1f7167662954804274653904ef57a9b5f8e687"
 dependencies = [
  "arbitrary",
  "near-chain-configs",
- "near-crypto",
- "near-primitives",
- "near-schema-checker-lib",
+ "near-crypto 0.29.2",
+ "near-primitives 0.29.2",
+ "near-schema-checker-lib 0.29.2",
  "serde",
  "serde_json",
  "thiserror 2.0.12",
@@ -5595,7 +5642,7 @@ dependencies = [
 [[package]]
 name = "near-lake-context-derive"
 version = "0.8.0-beta.4"
-source = "git+https://github.com/near/near-lake-framework-rs?branch=chore%2Fbumped-near-crates-versions#9ad2cd4613cd3528f3f7ab8021e7def8bcd41566"
+source = "git+https://github.com/near/near-lake-framework-rs?branch=chore%2Fbumped-near-crates-versions#fa8f20d08c9543ea56cfeab0e48c300f412dc593"
 dependencies = [
  "quote",
  "syn 2.0.100",
@@ -5604,7 +5651,7 @@ dependencies = [
 [[package]]
 name = "near-lake-framework"
 version = "0.8.0-beta.4"
-source = "git+https://github.com/near/near-lake-framework-rs?branch=chore%2Fbumped-near-crates-versions#9ad2cd4613cd3528f3f7ab8021e7def8bcd41566"
+source = "git+https://github.com/near/near-lake-framework-rs?branch=chore%2Fbumped-near-crates-versions#fa8f20d08c9543ea56cfeab0e48c300f412dc593"
 dependencies = [
  "async-stream",
  "async-trait",
@@ -5627,13 +5674,13 @@ dependencies = [
 [[package]]
 name = "near-lake-primitives"
 version = "0.8.0-beta.4"
-source = "git+https://github.com/near/near-lake-framework-rs?branch=chore%2Fbumped-near-crates-versions#9ad2cd4613cd3528f3f7ab8021e7def8bcd41566"
+source = "git+https://github.com/near/near-lake-framework-rs?branch=chore%2Fbumped-near-crates-versions#fa8f20d08c9543ea56cfeab0e48c300f412dc593"
 dependencies = [
  "anyhow",
- "near-crypto",
+ "near-crypto 0.30.0-rc.1",
  "near-indexer-primitives",
- "near-primitives",
- "near-primitives-core",
+ "near-primitives 0.30.0-rc.1",
+ "near-primitives-core 0.30.0-rc.1",
  "paste",
  "serde",
  "serde_json",
@@ -5661,8 +5708,27 @@ dependencies = [
  "borsh 1.5.7",
  "enum-map",
  "near-account-id",
- "near-primitives-core",
- "near-schema-checker-lib",
+ "near-primitives-core 0.29.2",
+ "near-schema-checker-lib 0.29.2",
+ "num-rational 0.3.2",
+ "serde",
+ "serde_repr",
+ "serde_yaml",
+ "strum 0.24.1",
+ "thiserror 2.0.12",
+]
+
+[[package]]
+name = "near-parameters"
+version = "0.30.0-rc.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6959b8fe97d7b7857d41662d643532c95203aa6d53f766fcb39ee2d2af0666a4"
+dependencies = [
+ "borsh 1.5.7",
+ "enum-map",
+ "near-account-id",
+ "near-primitives-core 0.30.0-rc.1",
+ "near-schema-checker-lib 0.30.0-rc.1",
  "num-rational 0.3.2",
  "serde",
  "serde_repr",
@@ -5690,18 +5756,58 @@ dependencies = [
  "enum-map",
  "hex",
  "itertools 0.12.1",
- "near-crypto",
- "near-fmt",
- "near-parameters",
- "near-primitives-core",
- "near-schema-checker-lib",
- "near-stdx",
- "near-time",
+ "near-crypto 0.29.2",
+ "near-fmt 0.29.2",
+ "near-parameters 0.29.2",
+ "near-primitives-core 0.29.2",
+ "near-schema-checker-lib 0.29.2",
+ "near-stdx 0.29.2",
+ "near-time 0.29.2",
  "num-rational 0.3.2",
  "ordered-float",
  "primitive-types 0.10.1",
  "rand 0.8.5",
  "rand_chacha 0.3.1",
+ "serde",
+ "serde_json",
+ "serde_with",
+ "sha3",
+ "smart-default",
+ "strum 0.24.1",
+ "thiserror 2.0.12",
+ "tracing",
+ "zstd 0.13.3",
+]
+
+[[package]]
+name = "near-primitives"
+version = "0.30.0-rc.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bcc1d0b59952b2f408e83ffdad01f9b863f4d835431c3875ee1e6653a942337d"
+dependencies = [
+ "arbitrary",
+ "base64 0.21.7",
+ "bitvec",
+ "borsh 1.5.7",
+ "bytes",
+ "bytesize",
+ "cfg-if 1.0.0",
+ "chrono",
+ "derive_more 1.0.0",
+ "easy-ext",
+ "enum-map",
+ "hex",
+ "itertools 0.12.1",
+ "near-crypto 0.30.0-rc.1",
+ "near-fmt 0.30.0-rc.1",
+ "near-parameters 0.30.0-rc.1",
+ "near-primitives-core 0.30.0-rc.1",
+ "near-schema-checker-lib 0.30.0-rc.1",
+ "near-stdx 0.30.0-rc.1",
+ "near-time 0.30.0-rc.1",
+ "num-rational 0.3.2",
+ "ordered-float",
+ "primitive-types 0.10.1",
  "serde",
  "serde_json",
  "serde_with",
@@ -5726,7 +5832,28 @@ dependencies = [
  "derive_more 1.0.0",
  "enum-map",
  "near-account-id",
- "near-schema-checker-lib",
+ "near-schema-checker-lib 0.29.2",
+ "num-rational 0.3.2",
+ "serde",
+ "serde_repr",
+ "sha2 0.10.8",
+ "thiserror 2.0.12",
+]
+
+[[package]]
+name = "near-primitives-core"
+version = "0.30.0-rc.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ec03ea80048140cdcc299202904358dec12c9e5e4a026c38cb1b229259ed1895"
+dependencies = [
+ "arbitrary",
+ "base64 0.21.7",
+ "borsh 1.5.7",
+ "bs58 0.4.0",
+ "derive_more 1.0.0",
+ "enum-map",
+ "near-account-id",
+ "near-schema-checker-lib 0.30.0-rc.1",
  "num-rational 0.3.2",
  "serde",
  "serde_repr",
@@ -5741,10 +5868,10 @@ source = "git+https://github.com/Near-One/bridge-sdk-rs?rev=8f1a290c162a91b0314f
 dependencies = [
  "borsh 1.5.7",
  "lazy_static",
- "near-crypto",
+ "near-crypto 0.29.2",
  "near-jsonrpc-client",
  "near-jsonrpc-primitives",
- "near-primitives",
+ "near-primitives 0.29.2",
  "reqwest 0.12.15",
  "serde_json",
  "thiserror 2.0.12",
@@ -5758,13 +5885,29 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "00d54cd2888814fc2398316ec6d870754d7dd08704233bda770a75360afc8a7b"
 
 [[package]]
+name = "near-schema-checker-core"
+version = "0.30.0-rc.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2dbf2e5cb110e9fdd85b9a87c74e569b345a04d69a9f25bcc354d7cbfc8acb20"
+
+[[package]]
 name = "near-schema-checker-lib"
 version = "0.29.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "311745157f685c26e05ca8532efbfcc09f63ab9fc7d94b824b2c75946ef37197"
 dependencies = [
- "near-schema-checker-core",
- "near-schema-checker-macro",
+ "near-schema-checker-core 0.29.2",
+ "near-schema-checker-macro 0.29.2",
+]
+
+[[package]]
+name = "near-schema-checker-lib"
+version = "0.30.0-rc.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ae681d7fad224edbad00ed23d339456973c9d0333ee13c67e93fa58a8d932e5a"
+dependencies = [
+ "near-schema-checker-core 0.30.0-rc.1",
+ "near-schema-checker-macro 0.30.0-rc.1",
 ]
 
 [[package]]
@@ -5772,6 +5915,12 @@ name = "near-schema-checker-macro"
 version = "0.29.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "515c63689e1e7940ac34629ad9d16ba8fd6bea58ad8ddbd4acf705d6149f3c77"
+
+[[package]]
+name = "near-schema-checker-macro"
+version = "0.30.0-rc.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f2df63279ed461f334ecf0bda92067f616a7c845acd4d0afc9cd1e301a26b435"
 
 [[package]]
 name = "near-sdk"
@@ -5817,6 +5966,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0bf9306662fe8ced267a85aa1d3fc9205f1968d88b9ddbb9a03c657da8457533"
 
 [[package]]
+name = "near-stdx"
+version = "0.30.0-rc.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b8b3c358829045ede1b5ea250e7ff26806dcff1031762c342656a4e41671e6bf"
+
+[[package]]
 name = "near-sys"
 version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5827,6 +5982,16 @@ name = "near-time"
 version = "0.29.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "40a8ffbee0028f08220c46d864d81ac780f2805ab3156b044ee04a927005a84f"
+dependencies = [
+ "serde",
+ "time",
+]
+
+[[package]]
+name = "near-time"
+version = "0.30.0-rc.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d437f4d3aba00acdf533f884ad6680b804ed898823444c9c4a4c3f4f5eb9ca6b"
 dependencies = [
  "serde",
  "time",
@@ -6105,9 +6270,9 @@ dependencies = [
  "hex",
  "near-bridge-client",
  "near-contract-standards",
- "near-crypto",
+ "near-crypto 0.29.2",
  "near-jsonrpc-client",
- "near-primitives",
+ "near-primitives 0.29.2",
  "near-rpc-client",
  "near-token",
  "omni-types",
@@ -6137,11 +6302,11 @@ dependencies = [
  "hex",
  "log",
  "near-bridge-client",
- "near-crypto",
+ "near-crypto 0.29.2",
  "near-jsonrpc-client",
  "near-jsonrpc-primitives",
  "near-lake-framework",
- "near-primitives",
+ "near-primitives 0.29.2",
  "near-rpc-client",
  "near-sdk",
  "omni-connector",
@@ -12195,7 +12360,7 @@ dependencies = [
  "bridge-connector-common",
  "derive_builder 0.20.2",
  "hex",
- "near-primitives",
+ "near-primitives 0.29.2",
  "reqwest 0.12.15",
  "serde",
  "serde_json",
