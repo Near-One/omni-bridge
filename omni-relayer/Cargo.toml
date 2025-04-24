@@ -1,7 +1,7 @@
 [package]
 name = "omni-relayer"
 version = "0.3.8"
-edition = "2021"
+edition = "2024"
 resolver = "2"
 repository = "https://github.com/Near-One/omni-bridge"
 
@@ -33,7 +33,7 @@ ethereum-types = "0.14.1"
 omni-types = { git = "https://github.com/near-one/omni-bridge", package = "omni-types", rev = "303facdae820faef114282d99c1cabd24787b93c" }
 bridge-indexer-types = { git = "ssh://git@github.com/near-one/bridge-indexer-rs.git", package = "bridge-indexer-types", rev = "be565d1eb6d5c641e0f3c6ababfe5ced4e9de3c7" }
 
-near-lake-framework = "0.7.11"
+near-lake-framework = "0.7.12"
 near-jsonrpc-client = "0.16.0"
 near-jsonrpc-primitives = "0.29.1"
 near-primitives = "0.29.1"
