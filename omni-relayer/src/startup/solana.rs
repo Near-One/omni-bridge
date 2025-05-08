@@ -250,7 +250,7 @@ pub async fn process_signature(config: config::Config, redis_client: redis::Clie
                         Err(err) => {
                             warn!("Failed to fetch transaction (probably signature wasn't finalized yet): {err:?}");
                         }
-                    };
+                    }
                 }
             }));
         }
