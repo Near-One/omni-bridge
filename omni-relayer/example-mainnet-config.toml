@@ -14,7 +14,8 @@ api_url = "https://mainnet.api.bridge.nearone.org/"
 [near]
 network = "mainnet"
 rpc_url = "https://rpc.mainnet.near.org/"
-token_locker_id = "omni.bridge.near"
+omni_bridge_id = "omni.bridge.near"
+btc_connector = "btc-connector.bridge.near"
 # Either provide a path to a credentials file or set it in the environment
 # Note: the path must be absolute
 # credentials_path = "/Users/username/.near-credentials/mainnet/omni-relayer.bridge.near.json"
@@ -25,7 +26,7 @@ sign_without_checking_fee = ["near:aurora"]
 rpc_http_url = "https://mainnet.infura.io/v3/INFURA_API_KEY"
 rpc_ws_url = "wss://mainnet.infura.io/ws/v3/INFURA_API_KEY"
 chain_id = 1
-bridge_token_factory_address = "0xe00c629aFaCCb0510995A2B95560E446A24c85B9"
+omni_bridge_address = "0xe00c629aFaCCb0510995A2B95560E446A24c85B9"
 light_client = "client-eth2.bridge.near"
 block_processing_batch_size = 10_000
 # https://wormhole.com/docs/build/reference/consistency-levels/
@@ -35,7 +36,7 @@ expected_finalization_time = 1095
 rpc_http_url = "https://base-mainnet.infura.io/v3/INFURA_API_KEY"
 rpc_ws_url = "wss://base-mainnet.infura.io/ws/v3/INFURA_API_KEY"
 chain_id = 8453
-bridge_token_factory_address = "0xd025b38762B4A4E36F0Cde483b86CB13ea00D989"
+omni_bridge_address = "0xd025b38762B4A4E36F0Cde483b86CB13ea00D989"
 block_processing_batch_size = 10_000
 # https://wormhole.com/docs/build/reference/consistency-levels/
 expected_finalization_time = 1026
@@ -44,7 +45,7 @@ expected_finalization_time = 1026
 rpc_http_url = "https://arbitrum-mainnet.infura.io/v3/INFURA_API_KEY"
 rpc_ws_url = "wss://arbitrum-mainnet.infura.io/ws/v3/INFURA_API_KEY"
 chain_id = 42_161
-bridge_token_factory_address = "0xd025b38762B4A4E36F0Cde483b86CB13ea00D989"
+omni_bridge_address = "0xd025b38762B4A4E36F0Cde483b86CB13ea00D989"
 block_processing_batch_size = 10_000
 # https://wormhole.com/docs/build/reference/consistency-levels/
 expected_finalization_time = 1066

@@ -585,8 +585,8 @@ async fn process_near_transfer_event(
             TransactionOptions {
                 nonce: Some(nonce),
                 wait_until: near_primitives::views::TxExecutionStatus::Included,
+                wait_final_outcome_timeout_sec: None,
             },
-            None,
         )
         .await
     {
@@ -962,8 +962,8 @@ async fn process_evm_init_transfer_event(
             transaction_options: TransactionOptions {
                 nonce: Some(nonce),
                 wait_until: TxExecutionStatus::Included,
+                wait_final_outcome_timeout_sec: None,
             },
-            wait_final_outcome_timeout_sec: None,
         }
     } else {
         omni_connector::FinTransferArgs::NearFinTransferWithEvmProof {
@@ -973,8 +973,8 @@ async fn process_evm_init_transfer_event(
             transaction_options: TransactionOptions {
                 nonce: Some(nonce),
                 wait_until: TxExecutionStatus::Included,
+                wait_final_outcome_timeout_sec: None,
             },
-            wait_final_outcome_timeout_sec: None,
         }
     };
 
@@ -1125,8 +1125,8 @@ async fn process_solana_init_transfer_event(
         transaction_options: TransactionOptions {
             nonce: Some(nonce),
             wait_until: TxExecutionStatus::Included,
+            wait_final_outcome_timeout_sec: None,
         },
-        wait_final_outcome_timeout_sec: None,
     };
 
     match connector.fin_transfer(fin_transfer_args).await {
@@ -1254,8 +1254,8 @@ async fn process_evm_fin_transfer_event(
             TransactionOptions {
                 nonce: Some(nonce),
                 wait_until: near_primitives::views::TxExecutionStatus::Included,
+                wait_final_outcome_timeout_sec: None,
             },
-            None,
         )
         .await
     {
@@ -1331,8 +1331,8 @@ async fn process_solana_fin_transfer_event(
             TransactionOptions {
                 nonce: Some(nonce),
                 wait_until: near_primitives::views::TxExecutionStatus::Included,
+                wait_final_outcome_timeout_sec: None,
             },
-            None,
         )
         .await
     {
@@ -1439,8 +1439,8 @@ async fn process_evm_deploy_token_event(
         transaction_options: TransactionOptions {
             nonce: Some(nonce),
             wait_until: near_primitives::views::TxExecutionStatus::Included,
+            wait_final_outcome_timeout_sec: None,
         },
-        wait_final_outcome_timeout_sec: None,
     };
 
     match connector.bind_token(bind_token_args).await {
@@ -1515,8 +1515,8 @@ async fn process_solana_deploy_token_event(
         transaction_options: TransactionOptions {
             nonce,
             wait_until: near_primitives::views::TxExecutionStatus::Included,
+            wait_final_outcome_timeout_sec: None,
         },
-        wait_final_outcome_timeout_sec: None,
     };
 
     match connector.bind_token(bind_token_args).await {

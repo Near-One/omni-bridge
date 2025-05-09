@@ -8,8 +8,8 @@ use bridge_indexer_types::documents_types::{
 };
 use ethereum_types::H256;
 use log::{info, warn};
-use mongodb::{change_stream::event::ResumeToken, options::ClientOptions, Client, Collection};
-use omni_types::{near_events::OmniBridgeEvent, ChainKind, OmniAddress};
+use mongodb::{Client, Collection, change_stream::event::ResumeToken, options::ClientOptions};
+use omni_types::{ChainKind, OmniAddress, near_events::OmniBridgeEvent};
 use solana_sdk::pubkey::Pubkey;
 use tokio_stream::StreamExt;
 
@@ -336,6 +336,8 @@ async fn handle_meta_event(
             .await;
         }
         OmniMetaEventDetails::EVMLogMetadata(_)
+        | OmniMetaEventDetails::EVMOnNearEvent { .. }
+        | OmniMetaEventDetails::EVMOnNearInternalTransaction { .. }
         | OmniMetaEventDetails::SolanaLogMetadata { .. }
         | OmniMetaEventDetails::NearLogMetadataEvent { .. }
         | OmniMetaEventDetails::NearDeployTokenEvent { .. }
