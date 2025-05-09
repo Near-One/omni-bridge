@@ -127,7 +127,7 @@ pub enum Network {
 pub struct Near {
     pub network: Network,
     pub rpc_url: String,
-    pub token_locker_id: AccountId,
+    pub omni_bridge_id: AccountId,
     pub credentials_path: Option<String>,
     pub sign_without_checking_fee: Option<Vec<OmniAddress>>,
 }
@@ -139,7 +139,7 @@ pub struct Evm {
     #[serde(deserialize_with = "replace_rpc_api_key")]
     pub rpc_ws_url: String,
     pub chain_id: u64,
-    pub bridge_token_factory_address: Address,
+    pub omni_bridge_address: Address,
     pub light_client: Option<AccountId>,
     pub block_processing_batch_size: u64,
     pub expected_finalization_time: i64,

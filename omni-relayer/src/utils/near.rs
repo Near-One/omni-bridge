@@ -2,21 +2,21 @@ use anyhow::Result;
 use log::{info, warn};
 
 use near_jsonrpc_client::{
-    methods::{self, block::RpcBlockRequest},
     JsonRpcClient,
+    methods::{self, block::RpcBlockRequest},
 };
 use near_jsonrpc_primitives::types::query::QueryResponseKind;
 use near_lake_framework::near_indexer_primitives::{
-    views::{ActionView, ReceiptEnumView, ReceiptView},
     IndexerExecutionOutcomeWithReceipt, StreamerMessage,
+    views::{ActionView, ReceiptEnumView, ReceiptView},
 };
 use near_primitives::{
-    borsh::{from_slice, BorshDeserialize},
+    borsh::{BorshDeserialize, from_slice},
     hash::CryptoHash,
     types::{AccountId, BlockReference},
     views::QueryRequest,
 };
-use omni_types::{near_events::OmniBridgeEvent, ChainKind};
+use omni_types::{ChainKind, near_events::OmniBridgeEvent};
 
 use crate::{config, utils};
 
@@ -207,7 +207,7 @@ fn find_nep_locker_event_outcomes(
 }
 
 fn is_nep_locker_event(config: &config::Config, receipt: &ReceiptView) -> bool {
-    receipt.receiver_id == config.near.token_locker_id
+    receipt.receiver_id == config.near.omni_bridge_id
         && matches!(
             receipt.receipt,
             ReceiptEnumView::Action { ref actions, .. } if actions.iter().any(|action| {

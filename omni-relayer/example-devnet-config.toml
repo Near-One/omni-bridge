@@ -14,7 +14,7 @@ api_url = "https://testnet.api.bridge.nearone.org/"
 [near]
 network = "testnet"
 rpc_url = "https://rpc.testnet.near.org/"
-token_locker_id = "omni-locker.testnet"
+omni_bridge_id = "omni-locker.testnet"
 # Either provide a path to a credentials file or set it in the environment
 # Note: the path must be absolute
 # credentials_path = "/Users/username/.near-credentials/testnet/omni-relayer.testnet.json"
@@ -25,7 +25,7 @@ sign_without_checking_fee = ["near:aurora"]
 rpc_http_url = "https://sepolia.infura.io/v3/INFURA_API_KEY"
 rpc_ws_url = "wss://sepolia.infura.io/ws/v3/INFURA_API_KEY"
 chain_id = 11_155_111
-bridge_token_factory_address = "0x3701B9859Dbb9a4333A3dd933ab18e9011ddf2C8"
+omni_bridge_address = "0x3701B9859Dbb9a4333A3dd933ab18e9011ddf2C8"
 light_client = "client-eth2.sepolia.testnet"
 block_processing_batch_size = 10_000
 # https://wormhole.com/docs/build/reference/consistency-levels/
@@ -35,7 +35,7 @@ expected_finalization_time = 1095
 rpc_http_url = "https://base-sepolia.infura.io/v3/INFURA_API_KEY"
 rpc_ws_url = "wss://base-sepolia.infura.io/ws/v3/INFURA_API_KEY"
 chain_id = 84_532
-bridge_token_factory_address = "0x0C981337fFe39a555d3A40dbb32f21aD0eF33FFA"
+omni_bridge_address = "0x0C981337fFe39a555d3A40dbb32f21aD0eF33FFA"
 block_processing_batch_size = 10_000
 # https://wormhole.com/docs/build/reference/consistency-levels/
 expected_finalization_time = 1026
@@ -44,7 +44,7 @@ expected_finalization_time = 1026
 rpc_http_url = "https://arbitrum-sepolia.infura.io/v3/INFURA_API_KEY"
 rpc_ws_url = "wss://arbitrum-sepolia.infura.io/ws/v3/INFURA_API_KEY"
 chain_id = 421_614
-bridge_token_factory_address = "0xd025b38762B4A4E36F0Cde483b86CB13ea00D989"
+omni_bridge_address = "0xd025b38762B4A4E36F0Cde483b86CB13ea00D989"
 block_processing_batch_size = 10_000
 # https://wormhole.com/docs/build/reference/consistency-levels/
 expected_finalization_time = 1066

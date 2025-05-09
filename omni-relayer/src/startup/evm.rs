@@ -1,8 +1,8 @@
 use alloy::{
     primitives::Address,
     providers::{
-        fillers::{BlobGasFiller, ChainIdFiller, FillProvider, GasFiller, JoinFill, NonceFiller},
         Identity, Provider, ProviderBuilder, RootProvider, WsConnect,
+        fillers::{BlobGasFiller, ChainIdFiller, FillProvider, GasFiller, JoinFill, NonceFiller},
     },
     rpc::types::{Filter, Log},
     sol_types::SolEvent,
@@ -39,7 +39,7 @@ fn extract_evm_config(evm: config::Evm) -> Result<(Url, String, Address, u64, i6
             .parse()
             .context("Failed to parse EVM rpc provider as url")?,
         evm.rpc_ws_url,
-        evm.bridge_token_factory_address,
+        evm.omni_bridge_address,
         evm.block_processing_batch_size,
         evm.expected_finalization_time,
     ))
