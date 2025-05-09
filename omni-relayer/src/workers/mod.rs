@@ -1,16 +1,15 @@
-use std::str::FromStr;
 use std::sync::Arc;
 
+use alloy::primitives::B256;
 use anyhow::{Context, Result};
 use bridge_connector_common::result::BridgeSdkError;
 use futures::future::join_all;
 use log::{info, warn};
 
-use alloy::rpc::types::{Log, TransactionReceipt};
 use ethereum_types::H256;
 
 use near_bridge_client::TransactionOptions;
-use near_jsonrpc_client::{errors::JsonRpcError, JsonRpcClient};
+use near_jsonrpc_client::{JsonRpcClient, errors::JsonRpcError};
 use near_primitives::{hash::CryptoHash, types::AccountId, views::TxExecutionStatus};
 use near_rpc_client::NearRpcError;
 use near_sdk::json_types::U128;
@@ -20,8 +19,8 @@ use solana_sdk::{instruction::InstructionError, pubkey::Pubkey, transaction::Tra
 
 use omni_connector::OmniConnector;
 use omni_types::{
-    locker_args::ClaimFeeArgs, near_events::OmniBridgeEvent, prover_args::WormholeVerifyProofArgs,
-    prover_result::ProofKind, ChainKind, Fee, OmniAddress, TransferId,
+    ChainKind, Fee, OmniAddress, TransferId, TransferMessage, locker_args::ClaimFeeArgs,
+    near_events::OmniBridgeEvent, prover_args::WormholeVerifyProofArgs, prover_result::ProofKind,
 };
 
 use crate::{config, utils};
@@ -37,28 +36,28 @@ enum EventAction {
 #[serde(tag = "init_transfer")]
 pub enum Transfer {
     Near {
-        event: OmniBridgeEvent,
+        transfer_message: TransferMessage,
         creation_timestamp: i64,
         last_update_timestamp: Option<i64>,
     },
     Evm {
         chain_kind: ChainKind,
         block_number: u64,
-        log: Log,
-        tx_logs: Option<Box<TransactionReceipt>>,
+        tx_hash: H256,
+        log: utils::evm::InitTransfer,
         creation_timestamp: i64,
         last_update_timestamp: Option<i64>,
         expected_finalization_time: i64,
     },
     Solana {
         amount: U128,
-        token: String,
-        sender: String,
-        recipient: String,
+        token: Pubkey,
+        sender: OmniAddress,
+        recipient: OmniAddress,
         fee: U128,
         native_fee: u64,
         message: String,
-        emitter: String,
+        emitter: Pubkey,
         sequence: u64,
         creation_timestamp: i64,
         last_update_timestamp: Option<i64>,
@@ -71,8 +70,10 @@ pub enum FinTransfer {
     Evm {
         chain_kind: ChainKind,
         block_number: u64,
-        log: Log,
-        tx_logs: Option<Box<TransactionReceipt>>,
+        tx_hash: H256,
+        topic: B256,
+        origin_chain: ChainKind,
+        origin_nonce: u64,
         creation_timestamp: i64,
         expected_finalization_time: i64,
     },
@@ -88,8 +89,8 @@ pub enum DeployToken {
     Evm {
         chain_kind: ChainKind,
         block_number: u64,
-        log: Log,
-        tx_logs: Option<Box<TransactionReceipt>>,
+        tx_hash: H256,
+        topic: B256,
         creation_timestamp: i64,
         expected_finalization_time: i64,
     },
@@ -140,11 +141,11 @@ pub async fn process_events(
         };
 
         if let Err(err) = near_nonce.resync_nonce().await {
-            warn!("Failed to resync near nonce: {}", err);
+            warn!("Failed to resync near nonce: {err:?}");
         }
 
         if let Err(err) = evm_nonces.resync_nonces().await {
-            warn!("Failed to resync evm nonces: {}", err);
+            warn!("Failed to resync evm nonces: {err:?}");
         }
 
         let mut handlers = Vec::new();
@@ -189,7 +190,7 @@ pub async fn process_events(
                                     )
                                     .await;
                                 }
-                            };
+                            }
                         }
                     }));
                 } else if let Transfer::Evm { .. } = transfer {
@@ -231,7 +232,7 @@ pub async fn process_events(
                                     )
                                     .await;
                                 }
-                            };
+                            }
                         }
                     }));
                 } else if let Transfer::Solana { .. } = transfer {
@@ -271,7 +272,7 @@ pub async fn process_events(
                                     )
                                     .await;
                                 }
-                            };
+                            }
                         }
                     }));
                 }
@@ -312,7 +313,7 @@ pub async fn process_events(
                                     )
                                     .await;
                                 }
-                            };
+                            }
                         }
                     }));
                 }
@@ -353,7 +354,7 @@ pub async fn process_events(
                                     )
                                     .await;
                                 }
-                            };
+                            }
                         }
                     }));
                 } else if let FinTransfer::Solana { .. } = fin_transfer_event {
@@ -390,7 +391,7 @@ pub async fn process_events(
                                     )
                                     .await;
                                 }
-                            };
+                            }
                         }
                     }));
                 }
@@ -431,7 +432,7 @@ pub async fn process_events(
                                     )
                                     .await;
                                 }
-                            };
+                            }
                         }
                     }));
                 } else if let DeployToken::Solana { .. } = deploy_token_event {
@@ -468,7 +469,7 @@ pub async fn process_events(
                                     )
                                     .await;
                                 }
-                            };
+                            }
                         }
                     }));
                 }
@@ -510,7 +511,7 @@ async fn process_near_transfer_event(
     near_nonce: Arc<utils::nonce::NonceManager>,
 ) -> Result<EventAction> {
     let Transfer::Near {
-        ref event,
+        ref transfer_message,
         creation_timestamp,
         last_update_timestamp,
     } = transfer
@@ -526,32 +527,28 @@ async fn process_near_transfer_event(
         return Ok(EventAction::Retry);
     }
 
-    let (OmniBridgeEvent::InitTransferEvent {
-        ref transfer_message,
-    }
-    | OmniBridgeEvent::FinTransferEvent {
-        ref transfer_message,
-    }
-    | OmniBridgeEvent::UpdateFeeEvent {
-        ref transfer_message,
-    }) = event
-    else {
-        anyhow::bail!(
-            "Expected InitTransferEvent/FinTransferEvent/UpdateFeeEvent, got: {:?}",
-            event
-        );
-    };
+    info!("Trying to process TransferMessage on NEAR");
 
-    info!("Trying to process InitTransferEvent/FinTransferEvent/UpdateFeeEvent");
+    match connector
+        .near_is_transfer_finalised(transfer_message.get_transfer_id())
+        .await
+    {
+        Ok(true) => anyhow::bail!("Transfer is already finalised: {:?}", transfer_message),
+        Ok(false) => {}
+        Err(err) => {
+            warn!("Failed to check if transfer is finalised: {err:?}");
+            return Ok(EventAction::Retry);
+        }
+    }
 
-    if config.is_check_fee_enabled()
+    if config.is_bridge_api_enabled()
         && !config
             .near
             .sign_without_checking_fee
             .as_ref()
             .is_some_and(|list| list.contains(&transfer_message.sender))
     {
-        match utils::fee::is_fee_sufficient(
+        match utils::bridge_api::is_fee_sufficient(
             &config,
             transfer_message.fee.clone(),
             &transfer_message.sender,
@@ -562,11 +559,11 @@ async fn process_near_transfer_event(
         {
             Ok(true) => {}
             Ok(false) => {
-                warn!("Insufficient fee for transfer: {:?}", transfer_message);
+                warn!("Insufficient fee for transfer: {transfer_message:?}");
                 return Ok(EventAction::Retry);
             }
             Err(err) => {
-                warn!("Failed to check fee sufficiency: {}", err);
+                warn!("Failed to check fee sufficiency: {err:?}");
                 return Ok(EventAction::Retry);
             }
         }
@@ -613,7 +610,7 @@ async fn process_near_transfer_event(
             )
             .await;
 
-            info!("Signed transfer: {:?}", tx_hash);
+            info!("Signed transfer: {tx_hash:?}");
 
             Ok(EventAction::Remove)
         }
@@ -665,13 +662,28 @@ async fn process_sign_transfer_event(
         anyhow::bail!("Expected SignTransferEvent, got: {:?}", sign_transfer_event);
     };
 
-    info!("Received SignTransferEvent");
+    info!("Trying to process SignTransferEvent log on NEAR");
+
+    match connector
+        .near_is_transfer_finalised(message_payload.transfer_id)
+        .await
+    {
+        Ok(true) => anyhow::bail!(
+            "Transfer is already finalised: {:?}",
+            message_payload.transfer_id
+        ),
+        Ok(false) => {}
+        Err(err) => {
+            warn!("Failed to check if transfer is finalised: {err:?}");
+            return Ok(EventAction::Retry);
+        }
+    }
 
     if message_payload.fee_recipient != Some(signer) {
         anyhow::bail!("Fee recipient mismatch");
     }
 
-    if config.is_check_fee_enabled() {
+    if config.is_bridge_api_enabled() {
         let transfer_message = match connector
             .near_get_transfer_message(message_payload.transfer_id)
             .await
@@ -679,7 +691,10 @@ async fn process_sign_transfer_event(
             Ok(transfer_message) => transfer_message,
             Err(err) => {
                 if err.to_string().contains("The transfer does not exist") {
-                    anyhow::bail!("Transfer does not exist: {:?} (probably fee is 0 or transfer was already finalized)", message_payload.transfer_id);
+                    anyhow::bail!(
+                        "Transfer does not exist: {:?} (probably fee is 0 or transfer was already finalized)",
+                        message_payload.transfer_id
+                    );
                 }
 
                 warn!(
@@ -691,7 +706,7 @@ async fn process_sign_transfer_event(
             }
         };
 
-        match utils::fee::is_fee_sufficient(
+        match utils::bridge_api::is_fee_sufficient(
             &config,
             transfer_message.fee,
             &transfer_message.sender,
@@ -702,11 +717,11 @@ async fn process_sign_transfer_event(
         {
             Ok(true) => {}
             Ok(false) => {
-                warn!("Insufficient fee for transfer: {:?}", message_payload);
+                warn!("Insufficient fee for transfer: {message_payload:?}");
                 return Ok(EventAction::Retry);
             }
             Err(err) => {
-                warn!("Failed to check fee sufficiency: {}", err);
+                warn!("Failed to check fee sufficiency: {err:?}");
                 return Ok(EventAction::Retry);
             }
         }
@@ -745,7 +760,7 @@ async fn process_sign_transfer_event(
 
     match connector.fin_transfer(fin_transfer_args).await {
         Ok(tx_hash) => {
-            info!("Finalized deposit: {}", tx_hash);
+            info!("Finalized deposit: {tx_hash}");
             Ok(EventAction::Remove)
         }
         Err(err) => {
@@ -791,8 +806,8 @@ async fn process_evm_init_transfer_event(
     let Transfer::Evm {
         chain_kind,
         block_number,
+        tx_hash: transaction_hash,
         ref log,
-        ref tx_logs,
         creation_timestamp,
         last_update_timestamp,
         expected_finalization_time,
@@ -813,56 +828,54 @@ async fn process_evm_init_transfer_event(
         return Ok(EventAction::Retry);
     }
 
-    let Ok(init_log) = log.log_decode::<utils::evm::InitTransfer>() else {
-        anyhow::bail!("Failed to decode log as InitTransfer: {:?}", log);
+    info!("Trying to process InitTransfer log on {chain_kind:?}");
+
+    let transfer_id = TransferId {
+        origin_chain: chain_kind,
+        origin_nonce: log.originNonce,
     };
+    match connector.near_is_transfer_finalised(transfer_id).await {
+        Ok(true) => anyhow::bail!("Transfer is already finalised: {:?}", transfer_id),
+        Ok(false) => {}
+        Err(err) => {
+            warn!("Failed to check if transfer is finalised: {err:?}");
+            return Ok(EventAction::Retry);
+        }
+    }
 
-    info!("Trying to process InitTransfer log on {:?}", chain_kind);
+    let recipient = log.recipient.parse::<OmniAddress>().map_err(|err| {
+        anyhow::anyhow!(
+            "Failed to parse \"{}\" as `OmniAddress`: {:?}",
+            log.recipient,
+            err
+        )
+    })?;
 
-    let Some(tx_hash) = log.transaction_hash else {
-        anyhow::bail!("No transaction hash in log: {:?}", log);
-    };
-
-    let recipient = init_log
-        .inner
-        .recipient
-        .parse::<OmniAddress>()
-        .map_err(|err| {
-            anyhow::anyhow!(
-                "Failed to parse \"{}\" as `OmniAddress`: {:?}",
-                init_log.inner.recipient,
-                err
-            )
-        })?;
-
-    if config.is_check_fee_enabled() {
-        let sender =
-            utils::evm::string_to_evm_omniaddress(chain_kind, &init_log.inner.sender.to_string())
-                .map_err(|err| {
+    if config.is_bridge_api_enabled() {
+        let sender = utils::evm::string_to_evm_omniaddress(chain_kind, &log.sender.to_string())
+            .map_err(|err| {
                 anyhow::anyhow!(
                     "Failed to parse \"{}\" as `OmniAddress`: {:?}",
-                    init_log.inner.recipient,
+                    log.sender,
                     err
                 )
             })?;
 
-        let token = utils::evm::string_to_evm_omniaddress(
-            chain_kind,
-            &init_log.inner.tokenAddress.to_string(),
-        )
-        .map_err(|err| {
-            anyhow::anyhow!(
-                "Failed to parse \"{}\" as `OmniAddress`: {:?}",
-                init_log.inner.recipient,
-                err
-            )
-        })?;
+        let token =
+            utils::evm::string_to_evm_omniaddress(chain_kind, &log.tokenAddress.to_string())
+                .map_err(|err| {
+                    anyhow::anyhow!(
+                        "Failed to parse \"{}\" as `OmniAddress`: {:?}",
+                        log.tokenAddress,
+                        err
+                    )
+                })?;
 
-        match utils::fee::is_fee_sufficient(
+        match utils::bridge_api::is_fee_sufficient(
             &config,
             Fee {
-                fee: init_log.inner.fee.into(),
-                native_fee: init_log.inner.nativeFee.into(),
+                fee: log.fee.into(),
+                native_fee: log.nativeFee.into(),
             },
             &sender,
             &recipient,
@@ -872,19 +885,20 @@ async fn process_evm_init_transfer_event(
         {
             Ok(true) => {}
             Ok(false) => {
-                warn!("Insufficient fee for transfer: {:?}", transfer);
+                warn!("Insufficient fee for transfer: {transfer:?}");
                 return Ok(EventAction::Retry);
             }
             Err(err) => {
-                warn!("Failed to check fee sufficiency: {}", err);
+                warn!("Failed to check fee sufficiency: {err:?}");
                 return Ok(EventAction::Retry);
             }
         }
     }
 
-    let vaa =
-        utils::evm::get_vaa_from_evm_log(connector.clone(), chain_kind, tx_logs.clone(), &config)
-            .await;
+    let vaa = connector
+        .wormhole_get_vaa_by_tx_hash(format!("{transaction_hash:?}"))
+        .await
+        .ok();
 
     if vaa.is_none() {
         if chain_kind == ChainKind::Eth {
@@ -918,15 +932,13 @@ async fn process_evm_init_transfer_event(
         }
     }
 
-    let tx_hash = H256::from_slice(tx_hash.as_slice());
-
     let storage_deposit_actions = match utils::storage::get_storage_deposit_actions(
         &connector,
         chain_kind,
         &recipient,
-        &init_log.inner.tokenAddress.to_string(),
-        init_log.inner.fee,
-        init_log.inner.nativeFee,
+        &log.tokenAddress.to_string(),
+        log.fee,
+        log.nativeFee,
     )
     .await
     {
@@ -956,7 +968,7 @@ async fn process_evm_init_transfer_event(
     } else {
         omni_connector::FinTransferArgs::NearFinTransferWithEvmProof {
             chain_kind,
-            tx_hash,
+            tx_hash: transaction_hash,
             storage_deposit_actions,
             transaction_options: TransactionOptions {
                 nonce: Some(nonce),
@@ -968,7 +980,7 @@ async fn process_evm_init_transfer_event(
 
     match connector.fin_transfer(fin_transfer_args).await {
         Ok(tx_hash) => {
-            info!("Finalized InitTransfer: {:?}", tx_hash);
+            info!("Finalized InitTransfer: {tx_hash:?}");
             Ok(EventAction::Remove)
         }
         Err(err) => {
@@ -979,22 +991,19 @@ async fn process_evm_init_transfer_event(
                     | NearRpcError::RpcTransactionError(JsonRpcError::TransportError(_)) => {
                         warn!(
                             "Failed to finalize transfer ({}), retrying: {near_rpc_error:?}",
-                            init_log.inner.originNonce
+                            log.originNonce
                         );
                         return Ok(EventAction::Retry);
                     }
                     _ => {
                         anyhow::bail!(
                             "Failed to finalize transfer ({}): {near_rpc_error:?}",
-                            init_log.inner.originNonce
+                            log.originNonce
                         );
                     }
                 };
             }
-            anyhow::bail!(
-                "Failed to finalize transfer ({}): {err:?}",
-                init_log.inner.originNonce
-            );
+            anyhow::bail!("Failed to finalize transfer ({}): {err:?}", log.originNonce);
         }
     }
 }
@@ -1035,48 +1044,44 @@ async fn process_solana_init_transfer_event(
 
     info!("Trying to process InitTransfer log on Solana");
 
-    let recipient = recipient.parse::<OmniAddress>().map_err(|err| {
-        anyhow::anyhow!(
-            "Failed to parse \"{}\" as `OmniAddress`: {:?}",
-            recipient,
-            err
-        )
-    })?;
+    let transfer_id = TransferId {
+        origin_chain: ChainKind::Sol,
+        origin_nonce: sequence,
+    };
+    match connector.near_is_transfer_finalised(transfer_id).await {
+        Ok(true) => anyhow::bail!("Transfer is already finalised: {:?}", transfer_id),
+        Ok(false) => {}
+        Err(err) => {
+            warn!("Failed to check if transfer is finalised: {err:?}");
+            return Ok(EventAction::Retry);
+        }
+    }
 
-    if config.is_check_fee_enabled() {
-        let sender = Pubkey::from_str(sender)?;
-
-        let sender =
-            OmniAddress::new_from_slice(ChainKind::Sol, &sender.to_bytes()).map_err(|err| {
-                anyhow::anyhow!("Failed to parse \"{}\" as `OmniAddress`: {:?}", sender, err)
-            })?;
-
-        let token = Pubkey::from_str(token)?;
-
+    if config.is_bridge_api_enabled() {
         let token =
             OmniAddress::new_from_slice(ChainKind::Sol, &token.to_bytes()).map_err(|err| {
                 anyhow::anyhow!("Failed to parse \"{}\" as `OmniAddress`: {:?}", sender, err)
             })?;
 
-        match utils::fee::is_fee_sufficient(
+        match utils::bridge_api::is_fee_sufficient(
             &config,
             Fee {
                 fee,
                 native_fee: u128::from(native_fee).into(),
             },
-            &sender,
-            &recipient,
+            sender,
+            recipient,
             &token,
         )
         .await
         {
             Ok(true) => {}
             Ok(false) => {
-                warn!("Insufficient fee for transfer: {:?}", transfer);
+                warn!("Insufficient fee for transfer: {transfer:?}");
                 return Ok(EventAction::Retry);
             }
             Err(err) => {
-                warn!("Failed to check fee sufficiency: {}", err);
+                warn!("Failed to check fee sufficiency: {err:?}");
                 return Ok(EventAction::Retry);
             }
         }
@@ -1086,15 +1091,15 @@ async fn process_solana_init_transfer_event(
         .wormhole_get_vaa(config.wormhole.solana_chain_id, &emitter, sequence)
         .await
     else {
-        warn!("Failed to get VAA for sequence: {}", sequence);
+        warn!("Failed to get VAA for sequence: {sequence}");
         return Ok(EventAction::Retry);
     };
 
     let storage_deposit_actions = match utils::storage::get_storage_deposit_actions(
         &connector,
         ChainKind::Sol,
-        &recipient,
-        token,
+        recipient,
+        &token.to_string(),
         fee.0,
         u128::from(native_fee),
     )
@@ -1126,7 +1131,7 @@ async fn process_solana_init_transfer_event(
 
     match connector.fin_transfer(fin_transfer_args).await {
         Ok(tx_hash) => {
-            info!("Finalized InitTransfer: {:?}", tx_hash);
+            info!("Finalized InitTransfer: {tx_hash:?}");
             Ok(EventAction::Remove)
         }
         Err(err) => {
@@ -1159,8 +1164,10 @@ async fn process_evm_fin_transfer_event(
     let FinTransfer::Evm {
         chain_kind,
         block_number,
-        log,
-        tx_logs,
+        tx_hash: transaction_hash,
+        topic,
+        origin_chain,
+        origin_nonce,
         creation_timestamp,
         expected_finalization_time,
     } = fin_transfer
@@ -1174,10 +1181,25 @@ async fn process_evm_fin_transfer_event(
         return Ok(EventAction::Retry);
     }
 
-    info!("Trying to process FinTransfer log on {:?}", chain_kind);
+    info!("Trying to process FinTransfer log on {chain_kind:?}");
 
-    let vaa =
-        utils::evm::get_vaa_from_evm_log(connector.clone(), chain_kind, tx_logs, &config).await;
+    let transfer_id = TransferId {
+        origin_chain,
+        origin_nonce,
+    };
+    match connector.near_is_transfer_finalised(transfer_id).await {
+        Ok(true) => anyhow::bail!("Transfer is already finalised: {:?}", transfer_id),
+        Ok(false) => {}
+        Err(err) => {
+            warn!("Failed to check if transfer is finalised: {err:?}");
+            return Ok(EventAction::Retry);
+        }
+    }
+
+    let vaa = connector
+        .wormhole_get_vaa_by_tx_hash(format!("{transaction_hash:?}"))
+        .await
+        .ok();
 
     if vaa.is_none() {
         if chain_kind == ChainKind::Eth {
@@ -1203,26 +1225,16 @@ async fn process_evm_fin_transfer_event(
         }
     }
 
-    let Some(tx_hash) = log.transaction_hash else {
-        anyhow::bail!("No transaction hash in log: {:?}", log);
-    };
-
-    let Some(topic) = log.topic0() else {
-        anyhow::bail!("No topic0 in log: {:?}", log);
-    };
-
-    let tx_hash = H256::from_slice(tx_hash.as_slice());
-
     let Some(prover_args) = utils::evm::construct_prover_args(
         &config,
         vaa,
-        tx_hash,
+        transaction_hash,
         H256::from_slice(topic.as_slice()),
         ProofKind::FinTransfer,
     )
     .await
     else {
-        warn!("Failed to get prover args for {:?}", tx_hash);
+        warn!("Failed to get prover args for {transaction_hash:?}");
         return Ok(EventAction::Retry);
     };
 
@@ -1248,7 +1260,7 @@ async fn process_evm_fin_transfer_event(
         .await
     {
         Ok(tx_hash) => {
-            info!("Claimed fee: {:?}", tx_hash);
+            info!("Claimed fee: {tx_hash:?}");
             Ok(EventAction::Remove)
         }
         Err(err) => {
@@ -1292,7 +1304,7 @@ async fn process_solana_fin_transfer_event(
         .wormhole_get_vaa(config.wormhole.solana_chain_id, emitter, sequence)
         .await
     else {
-        warn!("Failed to get VAA for sequence: {}", sequence);
+        warn!("Failed to get VAA for sequence: {sequence}");
         return Ok(EventAction::Retry);
     };
 
@@ -1325,7 +1337,7 @@ async fn process_solana_fin_transfer_event(
         .await
     {
         Ok(tx_hash) => {
-            info!("Claimed fee: {:?}", tx_hash);
+            info!("Claimed fee: {tx_hash:?}");
             Ok(EventAction::Remove)
         }
         Err(err) => {
@@ -1357,8 +1369,8 @@ async fn process_evm_deploy_token_event(
     let DeployToken::Evm {
         chain_kind,
         block_number,
-        log,
-        tx_logs,
+        tx_hash: transaction_hash,
+        topic,
         creation_timestamp,
         expected_finalization_time,
     } = deploy_token_event
@@ -1372,10 +1384,12 @@ async fn process_evm_deploy_token_event(
         return Ok(EventAction::Retry);
     }
 
-    info!("Trying to process DeployToken log on {:?}", chain_kind);
+    info!("Trying to process DeployToken log on {chain_kind:?}");
 
-    let vaa =
-        utils::evm::get_vaa_from_evm_log(connector.clone(), chain_kind, tx_logs, &config).await;
+    let vaa = connector
+        .wormhole_get_vaa_by_tx_hash(format!("{transaction_hash:?}"))
+        .await
+        .ok();
 
     if vaa.is_none() {
         if chain_kind == ChainKind::Eth {
@@ -1401,26 +1415,16 @@ async fn process_evm_deploy_token_event(
         }
     }
 
-    let Some(tx_hash) = log.transaction_hash else {
-        anyhow::bail!("No transaction hash in log: {:?}", log);
-    };
-
-    let Some(topic) = log.topic0() else {
-        anyhow::bail!("No topic0 in log: {:?}", log);
-    };
-
-    let tx_hash = H256::from_slice(tx_hash.as_slice());
-
     let Some(prover_args) = utils::evm::construct_prover_args(
         &config,
         vaa,
-        tx_hash,
+        transaction_hash,
         H256::from_slice(topic.as_slice()),
         ProofKind::DeployToken,
     )
     .await
     else {
-        warn!("Failed to get prover args for {:?}", tx_hash);
+        warn!("Failed to get prover args for {transaction_hash:?}");
         return Ok(EventAction::Retry);
     };
 
@@ -1441,7 +1445,7 @@ async fn process_evm_deploy_token_event(
 
     match connector.bind_token(bind_token_args).await {
         Ok(tx_hash) => {
-            info!("Bound token: {:?}", tx_hash);
+            info!("Bound token: {tx_hash:?}");
             Ok(EventAction::Remove)
         }
         Err(err) => {
@@ -1486,7 +1490,7 @@ async fn process_solana_deploy_token_event(
         .wormhole_get_vaa(config.wormhole.solana_chain_id, emitter, sequence)
         .await
     else {
-        warn!("Failed to get VAA for sequence: {}", sequence);
+        warn!("Failed to get VAA for sequence: {sequence}");
         return Ok(EventAction::Retry);
     };
 
@@ -1500,7 +1504,7 @@ async fn process_solana_deploy_token_event(
     let nonce = match near_nonce.reserve_nonce().await {
         Ok(nonce) => Some(nonce),
         Err(err) => {
-            warn!("Failed to reserve nonce: {}", err);
+            warn!("Failed to reserve nonce: {err:?}");
             return Ok(EventAction::Retry);
         }
     };
@@ -1517,7 +1521,7 @@ async fn process_solana_deploy_token_event(
 
     match connector.bind_token(bind_token_args).await {
         Ok(tx_hash) => {
-            info!("Bound token: {:?}", tx_hash);
+            info!("Bound token: {tx_hash:?}");
             Ok(EventAction::Remove)
         }
         Err(err) => {
