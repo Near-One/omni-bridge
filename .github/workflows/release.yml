@@ -241,6 +241,12 @@ jobs:
     outputs:
       val: ${{ steps.host.outputs.manifest }}
     steps:
+      - name: Setup SSH
+        uses: webfactory/ssh-agent@v0.7.0
+        with:
+          ssh-private-key: |
+            ${{ secrets.SSH_BRIDGE_INDEXER }}
+            ${{ secrets.SSH_BOREALIS }}
       - uses: actions/checkout@v4
         with:
           submodules: recursive
