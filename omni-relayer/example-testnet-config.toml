@@ -15,6 +15,7 @@ api_url = "https://testnet.api.bridge.nearone.org/"
 network = "testnet"
 rpc_url = "https://rpc.testnet.near.org/"
 omni_bridge_id = "omni.n-bridge.testnet"
+btc_connector = "brg-dev.tesntet"
 # Either provide a path to a credentials file or set it in the environment
 # Note: the path must be absolute
 # credentials_path = "/Users/username/.near-credentials/testnet/omni-relayer.testnet.json"

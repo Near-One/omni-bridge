@@ -66,6 +66,7 @@ pub fn build_omni_connector(
         .private_key(Some(near_signer.secret_key.to_string()))
         .signer(Some(near_signer.account_id.to_string()))
         .omni_bridge_id(Some(config.near.omni_bridge_id.to_string()))
+        .btc_connector(Some(config.near.btc_connector.to_string()))
         .build()
         .context("Failed to build NearBridgeClient")?;
 
@@ -101,6 +102,7 @@ pub fn build_omni_connector(
         .arb_bridge_client(arb_bridge_client)
         .solana_bridge_client(solana_bridge_client)
         .wormhole_bridge_client(Some(wormhole_bridge_client))
+        .btc_bridge_client(None)
         .build()
         .context("Failed to build OmniConnector")
 }

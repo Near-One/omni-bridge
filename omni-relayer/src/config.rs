@@ -128,6 +128,7 @@ pub struct Near {
     pub network: Network,
     pub rpc_url: String,
     pub omni_bridge_id: AccountId,
+    pub btc_connector: AccountId,
     pub credentials_path: Option<String>,
     pub sign_without_checking_fee: Option<Vec<OmniAddress>>,
 }

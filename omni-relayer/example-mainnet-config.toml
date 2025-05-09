@@ -15,6 +15,7 @@ api_url = "https://mainnet.api.bridge.nearone.org/"
 network = "mainnet"
 rpc_url = "https://rpc.mainnet.near.org/"
 omni_bridge_id = "omni.bridge.near"
+btc_connector = "btc-connector.bridge.near"
 # Either provide a path to a credentials file or set it in the environment
 # Note: the path must be absolute
 # credentials_path = "/Users/username/.near-credentials/mainnet/omni-relayer.bridge.near.json"
