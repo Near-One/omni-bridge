@@ -119,6 +119,12 @@ jobs:
       BUILD_MANIFEST_NAME: target/distrib/${{ join(matrix.targets, '-') }}-dist-manifest.json
       AWS_LC_SYS_CMAKE_BUILDER: 1
     steps:
+      - name: Setup SSH
+        uses: webfactory/ssh-agent@v0.7.0
+        with:
+          ssh-private-key: |
+            ${{ secrets.SSH_BRIDGE_INDEXER }}
+            ${{ secrets.SSH_BOREALIS }}
       - name: enable windows longpaths
         run: |
           git config --global core.longpaths true
