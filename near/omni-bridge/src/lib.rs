@@ -861,7 +861,7 @@ impl Contract {
                 Promise::new(fin_transfer.fee_recipient.clone())
                     .transfer(NearToken::from_yoctonear(message.fee.native_fee.0));
             } else {
-                ext_token::ext(self.get_native_token_id(message.get_origin_chain()))
+                ext_token::ext(self.get_native_token_id(origin_chain))
                     .with_static_gas(MINT_TOKEN_GAS)
                     .mint(
                         fin_transfer.fee_recipient.clone(),
