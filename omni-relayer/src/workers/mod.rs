@@ -875,8 +875,8 @@ async fn process_evm_init_transfer_event(
         match utils::bridge_api::is_fee_sufficient(
             &config,
             Fee {
-                fee: log.fee.into(),
-                native_fee: log.native_fee.into(),
+                fee: log.fee,
+                native_fee: log.native_fee,
             },
             &sender,
             &recipient,
