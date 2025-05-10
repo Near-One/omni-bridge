@@ -44,7 +44,7 @@ pub enum Transfer {
         chain_kind: ChainKind,
         block_number: u64,
         tx_hash: H256,
-        log: utils::evm::InitTransfer,
+        log: utils::evm::InitTransferMessage,
         creation_timestamp: i64,
         last_update_timestamp: Option<i64>,
         expected_finalization_time: i64,
@@ -832,8 +832,9 @@ async fn process_evm_init_transfer_event(
 
     let transfer_id = TransferId {
         origin_chain: chain_kind,
-        origin_nonce: log.originNonce,
+        origin_nonce: log.origin_nonce,
     };
+
     match connector.near_is_transfer_finalised(transfer_id).await {
         Ok(true) => anyhow::bail!("Transfer is already finalised: {:?}", transfer_id),
         Ok(false) => {}
@@ -862,11 +863,11 @@ async fn process_evm_init_transfer_event(
             })?;
 
         let token =
-            utils::evm::string_to_evm_omniaddress(chain_kind, &log.tokenAddress.to_string())
+            utils::evm::string_to_evm_omniaddress(chain_kind, &log.token_address.to_string())
                 .map_err(|err| {
                     anyhow::anyhow!(
                         "Failed to parse \"{}\" as `OmniAddress`: {:?}",
-                        log.tokenAddress,
+                        log.token_address,
                         err
                     )
                 })?;
@@ -875,7 +876,7 @@ async fn process_evm_init_transfer_event(
             &config,
             Fee {
                 fee: log.fee.into(),
-                native_fee: log.nativeFee.into(),
+                native_fee: log.native_fee.into(),
             },
             &sender,
             &recipient,
@@ -936,9 +937,9 @@ async fn process_evm_init_transfer_event(
         &connector,
         chain_kind,
         &recipient,
-        &log.tokenAddress.to_string(),
-        log.fee,
-        log.nativeFee,
+        &log.token_address.to_string(),
+        log.fee.0,
+        log.native_fee.0,
     )
     .await
     {
@@ -991,19 +992,22 @@ async fn process_evm_init_transfer_event(
                     | NearRpcError::RpcTransactionError(JsonRpcError::TransportError(_)) => {
                         warn!(
                             "Failed to finalize transfer ({}), retrying: {near_rpc_error:?}",
-                            log.originNonce
+                            log.origin_nonce
                         );
                         return Ok(EventAction::Retry);
                     }
                     _ => {
                         anyhow::bail!(
                             "Failed to finalize transfer ({}): {near_rpc_error:?}",
-                            log.originNonce
+                            log.origin_nonce
                         );
                     }
                 };
             }
-            anyhow::bail!("Failed to finalize transfer ({}): {err:?}", log.originNonce);
+            anyhow::bail!(
+                "Failed to finalize transfer ({}): {err:?}",
+                log.origin_nonce
+            );
         }
     }
 }

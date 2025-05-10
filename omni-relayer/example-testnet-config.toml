@@ -5,11 +5,11 @@ url = "redis://127.0.0.1/"
 # Used to check if provided fee is sufficient to complete the transfer
 api_url = "https://testnet.api.bridge.nearone.org/"
 
-# mongodb_uri = "mongodb+srv://MONGODB_USERNAME:MONGODB_PASSWORD@MONGODB_HOST/?retryWrites=true&w=majority"
-# db_name = "testnet_omni_bridge_db"
+mongodb_uri = "mongodb+srv://MONGODB_USERNAME:MONGODB_PASSWORD@MONGODB_HOST/?retryWrites=true&w=majority"
+db_name = "testnet_omni_bridge_db"
 
 # Discount that relayer can accept [default: 0]
-# fee_discount = 30
+fee_discount = 30
 
 [near]
 network = "testnet"
