@@ -233,13 +233,13 @@ async fn process_log(
     if let Ok(init_log) = log.log_decode::<utils::evm::InitTransfer>() {
         info!("Received InitTransfer on {chain_kind:?} ({tx_hash:?})");
 
-        let log = utils::evm::InitTransfer {
+        let log = utils::evm::InitTransferMessage {
             sender: init_log.inner.sender,
-            tokenAddress: init_log.inner.tokenAddress,
-            originNonce: init_log.inner.originNonce,
-            amount: init_log.inner.amount,
-            fee: init_log.inner.fee,
-            nativeFee: init_log.inner.nativeFee,
+            token_address: init_log.inner.tokenAddress,
+            origin_nonce: init_log.inner.originNonce,
+            amount: init_log.inner.amount.into(),
+            fee: init_log.inner.fee.into(),
+            native_fee: init_log.inner.nativeFee.into(),
             recipient: init_log.inner.recipient.clone(),
             message: init_log.inner.message.clone(),
         };

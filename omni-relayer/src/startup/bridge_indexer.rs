@@ -115,13 +115,13 @@ async fn handle_transaction_event(
                 anyhow::bail!("Unexpected token address: {}", init_transfer.token);
             };
 
-            let log = utils::evm::InitTransfer {
+            let log = utils::evm::InitTransferMessage {
                 sender: Address(sender.0.into()),
-                tokenAddress: Address(token.0.into()),
-                originNonce: init_transfer.origin_nonce,
-                amount: init_transfer.amount.into(),
-                fee: init_transfer.fee.fee.into(),
-                nativeFee: init_transfer.fee.native_fee.into(),
+                token_address: Address(token.0.into()),
+                origin_nonce: init_transfer.origin_nonce,
+                amount: init_transfer.amount,
+                fee: init_transfer.fee.fee,
+                native_fee: init_transfer.fee.native_fee,
                 recipient: init_transfer.recipient.to_string(),
                 message: init_transfer.msg,
             };
