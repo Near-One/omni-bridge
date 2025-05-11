@@ -23,7 +23,7 @@ pub struct InitTransferMessage {
     pub amount: U128,
     pub fee: U128,
     pub native_fee: U128,
-    pub recipient: String,
+    pub recipient: OmniAddress,
     pub message: String,
 }
 

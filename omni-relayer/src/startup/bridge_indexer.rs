@@ -122,7 +122,7 @@ async fn handle_transaction_event(
                 amount: init_transfer.amount,
                 fee: init_transfer.fee.fee,
                 native_fee: init_transfer.fee.native_fee,
-                recipient: init_transfer.recipient.to_string(),
+                recipient: init_transfer.recipient,
                 message: init_transfer.msg,
             };
 
@@ -191,8 +191,6 @@ async fn handle_transaction_event(
                     block_number,
                     tx_hash,
                     topic: utils::evm::FinTransfer::SIGNATURE_HASH,
-                    origin_chain: fin_transfer.transfer_id.origin_chain,
-                    origin_nonce: fin_transfer.transfer_id.origin_nonce,
                     creation_timestamp,
                     expected_finalization_time,
                 },

@@ -72,8 +72,6 @@ pub enum FinTransfer {
         block_number: u64,
         tx_hash: H256,
         topic: B256,
-        origin_chain: ChainKind,
-        origin_nonce: u64,
         creation_timestamp: i64,
         expected_finalization_time: i64,
     },
@@ -530,7 +528,11 @@ async fn process_near_transfer_event(
     info!("Trying to process TransferMessage on NEAR");
 
     match connector
-        .near_is_transfer_finalised(transfer_message.get_transfer_id())
+        .is_transfer_finalised(
+            Some(transfer_message.get_origin_chain()),
+            transfer_message.get_destination_chain(),
+            transfer_message.destination_nonce,
+        )
         .await
     {
         Ok(true) => anyhow::bail!("Transfer is already finalised: {:?}", transfer_message),
@@ -665,7 +667,11 @@ async fn process_sign_transfer_event(
     info!("Trying to process SignTransferEvent log on NEAR");
 
     match connector
-        .near_is_transfer_finalised(message_payload.transfer_id)
+        .is_transfer_finalised(
+            None,
+            message_payload.recipient.get_chain(),
+            message_payload.destination_nonce,
+        )
         .await
     {
         Ok(true) => anyhow::bail!(
@@ -835,7 +841,14 @@ async fn process_evm_init_transfer_event(
         origin_nonce: log.origin_nonce,
     };
 
-    match connector.near_is_transfer_finalised(transfer_id).await {
+    match connector
+        .is_transfer_finalised(
+            Some(chain_kind),
+            log.recipient.get_chain(),
+            log.origin_nonce,
+        )
+        .await
+    {
         Ok(true) => anyhow::bail!("Transfer is already finalised: {:?}", transfer_id),
         Ok(false) => {}
         Err(err) => {
@@ -843,14 +856,6 @@ async fn process_evm_init_transfer_event(
             return Ok(EventAction::Retry);
         }
     }
-
-    let recipient = log.recipient.parse::<OmniAddress>().map_err(|err| {
-        anyhow::anyhow!(
-            "Failed to parse \"{}\" as `OmniAddress`: {:?}",
-            log.recipient,
-            err
-        )
-    })?;
 
     if config.is_bridge_api_enabled() {
         let sender = utils::evm::string_to_evm_omniaddress(chain_kind, &log.sender.to_string())
@@ -879,7 +884,7 @@ async fn process_evm_init_transfer_event(
                 native_fee: log.native_fee,
             },
             &sender,
-            &recipient,
+            &log.recipient,
             &token,
         )
         .await
@@ -936,7 +941,7 @@ async fn process_evm_init_transfer_event(
     let storage_deposit_actions = match utils::storage::get_storage_deposit_actions(
         &connector,
         chain_kind,
-        &recipient,
+        &log.recipient,
         &log.token_address.to_string(),
         log.fee.0,
         log.native_fee.0,
@@ -1049,10 +1054,13 @@ async fn process_solana_init_transfer_event(
     info!("Trying to process InitTransfer log on Solana");
 
     let transfer_id = TransferId {
-        origin_chain: ChainKind::Sol,
+        origin_chain: sender.get_chain(),
         origin_nonce: sequence,
     };
-    match connector.near_is_transfer_finalised(transfer_id).await {
+    match connector
+        .is_transfer_finalised(Some(sender.get_chain()), recipient.get_chain(), sequence)
+        .await
+    {
         Ok(true) => anyhow::bail!("Transfer is already finalised: {:?}", transfer_id),
         Ok(false) => {}
         Err(err) => {
@@ -1170,8 +1178,6 @@ async fn process_evm_fin_transfer_event(
         block_number,
         tx_hash: transaction_hash,
         topic,
-        origin_chain,
-        origin_nonce,
         creation_timestamp,
         expected_finalization_time,
     } = fin_transfer
@@ -1186,19 +1192,6 @@ async fn process_evm_fin_transfer_event(
     }
 
     info!("Trying to process FinTransfer log on {chain_kind:?}");
-
-    let transfer_id = TransferId {
-        origin_chain,
-        origin_nonce,
-    };
-    match connector.near_is_transfer_finalised(transfer_id).await {
-        Ok(true) => anyhow::bail!("Transfer is already finalised: {:?}", transfer_id),
-        Ok(false) => {}
-        Err(err) => {
-            warn!("Failed to check if transfer is finalised: {err:?}");
-            return Ok(EventAction::Retry);
-        }
-    }
 
     let vaa = connector
         .wormhole_get_vaa_by_tx_hash(format!("{transaction_hash:?}"))
