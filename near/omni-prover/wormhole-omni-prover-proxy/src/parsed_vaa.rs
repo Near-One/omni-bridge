@@ -194,7 +194,7 @@ impl TryInto<FinTransferMessage> for ParsedVAA {
 
         Ok(FinTransferMessage {
             transfer_id: transfer.transfer_id,
-            fee_recipient: transfer.fee_recipient.parse().map_err(stringify)?,
+            fee_recipient: transfer.fee_recipient.parse().ok(),
             amount: transfer.amount.into(),
             emitter_address: OmniAddress::new_from_slice(
                 transfer.token_address.get_chain(),
