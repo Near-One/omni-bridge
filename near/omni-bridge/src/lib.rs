@@ -1018,10 +1018,17 @@ impl Contract {
         icon: Option<String>,
         reference: Option<String>,
         reference_hash: Option<Base64VecU8>,
+        decimals: Option<u8>,
     ) -> Promise {
+        // Only DAO can set decimals
+        require!(
+            decimals.is_none()
+                || self.acl_has_role(Role::DAO.into(), env::predecessor_account_id())
+        );
+
         ext_token::ext(token)
             .with_static_gas(SET_METADATA_GAS)
-            .set_metadata(name, symbol, reference, reference_hash, None, icon)
+            .set_metadata(name, symbol, reference, reference_hash, decimals, icon)
     }
 
     pub fn get_current_destination_nonce(&self, chain_kind: ChainKind) -> Nonce {

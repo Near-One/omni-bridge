@@ -284,6 +284,56 @@ mod tests {
     }
 
     #[rstest]
+    #[case(eth_token_address())]
+    #[case(sol_token_address())]
+    #[case(arb_token_address())]
+    #[case(base_token_address())]
+    #[tokio::test]
+    async fn test_set_token_metadata(
+        #[case] init_token_address: OmniAddress,
+        mock_prover_wasm: Vec<u8>,
+        locker_wasm: Vec<u8>,
+        token_deployer_wasm: Vec<u8>,
+    ) -> anyhow::Result<()> {
+        let env = TestEnv::new(
+            init_token_address,
+            mock_prover_wasm,
+            locker_wasm,
+            token_deployer_wasm,
+        )
+        .await?;
+
+        let fetched_metadata: BasicMetadata =
+            env.token_contract.view("ft_metadata").await?.json()?;
+
+        assert_eq!(env.token_metadata.name, fetched_metadata.name);
+        assert_eq!(env.token_metadata.symbol, fetched_metadata.symbol);
+        assert_eq!(env.token_metadata.decimals, fetched_metadata.decimals);
+
+        env.locker_contract
+            .call("set_token_metadata")
+            .args_json(json!({
+                "token": env.token_contract.id(),
+                "name": "New Token Name",
+                "symbol": "NEW",
+                "decimals": 8,
+            }))
+            .max_gas()
+            .transact()
+            .await?
+            .into_result()?;
+
+        let updated_metadata: BasicMetadata =
+            env.token_contract.view("ft_metadata").await?.json()?;
+
+        assert_eq!(updated_metadata.name, "New Token Name");
+        assert_eq!(updated_metadata.symbol, "NEW");
+        assert_eq!(updated_metadata.decimals, 8);
+
+        Ok(())
+    }
+
+    #[rstest]
     #[case(eth_token_address(), false)]
     #[case(sol_token_address(), false)]
     #[case(arb_token_address(), false)]
