@@ -10,7 +10,7 @@ use alloy::{
 use anyhow::{Context, Result};
 use ethereum_types::H256;
 use log::{error, info, warn};
-use omni_types::ChainKind;
+use omni_types::{ChainKind, OmniAddress};
 use reqwest::Url;
 use tokio_stream::StreamExt;
 
@@ -233,14 +233,19 @@ async fn process_log(
     if let Ok(init_log) = log.log_decode::<utils::evm::InitTransfer>() {
         info!("Received InitTransfer on {chain_kind:?} ({tx_hash:?})");
 
-        let log = utils::evm::InitTransfer {
+        let Ok(recipient) = init_log.inner.recipient.parse::<OmniAddress>() else {
+            warn!("Failed to parse recipient as OmniAddress: {log:?}");
+            return;
+        };
+
+        let log = utils::evm::InitTransferMessage {
             sender: init_log.inner.sender,
-            tokenAddress: init_log.inner.tokenAddress,
-            originNonce: init_log.inner.originNonce,
-            amount: init_log.inner.amount,
-            fee: init_log.inner.fee,
-            nativeFee: init_log.inner.nativeFee,
-            recipient: init_log.inner.recipient.clone(),
+            token_address: init_log.inner.tokenAddress,
+            origin_nonce: init_log.inner.originNonce,
+            amount: init_log.inner.amount.into(),
+            fee: init_log.inner.fee.into(),
+            native_fee: init_log.inner.nativeFee.into(),
+            recipient,
             message: init_log.inner.message.clone(),
         };
 
@@ -259,16 +264,11 @@ async fn process_log(
             },
         )
         .await;
-    } else if let Ok(fin_log) = log.log_decode::<utils::evm::FinTransfer>() {
+    } else if log.log_decode::<utils::evm::FinTransfer>().is_ok() {
         info!("Received FinTransfer on {chain_kind:?} ({tx_hash:?})");
 
         let Some(&topic) = topic else {
             warn!("Topic is empty for log: {log:?}");
-            return;
-        };
-
-        let Ok(origin_chain) = ChainKind::try_from(fin_log.inner.originChain) else {
-            warn!("Failed to parse origin chain from log: {log:?}");
             return;
         };
 
@@ -281,8 +281,6 @@ async fn process_log(
                 block_number,
                 tx_hash,
                 topic,
-                origin_chain,
-                origin_nonce: fin_log.inner.originNonce,
                 creation_timestamp: timestamp,
                 expected_finalization_time,
             },

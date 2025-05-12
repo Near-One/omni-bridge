@@ -3,16 +3,29 @@ use std::str::FromStr;
 use log::warn;
 
 use anyhow::Result;
+use near_sdk::json_types::U128;
 use omni_types::{
+    ChainKind, H160, OmniAddress,
     prover_args::{EvmVerifyProofArgs, WormholeVerifyProofArgs},
     prover_result::ProofKind,
-    ChainKind, OmniAddress, H160,
 };
 
-use alloy::sol;
+use alloy::{primitives::Address, sol};
 use ethereum_types::H256;
 
 use crate::config;
+
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+pub struct InitTransferMessage {
+    pub sender: Address,
+    pub token_address: Address,
+    pub origin_nonce: u64,
+    pub amount: U128,
+    pub fee: U128,
+    pub native_fee: U128,
+    pub recipient: OmniAddress,
+    pub message: String,
+}
 
 sol!(
     #[derive(Debug, serde::Serialize, serde::Deserialize)]
