@@ -84,7 +84,7 @@ impl TryFromLog<Log<FinTransfer>> for FinTransferMessage {
                 origin_nonce: event.data.originNonce,
             },
             amount: near_sdk::json_types::U128(event.data.amount),
-            fee_recipient: event.data.feeRecipient.parse().map_err(stringify)?,
+            fee_recipient: event.data.feeRecipient.parse().ok(),
             emitter_address: OmniAddress::new_from_evm_address(
                 chain_kind,
                 H160(event.address.into()),

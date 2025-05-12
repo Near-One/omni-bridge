@@ -934,46 +934,55 @@ mod tests {
         )
         .await?;
 
-        let transfer_message = init_transfer_legacy(
-            &env,
-            transfer_amount,
-            init_transfer_msg.clone(),
-        )
-        .await?;
+        let transfer_message =
+            init_transfer_legacy(&env, transfer_amount, init_transfer_msg.clone()).await?;
 
-        let res = env.locker_contract
+        let res = env
+            .locker_contract
             .as_account()
             .deploy(&locker_wasm)
             .await
             .unwrap();
         assert!(res.is_success(), "Failed to upgrade locker");
 
-        let res = env.locker_contract.call("migrate").args_json(json!({}))
+        let res = env
+            .locker_contract
+            .call("migrate")
+            .args_json(json!({}))
             .max_gas()
             .transact()
             .await?;
         assert!(res.is_success(), "Migration didn't succeed");
 
-        let transfer = env.locker_contract.call("get_transfer_message").args_json(json!({
-            "transfer_id": TransferId {
-                origin_chain: ChainKind::Near,
-                origin_nonce: transfer_message.origin_nonce,
-            },
-        }))
-        .max_gas()
-        .transact()
-        .await?;
+        let transfer = env
+            .locker_contract
+            .call("get_transfer_message")
+            .args_json(json!({
+                "transfer_id": TransferId {
+                    origin_chain: ChainKind::Near,
+                    origin_nonce: transfer_message.origin_nonce,
+                },
+            }))
+            .max_gas()
+            .transact()
+            .await?;
 
         let migrated_transfer = transfer.json::<TransferMessage>()?;
         assert_eq!(migrated_transfer.origin_transfer_id, None);
-        assert_eq!(migrated_transfer.origin_nonce, transfer_message.origin_nonce);
+        assert_eq!(
+            migrated_transfer.origin_nonce,
+            transfer_message.origin_nonce
+        );
         assert_eq!(migrated_transfer.recipient, transfer_message.recipient);
         assert_eq!(migrated_transfer.token, transfer_message.token);
         assert_eq!(migrated_transfer.amount, transfer_message.amount);
         assert_eq!(migrated_transfer.fee, transfer_message.fee);
         assert_eq!(migrated_transfer.sender, transfer_message.sender);
-        assert_eq!(migrated_transfer.destination_nonce, transfer_message.destination_nonce);
-        
+        assert_eq!(
+            migrated_transfer.destination_nonce,
+            transfer_message.destination_nonce
+        );
+
         Ok(())
     }
 }

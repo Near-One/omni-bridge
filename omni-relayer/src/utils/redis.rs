@@ -2,6 +2,8 @@ use log::warn;
 use omni_types::ChainKind;
 use redis::{aio::MultiplexedConnection, AsyncCommands};
 
+pub const MONGODB_OMNI_EVENTS_RT: &str = "mongodb_omni_events_rt";
+
 pub const EVENTS: &str = "events";
 pub const SOLANA_EVENTS: &str = "solana_events";
 
@@ -96,7 +98,7 @@ pub async fn add_event<F, E>(
     E: serde::Serialize + std::fmt::Debug + Send,
 {
     let Ok(serialized_event) = serde_json::to_string(&event) else {
-        warn!("Failed to serialize event: {:?}", event);
+        warn!("Failed to serialize event: {event:?}");
         return;
     };
 

@@ -25,7 +25,7 @@ pub const METADATA_SEED: &[u8] = b"metadata";
 pub const USED_NONCES_PER_ACCOUNT: u32 = 1024;
 
 #[constant]
-pub const USED_NONCES_ACCOUNT_SIZE: u32 = 8 + (USED_NONCES_PER_ACCOUNT + 7) / 8;
+pub const USED_NONCES_ACCOUNT_SIZE: u32 = 8 + (USED_NONCES_PER_ACCOUNT + 7).div_ceil(8);
 
 #[constant]
 pub const SOLANA_OMNI_BRIDGE_CHAIN_ID: u8 = 2;

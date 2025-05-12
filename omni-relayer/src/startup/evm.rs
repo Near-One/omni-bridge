@@ -1,21 +1,31 @@
 use alloy::{
     primitives::Address,
-    providers::{Provider, ProviderBuilder, RootProvider, WsConnect},
+    providers::{
+        Identity, Provider, ProviderBuilder, RootProvider, WsConnect,
+        fillers::{BlobGasFiller, ChainIdFiller, FillProvider, GasFiller, JoinFill, NonceFiller},
+    },
     rpc::types::{Filter, Log},
     sol_types::SolEvent,
-    transports::http::Http,
 };
 use anyhow::{Context, Result};
 use ethereum_types::H256;
 use log::{error, info, warn};
-use omni_types::ChainKind;
-use reqwest::{Client, Url};
+use omni_types::{ChainKind, OmniAddress};
+use reqwest::Url;
 use tokio_stream::StreamExt;
 
 use crate::{
     config, utils,
     workers::{DeployToken, FinTransfer},
 };
+
+pub type EvmProvider = FillProvider<
+    JoinFill<
+        Identity,
+        JoinFill<GasFiller, JoinFill<BlobGasFiller, JoinFill<NonceFiller, ChainIdFiller>>>,
+    >,
+    RootProvider,
+>;
 
 fn hide_api_key<E: ToString>(err: &E) -> String {
     let env_key = "INFURA_API_KEY";
@@ -29,7 +39,7 @@ fn extract_evm_config(evm: config::Evm) -> Result<(Url, String, Address, u64, i6
             .parse()
             .context("Failed to parse EVM rpc provider as url")?,
         evm.rpc_ws_url,
-        evm.bridge_token_factory_address,
+        evm.omni_bridge_address,
         evm.block_processing_batch_size,
         evm.expected_finalization_time,
     ))
@@ -82,17 +92,11 @@ pub async fn start_indexer(
             )
             .await
             .map_err(|err| hide_api_key(&err)),
-            format!(
-                "Failed to process recent blocks for {:?} indexer",
-                chain_kind
-            ),
+            format!("Failed to process recent blocks for {chain_kind:?} indexer"),
             5
         );
 
-        info!(
-            "All historical logs processed, starting {:?} WS subscription",
-            chain_kind
-        );
+        info!("All historical logs processed, starting {chain_kind:?} WS subscription");
 
         let ws_provider = crate::skip_fail!(
             ProviderBuilder::new()
@@ -113,7 +117,7 @@ pub async fn start_indexer(
         )
         .into_stream();
 
-        info!("Subscribed to {:?} logs", chain_kind);
+        info!("Subscribed to {chain_kind:?} logs");
 
         while let Some(log) = stream.next().await {
             process_log(
@@ -135,7 +139,7 @@ pub async fn start_indexer(
 
 async fn process_recent_blocks(
     redis_connection: &mut redis::aio::MultiplexedConnection,
-    http_provider: &RootProvider<Http<Client>>,
+    http_provider: &EvmProvider,
     filter: &Filter,
     chain_kind: ChainKind,
     start_block: Option<u64>,
@@ -198,40 +202,53 @@ async fn process_recent_blocks(
 async fn process_log(
     chain_kind: ChainKind,
     redis_connection: &mut redis::aio::MultiplexedConnection,
-    http_provider: &RootProvider<Http<Client>>,
+    http_provider: &EvmProvider,
     log: Log,
     expected_finalization_time: i64,
 ) {
     let Some(tx_hash) = log.transaction_hash else {
-        warn!("No transaction hash in log: {:?}", log);
-        return;
-    };
-
-    let Ok(tx_logs) = http_provider.get_transaction_receipt(tx_hash).await else {
-        warn!("Failed to get transaction receipt for tx: {:?}", tx_hash);
+        warn!("No transaction hash in log: {log:?}");
         return;
     };
 
     let tx_hash = H256::from_slice(tx_hash.as_slice());
 
     let Some(block_number) = log.block_number else {
-        warn!("No block number in log: {:?}", log);
+        warn!("No block number in log: {log:?}");
         return;
     };
 
     let timestamp = http_provider
-        .get_block(
-            alloy::eips::BlockId::Number(alloy::eips::BlockNumberOrTag::Number(block_number)),
-            alloy::rpc::types::BlockTransactionsKind::Hashes,
-        )
+        .get_block(alloy::eips::BlockId::Number(
+            alloy::eips::BlockNumberOrTag::Number(block_number),
+        ))
         .await
         .ok()
         .flatten()
         .and_then(|block| i64::try_from(block.header.timestamp).ok())
         .unwrap_or_else(|| chrono::Utc::now().timestamp());
 
-    if log.log_decode::<utils::evm::InitTransfer>().is_ok() {
-        info!("Received InitTransfer on {:?} ({:?})", chain_kind, tx_hash);
+    let topic = log.topic0();
+
+    if let Ok(init_log) = log.log_decode::<utils::evm::InitTransfer>() {
+        info!("Received InitTransfer on {chain_kind:?} ({tx_hash:?})");
+
+        let Ok(recipient) = init_log.inner.recipient.parse::<OmniAddress>() else {
+            warn!("Failed to parse recipient as OmniAddress: {log:?}");
+            return;
+        };
+
+        let log = utils::evm::InitTransferMessage {
+            sender: init_log.inner.sender,
+            token_address: init_log.inner.tokenAddress,
+            origin_nonce: init_log.inner.originNonce,
+            amount: init_log.inner.amount.into(),
+            fee: init_log.inner.fee.into(),
+            native_fee: init_log.inner.nativeFee.into(),
+            recipient,
+            message: init_log.inner.message.clone(),
+        };
+
         utils::redis::add_event(
             redis_connection,
             utils::redis::EVENTS,
@@ -239,8 +256,8 @@ async fn process_log(
             crate::workers::Transfer::Evm {
                 chain_kind,
                 block_number,
+                tx_hash,
                 log,
-                tx_logs: tx_logs.map(Box::new),
                 creation_timestamp: timestamp,
                 last_update_timestamp: None,
                 expected_finalization_time,
@@ -248,7 +265,12 @@ async fn process_log(
         )
         .await;
     } else if log.log_decode::<utils::evm::FinTransfer>().is_ok() {
-        info!("Received FinTransfer on {:?} ({:?})", chain_kind, tx_hash);
+        info!("Received FinTransfer on {chain_kind:?} ({tx_hash:?})");
+
+        let Some(&topic) = topic else {
+            warn!("Topic is empty for log: {log:?}");
+            return;
+        };
 
         utils::redis::add_event(
             redis_connection,
@@ -257,15 +279,20 @@ async fn process_log(
             FinTransfer::Evm {
                 chain_kind,
                 block_number,
-                log,
-                tx_logs: tx_logs.map(Box::new),
+                tx_hash,
+                topic,
                 creation_timestamp: timestamp,
                 expected_finalization_time,
             },
         )
         .await;
     } else if log.log_decode::<utils::evm::DeployToken>().is_ok() {
-        info!("Received DeployToken on {:?} ({:?})", chain_kind, tx_hash);
+        info!("Received DeployToken on {chain_kind:?} ({tx_hash:?})");
+
+        let Some(&topic) = topic else {
+            warn!("Topic is empty for log: {log:?}");
+            return;
+        };
 
         utils::redis::add_event(
             redis_connection,
@@ -274,15 +301,15 @@ async fn process_log(
             DeployToken::Evm {
                 chain_kind,
                 block_number,
-                log,
-                tx_logs: tx_logs.map(Box::new),
+                tx_hash,
+                topic,
                 creation_timestamp: timestamp,
                 expected_finalization_time,
             },
         )
         .await;
     } else {
-        warn!("Received unknown log on {:?}: {:?}", chain_kind, log);
+        warn!("Received unknown log on {chain_kind:?}: {log:?}");
     }
 
     utils::redis::update_last_processed(

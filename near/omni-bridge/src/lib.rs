@@ -36,8 +36,8 @@ use storage::{
 };
 
 mod errors;
-mod storage;
 mod migrate;
+mod storage;
 
 #[cfg(test)]
 mod tests;
@@ -824,8 +824,13 @@ impl Contract {
         let Ok(ProverResult::FinTransfer(fin_transfer)) = call_result else {
             env::panic_str("Invalid proof message")
         };
+
+        let fee_recipient = fin_transfer.fee_recipient.unwrap_or_else(|| {
+            env::panic_str("ERR_FEE_RECIPIENT_NOT_SET_OR_EMPTY");
+        });
+
         require!(
-            fin_transfer.fee_recipient == *predecessor_account_id,
+            fee_recipient == *predecessor_account_id,
             "ERR_ONLY_FEE_RECIPIENT_CAN_CLAIM"
         );
         require!(
@@ -858,16 +863,12 @@ impl Contract {
                 None => message.get_origin_chain(),
             };
             if origin_chain == ChainKind::Near {
-                Promise::new(fin_transfer.fee_recipient.clone())
+                Promise::new(fee_recipient.clone())
                     .transfer(NearToken::from_yoctonear(message.fee.native_fee.0));
             } else {
                 ext_token::ext(self.get_native_token_id(origin_chain))
                     .with_static_gas(MINT_TOKEN_GAS)
-                    .mint(
-                        fin_transfer.fee_recipient.clone(),
-                        message.fee.native_fee,
-                        None,
-                    );
+                    .mint(fee_recipient.clone(), message.fee.native_fee, None);
             }
         }
 
@@ -894,7 +895,7 @@ impl Contract {
         if fee > 0 {
             if self.deployed_tokens.contains(&token) {
                 PromiseOrValue::Promise(ext_token::ext(token).with_static_gas(MINT_TOKEN_GAS).mint(
-                    fin_transfer.fee_recipient,
+                    fee_recipient,
                     U128(fee),
                     None,
                 ))
@@ -903,7 +904,7 @@ impl Contract {
                     ext_token::ext(token)
                         .with_static_gas(FT_TRANSFER_GAS)
                         .with_attached_deposit(ONE_YOCTO)
-                        .ft_transfer(fin_transfer.fee_recipient, U128(fee), None),
+                        .ft_transfer(fee_recipient, U128(fee), None),
                 )
             }
         } else {
@@ -1241,16 +1242,32 @@ impl Contract {
     #[access_control_any(roles(Role::DAO, Role::MetadataManager))]
     pub fn set_token_metadata(
         &mut self,
-        token: AccountId,
+        address: OmniAddress,
         name: Option<String>,
         symbol: Option<String>,
         icon: Option<String>,
         reference: Option<String>,
         reference_hash: Option<Base64VecU8>,
     ) -> Promise {
+        let token = self.get_token_id(&address);
+        require!(self.deployed_tokens.contains(&token));
+
+        let decimals = self
+            .token_decimals
+            .get(&address)
+            .sdk_expect("ERR_TOKEN_DECIMALS_NOT_FOUND")
+            .decimals;
+
         ext_token::ext(token)
             .with_static_gas(SET_METADATA_GAS)
-            .set_metadata(name, symbol, reference, reference_hash, None, icon)
+            .set_metadata(
+                name,
+                symbol,
+                reference,
+                reference_hash,
+                Some(decimals),
+                icon,
+            )
     }
 
     pub fn get_current_destination_nonce(&self, chain_kind: ChainKind) -> Nonce {

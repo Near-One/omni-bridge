@@ -52,7 +52,13 @@ describe("eNearProxy contract", () => {
     const eNearProxyFactory = await ethers.getContractFactory("ENearProxy")
     eNearProxy = (await upgrades.deployProxy(
       eNearProxyFactory,
-      [await eNear.getAddress(), Buffer.from("eNearBridge", "utf-8"), 0],
+      [
+        await eNear.getAddress(),
+        await nearProver.getAddress(),
+        Buffer.from("eNearBridge", "utf-8"),
+        0,
+        await deployer.getAddress(),
+      ],
       { initializer: "initialize" },
     )) as unknown as ENearProxy
 

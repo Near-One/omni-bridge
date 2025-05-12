@@ -90,6 +90,10 @@ contract OmniBridge is
         delete customMinters[tokenAddress];
     }
 
+    function acceptTokenOwnership(address tokenAddress) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        BridgeToken(tokenAddress).acceptOwnership();
+    }
+
     function deployToken(bytes calldata signatureData, BridgeTypes.MetadataPayload calldata metadata) payable external returns (address) {
         bytes memory borshEncoded = bytes.concat(
             bytes1(uint8(BridgeTypes.PayloadType.Metadata)),

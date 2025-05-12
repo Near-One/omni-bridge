@@ -38,6 +38,10 @@ async fn main() -> Result<()> {
     dotenv::dotenv().ok();
     pretty_env_logger::init_timed();
 
+    rustls::crypto::ring::default_provider()
+        .install_default()
+        .expect("Failed to install rustls crypto provider");
+
     let args = CliArgs::parse();
 
     let config = toml::from_str::<config::Config>(
@@ -61,79 +65,91 @@ async fn main() -> Result<()> {
 
     let mut handles = Vec::new();
 
-    handles.push(tokio::spawn({
-        let config = config.clone();
-        let redis_client = redis_client.clone();
-        let jsonrpc_client = jsonrpc_client.clone();
-        async move {
-            startup::near::start_indexer(
-                config,
-                redis_client,
-                jsonrpc_client,
-                args.near_start_block,
-            )
-            .await
-        }
-    }));
-    if config.eth.is_some() {
+    if config.is_bridge_indexer_enabled() {
         handles.push(tokio::spawn({
             let config = config.clone();
             let redis_client = redis_client.clone();
+            async move { startup::bridge_indexer::start_indexer(config, redis_client).await }
+        }));
+    } else {
+        handles.push(tokio::spawn({
+            let config = config.clone();
+            let redis_client = redis_client.clone();
+            let jsonrpc_client = jsonrpc_client.clone();
             async move {
-                startup::evm::start_indexer(
+                startup::near::start_indexer(
                     config,
                     redis_client,
-                    ChainKind::Eth,
-                    args.eth_start_block,
+                    jsonrpc_client,
+                    args.near_start_block,
                 )
                 .await
             }
         }));
-    }
-    if config.base.is_some() {
-        handles.push(tokio::spawn({
-            let config = config.clone();
-            let redis_client = redis_client.clone();
-            async move {
-                startup::evm::start_indexer(
-                    config,
-                    redis_client,
-                    ChainKind::Base,
-                    args.base_start_block,
-                )
-                .await
-            }
-        }));
-    }
-    if config.arb.is_some() {
-        handles.push(tokio::spawn({
-            let config = config.clone();
-            let redis_client = redis_client.clone();
-            async move {
-                startup::evm::start_indexer(
-                    config,
-                    redis_client,
-                    ChainKind::Arb,
-                    args.arb_start_block,
-                )
-                .await
-            }
-        }));
-    }
-    if config.solana.is_some() {
-        handles.push(tokio::spawn({
-            let config = config.clone();
-            let redis_client = redis_client.clone();
-            async move {
-                startup::solana::start_indexer(config, redis_client, args.solana_start_signature)
+        if config.eth.is_some() {
+            handles.push(tokio::spawn({
+                let config = config.clone();
+                let redis_client = redis_client.clone();
+                async move {
+                    startup::evm::start_indexer(
+                        config,
+                        redis_client,
+                        ChainKind::Eth,
+                        args.eth_start_block,
+                    )
                     .await
-            }
-        }));
-        handles.push(tokio::spawn({
-            let config = config.clone();
-            let redis_client = redis_client.clone();
-            async move { startup::solana::process_signature(config, redis_client).await }
-        }));
+                }
+            }));
+        }
+        if config.base.is_some() {
+            handles.push(tokio::spawn({
+                let config = config.clone();
+                let redis_client = redis_client.clone();
+                async move {
+                    startup::evm::start_indexer(
+                        config,
+                        redis_client,
+                        ChainKind::Base,
+                        args.base_start_block,
+                    )
+                    .await
+                }
+            }));
+        }
+        if config.arb.is_some() {
+            handles.push(tokio::spawn({
+                let config = config.clone();
+                let redis_client = redis_client.clone();
+                async move {
+                    startup::evm::start_indexer(
+                        config,
+                        redis_client,
+                        ChainKind::Arb,
+                        args.arb_start_block,
+                    )
+                    .await
+                }
+            }));
+        }
+        if config.solana.is_some() {
+            handles.push(tokio::spawn({
+                let config = config.clone();
+                let redis_client = redis_client.clone();
+                async move {
+                    startup::solana::start_indexer(
+                        config,
+                        redis_client,
+                        args.solana_start_signature,
+                    )
+                    .await
+                }
+            }));
+            handles.push(tokio::spawn({
+                let config = config.clone();
+                let redis_client = redis_client.clone();
+                async move { startup::solana::process_signature(config, redis_client).await }
+            }));
+        }
     }
 
     handles.push(tokio::spawn({
@@ -164,7 +180,7 @@ async fn main() -> Result<()> {
         result = futures::future::select_all(handles) => {
             let (res, _, _) = result;
             if let Ok(Err(err)) = res {
-                error!("A worker encountered an error: {:?}", err);
+                error!("A worker encountered an error: {err:?}");
             }
         }
     }

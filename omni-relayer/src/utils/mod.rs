@@ -1,5 +1,5 @@
+pub mod bridge_api;
 pub mod evm;
-pub mod fee;
 pub mod near;
 pub mod nonce;
 pub mod redis;

@@ -1,8 +1,14 @@
+use crate::{
+    storage::{Decimals, TransferMessageStorage},
+    Contract, ContractExt, StorageKey,
+};
 use borsh::{BorshDeserialize, BorshSerialize};
 use near_contract_standards::storage_management::StorageBalance;
-use near_sdk::{collections::{LookupMap, LookupSet}, env, near, AccountId, PanicOnDefault};
+use near_sdk::{
+    collections::{LookupMap, LookupSet},
+    env, near, AccountId, PanicOnDefault,
+};
 use omni_types::{ChainKind, Nonce, OmniAddress, TransferId};
-use crate::{storage::{Decimals, TransferMessageStorage}, Contract, ContractExt, StorageKey};
 
 #[derive(BorshDeserialize, BorshSerialize, PanicOnDefault)]
 pub struct OldState {
@@ -27,7 +33,8 @@ impl Contract {
     #[private]
     #[init(ignore_state)]
     pub fn migrate() -> Self {
-        let old_state: OldState = env::state_read().expect("failed");
+        let old_state: OldState = env::state_read()
+            .unwrap_or_else(|| env::panic_str("Old state not found. Migration is not needed."));
 
         Self {
             prover_account: old_state.prover_account,

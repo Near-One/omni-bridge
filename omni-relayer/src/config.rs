@@ -3,7 +3,7 @@ use alloy::{
     signers::{k256::ecdsa::SigningKey, local::LocalSigner},
 };
 use near_primitives::types::AccountId;
-use omni_types::ChainKind;
+use omni_types::{ChainKind, OmniAddress};
 use serde::Deserialize;
 
 pub fn get_private_key(chain_kind: ChainKind) -> String {
@@ -28,6 +28,27 @@ pub fn get_relayer_evm_address(chain_kind: ChainKind) -> Address {
     let signer = LocalSigner::from_signing_key(secret_key);
 
     signer.address()
+}
+
+fn replace_mongodb_credentials<'de, D>(deserializer: D) -> Result<Option<String>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let uri = Option::<String>::deserialize(deserializer)?;
+
+    if let Some(uri) = uri {
+        let username = std::env::var("MONGODB_USERNAME").map_err(serde::de::Error::custom)?;
+        let password = std::env::var("MONGODB_PASSWORD").map_err(serde::de::Error::custom)?;
+        let host = std::env::var("MONGODB_HOST").map_err(serde::de::Error::custom)?;
+
+        Ok(Some(
+            uri.replace("MONGODB_USERNAME", &username)
+                .replace("MONGODB_PASSWORD", &password)
+                .replace("MONGODB_HOST", &host),
+        ))
+    } else {
+        Ok(None)
+    }
 }
 
 fn replace_rpc_api_key<'de, D>(deserializer: D) -> Result<String, D::Error>
@@ -68,6 +89,16 @@ pub struct Config {
     pub wormhole: Wormhole,
 }
 
+impl Config {
+    pub fn is_bridge_indexer_enabled(&self) -> bool {
+        self.bridge_indexer.mongodb_uri.is_some() && self.bridge_indexer.db_name.is_some()
+    }
+
+    pub fn is_bridge_api_enabled(&self) -> bool {
+        self.bridge_indexer.api_url.is_some()
+    }
+}
+
 #[derive(Debug, Clone, Deserialize)]
 pub struct Redis {
     pub url: String,
@@ -76,6 +107,10 @@ pub struct Redis {
 #[derive(Debug, Clone, Deserialize)]
 pub struct BridgeIndexer {
     pub api_url: Option<String>,
+
+    #[serde(default, deserialize_with = "replace_mongodb_credentials")]
+    pub mongodb_uri: Option<String>,
+    pub db_name: Option<String>,
 
     #[serde(default, deserialize_with = "validate_fee_discount")]
     pub fee_discount: u8,
@@ -92,8 +127,10 @@ pub enum Network {
 pub struct Near {
     pub network: Network,
     pub rpc_url: String,
-    pub token_locker_id: AccountId,
+    pub omni_bridge_id: AccountId,
+    pub btc_connector: AccountId,
     pub credentials_path: Option<String>,
+    pub sign_without_checking_fee: Option<Vec<OmniAddress>>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -103,7 +140,7 @@ pub struct Evm {
     #[serde(deserialize_with = "replace_rpc_api_key")]
     pub rpc_ws_url: String,
     pub chain_id: u64,
-    pub bridge_token_factory_address: Address,
+    pub omni_bridge_address: Address,
     pub light_client: Option<AccountId>,
     pub block_processing_batch_size: u64,
     pub expected_finalization_time: i64,
@@ -136,8 +173,5 @@ pub struct Solana {
 #[derive(Debug, Clone, Deserialize)]
 pub struct Wormhole {
     pub api_url: String,
-    pub eth_chain_id: u64,
-    pub base_chain_id: u64,
-    pub arb_chain_id: u64,
     pub solana_chain_id: u64,
 }

@@ -4,7 +4,7 @@ use anyhow::{Context, Result};
 use futures::StreamExt;
 use log::info;
 
-use near_crypto::InMemorySigner;
+use near_crypto::{InMemorySigner, Signer};
 use near_jsonrpc_client::JsonRpcClient;
 use near_lake_framework::{LakeConfig, LakeConfigBuilder};
 use omni_types::ChainKind;
@@ -15,8 +15,8 @@ pub fn get_signer(file: Option<&String>) -> Result<InMemorySigner> {
     info!("Creating NEAR signer");
 
     if let Some(file) = file {
-        info!("Using NEAR credentials file: {}", file);
-        if let Ok(signer) = InMemorySigner::from_file(Path::new(file)) {
+        info!("Using NEAR credentials file: {file}");
+        if let Ok(Signer::InMemory(signer)) = InMemorySigner::from_file(Path::new(file)) {
             return Ok(signer);
         }
     }
@@ -32,7 +32,11 @@ pub fn get_signer(file: Option<&String>) -> Result<InMemorySigner> {
         .parse()
         .context("Failed to parse private key")?;
 
-    Ok(InMemorySigner::from_secret_key(account_id, private_key))
+    if let Signer::InMemory(signer) = InMemorySigner::from_secret_key(account_id, private_key) {
+        Ok(signer)
+    } else {
+        anyhow::bail!("Failed to create NEAR signer")
+    }
 }
 
 async fn create_lake_config(
@@ -54,7 +58,7 @@ async fn create_lake_config(
         ),
     };
 
-    info!("NEAR Lake will start from block: {}", start_block_height);
+    info!("NEAR Lake will start from block: {start_block_height}");
 
     let lake_config = LakeConfigBuilder::default().start_block_height(start_block_height);
 

@@ -1,10 +1,9 @@
 use anyhow::{Context, Result};
 use log::info;
 
-use near_crypto::InMemorySigner;
-
 use evm_bridge_client::{EvmBridgeClient, EvmBridgeClientBuilder};
 use near_bridge_client::NearBridgeClientBuilder;
+use near_crypto::InMemorySigner;
 use omni_connector::{OmniConnector, OmniConnectorBuilder};
 use omni_types::ChainKind;
 use solana_bridge_client::SolanaBridgeClientBuilder;
@@ -13,6 +12,7 @@ use wormhole_bridge_client::WormholeBridgeClientBuilder;
 
 use crate::{config, startup};
 
+pub mod bridge_indexer;
 pub mod evm;
 pub mod near;
 pub mod solana;
@@ -48,7 +48,7 @@ fn build_evm_bridge_client(
                 .endpoint(Some(evm.rpc_http_url.clone()))
                 .chain_id(Some(evm.chain_id))
                 .private_key(Some(crate::config::get_private_key(chain_kind)))
-                .bridge_token_factory_address(Some(evm.bridge_token_factory_address.to_string()))
+                .omni_bridge_address(Some(evm.omni_bridge_address.to_string()))
                 .build()
                 .context(format!("Failed to build EvmBridgeClient ({chain_kind:?})"))
         })
@@ -65,7 +65,8 @@ pub fn build_omni_connector(
         .endpoint(Some(config.near.rpc_url.clone()))
         .private_key(Some(near_signer.secret_key.to_string()))
         .signer(Some(near_signer.account_id.to_string()))
-        .token_locker_id(Some(config.near.token_locker_id.to_string()))
+        .omni_bridge_id(Some(config.near.omni_bridge_id.to_string()))
+        .btc_connector(Some(config.near.btc_connector.to_string()))
         .build()
         .context("Failed to build NearBridgeClient")?;
 
@@ -101,6 +102,7 @@ pub fn build_omni_connector(
         .arb_bridge_client(arb_bridge_client)
         .solana_bridge_client(solana_bridge_client)
         .wormhole_bridge_client(Some(wormhole_bridge_client))
+        .btc_bridge_client(None)
         .build()
         .context("Failed to build OmniConnector")
 }

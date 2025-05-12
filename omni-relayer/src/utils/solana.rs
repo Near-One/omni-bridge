@@ -1,7 +1,10 @@
+use std::str::FromStr;
+
 use anyhow::{Context, Result};
 use log::{info, warn};
 
 use borsh::BorshDeserialize;
+use omni_types::{ChainKind, OmniAddress};
 use solana_sdk::{bs58, pubkey::Pubkey, signature::Signature};
 use solana_transaction_status::{
     option_serializer::OptionSerializer, EncodedTransactionWithStatusMeta, UiRawMessage,
@@ -43,7 +46,7 @@ pub async fn process_message(
         )
         .await
         {
-            warn!("Failed to decode instruction: {}", err);
+            warn!("Failed to decode instruction: {err:?}");
         }
     }
 }
@@ -74,7 +77,7 @@ async fn decode_instruction(
             .starts_with(discriminator)
             .then_some((discriminator, len))
     }) {
-        info!("Received InitTransfer on Solana ({})", signature);
+        info!("Received InitTransfer on Solana ({signature})");
 
         let mut payload_data = decoded_data
             .get(offset..)
@@ -117,17 +120,36 @@ async fn decode_instruction(
             {
                 for log in logs {
                     if log.contains("Sequence") {
-                        let Some(sequence) = log
-                            .split_ascii_whitespace()
-                            .last()
-                            .map(std::string::ToString::to_string)
-                        else {
-                            warn!("Failed to parse sequence number from log: {:?}", log);
+                        let Ok(Ok(sender)) = Pubkey::from_str(sender).map(|sender| {
+                            OmniAddress::new_from_slice(ChainKind::Sol, &sender.to_bytes())
+                        }) else {
+                            warn!("Failed to parse sender as a pubkey: {sender:?}");
                             continue;
                         };
 
-                        let Ok(sequence) = sequence.parse() else {
-                            warn!("Failed to parse sequence as a number: {:?}", sequence);
+                        let Ok(Ok(recipient)) =
+                            Pubkey::from_str(&payload.recipient).map(|recipient| {
+                                OmniAddress::new_from_slice(ChainKind::Sol, &recipient.to_bytes())
+                            })
+                        else {
+                            warn!("Failed to parse recipient as a pubkey: {sender:?}");
+                            continue;
+                        };
+
+                        let Ok(token) = Pubkey::from_str(token) else {
+                            warn!("Failed to parse token as a pubkey: {token:?}");
+                            continue;
+                        };
+
+                        let Some(Ok(sequence)) =
+                            log.split_ascii_whitespace().last().map(str::parse)
+                        else {
+                            warn!("Failed to parse sequence number from log: {log:?}");
+                            continue;
+                        };
+
+                        let Ok(emitter) = Pubkey::from_str(emitter) else {
+                            warn!("Failed to parse emitter as a pubkey: {emitter:?}");
                             continue;
                         };
 
@@ -137,13 +159,13 @@ async fn decode_instruction(
                             signature.to_string(),
                             Transfer::Solana {
                                 amount: payload.amount.into(),
-                                token: token.clone(),
-                                sender: sender.clone(),
-                                recipient: payload.recipient.clone(),
+                                token,
+                                sender,
+                                recipient,
                                 fee: payload.fee.into(),
                                 native_fee: payload.native_fee,
                                 message: payload.message.clone(),
-                                emitter: emitter.clone(),
+                                emitter,
                                 sequence,
                                 creation_timestamp: chrono::Utc::now().timestamp(),
                                 last_update_timestamp: None,
@@ -161,7 +183,7 @@ async fn decode_instruction(
     .into_iter()
     .find(|discriminator| decoded_data.starts_with(discriminator))
     {
-        info!("Received FinTransfer on Solana: {}", signature);
+        info!("Received FinTransfer on Solana: {signature}");
 
         let emitter = if discriminator == &solana.finalize_transfer_discriminator {
             account_keys
@@ -187,12 +209,12 @@ async fn decode_instruction(
                         .last()
                         .map(std::string::ToString::to_string)
                     else {
-                        warn!("Failed to parse sequence number from log: {:?}", log);
+                        warn!("Failed to parse sequence number from log: {log:?}");
                         continue;
                     };
 
                     let Ok(sequence) = sequence.parse() else {
-                        warn!("Failed to parse sequence as a number: {:?}", sequence);
+                        warn!("Failed to parse sequence as a number: {sequence:?}");
                         continue;
                     };
 
@@ -210,7 +232,7 @@ async fn decode_instruction(
             }
         }
     } else if decoded_data.starts_with(&solana.deploy_token_discriminator) {
-        info!("Received DeployToken on Solana ({})", signature);
+        info!("Received DeployToken on Solana ({signature})");
 
         if let Some(OptionSerializer::Some(logs)) =
             transaction.clone().meta.map(|meta| meta.log_messages)
@@ -222,11 +244,11 @@ async fn decode_instruction(
                         .last()
                         .map(std::string::ToString::to_string)
                     else {
-                        warn!("Failed to parse sequence number from log: {:?}", log);
+                        warn!("Failed to parse sequence number from log: {log:?}");
                         continue;
                     };
                     let Ok(sequence) = sequence.parse() else {
-                        warn!("Failed to parse sequence as a number: {:?}", sequence);
+                        warn!("Failed to parse sequence as a number: {sequence:?}");
                         continue;
                     };
 

@@ -145,10 +145,15 @@ impl Serialize for H160 {
 #[repr(u8)]
 pub enum ChainKind {
     #[default]
+    #[serde(alias = "eth")]
     Eth,
+    #[serde(alias = "near")]
     Near,
+    #[serde(alias = "sol")]
     Sol,
+    #[serde(alias = "arb")]
     Arb,
+    #[serde(alias = "base")]
     Base,
 }
 
@@ -448,7 +453,7 @@ pub struct TransferMessageV0 {
     pub fee: Fee,
     pub sender: OmniAddress,
     pub msg: String,
-    pub destination_nonce: Nonce
+    pub destination_nonce: Nonce,
 }
 
 #[near(serializers=[borsh, json])]

@@ -2,21 +2,21 @@ use anyhow::Result;
 use log::{info, warn};
 
 use near_jsonrpc_client::{
-    methods::{self, block::RpcBlockRequest},
     JsonRpcClient,
+    methods::{self, block::RpcBlockRequest},
 };
 use near_jsonrpc_primitives::types::query::QueryResponseKind;
 use near_lake_framework::near_indexer_primitives::{
-    views::{ActionView, ReceiptEnumView, ReceiptView},
     IndexerExecutionOutcomeWithReceipt, StreamerMessage,
+    views::{ActionView, ReceiptEnumView, ReceiptView},
 };
 use near_primitives::{
-    borsh::{from_slice, BorshDeserialize},
+    borsh::{BorshDeserialize, from_slice},
     hash::CryptoHash,
     types::{AccountId, BlockReference},
     views::QueryRequest,
 };
-use omni_types::{near_events::OmniBridgeEvent, ChainKind};
+use omni_types::{ChainKind, near_events::OmniBridgeEvent};
 
 use crate::{config, utils};
 
@@ -144,18 +144,14 @@ pub async fn handle_streamer_message(
         info!("Received OmniBridgeEvent: {}", log.to_log_string());
 
         match log {
-            OmniBridgeEvent::InitTransferEvent {
-                ref transfer_message,
-            }
-            | OmniBridgeEvent::UpdateFeeEvent {
-                ref transfer_message,
-            } => {
+            OmniBridgeEvent::InitTransferEvent { transfer_message }
+            | OmniBridgeEvent::UpdateFeeEvent { transfer_message } => {
                 utils::redis::add_event(
                     redis_connection,
                     utils::redis::EVENTS,
                     transfer_message.origin_nonce.to_string(),
                     crate::workers::Transfer::Near {
-                        event: log,
+                        transfer_message,
                         creation_timestamp: chrono::Utc::now().timestamp(),
                         last_update_timestamp: None,
                     },
@@ -174,16 +170,14 @@ pub async fn handle_streamer_message(
                 )
                 .await;
             }
-            OmniBridgeEvent::FinTransferEvent {
-                ref transfer_message,
-            } => {
+            OmniBridgeEvent::FinTransferEvent { transfer_message } => {
                 if transfer_message.recipient.get_chain() != ChainKind::Near {
                     utils::redis::add_event(
                         redis_connection,
                         utils::redis::EVENTS,
                         transfer_message.origin_nonce.to_string(),
                         crate::workers::Transfer::Near {
-                            event: log,
+                            transfer_message,
                             creation_timestamp: chrono::Utc::now().timestamp(),
                             last_update_timestamp: None,
                         },
@@ -213,7 +207,7 @@ fn find_nep_locker_event_outcomes(
 }
 
 fn is_nep_locker_event(config: &config::Config, receipt: &ReceiptView) -> bool {
-    receipt.receiver_id == config.near.token_locker_id
+    receipt.receiver_id == config.near.omni_bridge_id
         && matches!(
             receipt.receipt,
             ReceiptEnumView::Action { ref actions, .. } if actions.iter().any(|action| {

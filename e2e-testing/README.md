@@ -2,73 +2,98 @@
 
 ## General description
 
-The E2E tests cover an entire workflow involving multiple blockchain components (NEAR, EVM-based chains, Solana) and cross-chain communication. These tests ensure that all parts (smart contracts, scripts, etc.) integrate correctly. The Makefiles in this project orchestrate each step in the workflow, from compiling and deploying contracts on various chains to executing and verifying cross-chain transactions.
+The E2E tests cover an entire workflow involving multiple blockchain components (NEAR, EVM-based chains, Solana) and cross-chain communication. These tests ensure that all parts (smart contracts, scripts, etc.) integrate correctly. The [Snakefiles](https://snakemake.readthedocs.io/en/stable/) in this project orchestrate each step in the workflow, from compiling and deploying contracts on various chains to executing and verifying cross-chain transactions.
 
 ## Prerequisites
 
 You will need the following tools installed on your environment before proceeding:
+- **Snakemake**. Refer to the [Snakemake installation guide](https://snakemake.readthedocs.io/en/stable/getting_started/installation.html) for instructions.
 - **Yarn**. Used for installing TypeScript dependencies for EVM contracts and scripts.
 - **Cargo**. The Rust package manager, required for building Rust-based components.
 - **NEAR CLI RS**. A command-line interface for interacting with NEAR protocols.
 - **Docker**. Required to build NEAR contracts in consistent environment.
 - **Solana CLI and Anchor**. For compiling and deploying Solana programs.
 - **Bridge SDK CLI**. Install with:
-`cargo install --git https://github.com/Near-One/bridge-sdk-rs/ --rev b7c5acf bridge-cli`
+`cargo install --git https://github.com/Near-One/bridge-sdk-rs/ --rev <actual_revision> bridge-cli`, look for `<actual_revision>` in the `.github/workflows/e2e-test.yml` file.
 - **Cargo Near**. Used to build NEAR contracts. Install with:
 `cargo install --locked cargo-near`
 Enables bridging functionality for various blockchain environments.
-- **jq**. A command-line JSON processor used by many scripts in this project.
 
 ## Project Structure
 
-The E2E testing project is organized into several key directories:
-
 ### Main Directories
+
 - `tools/` - TypeScript-based utilities and scripts that support the E2E testing process:
   - `src/lib/` - Contains shared libraries and utilities used across different scripts
   - `src/scripts/` - Contains the main scripts for deployment, testing, and chain interaction
   - `src/E2ETestToken/` - Contains token-related implementations and utilities
 
-- `makefiles/` - Contains modular Makefiles split by functionality:
-  - `near.mk`, `evm.mk`, `solana.mk` - Chain-specific build and deployment rules
-  - `pipelines/` - Complex multi-chain testing scenarios (e.g., `bridge_token_near_to_evm.mk`)
-  - `common.mk` - Shared variables and utility functions
+- `snakefiles/` - Contains modular Snakefiles split by functionality:
+  - `near.smk`, `evm.smk`, `solana.smk` - Chain-specific build and deployment rules
+  - `common.smk` - Shared rules.
+  - `<pipeline_number>_<pipeline_name>.smk` - Complex multi-chain testing scenarios (e.g., `01_bridge_token_near_to_evm.smk`)
+  - `utils.py` - Contains utility functions used in the Snakefiles.
+  - `const.py` - Contains constants used in the Snakefiles. It should be trated as a config to be changed if required.
 
-- `generated/` - **All generated files and artifacts are stored here**, including:
-  - Build outputs
-  - Deployment results
-  - Test artifacts
-  - Transaction receipts
-  - Contract addresses
-  This directory is automatically created and managed by the build system.
+- `bin/` - Contains compiled binaries and executables used by the testing process.
 
-- `bin/` - Contains compiled binaries and executables used by the testing process
+During the execution of the tests, the `generated/` directory will be created (could be configured in `const.py`). All generated files and artifacts are stored here, including:
+- Build outputs
+- Deployment results
+- Test artifacts
+- Transaction receipts
+- Contract addresses
 
 ### Configuration Files
+- `snakefiles/const.py` - Contains constants used in the Snakefiles. It should be trated as a config to be changed if required.
 - `bridge-sdk-config.example.json` - Template for bridge SDK configuration
 - `near_init_params.json` - NEAR contract initialization parameters
+- `tools/.env.example` - Example environment variables file for the tools
+- `../evm/.env.example` - Example environment variables file for the EVM contracts
 - Various keypair files for Solana program deployment
+- `environment.yml` - Conda environment file to set up the environment for Snakemake during the Github Actions workflow (no need to change).
+
+Currently, the values of the config files are sometimes intersected. TODO: refactor to create a single config file for end-to-end tests.
+
+### Github Actions
+
+The repository contains a Github Actions workflow for running the end-to-end tests. The workflow is defined in `.github/workflows/e2e-test.yml`.
+
+The custom action to setup the environment is defined in `.github/e2e-setup/action.yml`.
+
+### Workflows Visualizations
+
+All workflows are visualized into DAGs and stored in `workflows_viz` directory as PDF files.
+
+The files can be regenerated by running the following command:
+```
+snakemake -s <pipeline_name>.smk --rerun-triggers=mtime --dag <rule_name> | dot -Tpdf > workflows_viz/<pipeline_name>.pdf
+```
+
+Here `dot` is a tool from `graphviz` package.
 
 ## User guide
 
-### How to Run Builds and Pipelines
+Before running the tests, make sure that you have all the prerequisites installed and configured.
 
-This repository contains multiple Makefiles, each focusing on a particular chain or pipeline.
 
-You can explore all the available targets by running:
-```
-make help
-```
+### How to run the tests (Github Actions)
 
-Typical usage involves calling a specific pipeline target, for example:
+**Prerequisites**:
+- [The step should be done once by the repository admin] Set up the environment variables used in `e2e-test.yml` file in the repository settings. Currently, this includes `E2E_INFURA_API_KEY`, `E2E_EVM_PRIVATE_KEY` and `E2E_ETH_RPC_URL` (this one should be added without the trailing slash).
 
-```
-make bridge-token-near-to-evm
-```
 
-This command triggers a multi-step process that compiles, deploys, and binds tokens across NEAR and an EVM-based network.
+Currently, the tests should be triggered manually. In order to do this, you need:
+1. Go to the "Actions" tab in the repository.
+2. Select "E2E Tests" workflow.
+3. Click on "Run workflow" button.
+4. Enter the names of the pipelines you want to run, separated by spaces. The name of the pipeline is the stem of the corresponding Snakefile.
+5. Enter the tag of the contracts to download. If you want contracts to be built from the source leave it empty.
+6. Click on "Run workflow" button.
 
-### Environment variables and configuration
+After the workflow is finished, you can find all the generated files in archive in the Artifacts section of the workflow run page.
+
+### Configuration (locally)
 
 You need to create a `.env` files from the examples provided in:
 - `./tools/.env.example`
@@ -78,84 +103,87 @@ Also you need to copy or rename the provided `bridge-sdk-config.example.json` to
 
 For Solana bulding and deployment, ensure that for every program you have a keypair in `.e2e-testing/` directory in the format of `<program_name>-keypair.json`. However, this key pair is secret and should not be shared.
 
-### Result artifacts
+### How to run the tests (locally)
+
+This repository contains multiple Snakefiles, each focusing on a particular chain or pipeline. Each Snakefile is an independent set of rules that perform a corresponding workflow.
+
+To run a pipeline, you need to execute the following command:
+```
+snakemake -s snakefiles/<pipeline_name>.smk -j1 --rerun-triggers=mtime
+```
+
+### Result artifacts (locally)
 
 Throughout the pipelines, you will see JSON files containing addresses, transaction hashes, and other relevant data.
-These files serve as evidence that each step or deployment was successfully executed. They are automatically generated and stored in dedicated directories such as `evm_deploy_results` or `near_deploy_results`.
+These files serve as evidence that each step or deployment was successfully executed. They are automatically generated and stored in dedicated directories such as `evm_deploy_results`, `near_deploy_results` etc.
 
-### Handling Pipeline Failures
 
-If a pipeline fails at a certain step, fix the underlying issue and rerun the same target. Make will pick up from the point of failure if the previous steps have created their artifact files or “stamp” files.
+### Handling Pipeline Failures (locally)
 
-### Rebuilding Binaries
+If a pipeline fails at a certain step, fix the underlying issue and rerun the same command. Snakemake will pick up from the point of failure if the previous steps have created their artifact files or “stamp” files. Don't forget to add `--rerun-triggers=mtime` to the command to ensure that the pipeline is run from the place it failed.
 
-Each build step depends on “stamp” files that mark the completion of the step. Simply calling the relevant build target again will skip the build if the stamp file exists.
+### Rebuilding parts of pipeline (locally)
 
-To perform a clean rebuild, run the corresponding clean target. For example:
+In some cases, you might want to rebuild only a part of the pipeline and propagate the changes to the rest of the pipeline if required. E.g. rebuild and redeploy the contract A and everything that depends on it. Please, see the following sections on how to do this.
+
+In the common case (especially with `--rerun-triggers=mtime` being used), Snakemake will detect the changes in the files and will rebuild the targets that depend on the changed files. However, due to the Snakemake implementation specifics, it doesn't detect the deletion of the files. Therefore, let's imagine that you want to rerun the rule `A` and it corresponds to the file `generated/some_pipleine/A.json`. In this case, there could be two cases:
+1. It's possible to rerun the rule `A` **without rerunning its prerequisites**. Example: you want to redeploy the contract A and the contract doesn't depend on anything else.
+2. It's **required to rerun the prerequisites** of the rule `A` before rebuilding it. Example: the rule sends tokens from contract A to contract B but after the pipeline execution the contract A doesn't have any tokens left. Therefore, you need to rerun the prerequisite rules, i.e. mint (or send) tokens to contract A.
+
+In the **first case** you should do the following:
+1. Rerun the desired target: `snakemake -s snakefiles/<pipeline_name>.smk -j1 --rerun-triggers=mtime <target_name>`
+2. Rerun the whole pipeline to propagate the changes: `snakemake -s snakefiles/<pipeline_name>.smk -j1 --rerun-triggers=mtime`
+
+In the **second case** you should do the following:
+1. Rerunt the desired target and all of its prerequisite rules: `snakemake -s snakefiles/<pipeline_name>.smk -j1 --rerun-triggers=mtime --forceall <target_name>`
+2. Rerun the whole pipeline to propagate the changes: `snakemake -s snakefiles/<pipeline_name>.smk -j1 --rerun-triggers=mtime`
+
+If you want to just **rerun the whole pipeline**, you should:
+1. Delete all the related files: `snakemake -s snakefiles/<pipeline_name>.smk --delete-all-output`
+2. Rerun the pipeline: `snakemake -s snakefiles/<pipeline_name>.smk -j1 --rerun-triggers=mtime`
+
+#### Note on binaries
+
+In contrast to other targets, binaries are not automatically rebuilt when the corresponding source code changes. Therefore, if you want to rebuild binaries, you must delete them or the corresponding stamp files.
+
+This can be done either manually or by running the following command (preferred):
 ```
-  make clean-near
-  make near-build
+snakemake -s snakefiles/<pipeline_name>.smk --delete-all-output
 ```
 
-This removes the old artifacts and stamps, forcing a complete recompile.
+The command above will delete all the files which are generated during the pipeline execution. If you want to delete only the files related to some specific rule, you can specify it as follows:
+```
+snakemake -s snakefiles/<pipeline_name>.smk --delete-all-output <rule_name>
+```
 
-## Developer Guide
+## Developer guide
 
-### Introduction to Make
+### Introduction to Snakemake
 
-- If you are new to Make, the [[GNU Make Manual](https://www.gnu.org/software/make/manual/make.html)] is an excellent place to start.
-- Make allows us to define rules that specify how to build or process files and manage dependencies.
+- If you are new to Snakemake, the [Snakemake documentation](https://snakemake.readthedocs.io/en/stable/) is an excellent place to start.
+- Snakemake allows us to define rules that specify how to build or process files and manage dependencies in a declarative way.
+- Comparing to Makefile, Snakemake has friendlier syntax and more powerful features such as DAGs visualization, effective parallel execution, modularization, built-in message printing and parameters definition.
+- In order to have a better experience writing Snakemake, it's recommended to use Snakemake extension for IDE. E.g. [extension for VSCode](https://marketplace.visualstudio.com/items?itemName=Snakemake.snakemake-lang).
 
+### Structure of the Snakefiles
 
-### Structure of the Makefiles
-
-- Makefiles here are split into modules for different chains (e.g., `near.mk`, `evm.mk`, `solana.mk`) and pipelines (e.g., `pipelines/bridge_token_near_to_evm.mk`).  
-- Each of these is included into a master Makefile.
-- Variables are in a global namespace. Therefore, every variable should be prefixed to avoid naming collisions, such as `evm_compile_stamp`, `solana_build_stamp`, etc.
-
-### Pipelines Organization
-
-- Each pipeline typically has a prefix, such as pipeline1, pipeline2, and so on.
-- Consider adding new pipelines in separate `.mk` files.
-- Number the generated files for clarity (e.g., `01_step.json`, `02_step.json`) to keep track of the pipeline steps.
-
-### Targets and Phony Targets
-
-Most steps have two targets:
-
-1. A “file” target (e.g., a JSON artifact) or a “stamp” file target to indicate completion.
-2. A `.PHONY` target to run that step directly.
-
-The phony target typically depends on the file target, ensuring that the command is performed when necessary.
-
-Each step usually prints a brief description before execution using a helper function like `description`, so you know what is happening.
-
-### Order of prerequsites
-
-In certain cases, the order in which prerequisites are listed (and thus passed to scripts) can matter. Pay special attention to the scripts that rely on positional arguments.
-
-### Special targets
-
-- Every module or feature should provide a custom `clean-{custom-name}` target that removes the artifacts and stamp files it generates.
-- Remember to add that clean target to the help target or a consolidated list of “clean” targets so that users can discover and run it easily.
-- After adding module, don't forget to add it to the `help` target.
+- Each Snakefile is an independent set of rules that perform a corresponding workflow.
+- Rules from one Snakefile are reused in another one by using [modules](https://snakemake.readthedocs.io/en/stable/snakefiles/modularization.html#modules).
+- In order to avoid name conflicts, rules are included into modules and are prefixed with the module name.
+- Since Snakemake can use Python functions and variables, some of them are abstracted into `const.py` and `utils.py` files.
 
 ### Debugging
 
-- Run `make --dry-run` to print the commands that would be executed without actually running them.
-- Use `make  -d` for a more verbose explanation of why each command runs (or doesn’t run). It could be used with `make --dry-run` in order not to run the commands.
+- Use `-n` flag to print the jobs that will be executed without actually running them. Additionally, Snakefile will check if there're any errors which could be detected before the actual execution.
+- DAG visualization can also be helpful to understand the dependencies between the rules (see command above).
 
-## General recommendations for Makefiles in this project
+## Further improvements
 
-Below are some guidelines to maintain consistency and clarity:
-1. Internal variables (not environment or inherited from parent Makefile) should use lowercase.
-2. Prefer `:=` (immediate assignment) over `=` (delayed assignment) for most variable definitions.
-3. Use `.INTERMEDIATE` and `.PHONY` to define targets properly.
-4. Make each phony target a prerequisite of `.PHONY` right before declaring the target.
-5. Avoid using phony targets as prerequisites for file targets.
-6. When a Makefile grows large, consider splitting it into multiple files, each handling a distinct set of tasks or a single pipeline.
-7. Use automatic variables like `$^`, `$@`, `$<`, and `$(word n,$^)` wisely to simplify commands.
-8. Directories often work best as order-only prerequisites (using the pipe symbol `|`) to avoid rebuilding them unnecessarily.
-9. Try to avoid recursive Make patterns; a single dependency graph is often clearer.
-10. Control verbosity to suit the needs of the project, for example by hiding command echoes and only printing the essential logs.
+The following improvements are nice to be done in the future. They are presented in the subjective order of priority.
 
+- **Unified configuration**. Currently, the values of the config files are scattered and even intersected in different files (see [Configuration Files](#configuration-files) section). It should be refactored to have a single config file for end-to-end tests.
+- **Transparent variables reusage**. If we want that some rule A is triggered by rule B, we need to ensure that the path in the `output` of rule A matches the path in the `input` of rule B. 
+Currently, we simply define variables with the same paths in different Snakefiles. It's error-prone and should be refactored. Since variables can't be directled imported between Snakefiles, one possible solution is to create a centralized **Python** file(s) (like `const.py` or `utils.py`) and move all paths variables there.
+- **Docker containerization**. Put all the dependencies and their installation into a Docker container and run the tests in a consistent environment.
+- **Parallel execution of the pipelines**. Even though the dependency graph and Snakemake itself are ready for parallel execution of the tasks, currently, the pipelines are executed sequentially. The reason for this is that parallel execution causes race conditions when the same account tries to submit transactions with the same nonce. However, be aware that this improvement will speed up the execution of the pipelines only locally, since our Github Actions runners are single-threaded at the moment.
+- **Reuse contracts/accounts from previous GA runs**. Currently, the contracts are deployed from scratch. However, sometimes it may be useful and cost-effective to reuse the contracts/accounts from previous GA runs. To achieve this, we need to store the desired deployment results and then put them in a corresponding location in the next run.

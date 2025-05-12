@@ -1,7 +1,7 @@
 on:
   push:
     tags:
-      - 'contracts-v[0-9]+.[0-9]+.[0-9]+*'
+      - 'omni-v[0-9]+.[0-9]+.[0-9]+*'
   
   workflow_dispatch:
 
@@ -13,6 +13,13 @@ jobs:
     permissions:
       contents: write
     steps:
+      - name: Setup SSH
+        uses: webfactory/ssh-agent@v0.7.0
+        with:
+          ssh-private-key: |
+            ${{ secrets.SSH_BRIDGE_INDEXER }}
+            ${{ secrets.SSH_BOREALIS }}
+          
       - name: Clone the repository
         uses: actions/checkout@v3
         
@@ -35,14 +42,16 @@ jobs:
  
       - name: Archive built WASM files
         run: |
+          SAFE_TAG="${RAW_TAG//./-}"
+          ZIP_NAME="${SAFE_TAG}.zip"
           mkdir -p artifacts
           find ./near/target/near -name "*.wasm" -exec cp {} artifacts/ \;
           cp ./solana/bridge_token_factory/target/verifiable/bridge_token_factory.so artifacts
-          zip -j contracts.zip artifacts/*
+          zip -j "$ZIP_NAME" artifacts/*
         shell: bash
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
-          files: contracts.zip
+          files: "*.zip"

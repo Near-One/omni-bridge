@@ -21,7 +21,7 @@ pub struct InitTransferMessage {
 #[derive(Debug, Clone)]
 pub struct FinTransferMessage {
     pub transfer_id: TransferId,
-    pub fee_recipient: AccountId,
+    pub fee_recipient: Option<AccountId>,
     pub amount: U128,
     pub emitter_address: OmniAddress,
 }
