@@ -3054,7 +3054,7 @@ dependencies = [
 
 [[package]]
 name = "omni-bridge"
-version = "0.2.6"
+version = "0.2.7"
 dependencies = [
  "borsh",
  "hex",
@@ -3099,7 +3099,7 @@ dependencies = [
 
 [[package]]
 name = "omni-types"
-version = "2.0.3"
+version = "3.0.0"
 dependencies = [
  "alloy-primitives",
  "alloy-rlp",
