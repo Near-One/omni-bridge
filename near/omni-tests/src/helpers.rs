@@ -130,7 +130,7 @@ pub mod tests {
                 origin_chain,
                 origin_nonce,
             },
-            fee_recipient: fee_recipient.clone(),
+            fee_recipient: Some(fee_recipient.clone()),
             amount: U128(amount),
             emitter_address,
         };
