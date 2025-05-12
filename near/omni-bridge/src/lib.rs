@@ -1027,7 +1027,6 @@ impl Contract {
             .get(&address)
             .sdk_expect("ERR_TOKEN_DECIMALS_NOT_FOUND")
             .decimals;
-        require!(decimals > 0, "ERR_INVALID_DECIMALS");
 
         ext_token::ext(token)
             .with_static_gas(SET_METADATA_GAS)
