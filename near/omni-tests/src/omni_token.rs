@@ -313,10 +313,9 @@ mod tests {
         env.locker_contract
             .call("set_token_metadata")
             .args_json(json!({
-                "token": env.token_contract.id(),
+                "address": env.init_token_address,
                 "name": "New Token Name",
-                "symbol": "NEW",
-                "decimals": 8,
+                "symbol": "NEW"
             }))
             .max_gas()
             .transact()
@@ -328,7 +327,7 @@ mod tests {
 
         assert_eq!(updated_metadata.name, "New Token Name");
         assert_eq!(updated_metadata.symbol, "NEW");
-        assert_eq!(updated_metadata.decimals, 8);
+        assert_eq!(updated_metadata.decimals, fetched_metadata.decimals);
 
         Ok(())
     }
