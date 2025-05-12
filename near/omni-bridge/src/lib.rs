@@ -1012,16 +1012,32 @@ impl Contract {
     #[access_control_any(roles(Role::DAO, Role::MetadataManager))]
     pub fn set_token_metadata(
         &mut self,
-        token: AccountId,
+        address: OmniAddress,
         name: Option<String>,
         symbol: Option<String>,
         icon: Option<String>,
         reference: Option<String>,
         reference_hash: Option<Base64VecU8>,
     ) -> Promise {
+        let token = self.get_token_id(&address);
+        require!(self.deployed_tokens.contains(&token));
+
+        let decimals = self
+            .token_decimals
+            .get(&address)
+            .sdk_expect("ERR_TOKEN_DECIMALS_NOT_FOUND")
+            .decimals;
+
         ext_token::ext(token)
             .with_static_gas(SET_METADATA_GAS)
-            .set_metadata(name, symbol, reference, reference_hash, None, icon)
+            .set_metadata(
+                name,
+                symbol,
+                reference,
+                reference_hash,
+                Some(decimals),
+                icon,
+            )
     }
 
     pub fn get_current_destination_nonce(&self, chain_kind: ChainKind) -> Nonce {
