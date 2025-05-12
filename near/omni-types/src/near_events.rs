@@ -2,7 +2,10 @@ use near_sdk::serde_json::json;
 use near_sdk::{near, AccountId};
 
 use crate::mpc_types::SignatureResponse;
-use crate::{BasicMetadata, MetadataPayload, OmniAddress, TransferMessage, TransferMessagePayload};
+use crate::{
+    BasicMetadata, FastTransfer, MetadataPayload, OmniAddress, TransferId, TransferMessage,
+    TransferMessagePayload,
+};
 
 #[near(serializers=[json])]
 #[derive(Clone, Debug)]
@@ -37,6 +40,10 @@ pub enum OmniBridgeEvent {
         token_address: OmniAddress,
         decimals: u8,
         origin_decimals: u8,
+    },
+    FastTransferEvent {
+        fast_transfer: FastTransfer,
+        new_transfer_id: Option<TransferId>,
     },
 }
 
