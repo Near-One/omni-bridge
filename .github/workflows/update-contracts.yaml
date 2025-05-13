@@ -41,6 +41,8 @@ jobs:
         timeout-minutes: 60
  
       - name: Archive built WASM files
+        env:
+           RAW_TAG: ${{ github.ref_name }}
         run: |
           SAFE_TAG="${RAW_TAG//./-}"
           ZIP_NAME="${SAFE_TAG}.zip"
