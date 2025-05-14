@@ -16,11 +16,15 @@ crate-type = ["cdylib", "rlib"]
 borsh = { version = "1.*", features = ["derive"] }
 serde = { version = "1.*", features = ["derive"] }
 hex = "0.4"
+scrypt = { version = "0.11.0", default-features = false, optional = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 sha2 = "0.*"
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 near-sdk = "5.1.0"
+
+[dev-dependencies]
+serde_json = "1.0.133"
 
 [profile.release]
 codegen-units = 1
@@ -33,4 +37,4 @@ panic = "abort"
 overflow-checks = true
 
 [features]
-testnet = []
+scrypt_hash = ["scrypt"]
