@@ -7,7 +7,7 @@ use borsh::BorshDeserialize;
 use omni_types::{ChainKind, OmniAddress};
 use solana_sdk::{bs58, pubkey::Pubkey, signature::Signature};
 use solana_transaction_status::{
-    option_serializer::OptionSerializer, EncodedTransactionWithStatusMeta, UiRawMessage,
+    EncodedTransactionWithStatusMeta, UiRawMessage, option_serializer::OptionSerializer,
 };
 
 use crate::workers::{DeployToken, FinTransfer, Transfer};
@@ -127,12 +127,11 @@ async fn decode_instruction(
                             continue;
                         };
 
-                        let Ok(Ok(recipient)) =
-                            Pubkey::from_str(&payload.recipient).map(|recipient| {
-                                OmniAddress::new_from_slice(ChainKind::Sol, &recipient.to_bytes())
-                            })
-                        else {
-                            warn!("Failed to parse recipient as a pubkey: {sender:?}");
+                        let Ok(recipient) = payload.recipient.parse::<OmniAddress>() else {
+                            warn!(
+                                "Failed to parse recipient as OmniAddress: {:?}",
+                                payload.recipient
+                            );
                             continue;
                         };
 
