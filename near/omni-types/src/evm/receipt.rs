@@ -23,7 +23,7 @@ impl Decodable for Receipt {
         }
 
         let rlp = Rlp::new(view);
-        Ok(Receipt {
+        Ok(Self {
             status: rlp.val_at(0)?,
             gas_used: rlp.val_at(1)?,
             log_bloom: rlp.val_at(2)?,
@@ -41,7 +41,7 @@ pub struct LogEntry {
 
 impl Decodable for LogEntry {
     fn decode(rlp: &rlp::Rlp) -> Result<Self, rlp::DecoderError> {
-        let result = LogEntry {
+        let result = Self {
             address: rlp.val_at(0)?,
             topics: rlp.list_at(1)?,
             data: rlp.val_at(2)?,
