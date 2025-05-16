@@ -23,7 +23,7 @@ pub mod utils;
 mod tests;
 
 #[near(serializers = [borsh])]
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub struct H160(pub [u8; 20]);
 
 impl FromStr for H160 {
@@ -191,7 +191,7 @@ pub const ZERO_ACCOUNT_ID: &str =
     "0000000000000000000000000000000000000000000000000000000000000000";
 
 #[near(serializers=[borsh])]
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub enum OmniAddress {
     Eth(EvmAddress),
     Near(AccountId),

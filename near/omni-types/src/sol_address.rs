@@ -6,7 +6,7 @@ use near_sdk::{bs58, near};
 use serde::de::Visitor;
 
 #[near(serializers=[borsh])]
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub struct SolAddress(pub [u8; 32]);
 
 impl SolAddress {
