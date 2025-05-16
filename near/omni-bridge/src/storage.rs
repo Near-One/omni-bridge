@@ -36,7 +36,7 @@ pub enum TransferMessageStorage {
 impl TransferMessageStorage {
     pub fn into_main(self) -> TransferMessageStorageValue {
         match self {
-            TransferMessageStorage::V0(m) => TransferMessageStorageValue {
+            Self::V0(m) => TransferMessageStorageValue {
                 message: TransferMessage {
                     origin_nonce: m.message.origin_nonce,
                     token: m.message.token,
@@ -50,7 +50,7 @@ impl TransferMessageStorage {
                 },
                 owner: m.owner,
             },
-            TransferMessageStorage::V1(m) => m,
+            Self::V1(m) => m,
         }
     }
 
@@ -58,10 +58,7 @@ impl TransferMessageStorage {
         message: TransferMessage,
         owner: AccountId,
     ) -> Result<Vec<u8>, std::io::Error> {
-        borsh::to_vec(&TransferMessageStorage::V1(TransferMessageStorageValue {
-            message,
-            owner,
-        }))
+        borsh::to_vec(&Self::V1(TransferMessageStorageValue { message, owner }))
     }
 }
 
@@ -74,7 +71,7 @@ pub enum FastTransferStatusStorage {
 impl FastTransferStatusStorage {
     pub fn into_main(self) -> FastTransferStatus {
         match self {
-            FastTransferStatusStorage::V0(status) => status,
+            Self::V0(status) => status,
         }
     }
 }
@@ -92,21 +89,23 @@ impl Contract {
     pub fn storage_deposit(&mut self, account_id: Option<AccountId>) -> StorageBalance {
         let account_id = account_id.unwrap_or_else(env::predecessor_account_id);
         let amount = env::attached_deposit();
-        let storage = if let Some(mut storage) = self.accounts_balances.get(&account_id) {
-            storage.total = storage.total.saturating_add(amount);
-            storage.available = storage.available.saturating_add(amount);
-            storage
-        } else {
-            let min_required_storage_balance = self.required_balance_for_account();
-            let available = amount
-                .checked_sub(min_required_storage_balance)
-                .sdk_expect("The attached deposit is less than the minimum storage balance");
-            StorageBalance {
-                total: amount,
-                available,
-            }
-        };
-
+        let storage = self.accounts_balances.get(&account_id).map_or_else(
+            || {
+                let min_required_storage_balance = self.required_balance_for_account();
+                let available = amount
+                    .checked_sub(min_required_storage_balance)
+                    .sdk_expect("The attached deposit is less than the minimum storage balance");
+                StorageBalance {
+                    total: amount,
+                    available,
+                }
+            },
+            |mut storage| {
+                storage.total = storage.total.saturating_add(amount);
+                storage.available = storage.available.saturating_add(amount);
+                storage
+            },
+        );
         self.accounts_balances.insert(&account_id, &storage);
         storage
     }
@@ -292,7 +291,7 @@ impl Contract {
             .saturating_add(NEP141_DEPOSIT)
     }
 
-    fn get_basic_storage() -> u64 {
+    const fn get_basic_storage() -> u64 {
         const EXTRA_BYTES_RECORD: u64 = 40;
         const EXTRA_KEY_PREFIX_LEN: u64 = 1;
         EXTRA_BYTES_RECORD + EXTRA_KEY_PREFIX_LEN

@@ -858,10 +858,10 @@ impl Contract {
         }
 
         if message.fee.native_fee.0 != 0 {
-            let origin_chain = match message.origin_transfer_id {
-                Some(origin_transfer_id) => origin_transfer_id.origin_chain,
-                None => message.get_origin_chain(),
-            };
+            let origin_chain = message.origin_transfer_id.map_or_else(
+                || message.get_origin_chain(),
+                |origin_transfer_id| origin_transfer_id.origin_chain,
+            );
             if origin_chain == ChainKind::Near {
                 Promise::new(fee_recipient.clone())
                     .transfer(NearToken::from_yoctonear(message.fee.native_fee.0));
@@ -1072,7 +1072,7 @@ impl Contract {
         predecessor_account_id: AccountId,
         #[callback_result] call_result: Result<NearToken, PromiseError>,
     ) {
-        let refund_amount = call_result.unwrap_or(env::attached_deposit());
+        let refund_amount = call_result.unwrap_or_else(|_| env::attached_deposit());
         Self::refund(predecessor_account_id, refund_amount);
     }
 
@@ -1091,7 +1091,7 @@ impl Contract {
 
         let transfer_message = TransferMessage {
             origin_nonce: self.current_origin_nonce,
-            token: OmniAddress::Near(token_id.clone()),
+            token: OmniAddress::Near(token_id),
             amount: U128(amount),
             recipient: OmniAddress::Eth(
                 H160::from_str(&recipient).sdk_expect("Error on recipient parsing"),
@@ -1546,23 +1546,26 @@ impl Contract {
         action: &StorageDepositAction,
         attached_deposit: &mut NearToken,
     ) -> Promise {
-        if let Some(storage_deposit_amount) = action.storage_deposit_amount {
-            let storage_deposit_amount = NearToken::from_yoctonear(storage_deposit_amount);
+        action.storage_deposit_amount.map_or_else(
+            || {
+                ext_token::ext(action.token_id.clone())
+                    .with_static_gas(STORAGE_BALANCE_OF_GAS)
+                    .with_attached_deposit(NO_DEPOSIT)
+                    .storage_balance_of(&action.account_id)
+            },
+            |storage_deposit_amount| {
+                let storage_deposit_amount = NearToken::from_yoctonear(storage_deposit_amount);
 
-            *attached_deposit = attached_deposit
-                .checked_sub(storage_deposit_amount)
-                .sdk_expect("The attached deposit is less than required");
+                *attached_deposit = attached_deposit
+                    .checked_sub(storage_deposit_amount)
+                    .sdk_expect("The attached deposit is less than required");
 
-            ext_token::ext(action.token_id.clone())
-                .with_static_gas(STORAGE_DEPOSIT_GAS)
-                .with_attached_deposit(storage_deposit_amount)
-                .storage_deposit(&action.account_id, Some(true))
-        } else {
-            ext_token::ext(action.token_id.clone())
-                .with_static_gas(STORAGE_BALANCE_OF_GAS)
-                .with_attached_deposit(NO_DEPOSIT)
-                .storage_balance_of(&action.account_id)
-        }
+                ext_token::ext(action.token_id.clone())
+                    .with_static_gas(STORAGE_DEPOSIT_GAS)
+                    .with_attached_deposit(storage_deposit_amount)
+                    .storage_deposit(&action.account_id, Some(true))
+            },
+        )
     }
 
     fn check_storage_balance_result(result_idx: u64) -> bool {

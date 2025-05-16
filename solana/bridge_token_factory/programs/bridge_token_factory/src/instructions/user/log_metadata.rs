@@ -73,7 +73,7 @@ impl LogMetadata<'_> {
         let metadata = self
             .metadata
             .as_ref()
-            .ok_or(error!(ErrorCode::TokenMetadataNotProvided))?
+            .ok_or_else(|| error!(ErrorCode::TokenMetadataNotProvided))?
             .to_account_info();
         require_keys_eq!(
             metadata.key(),

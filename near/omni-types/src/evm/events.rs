@@ -78,7 +78,7 @@ impl TryFromLog<Log<FinTransfer>> for FinTransferMessage {
             return Err(ERR_INVALIDE_SIGNATURE_HASH.to_string());
         }
 
-        Ok(FinTransferMessage {
+        Ok(Self {
             transfer_id: crate::TransferId {
                 origin_chain: event.data.originChain.try_into()?,
                 origin_nonce: event.data.originNonce,
@@ -101,7 +101,7 @@ impl TryFromLog<Log<InitTransfer>> for InitTransferMessage {
             return Err(ERR_INVALIDE_SIGNATURE_HASH.to_string());
         }
 
-        Ok(InitTransferMessage {
+        Ok(Self {
             emitter_address: OmniAddress::new_from_evm_address(
                 chain_kind,
                 H160(event.address.into()),
@@ -128,7 +128,7 @@ impl TryFromLog<Log<DeployToken>> for DeployTokenMessage {
             return Err(ERR_INVALIDE_SIGNATURE_HASH.to_string());
         }
 
-        Ok(DeployTokenMessage {
+        Ok(Self {
             token: event.data.token.parse().map_err(stringify)?,
             token_address: OmniAddress::new_from_evm_address(
                 chain_kind,
@@ -152,7 +152,7 @@ impl TryFromLog<Log<LogMetadata>> for LogMetadataMessage {
             return Err(ERR_INVALIDE_SIGNATURE_HASH.to_string());
         }
 
-        Ok(LogMetadataMessage {
+        Ok(Self {
             token_address: OmniAddress::new_from_evm_address(
                 chain_kind,
                 H160(event.data.tokenAddress.into()),
