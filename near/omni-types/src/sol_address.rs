@@ -23,7 +23,7 @@ impl FromStr for SolAddress {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let result = bs58::decode(s).into_vec().map_err(|err| err.to_string())?;
 
-        Ok(SolAddress(
+        Ok(Self(
             result
                 .try_into()
                 .map_err(|err| format!("Invalid length: {err:?}"))?,

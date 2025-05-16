@@ -76,9 +76,9 @@ impl UpdateMetadata<'_> {
             cpi_ctx,
             None,
             Some(DataV2 {
-                name: name.unwrap_or(self.metadata.name.clone()),
-                symbol: symbol.unwrap_or(self.metadata.symbol.clone()),
-                uri: uri.unwrap_or(self.metadata.uri.clone()),
+                name: name.unwrap_or_else(|| self.metadata.name.clone()),
+                symbol: symbol.unwrap_or_else(|| self.metadata.symbol.clone()),
+                uri: uri.unwrap_or_else(|| self.metadata.uri.clone()),
                 seller_fee_basis_points: self.metadata.seller_fee_basis_points,
                 creators: self.metadata.creators.clone(),
                 collection: self.metadata.collection.clone(),

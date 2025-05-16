@@ -7,7 +7,7 @@ use alloy::{
 use anyhow::Result;
 use log::warn;
 use near_crypto::InMemorySigner;
-use near_jsonrpc_client::{methods, JsonRpcClient};
+use near_jsonrpc_client::{JsonRpcClient, methods};
 use near_jsonrpc_primitives::types::query::QueryResponseKind;
 use near_primitives::types::BlockReference;
 use omni_types::ChainKind;
@@ -34,7 +34,7 @@ pub struct NonceManager {
 }
 
 impl NonceManager {
-    pub fn new(client: ChainClient) -> Self {
+    pub const fn new(client: ChainClient) -> Self {
         Self {
             nonce: Mutex::new(0),
             client,
@@ -43,11 +43,10 @@ impl NonceManager {
 
     pub async fn resync_nonce(&self) -> Result<()> {
         let current_nonce = self.get_current_nonce().await?;
-        let mut local_nonce = self
+        *self
             .nonce
             .lock()
-            .map_err(|_| anyhow::anyhow!("Mutex lock error during nonce update"))?;
-        *local_nonce = current_nonce;
+            .map_err(|_| anyhow::anyhow!("Mutex lock error during nonce update"))? = current_nonce;
 
         Ok(())
     }
@@ -66,6 +65,7 @@ impl NonceManager {
 
         let reserved = *local_nonce;
         *local_nonce += 1;
+        drop(local_nonce);
 
         Ok(reserved)
     }

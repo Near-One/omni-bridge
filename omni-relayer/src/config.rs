@@ -90,11 +90,11 @@ pub struct Config {
 }
 
 impl Config {
-    pub fn is_bridge_indexer_enabled(&self) -> bool {
+    pub const fn is_bridge_indexer_enabled(&self) -> bool {
         self.bridge_indexer.mongodb_uri.is_some() && self.bridge_indexer.db_name.is_some()
     }
 
-    pub fn is_bridge_api_enabled(&self) -> bool {
+    pub const fn is_bridge_api_enabled(&self) -> bool {
         self.bridge_indexer.api_url.is_some()
     }
 }
