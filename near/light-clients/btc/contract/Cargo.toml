@@ -33,6 +33,7 @@ container_build_command = ["cargo", "near", "build", "non-reproducible-wasm", "-
 
 [lib]
 crate-type = ["cdylib", "rlib"]
+doctest = false
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [dependencies]
