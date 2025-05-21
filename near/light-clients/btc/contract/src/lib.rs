@@ -444,7 +444,7 @@ impl BtcLightClient {
         &self,
         block_header: &Header,
         prev_block_header: &ExtendedHeader,
-        config: NetworkConfig,
+        config: &NetworkConfig,
     ) {
         let time_diff = block_header
             .time
@@ -484,7 +484,7 @@ impl BtcLightClient {
 
         if (prev_block_header.block_height + 1) % config.blocks_per_adjustment != 0 {
             if config.pow_allow_min_difficulty_blocks {
-                return self.check_target_testnet(block_header, prev_block_header, config);
+                return self.check_target_testnet(block_header, prev_block_header, &config);
             }
 
             require!(
