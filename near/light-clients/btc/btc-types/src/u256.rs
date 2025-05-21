@@ -73,7 +73,7 @@ impl U256 {
     }
 
     pub fn target_to_bits(&self) -> u32 {
-        let mut n_size = (self.bits() + 7) / 8;
+        let mut n_size = self.bits().div_ceil(8);
         let mut n_compact: u32;
 
         if n_size <= 3 {

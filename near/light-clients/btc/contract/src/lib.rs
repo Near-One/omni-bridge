@@ -318,7 +318,7 @@ impl BtcLightClient {
     }
 
     pub fn get_config() -> NetworkConfig {
-        NetworkConfig::new(Self::get_network())
+        NetworkConfig::new(&Self::get_network())
     }
 
     pub fn get_network() -> Network {

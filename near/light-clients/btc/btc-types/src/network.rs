@@ -23,7 +23,7 @@ pub struct NetworkConfig {
 }
 
 impl NetworkConfig {
-    pub fn new(network: Network) -> Self {
+    pub fn new(network: &Network) -> Self {
         match network {
             Network::Bitcoin => NetworkConfig {
                 blocks_per_adjustment: 2016,
