@@ -280,6 +280,7 @@ version = "0.2.0"
 dependencies = [
  "borsh",
  "btc-types",
+ "cfg-if 1.0.0",
  "merkle-tools",
  "near-plugins",
  "near-sdk",

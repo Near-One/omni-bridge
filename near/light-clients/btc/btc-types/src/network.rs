@@ -3,7 +3,7 @@ use near_sdk::near;
 use crate::u256::U256;
 
 #[near(serializers = [borsh, json])]
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug)]
 pub enum Network {
     Bitcoin,
     BitcoinTestnet,
@@ -12,7 +12,7 @@ pub enum Network {
 }
 
 #[near(serializers = [borsh, json])]
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug)]
 pub struct NetworkConfig {
     pub expected_time_secs: u64,
     pub blocks_per_adjustment: u64,
@@ -23,7 +23,7 @@ pub struct NetworkConfig {
 }
 
 impl NetworkConfig {
-    pub fn new(network: &Network) -> Self {
+    pub fn new(network: Network) -> Self {
         match network {
             Network::Bitcoin => NetworkConfig {
                 blocks_per_adjustment: 2016,
