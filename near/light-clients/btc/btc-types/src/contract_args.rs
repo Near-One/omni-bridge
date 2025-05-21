@@ -1,9 +1,9 @@
-use borsh::{BorshDeserialize, BorshSerialize};
-use serde::{Deserialize, Serialize};
+use near_sdk::near;
 
 use crate::{hash::H256, header::Header};
 
-#[derive(Clone, Debug, BorshDeserialize, BorshSerialize, Serialize, Deserialize)]
+#[near(serializers = [borsh, json])]
+#[derive(Clone, Debug)]
 pub struct InitArgs {
     pub genesis_block: Header,
     pub genesis_block_hash: H256,
@@ -12,7 +12,8 @@ pub struct InitArgs {
     pub gc_threshold: u64,
 }
 
-#[derive(Clone, Debug, BorshDeserialize, BorshSerialize, Serialize, Deserialize)]
+#[near(serializers = [borsh, json])]
+#[derive(Clone, Debug)]
 pub struct ProofArgs {
     pub tx_id: H256,
     pub tx_block_blockhash: H256,

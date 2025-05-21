@@ -1,9 +1,9 @@
-use borsh::{BorshDeserialize, BorshSerialize};
-use serde::{Deserialize, Serialize};
+use near_sdk::near;
 
 use crate::u256::U256;
 
-#[derive(Clone, Debug, BorshDeserialize, BorshSerialize, Serialize, Deserialize)]
+#[near(serializers = [borsh, json])]
+#[derive(Clone, Debug)]
 pub enum Network {
     Bitcoin,
     BitcoinTestnet,
@@ -11,7 +11,8 @@ pub enum Network {
     LitecoinTestnet,
 }
 
-#[derive(Copy, Clone, Debug, BorshDeserialize, BorshSerialize, Serialize, Deserialize)]
+#[near(serializers = [borsh, json])]
+#[derive(Clone, Debug)]
 pub struct NetworkConfig {
     pub expected_time_secs: u64,
     pub blocks_per_adjustment: u64,

@@ -1,12 +1,13 @@
-use borsh::{BorshDeserialize, BorshSerialize};
-use serde::de::{self, Visitor};
-use serde::{Deserialize, Serialize};
 use std::fmt;
 use std::str::FromStr;
 
-#[derive(
-    BorshDeserialize, BorshSerialize, Clone, Eq, PartialEq, Ord, PartialOrd, Debug, Default,
-)]
+use near_sdk::near;
+use schemars::JsonSchema;
+use serde::de::{self, Visitor};
+use serde::{Deserialize, Serialize};
+
+#[near(serializers = [borsh])]
+#[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Debug, Default)]
 pub struct H256(pub [u8; 32]);
 
 impl From<[u8; 32]> for H256 {
@@ -80,6 +81,20 @@ impl Serialize for H256 {
     {
         let reversed: Vec<u8> = self.0.into_iter().rev().collect();
         serializer.serialize_str(&hex::encode(reversed))
+    }
+}
+
+impl JsonSchema for H256 {
+    fn is_referenceable() -> bool {
+        false
+    }
+
+    fn schema_name() -> String {
+        String::schema_name()
+    }
+
+    fn json_schema(gen: &mut schemars::gen::SchemaGenerator) -> schemars::schema::Schema {
+        String::json_schema(gen)
     }
 }
 
