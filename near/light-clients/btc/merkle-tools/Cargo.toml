@@ -14,5 +14,4 @@ sha2 = "0.10.8"
 near-sdk = "5.14.0"
 
 [dev-dependencies]
-
 hex = "0.4.3"
