@@ -35,7 +35,6 @@ enum StorageKey {
 impl Contract {
     /// Initializes the contract with the given total supply owned by the given `owner_id` with
     /// default metadata (for example purposes only).
-    #[allow(clippy::use_self)]
     #[init]
     pub fn new_default_meta(owner_id: &AccountId, total_supply: U128) -> Self {
         Self::new(
@@ -55,7 +54,6 @@ impl Contract {
 
     /// Initializes the contract with the given total supply owned by the given `owner_id` with
     /// the given fungible token metadata.
-    #[allow(clippy::use_self)]
     #[init]
     pub fn new(owner_id: &AccountId, total_supply: U128, metadata: &FungibleTokenMetadata) -> Self {
         require!(!env::state_exists(), "Already initialized");
