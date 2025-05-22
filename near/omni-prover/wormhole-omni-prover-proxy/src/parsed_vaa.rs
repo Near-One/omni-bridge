@@ -97,7 +97,7 @@ impl ParsedVAA {
         let consistency_level = data.get_u8(body_offset + Self::VAA_CONSISTENCY_LEVEL_POS);
         let payload = data[body_offset + Self::VAA_PAYLOAD_POS..].to_vec();
 
-        ParsedVAA {
+        Self {
             version,
             guardian_set_index,
             timestamp,
