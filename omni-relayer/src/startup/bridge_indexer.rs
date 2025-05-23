@@ -354,7 +354,7 @@ async fn handle_btc_event(
                 &mut redis_connection,
                 utils::redis::EVENTS,
                 transaction_id.clone(),
-                workers::SignBtcTransaction {
+                workers::btc::SignBtcTransaction {
                     near_tx_hash: transaction_id,
                     relayer,
                 },
@@ -387,7 +387,7 @@ async fn handle_btc_event(
                 &mut redis_connection,
                 utils::redis::EVENTS,
                 transaction_id,
-                workers::ConfirmedTxid { txid },
+                workers::btc::ConfirmedTxid { txid },
             )
             .await;
         }
