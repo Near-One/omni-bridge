@@ -352,7 +352,7 @@ async fn handle_btc_event(
 ) -> Result<()> {
     match event.details {
         BtcEventDetails::SignTransaction { relayer, .. } => {
-            info!("Received SignTransaction: {transaction_id}");
+            info!("Received SignBtcTransaction: {transaction_id}");
             utils::redis::add_event(
                 &mut redis_connection,
                 utils::redis::EVENTS,
@@ -370,7 +370,7 @@ async fn handle_btc_event(
             vout,
             address,
         } => {
-            info!("Received BtcEvent: {block_height} {tx_hash} {vout} {address}");
+            info!("Received BtcInitTransfer: {tx_hash}");
             utils::redis::add_event(
                 &mut redis_connection,
                 utils::redis::EVENTS,
@@ -385,7 +385,7 @@ async fn handle_btc_event(
             .await;
         }
         BtcEventDetails::ConfirmedTxid { txid } => {
-            info!("Received ConfirmedTxid: {txid}");
+            info!("Received ConfirmedTxid on Btc: {txid}");
             utils::redis::add_event(
                 &mut redis_connection,
                 utils::redis::EVENTS,
