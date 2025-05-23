@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use alloy::primitives::B256;
 use anyhow::Result;
+use bridge_indexer_types::documents_types::DepositMsg;
 use futures::future::join_all;
 use log::warn;
 
@@ -59,10 +60,9 @@ pub enum Transfer {
         last_update_timestamp: Option<i64>,
     },
     Btc {
-        block_height: u64,
         btc_tx_hash: String,
         vout: u64,
-        btc_bridge_address: String,
+        deposit_msg: DepositMsg,
     },
 }
 
