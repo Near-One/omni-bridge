@@ -379,13 +379,13 @@ async fn handle_btc_event(
             )
             .await;
         }
-        BtcEventDetails::ConfirmedTxid { txid } => {
-            info!("Received ConfirmedTxid on Btc: {txid}");
+        BtcEventDetails::ConfirmedTxid { txid: btc_tx_hash } => {
+            info!("Received ConfirmedTxid on Btc: {btc_tx_hash}");
             utils::redis::add_event(
                 &mut redis_connection,
                 utils::redis::EVENTS,
                 origin_transaction_id,
-                workers::btc::ConfirmedTxid { txid },
+                workers::btc::ConfirmedTxHash { btc_tx_hash },
             )
             .await;
         }

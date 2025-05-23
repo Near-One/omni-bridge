@@ -25,8 +25,8 @@ pub struct SignBtcTransaction {
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
-pub struct ConfirmedTxid {
-    pub txid: String,
+pub struct ConfirmedTxHash {
+    pub btc_tx_hash: String,
 }
 
 pub async fn process_init_transfer_event(
@@ -149,9 +149,9 @@ pub async fn process_sign_transaction_event(
     }
 }
 
-pub async fn process_confirmed_txid(
+pub async fn process_confirmed_tx_hash(
     connector: Arc<OmniConnector>,
-    txid: String,
+    btc_tx_hash: String,
     near_nonce: Arc<utils::nonce::NonceManager>,
 ) -> Result<EventAction> {
     let nonce = match near_nonce.reserve_nonce().await {
@@ -164,7 +164,7 @@ pub async fn process_confirmed_txid(
 
     match connector
         .near_btc_verify_withdraw(
-            txid,
+            btc_tx_hash,
             TransactionOptions {
                 nonce,
                 wait_until: near_primitives::views::TxExecutionStatus::Included,

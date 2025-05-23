@@ -530,16 +530,18 @@ pub async fn process_events(
                         }
                     }
                 }));
-            } else if let Ok(confirmed_txid) = serde_json::from_str::<btc::ConfirmedTxid>(&event) {
+            } else if let Ok(confirmed_tx_hash) =
+                serde_json::from_str::<btc::ConfirmedTxHash>(&event)
+            {
                 handlers.push(tokio::spawn({
                     let mut redis_connection = redis_connection.clone();
                     let connector = connector.clone();
                     let near_nonce = near_nonce.clone();
 
                     async move {
-                        match btc::process_confirmed_txid(
+                        match btc::process_confirmed_tx_hash(
                             connector,
-                            confirmed_txid.txid,
+                            confirmed_tx_hash.btc_tx_hash,
                             near_nonce,
                         )
                         .await
