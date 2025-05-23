@@ -36,7 +36,7 @@ fn get_expected_finalization_time(config: config::Config, chain_kind: ChainKind)
 async fn handle_transaction_event(
     mut redis_connection: redis::aio::MultiplexedConnection,
     config: config::Config,
-    transaction_id: String,
+    origin_transaction_id: String,
     origin: OmniTransactionOrigin,
     event: OmniTransactionEvent,
 ) -> Result<()> {
@@ -96,10 +96,10 @@ async fn handle_transaction_event(
                 anyhow::bail!("Expected EVMLog for EvmInitTransfer: {:?}", init_transfer);
             };
 
-            let Ok(tx_hash) = H256::from_str(&transaction_id) else {
+            let Ok(tx_hash) = H256::from_str(&origin_transaction_id) else {
                 anyhow::bail!(
                     "Failed to parse transaction_id as H256: {:?}",
-                    transaction_id
+                    origin_transaction_id
                 );
             };
 
@@ -138,7 +138,7 @@ async fn handle_transaction_event(
             utils::redis::add_event(
                 &mut redis_connection,
                 utils::redis::EVENTS,
-                transaction_id,
+                origin_transaction_id,
                 workers::Transfer::Evm {
                     chain_kind,
                     block_number,
@@ -164,10 +164,10 @@ async fn handle_transaction_event(
                 anyhow::bail!("Expected EVMLog for EvmFinTransfer: {:?}", fin_transfer);
             };
 
-            let Ok(tx_hash) = H256::from_str(&transaction_id) else {
+            let Ok(tx_hash) = H256::from_str(&origin_transaction_id) else {
                 anyhow::bail!(
                     "Failed to parse transaction_id as H256: {:?}",
-                    transaction_id
+                    origin_transaction_id
                 );
             };
 
@@ -183,7 +183,7 @@ async fn handle_transaction_event(
             utils::redis::add_event(
                 &mut redis_connection,
                 utils::redis::EVENTS,
-                transaction_id,
+                origin_transaction_id,
                 workers::FinTransfer::Evm {
                     chain_kind,
                     block_number,
@@ -220,7 +220,7 @@ async fn handle_transaction_event(
             utils::redis::add_event(
                 &mut redis_connection,
                 utils::redis::EVENTS,
-                transaction_id,
+                origin_transaction_id,
                 crate::workers::Transfer::Solana {
                     amount: init_transfer.amount.0.into(),
                     token: Pubkey::new_from_array(token.0),
@@ -253,7 +253,7 @@ async fn handle_transaction_event(
             utils::redis::add_event(
                 &mut redis_connection,
                 utils::redis::EVENTS,
-                transaction_id,
+                origin_transaction_id,
                 crate::workers::FinTransfer::Solana { emitter, sequence },
             )
             .await;
@@ -266,7 +266,7 @@ async fn handle_transaction_event(
 async fn handle_meta_event(
     mut redis_connection: redis::aio::MultiplexedConnection,
     config: config::Config,
-    transaction_id: String,
+    origin_transaction_id: String,
     origin: OmniTransactionOrigin,
     event: OmniMetaEvent,
 ) -> Result<()> {
@@ -287,10 +287,10 @@ async fn handle_meta_event(
                 );
             };
 
-            let Ok(tx_hash) = H256::from_str(&transaction_id) else {
+            let Ok(tx_hash) = H256::from_str(&origin_transaction_id) else {
                 anyhow::bail!(
                     "Failed to parse transaction_id as H256: {:?}",
-                    transaction_id
+                    origin_transaction_id
                 );
             };
 
@@ -306,7 +306,7 @@ async fn handle_meta_event(
             utils::redis::add_event(
                 &mut redis_connection,
                 utils::redis::EVENTS,
-                transaction_id,
+                origin_transaction_id,
                 workers::DeployToken::Evm {
                     chain_kind,
                     block_number,
@@ -325,7 +325,7 @@ async fn handle_meta_event(
             utils::redis::add_event(
                 &mut redis_connection,
                 utils::redis::EVENTS,
-                transaction_id,
+                origin_transaction_id,
                 workers::DeployToken::Solana { emitter, sequence },
             )
             .await;
@@ -344,18 +344,18 @@ async fn handle_meta_event(
 
 async fn handle_btc_event(
     mut redis_connection: redis::aio::MultiplexedConnection,
-    transaction_id: String,
+    origin_transaction_id: String,
     event: BtcEvent,
 ) -> Result<()> {
     match event.details {
         BtcEventDetails::SignTransaction { relayer, .. } => {
-            info!("Received SignBtcTransaction: {transaction_id}");
+            info!("Received SignBtcTransaction: {origin_transaction_id}");
             utils::redis::add_event(
                 &mut redis_connection,
                 utils::redis::EVENTS,
-                transaction_id.clone(),
+                origin_transaction_id.clone(),
                 workers::btc::SignBtcTransaction {
-                    near_tx_hash: transaction_id,
+                    near_tx_hash: origin_transaction_id,
                     relayer,
                 },
             )
@@ -370,7 +370,7 @@ async fn handle_btc_event(
             utils::redis::add_event(
                 &mut redis_connection,
                 utils::redis::EVENTS,
-                transaction_id,
+                origin_transaction_id,
                 workers::Transfer::Btc {
                     btc_tx_hash,
                     vout,
@@ -384,7 +384,7 @@ async fn handle_btc_event(
             utils::redis::add_event(
                 &mut redis_connection,
                 utils::redis::EVENTS,
-                transaction_id,
+                origin_transaction_id,
                 workers::btc::ConfirmedTxid { txid },
             )
             .await;
