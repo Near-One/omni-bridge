@@ -60,9 +60,9 @@ pub enum Transfer {
     },
     Btc {
         block_height: u64,
-        tx_hash: String,
+        btc_tx_hash: String,
         vout: u64,
-        recipient_id: String,
+        btc_bridge_address: String,
     },
 }
 

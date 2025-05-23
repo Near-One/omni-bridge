@@ -361,22 +361,22 @@ async fn handle_btc_event(
             )
             .await;
         }
-        BtcEventDetails::Transfer {
+        BtcEventDetails::InitTransfer {
             block_height,
-            tx_hash,
+            btc_tx_hash,
             vout,
-            address,
+            btc_bridge_address,
         } => {
-            info!("Received BtcInitTransfer: {tx_hash}");
+            info!("Received BtcInitTransfer: {btc_tx_hash}");
             utils::redis::add_event(
                 &mut redis_connection,
                 utils::redis::EVENTS,
                 transaction_id,
                 workers::Transfer::Btc {
                     block_height,
-                    tx_hash,
+                    btc_tx_hash,
                     vout,
-                    recipient_id: address,
+                    btc_bridge_address,
                 },
             )
             .await;

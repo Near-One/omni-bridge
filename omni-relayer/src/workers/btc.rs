@@ -32,9 +32,9 @@ pub async fn process_init_transfer_event(
     near_nonce: Arc<utils::nonce::NonceManager>,
 ) -> Result<EventAction> {
     let Transfer::Btc {
-        tx_hash,
+        btc_tx_hash,
         vout,
-        recipient_id,
+        btc_bridge_address: recipient_id,
         ..
     } = transfer
     else {
@@ -51,7 +51,7 @@ pub async fn process_init_transfer_event(
 
     match connector
         .near_fin_transfer_btc(
-            tx_hash,
+            btc_tx_hash,
             usize::try_from(vout)?,
             BtcDepositArgs::OmniDepositArgs {
                 recipient_id,
