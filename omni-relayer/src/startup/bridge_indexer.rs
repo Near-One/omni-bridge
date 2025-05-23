@@ -8,12 +8,7 @@ use bridge_indexer_types::documents_types::{
 };
 use ethereum_types::H256;
 use log::{info, warn};
-use mongodb::{
-    Client, Collection,
-    bson::{Bson, Document, doc},
-    change_stream::event::ResumeToken,
-    options::ClientOptions,
-};
+use mongodb::{Client, Collection, change_stream::event::ResumeToken, options::ClientOptions};
 use omni_types::{ChainKind, OmniAddress, near_events::OmniBridgeEvent};
 use solana_sdk::pubkey::Pubkey;
 use tokio_stream::StreamExt;
@@ -402,48 +397,35 @@ async fn handle_btc_event(
     Ok(())
 }
 
-fn get_pipeline(start_timestamp: Option<i64>) -> Vec<Document> {
-    if let Some(timestamp) = start_timestamp {
-        vec![doc! {
-            "$match": {
-                "$or": [
-                    { "origin.SolanaTransaction.block_time": { "$gte": timestamp * 10_i64.pow(3) } },
-                    { "origin.EVMLog.block_timestamp": { "$gte": timestamp * 10_i64.pow(3) } },
-                    { "origin.BtcTransaction.block_time": { "$gte": timestamp * 10_i64.pow(3) } },
-                    { "origin.NearReceipt.block_timestamp_nanosec": { "$gte": timestamp / 10_i64.pow(6) } }
-                ]
-            }
-        }]
-    } else {
-        vec![]
-    }
-}
-
 async fn watch_omni_events_collection(
     collection: &Collection<OmniEvent>,
     mut redis_connection: redis::aio::MultiplexedConnection,
     config: &config::Config,
     start_timestamp: Option<i64>,
 ) -> Result<()> {
-    let resume_token: Option<ResumeToken> = utils::redis::get_last_processed::<&str, String>(
-        &mut redis_connection,
-        utils::redis::MONGODB_OMNI_EVENTS_RT,
-    )
-    .await
-    .and_then(|rt| serde_json::from_str(&rt).ok())
-    .unwrap_or_default();
+    let mut stream = if let Some(timestamp) = start_timestamp {
+        info!("Starting from timestamp: {timestamp}");
 
-    let pipeline = get_pipeline(start_timestamp);
+        collection
+            .watch()
+            .start_at_operation_time(mongodb::bson::Timestamp {
+                time: timestamp as u32,
+                increment: 0,
+            })
+            .await?
+    } else {
+        let resume_token: Option<ResumeToken> = utils::redis::get_last_processed::<&str, String>(
+            &mut redis_connection,
+            utils::redis::MONGODB_OMNI_EVENTS_RT,
+        )
+        .await
+        .and_then(|rt| serde_json::from_str(&rt).ok())
+        .unwrap_or_default();
 
-    let mut stream = collection
-        .watch()
-        .pipeline(pipeline.clone())
-        .resume_after(if pipeline.is_empty() {
-            resume_token
-        } else {
-            None
-        })
-        .await?;
+        info!("Resuming from token: {resume_token:?}");
+
+        collection.watch().resume_after(resume_token).await?
+    };
 
     while let Some(change) = stream.next().await {
         match change {
