@@ -8,7 +8,12 @@ use bridge_indexer_types::documents_types::{
 };
 use ethereum_types::H256;
 use log::{info, warn};
-use mongodb::{Client, Collection, change_stream::event::ResumeToken, options::ClientOptions};
+use mongodb::{
+    Client, Collection,
+    bson::{Bson, Document, doc},
+    change_stream::event::ResumeToken,
+    options::ClientOptions,
+};
 use omni_types::{ChainKind, OmniAddress, near_events::OmniBridgeEvent};
 use solana_sdk::pubkey::Pubkey;
 use tokio_stream::StreamExt;
@@ -133,8 +138,7 @@ async fn handle_transaction_event(
                 );
             };
 
-            let expected_finalization_time =
-                get_expected_finalization_time(config, chain_kind).unwrap();
+            let expected_finalization_time = get_expected_finalization_time(config, chain_kind)?;
 
             utils::redis::add_event(
                 &mut redis_connection,
@@ -179,8 +183,7 @@ async fn handle_transaction_event(
                 );
             };
 
-            let expected_finalization_time =
-                get_expected_finalization_time(config, chain_kind).unwrap();
+            let expected_finalization_time = get_expected_finalization_time(config, chain_kind)?;
 
             utils::redis::add_event(
                 &mut redis_connection,
@@ -303,8 +306,7 @@ async fn handle_meta_event(
                 );
             };
 
-            let expected_finalization_time =
-                get_expected_finalization_time(config, chain_kind).unwrap();
+            let expected_finalization_time = get_expected_finalization_time(config, chain_kind)?;
 
             utils::redis::add_event(
                 &mut redis_connection,
@@ -400,11 +402,32 @@ async fn handle_btc_event(
     Ok(())
 }
 
+fn get_pipeline(start_timestamp: Option<i64>) -> Vec<Document> {
+    if let Some(timestamp) = start_timestamp {
+        let ts_ms = Bson::Int64(timestamp * 1000);
+        let ts_ns = Bson::Double((timestamp as f64) * 1_000_000.0);
+
+        vec![doc! {
+            "$match": {
+                "$or": [
+                    { "origin.SolanaTransaction.block_time": { "$gte": ts_ms.clone() } },
+                    { "origin.EVMLog.block_timestamp": { "$gte": ts_ms.clone() } },
+                    { "origin.BtcTransaction.block_time": { "$gte": ts_ms.clone() } },
+                    { "origin.NearReceipt.block_timestamp_nanosec": { "$gte": ts_ns } }
+                ]
+            }
+        }]
+    } else {
+        vec![]
+    }
+}
+
 async fn watch_omni_events_collection(
     collection: &Collection<OmniEvent>,
     mut redis_connection: redis::aio::MultiplexedConnection,
     config: &config::Config,
-) {
+    start_timestamp: Option<i64>,
+) -> Result<()> {
     let resume_token: Option<ResumeToken> = utils::redis::get_last_processed::<&str, String>(
         &mut redis_connection,
         utils::redis::MONGODB_OMNI_EVENTS_RT,
@@ -413,7 +436,17 @@ async fn watch_omni_events_collection(
     .and_then(|rt| serde_json::from_str(&rt).ok())
     .unwrap_or_default();
 
-    let mut stream = collection.watch().resume_after(resume_token).await.unwrap();
+    let pipeline = get_pipeline(start_timestamp);
+
+    let mut stream = collection
+        .watch()
+        .pipeline(pipeline.clone())
+        .resume_after(if pipeline.is_empty() {
+            resume_token
+        } else {
+            None
+        })
+        .await?;
 
     while let Some(change) = stream.next().await {
         match change {
@@ -495,9 +528,15 @@ async fn watch_omni_events_collection(
             .await;
         }
     }
+
+    Ok(())
 }
 
-pub async fn start_indexer(config: config::Config, redis_client: redis::Client) -> Result<()> {
+pub async fn start_indexer(
+    config: config::Config,
+    redis_client: redis::Client,
+    start_timestamp: Option<i64>,
+) -> Result<()> {
     info!("Connecting to bridge-indexer");
 
     let Some(ref uri) = config.bridge_indexer.mongodb_uri else {
@@ -518,8 +557,16 @@ pub async fn start_indexer(config: config::Config, redis_client: redis::Client) 
     loop {
         info!("Starting a mongodb stream that track changes in {OMNI_EVENTS}");
 
-        watch_omni_events_collection(&omni_events_collection, redis_connection.clone(), &config)
-            .await;
+        if let Err(err) = watch_omni_events_collection(
+            &omni_events_collection,
+            redis_connection.clone(),
+            &config,
+            start_timestamp,
+        )
+        .await
+        {
+            warn!("Error watching changes: {err:?}");
+        }
 
         warn!("Mongodb stream was closed, restarting...");
         tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
