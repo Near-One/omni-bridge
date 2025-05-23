@@ -86,6 +86,7 @@ pub struct Config {
     pub base: Option<Evm>,
     pub arb: Option<Evm>,
     pub solana: Option<Solana>,
+    pub btc: Option<Btc>,
     pub wormhole: Wormhole,
 }
 
@@ -168,6 +169,11 @@ pub struct Solana {
     pub finalize_transfer_discriminator: Vec<u8>,
     pub finalize_transfer_sol_discriminator: Vec<u8>,
     pub credentials_path: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct Btc {
+    pub rpc_http_url: String,
 }
 
 #[derive(Debug, Clone, Deserialize)]

@@ -8,7 +8,7 @@ use log::{info, warn};
 
 use ethereum_types::H256;
 
-use near_bridge_client::TransactionOptions;
+use near_bridge_client::{TransactionOptions, btc_connector::DepositMsg};
 use near_jsonrpc_client::{JsonRpcClient, errors::JsonRpcError};
 use near_primitives::{hash::CryptoHash, types::AccountId, views::TxExecutionStatus};
 use near_rpc_client::NearRpcError;
@@ -17,7 +17,7 @@ use solana_client::rpc_request::RpcResponseErrorData;
 use solana_rpc_client_api::{client_error::ErrorKind, request::RpcError};
 use solana_sdk::{instruction::InstructionError, pubkey::Pubkey, transaction::TransactionError};
 
-use omni_connector::OmniConnector;
+use omni_connector::{BtcDepositArgs, OmniConnector};
 use omni_types::{
     ChainKind, Fee, OmniAddress, TransferId, TransferMessage, locker_args::ClaimFeeArgs,
     near_events::OmniBridgeEvent, prover_args::WormholeVerifyProofArgs, prover_result::ProofKind,
@@ -62,6 +62,12 @@ pub enum Transfer {
         creation_timestamp: i64,
         last_update_timestamp: Option<i64>,
     },
+    Btc {
+        block_height: u64,
+        tx_hash: String,
+        vout: u64,
+        recipient_id: AccountId,
+    },
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
@@ -96,6 +102,17 @@ pub enum DeployToken {
         emitter: String,
         sequence: u64,
     },
+}
+
+#[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
+pub struct SignBtcTransaction {
+    pub tx_hash: String,
+    pub relayer: AccountId,
+}
+
+#[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
+pub struct ConfirmedTxid {
+    pub txid: String,
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
@@ -251,6 +268,37 @@ pub async fn process_events(
                                 near_nonce,
                             )
                             .await
+                            {
+                                Ok(EventAction::Retry) => {}
+                                Ok(EventAction::Remove) => {
+                                    utils::redis::remove_event(
+                                        &mut redis_connection,
+                                        utils::redis::EVENTS,
+                                        &key,
+                                    )
+                                    .await;
+                                }
+                                Err(err) => {
+                                    warn!("{err:?}");
+                                    utils::redis::remove_event(
+                                        &mut redis_connection,
+                                        utils::redis::EVENTS,
+                                        &key,
+                                    )
+                                    .await;
+                                }
+                            }
+                        }
+                    }));
+                } else if let Transfer::Btc { .. } = transfer {
+                    handlers.push(tokio::spawn({
+                        let mut redis_connection = redis_connection.clone();
+                        let connector = connector.clone();
+                        let near_nonce = near_nonce.clone();
+
+                        async move {
+                            match process_btc_init_transfer_event(connector, transfer, near_nonce)
+                                .await
                             {
                                 Ok(EventAction::Retry) => {}
                                 Ok(EventAction::Remove) => {
@@ -471,6 +519,72 @@ pub async fn process_events(
                         }
                     }));
                 }
+            } else if let Ok(sign_btc_transaction_event) =
+                serde_json::from_str::<SignBtcTransaction>(&event)
+            {
+                handlers.push(tokio::spawn({
+                    let mut redis_connection = redis_connection.clone();
+                    let connector = connector.clone();
+
+                    async move {
+                        match process_sign_btc_transaction_event(
+                            connector,
+                            sign_btc_transaction_event,
+                        )
+                        .await
+                        {
+                            Ok(EventAction::Retry) => {}
+                            Ok(EventAction::Remove) => {
+                                utils::redis::remove_event(
+                                    &mut redis_connection,
+                                    utils::redis::EVENTS,
+                                    &key,
+                                )
+                                .await;
+                            }
+                            Err(err) => {
+                                warn!("{err:?}");
+                                utils::redis::remove_event(
+                                    &mut redis_connection,
+                                    utils::redis::EVENTS,
+                                    &key,
+                                )
+                                .await;
+                            }
+                        }
+                    }
+                }));
+            } else if let Ok(confirmed_txid) = serde_json::from_str::<ConfirmedTxid>(&event) {
+                handlers.push(tokio::spawn({
+                    let mut redis_connection = redis_connection.clone();
+                    let connector = connector.clone();
+                    let near_nonce = near_nonce.clone();
+
+                    async move {
+                        match process_btc_confirmed_txid(connector, confirmed_txid.txid, near_nonce)
+                            .await
+                        {
+                            Ok(EventAction::Retry) => {}
+                            Ok(EventAction::Remove) => {
+                                utils::redis::remove_event(
+                                    &mut redis_connection,
+                                    utils::redis::EVENTS,
+                                    &key,
+                                )
+                                .await;
+                            }
+                            Err(err) => {
+                                warn!("{err:?}");
+                                utils::redis::remove_event(
+                                    &mut redis_connection,
+                                    utils::redis::EVENTS,
+                                    &key,
+                                )
+                                .await;
+                            }
+                        }
+                    }
+                }));
             } else if let Ok(unverified_event) =
                 serde_json::from_str::<UnverifiedNearTrasfer>(&event)
             {
@@ -796,6 +910,51 @@ async fn process_sign_transfer_event(
             }
 
             Ok(EventAction::Retry)
+        }
+    }
+}
+
+async fn process_sign_btc_transaction_event(
+    connector: Arc<OmniConnector>,
+    sign_btc_transaction_event: SignBtcTransaction,
+) -> Result<EventAction> {
+    info!("Trying to process SignBtcTransaction log on NEAR");
+
+    match connector
+        .btc_fin_transfer(
+            sign_btc_transaction_event.tx_hash.clone(),
+            Some(sign_btc_transaction_event.relayer),
+        )
+        .await
+    {
+        Ok(tx_hash) => {
+            info!("Finalized BTC transaction: {tx_hash}");
+            Ok(EventAction::Remove)
+        }
+        Err(err) => {
+            if let BridgeSdkError::NearRpcError(near_rpc_error) = err {
+                match near_rpc_error {
+                    NearRpcError::NonceError
+                    | NearRpcError::FinalizationError
+                    | NearRpcError::RpcTransactionError(JsonRpcError::TransportError(_)) => {
+                        warn!(
+                            "Failed to finalize btc transaction ({}), retrying: {near_rpc_error:?}",
+                            sign_btc_transaction_event.tx_hash
+                        );
+                        return Ok(EventAction::Retry);
+                    }
+                    _ => {
+                        anyhow::bail!(
+                            "Failed to finalize btc transaction ({}): {near_rpc_error:?}",
+                            sign_btc_transaction_event.tx_hash
+                        );
+                    }
+                };
+            }
+            anyhow::bail!(
+                "Failed to finalize btc transaction ({}): {err:?}",
+                sign_btc_transaction_event.tx_hash
+            );
         }
     }
 }
@@ -1162,6 +1321,74 @@ async fn process_solana_init_transfer_event(
             }
 
             anyhow::bail!("Failed to finalize transfer: {err:?}");
+        }
+    }
+}
+
+async fn process_btc_init_transfer_event(
+    connector: Arc<OmniConnector>,
+    transfer: Transfer,
+    near_nonce: Arc<utils::nonce::NonceManager>,
+) -> Result<EventAction> {
+    let Transfer::Btc {
+        tx_hash,
+        vout,
+        recipient_id,
+        ..
+    } = transfer
+    else {
+        anyhow::bail!(
+            "Expected SolanaInitTransferWithTimestamp, got: {:?}",
+            transfer
+        );
+    };
+
+    let nonce = match near_nonce.reserve_nonce().await {
+        Ok(nonce) => Some(nonce),
+        Err(err) => {
+            warn!("Failed to reserve nonce: {err:?}");
+            return Ok(EventAction::Retry);
+        }
+    };
+
+    match connector
+        .near_fin_transfer_btc(
+            tx_hash,
+            usize::try_from(vout)?,
+            BtcDepositArgs::DepositMsg {
+                msg: DepositMsg {
+                    recipient_id,
+                    post_actions: None,
+                    extra_msg: None,
+                },
+            },
+            TransactionOptions {
+                nonce,
+                wait_until: near_primitives::views::TxExecutionStatus::Included,
+                wait_final_outcome_timeout_sec: None,
+            },
+        )
+        .await
+    {
+        Ok(tx_hash) => {
+            info!("Finalized BTC transaction: {tx_hash:?}");
+            Ok(EventAction::Remove)
+        }
+        Err(err) => {
+            if let BridgeSdkError::NearRpcError(near_rpc_error) = err {
+                match near_rpc_error {
+                    NearRpcError::NonceError
+                    | NearRpcError::FinalizationError
+                    | NearRpcError::RpcTransactionError(JsonRpcError::TransportError(_)) => {
+                        warn!("Failed to claim fee, retrying: {near_rpc_error:?}");
+                        return Ok(EventAction::Retry);
+                    }
+                    _ => {
+                        anyhow::bail!("Failed to claim fee: {near_rpc_error:?}");
+                    }
+                };
+            }
+            anyhow::bail!("Failed to claim fee: {err:?}");
         }
     }
 }
@@ -1537,6 +1764,54 @@ async fn process_solana_deploy_token_event(
             }
 
             anyhow::bail!("Failed to bind token: {err:?}");
+        }
+    }
+}
+
+async fn process_btc_confirmed_txid(
+    connector: Arc<OmniConnector>,
+    txid: String,
+    near_nonce: Arc<utils::nonce::NonceManager>,
+) -> Result<EventAction> {
+    let nonce = match near_nonce.reserve_nonce().await {
+        Ok(nonce) => Some(nonce),
+        Err(err) => {
+            warn!("Failed to reserve nonce: {err:?}");
+            return Ok(EventAction::Retry);
+        }
+    };
+
+    match connector
+        .near_btc_verify_withdraw(
+            txid,
+            TransactionOptions {
+                nonce,
+                wait_until: near_primitives::views::TxExecutionStatus::Included,
+                wait_final_outcome_timeout_sec: None,
+            },
+        )
+        .await
+    {
+        Ok(tx_hash) => {
+            info!("Verified withdraw: {tx_hash:?}");
+            Ok(EventAction::Remove)
+        }
+        Err(err) => {
+            if let BridgeSdkError::NearRpcError(near_rpc_error) = err {
+                match near_rpc_error {
+                    NearRpcError::NonceError
+                    | NearRpcError::FinalizationError
+                    | NearRpcError::RpcTransactionError(JsonRpcError::TransportError(_)) => {
+                        warn!("Failed to verify withdraw, retrying: {near_rpc_error:?}");
+                        return Ok(EventAction::Retry);
+                    }
+                    _ => {
+                        anyhow::bail!("Failed to verify withdraw: {near_rpc_error:?}");
+                    }
+                };
+            }
+
+            anyhow::bail!("Failed to verify withdraw: {err:?}");
         }
     }
 }

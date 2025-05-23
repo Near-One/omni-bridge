@@ -3,8 +3,8 @@ use std::str::FromStr;
 use alloy::{primitives::Address, sol_types::SolEvent};
 use anyhow::{Context, Result};
 use bridge_indexer_types::documents_types::{
-    OmniEvent, OmniEventData, OmniMetaEvent, OmniMetaEventDetails, OmniTransactionEvent,
-    OmniTransactionOrigin, OmniTransferMessage,
+    BtcEvent, BtcEventDetails, OmniEvent, OmniEventData, OmniMetaEvent, OmniMetaEventDetails,
+    OmniTransactionEvent, OmniTransactionOrigin, OmniTransferMessage,
 };
 use ethereum_types::H256;
 use log::{info, warn};
@@ -345,6 +345,61 @@ async fn handle_meta_event(
     Ok(())
 }
 
+async fn handle_btc_event(
+    mut redis_connection: redis::aio::MultiplexedConnection,
+    transaction_id: String,
+    event: BtcEvent,
+) -> Result<()> {
+    match event.details {
+        BtcEventDetails::SignTransaction { relayer, .. } => {
+            info!("Received SignTransaction: {transaction_id}");
+            utils::redis::add_event(
+                &mut redis_connection,
+                utils::redis::EVENTS,
+                transaction_id.clone(),
+                workers::SignBtcTransaction {
+                    tx_hash: transaction_id,
+                    relayer,
+                },
+            )
+            .await;
+        }
+        BtcEventDetails::Transfer {
+            block_height,
+            tx_hash,
+            vout,
+            address,
+        } => {
+            info!("Received BtcEvent: {block_height} {tx_hash} {vout} {address}");
+            utils::redis::add_event(
+                &mut redis_connection,
+                utils::redis::EVENTS,
+                transaction_id,
+                workers::Transfer::Btc {
+                    block_height,
+                    tx_hash,
+                    vout,
+                    recipient_id: address.parse()?,
+                },
+            )
+            .await;
+        }
+        BtcEventDetails::ConfirmedTxid { txid } => {
+            info!("Received ConfirmedTxid: {txid}");
+            utils::redis::add_event(
+                &mut redis_connection,
+                utils::redis::EVENTS,
+                transaction_id,
+                workers::ConfirmedTxid { txid },
+            )
+            .await;
+        }
+        BtcEventDetails::VerifyDeposit { .. } | BtcEventDetails::LogDepositAddress(_) => {}
+    }
+
+    Ok(())
+}
+
 async fn watch_omni_events_collection(
     collection: &Collection<OmniEvent>,
     mut redis_connection: redis::aio::MultiplexedConnection,
@@ -397,6 +452,23 @@ async fn watch_omni_events_collection(
                                         event.transaction_id,
                                         event.origin,
                                         meta_event,
+                                    )
+                                    .await
+                                    {
+                                        warn!("Failed to handle meta event: {err:?}");
+                                    }
+                                }
+                            });
+                        }
+                        OmniEventData::Btc(btc_event) => {
+                            tokio::spawn({
+                                let redis_connection = redis_connection.clone();
+
+                                async move {
+                                    if let Err(err) = handle_btc_event(
+                                        redis_connection,
+                                        event.transaction_id,
+                                        btc_event,
                                     )
                                     .await
                                     {

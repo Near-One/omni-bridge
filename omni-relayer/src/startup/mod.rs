@@ -1,4 +1,5 @@
 use anyhow::{Context, Result};
+use btc_bridge_client::BtcBridgeClient;
 use log::info;
 
 use evm_bridge_client::{EvmBridgeClient, EvmBridgeClientBuilder};
@@ -90,6 +91,12 @@ pub fn build_omni_connector(
         })
         .transpose()?;
 
+    let btc_bridge_client = config
+        .btc
+        .as_ref()
+        .map(|btc| BtcBridgeClient::new(&btc.rpc_http_url))
+        .context("Failed to create BtcBridgeClient")?;
+
     let wormhole_bridge_client = WormholeBridgeClientBuilder::default()
         .endpoint(Some(config.wormhole.api_url.clone()))
         .build()
@@ -102,7 +109,7 @@ pub fn build_omni_connector(
         .arb_bridge_client(arb_bridge_client)
         .solana_bridge_client(solana_bridge_client)
         .wormhole_bridge_client(Some(wormhole_bridge_client))
-        .btc_bridge_client(None)
+        .btc_bridge_client(Some(btc_bridge_client))
         .build()
         .context("Failed to build OmniConnector")
 }
