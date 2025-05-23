@@ -8,7 +8,7 @@ use log::{info, warn};
 
 use ethereum_types::H256;
 
-use near_bridge_client::{TransactionOptions, btc_connector::DepositMsg};
+use near_bridge_client::TransactionOptions;
 use near_jsonrpc_client::{JsonRpcClient, errors::JsonRpcError};
 use near_primitives::{hash::CryptoHash, types::AccountId, views::TxExecutionStatus};
 use near_rpc_client::NearRpcError;
@@ -66,7 +66,7 @@ pub enum Transfer {
         block_height: u64,
         tx_hash: String,
         vout: u64,
-        recipient_id: AccountId,
+        recipient_id: String,
     },
 }
 
@@ -106,7 +106,7 @@ pub enum DeployToken {
 
 #[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
 pub struct SignBtcTransaction {
-    pub tx_hash: String,
+    pub near_tx_hash: String,
     pub relayer: AccountId,
 }
 
@@ -922,7 +922,7 @@ async fn process_sign_btc_transaction_event(
 
     match connector
         .btc_fin_transfer(
-            sign_btc_transaction_event.tx_hash.clone(),
+            sign_btc_transaction_event.near_tx_hash.clone(),
             Some(sign_btc_transaction_event.relayer),
         )
         .await
@@ -939,21 +939,21 @@ async fn process_sign_btc_transaction_event(
                     | NearRpcError::RpcTransactionError(JsonRpcError::TransportError(_)) => {
                         warn!(
                             "Failed to finalize btc transaction ({}), retrying: {near_rpc_error:?}",
-                            sign_btc_transaction_event.tx_hash
+                            sign_btc_transaction_event.near_tx_hash
                         );
                         return Ok(EventAction::Retry);
                     }
                     _ => {
                         anyhow::bail!(
                             "Failed to finalize btc transaction ({}): {near_rpc_error:?}",
-                            sign_btc_transaction_event.tx_hash
+                            sign_btc_transaction_event.near_tx_hash
                         );
                     }
                 };
             }
             anyhow::bail!(
                 "Failed to finalize btc transaction ({}): {err:?}",
-                sign_btc_transaction_event.tx_hash
+                sign_btc_transaction_event.near_tx_hash
             );
         }
     }
@@ -1337,10 +1337,7 @@ async fn process_btc_init_transfer_event(
         ..
     } = transfer
     else {
-        anyhow::bail!(
-            "Expected SolanaInitTransferWithTimestamp, got: {:?}",
-            transfer
-        );
+        anyhow::bail!("Expected BtcTransfer, got: {:?}", transfer);
     };
 
     let nonce = match near_nonce.reserve_nonce().await {
@@ -1355,12 +1352,10 @@ async fn process_btc_init_transfer_event(
         .near_fin_transfer_btc(
             tx_hash,
             usize::try_from(vout)?,
-            BtcDepositArgs::DepositMsg {
-                msg: DepositMsg {
-                    recipient_id,
-                    post_actions: None,
-                    extra_msg: None,
-                },
+            BtcDepositArgs::OmniDepositArgs {
+                recipient_id,
+                amount: 0,
+                fee: 0,
             },
             TransactionOptions {
                 nonce,

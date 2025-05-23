@@ -355,7 +355,7 @@ async fn handle_btc_event(
                 utils::redis::EVENTS,
                 transaction_id.clone(),
                 workers::SignBtcTransaction {
-                    tx_hash: transaction_id,
+                    near_tx_hash: transaction_id,
                     relayer,
                 },
             )
@@ -376,7 +376,7 @@ async fn handle_btc_event(
                     block_height,
                     tx_hash,
                     vout,
-                    recipient_id: address.parse()?,
+                    recipient_id: address,
                 },
             )
             .await;
