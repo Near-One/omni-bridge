@@ -9,7 +9,7 @@ use near_jsonrpc_client::errors::JsonRpcError;
 use near_primitives::types::AccountId;
 use near_rpc_client::NearRpcError;
 
-use omni_connector::{BtcDepositArgs, OmniConnector};
+use omni_connector::{FinTransferArgs, OmniConnector};
 
 use crate::utils;
 
@@ -49,23 +49,20 @@ pub async fn process_init_transfer_event(
         }
     };
 
-    match connector
-        .near_fin_transfer_btc(
-            btc_tx_hash,
-            usize::try_from(vout)?,
-            BtcDepositArgs::OmniDepositArgs {
-                recipient_id,
-                amount: 0,
-                fee: 0,
-            },
-            TransactionOptions {
-                nonce,
-                wait_until: near_primitives::views::TxExecutionStatus::Included,
-                wait_final_outcome_timeout_sec: None,
-            },
-        )
-        .await
-    {
+    let fin_transfer_args = FinTransferArgs::NearFinTransferBTC {
+        btc_tx_hash,
+        vout: usize::try_from(vout)?,
+        recipient_id,
+        amount: 0,
+        fee: 0,
+        transaction_options: TransactionOptions {
+            nonce,
+            wait_until: near_primitives::views::TxExecutionStatus::Included,
+            wait_final_outcome_timeout_sec: None,
+        },
+    };
+
+    match connector.fin_transfer(fin_transfer_args).await {
         Ok(tx_hash) => {
             info!("Finalized BTC transaction: {tx_hash:?}");
             Ok(EventAction::Remove)
