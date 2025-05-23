@@ -33,7 +33,7 @@ struct CliArgs {
     solana_start_signature: Option<Signature>,
     /// Start timestamp for bridge indexer
     #[clap(long)]
-    start_timestamp: Option<i64>,
+    start_timestamp: Option<u32>,
 }
 
 #[tokio::main]

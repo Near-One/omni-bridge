@@ -401,17 +401,14 @@ async fn watch_omni_events_collection(
     collection: &Collection<OmniEvent>,
     mut redis_connection: redis::aio::MultiplexedConnection,
     config: &config::Config,
-    start_timestamp: Option<i64>,
+    start_timestamp: Option<u32>,
 ) -> Result<()> {
-    let mut stream = if let Some(timestamp) = start_timestamp {
-        info!("Starting from timestamp: {timestamp}");
+    let mut stream = if let Some(time) = start_timestamp {
+        info!("Starting from timestamp: {time}");
 
         collection
             .watch()
-            .start_at_operation_time(mongodb::bson::Timestamp {
-                time: timestamp as u32,
-                increment: 0,
-            })
+            .start_at_operation_time(mongodb::bson::Timestamp { time, increment: 0 })
             .await?
     } else {
         let resume_token: Option<ResumeToken> = utils::redis::get_last_processed::<&str, String>(
@@ -514,7 +511,7 @@ async fn watch_omni_events_collection(
 pub async fn start_indexer(
     config: config::Config,
     redis_client: redis::Client,
-    start_timestamp: Option<i64>,
+    start_timestamp: Option<u32>,
 ) -> Result<()> {
     info!("Connecting to bridge-indexer");
 
