@@ -404,16 +404,13 @@ async fn handle_btc_event(
 
 fn get_pipeline(start_timestamp: Option<i64>) -> Vec<Document> {
     if let Some(timestamp) = start_timestamp {
-        let ts_ms = Bson::Int64(timestamp * 1000);
-        let ts_ns = Bson::Double((timestamp as f64) * 1_000_000.0);
-
         vec![doc! {
             "$match": {
                 "$or": [
-                    { "origin.SolanaTransaction.block_time": { "$gte": ts_ms.clone() } },
-                    { "origin.EVMLog.block_timestamp": { "$gte": ts_ms.clone() } },
-                    { "origin.BtcTransaction.block_time": { "$gte": ts_ms.clone() } },
-                    { "origin.NearReceipt.block_timestamp_nanosec": { "$gte": ts_ns } }
+                    { "origin.SolanaTransaction.block_time": { "$gte": timestamp * 10_i64.pow(3) } },
+                    { "origin.EVMLog.block_timestamp": { "$gte": timestamp * 10_i64.pow(3) } },
+                    { "origin.BtcTransaction.block_time": { "$gte": timestamp * 10_i64.pow(3) } },
+                    { "origin.NearReceipt.block_timestamp_nanosec": { "$gte": timestamp / 10_i64.pow(6) } }
                 ]
             }
         }]
