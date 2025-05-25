@@ -1,6 +1,4 @@
-use alloy_primitives::Log;
-use alloy_rlp::Decodable;
-use alloy_sol_types::{sol, SolEvent};
+use alloy::{primitives::Log, rlp::Decodable, sol, sol_types::SolEvent};
 
 use crate::{
     prover_result::{
@@ -58,11 +56,7 @@ where
     <V as TryFromLog<Log<T>>>::Error: std::fmt::Display,
 {
     let rlp_decoded = Log::decode(&mut log_rlp.as_slice()).map_err(stringify)?;
-    V::try_from_log(
-        chain_kind,
-        T::decode_log(&rlp_decoded, true).map_err(stringify)?,
-    )
-    .map_err(stringify)
+    V::try_from_log(chain_kind, T::decode_log(&rlp_decoded).map_err(stringify)?).map_err(stringify)
 }
 
 pub trait TryFromLog<T>: Sized {
@@ -171,7 +165,7 @@ impl TryFromLog<Log<LogMetadata>> for LogMetadataMessage {
 
 #[cfg(test)]
 mod tests {
-    use alloy_primitives::IntoLogData;
+    use alloy::primitives::IntoLogData;
 
     use super::*;
     sol! {
@@ -214,8 +208,8 @@ mod tests {
 
         assert_ne!(log, test_log);
 
-        let decoded_log = FinTransfer::decode_log(&log, true).unwrap();
-        let decoded_test_log = TestFinTransfer::decode_log(&test_log, true).unwrap();
+        let decoded_log = FinTransfer::decode_log(&log).unwrap();
+        let decoded_test_log = TestFinTransfer::decode_log(&test_log).unwrap();
 
         assert_ne!(FinTransfer::SIGNATURE_HASH, TestFinTransfer::SIGNATURE_HASH);
         assert_eq!(FinTransfer::SIGNATURE_HASH, decoded_log.topics().0);

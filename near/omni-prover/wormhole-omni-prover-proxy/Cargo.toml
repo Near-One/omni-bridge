@@ -29,6 +29,5 @@ crate-type = ["cdylib", "rlib"]
 near-sdk.workspace = true
 borsh.workspace = true
 near-plugins.workspace = true
-alloy-sol-types.workspace = true
 hex = { version = "0.4.3" }
 omni-types = { path = "../../omni-types" }
