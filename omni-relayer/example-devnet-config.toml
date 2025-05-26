@@ -17,6 +17,7 @@ rpc_url = "https://rpc.testnet.near.org/"
 omni_bridge_id = "omni-locker.testnet"
 btc_connector = "brg-dev.testnet"
 btc = "nbtc-dev.testnet"
+satoshi_relayer = "cosmosfirst.testnet"
 # Either provide a path to a credentials file or set it in the environment
 # Note: the path must be absolute
 # credentials_path = "/Users/username/.near-credentials/testnet/omni-relayer.testnet.json"

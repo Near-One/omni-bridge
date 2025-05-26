@@ -3,8 +3,8 @@ use std::str::FromStr;
 use alloy::{primitives::Address, sol_types::SolEvent};
 use anyhow::{Context, Result};
 use bridge_indexer_types::documents_types::{
-    BtcEvent, BtcEventDetails, OmniEvent, OmniEventData, OmniMetaEvent, OmniMetaEventDetails,
-    OmniTransactionEvent, OmniTransactionOrigin, OmniTransferMessage,
+    BtcConnectorEvent, BtcConnectorEventDetails, OmniEvent, OmniEventData, OmniMetaEvent,
+    OmniMetaEventDetails, OmniTransactionEvent, OmniTransactionOrigin, OmniTransferMessage,
 };
 use ethereum_types::H256;
 use log::{info, warn};
@@ -345,10 +345,10 @@ async fn handle_meta_event(
 async fn handle_btc_event(
     mut redis_connection: redis::aio::MultiplexedConnection,
     origin_transaction_id: String,
-    event: BtcEvent,
+    event: BtcConnectorEvent,
 ) -> Result<()> {
     match event.details {
-        BtcEventDetails::SignTransaction { relayer, .. } => {
+        BtcConnectorEventDetails::SignTransaction { relayer, .. } => {
             info!("Received SignBtcTransaction: {origin_transaction_id}");
             utils::redis::add_event(
                 &mut redis_connection,
@@ -361,7 +361,7 @@ async fn handle_btc_event(
             )
             .await;
         }
-        BtcEventDetails::TransferBtcToNear {
+        BtcConnectorEventDetails::TransferBtcToNear {
             btc_tx_hash,
             vout,
             deposit_msg,
@@ -379,7 +379,7 @@ async fn handle_btc_event(
             )
             .await;
         }
-        BtcEventDetails::ConfirmedTxid { txid: btc_tx_hash } => {
+        BtcConnectorEventDetails::ConfirmedTxid { txid: btc_tx_hash } => {
             info!("Received ConfirmedTxid on Btc: {btc_tx_hash}");
             utils::redis::add_event(
                 &mut redis_connection,
@@ -389,7 +389,8 @@ async fn handle_btc_event(
             )
             .await;
         }
-        BtcEventDetails::VerifyDeposit { .. } | BtcEventDetails::LogDepositAddress(_) => {}
+        BtcConnectorEventDetails::VerifyDeposit { .. }
+        | BtcConnectorEventDetails::LogDepositAddress(_) => {}
     }
 
     Ok(())
@@ -467,7 +468,7 @@ async fn watch_omni_events_collection(
                                 }
                             });
                         }
-                        OmniEventData::Btc(btc_event) => {
+                        OmniEventData::BtcConnector(btc_event) => {
                             tokio::spawn({
                                 let redis_connection = redis_connection.clone();
 
@@ -527,6 +528,8 @@ pub async fn start_indexer(
 
     let db = client.database(db_name);
     let omni_events_collection = db.collection::<OmniEvent>(OMNI_EVENTS);
+
+    println!("Connected to MongoDB at {uri} and using database {db_name}");
 
     loop {
         info!("Starting a mongodb stream that track changes in {OMNI_EVENTS}");

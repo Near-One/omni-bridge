@@ -2131,7 +2131,7 @@ dependencies = [
 [[package]]
 name = "bridge-indexer-types"
 version = "0.1.0"
-source = "git+ssh://git@github.com/near-one/bridge-indexer-rs.git?rev=b9bce1d6b916528037a33f9eeff941d690b7c16b#b9bce1d6b916528037a33f9eeff941d690b7c16b"
+source = "git+ssh://git@github.com/near-one/bridge-indexer-rs.git?rev=e9d7164c051c6b8d7ed489699e962451eea16e76#e9d7164c051c6b8d7ed489699e962451eea16e76"
 dependencies = [
  "borsh 1.5.7",
  "bson",
