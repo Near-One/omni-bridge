@@ -447,7 +447,7 @@ impl BtcLightClient {
         let time_diff = block_header
             .time
             .saturating_sub(prev_block_header.block_header.time);
-        if time_diff >= 2 * config.pow_target_time_between_blocks_secs {
+        if time_diff > 2 * config.pow_target_time_between_blocks_secs {
             require!(
                 block_header.bits == config.proof_of_work_limit_bits,
                 format!(
