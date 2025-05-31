@@ -1,5 +1,4 @@
-use borsh::{BorshDeserialize, BorshSerialize};
-use serde::{Deserialize, Serialize};
+use near_sdk::near;
 
 use crate::{
     hash::{double_sha256, H256},
@@ -9,7 +8,8 @@ use crate::{
 pub type Target = U256;
 pub type Work = U256;
 
-#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+#[near(serializers = [borsh, json])]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Header {
     /// Block version, now repurposed for soft fork signalling.
     pub version: i32,
@@ -99,7 +99,8 @@ impl Header {
 }
 
 #[allow(clippy::module_name_repetitions)]
-#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+#[near(serializers = [borsh, json])]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ExtendedHeader {
     pub block_header: Header,
     /// Below, state contains additional fields not presented in the standard blockchain header
