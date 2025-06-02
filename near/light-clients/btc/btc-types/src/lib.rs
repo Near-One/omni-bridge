@@ -1,5 +1,8 @@
+pub mod btc_header;
 pub mod contract_args;
 pub mod hash;
 pub mod header;
 pub mod network;
 pub mod u256;
+pub mod utils;
+pub mod zcash_header;

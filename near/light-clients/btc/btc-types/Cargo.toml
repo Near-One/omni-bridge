@@ -11,7 +11,7 @@ crate-type = ["cdylib", "rlib"]
 [dependencies]
 borsh = { version = "1.*", features = ["derive"] }
 serde = { version = "1.*", features = ["derive"] }
-hex = "0.4"
+hex = { version = "0.4", features = ["serde"] }
 scrypt = { version = "0.11.0", default-features = false, optional = true }
 near-sdk = "5.14.0"
 schemars = "0.8.22"
@@ -35,4 +35,6 @@ panic = "abort"
 overflow-checks = true
 
 [features]
+default = []
 scrypt_hash = ["scrypt"]
+zcash_header = []

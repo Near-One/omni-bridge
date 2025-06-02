@@ -31,6 +31,14 @@ impl TryFrom<Vec<u8>> for H256 {
     }
 }
 
+impl TryFrom<&[u8]> for H256 {
+    type Error = &'static str;
+
+    fn try_from(value: &[u8]) -> Result<Self, Self::Error> {
+        Ok(H256(value.try_into().map_err(|_| "Invalid hex length")?))
+    }
+}
+
 impl FromStr for H256 {
     type Err = hex::FromHexError;
 

@@ -22,14 +22,11 @@ passed_env = []
 # supported by respective version of binary inside the container besides `--no-locked` flag
 container_build_command = ["cargo", "near", "build", "non-reproducible-wasm", "--locked"]
 
-[package.metadata.near.reproducible_build.variant.bitcoin_testnet]
-container_build_command = ["cargo", "near", "build", "non-reproducible-wasm", "--locked", "--features", "bitcoin_testnet"]
-
 [package.metadata.near.reproducible_build.variant.litecoin]
-container_build_command = ["cargo", "near", "build", "non-reproducible-wasm", "--locked", "--features", "litecoin"]
+container_build_command = ["cargo", "near", "build", "non-reproducible-wasm", "--locked", "--no-default-features", "--features", "litecoin"]
 
-[package.metadata.near.reproducible_build.variant.litecoin_testnet]
-container_build_command = ["cargo", "near", "build", "non-reproducible-wasm", "--locked", "--features", "litecoin_testnet"]
+[package.metadata.near.reproducible_build.variant.zcash]
+container_build_command = ["cargo", "near", "build", "non-reproducible-wasm", "--locked", "--no-default-features", "--features", "zcash"]
 
 [lib]
 crate-type = ["cdylib", "rlib"]
@@ -44,6 +41,7 @@ serde_json = "1"
 merkle-tools = { path = "../merkle-tools" }
 serde = { version = "1.0.200", features = ["derive"] }
 btc-types = { path = "../btc-types" }
+equihash = { version = "0.2.2", optional = true }
 cfg-if = "1.0.0"
 
 [dev-dependencies]
@@ -62,18 +60,17 @@ panic = "abort"
 # Opt into extra safety checks on arithmetic operations https://stackoverflow.com/a/64136471/249801
 overflow-checks = true
 
-[profile.bitcoin-testnet]
+[profile.bitcoin]
 inherits = "release"
 
 [profile.litecoin]
 inherits = "release"
 
-[profile.litecoin-testnet]
+[profile.zcash]
 inherits = "release"
 
 [features]
 default = ["bitcoin"]
 bitcoin = []
-bitcoin_testnet = [] 
 litecoin = ["btc-types/scrypt_hash"]
-litecoin_testnet = ["btc-types/scrypt_hash"]
+zcash = ["btc-types/zcash_header", "equihash"]
