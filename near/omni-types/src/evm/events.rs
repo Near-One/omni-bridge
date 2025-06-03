@@ -7,8 +7,6 @@ use crate::{
     stringify, ChainKind, Fee, OmniAddress, H160,
 };
 
-const ERR_INVALIDE_SIGNATURE_HASH: &str = "ERR_INVALIDE_SIGNATURE_HASH";
-
 sol! {
     event InitTransfer(
         address indexed sender,
@@ -68,10 +66,6 @@ impl TryFromLog<Log<FinTransfer>> for FinTransferMessage {
     type Error = String;
 
     fn try_from_log(chain_kind: ChainKind, event: Log<FinTransfer>) -> Result<Self, Self::Error> {
-        if event.topics().0 != FinTransfer::SIGNATURE_HASH {
-            return Err(ERR_INVALIDE_SIGNATURE_HASH.to_string());
-        }
-
         Ok(Self {
             transfer_id: crate::TransferId {
                 origin_chain: event.data.originChain.try_into()?,
@@ -91,10 +85,6 @@ impl TryFromLog<Log<InitTransfer>> for InitTransferMessage {
     type Error = String;
 
     fn try_from_log(chain_kind: ChainKind, event: Log<InitTransfer>) -> Result<Self, Self::Error> {
-        if event.topics().0 != InitTransfer::SIGNATURE_HASH {
-            return Err(ERR_INVALIDE_SIGNATURE_HASH.to_string());
-        }
-
         Ok(Self {
             emitter_address: OmniAddress::new_from_evm_address(
                 chain_kind,
@@ -118,10 +108,6 @@ impl TryFromLog<Log<DeployToken>> for DeployTokenMessage {
     type Error = String;
 
     fn try_from_log(chain_kind: ChainKind, event: Log<DeployToken>) -> Result<Self, Self::Error> {
-        if event.topics().0 != DeployToken::SIGNATURE_HASH {
-            return Err(ERR_INVALIDE_SIGNATURE_HASH.to_string());
-        }
-
         Ok(Self {
             token: event.data.token.parse().map_err(stringify)?,
             token_address: OmniAddress::new_from_evm_address(
@@ -142,10 +128,6 @@ impl TryFromLog<Log<LogMetadata>> for LogMetadataMessage {
     type Error = String;
 
     fn try_from_log(chain_kind: ChainKind, event: Log<LogMetadata>) -> Result<Self, Self::Error> {
-        if event.topics().0 != LogMetadata::SIGNATURE_HASH {
-            return Err(ERR_INVALIDE_SIGNATURE_HASH.to_string());
-        }
-
         Ok(Self {
             token_address: OmniAddress::new_from_evm_address(
                 chain_kind,
