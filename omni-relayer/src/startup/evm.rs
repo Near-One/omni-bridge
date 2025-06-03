@@ -1,9 +1,6 @@
 use alloy::{
     primitives::Address,
-    providers::{
-        Identity, Provider, ProviderBuilder, RootProvider, WsConnect,
-        fillers::{BlobGasFiller, ChainIdFiller, FillProvider, GasFiller, JoinFill, NonceFiller},
-    },
+    providers::{DynProvider, Provider, ProviderBuilder, WsConnect},
     rpc::types::{Filter, Log},
     sol_types::SolEvent,
 };
@@ -18,14 +15,6 @@ use crate::{
     config, utils,
     workers::{DeployToken, FinTransfer},
 };
-
-pub type EvmProvider = FillProvider<
-    JoinFill<
-        Identity,
-        JoinFill<GasFiller, JoinFill<BlobGasFiller, JoinFill<NonceFiller, ChainIdFiller>>>,
-    >,
-    RootProvider,
->;
 
 fn hide_api_key<E: ToString>(err: &E) -> String {
     let env_key = "INFURA_API_KEY";
@@ -78,7 +67,7 @@ pub async fn start_indexer(
         );
 
     loop {
-        let http_provider = ProviderBuilder::new().on_http(rpc_http_url.clone());
+        let http_provider = DynProvider::new(ProviderBuilder::new().on_http(rpc_http_url.clone()));
 
         crate::skip_fail!(
             process_recent_blocks(
@@ -139,7 +128,7 @@ pub async fn start_indexer(
 
 async fn process_recent_blocks(
     redis_connection: &mut redis::aio::MultiplexedConnection,
-    http_provider: &EvmProvider,
+    http_provider: &DynProvider,
     filter: &Filter,
     chain_kind: ChainKind,
     start_block: Option<u64>,
@@ -202,7 +191,7 @@ async fn process_recent_blocks(
 async fn process_log(
     chain_kind: ChainKind,
     redis_connection: &mut redis::aio::MultiplexedConnection,
-    http_provider: &EvmProvider,
+    http_provider: &DynProvider,
     log: Log,
     expected_finalization_time: i64,
 ) {
