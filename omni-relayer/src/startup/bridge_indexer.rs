@@ -258,6 +258,9 @@ async fn handle_transaction_event(
             )
             .await;
         }
+        OmniTransferMessage::NearFastTransferMessage { .. } => {
+            info!("Received NearFastTransferMessage, skipping");
+        }
     }
 
     Ok(())
@@ -401,8 +404,8 @@ async fn handle_btc_event(
             )
             .await;
         }
-        BtcConnectorEventDetails::ConfirmedTxid { txid: btc_tx_hash } => {
-            info!("Received ConfirmedTxid on Btc: {btc_tx_hash}");
+        BtcConnectorEventDetails::ConfirmedTxHash { btc_tx_hash } => {
+            info!("Received ConfirmedTxHash on Btc: {btc_tx_hash}");
             utils::redis::add_event(
                 &mut redis_connection,
                 utils::redis::EVENTS,
