@@ -155,6 +155,8 @@ pub enum ChainKind {
     Arb,
     #[serde(alias = "base")]
     Base,
+    #[serde(alias = "btc")]
+    Btc,
 }
 
 impl FromStr for ChainKind {
@@ -180,12 +182,14 @@ impl TryFrom<u8> for ChainKind {
             2 => Ok(ChainKind::Sol),
             3 => Ok(ChainKind::Arb),
             4 => Ok(ChainKind::Base),
+            5 => Ok(ChainKind::Btc),
             _ => Err(format!("{input:?} invalid chain kind")),
         }
     }
 }
 
 pub type EvmAddress = H160;
+pub type BtcAddress = String;
 
 pub const ZERO_ACCOUNT_ID: &str =
     "0000000000000000000000000000000000000000000000000000000000000000";
@@ -198,6 +202,7 @@ pub enum OmniAddress {
     Sol(SolAddress),
     Arb(EvmAddress),
     Base(EvmAddress),
+    Btc(BtcAddress)
 }
 
 impl OmniAddress {
@@ -211,6 +216,7 @@ impl OmniAddress {
             ChainKind::Sol => Ok(OmniAddress::Sol(SolAddress::ZERO)),
             ChainKind::Arb => Ok(OmniAddress::Arb(H160::ZERO)),
             ChainKind::Base => Ok(OmniAddress::Base(H160::ZERO)),
+            ChainKind::Btc => Ok(OmniAddress::Btc("1111111111111111111114oLvT2".to_string())),
         }
     }
 
@@ -233,6 +239,7 @@ impl OmniAddress {
                 Self::new_from_evm_address(chain_kind, Self::to_evm_address(address)?)
             }
             ChainKind::Near => Ok(Self::Near(Self::to_near_account_id(address)?)),
+            ChainKind::Btc => Ok(Self::Btc(String::from_utf8(address.to_vec()).map_err(|e| format!("Invalid UTF-8 in BTC address: {}", e))?)),
         }
     }
 
@@ -243,6 +250,7 @@ impl OmniAddress {
             OmniAddress::Sol(_) => ChainKind::Sol,
             OmniAddress::Arb(_) => ChainKind::Arb,
             OmniAddress::Base(_) => ChainKind::Base,
+            OmniAddress::Btc(_) => ChainKind::Btc,
         }
     }
 
@@ -253,6 +261,7 @@ impl OmniAddress {
             OmniAddress::Sol(address) => ("sol", address.to_string()),
             OmniAddress::Arb(address) => ("arb", address.to_string()),
             OmniAddress::Base(address) => ("base", address.to_string()),
+            OmniAddress::Btc(address) => ("btc", address.to_string()),
         };
 
         if skip_zero_address && self.is_zero() {
@@ -269,6 +278,7 @@ impl OmniAddress {
             }
             OmniAddress::Near(address) => *address == ZERO_ACCOUNT_ID,
             OmniAddress::Sol(address) => address.is_zero(),
+            OmniAddress::Btc(address) => address == "1111111111111111111114oLvT2",
         }
     }
 
@@ -338,6 +348,7 @@ impl FromStr for OmniAddress {
             "sol" => Ok(OmniAddress::Sol(recipient.parse().map_err(stringify)?)),
             "arb" => Ok(OmniAddress::Arb(recipient.parse().map_err(stringify)?)),
             "base" => Ok(OmniAddress::Base(recipient.parse().map_err(stringify)?)),
+            "btc" => Ok(OmniAddress::Btc(recipient.to_string())),
             _ => Err(format!("Chain {chain} is not supported")),
         }
     }
