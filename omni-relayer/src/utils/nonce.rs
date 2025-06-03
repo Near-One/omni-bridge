@@ -20,7 +20,7 @@ const RETRY_SLEEP_SECS: u64 = 1;
 pub enum ChainClient {
     Near {
         jsonrpc_client: JsonRpcClient,
-        signer: InMemorySigner,
+        signer: Box<InMemorySigner>,
     },
     Evm {
         provider: DynProvider,
