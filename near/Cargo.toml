@@ -36,7 +36,7 @@ serde = { version = "1.0.200", features = ["derive"] }
 near-plugins = { git = "https://github.com/aurora-is-near/near-plugins", tag = "v0.4.1" }
 omni-types = { path = "omni-types" }
 strum_macros = "0.27.1"
-near-workspaces = "0.20.1"
+near-workspaces = "0.16.0"
 num_enum = "0.7.3"
 tokio = "1.40"
 anyhow = "1"
