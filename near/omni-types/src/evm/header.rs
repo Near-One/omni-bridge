@@ -38,7 +38,7 @@ struct CustomRlpIter<'a> {
 }
 
 impl<'a> CustomRlpIter<'a> {
-    fn new(rlp: &'a Rlp) -> Self {
+    const fn new(rlp: &'a Rlp) -> Self {
         Self {
             index: 0,
             consumed_bytes: 0,
@@ -72,7 +72,7 @@ impl<'a> CustomRlpIter<'a> {
 impl Decodable for BlockHeader {
     fn decode(rlp: &Rlp) -> Result<Self, DecoderError> {
         let mut iter = CustomRlpIter::new(rlp);
-        let mut block_header = BlockHeader {
+        let mut block_header = Self {
             parent_hash: iter.next()?,
             sha3_uncles: iter.next()?,
             miner: iter.next()?,

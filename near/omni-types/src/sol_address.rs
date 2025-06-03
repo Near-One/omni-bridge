@@ -6,7 +6,7 @@ use near_sdk::{bs58, near};
 use serde::de::Visitor;
 
 #[near(serializers=[borsh])]
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub struct SolAddress(pub [u8; 32]);
 
 impl SolAddress {
@@ -23,7 +23,7 @@ impl FromStr for SolAddress {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let result = bs58::decode(s).into_vec().map_err(|err| err.to_string())?;
 
-        Ok(SolAddress(
+        Ok(Self(
             result
                 .try_into()
                 .map_err(|err| format!("Invalid length: {err:?}"))?,

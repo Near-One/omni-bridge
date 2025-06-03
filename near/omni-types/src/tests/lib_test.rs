@@ -360,7 +360,7 @@ fn test_transfer_message_getters() {
                 origin_nonce: 456,
                 token: OmniAddress::Near("token.near".parse().unwrap()),
                 amount: U128(2000),
-                recipient: OmniAddress::Eth(evm_addr.clone()),
+                recipient: OmniAddress::Eth(evm_addr),
                 fee: Fee::default(),
                 sender: OmniAddress::Near("alice.near".parse().unwrap()),
                 msg: String::new(),

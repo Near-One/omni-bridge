@@ -23,20 +23,16 @@ pub mod utils;
 mod tests;
 
 #[near(serializers = [borsh])]
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub struct H160(pub [u8; 20]);
 
 impl FromStr for H160 {
     type Err = String;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let s = if let Some(stripped) = s.strip_prefix("0x") {
-            stripped
-        } else {
-            s
-        };
-        let result = Vec::from_hex(s).map_err(|_| "ERR_INVALIDE_HEX")?;
-        Ok(H160(
+        let result = Vec::from_hex(s.strip_prefix("0x").map_or(s, |stripped| stripped))
+            .map_err(|_| "ERR_INVALIDE_HEX")?;
+        Ok(Self(
             result
                 .try_into()
                 .map_err(|err| format!("Invalid length: {err:?}"))?,
@@ -160,7 +156,7 @@ pub enum ChainKind {
 impl FromStr for ChainKind {
     type Err = String;
 
-    fn from_str(s: &str) -> Result<ChainKind, Self::Err> {
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
         near_sdk::serde_json::from_str(&format!("\"{s}\"")).map_err(stringify)
     }
 }
@@ -175,11 +171,11 @@ impl TryFrom<u8> for ChainKind {
     type Error = String;
     fn try_from(input: u8) -> Result<Self, String> {
         match input {
-            0 => Ok(ChainKind::Eth),
-            1 => Ok(ChainKind::Near),
-            2 => Ok(ChainKind::Sol),
-            3 => Ok(ChainKind::Arb),
-            4 => Ok(ChainKind::Base),
+            0 => Ok(Self::Eth),
+            1 => Ok(Self::Near),
+            2 => Ok(Self::Sol),
+            3 => Ok(Self::Arb),
+            4 => Ok(Self::Base),
             _ => Err(format!("{input:?} invalid chain kind")),
         }
     }
@@ -191,7 +187,7 @@ pub const ZERO_ACCOUNT_ID: &str =
     "0000000000000000000000000000000000000000000000000000000000000000";
 
 #[near(serializers=[borsh])]
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub enum OmniAddress {
     Eth(EvmAddress),
     Near(AccountId),
@@ -204,13 +200,11 @@ impl OmniAddress {
     #[allow(clippy::missing_panics_doc)]
     pub fn new_zero(chain_kind: ChainKind) -> Result<Self, String> {
         match chain_kind {
-            ChainKind::Eth => Ok(OmniAddress::Eth(H160::ZERO)),
-            ChainKind::Near => Ok(OmniAddress::Near(
-                ZERO_ACCOUNT_ID.parse().map_err(stringify)?,
-            )),
-            ChainKind::Sol => Ok(OmniAddress::Sol(SolAddress::ZERO)),
-            ChainKind::Arb => Ok(OmniAddress::Arb(H160::ZERO)),
-            ChainKind::Base => Ok(OmniAddress::Base(H160::ZERO)),
+            ChainKind::Eth => Ok(Self::Eth(H160::ZERO)),
+            ChainKind::Near => Ok(Self::Near(ZERO_ACCOUNT_ID.parse().map_err(stringify)?)),
+            ChainKind::Sol => Ok(Self::Sol(SolAddress::ZERO)),
+            ChainKind::Arb => Ok(Self::Arb(H160::ZERO)),
+            ChainKind::Base => Ok(Self::Base(H160::ZERO)),
         }
     }
 
@@ -236,23 +230,23 @@ impl OmniAddress {
         }
     }
 
-    pub fn get_chain(&self) -> ChainKind {
+    pub const fn get_chain(&self) -> ChainKind {
         match self {
-            OmniAddress::Eth(_) => ChainKind::Eth,
-            OmniAddress::Near(_) => ChainKind::Near,
-            OmniAddress::Sol(_) => ChainKind::Sol,
-            OmniAddress::Arb(_) => ChainKind::Arb,
-            OmniAddress::Base(_) => ChainKind::Base,
+            Self::Eth(_) => ChainKind::Eth,
+            Self::Near(_) => ChainKind::Near,
+            Self::Sol(_) => ChainKind::Sol,
+            Self::Arb(_) => ChainKind::Arb,
+            Self::Base(_) => ChainKind::Base,
         }
     }
 
     pub fn encode(&self, separator: char, skip_zero_address: bool) -> String {
         let (chain_str, address) = match self {
-            OmniAddress::Eth(address) => ("eth", address.to_string()),
-            OmniAddress::Near(address) => ("near", address.to_string()),
-            OmniAddress::Sol(address) => ("sol", address.to_string()),
-            OmniAddress::Arb(address) => ("arb", address.to_string()),
-            OmniAddress::Base(address) => ("base", address.to_string()),
+            Self::Eth(address) => ("eth", address.to_string()),
+            Self::Near(address) => ("near", address.to_string()),
+            Self::Sol(address) => ("sol", address.to_string()),
+            Self::Arb(address) => ("arb", address.to_string()),
+            Self::Base(address) => ("base", address.to_string()),
         };
 
         if skip_zero_address && self.is_zero() {
@@ -264,17 +258,15 @@ impl OmniAddress {
 
     pub fn is_zero(&self) -> bool {
         match self {
-            OmniAddress::Eth(address) | OmniAddress::Arb(address) | OmniAddress::Base(address) => {
-                address.is_zero()
-            }
-            OmniAddress::Near(address) => *address == ZERO_ACCOUNT_ID,
-            OmniAddress::Sol(address) => address.is_zero(),
+            Self::Eth(address) | Self::Arb(address) | Self::Base(address) => address.is_zero(),
+            Self::Near(address) => *address == ZERO_ACCOUNT_ID,
+            Self::Sol(address) => address.is_zero(),
         }
     }
 
     pub fn get_token_prefix(&self) -> String {
         match self {
-            OmniAddress::Sol(address) => {
+            Self::Sol(address) => {
                 if self.is_zero() {
                     "sol".to_string()
                 } else {
@@ -289,7 +281,7 @@ impl OmniAddress {
                     format!("sol-{hashed_address}")
                 }
             }
-            OmniAddress::Eth(address) => {
+            Self::Eth(address) => {
                 if self.is_zero() {
                     "eth".to_string()
                 } else {
@@ -307,17 +299,17 @@ impl OmniAddress {
             address
         };
 
-        match address.try_into() {
-            Ok(bytes) => Ok(H160(bytes)),
-            Err(_) => Err("Invalid EVM address".to_string()),
-        }
+        address.try_into().map_or_else(
+            |_| Err("Invalid EVM address".to_string()),
+            |bytes| Ok(H160(bytes)),
+        )
     }
 
     fn to_sol_address(address: &[u8]) -> Result<SolAddress, String> {
-        match address.try_into() {
-            Ok(bytes) => Ok(SolAddress(bytes)),
-            Err(_) => Err("Invalid SOL address".to_string()),
-        }
+        address.try_into().map_or_else(
+            |_| Err("Invalid SOL address".to_string()),
+            |bytes| Ok(SolAddress(bytes)),
+        )
     }
 
     fn to_near_account_id(address: &[u8]) -> Result<AccountId, String> {
@@ -329,15 +321,15 @@ impl OmniAddress {
 impl FromStr for OmniAddress {
     type Err = String;
 
-    fn from_str(input: &str) -> Result<OmniAddress, Self::Err> {
+    fn from_str(input: &str) -> Result<Self, Self::Err> {
         let (chain, recipient) = input.split_once(':').unwrap_or(("eth", input));
 
         match chain {
-            "eth" => Ok(OmniAddress::Eth(recipient.parse().map_err(stringify)?)),
-            "near" => Ok(OmniAddress::Near(recipient.parse().map_err(stringify)?)),
-            "sol" => Ok(OmniAddress::Sol(recipient.parse().map_err(stringify)?)),
-            "arb" => Ok(OmniAddress::Arb(recipient.parse().map_err(stringify)?)),
-            "base" => Ok(OmniAddress::Base(recipient.parse().map_err(stringify)?)),
+            "eth" => Ok(Self::Eth(recipient.parse().map_err(stringify)?)),
+            "near" => Ok(Self::Near(recipient.parse().map_err(stringify)?)),
+            "sol" => Ok(Self::Sol(recipient.parse().map_err(stringify)?)),
+            "arb" => Ok(Self::Arb(recipient.parse().map_err(stringify)?)),
+            "base" => Ok(Self::Base(recipient.parse().map_err(stringify)?)),
             _ => Err(format!("Chain {chain} is not supported")),
         }
     }
@@ -422,14 +414,14 @@ pub struct InitTransferMsg {
 }
 
 #[near(serializers=[borsh, json])]
-#[derive(Debug, Clone, PartialEq, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct Fee {
     pub fee: U128,
     pub native_fee: U128,
 }
 
 impl Fee {
-    pub fn is_zero(&self) -> bool {
+    pub const fn is_zero(&self) -> bool {
         self.fee.0 == 0 && self.native_fee.0 == 0
     }
 }
@@ -471,18 +463,18 @@ pub struct TransferMessage {
 }
 
 impl TransferMessage {
-    pub fn get_origin_chain(&self) -> ChainKind {
+    pub const fn get_origin_chain(&self) -> ChainKind {
         self.sender.get_chain()
     }
 
-    pub fn get_transfer_id(&self) -> TransferId {
+    pub const fn get_transfer_id(&self) -> TransferId {
         TransferId {
             origin_chain: self.get_origin_chain(),
             origin_nonce: self.origin_nonce,
         }
     }
 
-    pub fn get_destination_chain(&self) -> ChainKind {
+    pub const fn get_destination_chain(&self) -> ChainKind {
         self.recipient.get_chain()
     }
 }
@@ -570,7 +562,7 @@ impl FastTransfer {
 
 impl FastTransfer {
     pub fn from_transfer(transfer: TransferMessage, token_id: AccountId) -> Self {
-        FastTransfer {
+        Self {
             transfer_id: transfer.get_transfer_id(),
             token_id,
             amount: transfer.amount,
