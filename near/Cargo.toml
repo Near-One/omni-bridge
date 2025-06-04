@@ -41,7 +41,7 @@ num_enum = "0.7.3"
 tokio = "1.40"
 anyhow = "1"
 schemars = "0.8"
-alloy = { version = "1.0.7", default-features = false, features = ["rlp", "sol-types"] }
+alloy = { version = "1.0.9", default-features = false, features = ["rlp", "sol-types"] }
 ethereum-types = { version = "0.15.1", default-features = false, features = ["rlp", "serialize"] }
 rlp = "0.6"
 sha3 = "0.10.0"

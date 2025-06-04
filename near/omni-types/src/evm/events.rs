@@ -54,7 +54,11 @@ where
     <V as TryFromLog<Log<T>>>::Error: std::fmt::Display,
 {
     let rlp_decoded = Log::decode(&mut log_rlp.as_slice()).map_err(stringify)?;
-    V::try_from_log(chain_kind, T::decode_log(&rlp_decoded).map_err(stringify)?).map_err(stringify)
+    V::try_from_log(
+        chain_kind,
+        T::decode_log_validate(&rlp_decoded).map_err(stringify)?,
+    )
+    .map_err(stringify)
 }
 
 pub trait TryFromLog<T>: Sized {
@@ -190,8 +194,8 @@ mod tests {
 
         assert_ne!(log, test_log);
 
-        let decoded_log = FinTransfer::decode_log(&log).unwrap();
-        let decoded_test_log = TestFinTransfer::decode_log(&test_log).unwrap();
+        let decoded_log = FinTransfer::decode_log_validate(&log).unwrap();
+        let decoded_test_log = TestFinTransfer::decode_log_validate(&test_log).unwrap();
 
         assert_ne!(FinTransfer::SIGNATURE_HASH, TestFinTransfer::SIGNATURE_HASH);
         assert_eq!(FinTransfer::SIGNATURE_HASH, decoded_log.topics().0);
