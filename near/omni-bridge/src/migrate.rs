@@ -32,7 +32,7 @@ pub struct OldState {
 impl Contract {
     #[private]
     #[init(ignore_state)]
-    pub fn migrate() -> Self {
+    pub fn migrate(btc_account_id: AccountId) -> Self {
         let old_state: OldState = env::state_read()
             .unwrap_or_else(|| env::panic_str("Old state not found. Migration is not needed."));
 
@@ -52,6 +52,7 @@ impl Contract {
             destination_nonces: old_state.destination_nonces,
             accounts_balances: old_state.accounts_balances,
             wnear_account_id: old_state.wnear_account_id,
+            btc_account_id,
         }
     }
 }

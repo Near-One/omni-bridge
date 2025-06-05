@@ -195,6 +195,7 @@ pub struct Contract {
     pub destination_nonces: LookupMap<ChainKind, Nonce>,
     pub accounts_balances: LookupMap<AccountId, StorageBalance>,
     pub wnear_account_id: AccountId,
+    pub btc_account_id: AccountId,
 }
 
 #[near]
@@ -258,6 +259,7 @@ impl Contract {
         prover_account: AccountId,
         mpc_signer: AccountId,
         wnear_account_id: AccountId,
+        btc_account_id: AccountId,
     ) -> Self {
         let mut contract = Self {
             prover_account,
@@ -275,6 +277,7 @@ impl Contract {
             destination_nonces: LookupMap::new(StorageKey::DestinationNonces),
             accounts_balances: LookupMap::new(StorageKey::AccountsBalances),
             wnear_account_id,
+            btc_account_id,
         };
 
         contract.acl_init_super_admin(near_sdk::env::predecessor_account_id());
@@ -626,6 +629,9 @@ impl Contract {
                 storage_deposit_actions,
             )
             .into()
+        } else if let OmniAddress::Btc(recipient) = transfer_message.recipient.clone() {
+            self.process_fin_transfer_to_btc(predecessor_account_id, transfer_message);
+            PromiseOrValue::Value(destination_nonce)
         } else {
             self.process_fin_transfer_to_other_chain(predecessor_account_id, transfer_message);
             PromiseOrValue::Value(destination_nonce)
@@ -1328,6 +1334,29 @@ impl Contract {
         self.destination_nonces.insert(&chain_kind, &payload_nonce);
 
         payload_nonce
+    }
+
+    #[allow(clippy::too_many_lines, clippy::ptr_arg)]
+    fn process_fin_transfer_to_btc(
+        &mut self,
+        predecessor_account_id: AccountId,
+        transfer_message: TransferMessage,
+    ) {
+        let mut required_balance = self.add_fin_transfer(&transfer_message.get_transfer_id());
+        let token = self.get_token_id(&transfer_message.token);
+        assert_eq!(token, self.btc_account_id);
+
+        required_balance = self
+            .add_transfer_message(transfer_message.clone(), predecessor_account_id.clone())
+            .saturating_add(required_balance);
+
+        self.update_storage_balance(
+            predecessor_account_id,
+            required_balance,
+            env::attached_deposit(),
+        );
+
+        env::log_str(&OmniBridgeEvent::FinTransferEvent { transfer_message }.to_log_string());
     }
 
     #[allow(clippy::too_many_lines, clippy::ptr_arg)]
