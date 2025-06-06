@@ -203,29 +203,33 @@ fn get_next_work_required(
     calculate_next_work_required(config, prev_block_header, i64::from(first_block_time))
 }
 
-// source https://github.com/dogecoin/dogecoin/blob/2c513d0172e8bc86fe9a337693b26f2fdf68a013/src/pow.cpp#L90
+// source https://github.com/dogecoin/dogecoin/blob/2c513d0172e8bc86fe9a337693b26f2fdf68a013/src/dogecoin.cpp#L41
 fn calculate_next_work_required(
     config: &NetworkConfig,
     prev_block_header: &ExtendedHeader,
     first_block_time: i64,
 ) -> u32 {
-    let prev_block_time: i64 = prev_block_header.block_header.time.into();
-    let mut actual_timespan: i64 = prev_block_time - first_block_time;
+    let retarget_timespan = config.pow_target_timespan;
+    let modulated_timespan = i64::from(prev_block_header.block_header.time) - first_block_time;
 
-    if actual_timespan < config.pow_target_timespan / 4 {
-        actual_timespan = config.pow_target_timespan / 4;
-    }
-    if actual_timespan > config.pow_target_timespan * 4 {
-        actual_timespan = config.pow_target_timespan * 4;
+    let mut modulated_timespan = retarget_timespan + (modulated_timespan - retarget_timespan) / 8;
+
+    let min_timespan = retarget_timespan - (retarget_timespan / 4);
+    let max_timespan = retarget_timespan + (retarget_timespan / 2);
+
+    if modulated_timespan < min_timespan {
+        modulated_timespan = min_timespan;
+    } else if modulated_timespan > max_timespan {
+        modulated_timespan = max_timespan;
     }
 
-    // Retarget
-    let new_target = target_from_bits(prev_block_header.block_header.bits)
-        / U256::from(<i64 as TryInto<u64>>::try_into(config.pow_target_timespan).unwrap());
+    let new_target = target_from_bits(prev_block_header.block_header.bits);
 
     let (mut new_target, new_target_overflow) =
-        new_target.overflowing_mul(actual_timespan.try_into().unwrap());
+        new_target.overflowing_mul(<i64 as TryInto<u64>>::try_into(modulated_timespan).unwrap());
     require!(!new_target_overflow, "new target overflow");
+    new_target =
+        new_target / U256::from(<i64 as TryInto<u64>>::try_into(retarget_timespan).unwrap());
 
     if new_target > config.pow_limit {
         new_target = config.pow_limit;
