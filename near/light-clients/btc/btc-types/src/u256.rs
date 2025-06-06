@@ -120,6 +120,7 @@ impl U256 {
         if !overflow_low {
             return (Self(high, low), overflow);
         }
+
         let carry = ((self.1 >> 64) * (u128::from(rhs))) >> 64;
         let (high, overflow_add) = high.overflowing_add(carry);
 

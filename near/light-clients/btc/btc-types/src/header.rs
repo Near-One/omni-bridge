@@ -1,5 +1,7 @@
 use near_sdk::near;
 
+#[cfg(feature = "dogecoin_header")]
+use crate::aux::AuxData;
 use crate::{hash::H256, u256::U256};
 
 pub type Target = U256;
@@ -10,6 +12,12 @@ pub use super::zcash_header::{Header, LightHeader};
 
 #[cfg(not(feature = "zcash_header"))]
 pub use super::btc_header::{Header, LightHeader};
+
+#[cfg(not(feature = "dogecoin_header"))]
+pub type BlockHeader = Header;
+
+#[cfg(feature = "dogecoin_header")]
+pub type BlockHeader = (Header, Option<AuxData>);
 
 #[allow(clippy::module_name_repetitions)]
 #[near(serializers = [borsh, json])]
@@ -26,4 +34,7 @@ pub struct ExtendedHeader {
     pub chain_work: Work,
     /// Block height in the Bitcoin network
     pub block_height: u64,
+    // The parent block if AuxPow is used (for Dogecoin)
+    #[cfg(feature = "dogecoin_header")]
+    pub aux_parent_block: Option<H256>,
 }

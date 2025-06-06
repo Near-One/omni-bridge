@@ -5,8 +5,8 @@ version = "0.2.1"
 edition = "2021"
 repository = "https://github.com/Near-One/btc-light-client-contract"
 
-# fields to configure build with WASM reproducibility, according to specs  
-# in https://github.com/near/NEPs/blob/master/neps/nep-0330.md 
+# fields to configure build with WASM reproducibility, according to specs
+# in https://github.com/near/NEPs/blob/master/neps/nep-0330.md
 [package.metadata.near.reproducible_build]
 # docker image, descriptor of build environment
 image = "sourcescan/cargo-near:0.16.0-rust-1.86.0"
@@ -16,11 +16,14 @@ image_digest = "sha256:3220302ebb7036c1942e772810f21edd9381edf9a339983da43487c77
 # in a reproducible manner
 # supported by `sourcescan/cargo-near:0.10.1-rust-1.82.0` image or later images
 passed_env = []
-# build command inside of docker container 
+# build command inside of docker container
 # if docker image from default gallery is used https://hub.docker.com/r/sourcescan/cargo-near/tags,
 # the command may be any combination of flags of `cargo-near`,
 # supported by respective version of binary inside the container besides `--no-locked` flag
 container_build_command = ["cargo", "near", "build", "non-reproducible-wasm", "--locked"]
+
+[package.metadata.near.reproducible_build.variant.dogecoin]
+container_build_command = ["cargo", "near", "build", "non-reproducible-wasm", "--locked", "--no-default-features", "--features", "dogecoin"]
 
 [package.metadata.near.reproducible_build.variant.litecoin]
 container_build_command = ["cargo", "near", "build", "non-reproducible-wasm", "--locked", "--no-default-features", "--features", "litecoin"]
@@ -41,6 +44,7 @@ serde_json = "1"
 merkle-tools = { path = "../merkle-tools" }
 serde = { version = "1.0.200", features = ["derive"] }
 btc-types = { path = "../btc-types" }
+bitcoin = "0.32.5"
 equihash = { version = "0.2.2", optional = true }
 cfg-if = "1.0.0"
 
@@ -69,8 +73,15 @@ inherits = "release"
 [profile.zcash]
 inherits = "release"
 
+[profile.dogecoin]
+inherits = "release"
+
+[profile.dogecoin-testnet]
+inherits = "release"
+
 [features]
 default = ["bitcoin"]
+dogecoin = ["btc-types/scrypt_hash", "btc-types/dogecoin_header"]
 bitcoin = []
 litecoin = ["btc-types/scrypt_hash"]
 zcash = ["btc-types/zcash_header", "equihash"]
