@@ -22,6 +22,9 @@ passed_env = []
 # supported by respective version of binary inside the container besides `--no-locked` flag
 container_build_command = ["cargo", "near", "build", "non-reproducible-wasm", "--locked"]
 
+[package.metadata.near.reproducible_build.variant.bitcoin]
+container_build_command = ["cargo", "near", "build", "non-reproducible-wasm", "--locked", "--no-default-features", "--features", "bitcoin"]
+
 [package.metadata.near.reproducible_build.variant.dogecoin]
 container_build_command = ["cargo", "near", "build", "non-reproducible-wasm", "--locked", "--no-default-features", "--features", "dogecoin"]
 
@@ -74,9 +77,6 @@ inherits = "release"
 inherits = "release"
 
 [profile.dogecoin]
-inherits = "release"
-
-[profile.dogecoin-testnet]
 inherits = "release"
 
 [features]

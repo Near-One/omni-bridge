@@ -36,7 +36,7 @@ impl BtcLightClient {
 
         equihash::is_valid_solution(n, k, &input, &block_header.nonce.0, &block_header.solution)
             .unwrap_or_else(|e| {
-                env::panic_str(&format!("Invalid Equihash solution: {}", e));
+                env::panic_str(&format!("Invalid Equihash solution: {e}"));
             });
     }
 }
@@ -105,14 +105,15 @@ fn zcash_get_next_work_required(
     //
     // Here we take the floor of MeanTarget(height) immediately, but that is equivalent to doing
     // so only after a further division, as proven in <https://math.stackexchange.com/a/147832/185422>.
-    let average_target = total_target / U256::from(config.pow_averaging_window as u64);
+    let average_target = total_target
+        / U256::from(<i64 as TryInto<u64>>::try_into(config.pow_averaging_window).unwrap());
 
-    return zcash_calculate_next_work_required(
+    zcash_calculate_next_work_required(
         config,
         average_target,
         prev_block_median_time_past,
         first_block_in_interval_median_time_past,
-    );
+    )
 }
 
 fn zcash_calculate_next_work_required(
@@ -140,8 +141,10 @@ fn zcash_calculate_next_work_required(
     }
 
     // Retarget
-    let new_target = average_target / U256::from(averaging_window_timespan as u64);
-    let (mut new_target, new_target_overflow) = new_target.overflowing_mul(actual_timespan as u64);
+    let new_target = average_target
+        / U256::from(<i64 as TryInto<u64>>::try_into(averaging_window_timespan).unwrap());
+    let (mut new_target, new_target_overflow) =
+        new_target.overflowing_mul(<i64 as TryInto<u64>>::try_into(actual_timespan).unwrap());
     require!(!new_target_overflow, "new target overflow");
 
     if new_target > config.pow_limit {

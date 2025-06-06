@@ -1,4 +1,4 @@
-#[cfg(not(feature = "zcash"))]
+#[cfg(feature = "bitcoin")]
 mod test_basics {
     use btc_types::contract_args::{InitArgs, ProofArgs};
     use btc_types::hash::H256;

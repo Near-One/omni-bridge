@@ -163,20 +163,19 @@ fn get_next_work_required(
                 > prev_block_header.block_header.time + config.pow_target_spacing * 2
             {
                 return config.proof_of_work_limit_bits;
-            } else {
-                // Return the last non-special-min-difficulty-rules-block
-                let mut current_block_header = prev_block_header.clone();
-
-                while current_block_header.block_header.bits == config.proof_of_work_limit_bits
-                    && current_block_header.block_height % config.difficulty_adjustment_interval
-                        != 0
-                {
-                    current_block_header =
-                        blocks_getter.get_prev_header(&current_block_header.block_header);
-                }
-
-                return current_block_header.block_header.bits;
             }
+
+            // Return the last non-special-min-difficulty-rules-block
+            let mut current_block_header = prev_block_header.clone();
+
+            while current_block_header.block_header.bits == config.proof_of_work_limit_bits
+                && current_block_header.block_height % config.difficulty_adjustment_interval != 0
+            {
+                current_block_header =
+                    blocks_getter.get_prev_header(&current_block_header.block_header);
+            }
+
+            return current_block_header.block_header.bits;
         }
 
         return prev_block_header.block_header.bits;
@@ -201,7 +200,7 @@ fn get_next_work_required(
         .block_header
         .time;
 
-    calculate_next_work_required(&config, prev_block_header, first_block_time as i64)
+    calculate_next_work_required(config, prev_block_header, i64::from(first_block_time))
 }
 
 // source https://github.com/dogecoin/dogecoin/blob/2c513d0172e8bc86fe9a337693b26f2fdf68a013/src/pow.cpp#L90
@@ -224,7 +223,8 @@ fn calculate_next_work_required(
     let new_target = target_from_bits(prev_block_header.block_header.bits)
         / U256::from(<i64 as TryInto<u64>>::try_into(config.pow_target_timespan).unwrap());
 
-    let (mut new_target, new_target_overflow) = new_target.overflowing_mul(actual_timespan as u64);
+    let (mut new_target, new_target_overflow) =
+        new_target.overflowing_mul(actual_timespan.try_into().unwrap());
     require!(!new_target_overflow, "new target overflow");
 
     if new_target > config.pow_limit {
