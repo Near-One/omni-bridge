@@ -197,6 +197,7 @@ pub struct Contract {
     pub accounts_balances: LookupMap<AccountId, StorageBalance>,
     pub wnear_account_id: AccountId,
     pub btc_account_id: AccountId,
+    pub btc_connector: AccountId,
 }
 
 #[near]
@@ -261,6 +262,7 @@ impl Contract {
         mpc_signer: AccountId,
         wnear_account_id: AccountId,
         btc_account_id: AccountId,
+        btc_connector: AccountId,
     ) -> Self {
         let mut contract = Self {
             prover_account,
@@ -279,6 +281,7 @@ impl Contract {
             accounts_balances: LookupMap::new(StorageKey::AccountsBalances),
             wnear_account_id,
             btc_account_id,
+            btc_connector
         };
 
         contract.acl_init_super_admin(near_sdk::env::predecessor_account_id());
@@ -476,8 +479,13 @@ impl Contract {
         msg: TokenReceiverMessage,
         fee_recipient: Option<AccountId>,
         fee: &Option<Fee>,
-    ) {
-
+    ) -> Promise {
+        let transfer_message = self.get_transfer_message(transfer_id);
+        let amount = transfer_message.amount;
+        ext_token::ext(self.btc_account_id.clone())
+            .with_attached_deposit(ONE_YOCTO)
+            .with_static_gas(FT_TRANSFER_CALL_GAS)
+            .ft_transfer_call(self.btc_connector.clone(), amount, None, serde_json::to_string(&msg).unwrap())
     }
 
     fn init_transfer(
