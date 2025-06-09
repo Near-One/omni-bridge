@@ -1,10 +1,11 @@
 [package]
 name = "omni-types"
-version = "3.0.0"
+version = "3.1.0"
 authors = ["Near One <info@nearone.org>"]
 edition = "2021"
 
 [dependencies]
+bitcoin.workspace = true
 near-sdk.workspace = true
 near-contract-standards.workspace = true
 hex.workspace = true

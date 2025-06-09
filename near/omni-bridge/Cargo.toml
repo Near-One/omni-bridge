@@ -1,13 +1,13 @@
 [package]
 name = "omni-bridge"
-version = "0.2.7"
+version = "0.2.8"
 authors = ["Near One <info@nearone.org>"]
 edition = "2021"
 publish = false
 repository.workspace = true
 
-# fields to configure build with WASM reproducibility, according to specs  
-# in https://github.com/near/NEPs/blob/master/neps/nep-0330.md 
+# fields to configure build with WASM reproducibility, according to specs
+# in https://github.com/near/NEPs/blob/master/neps/nep-0330.md
 [package.metadata.near.reproducible_build]
 # docker image, descriptor of build environment
 image = "sourcescan/cargo-near:0.13.2-rust-1.84.0"
@@ -17,7 +17,7 @@ image_digest = "sha256:b41cb89907f92b114da9e2be4e109bff30ab792c22ddcbd2a4cff8e34
 # in a reproducible manner
 # supported by `sourcescan/cargo-near:0.10.1-rust-1.82.0` image or later images
 passed_env = []
-# build command inside of docker container 
+# build command inside of docker container
 # if docker image from default gallery is used https://hub.docker.com/r/sourcescan/cargo-near/tags,
 # the command may be any combination of flags of `cargo-near`,
 # supported by respective version of binary inside the container besides `--no-locked` flag

@@ -16,6 +16,7 @@ use near_sdk::{
     env, ext_contract, near, require, serde_json, AccountId, BorshStorageKey, Gas, NearToken,
     PanicOnDefault, Promise, PromiseError, PromiseOrValue, PromiseResult,
 };
+use omni_types::btc::TokenReceiverMessage;
 use omni_types::locker_args::{
     AddDeployedTokenArgs, BindTokenArgs, ClaimFeeArgs, DeployTokenArgs, FinTransferArgs,
     StorageDepositAction,
@@ -465,6 +466,18 @@ impl Contract {
                     .with_static_gas(SIGN_TRANSFER_CALLBACK_GAS)
                     .sign_transfer_callback(transfer_payload, &transfer_message.fee),
             )
+    }
+
+    #[payable]
+    #[pause(except(roles(Role::DAO, Role::UnrestrictedRelayer)))]
+    pub fn sign_btc_transfer(
+        &mut self,
+        transfer_id: TransferId,
+        msg: TokenReceiverMessage,
+        fee_recipient: Option<AccountId>,
+        fee: &Option<Fee>,
+    ) {
+
     }
 
     fn init_transfer(

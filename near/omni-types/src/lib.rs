@@ -18,6 +18,7 @@ pub mod prover_args;
 pub mod prover_result;
 pub mod sol_address;
 pub mod utils;
+pub mod btc;
 
 #[cfg(test)]
 mod tests;
