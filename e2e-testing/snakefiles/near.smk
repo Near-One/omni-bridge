@@ -16,7 +16,7 @@ near_init_params_file = const.near_init_params_file
 near_binaries = [f"{contract}.wasm" for contract in NC]
 
 # List of binaries that require dynamic init args
-near_contracts_with_dynamic_args = [NC.TOKEN_DEPLOYER, NC.MOCK_TOKEN, NC.OMNI_BRIDGE]
+near_contracts_with_dynamic_args = [NC.TOKEN_DEPLOYER, NC.MOCK_TOKEN, NC.OMNI_BRIDGE, "nbtc", "btc_connector"]
 
 # Account credential files
 near_init_account_credentials_file = const.near_account_dir / f"{NTA.INIT_ACCOUNT}.json"
@@ -44,7 +44,7 @@ def get_mkdir_cmd(directory):
 rule near_deploy_all:
     message: "Deploying all NEAR contracts"
     input:
-        expand(const.near_deploy_results_dir / "{contract}.json", 
+        expand(const.near_deploy_results_dir / "{contract}.json",
                contract=[binary.replace(".wasm", "") for binary in near_binaries]),
         near_prover_dau_grant_call_file,
         expand(near_evm_prover_setup_call_file, network=list(const.EvmNetwork))
@@ -168,18 +168,19 @@ rule near_deploy_contract:
         init_params=near_init_params_file,
         init_account=near_init_account_credentials_file,
         binary=near_binary_dir / "{contract}.wasm",
+        contract_account = const.near_account_dir / "{contract}.json",
         dyn_args=(lambda wc: const.common_generated_dir / f"{wc.contract}_dyn_init_args.json" if wc.contract in near_contracts_with_dynamic_args else []),
     output: const.near_deploy_results_dir / "{contract}.json"
     params:
         mkdir=get_mkdir_cmd(const.near_deploy_results_dir),
         base_name="{contract}",
         scripts_dir=const.common_scripts_dir,
-        ts=const.common_timestamp
+        contract_id = lambda wc, input: get_json_field(input.contract_account, "account_id")
     shell: """
     {params.mkdir} && \
     if [ -f {input.dyn_args} ]; then
-        {params.scripts_dir}/deploy-near-contract.sh {input.init_params} {input.init_account} {input.dyn_args} {input.binary} {params.base_name}-{params.ts}.testnet {output}
+        {params.scripts_dir}/deploy-near-contract.sh {input.init_params} {input.init_account} {input.dyn_args} {input.binary} {params.contract_id} {output}
     else
-        {params.scripts_dir}/deploy-near-contract.sh {input.init_params} {input.init_account} {input.binary} {params.base_name}-{params.ts}.testnet {output}
+        {params.scripts_dir}/deploy-near-contract.sh {input.init_params} {input.init_account} {input.binary} {params.contract_id} {output}
     fi
     """

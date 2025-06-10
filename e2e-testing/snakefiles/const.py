@@ -36,6 +36,7 @@ class Chain(StrEnum):
     SOL = "Sol"
     BASE = "Base"
     ARB = "Arb"
+    BTC = "Btc"
 
     @classmethod
     def from_evm_network(cls, evm_network):
