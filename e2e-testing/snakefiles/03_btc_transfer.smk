@@ -3,7 +3,7 @@ import const
 import time
 from const import (get_evm_deploy_results_dir, get_evm_account_dir,
                      EvmNetwork as EN, NearContract as NC, EvmContract as EC, NearTestAccount as NTA)
-from utils import get_mkdir_cmd, get_json_field, extract_tx_hash
+from utils import get_mkdir_cmd, get_json_field, extract_tx_hash, get_btc_address, get_btc_amount
 
 module near:
     snakefile: "./near.smk"
@@ -108,8 +108,7 @@ rule get_btc_user_deposit_address:
         mkdir = get_mkdir_cmd(call_dir),
         btc_connector = lambda wc, input: get_json_field(input.btc_connector_file, "contract_id"),
         user_account_id = lambda wc, input: get_json_field(input.user_account_file, "account_id"),
-        bridge_sdk_config_file = const.common_bridge_sdk_config_file,
-        extract_tx = lambda wc, output: extract_tx_hash("near", output)
+        bridge_sdk_config_file = const.common_bridge_sdk_config_file
     shell: """
     {params.mkdir} && \
          bridge-cli testnet get-bitcoin-address \
@@ -120,8 +119,21 @@ rule get_btc_user_deposit_address:
          > {output} \
     """
 
+rule send_btc_to_deposit_address:
+    message: "Send BTC to user deposit address on Bitcoin"
+    input:
+        step_2 = rules.get_btc_user_deposit_address.output,
+    output: call_dir / "03_send_btc_to_deposit_address.json"
+    params:
+        scripts_dir = const.common_scripts_dir,
+        btc_address = lambda wc, input: get_btc_address(input.step_2),
+        btc_amount = lambda wc, input: get_btc_amount(input.step_2),
+    shell: """
+    node {params.scripts_dir}/send_btc.js {params.btc_address} {params.btc_amount} > {output}
+    """
+
 rule all:
     input:
         nbtc_file,
-        rules.get_btc_user_deposit_address.output,
+        rules.send_btc_to_deposit_address.output,
     default_target: True
