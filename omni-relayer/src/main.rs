@@ -61,7 +61,7 @@ async fn main() -> Result<()> {
     let near_nonce = Arc::new(utils::nonce::NonceManager::new(
         utils::nonce::ChainClient::Near {
             jsonrpc_client: jsonrpc_client.clone(),
-            signer: near_signer,
+            signer: Box::new(near_signer),
         },
     ));
     let evm_nonces = Arc::new(utils::nonce::EvmNonceManagers::new(&config));

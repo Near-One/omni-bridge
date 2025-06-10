@@ -2,7 +2,7 @@ use std::sync::Mutex;
 
 use alloy::{
     primitives::{Address, U64},
-    providers::{Provider, ProviderBuilder},
+    providers::{DynProvider, Provider, ProviderBuilder},
 };
 use anyhow::Result;
 use log::warn;
@@ -12,7 +12,7 @@ use near_jsonrpc_primitives::types::query::QueryResponseKind;
 use near_primitives::types::BlockReference;
 use omni_types::ChainKind;
 
-use crate::{config, startup};
+use crate::config;
 
 const RETRY_ATTEMPTS: u64 = 10;
 const RETRY_SLEEP_SECS: u64 = 1;
@@ -20,10 +20,10 @@ const RETRY_SLEEP_SECS: u64 = 1;
 pub enum ChainClient {
     Near {
         jsonrpc_client: JsonRpcClient,
-        signer: InMemorySigner,
+        signer: Box<InMemorySigner>,
     },
     Evm {
-        provider: startup::evm::EvmProvider,
+        provider: DynProvider,
         address: Address,
     },
 }
@@ -109,10 +109,7 @@ impl NonceManager {
         anyhow::bail!("Failed to get current nonce")
     }
 
-    async fn get_current_nonce_evm(
-        provider: startup::evm::EvmProvider,
-        address: Address,
-    ) -> Result<u64> {
+    async fn get_current_nonce_evm(provider: DynProvider, address: Address) -> Result<u64> {
         for _ in 0..RETRY_ATTEMPTS {
             let response = provider
                 .client()
@@ -144,22 +141,25 @@ impl EvmNonceManagers {
         Self {
             eth: config.eth.as_ref().map(|eth_config| {
                 NonceManager::new(ChainClient::Evm {
-                    provider: ProviderBuilder::new()
-                        .on_http(eth_config.rpc_http_url.parse().unwrap()),
+                    provider: DynProvider::new(
+                        ProviderBuilder::new().on_http(eth_config.rpc_http_url.parse().unwrap()),
+                    ),
                     address: config::get_relayer_evm_address(ChainKind::Eth),
                 })
             }),
             base: config.base.as_ref().map(|base_config| {
                 NonceManager::new(ChainClient::Evm {
-                    provider: ProviderBuilder::new()
-                        .on_http(base_config.rpc_http_url.parse().unwrap()),
+                    provider: DynProvider::new(
+                        ProviderBuilder::new().on_http(base_config.rpc_http_url.parse().unwrap()),
+                    ),
                     address: config::get_relayer_evm_address(ChainKind::Base),
                 })
             }),
             arb: config.arb.as_ref().map(|arb_config| {
                 NonceManager::new(ChainClient::Evm {
-                    provider: ProviderBuilder::new()
-                        .on_http(arb_config.rpc_http_url.parse().unwrap()),
+                    provider: DynProvider::new(
+                        ProviderBuilder::new().on_http(arb_config.rpc_http_url.parse().unwrap()),
+                    ),
                     address: config::get_relayer_evm_address(ChainKind::Arb),
                 })
             }),
