@@ -57,5 +57,9 @@
     "nbtc": {
         "init_function": "new",
         "init_args": {}
+    },
+    "btc_connector": {
+        "init_function": "new",
+        "init_args": {}
     }
 }

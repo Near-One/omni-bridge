@@ -17,6 +17,7 @@ btc_connector_account_file = const.near_account_dir / f"btc_connector.json"
 nbtc_account_file = const.near_account_dir / f"nbtc.json"
 near_init_account_file = const.near_account_dir / f"{NTA.INIT_ACCOUNT}.json"
 near_dao_account_file = const.near_account_dir / f"{NTA.DAO_ACCOUNT}.json"
+user_account_file = const.near_account_dir / f"{NTA.USER_ACCOUNT}.json"
 
 # Binary files
 btc_connector_binary_file = const.near_binary_dir / "btc_connector.wasm"
@@ -75,8 +76,52 @@ rule near_generate_btc_connector_init_args:
     echo '{{\"config\": {{\"chain_signatures_account_id\": \"v1.signer-prod.testnet\",\"nbtc_account_id\": \"{params.nbtc_id}\",\"btc_light_client_account_id\": \"btc-client.testnet\",\"confirmations_strategy\": {{\"100000000\": 6}},\"confirmations_delta\": 1,\"withdraw_bridge_fee\": {{\"fee_min\": \"1000\",\"fee_rate\": 0,\"protocol_fee_rate\": 9000}},\"deposit_bridge_fee\": {{\"fee_min\": \"2000\",\"fee_rate\": 0,\"protocol_fee_rate\": 9000}},\"min_deposit_amount\": \"5000\", \"min_withdraw_amount\": \"5000\", \"min_change_amount\": \"0\", \"max_change_amount\": \"100000000\",\"min_btc_gas_fee\": \"100\",\"max_btc_gas_fee\": \"80000\",\"max_withdrawal_input_number\": 10,\"max_change_number\": 10,\"max_active_utxo_management_input_number\": 10,\"max_active_utxo_management_output_number\": 10,\"active_management_lower_limit\": 0,\"active_management_upper_limit\": 1000,\"passive_management_lower_limit\": 0,\"passive_management_upper_limit\": 600,\"rbf_num_limit\": 99,\"max_btc_tx_pending_sec\": 86400}}}}' > {output}
     """
 
+rule sync_btc_connector:
+    message: "Sync BTC connector"
+    input:
+        btc_connector_file = btc_connector_file,
+        init_account_file = near_init_account_file
+    output: call_dir / "01_sync_btc_connector.json"
+    params:
+        mkdir = get_mkdir_cmd(call_dir),
+        scripts_dir = const.common_scripts_dir,
+        btc_connector = lambda wc, input: get_json_field(input.btc_connector_file, "contract_id"),
+        extract_tx = lambda wc, output: extract_tx_hash("near", output)
+    shell: """
+    {params.mkdir} && \
+        {params.scripts_dir}/call-near-contract.sh -c {params.btc_connector} \
+        -m sync_chain_signatures_root_public_key \
+        -f {input.init_account_file} \
+        -d "1 yoctoNEAR"\
+        -n testnet 2>&1 | tee {output} && \
+    {params.extract_tx}
+    """
+
+rule get_btc_user_deposit_address:
+    message: "Get BTC user deposit address"
+    input:
+        step_1 = rules.sync_btc_connector.output,
+        btc_connector_file = btc_connector_file,
+        user_account_file = user_account_file
+    output: call_dir / "02_btc_user_deposit_address.json"
+    params:
+        mkdir = get_mkdir_cmd(call_dir),
+        btc_connector = lambda wc, input: get_json_field(input.btc_connector_file, "contract_id"),
+        user_account_id = lambda wc, input: get_json_field(input.user_account_file, "account_id"),
+        bridge_sdk_config_file = const.common_bridge_sdk_config_file,
+        extract_tx = lambda wc, output: extract_tx_hash("near", output)
+    shell: """
+    {params.mkdir} && \
+         bridge-cli testnet get-bitcoin-address \
+         --btc-connector {params.btc_connector} \
+         -r {params.user_account_id} \
+         --near-signer {params.user_account_id} \
+         --config {params.bridge_sdk_config_file} \
+         > {output} \
+    """
+
 rule all:
     input:
         nbtc_file,
-        btc_connector_file,
+        rules.get_btc_user_deposit_address.output,
     default_target: True
