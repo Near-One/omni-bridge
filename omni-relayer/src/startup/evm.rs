@@ -7,7 +7,7 @@ use alloy::{
 use anyhow::{Context, Result};
 use ethereum_types::H256;
 use log::{error, info, warn};
-use omni_types::{ChainKind, OmniAddress};
+use omni_types::{ChainKind, Fee, OmniAddress, TransferId};
 use reqwest::Url;
 use tokio_stream::StreamExt;
 
@@ -16,13 +16,24 @@ use crate::{
     workers::{DeployToken, FinTransfer},
 };
 
+struct ProcessRecentBlocksParams<'a> {
+    redis_connection: &'a mut redis::aio::MultiplexedConnection,
+    http_provider: &'a DynProvider,
+    filter: &'a Filter,
+    chain_kind: ChainKind,
+    start_block: Option<u64>,
+    block_processing_batch_size: u64,
+    expected_finalization_time: i64,
+    safe_confirmations: Option<u64>,
+}
+
 fn hide_api_key<E: ToString>(err: &E) -> String {
     let env_key = "INFURA_API_KEY";
     let api_key = std::env::var(env_key).unwrap_or_default();
     err.to_string().replace(&api_key, env_key)
 }
 
-fn extract_evm_config(evm: config::Evm) -> Result<(Url, String, Address, u64, i64)> {
+fn extract_evm_config(evm: config::Evm) -> Result<(Url, String, Address, u64, i64, Option<u64>)> {
     Ok((
         evm.rpc_http_url
             .parse()
@@ -31,6 +42,7 @@ fn extract_evm_config(evm: config::Evm) -> Result<(Url, String, Address, u64, i6
         evm.omni_bridge_address,
         evm.block_processing_batch_size,
         evm.expected_finalization_time,
+        evm.safe_confirmations,
     ))
 }
 
@@ -48,6 +60,7 @@ pub async fn start_indexer(
         bridge_token_factory_address,
         block_processing_batch_size,
         expected_finalization_time,
+        safe_confirmations,
     ) = match chain_kind {
         ChainKind::Eth => extract_evm_config(config.eth.context("Failed to get Eth config")?)?,
         ChainKind::Base => extract_evm_config(config.base.context("Failed to get Base config")?)?,
@@ -69,18 +82,21 @@ pub async fn start_indexer(
     loop {
         let http_provider = DynProvider::new(ProviderBuilder::new().on_http(rpc_http_url.clone()));
 
+        let params = ProcessRecentBlocksParams {
+            redis_connection: &mut redis_connection,
+            http_provider: &http_provider,
+            filter: &filter,
+            chain_kind,
+            start_block,
+            block_processing_batch_size,
+            expected_finalization_time,
+            safe_confirmations,
+        };
+
         crate::skip_fail!(
-            process_recent_blocks(
-                &mut redis_connection,
-                &http_provider,
-                &filter,
-                chain_kind,
-                start_block,
-                block_processing_batch_size,
-                expected_finalization_time,
-            )
-            .await
-            .map_err(|err| hide_api_key(&err)),
+            process_recent_blocks(params)
+                .await
+                .map_err(|err| hide_api_key(&err)),
             format!("Failed to process recent blocks for {chain_kind:?} indexer"),
             5
         );
@@ -115,6 +131,7 @@ pub async fn start_indexer(
                 &http_provider,
                 log,
                 expected_finalization_time,
+                safe_confirmations,
             )
             .await;
         }
@@ -126,15 +143,18 @@ pub async fn start_indexer(
     }
 }
 
-async fn process_recent_blocks(
-    redis_connection: &mut redis::aio::MultiplexedConnection,
-    http_provider: &DynProvider,
-    filter: &Filter,
-    chain_kind: ChainKind,
-    start_block: Option<u64>,
-    block_processing_batch_size: u64,
-    expected_finalization_time: i64,
-) -> Result<()> {
+async fn process_recent_blocks(params: ProcessRecentBlocksParams<'_>) -> Result<()> {
+    let ProcessRecentBlocksParams {
+        redis_connection,
+        http_provider,
+        filter,
+        chain_kind,
+        start_block,
+        block_processing_batch_size,
+        expected_finalization_time,
+        safe_confirmations,
+    } = params;
+
     let last_processed_block_key = utils::redis::get_last_processed_key(chain_kind);
     let latest_block = http_provider.get_block_number().await?;
     let from_block = match start_block {
@@ -180,6 +200,7 @@ async fn process_recent_blocks(
                 http_provider,
                 log,
                 expected_finalization_time,
+                safe_confirmations,
             )
             .await;
         }
@@ -194,6 +215,7 @@ async fn process_log(
     http_provider: &DynProvider,
     log: Log,
     expected_finalization_time: i64,
+    safe_confirmations: Option<u64>,
 ) {
     let Some(tx_hash) = log.transaction_hash else {
         warn!("No transaction hash in log: {log:?}");
@@ -234,7 +256,7 @@ async fn process_log(
             amount: init_log.inner.amount.into(),
             fee: init_log.inner.fee.into(),
             native_fee: init_log.inner.nativeFee.into(),
-            recipient,
+            recipient: recipient.clone(),
             message: init_log.inner.message.clone(),
         };
 
@@ -246,13 +268,39 @@ async fn process_log(
                 chain_kind,
                 block_number,
                 tx_hash,
-                log,
+                log: log.clone(),
                 creation_timestamp: timestamp,
                 last_update_timestamp: None,
                 expected_finalization_time,
             },
         )
         .await;
+
+        if let Some(safe_confirmations) = safe_confirmations {
+            utils::redis::add_event(
+                redis_connection,
+                utils::redis::EVENTS,
+                tx_hash.to_string(),
+                crate::workers::Transfer::Fast {
+                    block_number,
+                    token: log.token_address.to_string(),
+                    amount: log.amount.0,
+                    transfer_id: TransferId {
+                        origin_chain: chain_kind,
+                        origin_nonce: log.origin_nonce,
+                    },
+                    recipient,
+                    fee: Fee {
+                        fee: log.fee,
+                        native_fee: log.native_fee,
+                    },
+                    msg: log.message,
+                    storage_deposit_amount: None,
+                    safe_confirmations,
+                },
+            )
+            .await;
+        }
     } else if log.log_decode::<utils::evm::FinTransfer>().is_ok() {
         info!("Received FinTransfer on {chain_kind:?} ({tx_hash:?})");
 

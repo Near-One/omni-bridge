@@ -4,13 +4,13 @@ use anyhow::Result;
 
 use near_primitives::types::AccountId;
 use omni_connector::OmniConnector;
-use omni_types::{locker_args::StorageDepositAction, ChainKind, OmniAddress};
+use omni_types::{ChainKind, OmniAddress, locker_args::StorageDepositAction};
 use solana_sdk::pubkey::Pubkey;
 
 use crate::utils;
 
-async fn get_token_id(
-    connector: &OmniConnector,
+pub async fn get_token_id(
+    near_bridge_client: &near_bridge_client::NearBridgeClient,
     chain_kind: ChainKind,
     token_address: &str,
 ) -> Result<AccountId, String> {
@@ -34,8 +34,8 @@ async fn get_token_id(
     }
     .map_err(|_| format!("Failed to convert token address to OmniAddress: {token_address:?}",))?;
 
-    let token_id = connector
-        .near_get_token_id(omni_token_address.clone())
+    let token_id = near_bridge_client
+        .get_token_id(omni_token_address.clone())
         .await
         .map_err(|_| {
             format!("Failed to get token id by omni token address: {omni_token_address:?}",)
@@ -77,10 +77,14 @@ pub async fn get_storage_deposit_actions(
     fee: u128,
     native_fee: u128,
 ) -> Result<Vec<StorageDepositAction>, String> {
+    let near_bridge_client = connector
+        .near_bridge_client()
+        .map_err(|err| err.to_string())?;
+
     let mut storage_deposit_actions = Vec::new();
 
     if let OmniAddress::Near(near_recipient) = recipient {
-        let token_id = get_token_id(connector, chain_kind, token_address).await?;
+        let token_id = get_token_id(near_bridge_client, chain_kind, token_address).await?;
         add_storage_deposit_action(
             connector,
             &mut storage_deposit_actions,
@@ -91,7 +95,7 @@ pub async fn get_storage_deposit_actions(
     }
 
     if fee > 0 {
-        let token_id = get_token_id(connector, chain_kind, token_address).await?;
+        let token_id = get_token_id(near_bridge_client, chain_kind, token_address).await?;
 
         let relayer = connector
             .near_bridge_client()

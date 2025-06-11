@@ -4,7 +4,7 @@ use anyhow::{Context, Result};
 use bridge_connector_common::result::BridgeSdkError;
 use log::{info, warn};
 
-use near_bridge_client::TransactionOptions;
+use near_bridge_client::{FastFinTransferArgs, TransactionOptions};
 use near_jsonrpc_client::{JsonRpcClient, errors::JsonRpcError};
 use near_primitives::{hash::CryptoHash, types::AccountId};
 use near_rpc_client::NearRpcError;
@@ -356,5 +356,103 @@ pub async fn process_unverified_transfer_event(
             unverified_event.original_event,
         )
         .await;
+    }
+}
+
+pub async fn process_fast_transfer_event(
+    config: config::Config,
+    near_fast_bridge_client: Arc<near_bridge_client::NearBridgeClient>,
+    evm_bridge_client: &evm_bridge_client::EvmBridgeClient,
+    transfer: Transfer,
+    near_fast_nonce: Arc<utils::nonce::NonceManager>,
+) -> Result<EventAction> {
+    let Transfer::Fast {
+        block_number,
+        token,
+        amount,
+        transfer_id,
+        recipient,
+        fee,
+        msg,
+        storage_deposit_amount,
+        safe_confirmations,
+    } = transfer
+    else {
+        anyhow::bail!("Expected FastTransferEvent, got: {:?}", transfer);
+    };
+
+    let Ok(last_finalized_block_number) = evm_bridge_client.get_last_finalized_block_number().await
+    else {
+        warn!("Failed to get last finalized block number for EVM chain");
+        return Ok(EventAction::Retry);
+    };
+
+    let current_confirmations = last_finalized_block_number.saturating_sub(block_number);
+
+    if current_confirmations < safe_confirmations {
+        warn!(
+            "Fast transfer block number ({block_number}) is not finalized yet, waiting for more confirmations. Current confirmations: {current_confirmations}",
+        );
+        return Ok(EventAction::Retry);
+    }
+
+    info!("Trying to initiate FastTransfer on NEAR");
+
+    let relayer = near_fast_bridge_client
+        .account_id()
+        .context("Failed to get relayer account id")?;
+
+    let Ok(token_id) = utils::storage::get_token_id(
+        &near_fast_bridge_client.clone(),
+        transfer_id.origin_chain,
+        &token,
+    )
+    .await
+    else {
+        return Ok(EventAction::Retry);
+    };
+
+    let fast_fin_transfer_args = FastFinTransferArgs {
+        token_id,
+        amount,
+        transfer_id,
+        recipient,
+        fee,
+        msg,
+        storage_deposit_amount,
+        relayer,
+    };
+
+    match near_fast_bridge_client
+        .fast_fin_transfer(
+            fast_fin_transfer_args,
+            TransactionOptions {
+                nonce: Some(near_fast_nonce.reserve_nonce().await?),
+                wait_until: near_primitives::views::TxExecutionStatus::Included,
+                wait_final_outcome_timeout_sec: None,
+            },
+        )
+        .await
+    {
+        Ok(tx_hash) => {
+            info!("Fast transfer initiated successfully: {tx_hash:?}");
+            return Ok(EventAction::Remove);
+        }
+        Err(err) => {
+            if let BridgeSdkError::NearRpcError(near_rpc_error) = err {
+                match near_rpc_error {
+                    NearRpcError::NonceError
+                    | NearRpcError::FinalizationError
+                    | NearRpcError::RpcTransactionError(JsonRpcError::TransportError(_)) => {
+                        warn!("Failed to initiate fast transfer, retrying: {near_rpc_error:?}");
+                        return Ok(EventAction::Retry);
+                    }
+                    _ => {
+                        anyhow::bail!("Failed to initiate fast transfer: {near_rpc_error:?}");
+                    }
+                };
+            }
+            anyhow::bail!("Failed to initiate fast transfer: {err:?}");
+        }
     }
 }

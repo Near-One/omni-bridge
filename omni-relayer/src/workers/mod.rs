@@ -13,7 +13,9 @@ use near_sdk::json_types::U128;
 use solana_sdk::pubkey::Pubkey;
 
 use omni_connector::OmniConnector;
-use omni_types::{ChainKind, OmniAddress, TransferMessage, near_events::OmniBridgeEvent};
+use omni_types::{
+    ChainKind, Fee, OmniAddress, TransferId, TransferMessage, near_events::OmniBridgeEvent,
+};
 
 use crate::{config, utils};
 
@@ -68,6 +70,17 @@ pub enum Transfer {
         vout: u64,
         deposit_msg: DepositMsg,
     },
+    Fast {
+        block_number: u64,
+        token: String,
+        amount: u128,
+        transfer_id: TransferId,
+        recipient: OmniAddress,
+        fee: Fee,
+        msg: String,
+        storage_deposit_amount: Option<u128>,
+        safe_confirmations: u64,
+    },
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
@@ -104,13 +117,15 @@ pub enum DeployToken {
     },
 }
 
-#[allow(clippy::too_many_lines)]
+#[allow(clippy::too_many_lines, clippy::too_many_arguments)]
 pub async fn process_events(
     config: config::Config,
     redis_client: redis::Client,
     connector: Arc<OmniConnector>,
+    near_fast_bridge_client: Option<Arc<near_bridge_client::NearBridgeClient>>,
     jsonrpc_client: JsonRpcClient,
-    near_nonce: Arc<utils::nonce::NonceManager>,
+    near_omni_nonce: Arc<utils::nonce::NonceManager>,
+    near_fast_nonce: Option<Arc<utils::nonce::NonceManager>>,
     evm_nonces: Arc<utils::nonce::EvmNonceManagers>,
 ) -> Result<()> {
     let redis_connection = redis_client.get_multiplexed_tokio_connection().await?;
@@ -135,7 +150,7 @@ pub async fn process_events(
             continue;
         };
 
-        if let Err(err) = near_nonce.resync_nonce().await {
+        if let Err(err) = near_omni_nonce.resync_nonce().await {
             warn!("Failed to resync near nonce: {err:?}");
         }
 
@@ -153,7 +168,7 @@ pub async fn process_events(
                         let mut redis_connection = redis_connection.clone();
                         let connector = connector.clone();
                         let signer = signer.clone();
-                        let near_nonce = near_nonce.clone();
+                        let near_nonce = near_omni_nonce.clone();
 
                         async move {
                             match near::process_transfer_event(
@@ -195,7 +210,7 @@ pub async fn process_events(
                         let key = key.clone();
                         let connector = connector.clone();
                         let jsonrpc_client = jsonrpc_client.clone();
-                        let near_nonce = near_nonce.clone();
+                        let near_nonce = near_omni_nonce.clone();
 
                         async move {
                             match evm::process_init_transfer_event(
@@ -236,7 +251,7 @@ pub async fn process_events(
                         let mut redis_connection = redis_connection.clone();
                         let key = key.clone();
                         let connector = connector.clone();
-                        let near_nonce = near_nonce.clone();
+                        let near_nonce = near_omni_nonce.clone();
 
                         async move {
                             match solana::process_init_transfer_event(
@@ -274,7 +289,7 @@ pub async fn process_events(
                     handlers.push(tokio::spawn({
                         let mut redis_connection = redis_connection.clone();
                         let connector = connector.clone();
-                        let near_nonce = near_nonce.clone();
+                        let near_nonce = near_omni_nonce.clone();
 
                         async move {
                             match btc::process_near_to_btc_init_transfer_event(
@@ -307,11 +322,70 @@ pub async fn process_events(
                     handlers.push(tokio::spawn({
                         let mut redis_connection = redis_connection.clone();
                         let connector = connector.clone();
-                        let near_nonce = near_nonce.clone();
+                        let near_nonce = near_omni_nonce.clone();
 
                         async move {
                             match btc::process_btc_to_near_init_transfer_event(
                                 connector, transfer, near_nonce,
+                            )
+                            .await
+                            {
+                                Ok(EventAction::Retry) => {}
+                                Ok(EventAction::Remove) => {
+                                    utils::redis::remove_event(
+                                        &mut redis_connection,
+                                        utils::redis::EVENTS,
+                                        &key,
+                                    )
+                                    .await;
+                                }
+                                Err(err) => {
+                                    warn!("{err:?}");
+                                    utils::redis::remove_event(
+                                        &mut redis_connection,
+                                        utils::redis::EVENTS,
+                                        &key,
+                                    )
+                                    .await;
+                                }
+                            }
+                        }
+                    }));
+                } else if let Transfer::Fast { transfer_id, .. } = transfer {
+                    let Some(near_fast_bridge_client) = near_fast_bridge_client.clone() else {
+                        warn!(
+                            "Fast transfer event received, but near fast bridge connector is not available"
+                        );
+                        continue;
+                    };
+                    let Some(near_fast_nonce) = near_fast_nonce.clone() else {
+                        warn!(
+                            "Fast transfer event received, but near fast nonce manager is not available"
+                        );
+                        continue;
+                    };
+
+                    handlers.push(tokio::spawn({
+                        let config = config.clone();
+                        let mut redis_connection = redis_connection.clone();
+                        let omni_connector = connector.clone();
+                        let near_fast_bridge_client = near_fast_bridge_client.clone();
+                        let near_fast_nonce = near_fast_nonce.clone();
+                        async move {
+                            let Ok(evm_bridge_client) = omni_connector.evm_bridge_client(transfer_id.origin_chain) else {
+                                warn!(
+                                    "Fast transfer event received, but evm bridge client for {:?} is not available",
+                                    transfer_id.origin_chain
+                                );
+                                return;
+                            };
+                            
+                            match near::process_fast_transfer_event(
+                                config,
+                                near_fast_bridge_client,
+                                evm_bridge_client,
+                                transfer,
+                                near_fast_nonce,
                             )
                             .await
                             {
@@ -385,7 +459,7 @@ pub async fn process_events(
                         let mut redis_connection = redis_connection.clone();
                         let connector = connector.clone();
                         let jsonrpc_client = jsonrpc_client.clone();
-                        let near_nonce = near_nonce.clone();
+                        let near_nonce = near_omni_nonce.clone();
 
                         async move {
                             match evm::process_evm_transfer_event(
@@ -423,7 +497,7 @@ pub async fn process_events(
                         let config = config.clone();
                         let mut redis_connection = redis_connection.clone();
                         let connector = connector.clone();
-                        let near_nonce = near_nonce.clone();
+                        let near_nonce = near_omni_nonce.clone();
 
                         async move {
                             match solana::process_fin_transfer_event(
@@ -463,7 +537,7 @@ pub async fn process_events(
                         let mut redis_connection = redis_connection.clone();
                         let jsonrpc_client = jsonrpc_client.clone();
                         let connector = connector.clone();
-                        let near_nonce = near_nonce.clone();
+                        let near_nonce = near_omni_nonce.clone();
 
                         async move {
                             match evm::process_deploy_token_event(
@@ -501,7 +575,7 @@ pub async fn process_events(
                         let config = config.clone();
                         let mut redis_connection = redis_connection.clone();
                         let connector = connector.clone();
-                        let near_nonce = near_nonce.clone();
+                        let near_nonce = near_omni_nonce.clone();
 
                         async move {
                             match solana::process_deploy_token_event(
@@ -575,7 +649,7 @@ pub async fn process_events(
                 handlers.push(tokio::spawn({
                     let mut redis_connection = redis_connection.clone();
                     let connector = connector.clone();
-                    let near_nonce = near_nonce.clone();
+                    let near_nonce = near_omni_nonce.clone();
 
                     async move {
                         match btc::process_confirmed_tx_hash(

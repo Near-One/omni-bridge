@@ -54,16 +54,41 @@ async fn main() -> Result<()> {
 
     let redis_client = redis::Client::open(config.redis.url.clone())?;
     let jsonrpc_client = near_jsonrpc_client::JsonRpcClient::connect(config.near.rpc_url.clone());
-    let near_signer = startup::near::get_signer(config.near.credentials_path.as_ref())?;
 
-    let connector = Arc::new(startup::build_omni_connector(&config, &near_signer)?);
+    let near_omni_signer = startup::near::get_signer(
+        config.near.omni_credentials_path.as_ref(),
+        config::NearSignerType::Omni,
+    )?;
 
-    let near_nonce = Arc::new(utils::nonce::NonceManager::new(
+    let near_fast_signer = if config.is_fast_relayer_enabled() {
+        Some(startup::near::get_signer(
+            config.near.fast_credentials_path.as_ref(),
+            config::NearSignerType::Fast,
+        )?)
+    } else {
+        None
+    };
+    let (connector, near_fast_bridge_client) =
+        startup::build_omni_connector(&config, &near_omni_signer, near_fast_signer.as_ref())?;
+    let connector = Arc::new(connector);
+    let near_fast_bridge_client = near_fast_bridge_client.map(Arc::new);
+
+    let near_omni_nonce = Arc::new(utils::nonce::NonceManager::new(
         utils::nonce::ChainClient::Near {
             jsonrpc_client: jsonrpc_client.clone(),
-            signer: Box::new(near_signer),
+            signer: Box::new(near_omni_signer),
         },
     ));
+    let near_fast_nonce = if let Some(near_fast_signer) = near_fast_signer {
+        Some(Arc::new(utils::nonce::NonceManager::new(
+            utils::nonce::ChainClient::Near {
+                jsonrpc_client: jsonrpc_client.clone(),
+                signer: Box::new(near_fast_signer),
+            },
+        )))
+    } else {
+        None
+    };
     let evm_nonces = Arc::new(utils::nonce::EvmNonceManagers::new(&config));
 
     let mut handles = Vec::new();
@@ -162,8 +187,10 @@ async fn main() -> Result<()> {
         let config = config.clone();
         let redis_client = redis_client.clone();
         let connector = connector.clone();
+        let near_fast_bridge_client = near_fast_bridge_client.clone();
         let jsonrpc_client = jsonrpc_client.clone();
-        let near_nonce = near_nonce.clone();
+        let near_omni_nonce = near_omni_nonce.clone();
+        let near_fast_nonce = near_fast_nonce.clone();
         let evm_nonces = evm_nonces.clone();
 
         async move {
@@ -171,8 +198,10 @@ async fn main() -> Result<()> {
                 config,
                 redis_client,
                 connector,
+                near_fast_bridge_client,
                 jsonrpc_client,
-                near_nonce,
+                near_omni_nonce,
+                near_fast_nonce,
                 evm_nonces,
             )
             .await

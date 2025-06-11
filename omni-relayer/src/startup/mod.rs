@@ -32,37 +32,11 @@ macro_rules! skip_fail {
     };
 }
 
-fn build_evm_bridge_client(
-    config: &config::Config,
-    chain_kind: ChainKind,
-) -> Result<Option<EvmBridgeClient>> {
-    let evm = match chain_kind {
-        ChainKind::Eth => &config.eth,
-        ChainKind::Base => &config.base,
-        ChainKind::Arb => &config.arb,
-        _ => unreachable!("Function `build_evm_bridge_client` supports only EVM chains"),
-    };
-
-    evm.as_ref()
-        .map(|evm| {
-            EvmBridgeClientBuilder::default()
-                .endpoint(Some(evm.rpc_http_url.clone()))
-                .chain_id(Some(evm.chain_id))
-                .private_key(Some(crate::config::get_private_key(chain_kind)))
-                .omni_bridge_address(Some(evm.omni_bridge_address.to_string()))
-                .build()
-                .context(format!("Failed to build EvmBridgeClient ({chain_kind:?})"))
-        })
-        .transpose()
-}
-
-pub fn build_omni_connector(
+fn build_near_bridge_client(
     config: &config::Config,
     near_signer: &InMemorySigner,
-) -> Result<OmniConnector> {
-    info!("Building Omni connector");
-
-    let near_bridge_client = NearBridgeClientBuilder::default()
+) -> Result<near_bridge_client::NearBridgeClient> {
+    NearBridgeClientBuilder::default()
         .endpoint(Some(config.near.rpc_url.clone()))
         .private_key(Some(near_signer.secret_key.to_string()))
         .signer(Some(near_signer.account_id.to_string()))
@@ -83,7 +57,51 @@ pub fn build_omni_connector(
                 .map(|satoshi_relayer| satoshi_relayer.to_string()),
         )
         .build()
+        .context("Failed to build NearBridgeClient")
+}
+
+fn build_evm_bridge_client(
+    config: &config::Config,
+    chain_kind: ChainKind,
+) -> Result<Option<EvmBridgeClient>> {
+    let evm = match chain_kind {
+        ChainKind::Eth => &config.eth,
+        ChainKind::Base => &config.base,
+        ChainKind::Arb => &config.arb,
+        _ => unreachable!("Function `build_evm_bridge_client` supports only EVM chains"),
+    };
+
+    evm.as_ref()
+        .map(|evm| {
+            EvmBridgeClientBuilder::default()
+                .endpoint(Some(evm.rpc_http_url.clone()))
+                .chain_id(Some(evm.chain_id))
+                .private_key(Some(crate::config::get_private_key(chain_kind, None)))
+                .omni_bridge_address(Some(evm.omni_bridge_address.to_string()))
+                .build()
+                .context(format!("Failed to build EvmBridgeClient ({chain_kind:?})"))
+        })
+        .transpose()
+}
+
+pub fn build_omni_connector(
+    config: &config::Config,
+    near_omni_signer: &InMemorySigner,
+    near_fast_signer: Option<&InMemorySigner>,
+) -> Result<(OmniConnector, Option<near_bridge_client::NearBridgeClient>)> {
+    info!("Building Omni connector");
+
+    let near_bridge_client = build_near_bridge_client(config, near_omni_signer)
         .context("Failed to build NearBridgeClient")?;
+
+    let near_fast_bridge_client = if let Some(near_fast_signer) = near_fast_signer {
+        Some(
+            build_near_bridge_client(config, near_fast_signer)
+                .context("Failed to build NearFastBridgeClient")?,
+        )
+    } else {
+        None
+    };
 
     let eth_bridge_client = build_evm_bridge_client(config, ChainKind::Eth)?;
     let base_bridge_client = build_evm_bridge_client(config, ChainKind::Base)?;
@@ -116,7 +134,7 @@ pub fn build_omni_connector(
         .build()
         .context("Failed to build WormholeBridgeClient")?;
 
-    OmniConnectorBuilder::default()
+    let omni_connector = OmniConnectorBuilder::default()
         .near_bridge_client(Some(near_bridge_client))
         .eth_bridge_client(eth_bridge_client)
         .base_bridge_client(base_bridge_client)
@@ -125,5 +143,7 @@ pub fn build_omni_connector(
         .wormhole_bridge_client(Some(wormhole_bridge_client))
         .btc_bridge_client(Some(btc_bridge_client))
         .build()
-        .context("Failed to build OmniConnector")
+        .context("Failed to build OmniConnector")?;
+
+    Ok((omni_connector, near_fast_bridge_client))
 }
