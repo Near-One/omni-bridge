@@ -157,9 +157,77 @@ rule fin_btc_transfer_on_near:
          > {output} \
     """
 
+rule storage_deposit_btc_for_omni_bridge:
+    message: "Storage Deposit for BTC token for Omni Bridge"
+    input:
+        step_4 = rules.fin_btc_transfer_on_near.output,
+        nbtc_file = nbtc_file,
+        omni_bridge_file = omni_bridge_file,
+        user_account_file = user_account_file
+    output: call_dir / "05_storage_deposit_btc_for_omni_bridge.json"
+    params:
+        scripts_dir = const.common_scripts_dir,
+        nbtc_account = lambda wc, input: get_json_field(input.nbtc_file, "contract_id"),
+        omni_bridge_account = lambda wc, input: get_json_field(input.omni_bridge_file, "contract_id"),
+        extract_tx = lambda wc, output: extract_tx_hash("near", output)
+    shell: """
+    {params.scripts_dir}/call-near-contract.sh -c {params.nbtc_account} \
+        -m storage_deposit \
+        -f {input.user_account_file} \
+        -a '{{\"account_id\": \"{params.omni_bridge_account}\"}}' \
+        -d "1 NEAR" \
+        -n testnet 2>&1 | tee {output} && \
+    {params.extract_tx}
+    """
+
+rule omni_bridge_storage_deposit:
+    message: "Depositing storage for User on Omni Bridge"
+    input:
+        omni_bridge_contract_file = omni_bridge_file,
+        user_account_file = user_account_file
+    output:
+        call_dir / "06_storage_deposit_btc_for_omni_bridge.json"
+    params:
+        scripts_dir = const.common_scripts_dir,
+        omni_bridge_address = lambda wc, input: get_json_field(input.omni_bridge_contract_file, "contract_id"),
+        user_account_id = lambda wc, input: get_json_field(input.user_account_file, "account_id"),
+        extract_tx = lambda wc, output: extract_tx_hash("near", output)
+    shell: """
+    {params.scripts_dir}/call-near-contract.sh -c {params.omni_bridge_address} \
+        -m storage_deposit \
+        -a '{{\"account_id\": \"{params.user_account_id}\"}}' \
+        -d "1 NEAR" \
+        -f {input.user_account_file} \
+        -n testnet 2>&1 | tee {output} && \
+    {params.extract_tx}
+    """
+
+
+rule ft_transfer_btc_to_omni_bridge:
+    message: "Init BTC transfer to OmniBridge on Near"
+    input:
+        step_5 = rules.storage_deposit_btc_for_omni_bridge.output,
+        step_6 = rules.omni_bridge_storage_deposit.output,
+        nbtc_file = nbtc_file,
+        omni_bridge_file = omni_bridge_file,
+        user_account_file = user_account_file
+    output: call_dir / "07_ft_transfer_btc_to_omni_bridge.json"
+    params:
+        scripts_dir = const.common_scripts_dir,
+        nbtc_account = lambda wc, input: get_json_field(input.nbtc_file, "contract_id"),
+        omni_bridge_account = lambda wc, input: get_json_field(input.omni_bridge_file, "contract_id"),
+    shell: """
+    {params.scripts_dir}/call-near-contract.sh -c {params.nbtc_account} \
+        -m ft_transfer_call \
+        -a '{{\"receiver_id\": \"{params.omni_bridge_account}\", \"amount\": \"3000\", \"msg\": \"{{\\\"recipient\\\": \\\"btc:tb1q4vvl8ykwprwv9dw3y5nrnpk7f2jech7atz45v5\\\", \\\"fee\\\":\\\"0\\\",\\\"native_token_fee\\\":\\\"0\\\"}}\"}}' \
+        -f {input.user_account_file} \
+        -d "1 yoctoNEAR" \
+        -n testnet 2>&1 | tee {output} && \
+        TX_HASH=$(grep -o 'Transaction ID: [^ ]*' {output} | cut -d' ' -f3) && \
+        echo '{{\"tx_hash\": \"'$TX_HASH'\", \"contract_id\": \"{params.nbtc_account}\"}}' > {output}
+    """
+
 rule all:
     input:
-        nbtc_file,
-        omni_bridge_file,
-        rules.fin_btc_transfer_on_near.output,
+        rules.ft_transfer_btc_to_omni_bridge.output,
     default_target: True
