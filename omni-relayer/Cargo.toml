@@ -41,7 +41,7 @@ near-crypto = "0.29.0"
 near-sdk = "5.8.0"
 
 hex = "0.4.3"
-alloy = { version = "0.12.5", features = ["node-bindings", "providers", "rpc-types", "sol-types", "provider-ws", "signers", "signer-local"] }
+alloy = { version = "1.0.9", features = ["node-bindings", "providers", "rpc-types", "sol-types", "provider-ws", "signers", "signer-local"] }
 
 mongodb = "3.2.2"
 redis = { version = "0.30.0", features = ["aio", "tokio-comp"] }

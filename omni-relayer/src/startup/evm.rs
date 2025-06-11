@@ -80,7 +80,8 @@ pub async fn start_indexer(
         );
 
     loop {
-        let http_provider = DynProvider::new(ProviderBuilder::new().on_http(rpc_http_url.clone()));
+        let http_provider =
+            DynProvider::new(ProviderBuilder::new().connect_http(rpc_http_url.clone()));
 
         let params = ProcessRecentBlocksParams {
             redis_connection: &mut redis_connection,
@@ -105,7 +106,7 @@ pub async fn start_indexer(
 
         let ws_provider = crate::skip_fail!(
             ProviderBuilder::new()
-                .on_ws(WsConnect::new(&rpc_ws_url))
+                .connect_ws(WsConnect::new(&rpc_ws_url))
                 .await
                 .map_err(|err| hide_api_key(&err)),
             format!("{chain_kind:?} WebSocket connection failed"),
