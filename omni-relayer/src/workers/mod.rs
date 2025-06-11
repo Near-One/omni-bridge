@@ -31,7 +31,7 @@ pub enum EventAction {
     Remove,
 }
 
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 #[serde(tag = "init_transfer")]
 pub enum Transfer {
     Near {
@@ -351,7 +351,7 @@ pub async fn process_events(
                             }
                         }
                     }));
-                } else if let Transfer::Fast { transfer_id, .. } = transfer {
+                } else if let Transfer::Fast { .. } = transfer {
                     let Some(near_fast_bridge_client) = near_fast_bridge_client.clone() else {
                         warn!(
                             "Fast transfer event received, but near fast bridge connector is not available"
@@ -367,21 +367,13 @@ pub async fn process_events(
 
                     handlers.push(tokio::spawn({
                         let mut redis_connection = redis_connection.clone();
-                        let omni_connector = connector.clone();
+                        let connector = connector.clone();
                         let near_fast_bridge_client = near_fast_bridge_client.clone();
                         let near_fast_nonce = near_fast_nonce.clone();
                         async move {
-                            let Ok(evm_bridge_client) = omni_connector.evm_bridge_client(transfer_id.origin_chain) else {
-                                warn!(
-                                    "Fast transfer event received, but evm bridge client for {:?} is not available",
-                                    transfer_id.origin_chain
-                                );
-                                return;
-                            };
-                            
                             match near::process_fast_transfer_event(
+                                connector,
                                 near_fast_bridge_client,
-                                evm_bridge_client,
                                 transfer,
                                 near_fast_nonce,
                             )

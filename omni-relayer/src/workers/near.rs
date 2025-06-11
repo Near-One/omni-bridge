@@ -360,8 +360,8 @@ pub async fn process_unverified_transfer_event(
 }
 
 pub async fn process_fast_transfer_event(
+    connector: Arc<OmniConnector>,
     near_fast_bridge_client: Arc<near_bridge_client::NearBridgeClient>,
-    evm_bridge_client: &evm_bridge_client::EvmBridgeClient,
     transfer: Transfer,
     near_fast_nonce: Arc<utils::nonce::NonceManager>,
 ) -> Result<EventAction> {
@@ -375,9 +375,14 @@ pub async fn process_fast_transfer_event(
         msg,
         storage_deposit_amount,
         safe_confirmations,
-    } = transfer
+    } = transfer.clone()
     else {
         anyhow::bail!("Expected FastTransferEvent, got: {:?}", transfer);
+    };
+
+    let Ok(evm_bridge_client) = connector.evm_bridge_client(transfer_id.origin_chain) else {
+        warn!("EVM bridge client is not available");
+        return Ok(EventAction::Retry);
     };
 
     let Ok(last_finalized_block_number) = evm_bridge_client.get_last_finalized_block_number().await
@@ -396,6 +401,22 @@ pub async fn process_fast_transfer_event(
     }
 
     info!("Trying to initiate FastTransfer on NEAR");
+
+    match connector
+        .is_transfer_finalised(
+            Some(transfer_id.origin_chain),
+            recipient.get_chain(),
+            transfer_id.origin_nonce,
+        )
+        .await
+    {
+        Ok(true) => anyhow::bail!("Transfer is already finalised: {:?}", transfer),
+        Ok(false) => {}
+        Err(err) => {
+            warn!("Failed to check if transfer is finalised: {err:?}");
+            return Ok(EventAction::Retry);
+        }
+    }
 
     let relayer = near_fast_bridge_client
         .account_id()
@@ -425,7 +446,7 @@ pub async fn process_fast_transfer_event(
         transfer_id,
         recipient,
         fee,
-        msg,
+        msg: msg.clone(),
         storage_deposit_amount,
         relayer,
     };
