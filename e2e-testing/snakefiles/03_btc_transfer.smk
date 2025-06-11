@@ -13,17 +13,17 @@ use rule * from near
 call_dir = const.common_generated_dir / "03-btc-transfer"
 
 # Account files
-btc_connector_account_file = const.near_account_dir / f"btc_connector.json"
-nbtc_account_file = const.near_account_dir / f"nbtc.json"
 near_init_account_file = const.near_account_dir / f"{NTA.INIT_ACCOUNT}.json"
 near_dao_account_file = const.near_account_dir / f"{NTA.DAO_ACCOUNT}.json"
 user_account_file = const.near_account_dir / f"{NTA.USER_ACCOUNT}.json"
+btc_connector_account_file = const.near_account_dir / f"btc_connector.json"
+nbtc_account_file = const.near_account_dir / f"nbtc.json"
 
 # Binary files
 btc_connector_binary_file = const.near_binary_dir / "btc_connector.wasm"
 nbtc_binary_file = const.near_binary_dir / "nbtc.wasm"
+omni_bridge_file = const.near_deploy_results_dir / f"{NC.OMNI_BRIDGE}.json"
 
-# NEAR contract deployment
 nbtc_file = const.near_deploy_results_dir / f"nbtc.json"
 btc_connector_file = const.near_deploy_results_dir / f"btc_connector.json"
 
@@ -160,5 +160,6 @@ rule fin_btc_transfer_on_near:
 rule all:
     input:
         nbtc_file,
+        omni_bridge_file,
         rules.fin_btc_transfer_on_near.output,
     default_target: True

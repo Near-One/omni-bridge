@@ -476,7 +476,7 @@ impl Contract {
     pub fn sign_btc_transfer(
         &mut self,
         transfer_id: TransferId,
-        msg: TokenReceiverMessage,
+        msg: String,
         fee_recipient: Option<AccountId>,
         fee: &Option<Fee>,
     ) -> Promise {
@@ -485,7 +485,7 @@ impl Contract {
         ext_token::ext(self.btc_account_id.clone())
             .with_attached_deposit(ONE_YOCTO)
             .with_static_gas(FT_TRANSFER_CALL_GAS)
-            .ft_transfer_call(self.btc_connector.clone(), amount, None, serde_json::to_string(&msg).unwrap())
+            .ft_transfer_call(self.btc_connector.clone(), amount, None, msg)
     }
 
     fn init_transfer(
