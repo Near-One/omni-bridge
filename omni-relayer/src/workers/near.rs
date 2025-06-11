@@ -440,6 +440,20 @@ pub async fn process_fast_transfer_event(
         return Ok(EventAction::Retry);
     };
 
+    let Ok(balance) = near_fast_bridge_client
+        .ft_balance_of(token_id.clone(), relayer.clone())
+        .await
+    else {
+        warn!("Failed to get balance of relayer: {relayer} for token: {token_id}");
+        return Ok(EventAction::Retry);
+    };
+
+    if balance < amount {
+        anyhow::bail!(
+            "Insufficient balance for relayer to perform fast transfer: {relayer} for token: {token_id}"
+        );
+    }
+
     let fast_fin_transfer_args = FastFinTransferArgs {
         token_id,
         amount,
