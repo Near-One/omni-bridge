@@ -198,6 +198,3 @@ pub struct Wormhole {
     pub api_url: String,
     pub solana_chain_id: u64,
 }
-
-#[derive(Debug, Clone, Deserialize)]
-pub struct FastTransfers {}
