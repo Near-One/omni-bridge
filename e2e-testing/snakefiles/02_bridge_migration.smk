@@ -19,7 +19,7 @@ sepolia_call_dir = pathlib.Path(get_evm_deploy_results_dir(EN.ETH_SEPOLIA))
 sepolia_account_dir = pathlib.Path(get_evm_account_dir(EN.ETH_SEPOLIA))
 
 # NEAR contract deployment
-rainbow_bridge_token_factory_file = const.near_deploy_results_dir / f"{NC.RB_BRIDGE_TOKEN_FACTORY}.json"
+rainbow_bridge_token_factory_file = const.near_deploy_results_dir / "bridge_token_factory.json"
 omni_bridge_contract_file = const.near_deploy_results_dir / f"{NC.OMNI_BRIDGE}.json"
 
 # EVM contract deployment
