@@ -151,7 +151,7 @@ async fn handle_transaction_event(
             )
             .await;
 
-            if let Some(safe_confirmations) = safe_confirmations {
+            if config.is_fast_relayer_enabled() {
                 utils::redis::add_event(
                     &mut redis_connection,
                     utils::redis::EVENTS,

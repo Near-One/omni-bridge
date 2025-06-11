@@ -24,7 +24,8 @@ struct ProcessRecentBlocksParams<'a> {
     start_block: Option<u64>,
     block_processing_batch_size: u64,
     expected_finalization_time: i64,
-    safe_confirmations: Option<u64>,
+    is_fast_relayer_enabled: bool,
+    safe_confirmations: u64,
 }
 
 fn hide_api_key<E: ToString>(err: &E) -> String {
@@ -33,7 +34,7 @@ fn hide_api_key<E: ToString>(err: &E) -> String {
     err.to_string().replace(&api_key, env_key)
 }
 
-fn extract_evm_config(evm: config::Evm) -> Result<(Url, String, Address, u64, i64, Option<u64>)> {
+fn extract_evm_config(evm: config::Evm) -> Result<(Url, String, Address, u64, i64, u64)> {
     Ok((
         evm.rpc_http_url
             .parse()
@@ -54,6 +55,7 @@ pub async fn start_indexer(
 ) -> Result<()> {
     let mut redis_connection = redis_client.get_multiplexed_tokio_connection().await?;
 
+    let is_fast_relayer_enabled = config.is_fast_relayer_enabled();
     let (
         rpc_http_url,
         rpc_ws_url,
@@ -91,6 +93,7 @@ pub async fn start_indexer(
             start_block,
             block_processing_batch_size,
             expected_finalization_time,
+            is_fast_relayer_enabled,
             safe_confirmations,
         };
 
@@ -132,6 +135,7 @@ pub async fn start_indexer(
                 &http_provider,
                 log,
                 expected_finalization_time,
+                is_fast_relayer_enabled,
                 safe_confirmations,
             )
             .await;
@@ -153,6 +157,7 @@ async fn process_recent_blocks(params: ProcessRecentBlocksParams<'_>) -> Result<
         start_block,
         block_processing_batch_size,
         expected_finalization_time,
+        is_fast_relayer_enabled,
         safe_confirmations,
     } = params;
 
@@ -201,6 +206,7 @@ async fn process_recent_blocks(params: ProcessRecentBlocksParams<'_>) -> Result<
                 http_provider,
                 log,
                 expected_finalization_time,
+                is_fast_relayer_enabled,
                 safe_confirmations,
             )
             .await;
@@ -216,7 +222,8 @@ async fn process_log(
     http_provider: &DynProvider,
     log: Log,
     expected_finalization_time: i64,
-    safe_confirmations: Option<u64>,
+    is_fast_relayer_enabled: bool,
+    safe_confirmations: u64,
 ) {
     let Some(tx_hash) = log.transaction_hash else {
         warn!("No transaction hash in log: {log:?}");
@@ -277,7 +284,7 @@ async fn process_log(
         )
         .await;
 
-        if let Some(safe_confirmations) = safe_confirmations {
+        if is_fast_relayer_enabled {
             utils::redis::add_event(
                 redis_connection,
                 utils::redis::EVENTS,

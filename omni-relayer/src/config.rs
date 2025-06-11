@@ -108,7 +108,7 @@ impl Config {
     }
 
     pub fn is_fast_relayer_enabled(&self) -> bool {
-        self.near.fast_relayer_enabled.unwrap_or_default()
+        self.near.fast_relayer_enabled
     }
 }
 
@@ -147,7 +147,8 @@ pub struct Near {
     pub omni_credentials_path: Option<String>,
     pub fast_credentials_path: Option<String>,
     pub sign_without_checking_fee: Option<Vec<OmniAddress>>,
-    pub fast_relayer_enabled: Option<bool>,
+    #[serde(default)]
+    pub fast_relayer_enabled: bool,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -161,7 +162,8 @@ pub struct Evm {
     pub light_client: Option<AccountId>,
     pub block_processing_batch_size: u64,
     pub expected_finalization_time: i64,
-    pub safe_confirmations: Option<u64>,
+    #[serde(default)]
+    pub safe_confirmations: u64,
 }
 
 #[derive(Debug, Clone, Deserialize)]
