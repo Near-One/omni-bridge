@@ -79,16 +79,14 @@ async fn main() -> Result<()> {
             signer: Box::new(near_omni_signer),
         },
     ));
-    let near_fast_nonce = if let Some(near_fast_signer) = near_fast_signer {
-        Some(Arc::new(utils::nonce::NonceManager::new(
+    let near_fast_nonce = near_fast_signer.map(|near_fast_signer| {
+        Arc::new(utils::nonce::NonceManager::new(
             utils::nonce::ChainClient::Near {
                 jsonrpc_client: jsonrpc_client.clone(),
                 signer: Box::new(near_fast_signer),
             },
-        )))
-    } else {
-        None
-    };
+        ))
+    });
     let evm_nonces = Arc::new(utils::nonce::EvmNonceManagers::new(&config));
 
     let mut handles = Vec::new();

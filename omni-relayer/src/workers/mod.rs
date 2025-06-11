@@ -366,7 +366,6 @@ pub async fn process_events(
                     };
 
                     handlers.push(tokio::spawn({
-                        let config = config.clone();
                         let mut redis_connection = redis_connection.clone();
                         let omni_connector = connector.clone();
                         let near_fast_bridge_client = near_fast_bridge_client.clone();
@@ -381,7 +380,6 @@ pub async fn process_events(
                             };
                             
                             match near::process_fast_transfer_event(
-                                config,
                                 near_fast_bridge_client,
                                 evm_bridge_client,
                                 transfer,

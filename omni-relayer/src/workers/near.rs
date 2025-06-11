@@ -360,7 +360,6 @@ pub async fn process_unverified_transfer_event(
 }
 
 pub async fn process_fast_transfer_event(
-    config: config::Config,
     near_fast_bridge_client: Arc<near_bridge_client::NearBridgeClient>,
     evm_bridge_client: &evm_bridge_client::EvmBridgeClient,
     transfer: Transfer,
@@ -412,6 +411,14 @@ pub async fn process_fast_transfer_event(
         return Ok(EventAction::Retry);
     };
 
+    let Ok(amount) = near_fast_bridge_client
+        .denormalize_amount(OmniAddress::Near(token_id.clone()), amount)
+        .await
+    else {
+        warn!("Failed to denormalize amount for token: {token}");
+        return Ok(EventAction::Retry);
+    };
+
     let fast_fin_transfer_args = FastFinTransferArgs {
         token_id,
         amount,
@@ -436,7 +443,7 @@ pub async fn process_fast_transfer_event(
     {
         Ok(tx_hash) => {
             info!("Fast transfer initiated successfully: {tx_hash:?}");
-            return Ok(EventAction::Remove);
+            Ok(EventAction::Remove)
         }
         Err(err) => {
             if let BridgeSdkError::NearRpcError(near_rpc_error) = err {
