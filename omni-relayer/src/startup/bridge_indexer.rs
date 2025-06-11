@@ -3,8 +3,8 @@ use std::str::FromStr;
 use alloy::{primitives::Address, sol_types::SolEvent};
 use anyhow::{Context, Result};
 use bridge_indexer_types::documents_types::{
-    OmniEvent, OmniEventData, OmniMetaEvent, OmniMetaEventDetails, OmniTransactionEvent,
-    OmniTransactionOrigin, OmniTransferMessage,
+    BtcConnectorEvent, BtcConnectorEventDetails, OmniEvent, OmniEventData, OmniMetaEvent,
+    OmniMetaEventDetails, OmniTransactionEvent, OmniTransactionOrigin, OmniTransferMessage,
 };
 use ethereum_types::H256;
 use log::{info, warn};
@@ -36,7 +36,7 @@ fn get_expected_finalization_time(config: config::Config, chain_kind: ChainKind)
 async fn handle_transaction_event(
     mut redis_connection: redis::aio::MultiplexedConnection,
     config: config::Config,
-    transaction_id: String,
+    origin_transaction_id: String,
     origin: OmniTransactionOrigin,
     event: OmniTransactionEvent,
 ) -> Result<()> {
@@ -96,10 +96,10 @@ async fn handle_transaction_event(
                 anyhow::bail!("Expected EVMLog for EvmInitTransfer: {:?}", init_transfer);
             };
 
-            let Ok(tx_hash) = H256::from_str(&transaction_id) else {
+            let Ok(tx_hash) = H256::from_str(&origin_transaction_id) else {
                 anyhow::bail!(
                     "Failed to parse transaction_id as H256: {:?}",
-                    transaction_id
+                    origin_transaction_id
                 );
             };
 
@@ -133,13 +133,12 @@ async fn handle_transaction_event(
                 );
             };
 
-            let expected_finalization_time =
-                get_expected_finalization_time(config, chain_kind).unwrap();
+            let expected_finalization_time = get_expected_finalization_time(config, chain_kind)?;
 
             utils::redis::add_event(
                 &mut redis_connection,
                 utils::redis::EVENTS,
-                transaction_id,
+                origin_transaction_id,
                 workers::Transfer::Evm {
                     chain_kind,
                     block_number,
@@ -165,10 +164,10 @@ async fn handle_transaction_event(
                 anyhow::bail!("Expected EVMLog for EvmFinTransfer: {:?}", fin_transfer);
             };
 
-            let Ok(tx_hash) = H256::from_str(&transaction_id) else {
+            let Ok(tx_hash) = H256::from_str(&origin_transaction_id) else {
                 anyhow::bail!(
                     "Failed to parse transaction_id as H256: {:?}",
-                    transaction_id
+                    origin_transaction_id
                 );
             };
 
@@ -179,13 +178,12 @@ async fn handle_transaction_event(
                 );
             };
 
-            let expected_finalization_time =
-                get_expected_finalization_time(config, chain_kind).unwrap();
+            let expected_finalization_time = get_expected_finalization_time(config, chain_kind)?;
 
             utils::redis::add_event(
                 &mut redis_connection,
                 utils::redis::EVENTS,
-                transaction_id,
+                origin_transaction_id,
                 workers::FinTransfer::Evm {
                     chain_kind,
                     block_number,
@@ -222,7 +220,7 @@ async fn handle_transaction_event(
             utils::redis::add_event(
                 &mut redis_connection,
                 utils::redis::EVENTS,
-                transaction_id,
+                origin_transaction_id,
                 crate::workers::Transfer::Solana {
                     amount: init_transfer.amount.0.into(),
                     token: Pubkey::new_from_array(token.0),
@@ -255,10 +253,13 @@ async fn handle_transaction_event(
             utils::redis::add_event(
                 &mut redis_connection,
                 utils::redis::EVENTS,
-                transaction_id,
+                origin_transaction_id,
                 crate::workers::FinTransfer::Solana { emitter, sequence },
             )
             .await;
+        }
+        OmniTransferMessage::NearFastTransferMessage { .. } => {
+            info!("Received NearFastTransferMessage, skipping");
         }
     }
 
@@ -268,7 +269,7 @@ async fn handle_transaction_event(
 async fn handle_meta_event(
     mut redis_connection: redis::aio::MultiplexedConnection,
     config: config::Config,
-    transaction_id: String,
+    origin_transaction_id: String,
     origin: OmniTransactionOrigin,
     event: OmniMetaEvent,
 ) -> Result<()> {
@@ -289,10 +290,10 @@ async fn handle_meta_event(
                 );
             };
 
-            let Ok(tx_hash) = H256::from_str(&transaction_id) else {
+            let Ok(tx_hash) = H256::from_str(&origin_transaction_id) else {
                 anyhow::bail!(
                     "Failed to parse transaction_id as H256: {:?}",
-                    transaction_id
+                    origin_transaction_id
                 );
             };
 
@@ -303,13 +304,12 @@ async fn handle_meta_event(
                 );
             };
 
-            let expected_finalization_time =
-                get_expected_finalization_time(config, chain_kind).unwrap();
+            let expected_finalization_time = get_expected_finalization_time(config, chain_kind)?;
 
             utils::redis::add_event(
                 &mut redis_connection,
                 utils::redis::EVENTS,
-                transaction_id,
+                origin_transaction_id,
                 workers::DeployToken::Evm {
                     chain_kind,
                     block_number,
@@ -328,7 +328,7 @@ async fn handle_meta_event(
             utils::redis::add_event(
                 &mut redis_connection,
                 utils::redis::EVENTS,
-                transaction_id,
+                origin_transaction_id,
                 workers::DeployToken::Solana { emitter, sequence },
             )
             .await;
@@ -345,20 +345,108 @@ async fn handle_meta_event(
     Ok(())
 }
 
+async fn handle_btc_event(
+    mut redis_connection: redis::aio::MultiplexedConnection,
+    origin_transaction_id: String,
+    event: BtcConnectorEvent,
+) -> Result<()> {
+    match event.details {
+        BtcConnectorEventDetails::SignTransaction { relayer, .. } => {
+            info!("Received SignBtcTransaction: {origin_transaction_id}");
+            utils::redis::add_event(
+                &mut redis_connection,
+                utils::redis::EVENTS,
+                origin_transaction_id.clone(),
+                workers::btc::SignBtcTransaction {
+                    near_tx_hash: origin_transaction_id,
+                    relayer,
+                },
+            )
+            .await;
+        }
+        BtcConnectorEventDetails::TransferNearToBtc {
+            btc_pending_id,
+            utxo_count,
+        } => {
+            info!("Received NearToBtcInitTransfer: {origin_transaction_id}");
+            for sign_index in 0..utxo_count {
+                info!(
+                    "Received sign index {sign_index} for BTC pending ID: {}",
+                    btc_pending_id.clone()
+                );
+                utils::redis::add_event(
+                    &mut redis_connection,
+                    utils::redis::EVENTS,
+                    origin_transaction_id.clone(),
+                    workers::Transfer::NearToBtc {
+                        btc_pending_id: btc_pending_id.clone(),
+                        sign_index,
+                    },
+                )
+                .await;
+            }
+        }
+        BtcConnectorEventDetails::TransferBtcToNear {
+            btc_tx_hash,
+            vout,
+            deposit_msg,
+        } => {
+            info!("Received BtcToNearInitTransfer: {btc_tx_hash}");
+            utils::redis::add_event(
+                &mut redis_connection,
+                utils::redis::EVENTS,
+                origin_transaction_id,
+                workers::Transfer::BtcToNear {
+                    btc_tx_hash,
+                    vout,
+                    deposit_msg,
+                },
+            )
+            .await;
+        }
+        BtcConnectorEventDetails::ConfirmedTxHash { btc_tx_hash } => {
+            info!("Received ConfirmedTxHash on Btc: {btc_tx_hash}");
+            utils::redis::add_event(
+                &mut redis_connection,
+                utils::redis::EVENTS,
+                origin_transaction_id,
+                workers::btc::ConfirmedTxHash { btc_tx_hash },
+            )
+            .await;
+        }
+        BtcConnectorEventDetails::VerifyDeposit { .. }
+        | BtcConnectorEventDetails::LogDepositAddress(_) => {}
+    }
+
+    Ok(())
+}
+
 async fn watch_omni_events_collection(
     collection: &Collection<OmniEvent>,
     mut redis_connection: redis::aio::MultiplexedConnection,
     config: &config::Config,
-) {
-    let resume_token: Option<ResumeToken> = utils::redis::get_last_processed::<&str, String>(
-        &mut redis_connection,
-        utils::redis::MONGODB_OMNI_EVENTS_RT,
-    )
-    .await
-    .and_then(|rt| serde_json::from_str(&rt).ok())
-    .unwrap_or_default();
+    start_timestamp: Option<u32>,
+) -> Result<()> {
+    let mut stream = if let Some(time) = start_timestamp {
+        info!("Starting from timestamp: {time}");
 
-    let mut stream = collection.watch().resume_after(resume_token).await.unwrap();
+        collection
+            .watch()
+            .start_at_operation_time(mongodb::bson::Timestamp { time, increment: 0 })
+            .await?
+    } else {
+        let resume_token: Option<ResumeToken> = utils::redis::get_last_processed::<&str, String>(
+            &mut redis_connection,
+            utils::redis::MONGODB_OMNI_EVENTS_RT,
+        )
+        .await
+        .and_then(|rt| serde_json::from_str(&rt).ok())
+        .unwrap_or_default();
+
+        info!("Resuming from token: {resume_token:?}");
+
+        collection.watch().resume_after(resume_token).await?
+    };
 
     while let Some(change) = stream.next().await {
         match change {
@@ -405,6 +493,23 @@ async fn watch_omni_events_collection(
                                 }
                             });
                         }
+                        OmniEventData::BtcConnector(btc_event) => {
+                            tokio::spawn({
+                                let redis_connection = redis_connection.clone();
+
+                                async move {
+                                    if let Err(err) = handle_btc_event(
+                                        redis_connection,
+                                        event.transaction_id,
+                                        btc_event,
+                                    )
+                                    .await
+                                    {
+                                        warn!("Failed to handle meta event: {err:?}");
+                                    }
+                                }
+                            });
+                        }
                     }
                 }
             }
@@ -423,9 +528,15 @@ async fn watch_omni_events_collection(
             .await;
         }
     }
+
+    Ok(())
 }
 
-pub async fn start_indexer(config: config::Config, redis_client: redis::Client) -> Result<()> {
+pub async fn start_indexer(
+    config: config::Config,
+    redis_client: redis::Client,
+    start_timestamp: Option<u32>,
+) -> Result<()> {
     info!("Connecting to bridge-indexer");
 
     let Some(ref uri) = config.bridge_indexer.mongodb_uri else {
@@ -443,11 +554,21 @@ pub async fn start_indexer(config: config::Config, redis_client: redis::Client) 
     let db = client.database(db_name);
     let omni_events_collection = db.collection::<OmniEvent>(OMNI_EVENTS);
 
+    println!("Connected to MongoDB at {uri} and using database {db_name}");
+
     loop {
         info!("Starting a mongodb stream that track changes in {OMNI_EVENTS}");
 
-        watch_omni_events_collection(&omni_events_collection, redis_connection.clone(), &config)
-            .await;
+        if let Err(err) = watch_omni_events_collection(
+            &omni_events_collection,
+            redis_connection.clone(),
+            &config,
+            start_timestamp,
+        )
+        .await
+        {
+            warn!("Error watching changes: {err:?}");
+        }
 
         warn!("Mongodb stream was closed, restarting...");
         tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;

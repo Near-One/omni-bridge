@@ -185,7 +185,8 @@ pub async fn handle_streamer_message(
                     .await;
                 }
             }
-            OmniBridgeEvent::ClaimFeeEvent { .. }
+            OmniBridgeEvent::FastTransferEvent { .. }
+            | OmniBridgeEvent::ClaimFeeEvent { .. }
             | OmniBridgeEvent::LogMetadataEvent { .. }
             | OmniBridgeEvent::DeployTokenEvent { .. }
             | OmniBridgeEvent::BindTokenEvent { .. } => {}
