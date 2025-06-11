@@ -64,5 +64,5 @@ def get_mkdir_cmd(directory):
 def get_btc_address(filename):
     return open(str(filename)).readline().strip().split()[-1]
 
-def get_btc_amount(filename):
-    return open(str(filename)).readlines()[1].split()[-1]
+def get_last_value(filename):
+    return open(str(filename)).readlines()[-1].split()[-1]
