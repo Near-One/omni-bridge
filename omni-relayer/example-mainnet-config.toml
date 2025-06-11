@@ -20,9 +20,12 @@ btc = "btc-client.bridge.near"
 satoshi_relayer = "satoshi_optwo.near"
 # Either provide a path to a credentials file or set it in the environment
 # Note: the path must be absolute
-# credentials_path = "/Users/username/.near-credentials/mainnet/omni-relayer.bridge.near.json"
+# omni_credentials_path = "/Users/username/.near-credentials/mainnet/omni-relayer.bridge.near.json"
+# fast_credentials_path = "/Users/username/.near-credentials/mainnet/fast-relayer.bridge.near.json"
 # We won't check fee before signing transfer if account id matches on in array
 sign_without_checking_fee = ["near:aurora"]
+# To enable fast relayer, uncomment the line below
+# fast_relayer_enabled = true
 
 [eth]
 rpc_http_url = "https://mainnet.infura.io/v3/INFURA_API_KEY"
@@ -33,6 +36,7 @@ light_client = "client-eth2.bridge.near"
 block_processing_batch_size = 10_000
 # https://wormhole.com/docs/build/reference/consistency-levels/
 expected_finalization_time = 1095
+safe_confirmations = 12
 
 [base]
 rpc_http_url = "https://base-mainnet.infura.io/v3/INFURA_API_KEY"
@@ -42,6 +46,7 @@ omni_bridge_address = "0xd025b38762B4A4E36F0Cde483b86CB13ea00D989"
 block_processing_batch_size = 10_000
 # https://wormhole.com/docs/build/reference/consistency-levels/
 expected_finalization_time = 1026
+safe_confirmations = 30
 
 [arb]
 rpc_http_url = "https://arbitrum-mainnet.infura.io/v3/INFURA_API_KEY"
@@ -51,6 +56,7 @@ omni_bridge_address = "0xd025b38762B4A4E36F0Cde483b86CB13ea00D989"
 block_processing_batch_size = 10_000
 # https://wormhole.com/docs/build/reference/consistency-levels/
 expected_finalization_time = 1066
+safe_confirmations = 30
 
 [solana]
 rpc_http_url = "https://api.mainnet-beta.solana.com"
