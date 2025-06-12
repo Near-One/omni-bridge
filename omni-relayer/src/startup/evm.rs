@@ -292,7 +292,7 @@ async fn process_log(
                 crate::workers::Transfer::Fast {
                     block_number,
                     token: log.token_address.to_string(),
-                    amount: log.amount.0,
+                    amount: log.amount,
                     transfer_id: TransferId {
                         origin_chain: chain_kind,
                         origin_nonce: log.origin_nonce,

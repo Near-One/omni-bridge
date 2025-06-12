@@ -385,8 +385,7 @@ pub async fn process_fast_transfer_event(
         return Ok(EventAction::Retry);
     };
 
-    let Ok(last_finalized_block_number) = evm_bridge_client.get_last_finalized_block_number().await
-    else {
+    let Ok(last_finalized_block_number) = evm_bridge_client.get_last_block_number().await else {
         warn!("Failed to get last finalized block number for EVM chain");
         return Ok(EventAction::Retry);
     };
@@ -432,11 +431,17 @@ pub async fn process_fast_transfer_event(
         return Ok(EventAction::Retry);
     };
 
+    let Ok(token_omni_address) =
+        utils::evm::string_to_evm_omniaddress(transfer_id.origin_chain, &token)
+    else {
+        anyhow::bail!("Failed to convert token address to OmniAddress: {token}");
+    };
+
     let Ok(amount) = near_fast_bridge_client
-        .denormalize_amount(OmniAddress::Near(token_id.clone()), amount)
+        .denormalize_amount(token_omni_address, amount.0)
         .await
     else {
-        warn!("Failed to denormalize amount for token: {token}");
+        warn!("Failed to denormalize amount for token: {token_id}");
         return Ok(EventAction::Retry);
     };
 
@@ -461,7 +466,7 @@ pub async fn process_fast_transfer_event(
         recipient,
         fee,
         msg: msg.clone(),
-        storage_deposit_amount,
+        storage_deposit_amount: storage_deposit_amount.map(|amount| amount.0),
         relayer,
     };
 

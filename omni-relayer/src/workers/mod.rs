@@ -73,12 +73,12 @@ pub enum Transfer {
     Fast {
         block_number: u64,
         token: String,
-        amount: u128,
+        amount: U128,
         transfer_id: TransferId,
         recipient: OmniAddress,
         fee: Fee,
         msg: String,
-        storage_deposit_amount: Option<u128>,
+        storage_deposit_amount: Option<U128>,
         safe_confirmations: u64,
     },
 }
