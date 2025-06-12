@@ -13,7 +13,7 @@ use solana_rpc_client_api::{client_error::ErrorKind, request::RpcError};
 use solana_sdk::{instruction::InstructionError, pubkey::Pubkey, transaction::TransactionError};
 
 use omni_connector::OmniConnector;
-use omni_types::{ChainKind, OmniAddress, TransferId, near_events::OmniBridgeEvent};
+use omni_types::{ChainKind, FastTransfer, OmniAddress, TransferId, near_events::OmniBridgeEvent};
 
 use crate::{config, utils, workers::PAUSED_ERROR};
 
@@ -399,26 +399,6 @@ pub async fn process_fast_transfer_event(
 
     info!("Trying to initiate FastTransfer on NEAR");
 
-    match connector
-        .is_transfer_finalised(
-            Some(transfer_id.origin_chain),
-            recipient.get_chain(),
-            transfer_id.origin_nonce,
-        )
-        .await
-    {
-        Ok(true) => anyhow::bail!("Transfer is already finalised: {:?}", transfer),
-        Ok(false) => {}
-        Err(err) => {
-            warn!("Failed to check if transfer is finalised: {err:?}");
-            return Ok(EventAction::Retry);
-        }
-    }
-
-    let relayer = near_fast_bridge_client
-        .account_id()
-        .context("Failed to get relayer account id")?;
-
     let Ok(token_id) = utils::storage::get_token_id(
         &near_fast_bridge_client.clone(),
         transfer_id.origin_chain,
@@ -429,6 +409,31 @@ pub async fn process_fast_transfer_event(
         warn!("Failed to get token id for transfer: {transfer_id:?}");
         return Ok(EventAction::Retry);
     };
+
+    let fast_transfer = FastTransfer {
+        transfer_id,
+        token_id: token_id.clone(),
+        amount,
+        fee: fee.clone(),
+        recipient: recipient.clone(),
+        msg: msg.clone(),
+    };
+
+    match connector
+        .near_is_fast_transfer_finalised(fast_transfer.id())
+        .await
+    {
+        Ok(true) => anyhow::bail!("Fast transfer is already finalised: {:?}", transfer),
+        Ok(false) => {}
+        Err(err) => {
+            warn!("Failed to check if transfer is finalised: {err:?}");
+            return Ok(EventAction::Retry);
+        }
+    }
+
+    let relayer = near_fast_bridge_client
+        .account_id()
+        .context("Failed to get relayer account id")?;
 
     let Ok(token_omni_address) =
         utils::evm::string_to_evm_omniaddress(transfer_id.origin_chain, &token)
