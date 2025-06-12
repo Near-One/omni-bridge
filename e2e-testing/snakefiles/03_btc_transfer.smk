@@ -127,9 +127,8 @@ rule send_btc_to_deposit_address:
     params:
         scripts_dir = const.common_scripts_dir,
         btc_address = lambda wc, input: get_btc_address(input.step_2),
-        btc_amount = lambda wc, input: get_last_value(input.step_2),
     shell: """
-    node {params.scripts_dir}/send_btc.js {params.btc_address} {params.btc_amount} > {output}
+    node {params.scripts_dir}/send_btc.js {params.btc_address} 7000 > {output}
     """
 
 rule fin_btc_transfer_on_near:
@@ -219,7 +218,7 @@ rule ft_transfer_btc_to_omni_bridge:
     shell: """
     {params.scripts_dir}/call-near-contract.sh -c {params.nbtc_account} \
         -m ft_transfer_call \
-        -a '{{\"receiver_id\": \"{params.omni_bridge_account}\", \"amount\": \"3000\", \"msg\": \"{{\\\"recipient\\\": \\\"btc:tb1q4vvl8ykwprwv9dw3y5nrnpk7f2jech7atz45v5\\\", \\\"fee\\\":\\\"0\\\",\\\"native_token_fee\\\":\\\"0\\\"}}\"}}' \
+        -a '{{\"receiver_id\": \"{params.omni_bridge_account}\", \"amount\": \"5000\", \"msg\": \"{{\\\"recipient\\\": \\\"btc:tb1q4vvl8ykwprwv9dw3y5nrnpk7f2jech7atz45v5\\\", \\\"fee\\\":\\\"0\\\",\\\"native_token_fee\\\":\\\"0\\\"}}\"}}' \
         -f {input.user_account_file} \
         -d "1 yoctoNEAR" \
         -n testnet 2>&1 | tee {output} && \
