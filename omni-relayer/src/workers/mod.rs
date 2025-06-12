@@ -209,8 +209,10 @@ pub async fn process_events(
                         let mut redis_connection = redis_connection.clone();
                         let key = key.clone();
                         let connector = connector.clone();
+                        let near_fast_bridge_client = near_fast_bridge_client.clone();
                         let jsonrpc_client = jsonrpc_client.clone();
-                        let near_nonce = near_omni_nonce.clone();
+                        let near_omni_nonce = near_omni_nonce.clone();
+                        let near_fast_nonce = near_fast_nonce.clone();
 
                         async move {
                             match evm::process_init_transfer_event(
@@ -218,9 +220,11 @@ pub async fn process_events(
                                 &mut redis_connection,
                                 key.clone(),
                                 connector,
+                                near_fast_bridge_client,
                                 jsonrpc_client,
                                 transfer,
-                                near_nonce,
+                                near_omni_nonce,
+                                near_fast_nonce,
                             )
                             .await
                             {

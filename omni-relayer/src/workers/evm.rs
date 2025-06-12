@@ -12,7 +12,9 @@ use near_primitives::views::TxExecutionStatus;
 use near_rpc_client::NearRpcError;
 
 use omni_connector::OmniConnector;
-use omni_types::{ChainKind, Fee, TransferId, locker_args::ClaimFeeArgs, prover_result::ProofKind};
+use omni_types::{
+    ChainKind, FastTransfer, Fee, TransferId, locker_args::ClaimFeeArgs, prover_result::ProofKind,
+};
 
 use crate::{
     config, utils,
@@ -26,9 +28,11 @@ pub async fn process_init_transfer_event(
     redis_connection: &mut redis::aio::MultiplexedConnection,
     key: String,
     connector: Arc<OmniConnector>,
+    near_fast_bridge_client: Option<Arc<near_bridge_client::NearBridgeClient>>,
     jsonrpc_client: near_jsonrpc_client::JsonRpcClient,
     transfer: Transfer,
-    near_nonce: Arc<utils::nonce::NonceManager>,
+    near_omni_nonce: Arc<utils::nonce::NonceManager>,
+    near_fast_nonce: Option<Arc<utils::nonce::NonceManager>>,
 ) -> Result<EventAction> {
     let Transfer::Evm {
         chain_kind,
@@ -159,8 +163,61 @@ pub async fn process_init_transfer_event(
         }
     }
 
+    let Ok(mut near_bridge_client) = connector.near_bridge_client().cloned() else {
+        anyhow::bail!("Failed to get near bridge client");
+    };
+
+    let mut nonce = near_omni_nonce;
+    if let Some(near_fast_bridge_client) = near_fast_bridge_client {
+        let Ok(token_id) = utils::storage::get_token_id(
+            &near_fast_bridge_client.clone(),
+            transfer_id.origin_chain,
+            &log.token_address.to_string(),
+        )
+        .await
+        else {
+            warn!("Failed to get token id for transfer: {transfer_id:?}");
+            return Ok(EventAction::Retry);
+        };
+
+        let fast_transfer_args = FastTransfer {
+            transfer_id,
+            token_id,
+            amount: log.amount,
+            fee: Fee {
+                fee: log.fee,
+                native_fee: log.native_fee,
+            },
+            recipient: log.recipient.clone(),
+            msg: log.message.clone(),
+        };
+
+        let Ok(fast_transfer_status) = near_fast_bridge_client
+            .get_fast_transfer_status(fast_transfer_args.id())
+            .await
+        else {
+            warn!("Failed to get fast transfer status for transfer: {transfer_id:?}");
+            return Ok(EventAction::Retry);
+        };
+
+        if let Some(status) = fast_transfer_status {
+            let relayer = near_fast_bridge_client.account_id().map_err(|_| {
+                anyhow::anyhow!("Failed to get relayer account id for near fast bridge client")
+            })?;
+            if status.finalised && status.relayer == relayer {
+                near_bridge_client = (*near_fast_bridge_client).clone();
+                if let Some(near_fast_nonce) = near_fast_nonce {
+                    nonce = near_fast_nonce;
+                } else {
+                    warn!("Near fast nonce is not available, using omni nonce");
+                    return Ok(EventAction::Retry);
+                }
+            }
+        }
+    }
+
     let storage_deposit_actions = match utils::storage::get_storage_deposit_actions(
-        &connector,
+        &near_bridge_client,
         chain_kind,
         &log.recipient,
         &log.token_address.to_string(),
@@ -176,7 +233,7 @@ pub async fn process_init_transfer_event(
         }
     };
 
-    let nonce = near_nonce
+    let nonce = nonce
         .reserve_nonce()
         .await
         .context("Failed to reserve nonce for near transaction")?;

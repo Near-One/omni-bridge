@@ -109,8 +109,13 @@ pub async fn process_init_transfer_event(
         return Ok(EventAction::Retry);
     };
 
+    let Ok(near_bridge_client) = connector.near_bridge_client() else {
+        warn!("Near bridge client is not configured");
+        return Ok(EventAction::Remove);
+    };
+
     let storage_deposit_actions = match utils::storage::get_storage_deposit_actions(
-        &connector,
+        near_bridge_client,
         ChainKind::Sol,
         recipient,
         &token.to_string(),

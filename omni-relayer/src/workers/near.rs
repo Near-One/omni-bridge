@@ -380,12 +380,10 @@ pub async fn process_fast_transfer_event(
         anyhow::bail!("Expected FastTransferEvent, got: {:?}", transfer);
     };
 
-    let Ok(evm_bridge_client) = connector.evm_bridge_client(transfer_id.origin_chain) else {
-        warn!("EVM bridge client is not available");
-        return Ok(EventAction::Retry);
-    };
-
-    let Ok(last_finalized_block_number) = evm_bridge_client.get_last_block_number().await else {
+    let Ok(last_finalized_block_number) = connector
+        .evm_get_last_block_number(transfer_id.origin_chain)
+        .await
+    else {
         warn!("Failed to get last finalized block number for EVM chain");
         return Ok(EventAction::Retry);
     };
@@ -428,6 +426,7 @@ pub async fn process_fast_transfer_event(
     )
     .await
     else {
+        warn!("Failed to get token id for transfer: {transfer_id:?}");
         return Ok(EventAction::Retry);
     };
 

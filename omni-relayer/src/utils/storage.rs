@@ -3,7 +3,6 @@ use std::str::FromStr;
 use anyhow::Result;
 
 use near_primitives::types::AccountId;
-use omni_connector::OmniConnector;
 use omni_types::{ChainKind, OmniAddress, locker_args::StorageDepositAction};
 use solana_sdk::pubkey::Pubkey;
 
@@ -45,13 +44,13 @@ pub async fn get_token_id(
 }
 
 async fn add_storage_deposit_action(
-    connector: &OmniConnector,
+    near_bridge_client: &near_bridge_client::NearBridgeClient,
     storage_deposit_actions: &mut Vec<StorageDepositAction>,
     token_id: AccountId,
     account_id: AccountId,
 ) -> Result<(), String> {
-    let storage_deposit_amount = match connector
-        .near_get_required_storage_deposit(token_id.clone(), account_id.clone())
+    let storage_deposit_amount = match near_bridge_client
+        .get_required_storage_deposit(token_id.clone(), account_id.clone())
         .await
         .map_err(|_| {
             format!("Failed to get required storage deposit for account: {account_id:?}",)
@@ -70,23 +69,19 @@ async fn add_storage_deposit_action(
 }
 
 pub async fn get_storage_deposit_actions(
-    connector: &OmniConnector,
+    near_bridge_client: &near_bridge_client::NearBridgeClient,
     chain_kind: ChainKind,
     recipient: &OmniAddress,
     token_address: &str,
     fee: u128,
     native_fee: u128,
 ) -> Result<Vec<StorageDepositAction>, String> {
-    let near_bridge_client = connector
-        .near_bridge_client()
-        .map_err(|err| err.to_string())?;
-
     let mut storage_deposit_actions = Vec::new();
 
     if let OmniAddress::Near(near_recipient) = recipient {
         let token_id = get_token_id(near_bridge_client, chain_kind, token_address).await?;
         add_storage_deposit_action(
-            connector,
+            near_bridge_client,
             &mut storage_deposit_actions,
             token_id,
             near_recipient.clone(),
@@ -97,28 +92,36 @@ pub async fn get_storage_deposit_actions(
     if fee > 0 {
         let token_id = get_token_id(near_bridge_client, chain_kind, token_address).await?;
 
-        let relayer = connector
-            .near_bridge_client()
-            .and_then(|client| client.signer().map(|signer| signer.account_id))
+        let relayer = near_bridge_client
+            .account_id()
             .map_err(|_| "Failed to get relayer account id".to_string())?;
 
-        add_storage_deposit_action(connector, &mut storage_deposit_actions, token_id, relayer)
-            .await?;
+        add_storage_deposit_action(
+            near_bridge_client,
+            &mut storage_deposit_actions,
+            token_id,
+            relayer,
+        )
+        .await?;
     }
 
     if native_fee > 0 {
-        let token_id = connector
-            .near_get_native_token_id(chain_kind)
+        let token_id = near_bridge_client
+            .get_native_token_id(chain_kind)
             .await
             .map_err(|_| format!("Failed to get native token id by chain kind: {chain_kind:?}",))?;
 
-        let relayer = connector
-            .near_bridge_client()
-            .and_then(|client| client.signer().map(|signer| signer.account_id))
+        let relayer = near_bridge_client
+            .account_id()
             .map_err(|_| "Failed to get relayer account id".to_string())?;
 
-        add_storage_deposit_action(connector, &mut storage_deposit_actions, token_id, relayer)
-            .await?;
+        add_storage_deposit_action(
+            near_bridge_client,
+            &mut storage_deposit_actions,
+            token_id,
+            relayer,
+        )
+        .await?;
     }
 
     Ok(storage_deposit_actions)
