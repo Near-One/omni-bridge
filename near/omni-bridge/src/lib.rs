@@ -1319,6 +1319,16 @@ impl Contract {
         self.token_decimals.get(address)
     }
 
+    pub fn denormalize_amount(amount: u128, decimals: Decimals) -> u128 {
+        let diff_decimals: u32 = (decimals.origin_decimals - decimals.decimals).into();
+        amount * (10_u128.pow(diff_decimals))
+    }
+
+    pub fn normalize_amount(amount: u128, decimals: Decimals) -> u128 {
+        let diff_decimals: u32 = (decimals.origin_decimals - decimals.decimals).into();
+        amount / (10_u128.pow(diff_decimals))
+    }
+
     #[access_control_any(roles(Role::DAO, Role::TokenControllerUpdater))]
     pub fn update_tokens_controller(
         &self,
@@ -1819,15 +1829,5 @@ impl Contract {
         if !amount.is_zero() {
             Promise::new(account_id).transfer(amount);
         }
-    }
-
-    fn denormalize_amount(amount: u128, decimals: Decimals) -> u128 {
-        let diff_decimals: u32 = (decimals.origin_decimals - decimals.decimals).into();
-        amount * (10_u128.pow(diff_decimals))
-    }
-
-    fn normalize_amount(amount: u128, decimals: Decimals) -> u128 {
-        let diff_decimals: u32 = (decimals.origin_decimals - decimals.decimals).into();
-        amount / (10_u128.pow(diff_decimals))
     }
 }
