@@ -26,6 +26,7 @@ use crate::{
 
 use super::{EventAction, Transfer};
 
+#[allow(clippy::too_many_lines)]
 pub async fn process_init_transfer_event(
     config: config::Config,
     connector: Arc<OmniConnector>,
@@ -245,7 +246,7 @@ pub async fn process_init_transfer_event(
     {
         Ok(actions) => actions,
         Err(err) => {
-            warn!("Failed to get storage deposit actions: {}", err);
+            warn!("Failed to get storage deposit actions: {err}");
             return Ok(EventAction::Retry);
         }
     };

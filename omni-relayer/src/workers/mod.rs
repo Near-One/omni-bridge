@@ -132,7 +132,7 @@ pub async fn process_events(
 
     let signer = connector
         .near_bridge_client()
-        .and_then(|connector| connector.account_id())?;
+        .and_then(near_bridge_client::NearBridgeClient::account_id)?;
 
     loop {
         let mut redis_connection_clone = redis_connection.clone();
