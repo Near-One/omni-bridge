@@ -470,6 +470,20 @@ pub struct TransferMessageV0 {
 
 #[near(serializers=[borsh, json])]
 #[derive(Debug, Clone)]
+pub struct TransferMessageV1 {
+    pub origin_nonce: Nonce,
+    pub token: OmniAddress,
+    pub amount: U128,
+    pub recipient: OmniAddress,
+    pub fee: Fee,
+    pub sender: OmniAddress,
+    pub msg: String,
+    pub destination_nonce: Nonce,
+    pub origin_transfer_id: Option<TransferId>,
+}
+
+#[near(serializers=[borsh, json])]
+#[derive(Debug, Clone)]
 pub struct TransferMessage {
     pub origin_nonce: Nonce,
     pub token: OmniAddress,
@@ -480,6 +494,7 @@ pub struct TransferMessage {
     pub msg: String,
     pub destination_nonce: Nonce,
     pub origin_transfer_id: Option<TransferId>,
+    pub is_used: bool,
 }
 
 impl TransferMessage {

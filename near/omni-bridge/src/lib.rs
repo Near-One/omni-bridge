@@ -16,7 +16,6 @@ use near_sdk::{
     env, ext_contract, near, require, serde_json, AccountId, BorshStorageKey, Gas, NearToken,
     PanicOnDefault, Promise, PromiseError, PromiseOrValue, PromiseResult,
 };
-use omni_types::btc::TokenReceiverMessage;
 use omni_types::locker_args::{
     AddDeployedTokenArgs, BindTokenArgs, ClaimFeeArgs, DeployTokenArgs, FinTransferArgs,
     StorageDepositAction,
@@ -67,6 +66,7 @@ const MINT_TOKEN_GAS: Gas = Gas::from_tgas(5);
 const SET_METADATA_GAS: Gas = Gas::from_tgas(10);
 const RESOLVE_TRANSFER_GAS: Gas = Gas::from_tgas(3);
 const FAST_TRANSFER_CALLBACK_GAS: Gas = Gas::from_tgas(5);
+const SIGN_BTC_TRANSFER_CALLBACK_GAS: Gas = Gas::from_tgas(5);
 const NO_DEPOSIT: NearToken = NearToken::from_near(0);
 const ONE_YOCTO: NearToken = NearToken::from_yoctonear(1);
 const SIGN_PATH: &str = "bridge-1";
@@ -480,12 +480,44 @@ impl Contract {
         fee_recipient: Option<AccountId>,
         fee: &Option<Fee>,
     ) -> Promise {
-        let transfer_message = self.get_transfer_message(transfer_id);
-        let amount = transfer_message.amount;
+        let mut transfer = self.get_transfer_message_storage(transfer_id);
+
+        require!(!transfer.message.is_used, "Transfer already submitted");
+
+        if let Some(fee) = &fee {
+            require!(&transfer.message.fee == fee, "Invalid fee");
+        }
+
+        require!(transfer.message.get_destination_chain() == ChainKind::Btc, "Incorrect destination chain");
+        require!(self.get_token_id(&transfer.message.token) == self.btc_account_id, "BTC account id");
+
+        let amount = transfer.message.amount;
+
+        transfer.message.is_used = true;
+        self.insert_raw_transfer(transfer.message.clone(), transfer.owner);
         ext_token::ext(self.btc_account_id.clone())
             .with_attached_deposit(ONE_YOCTO)
             .with_static_gas(FT_TRANSFER_CALL_GAS)
             .ft_transfer_call(self.btc_connector.clone(), amount, None, msg)
+            .then(
+                Self::ext(env::current_account_id())
+                    .with_static_gas(SIGN_BTC_TRANSFER_CALLBACK_GAS)
+                    .sign_btc_transfer_callback(transfer_id),
+            )
+    }
+
+    // The callback function to handle the result of the cross-contract call
+    #[private]
+    pub fn sign_btc_transfer_callback(
+        &mut self,
+        transfer_id: TransferId,
+        #[callback_result] call_result: Result<(), PromiseError>,
+    ) {
+        if call_result.is_err() {
+            let mut transfer = self.get_transfer_message_storage(transfer_id);
+            transfer.message.is_used = false;
+            self.insert_raw_transfer(transfer.message, transfer.owner);
+        }
     }
 
     fn init_transfer(
@@ -525,6 +557,7 @@ impl Contract {
             msg: String::new(),
             destination_nonce,
             origin_transfer_id: None,
+            is_used: false,
         };
         require!(
             transfer_message.fee.fee < transfer_message.amount,
@@ -640,6 +673,7 @@ impl Contract {
             msg: init_transfer.msg,
             destination_nonce,
             origin_transfer_id: None,
+            is_used: false,
         };
 
         if let OmniAddress::Near(recipient) = transfer_message.recipient.clone() {
@@ -795,6 +829,7 @@ impl Contract {
             msg: fast_transfer.msg.clone(),
             destination_nonce,
             origin_transfer_id: Some(fast_transfer.transfer_id),
+            is_used: false,
         };
         let new_transfer_id = transfer_message.get_transfer_id();
 
@@ -1131,6 +1166,7 @@ impl Contract {
             msg: String::new(),
             destination_nonce,
             origin_transfer_id: None,
+            is_used: false,
         };
 
         let required_storage_balance =
