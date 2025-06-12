@@ -227,7 +227,35 @@ rule ft_transfer_btc_to_omni_bridge:
         echo '{{\"tx_hash\": \"'$TX_HASH'\", \"contract_id\": \"{params.nbtc_account}\"}}' > {output}
     """
 
+rule sign_btc_transfer:
+    message: "Sign BTC transfer on OmniBridge"
+    input:
+       step_7 = rules.ft_transfer_btc_to_omni_bridge.output,
+       btc_connector_file = btc_connector_file,
+       omni_bridge_file = omni_bridge_file,
+       user_account_file = user_account_file
+    output: call_dir / "08_sign_btc_transfer.json"
+    params:
+        btc_connector = lambda wc, input: get_json_field(input.btc_connector_file, "contract_id"),
+        user_account_id = lambda wc, input: get_json_field(input.user_account_file, "account_id"),
+        user_private_key = lambda wc, input: get_json_field(input.user_account_file, "private_key"),
+        bridge_sdk_config_file = const.common_bridge_sdk_config_file,
+        omni_bridge_account = lambda wc, input: get_json_field(input.omni_bridge_file, "contract_id"),
+        near_tx_hash = lambda wc, input: get_json_field(input.step_7, "tx_hash"),
+
+    shell: """
+    bridge-cli testnet near-sign-btc-transfer \
+        -n {params.near_tx_hash} \
+        -s {params.user_account_id} \
+        --near-token-locker-id {params.omni_bridge_account} \
+        --btc-connector {params.btc_connector} \
+        --near-signer {params.user_account_id} \
+        --near-private-key {params.user_private_key} \
+        --config {params.bridge_sdk_config_file} \
+         > {output} \
+    """
+
 rule all:
     input:
-        rules.ft_transfer_btc_to_omni_bridge.output,
+        rules.sign_btc_transfer.output,
     default_target: True
