@@ -46,15 +46,21 @@ fn build_near_bridge_client(
                 .near
                 .btc_connector
                 .as_ref()
-                .map(|btc_connector| btc_connector.to_string()),
+                .map(std::string::ToString::to_string),
         )
-        .btc(config.near.btc.as_ref().map(|btc| btc.to_string()))
+        .btc(
+            config
+                .near
+                .btc
+                .as_ref()
+                .map(std::string::ToString::to_string),
+        )
         .satoshi_relayer(
             config
                 .near
                 .satoshi_relayer
                 .as_ref()
-                .map(|satoshi_relayer| satoshi_relayer.to_string()),
+                .map(std::string::ToString::to_string),
         )
         .build()
         .context("Failed to build NearBridgeClient")
