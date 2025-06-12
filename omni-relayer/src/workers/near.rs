@@ -437,8 +437,12 @@ pub async fn process_fast_transfer_event(
         anyhow::bail!("Failed to convert token address to OmniAddress: {token}");
     };
 
+    let Some(amount) = amount.0.checked_sub(fee.fee.0) else {
+        anyhow::bail!("Amount ({amount:?}) is less than fee ({fee:?}) for token: {token_id}");
+    };
+
     let Ok(amount) = near_fast_bridge_client
-        .denormalize_amount(token_omni_address, amount.0)
+        .denormalize_amount(token_omni_address, amount)
         .await
     else {
         warn!("Failed to denormalize amount for token: {token_id}");
