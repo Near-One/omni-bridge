@@ -132,7 +132,7 @@ pub async fn process_events(
 
     let signer = connector
         .near_bridge_client()
-        .and_then(|connector| connector.signer().map(|signer| signer.account_id))?;
+        .and_then(|connector| connector.account_id())?;
 
     loop {
         let mut redis_connection_clone = redis_connection.clone();
@@ -152,6 +152,12 @@ pub async fn process_events(
 
         if let Err(err) = near_omni_nonce.resync_nonce().await {
             warn!("Failed to resync near nonce: {err:?}");
+        }
+
+        if let Some(near_fast_nonce) = near_fast_nonce.clone() {
+            if let Err(err) = near_fast_nonce.resync_nonce().await {
+                warn!("Failed to resync near fast nonce: {err:?}");
+            }
         }
 
         if let Err(err) = evm_nonces.resync_nonces().await {
@@ -207,7 +213,6 @@ pub async fn process_events(
                     handlers.push(tokio::spawn({
                         let config = config.clone();
                         let mut redis_connection = redis_connection.clone();
-                        let key = key.clone();
                         let connector = connector.clone();
                         let near_fast_bridge_client = near_fast_bridge_client.clone();
                         let jsonrpc_client = jsonrpc_client.clone();
@@ -217,8 +222,6 @@ pub async fn process_events(
                         async move {
                             match evm::process_init_transfer_event(
                                 config,
-                                &mut redis_connection,
-                                key.clone(),
                                 connector,
                                 near_fast_bridge_client,
                                 jsonrpc_client,

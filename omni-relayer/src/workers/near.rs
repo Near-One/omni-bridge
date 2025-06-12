@@ -473,11 +473,18 @@ pub async fn process_fast_transfer_event(
         relayer,
     };
 
+    let nonce = Some(
+        near_fast_nonce
+            .reserve_nonce()
+            .await
+            .context("Failed to reserve nonce for near transaction")?,
+    );
+
     match near_fast_bridge_client
         .fast_fin_transfer(
             fast_fin_transfer_args,
             TransactionOptions {
-                nonce: Some(near_fast_nonce.reserve_nonce().await?),
+                nonce,
                 wait_until: near_primitives::views::TxExecutionStatus::Included,
                 wait_final_outcome_timeout_sec: None,
             },

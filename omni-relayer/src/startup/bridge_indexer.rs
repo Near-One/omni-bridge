@@ -582,8 +582,6 @@ pub async fn start_indexer(
     let db = client.database(db_name);
     let omni_events_collection = db.collection::<OmniEvent>(OMNI_EVENTS);
 
-    println!("Connected to MongoDB at {uri} and using database {db_name}");
-
     loop {
         info!("Starting a mongodb stream that track changes in {OMNI_EVENTS}");
 
