@@ -16,6 +16,7 @@ use near_sdk::{
     env, ext_contract, near, require, serde_json, AccountId, BorshStorageKey, Gas, NearToken,
     PanicOnDefault, Promise, PromiseError, PromiseOrValue, PromiseResult,
 };
+use omni_types::btc::TokenReceiverMessage;
 use omni_types::locker_args::{
     AddDeployedTokenArgs, BindTokenArgs, ClaimFeeArgs, DeployTokenArgs, FinTransferArgs,
     StorageDepositAction,
@@ -481,6 +482,16 @@ impl Contract {
         fee: &Option<Fee>,
     ) -> Promise {
         let mut transfer = self.get_transfer_message_storage(transfer_id);
+        let message = serde_json::from_str::<TokenReceiverMessage>(&msg).expect("INVALID MSG");
+        if let OmniAddress::Btc(btc_address) = transfer.message.recipient.clone() {
+            if let TokenReceiverMessage::Withdraw{target_btc_address, ..} = message {
+                require!(btc_address == target_btc_address, "Incorrect target address");
+            } else {
+                env::panic_str("Invalid message type");
+            }
+        } else {
+            env::panic_str("Invalid destination chain");
+        }
 
         require!(!transfer.message.is_used, "Transfer already submitted");
 
