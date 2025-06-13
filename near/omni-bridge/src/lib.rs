@@ -1,11 +1,11 @@
 #![allow(clippy::too_many_arguments)]
 use errors::SdkExpect;
-use bitcoin::OutPoint;
+use bitcoin::{Address, Amount, absolute::LockTime, transaction::Version, Transaction as BtcTransaction, PublicKey as BtcPublicKey, OutPoint, TxOut, TxIn, Psbt, Network};
 use near_plugins::{
     access_control, access_control_any, pause, AccessControlRole, AccessControllable, Pausable,
     Upgradable,
 };
-
+use k256::elliptic_curve::sec1::ToEncodedPoint;
 use near_contract_standards::fungible_token::metadata::FungibleTokenMetadata;
 use near_contract_standards::fungible_token::receiver::FungibleTokenReceiver;
 use near_contract_standards::storage_management::StorageBalance;
@@ -536,8 +536,17 @@ impl Contract {
         let message = serde_json::from_str::<TokenReceiverMessage>(&msg).expect("INVALID MSG");
         let amount = transfer.message.amount;
 
+        let btc_tx_hash = if let TokenReceiverMessage::Withdraw{target_btc_address, input, output} = message {
+            self.get_btc_tx_hash(input, output, utxos)
+        } else {
+            env::panic_str("Invalid message type");
+        };
+
+        env::log_str(&OmniBridgeEvent::BtcTransferEvent { btc_tx_hash }.to_log_string());
+
         transfer.message.is_used = true;
         self.insert_raw_transfer(transfer.message.clone(), transfer.owner);
+
         ext_token::ext(self.btc_account_id.clone())
             .with_attached_deposit(ONE_YOCTO)
             .with_static_gas(FT_TRANSFER_CALL_GAS)
@@ -556,8 +565,9 @@ impl Contract {
             .collect()
     }
 
-    /*fn get_btc_tx_hash(input: Vec<OutPoint>,
-                       output: Vec<TxOut>) {
+    fn get_btc_tx_hash(&self, input: Vec<OutPoint>,
+                       output: Vec<TxOut>,
+                       vutxos: HashMap<String, Option<UTXO>>) -> String {
         let transaction = BtcTransaction {
             version: Version::TWO,
             lock_time: LockTime::ZERO,
@@ -573,9 +583,19 @@ impl Contract {
         };
         let mut psbt = Psbt::from_unsigned_tx(transaction).expect("Failed to generate PSBT");
 
+        vutxos.iter().enumerate().for_each(|(i, v)| {
+            psbt.inputs[i].witness_utxo = Some(TxOut {
+                value: Amount::from_sat(v.1.clone().unwrap().balance),
+                script_pubkey: self
+                    .generate_btc_p2wpkh_address(&v.1.clone().unwrap().path)
+                    .script_pubkey(),
+            })
+        });
+
         let psbt_hex = psbt.serialize_hex();
-        let btc_pending_id = psbt.extract_tx().unwrap().compute_txid().to_string();
-    }*/
+
+        psbt.extract_tx().unwrap().compute_txid().to_string()
+    }
 
     // The callback function to handle the result of the cross-contract call
     #[private]
@@ -1450,6 +1470,34 @@ impl Contract {
 }
 
 impl Contract {
+    pub fn generate_public_key(&self, path: &str) -> Vec<u8> {
+        let mpc_pk = crypto_shared::near_public_key_to_affine_point(
+            "secp256k1:4NfTiv3UsGahebgTaHyD9vF8KYKMBnfd6kh94mK6xv8fGBiJB8TBtFMP5WWXz6B89Ac1fbpzPwAvoyQebemHFwx3".parse::<near_sdk::PublicKey>().expect("Invalid pubkey string")
+        );
+        let epsilon = crypto_shared::derive_epsilon(&self.btc_connector, path);
+        let user_pk = crypto_shared::derive_key(mpc_pk, epsilon);
+        let user_pk_encoded_point = user_pk.to_encoded_point(false);
+        user_pk_encoded_point.as_bytes().to_vec()
+    }
+
+    pub fn generate_btc_public_key(&self, path: &str) -> BtcPublicKey {
+        let public_key_bytes = self.generate_public_key(path);
+        let uncompressed_btc_public_key =
+            BtcPublicKey::from_slice(&public_key_bytes).expect("Invalid public key bytes");
+        uncompressed_btc_public_key
+            .inner
+            .to_string()
+            .parse()
+            .unwrap()
+    }
+
+    pub fn generate_btc_p2wpkh_address(&self, path: &str) -> Address {
+        let btc_public_key = self.generate_btc_public_key(path);
+        Address::p2wpkh(&btc_public_key.try_into().unwrap(), btc_network())
+    }
+}
+
+impl Contract {
     fn get_next_destination_nonce(&mut self, chain_kind: ChainKind) -> Nonce {
         if chain_kind == ChainKind::Near {
             return 0;
@@ -1983,5 +2031,13 @@ impl Contract {
     fn normalize_amount(amount: u128, decimals: Decimals) -> u128 {
         let diff_decimals: u32 = (decimals.origin_decimals - decimals.decimals).into();
         amount / (10_u128.pow(diff_decimals))
+    }
+}
+
+pub fn btc_network() -> Network {
+    if env::current_account_id().to_string().ends_with(".near") {
+        Network::Bitcoin
+    } else {
+        Network::Testnet
     }
 }

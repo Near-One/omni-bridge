@@ -45,6 +45,9 @@ pub enum OmniBridgeEvent {
         fast_transfer: FastTransfer,
         new_transfer_id: Option<TransferId>,
     },
+    BtcTransferEvent {
+        btc_tx_hash: String,
+    }
 }
 
 impl OmniBridgeEvent {
