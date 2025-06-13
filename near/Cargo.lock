@@ -3353,6 +3353,7 @@ dependencies = [
 name = "omni-bridge"
 version = "0.2.8"
 dependencies = [
+ "bitcoin",
  "borsh",
  "hex",
  "near-contract-standards",
@@ -3412,6 +3413,7 @@ dependencies = [
  "rlp 0.6.1",
  "schemars",
  "serde",
+ "serde_with",
  "sha3",
  "strum_macros 0.26.4",
 ]

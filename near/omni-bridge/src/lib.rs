@@ -1,5 +1,6 @@
 #![allow(clippy::too_many_arguments)]
 use errors::SdkExpect;
+use bitcoin::OutPoint;
 use near_plugins::{
     access_control, access_control_any, pause, AccessControlRole, AccessControllable, Pausable,
     Upgradable,
@@ -16,7 +17,7 @@ use near_sdk::{
     env, ext_contract, near, require, serde_json, AccountId, BorshStorageKey, Gas, NearToken,
     PanicOnDefault, Promise, PromiseError, PromiseOrValue, PromiseResult,
 };
-use omni_types::btc::TokenReceiverMessage;
+use omni_types::btc::{UTXO, TokenReceiverMessage};
 use omni_types::locker_args::{
     AddDeployedTokenArgs, BindTokenArgs, ClaimFeeArgs, DeployTokenArgs, FinTransferArgs,
     StorageDepositAction,
@@ -30,6 +31,7 @@ use omni_types::{
     FastTransferId, FastTransferStatus, Fee, InitTransferMsg, MetadataPayload, Nonce, OmniAddress,
     PayloadType, SignRequest, TransferId, TransferMessage, TransferMessagePayload, UpdateFee, H160,
 };
+use std::collections::HashMap;
 use std::str::FromStr;
 use storage::{
     Decimals, FastTransferStatusStorage, TransferMessageStorage, TransferMessageStorageValue,
@@ -68,6 +70,7 @@ const SET_METADATA_GAS: Gas = Gas::from_tgas(10);
 const RESOLVE_TRANSFER_GAS: Gas = Gas::from_tgas(3);
 const FAST_TRANSFER_CALLBACK_GAS: Gas = Gas::from_tgas(5);
 const SIGN_BTC_TRANSFER_CALLBACK_GAS: Gas = Gas::from_tgas(5);
+const LIST_UTXOS_GAS: Gas = Gas::from_tgas(5);
 const NO_DEPOSIT: NearToken = NearToken::from_near(0);
 const ONE_YOCTO: NearToken = NearToken::from_yoctonear(1);
 const SIGN_PATH: &str = "bridge-1";
@@ -141,6 +144,11 @@ pub trait ExtToken {
         decimals: Option<u8>,
         icon: Option<String>,
     );
+}
+
+#[ext_contract(ext_btc_connector)]
+trait BtcConnector {
+    fn list_utxos(&self, utxo_storage_keys: Vec<String>) -> HashMap<String, Option<UTXO>>;
 }
 
 #[ext_contract(ext_bridge_token_facory)]
@@ -483,15 +491,17 @@ impl Contract {
     ) -> Promise {
         let mut transfer = self.get_transfer_message_storage(transfer_id);
         let message = serde_json::from_str::<TokenReceiverMessage>(&msg).expect("INVALID MSG");
-        if let OmniAddress::Btc(btc_address) = transfer.message.recipient.clone() {
-            if let TokenReceiverMessage::Withdraw{target_btc_address, ..} = message {
+
+        let utxo_storage_keys = if let OmniAddress::Btc(btc_address) = transfer.message.recipient.clone() {
+            if let TokenReceiverMessage::Withdraw{target_btc_address, input, ..} = message {
                 require!(btc_address == target_btc_address, "Incorrect target address");
+                Self::get_utxo_storage_keys(input)
             } else {
                 env::panic_str("Invalid message type");
             }
         } else {
             env::panic_str("Invalid destination chain");
-        }
+        };
 
         require!(!transfer.message.is_used, "Transfer already submitted");
 
@@ -502,6 +512,28 @@ impl Contract {
         require!(transfer.message.get_destination_chain() == ChainKind::Btc, "Incorrect destination chain");
         require!(self.get_token_id(&transfer.message.token) == self.btc_account_id, "BTC account id");
 
+        ext_btc_connector::ext(self.btc_connector.clone())
+            .with_static_gas(LIST_UTXOS_GAS)
+            .list_utxos(utxo_storage_keys)
+            .then(
+                Self::ext(env::current_account_id())
+                    .with_static_gas(SIGN_BTC_TRANSFER_CALLBACK_GAS)
+                    .list_utxos_callback(
+                        transfer_id,
+                        msg,
+                    ),
+            )
+    }
+
+    #[private]
+    pub fn list_utxos_callback(&mut self, transfer_id: TransferId, msg: String, #[callback_result] utxos_result: Result<HashMap<String, Option<UTXO>>, PromiseError>
+    ) -> Promise {
+        let utxos = match utxos_result {
+            Ok(utxos) => utxos,
+            Err(_) => env::panic_str("Failed to get UTXOs from btc_connector"),
+        };
+        let mut transfer = self.get_transfer_message_storage(transfer_id);
+        let message = serde_json::from_str::<TokenReceiverMessage>(&msg).expect("INVALID MSG");
         let amount = transfer.message.amount;
 
         transfer.message.is_used = true;
@@ -516,6 +548,34 @@ impl Contract {
                     .sign_btc_transfer_callback(transfer_id),
             )
     }
+
+    fn get_utxo_storage_keys(inputs: Vec<OutPoint>) -> Vec<String> {
+        inputs
+            .into_iter()
+            .map(|outpoint| format!("{}@{}", outpoint.txid.to_string(), outpoint.vout))
+            .collect()
+    }
+
+    /*fn get_btc_tx_hash(input: Vec<OutPoint>,
+                       output: Vec<TxOut>) {
+        let transaction = BtcTransaction {
+            version: Version::TWO,
+            lock_time: LockTime::ZERO,
+            input: input
+                .into_iter()
+                .map(|previous_output| TxIn {
+                    previous_output,
+                    sequence: bitcoin::Sequence::ENABLE_RBF_NO_LOCKTIME,
+                    ..Default::default()
+                })
+                .collect(),
+            output,
+        };
+        let mut psbt = Psbt::from_unsigned_tx(transaction).expect("Failed to generate PSBT");
+
+        let psbt_hex = psbt.serialize_hex();
+        let btc_pending_id = psbt.extract_tx().unwrap().compute_txid().to_string();
+    }*/
 
     // The callback function to handle the result of the cross-contract call
     #[private]
