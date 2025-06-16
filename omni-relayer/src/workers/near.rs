@@ -380,6 +380,17 @@ pub async fn process_fast_transfer_event(
         anyhow::bail!("Expected FastTransferEvent, got: {:?}", transfer);
     };
 
+    // TODO: Fast transfer to other chain increases origin nonce by one, so regular relayer won't
+    // be able to finalize it with a normal sign transfer. We need to catch and sign
+    // `FastTransferEvent`. This will be possible once bridge-indexer will track these events
+    // Related PR: https://github.com/Near-One/bridge-indexer-rs/pull/195
+    if recipient.get_chain() != ChainKind::Near {
+        anyhow::bail!(
+            "Fast transfer is supported only for transfers to NEAR for now, got: {:?}",
+            recipient.get_chain()
+        );
+    }
+
     let Ok(last_finalized_block_number) = connector
         .evm_get_last_block_number(transfer_id.origin_chain)
         .await
