@@ -602,9 +602,9 @@ impl Contract {
     pub fn sign_btc_transfer_callback(
         &mut self,
         transfer_id: TransferId,
-        #[callback_result] call_result: Result<(), PromiseError>,
+        #[callback_result] call_result: Result<U128, PromiseError>,
     ) {
-        if call_result.is_err() {
+        if !matches!(call_result, Ok(result) if result.0 > 0) {
             let mut transfer = self.get_transfer_message_storage(transfer_id);
             transfer.message.is_used = false;
             self.insert_raw_transfer(transfer.message, transfer.owner);
