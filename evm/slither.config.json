@@ -1,0 +1,13 @@
+{
+    "detectors_to_run": "all",
+    "detectors_to_exclude": ["timestamp", "solc-version", "naming-convention", "assembly-usage"],
+    "exclude_low": true,
+    "exclude_informational": true,
+    "exclude_optimization": true,
+    "fail_on": "medium",
+    "filter_paths": "node_modules,testing,test,lib",
+    "zip_type": "lzma",
+    "sarif_input": "export.sarif",
+    "sarif_triage": "export.sarif.sarifexplorer",
+    "triage_database": "slither.db.json"
+}

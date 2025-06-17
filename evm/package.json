@@ -32,16 +32,20 @@
     "ts-node": "^10.9.2",
     "typechain": "^8.3.2",
     "typescript": "^5.7.2",
-    "bs58": "^6.0.0"
+    "bs58": "^6.0.0",
+    "@types/bun": "latest"
   },
   "scripts": {
-    "build": "yarn hardhat compile",
+    "clean": "hardhat clean",
+    "build": "hardhat compile",
     "testrpc": "",
-    "test": "yarn hardhat test",
-    "coverage": "yarn hardhat coverage",
+    "secaudit": "bun run clean && bun run build && sh -c 'source .venv/bin/activate && slither . --ignore-compile'",
+    "test": "hardhat test",
+    "coverage": "hardhat coverage",
     "lint:js": "biome check",
     "lint:js:fix": "biome check --write",
     "lint": "prettier --list-different --plugin=prettier-plugin-solidity '**/*.sol'",
     "lint:fix": "prettier --write --plugin=prettier-plugin-solidity '**/*.sol'"
-  }
+  },
+  "private": true
 }
