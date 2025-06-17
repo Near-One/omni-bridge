@@ -4,6 +4,10 @@ use crate::prover_result::ProofKind;
 
 pub type ProverId = String;
 
+#[near(serializers = [borsh, json])]
+#[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Debug, Default)]
+pub struct H256(pub [u8; 32]);
+
 #[near(serializers=[borsh, json])]
 #[derive(Debug, Clone)]
 pub struct VerifyProofArgs {
@@ -25,6 +29,12 @@ pub struct WormholeVerifyProofArgs {
     pub vaa: String,
 }
 
+#[near(serializers=[borsh])]
+#[derive(Debug, Clone)]
+pub struct BtcVerifyProofArgs {
+    pub proof: BtcProof,
+}
+
 #[near(serializers=[borsh, json])]
 #[derive(Default, Debug, Clone)]
 pub struct EvmProof {
@@ -34,4 +44,14 @@ pub struct EvmProof {
     pub receipt_data: Vec<u8>,
     pub header_data: Vec<u8>,
     pub proof: Vec<Vec<u8>>,
+}
+
+#[near(serializers=[borsh, json])]
+#[derive(Default, Debug, Clone)]
+pub struct BtcProof {
+    pub tx_id: H256,
+    pub tx_block_blockhash: H256,
+    pub tx_index: u64,
+    pub merkle_proof: Vec<H256>,
+    pub confirmations: u64,
 }
