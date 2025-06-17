@@ -3,7 +3,7 @@ import const
 import time
 from const import (get_evm_deploy_results_dir, get_evm_account_dir,
                      EvmNetwork as EN, NearContract as NC, EvmContract as EC, NearTestAccount as NTA)
-from utils import get_mkdir_cmd, get_json_field, extract_tx_hash, get_btc_address, get_last_value
+from utils import get_mkdir_cmd, get_json_field, extract_tx_hash, get_btc_address, get_last_value, get_tx_hash
 
 module near:
     snakefile: "./near.smk"
@@ -281,8 +281,52 @@ rule sign_btc_transfer:
          > {output} \
     """
 
+rule sign_btc_connector_transfer:
+    message: "Sign BTC transfer on BtcConnectro"
+    input:
+        step_8 = rules.sign_btc_transfer.output,
+        btc_connector_file = btc_connector_file,
+        omni_bridge_file = omni_bridge_file,
+        user_account_file = user_account_file
+    output: call_dir / "09_sign_btc_connector_transfer.json"
+    params:
+        btc_connector = lambda wc, input: get_json_field(input.btc_connector_file, "contract_id"),
+        user_account_id = lambda wc, input: get_json_field(input.user_account_file, "account_id"),
+        user_private_key = lambda wc, input: get_json_field(input.user_account_file, "private_key"),
+        bridge_sdk_config_file = const.common_bridge_sdk_config_file,
+        near_tx_hash = lambda wc, input: get_tx_hash(input.step_8),
+
+    shell: """
+    bridge-cli testnet near-sign-btc-transaction \
+        -b d3aa85d2f9d2b0bf14e0e8b20b82ea6fd88dc48c700be781f418f6c96f32898b \
+        --btc-connector {params.btc_connector} \
+        --near-signer {params.user_account_id} \
+        --near-private-key {params.user_private_key} \
+        --config {params.bridge_sdk_config_file} \
+         > {output} \
+    """
+
+
+rule send_btc_transfer:
+    message: "Send BTC transfer"
+    input:
+        step_9 = rules.sign_btc_connector_transfer.output,
+        user_account_file = user_account_file
+    output: call_dir / "10_send_btc_transfer"
+    params:
+        near_tx_hash = lambda wc, input: get_tx_hash(input.step_9),
+        user_account_id = lambda wc, input: get_json_field(input.user_account_file, "account_id"),
+        bridge_sdk_config_file = const.common_bridge_sdk_config_file,
+    shell: """
+    bridge-cli testnet btc-fin-transfer \
+    --near-tx-hash {params.near_tx_hash} \
+    --btc-relayer {params.user_account_id} \
+    --config {params.bridge_sdk_config_file} \
+    > {output} \
+    """
+
 rule all:
     input:
-        rules.sign_btc_transfer.output,
+        rules.send_btc_transfer.output,
         rules.near_btc_prover_setup.output
     default_target: True

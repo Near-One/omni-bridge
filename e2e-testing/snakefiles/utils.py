@@ -66,3 +66,6 @@ def get_btc_address(filename):
 
 def get_last_value(filename):
     return open(str(filename)).readlines()[-1].split()[-1]
+
+def get_tx_hash(filename):
+    return open(str(filename)).readlines()[-1].split('"')[-2]
