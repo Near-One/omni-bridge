@@ -974,27 +974,43 @@ impl Contract {
         #[serializer(borsh)]
         call_result: Result<ProverResult, PromiseError>,
     ) -> PromiseOrValue<()> {
-        let Ok(ProverResult::FinTransfer(fin_transfer)) = call_result else {
-            env::panic_str("Invalid proof message")
+        let (message, transferred_amount) = match call_result {
+            Ok(ProverResult::FinTransfer(fin_transfer)) => {
+                let fee_recipient = fin_transfer.fee_recipient.unwrap_or_else(|| {
+                    env::panic_str("ERR_FEE_RECIPIENT_NOT_SET_OR_EMPTY");
+                });
+
+                require!(
+                    fee_recipient == *predecessor_account_id,
+                    "ERR_ONLY_FEE_RECIPIENT_CAN_CLAIM"
+                );
+                require!(
+                    self.factories
+                    .get(&fin_transfer.emitter_address.get_chain())
+                    .as_ref()
+                    == Some(&fin_transfer.emitter_address),
+                    "ERR_UNKNOWN_FACTORY"
+                );
+
+                (self.remove_transfer_message(fin_transfer.transfer_id), fin_transfer.amount.0)
+            },
+            Ok(ProverResult::BtcFinTransfer(fin_transfer)) => {
+                let message = self.remove_transfer_message(fin_transfer.transfer_id);
+                let transferred_amount = message.amount.0 - message.fee.fee.0;
+
+                require!(
+                    message.btc_tx_hash == Some(fin_transfer.btc_tx_hash),
+                    "ERR_INCORRECT_BTC_TX_HASH"
+                );
+
+                (message, transferred_amount)
+            },
+            _ => {
+                env::panic_str("Invalid proof message")
+            }
         };
 
-        let fee_recipient = fin_transfer.fee_recipient.unwrap_or_else(|| {
-            env::panic_str("ERR_FEE_RECIPIENT_NOT_SET_OR_EMPTY");
-        });
-
-        require!(
-            fee_recipient == *predecessor_account_id,
-            "ERR_ONLY_FEE_RECIPIENT_CAN_CLAIM"
-        );
-        require!(
-            self.factories
-                .get(&fin_transfer.emitter_address.get_chain())
-                .as_ref()
-                == Some(&fin_transfer.emitter_address),
-            "ERR_UNKNOWN_FACTORY"
-        );
-
-        let message = self.remove_transfer_message(fin_transfer.transfer_id);
+        let fee_recipient = predecessor_account_id.clone();
 
         // Need to make sure fast transfer is finalised because it means transfer parameters are correct. Otherwise, fee can be set as anything.
         if let Some(origin_transfer_id) = message.origin_transfer_id {
@@ -1038,7 +1054,7 @@ impl Contract {
             .unwrap_or_else(|| env::panic_str("ERR_FAILED_TO_GET_TOKEN_ADDRESS"));
 
         let denormalized_amount = Self::denormalize_amount(
-            fin_transfer.amount.0,
+            transferred_amount,
             self.token_decimals
                 .get(&token_address)
                 .sdk_expect("ERR_TOKEN_DECIMALS_NOT_FOUND"),
