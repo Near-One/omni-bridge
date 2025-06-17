@@ -1342,24 +1342,21 @@ impl Contract {
 
         let token = self.get_token_id(&transfer_message.token);
 
-        // If fast transfer happened, change recipient to the relayer that executed fast transfer
+        // If fast transfer happened, change recipient and fee recipient to the relayer that executed fast transfer
         let fast_transfer = FastTransfer::from_transfer(transfer_message.clone(), token.clone());
-        let (recipient, msg, is_fast_transfer) =
+        let (recipient, msg, fee_recipient) =
             match self.get_fast_transfer_status(&fast_transfer.id()) {
                 Some(status) => {
-                    require!(
-                        predecessor_account_id == status.relayer,
-                        "ERR_FAST_TRANSFER_PERFORMED_BY_ANOTHER_RELAYER"
-                    );
                     require!(!status.finalised, "ERR_FAST_TRANSFER_ALREADY_FINALISED");
-                    (status.relayer, String::new(), true)
+                    self.remove_fast_transfer(&fast_transfer.id());
+                    (status.relayer.clone(), String::new(), status.relayer)
                 }
-                None => (recipient, transfer_message.msg.clone(), false),
+                None => (
+                    recipient,
+                    transfer_message.msg.clone(),
+                    predecessor_account_id.clone(),
+                ),
             };
-
-        if is_fast_transfer {
-            self.remove_fast_transfer(&fast_transfer.id());
-        }
 
         let mut storage_deposit_action_index: usize = 0;
         require!(
@@ -1385,7 +1382,7 @@ impl Contract {
                         .try_into()
                         .sdk_expect("ERR_CAST")
                 ) && storage_deposit_actions[storage_deposit_action_index].account_id
-                    == predecessor_account_id
+                    == fee_recipient
                     && storage_deposit_actions[storage_deposit_action_index].token_id == token,
                 "STORAGE_ERR: The fee recipient is omitted"
             );
@@ -1393,7 +1390,7 @@ impl Contract {
 
             promise = promise.then(if is_deployed_token {
                 ext_token::ext(token).with_static_gas(MINT_TOKEN_GAS).mint(
-                    predecessor_account_id.clone(),
+                    fee_recipient.clone(),
                     transfer_message.fee.fee,
                     None,
                 )
@@ -1401,11 +1398,7 @@ impl Contract {
                 ext_token::ext(token)
                     .with_attached_deposit(ONE_YOCTO)
                     .with_static_gas(FT_TRANSFER_GAS)
-                    .ft_transfer(
-                        predecessor_account_id.clone(),
-                        transfer_message.fee.fee,
-                        None,
-                    )
+                    .ft_transfer(fee_recipient.clone(), transfer_message.fee.fee, None)
             });
 
             required_balance = required_balance.saturating_add(NearToken::from_yoctonear(2));
@@ -1422,7 +1415,7 @@ impl Contract {
                         .try_into()
                         .sdk_expect("ERR_CAST")
                 ) && storage_deposit_actions[storage_deposit_action_index].account_id
-                    == predecessor_account_id
+                    == fee_recipient
                     && storage_deposit_actions[storage_deposit_action_index].token_id
                         == native_token_id,
                 "STORAGE_ERR: The native fee recipient is omitted"
@@ -1431,11 +1424,7 @@ impl Contract {
             promise = promise.then(
                 ext_token::ext(native_token_id)
                     .with_static_gas(MINT_TOKEN_GAS)
-                    .mint(
-                        predecessor_account_id.clone(),
-                        transfer_message.fee.native_fee,
-                        None,
-                    ),
+                    .mint(fee_recipient.clone(), transfer_message.fee.native_fee, None),
             );
         }
 
