@@ -494,7 +494,7 @@ pub struct TransferMessage {
     pub msg: String,
     pub destination_nonce: Nonce,
     pub origin_transfer_id: Option<TransferId>,
-    pub is_used: bool,
+    pub btc_tx_hash: Option<String>,
 }
 
 impl TransferMessage {

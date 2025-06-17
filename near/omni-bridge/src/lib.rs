@@ -503,7 +503,7 @@ impl Contract {
             env::panic_str("Invalid destination chain");
         };
 
-        require!(!transfer.message.is_used, "Transfer already submitted");
+        require!(transfer.message.btc_tx_hash != None, "Transfer already submitted");
 
         if let Some(fee) = &fee {
             require!(&transfer.message.fee == fee, "Invalid fee");
@@ -542,9 +542,9 @@ impl Contract {
             env::panic_str("Invalid message type");
         };
 
-        env::log_str(&OmniBridgeEvent::BtcTransferEvent { btc_tx_hash }.to_log_string());
+        env::log_str(&OmniBridgeEvent::BtcTransferEvent { btc_tx_hash: btc_tx_hash.clone() }.to_log_string());
 
-        transfer.message.is_used = true;
+        transfer.message.btc_tx_hash = Some(btc_tx_hash);
         self.insert_raw_transfer(transfer.message.clone(), transfer.owner);
 
         ext_token::ext(self.btc_account_id.clone())
@@ -606,7 +606,7 @@ impl Contract {
     ) {
         if !matches!(call_result, Ok(result) if result.0 > 0) {
             let mut transfer = self.get_transfer_message_storage(transfer_id);
-            transfer.message.is_used = false;
+            transfer.message.btc_tx_hash = None;
             self.insert_raw_transfer(transfer.message, transfer.owner);
         }
     }
@@ -648,7 +648,7 @@ impl Contract {
             msg: String::new(),
             destination_nonce,
             origin_transfer_id: None,
-            is_used: false,
+            btc_tx_hash: None,
         };
         require!(
             transfer_message.fee.fee < transfer_message.amount,
@@ -764,7 +764,7 @@ impl Contract {
             msg: init_transfer.msg,
             destination_nonce,
             origin_transfer_id: None,
-            is_used: false,
+            btc_tx_hash: None,
         };
 
         if let OmniAddress::Near(recipient) = transfer_message.recipient.clone() {
@@ -920,7 +920,7 @@ impl Contract {
             msg: fast_transfer.msg.clone(),
             destination_nonce,
             origin_transfer_id: Some(fast_transfer.transfer_id),
-            is_used: false,
+            btc_tx_hash: None,
         };
         let new_transfer_id = transfer_message.get_transfer_id();
 
@@ -1257,7 +1257,7 @@ impl Contract {
             msg: String::new(),
             destination_nonce,
             origin_transfer_id: None,
-            is_used: false,
+            btc_tx_hash: None,
         };
 
         let required_storage_balance =

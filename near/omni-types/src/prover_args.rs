@@ -1,6 +1,7 @@
 use near_sdk::near;
 
 use crate::prover_result::ProofKind;
+use crate::TransferId;
 
 pub type ProverId = String;
 
