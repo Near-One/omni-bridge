@@ -52,7 +52,8 @@ impl BtcProver {
                 Self::ext(env::current_account_id())
                     .with_static_gas(VERIFY_PROOF_CALLBACK_GAS)
                     .verify_proof_callback(
-                        btc_proof
+                        btc_proof,
+                        args.transfer_id
                     ),
             ))
     }
@@ -64,6 +65,7 @@ impl BtcProver {
     pub fn verify_proof_callback(
         &mut self,
         #[serializer(borsh)] btc_proof: BtcProof,
+        #[serializer(borsh)] transfer_id: TransferId,
         #[callback]
         #[serializer(borsh)]
         is_included: bool,
@@ -74,6 +76,7 @@ impl BtcProver {
 
         Ok(ProverResult::BtcFinTransfer(BtcFinTransferMessage {
             btc_tx_hash: hex::encode(btc_proof.tx_id.0),
+            transfer_id,
         }))
     }
 }

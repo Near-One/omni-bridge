@@ -50,6 +50,7 @@ pub struct LogMetadataMessage {
 #[derive(Debug, Clone)]
 pub struct BtcFinTransferMessage {
     pub btc_tx_hash: String,
+    pub transfer_id: TransferId,
 }
 
 #[near(serializers=[borsh, json])]

@@ -33,6 +33,7 @@ pub struct WormholeVerifyProofArgs {
 #[derive(Debug, Clone)]
 pub struct BtcVerifyProofArgs {
     pub proof: BtcProof,
+    pub transfer_id: TransferId,
 }
 
 #[near(serializers=[borsh, json])]
