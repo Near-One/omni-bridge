@@ -5,7 +5,7 @@ use near_sdk::{
 };
 use omni_types::prover_args::{BtcVerifyProofArgs, BtcProof};
 use omni_types::prover_result::{ProverResult, BtcFinTransferMessage};
-use omni_types::ChainKind;
+use omni_types::{ChainKind, TransferId};
 
 const VERIFY_PROOF_CALLBACK_GAS: Gas = Gas::from_tgas(5);
 const BLOCK_HASH_SAFE_GAS: Gas = Gas::from_tgas(5);
