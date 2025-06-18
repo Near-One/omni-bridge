@@ -75,7 +75,7 @@ impl BtcProver {
         require!(is_valid, "verify_transaction_inclusion return false");
 
         Ok(ProverResult::BtcFinTransfer(BtcFinTransferMessage {
-            btc_tx_hash: hex::encode(btc_proof.tx_id.0),
+            btc_tx_hash: hex::encode(btc_proof.tx_id.0.into_iter().rev().collect::<Vec<_>>()),
             transfer_id,
         }))
     }

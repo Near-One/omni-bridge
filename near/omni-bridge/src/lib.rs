@@ -999,8 +999,8 @@ impl Contract {
                 let transferred_amount = message.amount.0 - message.fee.fee.0;
 
                 require!(
-                    message.btc_tx_hash == Some(fin_transfer.btc_tx_hash),
-                    "ERR_INCORRECT_BTC_TX_HASH"
+                    message.btc_tx_hash == Some(fin_transfer.btc_tx_hash.clone()),
+                    format!("ERR_INCORRECT_BTC_TX_HASH {:?}, {:?}", message.btc_tx_hash, Some(fin_transfer.btc_tx_hash.clone()))
                 );
 
                 (message, transferred_amount)
