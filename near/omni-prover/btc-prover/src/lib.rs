@@ -66,13 +66,12 @@ impl BtcProver {
         &mut self,
         #[serializer(borsh)] btc_proof: BtcProof,
         #[serializer(borsh)] transfer_id: TransferId,
-        #[callback]
-        #[serializer(borsh)]
-        is_included: bool,
     ) -> Result<ProverResult, String> {
-        if !is_included {
-            return Err("ERROR ON VALIDATION TX_HASH".to_owned());
-        }
+        let result_bytes =
+            promise_result_as_success().expect("Call verify_transaction_inclusion failed");
+        let is_valid = serde_json::from_slice::<bool>(&result_bytes)
+            .expect("verify_transaction_inclusion return not bool");
+        require!(is_valid, "verify_transaction_inclusion return false");
 
         Ok(ProverResult::BtcFinTransfer(BtcFinTransferMessage {
             btc_tx_hash: hex::encode(btc_proof.tx_id.0),
