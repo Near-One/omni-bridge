@@ -2,6 +2,7 @@ use borsh::BorshDeserialize;
 use hex;
 use near_sdk::{
     env, ext_contract, near, near_bindgen, AccountId, Gas, PanicOnDefault, Promise,
+    promise_result_as_success, require
 };
 use omni_types::prover_args::{BtcVerifyProofArgs, BtcProof};
 use omni_types::prover_result::{ProverResult, BtcFinTransferMessage};
