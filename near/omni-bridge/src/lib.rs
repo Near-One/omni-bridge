@@ -503,7 +503,7 @@ impl Contract {
             env::panic_str("Invalid destination chain");
         };
 
-        require!(transfer.message.btc_tx_hash != None, "Transfer already submitted");
+        require!(transfer.message.btc_tx_hash == None, "Transfer already submitted");
 
         if let Some(fee) = &fee {
             require!(&transfer.message.fee == fee, "Invalid fee");

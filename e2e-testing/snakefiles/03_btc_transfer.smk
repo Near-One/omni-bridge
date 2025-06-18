@@ -298,7 +298,8 @@ rule sign_btc_connector_transfer:
 
     shell: """
     bridge-cli testnet near-sign-btc-transaction \
-        -b d3aa85d2f9d2b0bf14e0e8b20b82ea6fd88dc48c700be781f418f6c96f32898b \
+        --near-tx-hash {params.near_tx_hash} \
+        --btc-relayer {params.user_account_id} \
         --btc-connector {params.btc_connector} \
         --near-signer {params.user_account_id} \
         --near-private-key {params.user_private_key} \
