@@ -1152,6 +1152,53 @@ impl Contract {
     }
 
     #[payable]
+    #[access_control_any(roles(Role::DAO))]
+    pub fn set_native_token(
+        &mut self,
+        chain_kind: ChainKind,
+        token_id: AccountId,
+        decimals: u8,
+    ) {
+        let storage_usage = env::storage_usage();
+        let token_address = OmniAddress::new_zero(chain_kind)
+            .unwrap_or_else(|_| env::panic_str("ERR_FAILED_TO_GET_ZERO_ADDRESS"));
+
+        require!(
+            self.token_id_to_address
+                .insert(&(chain_kind, token_id.clone()), &token_address)
+                .is_none(),
+            "ERR_TOKEN_EXIST"
+        );
+        require!(
+            self.token_address_to_id
+                .insert(&token_address, &token_id)
+                .is_none(),
+            "ERR_TOKEN_EXIST"
+        );
+        require!(
+            self.token_decimals
+                .insert(
+                    &token_address,
+                    &Decimals {
+                        decimals: decimals,
+                        origin_decimals: decimals
+                    }
+                )
+                .is_none(),
+            "ERR_TOKEN_EXIST"
+        );
+        let required_deposit = env::storage_byte_cost()
+            .saturating_mul((env::storage_usage().saturating_sub(storage_usage)).into())
+            .saturating_add(storage::BRIDGE_TOKEN_INIT_BALANCE)
+            .saturating_add(NEP141_DEPOSIT);
+
+        require!(
+            env::attached_deposit() >= required_deposit,
+            "ERROR: The deposit is not sufficient to cover the storage."
+        );
+    }
+
+    #[payable]
     #[pause(except(roles(Role::DAO, Role::UnrestrictedRelayer)))]
     pub fn bind_token(&mut self, #[serializer(borsh)] args: BindTokenArgs) -> Promise {
         ext_prover::ext(self.prover_account.clone())
