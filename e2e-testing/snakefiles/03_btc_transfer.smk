@@ -312,7 +312,7 @@ rule send_btc_transfer:
     input:
         step_9 = rules.sign_btc_connector_transfer.output,
         user_account_file = user_account_file
-    output: call_dir / "10_send_btc_transfer"
+    output: call_dir / "10_send_btc_transfer.json"
     params:
         near_tx_hash = lambda wc, input: get_tx_hash(input.step_9),
         user_account_id = lambda wc, input: get_json_field(input.user_account_file, "account_id"),
@@ -325,8 +325,33 @@ rule send_btc_transfer:
     > {output} \
     """
 
+rule claim_fee:
+    message: "Cliam fee"
+    input:
+        step_10 = rules.send_btc_transfer.output,
+        step_7 = rules.ft_transfer_btc_to_omni_bridge.output,
+        user_account_file = user_account_file,
+        btc_connector_file = btc_connector_file,
+    output: call_dir / "11_claim_fee.json"
+    params:
+        btc_tx_hash = lambda wc, input: get_last_value(input.step_10),
+        near_tx_hash = lambda wc, input: get_json_field(input.step_7, "tx_hash"),
+        bridge_sdk_config_file = const.common_bridge_sdk_config_file,
+        user_account_id = lambda wc, input: get_json_field(input.user_account_file, "account_id"),
+        user_private_key = lambda wc, input: get_json_field(input.user_account_file, "private_key"),
+        btc_connector = lambda wc, input: get_json_field(input.btc_connector_file, "contract_id"),
+    shell: """
+    bridge-cli testnet claim-fee-btc \
+    -b {params.btc_tx_hash} -n {params.near_tx_hash} \
+    --config {params.bridge_sdk_config_file} \
+    --near-signer {params.user_account_id} \
+    --near-private-key {params.user_private_key} \
+    --btc-connector {params.btc_connector} \
+    > {output} \
+    """
+
 rule all:
     input:
-        rules.send_btc_transfer.output,
+        rules.claim_fee.output,
         rules.near_btc_prover_setup.output
     default_target: True
