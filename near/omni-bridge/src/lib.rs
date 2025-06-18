@@ -534,7 +534,7 @@ impl Contract {
         };
         let mut transfer = self.get_transfer_message_storage(transfer_id);
         let message = serde_json::from_str::<TokenReceiverMessage>(&msg).expect("INVALID MSG");
-        let amount = transfer.message.amount;
+        let amount = transfer.message.amount - transfer.message.fee.fee;
 
         let btc_tx_hash = if let TokenReceiverMessage::Withdraw{target_btc_address, input, output} = message {
             self.get_btc_tx_hash(input, output, utxos)

@@ -245,7 +245,7 @@ rule ft_transfer_btc_to_omni_bridge:
     shell: """
     {params.scripts_dir}/call-near-contract.sh -c {params.nbtc_account} \
         -m ft_transfer_call \
-        -a '{{\"receiver_id\": \"{params.omni_bridge_account}\", \"amount\": \"5000\", \"msg\": \"{{\\\"recipient\\\": \\\"btc:tb1q4vvl8ykwprwv9dw3y5nrnpk7f2jech7atz45v5\\\", \\\"fee\\\":\\\"0\\\",\\\"native_token_fee\\\":\\\"0\\\"}}\"}}' \
+        -a '{{\"receiver_id\": \"{params.omni_bridge_account}\", \"amount\": \"5000\", \"msg\": \"{{\\\"recipient\\\": \\\"btc:tb1q4vvl8ykwprwv9dw3y5nrnpk7f2jech7atz45v5\\\", \\\"fee\\\":\\\"14\\\",\\\"native_token_fee\\\":\\\"162\\\"}}\"}}' \
         -f {input.user_account_file} \
         -d "1 yoctoNEAR" \
         -n testnet 2>&1 | tee {output} && \
@@ -332,6 +332,7 @@ rule claim_fee:
         step_7 = rules.ft_transfer_btc_to_omni_bridge.output,
         user_account_file = user_account_file,
         omni_bridge_file = omni_bridge_file,
+        prover_setup = rules.near_btc_prover_setup.output,
     output: call_dir / "11_claim_fee.json"
     params:
         btc_tx_hash = lambda wc, input: get_last_value(input.step_10),
@@ -353,5 +354,4 @@ rule claim_fee:
 rule all:
     input:
         rules.claim_fee.output,
-        rules.near_btc_prover_setup.output
     default_target: True
