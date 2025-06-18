@@ -1188,9 +1188,7 @@ impl Contract {
             "ERR_TOKEN_EXIST"
         );
         let required_deposit = env::storage_byte_cost()
-            .saturating_mul((env::storage_usage().saturating_sub(storage_usage)).into())
-            .saturating_add(storage::BRIDGE_TOKEN_INIT_BALANCE)
-            .saturating_add(NEP141_DEPOSIT);
+            .saturating_mul((env::storage_usage().saturating_sub(storage_usage)).into());
 
         require!(
             env::attached_deposit() >= required_deposit,
