@@ -362,7 +362,6 @@ pub async fn process_unverified_transfer_event(
 pub async fn process_fast_transfer_event(
     connector: Arc<OmniConnector>,
     near_fast_bridge_client: Arc<near_bridge_client::NearBridgeClient>,
-    evm_bridge_client: evm_bridge_client::EvmBridgeClient,
     tx_hash: &str,
     transfer: Transfer,
     near_fast_nonce: Arc<utils::nonce::NonceManager>,
@@ -440,7 +439,10 @@ pub async fn process_fast_transfer_event(
         anyhow::bail!("Failed to parse tx_hash: {tx_hash}");
     };
 
-    if let Err(err) = evm_bridge_client.get_transfer_event(tx_hash).await {
+    if let Err(err) = connector
+        .evm_get_transfer_event(transfer_id.origin_chain, tx_hash)
+        .await
+    {
         warn!("Failed to get transfer event for tx_hash {tx_hash}: {err:?}");
         return Ok(EventAction::Retry);
     }

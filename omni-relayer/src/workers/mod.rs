@@ -358,7 +358,7 @@ pub async fn process_events(
                             }
                         }
                     }));
-                } else if let Transfer::Fast { transfer_id, .. } = transfer {
+                } else if let Transfer::Fast { .. } = transfer {
                     let Some(near_fast_bridge_client) = near_fast_bridge_client.clone() else {
                         warn!(
                             "Fast transfer event received, but near fast bridge connector is not available"
@@ -372,27 +372,16 @@ pub async fn process_events(
                         continue;
                     };
 
-                    let Ok(evm_bridge_client) =
-                        connector.evm_bridge_client(transfer_id.origin_chain)
-                    else {
-                        warn!(
-                            "Fast transfer event received, but evm bridge client is not available"
-                        );
-                        continue;
-                    };
-
                     handlers.push(tokio::spawn({
                         let mut redis_connection = redis_connection.clone();
                         let connector = connector.clone();
                         let near_fast_bridge_client = near_fast_bridge_client.clone();
-                        let evm_bridge_client = evm_bridge_client.clone();
                         let near_fast_nonce = near_fast_nonce.clone();
 
                         async move {
                             match near::process_fast_transfer_event(
                                 connector,
                                 near_fast_bridge_client,
-                                evm_bridge_client.clone(),
                                 &key,
                                 transfer,
                                 near_fast_nonce,
