@@ -13,7 +13,9 @@ use solana_rpc_client_api::{client_error::ErrorKind, request::RpcError};
 use solana_sdk::{instruction::InstructionError, pubkey::Pubkey, transaction::TransactionError};
 
 use omni_connector::OmniConnector;
-use omni_types::{ChainKind, FastTransfer, OmniAddress, TransferId, near_events::OmniBridgeEvent};
+use omni_types::{
+    ChainKind, FastTransfer, Fee, OmniAddress, TransferId, near_events::OmniBridgeEvent,
+};
 
 use crate::{config, utils, workers::PAUSED_ERROR};
 
@@ -479,10 +481,18 @@ pub async fn process_fast_transfer_event(
     };
 
     let Ok(amount) = near_fast_bridge_client
-        .denormalize_amount(token_omni_address, amount)
+        .denormalize_amount(token_omni_address.clone(), amount)
         .await
     else {
         warn!("Failed to denormalize amount for token: {token_id}");
+        return Ok(EventAction::Retry);
+    };
+
+    let Ok(transferred_fee) = near_fast_bridge_client
+        .denormalize_amount(token_omni_address, fee.fee.0)
+        .await
+    else {
+        warn!("Failed to denormalize fee for token: {token_id}");
         return Ok(EventAction::Retry);
     };
 
@@ -494,7 +504,7 @@ pub async fn process_fast_transfer_event(
         return Ok(EventAction::Retry);
     };
 
-    if balance < amount {
+    if balance.saturating_add(transferred_fee) < amount {
         anyhow::bail!(
             "Insufficient balance for relayer to perform fast transfer: {relayer} for token: {token_id}"
         );
@@ -505,7 +515,10 @@ pub async fn process_fast_transfer_event(
         amount,
         transfer_id,
         recipient,
-        fee,
+        fee: Fee {
+            fee: transferred_fee.into(),
+            native_fee: fee.native_fee,
+        },
         msg: msg.clone(),
         storage_deposit_amount: storage_deposit_amount.map(|amount| amount.0),
         relayer,
