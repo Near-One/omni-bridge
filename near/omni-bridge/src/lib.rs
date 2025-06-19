@@ -1450,10 +1450,6 @@ impl Contract {
         let fast_transfer = FastTransfer::from_transfer(transfer_message.clone(), token.clone());
         let recipient = match self.get_fast_transfer_status(&fast_transfer.id()) {
             Some(status) => {
-                require!(
-                    predecessor_account_id == status.relayer,
-                    "ERR_FAST_TRANSFER_PERFORMED_BY_ANOTHER_RELAYER"
-                );
                 require!(!status.finalised, "ERR_FAST_TRANSFER_ALREADY_FINALISED");
                 Some(status.relayer)
             }
