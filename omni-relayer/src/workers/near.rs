@@ -362,6 +362,8 @@ pub async fn process_unverified_transfer_event(
 pub async fn process_fast_transfer_event(
     connector: Arc<OmniConnector>,
     near_fast_bridge_client: Arc<near_bridge_client::NearBridgeClient>,
+    evm_bridge_client: evm_bridge_client::EvmBridgeClient,
+    tx_hash: &str,
     transfer: Transfer,
     near_fast_nonce: Arc<utils::nonce::NonceManager>,
 ) -> Result<EventAction> {
@@ -389,23 +391,6 @@ pub async fn process_fast_transfer_event(
             "Fast transfer is supported only for transfers to NEAR for now, got: {:?}",
             recipient.get_chain()
         );
-    }
-
-    let Ok(last_finalized_block_number) = connector
-        .evm_get_last_block_number(transfer_id.origin_chain)
-        .await
-    else {
-        warn!("Failed to get last finalized block number for EVM chain");
-        return Ok(EventAction::Retry);
-    };
-
-    let current_confirmations = last_finalized_block_number.saturating_sub(block_number);
-
-    if current_confirmations < safe_confirmations {
-        warn!(
-            "Fast transfer block number ({block_number}) is not finalized yet, waiting for more confirmations. Current confirmations: {current_confirmations}",
-        );
-        return Ok(EventAction::Retry);
     }
 
     info!("Trying to initiate FastTransfer on NEAR");
@@ -437,9 +422,44 @@ pub async fn process_fast_transfer_event(
         Ok(true) => anyhow::bail!("Fast transfer is already finalised: {:?}", transfer),
         Ok(false) => {}
         Err(err) => {
+            warn!("Failed to check if fast transfer is finalised: {err:?}");
+            return Ok(EventAction::Retry);
+        }
+    }
+
+    match connector.near_is_transfer_finalised(transfer_id).await {
+        Ok(true) => anyhow::bail!("Transfer is already finalised: {:?}", transfer),
+        Ok(false) => {}
+        Err(err) => {
             warn!("Failed to check if transfer is finalised: {err:?}");
             return Ok(EventAction::Retry);
         }
+    }
+
+    let Ok(tx_hash) = tx_hash.parse() else {
+        anyhow::bail!("Failed to parse tx_hash: {tx_hash}");
+    };
+
+    if let Err(err) = evm_bridge_client.get_transfer_event(tx_hash).await {
+        warn!("Failed to get transfer event for tx_hash {tx_hash}: {err:?}");
+        return Ok(EventAction::Retry);
+    }
+
+    let Ok(last_finalized_block_number) = connector
+        .evm_get_last_block_number(transfer_id.origin_chain)
+        .await
+    else {
+        warn!("Failed to get last finalized block number for EVM chain");
+        return Ok(EventAction::Retry);
+    };
+
+    let current_confirmations = last_finalized_block_number.saturating_sub(block_number);
+
+    if current_confirmations < safe_confirmations {
+        warn!(
+            "Fast transfer block number ({block_number}) is not finalized yet, waiting for more confirmations. Current confirmations: {current_confirmations}",
+        );
+        return Ok(EventAction::Retry);
     }
 
     let relayer = near_fast_bridge_client
