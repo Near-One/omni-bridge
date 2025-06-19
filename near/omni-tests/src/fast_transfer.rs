@@ -475,16 +475,19 @@ mod tests {
             .call(env.bridge_contract.id(), "fin_transfer")
             .args_borsh(FinTransferArgs {
                 chain_kind: omni_types::ChainKind::Eth,
-                storage_deposit_actions: vec![storage_deposit_action.clone(), storage_deposit_action],
+                storage_deposit_actions: vec![
+                    storage_deposit_action.clone(),
+                    storage_deposit_action,
+                ],
                 prover_args: borsh::to_vec(&ProverResult::InitTransfer(transfer_msg)).unwrap(),
             })
             .deposit(attached_deposit)
             .max_gas()
             .transact()
             .await?
-            .into_result();
+            .into_result()?;
 
-        Ok(result?)
+        Ok(result)
     }
 
     async fn get_balance(
@@ -512,7 +515,8 @@ mod tests {
             let transfer_amount = 100_000_000;
             let fee = 1_000_000;
             let decimal_diff = 6;
-            let (_, fast_transfer_msg) = get_transfer_to_near_msg(&env, transfer_amount, fee, decimal_diff);
+            let (_, fast_transfer_msg) =
+                get_transfer_to_near_msg(&env, transfer_amount, fee, decimal_diff);
 
             let relayer_balance_before =
                 get_balance(&env.token_contract, env.relayer_account.id()).await?;
@@ -580,15 +584,17 @@ mod tests {
             let transfer_amount = 100_000_000;
             let fee = 1_000_000;
             let decimal_diff = 6;
-            let (_, mut fast_transfer_msg) = get_transfer_to_near_msg(&env, transfer_amount, fee, decimal_diff);
+            let (_, mut fast_transfer_msg) =
+                get_transfer_to_near_msg(&env, transfer_amount, fee, decimal_diff);
             fast_transfer_msg.origin_amount = U128(100_000_000);
 
             let result = do_fast_transfer(&env, transfer_amount, fast_transfer_msg).await?;
 
             assert_eq!(1, result.failures().len());
             let failure = result.failures()[0].clone().into_result();
-            assert!(failure
-                .is_err_and(|err| { format!("{err:?}").contains("ERR_INVALID_FAST_TRANSFER_AMOUNT") }));
+            assert!(failure.is_err_and(|err| {
+                format!("{err:?}").contains("ERR_INVALID_FAST_TRANSFER_AMOUNT")
+            }));
 
             Ok(())
         }
@@ -600,15 +606,17 @@ mod tests {
             let transfer_amount = 100_000_000;
             let fee = 1_000_000;
             let decimal_diff = 6;
-            let (_, mut fast_transfer_msg) = get_transfer_to_near_msg(&env, transfer_amount, fee, decimal_diff);
+            let (_, mut fast_transfer_msg) =
+                get_transfer_to_near_msg(&env, transfer_amount, fee, decimal_diff);
             fast_transfer_msg.fee.fee = U128(2);
 
             let result = do_fast_transfer(&env, transfer_amount, fast_transfer_msg).await?;
 
             assert_eq!(1, result.failures().len());
             let failure = result.failures()[0].clone().into_result();
-            assert!(failure
-                .is_err_and(|err| { format!("{err:?}").contains("ERR_INVALID_FAST_TRANSFER_AMOUNT") }));
+            assert!(failure.is_err_and(|err| {
+                format!("{err:?}").contains("ERR_INVALID_FAST_TRANSFER_AMOUNT")
+            }));
 
             Ok(())
         }
@@ -656,7 +664,8 @@ mod tests {
 
             let transfer_amount = 100_000_000;
             let decimal_diff = 6;
-            let (_, fast_transfer_msg) = get_transfer_to_near_msg(&env, transfer_amount, 0, decimal_diff);
+            let (_, fast_transfer_msg) =
+                get_transfer_to_near_msg(&env, transfer_amount, 0, decimal_diff);
 
             do_fast_transfer(&env, transfer_amount, fast_transfer_msg.clone()).await?;
 
@@ -672,7 +681,8 @@ mod tests {
 
             let transfer_amount = transfer_amount + 10_000_000;
             let decimal_diff = 6;
-            let (_, fast_transfer_msg) = get_transfer_to_near_msg(&env, transfer_amount, 0, decimal_diff);
+            let (_, fast_transfer_msg) =
+                get_transfer_to_near_msg(&env, transfer_amount, 0, decimal_diff);
 
             let result = do_fast_transfer(&env, transfer_amount, fast_transfer_msg).await?;
 
@@ -703,7 +713,8 @@ mod tests {
 
             let transfer_amount = 100_000_000;
             let decimal_diff = 6;
-            let (_, fast_transfer_msg) = get_transfer_to_near_msg(&env, transfer_amount, 0, decimal_diff);
+            let (_, fast_transfer_msg) =
+                get_transfer_to_near_msg(&env, transfer_amount, 0, decimal_diff);
 
             do_fast_transfer(&env, transfer_amount, fast_transfer_msg.clone()).await?;
 
@@ -791,7 +802,8 @@ mod tests {
             let transfer_amount = 100_000_000;
             let fee = 1_000_000;
             let decimal_diff = 6;
-            let (transfer_msg, fast_transfer_msg) = get_transfer_to_near_msg(&env, transfer_amount, fee, decimal_diff);
+            let (transfer_msg, fast_transfer_msg) =
+                get_transfer_to_near_msg(&env, transfer_amount, fee, decimal_diff);
 
             do_fast_transfer(&env, transfer_amount, fast_transfer_msg.clone()).await?;
 
@@ -820,7 +832,8 @@ mod tests {
 
             let transfer_amount = 100_000_000;
             let decimal_diff = 6;
-            let (transfer_msg, fast_transfer_msg) = get_transfer_to_near_msg(&env, transfer_amount, 0, decimal_diff);
+            let (transfer_msg, fast_transfer_msg) =
+                get_transfer_to_near_msg(&env, transfer_amount, 0, decimal_diff);
 
             do_fast_transfer(&env, transfer_amount, fast_transfer_msg.clone()).await?;
 
@@ -828,7 +841,6 @@ mod tests {
             let result = do_fin_transfer(&env, transfer_msg).await;
 
             assert!(result.is_err_and(|err| {
-                println!("err: {err:?}");
                 format!("{err:?}").contains("The transfer is already finalised")
             }));
 
@@ -846,8 +858,9 @@ mod tests {
             let transfer_amount = 100_000_000;
             let fee = 1_000_000;
             let decimal_diff = 6;
-            let (_, fast_transfer_msg) = get_transfer_to_other_chain_msg(&env, transfer_amount, fee, decimal_diff);
- 
+            let (_, fast_transfer_msg) =
+                get_transfer_to_other_chain_msg(&env, transfer_amount, fee, decimal_diff);
+
             let relayer_balance_before =
                 get_balance(&env.token_contract, env.relayer_account.id()).await?;
             let contract_balance_before =
@@ -855,7 +868,6 @@ mod tests {
 
             let result = do_fast_transfer(&env, transfer_amount, fast_transfer_msg.clone()).await?;
 
-            println!("result: {:?}", result);
             assert_eq!(0, result.failures().len());
 
             //get_transfer_message
@@ -906,7 +918,8 @@ mod tests {
             let env = TestEnv::new_with_bridged_token().await?;
 
             let transfer_amount = 100_000_000;
-            let (_, fast_transfer_msg) = get_transfer_to_other_chain_msg(&env, transfer_amount, 0, 0);
+            let (_, fast_transfer_msg) =
+                get_transfer_to_other_chain_msg(&env, transfer_amount, 0, 0);
 
             let relayer_balance_before =
                 get_balance(&env.token_contract, env.relayer_account.id()).await?;
@@ -939,7 +952,8 @@ mod tests {
 
             let transfer_amount = 100_000_000;
             let decimal_diff = 6;
-            let (_, fast_transfer_msg) = get_transfer_to_other_chain_msg(&env, transfer_amount, 0, decimal_diff);
+            let (_, fast_transfer_msg) =
+                get_transfer_to_other_chain_msg(&env, transfer_amount, 0, decimal_diff);
 
             do_fast_transfer(&env, transfer_amount, fast_transfer_msg.clone()).await?;
 
@@ -973,7 +987,8 @@ mod tests {
             let env = TestEnv::new_with_bridged_token().await?;
 
             let transfer_amount = 100_000_000;
-            let (transfer_msg, fast_transfer_msg) = get_transfer_to_other_chain_msg(&env, transfer_amount, 0, 0);
+            let (transfer_msg, fast_transfer_msg) =
+                get_transfer_to_other_chain_msg(&env, transfer_amount, 0, 0);
 
             do_fin_transfer(&env, transfer_msg).await?;
 
@@ -1013,7 +1028,8 @@ mod tests {
 
             let transfer_amount = 100_000_000;
             let decimal_diff = 6;
-            let (transfer_msg, fast_transfer_msg) = get_transfer_to_other_chain_msg(&env, transfer_amount, 0, decimal_diff);
+            let (transfer_msg, fast_transfer_msg) =
+                get_transfer_to_other_chain_msg(&env, transfer_amount, 0, decimal_diff);
 
             do_fast_transfer(&env, transfer_amount, fast_transfer_msg.clone()).await?;
 
@@ -1053,7 +1069,8 @@ mod tests {
 
             let transfer_amount = 100_000_000;
             let decimal_diff = 6;
-            let (transfer_msg, fast_transfer_msg) = get_transfer_to_other_chain_msg(&env, transfer_amount, 0, decimal_diff);
+            let (transfer_msg, fast_transfer_msg) =
+                get_transfer_to_other_chain_msg(&env, transfer_amount, 0, decimal_diff);
 
             do_fast_transfer(&env, transfer_amount, fast_transfer_msg.clone()).await?;
 
