@@ -205,7 +205,6 @@ pub struct Contract {
     pub destination_nonces: LookupMap<ChainKind, Nonce>,
     pub accounts_balances: LookupMap<AccountId, StorageBalance>,
     pub wnear_account_id: AccountId,
-    pub btc_account_id: AccountId,
     pub btc_connector: AccountId,
 }
 
@@ -270,7 +269,6 @@ impl Contract {
         prover_account: AccountId,
         mpc_signer: AccountId,
         wnear_account_id: AccountId,
-        btc_account_id: AccountId,
         btc_connector: AccountId,
     ) -> Self {
         let mut contract = Self {
@@ -289,7 +287,6 @@ impl Contract {
             destination_nonces: LookupMap::new(StorageKey::DestinationNonces),
             accounts_balances: LookupMap::new(StorageKey::AccountsBalances),
             wnear_account_id,
-            btc_account_id,
             btc_connector
         };
 
@@ -510,7 +507,8 @@ impl Contract {
         }
 
         require!(transfer.message.get_destination_chain() == ChainKind::Btc, "Incorrect destination chain");
-        require!(self.get_token_id(&transfer.message.token) == self.btc_account_id, "BTC account id");
+        let btc_account_id = self.get_native_token_id(ChainKind::Btc);
+        require!(self.get_token_id(&transfer.message.token) == btc_account_id, "BTC account id");
 
         ext_btc_connector::ext(self.btc_connector.clone())
             .with_static_gas(LIST_UTXOS_GAS)
@@ -546,8 +544,9 @@ impl Contract {
 
         transfer.message.btc_tx_hash = Some(btc_tx_hash);
         self.insert_raw_transfer(transfer.message.clone(), transfer.owner);
+        let btc_account_id = self.get_native_token_id(ChainKind::Btc);
 
-        ext_token::ext(self.btc_account_id.clone())
+        ext_token::ext(btc_account_id)
             .with_attached_deposit(ONE_YOCTO)
             .with_static_gas(FT_TRANSFER_CALL_GAS)
             .ft_transfer_call(self.btc_connector.clone(), amount, None, msg)
@@ -1581,7 +1580,8 @@ impl Contract {
     ) {
         let mut required_balance = self.add_fin_transfer(&transfer_message.get_transfer_id());
         let token = self.get_token_id(&transfer_message.token);
-        assert_eq!(token, self.btc_account_id);
+        let btc_account_id = self.get_native_token_id(ChainKind::Btc);
+        assert_eq!(token, btc_account_id);
 
         required_balance = self
             .add_transfer_message(transfer_message.clone(), predecessor_account_id.clone())
