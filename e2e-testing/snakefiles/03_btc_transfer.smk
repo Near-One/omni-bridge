@@ -228,6 +228,27 @@ rule omni_bridge_storage_deposit:
     {params.extract_tx}
     """
 
+rule set_native_token:
+    message: "Set BTC token as a native token to Omni Bridge"
+    input:
+        omni_bridge_file = omni_bridge_file,
+        nbtc_file = nbtc_file,
+        init_account_file = near_init_account_file
+    output: call_dir / "set_native_token.json"
+    params:
+        scripts_dir = const.common_scripts_dir,
+        omni_bridge_account = lambda wc, input: get_json_field(input.omni_bridge_file, "contract_id"),
+        nbtc_account = lambda wc, input: get_json_field(input.nbtc_file, "contract_id"),
+    shell: """
+    {params.scripts_dir}/call-near-contract.sh -c {params.omni_bridge_account} \
+        -m set_native_token \
+        -a '{{\"chain_kind\": \"Btc\", \"token_id\": \"{params.nbtc_account}\", \"decimals\": 8}}' \
+        -f {input.init_account_file}  \
+        -d "1 NEAR" \
+        -n testnet 2>&1 | tee {output} && \
+        TX_HASH=$(grep -o 'Transaction ID: [^ ]*' {output} | cut -d' ' -f3) && \
+        echo '{{\"tx_hash\": \"'$TX_HASH'\"}}' > {output}
+    """
 
 rule ft_transfer_btc_to_omni_bridge:
     message: "Init BTC transfer to OmniBridge on Near"
@@ -237,6 +258,7 @@ rule ft_transfer_btc_to_omni_bridge:
         nbtc_file = nbtc_file,
         omni_bridge_file = omni_bridge_file,
         user_account_file = user_account_file
+        set_native_token = rules.set_native_token.output,
     output: call_dir / "07_ft_transfer_btc_to_omni_bridge.json"
     params:
         scripts_dir = const.common_scripts_dir,
@@ -307,28 +329,6 @@ rule sign_btc_connector_transfer:
          > {output} \
     """
 
-rule set_native_token:
-    message: "Set BTC token as a native token to Omni Bridge"
-    input:
-        omni_bridge_file = omni_bridge_file,
-        nbtc_file = nbtc_file,
-        init_account_file = near_init_account_file
-    output: call_dir / "set_native_token.json"
-    params:
-        scripts_dir = const.common_scripts_dir,
-        omni_bridge_account = lambda wc, input: get_json_field(input.omni_bridge_file, "contract_id"),
-        nbtc_account = lambda wc, input: get_json_field(input.nbtc_file, "contract_id"),
-    shell: """
-    {params.scripts_dir}/call-near-contract.sh -c {params.omni_bridge_account} \
-        -m set_native_token \
-        -a '{{\"chain_kind\": \"Btc\", \"token_id\": \"{params.nbtc_account}\", \"decimals\": 8}}' \
-        -f {input.init_account_file}  \
-        -d "1 NEAR" \
-        -n testnet 2>&1 | tee {output} && \
-        TX_HASH=$(grep -o 'Transaction ID: [^ ]*' {output} | cut -d' ' -f3) && \
-        echo '{{\"tx_hash\": \"'$TX_HASH'\"}}' > {output}
-    """
-
 rule send_btc_transfer:
     message: "Send BTC transfer"
     input:
@@ -355,7 +355,6 @@ rule claim_fee:
         user_account_file = user_account_file,
         omni_bridge_file = omni_bridge_file,
         prover_setup = rules.near_btc_prover_setup.output,
-        set_native_token = rules.set_native_token.output,
     output: call_dir / "11_claim_fee.json"
     params:
         btc_tx_hash = lambda wc, input: get_last_value(input.step_10),
