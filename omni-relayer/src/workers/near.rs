@@ -4,7 +4,7 @@ use anyhow::{Context, Result};
 use bridge_connector_common::result::BridgeSdkError;
 use log::{info, warn};
 
-use near_bridge_client::TransactionOptions;
+use near_bridge_client::{FastFinTransferArgs, TransactionOptions};
 use near_jsonrpc_client::{JsonRpcClient, errors::JsonRpcError};
 use near_primitives::{hash::CryptoHash, types::AccountId};
 use near_rpc_client::NearRpcError;
@@ -13,7 +13,9 @@ use solana_rpc_client_api::{client_error::ErrorKind, request::RpcError};
 use solana_sdk::{instruction::InstructionError, pubkey::Pubkey, transaction::TransactionError};
 
 use omni_connector::OmniConnector;
-use omni_types::{ChainKind, OmniAddress, TransferId, near_events::OmniBridgeEvent};
+use omni_types::{
+    ChainKind, FastTransfer, Fee, OmniAddress, TransferId, near_events::OmniBridgeEvent,
+};
 
 use crate::{config, utils, workers::PAUSED_ERROR};
 
@@ -134,6 +136,7 @@ pub async fn process_transfer_event(
                             .to_string(),
                         "Signature request has timed out.".to_string(),
                         "Attached deposit is lower than required".to_string(),
+                        "Exceeded the prepaid gas.".to_string(),
                     ]),
                     original_key: key,
                     original_event: transfer,
@@ -356,5 +359,211 @@ pub async fn process_unverified_transfer_event(
             unverified_event.original_event,
         )
         .await;
+    }
+}
+
+pub async fn process_fast_transfer_event(
+    connector: Arc<OmniConnector>,
+    near_fast_bridge_client: Arc<near_bridge_client::NearBridgeClient>,
+    tx_hash: &str,
+    transfer: Transfer,
+    near_fast_nonce: Arc<utils::nonce::NonceManager>,
+) -> Result<EventAction> {
+    let Transfer::Fast {
+        block_number,
+        token,
+        amount,
+        transfer_id,
+        recipient,
+        fee,
+        msg,
+        storage_deposit_amount,
+        safe_confirmations,
+    } = transfer.clone()
+    else {
+        anyhow::bail!("Expected FastTransferEvent, got: {:?}", transfer);
+    };
+
+    // TODO: Fast transfer to other chain increases origin nonce by one, so regular relayer won't
+    // be able to finalize it with a normal sign transfer. We need to catch and sign
+    // `FastTransferEvent`. This will be possible once bridge-indexer will track these events
+    // Related PR: https://github.com/Near-One/bridge-indexer-rs/pull/195
+    if recipient.get_chain() != ChainKind::Near {
+        anyhow::bail!(
+            "Fast transfer is supported only for transfers to NEAR for now, got: {:?}",
+            recipient.get_chain()
+        );
+    }
+
+    info!("Trying to initiate FastTransfer on NEAR");
+
+    let Ok(token_id) = utils::storage::get_token_id(
+        &near_fast_bridge_client.clone(),
+        transfer_id.origin_chain,
+        &token,
+    )
+    .await
+    else {
+        warn!("Failed to get token id for transfer: {transfer_id:?}");
+        return Ok(EventAction::Retry);
+    };
+
+    let fast_transfer = FastTransfer {
+        transfer_id,
+        token_id: token_id.clone(),
+        amount,
+        fee: fee.clone(),
+        recipient: recipient.clone(),
+        msg: msg.clone(),
+    };
+
+    match connector
+        .near_is_fast_transfer_finalised(fast_transfer.id())
+        .await
+    {
+        Ok(true) => anyhow::bail!("Fast transfer is already finalised: {:?}", transfer),
+        Ok(false) => {}
+        Err(err) => {
+            warn!("Failed to check if fast transfer is finalised: {err:?}");
+            return Ok(EventAction::Retry);
+        }
+    }
+
+    match connector.near_is_transfer_finalised(transfer_id).await {
+        Ok(true) => anyhow::bail!("Transfer is already finalised: {:?}", transfer),
+        Ok(false) => {}
+        Err(err) => {
+            warn!("Failed to check if transfer is finalised: {err:?}");
+            return Ok(EventAction::Retry);
+        }
+    }
+
+    let Ok(tx_hash) = tx_hash.parse() else {
+        anyhow::bail!("Failed to parse tx_hash: {tx_hash}");
+    };
+
+    if let Err(err) = connector
+        .evm_get_transfer_event(transfer_id.origin_chain, tx_hash)
+        .await
+    {
+        warn!("Failed to get transfer event for tx_hash {tx_hash}: {err:?}");
+        return Ok(EventAction::Retry);
+    }
+
+    let Ok(last_finalized_block_number) = connector
+        .evm_get_last_block_number(transfer_id.origin_chain)
+        .await
+    else {
+        warn!("Failed to get last finalized block number for EVM chain");
+        return Ok(EventAction::Retry);
+    };
+
+    let current_confirmations = last_finalized_block_number.saturating_sub(block_number);
+
+    if current_confirmations < safe_confirmations {
+        warn!(
+            "Fast transfer block number ({block_number}) is not finalized yet, waiting for more confirmations. Current confirmations: {current_confirmations}",
+        );
+        return Ok(EventAction::Retry);
+    }
+
+    let relayer = near_fast_bridge_client
+        .account_id()
+        .context("Failed to get relayer account id")?;
+
+    let Ok(token_omni_address) =
+        utils::evm::string_to_evm_omniaddress(transfer_id.origin_chain, &token)
+    else {
+        anyhow::bail!("Failed to convert token address to OmniAddress: {token}");
+    };
+
+    let Ok(transferred_fee) = near_fast_bridge_client
+        .denormalize_amount(token_omni_address.clone(), fee.fee.0)
+        .await
+    else {
+        warn!("Failed to denormalize fee for token: {token_id}");
+        return Ok(EventAction::Retry);
+    };
+
+    let Ok(amount) = near_fast_bridge_client
+        .denormalize_amount(token_omni_address, amount.0)
+        .await
+    else {
+        warn!("Failed to denormalize amount for token: {token_id}");
+        return Ok(EventAction::Retry);
+    };
+
+    let Some(amount) = amount.checked_sub(transferred_fee) else {
+        anyhow::bail!(
+            "Amount ({amount:?}) is less than fee ({transferred_fee:?}) for token: {token_id}"
+        );
+    };
+
+    let Ok(balance) = near_fast_bridge_client
+        .ft_balance_of(token_id.clone(), relayer.clone())
+        .await
+    else {
+        warn!("Failed to get balance of relayer: {relayer} for token: {token_id}");
+        return Ok(EventAction::Retry);
+    };
+
+    if balance < amount {
+        anyhow::bail!(
+            "Insufficient balance for relayer to perform fast transfer: {relayer} for token: {token_id}"
+        );
+    }
+
+    let fast_fin_transfer_args = FastFinTransferArgs {
+        token_id,
+        amount,
+        transfer_id,
+        recipient,
+        fee: Fee {
+            fee: transferred_fee.into(),
+            native_fee: fee.native_fee,
+        },
+        msg: msg.clone(),
+        storage_deposit_amount: storage_deposit_amount.map(|amount| amount.0),
+        relayer,
+    };
+
+    let nonce = Some(
+        near_fast_nonce
+            .reserve_nonce()
+            .await
+            .context("Failed to reserve nonce for near transaction")?,
+    );
+
+    match near_fast_bridge_client
+        .fast_fin_transfer(
+            fast_fin_transfer_args,
+            TransactionOptions {
+                nonce,
+                wait_until: near_primitives::views::TxExecutionStatus::Included,
+                wait_final_outcome_timeout_sec: None,
+            },
+        )
+        .await
+    {
+        Ok(tx_hash) => {
+            info!("Fast transfer initiated successfully: {tx_hash:?}");
+            Ok(EventAction::Remove)
+        }
+        Err(err) => {
+            if let BridgeSdkError::NearRpcError(near_rpc_error) = err {
+                match near_rpc_error {
+                    NearRpcError::NonceError
+                    | NearRpcError::FinalizationError
+                    | NearRpcError::RpcTransactionError(JsonRpcError::TransportError(_)) => {
+                        warn!("Failed to initiate fast transfer, retrying: {near_rpc_error:?}");
+                        return Ok(EventAction::Retry);
+                    }
+                    _ => {
+                        anyhow::bail!("Failed to initiate fast transfer: {near_rpc_error:?}");
+                    }
+                };
+            }
+            anyhow::bail!("Failed to initiate fast transfer: {err:?}");
+        }
     }
 }

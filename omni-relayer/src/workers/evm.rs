@@ -12,7 +12,12 @@ use near_primitives::views::TxExecutionStatus;
 use near_rpc_client::NearRpcError;
 
 use omni_connector::OmniConnector;
-use omni_types::{ChainKind, Fee, TransferId, locker_args::ClaimFeeArgs, prover_result::ProofKind};
+use omni_types::{
+    ChainKind, FastTransfer, Fee, OmniAddress, TransferId,
+    locker_args::{ClaimFeeArgs, FinTransferArgs},
+    prover_args::{EvmVerifyProofArgs, WormholeVerifyProofArgs},
+    prover_result::ProofKind,
+};
 
 use crate::{
     config, utils,
@@ -21,14 +26,15 @@ use crate::{
 
 use super::{EventAction, Transfer};
 
+#[allow(clippy::too_many_lines)]
 pub async fn process_init_transfer_event(
     config: config::Config,
-    redis_connection: &mut redis::aio::MultiplexedConnection,
-    key: String,
     connector: Arc<OmniConnector>,
+    near_fast_bridge_client: Option<Arc<near_bridge_client::NearBridgeClient>>,
     jsonrpc_client: near_jsonrpc_client::JsonRpcClient,
     transfer: Transfer,
-    near_nonce: Arc<utils::nonce::NonceManager>,
+    near_omni_nonce: Arc<utils::nonce::NonceManager>,
+    near_fast_nonce: Option<Arc<utils::nonce::NonceManager>>,
 ) -> Result<EventAction> {
     let Transfer::Evm {
         chain_kind,
@@ -159,10 +165,79 @@ pub async fn process_init_transfer_event(
         }
     }
 
+    let Ok(mut near_bridge_client) = connector.near_bridge_client().cloned() else {
+        anyhow::bail!("Failed to get near bridge client");
+    };
+
+    let mut nonce = None;
+    let mut recipient = log.recipient.clone();
+    if let Some(near_fast_bridge_client) = near_fast_bridge_client {
+        let Ok(token_id) = utils::storage::get_token_id(
+            &near_fast_bridge_client.clone(),
+            transfer_id.origin_chain,
+            &log.token_address.to_string(),
+        )
+        .await
+        else {
+            warn!("Failed to get token id for transfer: {transfer_id:?}");
+            return Ok(EventAction::Retry);
+        };
+
+        let fast_transfer_args = FastTransfer {
+            transfer_id,
+            token_id,
+            amount: log.amount,
+            fee: Fee {
+                fee: log.fee,
+                native_fee: log.native_fee,
+            },
+            recipient: log.recipient.clone(),
+            msg: log.message.clone(),
+        };
+
+        let Ok(fast_transfer_status) = near_fast_bridge_client
+            .get_fast_transfer_status(fast_transfer_args.id())
+            .await
+        else {
+            warn!("Failed to get fast transfer status for transfer: {transfer_id:?}");
+            return Ok(EventAction::Retry);
+        };
+
+        if let Some(status) = fast_transfer_status {
+            let relayer = near_fast_bridge_client.account_id().map_err(|_| {
+                anyhow::anyhow!("Failed to get relayer account id for near fast bridge client")
+            })?;
+            if status.finalised && status.relayer == relayer {
+                recipient = OmniAddress::Near(relayer);
+                near_bridge_client = (*near_fast_bridge_client).clone();
+                if let Some(near_fast_nonce) = near_fast_nonce {
+                    nonce = Some(
+                        near_fast_nonce
+                            .reserve_nonce()
+                            .await
+                            .context("Failed to reserve nonce for near transaction")?,
+                    );
+                } else {
+                    warn!("Near fast nonce is not available");
+                    return Ok(EventAction::Retry);
+                }
+            }
+        }
+    }
+
+    if nonce.is_none() {
+        nonce = Some(
+            near_omni_nonce
+                .reserve_nonce()
+                .await
+                .context("Failed to reserve nonce for near transaction")?,
+        );
+    }
+
     let storage_deposit_actions = match utils::storage::get_storage_deposit_actions(
-        &connector,
+        &near_bridge_client,
         chain_kind,
-        &log.recipient,
+        &recipient,
         &log.token_address.to_string(),
         log.fee.0,
         log.native_fee.0,
@@ -171,41 +246,55 @@ pub async fn process_init_transfer_event(
     {
         Ok(actions) => actions,
         Err(err) => {
-            utils::redis::add_event(redis_connection, utils::redis::EVENTS, key, transfer).await;
-            anyhow::bail!("Failed to get storage deposit actions: {}", err);
+            warn!("Failed to get storage deposit actions: {err}");
+            return Ok(EventAction::Retry);
         }
     };
-
-    let nonce = near_nonce
-        .reserve_nonce()
-        .await
-        .context("Failed to reserve nonce for near transaction")?;
 
     let fin_transfer_args = if let Some(vaa) = vaa {
-        omni_connector::FinTransferArgs::NearFinTransferWithVaa {
+        let verify_proof_args = WormholeVerifyProofArgs {
+            proof_kind: ProofKind::InitTransfer,
+            vaa,
+        };
+
+        FinTransferArgs {
             chain_kind,
             storage_deposit_actions,
-            vaa,
-            transaction_options: TransactionOptions {
-                nonce: Some(nonce),
-                wait_until: TxExecutionStatus::Included,
-                wait_final_outcome_timeout_sec: None,
-            },
+            prover_args: borsh::to_vec(&verify_proof_args).map_err(|_| {
+                BridgeSdkError::EthProofError("Failed to serialize proof".to_string())
+            })?,
         }
     } else {
-        omni_connector::FinTransferArgs::NearFinTransferWithEvmProof {
+        let proof = connector
+            .evm_bridge_client(chain_kind)?
+            .get_proof_for_event(transaction_hash, ProofKind::InitTransfer)
+            .await?;
+
+        let verify_proof_args = EvmVerifyProofArgs {
+            proof_kind: ProofKind::InitTransfer,
+            proof,
+        };
+
+        FinTransferArgs {
             chain_kind,
-            tx_hash: transaction_hash,
             storage_deposit_actions,
-            transaction_options: TransactionOptions {
-                nonce: Some(nonce),
-                wait_until: TxExecutionStatus::Included,
-                wait_final_outcome_timeout_sec: None,
-            },
+            prover_args: borsh::to_vec(&verify_proof_args).map_err(|_| {
+                BridgeSdkError::EthProofError("Failed to serialize proof".to_string())
+            })?,
         }
     };
 
-    match connector.fin_transfer(fin_transfer_args).await {
+    match near_bridge_client
+        .fin_transfer(
+            fin_transfer_args,
+            TransactionOptions {
+                nonce,
+                wait_until: TxExecutionStatus::Included,
+                wait_final_outcome_timeout_sec: None,
+            },
+        )
+        .await
+    {
         Ok(tx_hash) => {
             info!("Finalized InitTransfer: {tx_hash:?}");
             Ok(EventAction::Remove)
