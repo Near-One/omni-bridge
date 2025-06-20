@@ -605,6 +605,7 @@ async fn process_near_transfer_event(
                             .to_string(),
                         "Signature request has timed out.".to_string(),
                         "Attached deposit is lower than required".to_string(),
+                        "Exceeded the prepaid gas.".to_string(),
                     ]),
                     original_key: key,
                     original_event: transfer,
