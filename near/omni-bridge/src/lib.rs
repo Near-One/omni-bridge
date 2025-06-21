@@ -639,10 +639,28 @@ impl Contract {
         storage_payer: AccountId,
         fast_fin_transfer_msg: FastFinTransferMsg,
     ) -> PromiseOrValue<U128> {
+        let origin_token = self
+            .get_token_address(
+                fast_fin_transfer_msg.transfer_id.origin_chain,
+                token_id.clone(),
+            )
+            .sdk_expect("ERR_TOKEN_NOT_FOUND");
+        let decimals = self
+            .token_decimals
+            .get(&origin_token)
+            .sdk_expect("ERR_TOKEN_DECIMALS_NOT_FOUND");
+
+        let total_amount =
+            Self::denormalize_amount(fast_fin_transfer_msg.origin_amount.0, decimals);
+        require!(
+            total_amount == amount.0 + fast_fin_transfer_msg.fee.fee.0,
+            "ERR_INVALID_FAST_TRANSFER_AMOUNT"
+        );
+
         let fast_transfer = FastTransfer {
             token_id: token_id.clone(),
             recipient: fast_fin_transfer_msg.recipient.clone(),
-            amount: U128(amount.0 + fast_fin_transfer_msg.fee.fee.0),
+            amount: U128(total_amount),
             fee: fast_fin_transfer_msg.fee,
             transfer_id: fast_fin_transfer_msg.transfer_id,
             msg: fast_fin_transfer_msg.msg,
