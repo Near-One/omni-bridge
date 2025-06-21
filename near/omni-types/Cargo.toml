@@ -15,10 +15,7 @@ ethereum-types.workspace = true
 rlp.workspace = true
 schemars.workspace = true
 num_enum.workspace = true
-alloy-sol-types = "0.8"
-alloy-sol-macro = "0.8"
-alloy-primitives = { version = "0.8", features = ["rlp"] }
-alloy-rlp = "0.3"
+alloy.workspace = true
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 sha3.workspace = true
