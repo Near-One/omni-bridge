@@ -519,6 +519,7 @@ impl Contract {
         fee: &Option<Fee>,
     ) -> Promise {
         let transfer = self.get_transfer_message_storage(transfer_id);
+
         let message = serde_json::from_str::<TokenReceiverMessage>(&msg).expect("INVALID MSG");
 
         let utxo_storage_keys = if let OmniAddress::Btc(btc_address) = transfer.message.recipient.clone() {
@@ -568,6 +569,12 @@ impl Contract {
         let amount = U128(transfer.message.amount.0 - transfer.message.fee.fee.0);
 
         let btc_tx_hash = if let TokenReceiverMessage::Withdraw{target_btc_address: _, input, output} = message {
+            let gas_fee = self.get_gas_fee(output.clone(), utxos.clone());
+            let max_fee = transfer.message.msg.parse::<u64>();
+            if let Ok(max_fee) = max_fee {
+                require!(gas_fee <= max_fee, "Gas fee exceeds max allowed fee");
+            }
+
             self.get_btc_tx_hash(input, output, utxos)
         } else {
             env::panic_str("Invalid message type");
@@ -589,6 +596,27 @@ impl Contract {
                     .with_static_gas(SUBMIT_TRANSFER_TO_BTC_CONNECTOR_CALLBACK_GAS)
                     .submit_transfer_to_btc_connector_callback(transfer_id),
             )
+    }
+
+    fn get_gas_fee(&self,
+                   output: Vec<TxOut>,
+                   vutxos: HashMap<String, Option<UTXO>>) -> u64 {
+        let sum_input: u64 = vutxos
+            .values()
+            .filter_map(|opt| opt.as_ref().map(|utxo| utxo.balance))
+            .sum();
+
+        let sum_output: u64 = output
+            .iter()
+            .map(|txout| txout.value.to_sat())
+            .sum();
+
+        assert!(
+            sum_input >= sum_output,
+            "Output value is greater than input — invalid transaction or negative fee"
+        );
+
+        sum_input - sum_output
     }
 
     fn get_utxo_storage_keys(inputs: Vec<OutPoint>) -> Vec<String> {
