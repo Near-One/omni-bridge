@@ -97,6 +97,7 @@ pub enum Role {
     UnrestrictedRelayer,
     TokenControllerUpdater,
     NativeFeeRestricted,
+    UnpauseManager,
 }
 
 #[ext_contract(ext_token)]
@@ -170,7 +171,7 @@ pub trait TokenDeployer {
 #[near(contract_state)]
 #[derive(Pausable, Upgradable, PanicOnDefault)]
 #[access_control(role_type(Role))]
-#[pausable(manager_roles(Role::PauseManager))]
+#[pausable(pause_roles(Role::PauseManager), unpause_roles(Role::UnpauseManager))]
 #[upgradable(access_control_roles(
     code_stagers(Role::UpgradableCodeStager, Role::DAO),
     code_deployers(Role::UpgradableCodeDeployer, Role::DAO),

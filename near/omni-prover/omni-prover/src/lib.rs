@@ -26,6 +26,7 @@ pub enum Role {
     DAO,
     ProversManager,
     UnrestrictedValidateProof,
+    UnpauseManager,
 }
 
 #[derive(BorshSerialize, near_sdk::BorshStorageKey)]
@@ -36,7 +37,10 @@ enum StorageKey {
 #[near(contract_state)]
 #[derive(PanicOnDefault, Pausable, Upgradable)]
 #[access_control(role_type(Role))]
-#[pausable(manager_roles(Role::PauseManager, Role::DAO))]
+#[pausable(
+    pause_roles(Role::PauseManager, Role::DAO),
+    unpause_roles(Role::UnpauseManager, Role::DAO)
+)]
 #[upgradable(access_control_roles(
     code_stagers(Role::UpgradableCodeStager, Role::DAO),
     code_deployers(Role::UpgradableCodeDeployer, Role::DAO),
