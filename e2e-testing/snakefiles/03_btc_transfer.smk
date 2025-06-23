@@ -275,7 +275,7 @@ rule ft_transfer_btc_to_omni_bridge:
         echo '{{\"tx_hash\": \"'$TX_HASH'\", \"contract_id\": \"{params.nbtc_account}\"}}' > {output}
     """
 
-rule sign_btc_transfer:
+rule submit_transfer_to_btc_connector:
     message: "Sign BTC transfer on OmniBridge"
     input:
        step_7 = rules.ft_transfer_btc_to_omni_bridge.output,
@@ -306,7 +306,7 @@ rule sign_btc_transfer:
 rule sign_btc_connector_transfer:
     message: "Sign BTC transfer on BtcConnectro"
     input:
-        step_8 = rules.sign_btc_transfer.output,
+        step_8 = rules.submit_transfer_to_btc_connector.output,
         btc_connector_file = btc_connector_file,
         omni_bridge_file = omni_bridge_file,
         user_account_file = user_account_file
