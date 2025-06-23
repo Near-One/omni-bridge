@@ -47,6 +47,8 @@ mod tests;
 
 const LOG_METADATA_GAS: Gas = Gas::from_tgas(10);
 const LOG_METADATA_CALLBACK_GAS: Gas = Gas::from_tgas(260);
+const SYNC_MPC_PUBLIC_KEY_GAS: Gas = Gas::from_tgas(10);
+const SYNC_MPC_PUBLIC_KEY_CALLBACK_GAS: Gas = Gas::from_tgas(10);
 const MPC_SIGNING_GAS: Gas = Gas::from_tgas(250);
 const SIGN_TRANSFER_CALLBACK_GAS: Gas = Gas::from_tgas(5);
 const SIGN_LOG_METADATA_CALLBACK_GAS: Gas = Gas::from_tgas(5);
@@ -146,9 +148,16 @@ pub trait ExtToken {
     );
 }
 
+#[near(serializers = [json])]
+#[derive(Clone)]
+pub struct BtcConfig {
+    pub chain_signatures_root_public_key: Option<near_sdk::PublicKey>,
+}
+
 #[ext_contract(ext_btc_connector)]
 pub trait BtcConnector {
     fn list_utxos(&self, utxo_storage_keys: Vec<String>) -> HashMap<String, Option<UTXO>>;
+    fn get_config(&self) -> BtcConfig;
 }
 
 #[ext_contract(ext_bridge_token_facory)]
@@ -206,6 +215,7 @@ pub struct Contract {
     pub accounts_balances: LookupMap<AccountId, StorageBalance>,
     pub wnear_account_id: AccountId,
     pub btc_connector: AccountId,
+    pub mpc_public_key: Option<near_sdk::PublicKey>,
 }
 
 #[near]
@@ -287,12 +297,34 @@ impl Contract {
             destination_nonces: LookupMap::new(StorageKey::DestinationNonces),
             accounts_balances: LookupMap::new(StorageKey::AccountsBalances),
             wnear_account_id,
-            btc_connector
+            btc_connector,
+            mpc_public_key: None
         };
 
         contract.acl_init_super_admin(near_sdk::env::predecessor_account_id());
         contract.acl_grant_role(Role::DAO.into(), near_sdk::env::predecessor_account_id());
         contract
+    }
+
+    #[pause(except(roles(Role::DAO)))]
+    pub fn sync_mpc_public_key(&self) -> Promise {
+        ext_btc_connector::ext(self.btc_connector.clone())
+            .with_static_gas(SYNC_MPC_PUBLIC_KEY_GAS)
+            .get_config()
+            .then(
+                Self::ext(env::current_account_id())
+                    .with_static_gas(SYNC_MPC_PUBLIC_KEY_CALLBACK_GAS)
+                    .sync_mpc_public_key_callback(),
+            )
+    }
+
+    #[private]
+    pub fn sync_mpc_public_key_callback(&mut self, #[callback_result] result: Result<BtcConfig, PromiseError>) {
+        if let Ok(config) = result {
+            self.mpc_public_key = config.chain_signatures_root_public_key;
+        } else {
+            env::panic_str("Failed to fetch config from BTC connector");
+        }
     }
 
     #[pause(except(roles(Role::DAO, Role::UnrestrictedRelayer)))]
@@ -1554,7 +1586,7 @@ impl Contract {
 impl Contract {
     pub fn generate_public_key(&self, path: &str) -> Vec<u8> {
         let mpc_pk = crypto_shared::near_public_key_to_affine_point(
-            "secp256k1:4NfTiv3UsGahebgTaHyD9vF8KYKMBnfd6kh94mK6xv8fGBiJB8TBtFMP5WWXz6B89Ac1fbpzPwAvoyQebemHFwx3".parse::<near_sdk::PublicKey>().expect("Invalid pubkey string")
+           self.mpc_public_key.clone().unwrap()
         );
         let epsilon = crypto_shared::derive_epsilon(&self.btc_connector, path);
         let user_pk = crypto_shared::derive_key(mpc_pk, epsilon);
