@@ -402,6 +402,7 @@ pub struct FastFinTransferMsg {
     pub recipient: OmniAddress,
     pub fee: Fee,
     pub msg: String,
+    pub origin_amount: U128,
     pub storage_deposit_amount: Option<U128>,
     pub relayer: AccountId,
 }
