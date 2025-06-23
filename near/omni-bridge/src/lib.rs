@@ -777,10 +777,13 @@ impl Contract {
                 storage_deposit_actions,
             )
             .into()
-        } else if let OmniAddress::Btc(_recipient) = transfer_message.recipient.clone() {
-            self.process_fin_transfer_to_btc(predecessor_account_id, transfer_message);
-            PromiseOrValue::Value(destination_nonce)
         } else {
+            if let OmniAddress::Btc(_) = transfer_message.recipient {
+                let token = self.get_token_id(&transfer_message.token);
+                let btc_account_id = self.get_native_token_id(ChainKind::Btc);
+                assert_eq!(token, btc_account_id);
+            }
+
             self.process_fin_transfer_to_other_chain(predecessor_account_id, transfer_message);
             PromiseOrValue::Value(destination_nonce)
         }
@@ -840,6 +843,11 @@ impl Contract {
                 ),
             )
         } else {
+            if let OmniAddress::Btc(_) = fast_fin_transfer_msg.recipient {
+                let btc_account_id = self.get_native_token_id(ChainKind::Btc);
+                assert_eq!(token_id, btc_account_id);
+            }
+
             self.fast_fin_transfer_to_other_chain(
                 &fast_transfer,
                 storage_payer,
@@ -1584,30 +1592,6 @@ impl Contract {
         self.destination_nonces.insert(&chain_kind, &payload_nonce);
 
         payload_nonce
-    }
-
-    #[allow(clippy::too_many_lines, clippy::ptr_arg)]
-    fn process_fin_transfer_to_btc(
-        &mut self,
-        predecessor_account_id: AccountId,
-        transfer_message: TransferMessage,
-    ) {
-        let mut required_balance = self.add_fin_transfer(&transfer_message.get_transfer_id());
-        let token = self.get_token_id(&transfer_message.token);
-        let btc_account_id = self.get_native_token_id(ChainKind::Btc);
-        assert_eq!(token, btc_account_id);
-
-        required_balance = self
-            .add_transfer_message(transfer_message.clone(), predecessor_account_id.clone())
-            .saturating_add(required_balance);
-
-        self.update_storage_balance(
-            predecessor_account_id,
-            required_balance,
-            env::attached_deposit(),
-        );
-
-        env::log_str(&OmniBridgeEvent::FinTransferEvent { transfer_message }.to_log_string());
     }
 
     #[allow(clippy::too_many_lines, clippy::ptr_arg)]
