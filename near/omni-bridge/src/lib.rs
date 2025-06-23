@@ -608,7 +608,7 @@ impl Contract {
             token: init_transfer.token,
             amount: Self::denormalize_amount(init_transfer.amount.0, decimals).into(),
             recipient: init_transfer.recipient,
-            fee: Self::denormalize_fee(init_transfer.fee, decimals),
+            fee: Self::denormalize_fee(&init_transfer.fee, decimals),
             sender: init_transfer.sender,
             msg: init_transfer.msg,
             destination_nonce,
@@ -649,7 +649,7 @@ impl Contract {
 
         let denormalized_amount =
             Self::denormalize_amount(fast_fin_transfer_msg.amount.0, decimals);
-        let denormalized_fee = Self::denormalize_fee(fast_fin_transfer_msg.fee, decimals);
+        let denormalized_fee = Self::denormalize_fee(&fast_fin_transfer_msg.fee, decimals);
         require!(
             denormalized_amount == amount.0 + denormalized_fee.fee.0,
             "ERR_INVALID_FAST_TRANSFER_AMOUNT"
@@ -1848,7 +1848,7 @@ impl Contract {
     }
 
     // Native tokens always have the same decimals on Near as on origin chain
-    fn denormalize_fee(fee: Fee, decimals: Decimals) -> Fee {
+    fn denormalize_fee(fee: &Fee, decimals: Decimals) -> Fee {
         Fee {
             fee: U128(Self::denormalize_amount(fee.fee.0, decimals)),
             native_fee: fee.native_fee
