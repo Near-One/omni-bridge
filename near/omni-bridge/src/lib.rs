@@ -147,7 +147,7 @@ pub trait ExtToken {
 }
 
 #[ext_contract(ext_btc_connector)]
-trait BtcConnector {
+pub trait BtcConnector {
     fn list_utxos(&self, utxo_storage_keys: Vec<String>) -> HashMap<String, Option<UTXO>>;
 }
 
@@ -486,7 +486,7 @@ impl Contract {
         fee_recipient: Option<AccountId>,
         fee: &Option<Fee>,
     ) -> Promise {
-        let mut transfer = self.get_transfer_message_storage(transfer_id);
+        let transfer = self.get_transfer_message_storage(transfer_id);
         let message = serde_json::from_str::<TokenReceiverMessage>(&msg).expect("INVALID MSG");
 
         let utxo_storage_keys = if let OmniAddress::Btc(btc_address) = transfer.message.recipient.clone() {
@@ -535,7 +535,7 @@ impl Contract {
         let message = serde_json::from_str::<TokenReceiverMessage>(&msg).expect("INVALID MSG");
         let amount = U128(transfer.message.amount.0 - transfer.message.fee.fee.0);
 
-        let btc_tx_hash = if let TokenReceiverMessage::Withdraw{target_btc_address, input, output} = message {
+        let btc_tx_hash = if let TokenReceiverMessage::Withdraw{target_btc_address: _, input, output} = message {
             self.get_btc_tx_hash(input, output, utxos)
         } else {
             env::panic_str("Invalid message type");
@@ -592,8 +592,6 @@ impl Contract {
                     .script_pubkey(),
             })
         });
-
-        let psbt_hex = psbt.serialize_hex();
 
         psbt.extract_tx().unwrap().compute_txid().to_string()
     }
@@ -779,7 +777,7 @@ impl Contract {
                 storage_deposit_actions,
             )
             .into()
-        } else if let OmniAddress::Btc(recipient) = transfer_message.recipient.clone() {
+        } else if let OmniAddress::Btc(_recipient) = transfer_message.recipient.clone() {
             self.process_fin_transfer_to_btc(predecessor_account_id, transfer_message);
             PromiseOrValue::Value(destination_nonce)
         } else {
