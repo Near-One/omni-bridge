@@ -24,20 +24,16 @@ pub mod btc;
 mod tests;
 
 #[near(serializers = [borsh])]
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub struct H160(pub [u8; 20]);
 
 impl FromStr for H160 {
     type Err = String;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let s = if let Some(stripped) = s.strip_prefix("0x") {
-            stripped
-        } else {
-            s
-        };
-        let result = Vec::from_hex(s).map_err(|_| "ERR_INVALIDE_HEX")?;
-        Ok(H160(
+        let result = Vec::from_hex(s.strip_prefix("0x").map_or(s, |stripped| stripped))
+            .map_err(|_| "ERR_INVALIDE_HEX")?;
+        Ok(Self(
             result
                 .try_into()
                 .map_err(|err| format!("Invalid length: {err:?}"))?,
@@ -163,7 +159,7 @@ pub enum ChainKind {
 impl FromStr for ChainKind {
     type Err = String;
 
-    fn from_str(s: &str) -> Result<ChainKind, Self::Err> {
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
         near_sdk::serde_json::from_str(&format!("\"{s}\"")).map_err(stringify)
     }
 }
@@ -196,7 +192,7 @@ pub const ZERO_ACCOUNT_ID: &str =
     "0000000000000000000000000000000000000000000000000000000000000000";
 
 #[near(serializers=[borsh])]
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub enum OmniAddress {
     Eth(EvmAddress),
     Near(AccountId),
@@ -244,7 +240,7 @@ impl OmniAddress {
         }
     }
 
-    pub fn get_chain(&self) -> ChainKind {
+    pub const fn get_chain(&self) -> ChainKind {
         match self {
             OmniAddress::Eth(_) => ChainKind::Eth,
             OmniAddress::Near(_) => ChainKind::Near,
@@ -285,7 +281,7 @@ impl OmniAddress {
 
     pub fn get_token_prefix(&self) -> String {
         match self {
-            OmniAddress::Sol(address) => {
+            Self::Sol(address) => {
                 if self.is_zero() {
                     "sol".to_string()
                 } else {
@@ -300,7 +296,7 @@ impl OmniAddress {
                     format!("sol-{hashed_address}")
                 }
             }
-            OmniAddress::Eth(address) => {
+            Self::Eth(address) => {
                 if self.is_zero() {
                     "eth".to_string()
                 } else {
@@ -318,17 +314,17 @@ impl OmniAddress {
             address
         };
 
-        match address.try_into() {
-            Ok(bytes) => Ok(H160(bytes)),
-            Err(_) => Err("Invalid EVM address".to_string()),
-        }
+        address.try_into().map_or_else(
+            |_| Err("Invalid EVM address".to_string()),
+            |bytes| Ok(H160(bytes)),
+        )
     }
 
     fn to_sol_address(address: &[u8]) -> Result<SolAddress, String> {
-        match address.try_into() {
-            Ok(bytes) => Ok(SolAddress(bytes)),
-            Err(_) => Err("Invalid SOL address".to_string()),
-        }
+        address.try_into().map_or_else(
+            |_| Err("Invalid SOL address".to_string()),
+            |bytes| Ok(SolAddress(bytes)),
+        )
     }
 
     fn to_near_account_id(address: &[u8]) -> Result<AccountId, String> {
@@ -340,7 +336,7 @@ impl OmniAddress {
 impl FromStr for OmniAddress {
     type Err = String;
 
-    fn from_str(input: &str) -> Result<OmniAddress, Self::Err> {
+    fn from_str(input: &str) -> Result<Self, Self::Err> {
         let (chain, recipient) = input.split_once(':').unwrap_or(("eth", input));
 
         match chain {
@@ -422,6 +418,7 @@ pub struct FastFinTransferMsg {
     pub recipient: OmniAddress,
     pub fee: Fee,
     pub msg: String,
+    pub origin_amount: U128,
     pub storage_deposit_amount: Option<U128>,
     pub relayer: AccountId,
 }
@@ -434,14 +431,14 @@ pub struct InitTransferMsg {
 }
 
 #[near(serializers=[borsh, json])]
-#[derive(Debug, Clone, PartialEq, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct Fee {
     pub fee: U128,
     pub native_fee: U128,
 }
 
 impl Fee {
-    pub fn is_zero(&self) -> bool {
+    pub const fn is_zero(&self) -> bool {
         self.fee.0 == 0 && self.native_fee.0 == 0
     }
 }
@@ -499,18 +496,18 @@ pub struct TransferMessage {
 }
 
 impl TransferMessage {
-    pub fn get_origin_chain(&self) -> ChainKind {
+    pub const fn get_origin_chain(&self) -> ChainKind {
         self.sender.get_chain()
     }
 
-    pub fn get_transfer_id(&self) -> TransferId {
+    pub const fn get_transfer_id(&self) -> TransferId {
         TransferId {
             origin_chain: self.get_origin_chain(),
             origin_nonce: self.origin_nonce,
         }
     }
 
-    pub fn get_destination_chain(&self) -> ChainKind {
+    pub const fn get_destination_chain(&self) -> ChainKind {
         self.recipient.get_chain()
     }
 }
@@ -598,7 +595,7 @@ impl FastTransfer {
 
 impl FastTransfer {
     pub fn from_transfer(transfer: TransferMessage, token_id: AccountId) -> Self {
-        FastTransfer {
+        Self {
             transfer_id: transfer.get_transfer_id(),
             token_id,
             amount: transfer.amount,

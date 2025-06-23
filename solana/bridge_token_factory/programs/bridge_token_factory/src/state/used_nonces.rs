@@ -38,7 +38,7 @@ impl UsedNonces {
 
     pub fn use_nonce<'info>(
         nonce: u64,
-        loader: &AccountLoader<'info, UsedNonces>,
+        loader: &AccountLoader<'info, Self>,
         config: &mut Account<'info, Config>,
         rent_reserve: AccountInfo<'info>,
         payer: AccountInfo<'info>,

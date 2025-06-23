@@ -28,7 +28,7 @@ impl WormholeOmniProverProxy {
     #[init]
     #[private]
     #[must_use]
-    pub fn init(prover_account: AccountId) -> Self {
+    pub const fn init(prover_account: AccountId) -> Self {
         Self { prover_account }
     }
 
