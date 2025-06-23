@@ -608,10 +608,7 @@ impl Contract {
             token: init_transfer.token,
             amount: Self::denormalize_amount(init_transfer.amount.0, decimals).into(),
             recipient: init_transfer.recipient,
-            fee: Fee {
-                fee: Self::denormalize_amount(init_transfer.fee.fee.0, decimals).into(),
-                native_fee: init_transfer.fee.native_fee,
-            },
+            fee: Self::denormalize_fee(init_transfer.fee, decimals),
             sender: init_transfer.sender,
             msg: init_transfer.msg,
             destination_nonce,
@@ -650,18 +647,19 @@ impl Contract {
             .get(&origin_token)
             .sdk_expect("ERR_TOKEN_DECIMALS_NOT_FOUND");
 
-        let total_amount =
-            Self::denormalize_amount(fast_fin_transfer_msg.origin_amount.0, decimals);
+        let denormalized_amount =
+            Self::denormalize_amount(fast_fin_transfer_msg.amount.0, decimals);
+        let denormalized_fee = Self::denormalize_fee(fast_fin_transfer_msg.fee, decimals);
         require!(
-            total_amount == amount.0 + fast_fin_transfer_msg.fee.fee.0,
+            denormalized_amount == amount.0 + denormalized_fee.fee.0,
             "ERR_INVALID_FAST_TRANSFER_AMOUNT"
         );
 
         let fast_transfer = FastTransfer {
             token_id: token_id.clone(),
             recipient: fast_fin_transfer_msg.recipient.clone(),
-            amount: U128(total_amount),
-            fee: fast_fin_transfer_msg.fee,
+            amount: U128(denormalized_amount),
+            fee: denormalized_fee,
             transfer_id: fast_fin_transfer_msg.transfer_id,
             msg: fast_fin_transfer_msg.msg,
         };
@@ -1847,5 +1845,13 @@ impl Contract {
     fn normalize_amount(amount: u128, decimals: Decimals) -> u128 {
         let diff_decimals: u32 = (decimals.origin_decimals - decimals.decimals).into();
         amount / (10_u128.pow(diff_decimals))
+    }
+
+    // Native tokens always have the same decimals on Near as on origin chain
+    fn denormalize_fee(fee: Fee, decimals: Decimals) -> Fee {
+        Fee {
+            fee: U128(Self::denormalize_amount(fee.fee.0, decimals)),
+            native_fee: fee.native_fee
+        }
     }
 }
