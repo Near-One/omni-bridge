@@ -56,6 +56,7 @@ impl TransferMessageStorage {
                     destination_nonce: m.message.destination_nonce,
                     origin_transfer_id: None,
                     btc_tx_hash: None,
+                    fee_recipient: None,
                 },
                 owner: m.owner,
             },
@@ -71,6 +72,7 @@ impl TransferMessageStorage {
                     destination_nonce: m.message.destination_nonce,
                     origin_transfer_id: None,
                     btc_tx_hash: None,
+                    fee_recipient: None,
                 },
                 owner: m.owner,
             },
@@ -235,6 +237,7 @@ impl Contract {
                         origin_nonce: 0,
                     }),
                     btc_tx_hash: None,
+                    fee_recipient: None,
                 },
                 owner: max_account_id,
             }))

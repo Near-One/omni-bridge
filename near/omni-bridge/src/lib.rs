@@ -519,12 +519,13 @@ impl Contract {
                     .list_utxos_callback(
                         transfer_id,
                         msg,
+                        fee_recipient
                     ),
             )
     }
 
     #[private]
-    pub fn list_utxos_callback(&mut self, transfer_id: TransferId, msg: String, #[callback_result] utxos_result: Result<HashMap<String, Option<UTXO>>, PromiseError>
+    pub fn list_utxos_callback(&mut self, transfer_id: TransferId, msg: String, fee_recipient: Option<AccountId>, #[callback_result] utxos_result: Result<HashMap<String, Option<UTXO>>, PromiseError>
     ) -> Promise {
         let utxos = match utxos_result {
             Ok(utxos) => utxos,
@@ -543,6 +544,7 @@ impl Contract {
         env::log_str(&OmniBridgeEvent::BtcTransferEvent { btc_tx_hash: btc_tx_hash.clone() }.to_log_string());
 
         transfer.message.btc_tx_hash = Some(btc_tx_hash);
+        transfer.message.fee_recipient = fee_recipient;
         self.insert_raw_transfer(transfer.message.clone(), transfer.owner);
         let btc_account_id = self.get_native_token_id(ChainKind::Btc);
 
@@ -606,6 +608,7 @@ impl Contract {
         if !matches!(call_result, Ok(result) if result.0 > 0) {
             let mut transfer = self.get_transfer_message_storage(transfer_id);
             transfer.message.btc_tx_hash = None;
+            transfer.message.fee_recipient = None;
             self.insert_raw_transfer(transfer.message, transfer.owner);
         }
     }
@@ -648,6 +651,7 @@ impl Contract {
             destination_nonce,
             origin_transfer_id: None,
             btc_tx_hash: None,
+            fee_recipient: None,
         };
         require!(
             transfer_message.fee.fee < transfer_message.amount,
@@ -764,6 +768,7 @@ impl Contract {
             destination_nonce,
             origin_transfer_id: None,
             btc_tx_hash: None,
+            fee_recipient: None,
         };
 
         if let OmniAddress::Near(recipient) = transfer_message.recipient.clone() {
@@ -920,6 +925,7 @@ impl Contract {
             destination_nonce,
             origin_transfer_id: Some(fast_transfer.transfer_id),
             btc_tx_hash: None,
+            fee_recipient: None,
         };
         let new_transfer_id = transfer_message.get_transfer_id();
 
@@ -996,6 +1002,15 @@ impl Contract {
             Ok(ProverResult::BtcFinTransfer(fin_transfer)) => {
                 let message = self.remove_transfer_message(fin_transfer.transfer_id);
                 let transferred_amount = message.amount.0 - message.fee.fee.0;
+
+                let fee_recipient = message.fee_recipient.clone().unwrap_or_else(|| {
+                    env::panic_str("ERR_FEE_RECIPIENT_NOT_SET_OR_EMPTY");
+                });
+
+                require!(
+                    fee_recipient == *predecessor_account_id,
+                    "ERR_ONLY_FEE_RECIPIENT_CAN_CLAIM"
+                );
 
                 require!(
                     message.btc_tx_hash == Some(fin_transfer.btc_tx_hash.clone()),
@@ -1318,6 +1333,7 @@ impl Contract {
             destination_nonce,
             origin_transfer_id: None,
             btc_tx_hash: None,
+            fee_recipient: None,
         };
 
         let required_storage_balance =

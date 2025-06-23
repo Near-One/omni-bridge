@@ -1,5 +1,5 @@
 use crate::{
-    storage::{Decimals, TransferMessageStorage},
+    storage::{Decimals, TransferMessageStorage, FastTransferStatusStorage},
     Contract, ContractExt, StorageKey,
 };
 use borsh::{BorshDeserialize, BorshSerialize};
@@ -8,7 +8,8 @@ use near_sdk::{
     collections::{LookupMap, LookupSet},
     env, near, AccountId, PanicOnDefault,
 };
-use omni_types::{ChainKind, Nonce, OmniAddress, TransferId};
+use omni_types::{ChainKind, Nonce, OmniAddress,
+                 TransferId, FastTransferId};
 
 #[derive(BorshDeserialize, BorshSerialize, PanicOnDefault)]
 pub struct StateV0 {
