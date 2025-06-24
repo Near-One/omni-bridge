@@ -1212,6 +1212,22 @@ impl Contract {
         self.finalised_transfers.contains(&transfer_id)
     }
 
+    pub fn get_fast_transfer_status(
+        &self,
+        fast_transfer_id: &FastTransferId,
+    ) -> Option<FastTransferStatus> {
+        self.fast_transfers
+            .get(fast_transfer_id)
+            .map(storage::FastTransferStatusStorage::into_main)
+    }
+
+    pub fn is_fast_transfer_finalised(&self, fast_transfer_id: &FastTransferId) -> bool {
+        self.fast_transfers
+            .get(fast_transfer_id)
+            .map(storage::FastTransferStatusStorage::into_main)
+            .is_some_and(|status| status.finalised)
+    }
+
     #[access_control_any(roles(Role::DAO))]
     pub fn add_factory(&mut self, address: OmniAddress) {
         self.factories.insert(&(&address).into(), &address);
@@ -1687,22 +1703,6 @@ impl Contract {
         );
         env::storage_byte_cost()
             .saturating_mul((env::storage_usage().saturating_sub(storage_usage)).into())
-    }
-
-    fn get_fast_transfer_status(
-        &self,
-        fast_transfer_id: &FastTransferId,
-    ) -> Option<FastTransferStatus> {
-        self.fast_transfers
-            .get(fast_transfer_id)
-            .map(storage::FastTransferStatusStorage::into_main)
-    }
-
-    pub fn is_fast_transfer_finalised(&self, fast_transfer_id: &FastTransferId) -> bool {
-        self.fast_transfers
-            .get(fast_transfer_id)
-            .map(storage::FastTransferStatusStorage::into_main)
-            .is_some_and(|status| status.finalised)
     }
 
     fn mark_fast_transfer_as_finalised(&mut self, fast_transfer_id: &FastTransferId) {
