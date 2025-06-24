@@ -637,7 +637,7 @@ mod tests {
             let decimal_diff = 6;
             let (_, mut fast_transfer_msg) =
                 get_transfer_to_near_msg(&env, transfer_amount, fee, decimal_diff);
-            fast_transfer_msg.origin_amount = U128(100_000_000);
+            fast_transfer_msg.amount = U128(100_000_000);
 
             let result = do_fast_transfer(&env, transfer_amount, fast_transfer_msg, None).await?;
 
@@ -953,7 +953,11 @@ mod tests {
             );
             assert_eq!(transfer_amount + fee, transfer_message.amount.0);
             assert_eq!(fast_transfer_msg.recipient, transfer_message.recipient);
-            assert_eq!(fast_transfer_msg.fee, transfer_message.fee);
+            assert_eq!(
+                fast_transfer_msg.fee.native_fee,
+                transfer_message.fee.native_fee
+            );
+            assert_eq!(fee, transfer_message.fee.fee.0);
             assert_eq!(fast_transfer_msg.msg, transfer_message.msg);
             assert_eq!(
                 OmniAddress::Near(env.relayer_account.id().clone()),
@@ -1156,16 +1160,16 @@ mod tests {
         fee: u128,
         decimal_diff: u8,
     ) -> (InitTransferMessage, FastFinTransferMsg) {
-        let denormalized_amount = amount / 10u128.pow(decimal_diff.into());
-        let denormalized_fee = fee / 10u128.pow(decimal_diff.into());
+        let origin_amount = amount / 10u128.pow(decimal_diff.into());
+        let origin_fee = fee / 10u128.pow(decimal_diff.into());
 
         let transfer_msg = InitTransferMessage {
             origin_nonce: 0,
             token: env.eth_token_address.clone(),
             recipient: OmniAddress::Near(account_n(1)),
-            amount: U128(denormalized_amount + denormalized_fee),
+            amount: U128(origin_amount + origin_fee),
             fee: Fee {
-                fee: U128(denormalized_fee),
+                fee: U128(origin_fee),
                 native_fee: U128(0),
             },
             sender: eth_eoa_address(),
@@ -1173,7 +1177,7 @@ mod tests {
             emitter_address: eth_factory_address(),
         };
 
-        let fast_transfer_msg = get_fast_transfer_msg(env, transfer_msg.clone(), decimal_diff);
+        let fast_transfer_msg = get_fast_transfer_msg(env, transfer_msg.clone());
 
         (transfer_msg, fast_transfer_msg)
     }
@@ -1184,16 +1188,16 @@ mod tests {
         fee: u128,
         decimal_diff: u8,
     ) -> (InitTransferMessage, FastFinTransferMsg) {
-        let denormalized_amount = amount / 10u128.pow(decimal_diff.into());
-        let denormalized_fee = fee / 10u128.pow(decimal_diff.into());
+        let origin_amount = amount / 10u128.pow(decimal_diff.into());
+        let origin_fee = fee / 10u128.pow(decimal_diff.into());
 
         let transfer_msg = InitTransferMessage {
             origin_nonce: 0,
             token: env.eth_token_address.clone(),
             recipient: base_eoa_address(),
-            amount: U128(denormalized_amount + denormalized_fee),
+            amount: U128(origin_amount + origin_fee),
             fee: Fee {
-                fee: U128(denormalized_fee),
+                fee: U128(origin_fee),
                 native_fee: U128(0),
             },
             sender: eth_eoa_address(),
@@ -1201,7 +1205,7 @@ mod tests {
             emitter_address: eth_factory_address(),
         };
 
-        let fast_transfer_msg = get_fast_transfer_msg(env, transfer_msg.clone(), decimal_diff);
+        let fast_transfer_msg = get_fast_transfer_msg(env, transfer_msg.clone());
 
         (transfer_msg, fast_transfer_msg)
     }
@@ -1209,7 +1213,6 @@ mod tests {
     fn get_fast_transfer_msg(
         env: &TestEnv,
         transfer_msg: InitTransferMessage,
-        decimal_diff: u8,
     ) -> FastFinTransferMsg {
         FastFinTransferMsg {
             transfer_id: TransferId {
@@ -1217,12 +1220,9 @@ mod tests {
                 origin_nonce: transfer_msg.origin_nonce,
             },
             recipient: transfer_msg.recipient.clone(),
-            fee: Fee {
-                fee: U128(transfer_msg.fee.fee.0 * 10u128.pow(decimal_diff.into())),
-                native_fee: U128(0),
-            },
+            fee: transfer_msg.fee,
             msg: transfer_msg.msg,
-            origin_amount: transfer_msg.amount,
+            amount: transfer_msg.amount,
             storage_deposit_amount: match transfer_msg.recipient.get_chain() {
                 ChainKind::Near => Some(U128(NEP141_DEPOSIT.as_yoctonear())),
                 _ => None,
