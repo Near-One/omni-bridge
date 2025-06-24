@@ -889,7 +889,10 @@ mod tests {
             );
             assert_eq!(transfer_amount + fee, transfer_message.amount.0);
             assert_eq!(fast_transfer_msg.recipient, transfer_message.recipient);
-            assert_eq!(fast_transfer_msg.fee.native_fee, transfer_message.fee.native_fee);
+            assert_eq!(
+                fast_transfer_msg.fee.native_fee,
+                transfer_message.fee.native_fee
+            );
             assert_eq!(fee, transfer_message.fee.fee.0);
             assert_eq!(fast_transfer_msg.msg, transfer_message.msg);
             assert_eq!(

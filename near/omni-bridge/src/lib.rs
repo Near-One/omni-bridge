@@ -1851,7 +1851,7 @@ impl Contract {
     fn denormalize_fee(fee: &Fee, decimals: Decimals) -> Fee {
         Fee {
             fee: U128(Self::denormalize_amount(fee.fee.0, decimals)),
-            native_fee: fee.native_fee
+            native_fee: fee.native_fee,
         }
     }
 }
