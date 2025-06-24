@@ -139,7 +139,7 @@ mod tests {
                     &relayer_account,
                     eth_factory_address.clone(),
                     U128(sender_balance_token),
-                    1
+                    1,
                 )
                 .await?;
 
@@ -151,7 +151,7 @@ mod tests {
                     &fast_relayer_account,
                     eth_factory_address,
                     U128(sender_balance_token * 2),
-                    2
+                    2,
                 )
                 .await?;
 
