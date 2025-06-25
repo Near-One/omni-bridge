@@ -72,7 +72,7 @@ async fn main() -> Result<()> {
             Arc::new(startup::build_omni_connector(&config, &near_fast_signer)?),
         )
     } else {
-        (None, Default::default())
+        (None, Arc::default())
     };
 
     let near_omni_nonce = Arc::new(utils::nonce::NonceManager::new(

@@ -6,7 +6,7 @@ use log::{info, warn};
 
 use ethereum_types::H256;
 
-use near_bridge_client::TransactionOptions;
+use near_bridge_client::{NearBridgeClient, TransactionOptions};
 use near_jsonrpc_client::{JsonRpcClient, errors::JsonRpcError};
 use near_primitives::views::TxExecutionStatus;
 use near_rpc_client::NearRpcError;
@@ -167,7 +167,7 @@ pub async fn process_init_transfer_event(
     let mut recipient = log.recipient.clone();
     let mut fee_recipient = omni_connector
         .near_bridge_client()
-        .and_then(|client| client.account_id())
+        .and_then(NearBridgeClient::account_id)
         .context("Failed to get relayer account id")?;
 
     let mut near_nonce = Some(near_omni_nonce);

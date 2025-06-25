@@ -4,7 +4,7 @@ use anyhow::{Context, Result};
 use bridge_connector_common::result::BridgeSdkError;
 use log::{info, warn};
 
-use near_bridge_client::TransactionOptions;
+use near_bridge_client::{NearBridgeClient, TransactionOptions};
 use near_jsonrpc_client::errors::JsonRpcError;
 use near_primitives::views::TxExecutionStatus;
 use near_rpc_client::NearRpcError;
@@ -111,7 +111,7 @@ pub async fn process_init_transfer_event(
 
     let fee_recipient = omni_connector
         .near_bridge_client()
-        .and_then(|client| client.account_id())
+        .and_then(NearBridgeClient::account_id)
         .context("Failed to get relayer account id")?;
 
     let storage_deposit_actions = match utils::storage::get_storage_deposit_actions(
