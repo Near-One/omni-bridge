@@ -48,9 +48,6 @@ rust-build-omni-prover:
 rust-build-evm-prover:
 	cargo near build reproducible-wasm --manifest-path $(EVM_PROVER_MANIFEST) --out-dir $(OUT_DIR)
 
-rust-build-btc-prover:
-	cargo near build reproducible-wasm --manifest-path $(BTC_PROVER_MANIFEST) --out-dir $(OUT_DIR)
-
 rust-build-wormhole-omni-prover-proxy:
 	cargo near build reproducible-wasm --manifest-path $(WORMHOLE_OMNI_PROVER_PROXY_MANIFEST) --out-dir $(OUT_DIR)
 
@@ -60,7 +57,7 @@ rust-build-mock-prover:
 rust-build-mock-token:
 	cargo near build reproducible-wasm --manifest-path $(MOCK_TOKEN_MANIFEST) --out-dir $(OUT_DIR)
 
-rust-build-near: rust-build-omni-bridge rust-build-omni-token rust-build-token-deployer rust-build-omni-prover rust-build-evm-prover rust-build-btc-prover rust-build-wormhole-omni-prover-proxy rust-build-mock-prover rust-build-mock-token
+rust-build-near: rust-build-omni-bridge rust-build-omni-token rust-build-token-deployer rust-build-omni-prover rust-build-evm-prover rust-build-wormhole-omni-prover-proxy rust-build-mock-prover rust-build-mock-token
 
 solana-generate-program-id:
 	solana-keygen new -o solana/bridge_token_factory/target/deploy/bridge_token_factory-keypair.json --no-passphrase
