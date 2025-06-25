@@ -23,13 +23,10 @@ nbtc_account_file = const.near_account_dir / f"nbtc.json"
 btc_connector_binary_file = const.near_binary_dir / "btc_connector.wasm"
 nbtc_binary_file = const.near_binary_dir / "nbtc.wasm"
 
-btc_prover_file = const.near_deploy_results_dir / f"{NC.BTC_PROVER}.json"
 omni_prover_file = const.near_deploy_results_dir / f"{NC.OMNI_PROVER}.json"
 omni_bridge_file = const.near_deploy_results_dir / f"{NC.OMNI_BRIDGE}.json"
 nbtc_file = const.near_deploy_results_dir / f"nbtc.json"
 btc_connector_file = const.near_deploy_results_dir / f"btc_connector.json"
-
-near_btc_prover_setup_call_file = const.near_deploy_results_dir / "btc-prover-setup-call.json"
 
 rule get_btc_connector_binary_file:
     output: btc_connector_binary_file
@@ -47,29 +44,6 @@ rule get_nbtc_binary_file:
     shell: """
     {params.mkdir_cmd} && \
     wget https://github.com/Near-Bridge-Lab/resources/raw/refs/heads/master/contracts/nbtc_release.wasm -O {output}
-    """
-
-rule near_btc_prover_setup:
-    message: "Setting up EVM prover"
-    input:
-        omni_prover = omni_prover_file,
-        btc_prover = btc_prover_file,
-        dau_grant = rules.near_omni_prover_dau_grant.output,
-        dao_account = near_dao_account_file
-    output: near_btc_prover_setup_call_file
-    params:
-        mkdir = get_mkdir_cmd(const.near_deploy_results_dir),
-        omni_prover_account_id = lambda wc, input: get_json_field(input.omni_prover, "contract_id"),
-        btc_prover_account_id = lambda wc, input: get_json_field(input.btc_prover, "contract_id"),
-        extract_tx = lambda wc, output: extract_tx_hash("near", output)
-    shell: """
-    {params.mkdir} && \
-    {const.common_scripts_dir}/call-near-contract.sh -c {params.omni_prover_account_id} \
-        -m add_prover \
-        -a '{{\"account_id\": \"{params.btc_prover_account_id}\", \"prover_id\": \"Btc\"}}' \
-        -f {input.dao_account} \
-        -n testnet 2>&1 | tee {output} && \
-    {params.extract_tx}
     """
 
 rule near_generate_nbtc_init_args:

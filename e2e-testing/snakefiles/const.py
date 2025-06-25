@@ -53,7 +53,6 @@ class Chain(StrEnum):
 class NearContract(StrEnum):
     OMNI_BRIDGE = "omni_bridge"
     EVM_PROVER = "evm_prover"
-    BTC_PROVER = "btc_prover"
     OMNI_PROVER = "omni_prover"
     TOKEN_DEPLOYER = "token_deployer"
     WORMHOLE_OMNI_PROVER_PROXY = "wormhole_omni_prover_proxy"
