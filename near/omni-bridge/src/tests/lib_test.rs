@@ -27,6 +27,7 @@ const DEFAULT_TRANSFER_ID: TransferId = TransferId {
 const DEFAULT_PROVER_ACCOUNT: &str = "prover.testnet";
 const DEFAULT_MPC_SIGNER_ACCOUNT: &str = "mpc_signer.testnet";
 const DEFAULT_WNEAR_ACCOUNT: &str = "wnear.testnet";
+const DEFAULT_BTC_CONNECTOR_ACCOUNT: &str = "brg-dev.testnet";
 
 const DEFAULT_NEAR_USER_ACCOUNT: &str = "user.testnet";
 const DEFAULT_FT_CONTRACT_ACCOUNT: &str = "ft_contract.testnet";
@@ -58,11 +59,12 @@ fn setup_test_env(
     }
 }
 
-fn setup_contract(prover_id: String, mpc_signer_id: String, wnear_id: String) -> Contract {
+fn setup_contract(prover_id: String, mpc_signer_id: String, wnear_id: String, btc_connector_id: String) -> Contract {
     Contract::new(
         AccountId::try_from(prover_id).expect("Invalid default prover ID"),
         AccountId::try_from(mpc_signer_id).expect("Invalid default mpc signer ID"),
         AccountId::try_from(wnear_id).expect("Invalid default wnear ID"),
+        AccountId::try_from(btc_connector_id).expect("Invalid default btc_connector ID")
     )
 }
 
@@ -71,6 +73,7 @@ fn get_default_contract() -> Contract {
         DEFAULT_PROVER_ACCOUNT.to_string(),
         DEFAULT_MPC_SIGNER_ACCOUNT.to_string(),
         DEFAULT_WNEAR_ACCOUNT.to_string(),
+        DEFAULT_BTC_CONNECTOR_ACCOUNT.to_string(),
     )
 }
 
