@@ -170,7 +170,7 @@ pub async fn process_init_transfer_event(
         .and_then(|client| client.account_id())
         .context("Failed to get relayer account id")?;
 
-    let mut nonce = None;
+    let mut near_nonce = Some(near_omni_nonce);
     let mut connector = omni_connector;
 
     if config.is_fast_relayer_enabled() {
@@ -206,37 +206,16 @@ pub async fn process_init_transfer_event(
         };
 
         if let Some(status) = fast_transfer_status {
-            let relayer = fast_connector
-                .near_bridge_client()
-                .and_then(|client| client.account_id())
-                .context("Failed to get fast relayer account id")?;
-
-            if status.relayer == relayer {
-                recipient = OmniAddress::Near(relayer.clone());
-                fee_recipient = relayer;
-                connector = fast_connector;
-                if let Some(near_fast_nonce) = near_fast_nonce {
-                    nonce = Some(
-                        near_fast_nonce
-                            .reserve_nonce()
-                            .await
-                            .context("Failed to reserve nonce for near transaction")?,
-                    );
-                } else {
-                    warn!("Near fast nonce is not available");
-                    return Ok(EventAction::Retry);
-                }
+            recipient = OmniAddress::Near(status.relayer.clone());
+            fee_recipient = status.relayer;
+            connector = fast_connector;
+            if let Some(near_fast_nonce) = near_fast_nonce {
+                near_nonce = Some(near_fast_nonce);
+            } else {
+                warn!("Near fast nonce is not available");
+                return Ok(EventAction::Retry);
             }
         }
-    }
-
-    if nonce.is_none() {
-        nonce = Some(
-            near_omni_nonce
-                .reserve_nonce()
-                .await
-                .context("Failed to reserve nonce for near transaction")?,
-        );
     }
 
     let storage_deposit_actions = match utils::storage::get_storage_deposit_actions(
@@ -257,13 +236,19 @@ pub async fn process_init_transfer_event(
         }
     };
 
+    let nonce = near_nonce
+        .ok_or_else(|| anyhow::anyhow!("Failed to select nonce"))?
+        .reserve_nonce()
+        .await
+        .context("Failed to reserve nonce for near transaction")?;
+
     let fin_transfer_args = if let Some(vaa) = vaa {
         omni_connector::FinTransferArgs::NearFinTransferWithVaa {
             chain_kind,
             storage_deposit_actions,
             vaa,
             transaction_options: TransactionOptions {
-                nonce,
+                nonce: Some(nonce),
                 wait_until: TxExecutionStatus::Included,
                 wait_final_outcome_timeout_sec: None,
             },
@@ -274,7 +259,7 @@ pub async fn process_init_transfer_event(
             tx_hash: transaction_hash,
             storage_deposit_actions,
             transaction_options: TransactionOptions {
-                nonce,
+                nonce: Some(nonce),
                 wait_until: TxExecutionStatus::Included,
                 wait_final_outcome_timeout_sec: None,
             },
