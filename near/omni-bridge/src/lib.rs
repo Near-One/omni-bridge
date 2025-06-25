@@ -1,11 +1,10 @@
 #![allow(clippy::too_many_arguments)]
 use errors::SdkExpect;
-use bitcoin::{Address, Amount, absolute::LockTime, transaction::Version, Transaction as BtcTransaction, PublicKey as BtcPublicKey, OutPoint, TxOut, TxIn, Psbt, Network};
+use bitcoin::{Address, TxOut, Network};
 use near_plugins::{
     access_control, access_control_any, pause, AccessControlRole, AccessControllable, Pausable,
     Upgradable,
 };
-use k256::elliptic_curve::sec1::ToEncodedPoint;
 use near_contract_standards::fungible_token::metadata::FungibleTokenMetadata;
 use near_contract_standards::fungible_token::receiver::FungibleTokenReceiver;
 use near_contract_standards::storage_management::StorageBalance;
@@ -47,8 +46,6 @@ mod tests;
 
 const LOG_METADATA_GAS: Gas = Gas::from_tgas(10);
 const LOG_METADATA_CALLBACK_GAS: Gas = Gas::from_tgas(260);
-const SYNC_MPC_PUBLIC_KEY_GAS: Gas = Gas::from_tgas(10);
-const SYNC_MPC_PUBLIC_KEY_CALLBACK_GAS: Gas = Gas::from_tgas(10);
 const MPC_SIGNING_GAS: Gas = Gas::from_tgas(250);
 const SIGN_TRANSFER_CALLBACK_GAS: Gas = Gas::from_tgas(5);
 const SIGN_LOG_METADATA_CALLBACK_GAS: Gas = Gas::from_tgas(5);
@@ -72,7 +69,6 @@ const SET_METADATA_GAS: Gas = Gas::from_tgas(10);
 const RESOLVE_TRANSFER_GAS: Gas = Gas::from_tgas(3);
 const FAST_TRANSFER_CALLBACK_GAS: Gas = Gas::from_tgas(5);
 const SUBMIT_TRANSFER_TO_BTC_CONNECTOR_CALLBACK_GAS: Gas = Gas::from_tgas(5);
-const LIST_UTXOS_GAS: Gas = Gas::from_tgas(5);
 const NO_DEPOSIT: NearToken = NearToken::from_near(0);
 const ONE_YOCTO: NearToken = NearToken::from_yoctonear(1);
 const SIGN_PATH: &str = "bridge-1";
@@ -215,7 +211,6 @@ pub struct Contract {
     pub accounts_balances: LookupMap<AccountId, StorageBalance>,
     pub wnear_account_id: AccountId,
     pub btc_connector: AccountId,
-    pub mpc_public_key: Option<near_sdk::PublicKey>,
 }
 
 #[near]
@@ -298,33 +293,11 @@ impl Contract {
             accounts_balances: LookupMap::new(StorageKey::AccountsBalances),
             wnear_account_id,
             btc_connector,
-            mpc_public_key: None
         };
 
         contract.acl_init_super_admin(near_sdk::env::predecessor_account_id());
         contract.acl_grant_role(Role::DAO.into(), near_sdk::env::predecessor_account_id());
         contract
-    }
-
-    #[pause(except(roles(Role::DAO)))]
-    pub fn sync_mpc_public_key(&self) -> Promise {
-        ext_btc_connector::ext(self.btc_connector.clone())
-            .with_static_gas(SYNC_MPC_PUBLIC_KEY_GAS)
-            .get_config()
-            .then(
-                Self::ext(env::current_account_id())
-                    .with_static_gas(SYNC_MPC_PUBLIC_KEY_CALLBACK_GAS)
-                    .sync_mpc_public_key_callback(),
-            )
-    }
-
-    #[private]
-    pub fn sync_mpc_public_key_callback(&mut self, #[callback_result] result: Result<BtcConfig, PromiseError>) {
-        if let Ok(config) = result {
-            self.mpc_public_key = config.chain_signatures_root_public_key;
-        } else {
-            env::panic_str("Failed to fetch config from BTC connector");
-        }
     }
 
     #[pause(except(roles(Role::DAO, Role::UnrestrictedRelayer)))]
@@ -521,19 +494,23 @@ impl Contract {
         let transfer = self.get_transfer_message_storage(transfer_id);
 
         let message = serde_json::from_str::<TokenReceiverMessage>(&msg).expect("INVALID MSG");
+        let amount = U128(transfer.message.amount.0 - transfer.message.fee.fee.0);
 
-        let utxo_storage_keys = if let OmniAddress::Btc(btc_address) = transfer.message.recipient.clone() {
-            if let TokenReceiverMessage::Withdraw{target_btc_address, input, ..} = message {
+        if let OmniAddress::Btc(btc_address) = transfer.message.recipient.clone() {
+            if let TokenReceiverMessage::Withdraw{target_btc_address, input: _, output} = message {
                 require!(btc_address == target_btc_address, "Incorrect target address");
-                Self::get_utxo_storage_keys(input)
+                let output_amount = self.get_output_amount(output.clone(), target_btc_address);
+
+                let max_fee = transfer.message.msg.parse::<u64>();
+                if let Ok(max_fee) = max_fee {
+                    require!(amount.0 - u128::from(output_amount) <= u128::from(max_fee), "Fee exceeds max allowed fee");
+                }
             } else {
                 env::panic_str("Invalid message type");
             }
         } else {
             env::panic_str("Invalid destination chain");
         };
-
-        require!(transfer.message.btc_tx_hash == None, "Transfer already submitted");
 
         if let Some(fee) = &fee {
             require!(&transfer.message.fee == fee, "Invalid fee");
@@ -543,49 +520,9 @@ impl Contract {
         let btc_account_id = self.get_native_token_id(ChainKind::Btc);
         require!(self.get_token_id(&transfer.message.token) == btc_account_id, "BTC account id");
 
-        ext_btc_connector::ext(self.btc_connector.clone())
-            .with_static_gas(LIST_UTXOS_GAS)
-            .list_utxos(utxo_storage_keys)
-            .then(
-                Self::ext(env::current_account_id())
-                    .with_static_gas(SUBMIT_TRANSFER_TO_BTC_CONNECTOR_CALLBACK_GAS)
-                    .list_utxos_callback(
-                        transfer_id,
-                        msg,
-                        fee_recipient
-                    ),
-            )
-    }
+        self.remove_transfer_message(transfer_id);
 
-    #[private]
-    pub fn list_utxos_callback(&mut self, transfer_id: TransferId, msg: String, fee_recipient: Option<AccountId>, #[callback_result] utxos_result: Result<HashMap<String, Option<UTXO>>, PromiseError>
-    ) -> Promise {
-        let utxos = match utxos_result {
-            Ok(utxos) => utxos,
-            Err(_) => env::panic_str("Failed to get UTXOs from btc_connector"),
-        };
-        let mut transfer = self.get_transfer_message_storage(transfer_id);
-        let message = serde_json::from_str::<TokenReceiverMessage>(&msg).expect("INVALID MSG");
-        let amount = U128(transfer.message.amount.0 - transfer.message.fee.fee.0);
-
-        let btc_tx_hash = if let TokenReceiverMessage::Withdraw{target_btc_address: _, input, output} = message {
-            let gas_fee = self.get_gas_fee(output.clone(), utxos.clone());
-            let max_fee = transfer.message.msg.parse::<u64>();
-            if let Ok(max_fee) = max_fee {
-                require!(gas_fee <= max_fee, "Gas fee exceeds max allowed fee");
-            }
-
-            self.get_btc_tx_hash(input, output, utxos)
-        } else {
-            env::panic_str("Invalid message type");
-        };
-
-        env::log_str(&OmniBridgeEvent::BtcTransferEvent { btc_tx_hash: btc_tx_hash.clone() }.to_log_string());
-
-        transfer.message.btc_tx_hash = Some(btc_tx_hash);
-        transfer.message.fee_recipient = fee_recipient;
-        self.insert_raw_transfer(transfer.message.clone(), transfer.owner);
-        let btc_account_id = self.get_native_token_id(ChainKind::Btc);
+        let fee_recipient = fee_recipient.unwrap_or(env::predecessor_account_id());
 
         ext_token::ext(btc_account_id)
             .with_attached_deposit(ONE_YOCTO)
@@ -594,80 +531,91 @@ impl Contract {
             .then(
                 Self::ext(env::current_account_id())
                     .with_static_gas(SUBMIT_TRANSFER_TO_BTC_CONNECTOR_CALLBACK_GAS)
-                    .submit_transfer_to_btc_connector_callback(transfer_id),
+                    .submit_transfer_to_btc_connector_callback(transfer.message, transfer.owner, fee_recipient),
             )
     }
 
-    fn get_gas_fee(&self,
+    fn get_output_amount(&self,
                    output: Vec<TxOut>,
-                   vutxos: HashMap<String, Option<UTXO>>) -> u64 {
-        let sum_input: u64 = vutxos
-            .values()
-            .filter_map(|opt| opt.as_ref().map(|utxo| utxo.balance))
-            .sum();
-
-        let sum_output: u64 = output
-            .iter()
-            .map(|txout| txout.value.to_sat())
-            .sum();
-
-        assert!(
-            sum_input >= sum_output,
-            "Output value is greater than input — invalid transaction or negative fee"
-        );
-
-        sum_input - sum_output
-    }
-
-    fn get_utxo_storage_keys(inputs: Vec<OutPoint>) -> Vec<String> {
-        inputs
-            .into_iter()
-            .map(|outpoint| format!("{}@{}", outpoint.txid.to_string(), outpoint.vout))
-            .collect()
-    }
-
-    fn get_btc_tx_hash(&self, input: Vec<OutPoint>,
-                       output: Vec<TxOut>,
-                       vutxos: HashMap<String, Option<UTXO>>) -> String {
-        let transaction = BtcTransaction {
-            version: Version::TWO,
-            lock_time: LockTime::ZERO,
-            input: input
-                .into_iter()
-                .map(|previous_output| TxIn {
-                    previous_output,
-                    sequence: bitcoin::Sequence::ENABLE_RBF_NO_LOCKTIME,
-                    ..Default::default()
-                })
-                .collect(),
-            output,
+                   target_address: String) -> u64 {
+        let target_address = match Address::from_str(&target_address) {
+            Ok(addr) => addr,
+            Err(_) => env::panic_str("Invalid target address")
         };
-        let mut psbt = Psbt::from_unsigned_tx(transaction).expect("Failed to generate PSBT");
 
-        vutxos.iter().enumerate().for_each(|(i, v)| {
-            psbt.inputs[i].witness_utxo = Some(TxOut {
-                value: Amount::from_sat(v.1.clone().unwrap().balance),
-                script_pubkey: self
-                    .generate_btc_p2wpkh_address(&v.1.clone().unwrap().path)
-                    .script_pubkey(),
+        let network = self.get_btc_network();
+
+        let checked_address = match target_address.require_network(network) {
+            Ok(addr) => addr,
+            Err(_) => env::panic_str("Invalid target address"),
+        };
+
+        output
+            .iter()
+            .filter_map(|txout| {
+                Address::from_script(&txout.script_pubkey, network)
+                    .ok()
+                    .filter(|addr| addr == &checked_address)
+                    .map(|_| txout.value.to_sat())
             })
-        });
-
-        psbt.extract_tx().unwrap().compute_txid().to_string()
+            .sum()
     }
 
-    // The callback function to handle the result of the cross-contract call
+    fn get_btc_network(&self) -> Network {
+        if self.btc_connector.as_str().ends_with(".testnet") {
+            Network::Testnet
+        } else {
+            Network::Bitcoin
+        }
+    }
+
     #[private]
     pub fn submit_transfer_to_btc_connector_callback(
         &mut self,
-        transfer_id: TransferId,
+        transfer_msg: TransferMessage,
+        transfer_owner: AccountId,
+        fee_recipient: AccountId,
         #[callback_result] call_result: Result<U128, PromiseError>,
-    ) {
-        if !matches!(call_result, Ok(result) if result.0 > 0) {
-            let mut transfer = self.get_transfer_message_storage(transfer_id);
-            transfer.message.btc_tx_hash = None;
-            transfer.message.fee_recipient = None;
-            self.insert_raw_transfer(transfer.message, transfer.owner);
+    ) -> PromiseOrValue<()> {
+        if matches!(call_result, Ok(result) if result.0 > 0) {
+            if transfer_msg.fee.native_fee.0 != 0 {
+                let origin_chain = transfer_msg.origin_transfer_id.map_or_else(
+                    || transfer_msg.get_origin_chain(),
+                    |origin_transfer_id| origin_transfer_id.origin_chain,
+                );
+                if origin_chain == ChainKind::Near {
+                    Promise::new(fee_recipient.clone())
+                        .transfer(NearToken::from_yoctonear(transfer_msg.fee.native_fee.0));
+                } else {
+                    ext_token::ext(self.get_native_token_id(origin_chain))
+                        .with_static_gas(MINT_TOKEN_GAS)
+                        .mint(fee_recipient.clone(), transfer_msg.fee.native_fee, None);
+                }
+            }
+
+            let token = self.get_token_id(&transfer_msg.token);
+            env::log_str(
+                &OmniBridgeEvent::ClaimFeeEvent {
+                    transfer_message: transfer_msg.clone(),
+                }
+                    .to_log_string(),
+            );
+
+            let fee = transfer_msg.fee.fee;
+
+            if fee.0 > 0 {
+                PromiseOrValue::Promise(
+                    ext_token::ext(token)
+                        .with_static_gas(FT_TRANSFER_GAS)
+                        .with_attached_deposit(ONE_YOCTO)
+                        .ft_transfer(fee_recipient, fee, None),
+                )
+            } else {
+                PromiseOrValue::Value(())
+            }
+        } else {
+            self.insert_raw_transfer(transfer_msg, transfer_owner);
+            PromiseOrValue::Value(())
         }
     }
 
@@ -708,8 +656,6 @@ impl Contract {
             msg: String::new(),
             destination_nonce,
             origin_transfer_id: None,
-            btc_tx_hash: None,
-            fee_recipient: None,
         };
         require!(
             transfer_message.fee.fee < transfer_message.amount,
@@ -825,8 +771,6 @@ impl Contract {
             msg: init_transfer.msg,
             destination_nonce,
             origin_transfer_id: None,
-            btc_tx_hash: None,
-            fee_recipient: None,
         };
 
         if let OmniAddress::Near(recipient) = transfer_message.recipient.clone() {
@@ -1008,8 +952,6 @@ impl Contract {
             msg: fast_transfer.msg.clone(),
             destination_nonce,
             origin_transfer_id: Some(fast_transfer.transfer_id),
-            btc_tx_hash: None,
-            fee_recipient: None,
         };
         let new_transfer_id = transfer_message.get_transfer_id();
 
@@ -1063,52 +1005,27 @@ impl Contract {
         #[serializer(borsh)]
         call_result: Result<ProverResult, PromiseError>,
     ) -> PromiseOrValue<()> {
-        let (message, transferred_amount) = match call_result {
-            Ok(ProverResult::FinTransfer(fin_transfer)) => {
-                let fee_recipient = fin_transfer.fee_recipient.unwrap_or_else(|| {
-                    env::panic_str("ERR_FEE_RECIPIENT_NOT_SET_OR_EMPTY");
-                });
-
-                require!(
-                    fee_recipient == *predecessor_account_id,
-                    "ERR_ONLY_FEE_RECIPIENT_CAN_CLAIM"
-                );
-                require!(
-                    self.factories
-                    .get(&fin_transfer.emitter_address.get_chain())
-                    .as_ref()
-                    == Some(&fin_transfer.emitter_address),
-                    "ERR_UNKNOWN_FACTORY"
-                );
-
-                (self.remove_transfer_message(fin_transfer.transfer_id), fin_transfer.amount.0)
-            },
-            Ok(ProverResult::BtcFinTransfer(fin_transfer)) => {
-                let message = self.remove_transfer_message(fin_transfer.transfer_id);
-                let transferred_amount = message.amount.0 - message.fee.fee.0;
-
-                let fee_recipient = message.fee_recipient.clone().unwrap_or_else(|| {
-                    env::panic_str("ERR_FEE_RECIPIENT_NOT_SET_OR_EMPTY");
-                });
-
-                require!(
-                    fee_recipient == *predecessor_account_id,
-                    "ERR_ONLY_FEE_RECIPIENT_CAN_CLAIM"
-                );
-
-                require!(
-                    message.btc_tx_hash == Some(fin_transfer.btc_tx_hash.clone()),
-                    format!("ERR_INCORRECT_BTC_TX_HASH {:?}, {:?}", message.btc_tx_hash, Some(fin_transfer.btc_tx_hash.clone()))
-                );
-
-                (message, transferred_amount)
-            },
-            _ => {
-                env::panic_str("Invalid proof message")
-            }
+        let Ok(ProverResult::FinTransfer(fin_transfer)) = call_result else {
+            env::panic_str("Invalid proof message")
         };
 
-        let fee_recipient = predecessor_account_id.clone();
+        let fee_recipient = fin_transfer.fee_recipient.unwrap_or_else(|| {
+            env::panic_str("ERR_FEE_RECIPIENT_NOT_SET_OR_EMPTY");
+        });
+
+        require!(
+            fee_recipient == *predecessor_account_id,
+            "ERR_ONLY_FEE_RECIPIENT_CAN_CLAIM"
+        );
+        require!(
+            self.factories
+                .get(&fin_transfer.emitter_address.get_chain())
+                .as_ref()
+                == Some(&fin_transfer.emitter_address),
+            "ERR_UNKNOWN_FACTORY"
+        );
+
+        let message = self.remove_transfer_message(fin_transfer.transfer_id);
 
         // Need to make sure fast transfer is finalised because it means transfer parameters are correct. Otherwise, fee can be set as anything.
         if let Some(origin_transfer_id) = message.origin_transfer_id {
@@ -1144,7 +1061,7 @@ impl Contract {
             &OmniBridgeEvent::ClaimFeeEvent {
                 transfer_message: message.clone(),
             }
-            .to_log_string(),
+                .to_log_string(),
         );
 
         let token_address = self
@@ -1152,7 +1069,7 @@ impl Contract {
             .unwrap_or_else(|| env::panic_str("ERR_FAILED_TO_GET_TOKEN_ADDRESS"));
 
         let denormalized_amount = Self::denormalize_amount(
-            transferred_amount,
+            fin_transfer.amount.0,
             self.token_decimals
                 .get(&token_address)
                 .sdk_expect("ERR_TOKEN_DECIMALS_NOT_FOUND"),
@@ -1416,8 +1333,6 @@ impl Contract {
             msg: String::new(),
             destination_nonce,
             origin_transfer_id: None,
-            btc_tx_hash: None,
-            fee_recipient: None,
         };
 
         let required_storage_balance =
@@ -1626,34 +1541,6 @@ impl Contract {
         ext_bridge_token_facory::ext(factory_account_id)
             .with_static_gas(UPDATE_CONTROLLER_GAS)
             .set_controller_for_tokens(tokens_accounts_id);
-    }
-}
-
-impl Contract {
-    pub fn generate_public_key(&self, path: &str) -> Vec<u8> {
-        let mpc_pk = crypto_shared::near_public_key_to_affine_point(
-           self.mpc_public_key.clone().unwrap()
-        );
-        let epsilon = crypto_shared::derive_epsilon(&self.btc_connector, path);
-        let user_pk = crypto_shared::derive_key(mpc_pk, epsilon);
-        let user_pk_encoded_point = user_pk.to_encoded_point(false);
-        user_pk_encoded_point.as_bytes().to_vec()
-    }
-
-    pub fn generate_btc_public_key(&self, path: &str) -> BtcPublicKey {
-        let public_key_bytes = self.generate_public_key(path);
-        let uncompressed_btc_public_key =
-            BtcPublicKey::from_slice(&public_key_bytes).expect("Invalid public key bytes");
-        uncompressed_btc_public_key
-            .inner
-            .to_string()
-            .parse()
-            .unwrap()
-    }
-
-    pub fn generate_btc_p2wpkh_address(&self, path: &str) -> Address {
-        let btc_public_key = self.generate_btc_public_key(path);
-        Address::p2wpkh(&btc_public_key.try_into().unwrap(), btc_network())
     }
 }
 

@@ -640,17 +640,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "btc-prover"
-version = "0.2.2"
-dependencies = [
- "borsh",
- "hex",
- "near-sdk",
- "omni-types",
- "rlp 0.6.1",
-]
-
-[[package]]
 name = "bumpalo"
 version = "3.18.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"

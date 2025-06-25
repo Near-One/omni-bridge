@@ -10,7 +10,6 @@ members = [
     "omni-prover/omni-prover",
     "omni-prover/wormhole-omni-prover-proxy",
     "omni-prover/evm-prover",
-    "omni-prover/btc-prover",
     "omni-token",
     "omni-types",
     "omni-tests",

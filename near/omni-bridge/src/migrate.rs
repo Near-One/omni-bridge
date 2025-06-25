@@ -71,7 +71,6 @@ impl Contract {
                 accounts_balances: old_state.accounts_balances,
                 wnear_account_id: old_state.wnear_account_id,
                 btc_connector,
-                mpc_public_key: None,
             }
         } else if let Some(old_state) = env::state_read::<StateV1>() {
             Self {
@@ -91,7 +90,6 @@ impl Contract {
                 accounts_balances: old_state.accounts_balances,
                 wnear_account_id: old_state.wnear_account_id,
                 btc_connector,
-                mpc_public_key: None,
             }
         } else {
             env::panic_str("Old state not found. Migration is not needed.")
