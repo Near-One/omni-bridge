@@ -346,6 +346,7 @@ fn test_transfer_message_getters() {
                 sender: OmniAddress::Eth(evm_addr.clone()),
                 msg: String::new(),
                 origin_transfer_id: None,
+                is_used: false,
             },
             ChainKind::Eth,
             TransferId {
@@ -365,6 +366,7 @@ fn test_transfer_message_getters() {
                 sender: OmniAddress::Near("alice.near".parse().unwrap()),
                 msg: String::new(),
                 origin_transfer_id: None,
+                is_used: false,
             },
             ChainKind::Near,
             TransferId {
@@ -384,6 +386,7 @@ fn test_transfer_message_getters() {
                 sender: OmniAddress::Sol("11111111111111111111111111111111".parse().unwrap()),
                 msg: String::new(),
                 origin_transfer_id: None,
+                is_used: false,
             },
             ChainKind::Sol,
             TransferId {

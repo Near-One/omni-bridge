@@ -50,7 +50,7 @@ impl TransferMessageStorage {
                 },
                 owner: m.owner,
             },
-            Self::V1(m) => m,
+            TransferMessageStorage::V1(m) => m,
         }
     }
 
@@ -58,7 +58,10 @@ impl TransferMessageStorage {
         message: TransferMessage,
         owner: AccountId,
     ) -> Result<Vec<u8>, std::io::Error> {
-        borsh::to_vec(&Self::V1(TransferMessageStorageValue { message, owner }))
+        borsh::to_vec(&TransferMessageStorage::V1(TransferMessageStorageValue {
+            message,
+            owner,
+        }))
     }
 }
 

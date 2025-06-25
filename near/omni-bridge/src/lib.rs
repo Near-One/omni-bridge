@@ -1,13 +1,12 @@
 #![allow(clippy::too_many_arguments)]
 use errors::SdkExpect;
+use near_contract_standards::fungible_token::metadata::FungibleTokenMetadata;
+use near_contract_standards::fungible_token::receiver::FungibleTokenReceiver;
+use near_contract_standards::storage_management::StorageBalance;
 use near_plugins::{
     access_control, access_control_any, pause, AccessControlRole, AccessControllable, Pausable,
     Upgradable,
 };
-
-use near_contract_standards::fungible_token::metadata::FungibleTokenMetadata;
-use near_contract_standards::fungible_token::receiver::FungibleTokenReceiver;
-use near_contract_standards::storage_management::StorageBalance;
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::collections::{LookupMap, LookupSet};
 use near_sdk::json_types::{Base64VecU8, U128};
@@ -35,6 +34,7 @@ use storage::{
     NEP141_DEPOSIT,
 };
 
+mod btc;
 mod errors;
 mod migrate;
 mod storage;
@@ -141,6 +141,12 @@ pub trait ExtToken {
     );
 }
 
+#[near(serializers = [json])]
+#[derive(Clone)]
+pub struct BtcConfig {
+    pub chain_signatures_root_public_key: Option<near_sdk::PublicKey>,
+}
+
 #[ext_contract(ext_bridge_token_facory)]
 pub trait ExtBridgeTokenFactory {
     fn set_controller_for_tokens(&self, tokens_account_id: Vec<AccountId>);
@@ -195,6 +201,7 @@ pub struct Contract {
     pub destination_nonces: LookupMap<ChainKind, Nonce>,
     pub accounts_balances: LookupMap<AccountId, StorageBalance>,
     pub wnear_account_id: AccountId,
+    pub btc_connector: AccountId,
 }
 
 #[near]
@@ -258,6 +265,7 @@ impl Contract {
         prover_account: AccountId,
         mpc_signer: AccountId,
         wnear_account_id: AccountId,
+        btc_connector: AccountId,
     ) -> Self {
         let mut contract = Self {
             prover_account,
@@ -275,6 +283,7 @@ impl Contract {
             destination_nonces: LookupMap::new(StorageKey::DestinationNonces),
             accounts_balances: LookupMap::new(StorageKey::AccountsBalances),
             wnear_account_id,
+            btc_connector,
         };
 
         contract.acl_init_super_admin(near_sdk::env::predecessor_account_id());
@@ -763,6 +772,14 @@ impl Contract {
         storage_payer: AccountId,
         relayer_id: AccountId,
     ) {
+        if let OmniAddress::Btc(_) = fast_transfer.recipient {
+            let btc_account_id = self.get_native_token_id(ChainKind::Btc);
+            require!(
+                    fast_transfer.token_id == btc_account_id,
+                    "Only BTC can be transferred to the Bitcoin network."
+                );
+        }
+
         if self.is_transfer_finalised(fast_transfer.transfer_id) {
             env::panic_str("ERR_TRANSFER_ALREADY_FINALISED");
         }
@@ -996,6 +1013,46 @@ impl Contract {
             },
             env::attached_deposit(),
         )
+    }
+
+    #[payable]
+    #[access_control_any(roles(Role::DAO))]
+    pub fn set_native_token(&mut self, chain_kind: ChainKind, token_id: AccountId, decimals: u8) {
+        let storage_usage = env::storage_usage();
+        let token_address = OmniAddress::new_zero(chain_kind)
+            .unwrap_or_else(|_| env::panic_str("ERR_FAILED_TO_GET_ZERO_ADDRESS"));
+
+        require!(
+            self.token_id_to_address
+                .insert(&(chain_kind, token_id.clone()), &token_address)
+                .is_none(),
+            "ERR_TOKEN_EXIST"
+        );
+        require!(
+            self.token_address_to_id
+                .insert(&token_address, &token_id)
+                .is_none(),
+            "ERR_TOKEN_EXIST"
+        );
+        require!(
+            self.token_decimals
+                .insert(
+                    &token_address,
+                    &Decimals {
+                        decimals: decimals,
+                        origin_decimals: decimals
+                    }
+                )
+                .is_none(),
+            "ERR_TOKEN_EXIST"
+        );
+        let required_deposit = env::storage_byte_cost()
+            .saturating_mul((env::storage_usage().saturating_sub(storage_usage)).into());
+
+        require!(
+            env::attached_deposit() >= required_deposit,
+            "ERROR: The deposit is not sufficient to cover the storage."
+        );
     }
 
     #[payable]
@@ -1478,6 +1535,14 @@ impl Contract {
     ) {
         let mut required_balance = self.add_fin_transfer(&transfer_message.get_transfer_id());
         let token = self.get_token_id(&transfer_message.token);
+
+        if let OmniAddress::Btc(_) = transfer_message.recipient {
+            let btc_account_id = self.get_native_token_id(ChainKind::Btc);
+            require!(
+                token == btc_account_id,
+                "Only BTC can be transferred to the Bitcoin network."
+            );
+        }
 
         let fast_transfer = FastTransfer::from_transfer(transfer_message.clone(), token.clone());
         let recipient = match self.get_fast_transfer_status(&fast_transfer.id()) {
