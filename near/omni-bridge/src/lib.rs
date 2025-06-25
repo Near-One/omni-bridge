@@ -15,7 +15,6 @@ use near_sdk::{
     env, ext_contract, near, require, serde_json, AccountId, BorshStorageKey, Gas, NearToken,
     PanicOnDefault, Promise, PromiseError, PromiseOrValue, PromiseResult,
 };
-use omni_types::btc::UTXO;
 use omni_types::locker_args::{
     AddDeployedTokenArgs, BindTokenArgs, ClaimFeeArgs, DeployTokenArgs, FinTransferArgs,
     StorageDepositAction,
@@ -29,7 +28,6 @@ use omni_types::{
     FastTransferId, FastTransferStatus, Fee, InitTransferMsg, MetadataPayload, Nonce, OmniAddress,
     PayloadType, SignRequest, TransferId, TransferMessage, TransferMessagePayload, UpdateFee, H160,
 };
-use std::collections::HashMap;
 use std::str::FromStr;
 use storage::{
     Decimals, FastTransferStatusStorage, TransferMessageStorage, TransferMessageStorageValue,
@@ -147,12 +145,6 @@ pub trait ExtToken {
 #[derive(Clone)]
 pub struct BtcConfig {
     pub chain_signatures_root_public_key: Option<near_sdk::PublicKey>,
-}
-
-#[ext_contract(ext_btc_connector)]
-pub trait BtcConnector {
-    fn list_utxos(&self, utxo_storage_keys: Vec<String>) -> HashMap<String, Option<UTXO>>;
-    fn get_config(&self) -> BtcConfig;
 }
 
 #[ext_contract(ext_bridge_token_facory)]
