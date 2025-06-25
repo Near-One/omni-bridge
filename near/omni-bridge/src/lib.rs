@@ -644,15 +644,6 @@ impl Contract {
             )
             .into()
         } else {
-            if let OmniAddress::Btc(_) = transfer_message.recipient {
-                let token = self.get_token_id(&transfer_message.token);
-                let btc_account_id = self.get_native_token_id(ChainKind::Btc);
-                require!(
-                    token == btc_account_id,
-                    "Only BTC can be transferred to the Bitcoin network."
-                );
-            }
-
             self.process_fin_transfer_to_other_chain(predecessor_account_id, transfer_message);
             PromiseOrValue::Value(destination_nonce)
         }
@@ -730,14 +721,6 @@ impl Contract {
                 ),
             )
         } else {
-            if let OmniAddress::Btc(_) = fast_fin_transfer_msg.recipient {
-                let btc_account_id = self.get_native_token_id(ChainKind::Btc);
-                require!(
-                    token_id == btc_account_id,
-                    "Only BTC can be transferred to the Bitcoin network."
-                );
-            }
-
             self.fast_fin_transfer_to_other_chain(
                 &fast_transfer,
                 storage_payer,
@@ -799,6 +782,14 @@ impl Contract {
         storage_payer: AccountId,
         relayer_id: AccountId,
     ) {
+        if let OmniAddress::Btc(_) = fast_transfer.recipient {
+            let btc_account_id = self.get_native_token_id(ChainKind::Btc);
+            require!(
+                    fast_transfer.token_id == btc_account_id,
+                    "Only BTC can be transferred to the Bitcoin network."
+                );
+        }
+
         if self.is_transfer_finalised(fast_transfer.transfer_id) {
             env::panic_str("ERR_TRANSFER_ALREADY_FINALISED");
         }
@@ -1549,6 +1540,14 @@ impl Contract {
     ) {
         let mut required_balance = self.add_fin_transfer(&transfer_message.get_transfer_id());
         let token = self.get_token_id(&transfer_message.token);
+
+        if let OmniAddress::Btc(_) = transfer_message.recipient {
+            let btc_account_id = self.get_native_token_id(ChainKind::Btc);
+            require!(
+                token == btc_account_id,
+                "Only BTC can be transferred to the Bitcoin network."
+            );
+        }
 
         let fast_transfer = FastTransfer::from_transfer(transfer_message.clone(), token.clone());
         let recipient = match self.get_fast_transfer_status(&fast_transfer.id()) {
