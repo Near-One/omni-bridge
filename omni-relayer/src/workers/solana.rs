@@ -23,7 +23,7 @@ pub async fn process_init_transfer_event(
     config: config::Config,
     redis_connection: &mut redis::aio::MultiplexedConnection,
     key: String,
-    connector: Arc<OmniConnector>,
+    omni_connector: Arc<OmniConnector>,
     transfer: Transfer,
     near_nonce: Arc<utils::nonce::NonceManager>,
 ) -> Result<EventAction> {
@@ -59,7 +59,7 @@ pub async fn process_init_transfer_event(
         origin_chain: sender.get_chain(),
         origin_nonce: sequence,
     };
-    match connector
+    match omni_connector
         .is_transfer_finalised(Some(sender.get_chain()), recipient.get_chain(), sequence)
         .await
     {
@@ -101,7 +101,7 @@ pub async fn process_init_transfer_event(
         }
     }
 
-    let Ok(vaa) = connector
+    let Ok(vaa) = omni_connector
         .wormhole_get_vaa(config.wormhole.solana_chain_id, &emitter, sequence)
         .await
     else {
@@ -109,15 +109,16 @@ pub async fn process_init_transfer_event(
         return Ok(EventAction::Retry);
     };
 
-    let Ok(near_bridge_client) = connector.near_bridge_client() else {
-        warn!("Near bridge client is not configured");
-        return Ok(EventAction::Remove);
-    };
+    let fee_recipient = omni_connector
+        .near_bridge_client()
+        .and_then(|client| client.account_id())
+        .context("Failed to get relayer account id")?;
 
     let storage_deposit_actions = match utils::storage::get_storage_deposit_actions(
-        near_bridge_client,
+        &omni_connector,
         ChainKind::Sol,
         recipient,
+        &fee_recipient,
         &token.to_string(),
         fee.0,
         u128::from(native_fee),
@@ -148,7 +149,7 @@ pub async fn process_init_transfer_event(
         },
     };
 
-    match connector.fin_transfer(fin_transfer_args).await {
+    match omni_connector.fin_transfer(fin_transfer_args).await {
         Ok(tx_hash) => {
             info!("Finalized InitTransfer: {tx_hash:?}");
             Ok(EventAction::Remove)
@@ -175,7 +176,7 @@ pub async fn process_init_transfer_event(
 
 pub async fn process_fin_transfer_event(
     config: config::Config,
-    connector: Arc<OmniConnector>,
+    omni_connector: Arc<OmniConnector>,
     fin_transfer: FinTransfer,
     near_nonce: Arc<utils::nonce::NonceManager>,
 ) -> Result<EventAction> {
@@ -185,7 +186,7 @@ pub async fn process_fin_transfer_event(
 
     info!("Trying to process FinTransfer log on Solana");
 
-    let Ok(vaa) = connector
+    let Ok(vaa) = omni_connector
         .wormhole_get_vaa(config.wormhole.solana_chain_id, emitter, sequence)
         .await
     else {
@@ -210,7 +211,7 @@ pub async fn process_fin_transfer_event(
         .await
         .context("Failed to reserve nonce for near transaction")?;
 
-    match connector
+    match omni_connector
         .near_claim_fee(
             claim_fee_args,
             TransactionOptions {
@@ -246,7 +247,7 @@ pub async fn process_fin_transfer_event(
 
 pub async fn process_deploy_token_event(
     config: config::Config,
-    connector: Arc<OmniConnector>,
+    omni_connector: Arc<OmniConnector>,
     deploy_token_event: DeployToken,
     near_nonce: Arc<utils::nonce::NonceManager>,
 ) -> Result<EventAction> {
@@ -256,7 +257,7 @@ pub async fn process_deploy_token_event(
 
     info!("Trying to process DeployToken log on Solana");
 
-    let Ok(vaa) = connector
+    let Ok(vaa) = omni_connector
         .wormhole_get_vaa(config.wormhole.solana_chain_id, emitter, sequence)
         .await
     else {
@@ -289,7 +290,7 @@ pub async fn process_deploy_token_event(
         },
     };
 
-    match connector.bind_token(bind_token_args).await {
+    match omni_connector.bind_token(bind_token_args).await {
         Ok(tx_hash) => {
             info!("Bound token: {tx_hash:?}");
             Ok(EventAction::Remove)

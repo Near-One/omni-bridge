@@ -13,9 +13,7 @@ use near_rpc_client::NearRpcError;
 
 use omni_connector::OmniConnector;
 use omni_types::{
-    ChainKind, FastTransfer, Fee, OmniAddress, TransferId,
-    locker_args::{ClaimFeeArgs, FinTransferArgs},
-    prover_args::{EvmVerifyProofArgs, WormholeVerifyProofArgs},
+    ChainKind, FastTransfer, Fee, OmniAddress, TransferId, locker_args::ClaimFeeArgs,
     prover_result::ProofKind,
 };
 
@@ -29,8 +27,8 @@ use super::{EventAction, Transfer};
 #[allow(clippy::too_many_lines)]
 pub async fn process_init_transfer_event(
     config: config::Config,
-    connector: Arc<OmniConnector>,
-    near_fast_bridge_client: Option<Arc<near_bridge_client::NearBridgeClient>>,
+    omni_connector: Arc<OmniConnector>,
+    fast_connector: Arc<OmniConnector>,
     jsonrpc_client: near_jsonrpc_client::JsonRpcClient,
     transfer: Transfer,
     near_omni_nonce: Arc<utils::nonce::NonceManager>,
@@ -68,7 +66,7 @@ pub async fn process_init_transfer_event(
         origin_nonce: log.origin_nonce,
     };
 
-    match connector
+    match omni_connector
         .is_transfer_finalised(
             Some(chain_kind),
             log.recipient.get_chain(),
@@ -128,14 +126,15 @@ pub async fn process_init_transfer_event(
         }
     }
 
-    let vaa = connector
+    let vaa = omni_connector
         .wormhole_get_vaa_by_tx_hash(format!("{transaction_hash:?}"))
         .await
         .ok();
 
     if vaa.is_none() {
         if chain_kind == ChainKind::Eth {
-            let Some(Some(light_client)) = config.eth.map(|eth| eth.light_client) else {
+            let Some(Some(light_client)) = config.eth.as_ref().map(|eth| eth.light_client.clone())
+            else {
                 anyhow::bail!("Eth chain is not configured or light client account id is missing");
             };
 
@@ -165,15 +164,18 @@ pub async fn process_init_transfer_event(
         }
     }
 
-    let Ok(mut near_bridge_client) = connector.near_bridge_client().cloned() else {
-        anyhow::bail!("Failed to get near bridge client");
-    };
+    let mut recipient = log.recipient.clone();
+    let mut fee_recipient = omni_connector
+        .near_bridge_client()
+        .and_then(|client| client.account_id())
+        .context("Failed to get relayer account id")?;
 
     let mut nonce = None;
-    let mut recipient = log.recipient.clone();
-    if let Some(near_fast_bridge_client) = near_fast_bridge_client {
+    let mut connector = omni_connector;
+
+    if config.is_fast_relayer_enabled() {
         let Ok(token_id) = utils::storage::get_token_id(
-            &near_fast_bridge_client.clone(),
+            &fast_connector,
             transfer_id.origin_chain,
             &log.token_address.to_string(),
         )
@@ -195,8 +197,8 @@ pub async fn process_init_transfer_event(
             msg: log.message.clone(),
         };
 
-        let Ok(fast_transfer_status) = near_fast_bridge_client
-            .get_fast_transfer_status(fast_transfer_args.id())
+        let Ok(fast_transfer_status) = fast_connector
+            .near_get_fast_transfer_status(fast_transfer_args.id())
             .await
         else {
             warn!("Failed to get fast transfer status for transfer: {transfer_id:?}");
@@ -204,12 +206,15 @@ pub async fn process_init_transfer_event(
         };
 
         if let Some(status) = fast_transfer_status {
-            let relayer = near_fast_bridge_client.account_id().map_err(|_| {
-                anyhow::anyhow!("Failed to get relayer account id for near fast bridge client")
-            })?;
-            if status.finalised && status.relayer == relayer {
-                recipient = OmniAddress::Near(relayer);
-                near_bridge_client = (*near_fast_bridge_client).clone();
+            let relayer = fast_connector
+                .near_bridge_client()
+                .and_then(|client| client.account_id())
+                .context("Failed to get fast relayer account id")?;
+
+            if status.relayer == relayer {
+                recipient = OmniAddress::Near(relayer.clone());
+                fee_recipient = relayer;
+                connector = fast_connector;
                 if let Some(near_fast_nonce) = near_fast_nonce {
                     nonce = Some(
                         near_fast_nonce
@@ -235,9 +240,10 @@ pub async fn process_init_transfer_event(
     }
 
     let storage_deposit_actions = match utils::storage::get_storage_deposit_actions(
-        &near_bridge_client,
+        &connector,
         chain_kind,
         &recipient,
+        &fee_recipient,
         &log.token_address.to_string(),
         log.fee.0,
         log.native_fee.0,
@@ -252,49 +258,30 @@ pub async fn process_init_transfer_event(
     };
 
     let fin_transfer_args = if let Some(vaa) = vaa {
-        let verify_proof_args = WormholeVerifyProofArgs {
-            proof_kind: ProofKind::InitTransfer,
+        omni_connector::FinTransferArgs::NearFinTransferWithVaa {
+            chain_kind,
+            storage_deposit_actions,
             vaa,
-        };
-
-        FinTransferArgs {
-            chain_kind,
-            storage_deposit_actions,
-            prover_args: borsh::to_vec(&verify_proof_args).map_err(|_| {
-                BridgeSdkError::EthProofError("Failed to serialize proof".to_string())
-            })?,
-        }
-    } else {
-        let proof = connector
-            .evm_bridge_client(chain_kind)?
-            .get_proof_for_event(transaction_hash, ProofKind::InitTransfer)
-            .await?;
-
-        let verify_proof_args = EvmVerifyProofArgs {
-            proof_kind: ProofKind::InitTransfer,
-            proof,
-        };
-
-        FinTransferArgs {
-            chain_kind,
-            storage_deposit_actions,
-            prover_args: borsh::to_vec(&verify_proof_args).map_err(|_| {
-                BridgeSdkError::EthProofError("Failed to serialize proof".to_string())
-            })?,
-        }
-    };
-
-    match near_bridge_client
-        .fin_transfer(
-            fin_transfer_args,
-            TransactionOptions {
+            transaction_options: TransactionOptions {
                 nonce,
                 wait_until: TxExecutionStatus::Included,
                 wait_final_outcome_timeout_sec: None,
             },
-        )
-        .await
-    {
+        }
+    } else {
+        omni_connector::FinTransferArgs::NearFinTransferWithEvmProof {
+            chain_kind,
+            tx_hash: transaction_hash,
+            storage_deposit_actions,
+            transaction_options: TransactionOptions {
+                nonce,
+                wait_until: TxExecutionStatus::Included,
+                wait_final_outcome_timeout_sec: None,
+            },
+        }
+    };
+
+    match connector.fin_transfer(fin_transfer_args).await {
         Ok(tx_hash) => {
             info!("Finalized InitTransfer: {tx_hash:?}");
             Ok(EventAction::Remove)
@@ -329,7 +316,7 @@ pub async fn process_init_transfer_event(
 
 pub async fn process_evm_transfer_event(
     config: config::Config,
-    connector: Arc<OmniConnector>,
+    omni_connector: Arc<OmniConnector>,
     jsonrpc_client: JsonRpcClient,
     fin_transfer: FinTransfer,
     near_nonce: Arc<utils::nonce::NonceManager>,
@@ -354,7 +341,7 @@ pub async fn process_evm_transfer_event(
 
     info!("Trying to process FinTransfer log on {chain_kind:?}");
 
-    let vaa = connector
+    let vaa = omni_connector
         .wormhole_get_vaa_by_tx_hash(format!("{transaction_hash:?}"))
         .await
         .ok();
@@ -406,7 +393,7 @@ pub async fn process_evm_transfer_event(
         .await
         .context("Failed to reserve nonce for near transaction")?;
 
-    match connector
+    match omni_connector
         .near_claim_fee(
             claim_fee_args,
             TransactionOptions {
@@ -448,7 +435,7 @@ pub async fn process_evm_transfer_event(
 
 pub async fn process_deploy_token_event(
     config: config::Config,
-    connector: Arc<OmniConnector>,
+    omni_connector: Arc<OmniConnector>,
     jsonrpc_client: JsonRpcClient,
     deploy_token_event: DeployToken,
     near_nonce: Arc<utils::nonce::NonceManager>,
@@ -473,7 +460,7 @@ pub async fn process_deploy_token_event(
 
     info!("Trying to process DeployToken log on {chain_kind:?}");
 
-    let vaa = connector
+    let vaa = omni_connector
         .wormhole_get_vaa_by_tx_hash(format!("{transaction_hash:?}"))
         .await
         .ok();
@@ -530,7 +517,7 @@ pub async fn process_deploy_token_event(
         },
     };
 
-    match connector.bind_token(bind_token_args).await {
+    match omni_connector.bind_token(bind_token_args).await {
         Ok(tx_hash) => {
             info!("Bound token: {tx_hash:?}");
             Ok(EventAction::Remove)

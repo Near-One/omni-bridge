@@ -7,9 +7,9 @@ use near_bridge_client::NearBridgeClientBuilder;
 use near_crypto::InMemorySigner;
 use omni_connector::{OmniConnector, OmniConnectorBuilder};
 use omni_types::ChainKind;
-use solana_bridge_client::SolanaBridgeClientBuilder;
+use solana_bridge_client::{SolanaBridgeClient, SolanaBridgeClientBuilder};
 use solana_client::nonblocking::rpc_client::RpcClient;
-use wormhole_bridge_client::WormholeBridgeClientBuilder;
+use wormhole_bridge_client::{WormholeBridgeClient, WormholeBridgeClientBuilder};
 
 use crate::{config, startup};
 
@@ -90,30 +90,8 @@ fn build_evm_bridge_client(
         .transpose()
 }
 
-pub fn build_omni_connector(
-    config: &config::Config,
-    near_omni_signer: &InMemorySigner,
-    near_fast_signer: Option<&InMemorySigner>,
-) -> Result<(OmniConnector, Option<near_bridge_client::NearBridgeClient>)> {
-    info!("Building Omni connector");
-
-    let near_bridge_client = build_near_bridge_client(config, near_omni_signer)
-        .context("Failed to build NearBridgeClient")?;
-
-    let near_fast_bridge_client = if let Some(near_fast_signer) = near_fast_signer {
-        Some(
-            build_near_bridge_client(config, near_fast_signer)
-                .context("Failed to build NearFastBridgeClient")?,
-        )
-    } else {
-        None
-    };
-
-    let eth_bridge_client = build_evm_bridge_client(config, ChainKind::Eth)?;
-    let base_bridge_client = build_evm_bridge_client(config, ChainKind::Base)?;
-    let arb_bridge_client = build_evm_bridge_client(config, ChainKind::Arb)?;
-
-    let solana_bridge_client = config
+fn build_solana_bridge_client(config: &config::Config) -> Result<Option<SolanaBridgeClient>> {
+    config
         .solana
         .as_ref()
         .map(|solana| {
@@ -127,18 +105,37 @@ pub fn build_omni_connector(
                 .build()
                 .context("Failed to build SolanaBridgeClient")
         })
-        .transpose()?;
+        .transpose()
+}
 
-    let btc_bridge_client = config
+fn build_btc_bridge_client(config: &config::Config) -> Result<BtcBridgeClient> {
+    config
         .btc
         .as_ref()
         .map(|btc| BtcBridgeClient::new(&btc.rpc_http_url))
-        .context("Failed to create BtcBridgeClient")?;
+        .context("Failed to create BtcBridgeClient")
+}
 
-    let wormhole_bridge_client = WormholeBridgeClientBuilder::default()
+fn build_wormhole_bridge_client(config: &config::Config) -> Result<WormholeBridgeClient> {
+    WormholeBridgeClientBuilder::default()
         .endpoint(Some(config.wormhole.api_url.clone()))
         .build()
-        .context("Failed to build WormholeBridgeClient")?;
+        .context("Failed to build WormholeBridgeClient")
+}
+
+pub fn build_omni_connector(
+    config: &config::Config,
+    near_signer: &InMemorySigner,
+) -> Result<OmniConnector> {
+    info!("Building Omni connector");
+
+    let near_bridge_client = build_near_bridge_client(config, near_signer)?;
+    let eth_bridge_client = build_evm_bridge_client(config, ChainKind::Eth)?;
+    let base_bridge_client = build_evm_bridge_client(config, ChainKind::Base)?;
+    let arb_bridge_client = build_evm_bridge_client(config, ChainKind::Arb)?;
+    let solana_bridge_client = build_solana_bridge_client(config)?;
+    let btc_bridge_client = build_btc_bridge_client(config)?;
+    let wormhole_bridge_client = build_wormhole_bridge_client(config)?;
 
     let omni_connector = OmniConnectorBuilder::default()
         .near_bridge_client(Some(near_bridge_client))
@@ -151,5 +148,5 @@ pub fn build_omni_connector(
         .build()
         .context("Failed to build OmniConnector")?;
 
-    Ok((omni_connector, near_fast_bridge_client))
+    Ok(omni_connector)
 }

@@ -138,7 +138,7 @@ async fn handle_transaction_event(
             utils::redis::add_event(
                 &mut redis_connection,
                 utils::redis::EVENTS,
-                origin_transaction_id,
+                origin_transaction_id.clone(),
                 workers::Transfer::Evm {
                     chain_kind,
                     block_number,
@@ -155,9 +155,10 @@ async fn handle_transaction_event(
                 utils::redis::add_event(
                     &mut redis_connection,
                     utils::redis::EVENTS,
-                    tx_hash.to_string(),
+                    format!("{origin_transaction_id}_fast"),
                     crate::workers::Transfer::Fast {
                         block_number,
+                        tx_hash: origin_transaction_id,
                         token: log.token_address.to_string(),
                         amount: log.amount,
                         transfer_id: TransferId {

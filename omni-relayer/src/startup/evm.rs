@@ -288,9 +288,10 @@ async fn process_log(
             utils::redis::add_event(
                 redis_connection,
                 utils::redis::EVENTS,
-                tx_hash.to_string(),
+                format!("{tx_hash}_fast"),
                 crate::workers::Transfer::Fast {
                     block_number,
+                    tx_hash: format!("{tx_hash:?}"),
                     token: log.token_address.to_string(),
                     amount: log.amount,
                     transfer_id: TransferId {

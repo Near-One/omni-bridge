@@ -59,19 +59,21 @@ async fn main() -> Result<()> {
         config.near.omni_credentials_path.as_ref(),
         config::NearSignerType::Omni,
     )?;
+    let omni_connector = Arc::new(startup::build_omni_connector(&config, &near_omni_signer)?);
 
-    let near_fast_signer = if config.is_fast_relayer_enabled() {
-        Some(startup::near::get_signer(
+    let (near_fast_signer, fast_connector) = if config.is_fast_relayer_enabled() {
+        let near_fast_signer = startup::near::get_signer(
             config.near.fast_credentials_path.as_ref(),
             config::NearSignerType::Fast,
-        )?)
+        )?;
+
+        (
+            Some(near_fast_signer.clone()),
+            Arc::new(startup::build_omni_connector(&config, &near_fast_signer)?),
+        )
     } else {
-        None
+        (None, Default::default())
     };
-    let (connector, near_fast_bridge_client) =
-        startup::build_omni_connector(&config, &near_omni_signer, near_fast_signer.as_ref())?;
-    let connector = Arc::new(connector);
-    let near_fast_bridge_client = near_fast_bridge_client.map(Arc::new);
 
     let near_omni_nonce = Arc::new(utils::nonce::NonceManager::new(
         utils::nonce::ChainClient::Near {
@@ -184,8 +186,8 @@ async fn main() -> Result<()> {
     handles.push(tokio::spawn({
         let config = config.clone();
         let redis_client = redis_client.clone();
-        let connector = connector.clone();
-        let near_fast_bridge_client = near_fast_bridge_client.clone();
+        let omni_connector = omni_connector.clone();
+        let fast_connector = fast_connector.clone();
         let jsonrpc_client = jsonrpc_client.clone();
         let near_omni_nonce = near_omni_nonce.clone();
         let near_fast_nonce = near_fast_nonce.clone();
@@ -195,8 +197,8 @@ async fn main() -> Result<()> {
             workers::process_events(
                 config,
                 redis_client,
-                connector,
-                near_fast_bridge_client,
+                omni_connector,
+                fast_connector,
                 jsonrpc_client,
                 near_omni_nonce,
                 near_fast_nonce,
