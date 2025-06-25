@@ -59,12 +59,17 @@ fn setup_test_env(
     }
 }
 
-fn setup_contract(prover_id: String, mpc_signer_id: String, wnear_id: String, btc_connector_id: String) -> Contract {
+fn setup_contract(
+    prover_id: String,
+    mpc_signer_id: String,
+    wnear_id: String,
+    btc_connector_id: String,
+) -> Contract {
     Contract::new(
         AccountId::try_from(prover_id).expect("Invalid default prover ID"),
         AccountId::try_from(mpc_signer_id).expect("Invalid default mpc signer ID"),
         AccountId::try_from(wnear_id).expect("Invalid default wnear ID"),
-        AccountId::try_from(btc_connector_id).expect("Invalid default btc_connector ID")
+        AccountId::try_from(btc_connector_id).expect("Invalid default btc_connector ID"),
     )
 }
 

@@ -1,17 +1,18 @@
+use crate::{
+    ext_token, Contract, ContractExt, Role, FT_TRANSFER_CALL_GAS, FT_TRANSFER_GAS, MINT_TOKEN_GAS,
+    ONE_YOCTO,
+};
+use bitcoin::{Address, Network, TxOut};
 use near_plugins::{pause, AccessControllable, Pausable};
 use near_sdk::json_types::U128;
 use near_sdk::{
-    env, near, require, serde_json, AccountId, Gas, NearToken,
-    Promise, PromiseError, PromiseOrValue,
+    env, near, require, serde_json, AccountId, Gas, NearToken, Promise, PromiseError,
+    PromiseOrValue,
 };
 use omni_types::btc::TokenReceiverMessage;
 use omni_types::near_events::OmniBridgeEvent;
-use omni_types::{
-    ChainKind, Fee,  OmniAddress, TransferId, TransferMessage,
-};
+use omni_types::{ChainKind, Fee, OmniAddress, TransferId, TransferMessage};
 use std::str::FromStr;
-use crate::{Contract, ContractExt, Role, ext_token, ONE_YOCTO, FT_TRANSFER_CALL_GAS, MINT_TOKEN_GAS, FT_TRANSFER_GAS};
-use bitcoin::{TxOut, Address, Network};
 
 const SUBMIT_TRANSFER_TO_BTC_CONNECTOR_CALLBACK_GAS: Gas = Gas::from_tgas(5);
 
@@ -32,13 +33,24 @@ impl Contract {
         let amount = U128(transfer.message.amount.0 - transfer.message.fee.fee.0);
 
         if let OmniAddress::Btc(btc_address) = transfer.message.recipient.clone() {
-            if let TokenReceiverMessage::Withdraw{target_btc_address, input: _, output} = message {
-                require!(btc_address == target_btc_address, "Incorrect target address");
+            if let TokenReceiverMessage::Withdraw {
+                target_btc_address,
+                input: _,
+                output,
+            } = message
+            {
+                require!(
+                    btc_address == target_btc_address,
+                    "Incorrect target address"
+                );
                 let output_amount = self.get_output_amount(output.clone(), target_btc_address);
 
                 let max_fee = transfer.message.msg.parse::<u64>();
                 if let Ok(max_fee) = max_fee {
-                    require!(amount.0 - u128::from(output_amount) <= u128::from(max_fee), "Fee exceeds max allowed fee");
+                    require!(
+                        amount.0 - u128::from(output_amount) <= u128::from(max_fee),
+                        "Fee exceeds max allowed fee"
+                    );
                 }
             } else {
                 env::panic_str("Invalid message type");
@@ -51,9 +63,15 @@ impl Contract {
             require!(&transfer.message.fee == fee, "Invalid fee");
         }
 
-        require!(transfer.message.get_destination_chain() == ChainKind::Btc, "Incorrect destination chain");
+        require!(
+            transfer.message.get_destination_chain() == ChainKind::Btc,
+            "Incorrect destination chain"
+        );
         let btc_account_id = self.get_native_token_id(ChainKind::Btc);
-        require!(self.get_token_id(&transfer.message.token) == btc_account_id, "BTC account id");
+        require!(
+            self.get_token_id(&transfer.message.token) == btc_account_id,
+            "BTC account id"
+        );
 
         self.remove_transfer_message(transfer_id);
 
@@ -66,16 +84,18 @@ impl Contract {
             .then(
                 Self::ext(env::current_account_id())
                     .with_static_gas(SUBMIT_TRANSFER_TO_BTC_CONNECTOR_CALLBACK_GAS)
-                    .submit_transfer_to_btc_connector_callback(transfer.message, transfer.owner, fee_recipient),
+                    .submit_transfer_to_btc_connector_callback(
+                        transfer.message,
+                        transfer.owner,
+                        fee_recipient,
+                    ),
             )
     }
 
-    fn get_output_amount(&self,
-                         output: Vec<TxOut>,
-                         target_address: String) -> u64 {
+    fn get_output_amount(&self, output: Vec<TxOut>, target_address: String) -> u64 {
         let target_address = match Address::from_str(&target_address) {
             Ok(addr) => addr,
-            Err(_) => env::panic_str("Invalid target address")
+            Err(_) => env::panic_str("Invalid target address"),
         };
 
         let network = self.get_btc_network();
@@ -133,7 +153,7 @@ impl Contract {
                 &OmniBridgeEvent::ClaimFeeEvent {
                     transfer_message: transfer_msg.clone(),
                 }
-                    .to_log_string(),
+                .to_log_string(),
             );
 
             let fee = transfer_msg.fee.fee;

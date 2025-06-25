@@ -7,15 +7,15 @@ pub mod u64_dec_format {
     use near_sdk::serde::{Deserialize, Deserializer, Serializer};
 
     pub fn serialize<S>(num: &u64, serializer: S) -> Result<S::Ok, S::Error>
-        where
-            S: Serializer,
+    where
+        S: Serializer,
     {
         serializer.serialize_str(&num.to_string())
     }
 
     pub fn deserialize<'de, D>(deserializer: D) -> Result<u64, D::Error>
-        where
-            D: Deserializer<'de>,
+    where
+        D: Deserializer<'de>,
     {
         String::deserialize(deserializer)?
             .parse()
@@ -41,8 +41,8 @@ pub struct UTXO {
     pub tx_bytes: Vec<u8>,
     pub vout: usize,
     #[serde(
-    serialize_with = "u64_dec_format::serialize",
-    deserialize_with = "u64_dec_format::deserialize"
+        serialize_with = "u64_dec_format::serialize",
+        deserialize_with = "u64_dec_format::deserialize"
     )]
     pub balance: u64,
 }

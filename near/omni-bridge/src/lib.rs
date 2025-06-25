@@ -1,12 +1,12 @@
 #![allow(clippy::too_many_arguments)]
 use errors::SdkExpect;
+use near_contract_standards::fungible_token::metadata::FungibleTokenMetadata;
+use near_contract_standards::fungible_token::receiver::FungibleTokenReceiver;
+use near_contract_standards::storage_management::StorageBalance;
 use near_plugins::{
     access_control, access_control_any, pause, AccessControlRole, AccessControllable, Pausable,
     Upgradable,
 };
-use near_contract_standards::fungible_token::metadata::FungibleTokenMetadata;
-use near_contract_standards::fungible_token::receiver::FungibleTokenReceiver;
-use near_contract_standards::storage_management::StorageBalance;
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::collections::{LookupMap, LookupSet};
 use near_sdk::json_types::{Base64VecU8, U128};
@@ -36,10 +36,10 @@ use storage::{
     NEP141_DEPOSIT,
 };
 
+mod btc;
 mod errors;
 mod migrate;
 mod storage;
-mod btc;
 
 #[cfg(test)]
 mod tests;
@@ -647,7 +647,10 @@ impl Contract {
             if let OmniAddress::Btc(_) = transfer_message.recipient {
                 let token = self.get_token_id(&transfer_message.token);
                 let btc_account_id = self.get_native_token_id(ChainKind::Btc);
-                assert_eq!(token, btc_account_id);
+                require!(
+                    token == btc_account_id,
+                    "Only BTC can be transferred to the Bitcoin network."
+                );
             }
 
             self.process_fin_transfer_to_other_chain(predecessor_account_id, transfer_message);
@@ -729,7 +732,10 @@ impl Contract {
         } else {
             if let OmniAddress::Btc(_) = fast_fin_transfer_msg.recipient {
                 let btc_account_id = self.get_native_token_id(ChainKind::Btc);
-                assert_eq!(token_id, btc_account_id);
+                require!(
+                    token_id == btc_account_id,
+                    "Only BTC can be transferred to the Bitcoin network."
+                );
             }
 
             self.fast_fin_transfer_to_other_chain(
@@ -923,7 +929,7 @@ impl Contract {
             &OmniBridgeEvent::ClaimFeeEvent {
                 transfer_message: message.clone(),
             }
-                .to_log_string(),
+            .to_log_string(),
         );
 
         let token_address = self
@@ -1030,12 +1036,7 @@ impl Contract {
 
     #[payable]
     #[access_control_any(roles(Role::DAO))]
-    pub fn set_native_token(
-        &mut self,
-        chain_kind: ChainKind,
-        token_id: AccountId,
-        decimals: u8,
-    ) {
+    pub fn set_native_token(&mut self, chain_kind: ChainKind, token_id: AccountId, decimals: u8) {
         let storage_usage = env::storage_usage();
         let token_address = OmniAddress::new_zero(chain_kind)
             .unwrap_or_else(|_| env::panic_str("ERR_FAILED_TO_GET_ZERO_ADDRESS"));

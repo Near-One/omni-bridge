@@ -47,7 +47,7 @@ pub enum OmniBridgeEvent {
     },
     BtcTransferEvent {
         btc_tx_hash: String,
-    }
+    },
 }
 
 impl OmniBridgeEvent {

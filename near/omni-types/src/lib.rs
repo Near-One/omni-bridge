@@ -10,6 +10,7 @@ use schemars::JsonSchema;
 use serde::de::Visitor;
 use sol_address::SolAddress;
 
+pub mod btc;
 pub mod evm;
 pub mod locker_args;
 pub mod mpc_types;
@@ -18,7 +19,6 @@ pub mod prover_args;
 pub mod prover_result;
 pub mod sol_address;
 pub mod utils;
-pub mod btc;
 
 #[cfg(test)]
 mod tests;
@@ -199,7 +199,7 @@ pub enum OmniAddress {
     Sol(SolAddress),
     Arb(EvmAddress),
     Base(EvmAddress),
-    Btc(BtcAddress)
+    Btc(BtcAddress),
 }
 
 impl OmniAddress {
@@ -236,7 +236,10 @@ impl OmniAddress {
                 Self::new_from_evm_address(chain_kind, Self::to_evm_address(address)?)
             }
             ChainKind::Near => Ok(Self::Near(Self::to_near_account_id(address)?)),
-            ChainKind::Btc => Ok(Self::Btc(String::from_utf8(address.to_vec()).map_err(|e| format!("Invalid UTF-8 in BTC address: {}", e))?)),
+            ChainKind::Btc => Ok(Self::Btc(
+                String::from_utf8(address.to_vec())
+                    .map_err(|e| format!("Invalid UTF-8 in BTC address: {}", e))?,
+            )),
         }
     }
 
