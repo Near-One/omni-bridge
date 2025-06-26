@@ -222,6 +222,13 @@ pub async fn process_events(
                                         &key,
                                     )
                                     .await;
+                                    utils::redis::remove_event(
+                                        &mut redis_connection,
+                                        utils::redis::FEE_MAPPING,
+                                        serde_json::to_string(&transfer_message.get_transfer_id())
+                                            .unwrap_or_default(),
+                                    )
+                                    .await;
                                 }
                             }
                         }
@@ -279,6 +286,16 @@ pub async fn process_events(
                                         &key,
                                     )
                                     .await;
+                                    utils::redis::remove_event(
+                                        &mut redis_connection,
+                                        utils::redis::FEE_MAPPING,
+                                        serde_json::to_string(&TransferId {
+                                            origin_nonce: log.origin_nonce,
+                                            origin_chain: chain_kind,
+                                        })
+                                        .unwrap_or_default(),
+                                    )
+                                    .await;
                                 }
                             }
                         }
@@ -327,6 +344,16 @@ pub async fn process_events(
                                         &mut redis_connection,
                                         utils::redis::EVENTS,
                                         &key,
+                                    )
+                                    .await;
+                                    utils::redis::remove_event(
+                                        &mut redis_connection,
+                                        utils::redis::FEE_MAPPING,
+                                        serde_json::to_string(&TransferId {
+                                            origin_nonce: sequence,
+                                            origin_chain: ChainKind::Sol,
+                                        })
+                                        .unwrap_or_default(),
                                     )
                                     .await;
                                 }
