@@ -77,27 +77,25 @@ pub async fn process_init_transfer_event(
                 anyhow::anyhow!("Failed to parse \"{}\" as `OmniAddress`: {:?}", sender, err)
             })?;
 
-        match utils::bridge_api::is_fee_sufficient(
+        let Ok(needed_fee) =
+            utils::bridge_api::get_transfer_fee(&config, sender, recipient, &token).await
+        else {
+            warn!("Failed to get transfer fee for transfer: {transfer:?}");
+            return Ok(EventAction::Retry);
+        };
+
+        if !utils::bridge_api::is_fee_sufficient(
             &config,
+            needed_fee,
             Fee {
                 fee,
                 native_fee: u128::from(native_fee).into(),
             },
-            sender,
-            recipient,
-            &token,
         )
         .await
         {
-            Ok(true) => {}
-            Ok(false) => {
-                warn!("Insufficient fee for transfer: {transfer:?}");
-                return Ok(EventAction::Retry);
-            }
-            Err(err) => {
-                warn!("Failed to check fee sufficiency: {err:?}");
-                return Ok(EventAction::Retry);
-            }
+            warn!("Insufficient fee for transfer: {transfer:?}");
+            return Ok(EventAction::Retry);
         }
     }
 

@@ -13,7 +13,10 @@ use omni_types::{ChainKind, Fee, OmniAddress, TransferId, near_events::OmniBridg
 use solana_sdk::pubkey::Pubkey;
 use tokio_stream::StreamExt;
 
-use crate::{config, utils, workers};
+use crate::{
+    config, utils,
+    workers::{self, SignTransferEvent},
+};
 
 const OMNI_EVENTS: &str = "omni_events";
 
@@ -60,6 +63,13 @@ async fn handle_transaction_event(
         OmniTransferMessage::NearSignTransferEvent(sign_event) => {
             info!("Received NearSignTransferEvent");
 
+            let OmniTransactionOrigin::NearReceipt { signer_id, .. } = origin else {
+                anyhow::bail!(
+                    "Expected NearReceipt for NearSignTransferEvent: {:?}",
+                    sign_event
+                );
+            };
+
             utils::redis::add_event(
                 &mut redis_connection,
                 utils::redis::EVENTS,
@@ -68,9 +78,12 @@ async fn handle_transaction_event(
                     .transfer_id
                     .origin_nonce
                     .to_string(),
-                OmniBridgeEvent::SignTransferEvent {
-                    signature: sign_event.signature,
-                    message_payload: sign_event.message_payload,
+                SignTransferEvent {
+                    event: OmniBridgeEvent::SignTransferEvent {
+                        signature: sign_event.signature,
+                        message_payload: sign_event.message_payload,
+                    },
+                    signer_id,
                 },
             )
             .await;

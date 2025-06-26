@@ -5,19 +5,19 @@ use omni_types::{Fee, OmniAddress};
 
 use crate::config;
 
-#[derive(Debug, serde::Deserialize)]
+#[derive(Debug, serde::Serialize, serde::Deserialize, PartialEq, Clone)]
 pub struct TransferFeeResponse {
     pub native_token_fee: Option<U128>,
     pub transferred_token_fee: Option<U128>,
+    pub usd_fee: f64,
 }
 
-pub async fn is_fee_sufficient(
+pub async fn get_transfer_fee(
     config: &config::Config,
-    provided_fee: Fee,
     sender: &OmniAddress,
     recipient: &OmniAddress,
     token: &OmniAddress,
-) -> Result<bool> {
+) -> Result<TransferFeeResponse> {
     let url = format!(
         "{}/api/v1/transfer-fee?sender={}&recipient={}&token={}",
         config
@@ -29,28 +29,33 @@ pub async fn is_fee_sufficient(
         recipient,
         token
     );
-
-    let response = reqwest::get(&url)
+    reqwest::get(&url)
         .await?
         .json::<TransferFeeResponse>()
-        .await?;
+        .await
+        .map_err(Into::into)
+}
 
-    let native_fee = response.native_token_fee.unwrap_or_default().0;
-    let transferred_fee = response.transferred_token_fee.unwrap_or_default().0;
+pub async fn is_fee_sufficient(
+    config: &config::Config,
+    needed_fee: TransferFeeResponse,
+    provided_fee: Fee,
+) -> bool {
+    let native_fee = needed_fee.native_token_fee.unwrap_or_default().0
+        * u128::from(100 - config.bridge_indexer.fee_discount)
+        / 100;
+    let transferred_fee = needed_fee.transferred_token_fee.unwrap_or_default().0
+        * u128::from(100 - config.bridge_indexer.fee_discount)
+        / 100;
 
     match (native_fee, transferred_fee) {
-        (0, 0) => Ok(true),
-        (0, fee) if fee > 0 => {
-            Ok(provided_fee.fee.0
-                >= fee * u128::from(100 - config.bridge_indexer.fee_discount) / 100)
+        (0, 0) => true,
+        (0, fee) if fee > 0 => provided_fee.fee.0 >= fee,
+        (native_fee, 0) if native_fee > 0 => provided_fee.native_fee.0 >= native_fee,
+        (native_fee, fee) => {
+            U256::from(provided_fee.fee.0) * U256::from(native_fee)
+                + U256::from(provided_fee.native_fee.0) * U256::from(fee)
+                >= U256::from(fee) * U256::from(native_fee)
         }
-        (native_fee, 0) if native_fee > 0 => Ok(provided_fee.native_fee.0
-            >= native_fee * u128::from(100 - config.bridge_indexer.fee_discount) / 100),
-        (native_fee, fee) => Ok(U256::from(provided_fee.fee.0) * U256::from(native_fee)
-            + U256::from(provided_fee.native_fee.0) * U256::from(fee)
-            >= U256::from(fee)
-                * U256::from(native_fee)
-                * U256::from(100 - config.bridge_indexer.fee_discount)
-                / U256::from(100)),
     }
 }

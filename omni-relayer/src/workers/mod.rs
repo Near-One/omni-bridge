@@ -9,7 +9,7 @@ use log::warn;
 use ethereum_types::H256;
 
 use near_jsonrpc_client::JsonRpcClient;
-use near_sdk::json_types::U128;
+use near_sdk::{AccountId, json_types::U128};
 use solana_sdk::pubkey::Pubkey;
 
 use omni_connector::OmniConnector;
@@ -82,6 +82,12 @@ pub enum Transfer {
         storage_deposit_amount: Option<U128>,
         safe_confirmations: u64,
     },
+}
+
+#[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
+pub struct SignTransferEvent {
+    pub event: OmniBridgeEvent,
+    pub signer_id: AccountId,
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
@@ -169,7 +175,10 @@ pub async fn process_events(
 
         for (key, event) in events {
             if let Ok(transfer) = serde_json::from_str::<Transfer>(&event) {
-                if let Transfer::Near { .. } = transfer {
+                if let Transfer::Near {
+                    transfer_message, ..
+                } = transfer.clone()
+                {
                     handlers.push(tokio::spawn({
                         let config = config.clone();
                         let mut redis_connection = redis_connection.clone();
@@ -195,6 +204,12 @@ pub async fn process_events(
                                         &mut redis_connection,
                                         utils::redis::EVENTS,
                                         &key,
+                                    )
+                                    .await;
+                                    utils::redis::remove_event(
+                                        &mut redis_connection,
+                                        utils::redis::FEE_MAPPING,
+                                        transfer_message.origin_nonce,
                                     )
                                     .await;
                                 }
@@ -399,47 +414,45 @@ pub async fn process_events(
                         }
                     }));
                 }
-            } else if let Ok(omni_bridge_event) = serde_json::from_str::<OmniBridgeEvent>(&event) {
-                if let OmniBridgeEvent::SignTransferEvent { .. } = omni_bridge_event {
-                    handlers.push(tokio::spawn({
-                        let config = config.clone();
-                        let mut redis_connection = redis_connection.clone();
-                        let omni_connector = omni_connector.clone();
-                        let signer = signer.clone();
-                        let evm_nonces = evm_nonces.clone();
+            } else if let Ok(sign_transfer_event) =
+                serde_json::from_str::<SignTransferEvent>(&event)
+            {
+                handlers.push(tokio::spawn({
+                    let mut redis_connection = redis_connection.clone();
+                    let omni_connector = omni_connector.clone();
+                    let signer = signer.clone();
+                    let evm_nonces = evm_nonces.clone();
 
-                        async move {
-                            match near::process_sign_transfer_event(
-                                config,
-                                omni_connector,
-                                signer,
-                                omni_bridge_event,
-                                evm_nonces,
-                            )
-                            .await
-                            {
-                                Ok(EventAction::Retry) => {}
-                                Ok(EventAction::Remove) => {
-                                    utils::redis::remove_event(
-                                        &mut redis_connection,
-                                        utils::redis::EVENTS,
-                                        &key,
-                                    )
-                                    .await;
-                                }
-                                Err(err) => {
-                                    warn!("{err:?}");
-                                    utils::redis::remove_event(
-                                        &mut redis_connection,
-                                        utils::redis::EVENTS,
-                                        &key,
-                                    )
-                                    .await;
-                                }
+                    async move {
+                        match near::process_sign_transfer_event(
+                            omni_connector,
+                            signer,
+                            sign_transfer_event,
+                            evm_nonces,
+                        )
+                        .await
+                        {
+                            Ok(EventAction::Retry) => {}
+                            Ok(EventAction::Remove) => {
+                                utils::redis::remove_event(
+                                    &mut redis_connection,
+                                    utils::redis::EVENTS,
+                                    &key,
+                                )
+                                .await;
+                            }
+                            Err(err) => {
+                                warn!("{err:?}");
+                                utils::redis::remove_event(
+                                    &mut redis_connection,
+                                    utils::redis::EVENTS,
+                                    &key,
+                                )
+                                .await;
                             }
                         }
-                    }));
-                }
+                    }
+                }));
             } else if let Ok(fin_transfer_event) = serde_json::from_str::<FinTransfer>(&event) {
                 if let FinTransfer::Evm { .. } = fin_transfer_event {
                     handlers.push(tokio::spawn({

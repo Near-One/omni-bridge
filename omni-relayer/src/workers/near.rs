@@ -15,7 +15,10 @@ use solana_sdk::{instruction::InstructionError, pubkey::Pubkey, transaction::Tra
 use omni_connector::OmniConnector;
 use omni_types::{ChainKind, FastTransfer, OmniAddress, TransferId, near_events::OmniBridgeEvent};
 
-use crate::{config, utils, workers::PAUSED_ERROR};
+use crate::{
+    config, utils,
+    workers::{PAUSED_ERROR, SignTransferEvent},
+};
 
 use super::{EventAction, Transfer};
 
@@ -79,23 +82,53 @@ pub async fn process_transfer_event(
             .as_ref()
             .is_some_and(|list| list.contains(&transfer_message.sender))
     {
-        match utils::bridge_api::is_fee_sufficient(
+        let Ok(needed_fee) = utils::bridge_api::get_transfer_fee(
             &config,
-            transfer_message.fee.clone(),
             &transfer_message.sender,
             &transfer_message.recipient,
             &transfer_message.token,
         )
         .await
+        else {
+            warn!("Failed to get transfer fee for transfer: {transfer_message:?}");
+            return Ok(EventAction::Retry);
+        };
+
+        if !utils::bridge_api::is_fee_sufficient(
+            &config,
+            needed_fee.clone(),
+            transfer_message.fee.clone(),
+        )
+        .await
         {
-            Ok(true) => {}
-            Ok(false) => {
-                warn!("Insufficient fee for transfer: {transfer_message:?}");
-                return Ok(EventAction::Retry);
-            }
-            Err(err) => {
-                warn!("Failed to check fee sufficiency: {err:?}");
-                return Ok(EventAction::Retry);
+            match utils::redis::get_fee(redis_connection, transfer_message.origin_nonce).await {
+                Some(historical_fee) => {
+                    if utils::bridge_api::is_fee_sufficient(
+                        &config,
+                        historical_fee.clone(),
+                        transfer_message.fee.clone(),
+                    )
+                    .await
+                    {
+                        info!(
+                            "Historical fee is sufficient for transfer: {transfer_message:?}, using historical fee: {historical_fee:?}"
+                        );
+                    } else {
+                        warn!("Insufficient fee for transfer: {transfer_message:?}");
+                        return Ok(EventAction::Retry);
+                    }
+                }
+                None => {
+                    utils::redis::add_event(
+                        redis_connection,
+                        utils::redis::FEE_MAPPING,
+                        transfer_message.origin_nonce,
+                        needed_fee,
+                    )
+                    .await;
+                    warn!("Insufficient fee for transfer: {transfer_message:?}");
+                    return Ok(EventAction::Retry);
+                }
             }
         }
     }
@@ -181,20 +214,30 @@ pub async fn process_transfer_event(
 }
 
 pub async fn process_sign_transfer_event(
-    config: config::Config,
     omni_connector: Arc<OmniConnector>,
     signer: AccountId,
-    sign_transfer_event: OmniBridgeEvent,
+    sign_transfer_event: SignTransferEvent,
     evm_nonces: Arc<utils::nonce::EvmNonceManagers>,
 ) -> Result<EventAction> {
-    let OmniBridgeEvent::SignTransferEvent {
-        message_payload, ..
+    let SignTransferEvent {
+        event: OmniBridgeEvent::SignTransferEvent {
+            message_payload, ..
+        },
+        signer_id,
     } = &sign_transfer_event
     else {
         anyhow::bail!("Expected SignTransferEvent, got: {:?}", sign_transfer_event);
     };
 
     info!("Trying to process SignTransferEvent log on NEAR");
+
+    if signer_id != &signer {
+        anyhow::bail!("Different relayer signed transfer");
+    }
+
+    if message_payload.fee_recipient != Some(signer) {
+        anyhow::bail!("Fee recipient mismatch");
+    }
 
     match omni_connector
         .is_transfer_finalised(
@@ -215,54 +258,6 @@ pub async fn process_sign_transfer_event(
         }
     }
 
-    if message_payload.fee_recipient != Some(signer) {
-        anyhow::bail!("Fee recipient mismatch");
-    }
-
-    if config.is_bridge_api_enabled() {
-        let transfer_message = match omni_connector
-            .near_get_transfer_message(message_payload.transfer_id)
-            .await
-        {
-            Ok(transfer_message) => transfer_message,
-            Err(err) => {
-                if err.to_string().contains("The transfer does not exist") {
-                    anyhow::bail!(
-                        "Transfer does not exist: {:?} (probably fee is 0 or transfer was already finalized)",
-                        message_payload.transfer_id
-                    );
-                }
-
-                warn!(
-                    "Failed to get transfer message: {:?}",
-                    message_payload.transfer_id
-                );
-
-                return Ok(EventAction::Retry);
-            }
-        };
-
-        match utils::bridge_api::is_fee_sufficient(
-            &config,
-            transfer_message.fee,
-            &transfer_message.sender,
-            &transfer_message.recipient,
-            &transfer_message.token,
-        )
-        .await
-        {
-            Ok(true) => {}
-            Ok(false) => {
-                warn!("Insufficient fee for transfer: {message_payload:?}");
-                return Ok(EventAction::Retry);
-            }
-            Err(err) => {
-                warn!("Failed to check fee sufficiency: {err:?}");
-                return Ok(EventAction::Retry);
-            }
-        }
-    }
-
     let fin_transfer_args = match message_payload.recipient.get_chain() {
         ChainKind::Near => {
             anyhow::bail!("Near to Near transfers are not supported yet");
@@ -275,7 +270,7 @@ pub async fn process_sign_transfer_event(
 
             omni_connector::FinTransferArgs::EvmFinTransfer {
                 chain_kind: message_payload.recipient.get_chain(),
-                event: sign_transfer_event,
+                event: sign_transfer_event.event,
                 tx_nonce: Some(nonce.into()),
             }
         }
@@ -288,7 +283,7 @@ pub async fn process_sign_transfer_event(
             };
 
             omni_connector::FinTransferArgs::SolanaFinTransfer {
-                event: sign_transfer_event,
+                event: sign_transfer_event.event,
                 solana_token: Pubkey::new_from_array(token.0),
             }
         }
