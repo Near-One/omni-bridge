@@ -63,6 +63,10 @@ pub mod tests {
         "relayer".parse().unwrap()
     }
 
+    pub fn fast_relayer_account_id() -> AccountId {
+        "fast_relayer".parse().unwrap()
+    }
+
     pub fn account_n(n: u8) -> AccountId {
         format!("account_{n}").parse().unwrap()
     }

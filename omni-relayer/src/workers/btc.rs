@@ -147,15 +147,15 @@ pub async fn process_btc_to_near_init_transfer_event(
                     NearRpcError::NonceError
                     | NearRpcError::FinalizationError
                     | NearRpcError::RpcTransactionError(JsonRpcError::TransportError(_)) => {
-                        warn!("Failed to claim fee, retrying: {near_rpc_error:?}");
+                        warn!("Failed to finalize BTC transaction, retrying: {near_rpc_error:?}");
                         return Ok(EventAction::Retry);
                     }
                     _ => {
-                        anyhow::bail!("Failed to claim fee: {near_rpc_error:?}");
+                        anyhow::bail!("Failed to finalize BTC transaction: {near_rpc_error:?}");
                     }
                 };
             }
-            anyhow::bail!("Failed to claim fee: {err:?}");
+            anyhow::bail!("Failed to finalize BTC transaction: {err:?}");
         }
     }
 }
