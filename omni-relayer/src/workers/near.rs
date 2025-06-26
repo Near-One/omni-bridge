@@ -94,37 +94,17 @@ pub async fn process_transfer_event(
             return Ok(EventAction::Retry);
         };
 
-        if !utils::bridge_api::is_fee_sufficient(&config, &needed_fee, &transfer_message.fee).await
+        if let Some(event_action) = utils::bridge_api::check_fee(
+            &config,
+            redis_connection,
+            &transfer_message,
+            transfer_message.origin_nonce,
+            &needed_fee,
+            &transfer_message.fee,
+        )
+        .await
         {
-            match utils::redis::get_fee(redis_connection, transfer_message.origin_nonce).await {
-                Some(historical_fee) => {
-                    if utils::bridge_api::is_fee_sufficient(
-                        &config,
-                        &historical_fee,
-                        &transfer_message.fee,
-                    )
-                    .await
-                    {
-                        info!(
-                            "Historical fee is sufficient for transfer: {transfer_message:?}, using historical fee: {historical_fee:?}"
-                        );
-                    } else {
-                        warn!("Insufficient fee for transfer: {transfer_message:?}");
-                        return Ok(EventAction::Retry);
-                    }
-                }
-                None => {
-                    utils::redis::add_event(
-                        redis_connection,
-                        utils::redis::FEE_MAPPING,
-                        transfer_message.origin_nonce,
-                        needed_fee,
-                    )
-                    .await;
-                    warn!("Insufficient fee for transfer: {transfer_message:?}");
-                    return Ok(EventAction::Retry);
-                }
-            }
+            return Ok(event_action);
         }
     }
 

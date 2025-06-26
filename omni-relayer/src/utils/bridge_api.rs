@@ -1,9 +1,10 @@
 use alloy::primitives::U256;
 use anyhow::{Context, Result};
+use log::{info, warn};
 use near_sdk::json_types::U128;
 use omni_types::{Fee, OmniAddress};
 
-use crate::config;
+use crate::{config, utils, workers::EventAction};
 
 #[derive(Debug, serde::Serialize, serde::Deserialize, PartialEq, Clone)]
 pub struct TransferFeeResponse {
@@ -58,4 +59,42 @@ pub async fn is_fee_sufficient(
                 >= U256::from(fee) * U256::from(native_fee)
         }
     }
+}
+
+pub async fn check_fee<T: std::fmt::Debug>(
+    config: &config::Config,
+    redis_connection: &mut redis::aio::MultiplexedConnection,
+    transfer: &T,
+    origin_nonce: u64,
+    needed_fee: &TransferFeeResponse,
+    provided_fee: &Fee,
+) -> Option<EventAction> {
+    if !is_fee_sufficient(config, needed_fee, provided_fee).await {
+        match utils::redis::get_fee(redis_connection, origin_nonce).await {
+            Some(historical_fee) => {
+                if utils::bridge_api::is_fee_sufficient(config, &historical_fee, provided_fee).await
+                {
+                    info!(
+                        "Historical fee is sufficient for transfer: {transfer:?}, using historical fee: {historical_fee:?}"
+                    );
+                } else {
+                    warn!("Insufficient fee for transfer: {transfer:?}");
+                    return Some(EventAction::Retry);
+                }
+            }
+            None => {
+                utils::redis::add_event(
+                    redis_connection,
+                    utils::redis::FEE_MAPPING,
+                    origin_nonce,
+                    needed_fee,
+                )
+                .await;
+                warn!("Insufficient fee for transfer: {transfer:?}");
+                return Some(EventAction::Retry);
+            }
+        }
+    }
+
+    None
 }

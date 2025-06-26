@@ -24,7 +24,7 @@ use crate::{
 
 use super::{EventAction, Transfer};
 
-#[allow(clippy::too_many_lines)]
+#[allow(clippy::too_many_lines, clippy::too_many_arguments)]
 pub async fn process_init_transfer_event(
     config: config::Config,
     redis_connection: &mut redis::aio::MultiplexedConnection,
@@ -115,32 +115,17 @@ pub async fn process_init_transfer_event(
             native_fee: log.native_fee,
         };
 
-        if !utils::bridge_api::is_fee_sufficient(&config, &needed_fee, &provided_fee).await {
-            match utils::redis::get_fee(redis_connection, log.origin_nonce).await {
-                Some(historical_fee) => {
-                    if utils::bridge_api::is_fee_sufficient(&config, &historical_fee, &provided_fee)
-                        .await
-                    {
-                        info!(
-                            "Historical fee is sufficient for transfer: {transfer:?}, using historical fee: {historical_fee:?}"
-                        );
-                    } else {
-                        warn!("Insufficient fee for transfer: {transfer:?}");
-                        return Ok(EventAction::Retry);
-                    }
-                }
-                None => {
-                    utils::redis::add_event(
-                        redis_connection,
-                        utils::redis::FEE_MAPPING,
-                        log.origin_nonce,
-                        needed_fee,
-                    )
-                    .await;
-                    warn!("Insufficient fee for transfer: {transfer:?}");
-                    return Ok(EventAction::Retry);
-                }
-            }
+        if let Some(event_action) = utils::bridge_api::check_fee(
+            &config,
+            redis_connection,
+            &transfer,
+            log.origin_nonce,
+            &needed_fee,
+            &provided_fee,
+        )
+        .await
+        {
+            return Ok(event_action);
         }
     }
 
