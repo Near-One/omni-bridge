@@ -38,8 +38,8 @@ pub async fn get_transfer_fee(
 
 pub async fn is_fee_sufficient(
     config: &config::Config,
-    needed_fee: TransferFeeResponse,
-    provided_fee: Fee,
+    needed_fee: &TransferFeeResponse,
+    provided_fee: &Fee,
 ) -> bool {
     let native_fee = needed_fee.native_token_fee.unwrap_or_default().0
         * u128::from(100 - config.bridge_indexer.fee_discount)

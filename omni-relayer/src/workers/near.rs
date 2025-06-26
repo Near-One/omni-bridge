@@ -94,19 +94,14 @@ pub async fn process_transfer_event(
             return Ok(EventAction::Retry);
         };
 
-        if !utils::bridge_api::is_fee_sufficient(
-            &config,
-            needed_fee.clone(),
-            transfer_message.fee.clone(),
-        )
-        .await
+        if !utils::bridge_api::is_fee_sufficient(&config, &needed_fee, &transfer_message.fee).await
         {
             match utils::redis::get_fee(redis_connection, transfer_message.origin_nonce).await {
                 Some(historical_fee) => {
                     if utils::bridge_api::is_fee_sufficient(
                         &config,
-                        historical_fee.clone(),
-                        transfer_message.fee.clone(),
+                        &historical_fee,
+                        &transfer_message.fee,
                     )
                     .await
                     {

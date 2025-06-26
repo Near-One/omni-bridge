@@ -27,6 +27,7 @@ use super::{EventAction, Transfer};
 #[allow(clippy::too_many_lines)]
 pub async fn process_init_transfer_event(
     config: config::Config,
+    redis_connection: &mut redis::aio::MultiplexedConnection,
     omni_connector: Arc<OmniConnector>,
     fast_connector: Arc<OmniConnector>,
     jsonrpc_client: near_jsonrpc_client::JsonRpcClient,
@@ -109,18 +110,37 @@ pub async fn process_init_transfer_event(
             return Ok(EventAction::Retry);
         };
 
-        if !utils::bridge_api::is_fee_sufficient(
-            &config,
-            needed_fee,
-            Fee {
-                fee: log.fee,
-                native_fee: log.native_fee,
-            },
-        )
-        .await
-        {
-            warn!("Insufficient fee for transfer: {transfer:?}");
-            return Ok(EventAction::Retry);
+        let provided_fee = Fee {
+            fee: log.fee,
+            native_fee: log.native_fee,
+        };
+
+        if !utils::bridge_api::is_fee_sufficient(&config, &needed_fee, &provided_fee).await {
+            match utils::redis::get_fee(redis_connection, log.origin_nonce).await {
+                Some(historical_fee) => {
+                    if utils::bridge_api::is_fee_sufficient(&config, &historical_fee, &provided_fee)
+                        .await
+                    {
+                        info!(
+                            "Historical fee is sufficient for transfer: {transfer:?}, using historical fee: {historical_fee:?}"
+                        );
+                    } else {
+                        warn!("Insufficient fee for transfer: {transfer:?}");
+                        return Ok(EventAction::Retry);
+                    }
+                }
+                None => {
+                    utils::redis::add_event(
+                        redis_connection,
+                        utils::redis::FEE_MAPPING,
+                        log.origin_nonce,
+                        needed_fee,
+                    )
+                    .await;
+                    warn!("Insufficient fee for transfer: {transfer:?}");
+                    return Ok(EventAction::Retry);
+                }
+            }
         }
     }
 

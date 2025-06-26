@@ -225,7 +225,7 @@ pub async fn process_events(
                             }
                         }
                     }));
-                } else if let Transfer::Evm { .. } = transfer {
+                } else if let Transfer::Evm { log, .. } = transfer.clone() {
                     handlers.push(tokio::spawn({
                         let config = config.clone();
                         let mut redis_connection = redis_connection.clone();
@@ -238,6 +238,7 @@ pub async fn process_events(
                         async move {
                             match evm::process_init_transfer_event(
                                 config,
+                                &mut redis_connection,
                                 omni_connector,
                                 fast_connector,
                                 jsonrpc_client,
@@ -255,6 +256,12 @@ pub async fn process_events(
                                         &key,
                                     )
                                     .await;
+                                    utils::redis::remove_event(
+                                        &mut redis_connection,
+                                        utils::redis::FEE_MAPPING,
+                                        log.origin_nonce,
+                                    )
+                                    .await;
                                 }
                                 Err(err) => {
                                     warn!("{err:?}");
@@ -268,7 +275,7 @@ pub async fn process_events(
                             }
                         }
                     }));
-                } else if let Transfer::Solana { .. } = transfer {
+                } else if let Transfer::Solana { sequence, .. } = transfer {
                     handlers.push(tokio::spawn({
                         let config = config.clone();
                         let mut redis_connection = redis_connection.clone();
@@ -293,6 +300,12 @@ pub async fn process_events(
                                         &mut redis_connection,
                                         utils::redis::EVENTS,
                                         &key,
+                                    )
+                                    .await;
+                                    utils::redis::remove_event(
+                                        &mut redis_connection,
+                                        utils::redis::FEE_MAPPING,
+                                        sequence,
                                     )
                                     .await;
                                 }
