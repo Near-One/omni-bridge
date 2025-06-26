@@ -59,7 +59,11 @@ pub enum Transfer {
         creation_timestamp: i64,
         last_update_timestamp: Option<i64>,
     },
-    Btc {
+    NearToBtc {
+        btc_pending_id: String,
+        sign_index: u64,
+    },
+    BtcToNear {
         btc_tx_hash: String,
         vout: u64,
         deposit_msg: DepositMsg,
@@ -266,15 +270,50 @@ pub async fn process_events(
                             }
                         }
                     }));
-                } else if let Transfer::Btc { .. } = transfer {
+                } else if let Transfer::NearToBtc { .. } = transfer {
                     handlers.push(tokio::spawn({
                         let mut redis_connection = redis_connection.clone();
                         let connector = connector.clone();
                         let near_nonce = near_nonce.clone();
 
                         async move {
-                            match btc::process_init_transfer_event(connector, transfer, near_nonce)
-                                .await
+                            match btc::process_near_to_btc_init_transfer_event(
+                                connector, transfer, near_nonce,
+                            )
+                            .await
+                            {
+                                Ok(EventAction::Retry) => {}
+                                Ok(EventAction::Remove) => {
+                                    utils::redis::remove_event(
+                                        &mut redis_connection,
+                                        utils::redis::EVENTS,
+                                        &key,
+                                    )
+                                    .await;
+                                }
+                                Err(err) => {
+                                    warn!("{err:?}");
+                                    utils::redis::remove_event(
+                                        &mut redis_connection,
+                                        utils::redis::EVENTS,
+                                        &key,
+                                    )
+                                    .await;
+                                }
+                            }
+                        }
+                    }));
+                } else if let Transfer::BtcToNear { .. } = transfer {
+                    handlers.push(tokio::spawn({
+                        let mut redis_connection = redis_connection.clone();
+                        let connector = connector.clone();
+                        let near_nonce = near_nonce.clone();
+
+                        async move {
+                            match btc::process_btc_to_near_init_transfer_event(
+                                connector, transfer, near_nonce,
+                            )
+                            .await
                             {
                                 Ok(EventAction::Retry) => {}
                                 Ok(EventAction::Remove) => {

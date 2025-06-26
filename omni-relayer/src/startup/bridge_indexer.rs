@@ -258,6 +258,9 @@ async fn handle_transaction_event(
             )
             .await;
         }
+        OmniTransferMessage::NearFastTransferMessage { .. } => {
+            info!("Received NearFastTransferMessage, skipping");
+        }
     }
 
     Ok(())
@@ -361,17 +364,39 @@ async fn handle_btc_event(
             )
             .await;
         }
+        BtcConnectorEventDetails::TransferNearToBtc {
+            btc_pending_id,
+            utxo_count,
+        } => {
+            info!("Received NearToBtcInitTransfer: {origin_transaction_id}");
+            for sign_index in 0..utxo_count {
+                info!(
+                    "Received sign index {sign_index} for BTC pending ID: {}",
+                    btc_pending_id.clone()
+                );
+                utils::redis::add_event(
+                    &mut redis_connection,
+                    utils::redis::EVENTS,
+                    origin_transaction_id.clone(),
+                    workers::Transfer::NearToBtc {
+                        btc_pending_id: btc_pending_id.clone(),
+                        sign_index,
+                    },
+                )
+                .await;
+            }
+        }
         BtcConnectorEventDetails::TransferBtcToNear {
             btc_tx_hash,
             vout,
             deposit_msg,
         } => {
-            info!("Received BtcInitTransfer: {btc_tx_hash}");
+            info!("Received BtcToNearInitTransfer: {btc_tx_hash}");
             utils::redis::add_event(
                 &mut redis_connection,
                 utils::redis::EVENTS,
                 origin_transaction_id,
-                workers::Transfer::Btc {
+                workers::Transfer::BtcToNear {
                     btc_tx_hash,
                     vout,
                     deposit_msg,
@@ -379,8 +404,8 @@ async fn handle_btc_event(
             )
             .await;
         }
-        BtcConnectorEventDetails::ConfirmedTxid { txid: btc_tx_hash } => {
-            info!("Received ConfirmedTxid on Btc: {btc_tx_hash}");
+        BtcConnectorEventDetails::ConfirmedTxHash { btc_tx_hash } => {
+            info!("Received ConfirmedTxHash on Btc: {btc_tx_hash}");
             utils::redis::add_event(
                 &mut redis_connection,
                 utils::redis::EVENTS,

@@ -29,18 +29,74 @@ pub struct ConfirmedTxHash {
     pub btc_tx_hash: String,
 }
 
-pub async fn process_init_transfer_event(
+pub async fn process_near_to_btc_init_transfer_event(
     connector: Arc<OmniConnector>,
     transfer: Transfer,
     near_nonce: Arc<utils::nonce::NonceManager>,
 ) -> Result<EventAction> {
-    let Transfer::Btc {
+    let Transfer::NearToBtc {
+        btc_pending_id,
+        sign_index,
+    } = transfer
+    else {
+        anyhow::bail!("Expected NearToBtcTransfer, got: {:?}", transfer);
+    };
+
+    let nonce = match near_nonce.reserve_nonce().await {
+        Ok(nonce) => Some(nonce),
+        Err(err) => {
+            warn!("Failed to reserve nonce: {err:?}");
+            return Ok(EventAction::Retry);
+        }
+    };
+
+    match connector
+        .near_sign_btc_transaction(
+            btc_pending_id,
+            sign_index,
+            TransactionOptions {
+                nonce,
+                wait_until: near_primitives::views::TxExecutionStatus::Included,
+                wait_final_outcome_timeout_sec: None,
+            },
+        )
+        .await
+    {
+        Ok(tx_hash) => {
+            info!("Signed BTC transaction: {tx_hash:?}");
+            Ok(EventAction::Remove)
+        }
+        Err(err) => {
+            if let BridgeSdkError::NearRpcError(near_rpc_error) = err {
+                match near_rpc_error {
+                    NearRpcError::NonceError
+                    | NearRpcError::FinalizationError
+                    | NearRpcError::RpcTransactionError(JsonRpcError::TransportError(_)) => {
+                        warn!("Failed to sign BTC transaction, retrying: {near_rpc_error:?}");
+                        return Ok(EventAction::Retry);
+                    }
+                    _ => {
+                        anyhow::bail!("Failed to sign BTC transaction: {near_rpc_error:?}");
+                    }
+                };
+            }
+            anyhow::bail!("Failed to sign BTC transaction: {err:?}");
+        }
+    }
+}
+
+pub async fn process_btc_to_near_init_transfer_event(
+    connector: Arc<OmniConnector>,
+    transfer: Transfer,
+    near_nonce: Arc<utils::nonce::NonceManager>,
+) -> Result<EventAction> {
+    let Transfer::BtcToNear {
         btc_tx_hash,
         vout,
         deposit_msg,
     } = transfer
     else {
-        anyhow::bail!("Expected BtcTransfer, got: {:?}", transfer);
+        anyhow::bail!("Expected BtcToNearTransfer, got: {:?}", transfer);
     };
 
     let nonce = match near_nonce.reserve_nonce().await {
