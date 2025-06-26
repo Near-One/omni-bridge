@@ -98,7 +98,7 @@ pub async fn process_transfer_event(
             &config,
             redis_connection,
             &transfer_message,
-            transfer_message.origin_nonce,
+            transfer_message.get_transfer_id(),
             &needed_fee,
             &transfer_message.fee,
         )

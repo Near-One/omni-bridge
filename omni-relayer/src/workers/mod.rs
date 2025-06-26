@@ -209,7 +209,8 @@ pub async fn process_events(
                                     utils::redis::remove_event(
                                         &mut redis_connection,
                                         utils::redis::FEE_MAPPING,
-                                        transfer_message.origin_nonce,
+                                        serde_json::to_string(&transfer_message.get_transfer_id())
+                                            .unwrap_or_default(),
                                     )
                                     .await;
                                 }
@@ -225,7 +226,10 @@ pub async fn process_events(
                             }
                         }
                     }));
-                } else if let Transfer::Evm { log, .. } = transfer.clone() {
+                } else if let Transfer::Evm {
+                    log, chain_kind, ..
+                } = transfer.clone()
+                {
                     handlers.push(tokio::spawn({
                         let config = config.clone();
                         let mut redis_connection = redis_connection.clone();
@@ -259,7 +263,11 @@ pub async fn process_events(
                                     utils::redis::remove_event(
                                         &mut redis_connection,
                                         utils::redis::FEE_MAPPING,
-                                        log.origin_nonce,
+                                        serde_json::to_string(&TransferId {
+                                            origin_nonce: log.origin_nonce,
+                                            origin_chain: chain_kind,
+                                        })
+                                        .unwrap_or_default(),
                                     )
                                     .await;
                                 }
@@ -305,7 +313,11 @@ pub async fn process_events(
                                     utils::redis::remove_event(
                                         &mut redis_connection,
                                         utils::redis::FEE_MAPPING,
-                                        sequence,
+                                        serde_json::to_string(&TransferId {
+                                            origin_nonce: sequence,
+                                            origin_chain: ChainKind::Sol,
+                                        })
+                                        .unwrap_or_default(),
                                     )
                                     .await;
                                 }

@@ -2,7 +2,7 @@ use alloy::primitives::U256;
 use anyhow::{Context, Result};
 use log::{info, warn};
 use near_sdk::json_types::U128;
-use omni_types::{Fee, OmniAddress};
+use omni_types::{Fee, OmniAddress, TransferId};
 
 use crate::{config, utils, workers::EventAction};
 
@@ -65,12 +65,17 @@ pub async fn check_fee<T: std::fmt::Debug>(
     config: &config::Config,
     redis_connection: &mut redis::aio::MultiplexedConnection,
     transfer: &T,
-    origin_nonce: u64,
+    transfer_id: TransferId,
     needed_fee: &TransferFeeResponse,
     provided_fee: &Fee,
 ) -> Option<EventAction> {
     if !is_fee_sufficient(config, needed_fee, provided_fee).await {
-        match utils::redis::get_fee(redis_connection, origin_nonce).await {
+        let Ok(transfer_id) = serde_json::to_string(&transfer_id) else {
+            warn!("Failed to serialize transfer id: {transfer_id:?}");
+            return Some(EventAction::Remove);
+        };
+
+        match utils::redis::get_fee(redis_connection, &transfer_id).await {
             Some(historical_fee) => {
                 if utils::bridge_api::is_fee_sufficient(config, &historical_fee, provided_fee).await
                 {
@@ -86,7 +91,7 @@ pub async fn check_fee<T: std::fmt::Debug>(
                 utils::redis::add_event(
                     redis_connection,
                     utils::redis::FEE_MAPPING,
-                    origin_nonce,
+                    transfer_id,
                     needed_fee,
                 )
                 .await;

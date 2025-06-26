@@ -23,19 +23,19 @@ const QUERY_RETRY_SLEEP_SECS: u64 = 1;
 
 pub async fn get_fee(
     redis_connection: &mut MultiplexedConnection,
-    origin_nonce: u64,
+    transfer_id: &str,
 ) -> Option<TransferFeeResponse> {
     for _ in 0..QUERY_RETRY_ATTEMPTS {
         match redis_connection
-            .hget::<&str, u64, Option<String>>(FEE_MAPPING, origin_nonce)
+            .hget::<&str, &str, Option<String>>(FEE_MAPPING, transfer_id)
             .await
         {
             Ok(Some(serialized)) => match serde_json::from_str(&serialized) {
                 Ok(fee) => return Some(fee),
                 Err(e) => {
                     warn!(
-                        "Failed to deserialize Fee for origin_nonce {}: {}",
-                        origin_nonce, e
+                        "Failed to deserialize Fee for transfer_id {}: {}",
+                        transfer_id, e
                     );
                     return None;
                 }
@@ -50,8 +50,8 @@ pub async fn get_fee(
     }
 
     warn!(
-        "Failed to get fee for origin_nonce {} from redis after {} attempts",
-        origin_nonce, QUERY_RETRY_ATTEMPTS
+        "Failed to get fee for transfer_id {} from redis after {} attempts",
+        transfer_id, QUERY_RETRY_ATTEMPTS
     );
     None
 }

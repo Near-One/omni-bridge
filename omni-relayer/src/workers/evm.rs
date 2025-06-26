@@ -119,7 +119,7 @@ pub async fn process_init_transfer_event(
             &config,
             redis_connection,
             &transfer,
-            log.origin_nonce,
+            transfer_id,
             &needed_fee,
             &provided_fee,
         )

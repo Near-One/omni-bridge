@@ -59,6 +59,7 @@ pub async fn process_init_transfer_event(
         origin_chain: sender.get_chain(),
         origin_nonce: sequence,
     };
+
     match omni_connector
         .is_transfer_finalised(Some(sender.get_chain()), recipient.get_chain(), sequence)
         .await
@@ -93,7 +94,7 @@ pub async fn process_init_transfer_event(
             &config,
             redis_connection,
             &transfer,
-            sequence,
+            transfer_id,
             &needed_fee,
             &provided_fee,
         )
