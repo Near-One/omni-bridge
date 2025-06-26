@@ -72,9 +72,15 @@ pub fn build_omni_connector(
                 .near
                 .btc_connector
                 .as_ref()
-                .map(|btc_connector| btc_connector.to_string()),
+                .map(std::string::ToString::to_string),
         )
-        .btc(config.near.btc.as_ref().map(|btc| btc.to_string()))
+        .btc(
+            config
+                .near
+                .btc
+                .as_ref()
+                .map(std::string::ToString::to_string),
+        )
         .satoshi_relayer(Some(near_signer.account_id.to_string()))
         .build()
         .context("Failed to build NearBridgeClient")?;
