@@ -69,7 +69,7 @@ pub fn build_omni_connector(
         .omni_bridge_id(Some(config.near.omni_bridge_id.to_string()))
         .btc_connector(Some(config.near.btc_connector.to_string()))
         .btc(Some(config.near.btc.to_string()))
-        .satoshi_relayer(Some(config.near.satoshi_relayer.to_string()))
+        .satoshi_relayer(Some(near_signer.account_id.to_string()))
         .build()
         .context("Failed to build NearBridgeClient")?;
 
