@@ -32,11 +32,8 @@ pub async fn get_fee(
         {
             Ok(Some(serialized)) => match serde_json::from_str(&serialized) {
                 Ok(fee) => return Some(fee),
-                Err(e) => {
-                    warn!(
-                        "Failed to deserialize Fee for transfer_id {}: {}",
-                        transfer_id, e
-                    );
+                Err(err) => {
+                    warn!("Failed to deserialize Fee for transfer_id {transfer_id}: {err:?}");
                     return None;
                 }
             },
@@ -50,8 +47,7 @@ pub async fn get_fee(
     }
 
     warn!(
-        "Failed to get fee for transfer_id {} from redis after {} attempts",
-        transfer_id, QUERY_RETRY_ATTEMPTS
+        "Failed to get fee for transfer_id {transfer_id} from redis after {QUERY_RETRY_ATTEMPTS} attempts"
     );
     None
 }
