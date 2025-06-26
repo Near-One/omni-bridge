@@ -17,7 +17,6 @@ rpc_url = "https://rpc.mainnet.near.org/"
 omni_bridge_id = "omni.bridge.near"
 btc_connector = "btc-connector.bridge.near"
 btc = "btc-client.bridge.near"
-satoshi_relayer = "satoshi_optwo.near"
 # Either provide a path to a credentials file or set it in the environment
 # Note: the path must be absolute
 # omni_credentials_path = "/Users/username/.near-credentials/mainnet/omni-relayer.bridge.near.json"

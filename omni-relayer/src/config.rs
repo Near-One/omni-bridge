@@ -143,7 +143,6 @@ pub struct Near {
     pub omni_bridge_id: AccountId,
     pub btc_connector: Option<AccountId>,
     pub btc: Option<AccountId>,
-    pub satoshi_relayer: Option<AccountId>,
     pub omni_credentials_path: Option<String>,
     pub fast_credentials_path: Option<String>,
     pub sign_without_checking_fee: Option<Vec<OmniAddress>>,

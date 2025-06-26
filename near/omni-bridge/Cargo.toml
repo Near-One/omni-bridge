@@ -1,6 +1,6 @@
 [package]
 name = "omni-bridge"
-version = "0.2.7"
+version = "0.2.8"
 authors = ["Near One <info@nearone.org>"]
 edition = "2021"
 publish = false
