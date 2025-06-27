@@ -689,13 +689,11 @@ impl Contract {
                     &mut NearToken::from_yoctonear(storage_deposit_amount),
                 )
                 .then(
-                    Self::ext(env::current_account_id())
-                        .with_static_gas(FAST_TRANSFER_CALLBACK_GAS)
-                        .fast_fin_transfer_to_near_callback(
-                            &fast_transfer,
-                            storage_payer,
-                            fast_fin_transfer_msg.relayer,
-                        ),
+                    Self::ext(env::current_account_id()).fast_fin_transfer_to_near_callback(
+                        &fast_transfer,
+                        storage_payer,
+                        fast_fin_transfer_msg.relayer,
+                    ),
                 ),
             )
         } else {
