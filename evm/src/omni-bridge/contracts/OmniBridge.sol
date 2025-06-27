@@ -45,6 +45,11 @@ contract OmniBridge is
     error InvalidValue();
     error FailedToSendEther();
 
+    /// @custom:oz-upgrades-unsafe-allow constructor
+    constructor() {
+        _disableInitializers();
+    }
+
     function initialize(
         address tokenImplementationAddress_,
         address nearBridgeDerivedAddress_,
@@ -111,6 +116,7 @@ contract OmniBridge is
         require(!isBridgeToken[nearToEthToken[metadata.token]], "ERR_TOKEN_EXIST");
         uint8 decimals = _normalizeDecimals(metadata.decimals);
 
+        // slither-disable-next-line reentrancy-no-eth
         address bridgeTokenProxy = address(
             new ERC1967Proxy(
                 tokenImplementationAddress,
@@ -170,7 +176,7 @@ contract OmniBridge is
         string memory symbol = IERC20Metadata(tokenAddress).symbol();
         uint8 decimals = IERC20Metadata(tokenAddress).decimals();
 
-      logMetadataExtension(tokenAddress, name, symbol, decimals);
+        logMetadataExtension(tokenAddress, name, symbol, decimals);
 
         emit BridgeTypes.LogMetadata(
             tokenAddress,
@@ -218,6 +224,7 @@ contract OmniBridge is
         }
 
         if (payload.tokenAddress == address(0)) {
+            // slither-disable-next-line arbitrary-send-eth
             (bool success, ) = payload.recipient.call{value: payload.amount}("");
             if (!success) revert FailedToSendEther();
         }
@@ -265,7 +272,7 @@ contract OmniBridge is
         } else {
             extensionValue = msg.value - nativeFee;
             if (customMinters[tokenAddress] != address(0)) {
-                IERC20(tokenAddress).transferFrom(msg.sender, customMinters[tokenAddress], amount);
+                IERC20(tokenAddress).safeTransferFrom(msg.sender, customMinters[tokenAddress], amount);
                 ICustomMinter(customMinters[tokenAddress]).burn(tokenAddress, amount);
             } else if (isBridgeToken[tokenAddress]) {
                 BridgeToken(tokenAddress).burn(msg.sender, amount);

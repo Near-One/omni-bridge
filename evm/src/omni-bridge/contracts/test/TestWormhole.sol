@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 pragma solidity ^0.8.24;
 
+// slither-disable-next-line locked-ether
 contract TestWormhole {
     event MessagePublished(uint32 nonce, bytes payload, uint8 consistencyLevel);
 
