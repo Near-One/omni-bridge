@@ -17,7 +17,7 @@ near_sender_account_file = const.near_account_dir / f"{NTA.SENDER_ACCOUNT}.json"
 near_bridge_contract_file = const.near_deploy_results_dir / f"{NC.OMNI_BRIDGE}.json"
 near_test_token_file = const.near_deploy_results_dir / f"{NC.MOCK_TOKEN}.json"
 
-call_dir = const.common_generated_dir / "03-transfer-near-to-{network}"
+call_dir = const.common_generated_dir / "04-transfer-near-to-{network}"
 
 # Main pipeline rule
 # TODO: Replace ETH_SEPOLIA with all EVM networks when the `evm_deploy_token` rule doesn't crash on Base and Arbitrum (the issue is not in the pipeline)
