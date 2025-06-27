@@ -86,6 +86,7 @@ pub struct Config {
     pub base: Option<Evm>,
     pub arb: Option<Evm>,
     pub solana: Option<Solana>,
+    pub btc: Option<Btc>,
     pub wormhole: Wormhole,
 }
 
@@ -128,7 +129,8 @@ pub struct Near {
     pub network: Network,
     pub rpc_url: String,
     pub omni_bridge_id: AccountId,
-    pub btc_connector: AccountId,
+    pub btc_connector: Option<AccountId>,
+    pub btc: Option<AccountId>,
     pub credentials_path: Option<String>,
     pub sign_without_checking_fee: Option<Vec<OmniAddress>>,
 }
@@ -168,6 +170,11 @@ pub struct Solana {
     pub finalize_transfer_discriminator: Vec<u8>,
     pub finalize_transfer_sol_discriminator: Vec<u8>,
     pub credentials_path: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct Btc {
+    pub rpc_http_url: String,
 }
 
 #[derive(Debug, Clone, Deserialize)]

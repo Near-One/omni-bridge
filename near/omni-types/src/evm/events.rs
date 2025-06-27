@@ -1,6 +1,4 @@
-use alloy_primitives::Log;
-use alloy_rlp::Decodable;
-use alloy_sol_types::{sol, SolEvent};
+use alloy::{primitives::Log, rlp::Decodable, sol, sol_types::SolEvent};
 
 use crate::{
     prover_result::{
@@ -8,8 +6,6 @@ use crate::{
     },
     stringify, ChainKind, Fee, OmniAddress, H160,
 };
-
-const ERR_INVALIDE_SIGNATURE_HASH: &str = "ERR_INVALIDE_SIGNATURE_HASH";
 
 sol! {
     event InitTransfer(
@@ -60,7 +56,7 @@ where
     let rlp_decoded = Log::decode(&mut log_rlp.as_slice()).map_err(stringify)?;
     V::try_from_log(
         chain_kind,
-        T::decode_log(&rlp_decoded, true).map_err(stringify)?,
+        T::decode_log_validate(&rlp_decoded).map_err(stringify)?,
     )
     .map_err(stringify)
 }
@@ -74,10 +70,6 @@ impl TryFromLog<Log<FinTransfer>> for FinTransferMessage {
     type Error = String;
 
     fn try_from_log(chain_kind: ChainKind, event: Log<FinTransfer>) -> Result<Self, Self::Error> {
-        if event.topics().0 != FinTransfer::SIGNATURE_HASH {
-            return Err(ERR_INVALIDE_SIGNATURE_HASH.to_string());
-        }
-
         Ok(Self {
             transfer_id: crate::TransferId {
                 origin_chain: event.data.originChain.try_into()?,
@@ -97,10 +89,6 @@ impl TryFromLog<Log<InitTransfer>> for InitTransferMessage {
     type Error = String;
 
     fn try_from_log(chain_kind: ChainKind, event: Log<InitTransfer>) -> Result<Self, Self::Error> {
-        if event.topics().0 != InitTransfer::SIGNATURE_HASH {
-            return Err(ERR_INVALIDE_SIGNATURE_HASH.to_string());
-        }
-
         Ok(Self {
             emitter_address: OmniAddress::new_from_evm_address(
                 chain_kind,
@@ -124,10 +112,6 @@ impl TryFromLog<Log<DeployToken>> for DeployTokenMessage {
     type Error = String;
 
     fn try_from_log(chain_kind: ChainKind, event: Log<DeployToken>) -> Result<Self, Self::Error> {
-        if event.topics().0 != DeployToken::SIGNATURE_HASH {
-            return Err(ERR_INVALIDE_SIGNATURE_HASH.to_string());
-        }
-
         Ok(Self {
             token: event.data.token.parse().map_err(stringify)?,
             token_address: OmniAddress::new_from_evm_address(
@@ -148,10 +132,6 @@ impl TryFromLog<Log<LogMetadata>> for LogMetadataMessage {
     type Error = String;
 
     fn try_from_log(chain_kind: ChainKind, event: Log<LogMetadata>) -> Result<Self, Self::Error> {
-        if event.topics().0 != LogMetadata::SIGNATURE_HASH {
-            return Err(ERR_INVALIDE_SIGNATURE_HASH.to_string());
-        }
-
         Ok(Self {
             token_address: OmniAddress::new_from_evm_address(
                 chain_kind,
@@ -171,7 +151,7 @@ impl TryFromLog<Log<LogMetadata>> for LogMetadataMessage {
 
 #[cfg(test)]
 mod tests {
-    use alloy_primitives::IntoLogData;
+    use alloy::primitives::IntoLogData;
 
     use super::*;
     sol! {
@@ -214,8 +194,8 @@ mod tests {
 
         assert_ne!(log, test_log);
 
-        let decoded_log = FinTransfer::decode_log(&log, true).unwrap();
-        let decoded_test_log = TestFinTransfer::decode_log(&test_log, true).unwrap();
+        let decoded_log = FinTransfer::decode_log_validate(&log).unwrap();
+        let decoded_test_log = TestFinTransfer::decode_log_validate(&test_log).unwrap();
 
         assert_ne!(FinTransfer::SIGNATURE_HASH, TestFinTransfer::SIGNATURE_HASH);
         assert_eq!(FinTransfer::SIGNATURE_HASH, decoded_log.topics().0);
