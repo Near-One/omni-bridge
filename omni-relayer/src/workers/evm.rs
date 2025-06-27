@@ -28,11 +28,9 @@ use super::{EventAction, Transfer};
 pub async fn process_init_transfer_event(
     config: config::Config,
     omni_connector: Arc<OmniConnector>,
-    fast_connector: Arc<OmniConnector>,
     jsonrpc_client: near_jsonrpc_client::JsonRpcClient,
     transfer: Transfer,
     near_omni_nonce: Arc<utils::nonce::NonceManager>,
-    near_fast_nonce: Option<Arc<utils::nonce::NonceManager>>,
 ) -> Result<EventAction> {
     let Transfer::Evm {
         chain_kind,
@@ -170,56 +168,44 @@ pub async fn process_init_transfer_event(
         .and_then(NearBridgeClient::account_id)
         .context("Failed to get relayer account id")?;
 
-    let mut near_nonce = Some(near_omni_nonce);
-    let mut connector = omni_connector;
+    let Ok(token_id) = utils::storage::get_token_id(
+        &omni_connector,
+        transfer_id.origin_chain,
+        &log.token_address.to_string(),
+    )
+    .await
+    else {
+        warn!("Failed to get token id for transfer: {transfer_id:?}");
+        return Ok(EventAction::Retry);
+    };
 
-    if config.is_fast_relayer_enabled() {
-        let Ok(token_id) = utils::storage::get_token_id(
-            &fast_connector,
-            transfer_id.origin_chain,
-            &log.token_address.to_string(),
-        )
+    let fast_transfer_args = FastTransfer {
+        transfer_id,
+        token_id,
+        amount: log.amount,
+        fee: Fee {
+            fee: log.fee,
+            native_fee: log.native_fee,
+        },
+        recipient: log.recipient.clone(),
+        msg: log.message.clone(),
+    };
+
+    let Ok(fast_transfer_status) = omni_connector
+        .near_get_fast_transfer_status(fast_transfer_args.id())
         .await
-        else {
-            warn!("Failed to get token id for transfer: {transfer_id:?}");
-            return Ok(EventAction::Retry);
-        };
+    else {
+        warn!("Failed to get fast transfer status for transfer: {transfer_id:?}");
+        return Ok(EventAction::Retry);
+    };
 
-        let fast_transfer_args = FastTransfer {
-            transfer_id,
-            token_id,
-            amount: log.amount,
-            fee: Fee {
-                fee: log.fee,
-                native_fee: log.native_fee,
-            },
-            recipient: log.recipient.clone(),
-            msg: log.message.clone(),
-        };
-
-        let Ok(fast_transfer_status) = fast_connector
-            .near_get_fast_transfer_status(fast_transfer_args.id())
-            .await
-        else {
-            warn!("Failed to get fast transfer status for transfer: {transfer_id:?}");
-            return Ok(EventAction::Retry);
-        };
-
-        if let Some(status) = fast_transfer_status {
-            recipient = OmniAddress::Near(status.relayer.clone());
-            fee_recipient = status.relayer;
-            connector = fast_connector;
-            if let Some(near_fast_nonce) = near_fast_nonce {
-                near_nonce = Some(near_fast_nonce);
-            } else {
-                warn!("Near fast nonce is not available");
-                return Ok(EventAction::Retry);
-            }
-        }
+    if let Some(status) = fast_transfer_status {
+        recipient = OmniAddress::Near(status.relayer.clone());
+        fee_recipient = status.relayer;
     }
 
     let storage_deposit_actions = match utils::storage::get_storage_deposit_actions(
-        &connector,
+        &omni_connector,
         chain_kind,
         &recipient,
         &fee_recipient,
@@ -236,8 +222,7 @@ pub async fn process_init_transfer_event(
         }
     };
 
-    let nonce = near_nonce
-        .ok_or_else(|| anyhow::anyhow!("Failed to select nonce"))?
+    let nonce = near_omni_nonce
         .reserve_nonce()
         .await
         .context("Failed to reserve nonce for near transaction")?;
@@ -266,7 +251,7 @@ pub async fn process_init_transfer_event(
         }
     };
 
-    match connector.fin_transfer(fin_transfer_args).await {
+    match omni_connector.fin_transfer(fin_transfer_args).await {
         Ok(tx_hash) => {
             info!("Finalized InitTransfer: {tx_hash:?}");
             Ok(EventAction::Remove)

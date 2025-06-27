@@ -215,20 +215,16 @@ pub async fn process_events(
                         let config = config.clone();
                         let mut redis_connection = redis_connection.clone();
                         let omni_connector = omni_connector.clone();
-                        let fast_connector = fast_connector.clone();
                         let jsonrpc_client = jsonrpc_client.clone();
                         let near_omni_nonce = near_omni_nonce.clone();
-                        let near_fast_nonce = near_fast_nonce.clone();
 
                         async move {
                             match evm::process_init_transfer_event(
                                 config,
                                 omni_connector,
-                                fast_connector,
                                 jsonrpc_client,
                                 transfer,
                                 near_omni_nonce,
-                                near_fast_nonce,
                             )
                             .await
                             {
