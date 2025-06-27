@@ -19,9 +19,12 @@ btc_connector = "brg-dev.testnet"
 btc = "nbtc-dev.testnet"
 # Either provide a path to a credentials file or set it in the environment
 # Note: the path must be absolute
-# credentials_path = "/Users/username/.near-credentials/testnet/omni-relayer.testnet.json"
+# omni_credentials_path = "/Users/username/.near-credentials/testnet/omni-relayer.testnet.json"
+# fast_credentials_path = "/Users/username/.near-credentials/testnet/fast-relayer.testnet.json"
 # We won't check fee before signing transfer if account id matches on in array
 sign_without_checking_fee = ["near:aurora"]
+# To enable fast relayer, uncomment the line below
+# fast_relayer_enabled = true
 
 [eth]
 rpc_http_url = "https://sepolia.infura.io/v3/INFURA_API_KEY"
@@ -32,6 +35,7 @@ light_client = "client-eth2.sepolia.testnet"
 block_processing_batch_size = 10_000
 # https://wormhole.com/docs/build/reference/consistency-levels/
 expected_finalization_time = 1095
+safe_confirmations = 12
 
 [base]
 rpc_http_url = "https://base-sepolia.infura.io/v3/INFURA_API_KEY"
@@ -41,6 +45,7 @@ omni_bridge_address = "0xa56b860017152cD296ad723E8409Abd6e5D86d4d"
 block_processing_batch_size = 10_000
 # https://wormhole.com/docs/build/reference/consistency-levels/
 expected_finalization_time = 1026
+safe_confirmations = 30
 
 [arb]
 rpc_http_url = "https://arbitrum-sepolia.infura.io/v3/INFURA_API_KEY"
@@ -50,6 +55,9 @@ omni_bridge_address = "0x0C981337fFe39a555d3A40dbb32f21aD0eF33FFA"
 block_processing_batch_size = 10_000
 # https://wormhole.com/docs/build/reference/consistency-levels/
 expected_finalization_time = 1066
+safe_confirmations = 30
+# To enable fast relayer, uncomment the line below
+# fast_relayer_enabled = true
 
 [solana]
 rpc_http_url = "https://api.devnet.solana.com"

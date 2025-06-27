@@ -30,7 +30,7 @@ pub fn get_keypair(file: Option<&String>) -> Keypair {
 
     info!("Retrieving Solana keypair from env");
 
-    Keypair::from_base58_string(&config::get_private_key(ChainKind::Sol))
+    Keypair::from_base58_string(&config::get_private_key(ChainKind::Sol, None))
 }
 
 pub async fn start_indexer(
