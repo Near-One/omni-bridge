@@ -19,12 +19,6 @@ near_test_token_file = const.near_deploy_results_dir / f"{NC.MOCK_TOKEN}.json"
 
 call_dir = const.common_generated_dir / "03-transfer-near-to-{network}"
 
-storage_deposit_file = call_dir / "00_storage-deposit.json"
-fund_sender_file = call_dir / "01_fund-sender.json"
-init_transfer_file = call_dir / "02_init-transfer.json"
-sign_transfer_file = call_dir / "03_sign-transfer.json"
-fin_transfer_file = call_dir / "04_fin-transfer.json"
-
 # Main pipeline rule
 # TODO: Replace ETH_SEPOLIA with all EVM networks when the `evm_deploy_token` rule doesn't crash on Base and Arbitrum (the issue is not in the pipeline)
 rule transfer_near_to_evm_all:
@@ -43,7 +37,7 @@ rule near_storage_deposit:
         near_bridge_contract = near_bridge_contract_file,
         near_test_token = near_test_token_file,
         near_owner_account = near_token_owner_credentials_file
-    output: storage_deposit_file
+    output: call_dir / "00_storage-deposit.json"
     params:
         mkdir = get_mkdir_cmd(call_dir),
         token_id = lambda wc, input: get_json_field(input.near_test_token, "contract_id"),
@@ -74,7 +68,7 @@ rule near_fund_sender:
         near_sender_account = near_sender_account_file,
         near_test_token = near_test_token_file,
         near_owner_account = near_token_owner_credentials_file
-    output: fund_sender_file
+    output: call_dir / "01_fund-sender.json"
     params:
         mkdir = get_mkdir_cmd(call_dir),
         token_id = lambda wc, input: get_json_field(input.near_test_token, "contract_id"),
@@ -100,7 +94,7 @@ rule near_init_transfer:
         bridge_contract = near_bridge_contract_file,
         test_token = near_test_token_file,
         evm_account = evm_account_file
-    output: init_transfer_file
+    output: call_dir / "02_init-transfer.json"
     params:
         config_file = const.common_bridge_sdk_config_file,
         mkdir = get_mkdir_cmd(call_dir),
@@ -129,7 +123,7 @@ rule near_sign_transfer:
         near_init_transfer = rules.near_init_transfer.output,
         sender_account = near_sender_account_file,
         bridge_contract = near_bridge_contract_file,
-    output: sign_transfer_file
+    output: call_dir / "03_sign-transfer.json"
     params:
         config_file = const.common_bridge_sdk_config_file,
         mkdir = get_mkdir_cmd(call_dir),
@@ -159,7 +153,7 @@ rule evm_fin_transfer:
     input:
         near_sign_transfer = rules.near_sign_transfer.output,
         evm_bridge = evm_bridge_contract_file,
-    output: fin_transfer_file
+    output: call_dir / "04_fin-transfer.json"
     params:
         config_file = const.common_bridge_sdk_config_file,
         mkdir = get_mkdir_cmd(call_dir),
