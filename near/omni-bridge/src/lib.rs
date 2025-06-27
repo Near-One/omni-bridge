@@ -568,6 +568,7 @@ impl Contract {
         main_promise.then(
             Self::ext(env::current_account_id())
                 .with_attached_deposit(attached_deposit)
+                .with_unused_gas_weight(10)
                 .fin_transfer_callback(
                     &args.storage_deposit_actions,
                     env::predecessor_account_id(),
@@ -582,6 +583,11 @@ impl Contract {
         #[serializer(borsh)] storage_deposit_actions: &Vec<StorageDepositAction>,
         #[serializer(borsh)] predecessor_account_id: AccountId,
     ) -> PromiseOrValue<Nonce> {
+        require!(
+            env::prepaid_gas() >= Gas::from_tgas(200),
+            "Not enough prepaid gas"
+        );
+
         let Ok(ProverResult::InitTransfer(init_transfer)) = Self::decode_prover_result(0) else {
             env::panic_str("Invalid proof message")
         };
@@ -1543,6 +1549,7 @@ impl Contract {
         } else {
             ext_token::ext(token)
                 .with_attached_deposit(ONE_YOCTO)
+                .with_unused_gas_weight(10)
                 .ft_transfer_call(recipient, amount, None, msg.to_string())
         }
     }
