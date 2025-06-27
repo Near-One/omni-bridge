@@ -40,6 +40,8 @@
     "build": "tsc",
     "verify-bridge-token-near-to-evm": "ts-node src/scripts/verify-bridge-token-near-to-evm.ts",
     "verify-pipeline-2": "ts-node src/scripts/verify-pipeline-2.ts",
+    "verify-transfer-near-to-evm": "ts-node src/scripts/verify-transfer-near-to-evm.ts",
+    "get-near-transfer-nonce": "ts-node src/scripts/get-near-transfer-nonce.ts",
     "test": "yarn hardhat test",
     "coverage": "yarn hardhat coverage",
     "lint:js": "biome check",

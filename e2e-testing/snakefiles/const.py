@@ -75,6 +75,7 @@ class EvmContract(StrEnum):
     OMNI_BRIDGE = "omni_bridge"
     TEST_TOKEN = "test_token"
     ENEAR = "e_near"
+    USER_ACCOUNT = "user_account"
 
 
 class EvmNetwork(StrEnum):
