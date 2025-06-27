@@ -570,7 +570,6 @@ impl Contract {
         main_promise.then(
             Self::ext(env::current_account_id())
                 .with_attached_deposit(attached_deposit)
-                .with_static_gas(VERIFY_PROOF_CALLBACK_GAS)
                 .fin_transfer_callback(
                     &args.storage_deposit_actions,
                     env::predecessor_account_id(),
