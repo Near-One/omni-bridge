@@ -1537,11 +1537,14 @@ impl Contract {
             } else {
                 ONE_YOCTO
             };
-            ext_token::ext(token).with_attached_deposit(deposit).mint(
-                recipient,
-                amount,
-                (!msg.is_empty()).then(|| msg.to_string()),
-            )
+            ext_token::ext(token)
+                .with_attached_deposit(deposit)
+                .with_unused_gas_weight(10)
+                .mint(
+                    recipient,
+                    amount,
+                    (!msg.is_empty()).then(|| msg.to_string()),
+                )
         } else if msg.is_empty() {
             ext_token::ext(token)
                 .with_attached_deposit(ONE_YOCTO)
