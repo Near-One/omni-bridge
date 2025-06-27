@@ -59,6 +59,7 @@ pub async fn process_init_transfer_event(
         origin_chain: sender.get_chain(),
         origin_nonce: sequence,
     };
+
     match omni_connector
         .is_transfer_finalised(Some(sender.get_chain()), recipient.get_chain(), sequence)
         .await
@@ -77,27 +78,29 @@ pub async fn process_init_transfer_event(
                 anyhow::anyhow!("Failed to parse \"{}\" as `OmniAddress`: {:?}", sender, err)
             })?;
 
-        match utils::bridge_api::is_fee_sufficient(
+        let Ok(needed_fee) =
+            utils::bridge_api::get_transfer_fee(&config, sender, recipient, &token).await
+        else {
+            warn!("Failed to get transfer fee for transfer: {transfer:?}");
+            return Ok(EventAction::Retry);
+        };
+
+        let provided_fee = Fee {
+            fee,
+            native_fee: u128::from(native_fee).into(),
+        };
+
+        if let Some(event_action) = utils::bridge_api::check_fee(
             &config,
-            Fee {
-                fee,
-                native_fee: u128::from(native_fee).into(),
-            },
-            sender,
-            recipient,
-            &token,
+            redis_connection,
+            &transfer,
+            transfer_id,
+            &needed_fee,
+            &provided_fee,
         )
         .await
         {
-            Ok(true) => {}
-            Ok(false) => {
-                warn!("Insufficient fee for transfer: {transfer:?}");
-                return Ok(EventAction::Retry);
-            }
-            Err(err) => {
-                warn!("Failed to check fee sufficiency: {err:?}");
-                return Ok(EventAction::Retry);
-            }
+            return Ok(event_action);
         }
     }
 
