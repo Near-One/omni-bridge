@@ -15,10 +15,7 @@ use solana_sdk::{instruction::InstructionError, pubkey::Pubkey, transaction::Tra
 use omni_connector::OmniConnector;
 use omni_types::{ChainKind, FastTransfer, OmniAddress, TransferId, near_events::OmniBridgeEvent};
 
-use crate::{
-    config, utils,
-    workers::{PAUSED_ERROR, SignTransferEvent},
-};
+use crate::{config, utils, workers::PAUSED_ERROR};
 
 use super::{EventAction, Transfer};
 
@@ -189,26 +186,21 @@ pub async fn process_transfer_event(
 }
 
 pub async fn process_sign_transfer_event(
+    config: config::Config,
+    redis_connection: &mut redis::aio::MultiplexedConnection,
     omni_connector: Arc<OmniConnector>,
     signer: AccountId,
-    sign_transfer_event: SignTransferEvent,
+    omni_bridge_event: OmniBridgeEvent,
     evm_nonces: Arc<utils::nonce::EvmNonceManagers>,
 ) -> Result<EventAction> {
-    let SignTransferEvent {
-        event: OmniBridgeEvent::SignTransferEvent {
-            message_payload, ..
-        },
-        signer_id,
-    } = &sign_transfer_event
+    let OmniBridgeEvent::SignTransferEvent {
+        message_payload, ..
+    } = &omni_bridge_event
     else {
-        anyhow::bail!("Expected SignTransferEvent, got: {:?}", sign_transfer_event);
+        anyhow::bail!("Expected SignTransferEvent, got: {:?}", omni_bridge_event);
     };
 
     info!("Trying to process SignTransferEvent log on NEAR");
-
-    if signer_id != &signer {
-        anyhow::bail!("Different relayer signed transfer");
-    }
 
     if message_payload.fee_recipient != Some(signer) {
         anyhow::bail!("Fee recipient mismatch");
@@ -233,6 +225,55 @@ pub async fn process_sign_transfer_event(
         }
     }
 
+    if config.is_bridge_api_enabled() {
+        let transfer_message = match omni_connector
+            .near_get_transfer_message(message_payload.transfer_id)
+            .await
+        {
+            Ok(transfer_message) => transfer_message,
+            Err(err) => {
+                if err.to_string().contains("The transfer does not exist") {
+                    anyhow::bail!(
+                        "Transfer does not exist: {:?} (probably fee is 0 or transfer was already finalized)",
+                        message_payload.transfer_id
+                    );
+                }
+
+                warn!(
+                    "Failed to get transfer message: {:?}",
+                    message_payload.transfer_id
+                );
+
+                return Ok(EventAction::Retry);
+            }
+        };
+
+        let Ok(needed_fee) = utils::bridge_api::get_transfer_fee(
+            &config,
+            &transfer_message.sender,
+            &transfer_message.recipient,
+            &transfer_message.token,
+        )
+        .await
+        else {
+            warn!("Failed to get transfer fee for transfer: {transfer_message:?}");
+            return Ok(EventAction::Retry);
+        };
+
+        if let Some(event_action) = utils::bridge_api::check_fee(
+            &config,
+            redis_connection,
+            &transfer_message,
+            transfer_message.get_transfer_id(),
+            &needed_fee,
+            &transfer_message.fee,
+        )
+        .await
+        {
+            return Ok(event_action);
+        }
+    }
+
     let fin_transfer_args = match message_payload.recipient.get_chain() {
         ChainKind::Near => {
             anyhow::bail!("Near to Near transfers are not supported yet");
@@ -245,7 +286,7 @@ pub async fn process_sign_transfer_event(
 
             omni_connector::FinTransferArgs::EvmFinTransfer {
                 chain_kind: message_payload.recipient.get_chain(),
-                event: sign_transfer_event.event,
+                event: omni_bridge_event,
                 tx_nonce: Some(nonce.into()),
             }
         }
@@ -258,7 +299,7 @@ pub async fn process_sign_transfer_event(
             };
 
             omni_connector::FinTransferArgs::SolanaFinTransfer {
-                event: sign_transfer_event.event,
+                event: omni_bridge_event,
                 solana_token: Pubkey::new_from_array(token.0),
             }
         }

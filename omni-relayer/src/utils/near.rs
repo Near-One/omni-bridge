@@ -18,7 +18,7 @@ use near_primitives::{
 };
 use omni_types::{ChainKind, near_events::OmniBridgeEvent};
 
-use crate::{config, utils, workers::SignTransferEvent};
+use crate::{config, utils};
 
 pub const RETRY_ATTEMPTS: u64 = 10;
 pub const RETRY_SLEEP_SECS: u64 = 5;
@@ -136,27 +136,11 @@ pub async fn handle_streamer_message(
 
     let nep_locker_event_logs = nep_locker_event_outcomes
         .iter()
-        .flat_map(|outcome| {
-            outcome
-                .execution_outcome
-                .outcome
-                .logs
-                .iter()
-                .map(move |log| {
-                    (
-                        log.clone(),
-                        outcome.execution_outcome.outcome.executor_id.clone(),
-                    )
-                })
-        })
-        .filter_map(|(log, signed_id)| {
-            serde_json::from_str::<OmniBridgeEvent>(&log)
-                .ok()
-                .map(|event| (event, signed_id))
-        })
+        .flat_map(|outcome| outcome.execution_outcome.outcome.logs.clone())
+        .filter_map(|log| serde_json::from_str::<OmniBridgeEvent>(&log).ok())
         .collect::<Vec<_>>();
 
-    for (log, signer_id) in nep_locker_event_logs {
+    for log in nep_locker_event_logs {
         info!("Received OmniBridgeEvent: {}", log.to_log_string());
 
         match log {
@@ -182,10 +166,7 @@ pub async fn handle_streamer_message(
                     redis_connection,
                     utils::redis::EVENTS,
                     message_payload.transfer_id.origin_nonce.to_string(),
-                    SignTransferEvent {
-                        event: log,
-                        signer_id,
-                    },
+                    log,
                 )
                 .await;
             }
