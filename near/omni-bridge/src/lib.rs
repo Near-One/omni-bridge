@@ -48,6 +48,7 @@ const MPC_SIGNING_GAS: Gas = Gas::from_tgas(250);
 const SIGN_TRANSFER_CALLBACK_GAS: Gas = Gas::from_tgas(5);
 const SIGN_LOG_METADATA_CALLBACK_GAS: Gas = Gas::from_tgas(5);
 const VERIFY_PROOF_GAS: Gas = Gas::from_tgas(30);
+const VERIFY_PROOF_CALLBACK_GAS: Gas = Gas::from_tgas(150);
 const CLAIM_FEE_CALLBACK_GAS: Gas = Gas::from_tgas(50);
 const BIND_TOKEN_CALLBACK_GAS: Gas = Gas::from_tgas(25);
 const BIND_TOKEN_REFUND_GAS: Gas = Gas::from_tgas(5);
@@ -584,7 +585,7 @@ impl Contract {
         #[serializer(borsh)] predecessor_account_id: AccountId,
     ) -> PromiseOrValue<Nonce> {
         require!(
-            env::prepaid_gas() >= Gas::from_tgas(200),
+            env::prepaid_gas() >= VERIFY_PROOF_CALLBACK_GAS,
             "Not enough prepaid gas"
         );
 
