@@ -52,7 +52,7 @@ const VERIFY_PROOF_CALLBACK_GAS: Gas = Gas::from_tgas(250);
 const CLAIM_FEE_CALLBACK_GAS: Gas = Gas::from_tgas(50);
 const BIND_TOKEN_CALLBACK_GAS: Gas = Gas::from_tgas(25);
 const BIND_TOKEN_REFUND_GAS: Gas = Gas::from_tgas(5);
-const FT_TRANSFER_CALL_GAS: Gas = Gas::from_tgas(230);
+const FT_TRANSFER_CALL_GAS: Gas = Gas::from_tgas(220);
 const FT_TRANSFER_GAS: Gas = Gas::from_tgas(5);
 const UPDATE_CONTROLLER_GAS: Gas = Gas::from_tgas(250);
 const WNEAR_WITHDRAW_GAS: Gas = Gas::from_tgas(10);
@@ -65,6 +65,7 @@ const BURN_TOKEN_GAS: Gas = Gas::from_tgas(10);
 const MINT_TOKEN_GAS: Gas = Gas::from_tgas(5);
 const SET_METADATA_GAS: Gas = Gas::from_tgas(10);
 const RESOLVE_TRANSFER_GAS: Gas = Gas::from_tgas(3);
+const FAST_TRANSFER_CALLBACK_GAS: Gas = Gas::from_tgas(5);
 const NO_DEPOSIT: NearToken = NearToken::from_near(0);
 const ONE_YOCTO: NearToken = NearToken::from_yoctonear(1);
 const SIGN_PATH: &str = "bridge-1";
@@ -689,11 +690,15 @@ impl Contract {
                     &mut NearToken::from_yoctonear(storage_deposit_amount),
                 )
                 .then(
-                    Self::ext(env::current_account_id()).fast_fin_transfer_to_near_callback(
-                        &fast_transfer,
-                        storage_payer,
-                        fast_fin_transfer_msg.relayer,
-                    ),
+                    Self::ext(env::current_account_id())
+                        .with_static_gas(
+                            FAST_TRANSFER_CALLBACK_GAS.saturating_add(FT_TRANSFER_CALL_GAS),
+                        )
+                        .fast_fin_transfer_to_near_callback(
+                            &fast_transfer,
+                            storage_payer,
+                            fast_fin_transfer_msg.relayer,
+                        ),
                 ),
             )
         } else {
