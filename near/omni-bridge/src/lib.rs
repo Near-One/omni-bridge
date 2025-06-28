@@ -52,6 +52,7 @@ const VERIFY_PROOF_CALLBACK_GAS: Gas = Gas::from_tgas(250);
 const CLAIM_FEE_CALLBACK_GAS: Gas = Gas::from_tgas(50);
 const BIND_TOKEN_CALLBACK_GAS: Gas = Gas::from_tgas(25);
 const BIND_TOKEN_REFUND_GAS: Gas = Gas::from_tgas(5);
+const FT_TRANSFER_CALL_GAS: Gas = Gas::from_tgas(230);
 const FT_TRANSFER_GAS: Gas = Gas::from_tgas(5);
 const UPDATE_CONTROLLER_GAS: Gas = Gas::from_tgas(250);
 const WNEAR_WITHDRAW_GAS: Gas = Gas::from_tgas(10);
@@ -1534,7 +1535,7 @@ impl Contract {
             };
             ext_token::ext(token)
                 .with_attached_deposit(deposit)
-                .with_unused_gas_weight(10)
+                .with_static_gas(MINT_TOKEN_GAS.saturating_add(FT_TRANSFER_CALL_GAS))
                 .mint(
                     recipient,
                     amount,
@@ -1549,6 +1550,7 @@ impl Contract {
             ext_token::ext(token)
                 .with_attached_deposit(ONE_YOCTO)
                 .with_unused_gas_weight(10)
+                .with_static_gas(FT_TRANSFER_CALL_GAS)
                 .ft_transfer_call(recipient, amount, None, msg.to_string())
         }
     }
