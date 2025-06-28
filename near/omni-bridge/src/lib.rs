@@ -48,7 +48,7 @@ const MPC_SIGNING_GAS: Gas = Gas::from_tgas(250);
 const SIGN_TRANSFER_CALLBACK_GAS: Gas = Gas::from_tgas(5);
 const SIGN_LOG_METADATA_CALLBACK_GAS: Gas = Gas::from_tgas(5);
 const VERIFY_PROOF_GAS: Gas = Gas::from_tgas(30);
-const VERIFY_PROOF_CALLBACK_GAS: Gas = Gas::from_tgas(150);
+const VERIFY_PROOF_CALLBACK_GAS: Gas = Gas::from_tgas(250);
 const CLAIM_FEE_CALLBACK_GAS: Gas = Gas::from_tgas(50);
 const BIND_TOKEN_CALLBACK_GAS: Gas = Gas::from_tgas(25);
 const BIND_TOKEN_REFUND_GAS: Gas = Gas::from_tgas(5);
@@ -569,7 +569,7 @@ impl Contract {
         main_promise.then(
             Self::ext(env::current_account_id())
                 .with_attached_deposit(attached_deposit)
-                .with_unused_gas_weight(10)
+                .with_static_gas(VERIFY_PROOF_CALLBACK_GAS)
                 .fin_transfer_callback(
                     &args.storage_deposit_actions,
                     env::predecessor_account_id(),
@@ -584,11 +584,6 @@ impl Contract {
         #[serializer(borsh)] storage_deposit_actions: &Vec<StorageDepositAction>,
         #[serializer(borsh)] predecessor_account_id: AccountId,
     ) -> PromiseOrValue<Nonce> {
-        require!(
-            env::prepaid_gas() >= VERIFY_PROOF_CALLBACK_GAS,
-            "Not enough prepaid gas"
-        );
-
         let Ok(ProverResult::InitTransfer(init_transfer)) = Self::decode_prover_result(0) else {
             env::panic_str("Invalid proof message")
         };
