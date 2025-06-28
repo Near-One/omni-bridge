@@ -1549,7 +1549,6 @@ impl Contract {
         } else {
             ext_token::ext(token)
                 .with_attached_deposit(ONE_YOCTO)
-                .with_unused_gas_weight(10)
                 .with_static_gas(FT_TRANSFER_CALL_GAS)
                 .ft_transfer_call(recipient, amount, None, msg.to_string())
         }
