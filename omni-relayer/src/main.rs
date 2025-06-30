@@ -2,9 +2,13 @@ use std::sync::Arc;
 
 use anyhow::{Context, Result};
 use clap::Parser;
-use log::{error, info};
+use config::Network;
+use near_sdk::base64::{Engine, engine::general_purpose};
 use omni_types::ChainKind;
+use reqwest::Url;
 use solana_sdk::signature::Signature;
+use tracing::{error, info, warn};
+use tracing_subscriber::{EnvFilter, fmt, layer::SubscriberExt, util::SubscriberInitExt};
 
 mod config;
 mod startup;
@@ -36,10 +40,57 @@ struct CliArgs {
     start_timestamp: Option<u32>,
 }
 
+fn init_logging(network: &Network) -> Result<()> {
+    let fmt_layer = fmt::Layer::default()
+        .with_timer(fmt::time::ChronoLocal::rfc_3339())
+        .with_target(false);
+    let filter_layer = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
+
+    let grafana_loki_url = std::env::var("GRAFANA_LOKI_URL").ok();
+    let grafana_cloud_instance_id = std::env::var("GRAFANA_CLOUD_INSTANCE_ID").ok();
+    let grafana_api_key = std::env::var("GRAFANA_CLOUD_API_KEY").ok();
+
+    if let (Some(url), Some(instance_id), Some(key)) =
+        (grafana_loki_url, grafana_cloud_instance_id, grafana_api_key)
+    {
+        let basic = format!("{instance_id}:{key}");
+        let encoded = general_purpose::STANDARD.encode(basic);
+
+        let base = Url::parse(&url).context("Failed to parse `GRAFANA_LOKI_URL` as a valid URL")?;
+
+        let (loki_layer, loki_task) = tracing_loki::builder()
+            .label("app", format!("omni-relayer-{network}"))?
+            .http_header("Authorization", format!("Basic {encoded}"))?
+            .build_url(base)?;
+
+        tracing_subscriber::registry()
+            .with(filter_layer)
+            .with(fmt_layer)
+            .with(loki_layer)
+            .try_init()
+            .context("failed to initialize tracing subscriber with Loki")?;
+
+        tokio::spawn(loki_task);
+
+        info!("Loki logging enabled");
+    } else {
+        tracing_subscriber::registry()
+            .with(filter_layer)
+            .with(fmt_layer)
+            .try_init()
+            .context("failed to initialize basic tracing subscriber")?;
+
+        warn!(
+            "Running without Loki due to missing one of `GRAFANA_LOKI_URL`, `GRAFANA_CLOUD_INSTANCE_ID` or `GRAFANA_CLOUD_API_KEY` environment variables"
+        );
+    }
+
+    Ok(())
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     dotenv::dotenv().ok();
-    pretty_env_logger::init_timed();
 
     rustls::crypto::ring::default_provider()
         .install_default()
@@ -51,6 +102,8 @@ async fn main() -> Result<()> {
         &std::fs::read_to_string(args.config).context("Config file doesn't exist")?,
     )
     .context("Failed to parse config file")?;
+
+    init_logging(&config.near.network).context("Failed to initialize logging")?;
 
     let redis_client = redis::Client::open(config.redis.url.clone())?;
     let jsonrpc_client = near_jsonrpc_client::JsonRpcClient::connect(config.near.rpc_url.clone());
