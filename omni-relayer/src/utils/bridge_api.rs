@@ -1,8 +1,8 @@
 use alloy::primitives::U256;
 use anyhow::{Context, Result};
-use log::{info, warn};
 use near_sdk::json_types::U128;
 use omni_types::{Fee, OmniAddress, TransferId};
+use tracing::{info, warn};
 
 use crate::{config, utils, workers::EventAction};
 
