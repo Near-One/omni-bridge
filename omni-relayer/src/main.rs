@@ -31,6 +31,9 @@ struct CliArgs {
     /// Start signature for Solana indexer
     #[clap(long)]
     solana_start_signature: Option<Signature>,
+    /// Start timestamp for bridge indexer
+    #[clap(long)]
+    start_timestamp: Option<u32>,
 }
 
 #[tokio::main]
@@ -58,7 +61,7 @@ async fn main() -> Result<()> {
     let near_nonce = Arc::new(utils::nonce::NonceManager::new(
         utils::nonce::ChainClient::Near {
             jsonrpc_client: jsonrpc_client.clone(),
-            signer: near_signer,
+            signer: Box::new(near_signer),
         },
     ));
     let evm_nonces = Arc::new(utils::nonce::EvmNonceManagers::new(&config));
@@ -69,7 +72,10 @@ async fn main() -> Result<()> {
         handles.push(tokio::spawn({
             let config = config.clone();
             let redis_client = redis_client.clone();
-            async move { startup::bridge_indexer::start_indexer(config, redis_client).await }
+            async move {
+                startup::bridge_indexer::start_indexer(config, redis_client, args.start_timestamp)
+                    .await
+            }
         }));
     } else {
         handles.push(tokio::spawn({
