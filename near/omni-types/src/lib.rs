@@ -238,7 +238,7 @@ impl OmniAddress {
             ChainKind::Near => Ok(Self::Near(Self::to_near_account_id(address)?)),
             ChainKind::Btc => Ok(Self::Btc(
                 String::from_utf8(address.to_vec())
-                    .map_err(|e| format!("Invalid BTC address: {}", e))?,
+                    .map_err(|e| format!("Invalid BTC address: {e}"))?,
             )),
         }
     }
