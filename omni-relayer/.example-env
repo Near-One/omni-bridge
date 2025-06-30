@@ -2,7 +2,7 @@ RUST_LOG=info
 
 # Used for logging (optional)
 # GRAFANA_LOKI_URL=
-# GRAFANA_CLOUD_INSTANCE_ID=
+# GRAFANA_LOKI_USER=
 # GRAFANA_CLOUD_API_KEY=
 
 # It's used for near-lake-framework
