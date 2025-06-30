@@ -3,10 +3,10 @@ use std::sync::Arc;
 
 use anyhow::Result;
 use futures::future::join_all;
-use log::{error, info, warn};
 use solana_sdk::signer::EncodableKey;
 use solana_transaction_status::{UiMessage, UiTransactionEncoding};
 use tokio_stream::StreamExt;
+use tracing::{error, info, warn};
 
 use omni_types::ChainKind;
 use solana_client::nonblocking::{pubsub_client::PubsubClient, rpc_client::RpcClient};

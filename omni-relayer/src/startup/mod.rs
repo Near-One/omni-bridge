@@ -1,6 +1,6 @@
 use anyhow::{Context, Result};
 use btc_bridge_client::BtcBridgeClient;
-use log::info;
+use tracing::info;
 
 use evm_bridge_client::{EvmBridgeClient, EvmBridgeClientBuilder};
 use near_bridge_client::NearBridgeClientBuilder;

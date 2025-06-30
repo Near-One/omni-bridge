@@ -1,6 +1,6 @@
-use log::warn;
 use omni_types::ChainKind;
 use redis::{AsyncCommands, aio::MultiplexedConnection};
+use tracing::warn;
 
 use super::bridge_api::TransferFee;
 

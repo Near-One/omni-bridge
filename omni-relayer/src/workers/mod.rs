@@ -4,7 +4,7 @@ use alloy::primitives::B256;
 use anyhow::Result;
 use bridge_indexer_types::documents_types::DepositMsg;
 use futures::future::join_all;
-use log::warn;
+use tracing::warn;
 
 use ethereum_types::H256;
 

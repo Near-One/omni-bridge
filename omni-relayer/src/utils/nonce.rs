@@ -5,12 +5,12 @@ use alloy::{
     providers::{DynProvider, Provider, ProviderBuilder},
 };
 use anyhow::Result;
-use log::warn;
 use near_crypto::InMemorySigner;
 use near_jsonrpc_client::{JsonRpcClient, methods};
 use near_jsonrpc_primitives::types::query::QueryResponseKind;
 use near_primitives::types::BlockReference;
 use omni_types::ChainKind;
+use tracing::warn;
 
 use crate::config;
 
