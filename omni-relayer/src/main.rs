@@ -47,13 +47,13 @@ fn init_logging(network: &Network) -> Result<()> {
     let filter_layer = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
 
     let grafana_loki_url = std::env::var("GRAFANA_LOKI_URL").ok();
-    let grafana_cloud_instance_id = std::env::var("GRAFANA_CLOUD_INSTANCE_ID").ok();
+    let grafana_loki_user = std::env::var("GRAFANA_LOKI_USER").ok();
     let grafana_api_key = std::env::var("GRAFANA_CLOUD_API_KEY").ok();
 
-    if let (Some(url), Some(instance_id), Some(key)) =
-        (grafana_loki_url, grafana_cloud_instance_id, grafana_api_key)
+    if let (Some(url), Some(user), Some(key)) =
+        (grafana_loki_url, grafana_loki_user, grafana_api_key)
     {
-        let basic = format!("{instance_id}:{key}");
+        let basic = format!("{user}:{key}");
         let encoded = general_purpose::STANDARD.encode(basic);
 
         let base = Url::parse(&url).context("Failed to parse `GRAFANA_LOKI_URL` as a valid URL")?;
@@ -81,7 +81,7 @@ fn init_logging(network: &Network) -> Result<()> {
             .context("failed to initialize basic tracing subscriber")?;
 
         warn!(
-            "Running without Loki due to missing one of `GRAFANA_LOKI_URL`, `GRAFANA_CLOUD_INSTANCE_ID` or `GRAFANA_CLOUD_API_KEY` environment variables"
+            "Running without Loki due to missing one of `GRAFANA_LOKI_URL`, `GRAFANA_LOKI_USER` or `GRAFANA_CLOUD_API_KEY` environment variables"
         );
     }
 
