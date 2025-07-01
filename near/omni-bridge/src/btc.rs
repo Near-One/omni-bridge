@@ -43,7 +43,7 @@ impl Contract {
                     btc_address == target_btc_address,
                     "Incorrect target address"
                 );
-                let output_amount = self.get_output_amount(output.clone(), target_btc_address);
+                let output_amount = self.get_output_amount(&output, &target_btc_address);
 
                 let max_fee = transfer.message.msg.parse::<u64>();
                 if let Ok(max_fee) = max_fee {
@@ -57,7 +57,7 @@ impl Contract {
             }
         } else {
             env::panic_str("Invalid destination chain");
-        };
+        }
 
         if let Some(fee) = &fee {
             require!(&transfer.message.fee == fee, "Invalid fee");
@@ -92,18 +92,12 @@ impl Contract {
             )
     }
 
-    fn get_output_amount(&self, output: Vec<TxOut>, target_address: String) -> u64 {
-        let target_address = match Address::from_str(&target_address) {
-            Ok(addr) => addr,
-            Err(_) => env::panic_str("Invalid target address"),
-        };
+    fn get_output_amount(&self, output: &[TxOut], target_address: &str) -> u64 {
+        let Ok(target_address) = Address::from_str(target_address) else { env::panic_str("Invalid target address") };
 
         let network = self.get_btc_network();
 
-        let checked_address = match target_address.require_network(network) {
-            Ok(addr) => addr,
-            Err(_) => env::panic_str("Invalid target address"),
-        };
+        let Ok(checked_address) = target_address.require_network(network) else { env::panic_str("Invalid target address") };
 
         output
             .iter()
@@ -130,7 +124,7 @@ impl Contract {
         transfer_msg: TransferMessage,
         transfer_owner: AccountId,
         fee_recipient: AccountId,
-        #[callback_result] call_result: Result<U128, PromiseError>,
+        #[callback_result] call_result: &Result<U128, PromiseError>,
     ) -> PromiseOrValue<()> {
         if matches!(call_result, Ok(result) if result.0 > 0) {
             if transfer_msg.fee.native_fee.0 != 0 {

@@ -1039,7 +1039,7 @@ impl Contract {
                 .insert(
                     &token_address,
                     &Decimals {
-                        decimals: decimals,
+                        decimals,
                         origin_decimals: decimals
                     }
                 )
