@@ -1131,7 +1131,7 @@ dependencies = [
 
 [[package]]
 name = "evm-prover"
-version = "0.2.2"
+version = "0.2.9"
 dependencies = [
  "borsh",
  "near-sdk",
@@ -2885,7 +2885,7 @@ dependencies = [
 
 [[package]]
 name = "omni-bridge"
-version = "0.2.8"
+version = "0.2.9"
 dependencies = [
  "borsh",
  "hex",
@@ -2898,7 +2898,7 @@ dependencies = [
 
 [[package]]
 name = "omni-prover"
-version = "0.2.1"
+version = "0.2.9"
 dependencies = [
  "borsh",
  "near-plugins",
@@ -5156,7 +5156,7 @@ dependencies = [
 
 [[package]]
 name = "wormhole-omni-prover-proxy"
-version = "0.2.1"
+version = "0.2.9"
 dependencies = [
  "borsh",
  "hex",
