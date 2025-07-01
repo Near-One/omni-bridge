@@ -28,7 +28,7 @@ overflow-checks = true
 
 [workspace.dependencies]
 cargo-near-build = "0.4.3"
-near-sdk = { version = "5.15.1", features = ["non-contract-usage"] }
+near-sdk = "5.15.1"
 near-contract-standards = "5.7.0"
 hex = "0.4.2"
 borsh = "1.5.1"

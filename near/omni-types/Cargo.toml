@@ -5,7 +5,7 @@ authors = ["Near One <info@nearone.org>"]
 edition = "2021"
 
 [dependencies]
-near-sdk.workspace = true
+near-sdk = { workspace = true, features = ["non-contract-usage"] }
 near-contract-standards.workspace = true
 hex.workspace = true
 borsh.workspace = true
