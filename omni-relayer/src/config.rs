@@ -161,7 +161,7 @@ pub struct Evm {
     pub light_client: Option<AccountId>,
     pub block_processing_batch_size: u64,
     pub expected_finalization_time: i64,
-    #[serde(default)]
+    #[serde(default = "u64::max_value")]
     pub safe_confirmations: u64,
 }
 

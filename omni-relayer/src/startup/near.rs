@@ -12,10 +12,15 @@ use omni_types::ChainKind;
 use crate::{config, utils};
 
 pub fn get_signer(
-    file: Option<&String>,
+    config: &config::Config,
     near_signer_type: config::NearSignerType,
 ) -> Result<InMemorySigner> {
     info!("Creating NEAR signer");
+
+    let file = match near_signer_type {
+        config::NearSignerType::Omni => config.near.omni_credentials_path.as_deref(),
+        config::NearSignerType::Fast => config.near.fast_credentials_path.as_deref(),
+    };
 
     if let Some(file) = file {
         info!("Using NEAR credentials file: {file}");

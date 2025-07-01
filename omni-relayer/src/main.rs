@@ -55,17 +55,11 @@ async fn main() -> Result<()> {
     let redis_client = redis::Client::open(config.redis.url.clone())?;
     let jsonrpc_client = near_jsonrpc_client::JsonRpcClient::connect(config.near.rpc_url.clone());
 
-    let near_omni_signer = startup::near::get_signer(
-        config.near.omni_credentials_path.as_ref(),
-        config::NearSignerType::Omni,
-    )?;
+    let near_omni_signer = startup::near::get_signer(&config, config::NearSignerType::Omni)?;
     let omni_connector = Arc::new(startup::build_omni_connector(&config, &near_omni_signer)?);
 
     let (near_fast_signer, fast_connector) = if config.is_fast_relayer_enabled() {
-        let near_fast_signer = startup::near::get_signer(
-            config.near.fast_credentials_path.as_ref(),
-            config::NearSignerType::Fast,
-        )?;
+        let near_fast_signer = startup::near::get_signer(&config, config::NearSignerType::Fast)?;
 
         (
             Some(near_fast_signer.clone()),
