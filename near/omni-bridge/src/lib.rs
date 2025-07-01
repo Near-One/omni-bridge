@@ -775,9 +775,9 @@ impl Contract {
         if let OmniAddress::Btc(_) = fast_transfer.recipient {
             let btc_account_id = self.get_native_token_id(ChainKind::Btc);
             require!(
-                    fast_transfer.token_id == btc_account_id,
-                    "Only BTC can be transferred to the Bitcoin network."
-                );
+                fast_transfer.token_id == btc_account_id,
+                "Only BTC can be transferred to the Bitcoin network."
+            );
         }
 
         if self.is_transfer_finalised(fast_transfer.transfer_id) {

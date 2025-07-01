@@ -93,11 +93,15 @@ impl Contract {
     }
 
     fn get_output_amount(&self, output: &[TxOut], target_address: &str) -> u64 {
-        let Ok(target_address) = Address::from_str(target_address) else { env::panic_str("Invalid target address") };
+        let Ok(target_address) = Address::from_str(target_address) else {
+            env::panic_str("Invalid target address")
+        };
 
         let network = self.get_btc_network();
 
-        let Ok(checked_address) = target_address.require_network(network) else { env::panic_str("Invalid target address") };
+        let Ok(checked_address) = target_address.require_network(network) else {
+            env::panic_str("Invalid target address")
+        };
 
         output
             .iter()
