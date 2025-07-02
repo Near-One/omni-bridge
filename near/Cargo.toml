@@ -29,7 +29,7 @@ overflow-checks = true
 [workspace.dependencies]
 cargo-near-build = "0.4.3"
 near-sdk = "5.15.1"
-near-contract-standards = "5.15.1"
+near-contract-standards = "=5.15.1"
 hex = "0.4.2"
 borsh = "1.5.1"
 serde = { version = "1.0.200", features = ["derive"] }
