@@ -169,7 +169,10 @@ pub async fn process_events(
 
         for (key, event) in events {
             if let Ok(transfer) = serde_json::from_str::<Transfer>(&event) {
-                if let Transfer::Near { .. } = transfer {
+                if let Transfer::Near {
+                    transfer_message, ..
+                } = transfer.clone()
+                {
                     handlers.push(tokio::spawn({
                         let config = config.clone();
                         let mut redis_connection = redis_connection.clone();
@@ -206,11 +209,21 @@ pub async fn process_events(
                                         &key,
                                     )
                                     .await;
+                                    utils::redis::remove_event(
+                                        &mut redis_connection,
+                                        utils::redis::FEE_MAPPING,
+                                        serde_json::to_string(&transfer_message.get_transfer_id())
+                                            .unwrap_or_default(),
+                                    )
+                                    .await;
                                 }
                             }
                         }
                     }));
-                } else if let Transfer::Evm { .. } = transfer {
+                } else if let Transfer::Evm {
+                    log, chain_kind, ..
+                } = transfer.clone()
+                {
                     handlers.push(tokio::spawn({
                         let config = config.clone();
                         let mut redis_connection = redis_connection.clone();
@@ -221,6 +234,7 @@ pub async fn process_events(
                         async move {
                             match evm::process_init_transfer_event(
                                 config,
+                                &mut redis_connection,
                                 omni_connector,
                                 jsonrpc_client,
                                 transfer,
@@ -236,6 +250,16 @@ pub async fn process_events(
                                         &key,
                                     )
                                     .await;
+                                    utils::redis::remove_event(
+                                        &mut redis_connection,
+                                        utils::redis::FEE_MAPPING,
+                                        serde_json::to_string(&TransferId {
+                                            origin_nonce: log.origin_nonce,
+                                            origin_chain: chain_kind,
+                                        })
+                                        .unwrap_or_default(),
+                                    )
+                                    .await;
                                 }
                                 Err(err) => {
                                     warn!("{err:?}");
@@ -245,11 +269,21 @@ pub async fn process_events(
                                         &key,
                                     )
                                     .await;
+                                    utils::redis::remove_event(
+                                        &mut redis_connection,
+                                        utils::redis::FEE_MAPPING,
+                                        serde_json::to_string(&TransferId {
+                                            origin_nonce: log.origin_nonce,
+                                            origin_chain: chain_kind,
+                                        })
+                                        .unwrap_or_default(),
+                                    )
+                                    .await;
                                 }
                             }
                         }
                     }));
-                } else if let Transfer::Solana { .. } = transfer {
+                } else if let Transfer::Solana { sequence, .. } = transfer {
                     handlers.push(tokio::spawn({
                         let config = config.clone();
                         let mut redis_connection = redis_connection.clone();
@@ -276,6 +310,16 @@ pub async fn process_events(
                                         &key,
                                     )
                                     .await;
+                                    utils::redis::remove_event(
+                                        &mut redis_connection,
+                                        utils::redis::FEE_MAPPING,
+                                        serde_json::to_string(&TransferId {
+                                            origin_nonce: sequence,
+                                            origin_chain: ChainKind::Sol,
+                                        })
+                                        .unwrap_or_default(),
+                                    )
+                                    .await;
                                 }
                                 Err(err) => {
                                     warn!("{err:?}");
@@ -283,6 +327,16 @@ pub async fn process_events(
                                         &mut redis_connection,
                                         utils::redis::EVENTS,
                                         &key,
+                                    )
+                                    .await;
+                                    utils::redis::remove_event(
+                                        &mut redis_connection,
+                                        utils::redis::FEE_MAPPING,
+                                        serde_json::to_string(&TransferId {
+                                            origin_nonce: sequence,
+                                            origin_chain: ChainKind::Sol,
+                                        })
+                                        .unwrap_or_default(),
                                     )
                                     .await;
                                 }
@@ -293,13 +347,13 @@ pub async fn process_events(
                     handlers.push(tokio::spawn({
                         let mut redis_connection = redis_connection.clone();
                         let omni_connector = omni_connector.clone();
-                        let near_nonce = near_omni_nonce.clone();
+                        let near_omni_nonce = near_omni_nonce.clone();
 
                         async move {
                             match btc::process_near_to_btc_init_transfer_event(
                                 omni_connector,
                                 transfer,
-                                near_nonce,
+                                near_omni_nonce,
                             )
                             .await
                             {
@@ -396,7 +450,10 @@ pub async fn process_events(
                     }));
                 }
             } else if let Ok(omni_bridge_event) = serde_json::from_str::<OmniBridgeEvent>(&event) {
-                if let OmniBridgeEvent::SignTransferEvent { .. } = omni_bridge_event {
+                if let OmniBridgeEvent::SignTransferEvent {
+                    message_payload, ..
+                } = omni_bridge_event.clone()
+                {
                     handlers.push(tokio::spawn({
                         let config = config.clone();
                         let mut redis_connection = redis_connection.clone();
@@ -407,6 +464,7 @@ pub async fn process_events(
                         async move {
                             match near::process_sign_transfer_event(
                                 config,
+                                &mut redis_connection,
                                 omni_connector,
                                 signer,
                                 omni_bridge_event,
@@ -422,6 +480,13 @@ pub async fn process_events(
                                         &key,
                                     )
                                     .await;
+                                    utils::redis::remove_event(
+                                        &mut redis_connection,
+                                        utils::redis::FEE_MAPPING,
+                                        serde_json::to_string(&message_payload.transfer_id)
+                                            .unwrap_or_default(),
+                                    )
+                                    .await;
                                 }
                                 Err(err) => {
                                     warn!("{err:?}");
@@ -429,6 +494,13 @@ pub async fn process_events(
                                         &mut redis_connection,
                                         utils::redis::EVENTS,
                                         &key,
+                                    )
+                                    .await;
+                                    utils::redis::remove_event(
+                                        &mut redis_connection,
+                                        utils::redis::FEE_MAPPING,
+                                        serde_json::to_string(&message_payload.transfer_id)
+                                            .unwrap_or_default(),
                                     )
                                     .await;
                                 }

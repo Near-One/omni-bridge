@@ -27,6 +27,7 @@ use super::{EventAction, Transfer};
 #[allow(clippy::too_many_lines)]
 pub async fn process_init_transfer_event(
     config: config::Config,
+    redis_connection: &mut redis::aio::MultiplexedConnection,
     omni_connector: Arc<OmniConnector>,
     jsonrpc_client: near_jsonrpc_client::JsonRpcClient,
     transfer: Transfer,
@@ -100,27 +101,34 @@ pub async fn process_init_transfer_event(
                     )
                 })?;
 
-        match utils::bridge_api::is_fee_sufficient(
+        let Ok(needed_fee) = utils::bridge_api::TransferFee::get_transfer_fee(
             &config,
-            Fee {
-                fee: log.fee,
-                native_fee: log.native_fee,
-            },
             &sender,
             &log.recipient,
             &token,
         )
         .await
+        else {
+            warn!("Failed to get transfer fee for transfer: {transfer:?}");
+            return Ok(EventAction::Retry);
+        };
+
+        let provided_fee = Fee {
+            fee: log.fee,
+            native_fee: log.native_fee,
+        };
+
+        if let Some(event_action) = needed_fee
+            .check_fee(
+                &config,
+                redis_connection,
+                &transfer,
+                transfer_id,
+                &provided_fee,
+            )
+            .await
         {
-            Ok(true) => {}
-            Ok(false) => {
-                warn!("Insufficient fee for transfer: {transfer:?}");
-                return Ok(EventAction::Retry);
-            }
-            Err(err) => {
-                warn!("Failed to check fee sufficiency: {err:?}");
-                return Ok(EventAction::Retry);
-            }
+            return Ok(event_action);
         }
     }
 

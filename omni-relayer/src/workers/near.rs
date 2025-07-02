@@ -79,24 +79,29 @@ pub async fn process_transfer_event(
             .as_ref()
             .is_some_and(|list| list.contains(&transfer_message.sender))
     {
-        match utils::bridge_api::is_fee_sufficient(
+        let Ok(needed_fee) = utils::bridge_api::TransferFee::get_transfer_fee(
             &config,
-            transfer_message.fee.clone(),
             &transfer_message.sender,
             &transfer_message.recipient,
             &transfer_message.token,
         )
         .await
+        else {
+            warn!("Failed to get transfer fee for transfer: {transfer_message:?}");
+            return Ok(EventAction::Retry);
+        };
+
+        if let Some(event_action) = needed_fee
+            .check_fee(
+                &config,
+                redis_connection,
+                &transfer_message,
+                transfer_message.get_transfer_id(),
+                &transfer_message.fee,
+            )
+            .await
         {
-            Ok(true) => {}
-            Ok(false) => {
-                warn!("Insufficient fee for transfer: {transfer_message:?}");
-                return Ok(EventAction::Retry);
-            }
-            Err(err) => {
-                warn!("Failed to check fee sufficiency: {err:?}");
-                return Ok(EventAction::Retry);
-            }
+            return Ok(event_action);
         }
     }
 
@@ -182,19 +187,24 @@ pub async fn process_transfer_event(
 
 pub async fn process_sign_transfer_event(
     config: config::Config,
+    redis_connection: &mut redis::aio::MultiplexedConnection,
     omni_connector: Arc<OmniConnector>,
     signer: AccountId,
-    sign_transfer_event: OmniBridgeEvent,
+    omni_bridge_event: OmniBridgeEvent,
     evm_nonces: Arc<utils::nonce::EvmNonceManagers>,
 ) -> Result<EventAction> {
     let OmniBridgeEvent::SignTransferEvent {
         message_payload, ..
-    } = &sign_transfer_event
+    } = &omni_bridge_event
     else {
-        anyhow::bail!("Expected SignTransferEvent, got: {:?}", sign_transfer_event);
+        anyhow::bail!("Expected SignTransferEvent, got: {:?}", omni_bridge_event);
     };
 
     info!("Trying to process SignTransferEvent log on NEAR");
+
+    if message_payload.fee_recipient != Some(signer) {
+        anyhow::bail!("Fee recipient mismatch");
+    }
 
     match omni_connector
         .is_transfer_finalised(
@@ -213,10 +223,6 @@ pub async fn process_sign_transfer_event(
             warn!("Failed to check if transfer is finalised: {err:?}");
             return Ok(EventAction::Retry);
         }
-    }
-
-    if message_payload.fee_recipient != Some(signer) {
-        anyhow::bail!("Fee recipient mismatch");
     }
 
     if config.is_bridge_api_enabled() {
@@ -242,24 +248,29 @@ pub async fn process_sign_transfer_event(
             }
         };
 
-        match utils::bridge_api::is_fee_sufficient(
+        let Ok(needed_fee) = utils::bridge_api::TransferFee::get_transfer_fee(
             &config,
-            transfer_message.fee,
             &transfer_message.sender,
             &transfer_message.recipient,
             &transfer_message.token,
         )
         .await
+        else {
+            warn!("Failed to get transfer fee for transfer: {transfer_message:?}");
+            return Ok(EventAction::Retry);
+        };
+
+        if let Some(event_action) = needed_fee
+            .check_fee(
+                &config,
+                redis_connection,
+                &transfer_message,
+                transfer_message.get_transfer_id(),
+                &transfer_message.fee,
+            )
+            .await
         {
-            Ok(true) => {}
-            Ok(false) => {
-                warn!("Insufficient fee for transfer: {message_payload:?}");
-                return Ok(EventAction::Retry);
-            }
-            Err(err) => {
-                warn!("Failed to check fee sufficiency: {err:?}");
-                return Ok(EventAction::Retry);
-            }
+            return Ok(event_action);
         }
     }
 
@@ -275,7 +286,7 @@ pub async fn process_sign_transfer_event(
 
             omni_connector::FinTransferArgs::EvmFinTransfer {
                 chain_kind: message_payload.recipient.get_chain(),
-                event: sign_transfer_event,
+                event: omni_bridge_event,
                 tx_nonce: Some(nonce.into()),
             }
         }
@@ -288,7 +299,7 @@ pub async fn process_sign_transfer_event(
             };
 
             omni_connector::FinTransferArgs::SolanaFinTransfer {
-                event: sign_transfer_event,
+                event: omni_bridge_event,
                 solana_token: Pubkey::new_from_array(token.0),
             }
         }
