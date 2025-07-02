@@ -54,6 +54,7 @@ mod tests {
                 "mpc_signer": "mpc.testnet",
                 "nonce": U128(0),
                 "wnear_account_id": wnear_account_id,
+                "btc_connector": "brg-dev.testnet",
             }))
             .max_gas()
             .transact()
