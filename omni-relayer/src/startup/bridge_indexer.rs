@@ -9,7 +9,7 @@ use bridge_indexer_types::documents_types::{
 use ethereum_types::H256;
 use log::{info, warn};
 use mongodb::{Client, Collection, change_stream::event::ResumeToken, options::ClientOptions};
-use omni_types::{ChainKind, OmniAddress, near_events::OmniBridgeEvent};
+use omni_types::{ChainKind, Fee, OmniAddress, TransferId, near_events::OmniBridgeEvent};
 use solana_sdk::pubkey::Pubkey;
 use tokio_stream::StreamExt;
 
@@ -17,20 +17,16 @@ use crate::{config, utils, workers};
 
 const OMNI_EVENTS: &str = "omni_events";
 
-fn get_expected_finalization_time(config: config::Config, chain_kind: ChainKind) -> Result<i64> {
-    let Some(expected_finalization_time) = (match chain_kind {
-        ChainKind::Eth => config.eth.map(|eth| eth.expected_finalization_time),
-        ChainKind::Base => config.base.map(|base| base.expected_finalization_time),
-        ChainKind::Arb => config.arb.map(|arb| arb.expected_finalization_time),
-        _ => None,
-    }) else {
-        anyhow::bail!(
-            "Failed to get expected_finalization_time, since config for {:?} is not set",
-            chain_kind
-        );
-    };
-
-    Ok(expected_finalization_time)
+fn get_evm_config(config: &config::Config, chain_kind: ChainKind) -> Result<&config::Evm> {
+    match chain_kind {
+        ChainKind::Eth => config.eth.as_ref().context("EVM config for Eth is not set"),
+        ChainKind::Base => config
+            .base
+            .as_ref()
+            .context("EVM config for Base is not set"),
+        ChainKind::Arb => config.arb.as_ref().context("EVM config for Arb is not set"),
+        _ => anyhow::bail!("Unsupported chain kind for EVM: {:?}", chain_kind),
+    }
 }
 
 async fn handle_transaction_event(
@@ -133,23 +129,54 @@ async fn handle_transaction_event(
                 );
             };
 
-            let expected_finalization_time = get_expected_finalization_time(config, chain_kind)?;
+            let expected_finalization_time = get_evm_config(&config, chain_kind)
+                .map(|evm_config| evm_config.expected_finalization_time)?;
+
+            let safe_confirmations = get_evm_config(&config, chain_kind)
+                .map(|evm_config| evm_config.safe_confirmations)?;
 
             utils::redis::add_event(
                 &mut redis_connection,
                 utils::redis::EVENTS,
-                origin_transaction_id,
+                origin_transaction_id.clone(),
                 workers::Transfer::Evm {
                     chain_kind,
                     block_number,
                     tx_hash,
-                    log,
+                    log: log.clone(),
                     creation_timestamp,
                     last_update_timestamp: None,
                     expected_finalization_time,
                 },
             )
             .await;
+
+            if config.is_fast_relayer_enabled() {
+                utils::redis::add_event(
+                    &mut redis_connection,
+                    utils::redis::EVENTS,
+                    format!("{origin_transaction_id}_fast"),
+                    crate::workers::Transfer::Fast {
+                        block_number,
+                        tx_hash: origin_transaction_id,
+                        token: log.token_address.to_string(),
+                        amount: log.amount,
+                        transfer_id: TransferId {
+                            origin_chain: chain_kind,
+                            origin_nonce: log.origin_nonce,
+                        },
+                        recipient: log.recipient,
+                        fee: Fee {
+                            fee: log.fee,
+                            native_fee: log.native_fee,
+                        },
+                        msg: log.message,
+                        storage_deposit_amount: None,
+                        safe_confirmations,
+                    },
+                )
+                .await;
+            }
         }
         OmniTransferMessage::EvmFinTransferMessage(fin_transfer) => {
             info!("Received EvmFinTransferMessage");
@@ -178,7 +205,8 @@ async fn handle_transaction_event(
                 );
             };
 
-            let expected_finalization_time = get_expected_finalization_time(config, chain_kind)?;
+            let expected_finalization_time = get_evm_config(&config, chain_kind)
+                .map(|evm_config| evm_config.expected_finalization_time)?;
 
             utils::redis::add_event(
                 &mut redis_connection,
@@ -304,7 +332,8 @@ async fn handle_meta_event(
                 );
             };
 
-            let expected_finalization_time = get_expected_finalization_time(config, chain_kind)?;
+            let expected_finalization_time = get_evm_config(&config, chain_kind)
+                .map(|evm_config| evm_config.expected_finalization_time)?;
 
             utils::redis::add_event(
                 &mut redis_connection,

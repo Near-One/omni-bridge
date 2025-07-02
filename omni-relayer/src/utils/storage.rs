@@ -4,12 +4,12 @@ use anyhow::Result;
 
 use near_primitives::types::AccountId;
 use omni_connector::OmniConnector;
-use omni_types::{locker_args::StorageDepositAction, ChainKind, OmniAddress};
+use omni_types::{ChainKind, OmniAddress, locker_args::StorageDepositAction};
 use solana_sdk::pubkey::Pubkey;
 
 use crate::utils;
 
-async fn get_token_id(
+pub async fn get_token_id(
     connector: &OmniConnector,
     chain_kind: ChainKind,
     token_address: &str,
@@ -73,6 +73,7 @@ pub async fn get_storage_deposit_actions(
     connector: &OmniConnector,
     chain_kind: ChainKind,
     recipient: &OmniAddress,
+    fee_recipient: &AccountId,
     token_address: &str,
     fee: u128,
     native_fee: u128,
@@ -93,13 +94,13 @@ pub async fn get_storage_deposit_actions(
     if fee > 0 {
         let token_id = get_token_id(connector, chain_kind, token_address).await?;
 
-        let relayer = connector
-            .near_bridge_client()
-            .and_then(|client| client.signer().map(|signer| signer.account_id))
-            .map_err(|_| "Failed to get relayer account id".to_string())?;
-
-        add_storage_deposit_action(connector, &mut storage_deposit_actions, token_id, relayer)
-            .await?;
+        add_storage_deposit_action(
+            connector,
+            &mut storage_deposit_actions,
+            token_id,
+            fee_recipient.clone(),
+        )
+        .await?;
     }
 
     if native_fee > 0 {
@@ -108,13 +109,13 @@ pub async fn get_storage_deposit_actions(
             .await
             .map_err(|_| format!("Failed to get native token id by chain kind: {chain_kind:?}",))?;
 
-        let relayer = connector
-            .near_bridge_client()
-            .and_then(|client| client.signer().map(|signer| signer.account_id))
-            .map_err(|_| "Failed to get relayer account id".to_string())?;
-
-        add_storage_deposit_action(connector, &mut storage_deposit_actions, token_id, relayer)
-            .await?;
+        add_storage_deposit_action(
+            connector,
+            &mut storage_deposit_actions,
+            token_id,
+            fee_recipient.clone(),
+        )
+        .await?;
     }
 
     Ok(storage_deposit_actions)

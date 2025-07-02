@@ -30,7 +30,7 @@ pub struct ConfirmedTxHash {
 }
 
 pub async fn process_near_to_btc_init_transfer_event(
-    connector: Arc<OmniConnector>,
+    omni_connector: Arc<OmniConnector>,
     transfer: Transfer,
     near_nonce: Arc<utils::nonce::NonceManager>,
 ) -> Result<EventAction> {
@@ -50,7 +50,7 @@ pub async fn process_near_to_btc_init_transfer_event(
         }
     };
 
-    match connector
+    match omni_connector
         .near_sign_btc_transaction(
             btc_pending_id,
             sign_index,
@@ -86,7 +86,7 @@ pub async fn process_near_to_btc_init_transfer_event(
 }
 
 pub async fn process_btc_to_near_init_transfer_event(
-    connector: Arc<OmniConnector>,
+    omni_connector: Arc<OmniConnector>,
     transfer: Transfer,
     near_nonce: Arc<utils::nonce::NonceManager>,
 ) -> Result<EventAction> {
@@ -107,7 +107,7 @@ pub async fn process_btc_to_near_init_transfer_event(
         }
     };
 
-    match connector
+    match omni_connector
         .near_fin_transfer_btc(
             btc_tx_hash,
             usize::try_from(vout)?,
@@ -161,12 +161,12 @@ pub async fn process_btc_to_near_init_transfer_event(
 }
 
 pub async fn process_sign_transaction_event(
-    connector: Arc<OmniConnector>,
+    omni_connector: Arc<OmniConnector>,
     sign_btc_transaction_event: SignBtcTransaction,
 ) -> Result<EventAction> {
     info!("Trying to process SignBtcTransaction log on NEAR");
 
-    match connector
+    match omni_connector
         .btc_fin_transfer(
             sign_btc_transaction_event.near_tx_hash.clone(),
             Some(sign_btc_transaction_event.relayer),
@@ -206,7 +206,7 @@ pub async fn process_sign_transaction_event(
 }
 
 pub async fn process_confirmed_tx_hash(
-    connector: Arc<OmniConnector>,
+    omni_connector: Arc<OmniConnector>,
     btc_tx_hash: String,
     near_nonce: Arc<utils::nonce::NonceManager>,
 ) -> Result<EventAction> {
@@ -218,7 +218,7 @@ pub async fn process_confirmed_tx_hash(
         }
     };
 
-    match connector
+    match omni_connector
         .near_btc_verify_withdraw(
             btc_tx_hash,
             TransactionOptions {

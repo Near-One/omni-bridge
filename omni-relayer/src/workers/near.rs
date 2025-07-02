@@ -13,7 +13,7 @@ use solana_rpc_client_api::{client_error::ErrorKind, request::RpcError};
 use solana_sdk::{instruction::InstructionError, pubkey::Pubkey, transaction::TransactionError};
 
 use omni_connector::OmniConnector;
-use omni_types::{ChainKind, OmniAddress, TransferId, near_events::OmniBridgeEvent};
+use omni_types::{ChainKind, FastTransfer, OmniAddress, TransferId, near_events::OmniBridgeEvent};
 
 use crate::{config, utils, workers::PAUSED_ERROR};
 
@@ -32,7 +32,7 @@ pub async fn process_transfer_event(
     config: config::Config,
     redis_connection: &mut redis::aio::MultiplexedConnection,
     key: String,
-    connector: Arc<OmniConnector>,
+    omni_connector: Arc<OmniConnector>,
     signer: AccountId,
     transfer: Transfer,
     near_nonce: Arc<utils::nonce::NonceManager>,
@@ -56,7 +56,7 @@ pub async fn process_transfer_event(
 
     info!("Trying to process TransferMessage on NEAR");
 
-    match connector
+    match omni_connector
         .is_transfer_finalised(
             Some(transfer_message.get_origin_chain()),
             transfer_message.get_destination_chain(),
@@ -105,7 +105,7 @@ pub async fn process_transfer_event(
         .await
         .context("Failed to reserve nonce for near transaction")?;
 
-    match connector
+    match omni_connector
         .near_sign_transfer(
             TransferId {
                 origin_chain: transfer_message.sender.get_chain(),
@@ -134,6 +134,7 @@ pub async fn process_transfer_event(
                             .to_string(),
                         "Signature request has timed out.".to_string(),
                         "Attached deposit is lower than required".to_string(),
+                        "Exceeded the prepaid gas.".to_string(),
                     ]),
                     original_key: key,
                     original_event: transfer,
@@ -181,7 +182,7 @@ pub async fn process_transfer_event(
 
 pub async fn process_sign_transfer_event(
     config: config::Config,
-    connector: Arc<OmniConnector>,
+    omni_connector: Arc<OmniConnector>,
     signer: AccountId,
     sign_transfer_event: OmniBridgeEvent,
     evm_nonces: Arc<utils::nonce::EvmNonceManagers>,
@@ -195,7 +196,7 @@ pub async fn process_sign_transfer_event(
 
     info!("Trying to process SignTransferEvent log on NEAR");
 
-    match connector
+    match omni_connector
         .is_transfer_finalised(
             None,
             message_payload.recipient.get_chain(),
@@ -219,7 +220,7 @@ pub async fn process_sign_transfer_event(
     }
 
     if config.is_bridge_api_enabled() {
-        let transfer_message = match connector
+        let transfer_message = match omni_connector
             .near_get_transfer_message(message_payload.transfer_id)
             .await
         {
@@ -293,7 +294,7 @@ pub async fn process_sign_transfer_event(
         }
     };
 
-    match connector.fin_transfer(fin_transfer_args).await {
+    match omni_connector.fin_transfer(fin_transfer_args).await {
         Ok(tx_hash) => {
             info!("Finalized deposit: {tx_hash}");
             Ok(EventAction::Remove)
@@ -356,5 +357,136 @@ pub async fn process_unverified_transfer_event(
             unverified_event.original_event,
         )
         .await;
+    }
+}
+
+pub async fn initiate_fast_transfer(
+    fast_connector: Arc<OmniConnector>,
+    transfer: Transfer,
+    near_omni_nonce: Arc<utils::nonce::NonceManager>,
+) -> Result<EventAction> {
+    let Transfer::Fast {
+        block_number,
+        tx_hash,
+        token,
+        amount,
+        transfer_id,
+        recipient,
+        fee,
+        msg,
+        storage_deposit_amount,
+        safe_confirmations,
+    } = transfer.clone()
+    else {
+        anyhow::bail!("Expected FastTransferEvent, got: {:?}", transfer);
+    };
+
+    // TODO: Fast transfer to other chain increases origin nonce by one, so regular relayer won't
+    // be able to finalize it with a normal sign transfer. We need to catch and sign
+    // `FastTransferEvent`. This will be possible once bridge-indexer will track these events
+    // Related PR: https://github.com/Near-One/bridge-indexer-rs/pull/195
+    if recipient.get_chain() != ChainKind::Near {
+        anyhow::bail!(
+            "Fast transfer is supported only for transfers to NEAR for now, got: {:?}",
+            recipient.get_chain()
+        );
+    }
+
+    info!("Trying to initiate FastTransfer on NEAR");
+
+    let Ok(token_id) =
+        utils::storage::get_token_id(&fast_connector, transfer_id.origin_chain, &token).await
+    else {
+        warn!("Failed to get token id for transfer: {transfer_id:?}");
+        return Ok(EventAction::Retry);
+    };
+
+    let fast_transfer = FastTransfer {
+        transfer_id,
+        token_id: token_id.clone(),
+        amount,
+        fee: fee.clone(),
+        recipient: recipient.clone(),
+        msg: msg.clone(),
+    };
+
+    match fast_connector.near_is_transfer_finalised(transfer_id).await {
+        Ok(true) => anyhow::bail!("Transfer is already finalised: {:?}", transfer),
+        Ok(false) => {}
+        Err(err) => {
+            warn!("Failed to check if transfer is finalised: {err:?}");
+            return Ok(EventAction::Retry);
+        }
+    }
+
+    match fast_connector
+        .near_get_fast_transfer_status(fast_transfer.id())
+        .await
+    {
+        Ok(Some(_)) => anyhow::bail!("Fast transfer is already finalised: {:?}", transfer),
+        Ok(None) => {}
+        Err(err) => {
+            warn!("Failed to check if fast transfer is finalised: {err:?}");
+            return Ok(EventAction::Retry);
+        }
+    }
+
+    let Ok(last_finalized_block_number) = fast_connector
+        .evm_get_last_block_number(transfer_id.origin_chain)
+        .await
+    else {
+        warn!("Failed to get last finalized block number for EVM chain");
+        return Ok(EventAction::Retry);
+    };
+
+    let current_confirmations = last_finalized_block_number.saturating_sub(block_number);
+
+    if current_confirmations < safe_confirmations {
+        warn!(
+            "Fast transfer block number ({block_number}) is not finalized yet, waiting for more confirmations. Current confirmations: {current_confirmations}",
+        );
+        return Ok(EventAction::Retry);
+    }
+
+    let nonce = Some(
+        near_omni_nonce
+            .reserve_nonce()
+            .await
+            .context("Failed to reserve nonce for near transaction")?,
+    );
+
+    match fast_connector
+        .near_fast_transfer(
+            transfer_id.origin_chain,
+            tx_hash,
+            storage_deposit_amount.map(|storage_deposit_amount| storage_deposit_amount.0),
+            TransactionOptions {
+                nonce,
+                wait_until: near_primitives::views::TxExecutionStatus::Included,
+                wait_final_outcome_timeout_sec: None,
+            },
+        )
+        .await
+    {
+        Ok(tx_hash) => {
+            info!("Fast transfer initiated successfully: {tx_hash:?}");
+            Ok(EventAction::Remove)
+        }
+        Err(err) => {
+            if let BridgeSdkError::NearRpcError(near_rpc_error) = err {
+                match near_rpc_error {
+                    NearRpcError::NonceError
+                    | NearRpcError::FinalizationError
+                    | NearRpcError::RpcTransactionError(JsonRpcError::TransportError(_)) => {
+                        warn!("Failed to initiate fast transfer, retrying: {near_rpc_error:?}");
+                        return Ok(EventAction::Retry);
+                    }
+                    _ => {
+                        anyhow::bail!("Failed to initiate fast transfer: {near_rpc_error:?}");
+                    }
+                };
+            }
+            anyhow::bail!("Failed to initiate fast transfer: {err:?}");
+        }
     }
 }
