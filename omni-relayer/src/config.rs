@@ -6,9 +6,17 @@ use near_primitives::types::AccountId;
 use omni_types::{ChainKind, OmniAddress};
 use serde::Deserialize;
 
-pub fn get_private_key(chain_kind: ChainKind) -> String {
+pub enum NearSignerType {
+    Omni,
+    Fast,
+}
+
+pub fn get_private_key(chain_kind: ChainKind, near_signer_type: Option<NearSignerType>) -> String {
     let env_var = match chain_kind {
-        ChainKind::Near => "NEAR_PRIVATE_KEY",
+        ChainKind::Near => match near_signer_type.unwrap() {
+            NearSignerType::Omni => "NEAR_OMNI_PRIVATE_KEY",
+            NearSignerType::Fast => "NEAR_FAST_PRIVATE_KEY",
+        },
         ChainKind::Eth => "ETH_PRIVATE_KEY",
         ChainKind::Base => "BASE_PRIVATE_KEY",
         ChainKind::Arb => "ARB_PRIVATE_KEY",
@@ -20,7 +28,7 @@ pub fn get_private_key(chain_kind: ChainKind) -> String {
 
 pub fn get_relayer_evm_address(chain_kind: ChainKind) -> Address {
     let decoded_private_key =
-        hex::decode(get_private_key(chain_kind)).expect("Failed to decode EVM private key");
+        hex::decode(get_private_key(chain_kind, None)).expect("Failed to decode EVM private key");
 
     let secret_key = SigningKey::from_slice(&decoded_private_key)
         .expect("Failed to create a `SecretKey` from the provided private key");
@@ -98,6 +106,10 @@ impl Config {
     pub const fn is_bridge_api_enabled(&self) -> bool {
         self.bridge_indexer.api_url.is_some()
     }
+
+    pub fn is_fast_relayer_enabled(&self) -> bool {
+        self.near.fast_relayer_enabled
+    }
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -131,8 +143,11 @@ pub struct Near {
     pub omni_bridge_id: AccountId,
     pub btc_connector: Option<AccountId>,
     pub btc: Option<AccountId>,
-    pub credentials_path: Option<String>,
+    pub omni_credentials_path: Option<String>,
+    pub fast_credentials_path: Option<String>,
     pub sign_without_checking_fee: Option<Vec<OmniAddress>>,
+    #[serde(default)]
+    pub fast_relayer_enabled: bool,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -146,6 +161,8 @@ pub struct Evm {
     pub light_client: Option<AccountId>,
     pub block_processing_batch_size: u64,
     pub expected_finalization_time: i64,
+    #[serde(default = "u64::max_value")]
+    pub safe_confirmations: u64,
 }
 
 #[derive(Debug, Clone, Deserialize)]
