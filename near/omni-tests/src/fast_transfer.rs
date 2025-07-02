@@ -21,8 +21,8 @@ mod tests {
 
     use crate::helpers::tests::{
         account_n, base_eoa_address, base_factory_address, eth_eoa_address, eth_factory_address,
-        eth_token_address, get_bind_token_args, locker_wasm, mock_prover_wasm, mock_token_wasm,
-        relayer_account_id, token_deployer_wasm, NEP141_DEPOSIT,
+        eth_token_address, fast_relayer_account_id, get_bind_token_args, locker_wasm,
+        mock_prover_wasm, mock_token_wasm, relayer_account_id, token_deployer_wasm, NEP141_DEPOSIT,
     };
 
     struct TestEnv {
@@ -30,6 +30,7 @@ mod tests {
         eth_token_address: OmniAddress,
         bridge_contract: near_workspaces::Contract,
         relayer_account: near_workspaces::Account,
+        fast_relayer_account: near_workspaces::Account,
     }
 
     impl TestEnv {
@@ -43,7 +44,7 @@ mod tests {
 
         #[allow(clippy::too_many_lines)]
         async fn new(is_bridged_token: bool) -> anyhow::Result<Self> {
-            let sender_balance_token = 1_000_000;
+            let sender_balance_token = 1_000_000_000_000;
             let worker = near_workspaces::sandbox().await?;
 
             let prover_contract = worker.dev_deploy(&mock_prover_wasm()).await?;
@@ -116,9 +117,13 @@ mod tests {
                 .await?
                 .into_result()?;
 
-            // Create relayer account. (Default account in sandbox has 100 NEAR)
+            // Create relayer accounts. (Default account in sandbox has 100 NEAR)
             let relayer_account = worker
                 .create_tla(relayer_account_id(), worker.dev_generate().await.1)
+                .await?
+                .unwrap();
+            let fast_relayer_account = worker
+                .create_tla(fast_relayer_account_id(), worker.dev_generate().await.1)
                 .await?
                 .unwrap();
 
@@ -132,8 +137,21 @@ mod tests {
                     &token_contract,
                     eth_token_address.clone(),
                     &relayer_account,
-                    eth_factory_address,
+                    eth_factory_address.clone(),
                     U128(sender_balance_token),
+                    1,
+                )
+                .await?;
+
+                // Mint to fast relayer account
+                Self::fake_finalize_transfer(
+                    &bridge_contract,
+                    &token_contract,
+                    eth_token_address.clone(),
+                    &fast_relayer_account,
+                    eth_factory_address,
+                    U128(sender_balance_token * 2),
+                    2,
                 )
                 .await?;
 
@@ -182,6 +200,32 @@ mod tests {
                     .await?
                     .into_result()?;
 
+                // Register and send tokens to the fast relayer account
+                token_contract
+                    .call("storage_deposit")
+                    .args_json(json!({
+                        "account_id": fast_relayer_account.id(),
+                        "registration_only": true,
+                    }))
+                    .deposit(NEP141_DEPOSIT)
+                    .max_gas()
+                    .transact()
+                    .await?
+                    .into_result()?;
+
+                token_contract
+                    .call("ft_transfer")
+                    .args_json(json!({
+                        "receiver_id": fast_relayer_account.id(),
+                        "amount": U128(sender_balance_token * 2),
+                        "memo": None::<String>,
+                    }))
+                    .deposit(NearToken::from_yoctonear(1))
+                    .max_gas()
+                    .transact()
+                    .await?
+                    .into_result()?;
+
                 // Register and send tokens to the bridge contract
                 token_contract
                     .call("storage_deposit")
@@ -216,6 +260,7 @@ mod tests {
                 eth_token_address,
                 bridge_contract,
                 relayer_account,
+                fast_relayer_account,
             })
         }
 
@@ -293,7 +338,7 @@ mod tests {
                     &eth_token_address(),
                     &eth_factory_address,
                     18,
-                    18,
+                    24,
                 ))
                 .deposit(required_deposit_for_bind_token)
                 .max_gas()
@@ -310,6 +355,7 @@ mod tests {
             recipient: &near_workspaces::Account,
             emitter_address: OmniAddress,
             amount: U128,
+            nonce: u64,
         ) -> anyhow::Result<()> {
             let storage_deposit_actions = vec![StorageDepositAction {
                 token_id: token_contract.id().clone(),
@@ -330,7 +376,7 @@ mod tests {
                     chain_kind: ChainKind::Near,
                     storage_deposit_actions,
                     prover_args: borsh::to_vec(&ProverResult::InitTransfer(InitTransferMessage {
-                        origin_nonce: 1,
+                        origin_nonce: nonce,
                         token: eth_token_address,
                         recipient: OmniAddress::Near(recipient.id().clone()),
                         amount,
@@ -403,7 +449,10 @@ mod tests {
         env: &TestEnv,
         transfer_amount: u128,
         fast_transfer_msg: FastFinTransferMsg,
+        relayer_account: Option<&near_workspaces::Account>,
     ) -> anyhow::Result<ExecutionResult<Value>> {
+        let relayer_account = relayer_account.unwrap_or(&env.relayer_account);
+
         let storage_deposit_amount = match fast_transfer_msg.recipient {
             OmniAddress::Near(_) => {
                 get_balance_required_for_fast_transfer_to_near(&env.bridge_contract, true).await?
@@ -414,10 +463,10 @@ mod tests {
         };
 
         // Deposit to the storage
-        env.relayer_account
+        relayer_account
             .call(env.bridge_contract.id(), "storage_deposit")
             .args_json(json!({
-                "account_id": env.relayer_account.id(),
+                "account_id": relayer_account.id(),
             }))
             .deposit(storage_deposit_amount)
             .max_gas()
@@ -426,8 +475,7 @@ mod tests {
             .into_result()?;
 
         // Initiate the fast transfer
-        let transfer_result = env
-            .relayer_account
+        let transfer_result = relayer_account
             .call(env.token_contract.id(), "ft_transfer_call")
             .args_json(json!({
                 "receiver_id": env.bridge_contract.id(),
@@ -447,7 +495,10 @@ mod tests {
     async fn do_fin_transfer(
         env: &TestEnv,
         transfer_msg: InitTransferMessage,
+        fast_relayer_account: Option<&near_workspaces::Account>,
     ) -> anyhow::Result<ExecutionResult<Value>> {
+        let fast_relayer_account = fast_relayer_account.unwrap_or(&env.relayer_account);
+
         let required_balance_for_fin_transfer: NearToken = env
             .bridge_contract
             .view("required_balance_for_fin_transfer")
@@ -466,7 +517,7 @@ mod tests {
 
         let storage_deposit_action = StorageDepositAction {
             token_id: env.token_contract.id().clone(),
-            account_id: env.relayer_account.id().clone(),
+            account_id: fast_relayer_account.id().clone(),
             storage_deposit_amount: None,
         };
 
@@ -475,7 +526,10 @@ mod tests {
             .call(env.bridge_contract.id(), "fin_transfer")
             .args_borsh(FinTransferArgs {
                 chain_kind: omni_types::ChainKind::Eth,
-                storage_deposit_actions: vec![storage_deposit_action],
+                storage_deposit_actions: vec![
+                    storage_deposit_action.clone(),
+                    storage_deposit_action,
+                ],
                 prover_args: borsh::to_vec(&ProverResult::InitTransfer(transfer_msg)).unwrap(),
             })
             .deposit(attached_deposit)
@@ -509,16 +563,18 @@ mod tests {
         async fn succeeds_with_native_token() -> anyhow::Result<()> {
             let env = TestEnv::new_with_native_token().await?;
 
-            let transfer_amount = 100;
-            let transfer_msg = get_transfer_msg_to_near(&env, transfer_amount);
-            let fast_transfer_msg = get_fast_transfer_msg(&env, transfer_msg);
+            let transfer_amount = 100_000_000;
+            let fee = 1_000_000;
+            let decimal_diff = 6;
+            let (_, fast_transfer_msg) =
+                get_transfer_to_near_msg(&env, transfer_amount, fee, decimal_diff);
 
             let relayer_balance_before =
                 get_balance(&env.token_contract, env.relayer_account.id()).await?;
             let contract_balance_before =
                 get_balance(&env.token_contract, env.bridge_contract.id()).await?;
 
-            let result = do_fast_transfer(&env, transfer_amount, fast_transfer_msg).await?;
+            let result = do_fast_transfer(&env, transfer_amount, fast_transfer_msg, None).await?;
 
             assert_eq!(0, result.failures().len());
 
@@ -542,9 +598,8 @@ mod tests {
         async fn succeeds_with_bridged_token() -> anyhow::Result<()> {
             let env = TestEnv::new_with_bridged_token().await?;
 
-            let transfer_amount = 100;
-            let transfer_msg = get_transfer_msg_to_near(&env, transfer_amount);
-            let fast_transfer_msg = get_fast_transfer_msg(&env, transfer_msg);
+            let transfer_amount = 100_000_000;
+            let (_, fast_transfer_msg) = get_transfer_to_near_msg(&env, transfer_amount, 0, 0);
 
             let relayer_balance_before =
                 get_balance(&env.token_contract, env.relayer_account.id()).await?;
@@ -553,7 +608,7 @@ mod tests {
 
             assert_eq!(U128(0), contract_balance_before);
 
-            let result = do_fast_transfer(&env, transfer_amount, fast_transfer_msg).await?;
+            let result = do_fast_transfer(&env, transfer_amount, fast_transfer_msg, None).await?;
 
             assert_eq!(0, result.failures().len());
 
@@ -574,12 +629,56 @@ mod tests {
         }
 
         #[tokio::test]
+        async fn fails_due_to_invalid_amount() -> anyhow::Result<()> {
+            let env = TestEnv::new_with_native_token().await?;
+
+            let transfer_amount = 100_000_000;
+            let fee = 1_000_000;
+            let decimal_diff = 6;
+            let (_, mut fast_transfer_msg) =
+                get_transfer_to_near_msg(&env, transfer_amount, fee, decimal_diff);
+            fast_transfer_msg.amount = U128(100_000_000);
+
+            let result = do_fast_transfer(&env, transfer_amount, fast_transfer_msg, None).await?;
+
+            assert_eq!(1, result.failures().len());
+            let failure = result.failures()[0].clone().into_result();
+            assert!(failure.is_err_and(|err| {
+                format!("{err:?}").contains("ERR_INVALID_FAST_TRANSFER_AMOUNT")
+            }));
+
+            Ok(())
+        }
+
+        #[tokio::test]
+        async fn fails_due_to_invalid_fee() -> anyhow::Result<()> {
+            let env = TestEnv::new_with_native_token().await?;
+
+            let transfer_amount = 100_000_000;
+            let fee = 1_000_000;
+            let decimal_diff = 6;
+            let (_, mut fast_transfer_msg) =
+                get_transfer_to_near_msg(&env, transfer_amount, fee, decimal_diff);
+            fast_transfer_msg.fee.fee = U128(2);
+
+            let result = do_fast_transfer(&env, transfer_amount, fast_transfer_msg, None).await?;
+
+            assert_eq!(1, result.failures().len());
+            let failure = result.failures()[0].clone().into_result();
+            assert!(failure.is_err_and(|err| {
+                format!("{err:?}").contains("ERR_INVALID_FAST_TRANSFER_AMOUNT")
+            }));
+
+            Ok(())
+        }
+
+        #[tokio::test]
         async fn fails_due_to_bad_storage_deposit() -> anyhow::Result<()> {
             let env = TestEnv::new_with_bridged_token().await?;
 
-            let transfer_amount = 100;
-            let transfer_msg = get_transfer_msg_to_near(&env, transfer_amount);
-            let mut fast_transfer_msg = get_fast_transfer_msg(&env, transfer_msg);
+            let transfer_amount = 100_000_000;
+            let (_, mut fast_transfer_msg) = get_transfer_to_near_msg(&env, transfer_amount, 0, 0);
+
             fast_transfer_msg.storage_deposit_amount =
                 Some(U128(NEP141_DEPOSIT.saturating_mul(100).as_yoctonear()));
 
@@ -590,7 +689,7 @@ mod tests {
 
             assert_eq!(U128(0), contract_balance_before);
 
-            let result = do_fast_transfer(&env, transfer_amount, fast_transfer_msg).await?;
+            let result = do_fast_transfer(&env, transfer_amount, fast_transfer_msg, None).await?;
 
             assert_eq!(1, result.failures().len());
             let failure = result.failures()[0].clone().into_result();
@@ -611,14 +710,15 @@ mod tests {
         }
 
         #[tokio::test]
-        async fn succeeds_with_different_amount() -> anyhow::Result<()> {
+        async fn succeeds_with_non_duplicate_transfer() -> anyhow::Result<()> {
             let env = TestEnv::new_with_native_token().await?;
 
-            let transfer_amount = 100;
-            let transfer_msg = get_transfer_msg_to_near(&env, transfer_amount);
-            let fast_transfer_msg = get_fast_transfer_msg(&env, transfer_msg);
+            let transfer_amount = 100_000_000;
+            let decimal_diff = 6;
+            let (_, fast_transfer_msg) =
+                get_transfer_to_near_msg(&env, transfer_amount, 0, decimal_diff);
 
-            do_fast_transfer(&env, transfer_amount, fast_transfer_msg.clone()).await?;
+            do_fast_transfer(&env, transfer_amount, fast_transfer_msg.clone(), None).await?;
 
             let OmniAddress::Near(recipient) = fast_transfer_msg.recipient.clone() else {
                 panic!("Recipient is not a Near address");
@@ -630,8 +730,12 @@ mod tests {
                 get_balance(&env.token_contract, env.bridge_contract.id()).await?;
             let recipient_balance_before = get_balance(&env.token_contract, &recipient).await?;
 
-            let transfer_amount = transfer_amount + 10;
-            let result = do_fast_transfer(&env, transfer_amount, fast_transfer_msg).await?;
+            let transfer_amount = transfer_amount + 10_000_000;
+            let decimal_diff = 6;
+            let (_, fast_transfer_msg) =
+                get_transfer_to_near_msg(&env, transfer_amount, 0, decimal_diff);
+
+            let result = do_fast_transfer(&env, transfer_amount, fast_transfer_msg, None).await?;
 
             assert_eq!(0, result.failures().len());
 
@@ -658,11 +762,12 @@ mod tests {
         async fn fails_due_to_duplicate_transfer() -> anyhow::Result<()> {
             let env = TestEnv::new_with_native_token().await?;
 
-            let transfer_amount = 100;
-            let transfer_msg = get_transfer_msg_to_near(&env, transfer_amount);
-            let fast_transfer_msg = get_fast_transfer_msg(&env, transfer_msg);
+            let transfer_amount = 100_000_000;
+            let decimal_diff = 6;
+            let (_, fast_transfer_msg) =
+                get_transfer_to_near_msg(&env, transfer_amount, 0, decimal_diff);
 
-            do_fast_transfer(&env, transfer_amount, fast_transfer_msg.clone()).await?;
+            do_fast_transfer(&env, transfer_amount, fast_transfer_msg.clone(), None).await?;
 
             let OmniAddress::Near(recipient) = fast_transfer_msg.recipient.clone() else {
                 panic!("Recipient is not a Near address");
@@ -674,7 +779,7 @@ mod tests {
                 get_balance(&env.token_contract, env.bridge_contract.id()).await?;
             let recipient_balance_before = get_balance(&env.token_contract, &recipient).await?;
 
-            let result = do_fast_transfer(&env, transfer_amount, fast_transfer_msg).await?;
+            let result = do_fast_transfer(&env, transfer_amount, fast_transfer_msg, None).await?;
             assert_eq!(1, result.failures().len());
 
             let failure = result.failures()[0].clone().into_result();
@@ -699,11 +804,10 @@ mod tests {
         async fn fails_due_to_duplicate_transfer_with_bridged_token() -> anyhow::Result<()> {
             let env = TestEnv::new_with_bridged_token().await?;
 
-            let transfer_amount = 100;
-            let transfer_msg = get_transfer_msg_to_near(&env, transfer_amount);
-            let fast_transfer_msg = get_fast_transfer_msg(&env, transfer_msg);
+            let transfer_amount = 100_000_000;
+            let (_, fast_transfer_msg) = get_transfer_to_near_msg(&env, transfer_amount, 0, 0);
 
-            do_fast_transfer(&env, transfer_amount, fast_transfer_msg.clone()).await?;
+            do_fast_transfer(&env, transfer_amount, fast_transfer_msg.clone(), None).await?;
 
             let OmniAddress::Near(recipient) = fast_transfer_msg.recipient.clone() else {
                 panic!("Recipient is not a Near address");
@@ -717,7 +821,7 @@ mod tests {
 
             assert_eq!(U128(0), contract_balance_before);
 
-            let result = do_fast_transfer(&env, transfer_amount, fast_transfer_msg).await?;
+            let result = do_fast_transfer(&env, transfer_amount, fast_transfer_msg, None).await?;
             assert!(!result.failures().is_empty());
 
             let failure = result.failures()[0].clone().into_result();
@@ -746,27 +850,41 @@ mod tests {
         async fn succeeds() -> anyhow::Result<()> {
             let env = TestEnv::new_with_native_token().await?;
 
-            let transfer_amount = 100;
-            let transfer_msg = get_transfer_msg_to_near(&env, transfer_amount);
-            let fast_transfer_msg = get_fast_transfer_msg(&env, transfer_msg.clone());
+            let transfer_amount = 100_000_000;
+            let fee = 1_000_000;
+            let decimal_diff = 6;
+            let (transfer_msg, mut fast_transfer_msg) =
+                get_transfer_to_near_msg(&env, transfer_amount, fee, decimal_diff);
+            fast_transfer_msg.relayer = env.fast_relayer_account.id().clone();
 
-            do_fast_transfer(&env, transfer_amount, fast_transfer_msg.clone()).await?;
+            do_fast_transfer(
+                &env,
+                transfer_amount,
+                fast_transfer_msg.clone(),
+                Some(&env.fast_relayer_account),
+            )
+            .await?;
 
             let relayer_balance_before =
                 get_balance(&env.token_contract, env.relayer_account.id()).await?;
+            let fast_relayer_balance_before =
+                get_balance(&env.token_contract, env.fast_relayer_account.id()).await?;
             let recipient_balance_before = get_balance(&env.token_contract, &account_n(1)).await?;
 
-            do_fin_transfer(&env, transfer_msg).await?;
+            do_fin_transfer(&env, transfer_msg, Some(&env.fast_relayer_account)).await?;
 
             let relayer_balance_after =
                 get_balance(&env.token_contract, env.relayer_account.id()).await?;
+            let fast_relayer_balance_after =
+                get_balance(&env.token_contract, env.fast_relayer_account.id()).await?;
             let recipient_balance_after = get_balance(&env.token_contract, &account_n(1)).await?;
 
             assert_eq!(
-                transfer_amount,
-                relayer_balance_after.0 - relayer_balance_before.0
+                transfer_amount + fee,
+                fast_relayer_balance_after.0 - fast_relayer_balance_before.0
             );
             assert_eq!(recipient_balance_after, recipient_balance_before);
+            assert_eq!(relayer_balance_after, relayer_balance_before);
 
             Ok(())
         }
@@ -775,17 +893,17 @@ mod tests {
         async fn fails_due_to_duplicate_finalisation() -> anyhow::Result<()> {
             let env = TestEnv::new_with_native_token().await?;
 
-            let transfer_amount = 100;
-            let transfer_msg = get_transfer_msg_to_near(&env, transfer_amount);
-            let fast_transfer_msg = get_fast_transfer_msg(&env, transfer_msg.clone());
+            let transfer_amount = 100_000_000;
+            let decimal_diff = 6;
+            let (transfer_msg, fast_transfer_msg) =
+                get_transfer_to_near_msg(&env, transfer_amount, 0, decimal_diff);
 
-            do_fast_transfer(&env, transfer_amount, fast_transfer_msg.clone()).await?;
+            do_fast_transfer(&env, transfer_amount, fast_transfer_msg.clone(), None).await?;
 
-            do_fin_transfer(&env, transfer_msg.clone()).await?;
-            let result = do_fin_transfer(&env, transfer_msg).await;
+            do_fin_transfer(&env, transfer_msg.clone(), None).await?;
+            let result = do_fin_transfer(&env, transfer_msg, None).await;
 
             assert!(result.is_err_and(|err| {
-                println!("err: {err:?}");
                 format!("{err:?}").contains("The transfer is already finalised")
             }));
 
@@ -800,16 +918,19 @@ mod tests {
         async fn succeeds_with_native_token() -> anyhow::Result<()> {
             let env = TestEnv::new_with_native_token().await?;
 
-            let transfer_amount = 100;
-            let transfer_msg = get_transfer_msg_to_other_chain(&env, transfer_amount);
-            let fast_transfer_msg = get_fast_transfer_msg(&env, transfer_msg.clone());
+            let transfer_amount = 100_000_000;
+            let fee = 1_000_000;
+            let decimal_diff = 6;
+            let (_, fast_transfer_msg) =
+                get_transfer_to_other_chain_msg(&env, transfer_amount, fee, decimal_diff);
 
             let relayer_balance_before =
                 get_balance(&env.token_contract, env.relayer_account.id()).await?;
             let contract_balance_before =
                 get_balance(&env.token_contract, env.bridge_contract.id()).await?;
 
-            let result = do_fast_transfer(&env, transfer_amount, fast_transfer_msg.clone()).await?;
+            let result =
+                do_fast_transfer(&env, transfer_amount, fast_transfer_msg.clone(), None).await?;
 
             assert_eq!(0, result.failures().len());
 
@@ -830,9 +951,13 @@ mod tests {
                 OmniAddress::Near(env.token_contract.id().clone()),
                 transfer_message.token
             );
-            assert_eq!(transfer_amount, transfer_message.amount.0);
+            assert_eq!(transfer_amount + fee, transfer_message.amount.0);
             assert_eq!(fast_transfer_msg.recipient, transfer_message.recipient);
-            assert_eq!(fast_transfer_msg.fee, transfer_message.fee);
+            assert_eq!(
+                fast_transfer_msg.fee.native_fee,
+                transfer_message.fee.native_fee
+            );
+            assert_eq!(fee, transfer_message.fee.fee.0);
             assert_eq!(fast_transfer_msg.msg, transfer_message.msg);
             assert_eq!(
                 OmniAddress::Near(env.relayer_account.id().clone()),
@@ -860,9 +985,9 @@ mod tests {
         async fn succeeds_with_bridged_token() -> anyhow::Result<()> {
             let env = TestEnv::new_with_bridged_token().await?;
 
-            let transfer_amount = 100;
-            let transfer_msg = get_transfer_msg_to_other_chain(&env, transfer_amount);
-            let fast_transfer_msg = get_fast_transfer_msg(&env, transfer_msg.clone());
+            let transfer_amount = 100_000_000;
+            let (_, fast_transfer_msg) =
+                get_transfer_to_other_chain_msg(&env, transfer_amount, 0, 0);
 
             let relayer_balance_before =
                 get_balance(&env.token_contract, env.relayer_account.id()).await?;
@@ -871,7 +996,8 @@ mod tests {
 
             assert_eq!(U128(0), contract_balance_before);
 
-            let result = do_fast_transfer(&env, transfer_amount, fast_transfer_msg.clone()).await?;
+            let result =
+                do_fast_transfer(&env, transfer_amount, fast_transfer_msg.clone(), None).await?;
 
             assert_eq!(0, result.failures().len());
 
@@ -893,18 +1019,19 @@ mod tests {
         async fn fails_due_to_duplicate_transfer() -> anyhow::Result<()> {
             let env = TestEnv::new_with_native_token().await?;
 
-            let transfer_amount = 100;
-            let transfer_msg = get_transfer_msg_to_other_chain(&env, transfer_amount);
-            let fast_transfer_msg = get_fast_transfer_msg(&env, transfer_msg.clone());
+            let transfer_amount = 100_000_000;
+            let decimal_diff = 6;
+            let (_, fast_transfer_msg) =
+                get_transfer_to_other_chain_msg(&env, transfer_amount, 0, decimal_diff);
 
-            do_fast_transfer(&env, transfer_amount, fast_transfer_msg.clone()).await?;
+            do_fast_transfer(&env, transfer_amount, fast_transfer_msg.clone(), None).await?;
 
             let relayer_balance_before =
                 get_balance(&env.token_contract, env.relayer_account.id()).await?;
             let contract_balance_before =
                 get_balance(&env.token_contract, env.bridge_contract.id()).await?;
 
-            let result = do_fast_transfer(&env, transfer_amount, fast_transfer_msg).await?;
+            let result = do_fast_transfer(&env, transfer_amount, fast_transfer_msg, None).await?;
 
             assert_eq!(1, result.failures().len());
 
@@ -928,11 +1055,11 @@ mod tests {
         async fn fails_due_to_already_finalised() -> anyhow::Result<()> {
             let env = TestEnv::new_with_bridged_token().await?;
 
-            let transfer_amount = 100;
-            let transfer_msg = get_transfer_msg_to_other_chain(&env, transfer_amount);
-            let fast_transfer_msg = get_fast_transfer_msg(&env, transfer_msg.clone());
+            let transfer_amount = 100_000_000;
+            let (transfer_msg, fast_transfer_msg) =
+                get_transfer_to_other_chain_msg(&env, transfer_amount, 0, 0);
 
-            do_fin_transfer(&env, transfer_msg).await?;
+            do_fin_transfer(&env, transfer_msg, None).await?;
 
             let relayer_balance_before =
                 get_balance(&env.token_contract, env.relayer_account.id()).await?;
@@ -941,7 +1068,7 @@ mod tests {
 
             assert_eq!(U128(0), contract_balance_before);
 
-            let result = do_fast_transfer(&env, transfer_amount, fast_transfer_msg).await?;
+            let result = do_fast_transfer(&env, transfer_amount, fast_transfer_msg, None).await?;
 
             let relayer_balance_after =
                 get_balance(&env.token_contract, env.relayer_account.id()).await?;
@@ -968,16 +1095,17 @@ mod tests {
         async fn succeeds() -> anyhow::Result<()> {
             let env = TestEnv::new_with_native_token().await?;
 
-            let transfer_amount = 100;
-            let transfer_msg = get_transfer_msg_to_other_chain(&env, transfer_amount);
-            let fast_transfer_msg = get_fast_transfer_msg(&env, transfer_msg.clone());
+            let transfer_amount = 100_000_000;
+            let decimal_diff = 6;
+            let (transfer_msg, fast_transfer_msg) =
+                get_transfer_to_other_chain_msg(&env, transfer_amount, 0, decimal_diff);
 
-            do_fast_transfer(&env, transfer_amount, fast_transfer_msg.clone()).await?;
+            do_fast_transfer(&env, transfer_amount, fast_transfer_msg.clone(), None).await?;
 
             let relayer_balance_before =
                 get_balance(&env.token_contract, env.relayer_account.id()).await?;
 
-            do_fin_transfer(&env, transfer_msg).await?;
+            do_fin_transfer(&env, transfer_msg, None).await?;
 
             let transfer_message = env
                 .bridge_contract
@@ -1008,14 +1136,15 @@ mod tests {
         async fn fails_due_to_duplicate_finalisation() -> anyhow::Result<()> {
             let env = TestEnv::new_with_native_token().await?;
 
-            let transfer_amount = 100;
-            let transfer_msg = get_transfer_msg_to_other_chain(&env, transfer_amount);
-            let fast_transfer_msg = get_fast_transfer_msg(&env, transfer_msg.clone());
+            let transfer_amount = 100_000_000;
+            let decimal_diff = 6;
+            let (transfer_msg, fast_transfer_msg) =
+                get_transfer_to_other_chain_msg(&env, transfer_amount, 0, decimal_diff);
 
-            do_fast_transfer(&env, transfer_amount, fast_transfer_msg.clone()).await?;
+            do_fast_transfer(&env, transfer_amount, fast_transfer_msg.clone(), None).await?;
 
-            do_fin_transfer(&env, transfer_msg.clone()).await?;
-            let result = do_fin_transfer(&env, transfer_msg).await;
+            do_fin_transfer(&env, transfer_msg.clone(), None).await?;
+            let result = do_fin_transfer(&env, transfer_msg, None).await;
 
             assert!(result.is_err_and(|err| {
                 format!("{err:?}").contains("The transfer is already finalised")
@@ -1025,36 +1154,60 @@ mod tests {
         }
     }
 
-    fn get_transfer_msg_to_near(env: &TestEnv, amount: u128) -> InitTransferMessage {
-        InitTransferMessage {
+    fn get_transfer_to_near_msg(
+        env: &TestEnv,
+        amount: u128,
+        fee: u128,
+        decimal_diff: u8,
+    ) -> (InitTransferMessage, FastFinTransferMsg) {
+        let origin_amount = amount / 10u128.pow(decimal_diff.into());
+        let origin_fee = fee / 10u128.pow(decimal_diff.into());
+
+        let transfer_msg = InitTransferMessage {
             origin_nonce: 0,
             token: env.eth_token_address.clone(),
             recipient: OmniAddress::Near(account_n(1)),
-            amount: U128(amount),
+            amount: U128(origin_amount + origin_fee),
             fee: Fee {
-                fee: U128(0),
+                fee: U128(origin_fee),
                 native_fee: U128(0),
             },
             sender: eth_eoa_address(),
             msg: String::default(),
             emitter_address: eth_factory_address(),
-        }
+        };
+
+        let fast_transfer_msg = get_fast_transfer_msg(env, transfer_msg.clone());
+
+        (transfer_msg, fast_transfer_msg)
     }
 
-    fn get_transfer_msg_to_other_chain(env: &TestEnv, amount: u128) -> InitTransferMessage {
-        InitTransferMessage {
+    fn get_transfer_to_other_chain_msg(
+        env: &TestEnv,
+        amount: u128,
+        fee: u128,
+        decimal_diff: u8,
+    ) -> (InitTransferMessage, FastFinTransferMsg) {
+        let origin_amount = amount / 10u128.pow(decimal_diff.into());
+        let origin_fee = fee / 10u128.pow(decimal_diff.into());
+
+        let transfer_msg = InitTransferMessage {
             origin_nonce: 0,
             token: env.eth_token_address.clone(),
             recipient: base_eoa_address(),
-            amount: U128(amount),
+            amount: U128(origin_amount + origin_fee),
             fee: Fee {
-                fee: U128(0),
+                fee: U128(origin_fee),
                 native_fee: U128(0),
             },
             sender: eth_eoa_address(),
             msg: String::default(),
             emitter_address: eth_factory_address(),
-        }
+        };
+
+        let fast_transfer_msg = get_fast_transfer_msg(env, transfer_msg.clone());
+
+        (transfer_msg, fast_transfer_msg)
     }
 
     fn get_fast_transfer_msg(
@@ -1069,6 +1222,7 @@ mod tests {
             recipient: transfer_msg.recipient.clone(),
             fee: transfer_msg.fee,
             msg: transfer_msg.msg,
+            amount: transfer_msg.amount,
             storage_deposit_amount: match transfer_msg.recipient.get_chain() {
                 ChainKind::Near => Some(U128(NEP141_DEPOSIT.as_yoctonear())),
                 _ => None,

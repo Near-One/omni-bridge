@@ -48,11 +48,11 @@ const MPC_SIGNING_GAS: Gas = Gas::from_tgas(250);
 const SIGN_TRANSFER_CALLBACK_GAS: Gas = Gas::from_tgas(5);
 const SIGN_LOG_METADATA_CALLBACK_GAS: Gas = Gas::from_tgas(5);
 const VERIFY_PROOF_GAS: Gas = Gas::from_tgas(30);
-const VERIFY_PROOF_CALLBACK_GAS: Gas = Gas::from_tgas(150);
+const VERIFY_PROOF_CALLBACK_GAS: Gas = Gas::from_tgas(250);
 const CLAIM_FEE_CALLBACK_GAS: Gas = Gas::from_tgas(50);
 const BIND_TOKEN_CALLBACK_GAS: Gas = Gas::from_tgas(25);
 const BIND_TOKEN_REFUND_GAS: Gas = Gas::from_tgas(5);
-const FT_TRANSFER_CALL_GAS: Gas = Gas::from_tgas(125);
+const FT_TRANSFER_CALL_GAS: Gas = Gas::from_tgas(230);
 const FT_TRANSFER_GAS: Gas = Gas::from_tgas(5);
 const UPDATE_CONTROLLER_GAS: Gas = Gas::from_tgas(250);
 const WNEAR_WITHDRAW_GAS: Gas = Gas::from_tgas(10);
@@ -608,10 +608,7 @@ impl Contract {
             token: init_transfer.token,
             amount: Self::denormalize_amount(init_transfer.amount.0, decimals).into(),
             recipient: init_transfer.recipient,
-            fee: Fee {
-                fee: Self::denormalize_amount(init_transfer.fee.fee.0, decimals).into(),
-                native_fee: init_transfer.fee.native_fee,
-            },
+            fee: Self::denormalize_fee(&init_transfer.fee, decimals),
             sender: init_transfer.sender,
             msg: init_transfer.msg,
             destination_nonce,
@@ -639,11 +636,30 @@ impl Contract {
         storage_payer: AccountId,
         fast_fin_transfer_msg: FastFinTransferMsg,
     ) -> PromiseOrValue<U128> {
+        let origin_token = self
+            .get_token_address(
+                fast_fin_transfer_msg.transfer_id.origin_chain,
+                token_id.clone(),
+            )
+            .sdk_expect("ERR_TOKEN_NOT_FOUND");
+        let decimals = self
+            .token_decimals
+            .get(&origin_token)
+            .sdk_expect("ERR_TOKEN_DECIMALS_NOT_FOUND");
+
+        let denormalized_amount =
+            Self::denormalize_amount(fast_fin_transfer_msg.amount.0, decimals);
+        let denormalized_fee = Self::denormalize_fee(&fast_fin_transfer_msg.fee, decimals);
+        require!(
+            denormalized_amount == amount.0 + denormalized_fee.fee.0,
+            "ERR_INVALID_FAST_TRANSFER_AMOUNT"
+        );
+
         let fast_transfer = FastTransfer {
             token_id: token_id.clone(),
             recipient: fast_fin_transfer_msg.recipient.clone(),
-            amount: U128(amount.0 + fast_fin_transfer_msg.fee.fee.0),
-            fee: fast_fin_transfer_msg.fee,
+            amount: U128(denormalized_amount),
+            fee: denormalized_fee,
             transfer_id: fast_fin_transfer_msg.transfer_id,
             msg: fast_fin_transfer_msg.msg,
         };
@@ -1194,6 +1210,22 @@ impl Contract {
         self.finalised_transfers.contains(&transfer_id)
     }
 
+    pub fn get_fast_transfer_status(
+        &self,
+        fast_transfer_id: &FastTransferId,
+    ) -> Option<FastTransferStatus> {
+        self.fast_transfers
+            .get(fast_transfer_id)
+            .map(storage::FastTransferStatusStorage::into_main)
+    }
+
+    pub fn is_fast_transfer_finalised(&self, fast_transfer_id: &FastTransferId) -> bool {
+        self.fast_transfers
+            .get(fast_transfer_id)
+            .map(storage::FastTransferStatusStorage::into_main)
+            .is_some_and(|status| status.finalised)
+    }
+
     #[access_control_any(roles(Role::DAO))]
     pub fn add_factory(&mut self, address: OmniAddress) {
         self.factories.insert(&(&address).into(), &address);
@@ -1342,24 +1374,21 @@ impl Contract {
 
         let token = self.get_token_id(&transfer_message.token);
 
-        // If fast transfer happened, change recipient to the relayer that executed fast transfer
+        // If fast transfer happened, change recipient and fee recipient to the relayer that executed fast transfer
         let fast_transfer = FastTransfer::from_transfer(transfer_message.clone(), token.clone());
-        let (recipient, msg, is_fast_transfer) =
+        let (recipient, msg, fee_recipient) =
             match self.get_fast_transfer_status(&fast_transfer.id()) {
                 Some(status) => {
-                    require!(
-                        predecessor_account_id == status.relayer,
-                        "ERR_FAST_TRANSFER_PERFORMED_BY_ANOTHER_RELAYER"
-                    );
                     require!(!status.finalised, "ERR_FAST_TRANSFER_ALREADY_FINALISED");
-                    (status.relayer, String::new(), true)
+                    self.remove_fast_transfer(&fast_transfer.id());
+                    (status.relayer.clone(), String::new(), status.relayer)
                 }
-                None => (recipient, transfer_message.msg.clone(), false),
+                None => (
+                    recipient,
+                    transfer_message.msg.clone(),
+                    predecessor_account_id.clone(),
+                ),
             };
-
-        if is_fast_transfer {
-            self.remove_fast_transfer(&fast_transfer.id());
-        }
 
         let mut storage_deposit_action_index: usize = 0;
         require!(
@@ -1385,7 +1414,7 @@ impl Contract {
                         .try_into()
                         .sdk_expect("ERR_CAST")
                 ) && storage_deposit_actions[storage_deposit_action_index].account_id
-                    == predecessor_account_id
+                    == fee_recipient
                     && storage_deposit_actions[storage_deposit_action_index].token_id == token,
                 "STORAGE_ERR: The fee recipient is omitted"
             );
@@ -1393,7 +1422,7 @@ impl Contract {
 
             promise = promise.then(if is_deployed_token {
                 ext_token::ext(token).with_static_gas(MINT_TOKEN_GAS).mint(
-                    predecessor_account_id.clone(),
+                    fee_recipient.clone(),
                     transfer_message.fee.fee,
                     None,
                 )
@@ -1401,11 +1430,7 @@ impl Contract {
                 ext_token::ext(token)
                     .with_attached_deposit(ONE_YOCTO)
                     .with_static_gas(FT_TRANSFER_GAS)
-                    .ft_transfer(
-                        predecessor_account_id.clone(),
-                        transfer_message.fee.fee,
-                        None,
-                    )
+                    .ft_transfer(fee_recipient.clone(), transfer_message.fee.fee, None)
             });
 
             required_balance = required_balance.saturating_add(NearToken::from_yoctonear(2));
@@ -1422,7 +1447,7 @@ impl Contract {
                         .try_into()
                         .sdk_expect("ERR_CAST")
                 ) && storage_deposit_actions[storage_deposit_action_index].account_id
-                    == predecessor_account_id
+                    == fee_recipient
                     && storage_deposit_actions[storage_deposit_action_index].token_id
                         == native_token_id,
                 "STORAGE_ERR: The native fee recipient is omitted"
@@ -1431,11 +1456,7 @@ impl Contract {
             promise = promise.then(
                 ext_token::ext(native_token_id)
                     .with_static_gas(MINT_TOKEN_GAS)
-                    .mint(
-                        predecessor_account_id.clone(),
-                        transfer_message.fee.native_fee,
-                        None,
-                    ),
+                    .mint(fee_recipient.clone(), transfer_message.fee.native_fee, None),
             );
         }
 
@@ -1461,10 +1482,6 @@ impl Contract {
         let fast_transfer = FastTransfer::from_transfer(transfer_message.clone(), token.clone());
         let recipient = match self.get_fast_transfer_status(&fast_transfer.id()) {
             Some(status) => {
-                require!(
-                    predecessor_account_id == status.relayer,
-                    "ERR_FAST_TRANSFER_PERFORMED_BY_ANOTHER_RELAYER"
-                );
                 require!(!status.finalised, "ERR_FAST_TRANSFER_ALREADY_FINALISED");
                 Some(status.relayer)
             }
@@ -1671,22 +1688,6 @@ impl Contract {
             .saturating_mul((env::storage_usage().saturating_sub(storage_usage)).into())
     }
 
-    fn get_fast_transfer_status(
-        &self,
-        fast_transfer_id: &FastTransferId,
-    ) -> Option<FastTransferStatus> {
-        self.fast_transfers
-            .get(fast_transfer_id)
-            .map(storage::FastTransferStatusStorage::into_main)
-    }
-
-    pub fn is_fast_transfer_finalised(&self, fast_transfer_id: &FastTransferId) -> bool {
-        self.fast_transfers
-            .get(fast_transfer_id)
-            .map(storage::FastTransferStatusStorage::into_main)
-            .is_some_and(|status| status.finalised)
-    }
-
     fn mark_fast_transfer_as_finalised(&mut self, fast_transfer_id: &FastTransferId) {
         let mut status = self
             .get_fast_transfer_status(fast_transfer_id)
@@ -1829,5 +1830,13 @@ impl Contract {
     fn normalize_amount(amount: u128, decimals: Decimals) -> u128 {
         let diff_decimals: u32 = (decimals.origin_decimals - decimals.decimals).into();
         amount / (10_u128.pow(diff_decimals))
+    }
+
+    // Native tokens always have the same decimals on Near as on origin chain
+    fn denormalize_fee(fee: &Fee, decimals: Decimals) -> Fee {
+        Fee {
+            fee: U128(Self::denormalize_amount(fee.fee.0, decimals)),
+            native_fee: fee.native_fee,
+        }
     }
 }

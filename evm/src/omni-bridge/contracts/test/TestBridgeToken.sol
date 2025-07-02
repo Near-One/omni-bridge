@@ -22,6 +22,11 @@ contract TestBridgeToken is
 
     bytes32 public constant PAUSE_ROLE = keccak256("PAUSE_ROLE");
 
+    /// @custom:oz-upgrades-unsafe-allow constructor
+    constructor() {
+        _disableInitializers();
+    }
+
     function initialize(
         string memory name_,
         string memory symbol_,

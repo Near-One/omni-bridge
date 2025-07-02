@@ -25,6 +25,7 @@ For more information on how it works, please see [Omni Bridge Documentation](htt
 **Bridge Contracts:**
 - Arbitrum: [`0xd025b38762B4A4E36F0Cde483b86CB13ea00D989`](https://arbiscan.io/address/0xd025b38762B4A4E36F0Cde483b86CB13ea00D989)
 - Base: [`0xd025b38762B4A4E36F0Cde483b86CB13ea00D989`](https://basescan.org/address/0xd025b38762B4A4E36F0Cde483b86CB13ea00D989)
+- Ethereum: [`0xe00c629aFaCCb0510995A2B95560E446A24c85B9`](https://etherscan.io/address/0xe00c629aFaCCb0510995A2B95560E446A24c85B9)
 - NEAR: [`omni.bridge.near`](https://nearblocks.io/address/omni.bridge.near)
 - Solana: [`dahPEoZGXfyV58JqqH85okdHmpN8U2q8owgPUXSCPxe`](https://explorer.solana.com/address/dahPEoZGXfyV58JqqH85okdHmpN8U2q8owgPUXSCPxe)
 

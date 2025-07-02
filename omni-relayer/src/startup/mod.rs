@@ -55,13 +55,7 @@ fn build_near_bridge_client(
                 .as_ref()
                 .map(std::string::ToString::to_string),
         )
-        .satoshi_relayer(
-            config
-                .near
-                .satoshi_relayer
-                .as_ref()
-                .map(std::string::ToString::to_string),
-        )
+        .satoshi_relayer(Some(near_signer.account_id.to_string()))
         .build()
         .context("Failed to build NearBridgeClient")
 }
