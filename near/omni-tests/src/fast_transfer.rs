@@ -156,8 +156,9 @@ mod tests {
                 .await?;
 
                 // Register the bridge in the token contract
-                token_contract
-                    .call("storage_deposit")
+                bridge_contract
+                    .as_account()
+                    .call(token_contract.id(), "storage_deposit")
                     .args_json(json!({
                         "account_id": bridge_contract.id(),
                         "registration_only": true,
