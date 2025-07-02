@@ -2,7 +2,7 @@ use log::warn;
 use omni_types::ChainKind;
 use redis::{AsyncCommands, aio::MultiplexedConnection};
 
-use super::bridge_api::TransferFeeResponse;
+use super::bridge_api::TransferFee;
 
 pub const MONGODB_OMNI_EVENTS_RT: &str = "mongodb_omni_events_rt";
 
@@ -24,7 +24,7 @@ const QUERY_RETRY_SLEEP_SECS: u64 = 1;
 pub async fn get_fee(
     redis_connection: &mut MultiplexedConnection,
     transfer_id: &str,
-) -> Option<TransferFeeResponse> {
+) -> Option<TransferFee> {
     for _ in 0..QUERY_RETRY_ATTEMPTS {
         match redis_connection
             .hget::<&str, &str, Option<String>>(FEE_MAPPING, transfer_id)

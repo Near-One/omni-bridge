@@ -79,7 +79,7 @@ pub async fn process_transfer_event(
             .as_ref()
             .is_some_and(|list| list.contains(&transfer_message.sender))
     {
-        let Ok(needed_fee) = utils::bridge_api::get_transfer_fee(
+        let Ok(needed_fee) = utils::bridge_api::TransferFee::get_transfer_fee(
             &config,
             &transfer_message.sender,
             &transfer_message.recipient,
@@ -91,15 +91,15 @@ pub async fn process_transfer_event(
             return Ok(EventAction::Retry);
         };
 
-        if let Some(event_action) = utils::bridge_api::check_fee(
-            &config,
-            redis_connection,
-            &transfer_message,
-            transfer_message.get_transfer_id(),
-            &needed_fee,
-            &transfer_message.fee,
-        )
-        .await
+        if let Some(event_action) = needed_fee
+            .check_fee(
+                &config,
+                redis_connection,
+                &transfer_message,
+                transfer_message.get_transfer_id(),
+                &transfer_message.fee,
+            )
+            .await
         {
             return Ok(event_action);
         }
@@ -248,7 +248,7 @@ pub async fn process_sign_transfer_event(
             }
         };
 
-        let Ok(needed_fee) = utils::bridge_api::get_transfer_fee(
+        let Ok(needed_fee) = utils::bridge_api::TransferFee::get_transfer_fee(
             &config,
             &transfer_message.sender,
             &transfer_message.recipient,
@@ -260,15 +260,15 @@ pub async fn process_sign_transfer_event(
             return Ok(EventAction::Retry);
         };
 
-        if let Some(event_action) = utils::bridge_api::check_fee(
-            &config,
-            redis_connection,
-            &transfer_message,
-            transfer_message.get_transfer_id(),
-            &needed_fee,
-            &transfer_message.fee,
-        )
-        .await
+        if let Some(event_action) = needed_fee
+            .check_fee(
+                &config,
+                redis_connection,
+                &transfer_message,
+                transfer_message.get_transfer_id(),
+                &transfer_message.fee,
+            )
+            .await
         {
             return Ok(event_action);
         }

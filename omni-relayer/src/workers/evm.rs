@@ -103,8 +103,13 @@ pub async fn process_init_transfer_event(
                     )
                 })?;
 
-        let Ok(needed_fee) =
-            utils::bridge_api::get_transfer_fee(&config, &sender, &log.recipient, &token).await
+        let Ok(needed_fee) = utils::bridge_api::TransferFee::get_transfer_fee(
+            &config,
+            &sender,
+            &log.recipient,
+            &token,
+        )
+        .await
         else {
             warn!("Failed to get transfer fee for transfer: {transfer:?}");
             return Ok(EventAction::Retry);
@@ -115,15 +120,15 @@ pub async fn process_init_transfer_event(
             native_fee: log.native_fee,
         };
 
-        if let Some(event_action) = utils::bridge_api::check_fee(
-            &config,
-            redis_connection,
-            &transfer,
-            transfer_id,
-            &needed_fee,
-            &provided_fee,
-        )
-        .await
+        if let Some(event_action) = needed_fee
+            .check_fee(
+                &config,
+                redis_connection,
+                &transfer,
+                transfer_id,
+                &provided_fee,
+            )
+            .await
         {
             return Ok(event_action);
         }

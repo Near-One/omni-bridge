@@ -8,95 +8,91 @@ use crate::{config, utils, workers::EventAction};
 
 #[allow(clippy::struct_field_names)]
 #[derive(Debug, serde::Serialize, serde::Deserialize, PartialEq, Clone)]
-pub struct TransferFeeResponse {
+pub struct TransferFee {
     pub native_token_fee: Option<U128>,
     pub transferred_token_fee: Option<U128>,
     pub usd_fee: f64,
 }
 
-pub async fn get_transfer_fee(
-    config: &config::Config,
-    sender: &OmniAddress,
-    recipient: &OmniAddress,
-    token: &OmniAddress,
-) -> Result<TransferFeeResponse> {
-    let url = format!(
-        "{}/api/v1/transfer-fee?sender={}&recipient={}&token={}",
-        config
-            .bridge_indexer
-            .api_url
-            .as_ref()
-            .context("No api url was provided")?,
-        sender,
-        recipient,
-        token
-    );
-    reqwest::get(&url)
-        .await?
-        .json::<TransferFeeResponse>()
-        .await
-        .map_err(Into::into)
-}
+impl TransferFee {
+    pub async fn get_transfer_fee(
+        config: &config::Config,
+        sender: &OmniAddress,
+        recipient: &OmniAddress,
+        token: &OmniAddress,
+    ) -> Result<Self> {
+        let url = format!(
+            "{}/api/v1/transfer-fee?sender={}&recipient={}&token={}",
+            config
+                .bridge_indexer
+                .api_url
+                .as_ref()
+                .context("No api url was provided")?,
+            sender,
+            recipient,
+            token
+        );
+        reqwest::get(&url).await?.json().await.map_err(Into::into)
+    }
 
-pub fn is_fee_sufficient(
-    config: &config::Config,
-    needed_fee: &TransferFeeResponse,
-    provided_fee: &Fee,
-) -> bool {
-    let native_fee = needed_fee.native_token_fee.unwrap_or_default().0
-        * u128::from(100 - config.bridge_indexer.fee_discount)
-        / 100;
-    let transferred_fee = needed_fee.transferred_token_fee.unwrap_or_default().0
-        * u128::from(100 - config.bridge_indexer.fee_discount)
-        / 100;
+    pub fn is_fee_sufficient(&self, config: &config::Config, provided_fee: &Fee) -> bool {
+        let native_fee = self.native_token_fee.unwrap_or_default().0
+            * u128::from(100 - config.bridge_indexer.fee_discount)
+            / 100;
+        let transferred_fee = self.transferred_token_fee.unwrap_or_default().0
+            * u128::from(100 - config.bridge_indexer.fee_discount)
+            / 100;
 
-    match (native_fee, transferred_fee) {
-        (0, 0) => true,
-        (0, fee) if fee > 0 => provided_fee.fee.0 >= fee,
-        (native_fee, 0) if native_fee > 0 => provided_fee.native_fee.0 >= native_fee,
-        (native_fee, fee) => {
-            U256::from(provided_fee.fee.0) * U256::from(native_fee)
-                + U256::from(provided_fee.native_fee.0) * U256::from(fee)
-                >= U256::from(fee) * U256::from(native_fee)
+        match (native_fee, transferred_fee) {
+            (0, 0) => true,
+            (0, fee) if fee > 0 => provided_fee.fee.0 >= fee,
+            (native_fee, 0) if native_fee > 0 => provided_fee.native_fee.0 >= native_fee,
+            (native_fee, fee) => {
+                U256::from(provided_fee.fee.0) * U256::from(native_fee)
+                    + U256::from(provided_fee.native_fee.0) * U256::from(fee)
+                    >= U256::from(fee) * U256::from(native_fee)
+            }
         }
     }
-}
 
-pub async fn check_fee<T: std::fmt::Debug>(
-    config: &config::Config,
-    redis_connection: &mut redis::aio::MultiplexedConnection,
-    transfer: &T,
-    transfer_id: TransferId,
-    needed_fee: &TransferFeeResponse,
-    provided_fee: &Fee,
-) -> Option<EventAction> {
-    if !is_fee_sufficient(config, needed_fee, provided_fee) {
-        let Ok(transfer_id) = serde_json::to_string(&transfer_id) else {
-            warn!("Failed to serialize transfer id: {transfer_id:?}");
-            return Some(EventAction::Remove);
-        };
+    pub async fn check_fee<T: std::fmt::Debug>(
+        &self,
+        config: &config::Config,
+        redis_connection: &mut redis::aio::MultiplexedConnection,
+        transfer: &T,
+        transfer_id: TransferId,
+        provided_fee: &Fee,
+    ) -> Option<EventAction> {
+        if !self.is_fee_sufficient(config, provided_fee) {
+            let Ok(transfer_id) = serde_json::to_string(&transfer_id) else {
+                warn!("Failed to serialize transfer id: {transfer_id:?}");
+                return Some(EventAction::Remove);
+            };
 
-        if let Some(historical_fee) = utils::redis::get_fee(redis_connection, &transfer_id).await {
-            if utils::bridge_api::is_fee_sufficient(config, &historical_fee, provided_fee) {
-                info!(
-                    "Historical fee is sufficient for transfer: {transfer:?}, using historical fee: {historical_fee:?}"
-                );
+            if let Some(historical_fee) =
+                utils::redis::get_fee(redis_connection, &transfer_id).await
+            {
+                if historical_fee.is_fee_sufficient(config, provided_fee) {
+                    info!(
+                        "Historical fee is sufficient for transfer: {transfer:?}, using historical fee: {historical_fee:?}"
+                    );
+                } else {
+                    warn!("Insufficient fee for transfer: {transfer:?}");
+                    return Some(EventAction::Retry);
+                }
             } else {
+                utils::redis::add_event(
+                    redis_connection,
+                    utils::redis::FEE_MAPPING,
+                    transfer_id,
+                    self,
+                )
+                .await;
                 warn!("Insufficient fee for transfer: {transfer:?}");
                 return Some(EventAction::Retry);
             }
-        } else {
-            utils::redis::add_event(
-                redis_connection,
-                utils::redis::FEE_MAPPING,
-                transfer_id,
-                needed_fee,
-            )
-            .await;
-            warn!("Insufficient fee for transfer: {transfer:?}");
-            return Some(EventAction::Retry);
         }
-    }
 
-    None
+        None
+    }
 }
