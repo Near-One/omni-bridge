@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use anyhow::{Context, Result};
 use bridge_connector_common::result::BridgeSdkError;
-use log::{info, warn};
+use tracing::{info, warn};
 
 use ethereum_types::H256;
 

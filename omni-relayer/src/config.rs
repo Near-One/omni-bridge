@@ -136,6 +136,15 @@ pub enum Network {
     Mainnet,
 }
 
+impl std::fmt::Display for Network {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Network::Testnet => write!(f, "testnet"),
+            Network::Mainnet => write!(f, "mainnet"),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Deserialize)]
 pub struct Near {
     pub network: Network,

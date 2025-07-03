@@ -6,10 +6,10 @@ use alloy::{
 };
 use anyhow::{Context, Result};
 use ethereum_types::H256;
-use log::{error, info, warn};
 use omni_types::{ChainKind, Fee, OmniAddress, TransferId};
 use reqwest::Url;
 use tokio_stream::StreamExt;
+use tracing::{error, info, warn};
 
 use crate::{
     config, utils,

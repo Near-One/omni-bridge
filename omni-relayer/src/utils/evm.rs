@@ -1,6 +1,6 @@
 use std::str::FromStr;
 
-use log::warn;
+use tracing::warn;
 
 use anyhow::Result;
 use near_sdk::json_types::U128;

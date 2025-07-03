@@ -7,11 +7,11 @@ use bridge_indexer_types::documents_types::{
     OmniMetaEventDetails, OmniTransactionEvent, OmniTransactionOrigin, OmniTransferMessage,
 };
 use ethereum_types::H256;
-use log::{info, warn};
 use mongodb::{Client, Collection, change_stream::event::ResumeToken, options::ClientOptions};
 use omni_types::{ChainKind, Fee, OmniAddress, TransferId, near_events::OmniBridgeEvent};
 use solana_sdk::pubkey::Pubkey;
 use tokio_stream::StreamExt;
+use tracing::{info, warn};
 
 use crate::{config, utils, workers};
 
@@ -582,8 +582,6 @@ pub async fn start_indexer(
 
     let db = client.database(db_name);
     let omni_events_collection = db.collection::<OmniEvent>(OMNI_EVENTS);
-
-    println!("Connected to MongoDB at {uri} and using database {db_name}");
 
     loop {
         info!("Starting a mongodb stream that track changes in {OMNI_EVENTS}");

@@ -1,13 +1,16 @@
 [package]
 name = "omni-relayer"
-version = "0.3.13"
+version = "0.3.14"
 edition = "2024"
 resolver = "2"
 repository = "https://github.com/Near-One/omni-bridge"
 
 [dependencies]
-log = "0.4"
-pretty_env_logger = "0.5"
+tracing = "0.1"
+tracing-log = "0.2"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt", "chrono"] }
+tracing-loki = "0.2"
+
 chrono = "0.4"
 
 anyhow = "1"

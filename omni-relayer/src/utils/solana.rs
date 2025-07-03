@@ -1,7 +1,7 @@
 use std::str::FromStr;
 
 use anyhow::{Context, Result};
-use log::{info, warn};
+use tracing::{info, warn};
 
 use borsh::BorshDeserialize;
 use omni_types::{ChainKind, OmniAddress};
