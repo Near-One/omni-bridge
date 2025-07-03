@@ -83,6 +83,7 @@ enum StorageKey {
     DestinationNonces,
     TokenDecimals,
     FastTransfers,
+    BtcConnectors,
 }
 
 #[derive(AccessControlRole, Deserialize, Serialize, Copy, Clone)]
@@ -201,7 +202,7 @@ pub struct Contract {
     pub destination_nonces: LookupMap<ChainKind, Nonce>,
     pub accounts_balances: LookupMap<AccountId, StorageBalance>,
     pub wnear_account_id: AccountId,
-    pub btc_connector: AccountId,
+    pub btc_connectors: LookupMap<ChainKind, AccountId>,
 }
 
 #[near]
@@ -265,7 +266,6 @@ impl Contract {
         prover_account: AccountId,
         mpc_signer: AccountId,
         wnear_account_id: AccountId,
-        btc_connector: AccountId,
     ) -> Self {
         let mut contract = Self {
             prover_account,
@@ -283,7 +283,7 @@ impl Contract {
             destination_nonces: LookupMap::new(StorageKey::DestinationNonces),
             accounts_balances: LookupMap::new(StorageKey::AccountsBalances),
             wnear_account_id,
-            btc_connector,
+            btc_connectors: LookupMap::new(StorageKey::BtcConnectors),
         };
 
         contract.acl_init_super_admin(near_sdk::env::predecessor_account_id());
@@ -772,8 +772,8 @@ impl Contract {
         storage_payer: AccountId,
         relayer_id: AccountId,
     ) {
-        if let OmniAddress::Btc(_) = fast_transfer.recipient {
-            let btc_account_id = self.get_native_token_id(ChainKind::Btc);
+        if let Some(_) = self.get_btc_address(fast_transfer.recipient.clone()) {
+            let btc_account_id = self.get_native_token_id(fast_transfer.recipient.get_chain());
             require!(
                 fast_transfer.token_id == btc_account_id,
                 "Only BTC can be transferred to the Bitcoin network."
