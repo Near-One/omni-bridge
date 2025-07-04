@@ -890,29 +890,7 @@ impl Contract {
             self.remove_fast_transfer(&fast_transfer.id());
         }
 
-        if message.fee.native_fee.0 != 0 {
-            let origin_chain = message.origin_transfer_id.map_or_else(
-                || message.get_origin_chain(),
-                |origin_transfer_id| origin_transfer_id.origin_chain,
-            );
-            if origin_chain == ChainKind::Near {
-                Promise::new(fee_recipient.clone())
-                    .transfer(NearToken::from_yoctonear(message.fee.native_fee.0));
-            } else {
-                ext_token::ext(self.get_native_token_id(origin_chain))
-                    .with_static_gas(MINT_TOKEN_GAS)
-                    .mint(fee_recipient.clone(), message.fee.native_fee, None);
-            }
-        }
-
         let token = self.get_token_id(&message.token);
-        env::log_str(
-            &OmniBridgeEvent::ClaimFeeEvent {
-                transfer_message: message.clone(),
-            }
-            .to_log_string(),
-        );
-
         let token_address = self
             .get_token_address(message.get_destination_chain(), token.clone())
             .unwrap_or_else(|| env::panic_str("ERR_FAILED_TO_GET_TOKEN_ADDRESS"));
