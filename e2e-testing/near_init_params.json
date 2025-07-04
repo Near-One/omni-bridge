@@ -41,7 +41,7 @@
     "mock_token": {
         "init_function": "new_default_meta",
         "init_args": {
-            "total_supply": "1000000000"
+            "total_supply": "10000000000000000000000"
         }
     },
     "bridge_token": {
