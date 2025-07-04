@@ -174,12 +174,12 @@ impl TryFrom<u8> for ChainKind {
     type Error = String;
     fn try_from(input: u8) -> Result<Self, String> {
         match input {
-            0 => Ok(ChainKind::Eth),
-            1 => Ok(ChainKind::Near),
-            2 => Ok(ChainKind::Sol),
-            3 => Ok(ChainKind::Arb),
-            4 => Ok(ChainKind::Base),
-            5 => Ok(ChainKind::Btc),
+            0 => Ok(Self::Eth),
+            1 => Ok(Self::Near),
+            2 => Ok(Self::Sol),
+            3 => Ok(Self::Arb),
+            4 => Ok(Self::Base),
+            5 => Ok(Self::Btc),
             _ => Err(format!("{input:?} invalid chain kind")),
         }
     }
