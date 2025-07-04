@@ -6,7 +6,7 @@ use near_sdk::{
     env, near, require, serde_json, AccountId, Gas, Promise, PromiseError, PromiseOrValue,
 };
 use omni_types::btc::TokenReceiverMessage;
-use omni_types::{BtcAddress, ChainKind, Fee, OmniAddress, TransferId, TransferMessage};
+use omni_types::{ChainKind, Fee, TransferId, TransferMessage};
 use std::str::FromStr;
 
 const SUBMIT_TRANSFER_TO_BTC_CONNECTOR_CALLBACK_GAS: Gas = Gas::from_tgas(5);
@@ -27,7 +27,7 @@ impl Contract {
         let message = serde_json::from_str::<TokenReceiverMessage>(&msg).expect("INVALID MSG");
         let amount = U128(transfer.message.amount.0 - transfer.message.fee.fee.0);
 
-        if let Some(btc_address) = self.get_btc_address(transfer.message.recipient.clone()) {
+        if let Some(btc_address) = transfer.message.recipient.get_btc_address() {
             if let TokenReceiverMessage::Withdraw {
                 target_btc_address,
                 input: _,
@@ -140,12 +140,5 @@ impl Contract {
         self.btc_connectors
             .get(&chain_kind)
             .expect("BTC Connector has not been set up for {chain_kind}")
-    }
-
-    pub(crate) fn get_btc_address(&self, omni_address: OmniAddress) -> Option<BtcAddress> {
-        match omni_address {
-            OmniAddress::Btc(btc_address) => Some(btc_address),
-            _ => None,
-        }
     }
 }

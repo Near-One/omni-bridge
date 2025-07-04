@@ -310,6 +310,20 @@ impl OmniAddress {
         }
     }
 
+    pub fn get_btc_address(&self) -> Option<BtcAddress> {
+        match self {
+            OmniAddress::Btc(btc_address) => Some(btc_address.clone()),
+            _ => None,
+        }
+    }
+
+    pub fn is_utxo_chain(&self) -> bool {
+        match self {
+            OmniAddress::Btc(_) => true,
+            _ => false,
+        }
+    }
+
     fn to_evm_address(address: &[u8]) -> Result<EvmAddress, String> {
         let address = if address.len() == 32 {
             &address[address.len() - 20..]

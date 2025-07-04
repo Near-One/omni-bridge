@@ -772,7 +772,7 @@ impl Contract {
         storage_payer: AccountId,
         relayer_id: AccountId,
     ) {
-        if let Some(_) = self.get_btc_address(fast_transfer.recipient.clone()) {
+        if fast_transfer.recipient.is_utxo_chain() {
             let btc_account_id = self.get_native_token_id(fast_transfer.recipient.get_chain());
             require!(
                 fast_transfer.token_id == btc_account_id,
