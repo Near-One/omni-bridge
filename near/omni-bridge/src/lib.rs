@@ -83,7 +83,7 @@ enum StorageKey {
     DestinationNonces,
     TokenDecimals,
     FastTransfers,
-    BtcConnectors,
+    UtxoChainConnectors,
 }
 
 #[derive(AccessControlRole, Deserialize, Serialize, Copy, Clone)]
@@ -202,7 +202,7 @@ pub struct Contract {
     pub destination_nonces: LookupMap<ChainKind, Nonce>,
     pub accounts_balances: LookupMap<AccountId, StorageBalance>,
     pub wnear_account_id: AccountId,
-    pub btc_connectors: LookupMap<ChainKind, AccountId>,
+    pub utxo_chain_connectors: LookupMap<ChainKind, AccountId>,
 }
 
 #[near]
@@ -283,7 +283,7 @@ impl Contract {
             destination_nonces: LookupMap::new(StorageKey::DestinationNonces),
             accounts_balances: LookupMap::new(StorageKey::AccountsBalances),
             wnear_account_id,
-            btc_connectors: LookupMap::new(StorageKey::BtcConnectors),
+            utxo_chain_connectors: LookupMap::new(StorageKey::UtxoChainConnectors),
         };
 
         contract.acl_init_super_admin(near_sdk::env::predecessor_account_id());

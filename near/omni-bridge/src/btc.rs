@@ -132,12 +132,17 @@ impl Contract {
     }
 
     #[access_control_any(roles(Role::DAO))]
-    pub fn add_btc_connector(&mut self, chain_kind: ChainKind, btc_connector_id: AccountId) {
-        self.btc_connectors.insert(&chain_kind, &btc_connector_id);
+    pub fn add_utxo_chain_connector(
+        &mut self,
+        chain_kind: ChainKind,
+        utxo_chain_connector_id: AccountId,
+    ) {
+        self.utxo_chain_connectors
+            .insert(&chain_kind, &utxo_chain_connector_id);
     }
 
     fn get_btc_connector(&self, chain_kind: ChainKind) -> AccountId {
-        self.btc_connectors
+        self.utxo_chain_connectors
             .get(&chain_kind)
             .expect("BTC Connector has not been set up for {chain_kind}")
     }

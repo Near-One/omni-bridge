@@ -69,7 +69,7 @@ impl Contract {
                 destination_nonces: old_state.destination_nonces,
                 accounts_balances: old_state.accounts_balances,
                 wnear_account_id: old_state.wnear_account_id,
-                btc_connectors: LookupMap::new(StorageKey::BtcConnectors),
+                utxo_chain_connectors: LookupMap::new(StorageKey::UtxoChainConnectors),
             }
         } else if let Some(old_state) = env::state_read::<StateV1>() {
             Self {
@@ -88,7 +88,7 @@ impl Contract {
                 destination_nonces: old_state.destination_nonces,
                 accounts_balances: old_state.accounts_balances,
                 wnear_account_id: old_state.wnear_account_id,
-                btc_connectors: LookupMap::new(StorageKey::BtcConnectors),
+                utxo_chain_connectors: LookupMap::new(StorageKey::UtxoChainConnectors),
             }
         } else {
             env::panic_str("Old state not found. Migration is not needed.")
