@@ -47,4 +47,3 @@ ethereum-types = { version = "0.15.1", default-features = false, features = ["rl
 rlp = "0.6"
 sha3 = "0.10.0"
 rstest = "0.25.0"
-getrandom = { version = "0.3.3", features = ["wasm_js"] }
