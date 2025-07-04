@@ -65,6 +65,7 @@ mod tests {
                     "mpc_signer": "mpc.testnet",
                     "nonce": U128(0),
                     "wnear_account_id": "wnear.testnet",
+                    "btc_connector": "brg-dev.testnet",
                 }))
                 .max_gas()
                 .transact()
@@ -948,7 +949,9 @@ mod tests {
         let res = env
             .locker_contract
             .call("migrate")
-            .args_json(json!({}))
+            .args_json(json!({
+                "btc_connector": "brg-dev.testnet",
+            }))
             .max_gas()
             .transact()
             .await?;
