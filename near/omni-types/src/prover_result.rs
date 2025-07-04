@@ -48,19 +48,11 @@ pub struct LogMetadataMessage {
 
 #[near(serializers=[borsh, json])]
 #[derive(Debug, Clone)]
-pub struct BtcFinTransferMessage {
-    pub btc_tx_hash: String,
-    pub transfer_id: TransferId,
-}
-
-#[near(serializers=[borsh, json])]
-#[derive(Debug, Clone)]
 pub enum ProverResult {
     InitTransfer(InitTransferMessage),
     FinTransfer(FinTransferMessage),
     DeployToken(DeployTokenMessage),
     LogMetadata(LogMetadataMessage),
-    BtcFinTransfer(BtcFinTransferMessage),
 }
 
 #[near(serializers=[borsh, json])]
