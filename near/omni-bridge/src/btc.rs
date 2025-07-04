@@ -15,7 +15,7 @@ const SUBMIT_TRANSFER_TO_BTC_CONNECTOR_CALLBACK_GAS: Gas = Gas::from_tgas(5);
 impl Contract {
     #[payable]
     #[pause(except(roles(Role::DAO, Role::UnrestrictedRelayer)))]
-    pub fn submit_transfer_to_btc_connector(
+    pub fn submit_transfer_to_utxo_chain_connector(
         &mut self,
         transfer_id: TransferId,
         msg: String,
@@ -62,7 +62,7 @@ impl Contract {
         let btc_account_id = self.get_native_token_id(chain_kind);
         require!(
             self.get_token_id(&transfer.message.token) == btc_account_id,
-            "BTC account id"
+            "Only the native token of this UTXO chain can be transferred."
         );
 
         self.remove_transfer_message(transfer_id);
