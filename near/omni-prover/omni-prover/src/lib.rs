@@ -68,13 +68,6 @@ impl OmniProver {
     }
 
     #[access_control_any(roles(Role::ProversManager, Role::DAO))]
-    pub fn add_provers(&mut self, provers: Vec<(ProverId, AccountId)>) {
-        for (prover_id, account_id) in provers {
-            self.provers.insert(&prover_id, &account_id);
-        }
-    }
-
-    #[access_control_any(roles(Role::ProversManager, Role::DAO))]
     pub fn remove_prover(&mut self, prover_id: ProverId) {
         self.provers.remove(&prover_id);
     }
