@@ -1,7 +1,6 @@
 use near_sdk::near;
 
 use crate::prover_result::ProofKind;
-use crate::TransferId;
 
 pub type ProverId = String;
 
@@ -30,13 +29,6 @@ pub struct WormholeVerifyProofArgs {
     pub vaa: String,
 }
 
-#[near(serializers=[borsh])]
-#[derive(Debug, Clone)]
-pub struct BtcVerifyProofArgs {
-    pub proof: BtcProof,
-    pub transfer_id: TransferId,
-}
-
 #[near(serializers=[borsh, json])]
 #[derive(Default, Debug, Clone)]
 pub struct EvmProof {
@@ -46,14 +38,4 @@ pub struct EvmProof {
     pub receipt_data: Vec<u8>,
     pub header_data: Vec<u8>,
     pub proof: Vec<Vec<u8>>,
-}
-
-#[near(serializers=[borsh, json])]
-#[derive(Default, Debug, Clone)]
-pub struct BtcProof {
-    pub tx_id: H256,
-    pub tx_block_blockhash: H256,
-    pub tx_index: u64,
-    pub merkle_proof: Vec<H256>,
-    pub confirmations: u64,
 }
