@@ -1017,35 +1017,18 @@ impl Contract {
 
     #[payable]
     #[access_control_any(roles(Role::DAO))]
-    pub fn set_native_token(&mut self, chain_kind: ChainKind, token_id: AccountId, decimals: u8) {
+    pub fn set_utxo_chain_token(
+        &mut self,
+        chain_kind: ChainKind,
+        token_id: AccountId,
+        decimals: u8,
+    ) {
         let storage_usage = env::storage_usage();
         let token_address = OmniAddress::new_zero(chain_kind)
             .unwrap_or_else(|_| env::panic_str("ERR_FAILED_TO_GET_ZERO_ADDRESS"));
 
-        require!(
-            self.token_id_to_address
-                .insert(&(chain_kind, token_id.clone()), &token_address)
-                .is_none(),
-            "ERR_TOKEN_EXIST"
-        );
-        require!(
-            self.token_address_to_id
-                .insert(&token_address, &token_id)
-                .is_none(),
-            "ERR_TOKEN_EXIST"
-        );
-        require!(
-            self.token_decimals
-                .insert(
-                    &token_address,
-                    &Decimals {
-                        decimals,
-                        origin_decimals: decimals
-                    }
-                )
-                .is_none(),
-            "ERR_TOKEN_EXIST"
-        );
+        self.add_token(token_id.clone(), &token_address, decimals, decimals);
+
         let required_deposit = env::storage_byte_cost()
             .saturating_mul((env::storage_usage().saturating_sub(storage_usage)).into());
 
@@ -1099,22 +1082,12 @@ impl Contract {
         );
 
         let storage_usage = env::storage_usage();
-        self.token_id_to_address.insert(
-            &(
-                deploy_token.token_address.get_chain(),
-                deploy_token.token.clone(),
-            ),
-            &deploy_token.token_address,
-        );
-        self.token_address_to_id
-            .insert(&deploy_token.token_address, &deploy_token.token);
 
-        self.token_decimals.insert(
+        self.add_token(
+            deploy_token.token,
             &deploy_token.token_address,
-            &Decimals {
-                decimals: deploy_token.decimals,
-                origin_decimals: deploy_token.origin_decimals,
-            },
+            deploy_token.decimals,
+            deploy_token.origin_decimals,
         );
 
         let required_deposit = env::storage_byte_cost()
@@ -1304,23 +1277,12 @@ impl Contract {
 
         for token_info in tokens {
             self.deployed_tokens.insert(&token_info.token_id);
-            self.token_address_to_id
-                .insert(&token_info.token_address, &token_info.token_id);
-            self.token_id_to_address.insert(
-                &(
-                    token_info.token_address.get_chain(),
-                    token_info.token_id.clone(),
-                ),
+            self.add_token(
+                token_info.token_id,
                 &token_info.token_address,
+                token_info.decimals,
+                token_info.decimals,
             );
-            self.token_decimals.insert(
-                &token_info.token_address,
-                &Decimals {
-                    decimals: token_info.decimals,
-                    origin_decimals: token_info.decimals,
-                },
-            );
-
             ext_token::ext(token_info.token_id)
                 .with_static_gas(STORAGE_DEPOSIT_GAS)
                 .with_attached_deposit(NEP141_DEPOSIT)
@@ -1825,30 +1787,13 @@ impl Contract {
             .unwrap_or_else(|_| env::panic_str("ERR_PARSE_ACCOUNT"));
 
         let storage_usage = env::storage_usage();
-        require!(
-            self.token_id_to_address
-                .insert(&(chain_kind, token_id.clone()), token_address)
-                .is_none(),
-            "ERR_TOKEN_EXIST"
+        self.add_token(
+            token_id,
+            token_address,
+            metadata.decimals,
+            metadata.decimals,
         );
-        require!(
-            self.token_address_to_id
-                .insert(token_address, &token_id)
-                .is_none(),
-            "ERR_TOKEN_EXIST"
-        );
-        require!(
-            self.token_decimals
-                .insert(
-                    token_address,
-                    &Decimals {
-                        decimals: metadata.decimals,
-                        origin_decimals: metadata.decimals
-                    }
-                )
-                .is_none(),
-            "ERR_TOKEN_EXIST"
-        );
+
         require!(self.deployed_tokens.insert(&token_id), "ERR_TOKEN_EXIST");
         let required_deposit = env::storage_byte_cost()
             .saturating_mul((env::storage_usage().saturating_sub(storage_usage)).into())
@@ -1879,6 +1824,40 @@ impl Contract {
                     .with_attached_deposit(NEP141_DEPOSIT)
                     .storage_deposit(&env::current_account_id(), Some(true)),
             )
+    }
+
+    fn add_token(
+        &mut self,
+        token_id: AccountId,
+        token_address: &OmniAddress,
+        decimals: u8,
+        origin_decimals: u8,
+    ) {
+        let chain_kind = token_address.get_chain();
+        require!(
+            self.token_id_to_address
+                .insert(&(chain_kind, token_id.clone()), token_address)
+                .is_none(),
+            "ERR_TOKEN_EXIST"
+        );
+        require!(
+            self.token_address_to_id
+                .insert(token_address, &token_id)
+                .is_none(),
+            "ERR_TOKEN_EXIST"
+        );
+        require!(
+            self.token_decimals
+                .insert(
+                    token_address,
+                    &Decimals {
+                        decimals,
+                        origin_decimals,
+                    }
+                )
+                .is_none(),
+            "ERR_TOKEN_EXIST"
+        );
     }
 
     fn refund(account_id: AccountId, amount: NearToken) {
