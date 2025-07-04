@@ -38,7 +38,7 @@ impl Contract {
                     btc_address == target_btc_address,
                     "Incorrect target address"
                 );
-                let output_amount = self.get_output_amount(&output, &target_btc_address);
+                let output_amount = Self::get_output_amount(&output, &target_btc_address);
 
                 let max_fee = transfer.message.msg.parse::<u64>();
                 if let Ok(max_fee) = max_fee {
@@ -84,12 +84,12 @@ impl Contract {
             )
     }
 
-    fn get_output_amount(&self, output: &[TxOut], target_address: &str) -> u64 {
+    fn get_output_amount(output: &[TxOut], target_address: &str) -> u64 {
         let Ok(target_address) = Address::from_str(target_address) else {
             env::panic_str("Invalid target address")
         };
 
-        let network = self.get_btc_network();
+        let network = Self::get_btc_network();
 
         let Ok(checked_address) = target_address.require_network(network) else {
             env::panic_str("Invalid target address")
@@ -106,7 +106,7 @@ impl Contract {
             .sum()
     }
 
-    fn get_btc_network(&self) -> Network {
+    fn get_btc_network() -> Network {
         if env::current_account_id().as_str().ends_with(".testnet") {
             Network::Testnet
         } else {
@@ -124,7 +124,7 @@ impl Contract {
     ) -> PromiseOrValue<()> {
         if matches!(call_result, Ok(result) if result.0 > 0) {
             let token_fee = transfer_msg.fee.fee.0;
-            self.send_fee_internal(transfer_msg, fee_recipient, token_fee)
+            self.send_fee_internal(&transfer_msg, fee_recipient, token_fee)
         } else {
             self.insert_raw_transfer(transfer_msg, transfer_owner);
             PromiseOrValue::Value(())

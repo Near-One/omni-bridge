@@ -318,10 +318,7 @@ impl OmniAddress {
     }
 
     pub fn is_utxo_chain(&self) -> bool {
-        match self {
-            OmniAddress::Btc(_) => true,
-            _ => false,
-        }
+        matches!(self, OmniAddress::Btc(_))
     }
 
     fn to_evm_address(address: &[u8]) -> Result<EvmAddress, String> {

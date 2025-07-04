@@ -903,7 +903,7 @@ impl Contract {
         );
         let fee = message.amount.0 - denormalized_amount;
 
-        self.send_fee_internal(message, fee_recipient, fee)
+        self.send_fee_internal(&message, fee_recipient, fee)
     }
 
     #[payable]
@@ -988,7 +988,7 @@ impl Contract {
         let token_address = OmniAddress::new_zero(chain_kind)
             .unwrap_or_else(|_| env::panic_str("ERR_FAILED_TO_GET_ZERO_ADDRESS"));
 
-        self.add_token(token_id.clone(), &token_address, decimals, decimals);
+        self.add_token(&token_id, &token_address, decimals, decimals);
 
         let required_deposit = env::storage_byte_cost()
             .saturating_mul((env::storage_usage().saturating_sub(storage_usage)).into());
@@ -1045,7 +1045,7 @@ impl Contract {
         let storage_usage = env::storage_usage();
 
         self.add_token(
-            deploy_token.token.clone(),
+            &deploy_token.token,
             &deploy_token.token_address,
             deploy_token.decimals,
             deploy_token.origin_decimals,
@@ -1239,7 +1239,7 @@ impl Contract {
         for token_info in tokens {
             self.deployed_tokens.insert(&token_info.token_id);
             self.add_token(
-                token_info.token_id.clone(),
+                &token_info.token_id,
                 &token_info.token_address,
                 token_info.decimals,
                 token_info.decimals,
@@ -1749,7 +1749,7 @@ impl Contract {
 
         let storage_usage = env::storage_usage();
         self.add_token(
-            token_id.clone(),
+            &token_id,
             token_address,
             metadata.decimals,
             metadata.decimals,
@@ -1789,7 +1789,7 @@ impl Contract {
 
     fn send_fee_internal(
         &mut self,
-        message: TransferMessage,
+        message: &TransferMessage,
         fee_recipient: AccountId,
         token_fee: u128,
     ) -> PromiseOrValue<()> {
@@ -1838,7 +1838,7 @@ impl Contract {
 
     fn add_token(
         &mut self,
-        token_id: AccountId,
+        token_id: &AccountId,
         token_address: &OmniAddress,
         decimals: u8,
         origin_decimals: u8,
@@ -1852,7 +1852,7 @@ impl Contract {
         );
         require!(
             self.token_address_to_id
-                .insert(token_address, &token_id)
+                .insert(token_address, token_id)
                 .is_none(),
             "ERR_TOKEN_EXIST"
         );
