@@ -1,16 +1,11 @@
-use crate::{
-    ext_token, Contract, ContractExt, Role, FT_TRANSFER_CALL_GAS, FT_TRANSFER_GAS, MINT_TOKEN_GAS,
-    ONE_YOCTO,
-};
+use crate::{ext_token, Contract, ContractExt, Role, FT_TRANSFER_CALL_GAS, ONE_YOCTO};
 use bitcoin::{Address, Network, TxOut};
 use near_plugins::{access_control_any, pause, AccessControllable, Pausable};
 use near_sdk::json_types::U128;
 use near_sdk::{
-    env, near, require, serde_json, AccountId, Gas, NearToken, Promise, PromiseError,
-    PromiseOrValue,
+    env, near, require, serde_json, AccountId, Gas, Promise, PromiseError, PromiseOrValue,
 };
 use omni_types::btc::TokenReceiverMessage;
-use omni_types::near_events::OmniBridgeEvent;
 use omni_types::{BtcAddress, ChainKind, Fee, OmniAddress, TransferId, TransferMessage};
 use std::str::FromStr;
 
@@ -128,41 +123,8 @@ impl Contract {
         #[callback_result] call_result: &Result<U128, PromiseError>,
     ) -> PromiseOrValue<()> {
         if matches!(call_result, Ok(result) if result.0 > 0) {
-            if transfer_msg.fee.native_fee.0 != 0 {
-                let origin_chain = transfer_msg.origin_transfer_id.map_or_else(
-                    || transfer_msg.get_origin_chain(),
-                    |origin_transfer_id| origin_transfer_id.origin_chain,
-                );
-                if origin_chain == ChainKind::Near {
-                    Promise::new(fee_recipient.clone())
-                        .transfer(NearToken::from_yoctonear(transfer_msg.fee.native_fee.0));
-                } else {
-                    ext_token::ext(self.get_native_token_id(origin_chain))
-                        .with_static_gas(MINT_TOKEN_GAS)
-                        .mint(fee_recipient.clone(), transfer_msg.fee.native_fee, None);
-                }
-            }
-
-            let token = self.get_token_id(&transfer_msg.token);
-            env::log_str(
-                &OmniBridgeEvent::ClaimFeeEvent {
-                    transfer_message: transfer_msg.clone(),
-                }
-                .to_log_string(),
-            );
-
-            let fee = transfer_msg.fee.fee;
-
-            if fee.0 > 0 {
-                PromiseOrValue::Promise(
-                    ext_token::ext(token)
-                        .with_static_gas(FT_TRANSFER_GAS)
-                        .with_attached_deposit(ONE_YOCTO)
-                        .ft_transfer(fee_recipient, fee, None),
-                )
-            } else {
-                PromiseOrValue::Value(())
-            }
+            let token_fee = transfer_msg.fee.fee.0;
+            self.send_fee_internal(transfer_msg, fee_recipient, token_fee)
         } else {
             self.insert_raw_transfer(transfer_msg, transfer_owner);
             PromiseOrValue::Value(())

@@ -925,24 +925,7 @@ impl Contract {
         );
         let fee = message.amount.0 - denormalized_amount;
 
-        if fee > 0 {
-            if self.deployed_tokens.contains(&token) {
-                PromiseOrValue::Promise(ext_token::ext(token).with_static_gas(MINT_TOKEN_GAS).mint(
-                    fee_recipient,
-                    U128(fee),
-                    None,
-                ))
-            } else {
-                PromiseOrValue::Promise(
-                    ext_token::ext(token)
-                        .with_static_gas(FT_TRANSFER_GAS)
-                        .with_attached_deposit(ONE_YOCTO)
-                        .ft_transfer(fee_recipient, U128(fee), None),
-                )
-            }
-        } else {
-            PromiseOrValue::Value(())
-        }
+        self.send_fee_internal(message, fee_recipient, fee)
     }
 
     #[payable]
@@ -1084,7 +1067,7 @@ impl Contract {
         let storage_usage = env::storage_usage();
 
         self.add_token(
-            deploy_token.token,
+            deploy_token.token.clone(),
             &deploy_token.token_address,
             deploy_token.decimals,
             deploy_token.origin_decimals,
@@ -1278,7 +1261,7 @@ impl Contract {
         for token_info in tokens {
             self.deployed_tokens.insert(&token_info.token_id);
             self.add_token(
-                token_info.token_id,
+                token_info.token_id.clone(),
                 &token_info.token_address,
                 token_info.decimals,
                 token_info.decimals,
@@ -1788,7 +1771,7 @@ impl Contract {
 
         let storage_usage = env::storage_usage();
         self.add_token(
-            token_id,
+            token_id.clone(),
             token_address,
             metadata.decimals,
             metadata.decimals,
@@ -1824,6 +1807,55 @@ impl Contract {
                     .with_attached_deposit(NEP141_DEPOSIT)
                     .storage_deposit(&env::current_account_id(), Some(true)),
             )
+    }
+
+    fn send_fee_internal(
+        &mut self,
+        message: TransferMessage,
+        fee_recipient: AccountId,
+        token_fee: u128,
+    ) -> PromiseOrValue<()> {
+        if message.fee.native_fee.0 != 0 {
+            let origin_chain = message.origin_transfer_id.map_or_else(
+                || message.get_origin_chain(),
+                |origin_transfer_id| origin_transfer_id.origin_chain,
+            );
+            if origin_chain == ChainKind::Near {
+                Promise::new(fee_recipient.clone())
+                    .transfer(NearToken::from_yoctonear(message.fee.native_fee.0));
+            } else {
+                ext_token::ext(self.get_native_token_id(origin_chain))
+                    .with_static_gas(MINT_TOKEN_GAS)
+                    .mint(fee_recipient.clone(), message.fee.native_fee, None);
+            }
+        }
+
+        let token = self.get_token_id(&message.token);
+        env::log_str(
+            &OmniBridgeEvent::ClaimFeeEvent {
+                transfer_message: message.clone(),
+            }
+            .to_log_string(),
+        );
+
+        if token_fee > 0 {
+            if self.deployed_tokens.contains(&token) {
+                PromiseOrValue::Promise(ext_token::ext(token).with_static_gas(MINT_TOKEN_GAS).mint(
+                    fee_recipient,
+                    U128(token_fee),
+                    None,
+                ))
+            } else {
+                PromiseOrValue::Promise(
+                    ext_token::ext(token)
+                        .with_static_gas(FT_TRANSFER_GAS)
+                        .with_attached_deposit(ONE_YOCTO)
+                        .ft_transfer(fee_recipient, U128(token_fee), None),
+                )
+            }
+        } else {
+            PromiseOrValue::Value(())
+        }
     }
 
     fn add_token(
