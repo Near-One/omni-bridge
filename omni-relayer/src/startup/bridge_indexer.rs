@@ -376,6 +376,7 @@ async fn handle_meta_event(
 
 async fn handle_btc_event(
     mut redis_connection: redis::aio::MultiplexedConnection,
+    config: config::Config,
     origin_transaction_id: String,
     event: BtcConnectorEvent,
 ) -> Result<()> {
@@ -397,22 +398,24 @@ async fn handle_btc_event(
             btc_pending_id,
             utxo_count,
         } => {
-            info!("Received NearToBtcInitTransfer: {origin_transaction_id}");
-            for sign_index in 0..utxo_count {
-                info!(
-                    "Received sign index {sign_index} for BTC pending ID: {}",
-                    btc_pending_id.clone()
-                );
-                utils::redis::add_event(
-                    &mut redis_connection,
-                    utils::redis::EVENTS,
-                    origin_transaction_id.clone(),
-                    workers::Transfer::NearToBtc {
-                        btc_pending_id: btc_pending_id.clone(),
-                        sign_index,
-                    },
-                )
-                .await;
+            if config.is_signing_btc_transaction_enabled() {
+                info!("Received NearToBtcInitTransfer: {origin_transaction_id}");
+                for sign_index in 0..utxo_count {
+                    info!(
+                        "Received sign index {sign_index} for BTC pending ID: {}",
+                        btc_pending_id.clone()
+                    );
+                    utils::redis::add_event(
+                        &mut redis_connection,
+                        utils::redis::EVENTS,
+                        origin_transaction_id.clone(),
+                        workers::Transfer::NearToBtc {
+                            btc_pending_id: btc_pending_id.clone(),
+                            sign_index,
+                        },
+                    )
+                    .await;
+                }
             }
         }
         BtcConnectorEventDetails::TransferBtcToNear {
@@ -525,10 +528,12 @@ async fn watch_omni_events_collection(
                         OmniEventData::BtcConnector(btc_event) => {
                             tokio::spawn({
                                 let redis_connection = redis_connection.clone();
+                                let config = config.clone();
 
                                 async move {
                                     if let Err(err) = handle_btc_event(
                                         redis_connection,
+                                        config,
                                         event.transaction_id,
                                         btc_event,
                                     )

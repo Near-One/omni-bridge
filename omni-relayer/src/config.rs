@@ -110,6 +110,13 @@ impl Config {
     pub fn is_fast_relayer_enabled(&self) -> bool {
         self.near.fast_relayer_enabled
     }
+
+    pub fn is_signing_btc_transaction_enabled(&self) -> bool {
+        self.btc
+            .as_ref()
+            .map(|btc| btc.signing_enabled)
+            .unwrap_or_default()
+    }
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -201,6 +208,7 @@ pub struct Solana {
 #[derive(Debug, Clone, Deserialize)]
 pub struct Btc {
     pub rpc_http_url: String,
+    pub signing_enabled: bool,
 }
 
 #[derive(Debug, Clone, Deserialize)]

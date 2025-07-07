@@ -85,6 +85,8 @@ finalize_transfer_sol_discriminator = [104, 27, 121, 69, 3, 70, 217, 66]
 
 [btc]
 rpc_http_url = "https://bitcoin-rpc.publicnode.com"
+# If this is set to true, then omni relayer will call `sign_btc_transaction`
+signing_enabled = false
 
 [wormhole]
 api_url = "https://api.wormholescan.io/"
