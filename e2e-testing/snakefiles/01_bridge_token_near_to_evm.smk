@@ -38,7 +38,7 @@ evm_prover_setup_file = const.near_deploy_results_dir / "{network}-evm-prover-se
 
 # Main pipeline rule
 # TODO: Replace ETH_SEPOLIA with all EVM networks when the `evm_deploy_token` rule doesn't crash on Base and Arbitrum (the issue is not in the pipeline)
-rule all:
+rule bridge_token_all:
     input:
         expand(call_dir / "{network}-verify-bridge-token-report.txt", 
                network=list([const.EvmNetwork.ETH_SEPOLIA]))

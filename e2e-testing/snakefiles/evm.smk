@@ -40,6 +40,9 @@ def evm_deploy_test_token(network, name, symbol):
 def evm_create_eoa(network):
     return f"yarn --silent --cwd {const.common_tools_dir} hardhat create-eoa --network {network}"
 
+def evm_get_current_eoa(network):
+    return f"yarn --silent --cwd {const.common_tools_dir} hardhat get-current-eoa --network {network}"
+
 def get_mkdir_cmd(wildcards):
     return f"mkdir -p {get_evm_deploy_results_dir(wildcards.network)}"
 
@@ -69,10 +72,10 @@ rule evm_build:
 
 rule evm_create_eoa_account:
     message: "Creating EOA account"
-    output: pathlib.Path(get_evm_account_dir("{network}")) / "{account}.json"
+    output: pathlib.Path(get_evm_account_dir("{network}")) / f"{EC.USER_ACCOUNT}.json"
     params:
         evm_account_dir = lambda wc: get_evm_account_dir(wc.network),
-        create_cmd = lambda wc: evm_create_eoa(wc.network)
+        create_cmd = lambda wc: evm_get_current_eoa(wc.network)
     shell: """
     mkdir -p {params.evm_account_dir} && \
     {params.create_cmd} 2>/dev/stderr 1> {output}
