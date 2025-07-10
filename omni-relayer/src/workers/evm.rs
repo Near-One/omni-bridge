@@ -26,7 +26,7 @@ use super::{EventAction, Transfer};
 
 #[allow(clippy::too_many_lines)]
 pub async fn process_init_transfer_event(
-    config: config::Config,
+    config: &config::Config,
     redis_connection: &mut redis::aio::MultiplexedConnection,
     omni_connector: Arc<OmniConnector>,
     jsonrpc_client: near_jsonrpc_client::JsonRpcClient,
@@ -53,7 +53,7 @@ pub async fn process_init_transfer_event(
     }
 
     if current_timestamp - last_update_timestamp.unwrap_or_default()
-        < utils::redis::CHECK_INSUFFICIENT_FEE_TRANSFERS_EVERY_SECS
+        < config.redis.check_insufficient_fee_transfers_every_secs
     {
         return Ok(EventAction::Retry);
     }
@@ -154,18 +154,10 @@ pub async fn process_init_transfer_event(
 
             if block_number > light_client_latest_block_number {
                 warn!("ETH light client is not synced yet");
-                tokio::time::sleep(tokio::time::Duration::from_secs(
-                    utils::redis::SLEEP_TIME_AFTER_EVENTS_PROCESS_SECS,
-                ))
-                .await;
                 return Ok(EventAction::Retry);
             }
         } else {
             warn!("VAA is not ready yet");
-            tokio::time::sleep(tokio::time::Duration::from_secs(
-                utils::redis::SLEEP_TIME_AFTER_EVENTS_PROCESS_SECS,
-            ))
-            .await;
             return Ok(EventAction::Retry);
         }
     }
@@ -293,7 +285,7 @@ pub async fn process_init_transfer_event(
 }
 
 pub async fn process_evm_transfer_event(
-    config: config::Config,
+    config: &config::Config,
     omni_connector: Arc<OmniConnector>,
     jsonrpc_client: JsonRpcClient,
     fin_transfer: FinTransfer,
@@ -388,7 +380,7 @@ pub async fn process_evm_transfer_event(
         }
         Err(err) => {
             if current_timestamp - creation_timestamp
-                > utils::redis::KEEP_INSUFFICIENT_FEE_TRANSFERS_FOR
+                > config.redis.keep_insufficient_fee_transfers_for
             {
                 anyhow::bail!("Transfer is too old");
             }
@@ -412,7 +404,7 @@ pub async fn process_evm_transfer_event(
 }
 
 pub async fn process_deploy_token_event(
-    config: config::Config,
+    config: &config::Config,
     omni_connector: Arc<OmniConnector>,
     jsonrpc_client: JsonRpcClient,
     deploy_token_event: DeployToken,
@@ -502,7 +494,7 @@ pub async fn process_deploy_token_event(
         }
         Err(err) => {
             if current_timestamp - creation_timestamp
-                > utils::redis::KEEP_INSUFFICIENT_FEE_TRANSFERS_FOR
+                > config.redis.keep_insufficient_fee_transfers_for
             {
                 anyhow::bail!("Transfer is too old");
             }

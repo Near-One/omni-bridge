@@ -139,13 +139,14 @@ pub async fn process_events(
         let mut redis_connection_clone = redis_connection.clone();
 
         let Some(events) = utils::redis::get_events(
+            &config,
             &mut redis_connection_clone,
             utils::redis::EVENTS.to_string(),
         )
         .await
         else {
             tokio::time::sleep(tokio::time::Duration::from_secs(
-                utils::redis::SLEEP_TIME_AFTER_EVENTS_PROCESS_SECS,
+                config.redis.sleep_time_after_events_process_secs,
             ))
             .await;
             continue;
@@ -182,7 +183,7 @@ pub async fn process_events(
 
                         async move {
                             match near::process_transfer_event(
-                                config,
+                                &config,
                                 &mut redis_connection,
                                 key.clone(),
                                 omni_connector,
@@ -195,6 +196,7 @@ pub async fn process_events(
                                 Ok(EventAction::Retry) => {}
                                 Ok(EventAction::Remove) => {
                                     utils::redis::remove_event(
+                                        &config,
                                         &mut redis_connection,
                                         utils::redis::EVENTS,
                                         &key,
@@ -204,12 +206,14 @@ pub async fn process_events(
                                 Err(err) => {
                                     warn!("{err:?}");
                                     utils::redis::remove_event(
+                                        &config,
                                         &mut redis_connection,
                                         utils::redis::EVENTS,
                                         &key,
                                     )
                                     .await;
                                     utils::redis::remove_event(
+                                        &config,
                                         &mut redis_connection,
                                         utils::redis::FEE_MAPPING,
                                         serde_json::to_string(&transfer_message.get_transfer_id())
@@ -233,7 +237,7 @@ pub async fn process_events(
 
                         async move {
                             match evm::process_init_transfer_event(
-                                config,
+                                &config,
                                 &mut redis_connection,
                                 omni_connector,
                                 jsonrpc_client,
@@ -245,12 +249,14 @@ pub async fn process_events(
                                 Ok(EventAction::Retry) => {}
                                 Ok(EventAction::Remove) => {
                                     utils::redis::remove_event(
+                                        &config,
                                         &mut redis_connection,
                                         utils::redis::EVENTS,
                                         &key,
                                     )
                                     .await;
                                     utils::redis::remove_event(
+                                        &config,
                                         &mut redis_connection,
                                         utils::redis::FEE_MAPPING,
                                         serde_json::to_string(&TransferId {
@@ -264,12 +270,14 @@ pub async fn process_events(
                                 Err(err) => {
                                     warn!("{err:?}");
                                     utils::redis::remove_event(
+                                        &config,
                                         &mut redis_connection,
                                         utils::redis::EVENTS,
                                         &key,
                                     )
                                     .await;
                                     utils::redis::remove_event(
+                                        &config,
                                         &mut redis_connection,
                                         utils::redis::FEE_MAPPING,
                                         serde_json::to_string(&TransferId {
@@ -293,7 +301,7 @@ pub async fn process_events(
 
                         async move {
                             match solana::process_init_transfer_event(
-                                config,
+                                &config,
                                 &mut redis_connection,
                                 key.clone(),
                                 omni_connector,
@@ -305,12 +313,14 @@ pub async fn process_events(
                                 Ok(EventAction::Retry) => {}
                                 Ok(EventAction::Remove) => {
                                     utils::redis::remove_event(
+                                        &config,
                                         &mut redis_connection,
                                         utils::redis::EVENTS,
                                         &key,
                                     )
                                     .await;
                                     utils::redis::remove_event(
+                                        &config,
                                         &mut redis_connection,
                                         utils::redis::FEE_MAPPING,
                                         serde_json::to_string(&TransferId {
@@ -324,12 +334,14 @@ pub async fn process_events(
                                 Err(err) => {
                                     warn!("{err:?}");
                                     utils::redis::remove_event(
+                                        &config,
                                         &mut redis_connection,
                                         utils::redis::EVENTS,
                                         &key,
                                     )
                                     .await;
                                     utils::redis::remove_event(
+                                        &config,
                                         &mut redis_connection,
                                         utils::redis::FEE_MAPPING,
                                         serde_json::to_string(&TransferId {
@@ -345,6 +357,7 @@ pub async fn process_events(
                     }));
                 } else if let Transfer::NearToBtc { .. } = transfer {
                     handlers.push(tokio::spawn({
+                        let config = config.clone();
                         let mut redis_connection = redis_connection.clone();
                         let omni_connector = omni_connector.clone();
                         let near_omni_nonce = near_omni_nonce.clone();
@@ -360,6 +373,7 @@ pub async fn process_events(
                                 Ok(EventAction::Retry) => {}
                                 Ok(EventAction::Remove) => {
                                     utils::redis::remove_event(
+                                        &config,
                                         &mut redis_connection,
                                         utils::redis::EVENTS,
                                         &key,
@@ -369,6 +383,7 @@ pub async fn process_events(
                                 Err(err) => {
                                     warn!("{err:?}");
                                     utils::redis::remove_event(
+                                        &config,
                                         &mut redis_connection,
                                         utils::redis::EVENTS,
                                         &key,
@@ -380,6 +395,7 @@ pub async fn process_events(
                     }));
                 } else if let Transfer::BtcToNear { .. } = transfer {
                     handlers.push(tokio::spawn({
+                        let config = config.clone();
                         let mut redis_connection = redis_connection.clone();
                         let omni_connector = omni_connector.clone();
                         let near_nonce = near_omni_nonce.clone();
@@ -395,6 +411,7 @@ pub async fn process_events(
                                 Ok(EventAction::Retry) => {}
                                 Ok(EventAction::Remove) => {
                                     utils::redis::remove_event(
+                                        &config,
                                         &mut redis_connection,
                                         utils::redis::EVENTS,
                                         &key,
@@ -404,6 +421,7 @@ pub async fn process_events(
                                 Err(err) => {
                                     warn!("{err:?}");
                                     utils::redis::remove_event(
+                                        &config,
                                         &mut redis_connection,
                                         utils::redis::EVENTS,
                                         &key,
@@ -415,6 +433,7 @@ pub async fn process_events(
                     }));
                 } else if let Transfer::Fast { .. } = transfer {
                     handlers.push(tokio::spawn({
+                        let config = config.clone();
                         let mut redis_connection = redis_connection.clone();
                         let fast_connector = fast_connector.clone();
                         let near_omni_nonce = near_omni_nonce.clone();
@@ -430,6 +449,7 @@ pub async fn process_events(
                                 Ok(EventAction::Retry) => {}
                                 Ok(EventAction::Remove) => {
                                     utils::redis::remove_event(
+                                        &config,
                                         &mut redis_connection,
                                         utils::redis::EVENTS,
                                         &key,
@@ -439,6 +459,7 @@ pub async fn process_events(
                                 Err(err) => {
                                     warn!("{err:?}");
                                     utils::redis::remove_event(
+                                        &config,
                                         &mut redis_connection,
                                         utils::redis::EVENTS,
                                         &key,
@@ -463,7 +484,7 @@ pub async fn process_events(
 
                         async move {
                             match near::process_sign_transfer_event(
-                                config,
+                                &config,
                                 &mut redis_connection,
                                 omni_connector,
                                 signer,
@@ -475,12 +496,14 @@ pub async fn process_events(
                                 Ok(EventAction::Retry) => {}
                                 Ok(EventAction::Remove) => {
                                     utils::redis::remove_event(
+                                        &config,
                                         &mut redis_connection,
                                         utils::redis::EVENTS,
                                         &key,
                                     )
                                     .await;
                                     utils::redis::remove_event(
+                                        &config,
                                         &mut redis_connection,
                                         utils::redis::FEE_MAPPING,
                                         serde_json::to_string(&message_payload.transfer_id)
@@ -491,12 +514,14 @@ pub async fn process_events(
                                 Err(err) => {
                                     warn!("{err:?}");
                                     utils::redis::remove_event(
+                                        &config,
                                         &mut redis_connection,
                                         utils::redis::EVENTS,
                                         &key,
                                     )
                                     .await;
                                     utils::redis::remove_event(
+                                        &config,
                                         &mut redis_connection,
                                         utils::redis::FEE_MAPPING,
                                         serde_json::to_string(&message_payload.transfer_id)
@@ -519,7 +544,7 @@ pub async fn process_events(
 
                         async move {
                             match evm::process_evm_transfer_event(
-                                config,
+                                &config,
                                 omni_connector,
                                 jsonrpc_client,
                                 fin_transfer_event,
@@ -530,6 +555,7 @@ pub async fn process_events(
                                 Ok(EventAction::Retry) => {}
                                 Ok(EventAction::Remove) => {
                                     utils::redis::remove_event(
+                                        &config,
                                         &mut redis_connection,
                                         utils::redis::EVENTS,
                                         &key,
@@ -539,6 +565,7 @@ pub async fn process_events(
                                 Err(err) => {
                                     warn!("{err:?}");
                                     utils::redis::remove_event(
+                                        &config,
                                         &mut redis_connection,
                                         utils::redis::EVENTS,
                                         &key,
@@ -557,7 +584,7 @@ pub async fn process_events(
 
                         async move {
                             match solana::process_fin_transfer_event(
-                                config,
+                                &config,
                                 omni_connector,
                                 fin_transfer_event,
                                 near_nonce,
@@ -567,6 +594,7 @@ pub async fn process_events(
                                 Ok(EventAction::Retry) => {}
                                 Ok(EventAction::Remove) => {
                                     utils::redis::remove_event(
+                                        &config,
                                         &mut redis_connection,
                                         utils::redis::EVENTS,
                                         &key,
@@ -576,6 +604,7 @@ pub async fn process_events(
                                 Err(err) => {
                                     warn!("{err:?}");
                                     utils::redis::remove_event(
+                                        &config,
                                         &mut redis_connection,
                                         utils::redis::EVENTS,
                                         &key,
@@ -597,7 +626,7 @@ pub async fn process_events(
 
                         async move {
                             match evm::process_deploy_token_event(
-                                config,
+                                &config,
                                 omni_connector,
                                 jsonrpc_client,
                                 deploy_token_event,
@@ -608,6 +637,7 @@ pub async fn process_events(
                                 Ok(EventAction::Retry) => {}
                                 Ok(EventAction::Remove) => {
                                     utils::redis::remove_event(
+                                        &config,
                                         &mut redis_connection,
                                         utils::redis::EVENTS,
                                         &key,
@@ -617,6 +647,7 @@ pub async fn process_events(
                                 Err(err) => {
                                     warn!("{err:?}");
                                     utils::redis::remove_event(
+                                        &config,
                                         &mut redis_connection,
                                         utils::redis::EVENTS,
                                         &key,
@@ -635,7 +666,7 @@ pub async fn process_events(
 
                         async move {
                             match solana::process_deploy_token_event(
-                                config,
+                                &config,
                                 omni_connector,
                                 deploy_token_event,
                                 near_nonce,
@@ -645,6 +676,7 @@ pub async fn process_events(
                                 Ok(EventAction::Retry) => {}
                                 Ok(EventAction::Remove) => {
                                     utils::redis::remove_event(
+                                        &config,
                                         &mut redis_connection,
                                         utils::redis::EVENTS,
                                         &key,
@@ -654,6 +686,7 @@ pub async fn process_events(
                                 Err(err) => {
                                     warn!("{err:?}");
                                     utils::redis::remove_event(
+                                        &config,
                                         &mut redis_connection,
                                         utils::redis::EVENTS,
                                         &key,
@@ -668,6 +701,7 @@ pub async fn process_events(
                 serde_json::from_str::<btc::SignBtcTransaction>(&event)
             {
                 handlers.push(tokio::spawn({
+                    let config = config.clone();
                     let mut redis_connection = redis_connection.clone();
                     let omni_connector = omni_connector.clone();
 
@@ -681,6 +715,7 @@ pub async fn process_events(
                             Ok(EventAction::Retry) => {}
                             Ok(EventAction::Remove) => {
                                 utils::redis::remove_event(
+                                    &config,
                                     &mut redis_connection,
                                     utils::redis::EVENTS,
                                     &key,
@@ -690,6 +725,7 @@ pub async fn process_events(
                             Err(err) => {
                                 warn!("{err:?}");
                                 utils::redis::remove_event(
+                                    &config,
                                     &mut redis_connection,
                                     utils::redis::EVENTS,
                                     &key,
@@ -703,6 +739,7 @@ pub async fn process_events(
                 serde_json::from_str::<btc::ConfirmedTxHash>(&event)
             {
                 handlers.push(tokio::spawn({
+                    let config = config.clone();
                     let mut redis_connection = redis_connection.clone();
                     let omni_connector = omni_connector.clone();
                     let near_nonce = near_omni_nonce.clone();
@@ -718,6 +755,7 @@ pub async fn process_events(
                             Ok(EventAction::Retry) => {}
                             Ok(EventAction::Remove) => {
                                 utils::redis::remove_event(
+                                    &config,
                                     &mut redis_connection,
                                     utils::redis::EVENTS,
                                     &key,
@@ -727,6 +765,7 @@ pub async fn process_events(
                             Err(err) => {
                                 warn!("{err:?}");
                                 utils::redis::remove_event(
+                                    &config,
                                     &mut redis_connection,
                                     utils::redis::EVENTS,
                                     &key,
@@ -740,11 +779,13 @@ pub async fn process_events(
                 serde_json::from_str::<near::UnverifiedTrasfer>(&event)
             {
                 tokio::spawn({
+                    let config = config.clone();
                     let mut redis_connection = redis_connection.clone();
                     let jsonrpc_client = jsonrpc_client.clone();
 
                     async move {
                         near::process_unverified_transfer_event(
+                            &config,
                             &mut redis_connection,
                             jsonrpc_client,
                             unverified_event,
@@ -758,7 +799,7 @@ pub async fn process_events(
         join_all(handlers).await;
 
         tokio::time::sleep(tokio::time::Duration::from_secs(
-            utils::redis::SLEEP_TIME_AFTER_EVENTS_PROCESS_SECS,
+            config.redis.sleep_time_after_events_process_secs,
         ))
         .await;
     }

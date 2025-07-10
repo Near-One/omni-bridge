@@ -147,6 +147,7 @@ pub async fn handle_streamer_message(
             OmniBridgeEvent::InitTransferEvent { transfer_message }
             | OmniBridgeEvent::UpdateFeeEvent { transfer_message } => {
                 utils::redis::add_event(
+                    config,
                     redis_connection,
                     utils::redis::EVENTS,
                     transfer_message.origin_nonce.to_string(),
@@ -163,6 +164,7 @@ pub async fn handle_streamer_message(
                 ..
             } => {
                 utils::redis::add_event(
+                    config,
                     redis_connection,
                     utils::redis::EVENTS,
                     message_payload.transfer_id.origin_nonce.to_string(),
@@ -173,6 +175,7 @@ pub async fn handle_streamer_message(
             OmniBridgeEvent::FinTransferEvent { transfer_message } => {
                 if transfer_message.recipient.get_chain() != ChainKind::Near {
                     utils::redis::add_event(
+                        config,
                         redis_connection,
                         utils::redis::EVENTS,
                         transfer_message.origin_nonce.to_string(),

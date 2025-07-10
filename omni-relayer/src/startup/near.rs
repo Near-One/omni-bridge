@@ -63,6 +63,7 @@ async fn create_lake_config(
     let start_block_height = match start_block {
         Some(block) => block,
         None => utils::redis::get_last_processed::<&str, u64>(
+            config,
             redis_connection,
             &utils::redis::get_last_processed_key(ChainKind::Near),
         )
@@ -118,6 +119,7 @@ pub async fn start_indexer(
                 .await;
 
                 utils::redis::update_last_processed(
+                    &config,
                     &mut redis_connection,
                     &utils::redis::get_last_processed_key(ChainKind::Near),
                     streamer_message.block.header.height,

@@ -215,7 +215,7 @@ async fn main() -> Result<()> {
                 let redis_client = redis_client.clone();
                 async move {
                     startup::solana::start_indexer(
-                        config,
+                        &config,
                         redis_client,
                         args.solana_start_signature,
                     )
@@ -225,7 +225,7 @@ async fn main() -> Result<()> {
             handles.push(tokio::spawn({
                 let config = config.clone();
                 let redis_client = redis_client.clone();
-                async move { startup::solana::process_signature(config, redis_client).await }
+                async move { startup::solana::process_signature(&config, redis_client).await }
             }));
         }
     }

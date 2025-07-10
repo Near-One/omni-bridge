@@ -23,6 +23,7 @@ struct InitTransferPayload {
 }
 
 pub async fn process_message(
+    config: &config::Config,
     redis_connection: &mut redis::aio::MultiplexedConnection,
     solana: &config::Solana,
     transaction: &EncodedTransactionWithStatusMeta,
@@ -37,6 +38,7 @@ pub async fn process_message(
             .collect::<Vec<_>>();
 
         if let Err(err) = decode_instruction(
+            config,
             redis_connection,
             solana,
             signature,
@@ -52,6 +54,7 @@ pub async fn process_message(
 }
 
 async fn decode_instruction(
+    config: &config::Config,
     redis_connection: &mut redis::aio::MultiplexedConnection,
     solana: &config::Solana,
     signature: Signature,
@@ -153,6 +156,7 @@ async fn decode_instruction(
                         };
 
                         utils::redis::add_event(
+                            config,
                             redis_connection,
                             utils::redis::EVENTS,
                             signature.to_string(),
@@ -218,6 +222,7 @@ async fn decode_instruction(
                     };
 
                     utils::redis::add_event(
+                        config,
                         redis_connection,
                         utils::redis::EVENTS,
                         signature.to_string(),
@@ -252,6 +257,7 @@ async fn decode_instruction(
                     };
 
                     utils::redis::add_event(
+                        config,
                         redis_connection,
                         utils::redis::EVENTS,
                         signature.to_string(),
