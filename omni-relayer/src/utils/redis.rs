@@ -16,9 +16,9 @@ pub const FEE_MAPPING: &str = "fee_mapping";
 pub const KEEP_INSUFFICIENT_FEE_TRANSFERS_FOR: i64 = 60 * 60 * 24 * 14; // 14 days
 pub const CHECK_INSUFFICIENT_FEE_TRANSFERS_EVERY_SECS: i64 = 60 * 30; // 30 minutes
 
-pub const SLEEP_TIME_AFTER_EVENTS_PROCESS_SECS: u64 = 10;
+pub const SLEEP_TIME_AFTER_EVENTS_PROCESS_SECS: u64 = 1;
 
-const QUERY_RETRY_ATTEMPTS: u64 = 10;
+const QUERY_RETRY_ATTEMPTS: u64 = 1;
 const QUERY_RETRY_SLEEP_SECS: u64 = 1;
 
 pub async fn get_fee(
