@@ -112,10 +112,7 @@ impl Config {
     }
 
     pub fn is_signing_btc_transaction_enabled(&self) -> bool {
-        self.btc
-            .as_ref()
-            .map(|btc| btc.signing_enabled)
-            .unwrap_or_default()
+        self.btc.as_ref().is_some_and(|btc| btc.signing_enabled)
     }
 }
 
