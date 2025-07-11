@@ -152,18 +152,20 @@ pub async fn process_events(
             continue;
         };
 
-        if let Err(err) = near_omni_nonce.resync_nonce().await {
-            warn!("Failed to resync near nonce: {err:?}");
-        }
-
-        if let Some(near_fast_nonce) = near_fast_nonce.clone() {
-            if let Err(err) = near_fast_nonce.resync_nonce().await {
-                warn!("Failed to resync near fast nonce: {err:?}");
+        if !events.is_empty() {
+            if let Err(err) = near_omni_nonce.resync_nonce().await {
+                warn!("Failed to resync near nonce: {err:?}");
             }
-        }
 
-        if let Err(err) = evm_nonces.resync_nonces().await {
-            warn!("Failed to resync evm nonces: {err:?}");
+            if let Some(near_fast_nonce) = near_fast_nonce.clone() {
+                if let Err(err) = near_fast_nonce.resync_nonce().await {
+                    warn!("Failed to resync near fast nonce: {err:?}");
+                }
+            }
+
+            if let Err(err) = evm_nonces.resync_nonces().await {
+                warn!("Failed to resync evm nonces: {err:?}");
+            }
         }
 
         let mut handlers = Vec::new();
