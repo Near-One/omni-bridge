@@ -79,7 +79,7 @@ pub async fn process_init_transfer_event(
             })?;
 
         let Ok(needed_fee) =
-            utils::bridge_api::TransferFee::get_transfer_fee(&config, sender, recipient, &token)
+            utils::bridge_api::TransferFee::get_transfer_fee(config, sender, recipient, &token)
                 .await
         else {
             warn!("Failed to get transfer fee for transfer: {transfer:?}");
@@ -93,7 +93,7 @@ pub async fn process_init_transfer_event(
 
         if let Some(event_action) = needed_fee
             .check_fee(
-                &config,
+                config,
                 redis_connection,
                 &transfer,
                 transfer_id,

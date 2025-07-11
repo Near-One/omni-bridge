@@ -213,7 +213,7 @@ async fn process_recent_blocks(
 
         for log in logs {
             process_log(
-                &config,
+                config,
                 chain_kind,
                 redis_connection,
                 http_provider,
@@ -229,6 +229,7 @@ async fn process_recent_blocks(
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn process_log(
     config: &config::Config,
     chain_kind: ChainKind,

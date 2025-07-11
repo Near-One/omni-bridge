@@ -102,7 +102,7 @@ pub async fn process_init_transfer_event(
                 })?;
 
         let Ok(needed_fee) = utils::bridge_api::TransferFee::get_transfer_fee(
-            &config,
+            config,
             &sender,
             &log.recipient,
             &token,
@@ -120,7 +120,7 @@ pub async fn process_init_transfer_event(
 
         if let Some(event_action) = needed_fee
             .check_fee(
-                &config,
+                config,
                 redis_connection,
                 &transfer,
                 transfer_id,
@@ -341,7 +341,7 @@ pub async fn process_evm_transfer_event(
     }
 
     let Some(prover_args) = utils::evm::construct_prover_args(
-        &config,
+        config,
         vaa,
         transaction_hash,
         H256::from_slice(topic.as_slice()),
@@ -460,7 +460,7 @@ pub async fn process_deploy_token_event(
     }
 
     let Some(prover_args) = utils::evm::construct_prover_args(
-        &config,
+        config,
         vaa,
         transaction_hash,
         H256::from_slice(topic.as_slice()),

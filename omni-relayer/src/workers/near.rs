@@ -80,7 +80,7 @@ pub async fn process_transfer_event(
             .is_some_and(|list| list.contains(&transfer_message.sender))
     {
         let Ok(needed_fee) = utils::bridge_api::TransferFee::get_transfer_fee(
-            &config,
+            config,
             &transfer_message.sender,
             &transfer_message.recipient,
             &transfer_message.token,
@@ -93,7 +93,7 @@ pub async fn process_transfer_event(
 
         if let Some(event_action) = needed_fee
             .check_fee(
-                &config,
+                config,
                 redis_connection,
                 &transfer_message,
                 transfer_message.get_transfer_id(),
@@ -250,7 +250,7 @@ pub async fn process_sign_transfer_event(
         };
 
         let Ok(needed_fee) = utils::bridge_api::TransferFee::get_transfer_fee(
-            &config,
+            config,
             &transfer_message.sender,
             &transfer_message.recipient,
             &transfer_message.token,
@@ -263,7 +263,7 @@ pub async fn process_sign_transfer_event(
 
         if let Some(event_action) = needed_fee
             .check_fee(
-                &config,
+                config,
                 redis_connection,
                 &transfer_message,
                 transfer_message.get_transfer_id(),
