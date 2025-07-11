@@ -20,7 +20,7 @@ use crate::{config, utils};
 use super::{DeployToken, EventAction, FinTransfer, Transfer};
 
 pub async fn process_init_transfer_event(
-    config: config::Config,
+    config: &config::Config,
     redis_connection: &mut redis::aio::MultiplexedConnection,
     key: String,
     omni_connector: Arc<OmniConnector>,
@@ -48,7 +48,7 @@ pub async fn process_init_transfer_event(
     let current_timestamp = chrono::Utc::now().timestamp();
 
     if current_timestamp - last_update_timestamp.unwrap_or_default()
-        < utils::redis::CHECK_INSUFFICIENT_FEE_TRANSFERS_EVERY_SECS
+        < config.redis.check_insufficient_fee_transfers_every_secs
     {
         return Ok(EventAction::Retry);
     }
@@ -79,7 +79,7 @@ pub async fn process_init_transfer_event(
             })?;
 
         let Ok(needed_fee) =
-            utils::bridge_api::TransferFee::get_transfer_fee(&config, sender, recipient, &token)
+            utils::bridge_api::TransferFee::get_transfer_fee(config, sender, recipient, &token)
                 .await
         else {
             warn!("Failed to get transfer fee for transfer: {transfer:?}");
@@ -93,7 +93,7 @@ pub async fn process_init_transfer_event(
 
         if let Some(event_action) = needed_fee
             .check_fee(
-                &config,
+                config,
                 redis_connection,
                 &transfer,
                 transfer_id,
@@ -131,8 +131,14 @@ pub async fn process_init_transfer_event(
     {
         Ok(actions) => actions,
         Err(err) => {
-            utils::redis::add_event(redis_connection, utils::redis::STUCK_EVENTS, &key, transfer)
-                .await;
+            utils::redis::add_event(
+                config,
+                redis_connection,
+                utils::redis::STUCK_EVENTS,
+                &key,
+                transfer,
+            )
+            .await;
             anyhow::bail!("Failed to get storage deposit actions: {}", err);
         }
     };
@@ -179,7 +185,7 @@ pub async fn process_init_transfer_event(
 }
 
 pub async fn process_fin_transfer_event(
-    config: config::Config,
+    config: &config::Config,
     omni_connector: Arc<OmniConnector>,
     fin_transfer: FinTransfer,
     near_nonce: Arc<utils::nonce::NonceManager>,
@@ -250,7 +256,7 @@ pub async fn process_fin_transfer_event(
 }
 
 pub async fn process_deploy_token_event(
-    config: config::Config,
+    config: &config::Config,
     omni_connector: Arc<OmniConnector>,
     deploy_token_event: DeployToken,
     near_nonce: Arc<utils::nonce::NonceManager>,

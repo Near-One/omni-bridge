@@ -110,11 +110,21 @@ impl Config {
     pub fn is_fast_relayer_enabled(&self) -> bool {
         self.near.fast_relayer_enabled
     }
+
+    pub fn is_signing_btc_transaction_enabled(&self) -> bool {
+        self.btc.as_ref().is_some_and(|btc| btc.signing_enabled)
+    }
 }
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct Redis {
     pub url: String,
+
+    pub keep_insufficient_fee_transfers_for: i64,
+    pub check_insufficient_fee_transfers_every_secs: i64,
+    pub sleep_time_after_events_process_secs: u64,
+    pub query_retry_attempts: u64,
+    pub query_retry_sleep_secs: u64,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -201,6 +211,7 @@ pub struct Solana {
 #[derive(Debug, Clone, Deserialize)]
 pub struct Btc {
     pub rpc_http_url: String,
+    pub signing_enabled: bool,
 }
 
 #[derive(Debug, Clone, Deserialize)]

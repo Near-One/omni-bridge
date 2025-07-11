@@ -64,9 +64,15 @@ pub async fn start_indexer(
         expected_finalization_time,
         safe_confirmations,
     ) = match chain_kind {
-        ChainKind::Eth => extract_evm_config(config.eth.context("Failed to get Eth config")?)?,
-        ChainKind::Base => extract_evm_config(config.base.context("Failed to get Base config")?)?,
-        ChainKind::Arb => extract_evm_config(config.arb.context("Failed to get Arb config")?)?,
+        ChainKind::Eth => {
+            extract_evm_config(config.eth.clone().context("Failed to get Eth config")?)?
+        }
+        ChainKind::Base => {
+            extract_evm_config(config.base.clone().context("Failed to get Base config")?)?
+        }
+        ChainKind::Arb => {
+            extract_evm_config(config.arb.clone().context("Failed to get Arb config")?)?
+        }
         _ => anyhow::bail!("Unsupported chain kind: {chain_kind:?}"),
     };
 
@@ -98,7 +104,7 @@ pub async fn start_indexer(
         };
 
         crate::skip_fail!(
-            process_recent_blocks(params)
+            process_recent_blocks(&config, params)
                 .await
                 .map_err(|err| hide_api_key(&err)),
             format!("Failed to process recent blocks for {chain_kind:?} indexer"),
@@ -130,6 +136,7 @@ pub async fn start_indexer(
 
         while let Some(log) = stream.next().await {
             process_log(
+                &config,
                 chain_kind,
                 &mut redis_connection,
                 &http_provider,
@@ -148,7 +155,10 @@ pub async fn start_indexer(
     }
 }
 
-async fn process_recent_blocks(params: ProcessRecentBlocksParams<'_>) -> Result<()> {
+async fn process_recent_blocks(
+    config: &config::Config,
+    params: ProcessRecentBlocksParams<'_>,
+) -> Result<()> {
     let ProcessRecentBlocksParams {
         redis_connection,
         http_provider,
@@ -167,6 +177,7 @@ async fn process_recent_blocks(params: ProcessRecentBlocksParams<'_>) -> Result<
         Some(block) => block,
         None => {
             if let Some(block) = utils::redis::get_last_processed::<&str, u64>(
+                config,
                 redis_connection,
                 &last_processed_block_key,
             )
@@ -175,6 +186,7 @@ async fn process_recent_blocks(params: ProcessRecentBlocksParams<'_>) -> Result<
                 block + 1
             } else {
                 utils::redis::update_last_processed(
+                    config,
                     redis_connection,
                     &last_processed_block_key,
                     latest_block + 1,
@@ -201,6 +213,7 @@ async fn process_recent_blocks(params: ProcessRecentBlocksParams<'_>) -> Result<
 
         for log in logs {
             process_log(
+                config,
                 chain_kind,
                 redis_connection,
                 http_provider,
@@ -216,7 +229,9 @@ async fn process_recent_blocks(params: ProcessRecentBlocksParams<'_>) -> Result<
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn process_log(
+    config: &config::Config,
     chain_kind: ChainKind,
     redis_connection: &mut redis::aio::MultiplexedConnection,
     http_provider: &DynProvider,
@@ -269,6 +284,7 @@ async fn process_log(
         };
 
         utils::redis::add_event(
+            config,
             redis_connection,
             utils::redis::EVENTS,
             tx_hash.to_string(),
@@ -286,6 +302,7 @@ async fn process_log(
 
         if is_fast_relayer_enabled {
             utils::redis::add_event(
+                config,
                 redis_connection,
                 utils::redis::EVENTS,
                 format!("{tx_hash}_fast"),
@@ -319,6 +336,7 @@ async fn process_log(
         };
 
         utils::redis::add_event(
+            config,
             redis_connection,
             utils::redis::EVENTS,
             tx_hash.to_string(),
@@ -341,6 +359,7 @@ async fn process_log(
         };
 
         utils::redis::add_event(
+            config,
             redis_connection,
             utils::redis::EVENTS,
             tx_hash.to_string(),
@@ -359,6 +378,7 @@ async fn process_log(
     }
 
     utils::redis::update_last_processed(
+        config,
         redis_connection,
         &utils::redis::get_last_processed_key(chain_kind),
         block_number,

@@ -29,7 +29,7 @@ pub struct UnverifiedTrasfer {
 }
 
 pub async fn process_transfer_event(
-    config: config::Config,
+    config: &config::Config,
     redis_connection: &mut redis::aio::MultiplexedConnection,
     key: String,
     omni_connector: Arc<OmniConnector>,
@@ -49,7 +49,7 @@ pub async fn process_transfer_event(
     let current_timestamp = chrono::Utc::now().timestamp();
 
     if current_timestamp - last_update_timestamp.unwrap_or_default()
-        < utils::redis::CHECK_INSUFFICIENT_FEE_TRANSFERS_EVERY_SECS
+        < config.redis.check_insufficient_fee_transfers_every_secs
     {
         return Ok(EventAction::Retry);
     }
@@ -80,7 +80,7 @@ pub async fn process_transfer_event(
             .is_some_and(|list| list.contains(&transfer_message.sender))
     {
         let Ok(needed_fee) = utils::bridge_api::TransferFee::get_transfer_fee(
-            &config,
+            config,
             &transfer_message.sender,
             &transfer_message.recipient,
             &transfer_message.token,
@@ -93,7 +93,7 @@ pub async fn process_transfer_event(
 
         if let Some(event_action) = needed_fee
             .check_fee(
-                &config,
+                config,
                 redis_connection,
                 &transfer_message,
                 transfer_message.get_transfer_id(),
@@ -128,6 +128,7 @@ pub async fn process_transfer_event(
     {
         Ok(tx_hash) => {
             utils::redis::add_event(
+                config,
                 redis_connection,
                 utils::redis::EVENTS,
                 tx_hash.to_string(),
@@ -153,7 +154,7 @@ pub async fn process_transfer_event(
         }
         Err(err) => {
             if current_timestamp - creation_timestamp
-                > utils::redis::KEEP_INSUFFICIENT_FEE_TRANSFERS_FOR
+                > config.redis.keep_insufficient_fee_transfers_for
             {
                 anyhow::bail!("Transfer ({}) is too old", transfer_message.origin_nonce);
             }
@@ -186,7 +187,7 @@ pub async fn process_transfer_event(
 }
 
 pub async fn process_sign_transfer_event(
-    config: config::Config,
+    config: &config::Config,
     redis_connection: &mut redis::aio::MultiplexedConnection,
     omni_connector: Arc<OmniConnector>,
     signer: AccountId,
@@ -249,7 +250,7 @@ pub async fn process_sign_transfer_event(
         };
 
         let Ok(needed_fee) = utils::bridge_api::TransferFee::get_transfer_fee(
-            &config,
+            config,
             &transfer_message.sender,
             &transfer_message.recipient,
             &transfer_message.token,
@@ -262,7 +263,7 @@ pub async fn process_sign_transfer_event(
 
         if let Some(event_action) = needed_fee
             .check_fee(
-                &config,
+                config,
                 redis_connection,
                 &transfer_message,
                 transfer_message.get_transfer_id(),
@@ -342,11 +343,13 @@ pub async fn process_sign_transfer_event(
 }
 
 pub async fn process_unverified_transfer_event(
+    config: &config::Config,
     redis_connection: &mut redis::aio::MultiplexedConnection,
     jsonrpc_client: JsonRpcClient,
     unverified_event: UnverifiedTrasfer,
 ) {
     utils::redis::remove_event(
+        config,
         redis_connection,
         utils::redis::EVENTS,
         unverified_event.tx_hash.to_string(),
@@ -362,6 +365,7 @@ pub async fn process_unverified_transfer_event(
     .await
     {
         utils::redis::add_event(
+            config,
             redis_connection,
             utils::redis::EVENTS,
             unverified_event.original_key,

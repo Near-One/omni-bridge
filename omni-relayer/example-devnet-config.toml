@@ -1,5 +1,10 @@
 [redis]
 url = "redis://127.0.0.1/"
+keep_insufficient_fee_transfers_for = 1209600 # 60 * 60 * 24 * 14
+check_insufficient_fee_transfers_every_secs = 1800 # 60 * 30
+sleep_time_after_events_process_secs = 1
+query_retry_attempts = 10
+query_retry_sleep_secs = 1
 
 [bridge_indexer]
 # Used to check if provided fee is sufficient to complete the transfer
@@ -85,6 +90,8 @@ finalize_transfer_sol_discriminator = [104, 27, 121, 69, 3, 70, 217, 66]
 
 [btc]
 rpc_http_url = "https://bitcoin-testnet-rpc.publicnode.com"
+# If this is set to true, then omni relayer will call `sign_btc_transaction`
+signing_enabled = false
 
 [wormhole]
 api_url = "https://api.testnet.wormholescan.io/"

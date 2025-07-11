@@ -70,7 +70,7 @@ impl TransferFee {
             };
 
             if let Some(historical_fee) =
-                utils::redis::get_fee(redis_connection, &transfer_id).await
+                utils::redis::get_fee(config, redis_connection, &transfer_id).await
             {
                 if historical_fee.is_fee_sufficient(config, provided_fee) {
                     info!(
@@ -82,6 +82,7 @@ impl TransferFee {
                 }
             } else {
                 utils::redis::add_event(
+                    config,
                     redis_connection,
                     utils::redis::FEE_MAPPING,
                     transfer_id,
