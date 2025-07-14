@@ -1,12 +1,17 @@
 [redis]
 url = "redis://127.0.0.1/"
+keep_insufficient_fee_transfers_for = 1209600 # 60 * 60 * 24 * 14
+check_insufficient_fee_transfers_every_secs = 1800 # 60 * 30
+sleep_time_after_events_process_secs = 1
+query_retry_attempts = 10
+query_retry_sleep_secs = 1
 
 [bridge_indexer]
 # Used to check if provided fee is sufficient to complete the transfer
 api_url = "https://testnet.api.bridge.nearone.org/"
 
-# mongodb_uri = "mongodb+srv://MONGODB_USERNAME:MONGODB_PASSWORD@MONGODB_HOST/?retryWrites=true&w=majority"
-# db_name = "testnet_omni_bridge_db"
+mongodb_uri = "mongodb+srv://MONGODB_USERNAME:MONGODB_PASSWORD@MONGODB_HOST/?retryWrites=true&w=majority"
+db_name = "testnet_omni_bridge_db"
 
 # Discount that relayer can accept [default: 0]
 # fee_discount = 30
@@ -15,12 +20,16 @@ api_url = "https://testnet.api.bridge.nearone.org/"
 network = "testnet"
 rpc_url = "https://rpc.testnet.near.org/"
 omni_bridge_id = "omni-locker.testnet"
-btc_connector = "brg-dev.tesntet"
+btc_connector = "brg-dev.testnet"
+btc = "nbtc-dev.testnet"
 # Either provide a path to a credentials file or set it in the environment
 # Note: the path must be absolute
-# credentials_path = "/Users/username/.near-credentials/testnet/omni-relayer.testnet.json"
+# omni_credentials_path = "/Users/username/.near-credentials/testnet/omni-relayer.testnet.json"
+# fast_credentials_path = "/Users/username/.near-credentials/testnet/fast-relayer.testnet.json"
 # We won't check fee before signing transfer if account id matches on in array
 sign_without_checking_fee = ["near:aurora"]
+# To enable fast relayer, uncomment the line below
+# fast_relayer_enabled = true
 
 [eth]
 rpc_http_url = "https://sepolia.infura.io/v3/INFURA_API_KEY"
@@ -31,6 +40,7 @@ light_client = "client-eth2.sepolia.testnet"
 block_processing_batch_size = 10_000
 # https://wormhole.com/docs/build/reference/consistency-levels/
 expected_finalization_time = 1095
+safe_confirmations = 12
 
 [base]
 rpc_http_url = "https://base-sepolia.infura.io/v3/INFURA_API_KEY"
@@ -40,6 +50,7 @@ omni_bridge_address = "0x0C981337fFe39a555d3A40dbb32f21aD0eF33FFA"
 block_processing_batch_size = 10_000
 # https://wormhole.com/docs/build/reference/consistency-levels/
 expected_finalization_time = 1026
+safe_confirmations = 30
 
 [arb]
 rpc_http_url = "https://arbitrum-sepolia.infura.io/v3/INFURA_API_KEY"
@@ -49,6 +60,7 @@ omni_bridge_address = "0xd025b38762B4A4E36F0Cde483b86CB13ea00D989"
 block_processing_batch_size = 10_000
 # https://wormhole.com/docs/build/reference/consistency-levels/
 expected_finalization_time = 1066
+safe_confirmations = 30
 
 [solana]
 rpc_http_url = "https://api.devnet.solana.com"
@@ -75,6 +87,11 @@ finalize_transfer_sol_discriminator = [104, 27, 121, 69, 3, 70, 217, 66]
 # Either provide a path to a keypair file or set it in the environment
 # Note: the path must be absolute
 # credentials_path = "/Users/username/my-solana-keypair.json"
+
+[btc]
+rpc_http_url = "https://bitcoin-testnet-rpc.publicnode.com"
+# If this is set to true, then omni relayer will call `sign_btc_transaction`
+signing_enabled = false
 
 [wormhole]
 api_url = "https://api.testnet.wormholescan.io/"

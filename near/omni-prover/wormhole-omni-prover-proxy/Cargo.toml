@@ -1,6 +1,6 @@
 [package]
 name = "wormhole-omni-prover-proxy"
-version = "0.2.1"
+version.workspace = true
 authors = ["Near One <info@nearone.org>"]
 edition = "2021"
 repository.workspace = true
@@ -9,9 +9,9 @@ repository.workspace = true
 # in https://github.com/near/NEPs/blob/master/neps/nep-0330.md 
 [package.metadata.near.reproducible_build]
 # docker image, descriptor of build environment
-image = "sourcescan/cargo-near:0.13.2-rust-1.84.0"
+image = "sourcescan/cargo-near:0.16.0-rust-1.86.0"
 # tag after colon above serves only descriptive purpose; image is identified by digest
-image_digest = "sha256:b41cb89907f92b114da9e2be4e109bff30ab792c22ddcbd2a4cff8e340cb9acb"
+image_digest = "sha256:3220302ebb7036c1942e772810f21edd9381edf9a339983da43487c77fbad488"
 # list of environment variables names, whose values, if set, will be used as external build parameters
 # in a reproducible manner
 # supported by `sourcescan/cargo-near:0.10.1-rust-1.82.0` image or later images
@@ -29,6 +29,5 @@ crate-type = ["cdylib", "rlib"]
 near-sdk.workspace = true
 borsh.workspace = true
 near-plugins.workspace = true
-alloy-sol-types.workspace = true
 hex = { version = "0.4.3" }
 omni-types = { path = "../../omni-types" }

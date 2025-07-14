@@ -2,7 +2,7 @@ use std::path::Path;
 
 use anyhow::{Context, Result};
 use futures::StreamExt;
-use log::info;
+use tracing::info;
 
 use near_crypto::{InMemorySigner, Signer};
 use near_jsonrpc_client::JsonRpcClient;
@@ -11,8 +11,16 @@ use omni_types::ChainKind;
 
 use crate::{config, utils};
 
-pub fn get_signer(file: Option<&String>) -> Result<InMemorySigner> {
+pub fn get_signer(
+    config: &config::Config,
+    near_signer_type: config::NearSignerType,
+) -> Result<InMemorySigner> {
     info!("Creating NEAR signer");
+
+    let file = match near_signer_type {
+        config::NearSignerType::Omni => config.near.omni_credentials_path.as_deref(),
+        config::NearSignerType::Fast => config.near.fast_credentials_path.as_deref(),
+    };
 
     if let Some(file) = file {
         info!("Using NEAR credentials file: {file}");
@@ -23,12 +31,19 @@ pub fn get_signer(file: Option<&String>) -> Result<InMemorySigner> {
 
     info!("Retrieving NEAR credentials from env");
 
-    let account_id = std::env::var("NEAR_ACCOUNT_ID")
-        .context("Failed to get `NEAR_ACCOUNT_ID` environment variable")?
-        .parse()
-        .context("Failed to parse `NEAR_ACCOUNT_ID`")?;
+    let account_id_env = match near_signer_type {
+        config::NearSignerType::Omni => "NEAR_OMNI_ACCOUNT_ID",
+        config::NearSignerType::Fast => "NEAR_FAST_ACCOUNT_ID",
+    };
 
-    let private_key = config::get_private_key(ChainKind::Near)
+    let account_id = std::env::var(account_id_env)
+        .context(format!(
+            "Failed to get `{account_id_env}` environment variable"
+        ))?
+        .parse()
+        .context(format!("Failed to parse `{account_id_env}`"))?;
+
+    let private_key = config::get_private_key(ChainKind::Near, Some(near_signer_type))
         .parse()
         .context("Failed to parse private key")?;
 
@@ -48,6 +63,7 @@ async fn create_lake_config(
     let start_block_height = match start_block {
         Some(block) => block,
         None => utils::redis::get_last_processed::<&str, u64>(
+            config,
             redis_connection,
             &utils::redis::get_last_processed_key(ChainKind::Near),
         )
@@ -103,6 +119,7 @@ pub async fn start_indexer(
                 .await;
 
                 utils::redis::update_last_processed(
+                    &config,
                     &mut redis_connection,
                     &utils::redis::get_last_processed_key(ChainKind::Near),
                     streamer_message.block.header.height,
