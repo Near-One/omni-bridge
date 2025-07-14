@@ -43,18 +43,10 @@ fi
 
 INIT_ARGS=$(echo "$STATIC_INIT_ARGS $DYN_INIT_ARGS" | jq -s add)
 
-echo "Creating the contract account"
-# Create the contract account
-if ! near account create-account sponsor-by-faucet-service "$CONTRACT_ID" \
-    autogenerate-new-keypair save-to-legacy-keychain network-config testnet create; then
-    echo "Failed to create account for ${CONTRACT_NAME}"
-    exit 1
-fi
-
 # Delay to allow the account to be created
 sleep 3
 
-# Deploy the contract 
+# Deploy the contract
 echo "Deploying the contract"
 if ! near contract deploy "$CONTRACT_ID" use-file "$WASM_PATH" \
     without-init-call network-config testnet sign-with-legacy-keychain send; then
@@ -84,4 +76,4 @@ else
 fi
 
 echo "{\"contract_id\": \"$CONTRACT_ID\"}" > "$OUTPUT_JSON"
-echo "Deployment successful, saved to $OUTPUT_JSON" 
+echo "Deployment successful, saved to $OUTPUT_JSON"

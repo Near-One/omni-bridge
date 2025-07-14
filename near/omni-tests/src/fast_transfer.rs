@@ -55,8 +55,8 @@ mod tests {
                 .args_json(json!({
                     "prover_account": prover_contract.id(),
                     "mpc_signer": "mpc.testnet",
-                    "nonce": U128(0),
                     "wnear_account_id": "wnear.testnet",
+                    "btc_connector": "brg-dev.testnet",
                 }))
                 .max_gas()
                 .transact()
@@ -156,8 +156,9 @@ mod tests {
                 .await?;
 
                 // Register the bridge in the token contract
-                token_contract
-                    .call("storage_deposit")
+                bridge_contract
+                    .as_account()
+                    .call(token_contract.id(), "storage_deposit")
                     .args_json(json!({
                         "account_id": bridge_contract.id(),
                         "registration_only": true,
