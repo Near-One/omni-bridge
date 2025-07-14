@@ -18,12 +18,13 @@ near_bridge_contract_file = const.near_deploy_results_dir / f"{NC.OMNI_BRIDGE}.j
 near_test_token_file = const.near_deploy_results_dir / f"{NC.MOCK_TOKEN}.json"
 
 call_dir = const.common_generated_dir / "04-transfer-near-to-{network}"
+report_file = call_dir / "verify-transfer-report.txt"
 
 # Main pipeline rule
 # TODO: Replace ETH_SEPOLIA with all EVM networks when the `evm_deploy_token` rule doesn't crash on Base and Arbitrum (the issue is not in the pipeline)
 rule transfer_near_to_evm_all:
     input:
-        expand(call_dir / "verify-transfer-report.txt", 
+        expand(report_file, 
                network=list([const.EvmNetwork.ETH_SEPOLIA]))
             #    network=list(const.EvmNetwork))
     message: "Transfer Near to EVM pipeline completed"
@@ -180,7 +181,7 @@ rule verify_transfer_near_to_evm:
         test_token = near_test_token_file,
         bridge_contract = near_bridge_contract_file,
         evm_account = evm_account_file
-    output: call_dir / "verify-transfer-report.txt"
+    output: report_file
     params:
         mkdir = get_mkdir_cmd(call_dir),
         call_dir = lambda wildcards: str(call_dir).format(network=wildcards.network),
