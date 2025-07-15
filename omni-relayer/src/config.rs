@@ -114,6 +114,12 @@ impl Config {
     pub fn is_signing_btc_transaction_enabled(&self) -> bool {
         self.btc.as_ref().is_some_and(|btc| btc.signing_enabled)
     }
+
+    pub fn is_verifying_withdraw_enabled(&self) -> bool {
+        self.btc
+            .as_ref()
+            .is_some_and(|btc| btc.verifying_withdraw_enabled)
+    }
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -212,6 +218,7 @@ pub struct Solana {
 pub struct Btc {
     pub rpc_http_url: String,
     pub signing_enabled: bool,
+    pub verifying_withdraw_enabled: bool,
 }
 
 #[derive(Debug, Clone, Deserialize)]

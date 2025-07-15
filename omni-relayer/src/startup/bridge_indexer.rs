@@ -449,15 +449,17 @@ async fn handle_btc_event(
             .await;
         }
         BtcConnectorEventDetails::ConfirmedTxHash { btc_tx_hash } => {
-            info!("Received ConfirmedTxHash on Btc: {btc_tx_hash}");
-            utils::redis::add_event(
-                config,
-                &mut redis_connection,
-                utils::redis::EVENTS,
-                origin_transaction_id,
-                workers::btc::ConfirmedTxHash { btc_tx_hash },
-            )
-            .await;
+            if config.is_verifying_withdraw_enabled() {
+                info!("Received ConfirmedTxHash on Btc: {btc_tx_hash}");
+                utils::redis::add_event(
+                    config,
+                    &mut redis_connection,
+                    utils::redis::EVENTS,
+                    origin_transaction_id,
+                    workers::btc::ConfirmedTxHash { btc_tx_hash },
+                )
+                .await;
+            }
         }
         BtcConnectorEventDetails::VerifyDeposit { .. }
         | BtcConnectorEventDetails::LogDepositAddress(_) => {}
