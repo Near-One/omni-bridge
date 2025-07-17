@@ -51,7 +51,7 @@ def extract_tx_hash(pattern_type, output_file):
     """
     elif pattern_type == "bridge":
         return f"""
-    TX_HASH=$(grep -o 'tx_hash="[^"]*"' {output_file} | cut -d'"' -f2) && \\
+    TX_HASH=$(grep -o 'tx_hash="[^"]*"' {output_file} | tail -1 | cut -d'"' -f2) && \\
     echo '{{\"tx_hash\": \"'$TX_HASH'\"}}' > {output_file}
     """
     else:

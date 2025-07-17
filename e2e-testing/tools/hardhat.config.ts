@@ -97,6 +97,16 @@ task("mint-test-token", "Mints tokens to a specified address")
     }));
   });
 
+task("get-current-eoa", "Gets the EOA address of a current signer")
+  .setAction(async (_, hre) => {
+    const { ethers } = hre;
+
+    const wallet = new ethers.Wallet(EVM_PRIVATE_KEY);
+    console.log(JSON.stringify({
+      address: wallet.address,
+      privateKey: wallet.privateKey,
+    }, null, 2));
+  });
 
 task("create-eoa", "Creates a new EOA account and prints its credentials")
   .setAction(async (_, hre) => {
