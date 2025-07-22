@@ -16,7 +16,7 @@ near_init_params_file = const.near_init_params_file
 near_binaries = [f"{contract}.wasm" for contract in NC]
 
 # List of binaries that require dynamic init args
-near_contracts_with_dynamic_args = [NC.TOKEN_DEPLOYER, NC.MOCK_TOKEN, NC.OMNI_BRIDGE, "nbtc", "btc_connector"]
+near_contracts_with_dynamic_args = [NC.TOKEN_DEPLOYER, NC.MOCK_TOKEN, NC.OMNI_BRIDGE, "nbtc", "btc_connector", "zcash", "zcash_connector"]
 
 # Account credential files
 near_init_account_credentials_file = const.near_account_dir / f"{NTA.INIT_ACCOUNT}.json"

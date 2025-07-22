@@ -1,72 +1,84 @@
 {
-    "evm_prover": {
-        "init_function": "init",
-        "init_args": {
-            "light_client": "client-eth2.sepolia.testnet",
-            "chain_kind": "Eth"
-        }
-    },
-    "btc_prover": {
-        "init_function": "init",
-        "init_args": {
-            "light_client": "btc-client-v4.testnet",
-            "chain_kind": "Btc"
-        }
-    },
-    "wormhole_omni_prover_proxy": {
-        "init_function": "init",
-        "init_args": {
-            "prover_account": "prover.sepolia.testnet"
-        }
-    },
-    "omni_prover": {
-        "init_function": "init",
-        "init_args": {}
-    },
-    "omni_bridge": {
-        "init_function": "new",
-        "init_args": {
-            "mpc_signer": "v1.signer-prod.testnet",
-            "wnear_account_id": "wrap.testnet"
-        }
-    },
-    "omni_token": {
-        "init_function": "new",
-        "init_args": {
-            "controller": "e2e-dev.testnet",
-            "metadata": {
-                "name": "TestE2E",
-                "symbol": "te2e",
-                "decimals": 24
-            }
-        }
-    },
-    "token_deployer": {
-        "init_function": "new",
-        "init_args": {}
-    },
-    "mock_token": {
-        "init_function": "new_default_meta",
-        "init_args": {
-            "total_supply": "1000000000"
-        }
-    },
-    "bridge_token": {
-        "init_function": "new"
-    },
-    "bridge_token_factory": {
-        "init_function": "new",
-        "init_args": {
-            "prover_account": "prover.sepolia.testnet",
-            "locker_address": "d42c7b1d5c014c66e0dd31dca0e53758bb19ed16"
-        }
-    },
-    "nbtc": {
-        "init_function": "new",
-        "init_args": {}
-    },
-    "btc_connector": {
-        "init_function": "new",
-        "init_args": {}
+  "evm_prover": {
+    "init_function": "init",
+    "init_args": {
+      "light_client": "client-eth2.sepolia.testnet",
+      "chain_kind": "Eth"
     }
+  },
+  "btc_prover": {
+    "init_function": "init",
+    "init_args": {
+      "light_client": "btc-client-v4.testnet",
+      "chain_kind": "Btc"
+    }
+  },
+  "wormhole_omni_prover_proxy": {
+    "init_function": "init",
+    "init_args": {
+      "prover_account": "prover.sepolia.testnet"
+    }
+  },
+  "omni_prover": {
+    "init_function": "init",
+    "init_args": {}
+  },
+  "omni_bridge": {
+    "init_function": "new",
+    "init_args": {
+      "mpc_signer": "v1.signer-prod.testnet",
+      "wnear_account_id": "wrap.testnet"
+    }
+  },
+  "omni_token": {
+    "init_function": "new",
+    "init_args": {
+      "controller": "e2e-dev.testnet",
+      "metadata": {
+        "name": "TestE2E",
+        "symbol": "te2e",
+        "decimals": 24
+      }
+    }
+  },
+  "token_deployer": {
+    "init_function": "new",
+    "init_args": {}
+  },
+  "mock_token": {
+    "init_function": "new_default_meta",
+    "init_args": {
+      "total_supply": "1000000000"
+    }
+  },
+  "bridge_token": {
+    "init_function": "new"
+  },
+  "bridge_token_factory": {
+    "init_function": "new",
+    "init_args": {
+      "prover_account": "prover.sepolia.testnet",
+      "locker_address": "d42c7b1d5c014c66e0dd31dca0e53758bb19ed16"
+    }
+  },
+  "nbtc": {
+    "init_function": "new",
+    "init_args": {}
+  },
+  "zcash": {
+    "init_function": "new",
+    "init_args": {
+      "name": "Test Near Zcash",
+      "symbol": "nTAZ",
+      "decimals": 8
+    }
+  },
+  "btc_connector": {
+    "init_function": "new",
+    "init_args": {}
+  },
+  "zcash_connector": {
+    "init_function": "new",
+    "init_args": {}
+  }
 }
