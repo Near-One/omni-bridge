@@ -168,13 +168,6 @@ pub trait TokenDeployer {
     fn deploy_token(&self, account_id: AccountId, metadata: BasicMetadata) -> Promise;
 }
 
-pub struct RefundData {
-    pub fast_transfer: Option<FastTransfer>,
-    pub transfer_message: TransferMessage,
-    pub message_owner: AccountId,
-    pub is_refund_required: bool,
-}
-
 #[near(contract_state)]
 #[derive(Pausable, Upgradable, PanicOnDefault)]
 #[access_control(role_type(Role))]
