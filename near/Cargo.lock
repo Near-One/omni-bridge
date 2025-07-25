@@ -2937,7 +2937,6 @@ dependencies = [
  "near-sdk",
  "near-workspaces",
  "omni-types",
- "once_cell",
  "rand 0.9.1",
  "rstest",
  "tokio",

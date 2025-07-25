@@ -13,7 +13,6 @@ mod tests {
         prover_result::{DeployTokenMessage, InitTransferMessage, ProverResult},
         Fee, OmniAddress,
     };
-    use once_cell::sync::Lazy;
     use rand::RngCore;
     use rstest::rstest;
 
@@ -23,10 +22,15 @@ mod tests {
         NEP141_DEPOSIT,
     };
 
-    static HEX_STRING_2000: Lazy<String> = Lazy::new(|| {
+    static HEX_STRING_2000: std::sync::LazyLock<String> = std::sync::LazyLock::new(|| {
+        use std::fmt::Write;
         let mut bytes = [0u8; 2000];
         rand::rng().fill_bytes(&mut bytes);
-        bytes.iter().map(|b| format!("{:02x}", b)).collect()
+
+        bytes.iter().fold(String::new(), |mut output, b| {
+            let _ = write!(output, "{b:02X}");
+            output
+        })
     });
 
     #[near(serializers=[json])]
@@ -444,8 +448,7 @@ mod tests {
             panic: false,
             extra_msg: String::new(),
         },
-        999,
-        1
+        999, 1, 0
     )]
     #[case(
         vec![],
@@ -456,8 +459,7 @@ mod tests {
             panic: false,
             extra_msg: String::new(),
         },
-        1000,
-        0
+        1000, 0, 0
     )]
     #[case(
         vec![(relayer_account_id(), true)],
@@ -468,8 +470,7 @@ mod tests {
             panic: false,
             extra_msg: String::new(),
         },
-        0,
-        0
+        0, 0, 1000
     )]
     #[case(
         vec![(relayer_account_id(), true)],
@@ -480,8 +481,7 @@ mod tests {
             panic: false,
             extra_msg: String::new(),
         },
-        998,
-        1
+        998, 1, 1
     )]
     #[case(
         vec![(relayer_account_id(), true)],
@@ -492,8 +492,7 @@ mod tests {
             panic: true,
             extra_msg: String::new(),
         },
-        0,
-        0
+        0, 0, 1000
     )]
     #[case(
         vec![],
@@ -504,8 +503,7 @@ mod tests {
             panic: true,
             extra_msg: String::new(),
         },
-        0,
-        0
+        0, 0, 1000
     )]
     #[case(
         vec![(relayer_account_id(), true)],
@@ -516,8 +514,7 @@ mod tests {
             panic: false,
             extra_msg: HEX_STRING_2000.clone(),
         },
-        999,
-        1
+        999, 1, 0
     )]
     #[tokio::test]
     async fn test_fin_transfer_with_msg(
@@ -527,6 +524,7 @@ mod tests {
         #[case] msg: TokenReceiverMessage,
         #[case] expected_recipient_balance: u128,
         #[case] expected_relayer_balance: u128,
+        #[case] expected_locker_balance: u128,
     ) {
         let msg = serde_json::to_string(&msg).unwrap();
         internal_test_fin_transfer(
@@ -536,7 +534,7 @@ mod tests {
             msg,
             expected_recipient_balance,
             expected_relayer_balance,
-            0,
+            expected_locker_balance,
         )
         .await
         .unwrap();

@@ -61,7 +61,8 @@ const STORAGE_BALANCE_OF_GAS: Gas = Gas::from_tgas(3);
 const STORAGE_DEPOSIT_GAS: Gas = Gas::from_tgas(3);
 const DEPLOY_TOKEN_CALLBACK_GAS: Gas = Gas::from_tgas(75);
 const DEPLOY_TOKEN_GAS: Gas = Gas::from_tgas(50);
-const BURN_TOKEN_GAS: Gas = Gas::from_tgas(10);
+const BURN_TOKENS_GAS: Gas = Gas::from_tgas(10);
+const BURN_TOKEN_GAS: Gas = Gas::from_tgas(3);
 const MINT_TOKEN_GAS: Gas = Gas::from_tgas(5);
 const SET_METADATA_GAS: Gas = Gas::from_tgas(10);
 const RESOLVE_TRANSFER_GAS: Gas = Gas::from_tgas(3);
@@ -240,7 +241,7 @@ impl FungibleTokenReceiver for Contract {
             PromiseOrValue::Promise(promise) => PromiseOrValue::Promise(
                 promise.then(
                     Self::ext(env::current_account_id())
-                        .with_static_gas(BURN_TOKEN_GAS)
+                        .with_static_gas(BURN_TOKENS_GAS)
                         .burn_tokens(token_id, amount),
                 ),
             ),
@@ -1374,12 +1375,21 @@ impl Contract {
             false
         };
 
+        let token = self.get_token_id(&transfer_message.token);
+        let is_deployed_token = self.deployed_tokens.contains(&token);
+
         if is_refund {
+            if is_deployed_token {
+                let amount_to_burn = U128(transfer_message.amount.0 - transfer_message.fee.fee.0);
+
+                ext_token::ext(token)
+                    .with_static_gas(BURN_TOKEN_GAS)
+                    .burn(amount_to_burn);
+            }
+
             self.remove_fin_transfer(&transfer_message.get_transfer_id(), storage_owner);
         } else {
             // Send fee to the fee recipient
-            let token = self.get_token_id(&transfer_message.token);
-            let is_deployed_token = self.deployed_tokens.contains(&token);
 
             if transfer_message.fee.fee.0 > 0 {
                 if is_deployed_token {
