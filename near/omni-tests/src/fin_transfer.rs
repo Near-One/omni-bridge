@@ -1,23 +1,46 @@
 #[cfg(test)]
 mod tests {
-    use near_sdk::{borsh, json_types::U128, serde_json::json, AccountId};
+    use near_sdk::{
+        borsh,
+        json_types::U128,
+        near,
+        serde_json::{self, json},
+        AccountId,
+    };
     use near_workspaces::{network::Sandbox, types::NearToken, Contract, Worker};
     use omni_types::{
         locker_args::{BindTokenArgs, FinTransferArgs, StorageDepositAction},
         prover_result::{DeployTokenMessage, InitTransferMessage, ProverResult},
         Fee, OmniAddress,
     };
+    use once_cell::sync::Lazy;
+    use rand::RngCore;
     use rstest::rstest;
 
     use crate::helpers::tests::{
         account_n, eth_eoa_address, eth_factory_address, eth_token_address, locker_wasm,
-        mock_prover_wasm, mock_token_wasm, relayer_account_id, NEP141_DEPOSIT,
+        mock_prover_wasm, mock_token_receiver_wasm, mock_token_wasm, relayer_account_id,
+        NEP141_DEPOSIT,
     };
+
+    static HEX_STRING_2000: Lazy<String> = Lazy::new(|| {
+        let mut bytes = [0u8; 2000];
+        rand::rng().fill_bytes(&mut bytes);
+        bytes.iter().map(|b| format!("{:02x}", b)).collect()
+    });
+
+    #[near(serializers=[json])]
+    struct TokenReceiverMessage {
+        return_value: U128,
+        panic: bool,
+        extra_msg: String,
+    }
 
     struct TestSetup {
         worker: Worker<Sandbox>,
         token_contract: Contract,
         locker_contract: Contract,
+        token_receiver_contract: Contract,
         relayer_account: near_workspaces::Account,
         required_balance_for_fin_transfer: NearToken,
     }
@@ -39,6 +62,7 @@ mod tests {
             .into_result()?;
 
         let prover_contract = worker.dev_deploy(&mock_prover_wasm()).await?;
+        let token_receiver_contract = worker.dev_deploy(&mock_token_receiver_wasm()).await?;
 
         // Deploy and init locker
         let locker_contract = worker.dev_deploy(&locker_wasm()).await?;
@@ -124,6 +148,7 @@ mod tests {
             worker,
             token_contract,
             locker_contract,
+            token_receiver_contract,
             relayer_account,
             required_balance_for_fin_transfer,
         })
@@ -181,7 +206,15 @@ mod tests {
         #[case] fee: u128,
         #[case] expected_error: Option<&str>,
     ) {
-        let result = test_fin_transfer(storage_deposit_accounts, amount, fee).await;
+        let result = internal_test_fin_transfer(
+            storage_deposit_accounts,
+            amount,
+            fee,
+            String::new(),
+            amount - fee,
+            0,
+        )
+        .await;
 
         match result {
             Ok(()) => assert!(
@@ -201,15 +234,19 @@ mod tests {
     }
 
     #[allow(clippy::too_many_lines)]
-    async fn test_fin_transfer(
-        storage_deposit_accounts: Vec<(AccountId, bool)>,
+    async fn internal_test_fin_transfer(
+        mut storage_deposit_accounts: Vec<(AccountId, bool)>,
         amount: u128,
         fee: u128,
+        msg: String,
+        expected_recipient_balance: u128,
+        expected_relayer_balance: u128,
     ) -> anyhow::Result<()> {
         let TestSetup {
             token_contract,
             locker_contract,
             relayer_account,
+            token_receiver_contract,
             required_balance_for_fin_transfer,
             ..
         } = setup_contracts(false).await?;
@@ -225,6 +262,14 @@ mod tests {
             .transact()
             .await?
             .into_result()?;
+
+        let recipient = if msg.is_empty() {
+            account_n(1)
+        } else {
+            let receiver_contract = token_receiver_contract.id().clone();
+            storage_deposit_accounts.insert(0, (receiver_contract.clone(), true));
+            receiver_contract
+        };
 
         let required_deposit_for_fin_transfer = NEP141_DEPOSIT
             .saturating_mul(u128::try_from(storage_deposit_accounts.len())?)
@@ -248,14 +293,14 @@ mod tests {
                 prover_args: borsh::to_vec(&ProverResult::InitTransfer(InitTransferMessage {
                     origin_nonce: 1,
                     token: eth_token_address(),
-                    recipient: OmniAddress::Near(account_n(1)),
+                    recipient: OmniAddress::Near(recipient.clone()),
                     amount: U128(amount),
                     fee: Fee {
                         fee: U128(fee),
                         native_fee: U128(0),
                     },
                     sender: eth_eoa_address(),
-                    msg: String::default(),
+                    msg,
                     emitter_address: eth_factory_address(),
                 }))
                 .unwrap(),
@@ -270,11 +315,11 @@ mod tests {
         let recipient_balance: U128 = token_contract
             .view("ft_balance_of")
             .args_json(json!({
-                "account_id": account_n(1),
+                "account_id": recipient,
             }))
             .await?
             .json()?;
-        assert_eq!(amount - fee, recipient_balance.0);
+        assert_eq!(expected_recipient_balance, recipient_balance.0);
 
         let relayer_balance: U128 = token_contract
             .view("ft_balance_of")
@@ -283,7 +328,7 @@ mod tests {
             }))
             .await?
             .json()?;
-        assert_eq!(fee, relayer_balance.0);
+        assert_eq!(expected_relayer_balance, relayer_balance.0);
 
         Ok(())
     }
@@ -299,6 +344,7 @@ mod tests {
             locker_contract,
             relayer_account,
             required_balance_for_fin_transfer,
+            ..
         } = setup_contracts(true).await?;
 
         // Provide locker contract with large wNEAR balance
@@ -375,5 +421,112 @@ mod tests {
         );
 
         Ok(())
+    }
+
+    #[rstest]
+    #[case(
+        vec![(relayer_account_id(), true)],
+        1000,
+        1,
+        TokenReceiverMessage {
+            return_value: U128(0),
+            panic: false,
+            extra_msg: String::new(),
+        },
+        999,
+        1
+    )]
+    #[case(
+        vec![],
+        1000,
+        0,
+        TokenReceiverMessage {
+            return_value: U128(0),
+            panic: false,
+            extra_msg: String::new(),
+        },
+        1000,
+        0
+    )]
+    #[case(
+        vec![(relayer_account_id(), true)],
+        1000,
+        1,
+        TokenReceiverMessage {
+            return_value: U128(999),
+            panic: false,
+            extra_msg: String::new(),
+        },
+        0,
+        0
+    )]
+    #[case(
+        vec![(relayer_account_id(), true)],
+        1000,
+        1,
+        TokenReceiverMessage {
+            return_value: U128(1),
+            panic: false,
+            extra_msg: String::new(),
+        },
+        998,
+        1
+    )]
+    #[case(
+        vec![(relayer_account_id(), true)],
+        1000,
+        1,
+        TokenReceiverMessage {
+            return_value: U128(0),
+            panic: true,
+            extra_msg: String::new(),
+        },
+        0,
+        0
+    )]
+    #[case(
+        vec![],
+        1000,
+        0,
+        TokenReceiverMessage {
+            return_value: U128(0),
+            panic: true,
+            extra_msg: String::new(),
+        },
+        0,
+        0
+    )]
+    #[case(
+        vec![(relayer_account_id(), true)],
+        1000,
+        1,
+        TokenReceiverMessage {
+            return_value: U128(0),
+            panic: false,
+            extra_msg: HEX_STRING_2000.clone(),
+        },
+        999,
+        1
+    )]
+    #[tokio::test]
+    async fn test_fin_transfer_with_msg(
+        #[case] storage_deposit_accounts: Vec<(AccountId, bool)>,
+        #[case] amount: u128,
+        #[case] fee: u128,
+        #[case] msg: TokenReceiverMessage,
+        #[case] expected_recipient_balance: u128,
+        #[case] expected_relayer_balance: u128,
+    ) {
+        let msg = serde_json::to_string(&msg).unwrap();
+        internal_test_fin_transfer(
+            storage_deposit_accounts,
+            amount,
+            fee,
+            msg,
+            expected_recipient_balance,
+            expected_relayer_balance,
+        )
+        .await
+        .unwrap();
     }
 }
