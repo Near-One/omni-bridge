@@ -212,6 +212,7 @@ mod tests {
             fee,
             String::new(),
             amount - fee,
+            fee,
             0,
         )
         .await;
@@ -241,6 +242,7 @@ mod tests {
         msg: String,
         expected_recipient_balance: u128,
         expected_relayer_balance: u128,
+        expected_locker_balance: u128,
     ) -> anyhow::Result<()> {
         let TestSetup {
             token_contract,
@@ -329,6 +331,15 @@ mod tests {
             .await?
             .json()?;
         assert_eq!(expected_relayer_balance, relayer_balance.0);
+
+        let locker_balance: U128 = token_contract
+            .view("ft_balance_of")
+            .args_json(json!({
+                "account_id": locker_contract.id()
+            }))
+            .await?
+            .json()?;
+        assert_eq!(expected_locker_balance, locker_balance.0);
 
         Ok(())
     }
@@ -525,6 +536,7 @@ mod tests {
             msg,
             expected_recipient_balance,
             expected_relayer_balance,
+            0,
         )
         .await
         .unwrap();
