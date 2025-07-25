@@ -619,7 +619,7 @@ impl Contract {
         if let OmniAddress::Near(recipient) = transfer_message.recipient.clone() {
             self.process_fin_transfer_to_near(
                 recipient,
-                predecessor_account_id,
+                &predecessor_account_id,
                 transfer_message,
                 storage_deposit_actions,
             )
@@ -1351,9 +1351,9 @@ impl Contract {
     pub fn fin_transfer_send_tokens_callback(
         &mut self,
         #[serializer(borsh)] transfer_message: TransferMessage,
-        #[serializer(borsh)] fee_recipient: AccountId,
+        #[serializer(borsh)] fee_recipient: &AccountId,
         #[serializer(borsh)] is_ft_transfer_call: bool,
-        #[serializer(borsh)] storage_owner: AccountId,
+        #[serializer(borsh)] storage_owner: &AccountId,
     ) {
         let is_refund = if is_ft_transfer_call {
             match env::promise_result(0) {
@@ -1375,7 +1375,7 @@ impl Contract {
         };
 
         if is_refund {
-            self.remove_fin_transfer(&transfer_message.get_transfer_id(), &storage_owner);
+            self.remove_fin_transfer(&transfer_message.get_transfer_id(), storage_owner);
         } else {
             // Send fee to the fee recipient
             let token = self.get_token_id(&transfer_message.token);
@@ -1387,14 +1387,14 @@ impl Contract {
                         fee_recipient.clone(),
                         transfer_message.fee.fee,
                         None,
-                    )
+                    );
                 } else {
                     ext_token::ext(token)
                         .with_attached_deposit(ONE_YOCTO)
                         .with_static_gas(FT_TRANSFER_GAS)
-                        .ft_transfer(fee_recipient.clone(), transfer_message.fee.fee, None)
-                };
-            };
+                        .ft_transfer(fee_recipient.clone(), transfer_message.fee.fee, None);
+                }
+            }
 
             if transfer_message.fee.native_fee.0 > 0 {
                 let native_token_id = self.get_native_token_id(transfer_message.get_origin_chain());
@@ -1428,7 +1428,7 @@ impl Contract {
     fn process_fin_transfer_to_near(
         &mut self,
         recipient: AccountId,
-        predecessor_account_id: AccountId,
+        predecessor_account_id: &AccountId,
         transfer_message: TransferMessage,
         storage_deposit_actions: &Vec<StorageDepositAction>,
     ) -> Promise {
@@ -1511,7 +1511,7 @@ impl Contract {
                     .with_static_gas(SEND_TOKENS_CALLBACK_GAS)
                     .fin_transfer_send_tokens_callback(
                         transfer_message,
-                        fee_recipient,
+                        &fee_recipient,
                         !msg.is_empty(),
                         predecessor_account_id,
                     ),
@@ -1771,7 +1771,7 @@ impl Contract {
 
         if let Some(mut storage) = self.accounts_balances.get(storage_owner) {
             storage.available = storage.available.saturating_add(refund);
-            self.accounts_balances.insert(&storage_owner, &storage);
+            self.accounts_balances.insert(storage_owner, &storage);
         }
     }
 
