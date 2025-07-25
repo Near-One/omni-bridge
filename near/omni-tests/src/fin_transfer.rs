@@ -329,7 +329,7 @@ mod tests {
         }
     }
 
-    #[allow(clippy::too_many_lines)]
+    #[allow(clippy::too_many_lines, clippy::too_many_arguments)]
     async fn internal_test_fin_transfer(
         mut storage_deposit_accounts: Vec<(AccountId, bool)>,
         amount: u128,
