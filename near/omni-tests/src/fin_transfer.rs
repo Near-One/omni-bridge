@@ -11,15 +11,15 @@ mod tests {
     use omni_types::{
         locker_args::{BindTokenArgs, FinTransferArgs, StorageDepositAction},
         prover_result::{DeployTokenMessage, InitTransferMessage, ProverResult},
-        Fee, OmniAddress,
+        BasicMetadata, Fee, OmniAddress,
     };
     use rand::RngCore;
     use rstest::rstest;
 
     use crate::helpers::tests::{
-        account_n, eth_eoa_address, eth_factory_address, eth_token_address, locker_wasm,
-        mock_prover_wasm, mock_token_receiver_wasm, mock_token_wasm, relayer_account_id,
-        NEP141_DEPOSIT,
+        account_n, eth_eoa_address, eth_factory_address, eth_token_address,
+        get_test_deploy_token_args, locker_wasm, mock_prover_wasm, mock_token_receiver_wasm,
+        mock_token_wasm, relayer_account_id, token_deployer_wasm, NEP141_DEPOSIT,
     };
 
     static HEX_STRING_2000: std::sync::LazyLock<String> = std::sync::LazyLock::new(|| {
@@ -49,7 +49,10 @@ mod tests {
         required_balance_for_fin_transfer: NearToken,
     }
 
-    async fn setup_contracts(is_wnear: bool) -> anyhow::Result<TestSetup> {
+    async fn setup_contracts(
+        is_wnear: bool,
+        deploy_minted_token: bool,
+    ) -> anyhow::Result<TestSetup> {
         let worker = near_workspaces::sandbox().await?;
 
         // Deploy and init FT token
@@ -100,19 +103,6 @@ mod tests {
             .await?
             .into_result()?;
 
-        // Storage deposit and transfer tokens
-        token_contract
-            .call("storage_deposit")
-            .args_json(json!({
-                "account_id": locker_contract.id(),
-                "registration_only": true,
-            }))
-            .deposit(NEP141_DEPOSIT)
-            .max_gas()
-            .transact()
-            .await?
-            .into_result()?;
-
         locker_contract
             .call("add_factory")
             .args_json(json!({
@@ -123,30 +113,49 @@ mod tests {
             .await?
             .into_result()?;
 
-        // Bind token
-        let required_balance_for_bind_token: NearToken = locker_contract
-            .view("required_balance_for_bind_token")
-            .await?
-            .json()?;
+        let token_contract = if deploy_minted_token {
+            setup_deployed_token(&worker, &locker_contract).await?
+        } else {
+            // Bind token
+            let required_balance_for_bind_token: NearToken = locker_contract
+                .view("required_balance_for_bind_token")
+                .await?
+                .json()?;
 
-        relayer_account
-            .call(locker_contract.id(), "bind_token")
-            .args_borsh(BindTokenArgs {
-                chain_kind: omni_types::ChainKind::Eth,
-                prover_args: borsh::to_vec(&ProverResult::DeployToken(DeployTokenMessage {
-                    token: token_contract.id().clone(),
-                    token_address: eth_token_address(),
-                    decimals: 24,
-                    origin_decimals: 24,
-                    emitter_address: eth_factory_address(),
+            relayer_account
+                .call(locker_contract.id(), "bind_token")
+                .args_borsh(BindTokenArgs {
+                    chain_kind: omni_types::ChainKind::Eth,
+                    prover_args: borsh::to_vec(&ProverResult::DeployToken(DeployTokenMessage {
+                        token: token_contract.id().clone(),
+                        token_address: eth_token_address(),
+                        decimals: 24,
+                        origin_decimals: 24,
+                        emitter_address: eth_factory_address(),
+                    }))
+                    .unwrap(),
+                })
+                .deposit(required_balance_for_bind_token)
+                .max_gas()
+                .transact()
+                .await?
+                .into_result()?;
+
+            // Storage deposit
+            token_contract
+                .call("storage_deposit")
+                .args_json(json!({
+                    "account_id": locker_contract.id(),
+                    "registration_only": true,
                 }))
-                .unwrap(),
-            })
-            .deposit(required_balance_for_bind_token)
-            .max_gas()
-            .transact()
-            .await?
-            .into_result()?;
+                .deposit(NEP141_DEPOSIT)
+                .max_gas()
+                .transact()
+                .await?
+                .into_result()?;
+
+            token_contract
+        };
 
         Ok(TestSetup {
             worker,
@@ -156,6 +165,87 @@ mod tests {
             relayer_account,
             required_balance_for_fin_transfer,
         })
+    }
+
+    async fn setup_deployed_token(
+        worker: &near_workspaces::Worker<near_workspaces::network::Sandbox>,
+        locker: &near_workspaces::Contract,
+    ) -> anyhow::Result<near_workspaces::Contract> {
+        // Setup token deployer
+        let token_deployer = worker
+            .create_tla_and_deploy(
+                account_n(10),
+                worker.dev_generate().await.1,
+                &token_deployer_wasm(),
+            )
+            .await?
+            .unwrap();
+
+        token_deployer
+            .call("new")
+            .args_json(json!({
+                "controller": locker.id(),
+                "dao": "dao.near",
+            }))
+            .max_gas()
+            .transact()
+            .await?
+            .into_result()?;
+
+        let init_token_address = eth_token_address();
+        // Configure locker
+        locker
+            .call("add_token_deployer")
+            .args_json(json!({
+                "chain": init_token_address.get_chain(),
+                "account_id": token_deployer.id(),
+            }))
+            .max_gas()
+            .transact()
+            .await?
+            .into_result()?;
+
+        let token_deploy_initiator = worker
+            .create_tla(account_n(2), worker.dev_generate().await.1)
+            .await?
+            .unwrap();
+
+        let required_storage: NearToken = locker
+            .view("required_balance_for_deploy_token")
+            .await?
+            .json()?;
+
+        token_deploy_initiator
+            .call(locker.id(), "deploy_token")
+            .args_borsh(get_test_deploy_token_args(
+                &init_token_address,
+                &eth_factory_address(),
+                &BasicMetadata {
+                    name: "Test Token".to_string(),
+                    symbol: "TEST".to_string(),
+                    decimals: 18,
+                },
+            ))
+            .deposit(required_storage)
+            .max_gas()
+            .transact()
+            .await?
+            .into_result()?;
+
+        let token_account_id: AccountId = locker
+            .view("get_token_id")
+            .args_json(json!({
+                "address": init_token_address
+            }))
+            .await?
+            .json()?;
+
+        let token_contract = worker
+            .import_contract(&token_account_id, worker)
+            .transact()
+            .await?;
+
+        Ok(token_contract)
     }
 
     #[rstest]
@@ -218,6 +308,7 @@ mod tests {
             amount - fee,
             fee,
             0,
+            false, // is_deployed_token
         )
         .await;
 
@@ -247,6 +338,7 @@ mod tests {
         expected_recipient_balance: u128,
         expected_relayer_balance: u128,
         expected_locker_balance: u128,
+        is_deployed_token: bool,
     ) -> anyhow::Result<()> {
         let TestSetup {
             token_contract,
@@ -255,19 +347,21 @@ mod tests {
             token_receiver_contract,
             required_balance_for_fin_transfer,
             ..
-        } = setup_contracts(false).await?;
+        } = setup_contracts(false, is_deployed_token).await?;
 
-        token_contract
-            .call("ft_transfer")
-            .args_json(json!({
-                "receiver_id": locker_contract.id(),
-                "amount": U128(amount),
-            }))
-            .deposit(NearToken::from_yoctonear(1))
-            .max_gas()
-            .transact()
-            .await?
-            .into_result()?;
+        if !is_deployed_token {
+            token_contract
+                .call("ft_transfer")
+                .args_json(json!({
+                    "receiver_id": locker_contract.id(),
+                    "amount": U128(amount),
+                }))
+                .deposit(NearToken::from_yoctonear(1))
+                .max_gas()
+                .transact()
+                .await?
+                .into_result()?;
+        }
 
         let recipient = if msg.is_empty() {
             account_n(1)
@@ -360,7 +454,7 @@ mod tests {
             relayer_account,
             required_balance_for_fin_transfer,
             ..
-        } = setup_contracts(true).await?;
+        } = setup_contracts(true, false).await?;
 
         // Provide locker contract with large wNEAR balance
         let wnear_amount = NearToken::from_near(near_amount);
@@ -438,103 +532,229 @@ mod tests {
         Ok(())
     }
 
+    struct FinTransferWithMsgCase {
+        storage_deposit_accounts: Vec<(AccountId, bool)>,
+        amount: u128,
+        fee: u128,
+        msg: TokenReceiverMessage,
+        expected_recipient_balance: u128,
+        expected_relayer_balance: u128,
+        expected_locker_balance: u128,
+    }
+
     #[rstest]
-    #[case(
-        vec![(relayer_account_id(), true)],
-        1000,
-        1,
-        TokenReceiverMessage {
+    #[case(FinTransferWithMsgCase {
+        storage_deposit_accounts: vec![(relayer_account_id(), true)],
+        amount: 1000,
+        fee: 1,
+        msg: TokenReceiverMessage {
             return_value: U128(0),
             panic: false,
             extra_msg: String::new(),
         },
-        999, 1, 0
-    )]
-    #[case(
-        vec![],
-        1000,
-        0,
-        TokenReceiverMessage {
+        expected_recipient_balance: 999,
+        expected_relayer_balance: 1,
+        expected_locker_balance: 0,
+    })]
+    #[case(FinTransferWithMsgCase {
+        storage_deposit_accounts: vec![],
+        amount: 1000,
+        fee: 0,
+        msg: TokenReceiverMessage {
             return_value: U128(0),
             panic: false,
             extra_msg: String::new(),
         },
-        1000, 0, 0
-    )]
-    #[case(
-        vec![(relayer_account_id(), true)],
-        1000,
-        1,
-        TokenReceiverMessage {
+        expected_recipient_balance: 1000,
+        expected_relayer_balance: 0,
+        expected_locker_balance: 0,
+    })]
+    #[case(FinTransferWithMsgCase {
+        storage_deposit_accounts: vec![(relayer_account_id(), true)],
+        amount: 1000,
+        fee: 1,
+        msg: TokenReceiverMessage {
             return_value: U128(999),
             panic: false,
             extra_msg: String::new(),
         },
-        0, 0, 1000
-    )]
-    #[case(
-        vec![(relayer_account_id(), true)],
-        1000,
-        1,
-        TokenReceiverMessage {
+        expected_recipient_balance: 0,
+        expected_relayer_balance: 0,
+        expected_locker_balance: 1000,
+    })]
+    #[case(FinTransferWithMsgCase {
+        storage_deposit_accounts: vec![(relayer_account_id(), true)],
+        amount: 1000,
+        fee: 1,
+        msg: TokenReceiverMessage {
             return_value: U128(1),
             panic: false,
             extra_msg: String::new(),
         },
-        998, 1, 1
-    )]
-    #[case(
-        vec![(relayer_account_id(), true)],
-        1000,
-        1,
-        TokenReceiverMessage {
+        expected_recipient_balance: 998,
+        expected_relayer_balance: 1,
+        expected_locker_balance: 1,
+    })]
+    #[case(FinTransferWithMsgCase {
+        storage_deposit_accounts: vec![(relayer_account_id(), true)],
+        amount: 1000,
+        fee: 1,
+        msg: TokenReceiverMessage {
             return_value: U128(0),
             panic: true,
             extra_msg: String::new(),
         },
-        0, 0, 1000
-    )]
-    #[case(
-        vec![],
-        1000,
-        0,
-        TokenReceiverMessage {
+        expected_recipient_balance: 0,
+        expected_relayer_balance: 0,
+        expected_locker_balance: 1000,
+    })]
+    #[case(FinTransferWithMsgCase {
+        storage_deposit_accounts: vec![],
+        amount: 1000,
+        fee: 0,
+        msg: TokenReceiverMessage {
             return_value: U128(0),
             panic: true,
             extra_msg: String::new(),
         },
-        0, 0, 1000
-    )]
-    #[case(
-        vec![(relayer_account_id(), true)],
-        1000,
-        1,
-        TokenReceiverMessage {
+        expected_recipient_balance: 0,
+        expected_relayer_balance: 0,
+        expected_locker_balance: 1000,
+    })]
+    #[case(FinTransferWithMsgCase {
+        storage_deposit_accounts: vec![(relayer_account_id(), true)],
+        amount: 1000,
+        fee: 1,
+        msg: TokenReceiverMessage {
             return_value: U128(0),
             panic: false,
             extra_msg: HEX_STRING_2000.clone(),
         },
-        999, 1, 0
-    )]
+        expected_recipient_balance: 999,
+        expected_relayer_balance: 1,
+        expected_locker_balance: 0,
+    })]
     #[tokio::test]
-    async fn test_fin_transfer_with_msg(
-        #[case] storage_deposit_accounts: Vec<(AccountId, bool)>,
-        #[case] amount: u128,
-        #[case] fee: u128,
-        #[case] msg: TokenReceiverMessage,
-        #[case] expected_recipient_balance: u128,
-        #[case] expected_relayer_balance: u128,
-        #[case] expected_locker_balance: u128,
-    ) {
-        let msg = serde_json::to_string(&msg).unwrap();
+    async fn test_fin_transfer_with_msg(#[case] case: FinTransferWithMsgCase) {
+        let msg = serde_json::to_string(&case.msg).unwrap();
         internal_test_fin_transfer(
-            storage_deposit_accounts,
-            amount,
-            fee,
+            case.storage_deposit_accounts,
+            case.amount,
+            case.fee,
             msg,
-            expected_recipient_balance,
-            expected_relayer_balance,
-            expected_locker_balance,
+            case.expected_recipient_balance,
+            case.expected_relayer_balance,
+            case.expected_locker_balance,
+            false, // is_deployed_token
+        )
+        .await
+        .unwrap();
+    }
+
+    #[rstest]
+    #[case(FinTransferWithMsgCase {
+        storage_deposit_accounts: vec![(relayer_account_id(), true)],
+        amount: 1000,
+        fee: 1,
+        msg: TokenReceiverMessage {
+            return_value: U128(0),
+            panic: false,
+            extra_msg: String::new(),
+        },
+        expected_recipient_balance: 999,
+        expected_relayer_balance: 1,
+        expected_locker_balance: 0,
+    })]
+    #[case(FinTransferWithMsgCase {
+        storage_deposit_accounts: vec![],
+        amount: 1000,
+        fee: 0,
+        msg: TokenReceiverMessage {
+            return_value: U128(0),
+            panic: false,
+            extra_msg: String::new(),
+        },
+        expected_recipient_balance: 1000,
+        expected_relayer_balance: 0,
+        expected_locker_balance: 0,
+    })]
+    #[case(FinTransferWithMsgCase {
+        storage_deposit_accounts: vec![(relayer_account_id(), true)],
+        amount: 1000,
+        fee: 1,
+        msg: TokenReceiverMessage {
+            return_value: U128(999),
+            panic: false,
+            extra_msg: String::new(),
+        },
+        expected_recipient_balance: 0,
+        expected_relayer_balance: 0,
+        expected_locker_balance: 0,
+    })]
+    #[case(FinTransferWithMsgCase {
+        storage_deposit_accounts: vec![(relayer_account_id(), true)],
+        amount: 1000,
+        fee: 1,
+        msg: TokenReceiverMessage {
+            return_value: U128(1),
+            panic: false,
+            extra_msg: String::new(),
+        },
+        expected_recipient_balance: 998,
+        expected_relayer_balance: 1,
+        expected_locker_balance: 1,
+    })]
+    #[case(FinTransferWithMsgCase {
+        storage_deposit_accounts: vec![(relayer_account_id(), true)],
+        amount: 1000,
+        fee: 1,
+        msg: TokenReceiverMessage {
+            return_value: U128(0),
+            panic: true,
+            extra_msg: String::new(),
+        },
+        expected_recipient_balance: 0,
+        expected_relayer_balance: 0,
+        expected_locker_balance: 0,
+    })]
+    #[case(FinTransferWithMsgCase {
+        storage_deposit_accounts: vec![],
+        amount: 1000,
+        fee: 0,
+        msg: TokenReceiverMessage {
+            return_value: U128(0),
+            panic: true,
+            extra_msg: String::new(),
+        },
+        expected_recipient_balance: 0,
+        expected_relayer_balance: 0,
+        expected_locker_balance: 0,
+    })]
+    #[case(FinTransferWithMsgCase {
+        storage_deposit_accounts: vec![(relayer_account_id(), true)],
+        amount: 1000,
+        fee: 1,
+        msg: TokenReceiverMessage {
+            return_value: U128(0),
+            panic: false,
+            extra_msg: HEX_STRING_2000.clone(),
+        },
+        expected_recipient_balance: 999,
+        expected_relayer_balance: 1,
+        expected_locker_balance: 0,
+    })]
+    #[tokio::test]
+    async fn test_fin_transfer_with_msg_for_deployed_token(#[case] case: FinTransferWithMsgCase) {
+        let msg = serde_json::to_string(&case.msg).unwrap();
+        internal_test_fin_transfer(
+            case.storage_deposit_accounts,
+            case.amount,
+            case.fee,
+            msg,
+            case.expected_recipient_balance,
+            case.expected_relayer_balance,
+            case.expected_locker_balance,
+            true, // is_deployed_token
         )
         .await
         .unwrap();
