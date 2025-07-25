@@ -1353,6 +1353,7 @@ impl Contract {
         #[serializer(borsh)] transfer_message: TransferMessage,
         #[serializer(borsh)] fee_recipient: AccountId,
         #[serializer(borsh)] is_ft_transfer_call: bool,
+        #[serializer(borsh)] storage_owner: AccountId,
     ) {
         let is_refund = if is_ft_transfer_call {
             match env::promise_result(0) {
@@ -1374,9 +1375,7 @@ impl Contract {
         };
 
         if is_refund {
-            // TODO: handle storage update
-            self.finalised_transfers
-                .remove(&transfer_message.get_transfer_id());
+            self.remove_fin_transfer(&transfer_message.get_transfer_id(), &storage_owner);
         } else {
             // Send fee to the fee recipient
             let token = self.get_token_id(&transfer_message.token);
@@ -1500,7 +1499,7 @@ impl Contract {
         }
 
         self.update_storage_balance(
-            predecessor_account_id,
+            predecessor_account_id.clone(),
             required_balance,
             env::attached_deposit(),
         );
@@ -1511,9 +1510,10 @@ impl Contract {
                 Self::ext(env::current_account_id())
                     .with_static_gas(SEND_TOKENS_CALLBACK_GAS)
                     .fin_transfer_send_tokens_callback(
-                        transfer_message.clone(),
-                        fee_recipient.clone(),
+                        transfer_message,
+                        fee_recipient,
                         !msg.is_empty(),
+                        predecessor_account_id,
                     ),
             )
     }
@@ -1759,6 +1759,19 @@ impl Contract {
             storage.available = storage.available.saturating_add(refund);
             self.accounts_balances
                 .insert(&fast_transfer.storage_owner, &storage);
+        }
+    }
+
+    fn remove_fin_transfer(&mut self, transfer_id: &TransferId, storage_owner: &AccountId) {
+        let storage_usage = env::storage_usage();
+        self.finalised_transfers.remove(transfer_id);
+
+        let refund =
+            env::storage_byte_cost().saturating_mul((storage_usage - env::storage_usage()).into());
+
+        if let Some(mut storage) = self.accounts_balances.get(storage_owner) {
+            storage.available = storage.available.saturating_add(refund);
+            self.accounts_balances.insert(&storage_owner, &storage);
         }
     }
 
