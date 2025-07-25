@@ -68,6 +68,7 @@ const RESOLVE_TRANSFER_GAS: Gas = Gas::from_tgas(3);
 const FAST_TRANSFER_CALLBACK_GAS: Gas = Gas::from_tgas(5);
 const NO_DEPOSIT: NearToken = NearToken::from_near(0);
 const ONE_YOCTO: NearToken = NearToken::from_yoctonear(1);
+const SEND_TOKENS_CALLBACK_GAS: Gas = Gas::from_tgas(15);
 const SIGN_PATH: &str = "bridge-1";
 
 #[derive(BorshSerialize, BorshStorageKey)]
@@ -165,6 +166,13 @@ pub trait ExtWNearToken {
 #[ext_contract(ext_deployer)]
 pub trait TokenDeployer {
     fn deploy_token(&self, account_id: AccountId, metadata: BasicMetadata) -> Promise;
+}
+
+pub struct RefundData {
+    pub fast_transfer: Option<FastTransfer>,
+    pub transfer_message: TransferMessage,
+    pub message_owner: AccountId,
+    pub is_refund_required: bool,
 }
 
 #[near(contract_state)]
@@ -1345,6 +1353,68 @@ impl Contract {
             .with_static_gas(UPDATE_CONTROLLER_GAS)
             .set_controller_for_tokens(tokens_accounts_id);
     }
+
+    #[private]
+    pub fn fin_transfer_send_tokens_callback(
+        &mut self,
+        #[serializer(borsh)] transfer_message: TransferMessage,
+        #[serializer(borsh)] fee_recipient: AccountId,
+        #[serializer(borsh)] is_ft_transfer_call: bool,
+    ) {
+        let is_refund = if is_ft_transfer_call {
+            match env::promise_result(0) {
+                PromiseResult::Successful(value) => {
+                    if let Ok(amount) = near_sdk::serde_json::from_slice::<U128>(&value) {
+                        // Normal case: refund if the used token amount is zero
+                        amount.0 == 0
+                    } else {
+                        // Unexpected case: don't refund
+                        false
+                    }
+                }
+                // Unexpected case: don't refund
+                PromiseResult::Failed => false,
+            }
+        } else {
+            // Not ft_transfer_call: don't refund
+            false
+        };
+
+        if is_refund {
+            // TODO: handle storage update
+            self.finalised_transfers
+                .remove(&transfer_message.get_transfer_id());
+        } else {
+            // Send fee to the fee recipient
+            let token = self.get_token_id(&transfer_message.token);
+            let is_deployed_token = self.deployed_tokens.contains(&token);
+
+            if transfer_message.fee.fee.0 > 0 {
+                if is_deployed_token {
+                    ext_token::ext(token).with_static_gas(MINT_TOKEN_GAS).mint(
+                        fee_recipient.clone(),
+                        transfer_message.fee.fee,
+                        None,
+                    )
+                } else {
+                    ext_token::ext(token)
+                        .with_attached_deposit(ONE_YOCTO)
+                        .with_static_gas(FT_TRANSFER_GAS)
+                        .ft_transfer(fee_recipient.clone(), transfer_message.fee.fee, None)
+                };
+            };
+
+            if transfer_message.fee.native_fee.0 > 0 {
+                let native_token_id = self.get_native_token_id(transfer_message.get_origin_chain());
+
+                ext_token::ext(native_token_id)
+                    .with_static_gas(MINT_TOKEN_GAS)
+                    .mint(fee_recipient.clone(), transfer_message.fee.native_fee, None);
+            }
+        }
+
+        env::log_str(&OmniBridgeEvent::FinTransferEvent { transfer_message }.to_log_string());
+    }
 }
 
 impl Contract {
@@ -1402,10 +1472,7 @@ impl Contract {
         );
         storage_deposit_action_index += 1;
 
-        let amount_to_transfer = U128(transfer_message.amount.0 - transfer_message.fee.fee.0);
-        let is_deployed_token = self.deployed_tokens.contains(&token);
-
-        let mut promise = self.send_tokens(token.clone(), recipient, amount_to_transfer, &msg);
+        required_balance = required_balance.saturating_add(ONE_YOCTO);
 
         if transfer_message.fee.fee.0 > 0 {
             require!(
@@ -1420,21 +1487,6 @@ impl Contract {
             );
             storage_deposit_action_index += 1;
 
-            promise = promise.then(if is_deployed_token {
-                ext_token::ext(token).with_static_gas(MINT_TOKEN_GAS).mint(
-                    fee_recipient.clone(),
-                    transfer_message.fee.fee,
-                    None,
-                )
-            } else {
-                ext_token::ext(token)
-                    .with_attached_deposit(ONE_YOCTO)
-                    .with_static_gas(FT_TRANSFER_GAS)
-                    .ft_transfer(fee_recipient.clone(), transfer_message.fee.fee, None)
-            });
-
-            required_balance = required_balance.saturating_add(NearToken::from_yoctonear(2));
-        } else {
             required_balance = required_balance.saturating_add(ONE_YOCTO);
         }
 
@@ -1452,12 +1504,6 @@ impl Contract {
                         == native_token_id,
                 "STORAGE_ERR: The native fee recipient is omitted"
             );
-
-            promise = promise.then(
-                ext_token::ext(native_token_id)
-                    .with_static_gas(MINT_TOKEN_GAS)
-                    .mint(fee_recipient.clone(), transfer_message.fee.native_fee, None),
-            );
         }
 
         self.update_storage_balance(
@@ -1466,9 +1512,17 @@ impl Contract {
             env::attached_deposit(),
         );
 
-        env::log_str(&OmniBridgeEvent::FinTransferEvent { transfer_message }.to_log_string());
-
-        promise
+        let amount_to_transfer = U128(transfer_message.amount.0 - transfer_message.fee.fee.0);
+        self.send_tokens(token.clone(), recipient, amount_to_transfer, &msg)
+            .then(
+                Self::ext(env::current_account_id())
+                    .with_static_gas(SEND_TOKENS_CALLBACK_GAS)
+                    .fin_transfer_send_tokens_callback(
+                        transfer_message.clone(),
+                        fee_recipient.clone(),
+                        !msg.is_empty(),
+                    ),
+            )
     }
 
     fn process_fin_transfer_to_other_chain(
