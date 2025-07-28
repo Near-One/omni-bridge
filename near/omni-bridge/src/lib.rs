@@ -1413,9 +1413,9 @@ impl Contract {
                     .with_static_gas(MINT_TOKEN_GAS)
                     .mint(fee_recipient.clone(), transfer_message.fee.native_fee, None);
             }
-        }
 
-        env::log_str(&OmniBridgeEvent::FinTransferEvent { transfer_message }.to_log_string());
+            env::log_str(&OmniBridgeEvent::FinTransferEvent { transfer_message }.to_log_string());
+        }
     }
 }
 
