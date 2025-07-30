@@ -1388,6 +1388,10 @@ impl Contract {
             }
 
             self.remove_fin_transfer(&transfer_message.get_transfer_id(), storage_owner);
+
+            env::log_str(
+                &OmniBridgeEvent::FailedFinTransferEvent { transfer_message }.to_log_string(),
+            );
         } else {
             // Send fee to the fee recipient
 
