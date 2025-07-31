@@ -61,11 +61,10 @@ const STORAGE_BALANCE_OF_GAS: Gas = Gas::from_tgas(3);
 const STORAGE_DEPOSIT_GAS: Gas = Gas::from_tgas(3);
 const DEPLOY_TOKEN_CALLBACK_GAS: Gas = Gas::from_tgas(75);
 const DEPLOY_TOKEN_GAS: Gas = Gas::from_tgas(50);
-const BURN_TOKENS_GAS: Gas = Gas::from_tgas(10);
 const BURN_TOKEN_GAS: Gas = Gas::from_tgas(3);
 const MINT_TOKEN_GAS: Gas = Gas::from_tgas(5);
 const SET_METADATA_GAS: Gas = Gas::from_tgas(10);
-const RESOLVE_TRANSFER_GAS: Gas = Gas::from_tgas(3);
+const RESOLVE_FAST_TRANSFER_GAS: Gas = Gas::from_tgas(6);
 const FAST_TRANSFER_CALLBACK_GAS: Gas = Gas::from_tgas(5);
 const NO_DEPOSIT: NearToken = NearToken::from_near(0);
 const ONE_YOCTO: NearToken = NearToken::from_yoctonear(1);
@@ -215,39 +214,16 @@ impl FungibleTokenReceiver for Contract {
 
         // We can't trust sender_id to pay for storage as it can be spoofed.
         let storage_payer = env::signer_account_id();
-        let promise_or_value = match parsed_msg {
-            BridgeOnTransferMsg::InitTransfer(init_transfer_msg) => {
-                PromiseOrValue::Value(self.init_transfer(
-                    sender_id,
-                    storage_payer,
-                    token_id.clone(),
-                    amount,
-                    init_transfer_msg,
-                ))
-            }
-            BridgeOnTransferMsg::FastFinTransfer(fast_fin_transfer_msg) => self.fast_fin_transfer(
-                token_id.clone(),
-                amount,
+        match parsed_msg {
+            BridgeOnTransferMsg::InitTransfer(init_transfer_msg) => self.init_transfer(
+                sender_id,
                 storage_payer,
-                fast_fin_transfer_msg,
+                token_id,
+                amount,
+                init_transfer_msg,
             ),
-        };
-
-        if !self.deployed_tokens.contains(&token_id) {
-            return promise_or_value;
-        }
-
-        match promise_or_value {
-            PromiseOrValue::Promise(promise) => PromiseOrValue::Promise(
-                promise.then(
-                    Self::ext(env::current_account_id())
-                        .with_static_gas(BURN_TOKENS_GAS)
-                        .burn_tokens(token_id, amount),
-                ),
-            ),
-            PromiseOrValue::Value(_) => {
-                self.burn_tokens(token_id, amount);
-                promise_or_value
+            BridgeOnTransferMsg::FastFinTransfer(fast_fin_transfer_msg) => {
+                self.fast_fin_transfer(token_id, amount, storage_payer, fast_fin_transfer_msg)
             }
         }
     }
@@ -473,7 +449,7 @@ impl Contract {
         token_id: AccountId,
         amount: U128,
         init_transfer_msg: InitTransferMsg,
-    ) -> U128 {
+    ) -> PromiseOrValue<U128> {
         // Avoid extra storage read by verifying native fee before checking the role
         if init_transfer_msg.native_token_fee.0 > 0
             && self.acl_has_role(Role::NativeFeeRestricted.into(), storage_payer.clone())
@@ -492,7 +468,7 @@ impl Contract {
 
         let transfer_message = TransferMessage {
             origin_nonce: self.current_origin_nonce,
-            token: OmniAddress::Near(token_id),
+            token: OmniAddress::Near(token_id.clone()),
             amount,
             recipient: init_transfer_msg.recipient,
             fee: Fee {
@@ -521,9 +497,11 @@ impl Contract {
             NearToken::from_yoctonear(0),
         );
 
+        self.burn_tokens_if_needed(token_id, amount);
+
         env::log_str(&OmniBridgeEvent::InitTransferEvent { transfer_message }.to_log_string());
 
-        U128(0)
+        PromiseOrValue::Value(U128(0))
     }
 
     #[private]
@@ -686,29 +664,30 @@ impl Contract {
                     .storage_deposit_amount
                     .map(|amount| amount.0),
             };
-            PromiseOrValue::Promise(
-                Self::check_or_pay_ft_storage(
-                    &deposit_action,
-                    &mut NearToken::from_yoctonear(storage_deposit_amount),
-                )
-                .then(
-                    Self::ext(env::current_account_id())
-                        .with_static_gas(
-                            FAST_TRANSFER_CALLBACK_GAS.saturating_add(FT_TRANSFER_CALL_GAS),
-                        )
-                        .fast_fin_transfer_to_near_callback(
-                            &fast_transfer,
-                            storage_payer,
-                            fast_fin_transfer_msg.relayer,
-                        ),
-                ),
+
+            Self::check_or_pay_ft_storage(
+                &deposit_action,
+                &mut NearToken::from_yoctonear(storage_deposit_amount),
             )
+            .then(
+                Self::ext(env::current_account_id())
+                    .with_static_gas(
+                        FAST_TRANSFER_CALLBACK_GAS.saturating_add(FT_TRANSFER_CALL_GAS),
+                    )
+                    .fast_fin_transfer_to_near_callback(
+                        &fast_transfer,
+                        storage_payer,
+                        fast_fin_transfer_msg.relayer,
+                    ),
+            )
+            .into()
         } else {
             self.fast_fin_transfer_to_other_chain(
                 &fast_transfer,
                 storage_payer,
                 fast_fin_transfer_msg.relayer,
             );
+            self.burn_tokens_if_needed(token_id, amount);
             PromiseOrValue::Value(U128(0))
         }
     }
@@ -754,8 +733,13 @@ impl Contract {
         )
         .then(
             Self::ext(env::current_account_id())
-                .with_static_gas(RESOLVE_TRANSFER_GAS)
-                .resolve_transfer(),
+                .with_static_gas(RESOLVE_FAST_TRANSFER_GAS)
+                .resolve_fast_transfer(
+                    fast_transfer.token_id.clone(),
+                    fast_transfer.id(),
+                    fast_transfer.amount,
+                    !fast_transfer.msg.is_empty(),
+                ),
         )
     }
 
@@ -1309,23 +1293,19 @@ impl Contract {
     }
 
     #[private]
-    pub fn resolve_transfer(&mut self) -> U128 {
-        U128(0)
-    }
-
-    #[private]
-    pub fn burn_tokens(&self, token: AccountId, amount: U128) -> Promise {
-        if env::promise_results_count() == 0 {
-            return ext_token::ext(token)
-                .with_static_gas(BURN_TOKEN_GAS)
-                .burn(amount);
-        }
-
-        match env::promise_result(0) {
-            PromiseResult::Failed => env::panic_str("ERR_FAST_TRANSFER_FAILED"),
-            PromiseResult::Successful(_) => ext_token::ext(token)
-                .with_static_gas(BURN_TOKEN_GAS)
-                .burn(amount),
+    pub fn resolve_fast_transfer(
+        &mut self,
+        token_id: AccountId,
+        fast_transfer_id: FastTransferId,
+        amount: U128,
+        is_ft_transfer_call: bool,
+    ) -> U128 {
+        if Self::is_refund_required(is_ft_transfer_call) {
+            self.remove_fast_transfer(&fast_transfer_id);
+            amount
+        } else {
+            self.burn_tokens_if_needed(token_id, amount);
+            U128(0)
         }
     }
 
@@ -1356,37 +1336,13 @@ impl Contract {
         #[serializer(borsh)] is_ft_transfer_call: bool,
         #[serializer(borsh)] storage_owner: &AccountId,
     ) {
-        let is_refund = if is_ft_transfer_call {
-            match env::promise_result(0) {
-                PromiseResult::Successful(value) => {
-                    if let Ok(amount) = near_sdk::serde_json::from_slice::<U128>(&value) {
-                        // Normal case: refund if the used token amount is zero
-                        amount.0 == 0
-                    } else {
-                        // Unexpected case: don't refund
-                        false
-                    }
-                }
-                // Unexpected case: don't refund
-                PromiseResult::Failed => false,
-            }
-        } else {
-            // Not ft_transfer_call: don't refund
-            false
-        };
-
         let token = self.get_token_id(&transfer_message.token);
-        let is_deployed_token = self.deployed_tokens.contains(&token);
 
-        if is_refund {
-            if is_deployed_token {
-                let amount_to_burn = U128(transfer_message.amount.0 - transfer_message.fee.fee.0);
-
-                ext_token::ext(token)
-                    .with_static_gas(BURN_TOKEN_GAS)
-                    .burn(amount_to_burn);
-            }
-
+        if Self::is_refund_required(is_ft_transfer_call) {
+            self.burn_tokens_if_needed(
+                token,
+                U128(transfer_message.amount.0 - transfer_message.fee.fee.0),
+            );
             self.remove_fin_transfer(&transfer_message.get_transfer_id(), storage_owner);
 
             env::log_str(
@@ -1394,9 +1350,8 @@ impl Contract {
             );
         } else {
             // Send fee to the fee recipient
-
             if transfer_message.fee.fee.0 > 0 {
-                if is_deployed_token {
+                if self.deployed_tokens.contains(&token) {
                     ext_token::ext(token).with_static_gas(MINT_TOKEN_GAS).mint(
                         fee_recipient.clone(),
                         transfer_message.fee.fee,
@@ -1424,6 +1379,35 @@ impl Contract {
 }
 
 impl Contract {
+    fn is_refund_required(is_ft_transfer_call: bool) -> bool {
+        if is_ft_transfer_call {
+            match env::promise_result(0) {
+                PromiseResult::Successful(value) => {
+                    if let Ok(amount) = near_sdk::serde_json::from_slice::<U128>(&value) {
+                        // Normal case: refund if the used token amount is zero
+                        amount.0 == 0
+                    } else {
+                        // Unexpected case: don't refund
+                        false
+                    }
+                }
+                // Unexpected case: don't refund
+                PromiseResult::Failed => false,
+            }
+        } else {
+            // Not ft_transfer_call: don't refund
+            false
+        }
+    }
+
+    fn burn_tokens_if_needed(&self, token: AccountId, amount: U128) {
+        if self.deployed_tokens.contains(&token) {
+            ext_token::ext(token)
+                .with_static_gas(BURN_TOKEN_GAS)
+                .burn(amount);
+        }
+    }
+
     fn get_next_destination_nonce(&mut self, chain_kind: ChainKind) -> Nonce {
         if chain_kind == ChainKind::Near {
             return 0;
