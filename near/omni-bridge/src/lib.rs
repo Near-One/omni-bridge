@@ -736,7 +736,7 @@ impl Contract {
                 .with_static_gas(RESOLVE_FAST_TRANSFER_GAS)
                 .resolve_fast_transfer(
                     fast_transfer.token_id.clone(),
-                    fast_transfer.id(),
+                    &fast_transfer.id(),
                     fast_transfer.amount,
                     !fast_transfer.msg.is_empty(),
                 ),
@@ -1296,12 +1296,12 @@ impl Contract {
     pub fn resolve_fast_transfer(
         &mut self,
         token_id: AccountId,
-        fast_transfer_id: FastTransferId,
+        fast_transfer_id: &FastTransferId,
         amount: U128,
         is_ft_transfer_call: bool,
     ) -> U128 {
         if Self::is_refund_required(is_ft_transfer_call) {
-            self.remove_fast_transfer(&fast_transfer_id);
+            self.remove_fast_transfer(fast_transfer_id);
             amount
         } else {
             self.burn_tokens_if_needed(token_id, amount);
