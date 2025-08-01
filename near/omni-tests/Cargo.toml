@@ -16,3 +16,4 @@ tokio.workspace = true
 anyhow.workspace = true
 omni-types.workspace = true
 rstest.workspace = true
+rand = "0.9"

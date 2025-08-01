@@ -20,6 +20,9 @@ pub enum OmniBridgeEvent {
     FinTransferEvent {
         transfer_message: TransferMessage,
     },
+    FailedFinTransferEvent {
+        transfer_message: TransferMessage,
+    },
     UpdateFeeEvent {
         transfer_message: TransferMessage,
     },
