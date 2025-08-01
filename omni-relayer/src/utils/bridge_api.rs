@@ -64,6 +64,11 @@ impl TransferFee {
         provided_fee: &Fee,
     ) -> Option<EventAction> {
         if !self.is_fee_sufficient(config, provided_fee) {
+            if provided_fee == &Fee::default() {
+                info!("No fee provided for transfer: {transfer:?}, skipping transfer");
+                return Some(EventAction::Remove);
+            };
+
             let Ok(transfer_id) = serde_json::to_string(&transfer_id) else {
                 warn!("Failed to serialize transfer id: {transfer_id:?}");
                 return Some(EventAction::Remove);
