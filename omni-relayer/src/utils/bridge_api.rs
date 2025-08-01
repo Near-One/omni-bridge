@@ -67,7 +67,7 @@ impl TransferFee {
             if provided_fee == &Fee::default() {
                 info!("No fee provided for transfer: {transfer:?}, skipping transfer");
                 return Some(EventAction::Remove);
-            };
+            }
 
             let Ok(transfer_id) = serde_json::to_string(&transfer_id) else {
                 warn!("Failed to serialize transfer id: {transfer_id:?}");
