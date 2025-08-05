@@ -26,6 +26,27 @@ mod solana;
 
 const PAUSED_ERROR: u32 = 6008;
 
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+pub struct RetryableEvent<E> {
+    pub event: E,
+    pub creation_timestamp: i64,
+    pub last_updated_timestamp: i64,
+    pub retries: u32,
+}
+
+impl<E> RetryableEvent<E> {
+    pub fn new(event: E) -> Self {
+        let current_timestamp = chrono::Utc::now().timestamp();
+
+        Self {
+            event,
+            creation_timestamp: current_timestamp,
+            last_updated_timestamp: current_timestamp,
+            retries: 0,
+        }
+    }
+}
+
 pub enum EventAction {
     Retry,
     Remove,
@@ -36,8 +57,6 @@ pub enum EventAction {
 pub enum Transfer {
     Near {
         transfer_message: TransferMessage,
-        creation_timestamp: i64,
-        last_update_timestamp: Option<i64>,
     },
     Evm {
         chain_kind: ChainKind,
@@ -45,7 +64,6 @@ pub enum Transfer {
         tx_hash: H256,
         log: utils::evm::InitTransferMessage,
         creation_timestamp: i64,
-        last_update_timestamp: Option<i64>,
         expected_finalization_time: i64,
     },
     Solana {
@@ -58,8 +76,6 @@ pub enum Transfer {
         message: String,
         emitter: Pubkey,
         sequence: u64,
-        creation_timestamp: i64,
-        last_update_timestamp: Option<i64>,
     },
     NearToBtc {
         btc_pending_id: String,
@@ -138,7 +154,7 @@ pub async fn process_events(
     loop {
         let mut redis_connection_clone = redis_connection.clone();
 
-        let Some(events) = utils::redis::get_events(
+        let Some(retryable_events) = utils::redis::get_events(
             &config,
             &mut redis_connection_clone,
             utils::redis::EVENTS.to_string(),
@@ -152,26 +168,94 @@ pub async fn process_events(
             continue;
         };
 
-        if !events.is_empty() {
-            if let Err(err) = near_omni_nonce.resync_nonce().await {
-                warn!("Failed to resync near nonce: {err:?}");
+        if retryable_events.is_empty() {
+            tokio::time::sleep(tokio::time::Duration::from_secs(
+                config.redis.sleep_time_after_events_process_secs,
+            ))
+            .await;
+            continue;
+        }
+
+        if let Err(err) = near_omni_nonce.resync_nonce().await {
+            warn!("Failed to resync near nonce: {err:?}");
+        }
+
+        if let Some(near_fast_nonce) = near_fast_nonce.clone() {
+            if let Err(err) = near_fast_nonce.resync_nonce().await {
+                warn!("Failed to resync near fast nonce: {err:?}");
+            }
+        }
+
+        if let Err(err) = evm_nonces.resync_nonces().await {
+            warn!("Failed to resync evm nonces: {err:?}");
+        }
+
+        let current_timestamp = chrono::Utc::now().timestamp();
+
+        let mut events = Vec::new();
+
+        for (key, payload) in retryable_events {
+            let mut retryable_event =
+                match serde_json::from_str::<RetryableEvent<serde_json::Value>>(&payload) {
+                    Ok(retryable_event) => retryable_event,
+                    Err(err) => {
+                        warn!("Failed to deserialize retryable event: {err:?}");
+                        utils::redis::remove_event(
+                            &config,
+                            &mut redis_connection_clone,
+                            utils::redis::EVENTS,
+                            &key,
+                        )
+                        .await;
+                        continue;
+                    }
+                };
+
+            if current_timestamp - retryable_event.creation_timestamp
+                > config.redis.keep_transfers_for_secs
+            {
+                warn!(
+                    "Event ({payload}) with key {key} has exceeded the retention period, removing it"
+                );
+                utils::redis::remove_event(
+                    &config,
+                    &mut redis_connection_clone,
+                    utils::redis::EVENTS,
+                    &key,
+                )
+                .await;
+                continue;
             }
 
-            if let Some(near_fast_nonce) = near_fast_nonce.clone() {
-                if let Err(err) = near_fast_nonce.resync_nonce().await {
-                    warn!("Failed to resync near fast nonce: {err:?}");
-                }
+            let delay = config
+                .redis
+                .fee_retry_base_sleep_secs
+                .saturating_mul(2_i64.saturating_pow(retryable_event.retries))
+                .min(config.redis.fee_retry_max_sleep_secs);
+
+            if current_timestamp < retryable_event.last_updated_timestamp + delay {
+                continue;
             }
 
-            if let Err(err) = evm_nonces.resync_nonces().await {
-                warn!("Failed to resync evm nonces: {err:?}");
-            }
+            retryable_event.retries += 1;
+            retryable_event.last_updated_timestamp = current_timestamp;
+
+            utils::redis::add_event(
+                &config,
+                &mut redis_connection_clone,
+                utils::redis::EVENTS,
+                &key,
+                &retryable_event,
+            )
+            .await;
+
+            events.push((key, retryable_event.event));
         }
 
         let mut handlers = Vec::new();
 
         for (key, event) in events {
-            if let Ok(transfer) = serde_json::from_str::<Transfer>(&event) {
+            if let Ok(transfer) = serde_json::from_value::<Transfer>(event.clone()) {
                 if let Transfer::Near {
                     transfer_message, ..
                 } = transfer.clone()
@@ -472,7 +556,9 @@ pub async fn process_events(
                         }
                     }));
                 }
-            } else if let Ok(omni_bridge_event) = serde_json::from_str::<OmniBridgeEvent>(&event) {
+            } else if let Ok(omni_bridge_event) =
+                serde_json::from_value::<OmniBridgeEvent>(event.clone())
+            {
                 if let OmniBridgeEvent::SignTransferEvent {
                     message_payload, ..
                 } = omni_bridge_event.clone()
@@ -535,7 +621,9 @@ pub async fn process_events(
                         }
                     }));
                 }
-            } else if let Ok(fin_transfer_event) = serde_json::from_str::<FinTransfer>(&event) {
+            } else if let Ok(fin_transfer_event) =
+                serde_json::from_value::<FinTransfer>(event.clone())
+            {
                 if let FinTransfer::Evm { .. } = fin_transfer_event {
                     handlers.push(tokio::spawn({
                         let config = config.clone();
@@ -617,7 +705,9 @@ pub async fn process_events(
                         }
                     }));
                 }
-            } else if let Ok(deploy_token_event) = serde_json::from_str::<DeployToken>(&event) {
+            } else if let Ok(deploy_token_event) =
+                serde_json::from_value::<DeployToken>(event.clone())
+            {
                 if let DeployToken::Evm { .. } = deploy_token_event {
                     handlers.push(tokio::spawn({
                         let config = config.clone();
@@ -700,7 +790,7 @@ pub async fn process_events(
                     }));
                 }
             } else if let Ok(sign_btc_transaction_event) =
-                serde_json::from_str::<btc::SignBtcTransaction>(&event)
+                serde_json::from_value::<btc::SignBtcTransaction>(event.clone())
             {
                 handlers.push(tokio::spawn({
                     let config = config.clone();
@@ -738,7 +828,7 @@ pub async fn process_events(
                     }
                 }));
             } else if let Ok(confirmed_tx_hash) =
-                serde_json::from_str::<btc::ConfirmedTxHash>(&event)
+                serde_json::from_value::<btc::ConfirmedTxHash>(event.clone())
             {
                 handlers.push(tokio::spawn({
                     let config = config.clone();
@@ -778,7 +868,7 @@ pub async fn process_events(
                     }
                 }));
             } else if let Ok(unverified_event) =
-                serde_json::from_str::<near::UnverifiedTrasfer>(&event)
+                serde_json::from_value::<near::UnverifiedTrasfer>(event.clone())
             {
                 tokio::spawn({
                     let config = config.clone();

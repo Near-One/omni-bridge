@@ -18,7 +18,7 @@ use near_primitives::{
 };
 use omni_types::{ChainKind, near_events::OmniBridgeEvent};
 
-use crate::{config, utils};
+use crate::{config, utils, workers::RetryableEvent};
 
 pub const RETRY_ATTEMPTS: u64 = 10;
 pub const RETRY_SLEEP_SECS: u64 = 5;
@@ -151,11 +151,7 @@ pub async fn handle_streamer_message(
                     redis_connection,
                     utils::redis::EVENTS,
                     transfer_message.origin_nonce.to_string(),
-                    crate::workers::Transfer::Near {
-                        transfer_message,
-                        creation_timestamp: chrono::Utc::now().timestamp(),
-                        last_update_timestamp: None,
-                    },
+                    RetryableEvent::new(crate::workers::Transfer::Near { transfer_message }),
                 )
                 .await;
             }
@@ -168,7 +164,7 @@ pub async fn handle_streamer_message(
                     redis_connection,
                     utils::redis::EVENTS,
                     message_payload.transfer_id.origin_nonce.to_string(),
-                    log,
+                    RetryableEvent::new(log),
                 )
                 .await;
             }
@@ -179,11 +175,7 @@ pub async fn handle_streamer_message(
                         redis_connection,
                         utils::redis::EVENTS,
                         transfer_message.origin_nonce.to_string(),
-                        crate::workers::Transfer::Near {
-                            transfer_message,
-                            creation_timestamp: chrono::Utc::now().timestamp(),
-                            last_update_timestamp: None,
-                        },
+                        RetryableEvent::new(crate::workers::Transfer::Near { transfer_message }),
                     )
                     .await;
                 }

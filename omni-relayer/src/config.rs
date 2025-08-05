@@ -126,11 +126,12 @@ impl Config {
 pub struct Redis {
     pub url: String,
 
-    pub keep_insufficient_fee_transfers_for: i64,
-    pub check_insufficient_fee_transfers_every_secs: i64,
     pub sleep_time_after_events_process_secs: u64,
     pub query_retry_attempts: u64,
     pub query_retry_sleep_secs: u64,
+    pub fee_retry_base_sleep_secs: i64,
+    pub fee_retry_max_sleep_secs: i64,
+    pub keep_transfers_for_secs: i64,
 }
 
 #[derive(Debug, Clone, Deserialize)]

@@ -10,7 +10,7 @@ use solana_transaction_status::{
     EncodedTransactionWithStatusMeta, UiRawMessage, option_serializer::OptionSerializer,
 };
 
-use crate::workers::{DeployToken, FinTransfer, Transfer};
+use crate::workers::{DeployToken, FinTransfer, RetryableEvent, Transfer};
 use crate::{config, utils};
 
 #[derive(Debug, BorshDeserialize)]
@@ -160,7 +160,7 @@ async fn decode_instruction(
                             redis_connection,
                             utils::redis::EVENTS,
                             signature.to_string(),
-                            Transfer::Solana {
+                            RetryableEvent::new(Transfer::Solana {
                                 amount: payload.amount.into(),
                                 token,
                                 sender,
@@ -170,9 +170,7 @@ async fn decode_instruction(
                                 message: payload.message.clone(),
                                 emitter,
                                 sequence,
-                                creation_timestamp: chrono::Utc::now().timestamp(),
-                                last_update_timestamp: None,
-                            },
+                            }),
                         )
                         .await;
                     }
@@ -226,10 +224,10 @@ async fn decode_instruction(
                         redis_connection,
                         utils::redis::EVENTS,
                         signature.to_string(),
-                        FinTransfer::Solana {
+                        RetryableEvent::new(FinTransfer::Solana {
                             emitter: emitter.clone(),
                             sequence,
-                        },
+                        }),
                     )
                     .await;
                 }
@@ -261,7 +259,7 @@ async fn decode_instruction(
                         redis_connection,
                         utils::redis::EVENTS,
                         signature.to_string(),
-                        DeployToken::Solana {
+                        RetryableEvent::new(DeployToken::Solana {
                             emitter: account_keys
                                 .get(solana.deploy_token_emitter_index)
                                 .context("Missing emitter account key")?
@@ -269,7 +267,7 @@ async fn decode_instruction(
                                 .context("Emitter account key is None")?
                                 .clone(),
                             sequence,
-                        },
+                        }),
                     )
                     .await;
                 }
