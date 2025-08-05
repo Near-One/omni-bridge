@@ -215,13 +215,16 @@ impl FungibleTokenReceiver for Contract {
         // We can't trust sender_id to pay for storage as it can be spoofed.
         let storage_payer = env::signer_account_id();
         match parsed_msg {
-            BridgeOnTransferMsg::InitTransfer(init_transfer_msg) => self.init_transfer(
-                sender_id,
-                storage_payer,
-                token_id,
-                amount,
-                init_transfer_msg,
-            ),
+            BridgeOnTransferMsg::InitTransfer(init_transfer_msg) => {
+                self.init_transfer(
+                    sender_id,
+                    storage_payer,
+                    token_id,
+                    amount,
+                    init_transfer_msg,
+                );
+                PromiseOrValue::Value(U128(0))
+            }
             BridgeOnTransferMsg::FastFinTransfer(fast_fin_transfer_msg) => {
                 self.fast_fin_transfer(token_id, amount, storage_payer, fast_fin_transfer_msg)
             }
@@ -449,7 +452,7 @@ impl Contract {
         token_id: AccountId,
         amount: U128,
         init_transfer_msg: InitTransferMsg,
-    ) -> PromiseOrValue<U128> {
+    ) {
         // Avoid extra storage read by verifying native fee before checking the role
         if init_transfer_msg.native_token_fee.0 > 0
             && self.acl_has_role(Role::NativeFeeRestricted.into(), storage_payer.clone())
@@ -500,8 +503,6 @@ impl Contract {
         self.burn_tokens_if_needed(token_id, amount);
 
         env::log_str(&OmniBridgeEvent::InitTransferEvent { transfer_message }.to_log_string());
-
-        PromiseOrValue::Value(U128(0))
     }
 
     #[private]
