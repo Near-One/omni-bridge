@@ -1386,6 +1386,7 @@ impl Contract {
                 PromiseResult::Successful(value) => {
                     if let Ok(amount) = near_sdk::serde_json::from_slice::<U128>(&value) {
                         // Normal case: refund if the used token amount is zero
+                        // The amount can be zero if the `ft_on_transfer` in the receiver contract returns an amount instead of `0`, or if it panics.
                         amount.0 == 0
                     } else {
                         // Unexpected case: don't refund
@@ -1463,6 +1464,7 @@ impl Contract {
         );
         storage_deposit_action_index += 1;
 
+        // One yoctoNear is required to send tokens to the recipient
         required_balance = required_balance.saturating_add(ONE_YOCTO);
 
         if transfer_message.fee.fee.0 > 0 {
