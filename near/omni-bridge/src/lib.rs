@@ -65,7 +65,7 @@ const BURN_TOKEN_GAS: Gas = Gas::from_tgas(3);
 const MINT_TOKEN_GAS: Gas = Gas::from_tgas(5);
 const SET_METADATA_GAS: Gas = Gas::from_tgas(10);
 const RESOLVE_FAST_TRANSFER_GAS: Gas = Gas::from_tgas(6);
-const FAST_TRANSFER_CALLBACK_GAS: Gas = Gas::from_tgas(5);
+const FAST_TRANSFER_CALLBACK_GAS: Gas = Gas::from_tgas(10);
 const NO_DEPOSIT: NearToken = NearToken::from_near(0);
 const ONE_YOCTO: NearToken = NearToken::from_yoctonear(1);
 const SEND_TOKENS_CALLBACK_GAS: Gas = Gas::from_tgas(15);
@@ -726,10 +726,12 @@ impl Contract {
             .to_log_string(),
         );
 
+        let amount = U128(fast_transfer.amount.0 - fast_transfer.fee.fee.0);
+
         self.send_tokens(
             fast_transfer.token_id.clone(),
             recipient,
-            U128(fast_transfer.amount.0 - fast_transfer.fee.fee.0),
+            amount,
             &fast_transfer.msg,
         )
         .then(
@@ -738,7 +740,7 @@ impl Contract {
                 .resolve_fast_transfer(
                     fast_transfer.token_id.clone(),
                     &fast_transfer.id(),
-                    fast_transfer.amount,
+                    amount,
                     !fast_transfer.msg.is_empty(),
                 ),
         )
