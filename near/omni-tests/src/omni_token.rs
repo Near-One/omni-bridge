@@ -14,7 +14,10 @@ mod tests {
     use rstest::rstest;
 
     use crate::helpers::tests::{
-        account_n, arb_factory_address, arb_token_address, base_factory_address, base_token_address, bnb_factory_address, eth_eoa_address, eth_factory_address, eth_token_address, get_test_deploy_token_args, locker_wasm, mock_prover_wasm, sol_factory_address, sol_token_address, token_deployer_wasm, NEP141_DEPOSIT
+        account_n, arb_factory_address, arb_token_address, base_factory_address,
+        base_token_address, bnb_factory_address, eth_eoa_address, eth_factory_address,
+        eth_token_address, get_test_deploy_token_args, locker_wasm, mock_prover_wasm,
+        sol_factory_address, sol_token_address, token_deployer_wasm, NEP141_DEPOSIT,
     };
 
     struct TestEnv {
