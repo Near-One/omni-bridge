@@ -29,9 +29,6 @@ dotenv.config()
 const INFURA_API_KEY = process.env.INFURA_API_KEY
 const EVM_PRIVATE_KEY = process.env.EVM_PRIVATE_KEY || "11".repeat(32)
 const ETHERSCAN_API_KEY = process.env.ETHERSCAN_API_KEY || ""
-const ARBISCAN_API_KEY = process.env.ARBISCAN_API_KEY || ""
-const BASESCAN_API_KEY = process.env.BASESCAN_API_KEY || ""
-const BSCSCAN_API_KEY = process.env.BSCSCAN_API_KEY || ""
 
 task("set-metadata-ft", "Set metadata for NEP-141 tokens on the Ethereum side")
   .addParam("nearTokenAccount", "Near account id of the token")
@@ -326,16 +323,7 @@ const config: HardhatUserConfig = {
     },
   },
   etherscan: {
-    apiKey: {
-      mainnet: ETHERSCAN_API_KEY,
-      arbitrumOne: ARBISCAN_API_KEY,
-      base: BASESCAN_API_KEY,
-      sepolia: ETHERSCAN_API_KEY,
-      bnb: BSCSCAN_API_KEY,
-      arbitrumSepolia: ARBISCAN_API_KEY,
-      baseSepolia: BASESCAN_API_KEY,
-      bnbTestnet: BSCSCAN_API_KEY,
-    },
+    apiKey: ETHERSCAN_API_KEY,
   },
 }
 
