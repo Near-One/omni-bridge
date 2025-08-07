@@ -93,7 +93,7 @@ fn calculate_next_work_required(
 
     let mut new_target = target_from_bits(prev_block_header.block_header.bits);
 
-    let shift: bool = new_target > config.pow_limit;
+    let shift: bool = new_target.bits() > config.pow_limit.bits() - 1;
     if shift {
         new_target = new_target >> 1;
     }

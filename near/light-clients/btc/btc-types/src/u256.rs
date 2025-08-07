@@ -105,7 +105,7 @@ impl U256 {
     }
 
     /// Returns the least number of bits needed to represent the number.
-    fn bits(&self) -> u32 {
+    pub fn bits(&self) -> u32 {
         if self.0 > 0 {
             256 - self.0.leading_zeros()
         } else {
