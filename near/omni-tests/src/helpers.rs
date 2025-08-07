@@ -90,7 +90,7 @@ pub mod tests {
     }
 
     pub fn bnb_factory_address() -> OmniAddress {
-        "base:0x252e87862A3A720287E7fd527cE6e8d0738427A2"
+        "bnb:0x252e87862A3A720287E7fd527cE6e8d0738427A2"
             .parse()
             .unwrap()
     }
