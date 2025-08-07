@@ -27,6 +27,7 @@ contract ENearProxy is UUPSUpgradeable, AccessControlUpgradeable, ICustomMinter,
     function initialize(address _eNear, address _prover, bytes memory _nearConnector, uint256 _currentReceiptId, address _adminAddress) public initializer {
         __UUPSUpgradeable_init();
         __AccessControl_init();
+        __Pausable_init();
         eNear = IENear(_eNear);
         nearConnector = _nearConnector;
         currentReceiptId = _currentReceiptId;
