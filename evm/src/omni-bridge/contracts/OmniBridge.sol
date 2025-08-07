@@ -66,7 +66,7 @@ contract OmniBridge is
         _grantRole(PAUSABLE_ADMIN_ROLE, _msgSender());
     }
 
-    function addCustomToken(string calldata nearTokenId, address tokenAddress, address customMinter, uint8 originDecimals) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    function addCustomToken(string calldata nearTokenId, address tokenAddress, address customMinter, uint8 originDecimals) payable external onlyRole(DEFAULT_ADMIN_ROLE) {
         isBridgeToken[tokenAddress] = true;
         ethToNearToken[tokenAddress] = nearTokenId;
         nearToEthToken[nearTokenId] = tokenAddress;
