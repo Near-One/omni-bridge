@@ -89,6 +89,12 @@ pub mod tests {
             .unwrap()
     }
 
+    pub fn bnb_factory_address() -> OmniAddress {
+        "base:0x252e87862A3A720287E7fd527cE6e8d0738427A2"
+            .parse()
+            .unwrap()
+    }
+
     pub fn sol_factory_address() -> OmniAddress {
         "sol:11111111111111111111111111111111".parse().unwrap()
     }
