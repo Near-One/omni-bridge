@@ -194,6 +194,13 @@ impl BtcLightClient {
             .unwrap_or_else(|| env::panic_str(ERR_KEY_NOT_EXIST))
     }
 
+    pub fn get_last_block_height(&self) -> u64 {
+        self.headers_pool
+            .get(&self.mainchain_tip_blockhash)
+            .unwrap_or_else(|| env::panic_str(ERR_KEY_NOT_EXIST))
+            .block_height
+    }
+
     pub fn get_block_hash_by_height(&self, height: u64) -> Option<H256> {
         self.mainchain_height_to_header.get(&height)
     }

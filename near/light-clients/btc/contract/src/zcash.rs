@@ -128,8 +128,8 @@ fn zcash_calculate_next_work_required(
 
     // Limit adjustment step
     // Use medians to prevent time-warp attacks
-    let mut actual_timespan: i64 =
-        (last_interval_block_median_time_past - first_interval_block_median_time_past).into();
+    let mut actual_timespan = i64::from(last_interval_block_median_time_past)
+        - i64::from(first_interval_block_median_time_past);
 
     actual_timespan = averaging_window_timespan + (actual_timespan - averaging_window_timespan) / 4;
 
@@ -152,4 +152,130 @@ fn zcash_calculate_next_work_required(
     }
 
     new_target.target_to_bits()
+}
+
+// Tests ported from:
+// https://github.com/zcash/zcash/blob/fe3e645ca9f1de4ff7feaaa1ddb763ae714c93c6/src/test/pow_tests.cpp
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use btc_types::network::Network;
+    use btc_types::utils::target_from_bits;
+    use more_asserts::assert_lt;
+
+    #[test]
+    fn test_zcash_calculate_next_work_pre_blossom() {
+        let mut config = btc_types::network::get_zcash_config(Network::Mainnet);
+        config.post_blossom_pow_target_spacing = 150;
+
+        let average_target = target_from_bits(0x1d00ffff);
+        let first_time = 1000000000;
+        let last_time = 1000003570;
+
+        let result =
+            zcash_calculate_next_work_required(&config, average_target, last_time, first_time);
+
+        assert_eq!(result, 0x1d011998);
+    }
+
+    #[test]
+    fn test_zcash_calculate_next_work() {
+        let config = btc_types::network::get_zcash_config(Network::Mainnet);
+
+        let average_target = target_from_bits(0x1d00ffff);
+        let first_time = 1000000000;
+        let last_time = 1000001445;
+
+        let result =
+            zcash_calculate_next_work_required(&config, average_target, last_time, first_time);
+
+        assert_lt!(result, 0x1d011998);
+    }
+
+    #[test]
+    fn test_zcash_calculate_next_work_pow_limit_pre_blossom() {
+        let mut config = btc_types::network::get_zcash_config(Network::Mainnet);
+        config.post_blossom_pow_target_spacing = 150;
+
+        let average_target = target_from_bits(0x1f07ffff);
+        let first_time = 1231006505;
+        let last_time = 1233061996;
+
+        let result =
+            zcash_calculate_next_work_required(&config, average_target, last_time, first_time);
+
+        assert_eq!(result, 0x1f07ffff);
+    }
+
+    #[test]
+    fn test_zcash_calculate_next_work_pow_limit() {
+        let config = btc_types::network::get_zcash_config(Network::Mainnet);
+
+        let average_target = target_from_bits(0x1f07ffff);
+        let first_time = 1231006505;
+        let last_time = 1233061996;
+
+        let result =
+            zcash_calculate_next_work_required(&config, average_target, last_time, first_time);
+
+        assert_eq!(result, 0x1f07ffff);
+    }
+
+    #[test]
+    fn test_zcash_calculate_next_work_lower_limit_actual_pre_blossom() {
+        let mut config = btc_types::network::get_zcash_config(Network::Mainnet);
+        config.post_blossom_pow_target_spacing = 150;
+
+        let average_target = target_from_bits(0x1c05a3f4);
+        let first_time = 1000000000;
+        let last_time = 100000917;
+
+        let result =
+            zcash_calculate_next_work_required(&config, average_target, last_time, first_time);
+
+        assert_eq!(result, 0x1c04bceb);
+    }
+
+    #[test]
+    fn test_zcash_calculate_next_work_lower_limit_actual() {
+        let config = btc_types::network::get_zcash_config(Network::Mainnet);
+
+        let average_target = target_from_bits(0x1c05a3f4);
+        let first_time = 1000000000;
+        let last_time = 1000000458;
+
+        let result =
+            zcash_calculate_next_work_required(&config, average_target, last_time, first_time);
+
+        assert_eq!(result, 0x1c04bceb);
+    }
+
+    #[test]
+    fn test_zcash_calculate_next_work_upper_limit_actual_pre_blossom() {
+        let mut config = btc_types::network::get_zcash_config(Network::Mainnet);
+        config.post_blossom_pow_target_spacing = 150;
+
+        let average_target = target_from_bits(0x1c387f6f);
+        let first_time = 1000000000;
+        let last_time = 1000005815;
+
+        let result =
+            zcash_calculate_next_work_required(&config, average_target, last_time, first_time);
+
+        assert_eq!(result, 0x1c4a93bb);
+    }
+
+    #[test]
+    fn test_zcash_calculate_next_work_upper_limit_actual() {
+        let config = btc_types::network::get_zcash_config(Network::Mainnet);
+
+        let average_target = target_from_bits(0x1c387f6f);
+        let first_time = 1000000000;
+        let last_time = 1000002908;
+
+        let result =
+            zcash_calculate_next_work_required(&config, average_target, last_time, first_time);
+
+        assert_eq!(result, 0x1c4a93bb);
+    }
 }
