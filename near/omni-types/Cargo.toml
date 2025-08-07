@@ -1,6 +1,6 @@
 [package]
 name = "omni-types"
-version = "3.1.0"
+version = "3.2.0"
 authors = ["Near One <info@nearone.org>"]
 edition = "2021"
 
