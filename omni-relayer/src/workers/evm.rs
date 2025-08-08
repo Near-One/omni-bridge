@@ -39,7 +39,6 @@ pub async fn process_init_transfer_event(
         tx_hash: transaction_hash,
         ref log,
         creation_timestamp,
-        last_update_timestamp,
         expected_finalization_time,
     } = transfer
     else {
@@ -49,12 +48,6 @@ pub async fn process_init_transfer_event(
     let current_timestamp = chrono::Utc::now().timestamp();
 
     if current_timestamp < creation_timestamp + expected_finalization_time {
-        return Ok(EventAction::Retry);
-    }
-
-    if current_timestamp - last_update_timestamp.unwrap_or_default()
-        < config.redis.check_insufficient_fee_transfers_every_secs
-    {
         return Ok(EventAction::Retry);
     }
 
@@ -379,12 +372,6 @@ pub async fn process_evm_transfer_event(
             Ok(EventAction::Remove)
         }
         Err(err) => {
-            if current_timestamp - creation_timestamp
-                > config.redis.keep_insufficient_fee_transfers_for
-            {
-                anyhow::bail!("Transfer is too old");
-            }
-
             if let BridgeSdkError::NearRpcError(near_rpc_error) = err {
                 match near_rpc_error {
                     NearRpcError::NonceError
@@ -493,12 +480,6 @@ pub async fn process_deploy_token_event(
             Ok(EventAction::Remove)
         }
         Err(err) => {
-            if current_timestamp - creation_timestamp
-                > config.redis.keep_insufficient_fee_transfers_for
-            {
-                anyhow::bail!("Transfer is too old");
-            }
-
             if let BridgeSdkError::NearRpcError(near_rpc_error) = err {
                 match near_rpc_error {
                     NearRpcError::NonceError
