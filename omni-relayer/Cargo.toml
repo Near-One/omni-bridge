@@ -60,6 +60,7 @@ evm-bridge-client = { git = "https://github.com/Near-One/bridge-sdk-rs", package
 solana-bridge-client = { git = "https://github.com/Near-One/bridge-sdk-rs", package = "solana-bridge-client", rev = "98e0c388f5df09f17c9f726d4a34969cce0aa2ec" }
 btc-bridge-client = { git = "https://github.com/Near-One/bridge-sdk-rs", package = "btc-bridge-client", rev = "98e0c388f5df09f17c9f726d4a34969cce0aa2ec" }
 wormhole-bridge-client = { git = "https://github.com/Near-One/bridge-sdk-rs", package = "wormhole-bridge-client", rev = "98e0c388f5df09f17c9f726d4a34969cce0aa2ec" }
+eth-light-client = { git = "https://github.com/Near-One/bridge-sdk-rs", package = "eth-light-client", rev = "98e0c388f5df09f17c9f726d4a34969cce0aa2ec" }
 
 omni-connector = { git = "https://github.com/Near-One/bridge-sdk-rs", package = "omni-connector", rev = "98e0c388f5df09f17c9f726d4a34969cce0aa2ec" }
 

@@ -48,6 +48,7 @@ rpc_http_url = "https://base-sepolia.infura.io/v3/INFURA_API_KEY"
 rpc_ws_url = "wss://base-sepolia.infura.io/ws/v3/INFURA_API_KEY"
 chain_id = 84_532
 omni_bridge_address = "0xa56b860017152cD296ad723E8409Abd6e5D86d4d"
+wormhole_address = "0x79A1027a6A159502049F10906D333EC57E95F083"
 block_processing_batch_size = 10_000
 # https://wormhole.com/docs/build/reference/consistency-levels/
 expected_finalization_time = 1026
@@ -58,6 +59,7 @@ rpc_http_url = "https://arbitrum-sepolia.infura.io/v3/INFURA_API_KEY"
 rpc_ws_url = "wss://arbitrum-sepolia.infura.io/ws/v3/INFURA_API_KEY"
 chain_id = 421_614
 omni_bridge_address = "0x0C981337fFe39a555d3A40dbb32f21aD0eF33FFA"
+wormhole_address = "0x6b9C8671cdDC8dEab9c719bB87cBd3e782bA6a35"
 block_processing_batch_size = 10_000
 # https://wormhole.com/docs/build/reference/consistency-levels/
 expected_finalization_time = 1066
@@ -68,6 +70,7 @@ rpc_http_url = "https://bsc-testnet.infura.io/v3/INFURA_API_KEY"
 rpc_ws_url = "wss://bsc-testnet-rpc.publicnode.com"
 chain_id = 97
 omni_bridge_address = "0xEC81aFc3485a425347Ac03316675e58a680b283A"
+wormhole_address = "0x68605AD7b15c732a30b1BbC62BE8F2A509D74b4D"
 block_processing_batch_size = 10_000
 # https://wormhole.com/docs/build/reference/consistency-levels/
 expected_finalization_time = 48
