@@ -266,7 +266,7 @@ pub async fn process_sign_transfer_event(
         ChainKind::Near => {
             anyhow::bail!("Near to Near transfers are not supported yet");
         }
-        ChainKind::Eth | ChainKind::Base | ChainKind::Arb => {
+        ChainKind::Eth | ChainKind::Base | ChainKind::Arb | ChainKind::Bnb => {
             let nonce = evm_nonces
                 .reserve_nonce(message_payload.recipient.get_chain())
                 .await

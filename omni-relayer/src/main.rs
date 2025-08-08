@@ -32,6 +32,9 @@ struct CliArgs {
     /// Start block for Arbitrum indexer
     #[clap(long)]
     arb_start_block: Option<u64>,
+    /// Start block for Bnb indexer
+    #[clap(long)]
+    bnb_start_block: Option<u64>,
     /// Start signature for Solana indexer
     #[clap(long)]
     solana_start_signature: Option<Signature>,
@@ -204,6 +207,21 @@ async fn main() -> Result<()> {
                         redis_client,
                         ChainKind::Arb,
                         args.arb_start_block,
+                    )
+                    .await
+                }
+            }));
+        }
+        if config.bnb.is_some() {
+            handles.push(tokio::spawn({
+                let config = config.clone();
+                let redis_client = redis_client.clone();
+                async move {
+                    startup::evm::start_indexer(
+                        config,
+                        redis_client,
+                        ChainKind::Bnb,
+                        args.bnb_start_block,
                     )
                     .await
                 }

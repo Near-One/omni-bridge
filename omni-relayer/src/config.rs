@@ -20,6 +20,7 @@ pub fn get_private_key(chain_kind: ChainKind, near_signer_type: Option<NearSigne
         ChainKind::Eth => "ETH_PRIVATE_KEY",
         ChainKind::Base => "BASE_PRIVATE_KEY",
         ChainKind::Arb => "ARB_PRIVATE_KEY",
+        ChainKind::Bnb => "BNB_PRIVATE_KEY",
         ChainKind::Sol => "SOLANA_PRIVATE_KEY",
     };
 
@@ -93,6 +94,7 @@ pub struct Config {
     pub eth: Option<Evm>,
     pub base: Option<Evm>,
     pub arb: Option<Evm>,
+    pub bnb: Option<Evm>,
     pub solana: Option<Solana>,
     pub btc: Option<Btc>,
     pub wormhole: Wormhole,

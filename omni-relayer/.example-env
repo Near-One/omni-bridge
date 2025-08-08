@@ -23,6 +23,7 @@ INFURA_API_KEY=
 ETH_PRIVATE_KEY=
 BASE_PRIVATE_KEY=
 ARB_PRIVATE_KEY=
+BNB_PRIVATE_KEY=
 
 # Note that solana private key must be encoded to bs58 string in order to use it
 SOLANA_PRIVATE_KEY=
