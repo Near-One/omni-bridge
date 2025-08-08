@@ -54,7 +54,7 @@ rule near_generate_zcash_connector_init_args:
     shell: """
     {params.mkdir} && \
     near tokens {params.zcash_id} send-near {params.bridge_id} '1 NEAR' network-config testnet sign-with-keychain send &&\
-    echo '{{\"config\": {{\"chain\": \"ZcashTestnet\", \"chain_signatures_account_id\": \"v1.signer-prod.testnet\",\"nbtc_account_id\": \"{params.zcash_id}\",\"btc_light_client_account_id\": \"zcash-client.n-bridge.testnet\",\"confirmations_strategy\": {{\"100000000\": 6}},\"confirmations_delta\": 1,\"withdraw_bridge_fee\": {{\"fee_min\": \"400\",\"fee_rate\": 0,\"protocol_fee_rate\": 9000}},\"deposit_bridge_fee\": {{\"fee_min\": \"200\",\"fee_rate\": 0,\"protocol_fee_rate\": 9000}},\"min_deposit_amount\": \"500\", \"min_withdraw_amount\": \"500\", \"min_change_amount\": \"0\", \"max_change_amount\": \"100000000\",\"min_btc_gas_fee\": \"100\",\"max_btc_gas_fee\": \"80000\",\"max_withdrawal_input_number\": 10,\"max_change_number\": 10,\"max_active_utxo_management_input_number\": 10,\"max_active_utxo_management_output_number\": 10,\"active_management_lower_limit\": 0,\"active_management_upper_limit\": 1000,\"passive_management_lower_limit\": 0,\"passive_management_upper_limit\": 600,\"rbf_num_limit\": 99,\"max_btc_tx_pending_sec\": 86400, \"expiry_height_gap\": 10}}}}' > {output}
+    echo '{{\"config\": {{\"chain\": \"ZcashTestnet\", \"chain_signatures_account_id\": \"v1.signer-prod.testnet\",\"nbtc_account_id\": \"{params.zcash_id}\",\"btc_light_client_account_id\": \"zcash-client.n-bridge.testnet\",\"confirmations_strategy\": {{\"100000000\": 6}},\"confirmations_delta\": 1,\"withdraw_bridge_fee\": {{\"fee_min\": \"400\",\"fee_rate\": 0,\"protocol_fee_rate\": 9000}},\"deposit_bridge_fee\": {{\"fee_min\": \"200\",\"fee_rate\": 0,\"protocol_fee_rate\": 9000}},\"min_deposit_amount\": \"500\", \"min_withdraw_amount\": \"500\", \"min_change_amount\": \"0\", \"max_change_amount\": \"100000000\",\"min_btc_gas_fee\": \"100\",\"max_btc_gas_fee\": \"80000\",\"max_withdrawal_input_number\": 10,\"max_change_number\": 10,\"max_active_utxo_management_input_number\": 10,\"max_active_utxo_management_output_number\": 10,\"active_management_lower_limit\": 0,\"active_management_upper_limit\": 1000,\"passive_management_lower_limit\": 0,\"passive_management_upper_limit\": 600,\"rbf_num_limit\": 99,\"max_btc_tx_pending_sec\": 86400, \"expiry_height_gap\": 100}}}}' > {output}
     """
 
 rule sync_zcash_connector:
@@ -152,7 +152,7 @@ rule init_zcash_transfer_to_zcash:
         bridge_sdk_config_file = const.common_bridge_sdk_config_file,
     shell: """
     bridge-cli testnet  init-near-to-bitcoin-transfer\
-        --target-btc-address tmQuiqJMqTRzxGLDwKNtMtHniHbqWbGGv1P \
+        --target-btc-address utest1rj797prep5mnq9ffd2zddlc94a4jm4z9kekluh87x7zvhq2sy3a4vence62nt0gzvjxyg06xtgmzrnrx6a8yv63gfa97j5rt55fkmlzjhpcgj4w85vgz5uphsp065g2kj9dk24f0kyl5f7jf36sdtt7ley6vucxftpekvsceg8upfeluev5308d0l3ycsnfs43uc8x3ggqc27danjtp \
         --amount 5000 \
         --btc-connector {params.zcash_connector} \
         --near-signer {params.user_account_id} \
@@ -176,7 +176,7 @@ rule submit_transfer_to_btc_connector:
 
     shell: """
     bridge-cli testnet near-sign-btc-transaction \
-        --btc-pending-id 59d0299bf11043cb7c04527004f306c356abf42e46ce4a54068e3df2ee077a08 \
+        --btc-pending-id 10037324b9f93b35fc1532f850d02668cff78cc20ae0464aabb71b2ab016837d \
         --btc-connector {params.zcash_connector} \
         --near-signer {params.user_account_id} \
         --near-private-key {params.user_private_key} \
