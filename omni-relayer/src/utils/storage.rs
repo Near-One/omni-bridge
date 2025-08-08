@@ -21,7 +21,7 @@ pub async fn get_token_id(
             })?;
             Ok(OmniAddress::Near(token))
         }
-        ChainKind::Eth | ChainKind::Base | ChainKind::Arb => {
+        ChainKind::Eth | ChainKind::Base | ChainKind::Arb | ChainKind::Bnb => {
             utils::evm::string_to_evm_omniaddress(chain_kind, token_address)
                 .map_err(|err| err.to_string())
         }
