@@ -28,7 +28,10 @@ fn get_evm_config(config: &config::Config, chain_kind: ChainKind) -> Result<&con
             .as_ref()
             .context("EVM config for Base is not set"),
         ChainKind::Arb => config.arb.as_ref().context("EVM config for Arb is not set"),
-        _ => anyhow::bail!("Unsupported chain kind for EVM: {:?}", chain_kind),
+        ChainKind::Bnb => config.bnb.as_ref().context("EVM config for Bnb is not set"),
+        ChainKind::Near | ChainKind::Sol => {
+            anyhow::bail!("Unsupported chain kind for EVM: {:?}", chain_kind)
+        }
     }
 }
 

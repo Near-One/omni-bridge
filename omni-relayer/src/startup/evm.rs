@@ -73,7 +73,10 @@ pub async fn start_indexer(
         ChainKind::Arb => {
             extract_evm_config(config.arb.clone().context("Failed to get Arb config")?)?
         }
-        _ => anyhow::bail!("Unsupported chain kind: {chain_kind:?}"),
+        ChainKind::Bnb => {
+            extract_evm_config(config.bnb.clone().context("Failed to get Bnb config")?)?
+        }
+        ChainKind::Near | ChainKind::Sol => anyhow::bail!("Unsupported chain kind: {chain_kind:?}"),
     };
 
     let filter = Filter::new()
