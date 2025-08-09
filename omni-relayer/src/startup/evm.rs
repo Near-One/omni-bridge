@@ -290,7 +290,6 @@ async fn process_log(
             tx_hash.to_string(),
             RetryableEvent::new(crate::workers::Transfer::Evm {
                 chain_kind,
-                block_number,
                 tx_hash,
                 log: log.clone(),
                 creation_timestamp: timestamp,
@@ -341,7 +340,6 @@ async fn process_log(
             tx_hash.to_string(),
             RetryableEvent::new(FinTransfer::Evm {
                 chain_kind,
-                block_number,
                 tx_hash,
                 topic,
                 creation_timestamp: timestamp,
@@ -364,7 +362,6 @@ async fn process_log(
             tx_hash.to_string(),
             RetryableEvent::new(DeployToken::Evm {
                 chain_kind,
-                block_number,
                 tx_hash,
                 topic,
                 creation_timestamp: timestamp,

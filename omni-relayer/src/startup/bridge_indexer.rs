@@ -143,7 +143,6 @@ async fn handle_transaction_event(
                 origin_transaction_id.clone(),
                 RetryableEvent::new(workers::Transfer::Evm {
                     chain_kind,
-                    block_number,
                     tx_hash,
                     log: log.clone(),
                     creation_timestamp,
@@ -184,7 +183,6 @@ async fn handle_transaction_event(
             info!("Received EvmFinTransferMessage");
 
             let OmniTransactionOrigin::EVMLog {
-                block_number,
                 block_timestamp,
                 chain_kind,
                 ..
@@ -217,7 +215,6 @@ async fn handle_transaction_event(
                 origin_transaction_id,
                 RetryableEvent::new(workers::FinTransfer::Evm {
                     chain_kind,
-                    block_number,
                     tx_hash,
                     topic: utils::evm::FinTransfer::SIGNATURE_HASH,
                     creation_timestamp,
@@ -309,7 +306,6 @@ async fn handle_meta_event(
             info!("Received EVMDeployToken: {deploy_token_event:?}");
 
             let OmniTransactionOrigin::EVMLog {
-                block_number,
                 block_timestamp,
                 chain_kind,
                 ..
@@ -345,7 +341,6 @@ async fn handle_meta_event(
                 origin_transaction_id,
                 RetryableEvent::new(workers::DeployToken::Evm {
                     chain_kind,
-                    block_number,
                     tx_hash,
                     topic: utils::evm::DeployToken::SIGNATURE_HASH,
                     creation_timestamp,

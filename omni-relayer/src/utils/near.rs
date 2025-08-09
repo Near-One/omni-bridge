@@ -1,21 +1,12 @@
 use anyhow::Result;
 use tracing::{info, warn};
 
-use near_jsonrpc_client::{
-    JsonRpcClient,
-    methods::{self, block::RpcBlockRequest},
-};
-use near_jsonrpc_primitives::types::query::QueryResponseKind;
+use near_jsonrpc_client::{JsonRpcClient, methods::block::RpcBlockRequest};
 use near_lake_framework::near_indexer_primitives::{
     IndexerExecutionOutcomeWithReceipt, StreamerMessage,
     views::{ActionView, ReceiptEnumView, ReceiptView},
 };
-use near_primitives::{
-    borsh::{BorshDeserialize, from_slice},
-    hash::CryptoHash,
-    types::{AccountId, BlockReference},
-    views::QueryRequest,
-};
+use near_primitives::{hash::CryptoHash, types::AccountId};
 use omni_types::{ChainKind, near_events::OmniBridgeEvent};
 
 use crate::{config, utils, workers::RetryableEvent};
@@ -37,33 +28,6 @@ pub async fn get_final_block(jsonrpc_client: &JsonRpcClient) -> Result<u64> {
         .await
         .map(|block| block.header.height)
         .map_err(Into::into)
-}
-
-#[derive(BorshDeserialize)]
-struct EthLightClientResponse {
-    last_block_number: u64,
-}
-
-pub async fn get_evm_light_client_last_block_number(
-    jsonrpc_client: &JsonRpcClient,
-    light_client: AccountId,
-) -> Result<u64> {
-    let request = methods::query::RpcQueryRequest {
-        block_reference: BlockReference::latest(),
-        request: QueryRequest::CallFunction {
-            account_id: light_client,
-            method_name: "last_block_number".to_string(),
-            args: Vec::new().into(),
-        },
-    };
-
-    let response = jsonrpc_client.call(request).await?;
-
-    if let QueryResponseKind::CallResult(result) = response.kind {
-        Ok(from_slice::<EthLightClientResponse>(&result.result)?.last_block_number)
-    } else {
-        anyhow::bail!("Failed to get token decimals")
-    }
 }
 
 pub async fn is_tx_successful(

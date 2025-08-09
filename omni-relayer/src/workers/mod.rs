@@ -60,7 +60,6 @@ pub enum Transfer {
     },
     Evm {
         chain_kind: ChainKind,
-        block_number: u64,
         tx_hash: H256,
         log: utils::evm::InitTransferMessage,
         creation_timestamp: i64,
@@ -105,7 +104,6 @@ pub enum Transfer {
 pub enum FinTransfer {
     Evm {
         chain_kind: ChainKind,
-        block_number: u64,
         tx_hash: H256,
         topic: B256,
         creation_timestamp: i64,
@@ -122,7 +120,6 @@ pub enum FinTransfer {
 pub enum DeployToken {
     Evm {
         chain_kind: ChainKind,
-        block_number: u64,
         tx_hash: H256,
         topic: B256,
         creation_timestamp: i64,
@@ -318,7 +315,6 @@ pub async fn process_events(
                         let config = config.clone();
                         let mut redis_connection = redis_connection.clone();
                         let omni_connector = omni_connector.clone();
-                        let jsonrpc_client = jsonrpc_client.clone();
                         let near_omni_nonce = near_omni_nonce.clone();
 
                         async move {
@@ -326,7 +322,6 @@ pub async fn process_events(
                                 &config,
                                 &mut redis_connection,
                                 omni_connector,
-                                jsonrpc_client,
                                 transfer,
                                 near_omni_nonce,
                             )
@@ -629,14 +624,12 @@ pub async fn process_events(
                         let config = config.clone();
                         let mut redis_connection = redis_connection.clone();
                         let omni_connector = omni_connector.clone();
-                        let jsonrpc_client = jsonrpc_client.clone();
                         let near_nonce = near_omni_nonce.clone();
 
                         async move {
                             match evm::process_evm_transfer_event(
                                 &config,
                                 omni_connector,
-                                jsonrpc_client,
                                 fin_transfer_event,
                                 near_nonce,
                             )
@@ -712,7 +705,6 @@ pub async fn process_events(
                     handlers.push(tokio::spawn({
                         let config = config.clone();
                         let mut redis_connection = redis_connection.clone();
-                        let jsonrpc_client = jsonrpc_client.clone();
                         let omni_connector = omni_connector.clone();
                         let near_nonce = near_omni_nonce.clone();
 
@@ -720,7 +712,6 @@ pub async fn process_events(
                             match evm::process_deploy_token_event(
                                 &config,
                                 omni_connector,
-                                jsonrpc_client,
                                 deploy_token_event,
                                 near_nonce,
                             )
