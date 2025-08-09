@@ -100,14 +100,18 @@ async fn handle_transaction_event(
                 );
             };
 
-            let (OmniAddress::Eth(sender) | OmniAddress::Base(sender) | OmniAddress::Arb(sender)) =
-                init_transfer.sender.clone()
+            let (OmniAddress::Eth(sender)
+            | OmniAddress::Base(sender)
+            | OmniAddress::Arb(sender)
+            | OmniAddress::Bnb(sender)) = init_transfer.sender.clone()
             else {
                 anyhow::bail!("Unexpected token address: {}", init_transfer.sender);
             };
 
-            let (OmniAddress::Eth(token) | OmniAddress::Base(token) | OmniAddress::Arb(token)) =
-                init_transfer.token.clone()
+            let (OmniAddress::Eth(token)
+            | OmniAddress::Base(token)
+            | OmniAddress::Arb(token)
+            | OmniAddress::Bnb(token)) = init_transfer.token.clone()
             else {
                 anyhow::bail!("Unexpected token address: {}", init_transfer.token);
             };
