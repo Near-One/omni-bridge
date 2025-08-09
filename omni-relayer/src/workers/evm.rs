@@ -123,18 +123,16 @@ pub async fn process_init_transfer_event(
         }
     }
 
-    let vaa = match chain_kind {
-        ChainKind::Eth => None,
-        _ => match omni_connector
-            .wormhole_get_vaa_by_tx_hash(format!("{transaction_hash:?}"))
-            .await
-        {
-            Ok(vaa) => Some(vaa),
-            Err(_) => {
-                warn!("VAA is not ready yet");
-                return Ok(EventAction::Retry);
-            }
-        },
+    let vaa = if chain_kind == ChainKind::Eth {
+        None
+    } else if let Ok(vaa) = omni_connector
+        .wormhole_get_vaa_by_tx_hash(format!("{transaction_hash:?}"))
+        .await
+    {
+        Some(vaa)
+    } else {
+        warn!("VAA is not ready yet");
+        return Ok(EventAction::Retry);
     };
 
     let mut recipient = log.recipient.clone();
@@ -293,18 +291,16 @@ pub async fn process_evm_transfer_event(
 
     info!("Trying to process FinTransfer log on {chain_kind:?}");
 
-    let vaa = match chain_kind {
-        ChainKind::Eth => None,
-        _ => match omni_connector
-            .wormhole_get_vaa_by_tx_hash(format!("{transaction_hash:?}"))
-            .await
-        {
-            Ok(vaa) => Some(vaa),
-            Err(_) => {
-                warn!("VAA is not ready yet");
-                return Ok(EventAction::Retry);
-            }
-        },
+    let vaa = if chain_kind == ChainKind::Eth {
+        None
+    } else if let Ok(vaa) = omni_connector
+        .wormhole_get_vaa_by_tx_hash(format!("{transaction_hash:?}"))
+        .await
+    {
+        Some(vaa)
+    } else {
+        warn!("VAA is not ready yet");
+        return Ok(EventAction::Retry);
     };
 
     let Some(prover_args) = utils::evm::construct_prover_args(
@@ -395,18 +391,16 @@ pub async fn process_deploy_token_event(
 
     info!("Trying to process DeployToken log on {chain_kind:?}");
 
-    let vaa = match chain_kind {
-        ChainKind::Eth => None,
-        _ => match omni_connector
-            .wormhole_get_vaa_by_tx_hash(format!("{transaction_hash:?}"))
-            .await
-        {
-            Ok(vaa) => Some(vaa),
-            Err(_) => {
-                warn!("VAA is not ready yet");
-                return Ok(EventAction::Retry);
-            }
-        },
+    let vaa = if chain_kind == ChainKind::Eth {
+        None
+    } else if let Ok(vaa) = omni_connector
+        .wormhole_get_vaa_by_tx_hash(format!("{transaction_hash:?}"))
+        .await
+    {
+        Some(vaa)
+    } else {
+        warn!("VAA is not ready yet");
+        return Ok(EventAction::Retry);
     };
 
     let Some(prover_args) = utils::evm::construct_prover_args(

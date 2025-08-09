@@ -132,7 +132,7 @@ fn build_eth_light_client(config: &config::Config) -> Result<Option<EthLightClie
                 .eth_light_client_id(
                     eth.light_client
                         .as_ref()
-                        .map(|account_id| account_id.to_string()),
+                        .map(std::string::ToString::to_string),
                 )
                 .build()
                 .context("Failed to build EthLightClient")
