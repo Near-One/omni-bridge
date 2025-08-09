@@ -73,7 +73,10 @@ pub async fn start_indexer(
         ChainKind::Arb => {
             extract_evm_config(config.arb.clone().context("Failed to get Arb config")?)?
         }
-        _ => anyhow::bail!("Unsupported chain kind: {chain_kind:?}"),
+        ChainKind::Bnb => {
+            extract_evm_config(config.bnb.clone().context("Failed to get Bnb config")?)?
+        }
+        ChainKind::Near | ChainKind::Sol => anyhow::bail!("Unsupported chain kind: {chain_kind:?}"),
     };
 
     let filter = Filter::new()
@@ -290,7 +293,6 @@ async fn process_log(
             tx_hash.to_string(),
             RetryableEvent::new(crate::workers::Transfer::Evm {
                 chain_kind,
-                block_number,
                 tx_hash,
                 log: log.clone(),
                 creation_timestamp: timestamp,
@@ -341,7 +343,6 @@ async fn process_log(
             tx_hash.to_string(),
             RetryableEvent::new(FinTransfer::Evm {
                 chain_kind,
-                block_number,
                 tx_hash,
                 topic,
                 creation_timestamp: timestamp,
@@ -364,7 +365,6 @@ async fn process_log(
             tx_hash.to_string(),
             RetryableEvent::new(DeployToken::Evm {
                 chain_kind,
-                block_number,
                 tx_hash,
                 topic,
                 creation_timestamp: timestamp,

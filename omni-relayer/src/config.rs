@@ -186,6 +186,7 @@ pub struct Evm {
     pub rpc_ws_url: String,
     pub chain_id: u64,
     pub omni_bridge_address: Address,
+    pub wormhole_address: Option<Address>,
     pub light_client: Option<AccountId>,
     pub block_processing_batch_size: u64,
     pub expected_finalization_time: i64,

@@ -28,7 +28,10 @@ fn get_evm_config(config: &config::Config, chain_kind: ChainKind) -> Result<&con
             .as_ref()
             .context("EVM config for Base is not set"),
         ChainKind::Arb => config.arb.as_ref().context("EVM config for Arb is not set"),
-        _ => anyhow::bail!("Unsupported chain kind for EVM: {:?}", chain_kind),
+        ChainKind::Bnb => config.bnb.as_ref().context("EVM config for Bnb is not set"),
+        ChainKind::Near | ChainKind::Sol => {
+            anyhow::bail!("Unsupported chain kind for EVM: {:?}", chain_kind)
+        }
     }
 }
 
@@ -100,14 +103,18 @@ async fn handle_transaction_event(
                 );
             };
 
-            let (OmniAddress::Eth(sender) | OmniAddress::Base(sender) | OmniAddress::Arb(sender)) =
-                init_transfer.sender.clone()
+            let (OmniAddress::Eth(sender)
+            | OmniAddress::Base(sender)
+            | OmniAddress::Arb(sender)
+            | OmniAddress::Bnb(sender)) = init_transfer.sender.clone()
             else {
                 anyhow::bail!("Unexpected token address: {}", init_transfer.sender);
             };
 
-            let (OmniAddress::Eth(token) | OmniAddress::Base(token) | OmniAddress::Arb(token)) =
-                init_transfer.token.clone()
+            let (OmniAddress::Eth(token)
+            | OmniAddress::Base(token)
+            | OmniAddress::Arb(token)
+            | OmniAddress::Bnb(token)) = init_transfer.token.clone()
             else {
                 anyhow::bail!("Unexpected token address: {}", init_transfer.token);
             };
@@ -143,7 +150,6 @@ async fn handle_transaction_event(
                 origin_transaction_id.clone(),
                 RetryableEvent::new(workers::Transfer::Evm {
                     chain_kind,
-                    block_number,
                     tx_hash,
                     log: log.clone(),
                     creation_timestamp,
@@ -184,7 +190,6 @@ async fn handle_transaction_event(
             info!("Received EvmFinTransferMessage");
 
             let OmniTransactionOrigin::EVMLog {
-                block_number,
                 block_timestamp,
                 chain_kind,
                 ..
@@ -217,7 +222,6 @@ async fn handle_transaction_event(
                 origin_transaction_id,
                 RetryableEvent::new(workers::FinTransfer::Evm {
                     chain_kind,
-                    block_number,
                     tx_hash,
                     topic: utils::evm::FinTransfer::SIGNATURE_HASH,
                     creation_timestamp,
@@ -309,7 +313,6 @@ async fn handle_meta_event(
             info!("Received EVMDeployToken: {deploy_token_event:?}");
 
             let OmniTransactionOrigin::EVMLog {
-                block_number,
                 block_timestamp,
                 chain_kind,
                 ..
@@ -345,7 +348,6 @@ async fn handle_meta_event(
                 origin_transaction_id,
                 RetryableEvent::new(workers::DeployToken::Evm {
                     chain_kind,
-                    block_number,
                     tx_hash,
                     topic: utils::evm::DeployToken::SIGNATURE_HASH,
                     creation_timestamp,
