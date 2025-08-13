@@ -12,9 +12,9 @@ use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::collections::{LookupMap, LookupSet};
 use near_sdk::json_types::{Base64VecU8, U128};
 use near_sdk::serde::{Deserialize, Serialize};
+use near_sdk::serde_json::json;
 use near_sdk::{
-    env, ext_contract, near, require, serde_json, AccountId, BorshStorageKey, Gas, NearToken,
-    PanicOnDefault, Promise, PromiseError, PromiseOrValue, PromiseResult,
+    env, ext_contract, near, require, serde_json, AccountId, BorshStorageKey, CryptoHash, Gas, GasWeight, NearToken, PanicOnDefault, Promise, PromiseError, PromiseOrValue, PromiseResult
 };
 use omni_types::locker_args::{
     AddDeployedTokenArgs, BindTokenArgs, ClaimFeeArgs, DeployTokenArgs, FinTransferArgs,
@@ -69,7 +69,10 @@ const FAST_TRANSFER_CALLBACK_GAS: Gas = Gas::from_tgas(10);
 const NO_DEPOSIT: NearToken = NearToken::from_near(0);
 const ONE_YOCTO: NearToken = NearToken::from_yoctonear(1);
 const SEND_TOKENS_CALLBACK_GAS: Gas = Gas::from_tgas(15);
+const INIT_TRANSFER_CALLBACK_GAS: Gas = Gas::from_tgas(5);
 const SIGN_PATH: &str = "bridge-1";
+
+const PROMISE_REGISTER_ID: u64 = 0;
 
 #[derive(BorshSerialize, BorshStorageKey)]
 enum StorageKey {
@@ -84,6 +87,7 @@ enum StorageKey {
     DestinationNonces,
     TokenDecimals,
     FastTransfers,
+    InitTransferPromises,
 }
 
 #[derive(AccessControlRole, Deserialize, Serialize, Copy, Clone)]
@@ -196,6 +200,7 @@ pub struct Contract {
     pub destination_nonces: LookupMap<ChainKind, Nonce>,
     pub accounts_balances: LookupMap<AccountId, StorageBalance>,
     pub wnear_account_id: AccountId,
+    pub init_transfer_promises: LookupMap<AccountId, CryptoHash>,
 }
 
 #[near]
@@ -256,6 +261,7 @@ impl Contract {
             destination_nonces: LookupMap::new(StorageKey::DestinationNonces),
             accounts_balances: LookupMap::new(StorageKey::AccountsBalances),
             wnear_account_id,
+            init_transfer_promises: LookupMap::new(StorageKey::InitTransferPromises),
         };
 
         contract.acl_init_super_admin(near_sdk::env::predecessor_account_id());
@@ -488,10 +494,67 @@ impl Contract {
             "ERR_INVALID_FEE"
         );
 
+        let mut required_storage_balance = self.required_balance_for_init_transfer_message(transfer_message.clone());
+        required_storage_balance = required_storage_balance.saturating_add(
+            NearToken::from_yoctonear(init_transfer_msg.native_token_fee.0),
+        );
+
+        let message_account_id = Self::calculate_message_account_id(&transfer_message);
+
+        if self.has_storage_balance(&storage_payer, required_storage_balance) {
+            env::panic_str(&format!("init_transfer_callback: storage_payer: {}, required: {}", storage_payer, required_storage_balance));
+            // self.init_transfer_callback(transfer_message, storage_payer);
+        } else if self.has_storage_balance(&message_account_id, required_storage_balance) {
+            env::panic_str(&format!("init_transfer_callback: message_account_id: {}, required: {}", message_account_id, required_storage_balance));
+            // self.init_transfer_callback(transfer_message, message_account_id);
+        } else {
+            let promise_index = env::promise_yield_create(
+                "init_transfer_resume",
+                &json!({
+                    "transfer_message": transfer_message,
+                    "message_account_id": message_account_id,
+                }).to_string().as_bytes(),
+                INIT_TRANSFER_CALLBACK_GAS,
+                GasWeight(0),
+                PROMISE_REGISTER_ID,
+            );
+
+            let yield_id: CryptoHash = env::read_register(PROMISE_REGISTER_ID)
+                .expect("ERR_READ_PROMISE_REGISTER")
+                .try_into()
+                .expect("ERR_READ_PROMISE_REGISTER");
+
+            self.init_transfer_promises.insert(&message_account_id, &yield_id);
+
+            env::promise_return(promise_index);
+        }
+    }
+
+    #[private]
+    pub fn init_transfer_resume(
+        &mut self,
+        transfer_message: TransferMessage,
+        message_account_id: AccountId,
+        #[callback_result] response: Result<(), PromiseError>,
+    ) {
+        self.init_transfer_promises.remove(&message_account_id);
+
+        match response {
+            Ok(_) => self.init_transfer_callback(transfer_message, message_account_id),
+            Err(_) => env::log_str("Init transfer resume timeout"),
+        }
+    }
+
+    #[private]
+    pub fn init_transfer_callback(
+        &mut self,
+        transfer_message: TransferMessage,
+        storage_payer: AccountId,
+    ) {
         let mut required_storage_balance =
             self.add_transfer_message(transfer_message.clone(), storage_payer.clone());
         required_storage_balance = required_storage_balance.saturating_add(
-            NearToken::from_yoctonear(init_transfer_msg.native_token_fee.0),
+            NearToken::from_yoctonear(transfer_message.fee.native_fee.0),
         );
 
         self.update_storage_balance(
@@ -500,7 +563,11 @@ impl Contract {
             NearToken::from_yoctonear(0),
         );
 
-        self.burn_tokens_if_needed(token_id, amount);
+        if let OmniAddress::Near(token_id) = transfer_message.token.clone() {
+            self.burn_tokens_if_needed(token_id, transfer_message.amount);
+        } else {
+            env::panic_str("ERR_NOT_NEAR_TOKEN");
+        }
 
         env::log_str(&OmniBridgeEvent::InitTransferEvent { transfer_message }.to_log_string());
     }
@@ -1382,6 +1449,25 @@ impl Contract {
 }
 
 impl Contract {
+    // Hashing the transfer message to calculate virtual account ID that can be used to deposit storage required for the message
+    fn calculate_message_account_id(
+        message: &TransferMessage,
+    ) -> AccountId {
+        let mut data = Vec::new();
+        data.extend_from_slice(message.token.to_string().as_bytes());
+        data.extend_from_slice(&message.amount.0.to_le_bytes());
+        data.extend_from_slice(message.recipient.to_string().as_bytes());
+        data.extend_from_slice(&message.fee.fee.0.to_le_bytes());
+        data.extend_from_slice(&message.fee.native_fee.0.to_le_bytes());
+        data.extend_from_slice(message.sender.to_string().as_bytes());
+        data.extend_from_slice(message.msg.as_bytes());
+
+        let hash = near_sdk::env::sha256_array(&data);
+
+        let implicit_account_id = hex::encode(hash);
+        AccountId::try_from(implicit_account_id).expect("ERR_CALCULATE_MESSAGE_ACCOUNT_ID")
+    }
+
     fn is_refund_required(is_ft_transfer_call: bool) -> bool {
         if is_ft_transfer_call {
             match env::promise_result(0) {
@@ -1801,7 +1887,7 @@ impl Contract {
                     storage_balance.available.saturating_sub(required_balance);
                 self.accounts_balances.insert(&account_id, &storage_balance);
             } else {
-                env::panic_str("Not enough storage deposited");
+                env::panic_str(&format!("Not enough storage deposited, required: {}, available: {}", required_balance, storage_balance.available));
             }
         }
     }

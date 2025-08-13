@@ -107,6 +107,15 @@ impl Contract {
             },
         );
         self.accounts_balances.insert(&account_id, &storage);
+
+        if self.init_transfer_promises.contains_key(&account_id) {
+            let res = env::promise_yield_resume(
+                &self.init_transfer_promises.get(&account_id).unwrap(),
+                &[],
+            );
+            env::log_str(&format!("Promise resume: {}", res));
+        }
+
         storage
     }
 
@@ -170,6 +179,13 @@ impl Contract {
         self.accounts_balances.get(account_id)
     }
 
+    pub fn has_storage_balance(&self, account_id: &AccountId, balance: NearToken) -> bool {
+        match self.storage_balance_of(account_id) {
+            Some(storage_balance) => storage_balance.available >= balance,
+            None => false,
+        }
+    }
+
     pub fn required_balance_for_account(&self) -> NearToken {
         let key_len = Self::max_key_len_of_account_id();
         let value_len: u64 = borsh::to_vec(&StorageBalance {
@@ -185,10 +201,34 @@ impl Contract {
             .saturating_mul((Self::get_basic_storage() + key_len + value_len).into())
     }
 
-    pub fn required_balance_for_init_transfer(&self) -> NearToken {
+    pub fn required_balance_for_init_transfer(&self, msg: Option<String>) -> NearToken {
         let max_account_id: AccountId = "a".repeat(64).parse().sdk_expect("ERR_PARSE_ACCOUNT_ID");
 
-        let key_len: u64 = borsh::to_vec(&TransferId::default())
+        self.required_balance_for_init_transfer_message(
+            TransferMessage {
+                origin_nonce: 0,
+                token: OmniAddress::Near(max_account_id.clone()),
+                amount: U128(0),
+                recipient: OmniAddress::Near(max_account_id.clone()),
+                fee: Fee::default(),
+                sender: OmniAddress::Near(max_account_id.clone()),
+                msg: msg.unwrap_or_default(),
+                destination_nonce: 0,
+                origin_transfer_id: Some(TransferId {
+                    origin_chain: ChainKind::Near,
+                    origin_nonce: 0,
+                }),
+            }
+        )
+    }
+
+    pub fn required_balance_for_init_transfer_message(
+        &self,
+        transfer_message: TransferMessage,
+    ) -> NearToken {
+        let max_account_id: AccountId = "a".repeat(64).parse().sdk_expect("ERR_PARSE_ACCOUNT_ID");
+
+        let key_len: u64 = borsh::to_vec(&transfer_message.get_transfer_id())
             .sdk_expect("ERR_BORSH")
             .len()
             .try_into()
@@ -196,20 +236,7 @@ impl Contract {
 
         let value_len: u64 =
             borsh::to_vec(&TransferMessageStorage::V1(TransferMessageStorageValue {
-                message: TransferMessage {
-                    origin_nonce: 0,
-                    token: OmniAddress::Near(max_account_id.clone()),
-                    amount: U128(0),
-                    recipient: OmniAddress::Near(max_account_id.clone()),
-                    fee: Fee::default(),
-                    sender: OmniAddress::Near(max_account_id.clone()),
-                    msg: String::new(),
-                    destination_nonce: 0,
-                    origin_transfer_id: Some(TransferId {
-                        origin_chain: ChainKind::Near,
-                        origin_nonce: 0,
-                    }),
-                },
+                message: transfer_message,
                 owner: max_account_id,
             }))
             .sdk_expect("ERR_BORSH")
