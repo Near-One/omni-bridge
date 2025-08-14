@@ -66,7 +66,7 @@ if [ -n "$INIT_FUNCTION" ]; then
         prepaid-gas '100.0 Tgas' attached-deposit '0 NEAR' \
         sign-as "$INIT_ACCOUNT_ID" \
         network-config testnet \
-        sign-with-plaintext-private-key --signer-public-key "$INIT_ACCOUNT_PUBLIC_KEY" --signer-private-key "$INIT_ACCOUNT_PRIVATE_KEY" \
+        sign-with-plaintext-private-key "$INIT_ACCOUNT_PRIVATE_KEY" \
         send; then
         echo "Failed to init ${CONTRACT_NAME}"
         exit 1

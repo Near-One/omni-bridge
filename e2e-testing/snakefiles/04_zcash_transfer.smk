@@ -176,7 +176,7 @@ rule submit_transfer_to_btc_connector:
 
     shell: """
     bridge-cli testnet near-sign-btc-transaction \
-        --btc-pending-id 10037324b9f93b35fc1532f850d02668cff78cc20ae0464aabb71b2ab016837d \
+        --btc-pending-id 04238d52945a710acd99823a0d12791266d3558a38d5914b32eed7c97e15c257 \
         --btc-connector {params.zcash_connector} \
         --near-signer {params.user_account_id} \
         --near-private-key {params.user_private_key} \

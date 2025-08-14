@@ -80,7 +80,7 @@ if ! near contract call-function as-transaction "$CONTRACT_ID" \
     prepaid-gas "$GAS" attached-deposit "$DEPOSIT" \
     sign-as "$SIGNER_ACCOUNT_ID" \
     network-config "$NETWORK" \
-    sign-with-plaintext-private-key --signer-public-key "$SIGNER_PUBLIC_KEY" --signer-private-key "$SIGNER_PRIVATE_KEY" \
+    sign-with-plaintext-private-key "$SIGNER_PRIVATE_KEY" \
     send; then
     echo "Failed to call method ${METHOD_NAME} on contract ${CONTRACT_ID}"
     exit 1
