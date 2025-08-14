@@ -20,6 +20,7 @@ pub fn get_private_key(chain_kind: ChainKind, near_signer_type: Option<NearSigne
         ChainKind::Eth => "ETH_PRIVATE_KEY",
         ChainKind::Base => "BASE_PRIVATE_KEY",
         ChainKind::Arb => "ARB_PRIVATE_KEY",
+        ChainKind::Bnb => "BNB_PRIVATE_KEY",
         ChainKind::Sol => "SOLANA_PRIVATE_KEY",
     };
 
@@ -93,6 +94,7 @@ pub struct Config {
     pub eth: Option<Evm>,
     pub base: Option<Evm>,
     pub arb: Option<Evm>,
+    pub bnb: Option<Evm>,
     pub solana: Option<Solana>,
     pub btc: Option<Btc>,
     pub wormhole: Wormhole,
@@ -114,17 +116,24 @@ impl Config {
     pub fn is_signing_btc_transaction_enabled(&self) -> bool {
         self.btc.as_ref().is_some_and(|btc| btc.signing_enabled)
     }
+
+    pub fn is_verifying_withdraw_enabled(&self) -> bool {
+        self.btc
+            .as_ref()
+            .is_some_and(|btc| btc.verifying_withdraw_enabled)
+    }
 }
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct Redis {
     pub url: String,
 
-    pub keep_insufficient_fee_transfers_for: i64,
-    pub check_insufficient_fee_transfers_every_secs: i64,
     pub sleep_time_after_events_process_secs: u64,
     pub query_retry_attempts: u64,
     pub query_retry_sleep_secs: u64,
+    pub fee_retry_base_sleep_secs: i64,
+    pub fee_retry_max_sleep_secs: i64,
+    pub keep_transfers_for_secs: i64,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -177,6 +186,7 @@ pub struct Evm {
     pub rpc_ws_url: String,
     pub chain_id: u64,
     pub omni_bridge_address: Address,
+    pub wormhole_address: Option<Address>,
     pub light_client: Option<AccountId>,
     pub block_processing_batch_size: u64,
     pub expected_finalization_time: i64,
@@ -212,6 +222,7 @@ pub struct Solana {
 pub struct Btc {
     pub rpc_http_url: String,
     pub signing_enabled: bool,
+    pub verifying_withdraw_enabled: bool,
 }
 
 #[derive(Debug, Clone, Deserialize)]

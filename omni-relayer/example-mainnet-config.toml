@@ -1,10 +1,11 @@
 [redis]
 url = "redis://127.0.0.1/"
-keep_insufficient_fee_transfers_for = 1209600 # 60 * 60 * 24 * 14
-check_insufficient_fee_transfers_every_secs = 1800 # 60 * 30
 sleep_time_after_events_process_secs = 1
 query_retry_attempts = 10
 query_retry_sleep_secs = 1
+fee_retry_base_sleep_secs = 10
+fee_retry_max_sleep_secs = 43200 # 60 * 60 * 12
+keep_transfers_for_secs = 604800 # 60 * 60 * 24 * 7
 
 [bridge_indexer]
 # Used to check if provided fee is sufficient to complete the transfer
@@ -47,6 +48,7 @@ rpc_http_url = "https://base-mainnet.infura.io/v3/INFURA_API_KEY"
 rpc_ws_url = "wss://base-mainnet.infura.io/ws/v3/INFURA_API_KEY"
 chain_id = 8453
 omni_bridge_address = "0xd025b38762B4A4E36F0Cde483b86CB13ea00D989"
+wormhole_address = "0xbebdb6C8ddC678FfA9f8748f85C815C556Dd8ac6"
 block_processing_batch_size = 10_000
 # https://wormhole.com/docs/build/reference/consistency-levels/
 expected_finalization_time = 1026
@@ -57,6 +59,7 @@ rpc_http_url = "https://arbitrum-mainnet.infura.io/v3/INFURA_API_KEY"
 rpc_ws_url = "wss://arbitrum-mainnet.infura.io/ws/v3/INFURA_API_KEY"
 chain_id = 42_161
 omni_bridge_address = "0xd025b38762B4A4E36F0Cde483b86CB13ea00D989"
+wormhole_address = "0xa5f208e072434bC67592E4C49C1B991BA79BCA46"
 block_processing_batch_size = 10_000
 # https://wormhole.com/docs/build/reference/consistency-levels/
 expected_finalization_time = 1066
@@ -92,6 +95,8 @@ finalize_transfer_sol_discriminator = [104, 27, 121, 69, 3, 70, 217, 66]
 rpc_http_url = "https://bitcoin-rpc.publicnode.com"
 # If this is set to true, then omni relayer will call `sign_btc_transaction`
 signing_enabled = false
+# If this is set to true, then omni relayer will call `verify_withdraw`
+verifying_withdraw_enabled = false
 
 [wormhole]
 api_url = "https://api.wormholescan.io/"

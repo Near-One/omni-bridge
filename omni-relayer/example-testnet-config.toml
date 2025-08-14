@@ -1,10 +1,11 @@
 [redis]
 url = "redis://127.0.0.1/"
-keep_insufficient_fee_transfers_for = 1209600 # 60 * 60 * 24 * 14
-check_insufficient_fee_transfers_every_secs = 1800 # 60 * 30
 sleep_time_after_events_process_secs = 1
 query_retry_attempts = 10
 query_retry_sleep_secs = 1
+fee_retry_base_sleep_secs = 10
+fee_retry_max_sleep_secs = 43200 # 60 * 60 * 12
+keep_transfers_for_secs = 604800 # 60 * 60 * 24 * 7
 
 [bridge_indexer]
 # Used to check if provided fee is sufficient to complete the transfer
@@ -47,6 +48,7 @@ rpc_http_url = "https://base-sepolia.infura.io/v3/INFURA_API_KEY"
 rpc_ws_url = "wss://base-sepolia.infura.io/ws/v3/INFURA_API_KEY"
 chain_id = 84_532
 omni_bridge_address = "0xa56b860017152cD296ad723E8409Abd6e5D86d4d"
+wormhole_address = "0x79A1027a6A159502049F10906D333EC57E95F083"
 block_processing_batch_size = 10_000
 # https://wormhole.com/docs/build/reference/consistency-levels/
 expected_finalization_time = 1026
@@ -57,12 +59,22 @@ rpc_http_url = "https://arbitrum-sepolia.infura.io/v3/INFURA_API_KEY"
 rpc_ws_url = "wss://arbitrum-sepolia.infura.io/ws/v3/INFURA_API_KEY"
 chain_id = 421_614
 omni_bridge_address = "0x0C981337fFe39a555d3A40dbb32f21aD0eF33FFA"
+wormhole_address = "0x6b9C8671cdDC8dEab9c719bB87cBd3e782bA6a35"
 block_processing_batch_size = 10_000
 # https://wormhole.com/docs/build/reference/consistency-levels/
 expected_finalization_time = 1066
 safe_confirmations = 30
-# To enable fast relayer, uncomment the line below
-# fast_relayer_enabled = true
+
+[bnb]
+rpc_http_url = "https://bsc-testnet.infura.io/v3/INFURA_API_KEY"
+rpc_ws_url = "wss://bsc-testnet-rpc.publicnode.com"
+chain_id = 97
+omni_bridge_address = "0xEC81aFc3485a425347Ac03316675e58a680b283A"
+wormhole_address = "0x68605AD7b15c732a30b1BbC62BE8F2A509D74b4D"
+block_processing_batch_size = 10_000
+# https://wormhole.com/docs/build/reference/consistency-levels/
+expected_finalization_time = 48
+safe_confirmations = 10
 
 [solana]
 rpc_http_url = "https://api.devnet.solana.com"
@@ -94,6 +106,8 @@ finalize_transfer_sol_discriminator = [104, 27, 121, 69, 3, 70, 217, 66]
 rpc_http_url = "https://bitcoin-testnet-rpc.publicnode.com"
 # If this is set to true, then omni relayer will call `sign_btc_transaction`
 signing_enabled = false
+# If this is set to true, then omni relayer will call `verify_withdraw`
+verifying_withdraw_enabled = false
 
 [wormhole]
 api_url = "https://api.testnet.wormholescan.io/"

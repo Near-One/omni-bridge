@@ -7,7 +7,7 @@ use tracing::{info, warn};
 use ethereum_types::H256;
 
 use near_bridge_client::{NearBridgeClient, TransactionOptions};
-use near_jsonrpc_client::{JsonRpcClient, errors::JsonRpcError};
+use near_jsonrpc_client::errors::JsonRpcError;
 use near_primitives::views::TxExecutionStatus;
 use near_rpc_client::NearRpcError;
 
@@ -29,17 +29,14 @@ pub async fn process_init_transfer_event(
     config: &config::Config,
     redis_connection: &mut redis::aio::MultiplexedConnection,
     omni_connector: Arc<OmniConnector>,
-    jsonrpc_client: near_jsonrpc_client::JsonRpcClient,
     transfer: Transfer,
     near_omni_nonce: Arc<utils::nonce::NonceManager>,
 ) -> Result<EventAction> {
     let Transfer::Evm {
         chain_kind,
-        block_number,
         tx_hash: transaction_hash,
         ref log,
         creation_timestamp,
-        last_update_timestamp,
         expected_finalization_time,
     } = transfer
     else {
@@ -49,12 +46,6 @@ pub async fn process_init_transfer_event(
     let current_timestamp = chrono::Utc::now().timestamp();
 
     if current_timestamp < creation_timestamp + expected_finalization_time {
-        return Ok(EventAction::Retry);
-    }
-
-    if current_timestamp - last_update_timestamp.unwrap_or_default()
-        < config.redis.check_insufficient_fee_transfers_every_secs
-    {
         return Ok(EventAction::Retry);
     }
 
@@ -132,35 +123,17 @@ pub async fn process_init_transfer_event(
         }
     }
 
-    let vaa = omni_connector
+    let vaa = if chain_kind == ChainKind::Eth {
+        None
+    } else if let Ok(vaa) = omni_connector
         .wormhole_get_vaa_by_tx_hash(format!("{transaction_hash:?}"))
         .await
-        .ok();
-
-    if vaa.is_none() {
-        if chain_kind == ChainKind::Eth {
-            let Some(Some(light_client)) = config.eth.as_ref().map(|eth| eth.light_client.clone())
-            else {
-                anyhow::bail!("Eth chain is not configured or light client account id is missing");
-            };
-
-            let Ok(light_client_latest_block_number) =
-                utils::near::get_evm_light_client_last_block_number(&jsonrpc_client, light_client)
-                    .await
-            else {
-                warn!("Failed to get eth light client last block number");
-                return Ok(EventAction::Retry);
-            };
-
-            if block_number > light_client_latest_block_number {
-                warn!("ETH light client is not synced yet");
-                return Ok(EventAction::Retry);
-            }
-        } else {
-            warn!("VAA is not ready yet");
-            return Ok(EventAction::Retry);
-        }
-    }
+    {
+        Some(vaa)
+    } else {
+        warn!("VAA is not ready yet");
+        return Ok(EventAction::Retry);
+    };
 
     let mut recipient = log.recipient.clone();
     let mut fee_recipient = omni_connector
@@ -276,6 +249,15 @@ pub async fn process_init_transfer_event(
                     }
                 };
             }
+
+            if let BridgeSdkError::LightClientNotSynced(block) = err {
+                warn!(
+                    "Light client is not synced yet for transfer ({}), block: {}",
+                    log.origin_nonce, block
+                );
+                return Ok(EventAction::Retry);
+            }
+
             anyhow::bail!(
                 "Failed to finalize transfer ({}): {err:?}",
                 log.origin_nonce
@@ -287,13 +269,11 @@ pub async fn process_init_transfer_event(
 pub async fn process_evm_transfer_event(
     config: &config::Config,
     omni_connector: Arc<OmniConnector>,
-    jsonrpc_client: JsonRpcClient,
     fin_transfer: FinTransfer,
     near_nonce: Arc<utils::nonce::NonceManager>,
 ) -> Result<EventAction> {
     let FinTransfer::Evm {
         chain_kind,
-        block_number,
         tx_hash: transaction_hash,
         topic,
         creation_timestamp,
@@ -311,34 +291,17 @@ pub async fn process_evm_transfer_event(
 
     info!("Trying to process FinTransfer log on {chain_kind:?}");
 
-    let vaa = omni_connector
+    let vaa = if chain_kind == ChainKind::Eth {
+        None
+    } else if let Ok(vaa) = omni_connector
         .wormhole_get_vaa_by_tx_hash(format!("{transaction_hash:?}"))
         .await
-        .ok();
-
-    if vaa.is_none() {
-        if chain_kind == ChainKind::Eth {
-            let Some(Some(light_client)) = config.eth.clone().map(|eth| eth.light_client) else {
-                anyhow::bail!("Eth chain is not configured or light client account id is missing");
-            };
-
-            let Ok(light_client_latest_block_number) =
-                utils::near::get_evm_light_client_last_block_number(&jsonrpc_client, light_client)
-                    .await
-            else {
-                warn!("Failed to get eth light client last block number");
-                return Ok(EventAction::Retry);
-            };
-
-            if block_number > light_client_latest_block_number {
-                warn!("ETH light client is not synced yet");
-                return Ok(EventAction::Retry);
-            }
-        } else {
-            warn!("VAA is not ready yet");
-            return Ok(EventAction::Retry);
-        }
-    }
+    {
+        Some(vaa)
+    } else {
+        warn!("VAA is not ready yet");
+        return Ok(EventAction::Retry);
+    };
 
     let Some(prover_args) = utils::evm::construct_prover_args(
         config,
@@ -379,12 +342,6 @@ pub async fn process_evm_transfer_event(
             Ok(EventAction::Remove)
         }
         Err(err) => {
-            if current_timestamp - creation_timestamp
-                > config.redis.keep_insufficient_fee_transfers_for
-            {
-                anyhow::bail!("Transfer is too old");
-            }
-
             if let BridgeSdkError::NearRpcError(near_rpc_error) = err {
                 match near_rpc_error {
                     NearRpcError::NonceError
@@ -398,6 +355,12 @@ pub async fn process_evm_transfer_event(
                     }
                 };
             }
+
+            if let BridgeSdkError::LightClientNotSynced(block) = err {
+                warn!("Light client is not synced yet for block: {block}");
+                return Ok(EventAction::Retry);
+            }
+
             anyhow::bail!("Failed to claim fee: {err:?}");
         }
     }
@@ -406,13 +369,11 @@ pub async fn process_evm_transfer_event(
 pub async fn process_deploy_token_event(
     config: &config::Config,
     omni_connector: Arc<OmniConnector>,
-    jsonrpc_client: JsonRpcClient,
     deploy_token_event: DeployToken,
     near_nonce: Arc<utils::nonce::NonceManager>,
 ) -> Result<EventAction> {
     let DeployToken::Evm {
         chain_kind,
-        block_number,
         tx_hash: transaction_hash,
         topic,
         creation_timestamp,
@@ -430,34 +391,17 @@ pub async fn process_deploy_token_event(
 
     info!("Trying to process DeployToken log on {chain_kind:?}");
 
-    let vaa = omni_connector
+    let vaa = if chain_kind == ChainKind::Eth {
+        None
+    } else if let Ok(vaa) = omni_connector
         .wormhole_get_vaa_by_tx_hash(format!("{transaction_hash:?}"))
         .await
-        .ok();
-
-    if vaa.is_none() {
-        if chain_kind == ChainKind::Eth {
-            let Some(Some(light_client)) = config.eth.clone().map(|eth| eth.light_client) else {
-                anyhow::bail!("Eth chain is not configured or light client account id is missing");
-            };
-
-            let Ok(light_client_latest_block_number) =
-                utils::near::get_evm_light_client_last_block_number(&jsonrpc_client, light_client)
-                    .await
-            else {
-                warn!("Failed to get eth light client last block number");
-                return Ok(EventAction::Retry);
-            };
-
-            if block_number > light_client_latest_block_number {
-                warn!("ETH light client is not synced yet");
-                return Ok(EventAction::Retry);
-            }
-        } else {
-            warn!("VAA is not ready yet");
-            return Ok(EventAction::Retry);
-        }
-    }
+    {
+        Some(vaa)
+    } else {
+        warn!("VAA is not ready yet");
+        return Ok(EventAction::Retry);
+    };
 
     let Some(prover_args) = utils::evm::construct_prover_args(
         config,
@@ -493,12 +437,6 @@ pub async fn process_deploy_token_event(
             Ok(EventAction::Remove)
         }
         Err(err) => {
-            if current_timestamp - creation_timestamp
-                > config.redis.keep_insufficient_fee_transfers_for
-            {
-                anyhow::bail!("Transfer is too old");
-            }
-
             if let BridgeSdkError::NearRpcError(near_rpc_error) = err {
                 match near_rpc_error {
                     NearRpcError::NonceError
@@ -511,6 +449,11 @@ pub async fn process_deploy_token_event(
                         anyhow::bail!("Failed to bind token: {near_rpc_error:?}");
                     }
                 };
+            }
+
+            if let BridgeSdkError::LightClientNotSynced(block) = err {
+                warn!("Light client is not synced yet for block: {block}");
+                return Ok(EventAction::Retry);
             }
 
             anyhow::bail!("Failed to bind token: {err:?}");

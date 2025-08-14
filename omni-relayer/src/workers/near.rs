@@ -15,7 +15,10 @@ use solana_sdk::{instruction::InstructionError, pubkey::Pubkey, transaction::Tra
 use omni_connector::OmniConnector;
 use omni_types::{ChainKind, FastTransfer, OmniAddress, TransferId, near_events::OmniBridgeEvent};
 
-use crate::{config, utils, workers::PAUSED_ERROR};
+use crate::{
+    config, utils,
+    workers::{PAUSED_ERROR, RetryableEvent},
+};
 
 use super::{EventAction, Transfer};
 
@@ -39,20 +42,10 @@ pub async fn process_transfer_event(
 ) -> Result<EventAction> {
     let Transfer::Near {
         ref transfer_message,
-        creation_timestamp,
-        last_update_timestamp,
     } = transfer
     else {
         anyhow::bail!("Expected NearTransferWithTimestamp, got: {:?}", transfer);
     };
-
-    let current_timestamp = chrono::Utc::now().timestamp();
-
-    if current_timestamp - last_update_timestamp.unwrap_or_default()
-        < config.redis.check_insufficient_fee_transfers_every_secs
-    {
-        return Ok(EventAction::Retry);
-    }
 
     info!("Trying to process TransferMessage on NEAR");
 
@@ -132,7 +125,7 @@ pub async fn process_transfer_event(
                 redis_connection,
                 utils::redis::EVENTS,
                 tx_hash.to_string(),
-                UnverifiedTrasfer {
+                RetryableEvent::new(UnverifiedTrasfer {
                     tx_hash,
                     signer,
                     specific_errors: Some(vec![
@@ -144,7 +137,7 @@ pub async fn process_transfer_event(
                     ]),
                     original_key: key,
                     original_event: transfer,
-                },
+                }),
             )
             .await;
 
@@ -153,12 +146,6 @@ pub async fn process_transfer_event(
             Ok(EventAction::Remove)
         }
         Err(err) => {
-            if current_timestamp - creation_timestamp
-                > config.redis.keep_insufficient_fee_transfers_for
-            {
-                anyhow::bail!("Transfer ({}) is too old", transfer_message.origin_nonce);
-            }
-
             if let BridgeSdkError::NearRpcError(near_rpc_error) = err {
                 match near_rpc_error {
                     NearRpcError::NonceError
@@ -279,7 +266,7 @@ pub async fn process_sign_transfer_event(
         ChainKind::Near => {
             anyhow::bail!("Near to Near transfers are not supported yet");
         }
-        ChainKind::Eth | ChainKind::Base | ChainKind::Arb => {
+        ChainKind::Eth | ChainKind::Base | ChainKind::Arb | ChainKind::Bnb => {
             let nonce = evm_nonces
                 .reserve_nonce(message_payload.recipient.get_chain())
                 .await
@@ -369,7 +356,7 @@ pub async fn process_unverified_transfer_event(
             redis_connection,
             utils::redis::EVENTS,
             unverified_event.original_key,
-            unverified_event.original_event,
+            RetryableEvent::new(unverified_event.original_event),
         )
         .await;
     }

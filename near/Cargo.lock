@@ -1134,7 +1134,7 @@ dependencies = [
 
 [[package]]
 name = "evm-prover"
-version = "0.2.11"
+version = "0.2.12"
 dependencies = [
  "borsh",
  "near-sdk",
@@ -2100,6 +2100,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "mock-token-receiver"
+version = "0.1.0"
+dependencies = [
+ "near-contract-standards",
+ "near-sdk",
+]
+
+[[package]]
 name = "native-tls"
 version = "0.2.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2899,7 +2907,7 @@ dependencies = [
 
 [[package]]
 name = "omni-bridge"
-version = "0.2.11"
+version = "0.2.12"
 dependencies = [
  "borsh",
  "hex",
@@ -2929,13 +2937,14 @@ dependencies = [
  "near-sdk",
  "near-workspaces",
  "omni-types",
+ "rand 0.9.1",
  "rstest",
  "tokio",
 ]
 
 [[package]]
 name = "omni-token"
-version = "0.2.11"
+version = "0.2.12"
 dependencies = [
  "near-contract-standards",
  "near-sdk",
@@ -2944,7 +2953,7 @@ dependencies = [
 
 [[package]]
 name = "omni-types"
-version = "3.1.0"
+version = "3.2.0"
 dependencies = [
  "alloy",
  "borsh",
@@ -3308,6 +3317,7 @@ version = "0.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9fbfd9d094a40bf3ae768db9361049ace4c0e04a4fd6b359518bd7b73a73dd97"
 dependencies = [
+ "rand_chacha 0.9.0",
  "rand_core 0.9.3",
 ]
 
@@ -3346,6 +3356,9 @@ name = "rand_core"
 version = "0.9.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "99d9a13982dcf210057a8a78572b2217b667c3beacbf3a0d8b454f6f82837d38"
+dependencies = [
+ "getrandom 0.3.3",
+]
 
 [[package]]
 name = "rand_xorshift"
@@ -4398,7 +4411,7 @@ checksum = "1f3ccbac311fea05f86f61904b462b55fb3df8837a366dfc601a0161d0532f20"
 
 [[package]]
 name = "token-deployer"
-version = "0.2.11"
+version = "0.2.12"
 dependencies = [
  "borsh",
  "cargo-near-build",
@@ -5185,7 +5198,7 @@ dependencies = [
 
 [[package]]
 name = "wormhole-omni-prover-proxy"
-version = "0.2.11"
+version = "0.2.12"
 dependencies = [
  "borsh",
  "hex",

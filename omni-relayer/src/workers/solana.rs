@@ -15,7 +15,7 @@ use omni_types::{
     prover_args::WormholeVerifyProofArgs, prover_result::ProofKind,
 };
 
-use crate::{config, utils};
+use crate::{config, utils, workers::RetryableEvent};
 
 use super::{DeployToken, EventAction, FinTransfer, Transfer};
 
@@ -35,7 +35,6 @@ pub async fn process_init_transfer_event(
         native_fee,
         ref emitter,
         sequence,
-        last_update_timestamp,
         ..
     } = transfer
     else {
@@ -44,14 +43,6 @@ pub async fn process_init_transfer_event(
             transfer
         );
     };
-
-    let current_timestamp = chrono::Utc::now().timestamp();
-
-    if current_timestamp - last_update_timestamp.unwrap_or_default()
-        < config.redis.check_insufficient_fee_transfers_every_secs
-    {
-        return Ok(EventAction::Retry);
-    }
 
     info!("Trying to process InitTransfer log on Solana");
 
@@ -136,7 +127,7 @@ pub async fn process_init_transfer_event(
                 redis_connection,
                 utils::redis::STUCK_EVENTS,
                 &key,
-                transfer,
+                RetryableEvent::new(transfer),
             )
             .await;
             anyhow::bail!("Failed to get storage deposit actions: {}", err);

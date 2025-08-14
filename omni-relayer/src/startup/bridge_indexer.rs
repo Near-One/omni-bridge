@@ -13,7 +13,10 @@ use solana_sdk::pubkey::Pubkey;
 use tokio_stream::StreamExt;
 use tracing::{info, warn};
 
-use crate::{config, utils, workers};
+use crate::{
+    config, utils,
+    workers::{self, RetryableEvent},
+};
 
 const OMNI_EVENTS: &str = "omni_events";
 
@@ -25,7 +28,10 @@ fn get_evm_config(config: &config::Config, chain_kind: ChainKind) -> Result<&con
             .as_ref()
             .context("EVM config for Base is not set"),
         ChainKind::Arb => config.arb.as_ref().context("EVM config for Arb is not set"),
-        _ => anyhow::bail!("Unsupported chain kind for EVM: {:?}", chain_kind),
+        ChainKind::Bnb => config.bnb.as_ref().context("EVM config for Bnb is not set"),
+        ChainKind::Near | ChainKind::Sol => {
+            anyhow::bail!("Unsupported chain kind for EVM: {:?}", chain_kind)
+        }
     }
 }
 
@@ -49,11 +55,7 @@ async fn handle_transaction_event(
                     &mut redis_connection,
                     utils::redis::EVENTS,
                     transfer_message.origin_nonce.to_string(),
-                    crate::workers::Transfer::Near {
-                        transfer_message,
-                        creation_timestamp: chrono::Utc::now().timestamp(),
-                        last_update_timestamp: None,
-                    },
+                    RetryableEvent::new(crate::workers::Transfer::Near { transfer_message }),
                 )
                 .await;
             }
@@ -70,10 +72,10 @@ async fn handle_transaction_event(
                     .transfer_id
                     .origin_nonce
                     .to_string(),
-                OmniBridgeEvent::SignTransferEvent {
+                RetryableEvent::new(OmniBridgeEvent::SignTransferEvent {
                     signature: sign_event.signature,
                     message_payload: sign_event.message_payload,
-                },
+                }),
             )
             .await;
         }
@@ -101,14 +103,18 @@ async fn handle_transaction_event(
                 );
             };
 
-            let (OmniAddress::Eth(sender) | OmniAddress::Base(sender) | OmniAddress::Arb(sender)) =
-                init_transfer.sender.clone()
+            let (OmniAddress::Eth(sender)
+            | OmniAddress::Base(sender)
+            | OmniAddress::Arb(sender)
+            | OmniAddress::Bnb(sender)) = init_transfer.sender.clone()
             else {
                 anyhow::bail!("Unexpected token address: {}", init_transfer.sender);
             };
 
-            let (OmniAddress::Eth(token) | OmniAddress::Base(token) | OmniAddress::Arb(token)) =
-                init_transfer.token.clone()
+            let (OmniAddress::Eth(token)
+            | OmniAddress::Base(token)
+            | OmniAddress::Arb(token)
+            | OmniAddress::Bnb(token)) = init_transfer.token.clone()
             else {
                 anyhow::bail!("Unexpected token address: {}", init_transfer.token);
             };
@@ -142,15 +148,13 @@ async fn handle_transaction_event(
                 &mut redis_connection,
                 utils::redis::EVENTS,
                 origin_transaction_id.clone(),
-                workers::Transfer::Evm {
+                RetryableEvent::new(workers::Transfer::Evm {
                     chain_kind,
-                    block_number,
                     tx_hash,
                     log: log.clone(),
                     creation_timestamp,
-                    last_update_timestamp: None,
                     expected_finalization_time,
-                },
+                }),
             )
             .await;
 
@@ -160,7 +164,7 @@ async fn handle_transaction_event(
                     &mut redis_connection,
                     utils::redis::EVENTS,
                     format!("{origin_transaction_id}_fast"),
-                    crate::workers::Transfer::Fast {
+                    RetryableEvent::new(crate::workers::Transfer::Fast {
                         block_number,
                         tx_hash: origin_transaction_id,
                         token: log.token_address.to_string(),
@@ -177,7 +181,7 @@ async fn handle_transaction_event(
                         msg: log.message,
                         storage_deposit_amount: None,
                         safe_confirmations,
-                    },
+                    }),
                 )
                 .await;
             }
@@ -186,7 +190,6 @@ async fn handle_transaction_event(
             info!("Received EvmFinTransferMessage");
 
             let OmniTransactionOrigin::EVMLog {
-                block_number,
                 block_timestamp,
                 chain_kind,
                 ..
@@ -217,14 +220,13 @@ async fn handle_transaction_event(
                 &mut redis_connection,
                 utils::redis::EVENTS,
                 origin_transaction_id,
-                workers::FinTransfer::Evm {
+                RetryableEvent::new(workers::FinTransfer::Evm {
                     chain_kind,
-                    block_number,
                     tx_hash,
                     topic: utils::evm::FinTransfer::SIGNATURE_HASH,
                     creation_timestamp,
                     expected_finalization_time,
-                },
+                }),
             )
             .await;
         }
@@ -255,7 +257,7 @@ async fn handle_transaction_event(
                 &mut redis_connection,
                 utils::redis::EVENTS,
                 origin_transaction_id,
-                crate::workers::Transfer::Solana {
+                RetryableEvent::new(crate::workers::Transfer::Solana {
                     amount: init_transfer.amount.0.into(),
                     token: Pubkey::new_from_array(token.0),
                     sender: init_transfer.sender,
@@ -265,9 +267,7 @@ async fn handle_transaction_event(
                     message: init_transfer.message.unwrap_or_default(),
                     emitter: Pubkey::from_str(&emitter).context("Failed to parse emitter")?,
                     sequence: init_transfer.origin_nonce,
-                    creation_timestamp: chrono::Utc::now().timestamp(),
-                    last_update_timestamp: None,
-                },
+                }),
             )
             .await;
         }
@@ -289,7 +289,7 @@ async fn handle_transaction_event(
                 &mut redis_connection,
                 utils::redis::EVENTS,
                 origin_transaction_id,
-                crate::workers::FinTransfer::Solana { emitter, sequence },
+                RetryableEvent::new(crate::workers::FinTransfer::Solana { emitter, sequence }),
             )
             .await;
         }
@@ -313,7 +313,6 @@ async fn handle_meta_event(
             info!("Received EVMDeployToken: {deploy_token_event:?}");
 
             let OmniTransactionOrigin::EVMLog {
-                block_number,
                 block_timestamp,
                 chain_kind,
                 ..
@@ -347,14 +346,13 @@ async fn handle_meta_event(
                 &mut redis_connection,
                 utils::redis::EVENTS,
                 origin_transaction_id,
-                workers::DeployToken::Evm {
+                RetryableEvent::new(workers::DeployToken::Evm {
                     chain_kind,
-                    block_number,
                     tx_hash,
                     topic: utils::evm::DeployToken::SIGNATURE_HASH,
                     creation_timestamp,
                     expected_finalization_time,
-                },
+                }),
             )
             .await;
         }
@@ -367,7 +365,7 @@ async fn handle_meta_event(
                 &mut redis_connection,
                 utils::redis::EVENTS,
                 origin_transaction_id,
-                workers::DeployToken::Solana { emitter, sequence },
+                RetryableEvent::new(workers::DeployToken::Solana { emitter, sequence }),
             )
             .await;
         }
@@ -397,10 +395,10 @@ async fn handle_btc_event(
                 &mut redis_connection,
                 utils::redis::EVENTS,
                 origin_transaction_id.clone(),
-                workers::btc::SignBtcTransaction {
+                RetryableEvent::new(workers::btc::SignBtcTransaction {
                     near_tx_hash: origin_transaction_id,
                     relayer,
-                },
+                }),
             )
             .await;
         }
@@ -420,10 +418,10 @@ async fn handle_btc_event(
                         &mut redis_connection,
                         utils::redis::EVENTS,
                         origin_transaction_id.clone(),
-                        workers::Transfer::NearToBtc {
+                        RetryableEvent::new(workers::Transfer::NearToBtc {
                             btc_pending_id: btc_pending_id.clone(),
                             sign_index,
-                        },
+                        }),
                     )
                     .await;
                 }
@@ -440,24 +438,26 @@ async fn handle_btc_event(
                 &mut redis_connection,
                 utils::redis::EVENTS,
                 origin_transaction_id,
-                workers::Transfer::BtcToNear {
+                RetryableEvent::new(workers::Transfer::BtcToNear {
                     btc_tx_hash,
                     vout,
                     deposit_msg,
-                },
+                }),
             )
             .await;
         }
         BtcConnectorEventDetails::ConfirmedTxHash { btc_tx_hash } => {
-            info!("Received ConfirmedTxHash on Btc: {btc_tx_hash}");
-            utils::redis::add_event(
-                config,
-                &mut redis_connection,
-                utils::redis::EVENTS,
-                origin_transaction_id,
-                workers::btc::ConfirmedTxHash { btc_tx_hash },
-            )
-            .await;
+            if config.is_verifying_withdraw_enabled() {
+                info!("Received ConfirmedTxHash on Btc: {btc_tx_hash}");
+                utils::redis::add_event(
+                    config,
+                    &mut redis_connection,
+                    utils::redis::EVENTS,
+                    origin_transaction_id,
+                    RetryableEvent::new(workers::btc::ConfirmedTxHash { btc_tx_hash }),
+                )
+                .await;
+            }
         }
         BtcConnectorEventDetails::VerifyDeposit { .. }
         | BtcConnectorEventDetails::LogDepositAddress(_) => {}

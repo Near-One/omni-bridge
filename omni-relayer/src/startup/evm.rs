@@ -13,7 +13,7 @@ use tracing::{error, info, warn};
 
 use crate::{
     config, utils,
-    workers::{DeployToken, FinTransfer},
+    workers::{DeployToken, FinTransfer, RetryableEvent},
 };
 
 struct ProcessRecentBlocksParams<'a> {
@@ -73,7 +73,10 @@ pub async fn start_indexer(
         ChainKind::Arb => {
             extract_evm_config(config.arb.clone().context("Failed to get Arb config")?)?
         }
-        _ => anyhow::bail!("Unsupported chain kind: {chain_kind:?}"),
+        ChainKind::Bnb => {
+            extract_evm_config(config.bnb.clone().context("Failed to get Bnb config")?)?
+        }
+        ChainKind::Near | ChainKind::Sol => anyhow::bail!("Unsupported chain kind: {chain_kind:?}"),
     };
 
     let filter = Filter::new()
@@ -288,15 +291,13 @@ async fn process_log(
             redis_connection,
             utils::redis::EVENTS,
             tx_hash.to_string(),
-            crate::workers::Transfer::Evm {
+            RetryableEvent::new(crate::workers::Transfer::Evm {
                 chain_kind,
-                block_number,
                 tx_hash,
                 log: log.clone(),
                 creation_timestamp: timestamp,
-                last_update_timestamp: None,
                 expected_finalization_time,
-            },
+            }),
         )
         .await;
 
@@ -306,7 +307,7 @@ async fn process_log(
                 redis_connection,
                 utils::redis::EVENTS,
                 format!("{tx_hash}_fast"),
-                crate::workers::Transfer::Fast {
+                RetryableEvent::new(crate::workers::Transfer::Fast {
                     block_number,
                     tx_hash: format!("{tx_hash:?}"),
                     token: log.token_address.to_string(),
@@ -323,7 +324,7 @@ async fn process_log(
                     msg: log.message,
                     storage_deposit_amount: None,
                     safe_confirmations,
-                },
+                }),
             )
             .await;
         }
@@ -340,14 +341,13 @@ async fn process_log(
             redis_connection,
             utils::redis::EVENTS,
             tx_hash.to_string(),
-            FinTransfer::Evm {
+            RetryableEvent::new(FinTransfer::Evm {
                 chain_kind,
-                block_number,
                 tx_hash,
                 topic,
                 creation_timestamp: timestamp,
                 expected_finalization_time,
-            },
+            }),
         )
         .await;
     } else if log.log_decode::<utils::evm::DeployToken>().is_ok() {
@@ -363,14 +363,13 @@ async fn process_log(
             redis_connection,
             utils::redis::EVENTS,
             tx_hash.to_string(),
-            DeployToken::Evm {
+            RetryableEvent::new(DeployToken::Evm {
                 chain_kind,
-                block_number,
                 tx_hash,
                 topic,
                 creation_timestamp: timestamp,
                 expected_finalization_time,
-            },
+            }),
         )
         .await;
     } else {

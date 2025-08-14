@@ -29,8 +29,6 @@ dotenv.config()
 const INFURA_API_KEY = process.env.INFURA_API_KEY
 const EVM_PRIVATE_KEY = process.env.EVM_PRIVATE_KEY || "11".repeat(32)
 const ETHERSCAN_API_KEY = process.env.ETHERSCAN_API_KEY || ""
-const ARBISCAN_API_KEY = process.env.ARBISCAN_API_KEY || ""
-const BASESCAN_API_KEY = process.env.BASESCAN_API_KEY || ""
 
 task("set-metadata-ft", "Set metadata for NEP-141 tokens on the Ethereum side")
   .addParam("nearTokenAccount", "Near account id of the token")
@@ -289,6 +287,13 @@ const config: HardhatUserConfig = {
       url: `https://base-mainnet.infura.io/v3/${INFURA_API_KEY}`,
       accounts: [`${EVM_PRIVATE_KEY}`],
     },
+    bnbMainnet: {
+      wormholeAddress: "0x98f3c9e6E3fAce36bAAd05FE09d375Ef1464288B",
+      omniChainId: 5,
+      chainId: 56,
+      url: `https://bsc-mainnet.infura.io/v3/${INFURA_API_KEY}`,
+      accounts: [`${EVM_PRIVATE_KEY}`],
+    },
     sepolia: {
       omniChainId: 0,
       chainId: 11155111,
@@ -309,16 +314,16 @@ const config: HardhatUserConfig = {
       url: `https://base-sepolia.infura.io/v3/${INFURA_API_KEY}`,
       accounts: [`${EVM_PRIVATE_KEY}`],
     },
+    bnbTestnet: {
+      wormholeAddress: "0x68605AD7b15c732a30b1BbC62BE8F2A509D74b4D",
+      omniChainId: 5,
+      chainId: 97,
+      url: `https://bsc-testnet.infura.io/v3/${INFURA_API_KEY}`,
+      accounts: [`${EVM_PRIVATE_KEY}`],
+    },
   },
   etherscan: {
-    apiKey: {
-      mainnet: ETHERSCAN_API_KEY,
-      arbitrumOne: ARBISCAN_API_KEY,
-      base: BASESCAN_API_KEY,
-      sepolia: ETHERSCAN_API_KEY,
-      arbitrumSepolia: ARBISCAN_API_KEY,
-      baseSepolia: BASESCAN_API_KEY,
-    },
+    apiKey: ETHERSCAN_API_KEY,
   },
 }
 
