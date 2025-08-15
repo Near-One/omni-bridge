@@ -11,6 +11,18 @@ class NearClient {
         });
     }
 
+    async getNearLog(txHash: string, receiptIdx: number, logIdx: number): Promise<string> {
+        const txStatus = await this.provider.txStatus(txHash, 'system');
+
+        // Check main transaction status
+        const status = txStatus.status as { SuccessValue?: string; Failure?: unknown };
+        if (status.Failure) {
+            throw new VerificationError(`NEAR transaction ${txHash} failed: ${JSON.stringify(status.Failure)}`);
+        }
+
+        return txStatus.receipts_outcome[receiptIdx].outcome.logs[logIdx];
+    }
+
     async verifyNearReceipt(txHash: string): Promise<void> {
         const txStatus = await this.provider.txStatus(txHash, 'system');
 
@@ -76,3 +88,4 @@ const nearClient = new NearClient();
 export const verifyNearReceipt = (txHash: string) => nearClient.verifyNearReceipt(txHash);
 export const getNearTokenMetadata = (tokenAddress: string) => nearClient.getTokenMetadata(tokenAddress);
 export const getLockerTokenAddress = (lockerAddress: string, nearToken: string, evmChainKind: string) => nearClient.getLockerTokenAddress(lockerAddress, nearToken, evmChainKind); 
+export const getNearLog = (txHash: string, receiptIdx: number, logIdx: number) => nearClient.getNearLog(txHash, receiptIdx, logIdx);
