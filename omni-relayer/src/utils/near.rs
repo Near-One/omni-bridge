@@ -144,7 +144,8 @@ pub async fn handle_streamer_message(
                     .await;
                 }
             }
-            OmniBridgeEvent::FastTransferEvent { .. }
+            OmniBridgeEvent::FailedFinTransferEvent { .. }
+            | OmniBridgeEvent::FastTransferEvent { .. }
             | OmniBridgeEvent::ClaimFeeEvent { .. }
             | OmniBridgeEvent::LogMetadataEvent { .. }
             | OmniBridgeEvent::DeployTokenEvent { .. }

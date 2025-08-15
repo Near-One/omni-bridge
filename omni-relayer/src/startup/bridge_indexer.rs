@@ -296,6 +296,9 @@ async fn handle_transaction_event(
         OmniTransferMessage::NearFastTransferMessage { .. } => {
             info!("Received NearFastTransferMessage, skipping");
         }
+        OmniTransferMessage::NearFailedTransferMessage { .. } => {
+            info!("Received NearFailedTransferMessage, skipping");
+        }
     }
 
     Ok(())
