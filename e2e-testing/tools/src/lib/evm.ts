@@ -75,3 +75,28 @@ export async function verifyEvmTokenBalance(tokenAddress: string, accountAddress
         );
     }
 } 
+
+export async function getEvmLog(txHash: string, event_signature: string): Promise<ethers.Log> {
+    const provider = getInfuraProvider();
+    const receipt = await provider.getTransactionReceipt(txHash);
+    if (!receipt) {
+        throw new VerificationError(`Transaction ${txHash} not found`);
+    }
+    const logEntry = receipt.logs.find(l => l.topics.includes(ethers.id(event_signature)));
+    if (!logEntry) {
+        throw new VerificationError(`Event ${event_signature} not found in transaction ${txHash}`);
+    }
+    return logEntry;
+}
+
+export function addressToPaddedHex(address: string): string {
+    const cleanAddress = address.startsWith('0x') ? address.slice(2) : address;
+    
+    if (cleanAddress.length !== 40) {
+        throw new Error('Invalid address length. Expected 40 hex characters.');
+    }
+    
+    const paddedAddress = cleanAddress.toLowerCase().padStart(64, '0');
+    
+    return '0x' + paddedAddress;
+}
