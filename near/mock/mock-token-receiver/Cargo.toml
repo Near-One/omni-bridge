@@ -1,5 +1,5 @@
 [package]
-name = "mock-token"
+name = "mock-token-receiver"
 version = "0.1.0"
 authors = ["Near One <info@nearone.org>"]
 edition = "2021"

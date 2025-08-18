@@ -47,6 +47,14 @@ pub mod tests {
     }
 
     #[fixture]
+    pub fn mock_token_receiver_wasm() -> Vec<u8> {
+        build_wasm(
+            "../mock/mock-token-receiver/Cargo.toml",
+            "test-target-for-mock-token-receiver",
+        )
+    }
+
+    #[fixture]
     pub fn locker_wasm() -> Vec<u8> {
         build_wasm("../omni-bridge/Cargo.toml", "test-target-for-locker")
     }
@@ -85,6 +93,12 @@ pub mod tests {
 
     pub fn base_factory_address() -> OmniAddress {
         "base:0x252e87862A3A720287E7fd527cE6e8d0738427A2"
+            .parse()
+            .unwrap()
+    }
+
+    pub fn bnb_factory_address() -> OmniAddress {
+        "bnb:0x252e87862A3A720287E7fd527cE6e8d0738427A2"
             .parse()
             .unwrap()
     }

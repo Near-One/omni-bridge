@@ -22,6 +22,7 @@ enum MessageType {
     LogMetadata
 }
 
+// slither-disable-start unused-return
 contract OmniBridgeWormhole is OmniBridge {
     IWormhole private _wormhole;
     // https://wormhole.com/docs/build/reference/consistency-levels
@@ -49,6 +50,7 @@ contract OmniBridgeWormhole is OmniBridge {
             bytes1(decimals),
             bytes1(originDecimals)
         );
+        // slither-disable-next-line reentrancy-eth
         _wormhole.publishMessage{value: msg.value}(
             wormholeNonce,
             payload,
@@ -73,7 +75,7 @@ contract OmniBridgeWormhole is OmniBridge {
             Borsh.encodeString(symbol),
             bytes1(decimals)
         );
-
+        // slither-disable-next-line reentrancy-eth
         _wormhole.publishMessage{value: msg.value}(
             wormholeNonce,
             payload,
@@ -93,6 +95,7 @@ contract OmniBridgeWormhole is OmniBridge {
             Borsh.encodeUint128(payload.amount),
             Borsh.encodeString(payload.feeRecipient)
         );
+        // slither-disable-next-line reentrancy-eth
         _wormhole.publishMessage{value: msg.value}(
             wormholeNonce,
             messagePayload,
@@ -126,6 +129,7 @@ contract OmniBridgeWormhole is OmniBridge {
             Borsh.encodeString(recipient),
             Borsh.encodeString(message)
         );
+        // slither-disable-next-line reentrancy-eth
         _wormhole.publishMessage{value: value}(
             wormholeNonce,
             payload,
@@ -143,3 +147,4 @@ contract OmniBridgeWormhole is OmniBridge {
         _consistencyLevel = consistencyLevel;
     }
 }
+// slither-disable-end unused-return

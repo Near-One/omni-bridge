@@ -17,7 +17,7 @@ near_sender_account_file = const.near_account_dir / f"{NTA.SENDER_ACCOUNT}.json"
 near_bridge_contract_file = const.near_deploy_results_dir / f"{NC.OMNI_BRIDGE}.json"
 near_test_token_file = const.near_deploy_results_dir / f"{NC.MOCK_TOKEN}.json"
 
-call_dir = const.common_generated_dir / "04-transfer-near-to-{network}"
+call_dir = const.common_generated_dir / "02-transfer-near-to-{network}"
 report_file = call_dir / "verify-transfer-report.txt"
 
 # Main pipeline rule
@@ -188,9 +188,11 @@ rule verify_transfer_near_to_evm:
         evm_chain_str = lambda wc: const.Chain.from_evm_network(wc.network),
         token_locker_id = lambda wc, input: get_json_field(input.bridge_contract, "contract_id"),
         near_token_id = lambda wc, input: get_json_field(input.test_token, "contract_id"),
+        progress_wait_cmd = progress_wait(5),
         recipient_address = lambda wc, input: get_json_field(input.evm_account, "address"),
     shell: """
     {params.mkdir} && \
+    {params.progress_wait_cmd} \
     yarn --cwd {const.common_tools_dir} --silent verify-transfer-near-to-evm \
         --tx-dir {params.call_dir} \
         --receiver {params.recipient_address} \

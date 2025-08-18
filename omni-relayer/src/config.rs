@@ -6,12 +6,21 @@ use near_primitives::types::AccountId;
 use omni_types::{ChainKind, OmniAddress};
 use serde::Deserialize;
 
-pub fn get_private_key(chain_kind: ChainKind) -> String {
+pub enum NearSignerType {
+    Omni,
+    Fast,
+}
+
+pub fn get_private_key(chain_kind: ChainKind, near_signer_type: Option<NearSignerType>) -> String {
     let env_var = match chain_kind {
-        ChainKind::Near => "NEAR_PRIVATE_KEY",
+        ChainKind::Near => match near_signer_type.unwrap() {
+            NearSignerType::Omni => "NEAR_OMNI_PRIVATE_KEY",
+            NearSignerType::Fast => "NEAR_FAST_PRIVATE_KEY",
+        },
         ChainKind::Eth => "ETH_PRIVATE_KEY",
         ChainKind::Base => "BASE_PRIVATE_KEY",
         ChainKind::Arb => "ARB_PRIVATE_KEY",
+        ChainKind::Bnb => "BNB_PRIVATE_KEY",
         ChainKind::Sol => "SOLANA_PRIVATE_KEY",
     };
 
@@ -20,7 +29,7 @@ pub fn get_private_key(chain_kind: ChainKind) -> String {
 
 pub fn get_relayer_evm_address(chain_kind: ChainKind) -> Address {
     let decoded_private_key =
-        hex::decode(get_private_key(chain_kind)).expect("Failed to decode EVM private key");
+        hex::decode(get_private_key(chain_kind, None)).expect("Failed to decode EVM private key");
 
     let secret_key = SigningKey::from_slice(&decoded_private_key)
         .expect("Failed to create a `SecretKey` from the provided private key");
@@ -85,7 +94,9 @@ pub struct Config {
     pub eth: Option<Evm>,
     pub base: Option<Evm>,
     pub arb: Option<Evm>,
+    pub bnb: Option<Evm>,
     pub solana: Option<Solana>,
+    pub btc: Option<Btc>,
     pub wormhole: Wormhole,
 }
 
@@ -97,11 +108,32 @@ impl Config {
     pub const fn is_bridge_api_enabled(&self) -> bool {
         self.bridge_indexer.api_url.is_some()
     }
+
+    pub fn is_fast_relayer_enabled(&self) -> bool {
+        self.near.fast_relayer_enabled
+    }
+
+    pub fn is_signing_btc_transaction_enabled(&self) -> bool {
+        self.btc.as_ref().is_some_and(|btc| btc.signing_enabled)
+    }
+
+    pub fn is_verifying_withdraw_enabled(&self) -> bool {
+        self.btc
+            .as_ref()
+            .is_some_and(|btc| btc.verifying_withdraw_enabled)
+    }
 }
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct Redis {
     pub url: String,
+
+    pub sleep_time_after_events_process_secs: u64,
+    pub query_retry_attempts: u64,
+    pub query_retry_sleep_secs: u64,
+    pub fee_retry_base_sleep_secs: i64,
+    pub fee_retry_max_sleep_secs: i64,
+    pub keep_transfers_for_secs: i64,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -123,14 +155,27 @@ pub enum Network {
     Mainnet,
 }
 
+impl std::fmt::Display for Network {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Network::Testnet => write!(f, "testnet"),
+            Network::Mainnet => write!(f, "mainnet"),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Deserialize)]
 pub struct Near {
     pub network: Network,
     pub rpc_url: String,
     pub omni_bridge_id: AccountId,
-    pub btc_connector: AccountId,
-    pub credentials_path: Option<String>,
+    pub btc_connector: Option<AccountId>,
+    pub btc: Option<AccountId>,
+    pub omni_credentials_path: Option<String>,
+    pub fast_credentials_path: Option<String>,
     pub sign_without_checking_fee: Option<Vec<OmniAddress>>,
+    #[serde(default)]
+    pub fast_relayer_enabled: bool,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -141,9 +186,12 @@ pub struct Evm {
     pub rpc_ws_url: String,
     pub chain_id: u64,
     pub omni_bridge_address: Address,
+    pub wormhole_address: Option<Address>,
     pub light_client: Option<AccountId>,
     pub block_processing_batch_size: u64,
     pub expected_finalization_time: i64,
+    #[serde(default = "u64::max_value")]
+    pub safe_confirmations: u64,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -168,6 +216,13 @@ pub struct Solana {
     pub finalize_transfer_discriminator: Vec<u8>,
     pub finalize_transfer_sol_discriminator: Vec<u8>,
     pub credentials_path: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct Btc {
+    pub rpc_http_url: String,
+    pub signing_enabled: bool,
+    pub verifying_withdraw_enabled: bool,
 }
 
 #[derive(Debug, Clone, Deserialize)]

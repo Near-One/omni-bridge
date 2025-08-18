@@ -1,6 +1,6 @@
 use std::str::FromStr;
 
-use log::warn;
+use tracing::warn;
 
 use anyhow::Result;
 use near_sdk::json_types::U128;
@@ -15,7 +15,7 @@ use ethereum_types::H256;
 
 use crate::config;
 
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct InitTransferMessage {
     pub sender: Address,
     pub token_address: Address,

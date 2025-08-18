@@ -73,30 +73,6 @@ task("deploy-test-token", "Deploys the E2ETestToken contract")
     }));
   });
 
-task("mint-test-token", "Mints tokens to a specified address")
-  .addParam("contract", "The address of the deployed token contract")
-  .addParam("to", "The address to mint tokens to")
-  .addParam("amount", "Amount of tokens to mint")
-  .setAction(async (taskArgs, hre) => {
-    const { ethers } = hre;
-
-    const amount = ethers.parseEther(taskArgs.amount);
-
-    const [signer] = await ethers.getSigners();
-
-    const token = await ethers.getContractAt("E2ETestToken", taskArgs.contract, signer);
-
-    const tx = await token.mint(taskArgs.to, amount);
-    await tx.wait();
-
-    console.log(JSON.stringify({
-      success: true,
-      contractAddress: taskArgs.contract,
-      to: taskArgs.to,
-      amount: taskArgs.amount
-    }));
-  });
-
 task("get-current-eoa", "Gets the EOA address of a current signer")
   .setAction(async (_, hre) => {
     const { ethers } = hre;
