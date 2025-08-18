@@ -56,7 +56,6 @@ class NearContract(StrEnum):
     TOKEN_DEPLOYER = "token_deployer"
     WORMHOLE_OMNI_PROVER_PROXY = "wormhole_omni_prover_proxy"
     MOCK_TOKEN = "mock_token"
-    RB_BRIDGE_TOKEN_FACTORY = "bridge_token_factory"
 
 
 class NearTestAccount(StrEnum):
