@@ -69,6 +69,9 @@ pub struct WormholeCPI<'info> {
     pub system_program: Program<'info, System>,
 
     pub wormhole_post_message_shim: Program<'info, WormholePostMessageShim>,
+    /// CHECK: Shim event authority
+    /// TODO: An address constraint could be included if this address was published to wormhole_solana_consts
+    /// Address will be enforced by the shim.
     pub wormhole_post_message_shim_ea: UncheckedAccount<'info>,
 }
 
