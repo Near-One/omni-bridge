@@ -93,6 +93,7 @@ rule get_zcash_user_deposit_address:
     shell: """
     {params.mkdir} && \
          bridge-cli testnet get-bitcoin-address \
+         --chain zcash \
          --btc-connector {params.zcash_connector} \
          -r {params.user_account_id} \
          --near-signer {params.user_account_id} \
