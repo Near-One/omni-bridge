@@ -96,7 +96,7 @@ impl WormholeCPI<'_> {
 
         wormhole_post_message_shim::cpi::post_message(
             CpiContext::new_with_signer(
-                self.wormhole_program.to_account_info(),
+                self.wormhole_post_message_shim.to_account_info(),
                 wormhole_post_message_shim::cpi::accounts::PostMessage {
                     bridge: self.bridge.to_account_info(),
                     message: self.message.to_account_info(),
