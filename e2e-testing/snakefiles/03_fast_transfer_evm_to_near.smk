@@ -142,7 +142,7 @@ rule near_fin_transfer:
     params:
         config_file = const.common_bridge_sdk_config_file,
         mkdir = get_mkdir_cmd(call_dir),
-        progress_wait_cmd = progress_wait(1),
+        progress_wait_cmd = progress_wait(1200),
         evm_chain_str = lambda wc: const.Chain.from_evm_network(wc.network),
         init_transfer_tx_hash = lambda wc, input: get_json_field(input.init_transfer, "tx_hash"),
         relayer_account_id = lambda wc, input: get_json_field(input.relayer_account, "account_id"),
