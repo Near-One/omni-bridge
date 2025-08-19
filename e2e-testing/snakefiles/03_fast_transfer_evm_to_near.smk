@@ -5,7 +5,7 @@ from const import NearContract as NC, NearTestAccount as NTA, EvmContract as EC,
 from utils import progress_wait, get_json_field, extract_tx_hash, get_mkdir_cmd
 
 module transfer_near_to_evm:
-    snakefile: "./04_transfer_near_to_evm.smk"
+    snakefile: "./02_transfer_near_to_evm.smk"
 use rule * from transfer_near_to_evm
 
 evm_deploy_results_dir = pathlib.Path(const.get_evm_deploy_results_dir("{network}"))
@@ -18,7 +18,7 @@ near_relayer_account_file = const.near_account_dir / f"{NTA.RELAYER_ACCOUNT}.jso
 near_bridge_contract_file = const.near_deploy_results_dir / f"{NC.OMNI_BRIDGE}.json"
 near_test_token_file = const.near_deploy_results_dir / f"{NC.MOCK_TOKEN}.json"
 
-call_dir = const.common_generated_dir / "05-fast-transfer-{network}-to-near"
+call_dir = const.common_generated_dir / "03-fast-transfer-{network}-to-near"
 report_file = call_dir / "verify-fast-transfer-report.txt"
 
 fast_transfer_amount = 1000
@@ -142,7 +142,7 @@ rule near_fin_transfer:
     params:
         config_file = const.common_bridge_sdk_config_file,
         mkdir = get_mkdir_cmd(call_dir),
-        progress_wait_cmd = progress_wait(1200),
+        progress_wait_cmd = progress_wait(1),
         evm_chain_str = lambda wc: const.Chain.from_evm_network(wc.network),
         init_transfer_tx_hash = lambda wc, input: get_json_field(input.init_transfer, "tx_hash"),
         relayer_account_id = lambda wc, input: get_json_field(input.relayer_account, "account_id"),
@@ -153,11 +153,9 @@ rule near_fin_transfer:
     shell:"""
         {params.mkdir} && \
         {params.progress_wait_cmd} \
-        bridge-cli testnet near-fin-transfer-with-evm-proof \
+        bridge-cli testnet near-fin-transfer \
             --chain {params.evm_chain_str} \
             --tx-hash {params.init_transfer_tx_hash} \
-            --storage-deposit-actions {params.token_id}:{params.relayer_account_id}:0 \
-            --storage-deposit-actions {params.token_id}:{params.relayer_account_id}:0 \
             --near-signer {params.relayer_account_id} \
             --near-private-key {params.relayer_private_key} \
             --near-token-locker-id {params.bridge_contract_id} \
