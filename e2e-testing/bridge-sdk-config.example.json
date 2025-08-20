@@ -18,8 +18,6 @@
     "solana_bridge_address": "3u8hJUVTA4jH1wYAyUur7FFZVQ8H635K3tSHHF4ssjQ5",
     "solana_wormhole_address": "3u8hJUVTA4jH1wYAyUur7FFZVQ8H635K3tSHHF4ssjQ5",
     "solana_keypair": "6Tyktf6mEqUMEKm2ZpLn3srEwk9zsT5jiE54EgPgToikMFYww1LGFUXgwgr6hvc9CikpaNaBH2vmkmqN3Usrxpd",
-    "fast_bridge_account_id": "fastbridge.testnet",
-    "fast_bridge_address": "0x0B2C4871C9bAD795746C05c1539A8B1f26c26357",
     "eth_rpc": "<ETH_RPC>",
     "eth_private_key": "<ETH_PRIVATE_KEY>",
     "base_private_key": "<ETH_PRIVATE_KEY>",
