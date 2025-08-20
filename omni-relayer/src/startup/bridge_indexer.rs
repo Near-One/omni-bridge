@@ -408,6 +408,7 @@ async fn handle_btc_event(
         BtcConnectorEventDetails::TransferNearToBtc {
             btc_pending_id,
             utxo_count,
+            ..
         } => {
             if config.is_signing_btc_transaction_enabled() {
                 info!("Received NearToBtcInitTransfer: {origin_transaction_id}");
@@ -463,6 +464,7 @@ async fn handle_btc_event(
             }
         }
         BtcConnectorEventDetails::VerifyDeposit { .. }
+        | BtcConnectorEventDetails::VerifyWithdraw { .. }
         | BtcConnectorEventDetails::LogDepositAddress(_) => {}
     }
 

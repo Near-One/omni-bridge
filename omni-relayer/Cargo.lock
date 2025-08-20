@@ -2121,13 +2121,14 @@ dependencies = [
 [[package]]
 name = "bridge-indexer-types"
 version = "0.1.0"
-source = "git+ssh://git@github.com/near-one/bridge-indexer-rs.git?rev=8159f1d10f80f107d4cf54c2bb8d6ffc32201db0#8159f1d10f80f107d4cf54c2bb8d6ffc32201db0"
+source = "git+ssh://git@github.com/near-one/bridge-indexer-rs.git?rev=929062d67c60df077e2aa314d04032963d65f8f4#929062d67c60df077e2aa314d04032963d65f8f4"
 dependencies = [
  "borsh 1.5.7",
  "bson",
  "ethabi 12.0.0",
  "ethereum-types 0.12.1",
  "hex",
+ "near-gas",
  "near-indexer-primitives 0.29.2",
  "omni-types",
  "rlp 0.4.6",
@@ -2136,6 +2137,7 @@ dependencies = [
  "serde_with",
  "thiserror 1.0.69",
  "tiny-keccak 2.0.2",
+ "utoipa",
 ]
 
 [[package]]
@@ -6861,7 +6863,7 @@ dependencies = [
 
 [[package]]
 name = "omni-relayer"
-version = "0.3.20"
+version = "0.3.21"
 dependencies = [
  "alloy",
  "anyhow",
@@ -12867,6 +12869,29 @@ name = "utf8parse"
 version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "06abde3611657adf66d383f00b093d7faecc7fa57071cce2578660c9f1010821"
+
+[[package]]
+name = "utoipa"
+version = "5.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2fcc29c80c21c31608227e0912b2d7fddba57ad76b606890627ba8ee7964e993"
+dependencies = [
+ "indexmap 2.10.0",
+ "serde",
+ "serde_json",
+ "utoipa-gen",
+]
+
+[[package]]
+name = "utoipa-gen"
+version = "5.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6d79d08d92ab8af4c5e8a6da20c47ae3f61a0f1dabc1997cdf2d082b757ca08b"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.104",
+]
 
 [[package]]
 name = "uuid"
