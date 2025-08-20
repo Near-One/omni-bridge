@@ -2,7 +2,19 @@ use near_sdk::near;
 
 use crate::u256::U256;
 
-pub const ZCASH_MEDIAN_TIME_SPAN: usize = 11;
+pub const MEDIAN_TIME_SPAN: usize = 11;
+
+/**
+ * Maximum amount of time that a block timestamp is allowed to be ahead of the
+ * median-time-past of the previous block.
+ */
+pub const MAX_FUTURE_BLOCK_TIME_MTP: u32 = 90 * 60;
+
+/**
+ * Maximum amount of time that a block timestamp is allowed to be ahead of the
+ * current local time.
+ */
+pub const MAX_FUTURE_BLOCK_TIME_LOCAL: u32 = 2 * 60 * 60;
 
 #[near(serializers = [borsh, json])]
 #[derive(Clone, Copy, Debug)]

@@ -1,9 +1,9 @@
-use crate::utils::BlocksGetter;
+use crate::utils::{get_median_time_past, BlocksGetter};
 use crate::{BtcLightClient, BtcLightClientExt, Header, U256};
 use btc_types::header::ExtendedHeader;
-use btc_types::network::{Network, NetworkConfig};
+use btc_types::network::{Network, NetworkConfig, MAX_FUTURE_BLOCK_TIME_LOCAL};
 use btc_types::utils::target_from_bits;
-use near_sdk::{near, require};
+use near_sdk::{env, near, require};
 
 #[near]
 impl BtcLightClient {
@@ -15,16 +15,33 @@ impl BtcLightClient {
         ("Bitcoin".to_owned(), self.network)
     }
 
+    // reference implementation: https://github.com/bitcoin/bitcoin/blob/ae024137bda9fe189f4e7ccf26dbaffd44cbbeb6/src/validation.cpp#L4200
     pub(crate) fn check_pow(&self, block_header: &Header, prev_block_header: &ExtendedHeader) {
         let config = self.get_config();
         let expected_bits = get_next_work_required(&config, block_header, prev_block_header, self);
 
         require!(
             expected_bits == block_header.bits,
-            format!(
-                "Error: Incorrect target. Expected bits: {:?}, Actual bits: {:?}",
-                expected_bits, block_header.bits
-            )
+            "bad-diffbits: incorrect proof of work"
+        );
+
+        // Check timestamp against prev
+        require!(
+            block_header.time > get_median_time_past(prev_block_header.clone(), self),
+            "time-too-old: block's timestamp is too early"
+        );
+
+        // Check timestamp
+        let current_timestamp = u32::try_from(env::block_timestamp_ms() / 1000).unwrap(); // Convert to seconds
+        require!(
+            block_header.time <= current_timestamp + MAX_FUTURE_BLOCK_TIME_LOCAL,
+            "time-too-new: block timestamp too far in the future"
+        );
+
+        // Reject blocks with outdated version
+        require!(
+            block_header.version >= 4,
+            "bad-version: block version must be at least 4"
         );
     }
 }

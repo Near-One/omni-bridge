@@ -1,7 +1,7 @@
 use crate::{utils::BlocksGetter, BtcLightClient, BtcLightClientExt};
 use btc_types::{
     header::{ExtendedHeader, Header},
-    network::{Network, ZcashConfig},
+    network::{Network, ZcashConfig, MAX_FUTURE_BLOCK_TIME_LOCAL, MAX_FUTURE_BLOCK_TIME_MTP},
     u256::U256,
     utils::target_from_bits,
 };
@@ -17,16 +17,43 @@ impl BtcLightClient {
         ("Zcash".to_owned(), self.network)
     }
 
+    // Reference implementation: https://github.com/zcash/zcash/blob/v6.2.0/src/main.cpp#L5019
     pub(crate) fn check_pow(&self, block_header: &Header, prev_block_header: &ExtendedHeader) {
-        let expected_bits =
+        let next_work_result =
             zcash_get_next_work_required(&self.get_config(), block_header, prev_block_header, self);
 
         require!(
-            expected_bits == block_header.bits,
-            format!(
-                "Error: Incorrect target. Expected bits: {:?}, Actual bits: {:?}",
-                expected_bits, block_header.bits
-            )
+            next_work_result.expected_bits == block_header.bits,
+            "bad-diffbits: incorrect proof of work"
+        );
+
+        // Check timestamp against prev
+        require!(
+            block_header.time > next_work_result.prev_block_median_time_past,
+            "time-too-old: block time is before the median time of the previous block"
+        );
+
+        // Check future timestamp soft fork rule introduced in v2.1.1-1.
+        // This retrospectively activates at block height 2 for mainnet and regtest,
+        // and 6 blocks after Blossom activation for testnet.
+        //
+        // MAX_FUTURE_BLOCK_TIME_MTP is typically 129600 seconds (36 hours) in Zcash
+        require!(
+            block_header.time
+                <= next_work_result.prev_block_median_time_past + MAX_FUTURE_BLOCK_TIME_MTP,
+            "time-too-far-ahead-of-mtp: block timestamp is too far ahead of median-time-past"
+        );
+
+        // Check timestamp
+        let current_timestamp = u32::try_from(env::block_timestamp_ms() / 1000).unwrap(); // Convert to seconds
+        require!(
+            block_header.time <= current_timestamp + MAX_FUTURE_BLOCK_TIME_LOCAL,
+            "time-too-new: block timestamp is too far ahead of local time"
+        );
+
+        require!(
+            block_header.version >= 4,
+            "bad-version: block version must be at least 4"
         );
 
         // Check Equihash solution
@@ -41,40 +68,29 @@ impl BtcLightClient {
     }
 }
 
+struct NextWorkResult {
+    expected_bits: u32,
+    prev_block_median_time_past: u32,
+}
+
 // Reference implementation: https://github.com/zcash/zcash/blob/v6.2.0/src/pow.cpp#L20
 fn zcash_get_next_work_required(
     config: &ZcashConfig,
     block_header: &Header,
     prev_block_header: &ExtendedHeader,
     prev_block_getter: &impl BlocksGetter,
-) -> u32 {
-    use btc_types::network::ZCASH_MEDIAN_TIME_SPAN;
-
-    if let Some(pow_allow_min_difficulty_blocks_after_height) =
-        config.pow_allow_min_difficulty_blocks_after_height
-    {
-        // Comparing with >= because this function returns the work required for the block after prev_block_header
-        if prev_block_header.block_height >= pow_allow_min_difficulty_blocks_after_height {
-            // Special difficulty rule for testnet:
-            // If the new block's timestamp is more than 6 * block interval minutes
-            // then allow mining of a min-difficulty block.
-            if i64::from(block_header.time)
-                > i64::from(prev_block_header.block_header.time) + config.pow_target_spacing() * 6
-            {
-                return config.proof_of_work_limit_bits;
-            }
-        }
-    }
+) -> NextWorkResult {
+    use btc_types::network::MEDIAN_TIME_SPAN;
 
     // Find the first block in the averaging interval
     // and the median time past for the first and last blocks in the interval
     let mut current_header = prev_block_header.clone();
     let mut total_target = U256::ZERO;
-    let mut median_time = [0u32; ZCASH_MEDIAN_TIME_SPAN];
+    let mut median_time = [0u32; MEDIAN_TIME_SPAN];
 
     let prev_block_median_time_past = {
         for i in 0..usize::try_from(config.pow_averaging_window).unwrap() {
-            if i < ZCASH_MEDIAN_TIME_SPAN {
+            if i < MEDIAN_TIME_SPAN {
                 median_time[i] = current_header.block_header.time;
             }
 
@@ -91,13 +107,32 @@ fn zcash_get_next_work_required(
     };
 
     let first_block_in_interval_median_time_past = {
-        for i in 0..ZCASH_MEDIAN_TIME_SPAN {
+        for i in 0..MEDIAN_TIME_SPAN {
             median_time[i] = current_header.block_header.time;
             current_header = prev_block_getter.get_prev_header(&current_header.block_header);
         }
         median_time.sort_unstable();
         median_time[median_time.len() / 2]
     };
+
+    if let Some(pow_allow_min_difficulty_blocks_after_height) =
+        config.pow_allow_min_difficulty_blocks_after_height
+    {
+        // Comparing with >= because this function returns the work required for the block after prev_block_header
+        if prev_block_header.block_height >= pow_allow_min_difficulty_blocks_after_height {
+            // Special difficulty rule for testnet:
+            // If the new block's timestamp is more than 6 * block interval minutes
+            // then allow mining of a min-difficulty block.
+            if i64::from(block_header.time)
+                > i64::from(prev_block_header.block_header.time) + config.pow_target_spacing() * 6
+            {
+                return NextWorkResult {
+                    expected_bits: config.proof_of_work_limit_bits,
+                    prev_block_median_time_past,
+                };
+            }
+        }
+    }
 
     // The protocol specification leaves MeanTarget(height) as a rational, and takes the floor
     // only after dividing by AveragingWindowTimespan in the computation of Threshold(height):
@@ -108,12 +143,17 @@ fn zcash_get_next_work_required(
     let average_target = total_target
         / U256::from(<i64 as TryInto<u64>>::try_into(config.pow_averaging_window).unwrap());
 
-    zcash_calculate_next_work_required(
+    let expected_bits = zcash_calculate_next_work_required(
         config,
         average_target,
         prev_block_median_time_past,
         first_block_in_interval_median_time_past,
-    )
+    );
+
+    NextWorkResult {
+        expected_bits,
+        prev_block_median_time_past,
+    }
 }
 
 fn zcash_calculate_next_work_required(
