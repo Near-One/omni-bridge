@@ -109,8 +109,8 @@ rule send_zcash_to_deposit_address:
     params:
         scripts_dir = const.common_scripts_dir,
         zcash_address = lambda wc, input: get_btc_address(input.step_2),
-    shell: """
-    node {params.scripts_dir}/send_btc.js {params.zcash_address} 7500 > {output}
+    shell: f"""
+    zingo-cli -c testnet --server https://testnet.zec.rocks:443 --data-dir /home/olga/Aurora/BTCLightClient/zingolib-karim/data_dir quicksend {params.zcash_address} 7500 > {output}
     """
 
 rule fin_zcash_transfer_on_near:
