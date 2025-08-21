@@ -633,7 +633,7 @@ impl Contract {
         let denormalized_fee = Self::denormalize_fee(&fast_fin_transfer_msg.fee, decimals);
         require!(
             denormalized_amount == amount.0 + denormalized_fee.fee.0,
-            format!("ERR_INVALID_FAST_TRANSFER_AMOUNT")
+            "ERR_INVALID_FAST_TRANSFER_AMOUNT"
         );
 
         let fast_transfer = FastTransfer {
