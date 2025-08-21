@@ -882,192 +882,6 @@ mod tests {
         }
     }
 
-    mod finalisation_to_near {
-        use super::*;
-
-        struct FinalisationToNearParams<'a> {
-            fast_transfer_amount: u128,
-            transfer_msg: InitTransferMessage,
-            fast_relayer_account: Option<&'a near_workspaces::Account>,
-        }
-
-        async fn assert_finalisation_to_near(
-            env: &TestEnv,
-            params: FinalisationToNearParams<'_>,
-            error: Option<&str>,
-        ) -> anyhow::Result<()> {
-            let OmniAddress::Near(recipient) = params.transfer_msg.recipient.clone() else {
-                panic!("Recipient is not a Near address");
-            };
-
-            let token_decimal_diff = params.fast_transfer_amount
-                / (params.transfer_msg.amount.0 - params.transfer_msg.fee.fee.0);
-            let expected_to_receive = params.transfer_msg.amount.0 * token_decimal_diff;
-
-            let relayer_balance_before =
-                get_balance(&env.token_contract, env.relayer_account.id()).await?;
-            let fast_relayer_balance_before =
-                get_balance(&env.token_contract, env.fast_relayer_account.id()).await?;
-            let recipient_balance_before = get_balance(&env.token_contract, &recipient).await?;
-
-            let result =
-                do_fin_transfer(&env, params.transfer_msg, params.fast_relayer_account).await?;
-
-            let relayer_balance_after =
-                get_balance(&env.token_contract, env.relayer_account.id()).await?;
-            let fast_relayer_balance_after =
-                get_balance(&env.token_contract, env.fast_relayer_account.id()).await?;
-            let recipient_balance_after = get_balance(&env.token_contract, &recipient).await?;
-
-            if let Some(error_msg) = error {
-                assert!(
-                    has_error_message(result, error_msg),
-                    "Expected error message: {error_msg}"
-                );
-
-                assert!(relayer_balance_after.0 == relayer_balance_before.0);
-                assert!(fast_relayer_balance_after.0 == fast_relayer_balance_before.0);
-                assert!(recipient_balance_after.0 == recipient_balance_before.0);
-
-                return Ok(());
-            }
-
-            if let Some(_) = params.fast_relayer_account {
-                assert_eq!(
-                    expected_to_receive,
-                    fast_relayer_balance_after.0 - fast_relayer_balance_before.0
-                );
-                assert_eq!(relayer_balance_after, relayer_balance_before);
-            } else {
-                assert_eq!(
-                    expected_to_receive,
-                    relayer_balance_after.0 - relayer_balance_before.0
-                );
-                assert_eq!(fast_relayer_balance_after, fast_relayer_balance_before);
-            }
-
-            assert_eq!(recipient_balance_after, recipient_balance_before);
-
-            Ok(())
-        }
-
-        #[tokio::test]
-        async fn succeeds() -> anyhow::Result<()> {
-            let env = TestEnv::new_with_native_token().await?;
-
-            let fast_transfer_amount = 100_000_000;
-            let transfer_msg = InitTransferMessage {
-                origin_nonce: 0,
-                token: env.eth_token_address.clone(),
-                recipient: OmniAddress::Near(account_n(1)),
-                amount: U128(101),
-                fee: Fee {
-                    fee: U128(1),
-                    native_fee: U128(0),
-                },
-                sender: eth_eoa_address(),
-                msg: String::default(),
-                emitter_address: eth_factory_address(),
-            };
-
-            let fast_transfer_msg = FastFinTransferMsg {
-                transfer_id: TransferId {
-                    origin_chain: transfer_msg.sender.get_chain(),
-                    origin_nonce: transfer_msg.origin_nonce,
-                },
-                recipient: transfer_msg.recipient.clone(),
-                fee: transfer_msg.fee.clone(),
-                msg: transfer_msg.msg.clone(),
-                amount: transfer_msg.amount,
-                storage_deposit_amount: match transfer_msg.recipient.get_chain() {
-                    ChainKind::Near => Some(U128(NEP141_DEPOSIT.as_yoctonear())),
-                    _ => None,
-                },
-                relayer: env.fast_relayer_account.id().clone(),
-            };
-
-            let _ = do_fast_transfer(
-                &env,
-                fast_transfer_amount,
-                fast_transfer_msg.clone(),
-                Some(&env.fast_relayer_account),
-            )
-            .await?;
-
-            assert_finalisation_to_near(
-                &env,
-                FinalisationToNearParams {
-                    fast_transfer_amount,
-                    transfer_msg,
-                    fast_relayer_account: Some(&env.fast_relayer_account),
-                },
-                None,
-            )
-            .await
-        }
-
-        #[tokio::test]
-        async fn fails_due_to_duplicate_finalisation() -> anyhow::Result<()> {
-            let env = TestEnv::new_with_native_token().await?;
-
-            let fast_transfer_amount = 100_000_000;
-            let transfer_msg = InitTransferMessage {
-                origin_nonce: 0,
-                token: env.eth_token_address.clone(),
-                recipient: OmniAddress::Near(account_n(1)),
-                amount: U128(101),
-                fee: Fee {
-                    fee: U128(1),
-                    native_fee: U128(0),
-                },
-                sender: eth_eoa_address(),
-                msg: String::default(),
-                emitter_address: eth_factory_address(),
-            };
-
-            let fast_transfer_msg = FastFinTransferMsg {
-                transfer_id: TransferId {
-                    origin_chain: transfer_msg.sender.get_chain(),
-                    origin_nonce: transfer_msg.origin_nonce,
-                },
-                recipient: transfer_msg.recipient.clone(),
-                fee: transfer_msg.fee.clone(),
-                msg: transfer_msg.msg.clone(),
-                amount: transfer_msg.amount,
-                storage_deposit_amount: match transfer_msg.recipient.get_chain() {
-                    ChainKind::Near => Some(U128(NEP141_DEPOSIT.as_yoctonear())),
-                    _ => None,
-                },
-                relayer: env.relayer_account.id().clone(),
-            };
-
-            let _ = do_fast_transfer(&env, fast_transfer_amount, fast_transfer_msg.clone(), None)
-                .await?;
-
-            assert_finalisation_to_near(
-                &env,
-                FinalisationToNearParams {
-                    fast_transfer_amount,
-                    transfer_msg: transfer_msg.clone(),
-                    fast_relayer_account: None,
-                },
-                None,
-            )
-            .await?;
-
-            assert_finalisation_to_near(
-                &env,
-                FinalisationToNearParams {
-                    fast_transfer_amount,
-                    transfer_msg: transfer_msg.clone(),
-                    fast_relayer_account: None,
-                },
-                Some("The transfer is already finalised"),
-            )
-            .await
-        }
-    }
-
     mod transfer_to_other_chain {
         use super::*;
 
@@ -1346,101 +1160,279 @@ mod tests {
         }
     }
 
-    mod finalisation_to_other_chain {
+    mod finalisation {
         use super::*;
+        
+        struct FinalisationParams<'a> {
+            fast_transfer_amount: u128,
+            transfer_msg: InitTransferMessage,
+            fast_relayer_account: Option<&'a near_workspaces::Account>,
+        }
 
-        #[tokio::test]
-        async fn succeeds() -> anyhow::Result<()> {
-            let env = TestEnv::new_with_native_token().await?;
-
-            let transfer_amount = 100_000_000;
-            let transfer_msg = InitTransferMessage {
-                origin_nonce: 0,
-                token: env.eth_token_address.clone(),
-                recipient: base_eoa_address(),
-                amount: U128(101),
-                fee: Fee {
-                    fee: U128(1),
-                    native_fee: U128(0),
-                },
-                sender: eth_eoa_address(),
-                msg: String::default(),
-                emitter_address: eth_factory_address(),
+        async fn assert_finalisation(
+            env: &TestEnv,
+            params: FinalisationParams<'_>,
+            error: Option<&str>,
+        ) -> anyhow::Result<()> {
+            let token_decimal_diff = params.fast_transfer_amount
+                / (params.transfer_msg.amount.0 - params.transfer_msg.fee.fee.0);
+            
+            // If destination is Near, we expect the fee to be paid to the relayer
+            let expected_to_receive = if let OmniAddress::Near(_) = params.transfer_msg.recipient.clone() {
+                params.transfer_msg.amount.0 * token_decimal_diff
+            } else {
+                (params.transfer_msg.amount.0 - params.transfer_msg.fee.fee.0) * token_decimal_diff
             };
-            let fast_transfer_msg =
-                get_fast_transfer_msg_from_init_transfer(&env, transfer_msg.clone());
-
-            let result =
-                do_fast_transfer(&env, transfer_amount, fast_transfer_msg.clone(), None).await?;
-            assert_eq!(0, result.failures().len());
 
             let relayer_balance_before =
                 get_balance(&env.token_contract, env.relayer_account.id()).await?;
+            let fast_relayer_balance_before =
+                get_balance(&env.token_contract, env.fast_relayer_account.id()).await?;
 
-            let result = do_fin_transfer(&env, transfer_msg, None).await?;
-            assert_eq!(0, result.failures().len());
-
-            let transfer_message = env
-                .bridge_contract
-                .view("get_transfer_message")
-                .args_json(json!({
-                    "transfer_id": TransferId {
-                        origin_chain: ChainKind::Base,
-                        origin_nonce: 0,
-                    },
-                }))
-                .await;
-
-            assert!(transfer_message
-                .is_err_and(|err| { format!("{err:?}").contains("The transfer does not exist") }));
+            let result =
+                do_fin_transfer(&env, params.transfer_msg, params.fast_relayer_account).await?;
 
             let relayer_balance_after =
                 get_balance(&env.token_contract, env.relayer_account.id()).await?;
+            let fast_relayer_balance_after =
+                get_balance(&env.token_contract, env.fast_relayer_account.id()).await?;
 
-            assert_eq!(
-                transfer_amount,
-                relayer_balance_after.0 - relayer_balance_before.0
-            );
+            if let Some(error_msg) = error {
+                assert!(
+                    has_error_message(result, error_msg),
+                    "Expected error message: {error_msg}"
+                );
+
+                assert!(relayer_balance_after.0 == relayer_balance_before.0);
+                assert!(fast_relayer_balance_after.0 == fast_relayer_balance_before.0);
+
+                return Ok(());
+            }
+
+            if let Some(_) = params.fast_relayer_account {
+                assert_eq!(
+                    expected_to_receive,
+                    fast_relayer_balance_after.0 - fast_relayer_balance_before.0
+                );
+                assert_eq!(relayer_balance_after, relayer_balance_before);
+            } else {
+                assert_eq!(
+                    expected_to_receive,
+                    relayer_balance_after.0 - relayer_balance_before.0
+                );
+                assert_eq!(fast_relayer_balance_after, fast_relayer_balance_before);
+            }
 
             Ok(())
         }
 
-        #[tokio::test]
-        async fn fails_due_to_duplicate_finalisation() -> anyhow::Result<()> {
-            let env = TestEnv::new_with_native_token().await?;
+        mod to_near {
+            use super::*;
 
-            let transfer_amount = 100_000_000;
-            let transfer_msg = InitTransferMessage {
-                origin_nonce: 0,
-                token: env.eth_token_address.clone(),
-                recipient: base_eoa_address(),
-                amount: U128(101),
-                fee: Fee {
-                    fee: U128(1),
-                    native_fee: U128(0),
-                },
-                sender: eth_eoa_address(),
-                msg: String::default(),
-                emitter_address: eth_factory_address(),
-            };
-            let fast_transfer_msg =
-                get_fast_transfer_msg_from_init_transfer(&env, transfer_msg.clone());
+            #[tokio::test]
+            async fn succeeds() -> anyhow::Result<()> {
+                let env = TestEnv::new_with_native_token().await?;
+    
+                let fast_transfer_amount = 100_000_000;
+                let transfer_msg = InitTransferMessage {
+                    origin_nonce: 0,
+                    token: env.eth_token_address.clone(),
+                    recipient: OmniAddress::Near(account_n(1)),
+                    amount: U128(101),
+                    fee: Fee {
+                        fee: U128(1),
+                        native_fee: U128(0),
+                    },
+                    sender: eth_eoa_address(),
+                    msg: String::default(),
+                    emitter_address: eth_factory_address(),
+                };
+    
+                let fast_transfer_msg = FastFinTransferMsg {
+                    transfer_id: TransferId {
+                        origin_chain: transfer_msg.sender.get_chain(),
+                        origin_nonce: transfer_msg.origin_nonce,
+                    },
+                    recipient: transfer_msg.recipient.clone(),
+                    fee: transfer_msg.fee.clone(),
+                    msg: transfer_msg.msg.clone(),
+                    amount: transfer_msg.amount,
+                    storage_deposit_amount: match transfer_msg.recipient.get_chain() {
+                        ChainKind::Near => Some(U128(NEP141_DEPOSIT.as_yoctonear())),
+                        _ => None,
+                    },
+                    relayer: env.fast_relayer_account.id().clone(),
+                };
+    
+                let _ = do_fast_transfer(
+                    &env,
+                    fast_transfer_amount,
+                    fast_transfer_msg.clone(),
+                    Some(&env.fast_relayer_account),
+                )
+                .await?;
+    
+                assert_finalisation(
+                    &env,
+                    FinalisationParams {
+                        fast_transfer_amount,
+                        transfer_msg,
+                        fast_relayer_account: Some(&env.fast_relayer_account),
+                    },
+                    None,
+                )
+                .await
+            }
 
-            let result =
-                do_fast_transfer(&env, transfer_amount, fast_transfer_msg.clone(), None).await?;
-            assert_eq!(0, result.failures().len());
+            #[tokio::test]
+            async fn fails_due_to_duplicate_finalisation() -> anyhow::Result<()> {
+                let env = TestEnv::new_with_native_token().await?;
+    
+                let fast_transfer_amount = 100_000_000;
+                let transfer_msg = InitTransferMessage {
+                    origin_nonce: 0,
+                    token: env.eth_token_address.clone(),
+                    recipient: OmniAddress::Near(account_n(1)),
+                    amount: U128(101),
+                    fee: Fee {
+                        fee: U128(1),
+                        native_fee: U128(0),
+                    },
+                    sender: eth_eoa_address(),
+                    msg: String::default(),
+                    emitter_address: eth_factory_address(),
+                };
+    
+                let fast_transfer_msg = FastFinTransferMsg {
+                    transfer_id: TransferId {
+                        origin_chain: transfer_msg.sender.get_chain(),
+                        origin_nonce: transfer_msg.origin_nonce,
+                    },
+                    recipient: transfer_msg.recipient.clone(),
+                    fee: transfer_msg.fee.clone(),
+                    msg: transfer_msg.msg.clone(),
+                    amount: transfer_msg.amount,
+                    storage_deposit_amount: match transfer_msg.recipient.get_chain() {
+                        ChainKind::Near => Some(U128(NEP141_DEPOSIT.as_yoctonear())),
+                        _ => None,
+                    },
+                    relayer: env.relayer_account.id().clone(),
+                };
+    
+                let _ = do_fast_transfer(&env, fast_transfer_amount, fast_transfer_msg.clone(), None)
+                    .await?;
+    
+                assert_finalisation(
+                    &env,
+                    FinalisationParams {
+                        fast_transfer_amount,
+                        transfer_msg: transfer_msg.clone(),
+                        fast_relayer_account: None,
+                    },
+                    None,
+                )
+                .await?;
+    
+                assert_finalisation(
+                    &env,
+                    FinalisationParams {
+                        fast_transfer_amount,
+                        transfer_msg: transfer_msg.clone(),
+                        fast_relayer_account: None,
+                    },
+                    Some("The transfer is already finalised"),
+                )
+                .await
+            }
+        }
 
-            let result = do_fin_transfer(&env, transfer_msg.clone(), None).await?;
-            assert_eq!(0, result.failures().len());
+        mod to_other_chain {
+            use super::*;
 
-            let result = do_fin_transfer(&env, transfer_msg, None).await?;
+            #[tokio::test]
+            async fn succeeds() -> anyhow::Result<()> {
+                let env = TestEnv::new_with_native_token().await?;
 
-            assert!(has_error_message(
-                result,
-                "The transfer is already finalised"
-            ));
+                let transfer_amount = 100_000_000;
+                let transfer_msg = InitTransferMessage {
+                    origin_nonce: 0,
+                    token: env.eth_token_address.clone(),
+                    recipient: base_eoa_address(),
+                    amount: U128(101),
+                    fee: Fee {
+                        fee: U128(1),
+                        native_fee: U128(0),
+                    },
+                    sender: eth_eoa_address(),
+                    msg: String::default(),
+                    emitter_address: eth_factory_address(),
+                };
+                let fast_transfer_msg =
+                    get_fast_transfer_msg_from_init_transfer(&env, transfer_msg.clone());
 
-            Ok(())
+                let result =
+                    do_fast_transfer(&env, transfer_amount, fast_transfer_msg.clone(), None).await?;
+                assert_eq!(0, result.failures().len());
+
+                assert_finalisation(
+                    &env,
+                    FinalisationParams {
+                        fast_transfer_amount: transfer_amount,
+                        transfer_msg,
+                        fast_relayer_account: None,
+                    },
+                    None,
+                )
+                .await
+            }
+
+            #[tokio::test]
+            async fn fails_due_to_duplicate_finalisation() -> anyhow::Result<()> {
+                let env = TestEnv::new_with_native_token().await?;
+
+                let transfer_amount = 100_000_000;
+                let transfer_msg = InitTransferMessage {
+                    origin_nonce: 0,
+                    token: env.eth_token_address.clone(),
+                    recipient: base_eoa_address(),
+                    amount: U128(101),
+                    fee: Fee {
+                        fee: U128(1),
+                        native_fee: U128(0),
+                    },
+                    sender: eth_eoa_address(),
+                    msg: String::default(),
+                    emitter_address: eth_factory_address(),
+                };
+                let fast_transfer_msg =
+                    get_fast_transfer_msg_from_init_transfer(&env, transfer_msg.clone());
+
+                let result =
+                    do_fast_transfer(&env, transfer_amount, fast_transfer_msg.clone(), None).await?;
+                assert_eq!(0, result.failures().len());
+
+                assert_finalisation(
+                    &env,
+                    FinalisationParams {
+                        fast_transfer_amount: transfer_amount,
+                        transfer_msg: transfer_msg.clone(),
+                        fast_relayer_account: None,
+                    },
+                    None,
+                )
+                .await?;
+
+                assert_finalisation(
+                    &env,
+                    FinalisationParams {
+                        fast_transfer_amount: transfer_amount,
+                        transfer_msg,
+                        fast_relayer_account: Some(&env.fast_relayer_account),
+                    },
+                    Some("The transfer is already finalised"),
+                )
+                .await
+            }
         }
     }
 }
