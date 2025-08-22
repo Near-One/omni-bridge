@@ -752,11 +752,31 @@ mod tests {
                         origin_nonce: 0,
                     },
                     recipient: OmniAddress::Near(account_n(1)),
+                    fee: Fee::default(),
+                    amount: U128(100_000_000),
+                    msg: String::default(),
+                    storage_deposit_amount: Some(U128(NEP141_DEPOSIT.as_yoctonear())),
+                    relayer: AccountId::from_str("fake.testnet").unwrap(),
+                }
+            },
+            error: None,
+        })]
+        // Success case bridged token with fee
+        #[case(FastTransferCase {
+            is_bridged_token: true,
+            transfer: FastTransferParams {
+                amount_to_send: 100_000_000,
+                fast_transfer_msg: FastFinTransferMsg {
+                    transfer_id: TransferId {
+                        origin_chain: ChainKind::Eth,
+                        origin_nonce: 0,
+                    },
+                    recipient: OmniAddress::Near(account_n(1)),
                     fee: Fee {
-                        fee: U128(0),
+                        fee: U128(10_000),
                         native_fee: U128(0),
                     },
-                    amount: U128(100_000_000),
+                    amount: U128(100_010_000),
                     msg: String::default(),
                     storage_deposit_amount: Some(U128(NEP141_DEPOSIT.as_yoctonear())),
                     relayer: AccountId::from_str("fake.testnet").unwrap(),
@@ -821,10 +841,7 @@ mod tests {
                         origin_nonce: 0,
                     },
                     recipient: OmniAddress::Near(account_n(1)),
-                    fee: Fee {
-                        fee: U128(0),
-                        native_fee: U128(0),
-                    },
+                    fee: Fee::default(),
                     amount: U128(100_000_000),
                     msg: String::default(),
                     storage_deposit_amount: Some(U128(NEP141_DEPOSIT.saturating_mul(100).as_yoctonear())),
@@ -832,6 +849,26 @@ mod tests {
                 },
             },
             error: Some("Not enough storage deposited"),
+        })]
+        // Refund on ft_transfer_call failure
+        #[case(FastTransferCase {
+            is_bridged_token: true,
+            transfer: FastTransferParams {
+                amount_to_send: 100_000_000,
+                fast_transfer_msg: FastFinTransferMsg {
+                    transfer_id: TransferId {
+                        origin_chain: ChainKind::Eth,
+                        origin_nonce: 0,
+                    },
+                    recipient: OmniAddress::Near(account_n(1)),
+                    fee: Fee::default(),
+                    amount: U128(100_000_000),
+                    msg: "Receiver can't accept ft_transfer_call".to_string(),
+                    storage_deposit_amount: Some(U128(NEP141_DEPOSIT.as_yoctonear())),
+                    relayer: AccountId::from_str("fake.testnet").unwrap(),
+                },
+            },
+            error: Some("MethodNotFound"),
         })]
         #[tokio::test]
         async fn single(
@@ -1141,6 +1178,7 @@ mod tests {
             assert_eq!(U128(transfer_amount), contract_balance_before);
 
             let result = do_fast_transfer(&env, transfer_amount, fast_transfer_msg, None).await?;
+            assert!(has_error_message(result, "ERR_TRANSFER_ALREADY_FINALISED"));
 
             let relayer_balance_after =
                 get_balance(&env.token_contract, env.relayer_account.id()).await?;
@@ -1149,12 +1187,6 @@ mod tests {
 
             assert_eq!(relayer_balance_before, relayer_balance_after);
             assert_eq!(contract_balance_before, contract_balance_after);
-
-            assert_eq!(1, result.failures().len());
-            let failure = result.failures()[0].clone().into_result();
-            assert!(failure.is_err_and(|err| {
-                format!("{err:?}").contains("ERR_TRANSFER_ALREADY_FINALISED")
-            }));
 
             Ok(())
         }

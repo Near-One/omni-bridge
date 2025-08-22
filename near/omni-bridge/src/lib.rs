@@ -1303,11 +1303,11 @@ impl Contract {
         amount: U128,
         is_ft_transfer_call: bool,
     ) -> U128 {
+        self.burn_tokens_if_needed(token_id, amount);
         if Self::is_refund_required(is_ft_transfer_call) {
             self.remove_fast_transfer(fast_transfer_id);
             amount
         } else {
-            self.burn_tokens_if_needed(token_id, amount);
             U128(0)
         }
     }
