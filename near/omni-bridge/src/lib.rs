@@ -1226,6 +1226,11 @@ impl Contract {
     }
 
     #[access_control_any(roles(Role::DAO))]
+    pub fn delete_fin_transfer(&mut self, transfer_id: &TransferId) -> bool {
+        self.finalised_transfers.remove(transfer_id)
+    }
+
+    #[access_control_any(roles(Role::DAO))]
     #[payable]
     pub fn add_deployed_tokens(&mut self, tokens: Vec<AddDeployedTokenArgs>) {
         require!(
