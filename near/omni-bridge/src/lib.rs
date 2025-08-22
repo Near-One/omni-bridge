@@ -746,6 +746,25 @@ impl Contract {
         )
     }
 
+    #[private]
+    pub fn resolve_fast_transfer(
+        &mut self,
+        token_id: AccountId,
+        fast_transfer_id: &FastTransferId,
+        amount: U128,
+        is_ft_transfer_call: bool,
+    ) -> U128 {
+        // Burn the tokens to ensure the locked tokens are not double-minted
+        self.burn_tokens_if_needed(token_id, amount);
+
+        if Self::is_refund_required(is_ft_transfer_call) {
+            self.remove_fast_transfer(fast_transfer_id);
+            amount
+        } else {
+            U128(0)
+        }
+    }
+
     fn fast_fin_transfer_to_other_chain(
         &mut self,
         fast_transfer: &FastTransfer,
@@ -1226,6 +1245,27 @@ impl Contract {
     }
 
     #[access_control_any(roles(Role::DAO))]
+    pub fn transfer_token_as_dao(
+        &mut self,
+        token: AccountId,
+        amount: U128,
+        recipient: AccountId,
+        msg: Option<String>,
+    ) -> Promise {
+        if let Some(msg) = msg {
+            ext_token::ext(token)
+                .with_attached_deposit(ONE_YOCTO)
+                .with_static_gas(FT_TRANSFER_CALL_GAS)
+                .ft_transfer_call(recipient, amount, None, msg)
+        } else {
+            ext_token::ext(token)
+                .with_attached_deposit(ONE_YOCTO)
+                .with_static_gas(FT_TRANSFER_GAS)
+                .ft_transfer(recipient, amount, None)
+        }
+    }
+
+    #[access_control_any(roles(Role::DAO))]
     #[payable]
     pub fn add_deployed_tokens(&mut self, tokens: Vec<AddDeployedTokenArgs>) {
         require!(
@@ -1293,23 +1333,6 @@ impl Contract {
 
     pub fn get_current_destination_nonce(&self, chain_kind: ChainKind) -> Nonce {
         self.destination_nonces.get(&chain_kind).unwrap_or_default()
-    }
-
-    #[private]
-    pub fn resolve_fast_transfer(
-        &mut self,
-        token_id: AccountId,
-        fast_transfer_id: &FastTransferId,
-        amount: U128,
-        is_ft_transfer_call: bool,
-    ) -> U128 {
-        if Self::is_refund_required(is_ft_transfer_call) {
-            self.remove_fast_transfer(fast_transfer_id);
-            amount
-        } else {
-            self.burn_tokens_if_needed(token_id, amount);
-            U128(0)
-        }
     }
 
     pub fn get_mpc_account(&self) -> AccountId {
