@@ -16,7 +16,7 @@ use super::config::Config;
 #[account(zero_copy(unsafe))]
 #[repr(C)]
 pub struct UsedNonces {
-    used: BitArray<[u8; (USED_NONCES_PER_ACCOUNT as usize + 7).div_ceil(8)]>,
+    used: BitArray<[u8; USED_NONCES_PER_ACCOUNT.div_ceil(8) as usize]>,
 }
 
 #[cfg(feature = "idl-build")]
