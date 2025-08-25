@@ -145,18 +145,22 @@ rule init_zcash_transfer_to_zcash:
     input:
         step_4 = rules.fin_zcash_transfer_on_near.output,
         zcash_connector_file = zcash_connector_file,
+        zcash_file = zcash_file,
         user_account_file = user_account_file
     output: call_dir / "05_init_zcash_transfer_to_zcash.json"
     params:
         zcash_connector = lambda wc, input: get_json_field(input.zcash_connector_file, "contract_id"),
+        zcash_token = lambda wc, input: get_json_field(input.zcash_file, "contract_id"),
         user_account_id = lambda wc, input: get_json_field(input.user_account_file, "account_id"),
         user_private_key = lambda wc, input: get_json_field(input.user_account_file, "private_key"),
         bridge_sdk_config_file = const.common_bridge_sdk_config_file,
     shell: """
     bridge-cli testnet  init-near-to-bitcoin-transfer\
+        --chain zcash-testnet \
         --target-btc-address utest1rj797prep5mnq9ffd2zddlc94a4jm4z9kekluh87x7zvhq2sy3a4vence62nt0gzvjxyg06xtgmzrnrx6a8yv63gfa97j5rt55fkmlzjhpcgj4w85vgz5uphsp065g2kj9dk24f0kyl5f7jf36sdtt7ley6vucxftpekvsceg8upfeluev5308d0l3ycsnfs43uc8x3ggqc27danjtp \
-        --amount 5000 \
-        --btc-connector {params.zcash_connector} \
+        --amount 3000 \
+        --zcash-connector {params.zcash_connector} \
+        --zcash {params.zcash_token} \
         --near-signer {params.user_account_id} \
         --near-private-key {params.user_private_key} \
         --config {params.bridge_sdk_config_file} \
