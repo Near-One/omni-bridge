@@ -871,9 +871,7 @@ mod tests {
             error: Some("MethodNotFound"),
         })]
         #[tokio::test]
-        async fn single(
-            #[case] mut case: FastTransferCase,
-        ) -> anyhow::Result<()> {
+        async fn single(#[case] mut case: FastTransferCase) -> anyhow::Result<()> {
             let env = TestEnv::new(case.is_bridged_token).await?;
             case.transfer.fast_transfer_msg.relayer = env.relayer_account.id().clone();
 
@@ -907,9 +905,7 @@ mod tests {
             error: Some("Fast transfer is already performed"),
         })]
         #[tokio::test]
-        async fn multiple(
-            #[case] mut case: FastTransferMultipleCase,
-        ) -> anyhow::Result<()> {
+        async fn multiple(#[case] mut case: FastTransferMultipleCase) -> anyhow::Result<()> {
             let env = TestEnv::new(case.is_bridged_token).await?;
             case.first_transfer.fast_transfer_msg.relayer = env.relayer_account.id().clone();
             case.second_transfer.fast_transfer_msg.relayer = env.relayer_account.id().clone();
@@ -1070,13 +1066,8 @@ mod tests {
             let env = TestEnv::new(case.is_bridged_token).await?;
             case.transfer.fast_transfer_msg.relayer = env.relayer_account.id().clone();
 
-            assert_transfer_to_other_chain(
-                &env,
-                case.transfer,
-                case.is_bridged_token,
-                case.error,
-            )
-            .await
+            assert_transfer_to_other_chain(&env, case.transfer, case.is_bridged_token, case.error)
+                .await
         }
 
         #[rstest]
@@ -1129,13 +1120,8 @@ mod tests {
             case.first_transfer.fast_transfer_msg.relayer = env.relayer_account.id().clone();
             case.second_transfer.fast_transfer_msg.relayer = env.relayer_account.id().clone();
 
-            assert_transfer_to_other_chain(
-                &env,
-                case.first_transfer,
-                case.is_bridged_token,
-                None,
-            )
-            .await?;
+            assert_transfer_to_other_chain(&env, case.first_transfer, case.is_bridged_token, None)
+                .await?;
 
             assert_transfer_to_other_chain(
                 &env,
@@ -1194,7 +1180,7 @@ mod tests {
 
     mod finalisation {
         use super::*;
-        
+
         struct FinalisationParams<'a> {
             fast_transfer_amount: u128,
             transfer_msg: InitTransferMessage,
@@ -1208,9 +1194,11 @@ mod tests {
         ) -> anyhow::Result<()> {
             let token_decimal_diff = params.fast_transfer_amount
                 / (params.transfer_msg.amount.0 - params.transfer_msg.fee.fee.0);
-            
+
             // If destination is Near, we expect the fee to be paid to the relayer
-            let expected_to_receive = if let OmniAddress::Near(_) = params.transfer_msg.recipient.clone() {
+            let expected_to_receive = if let OmniAddress::Near(_) =
+                params.transfer_msg.recipient.clone()
+            {
                 params.transfer_msg.amount.0 * token_decimal_diff
             } else {
                 (params.transfer_msg.amount.0 - params.transfer_msg.fee.fee.0) * token_decimal_diff
@@ -1264,7 +1252,7 @@ mod tests {
             #[tokio::test]
             async fn succeeds() -> anyhow::Result<()> {
                 let env = TestEnv::new_with_native_token().await?;
-    
+
                 let fast_transfer_amount = 100_000_000;
                 let transfer_msg = InitTransferMessage {
                     origin_nonce: 0,
@@ -1279,7 +1267,7 @@ mod tests {
                     msg: String::default(),
                     emitter_address: eth_factory_address(),
                 };
-    
+
                 let fast_transfer_msg = FastFinTransferMsg {
                     transfer_id: TransferId {
                         origin_chain: transfer_msg.sender.get_chain(),
@@ -1295,7 +1283,7 @@ mod tests {
                     },
                     relayer: env.fast_relayer_account.id().clone(),
                 };
-    
+
                 let _ = do_fast_transfer(
                     &env,
                     fast_transfer_amount,
@@ -1303,7 +1291,7 @@ mod tests {
                     Some(&env.fast_relayer_account),
                 )
                 .await?;
-    
+
                 assert_finalisation(
                     &env,
                     FinalisationParams {
@@ -1319,7 +1307,7 @@ mod tests {
             #[tokio::test]
             async fn fails_due_to_duplicate_finalisation() -> anyhow::Result<()> {
                 let env = TestEnv::new_with_native_token().await?;
-    
+
                 let fast_transfer_amount = 100_000_000;
                 let transfer_msg = InitTransferMessage {
                     origin_nonce: 0,
@@ -1334,7 +1322,7 @@ mod tests {
                     msg: String::default(),
                     emitter_address: eth_factory_address(),
                 };
-    
+
                 let fast_transfer_msg = FastFinTransferMsg {
                     transfer_id: TransferId {
                         origin_chain: transfer_msg.sender.get_chain(),
@@ -1350,10 +1338,11 @@ mod tests {
                     },
                     relayer: env.relayer_account.id().clone(),
                 };
-    
-                let _ = do_fast_transfer(&env, fast_transfer_amount, fast_transfer_msg.clone(), None)
-                    .await?;
-    
+
+                let _ =
+                    do_fast_transfer(&env, fast_transfer_amount, fast_transfer_msg.clone(), None)
+                        .await?;
+
                 assert_finalisation(
                     &env,
                     FinalisationParams {
@@ -1364,7 +1353,7 @@ mod tests {
                     None,
                 )
                 .await?;
-    
+
                 assert_finalisation(
                     &env,
                     FinalisationParams {
@@ -1403,7 +1392,8 @@ mod tests {
                     get_fast_transfer_msg_from_init_transfer(&env, transfer_msg.clone());
 
                 let result =
-                    do_fast_transfer(&env, transfer_amount, fast_transfer_msg.clone(), None).await?;
+                    do_fast_transfer(&env, transfer_amount, fast_transfer_msg.clone(), None)
+                        .await?;
                 assert_eq!(0, result.failures().len());
 
                 assert_finalisation(
@@ -1440,7 +1430,8 @@ mod tests {
                     get_fast_transfer_msg_from_init_transfer(&env, transfer_msg.clone());
 
                 let result =
-                    do_fast_transfer(&env, transfer_amount, fast_transfer_msg.clone(), None).await?;
+                    do_fast_transfer(&env, transfer_amount, fast_transfer_msg.clone(), None)
+                        .await?;
                 assert_eq!(0, result.failures().len());
 
                 assert_finalisation(
