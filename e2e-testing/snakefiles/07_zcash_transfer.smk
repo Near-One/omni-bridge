@@ -3,7 +3,7 @@ import const
 import time
 from const import (get_evm_deploy_results_dir, get_evm_account_dir,
                      EvmNetwork as EN, NearContract as NC, EvmContract as EC, NearTestAccount as NTA)
-from utils import get_mkdir_cmd, get_json_field, extract_tx_hash, get_btc_address, get_last_value, get_tx_hash
+from utils import get_mkdir_cmd, get_json_field, extract_tx_hash, get_btc_address, get_last_value, get_tx_hash, get_zcash_tx_hash
 
 module near:
     snakefile: "./near.smk"
@@ -93,8 +93,8 @@ rule get_zcash_user_deposit_address:
     shell: """
     {params.mkdir} && \
          bridge-cli testnet get-bitcoin-address \
-         --chain zcash \
-         --btc-connector {params.zcash_connector} \
+         --chain zcash-testnet \
+         --zcash-connector {params.zcash_connector} \
          -r {params.user_account_id} \
          --near-signer {params.user_account_id} \
          --config {params.bridge_sdk_config_file} \
@@ -104,13 +104,13 @@ rule get_zcash_user_deposit_address:
 rule send_zcash_to_deposit_address:
     message: "Send TAZ to user deposit address on ZCash"
     input:
-        step_2 = rules.get_zcash_user_deposit_address.output,
+        step_2 = rules.get_zcash_user_deposit_address.output
     output: call_dir / "03_send_zcash_to_deposit_address.json"
     params:
         scripts_dir = const.common_scripts_dir,
-        zcash_address = lambda wc, input: get_btc_address(input.step_2),
-    shell: f"""
-    zingo-cli -c testnet --server https://testnet.zec.rocks:443 --data-dir /home/olga/Aurora/BTCLightClient/zingolib-karim/data_dir quicksend {params.zcash_address} 7500 > {output}
+        zcash_address = lambda wc, input: get_btc_address(input.step_2)
+    shell: """
+        {params.scripts_dir}/send_zcash.sh {params.zcash_address} > {output}
     """
 
 rule fin_zcash_transfer_on_near:
@@ -126,13 +126,14 @@ rule fin_zcash_transfer_on_near:
         user_account_id = lambda wc, input: get_json_field(input.user_account_file, "account_id"),
         user_private_key = lambda wc, input: get_json_field(input.user_account_file, "private_key"),
         bridge_sdk_config_file = const.common_bridge_sdk_config_file,
-        zcash_tx_hash = lambda wc, input: get_last_value(input.step_3),
+        zcash_tx_hash = lambda wc, input: get_zcash_tx_hash(input.step_3),
     shell: """
     bridge-cli testnet  near-fin-transfer-btc \
+        --chain zcash-testnet \
         -b {params.zcash_tx_hash} \
         -v 0 \
         -r {params.user_account_id} \
-        --btc-connector {params.zcash_connector} \
+        --zcash-connector {params.zcash_connector} \
         --near-signer {params.user_account_id} \
         --near-private-key {params.user_private_key} \
         --config {params.bridge_sdk_config_file} \
