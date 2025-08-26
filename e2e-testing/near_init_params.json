@@ -12,6 +12,10 @@
             "prover_account": "prover.sepolia.testnet"
         }
     },
+    "omni_prover": {
+        "init_function": "init",
+        "init_args": {}
+    },
     "omni_bridge": {
         "init_function": "new",
         "init_args": {
@@ -51,4 +55,3 @@
         }
     }
 }
-
