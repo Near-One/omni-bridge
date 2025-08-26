@@ -215,7 +215,32 @@ rule send_btc_transfer:
     > {output} \
     """
 
+rule verify_withdraw:
+    message: "Verify withdraw"
+    input:
+        step_7 = rules.send_btc_transfer.output,
+        zcash_connector_file = zcash_connector_file,
+        zcash_file = zcash_file,
+        user_account_file = user_account_file
+    output: call_dir / "08_verify_withdraw.json"
+    params:
+        zcash_connector = lambda wc, input: get_json_field(input.zcash_connector_file, "contract_id"),
+        user_account_id = lambda wc, input: get_json_field(input.user_account_file, "account_id"),
+        user_private_key = lambda wc, input: get_json_field(input.user_account_file, "private_key"),
+        bridge_sdk_config_file = const.common_bridge_sdk_config_file,
+        zcash_tx_hash = lambda wc, input: get_last_value(input.step_7),
+    shell: """
+        bridge-cli testnet btc-verify-withdraw \
+        --chain zcash-testnet \
+        -b {params.zcash_tx_hash} \
+        --zcash-connector {params.zcash_connector} \
+        --near-signer {params.user_account_id} \
+        --near-private-key {params.user_private_key} \
+        --config {params.bridge_sdk_config_file} \
+         > {output} \
+    """
+
 rule all:
     input:
-        rules.send_btc_transfer.output,
+        rules.verify_withdraw.output,
     default_target: True
