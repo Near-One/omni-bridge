@@ -3,6 +3,7 @@ use near_sdk::near;
 use omni_types::prover_result::ProverResult;
 
 #[near(contract_state)]
+#[derive(Default)]
 pub struct Prover {}
 
 #[near]
