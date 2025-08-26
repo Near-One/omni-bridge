@@ -204,22 +204,20 @@ impl Contract {
     pub fn required_balance_for_init_transfer(&self, msg: Option<String>) -> NearToken {
         let max_account_id: AccountId = "a".repeat(64).parse().sdk_expect("ERR_PARSE_ACCOUNT_ID");
 
-        self.required_balance_for_init_transfer_message(
-            TransferMessage {
+        self.required_balance_for_init_transfer_message(TransferMessage {
+            origin_nonce: 0,
+            token: OmniAddress::Near(max_account_id.clone()),
+            amount: U128(0),
+            recipient: OmniAddress::Near(max_account_id.clone()),
+            fee: Fee::default(),
+            sender: OmniAddress::Near(max_account_id.clone()),
+            msg: msg.unwrap_or_default(),
+            destination_nonce: 0,
+            origin_transfer_id: Some(TransferId {
+                origin_chain: ChainKind::Near,
                 origin_nonce: 0,
-                token: OmniAddress::Near(max_account_id.clone()),
-                amount: U128(0),
-                recipient: OmniAddress::Near(max_account_id.clone()),
-                fee: Fee::default(),
-                sender: OmniAddress::Near(max_account_id.clone()),
-                msg: msg.unwrap_or_default(),
-                destination_nonce: 0,
-                origin_transfer_id: Some(TransferId {
-                    origin_chain: ChainKind::Near,
-                    origin_nonce: 0,
-                }),
-            }
-        )
+            }),
+        })
     }
 
     pub fn required_balance_for_init_transfer_message(

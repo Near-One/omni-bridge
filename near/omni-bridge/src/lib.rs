@@ -14,7 +14,8 @@ use near_sdk::json_types::{Base64VecU8, U128};
 use near_sdk::serde::{Deserialize, Serialize};
 use near_sdk::serde_json::json;
 use near_sdk::{
-    env, ext_contract, near, require, serde_json, AccountId, BorshStorageKey, CryptoHash, Gas, GasWeight, NearToken, PanicOnDefault, Promise, PromiseError, PromiseOrValue, PromiseResult
+    env, ext_contract, near, require, serde_json, AccountId, BorshStorageKey, CryptoHash, Gas,
+    GasWeight, NearToken, PanicOnDefault, Promise, PromiseError, PromiseOrValue, PromiseResult,
 };
 use omni_types::locker_args::{
     AddDeployedTokenArgs, BindTokenArgs, ClaimFeeArgs, DeployTokenArgs, FinTransferArgs,
@@ -69,7 +70,7 @@ const FAST_TRANSFER_CALLBACK_GAS: Gas = Gas::from_tgas(10);
 const NO_DEPOSIT: NearToken = NearToken::from_near(0);
 const ONE_YOCTO: NearToken = NearToken::from_yoctonear(1);
 const SEND_TOKENS_CALLBACK_GAS: Gas = Gas::from_tgas(15);
-const INIT_TRANSFER_CALLBACK_GAS: Gas = Gas::from_tgas(5);
+const INIT_TRANSFER_RESUME_GAS: Gas = Gas::from_tgas(5);
 const SIGN_PATH: &str = "bridge-1";
 
 const PROMISE_REGISTER_ID: u64 = 0;
@@ -454,14 +455,14 @@ impl Contract {
     fn init_transfer(
         &mut self,
         sender_id: AccountId,
-        storage_payer: AccountId,
+        signer_id: AccountId,
         token_id: AccountId,
         amount: U128,
         init_transfer_msg: InitTransferMsg,
     ) {
         // Avoid extra storage read by verifying native fee before checking the role
         if init_transfer_msg.native_token_fee.0 > 0
-            && self.acl_has_role(Role::NativeFeeRestricted.into(), storage_payer.clone())
+            && self.acl_has_role(Role::NativeFeeRestricted.into(), signer_id.clone())
         {
             env::panic_str("ERR_ACCOUNT_RESTRICTED_FROM_USING_NATIVE_FEE");
         }
@@ -494,27 +495,29 @@ impl Contract {
             "ERR_INVALID_FEE"
         );
 
-        let mut required_storage_balance = self.required_balance_for_init_transfer_message(transfer_message.clone());
+        let mut required_storage_balance =
+            self.required_balance_for_init_transfer_message(transfer_message.clone());
         required_storage_balance = required_storage_balance.saturating_add(
             NearToken::from_yoctonear(init_transfer_msg.native_token_fee.0),
         );
 
-        let message_account_id = Self::calculate_message_account_id(&transfer_message);
-
-        if self.has_storage_balance(&storage_payer, required_storage_balance) {
-            env::panic_str(&format!("init_transfer_callback: storage_payer: {}, required: {}", storage_payer, required_storage_balance));
-            // self.init_transfer_callback(transfer_message, storage_payer);
-        } else if self.has_storage_balance(&message_account_id, required_storage_balance) {
-            env::panic_str(&format!("init_transfer_callback: message_account_id: {}, required: {}", message_account_id, required_storage_balance));
-            // self.init_transfer_callback(transfer_message, message_account_id);
+        let message_storage_account_id =
+            Self::calculate_message_storage_account_id(&transfer_message, &signer_id);
+        if self.has_storage_balance(&message_storage_account_id, required_storage_balance) {
+            self.init_transfer_internal(transfer_message, message_storage_account_id, signer_id);
+        } else if self.has_storage_balance(&signer_id, required_storage_balance) {
+            self.init_transfer_internal(transfer_message, signer_id.clone(), signer_id);
         } else {
             let promise_index = env::promise_yield_create(
                 "init_transfer_resume",
-                &json!({
+                json!({
                     "transfer_message": transfer_message,
-                    "message_account_id": message_account_id,
-                }).to_string().as_bytes(),
-                INIT_TRANSFER_CALLBACK_GAS,
+                    "message_storage_account_id": message_storage_account_id,
+                    "storage_owner": signer_id,
+                })
+                .to_string()
+                .as_bytes(),
+                INIT_TRANSFER_RESUME_GAS,
                 GasWeight(0),
                 PROMISE_REGISTER_ID,
             );
@@ -524,7 +527,8 @@ impl Contract {
                 .try_into()
                 .expect("ERR_READ_PROMISE_REGISTER");
 
-            self.init_transfer_promises.insert(&message_account_id, &yield_id);
+            self.init_transfer_promises
+                .insert(&message_storage_account_id, &yield_id);
 
             env::promise_return(promise_index);
         }
@@ -534,28 +538,34 @@ impl Contract {
     pub fn init_transfer_resume(
         &mut self,
         transfer_message: TransferMessage,
-        message_account_id: AccountId,
+        message_storage_account_id: AccountId,
+        storage_owner: AccountId,
         #[callback_result] response: Result<(), PromiseError>,
     ) {
-        self.init_transfer_promises.remove(&message_account_id);
+        self.init_transfer_promises
+            .remove(&message_storage_account_id);
 
         match response {
-            Ok(_) => self.init_transfer_callback(transfer_message, message_account_id),
+            Ok(_) => self.init_transfer_internal(
+                transfer_message,
+                message_storage_account_id,
+                storage_owner,
+            ),
             Err(_) => env::log_str("Init transfer resume timeout"),
         }
     }
 
     #[private]
-    pub fn init_transfer_callback(
+    pub fn init_transfer_internal(
         &mut self,
         transfer_message: TransferMessage,
         storage_payer: AccountId,
+        storage_owner: AccountId,
     ) {
         let mut required_storage_balance =
-            self.add_transfer_message(transfer_message.clone(), storage_payer.clone());
-        required_storage_balance = required_storage_balance.saturating_add(
-            NearToken::from_yoctonear(transfer_message.fee.native_fee.0),
-        );
+            self.add_transfer_message(transfer_message.clone(), storage_owner);
+        required_storage_balance = required_storage_balance
+            .saturating_add(NearToken::from_yoctonear(transfer_message.fee.native_fee.0));
 
         self.update_storage_balance(
             storage_payer,
@@ -1473,8 +1483,9 @@ impl Contract {
 
 impl Contract {
     // Hashing the transfer message to calculate virtual account ID that can be used to deposit storage required for the message
-    fn calculate_message_account_id(
+    fn calculate_message_storage_account_id(
         message: &TransferMessage,
+        signer_id: &AccountId,
     ) -> AccountId {
         let mut data = Vec::new();
         data.extend_from_slice(message.token.to_string().as_bytes());
@@ -1484,6 +1495,7 @@ impl Contract {
         data.extend_from_slice(&message.fee.native_fee.0.to_le_bytes());
         data.extend_from_slice(message.sender.to_string().as_bytes());
         data.extend_from_slice(message.msg.as_bytes());
+        data.extend_from_slice(signer_id.as_bytes());
 
         let hash = near_sdk::env::sha256_array(&data);
 
@@ -1910,7 +1922,10 @@ impl Contract {
                     storage_balance.available.saturating_sub(required_balance);
                 self.accounts_balances.insert(&account_id, &storage_balance);
             } else {
-                env::panic_str(&format!("Not enough storage deposited, required: {}, available: {}", required_balance, storage_balance.available));
+                env::panic_str(&format!(
+                    "Not enough storage deposited, required: {}, available: {}",
+                    required_balance, storage_balance.available
+                ));
             }
         }
     }

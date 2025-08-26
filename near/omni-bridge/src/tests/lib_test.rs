@@ -106,7 +106,7 @@ fn run_ft_on_transfer(
         deplosit
     } else {
         let min_storage_balance = contract.required_balance_for_account();
-        let init_transfer_balance = contract.required_balance_for_init_transfer();
+        let init_transfer_balance = contract.required_balance_for_init_transfer(None);
         min_storage_balance.saturating_add(init_transfer_balance)
     };
 
@@ -133,7 +133,7 @@ fn run_ft_on_transfer_legacy(
         deposit
     } else {
         let min_storage_balance = contract.required_balance_for_account();
-        let init_transfer_balance = contract.required_balance_for_init_transfer();
+        let init_transfer_balance = contract.required_balance_for_init_transfer(None);
         min_storage_balance.saturating_add(init_transfer_balance)
     };
 
@@ -258,7 +258,7 @@ fn test_init_transfer_balance_updated() {
     let mut contract = get_default_contract();
 
     let min_storage_balance = contract.required_balance_for_account();
-    let init_transfer_balance = contract.required_balance_for_init_transfer();
+    let init_transfer_balance = contract.required_balance_for_init_transfer(None);
     let total_balance = min_storage_balance.saturating_add(init_transfer_balance);
 
     run_ft_on_transfer(
