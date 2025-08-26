@@ -17,7 +17,7 @@ members = [
     "mock/mock-prover",
     "mock/mock-token-receiver",
     "mock/mock-evm-prover"
-]
+, "mock/mock-wormhole-prover"]
 
 [profile.release]
 codegen-units = 1

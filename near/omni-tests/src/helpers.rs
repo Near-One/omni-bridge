@@ -47,6 +47,14 @@ pub mod tests {
     }
 
     #[fixture]
+    pub fn mock_wormhole_prover_wasm() -> Vec<u8> {
+        build_wasm(
+            "../mock/mock-wormhole-prover/Cargo.toml",
+            "test-target-for-mock-wormhole-prover",
+        )
+    }
+
+    #[fixture]
     pub fn mock_token_receiver_wasm() -> Vec<u8> {
         build_wasm(
             "../mock/mock-token-receiver/Cargo.toml",
@@ -137,6 +145,12 @@ pub mod tests {
 
     pub fn base_token_address() -> OmniAddress {
         "base:0x1234567890123456789012345678901234567890"
+            .parse()
+            .unwrap()
+    }
+
+    pub fn bnb_token_address() -> OmniAddress {
+        "bnb:0x1234567890123456789012345678901234567890"
             .parse()
             .unwrap()
     }

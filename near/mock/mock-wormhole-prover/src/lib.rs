@@ -1,25 +1,22 @@
 use near_sdk::borsh::BorshDeserialize;
 use near_sdk::{near, AccountId};
 use omni_types::prover_result::ProverResult;
-use omni_types::ChainKind;
 
 #[near(contract_state)]
-pub struct EvmProver {
-    pub light_client: AccountId,
-    pub chain_kind: ChainKind,
+pub struct WormholeProver {
+    pub prover_account: AccountId,
 }
 
-impl Default for EvmProver {
+impl Default for WormholeProver {
     fn default() -> Self {
         Self {
-            light_client: "light_client".parse().unwrap(),
-            chain_kind: ChainKind::Eth,
+            prover_account: "prover_account".parse().unwrap(),
         }
     }
 }
 
 #[near]
-impl EvmProver {
+impl WormholeProver {
     /// # Panics
     ///
     /// This function will panic if the prover args are not valid.

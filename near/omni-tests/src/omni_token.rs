@@ -15,9 +15,10 @@ mod tests {
 
     use crate::helpers::tests::{
         account_n, arb_factory_address, arb_token_address, base_factory_address,
-        base_token_address, bnb_factory_address, eth_eoa_address, eth_factory_address,
-        eth_token_address, get_test_deploy_token_args, locker_wasm, mock_evm_prover_wasm,
-        sol_factory_address, sol_token_address, token_deployer_wasm, NEP141_DEPOSIT,
+        base_token_address, bnb_factory_address, bnb_token_address, eth_eoa_address,
+        eth_factory_address, eth_token_address, get_test_deploy_token_args, locker_wasm,
+        mock_evm_prover_wasm, mock_wormhole_prover_wasm, sol_factory_address, sol_token_address,
+        token_deployer_wasm, NEP141_DEPOSIT,
     };
 
     struct TestEnv {
@@ -33,6 +34,7 @@ mod tests {
         async fn new(
             init_token_address: OmniAddress,
             mock_evm_prover_wasm: Vec<u8>,
+            mock_wormhole_prover_wasm: Vec<u8>,
             locker_wasm: Vec<u8>,
             token_deployer_wasm: Vec<u8>,
         ) -> anyhow::Result<Self> {
@@ -58,16 +60,23 @@ mod tests {
                 .into_result()?;
 
             let eth_prover = worker.dev_deploy(&mock_evm_prover_wasm).await?;
-            locker_contract
-                .call("add_prover")
-                .args_json(json!({
-                    "prover_id": "Eth",
-                    "account_id": eth_prover.id(),
-                }))
-                .max_gas()
-                .transact()
-                .await?
-                .into_result()?;
+            let wormhole_prover = worker.dev_deploy(&mock_wormhole_prover_wasm).await?;
+
+            for (prover_id, account_id) in [
+                ("Eth", eth_prover.id()),
+                ("Base", wormhole_prover.id()),
+                ("Arb", wormhole_prover.id()),
+                ("Bnb", wormhole_prover.id()),
+                ("Sol", wormhole_prover.id()),
+            ] {
+                locker_contract
+                    .call("add_prover")
+                    .args_json(json!({ "prover_id": prover_id, "account_id": account_id }))
+                    .max_gas()
+                    .transact()
+                    .await?
+                    .into_result()?;
+            }
 
             // Setup token deployer
             let token_deployer = worker
@@ -144,6 +153,7 @@ mod tests {
         async fn new_native(
             chain_kind: ChainKind,
             mock_evm_prover_wasm: Vec<u8>,
+            mock_wormhole_prover_wasm: Vec<u8>,
             locker_wasm: Vec<u8>,
             token_deployer_wasm: Vec<u8>,
         ) -> anyhow::Result<Self> {
@@ -151,6 +161,7 @@ mod tests {
             Self::new(
                 init_token_address,
                 mock_evm_prover_wasm,
+                mock_wormhole_prover_wasm,
                 locker_wasm,
                 token_deployer_wasm,
             )
@@ -252,15 +263,18 @@ mod tests {
     #[case(sol_token_address(), false)]
     #[case(arb_token_address(), false)]
     #[case(base_token_address(), false)]
+    #[case(bnb_token_address(), false)]
     #[case(eth_token_address(), true)]
     #[case(sol_token_address(), true)]
     #[case(arb_token_address(), true)]
     #[case(base_token_address(), true)]
+    #[case(bnb_token_address(), true)]
     #[tokio::test]
     async fn test_token_metadata(
         #[case] init_token_address: OmniAddress,
         #[case] is_native: bool,
         mock_evm_prover_wasm: Vec<u8>,
+        mock_wormhole_prover_wasm: Vec<u8>,
         locker_wasm: Vec<u8>,
         token_deployer_wasm: Vec<u8>,
     ) -> anyhow::Result<()> {
@@ -268,6 +282,7 @@ mod tests {
             TestEnv::new_native(
                 init_token_address.get_chain(),
                 mock_evm_prover_wasm,
+                mock_wormhole_prover_wasm,
                 locker_wasm,
                 token_deployer_wasm,
             )
@@ -276,6 +291,7 @@ mod tests {
             TestEnv::new(
                 init_token_address,
                 mock_evm_prover_wasm,
+                mock_wormhole_prover_wasm,
                 locker_wasm,
                 token_deployer_wasm,
             )
@@ -297,16 +313,19 @@ mod tests {
     #[case(sol_token_address())]
     #[case(arb_token_address())]
     #[case(base_token_address())]
+    #[case(bnb_token_address())]
     #[tokio::test]
     async fn test_set_token_metadata(
         #[case] init_token_address: OmniAddress,
         mock_evm_prover_wasm: Vec<u8>,
+        mock_wormhole_prover_wasm: Vec<u8>,
         locker_wasm: Vec<u8>,
         token_deployer_wasm: Vec<u8>,
     ) -> anyhow::Result<()> {
         let env = TestEnv::new(
             init_token_address,
             mock_evm_prover_wasm,
+            mock_wormhole_prover_wasm,
             locker_wasm,
             token_deployer_wasm,
         )
@@ -346,15 +365,18 @@ mod tests {
     #[case(sol_token_address(), false)]
     #[case(arb_token_address(), false)]
     #[case(base_token_address(), false)]
+    #[case(bnb_token_address(), false)]
     #[case(eth_token_address(), true)]
     #[case(sol_token_address(), true)]
     #[case(arb_token_address(), true)]
     #[case(base_token_address(), true)]
+    #[case(bnb_token_address(), true)]
     #[tokio::test]
     async fn test_token_minting(
         #[case] init_token_address: OmniAddress,
         #[case] is_native: bool,
         mock_evm_prover_wasm: Vec<u8>,
+        mock_wormhole_prover_wasm: Vec<u8>,
         locker_wasm: Vec<u8>,
         token_deployer_wasm: Vec<u8>,
     ) -> anyhow::Result<()> {
@@ -362,6 +384,7 @@ mod tests {
             TestEnv::new_native(
                 init_token_address.get_chain(),
                 mock_evm_prover_wasm,
+                mock_wormhole_prover_wasm,
                 locker_wasm,
                 token_deployer_wasm,
             )
@@ -370,6 +393,7 @@ mod tests {
             TestEnv::new(
                 init_token_address,
                 mock_evm_prover_wasm,
+                mock_wormhole_prover_wasm,
                 locker_wasm,
                 token_deployer_wasm,
             )
@@ -415,15 +439,18 @@ mod tests {
     #[case(sol_token_address(), false)]
     #[case(arb_token_address(), false)]
     #[case(base_token_address(), false)]
+    #[case(bnb_token_address(), false)]
     #[case(eth_token_address(), true)]
     #[case(sol_token_address(), true)]
     #[case(arb_token_address(), true)]
     #[case(base_token_address(), true)]
+    #[case(bnb_token_address(), true)]
     #[tokio::test]
     async fn test_token_transfer(
         #[case] init_token_address: OmniAddress,
         #[case] is_native: bool,
         mock_evm_prover_wasm: Vec<u8>,
+        mock_wormhole_prover_wasm: Vec<u8>,
         locker_wasm: Vec<u8>,
         token_deployer_wasm: Vec<u8>,
     ) -> anyhow::Result<()> {
@@ -431,6 +458,7 @@ mod tests {
             TestEnv::new_native(
                 init_token_address.get_chain(),
                 mock_evm_prover_wasm,
+                mock_wormhole_prover_wasm,
                 locker_wasm,
                 token_deployer_wasm,
             )
@@ -439,6 +467,7 @@ mod tests {
             TestEnv::new(
                 init_token_address,
                 mock_evm_prover_wasm,
+                mock_wormhole_prover_wasm,
                 locker_wasm,
                 token_deployer_wasm,
             )
@@ -530,7 +559,7 @@ mod tests {
         locker_contract
             .call("fin_transfer")
             .args_borsh(FinTransferArgs {
-                chain_kind: ChainKind::Near,
+                chain_kind: ChainKind::Eth,
                 storage_deposit_actions,
                 prover_args: borsh::to_vec(&ProverResult::InitTransfer(InitTransferMessage {
                     origin_nonce: 1,
