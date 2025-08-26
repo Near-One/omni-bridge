@@ -65,6 +65,17 @@ block_processing_batch_size = 10_000
 expected_finalization_time = 1066
 safe_confirmations = 30
 
+[bnb]
+rpc_http_url = "https://bsc-mainnet.infura.io/v3/INFURA_API_KEY"
+rpc_ws_url = "wss://bsc-mainnet.infura.io/ws/v3/INFURA_API_KEY"
+chain_id = 56
+omni_bridge_address = "0x073C8a225c8Cf9d3f9157F5C1a1DbE02407f5720"
+wormhole_address = "0x98f3c9e6E3fAce36bAAd05FE09d375Ef1464288B"
+block_processing_batch_size = 10_000
+# https://wormhole.com/docs/build/reference/consistency-levels/
+expected_finalization_time = 48
+safe_confirmations = 25
+
 [solana]
 rpc_http_url = "https://api.mainnet-beta.solana.com"
 rpc_ws_url = "wss://api.mainnet-beta.solana.com"
