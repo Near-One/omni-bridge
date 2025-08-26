@@ -397,7 +397,7 @@ mod tests {
             bridge_contract
                 .call("fin_transfer")
                 .args_borsh(FinTransferArgs {
-                    chain_kind: ChainKind::Near,
+                    chain_kind: ChainKind::Eth,
                     storage_deposit_actions,
                     prover_args: borsh::to_vec(&ProverResult::InitTransfer(InitTransferMessage {
                         origin_nonce: nonce,

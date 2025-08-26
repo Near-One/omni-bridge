@@ -21,6 +21,7 @@ mod tests {
     }
 
     impl TestEnv {
+        #[allow(clippy::too_many_lines)]
         async fn new(
             mock_token_wasm: Vec<u8>,
             mock_evm_prover_wasm: Vec<u8>,

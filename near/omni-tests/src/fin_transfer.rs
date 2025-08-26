@@ -49,6 +49,7 @@ mod tests {
         required_balance_for_fin_transfer: NearToken,
     }
 
+    #[allow(clippy::too_many_lines)]
     async fn setup_contracts(
         is_wnear: bool,
         deploy_minted_token: bool,
