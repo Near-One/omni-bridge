@@ -64,11 +64,15 @@ fn replace_rpc_api_key<'de, D>(deserializer: D) -> Result<String, D::Error>
 where
     D: serde::Deserializer<'de>,
 {
-    let url = String::deserialize(deserializer)?;
+    let mut url = String::deserialize(deserializer)?;
 
-    let api_key = std::env::var("INFURA_API_KEY").map_err(serde::de::Error::custom)?;
+    for key in ["INFURA_API_KEY", "TATUM_API_KEY", "FASTNEAR_API_KEY"] {
+        if let Ok(val) = std::env::var(key) {
+            url = url.replace(key, &val);
+        }
+    }
 
-    Ok(url.replace("INFURA_API_KEY", &api_key))
+    Ok(url)
 }
 
 fn validate_fee_discount<'de, D>(deserializer: D) -> Result<u8, D::Error>
@@ -96,7 +100,8 @@ pub struct Config {
     pub arb: Option<Evm>,
     pub bnb: Option<Evm>,
     pub solana: Option<Solana>,
-    pub btc: Option<Btc>,
+    pub btc: Option<Utxo>,
+    pub zcash: Option<Utxo>,
     pub wormhole: Wormhole,
 }
 
@@ -171,6 +176,8 @@ pub struct Near {
     pub omni_bridge_id: AccountId,
     pub btc_connector: Option<AccountId>,
     pub btc: Option<AccountId>,
+    pub zcash_connector: Option<AccountId>,
+    pub zcash: Option<AccountId>,
     pub omni_credentials_path: Option<String>,
     pub fast_credentials_path: Option<String>,
     pub sign_without_checking_fee: Option<Vec<OmniAddress>>,
@@ -219,7 +226,7 @@ pub struct Solana {
 }
 
 #[derive(Debug, Clone, Deserialize)]
-pub struct Btc {
+pub struct Utxo {
     pub rpc_http_url: String,
     pub signing_enabled: bool,
     pub verifying_withdraw_enabled: bool,

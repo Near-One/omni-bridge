@@ -19,10 +19,12 @@ db_name = "mainnet_omni_bridge_db"
 
 [near]
 network = "mainnet"
-rpc_url = "https://rpc.mainnet.near.org/"
+rpc_url = "https://rpc.mainnet.fastnear.com?apiKey=FASTNEAR_API_KEY"
 omni_bridge_id = "omni.bridge.near"
 btc_connector = "btc-connector.bridge.near"
-btc = "btc-client.bridge.near"
+btc = "nbtc.bridge.near"
+zcash_connector = "zcash-connector.bridge.near"
+zcash = "nzec.bridge.near"
 # Either provide a path to a credentials file or set it in the environment
 # Note: the path must be absolute
 # omni_credentials_path = "/Users/username/.near-credentials/mainnet/omni-relayer.bridge.near.json"
@@ -77,7 +79,7 @@ expected_finalization_time = 48
 safe_confirmations = 25
 
 [solana]
-rpc_http_url = "https://api.mainnet-beta.solana.com"
+rpc_http_url = "https://x-api-key:TATUM_API_KEY@solana-mainnet.gateway.tatum.io"
 rpc_ws_url = "wss://api.mainnet-beta.solana.com"
 # Program ID on Solana is an account ID whitch the bridge contract (basically bridge_token_factory_address on Solana)
 program_id = "dahPEoZGXfyV58JqqH85okdHmpN8U2q8owgPUXSCPxe"
@@ -103,11 +105,18 @@ finalize_transfer_sol_discriminator = [104, 27, 121, 69, 3, 70, 217, 66]
 # credentials_path = "/Users/username/my-solana-keypair.json"
 
 [btc]
-rpc_http_url = "https://bitcoin-rpc.publicnode.com"
+rpc_http_url = "https://x-api-key:TATUM_API_KEY@bitcoin-mainnet.gateway.tatum.io"
 # If this is set to true, then omni relayer will call `sign_btc_transaction`
 signing_enabled = false
 # If this is set to true, then omni relayer will call `verify_withdraw`
 verifying_withdraw_enabled = false
+
+[zcash]
+rpc_http_url = "https://x-api-key:TATUM_API_KEY@zcash-mainnet.gateway.tatum.io"
+# If this is set to true, then omni relayer will call `sign_btc_transaction`
+signing_enabled = true
+# If this is set to true, then omni relayer will call `verify_withdraw`
+verifying_withdraw_enabled = true
 
 [wormhole]
 api_url = "https://api.wormholescan.io/"
