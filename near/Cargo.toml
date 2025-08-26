@@ -15,9 +15,8 @@ members = [
     "omni-tests",
     "mock/mock-token",
     "mock/mock-prover",
-    "mock/mock-token-receiver",
-    "mock/mock-evm-prover"
-, "mock/mock-wormhole-prover"]
+    "mock/mock-token-receiver"
+]
 
 [profile.release]
 codegen-units = 1

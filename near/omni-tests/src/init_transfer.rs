@@ -14,8 +14,8 @@ mod tests {
 
     use crate::helpers::tests::{
         account_n, eth_eoa_address, eth_factory_address, eth_token_address, get_bind_token_args,
-        get_claim_fee_args_near, get_event_data, locker_wasm, mock_evm_prover_wasm,
-        mock_token_wasm, relayer_account_id, NEP141_DEPOSIT,
+        get_claim_fee_args_near, get_event_data, locker_wasm, mock_prover_wasm, mock_token_wasm,
+        relayer_account_id, NEP141_DEPOSIT,
     };
 
     const DEFAULT_NEAR_SANDBOX_BALANCE: NearToken = NearToken::from_near(100);
@@ -38,7 +38,7 @@ mod tests {
         async fn new(
             sender_balance_token: u128,
             mock_token_wasm: Vec<u8>,
-            mock_evm_prover_wasm: Vec<u8>,
+            mock_prover_wasm: Vec<u8>,
             locker_wasm: Vec<u8>,
             is_old_locker: bool,
         ) -> anyhow::Result<Self> {
@@ -75,12 +75,12 @@ mod tests {
                 .into_result()?;
 
             if !is_old_locker {
-                let eth_prover = worker.dev_deploy(&mock_evm_prover_wasm).await?;
+                let prover = worker.dev_deploy(&mock_prover_wasm).await?;
                 locker_contract
                     .call("add_prover")
                     .args_json(json!({
                         "prover_id": "Eth",
-                        "account_id": eth_prover.id(),
+                        "account_id": prover.id(),
                     }))
                     .max_gas()
                     .transact()
@@ -468,7 +468,7 @@ mod tests {
     #[tokio::test]
     async fn test_native_fee(
         mock_token_wasm: Vec<u8>,
-        mock_evm_prover_wasm: Vec<u8>,
+        mock_prover_wasm: Vec<u8>,
         locker_wasm: Vec<u8>,
     ) -> anyhow::Result<()> {
         let sender_balance_token = 1_000_000;
@@ -482,7 +482,7 @@ mod tests {
         let env = TestEnv::new(
             sender_balance_token,
             mock_token_wasm,
-            mock_evm_prover_wasm,
+            mock_prover_wasm,
             locker_wasm,
             false,
         )
@@ -525,7 +525,7 @@ mod tests {
     #[tokio::test]
     async fn test_transfer_fee(
         mock_token_wasm: Vec<u8>,
-        mock_evm_prover_wasm: Vec<u8>,
+        mock_prover_wasm: Vec<u8>,
         locker_wasm: Vec<u8>,
     ) -> anyhow::Result<()> {
         let sender_balance_token = 1_000_000;
@@ -539,7 +539,7 @@ mod tests {
         let env = TestEnv::new(
             sender_balance_token,
             mock_token_wasm,
-            mock_evm_prover_wasm,
+            mock_prover_wasm,
             locker_wasm,
             false,
         )
@@ -580,7 +580,7 @@ mod tests {
     #[tokio::test]
     async fn test_both_fee(
         mock_token_wasm: Vec<u8>,
-        mock_evm_prover_wasm: Vec<u8>,
+        mock_prover_wasm: Vec<u8>,
         locker_wasm: Vec<u8>,
     ) -> anyhow::Result<()> {
         let sender_balance_token = 1_000_000;
@@ -594,7 +594,7 @@ mod tests {
         let env = TestEnv::new(
             sender_balance_token,
             mock_token_wasm,
-            mock_evm_prover_wasm,
+            mock_prover_wasm,
             locker_wasm,
             false,
         )
@@ -644,7 +644,7 @@ mod tests {
     #[tokio::test]
     async fn test_update_fee(
         mock_token_wasm: Vec<u8>,
-        mock_evm_prover_wasm: Vec<u8>,
+        mock_prover_wasm: Vec<u8>,
         locker_wasm: Vec<u8>,
     ) -> anyhow::Result<()> {
         let sender_balance_token = 1_000_000;
@@ -663,7 +663,7 @@ mod tests {
         let env = TestEnv::new(
             sender_balance_token,
             mock_token_wasm,
-            mock_evm_prover_wasm,
+            mock_prover_wasm,
             locker_wasm,
             false,
         )
@@ -713,7 +713,7 @@ mod tests {
     #[tokio::test]
     async fn test_relayer_sign(
         mock_token_wasm: Vec<u8>,
-        mock_evm_prover_wasm: Vec<u8>,
+        mock_prover_wasm: Vec<u8>,
         locker_wasm: Vec<u8>,
     ) -> anyhow::Result<()> {
         let sender_balance_token = 1_000_000;
@@ -727,7 +727,7 @@ mod tests {
         let env = TestEnv::new(
             sender_balance_token,
             mock_token_wasm,
-            mock_evm_prover_wasm,
+            mock_prover_wasm,
             locker_wasm,
             false,
         )
@@ -772,7 +772,7 @@ mod tests {
     #[should_panic(expected = "ERR_LOWER_FEE")]
     async fn test_update_fee_native_too_small(
         mock_token_wasm: Vec<u8>,
-        mock_evm_prover_wasm: Vec<u8>,
+        mock_prover_wasm: Vec<u8>,
         locker_wasm: Vec<u8>,
     ) {
         let sender_balance_token = 1_000_000;
@@ -791,7 +791,7 @@ mod tests {
         let env = TestEnv::new(
             sender_balance_token,
             mock_token_wasm,
-            mock_evm_prover_wasm,
+            mock_prover_wasm,
             locker_wasm,
             false,
         )
@@ -815,7 +815,7 @@ mod tests {
     #[should_panic(expected = "ERR_INVALID_FEE")]
     async fn test_update_fee_transfer_fee_too_small(
         mock_token_wasm: Vec<u8>,
-        mock_evm_prover_wasm: Vec<u8>,
+        mock_prover_wasm: Vec<u8>,
         locker_wasm: Vec<u8>,
     ) {
         let sender_balance_token = 1_000_000;
@@ -834,7 +834,7 @@ mod tests {
         let env = TestEnv::new(
             sender_balance_token,
             mock_token_wasm,
-            mock_evm_prover_wasm,
+            mock_prover_wasm,
             locker_wasm,
             false,
         )
@@ -858,7 +858,7 @@ mod tests {
     #[should_panic(expected = "ERR_INVALID_FEE")]
     async fn test_update_fee_transfer_fee_too_big(
         mock_token_wasm: Vec<u8>,
-        mock_evm_prover_wasm: Vec<u8>,
+        mock_prover_wasm: Vec<u8>,
         locker_wasm: Vec<u8>,
     ) {
         let sender_balance_token = 1_000_000;
@@ -877,7 +877,7 @@ mod tests {
         let env = TestEnv::new(
             sender_balance_token,
             mock_token_wasm,
-            mock_evm_prover_wasm,
+            mock_prover_wasm,
             locker_wasm,
             false,
         )
@@ -902,7 +902,7 @@ mod tests {
     // Add a test once the Proof update fee is implemented
     async fn test_update_fee_proof(
         mock_token_wasm: Vec<u8>,
-        mock_evm_prover_wasm: Vec<u8>,
+        mock_prover_wasm: Vec<u8>,
         locker_wasm: Vec<u8>,
     ) {
         let sender_balance_token = 1_000_000;
@@ -917,7 +917,7 @@ mod tests {
         let env = TestEnv::new(
             sender_balance_token,
             mock_token_wasm,
-            mock_evm_prover_wasm,
+            mock_prover_wasm,
             locker_wasm,
             false,
         )
@@ -940,7 +940,7 @@ mod tests {
     #[tokio::test]
     async fn test_migrate(
         mock_token_wasm: Vec<u8>,
-        mock_evm_prover_wasm: Vec<u8>,
+        mock_prover_wasm: Vec<u8>,
         locker_wasm: Vec<u8>,
     ) -> anyhow::Result<()> {
         let sender_balance_token = 1_000_000;
@@ -955,7 +955,7 @@ mod tests {
         let env = TestEnv::new(
             sender_balance_token,
             mock_token_wasm,
-            mock_evm_prover_wasm,
+            mock_prover_wasm,
             prev_locker_wasm,
             true,
         )

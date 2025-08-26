@@ -18,7 +18,7 @@ mod tests {
 
     use crate::helpers::tests::{
         account_n, eth_eoa_address, eth_factory_address, eth_token_address,
-        get_test_deploy_token_args, locker_wasm, mock_evm_prover_wasm, mock_token_receiver_wasm,
+        get_test_deploy_token_args, locker_wasm, mock_prover_wasm, mock_token_receiver_wasm,
         mock_token_wasm, relayer_account_id, token_deployer_wasm, NEP141_DEPOSIT,
     };
 
@@ -90,12 +90,12 @@ mod tests {
             .await?
             .into_result()?;
 
-        let eth_prover = worker.dev_deploy(&mock_evm_prover_wasm()).await?;
+        let prover = worker.dev_deploy(&mock_prover_wasm()).await?;
         locker_contract
             .call("add_prover")
             .args_json(json!({
                 "prover_id": "Eth",
-                "account_id": eth_prover.id(),
+                "account_id": prover.id(),
             }))
             .max_gas()
             .transact()

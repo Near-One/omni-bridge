@@ -17,8 +17,8 @@ mod tests {
         account_n, arb_factory_address, arb_token_address, base_factory_address,
         base_token_address, bnb_factory_address, bnb_token_address, eth_eoa_address,
         eth_factory_address, eth_token_address, get_test_deploy_token_args, locker_wasm,
-        mock_evm_prover_wasm, mock_wormhole_prover_wasm, sol_factory_address, sol_token_address,
-        token_deployer_wasm, NEP141_DEPOSIT,
+        mock_prover_wasm, sol_factory_address, sol_token_address, token_deployer_wasm,
+        NEP141_DEPOSIT,
     };
 
     struct TestEnv {
@@ -33,8 +33,7 @@ mod tests {
     impl TestEnv {
         async fn new(
             init_token_address: OmniAddress,
-            mock_evm_prover_wasm: Vec<u8>,
-            mock_wormhole_prover_wasm: Vec<u8>,
+            mock_prover_wasm: Vec<u8>,
             locker_wasm: Vec<u8>,
             token_deployer_wasm: Vec<u8>,
         ) -> anyhow::Result<Self> {
@@ -59,19 +58,12 @@ mod tests {
                 .await?
                 .into_result()?;
 
-            let eth_prover = worker.dev_deploy(&mock_evm_prover_wasm).await?;
-            let wormhole_prover = worker.dev_deploy(&mock_wormhole_prover_wasm).await?;
+            let prover = worker.dev_deploy(&mock_prover_wasm).await?;
 
-            for (prover_id, account_id) in [
-                ("Eth", eth_prover.id()),
-                ("Base", wormhole_prover.id()),
-                ("Arb", wormhole_prover.id()),
-                ("Bnb", wormhole_prover.id()),
-                ("Sol", wormhole_prover.id()),
-            ] {
+            for prover_id in ["Eth", "Base", "Arb", "Bnb", "Sol"] {
                 locker_contract
                     .call("add_prover")
-                    .args_json(json!({ "prover_id": prover_id, "account_id": account_id }))
+                    .args_json(json!({ "prover_id": prover_id, "account_id": prover.id() }))
                     .max_gas()
                     .transact()
                     .await?
@@ -152,16 +144,14 @@ mod tests {
 
         async fn new_native(
             chain_kind: ChainKind,
-            mock_evm_prover_wasm: Vec<u8>,
-            mock_wormhole_prover_wasm: Vec<u8>,
+            mock_prover_wasm: Vec<u8>,
             locker_wasm: Vec<u8>,
             token_deployer_wasm: Vec<u8>,
         ) -> anyhow::Result<Self> {
             let init_token_address = OmniAddress::new_zero(chain_kind).unwrap();
             Self::new(
                 init_token_address,
-                mock_evm_prover_wasm,
-                mock_wormhole_prover_wasm,
+                mock_prover_wasm,
                 locker_wasm,
                 token_deployer_wasm,
             )
@@ -273,16 +263,14 @@ mod tests {
     async fn test_token_metadata(
         #[case] init_token_address: OmniAddress,
         #[case] is_native: bool,
-        mock_evm_prover_wasm: Vec<u8>,
-        mock_wormhole_prover_wasm: Vec<u8>,
+        mock_prover_wasm: Vec<u8>,
         locker_wasm: Vec<u8>,
         token_deployer_wasm: Vec<u8>,
     ) -> anyhow::Result<()> {
         let env = if is_native {
             TestEnv::new_native(
                 init_token_address.get_chain(),
-                mock_evm_prover_wasm,
-                mock_wormhole_prover_wasm,
+                mock_prover_wasm,
                 locker_wasm,
                 token_deployer_wasm,
             )
@@ -290,8 +278,7 @@ mod tests {
         } else {
             TestEnv::new(
                 init_token_address,
-                mock_evm_prover_wasm,
-                mock_wormhole_prover_wasm,
+                mock_prover_wasm,
                 locker_wasm,
                 token_deployer_wasm,
             )
@@ -317,15 +304,13 @@ mod tests {
     #[tokio::test]
     async fn test_set_token_metadata(
         #[case] init_token_address: OmniAddress,
-        mock_evm_prover_wasm: Vec<u8>,
-        mock_wormhole_prover_wasm: Vec<u8>,
+        mock_prover_wasm: Vec<u8>,
         locker_wasm: Vec<u8>,
         token_deployer_wasm: Vec<u8>,
     ) -> anyhow::Result<()> {
         let env = TestEnv::new(
             init_token_address,
-            mock_evm_prover_wasm,
-            mock_wormhole_prover_wasm,
+            mock_prover_wasm,
             locker_wasm,
             token_deployer_wasm,
         )
@@ -375,16 +360,14 @@ mod tests {
     async fn test_token_minting(
         #[case] init_token_address: OmniAddress,
         #[case] is_native: bool,
-        mock_evm_prover_wasm: Vec<u8>,
-        mock_wormhole_prover_wasm: Vec<u8>,
+        mock_prover_wasm: Vec<u8>,
         locker_wasm: Vec<u8>,
         token_deployer_wasm: Vec<u8>,
     ) -> anyhow::Result<()> {
         let env = if is_native {
             TestEnv::new_native(
                 init_token_address.get_chain(),
-                mock_evm_prover_wasm,
-                mock_wormhole_prover_wasm,
+                mock_prover_wasm,
                 locker_wasm,
                 token_deployer_wasm,
             )
@@ -392,8 +375,7 @@ mod tests {
         } else {
             TestEnv::new(
                 init_token_address,
-                mock_evm_prover_wasm,
-                mock_wormhole_prover_wasm,
+                mock_prover_wasm,
                 locker_wasm,
                 token_deployer_wasm,
             )
@@ -449,16 +431,14 @@ mod tests {
     async fn test_token_transfer(
         #[case] init_token_address: OmniAddress,
         #[case] is_native: bool,
-        mock_evm_prover_wasm: Vec<u8>,
-        mock_wormhole_prover_wasm: Vec<u8>,
+        mock_prover_wasm: Vec<u8>,
         locker_wasm: Vec<u8>,
         token_deployer_wasm: Vec<u8>,
     ) -> anyhow::Result<()> {
         let env = if is_native {
             TestEnv::new_native(
                 init_token_address.get_chain(),
-                mock_evm_prover_wasm,
-                mock_wormhole_prover_wasm,
+                mock_prover_wasm,
                 locker_wasm,
                 token_deployer_wasm,
             )
@@ -466,8 +446,7 @@ mod tests {
         } else {
             TestEnv::new(
                 init_token_address,
-                mock_evm_prover_wasm,
-                mock_wormhole_prover_wasm,
+                mock_prover_wasm,
                 locker_wasm,
                 token_deployer_wasm,
             )

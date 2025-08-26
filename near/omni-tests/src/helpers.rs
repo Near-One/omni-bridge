@@ -39,18 +39,10 @@ pub mod tests {
     }
 
     #[fixture]
-    pub fn mock_evm_prover_wasm() -> Vec<u8> {
+    pub fn mock_prover_wasm() -> Vec<u8> {
         build_wasm(
-            "../mock/mock-evm-prover/Cargo.toml",
-            "test-target-for-mock-evm-prover",
-        )
-    }
-
-    #[fixture]
-    pub fn mock_wormhole_prover_wasm() -> Vec<u8> {
-        build_wasm(
-            "../mock/mock-wormhole-prover/Cargo.toml",
-            "test-target-for-mock-wormhole-prover",
+            "../mock/mock-prover/Cargo.toml",
+            "test-target-for-mock-prover",
         )
     }
 
