@@ -18,8 +18,8 @@ mod tests {
 
     use crate::helpers::tests::{
         account_n, eth_eoa_address, eth_factory_address, eth_token_address,
-        get_test_deploy_token_args, locker_wasm, mock_prover_wasm, mock_token_receiver_wasm,
-        mock_token_wasm, relayer_account_id, token_deployer_wasm, NEP141_DEPOSIT,
+        get_test_deploy_token_args, locker_wasm, mock_token_receiver_wasm, mock_token_wasm,
+        relayer_account_id, token_deployer_wasm, NEP141_DEPOSIT,
     };
 
     static HEX_STRING_2000: std::sync::LazyLock<String> = std::sync::LazyLock::new(|| {
@@ -68,7 +68,6 @@ mod tests {
             .await?
             .into_result()?;
 
-        let prover_contract = worker.dev_deploy(&mock_prover_wasm()).await?;
         let token_receiver_contract = worker.dev_deploy(&mock_token_receiver_wasm()).await?;
 
         // Deploy and init locker
@@ -81,7 +80,6 @@ mod tests {
         locker_contract
             .call("new")
             .args_json(json!({
-                "prover_account": prover_contract.id(),
                 "mpc_signer": "mpc.testnet",
                 "nonce": U128(0),
                 "wnear_account_id": wnear_account_id,

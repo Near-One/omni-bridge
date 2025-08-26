@@ -22,7 +22,7 @@ mod tests {
     use crate::helpers::tests::{
         account_n, base_eoa_address, base_factory_address, eth_eoa_address, eth_factory_address,
         eth_token_address, fast_relayer_account_id, get_bind_token_args, locker_wasm,
-        mock_prover_wasm, mock_token_wasm, relayer_account_id, token_deployer_wasm, NEP141_DEPOSIT,
+        mock_token_wasm, relayer_account_id, token_deployer_wasm, NEP141_DEPOSIT,
     };
 
     struct TestEnv {
@@ -47,13 +47,11 @@ mod tests {
             let sender_balance_token = 1_000_000_000_000;
             let worker = near_workspaces::sandbox().await?;
 
-            let prover_contract = worker.dev_deploy(&mock_prover_wasm()).await?;
             // Deploy and initialize bridge
             let bridge_contract = worker.dev_deploy(&locker_wasm()).await?;
             bridge_contract
                 .call("new")
                 .args_json(json!({
-                    "prover_account": prover_contract.id(),
                     "mpc_signer": "mpc.testnet",
                     "nonce": U128(0),
                     "wnear_account_id": "wnear.testnet",

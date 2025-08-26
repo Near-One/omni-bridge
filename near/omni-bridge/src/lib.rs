@@ -9,7 +9,7 @@ use near_contract_standards::fungible_token::metadata::FungibleTokenMetadata;
 use near_contract_standards::fungible_token::receiver::FungibleTokenReceiver;
 use near_contract_standards::storage_management::StorageBalance;
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
-use near_sdk::collections::{LookupMap, LookupSet};
+use near_sdk::collections::{LookupMap, LookupSet, UnorderedMap};
 use near_sdk::json_types::{Base64VecU8, U128};
 use near_sdk::serde::{Deserialize, Serialize};
 use near_sdk::{
@@ -22,7 +22,7 @@ use omni_types::locker_args::{
 };
 use omni_types::mpc_types::SignatureResponse;
 use omni_types::near_events::OmniBridgeEvent;
-use omni_types::prover_args::VerifyProofArgs;
+use omni_types::prover_args::{ProverId, VerifyProofArgs};
 use omni_types::prover_result::ProverResult;
 use omni_types::{
     BasicMetadata, BridgeOnTransferMsg, ChainKind, FastFinTransferMsg, FastTransfer,
@@ -47,8 +47,7 @@ const LOG_METADATA_CALLBACK_GAS: Gas = Gas::from_tgas(260);
 const MPC_SIGNING_GAS: Gas = Gas::from_tgas(250);
 const SIGN_TRANSFER_CALLBACK_GAS: Gas = Gas::from_tgas(5);
 const SIGN_LOG_METADATA_CALLBACK_GAS: Gas = Gas::from_tgas(5);
-const VERIFY_PROOF_GAS: Gas = Gas::from_tgas(30);
-const VERIFY_PROOF_CALLBACK_GAS: Gas = Gas::from_tgas(250);
+const FIN_TRANSFER_CALLBACK_GAS: Gas = Gas::from_tgas(250);
 const CLAIM_FEE_CALLBACK_GAS: Gas = Gas::from_tgas(50);
 const BIND_TOKEN_CALLBACK_GAS: Gas = Gas::from_tgas(25);
 const BIND_TOKEN_REFUND_GAS: Gas = Gas::from_tgas(5);
@@ -69,6 +68,7 @@ const FAST_TRANSFER_CALLBACK_GAS: Gas = Gas::from_tgas(10);
 const NO_DEPOSIT: NearToken = NearToken::from_near(0);
 const ONE_YOCTO: NearToken = NearToken::from_yoctonear(1);
 const SEND_TOKENS_CALLBACK_GAS: Gas = Gas::from_tgas(15);
+const OUTER_VERIFY_PROOF_GAS: Gas = Gas::from_tgas(10);
 const SIGN_PATH: &str = "bridge-1";
 
 #[derive(BorshSerialize, BorshStorageKey)]
@@ -84,6 +84,7 @@ enum StorageKey {
     DestinationNonces,
     TokenDecimals,
     FastTransfers,
+    RegisteredProvers,
 }
 
 #[derive(AccessControlRole, Deserialize, Serialize, Copy, Clone)]
@@ -98,6 +99,8 @@ pub enum Role {
     UnrestrictedRelayer,
     TokenControllerUpdater,
     NativeFeeRestricted,
+    UnrestrictedValidateProof,
+    ProversManager,
 }
 
 #[ext_contract(ext_token)]
@@ -152,10 +155,9 @@ pub trait ExtSigner {
     fn sign(&mut self, request: SignRequest);
 }
 
-#[ext_contract(ext_prover)]
+#[ext_contract(ext_omni_prover_proxy)]
 pub trait Prover {
-    #[result_serializer(borsh)]
-    fn verify_proof(&self, #[serializer(borsh)] args: VerifyProofArgs) -> ProverResult;
+    fn verify_proof(&self, #[serializer(borsh)] proof: Vec<u8>);
 }
 
 #[ext_contract(ext_wnear_token)]
@@ -180,7 +182,6 @@ pub trait TokenDeployer {
     duration_update_appliers(Role::DAO),
 ))]
 pub struct Contract {
-    pub prover_account: AccountId,
     pub factories: LookupMap<ChainKind, OmniAddress>,
     pub pending_transfers: LookupMap<TransferId, TransferMessageStorage>,
     pub finalised_transfers: LookupSet<TransferId>,
@@ -196,6 +197,7 @@ pub struct Contract {
     pub destination_nonces: LookupMap<ChainKind, Nonce>,
     pub accounts_balances: LookupMap<AccountId, StorageBalance>,
     pub wnear_account_id: AccountId,
+    pub provers: UnorderedMap<ProverId, AccountId>,
 }
 
 #[near]
@@ -235,13 +237,8 @@ impl FungibleTokenReceiver for Contract {
 #[near]
 impl Contract {
     #[init]
-    pub fn new(
-        prover_account: AccountId,
-        mpc_signer: AccountId,
-        wnear_account_id: AccountId,
-    ) -> Self {
+    pub fn new(mpc_signer: AccountId, wnear_account_id: AccountId) -> Self {
         let mut contract = Self {
-            prover_account,
             factories: LookupMap::new(StorageKey::Factories),
             pending_transfers: LookupMap::new(StorageKey::PendingTransfers),
             finalised_transfers: LookupSet::new(StorageKey::FinalisedTransfers),
@@ -256,6 +253,7 @@ impl Contract {
             destination_nonces: LookupMap::new(StorageKey::DestinationNonces),
             accounts_balances: LookupMap::new(StorageKey::AccountsBalances),
             wnear_account_id,
+            provers: UnorderedMap::new(StorageKey::RegisteredProvers),
         };
 
         contract.acl_init_super_admin(near_sdk::env::predecessor_account_id());
@@ -534,13 +532,10 @@ impl Contract {
             args.storage_deposit_actions.len() <= 3,
             "Invalid len of accounts for storage deposit"
         );
-        let mut main_promise = ext_prover::ext(self.prover_account.clone())
-            .with_static_gas(VERIFY_PROOF_GAS)
-            .with_attached_deposit(NO_DEPOSIT)
-            .verify_proof(VerifyProofArgs {
-                prover_id: args.chain_kind.as_ref().to_owned(),
-                prover_args: args.prover_args,
-            });
+        let mut main_promise = self.verify_proof(VerifyProofArgs {
+            prover_id: args.chain_kind.as_ref().to_owned(),
+            prover_args: args.prover_args,
+        });
 
         let mut attached_deposit = env::attached_deposit();
 
@@ -552,7 +547,7 @@ impl Contract {
         main_promise.then(
             Self::ext(env::current_account_id())
                 .with_attached_deposit(attached_deposit)
-                .with_static_gas(VERIFY_PROOF_CALLBACK_GAS)
+                .with_static_gas(FIN_TRANSFER_CALLBACK_GAS)
                 .fin_transfer_callback(
                     &args.storage_deposit_actions,
                     env::predecessor_account_id(),
@@ -821,19 +816,16 @@ impl Contract {
     #[payable]
     #[pause(except(roles(Role::DAO, Role::UnrestrictedRelayer)))]
     pub fn claim_fee(&mut self, #[serializer(borsh)] args: ClaimFeeArgs) -> Promise {
-        ext_prover::ext(self.prover_account.clone())
-            .with_static_gas(VERIFY_PROOF_GAS)
-            .with_attached_deposit(NO_DEPOSIT)
-            .verify_proof(VerifyProofArgs {
-                prover_id: args.chain_kind.as_ref().to_owned(),
-                prover_args: args.prover_args,
-            })
-            .then(
-                Self::ext(env::current_account_id())
-                    .with_attached_deposit(env::attached_deposit())
-                    .with_static_gas(CLAIM_FEE_CALLBACK_GAS)
-                    .claim_fee_callback(&env::predecessor_account_id()),
-            )
+        self.verify_proof(VerifyProofArgs {
+            prover_id: args.chain_kind.as_ref().to_owned(),
+            prover_args: args.prover_args,
+        })
+        .then(
+            Self::ext(env::current_account_id())
+                .with_attached_deposit(env::attached_deposit())
+                .with_static_gas(CLAIM_FEE_CALLBACK_GAS)
+                .claim_fee_callback(&env::predecessor_account_id()),
+        )
     }
 
     #[private]
@@ -939,19 +931,16 @@ impl Contract {
     #[payable]
     #[pause(except(roles(Role::DAO, Role::UnrestrictedRelayer)))]
     pub fn deploy_token(&mut self, #[serializer(borsh)] args: DeployTokenArgs) -> Promise {
-        ext_prover::ext(self.prover_account.clone())
-            .with_static_gas(VERIFY_PROOF_GAS)
-            .with_attached_deposit(NO_DEPOSIT)
-            .verify_proof(VerifyProofArgs {
-                prover_id: args.chain_kind.as_ref().to_owned(),
-                prover_args: args.prover_args,
-            })
-            .then(
-                Self::ext(env::current_account_id())
-                    .with_attached_deposit(NO_DEPOSIT)
-                    .with_static_gas(DEPLOY_TOKEN_CALLBACK_GAS)
-                    .deploy_token_callback(near_sdk::env::attached_deposit()),
-            )
+        self.verify_proof(VerifyProofArgs {
+            prover_id: args.chain_kind.as_ref().to_owned(),
+            prover_args: args.prover_args,
+        })
+        .then(
+            Self::ext(env::current_account_id())
+                .with_attached_deposit(NO_DEPOSIT)
+                .with_static_gas(DEPLOY_TOKEN_CALLBACK_GAS)
+                .deploy_token_callback(near_sdk::env::attached_deposit()),
+        )
     }
 
     #[private]
@@ -1009,25 +998,22 @@ impl Contract {
     #[payable]
     #[pause(except(roles(Role::DAO, Role::UnrestrictedRelayer)))]
     pub fn bind_token(&mut self, #[serializer(borsh)] args: BindTokenArgs) -> Promise {
-        ext_prover::ext(self.prover_account.clone())
-            .with_static_gas(VERIFY_PROOF_GAS)
-            .with_attached_deposit(NO_DEPOSIT)
-            .verify_proof(VerifyProofArgs {
-                prover_id: args.chain_kind.as_ref().to_owned(),
-                prover_args: args.prover_args,
-            })
-            .then(
-                Self::ext(env::current_account_id())
-                    .with_attached_deposit(NO_DEPOSIT)
-                    .with_static_gas(BIND_TOKEN_CALLBACK_GAS)
-                    .bind_token_callback(near_sdk::env::attached_deposit()),
-            )
-            .then(
-                Self::ext(env::current_account_id())
-                    .with_attached_deposit(env::attached_deposit())
-                    .with_static_gas(BIND_TOKEN_REFUND_GAS)
-                    .bind_token_refund(near_sdk::env::predecessor_account_id()),
-            )
+        self.verify_proof(VerifyProofArgs {
+            prover_id: args.chain_kind.as_ref().to_owned(),
+            prover_args: args.prover_args,
+        })
+        .then(
+            Self::ext(env::current_account_id())
+                .with_attached_deposit(NO_DEPOSIT)
+                .with_static_gas(BIND_TOKEN_CALLBACK_GAS)
+                .bind_token_callback(near_sdk::env::attached_deposit()),
+        )
+        .then(
+            Self::ext(env::current_account_id())
+                .with_attached_deposit(env::attached_deposit())
+                .with_static_gas(BIND_TOKEN_REFUND_GAS)
+                .bind_token_refund(near_sdk::env::predecessor_account_id()),
+        )
     }
 
     #[private]
@@ -1401,6 +1387,34 @@ impl Contract {
 
             env::log_str(&OmniBridgeEvent::FinTransferEvent { transfer_message }.to_log_string());
         }
+    }
+
+    #[access_control_any(roles(Role::ProversManager, Role::DAO))]
+    pub fn add_prover(&mut self, prover_id: ProverId, account_id: AccountId) {
+        self.provers.insert(&prover_id, &account_id);
+    }
+
+    #[access_control_any(roles(Role::ProversManager, Role::DAO))]
+    pub fn remove_prover(&mut self, prover_id: ProverId) {
+        self.provers.remove(&prover_id);
+    }
+
+    #[must_use]
+    pub fn get_provers(&self) -> Vec<(ProverId, AccountId)> {
+        self.provers.iter().collect::<Vec<_>>()
+    }
+
+    #[pause(except(roles(Role::UnrestrictedValidateProof, Role::DAO)))]
+    pub fn verify_proof(&self, #[serializer(borsh)] args: VerifyProofArgs) -> Promise {
+        let prover_account_id = self
+            .provers
+            .get(&args.prover_id)
+            .unwrap_or_else(|| env::panic_str("ProverIdNotRegistered"));
+
+        ext_omni_prover_proxy::ext(prover_account_id)
+            .with_static_gas(env::prepaid_gas().saturating_sub(OUTER_VERIFY_PROOF_GAS))
+            .with_attached_deposit(NearToken::from_near(0))
+            .verify_proof(args.prover_args)
     }
 }
 

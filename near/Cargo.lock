@@ -2083,6 +2083,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "mock-evm-prover"
+version = "0.1.0"
+dependencies = [
+ "borsh",
+ "near-sdk",
+ "omni-types",
+]
+
+[[package]]
 name = "mock-prover"
 version = "0.1.0"
 dependencies = [
@@ -2106,6 +2115,10 @@ dependencies = [
  "near-contract-standards",
  "near-sdk",
 ]
+
+[[package]]
+name = "mock-wormhole-prover"
+version = "0.2.13"
 
 [[package]]
 name = "native-tls"
@@ -2916,16 +2929,6 @@ dependencies = [
  "near-sdk",
  "omni-types",
  "serde",
-]
-
-[[package]]
-name = "omni-prover"
-version = "0.2.10"
-dependencies = [
- "borsh",
- "near-plugins",
- "near-sdk",
- "omni-types",
 ]
 
 [[package]]

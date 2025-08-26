@@ -14,8 +14,8 @@ mod tests {
 
     use crate::helpers::tests::{
         account_n, eth_eoa_address, eth_factory_address, eth_token_address, get_bind_token_args,
-        get_claim_fee_args_near, get_event_data, locker_wasm, mock_prover_wasm, mock_token_wasm,
-        relayer_account_id, NEP141_DEPOSIT,
+        get_claim_fee_args_near, get_event_data, locker_wasm, mock_token_wasm, relayer_account_id,
+        NEP141_DEPOSIT,
     };
 
     const DEFAULT_NEAR_SANDBOX_BALANCE: NearToken = NearToken::from_near(100);
@@ -449,11 +449,7 @@ mod tests {
 
     #[rstest]
     #[tokio::test]
-    async fn test_native_fee(
-        mock_token_wasm: Vec<u8>,
-        mock_prover_wasm: Vec<u8>,
-        locker_wasm: Vec<u8>,
-    ) -> anyhow::Result<()> {
+    async fn test_native_fee(mock_token_wasm: Vec<u8>, locker_wasm: Vec<u8>) -> anyhow::Result<()> {
         let sender_balance_token = 1_000_000;
         let transfer_amount = 100;
         let init_transfer_msg = InitTransferMsg {
@@ -462,13 +458,7 @@ mod tests {
             recipient: eth_eoa_address(),
         };
 
-        let env = TestEnv::new(
-            sender_balance_token,
-            mock_token_wasm,
-            mock_prover_wasm,
-            locker_wasm,
-        )
-        .await?;
+        let env = TestEnv::new(sender_balance_token, mock_token_wasm, locker_wasm).await?;
 
         init_transfer_flow_on_near(
             &env,
@@ -507,7 +497,6 @@ mod tests {
     #[tokio::test]
     async fn test_transfer_fee(
         mock_token_wasm: Vec<u8>,
-        mock_prover_wasm: Vec<u8>,
         locker_wasm: Vec<u8>,
     ) -> anyhow::Result<()> {
         let sender_balance_token = 1_000_000;

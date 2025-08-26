@@ -8,7 +8,6 @@ resolver = "2"
 members = [
     "omni-bridge",
     "token-deployer",
-    "omni-prover/omni-prover",
     "omni-prover/wormhole-omni-prover-proxy",
     "omni-prover/evm-prover",
     "omni-token",
@@ -17,7 +16,7 @@ members = [
     "mock/mock-token",
     "mock/mock-prover",
     "mock/mock-token-receiver"
-]
+, "mock/mock-evm-prover", "mock/mock-wormhole-prover"]
 
 [profile.release]
 codegen-units = 1
