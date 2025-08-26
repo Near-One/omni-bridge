@@ -68,7 +68,7 @@ const FAST_TRANSFER_CALLBACK_GAS: Gas = Gas::from_tgas(10);
 const NO_DEPOSIT: NearToken = NearToken::from_near(0);
 const ONE_YOCTO: NearToken = NearToken::from_yoctonear(1);
 const SEND_TOKENS_CALLBACK_GAS: Gas = Gas::from_tgas(15);
-const OUTER_VERIFY_PROOF_GAS: Gas = Gas::from_tgas(10);
+const VERIFY_PROOF_GAS: Gas = Gas::from_tgas(10);
 const SIGN_PATH: &str = "bridge-1";
 
 #[derive(BorshSerialize, BorshStorageKey)]
@@ -1409,10 +1409,10 @@ impl Contract {
         let prover_account_id = self
             .provers
             .get(&args.prover_id)
-            .unwrap_or_else(|| env::panic_str("ProverIdNotRegistered"));
+            .unwrap_or_else(|| env::panic_str("ERR_PROVER_ID_NOT_REGISTERED"));
 
         ext_omni_prover_proxy::ext(prover_account_id)
-            .with_static_gas(env::prepaid_gas().saturating_sub(OUTER_VERIFY_PROOF_GAS))
+            .with_static_gas(VERIFY_PROOF_GAS)
             .with_attached_deposit(NearToken::from_near(0))
             .verify_proof(args.prover_args)
     }

@@ -1,8 +1,6 @@
 use near_sdk::borsh::BorshDeserialize;
 use near_sdk::{near, AccountId};
-use omni_types::evm::events::parse_evm_event;
-use omni_types::prover_args::EvmVerifyProofArgs;
-use omni_types::prover_result::{ProofKind, ProverResult};
+use omni_types::prover_result::ProverResult;
 use omni_types::ChainKind;
 
 #[near(contract_state)]
@@ -26,32 +24,9 @@ impl Default for EvmProver {
 impl EvmProver {
     /// MOCK: no block-hash check, no trie verification.
     /// Decodes args and returns the parsed event as `ProverResult` immediately.
-    #[handle_result]
+    #[allow(clippy::needless_pass_by_value)]
     #[result_serializer(borsh)]
-    pub fn verify_proof(
-        &self,
-        #[serializer(borsh)] input: Vec<u8>,
-    ) -> Result<ProverResult, String> {
-        let args =
-            EvmVerifyProofArgs::try_from_slice(&input).map_err(|_| "ERR_PARSE_ARGS".to_string())?;
-
-        let log_entry_data = args.proof.log_entry_data;
-
-        let out = match args.proof_kind {
-            ProofKind::InitTransfer => {
-                ProverResult::InitTransfer(parse_evm_event(self.chain_kind, log_entry_data)?)
-            }
-            ProofKind::FinTransfer => {
-                ProverResult::FinTransfer(parse_evm_event(self.chain_kind, log_entry_data)?)
-            }
-            ProofKind::DeployToken => {
-                ProverResult::DeployToken(parse_evm_event(self.chain_kind, log_entry_data)?)
-            }
-            ProofKind::LogMetadata => {
-                ProverResult::LogMetadata(parse_evm_event(self.chain_kind, log_entry_data)?)
-            }
-        };
-
-        Ok(out)
+    pub fn verify_proof(&self, #[serializer(borsh)] input: Vec<u8>) -> ProverResult {
+        ProverResult::try_from_slice(&input).unwrap()
     }
 }
