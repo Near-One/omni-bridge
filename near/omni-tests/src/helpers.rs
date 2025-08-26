@@ -39,6 +39,14 @@ pub mod tests {
     }
 
     #[fixture]
+    pub fn mock_evm_prover_wasm() -> Vec<u8> {
+        build_wasm(
+            "../mock/mock-evm-prover/Cargo.toml",
+            "test-target-for-mock-evm-prover",
+        )
+    }
+
+    #[fixture]
     pub fn mock_token_receiver_wasm() -> Vec<u8> {
         build_wasm(
             "../mock/mock-token-receiver/Cargo.toml",

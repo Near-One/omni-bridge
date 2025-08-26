@@ -10,7 +10,7 @@ mod tests {
 
     use crate::helpers::tests::{
         account_n, eth_eoa_address, eth_factory_address, get_event_data, locker_wasm,
-        mock_prover_wasm, mock_token_wasm, NEP141_DEPOSIT,
+        mock_evm_prover_wasm, mock_token_wasm, NEP141_DEPOSIT,
     };
 
     struct TestEnv {
@@ -23,7 +23,7 @@ mod tests {
     impl TestEnv {
         async fn new(
             mock_token_wasm: Vec<u8>,
-            mock_prover_wasm: Vec<u8>,
+            mock_evm_prover_wasm: Vec<u8>,
             locker_wasm: Vec<u8>,
         ) -> anyhow::Result<Self> {
             let worker = near_workspaces::sandbox().await?;
@@ -41,17 +41,26 @@ mod tests {
                 .await?
                 .into_result()?;
 
-            let prover_contract = worker.dev_deploy(&mock_prover_wasm).await?;
-
             // Deploy and initialize locker
             let locker_contract = worker.dev_deploy(&locker_wasm).await?;
             locker_contract
                 .call("new")
                 .args_json(json!({
-                    "prover_account": prover_contract.id(),
                     "mpc_signer": "mpc.testnet",
                     "nonce": U128(0),
                     "wnear_account_id": "wnear.testnet",
+                }))
+                .max_gas()
+                .transact()
+                .await?
+                .into_result()?;
+
+            let eth_prover = worker.dev_deploy(&mock_evm_prover_wasm).await?;
+            locker_contract
+                .call("add_prover")
+                .args_json(json!({
+                    "prover_id": "Eth",
+                    "account_id": eth_prover.id(),
                 }))
                 .max_gas()
                 .transact()
@@ -279,10 +288,10 @@ mod tests {
     #[tokio::test]
     async fn test_native_fee_restriction(
         mock_token_wasm: Vec<u8>,
-        mock_prover_wasm: Vec<u8>,
+        mock_evm_prover_wasm: Vec<u8>,
         locker_wasm: Vec<u8>,
     ) -> anyhow::Result<()> {
-        let env = TestEnv::new(mock_token_wasm, mock_prover_wasm, locker_wasm).await?;
+        let env = TestEnv::new(mock_token_wasm, mock_evm_prover_wasm, locker_wasm).await?;
 
         // 1. Test that an account can set a native fee when not restricted
         let transfer_amount = 100;
@@ -366,10 +375,10 @@ mod tests {
     #[tokio::test]
     async fn test_role_persistence(
         mock_token_wasm: Vec<u8>,
-        mock_prover_wasm: Vec<u8>,
+        mock_evm_prover_wasm: Vec<u8>,
         locker_wasm: Vec<u8>,
     ) -> anyhow::Result<()> {
-        let env = TestEnv::new(mock_token_wasm, mock_prover_wasm, locker_wasm).await?;
+        let env = TestEnv::new(mock_token_wasm, mock_evm_prover_wasm, locker_wasm).await?;
 
         // 1. Check role is not granted initially
         let has_role: bool = env
@@ -434,10 +443,10 @@ mod tests {
     #[tokio::test]
     async fn test_admin_permissions(
         mock_token_wasm: Vec<u8>,
-        mock_prover_wasm: Vec<u8>,
+        mock_evm_prover_wasm: Vec<u8>,
         locker_wasm: Vec<u8>,
     ) -> anyhow::Result<()> {
-        let env = TestEnv::new(mock_token_wasm, mock_prover_wasm, locker_wasm).await?;
+        let env = TestEnv::new(mock_token_wasm, mock_evm_prover_wasm, locker_wasm).await?;
 
         // Create a new account without special permissions
         let unauthorized_account = env

@@ -2117,10 +2117,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "mock-wormhole-prover"
-version = "0.2.13"
-
-[[package]]
 name = "native-tls"
 version = "0.2.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"

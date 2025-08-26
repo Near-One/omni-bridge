@@ -22,13 +22,14 @@ mod tests {
     use crate::helpers::tests::{
         account_n, base_eoa_address, base_factory_address, eth_eoa_address, eth_factory_address,
         eth_token_address, fast_relayer_account_id, get_bind_token_args, locker_wasm,
-        mock_token_wasm, relayer_account_id, token_deployer_wasm, NEP141_DEPOSIT,
+        mock_evm_prover_wasm, mock_token_wasm, relayer_account_id, token_deployer_wasm,
+        NEP141_DEPOSIT,
     };
 
     struct TestEnv {
         token_contract: near_workspaces::Contract,
         eth_token_address: OmniAddress,
-        bridge_contract: near_workspaces::Contract,
+        locker_contract: near_workspaces::Contract,
         relayer_account: near_workspaces::Account,
         fast_relayer_account: near_workspaces::Account,
     }
@@ -48,8 +49,8 @@ mod tests {
             let worker = near_workspaces::sandbox().await?;
 
             // Deploy and initialize bridge
-            let bridge_contract = worker.dev_deploy(&locker_wasm()).await?;
-            bridge_contract
+            let locker_contract = worker.dev_deploy(&locker_wasm()).await?;
+            locker_contract
                 .call("new")
                 .args_json(json!({
                     "mpc_signer": "mpc.testnet",
@@ -61,9 +62,21 @@ mod tests {
                 .await?
                 .into_result()?;
 
+            let eth_prover = worker.dev_deploy(&mock_evm_prover_wasm()).await?;
+            locker_contract
+                .call("add_prover")
+                .args_json(json!({
+                    "prover_id": "Eth",
+                    "account_id": eth_prover.id(),
+                }))
+                .max_gas()
+                .transact()
+                .await?
+                .into_result()?;
+
             // Add ETH factory address to the bridge contract
             let eth_factory_address = eth_factory_address();
-            bridge_contract
+            locker_contract
                 .call("add_factory")
                 .args_json(json!({
                     "address": eth_factory_address,
@@ -74,7 +87,7 @@ mod tests {
                 .into_result()?;
 
             let base_factory_address = base_factory_address();
-            bridge_contract
+            locker_contract
                 .call("add_factory")
                 .args_json(json!({
                     "address": base_factory_address,
@@ -96,7 +109,7 @@ mod tests {
             token_deployer
                 .call("new")
                 .args_json(json!({
-                    "controller": bridge_contract.id(),
+                    "controller": locker_contract.id(),
                     "dao": AccountId::from_str("dao.near").unwrap(),
                 }))
                 .max_gas()
@@ -104,7 +117,7 @@ mod tests {
                 .await?
                 .into_result()?;
 
-            bridge_contract
+            locker_contract
                 .call("add_token_deployer")
                 .args_json(json!({
                     "chain": eth_factory_address.get_chain(),
@@ -127,11 +140,11 @@ mod tests {
 
             let (token_contract, eth_token_address) = if is_bridged_token {
                 let (token_contract, eth_token_address) =
-                    Self::deploy_bridged_token(&worker, &bridge_contract).await?;
+                    Self::deploy_bridged_token(&worker, &locker_contract).await?;
 
                 // Mint to relayer account
                 Self::fake_finalize_transfer(
-                    &bridge_contract,
+                    &locker_contract,
                     &token_contract,
                     eth_token_address.clone(),
                     &relayer_account,
@@ -143,7 +156,7 @@ mod tests {
 
                 // Mint to fast relayer account
                 Self::fake_finalize_transfer(
-                    &bridge_contract,
+                    &locker_contract,
                     &token_contract,
                     eth_token_address.clone(),
                     &fast_relayer_account,
@@ -157,7 +170,7 @@ mod tests {
                 token_contract
                     .call("storage_deposit")
                     .args_json(json!({
-                        "account_id": bridge_contract.id(),
+                        "account_id": locker_contract.id(),
                         "registration_only": true,
                     }))
                     .deposit(NEP141_DEPOSIT)
@@ -169,7 +182,7 @@ mod tests {
                 (token_contract, eth_token_address)
             } else {
                 let (token_contract, eth_token_address) =
-                    Self::deploy_native_token(worker, &bridge_contract, eth_factory_address)
+                    Self::deploy_native_token(worker, &locker_contract, eth_factory_address)
                         .await?;
 
                 // Register and send tokens to the relayer account
@@ -228,7 +241,7 @@ mod tests {
                 token_contract
                     .call("storage_deposit")
                     .args_json(json!({
-                        "account_id": bridge_contract.id(),
+                        "account_id": locker_contract.id(),
                         "registration_only": true,
                     }))
                     .deposit(NEP141_DEPOSIT)
@@ -240,7 +253,7 @@ mod tests {
                 token_contract
                     .call("ft_transfer")
                     .args_json(json!({
-                        "receiver_id": bridge_contract.id(),
+                        "receiver_id": locker_contract.id(),
                         "amount": U128(sender_balance_token),
                         "memo": None::<String>,
                     }))
@@ -257,7 +270,7 @@ mod tests {
             relayer_account
                 .call(token_contract.id(), "ft_transfer")
                 .args_json(json!({
-                    "receiver_id": bridge_contract.id(),
+                    "receiver_id": locker_contract.id(),
                     "amount": U128(100_000_000),
                 }))
                 .deposit(NearToken::from_yoctonear(1))
@@ -269,7 +282,7 @@ mod tests {
             Ok(Self {
                 token_contract,
                 eth_token_address,
-                bridge_contract,
+                locker_contract,
                 relayer_account,
                 fast_relayer_account,
             })
@@ -466,16 +479,16 @@ mod tests {
 
         let storage_deposit_amount = match fast_transfer_msg.recipient {
             OmniAddress::Near(_) => {
-                get_balance_required_for_fast_transfer_to_near(&env.bridge_contract, true).await?
+                get_balance_required_for_fast_transfer_to_near(&env.locker_contract, true).await?
             }
             _ => {
-                get_balance_required_for_fast_transfer_to_other_chain(&env.bridge_contract).await?
+                get_balance_required_for_fast_transfer_to_other_chain(&env.locker_contract).await?
             }
         };
 
         // Deposit to the storage
         relayer_account
-            .call(env.bridge_contract.id(), "storage_deposit")
+            .call(env.locker_contract.id(), "storage_deposit")
             .args_json(json!({
                 "account_id": relayer_account.id(),
             }))
@@ -489,7 +502,7 @@ mod tests {
         let transfer_result = relayer_account
             .call(env.token_contract.id(), "ft_transfer_call")
             .args_json(json!({
-                "receiver_id": env.bridge_contract.id(),
+                "receiver_id": env.locker_contract.id(),
                 "amount": U128(transfer_amount),
                 "memo": None::<String>,
                 "msg": serde_json::to_string(&BridgeOnTransferMsg::FastFinTransfer(fast_transfer_msg))?,
@@ -511,13 +524,13 @@ mod tests {
         let fast_relayer_account = fast_relayer_account.unwrap_or(&env.relayer_account);
 
         let required_balance_for_fin_transfer: NearToken = env
-            .bridge_contract
+            .locker_contract
             .view("required_balance_for_fin_transfer")
             .await?
             .json()?;
 
         let required_balance_for_init_transfer: NearToken = env
-            .bridge_contract
+            .locker_contract
             .view("required_balance_for_init_transfer")
             .await?
             .json()?;
@@ -534,7 +547,7 @@ mod tests {
 
         let result = env
             .relayer_account
-            .call(env.bridge_contract.id(), "fin_transfer")
+            .call(env.locker_contract.id(), "fin_transfer")
             .args_borsh(FinTransferArgs {
                 chain_kind: omni_types::ChainKind::Eth,
                 storage_deposit_actions: vec![
@@ -583,7 +596,7 @@ mod tests {
             let relayer_balance_before =
                 get_balance(&env.token_contract, env.relayer_account.id()).await?;
             let contract_balance_before =
-                get_balance(&env.token_contract, env.bridge_contract.id()).await?;
+                get_balance(&env.token_contract, env.locker_contract.id()).await?;
 
             let result = do_fast_transfer(&env, transfer_amount, fast_transfer_msg, None).await?;
 
@@ -593,7 +606,7 @@ mod tests {
             let relayer_balance_after =
                 get_balance(&env.token_contract, env.relayer_account.id()).await?;
             let contract_balance_after =
-                get_balance(&env.token_contract, env.bridge_contract.id()).await?;
+                get_balance(&env.token_contract, env.locker_contract.id()).await?;
 
             assert_eq!(transfer_amount, recipient_balance.0);
             assert_eq!(contract_balance_before, contract_balance_after);
@@ -615,7 +628,7 @@ mod tests {
             let relayer_balance_before =
                 get_balance(&env.token_contract, env.relayer_account.id()).await?;
             let contract_balance_before =
-                get_balance(&env.token_contract, env.bridge_contract.id()).await?;
+                get_balance(&env.token_contract, env.locker_contract.id()).await?;
 
             assert_eq!(U128(transfer_amount), contract_balance_before);
 
@@ -627,7 +640,7 @@ mod tests {
             let relayer_balance_after =
                 get_balance(&env.token_contract, env.relayer_account.id()).await?;
             let contract_balance_after =
-                get_balance(&env.token_contract, env.bridge_contract.id()).await?;
+                get_balance(&env.token_contract, env.locker_contract.id()).await?;
 
             assert_eq!(transfer_amount, recipient_balance.0);
             assert_eq!(contract_balance_before, contract_balance_after);
@@ -696,7 +709,7 @@ mod tests {
             let relayer_balance_before =
                 get_balance(&env.token_contract, env.relayer_account.id()).await?;
             let contract_balance_before =
-                get_balance(&env.token_contract, env.bridge_contract.id()).await?;
+                get_balance(&env.token_contract, env.locker_contract.id()).await?;
 
             assert_eq!(U128(transfer_amount), contract_balance_before);
 
@@ -711,7 +724,7 @@ mod tests {
             let relayer_balance_after =
                 get_balance(&env.token_contract, env.relayer_account.id()).await?;
             let contract_balance_after =
-                get_balance(&env.token_contract, env.bridge_contract.id()).await?;
+                get_balance(&env.token_contract, env.locker_contract.id()).await?;
 
             assert_eq!(0, recipient_balance.0);
             assert_eq!(contract_balance_before, contract_balance_after);
@@ -738,7 +751,7 @@ mod tests {
             let relayer_balance_before =
                 get_balance(&env.token_contract, env.relayer_account.id()).await?;
             let contract_balance_before =
-                get_balance(&env.token_contract, env.bridge_contract.id()).await?;
+                get_balance(&env.token_contract, env.locker_contract.id()).await?;
             let recipient_balance_before = get_balance(&env.token_contract, &recipient).await?;
 
             let transfer_amount = transfer_amount + 10_000_000;
@@ -754,7 +767,7 @@ mod tests {
             let relayer_balance_after =
                 get_balance(&env.token_contract, env.relayer_account.id()).await?;
             let contract_balance_after =
-                get_balance(&env.token_contract, env.bridge_contract.id()).await?;
+                get_balance(&env.token_contract, env.locker_contract.id()).await?;
 
             assert_eq!(
                 recipient_balance_before.0 + transfer_amount,
@@ -787,7 +800,7 @@ mod tests {
             let relayer_balance_before =
                 get_balance(&env.token_contract, env.relayer_account.id()).await?;
             let contract_balance_before =
-                get_balance(&env.token_contract, env.bridge_contract.id()).await?;
+                get_balance(&env.token_contract, env.locker_contract.id()).await?;
             let recipient_balance_before = get_balance(&env.token_contract, &recipient).await?;
 
             let result = do_fast_transfer(&env, transfer_amount, fast_transfer_msg, None).await?;
@@ -801,7 +814,7 @@ mod tests {
             let relayer_balance_after =
                 get_balance(&env.token_contract, env.relayer_account.id()).await?;
             let contract_balance_after =
-                get_balance(&env.token_contract, env.bridge_contract.id()).await?;
+                get_balance(&env.token_contract, env.locker_contract.id()).await?;
             let recipient_balance_after = get_balance(&env.token_contract, &recipient).await?;
 
             assert_eq!(relayer_balance_before, relayer_balance_after);
@@ -827,7 +840,7 @@ mod tests {
             let relayer_balance_before =
                 get_balance(&env.token_contract, env.relayer_account.id()).await?;
             let contract_balance_before =
-                get_balance(&env.token_contract, env.bridge_contract.id()).await?;
+                get_balance(&env.token_contract, env.locker_contract.id()).await?;
             let recipient_balance_before = get_balance(&env.token_contract, &recipient).await?;
 
             assert_eq!(U128(transfer_amount), contract_balance_before);
@@ -843,7 +856,7 @@ mod tests {
             let relayer_balance_after =
                 get_balance(&env.token_contract, env.relayer_account.id()).await?;
             let contract_balance_after =
-                get_balance(&env.token_contract, env.bridge_contract.id()).await?;
+                get_balance(&env.token_contract, env.locker_contract.id()).await?;
             let recipient_balance_after = get_balance(&env.token_contract, &recipient).await?;
 
             assert_eq!(relayer_balance_before, relayer_balance_after);
@@ -938,7 +951,7 @@ mod tests {
             let relayer_balance_before =
                 get_balance(&env.token_contract, env.relayer_account.id()).await?;
             let contract_balance_before =
-                get_balance(&env.token_contract, env.bridge_contract.id()).await?;
+                get_balance(&env.token_contract, env.locker_contract.id()).await?;
 
             let result =
                 do_fast_transfer(&env, transfer_amount, fast_transfer_msg.clone(), None).await?;
@@ -947,7 +960,7 @@ mod tests {
 
             //get_transfer_message
             let transfer_message: TransferMessage = env
-                .bridge_contract
+                .locker_contract
                 .view("get_transfer_message")
                 .args_json(json!({
                     "transfer_id": TransferId {
@@ -978,7 +991,7 @@ mod tests {
             let relayer_balance_after =
                 get_balance(&env.token_contract, env.relayer_account.id()).await?;
             let contract_balance_after =
-                get_balance(&env.token_contract, env.bridge_contract.id()).await?;
+                get_balance(&env.token_contract, env.locker_contract.id()).await?;
 
             assert_eq!(
                 contract_balance_before,
@@ -1003,7 +1016,7 @@ mod tests {
             let relayer_balance_before =
                 get_balance(&env.token_contract, env.relayer_account.id()).await?;
             let contract_balance_before =
-                get_balance(&env.token_contract, env.bridge_contract.id()).await?;
+                get_balance(&env.token_contract, env.locker_contract.id()).await?;
 
             assert_eq!(U128(transfer_amount), contract_balance_before);
 
@@ -1015,7 +1028,7 @@ mod tests {
             let relayer_balance_after =
                 get_balance(&env.token_contract, env.relayer_account.id()).await?;
             let contract_balance_after =
-                get_balance(&env.token_contract, env.bridge_contract.id()).await?;
+                get_balance(&env.token_contract, env.locker_contract.id()).await?;
 
             assert_eq!(contract_balance_before, contract_balance_after);
             assert_eq!(
@@ -1040,7 +1053,7 @@ mod tests {
             let relayer_balance_before =
                 get_balance(&env.token_contract, env.relayer_account.id()).await?;
             let contract_balance_before =
-                get_balance(&env.token_contract, env.bridge_contract.id()).await?;
+                get_balance(&env.token_contract, env.locker_contract.id()).await?;
 
             let result = do_fast_transfer(&env, transfer_amount, fast_transfer_msg, None).await?;
 
@@ -1054,7 +1067,7 @@ mod tests {
             let relayer_balance_after =
                 get_balance(&env.token_contract, env.relayer_account.id()).await?;
             let contract_balance_after =
-                get_balance(&env.token_contract, env.bridge_contract.id()).await?;
+                get_balance(&env.token_contract, env.locker_contract.id()).await?;
 
             assert_eq!(relayer_balance_before, relayer_balance_after);
             assert_eq!(contract_balance_before, contract_balance_after);
@@ -1075,7 +1088,7 @@ mod tests {
             let relayer_balance_before =
                 get_balance(&env.token_contract, env.relayer_account.id()).await?;
             let contract_balance_before =
-                get_balance(&env.token_contract, env.bridge_contract.id()).await?;
+                get_balance(&env.token_contract, env.locker_contract.id()).await?;
 
             assert_eq!(U128(transfer_amount), contract_balance_before);
 
@@ -1084,7 +1097,7 @@ mod tests {
             let relayer_balance_after =
                 get_balance(&env.token_contract, env.relayer_account.id()).await?;
             let contract_balance_after =
-                get_balance(&env.token_contract, env.bridge_contract.id()).await?;
+                get_balance(&env.token_contract, env.locker_contract.id()).await?;
 
             assert_eq!(relayer_balance_before, relayer_balance_after);
             assert_eq!(contract_balance_before, contract_balance_after);
@@ -1119,7 +1132,7 @@ mod tests {
             do_fin_transfer(&env, transfer_msg, None).await?;
 
             let transfer_message = env
-                .bridge_contract
+                .locker_contract
                 .view("get_transfer_message")
                 .args_json(json!({
                     "transfer_id": TransferId {
