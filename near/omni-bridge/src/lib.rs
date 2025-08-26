@@ -99,7 +99,6 @@ pub enum Role {
     UnrestrictedRelayer,
     TokenControllerUpdater,
     NativeFeeRestricted,
-    UnrestrictedValidateProof,
     ProversManager,
 }
 
@@ -1404,7 +1403,7 @@ impl Contract {
         self.provers.iter().collect::<Vec<_>>()
     }
 
-    #[pause(except(roles(Role::UnrestrictedValidateProof, Role::DAO)))]
+    #[private]
     pub fn verify_proof(&self, #[serializer(borsh)] args: VerifyProofArgs) -> Promise {
         let prover_account_id = self
             .provers
