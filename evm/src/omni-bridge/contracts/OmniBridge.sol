@@ -15,6 +15,10 @@ import "./SelectivePausableUpgradable.sol";
 import "../../common/Borsh.sol";
 import "./BridgeTypes.sol";
 
+struct TokenInfo {
+    address customMinter;
+    bool isBridgeToken;
+}
 contract OmniBridge is
     UUPSUpgradeable,
     AccessControlUpgradeable,
@@ -23,16 +27,21 @@ contract OmniBridge is
     using SafeERC20 for IERC20;
     mapping(address => string) public ethToNearToken;
     mapping(string => address) public nearToEthToken;
+    // deprecated = use only tokensInfo after migration
     mapping(address => bool) public isBridgeToken;
 
     address public tokenImplementationAddress;
     address public nearBridgeDerivedAddress;
     uint8 public omniBridgeChainId;
 
-    mapping(uint64 => bool) public completedTransfers;
+    // deprecated = use only completedTransfersPacked after migration
+    mapping(uint64 => bool) private completedTransfers;
     uint64 public currentOriginNonce;
 
     mapping(address => address) public customMinters;
+    mapping(uint64 => uint256) public completedTransfersPacked;
+    uint64 public migrationNonce;
+    mapping(address => TokenInfo) public tokensInfo;
 
     bytes32 public constant PAUSABLE_ADMIN_ROLE = keccak256("PAUSABLE_ADMIN_ROLE");
     uint constant UNPAUSED_ALL = 0;
@@ -71,6 +80,7 @@ contract OmniBridge is
         ethToNearToken[tokenAddress] = nearTokenId;
         nearToEthToken[nearTokenId] = tokenAddress;
         customMinters[tokenAddress] = customMinter;
+        tokensInfo[tokenAddress] = TokenInfo(customMinter, true);
 
         string memory name = IERC20Metadata(tokenAddress).name();
         string memory symbol = IERC20Metadata(tokenAddress).symbol();
@@ -93,6 +103,7 @@ contract OmniBridge is
         delete nearToEthToken[ethToNearToken[tokenAddress]];
         delete ethToNearToken[tokenAddress];
         delete customMinters[tokenAddress];
+        delete tokensInfo[tokenAddress];
     }
 
     function acceptTokenOwnership(address tokenAddress) external onlyRole(DEFAULT_ADMIN_ROLE) {
@@ -143,6 +154,7 @@ contract OmniBridge is
         isBridgeToken[address(bridgeTokenProxy)] = true;
         ethToNearToken[address(bridgeTokenProxy)] = metadata.token;
         nearToEthToken[metadata.token] = address(bridgeTokenProxy);
+        tokensInfo[address(bridgeTokenProxy)] = TokenInfo(address(0), true);
 
         return bridgeTokenProxy;
     }
@@ -197,21 +209,22 @@ contract OmniBridge is
         bytes calldata signatureData,
         BridgeTypes.TransferMessagePayload calldata payload
     ) payable external whenNotPaused(PAUSED_FIN_TRANSFER) {
-        if (completedTransfers[payload.destinationNonce]) {
+        if (isTransferCompleted(payload.destinationNonce)) {
             revert NonceAlreadyUsed(payload.destinationNonce);
         }
 
-        completedTransfers[payload.destinationNonce] = true;
+        _markTransferCompleted(payload.destinationNonce);
 
+        bytes1 chainId = bytes1(omniBridgeChainId);
         bytes memory borshEncoded = bytes.concat(
             bytes1(uint8(BridgeTypes.PayloadType.TransferMessage)),
             Borsh.encodeUint64(payload.destinationNonce),
             bytes1(payload.originChain),
             Borsh.encodeUint64(payload.originNonce),
-            bytes1(omniBridgeChainId),
+            chainId,
             Borsh.encodeAddress(payload.tokenAddress),
             Borsh.encodeUint128(payload.amount),
-            bytes1(omniBridgeChainId),
+            chainId,
             Borsh.encodeAddress(payload.recipient),
             bytes(payload.feeRecipient).length == 0  // None or Some(String) in rust
                 ? bytes("\x00")
@@ -227,13 +240,25 @@ contract OmniBridge is
             // slither-disable-next-line arbitrary-send-eth
             (bool success, ) = payload.recipient.call{value: payload.amount}("");
             if (!success) revert FailedToSendEther();
-        }
-        else if (customMinters[payload.tokenAddress] != address(0)) {
-            ICustomMinter(customMinters[payload.tokenAddress]).mint(payload.tokenAddress, payload.recipient, payload.amount);
-        } else if (isBridgeToken[payload.tokenAddress]) {
-            BridgeToken(payload.tokenAddress).mint(payload.recipient, payload.amount);
         } else {
-            IERC20(payload.tokenAddress).safeTransfer(payload.recipient, payload.amount);
+            TokenInfo memory tokenInfo = getTokenInfo(payload.tokenAddress);
+            if (tokenInfo.customMinter != address(0)) {
+                ICustomMinter(tokenInfo.customMinter).mint(
+                    payload.tokenAddress,
+                    payload.recipient,
+                    payload.amount
+                );
+            } else if (tokenInfo.isBridgeToken) {
+                BridgeToken(payload.tokenAddress).mint(
+                    payload.recipient,
+                    payload.amount
+                );
+            } else {
+                IERC20(payload.tokenAddress).safeTransfer(
+                    payload.recipient,
+                    payload.amount
+                );
+            }
         }
 
         finTransferExtension(payload);
@@ -271,10 +296,12 @@ contract OmniBridge is
             extensionValue = msg.value - amount - nativeFee;
         } else {
             extensionValue = msg.value - nativeFee;
-            if (customMinters[tokenAddress] != address(0)) {
-                IERC20(tokenAddress).safeTransferFrom(msg.sender, customMinters[tokenAddress], amount);
-                ICustomMinter(customMinters[tokenAddress]).burn(tokenAddress, amount);
-            } else if (isBridgeToken[tokenAddress]) {
+
+            TokenInfo memory tokenInfo = getTokenInfo(tokenAddress);
+            if (tokenInfo.customMinter != address(0)) {
+                IERC20(tokenAddress).safeTransferFrom(msg.sender, tokenInfo.customMinter, amount);
+                ICustomMinter(tokenInfo.customMinter).burn(tokenAddress, amount);
+            } else if (tokenInfo.isBridgeToken) {
                 BridgeToken(tokenAddress).burn(msg.sender, amount);
             } else {
                 IERC20(tokenAddress).safeTransferFrom(msg.sender, address(this), amount);
@@ -327,10 +354,55 @@ contract OmniBridge is
     }
 
     receive() external payable {}
+    // TODO: remove this after migration
+    function migrateCompletedTransfers() external onlyRole(DEFAULT_ADMIN_ROLE) {
+        for (uint64 i = 0; i < migrationNonce / 256; i++) {
+            completedTransfersPacked[i] = type(uint256).max;
+        }
+    }
+    // TODO: remove this after migration
+    function migrateTokenInfo(address token) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        if (isBridgeToken[token]) {
+            tokensInfo[token] = TokenInfo(customMinters[token], isBridgeToken[token]);
+        }
+    }
 
-    function _normalizeDecimals(
-        uint8 decimals
-    ) internal pure returns (uint8) {
+    function isTransferCompleted(uint64 nonce) public view returns (bool) {
+        if (nonce < migrationNonce) {
+            // TODO: remove this after migration
+            return completedTransfers[nonce];
+        }
+
+        uint256 packed = completedTransfersPacked[nonce / 256];
+        uint256 bitIndex = nonce % 256;
+        return (packed & (1 << bitIndex)) != 0;
+    }
+
+    function _markTransferCompleted(uint64 nonce) internal {
+        if (nonce % 256 == 0 && migrationNonce == 0) {
+            migrationNonce = nonce;
+        }
+
+        if (migrationNonce > 0) {
+            uint256 packed = completedTransfersPacked[nonce / 256];
+            uint256 bitIndex = nonce % 256;
+            completedTransfersPacked[nonce / 256] = packed | (1 << bitIndex);
+        } else {
+            completedTransfers[nonce] = true;
+        }
+    }
+
+    function getTokenInfo(address token) public view returns (TokenInfo memory) {
+        TokenInfo memory tokenInfo = tokensInfo[token];
+        if (tokenInfo.isBridgeToken) {
+            return tokenInfo;
+        } else {
+            // TODO: remove this after migration
+            return TokenInfo(customMinters[token], isBridgeToken[token]);
+        }
+    }
+
+    function _normalizeDecimals(uint8 decimals) internal pure returns (uint8) {
         uint8 maxAllowedDecimals = 18;
         if (decimals > maxAllowedDecimals) {
             return maxAllowedDecimals;
