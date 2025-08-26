@@ -54,7 +54,7 @@ pub struct WormholeCPI<'info> {
     pub sequence: Account<'info, wormhole::SequenceTracker>,
 
     #[account(mut, seeds = [config.key().as_ref()], bump, seeds::program = wormhole_post_message_shim::ID)]
-    /// CHECK: Wormhole Message.
+    /// CHECK: Wormhole Message. Wormhole shim doesn't require this to be signer or mutable
     /// Seeds constraint added for IDL generation / convenience, it will be enforced by the shim.
     pub message: UncheckedAccount<'info>,
 
