@@ -175,6 +175,7 @@ rule submit_transfer_to_btc_connector:
        user_account_file = user_account_file
     output: call_dir / "06_sign_btc_transfer.json"
     params:
+        near_tx_hash = lambda wc, input: get_tx_hash(input.step_5),
         zcash_connector = lambda wc, input: get_json_field(input.zcash_connector_file, "contract_id"),
         user_account_id = lambda wc, input: get_json_field(input.user_account_file, "account_id"),
         user_private_key = lambda wc, input: get_json_field(input.user_account_file, "private_key"),
@@ -182,7 +183,9 @@ rule submit_transfer_to_btc_connector:
 
     shell: """
     bridge-cli testnet near-sign-btc-transaction \
-        --btc-pending-id 04238d52945a710acd99823a0d12791266d3558a38d5914b32eed7c97e15c257 \
+        --near-tx-hash {params.near_tx_hash} \
+        --user-account {params.user_account_id} \
+        --chain zcash-testnet \
         --zcash-connector {params.zcash_connector} \
         --near-signer {params.user_account_id} \
         --near-private-key {params.user_private_key} \
@@ -202,6 +205,7 @@ rule send_btc_transfer:
         bridge_sdk_config_file = const.common_bridge_sdk_config_file,
     shell: """
     bridge-cli testnet btc-fin-transfer \
+    --chain zcash-testnet \
     --near-tx-hash {params.near_tx_hash} \
     --satoshi-relayer {params.user_account_id} \
     --config {params.bridge_sdk_config_file} \
