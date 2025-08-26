@@ -155,9 +155,13 @@ rule init_zcash_transfer_to_zcash:
         user_private_key = lambda wc, input: get_json_field(input.user_account_file, "private_key"),
         bridge_sdk_config_file = const.common_bridge_sdk_config_file,
     shell: """
+    set -a
+    source "$PWD/tools/.env"
+    set +a
+    
     bridge-cli testnet  init-near-to-bitcoin-transfer\
         --chain zcash-testnet \
-        --target-btc-address utest1rj797prep5mnq9ffd2zddlc94a4jm4z9kekluh87x7zvhq2sy3a4vence62nt0gzvjxyg06xtgmzrnrx6a8yv63gfa97j5rt55fkmlzjhpcgj4w85vgz5uphsp065g2kj9dk24f0kyl5f7jf36sdtt7ley6vucxftpekvsceg8upfeluev5308d0l3ycsnfs43uc8x3ggqc27danjtp \
+        --target-btc-address $ZCASH_ACCOUNT_ID \
         --amount 3000 \
         --zcash-connector {params.zcash_connector} \
         --zcash {params.zcash_token} \
