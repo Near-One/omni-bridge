@@ -32,8 +32,8 @@ For more information on how it works, please see [Omni Bridge Documentation](htt
 
 **Helper Contracts:**
 - NEAR: 
-  - [`omni-prover.bridge.near`](https://nearblocks.io/address/omni-prover.bridge.near)
-  - [`vaa-prover.bridge.near`](https://nearblocks.io/address/vaa-prover.bridge.near)
+  - [`vaa-prover-0_2_12.bridge.near`](https://nearblocks.io/address/vaa-prover-0_2_12.bridge.near)
+  - [`eth-prover-0_2_7.bridge.near`](https://nearblocks.io/address/eth-prover-0_2_7.bridge.near)
 </details>
 
 <details>
@@ -49,7 +49,6 @@ For more information on how it works, please see [Omni Bridge Documentation](htt
 
 **Helper Contracts:**
 - NEAR:
-  - [`omni-prover.n-bridge.testnet`](https://testnet.nearblocks.io/address/vaa-prover.n-bridge.testnet)
   - [`eth-prover.n-bridge.testnet`](https://testnet.nearblocks.io/address/eth-prover.n-bridge.testnet)
   - [`vaa-prover.n-bridge.testnet`](https://testnet.nearblocks.io/address/vaa-prover.n-bridge.testnet)
 </details>
@@ -66,7 +65,7 @@ For more information on how it works, please see [Omni Bridge Documentation](htt
 
 **Helper Contracts:**
 - NEAR:
-  - [`omni-prover.testnet`](https://testnet.nearblocks.io/address/omni-prover.testnet)
+  - [`eth-prover.testnet`](https://testnet.nearblocks.io/address/eth-prover.testnet)
   - [`wormhole-prover-test.testnet`](https://testnet.nearblocks.io/address/wormhole-prover-test.testnet)
 </details>
 
