@@ -108,12 +108,9 @@ impl Contract {
         );
         self.accounts_balances.insert(&account_id, &storage);
 
-        if self.init_transfer_promises.contains_key(&account_id) {
-            let res = env::promise_yield_resume(
-                &self.init_transfer_promises.get(&account_id).unwrap(),
-                &[],
-            );
-            env::log_str(&format!("Promise resume: {}", res));
+        if let Some(promise_id) = &self.init_transfer_promises.get(&account_id) {
+            let result = env::promise_yield_resume(promise_id, &[]);
+            env::log_str(&format!("Init transfer resume. Result: {result}"));
         }
 
         storage

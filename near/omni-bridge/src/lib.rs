@@ -478,7 +478,7 @@ impl Contract {
 
         let transfer_message = TransferMessage {
             origin_nonce: self.current_origin_nonce,
-            token: OmniAddress::Near(token_id.clone()),
+            token: OmniAddress::Near(token_id),
             amount,
             recipient: init_transfer_msg.recipient,
             fee: Fee {
@@ -535,6 +535,7 @@ impl Contract {
     }
 
     #[private]
+    #[allow(clippy::needless_pass_by_value)]
     pub fn init_transfer_resume(
         &mut self,
         transfer_message: TransferMessage,
@@ -546,7 +547,7 @@ impl Contract {
             .remove(&message_storage_account_id);
 
         match response {
-            Ok(_) => self.init_transfer_internal(
+            Ok(()) => self.init_transfer_internal(
                 transfer_message,
                 message_storage_account_id,
                 storage_owner,
