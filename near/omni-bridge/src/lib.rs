@@ -1402,19 +1402,6 @@ impl Contract {
     pub fn get_provers(&self) -> Vec<(ProverId, AccountId)> {
         self.provers.iter().collect::<Vec<_>>()
     }
-
-    #[private]
-    pub fn verify_proof(&self, #[serializer(borsh)] args: VerifyProofArgs) -> Promise {
-        let prover_account_id = self
-            .provers
-            .get(&args.prover_id)
-            .unwrap_or_else(|| env::panic_str("ERR_PROVER_ID_NOT_REGISTERED"));
-
-        ext_omni_prover_proxy::ext(prover_account_id)
-            .with_static_gas(VERIFY_PROOF_GAS)
-            .with_attached_deposit(NearToken::from_near(0))
-            .verify_proof(args.prover_args)
-    }
 }
 
 impl Contract {
@@ -1913,6 +1900,18 @@ impl Contract {
                     .with_attached_deposit(NEP141_DEPOSIT)
                     .storage_deposit(&env::current_account_id(), Some(true)),
             )
+    }
+
+    fn verify_proof(&self, args: VerifyProofArgs) -> Promise {
+        let prover_account_id = self
+            .provers
+            .get(&args.prover_id)
+            .unwrap_or_else(|| env::panic_str("ERR_PROVER_ID_NOT_REGISTERED"));
+
+        ext_omni_prover_proxy::ext(prover_account_id)
+            .with_static_gas(VERIFY_PROOF_GAS)
+            .with_attached_deposit(NearToken::from_near(0))
+            .verify_proof(args.prover_args)
     }
 
     fn refund(account_id: AccountId, amount: NearToken) {
