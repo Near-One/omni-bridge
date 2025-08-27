@@ -60,7 +60,7 @@ mod tests {
             locker_contract
                 .call("add_prover")
                 .args_json(json!({
-                    "prover_id": "Eth",
+                    "chain": "Eth",
                     "account_id": prover.id(),
                 }))
                 .max_gas()

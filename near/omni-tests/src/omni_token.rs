@@ -60,10 +60,10 @@ mod tests {
 
             let prover = worker.dev_deploy(&mock_prover_wasm).await?;
 
-            for prover_id in ["Eth", "Base", "Arb", "Bnb", "Sol"] {
+            for chain in ["Eth", "Base", "Arb", "Bnb", "Sol"] {
                 locker_contract
                     .call("add_prover")
-                    .args_json(json!({ "prover_id": prover_id, "account_id": prover.id() }))
+                    .args_json(json!({ "chain": chain, "account_id": prover.id() }))
                     .max_gas()
                     .transact()
                     .await?
