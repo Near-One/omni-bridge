@@ -22,7 +22,6 @@ use omni_types::locker_args::{
 };
 use omni_types::mpc_types::SignatureResponse;
 use omni_types::near_events::OmniBridgeEvent;
-use omni_types::prover_args::{ProverId, VerifyProofArgs};
 use omni_types::prover_result::ProverResult;
 use omni_types::{
     BasicMetadata, BridgeOnTransferMsg, ChainKind, FastFinTransferMsg, FastTransfer,
@@ -195,7 +194,7 @@ pub struct Contract {
     pub destination_nonces: LookupMap<ChainKind, Nonce>,
     pub accounts_balances: LookupMap<AccountId, StorageBalance>,
     pub wnear_account_id: AccountId,
-    pub provers: UnorderedMap<ProverId, AccountId>,
+    pub provers: UnorderedMap<ChainKind, AccountId>,
 }
 
 #[near]
@@ -530,10 +529,7 @@ impl Contract {
             args.storage_deposit_actions.len() <= 3,
             "Invalid len of accounts for storage deposit"
         );
-        let mut main_promise = self.verify_proof(VerifyProofArgs {
-            prover_id: args.chain_kind.as_ref().to_owned(),
-            prover_args: args.prover_args,
-        });
+        let mut main_promise = self.verify_proof(args.chain_kind, args.prover_args);
 
         let mut attached_deposit = env::attached_deposit();
 
@@ -814,11 +810,7 @@ impl Contract {
     #[payable]
     #[pause(except(roles(Role::DAO, Role::UnrestrictedRelayer)))]
     pub fn claim_fee(&mut self, #[serializer(borsh)] args: ClaimFeeArgs) -> Promise {
-        self.verify_proof(VerifyProofArgs {
-            prover_id: args.chain_kind.as_ref().to_owned(),
-            prover_args: args.prover_args,
-        })
-        .then(
+        self.verify_proof(args.chain_kind, args.prover_args).then(
             Self::ext(env::current_account_id())
                 .with_attached_deposit(env::attached_deposit())
                 .with_static_gas(CLAIM_FEE_CALLBACK_GAS)
@@ -929,11 +921,7 @@ impl Contract {
     #[payable]
     #[pause(except(roles(Role::DAO, Role::UnrestrictedRelayer)))]
     pub fn deploy_token(&mut self, #[serializer(borsh)] args: DeployTokenArgs) -> Promise {
-        self.verify_proof(VerifyProofArgs {
-            prover_id: args.chain_kind.as_ref().to_owned(),
-            prover_args: args.prover_args,
-        })
-        .then(
+        self.verify_proof(args.chain_kind, args.prover_args).then(
             Self::ext(env::current_account_id())
                 .with_attached_deposit(NO_DEPOSIT)
                 .with_static_gas(DEPLOY_TOKEN_CALLBACK_GAS)
@@ -996,22 +984,19 @@ impl Contract {
     #[payable]
     #[pause(except(roles(Role::DAO, Role::UnrestrictedRelayer)))]
     pub fn bind_token(&mut self, #[serializer(borsh)] args: BindTokenArgs) -> Promise {
-        self.verify_proof(VerifyProofArgs {
-            prover_id: args.chain_kind.as_ref().to_owned(),
-            prover_args: args.prover_args,
-        })
-        .then(
-            Self::ext(env::current_account_id())
-                .with_attached_deposit(NO_DEPOSIT)
-                .with_static_gas(BIND_TOKEN_CALLBACK_GAS)
-                .bind_token_callback(near_sdk::env::attached_deposit()),
-        )
-        .then(
-            Self::ext(env::current_account_id())
-                .with_attached_deposit(env::attached_deposit())
-                .with_static_gas(BIND_TOKEN_REFUND_GAS)
-                .bind_token_refund(near_sdk::env::predecessor_account_id()),
-        )
+        self.verify_proof(args.chain_kind, args.prover_args)
+            .then(
+                Self::ext(env::current_account_id())
+                    .with_attached_deposit(NO_DEPOSIT)
+                    .with_static_gas(BIND_TOKEN_CALLBACK_GAS)
+                    .bind_token_callback(near_sdk::env::attached_deposit()),
+            )
+            .then(
+                Self::ext(env::current_account_id())
+                    .with_attached_deposit(env::attached_deposit())
+                    .with_static_gas(BIND_TOKEN_REFUND_GAS)
+                    .bind_token_refund(near_sdk::env::predecessor_account_id()),
+            )
     }
 
     #[private]
@@ -1388,17 +1373,17 @@ impl Contract {
     }
 
     #[access_control_any(roles(Role::DAO))]
-    pub fn add_prover(&mut self, prover_id: ProverId, account_id: AccountId) {
+    pub fn add_prover(&mut self, prover_id: ChainKind, account_id: AccountId) {
         self.provers.insert(&prover_id, &account_id);
     }
 
     #[access_control_any(roles(Role::DAO))]
-    pub fn remove_prover(&mut self, prover_id: ProverId) {
+    pub fn remove_prover(&mut self, prover_id: ChainKind) {
         self.provers.remove(&prover_id);
     }
 
     #[must_use]
-    pub fn get_provers(&self) -> Vec<(ProverId, AccountId)> {
+    pub fn get_provers(&self) -> Vec<(ChainKind, AccountId)> {
         self.provers.iter().collect::<Vec<_>>()
     }
 }
@@ -1901,16 +1886,16 @@ impl Contract {
             )
     }
 
-    fn verify_proof(&self, args: VerifyProofArgs) -> Promise {
+    fn verify_proof(&self, chain_kind: ChainKind, prover_args: Vec<u8>) -> Promise {
         let prover_account_id = self
             .provers
-            .get(&args.prover_id)
+            .get(&chain_kind)
             .unwrap_or_else(|| env::panic_str("ERR_PROVER_ID_NOT_REGISTERED"));
 
         ext_omni_prover_proxy::ext(prover_account_id)
             .with_static_gas(VERIFY_PROOF_GAS)
             .with_attached_deposit(NearToken::from_near(0))
-            .verify_proof(args.prover_args)
+            .verify_proof(prover_args)
     }
 
     fn refund(account_id: AccountId, amount: NearToken) {
