@@ -4,6 +4,7 @@ use alloy::primitives::B256;
 use anyhow::Result;
 use bridge_indexer_types::documents_types::DepositMsg;
 use futures::future::join_all;
+use rust_decimal::MathematicalOps;
 use tracing::warn;
 
 use ethereum_types::H256;
@@ -224,11 +225,21 @@ pub async fn process_events(
                 continue;
             }
 
-            let delay = config
-                .redis
-                .fee_retry_base_sleep_secs
-                .saturating_mul(2_i64.saturating_pow(retryable_event.retries))
-                .min(config.redis.fee_retry_max_sleep_secs);
+            let delay = i64::try_from(
+                config
+                    .redis
+                    .sleep_time_after_events_process_secs
+                    .saturating_mul(
+                        config
+                            .redis
+                            .fee_retry_base_secs
+                            .powu(u64::from(retryable_event.retries))
+                            .try_into()
+                            .unwrap(),
+                    ),
+            )
+            .unwrap_or(i64::MAX)
+            .min(config.redis.fee_retry_max_sleep_secs);
 
             if current_timestamp < retryable_event.last_updated_timestamp + delay {
                 continue;

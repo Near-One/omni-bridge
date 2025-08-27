@@ -15,7 +15,7 @@ pub fn get_signer(
     config: &config::Config,
     near_signer_type: config::NearSignerType,
 ) -> Result<InMemorySigner> {
-    info!("Creating NEAR signer");
+    info!("Getting NEAR signer");
 
     let file = match near_signer_type {
         config::NearSignerType::Omni => config.near.omni_credentials_path.as_deref(),

@@ -3,8 +3,8 @@ url = "redis://127.0.0.1/"
 sleep_time_after_events_process_secs = 1
 query_retry_attempts = 10
 query_retry_sleep_secs = 1
-fee_retry_base_sleep_secs = 10
-fee_retry_max_sleep_secs = 43200 # 60 * 60 * 12
+fee_retry_base_secs = 1.2
+fee_retry_max_sleep_secs = 3600 # 60 * 60
 keep_transfers_for_secs = 604800 # 60 * 60 * 24 * 7
 
 [bridge_indexer]
