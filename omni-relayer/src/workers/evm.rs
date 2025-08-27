@@ -4,8 +4,6 @@ use anyhow::{Context, Result};
 use bridge_connector_common::result::BridgeSdkError;
 use tracing::{info, warn};
 
-use ethereum_types::H256;
-
 use near_bridge_client::{NearBridgeClient, TransactionOptions};
 use near_jsonrpc_client::errors::JsonRpcError;
 use near_primitives::views::TxExecutionStatus;
@@ -268,7 +266,6 @@ pub async fn process_init_transfer_event(
 }
 
 pub async fn process_evm_transfer_event(
-    config: &config::Config,
     omni_connector: Arc<OmniConnector>,
     fin_transfer: FinTransfer,
     near_nonce: Arc<utils::nonce::NonceManager>,
@@ -276,7 +273,6 @@ pub async fn process_evm_transfer_event(
     let FinTransfer::Evm {
         chain_kind,
         tx_hash: transaction_hash,
-        topic,
         creation_timestamp,
         expected_finalization_time,
     } = fin_transfer
@@ -305,10 +301,9 @@ pub async fn process_evm_transfer_event(
     };
 
     let Some(prover_args) = utils::evm::construct_prover_args(
-        config,
+        omni_connector.clone(),
         vaa,
         transaction_hash,
-        H256::from_slice(topic.as_slice()),
         ProofKind::FinTransfer,
     )
     .await
@@ -369,7 +364,6 @@ pub async fn process_evm_transfer_event(
 }
 
 pub async fn process_deploy_token_event(
-    config: &config::Config,
     omni_connector: Arc<OmniConnector>,
     deploy_token_event: DeployToken,
     near_nonce: Arc<utils::nonce::NonceManager>,
@@ -377,7 +371,6 @@ pub async fn process_deploy_token_event(
     let DeployToken::Evm {
         chain_kind,
         tx_hash: transaction_hash,
-        topic,
         creation_timestamp,
         expected_finalization_time,
     } = deploy_token_event
@@ -406,10 +399,9 @@ pub async fn process_deploy_token_event(
     };
 
     let Some(prover_args) = utils::evm::construct_prover_args(
-        config,
+        omni_connector.clone(),
         vaa,
         transaction_hash,
-        H256::from_slice(topic.as_slice()),
         ProofKind::DeployToken,
     )
     .await

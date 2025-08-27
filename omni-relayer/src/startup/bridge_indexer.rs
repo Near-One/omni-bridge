@@ -1,6 +1,6 @@
 use std::str::FromStr;
 
-use alloy::{primitives::Address, sol_types::SolEvent};
+use alloy::primitives::Address;
 use anyhow::{Context, Result};
 use bridge_indexer_types::documents_types::{
     BtcConnectorEvent, BtcConnectorEventDetails, OmniEvent, OmniEventData, OmniMetaEvent,
@@ -223,7 +223,6 @@ async fn handle_transaction_event(
                 RetryableEvent::new(workers::FinTransfer::Evm {
                     chain_kind,
                     tx_hash,
-                    topic: utils::evm::FinTransfer::SIGNATURE_HASH,
                     creation_timestamp,
                     expected_finalization_time,
                 }),
@@ -352,7 +351,6 @@ async fn handle_meta_event(
                 RetryableEvent::new(workers::DeployToken::Evm {
                     chain_kind,
                     tx_hash,
-                    topic: utils::evm::DeployToken::SIGNATURE_HASH,
                     creation_timestamp,
                     expected_finalization_time,
                 }),

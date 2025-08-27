@@ -265,8 +265,6 @@ async fn process_log(
         .and_then(|block| i64::try_from(block.header.timestamp).ok())
         .unwrap_or_else(|| chrono::Utc::now().timestamp());
 
-    let topic = log.topic0();
-
     if let Ok(init_log) = log.log_decode::<utils::evm::InitTransfer>() {
         info!("Received InitTransfer on {chain_kind:?} ({tx_hash:?})");
 
@@ -331,11 +329,6 @@ async fn process_log(
     } else if log.log_decode::<utils::evm::FinTransfer>().is_ok() {
         info!("Received FinTransfer on {chain_kind:?} ({tx_hash:?})");
 
-        let Some(&topic) = topic else {
-            warn!("Topic is empty for log: {log:?}");
-            return;
-        };
-
         utils::redis::add_event(
             config,
             redis_connection,
@@ -344,7 +337,6 @@ async fn process_log(
             RetryableEvent::new(FinTransfer::Evm {
                 chain_kind,
                 tx_hash,
-                topic,
                 creation_timestamp: timestamp,
                 expected_finalization_time,
             }),
@@ -352,11 +344,6 @@ async fn process_log(
         .await;
     } else if log.log_decode::<utils::evm::DeployToken>().is_ok() {
         info!("Received DeployToken on {chain_kind:?} ({tx_hash:?})");
-
-        let Some(&topic) = topic else {
-            warn!("Topic is empty for log: {log:?}");
-            return;
-        };
 
         utils::redis::add_event(
             config,
@@ -366,7 +353,6 @@ async fn process_log(
             RetryableEvent::new(DeployToken::Evm {
                 chain_kind,
                 tx_hash,
-                topic,
                 creation_timestamp: timestamp,
                 expected_finalization_time,
             }),

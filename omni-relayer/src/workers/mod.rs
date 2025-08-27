@@ -1,6 +1,5 @@
 use std::sync::Arc;
 
-use alloy::primitives::B256;
 use anyhow::Result;
 use bridge_indexer_types::documents_types::DepositMsg;
 use futures::future::join_all;
@@ -106,7 +105,6 @@ pub enum FinTransfer {
     Evm {
         chain_kind: ChainKind,
         tx_hash: H256,
-        topic: B256,
         creation_timestamp: i64,
         expected_finalization_time: i64,
     },
@@ -122,7 +120,6 @@ pub enum DeployToken {
     Evm {
         chain_kind: ChainKind,
         tx_hash: H256,
-        topic: B256,
         creation_timestamp: i64,
         expected_finalization_time: i64,
     },
@@ -639,7 +636,6 @@ pub async fn process_events(
 
                         async move {
                             match evm::process_evm_transfer_event(
-                                &config,
                                 omni_connector,
                                 fin_transfer_event,
                                 near_nonce,
@@ -721,7 +717,6 @@ pub async fn process_events(
 
                         async move {
                             match evm::process_deploy_token_event(
-                                &config,
                                 omni_connector,
                                 deploy_token_event,
                                 near_nonce,
