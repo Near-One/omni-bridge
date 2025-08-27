@@ -217,18 +217,24 @@ impl Contract {
         // We can't trust sender_id to pay for storage as it can be spoofed.
         let storage_payer = env::signer_account_id();
         match parsed_msg {
-            BridgeOnTransferMsg::InitTransfer(init_transfer_msg) => self
-                .init_transfer(
+            BridgeOnTransferMsg::InitTransfer(init_transfer_msg) => {
+                match self.init_transfer(
                     sender_id,
                     storage_payer,
                     token_id,
                     amount,
                     init_transfer_msg,
-                )
-                .map_or_else(
-                    || env::value_return(&serde_json::to_vec(&U128(0)).unwrap()),
-                    |promise_index| env::promise_return(promise_index),
-                ),
+                ) {
+                    Some(promise_index) => {
+                        env::log_str("env::promise_return(promise_inde");
+                        env::promise_return(promise_index)
+                    }
+                    None => {
+                        env::log_str("env::value_return(&serde_json::to_vec(&U128(0)).unwrap())");
+                        env::value_return(&serde_json::to_vec(&U128(0)).unwrap())
+                    }
+                }
+            }
             BridgeOnTransferMsg::FastFinTransfer(fast_fin_transfer_msg) => {
                 match self.fast_fin_transfer(token_id, amount, storage_payer, fast_fin_transfer_msg)
                 {
