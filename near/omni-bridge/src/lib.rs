@@ -523,9 +523,9 @@ impl Contract {
             );
 
             let yield_id: CryptoHash = env::read_register(PROMISE_REGISTER_ID)
-                .expect("ERR_READ_PROMISE_REGISTER")
+                .sdk_expect("ERR_READ_PROMISE_REGISTER")
                 .try_into()
-                .expect("ERR_READ_PROMISE_REGISTER");
+                .sdk_expect("ERR_READ_PROMISE_REGISTER");
 
             self.init_transfer_promises
                 .insert(&message_storage_account_id, &yield_id);
@@ -554,33 +554,6 @@ impl Contract {
             ),
             Err(_) => env::log_str("Init transfer resume timeout"),
         }
-    }
-
-    #[private]
-    pub fn init_transfer_internal(
-        &mut self,
-        transfer_message: TransferMessage,
-        storage_payer: AccountId,
-        storage_owner: AccountId,
-    ) {
-        let mut required_storage_balance =
-            self.add_transfer_message(transfer_message.clone(), storage_owner);
-        required_storage_balance = required_storage_balance
-            .saturating_add(NearToken::from_yoctonear(transfer_message.fee.native_fee.0));
-
-        self.update_storage_balance(
-            storage_payer,
-            required_storage_balance,
-            NearToken::from_yoctonear(0),
-        );
-
-        if let OmniAddress::Near(token_id) = transfer_message.token.clone() {
-            self.burn_tokens_if_needed(token_id, transfer_message.amount);
-        } else {
-            env::panic_str("ERR_NOT_NEAR_TOKEN");
-        }
-
-        env::log_str(&OmniBridgeEvent::InitTransferEvent { transfer_message }.to_log_string());
     }
 
     #[private]
@@ -1501,7 +1474,7 @@ impl Contract {
         let hash = near_sdk::env::sha256_array(&data);
 
         let implicit_account_id = hex::encode(hash);
-        AccountId::try_from(implicit_account_id).expect("ERR_CALCULATE_MESSAGE_ACCOUNT_ID")
+        AccountId::try_from(implicit_account_id).sdk_expect("ERR_CALCULATE_MESSAGE_ACCOUNT_ID")
     }
 
     fn is_refund_required(is_ft_transfer_call: bool) -> bool {
@@ -1546,6 +1519,32 @@ impl Contract {
         self.destination_nonces.insert(&chain_kind, &payload_nonce);
 
         payload_nonce
+    }
+
+    fn init_transfer_internal(
+        &mut self,
+        transfer_message: TransferMessage,
+        storage_payer: AccountId,
+        storage_owner: AccountId,
+    ) {
+        let mut required_storage_balance =
+            self.add_transfer_message(transfer_message.clone(), storage_owner);
+        required_storage_balance = required_storage_balance
+            .saturating_add(NearToken::from_yoctonear(transfer_message.fee.native_fee.0));
+
+        self.update_storage_balance(
+            storage_payer,
+            required_storage_balance,
+            NearToken::from_yoctonear(0),
+        );
+
+        if let OmniAddress::Near(token_id) = transfer_message.token.clone() {
+            self.burn_tokens_if_needed(token_id, transfer_message.amount);
+        } else {
+            env::panic_str("ERR_NOT_NEAR_TOKEN");
+        }
+
+        env::log_str(&OmniBridgeEvent::InitTransferEvent { transfer_message }.to_log_string());
     }
 
     #[allow(clippy::too_many_lines, clippy::ptr_arg)]
