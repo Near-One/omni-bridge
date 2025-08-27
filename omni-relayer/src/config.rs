@@ -192,6 +192,8 @@ pub struct Evm {
     pub expected_finalization_time: i64,
     #[serde(default = "u64::max_value")]
     pub safe_confirmations: u64,
+    #[serde(default)]
+    pub error_selectors_to_remove: Vec<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]

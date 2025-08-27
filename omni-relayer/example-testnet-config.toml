@@ -42,6 +42,10 @@ block_processing_batch_size = 10_000
 # https://wormhole.com/docs/build/reference/consistency-levels/
 expected_finalization_time = 1095
 safe_confirmations = 12
+error_selectors_to_remove = [
+	"0x8baa579f", # InvalidSignature()
+	"0xdcf35db0", # FailedToSendEther()
+]
 
 [base]
 rpc_http_url = "https://base-sepolia.infura.io/v3/INFURA_API_KEY"
@@ -53,6 +57,11 @@ block_processing_batch_size = 10_000
 # https://wormhole.com/docs/build/reference/consistency-levels/
 expected_finalization_time = 1026
 safe_confirmations = 30
+error_selectors_to_remove = [
+	"0x8baa579f", # InvalidSignature()
+	"0xdcf35db0", # FailedToSendEther()
+	"696e76616c696420666565" # Wormhole's "invalid fee"
+]
 
 [arb]
 rpc_http_url = "https://arbitrum-sepolia.infura.io/v3/INFURA_API_KEY"
@@ -64,6 +73,11 @@ block_processing_batch_size = 10_000
 # https://wormhole.com/docs/build/reference/consistency-levels/
 expected_finalization_time = 1066
 safe_confirmations = 30
+error_selectors_to_remove = [
+	"0x8baa579f", # InvalidSignature()
+	"0xdcf35db0", # FailedToSendEther()
+	"696e76616c696420666565" # Wormhole's "invalid fee"
+]
 
 [bnb]
 rpc_http_url = "https://bsc-testnet.infura.io/v3/INFURA_API_KEY"
@@ -75,6 +89,11 @@ block_processing_batch_size = 10_000
 # https://wormhole.com/docs/build/reference/consistency-levels/
 expected_finalization_time = 48
 safe_confirmations = 10
+error_selectors_to_remove = [
+	"0x8baa579f", # InvalidSignature()
+	"0xdcf35db0", # FailedToSendEther()
+	"696e76616c696420666565" # Wormhole's "invalid fee"
+]
 
 [solana]
 rpc_http_url = "https://api.devnet.solana.com"

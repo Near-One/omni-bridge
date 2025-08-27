@@ -263,18 +263,20 @@ pub async fn process_sign_transfer_event(
         }
     }
 
-    let fin_transfer_args = match message_payload.recipient.get_chain() {
+    let chain_kind = message_payload.recipient.get_chain();
+
+    let fin_transfer_args = match chain_kind {
         ChainKind::Near => {
             anyhow::bail!("Near to Near transfers are not supported yet");
         }
         ChainKind::Eth | ChainKind::Base | ChainKind::Arb | ChainKind::Bnb => {
             let nonce = evm_nonces
-                .reserve_nonce(message_payload.recipient.get_chain())
+                .reserve_nonce(chain_kind)
                 .await
                 .context("Failed to reserve nonce for evm transaction")?;
 
             omni_connector::FinTransferArgs::EvmFinTransfer {
-                chain_kind: message_payload.recipient.get_chain(),
+                chain_kind,
                 event: omni_bridge_event,
                 tx_nonce: Some(nonce.into()),
             }
@@ -300,8 +302,36 @@ pub async fn process_sign_transfer_event(
             Ok(EventAction::Remove)
         }
         Err(err) => {
-            if let BridgeSdkError::EvmGasEstimateError(_) = err {
-                anyhow::bail!("Failed to finalize deposit: {}", err);
+            if let BridgeSdkError::EvmGasEstimateError(err) = err {
+                let Some(evm) = (match chain_kind {
+                    ChainKind::Eth => &config.eth,
+                    ChainKind::Base => &config.base,
+                    ChainKind::Arb => &config.arb,
+                    ChainKind::Bnb => &config.bnb,
+                    ChainKind::Near | ChainKind::Sol => {
+                        anyhow::bail!(
+                            "Failed to finalize deposit (unexpected: failed to get evm config): {}",
+                            err
+                        );
+                    }
+                }) else {
+                    anyhow::bail!(
+                        "Failed to finalize deposit (unexpected: config for {chain_kind:?} is not accessible): {err}"
+                    );
+                };
+
+                if evm
+                    .error_selectors_to_remove
+                    .iter()
+                    .any(|selector| err.contains(selector))
+                {
+                    anyhow::bail!(
+                        "Failed to finalize deposit: {err}. Found selector from the list of non-retryable errors in the config"
+                    );
+                }
+
+                warn!("Failed to finalize deposit, retrying: {err}");
+                return Ok(EventAction::Retry);
             }
 
             if let BridgeSdkError::SolanaRpcError(ref client_error) = err {
