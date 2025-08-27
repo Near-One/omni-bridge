@@ -232,7 +232,7 @@ pub async fn process_events(
                             .fee_retry_base_secs
                             .powu(u64::from(retryable_event.retries))
                             .try_into()
-                            .unwrap(),
+                            .unwrap_or(u64::MAX),
                     ),
             )
             .unwrap_or(i64::MAX)
