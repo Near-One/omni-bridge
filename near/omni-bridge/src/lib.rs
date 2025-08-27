@@ -15,7 +15,8 @@ use near_sdk::serde::{Deserialize, Serialize};
 use near_sdk::serde_json::json;
 use near_sdk::{
     env, ext_contract, near, require, serde_json, AccountId, BorshStorageKey, CryptoHash, Gas,
-    GasWeight, NearToken, PanicOnDefault, Promise, PromiseError, PromiseOrValue, PromiseResult,
+    GasWeight, NearToken, PanicOnDefault, Promise, PromiseError, PromiseIndex, PromiseOrValue,
+    PromiseResult,
 };
 use omni_types::locker_args::{
     AddDeployedTokenArgs, BindTokenArgs, ClaimFeeArgs, DeployTokenArgs, FinTransferArgs,
@@ -205,14 +206,9 @@ pub struct Contract {
 }
 
 #[near]
-impl FungibleTokenReceiver for Contract {
+impl Contract {
     #[pause(except(roles(Role::DAO, Role::UnrestrictedDeposit)))]
-    fn ft_on_transfer(
-        &mut self,
-        sender_id: AccountId,
-        amount: U128,
-        msg: String,
-    ) -> PromiseOrValue<U128> {
+    fn ft_on_transfer(&mut self, sender_id: AccountId, amount: U128, msg: String) {
         let token_id = env::predecessor_account_id();
         let parsed_msg: BridgeOnTransferMsg = serde_json::from_str(&msg)
             .or_else(|_| serde_json::from_str(&msg).map(BridgeOnTransferMsg::InitTransfer))
@@ -221,25 +217,32 @@ impl FungibleTokenReceiver for Contract {
         // We can't trust sender_id to pay for storage as it can be spoofed.
         let storage_payer = env::signer_account_id();
         match parsed_msg {
-            BridgeOnTransferMsg::InitTransfer(init_transfer_msg) => {
-                self.init_transfer(
+            BridgeOnTransferMsg::InitTransfer(init_transfer_msg) => self
+                .init_transfer(
                     sender_id,
                     storage_payer,
                     token_id,
                     amount,
                     init_transfer_msg,
-                );
-                PromiseOrValue::Value(U128(0))
-            }
+                )
+                .map_or_else(
+                    || env::value_return(&serde_json::to_vec(&U128(0)).unwrap()),
+                    |promise_index| env::promise_return(promise_index),
+                ),
             BridgeOnTransferMsg::FastFinTransfer(fast_fin_transfer_msg) => {
-                self.fast_fin_transfer(token_id, amount, storage_payer, fast_fin_transfer_msg)
+                match self.fast_fin_transfer(token_id, amount, storage_payer, fast_fin_transfer_msg)
+                {
+                    PromiseOrValue::Promise(promise) => {
+                        promise.as_return();
+                    }
+                    PromiseOrValue::Value(value) => {
+                        env::value_return(&serde_json::to_vec(&value).unwrap());
+                    }
+                }
             }
         }
     }
-}
 
-#[near]
-impl Contract {
     #[init]
     pub fn new(
         prover_account: AccountId,
@@ -459,7 +462,7 @@ impl Contract {
         token_id: AccountId,
         amount: U128,
         init_transfer_msg: InitTransferMsg,
-    ) {
+    ) -> Option<PromiseIndex> {
         // Avoid extra storage read by verifying native fee before checking the role
         if init_transfer_msg.native_token_fee.0 > 0
             && self.acl_has_role(Role::NativeFeeRestricted.into(), signer_id.clone())
@@ -530,8 +533,10 @@ impl Contract {
             self.init_transfer_promises
                 .insert(&message_storage_account_id, &yield_id);
 
-            env::promise_return(promise_index);
+            return Some(promise_index);
         }
+
+        None
     }
 
     #[private]
