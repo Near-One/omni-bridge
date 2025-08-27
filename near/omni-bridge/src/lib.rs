@@ -1,12 +1,11 @@
 #![allow(clippy::too_many_arguments)]
-use errors::SdkExpect;
+use helpers::{PromiseOrPromiseIndexOrValue, SdkExpect};
 use near_plugins::{
     access_control, access_control_any, pause, AccessControlRole, AccessControllable, Pausable,
     Upgradable,
 };
 
 use near_contract_standards::fungible_token::metadata::FungibleTokenMetadata;
-use near_contract_standards::fungible_token::receiver::FungibleTokenReceiver;
 use near_contract_standards::storage_management::StorageBalance;
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::collections::{LookupMap, LookupSet};
@@ -15,7 +14,8 @@ use near_sdk::serde::{Deserialize, Serialize};
 use near_sdk::serde_json::json;
 use near_sdk::{
     env, ext_contract, near, require, serde_json, AccountId, BorshStorageKey, CryptoHash, Gas,
-    GasWeight, NearToken, PanicOnDefault, Promise, PromiseError, PromiseOrValue, PromiseResult,
+    GasWeight, NearToken, PanicOnDefault, Promise, PromiseError, PromiseIndex, PromiseOrValue,
+    PromiseResult,
 };
 use omni_types::locker_args::{
     AddDeployedTokenArgs, BindTokenArgs, ClaimFeeArgs, DeployTokenArgs, FinTransferArgs,
@@ -36,7 +36,7 @@ use storage::{
     NEP141_DEPOSIT,
 };
 
-mod errors;
+mod helpers;
 mod migrate;
 mod storage;
 
@@ -205,14 +205,9 @@ pub struct Contract {
 }
 
 #[near]
-impl FungibleTokenReceiver for Contract {
+impl Contract {
     #[pause(except(roles(Role::DAO, Role::UnrestrictedDeposit)))]
-    fn ft_on_transfer(
-        &mut self,
-        sender_id: AccountId,
-        amount: U128,
-        msg: String,
-    ) -> PromiseOrValue<U128> {
+    pub fn ft_on_transfer(&mut self, sender_id: AccountId, amount: U128, msg: String) {
         let token_id = env::predecessor_account_id();
         let parsed_msg: BridgeOnTransferMsg = serde_json::from_str(&msg)
             .or_else(|_| serde_json::from_str(&msg).map(BridgeOnTransferMsg::InitTransfer))
@@ -220,26 +215,22 @@ impl FungibleTokenReceiver for Contract {
 
         // We can't trust sender_id to pay for storage as it can be spoofed.
         let storage_payer = env::signer_account_id();
-        match parsed_msg {
-            BridgeOnTransferMsg::InitTransfer(init_transfer_msg) => {
-                self.init_transfer(
-                    sender_id,
-                    storage_payer,
-                    token_id,
-                    amount,
-                    init_transfer_msg,
-                );
-                PromiseOrValue::Value(U128(0))
-            }
+        let promise_or_promise_index_or_value = match parsed_msg {
+            BridgeOnTransferMsg::InitTransfer(init_transfer_msg) => self.init_transfer(
+                sender_id,
+                storage_payer,
+                token_id,
+                amount,
+                init_transfer_msg,
+            ),
             BridgeOnTransferMsg::FastFinTransfer(fast_fin_transfer_msg) => {
                 self.fast_fin_transfer(token_id, amount, storage_payer, fast_fin_transfer_msg)
             }
-        }
-    }
-}
+        };
 
-#[near]
-impl Contract {
+        promise_or_promise_index_or_value.as_return();
+    }
+
     #[init]
     pub fn new(
         prover_account: AccountId,
@@ -459,7 +450,7 @@ impl Contract {
         token_id: AccountId,
         amount: U128,
         init_transfer_msg: InitTransferMsg,
-    ) {
+    ) -> PromiseOrPromiseIndexOrValue<U128> {
         // Avoid extra storage read by verifying native fee before checking the role
         if init_transfer_msg.native_token_fee.0 > 0
             && self.acl_has_role(Role::NativeFeeRestricted.into(), signer_id.clone())
@@ -530,8 +521,10 @@ impl Contract {
             self.init_transfer_promises
                 .insert(&message_storage_account_id, &yield_id);
 
-            env::promise_return(promise_index);
+            return PromiseOrPromiseIndexOrValue::PromiseIndex(promise_index);
         }
+
+        PromiseOrPromiseIndexOrValue::Value(U128(0))
     }
 
     #[private]
@@ -542,17 +535,23 @@ impl Contract {
         message_storage_account_id: AccountId,
         storage_owner: AccountId,
         #[callback_result] response: Result<(), PromiseError>,
-    ) {
+    ) -> U128 {
         self.init_transfer_promises
             .remove(&message_storage_account_id);
 
         match response {
-            Ok(()) => self.init_transfer_internal(
-                transfer_message,
-                message_storage_account_id,
-                storage_owner,
-            ),
-            Err(_) => env::log_str("Init transfer resume timeout"),
+            Ok(()) => {
+                self.init_transfer_internal(
+                    transfer_message,
+                    message_storage_account_id,
+                    storage_owner,
+                );
+                U128(0)
+            }
+            Err(_) => {
+                env::log_str("Init transfer resume timeout");
+                transfer_message.amount
+            }
         }
     }
 
@@ -667,7 +666,7 @@ impl Contract {
         amount: U128,
         storage_payer: AccountId,
         fast_fin_transfer_msg: FastFinTransferMsg,
-    ) -> PromiseOrValue<U128> {
+    ) -> PromiseOrPromiseIndexOrValue<U128> {
         let origin_token = self
             .get_token_address(
                 fast_fin_transfer_msg.transfer_id.origin_chain,
@@ -740,7 +739,7 @@ impl Contract {
                 fast_fin_transfer_msg.relayer,
             );
             self.burn_tokens_if_needed(token_id, amount);
-            PromiseOrValue::Value(U128(0))
+            PromiseOrPromiseIndexOrValue::Value(U128(0))
         }
     }
 
@@ -1905,27 +1904,44 @@ impl Contract {
         required_balance: NearToken,
         attached_deposit: NearToken,
     ) {
+        self.try_update_storage_balance(account_id, required_balance, attached_deposit)
+            .unwrap_or_else(|err| env::panic_str(&err));
+    }
+
+    fn try_update_storage_balance(
+        &mut self,
+        account_id: AccountId,
+        required_balance: NearToken,
+        attached_deposit: NearToken,
+    ) -> Result<(), String> {
         if attached_deposit >= required_balance {
             Self::refund(
                 account_id,
                 attached_deposit.saturating_sub(required_balance),
             );
+            Ok(())
         } else {
             let required_balance = required_balance.saturating_sub(attached_deposit);
-            let mut storage_balance = self
-                .accounts_balances
-                .get(&account_id)
-                .sdk_expect("ERR_ACCOUNT_NOT_REGISTERED");
+            let storage_balance = self.accounts_balances.get(&account_id);
+
+            let mut storage_balance = match storage_balance {
+                Some(storage_balance) => storage_balance,
+                None => {
+                    return Err(format!("Account {} is not registered", account_id));
+                }
+            };
 
             if storage_balance.available >= required_balance {
                 storage_balance.available =
                     storage_balance.available.saturating_sub(required_balance);
                 self.accounts_balances.insert(&account_id, &storage_balance);
+
+                Ok(())
             } else {
-                env::panic_str(&format!(
+                Err(format!(
                     "Not enough storage deposited, required: {}, available: {}",
                     required_balance, storage_balance.available
-                ));
+                ))
             }
         }
     }

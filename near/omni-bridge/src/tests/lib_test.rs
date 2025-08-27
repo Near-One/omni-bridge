@@ -98,7 +98,7 @@ fn run_ft_on_transfer(
     amount: U128,
     attached_deposit: Option<NearToken>,
     msg: &BridgeOnTransferMsg,
-) -> PromiseOrValue<U128> {
+) {
     let sender_id = AccountId::try_from(sender_id).expect("Invalid sender ID");
     let token_id = AccountId::try_from(token_id).expect("Invalid token ID");
 
@@ -125,7 +125,7 @@ fn run_ft_on_transfer_legacy(
     amount: U128,
     attached_deposit: Option<NearToken>,
     msg: &InitTransferMsg,
-) -> PromiseOrValue<U128> {
+) {
     let sender_id = AccountId::try_from(sender_id).expect("Invalid sender ID");
     let token_id = AccountId::try_from(token_id).expect("Invalid token ID");
 
@@ -213,26 +213,6 @@ fn test_init_transfer_stored_transfer_message() {
         U128(DEFAULT_TRANSFER_AMOUNT),
         "Incorrect stored amount"
     );
-}
-
-#[test]
-fn test_init_transfer_promise_result() {
-    let mut contract = get_default_contract();
-
-    let promise = run_ft_on_transfer(
-        &mut contract,
-        DEFAULT_NEAR_USER_ACCOUNT.to_string(),
-        DEFAULT_FT_CONTRACT_ACCOUNT.to_string(),
-        U128(DEFAULT_TRANSFER_AMOUNT),
-        None,
-        &BridgeOnTransferMsg::InitTransfer(get_init_transfer_msg(DEFAULT_ETH_USER_ADDRESS, 0, 0)),
-    );
-
-    let remaining = match promise {
-        PromiseOrValue::Value(remaining) => remaining,
-        PromiseOrValue::Promise(_) => panic!("Expected Value variant, got Promise"),
-    };
-    assert_eq!(remaining, U128(0), "Expected remaining amount to be 0");
 }
 
 #[test]
