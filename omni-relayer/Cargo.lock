@@ -6911,7 +6911,6 @@ dependencies = [
  "clap",
  "dotenv",
  "eth-light-client",
- "eth-proof",
  "ethereum-types 0.14.1",
  "evm-bridge-client",
  "futures",
