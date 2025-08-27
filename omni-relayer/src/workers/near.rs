@@ -150,6 +150,7 @@ pub async fn process_transfer_event(
                 match near_rpc_error {
                     NearRpcError::NonceError
                     | NearRpcError::FinalizationError
+                    | NearRpcError::RpcBroadcastTxAsyncError(_)
                     | NearRpcError::RpcTransactionError(JsonRpcError::TransportError(_)) => {
                         warn!(
                             "Failed to sign transfer ({}), retrying: {near_rpc_error:?}",
@@ -479,6 +480,7 @@ pub async fn initiate_fast_transfer(
                 match near_rpc_error {
                     NearRpcError::NonceError
                     | NearRpcError::FinalizationError
+                    | NearRpcError::RpcBroadcastTxAsyncError(_)
                     | NearRpcError::RpcTransactionError(JsonRpcError::TransportError(_)) => {
                         warn!("Failed to initiate fast transfer, retrying: {near_rpc_error:?}");
                         return Ok(EventAction::Retry);
