@@ -10,7 +10,7 @@ module near:
 use rule * from near
 
 # Directories
-call_dir = const.common_generated_dir / "03-btc-transfer"
+call_dir = const.common_generated_dir / "04-btc-transfer"
 
 # Account files
 near_init_account_file = const.near_account_dir / f"{NTA.INIT_ACCOUNT}.json"
