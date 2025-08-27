@@ -1373,18 +1373,18 @@ impl Contract {
     }
 
     #[access_control_any(roles(Role::DAO))]
-    pub fn add_prover(&mut self, prover_id: ChainKind, account_id: AccountId) {
-        self.provers.insert(&prover_id, &account_id);
+    pub fn add_prover(&mut self, chain: ChainKind, account_id: AccountId) {
+        self.provers.insert(&chain, &account_id);
     }
 
     #[access_control_any(roles(Role::DAO))]
-    pub fn remove_prover(&mut self, prover_id: ChainKind) {
-        self.provers.remove(&prover_id);
+    pub fn remove_prover(&mut self, chain: ChainKind) {
+        self.provers.remove(&chain);
     }
 
     #[must_use]
     pub fn get_provers(&self) -> Vec<(ChainKind, AccountId)> {
-        self.provers.iter().collect::<Vec<_>>()
+        self.provers.iter().collect()
     }
 }
 
@@ -1890,7 +1890,7 @@ impl Contract {
         let prover_account_id = self
             .provers
             .get(&chain_kind)
-            .unwrap_or_else(|| env::panic_str("ERR_PROVER_ID_NOT_REGISTERED"));
+            .unwrap_or_else(|| env::panic_str("ERR_PROVER_FOR_CHAIN_KIND_NOT_REGISTERED"));
 
         ext_omni_prover_proxy::ext(prover_account_id)
             .with_static_gas(VERIFY_PROOF_GAS)
