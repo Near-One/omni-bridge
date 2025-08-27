@@ -99,7 +99,6 @@ pub enum Role {
     UnrestrictedRelayer,
     TokenControllerUpdater,
     NativeFeeRestricted,
-    ProversManager,
 }
 
 #[ext_contract(ext_token)]
@@ -1388,12 +1387,12 @@ impl Contract {
         }
     }
 
-    #[access_control_any(roles(Role::ProversManager, Role::DAO))]
+    #[access_control_any(roles(Role::DAO))]
     pub fn add_prover(&mut self, prover_id: ProverId, account_id: AccountId) {
         self.provers.insert(&prover_id, &account_id);
     }
 
-    #[access_control_any(roles(Role::ProversManager, Role::DAO))]
+    #[access_control_any(roles(Role::DAO))]
     pub fn remove_prover(&mut self, prover_id: ProverId) {
         self.provers.remove(&prover_id);
     }
