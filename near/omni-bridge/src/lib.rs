@@ -14,8 +14,7 @@ use near_sdk::serde::{Deserialize, Serialize};
 use near_sdk::serde_json::json;
 use near_sdk::{
     env, ext_contract, near, require, serde_json, AccountId, BorshStorageKey, CryptoHash, Gas,
-    GasWeight, NearToken, PanicOnDefault, Promise, PromiseError, PromiseIndex, PromiseOrValue,
-    PromiseResult,
+    GasWeight, NearToken, PanicOnDefault, Promise, PromiseError, PromiseOrValue, PromiseResult,
 };
 use omni_types::locker_args::{
     AddDeployedTokenArgs, BindTokenArgs, ClaimFeeArgs, DeployTokenArgs, FinTransferArgs,
@@ -486,18 +485,27 @@ impl Contract {
             "ERR_INVALID_FEE"
         );
 
-        let mut required_storage_balance =
-            self.required_balance_for_init_transfer_message(transfer_message.clone());
-        required_storage_balance = required_storage_balance.saturating_add(
-            NearToken::from_yoctonear(init_transfer_msg.native_token_fee.0),
-        );
+        let required_storage_balance = self
+            .required_balance_for_init_transfer_message(transfer_message.clone())
+            .saturating_add(NearToken::from_yoctonear(
+                init_transfer_msg.native_token_fee.0,
+            ));
 
         let message_storage_account_id =
             Self::calculate_message_storage_account_id(&transfer_message, &signer_id);
+        // Choose storage payer or whether to yield execution until storage is available
         if self.has_storage_balance(&message_storage_account_id, required_storage_balance) {
-            self.init_transfer_internal(transfer_message, message_storage_account_id, signer_id);
+            PromiseOrPromiseIndexOrValue::Value(self.init_transfer_internal(
+                transfer_message,
+                message_storage_account_id,
+                signer_id,
+            ))
         } else if self.has_storage_balance(&signer_id, required_storage_balance) {
-            self.init_transfer_internal(transfer_message, signer_id.clone(), signer_id);
+            PromiseOrPromiseIndexOrValue::Value(self.init_transfer_internal(
+                transfer_message,
+                signer_id.clone(),
+                signer_id,
+            ))
         } else {
             let promise_index = env::promise_yield_create(
                 "init_transfer_resume",
@@ -518,13 +526,16 @@ impl Contract {
                 .try_into()
                 .sdk_expect("ERR_READ_PROMISE_REGISTER");
 
-            self.init_transfer_promises
-                .insert(&message_storage_account_id, &yield_id);
+            let required_storage_balance = self.add_promise(&message_storage_account_id, &yield_id);
 
-            return PromiseOrPromiseIndexOrValue::PromiseIndex(promise_index);
+            self.update_storage_balance(
+                env::current_account_id(),
+                required_storage_balance,
+                NearToken::from_yoctonear(0),
+            );
+
+            PromiseOrPromiseIndexOrValue::PromiseIndex(promise_index)
         }
-
-        PromiseOrPromiseIndexOrValue::Value(U128(0))
     }
 
     #[private]
@@ -536,22 +547,17 @@ impl Contract {
         storage_owner: AccountId,
         #[callback_result] response: Result<(), PromiseError>,
     ) -> U128 {
-        self.init_transfer_promises
-            .remove(&message_storage_account_id);
+        self.remove_promise(&message_storage_account_id);
 
-        match response {
-            Ok(()) => {
-                self.init_transfer_internal(
-                    transfer_message,
-                    message_storage_account_id,
-                    storage_owner,
-                );
-                U128(0)
-            }
-            Err(_) => {
-                env::log_str("Init transfer resume timeout");
-                transfer_message.amount
-            }
+        if response.is_ok() {
+            self.init_transfer_internal(
+                transfer_message,
+                message_storage_account_id,
+                storage_owner,
+            )
+        } else {
+            env::log_str("Init transfer resume timeout");
+            transfer_message.amount
         }
     }
 
@@ -1525,25 +1531,27 @@ impl Contract {
         transfer_message: TransferMessage,
         storage_payer: AccountId,
         storage_owner: AccountId,
-    ) {
-        let mut required_storage_balance =
-            self.add_transfer_message(transfer_message.clone(), storage_owner);
-        required_storage_balance = required_storage_balance
+    ) -> U128 {
+        let required_storage_balance = self
+            .add_transfer_message(transfer_message.clone(), storage_owner)
             .saturating_add(NearToken::from_yoctonear(transfer_message.fee.native_fee.0));
 
-        self.update_storage_balance(
+        if self.try_update_storage_balance(
             storage_payer,
             required_storage_balance,
             NearToken::from_yoctonear(0),
-        );
+        ).is_err() {
+            return transfer_message.amount;
+        }
 
         if let OmniAddress::Near(token_id) = transfer_message.token.clone() {
             self.burn_tokens_if_needed(token_id, transfer_message.amount);
         } else {
-            env::panic_str("ERR_NOT_NEAR_TOKEN");
+            return transfer_message.amount;
         }
 
         env::log_str(&OmniBridgeEvent::InitTransferEvent { transfer_message }.to_log_string());
+        U128(0)
     }
 
     #[allow(clippy::too_many_lines, clippy::ptr_arg)]
@@ -1885,6 +1893,31 @@ impl Contract {
         }
     }
 
+    fn add_promise(&mut self, promise_id: &AccountId, yield_id: &CryptoHash) -> NearToken {
+        let storage_usage = env::storage_usage();
+        require!(
+            self.init_transfer_promises
+                .insert(promise_id, yield_id)
+                .is_none(),
+            "ERR_KEY_EXIST"
+        );
+        env::storage_byte_cost().saturating_mul((env::storage_usage() - storage_usage).into())
+    }
+
+    fn remove_promise(&mut self, promise_id: &AccountId) {
+        let storage_usage = env::storage_usage();
+        self.init_transfer_promises.remove(promise_id);
+
+        let refund =
+            env::storage_byte_cost().saturating_mul((storage_usage - env::storage_usage()).into());
+
+        if let Some(mut storage) = self.accounts_balances.get(&env::current_account_id()) {
+            storage.available = storage.available.saturating_add(refund);
+            self.accounts_balances
+                .insert(&env::current_account_id(), &storage);
+        }
+    }
+
     fn remove_fin_transfer(&mut self, transfer_id: &TransferId, storage_owner: &AccountId) {
         let storage_usage = env::storage_usage();
         self.finalised_transfers.remove(transfer_id);
@@ -1922,13 +1955,9 @@ impl Contract {
             Ok(())
         } else {
             let required_balance = required_balance.saturating_sub(attached_deposit);
-            let storage_balance = self.accounts_balances.get(&account_id);
 
-            let mut storage_balance = match storage_balance {
-                Some(storage_balance) => storage_balance,
-                None => {
-                    return Err(format!("Account {} is not registered", account_id));
-                }
+            let Some(mut storage_balance) = self.accounts_balances.get(&account_id) else {
+                return Err(format!("Account {account_id} is not registered"));
             };
 
             if storage_balance.available >= required_balance {

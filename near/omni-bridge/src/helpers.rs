@@ -30,16 +30,17 @@ impl<T> PromiseOrPromiseIndexOrValue<T>
 where
     T: Serialize,
 {
+    #[allow(clippy::wrong_self_convention)]
     pub fn as_return(self) {
         match self {
             PromiseOrPromiseIndexOrValue::Promise(promise) => {
                 promise.as_return();
             }
             PromiseOrPromiseIndexOrValue::PromiseIndex(promise_index) => {
-                env::promise_return(promise_index)
+                env::promise_return(promise_index);
             }
             PromiseOrPromiseIndexOrValue::Value(value) => {
-                env::value_return(&serde_json::to_vec(&value).unwrap())
+                env::value_return(&serde_json::to_vec(&value).unwrap());
             }
         }
     }
