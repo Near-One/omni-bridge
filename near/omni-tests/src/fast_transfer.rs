@@ -256,6 +256,19 @@ mod tests {
                 (token_contract, eth_token_address)
             };
 
+            // Transfer tokens to the bridge contract to test that exist balances don't affect the fast transfer
+            relayer_account
+                .call(token_contract.id(), "ft_transfer")
+                .args_json(json!({
+                    "receiver_id": bridge_contract.id(),
+                    "amount": U128(100_000_000),
+                }))
+                .deposit(NearToken::from_yoctonear(1))
+                .max_gas()
+                .transact()
+                .await?
+                .into_result()?;
+
             Ok(Self {
                 token_contract,
                 eth_token_address,
@@ -607,7 +620,7 @@ mod tests {
             let contract_balance_before =
                 get_balance(&env.token_contract, env.bridge_contract.id()).await?;
 
-            assert_eq!(U128(0), contract_balance_before);
+            assert_eq!(U128(transfer_amount), contract_balance_before);
 
             let result = do_fast_transfer(&env, transfer_amount, fast_transfer_msg, None).await?;
 
@@ -620,7 +633,7 @@ mod tests {
                 get_balance(&env.token_contract, env.bridge_contract.id()).await?;
 
             assert_eq!(transfer_amount, recipient_balance.0);
-            assert_eq!(U128(0), contract_balance_after);
+            assert_eq!(contract_balance_before, contract_balance_after);
             assert_eq!(
                 relayer_balance_before,
                 U128(relayer_balance_after.0 + transfer_amount)
@@ -688,7 +701,7 @@ mod tests {
             let contract_balance_before =
                 get_balance(&env.token_contract, env.bridge_contract.id()).await?;
 
-            assert_eq!(U128(0), contract_balance_before);
+            assert_eq!(U128(transfer_amount), contract_balance_before);
 
             let result = do_fast_transfer(&env, transfer_amount, fast_transfer_msg, None).await?;
 
@@ -704,7 +717,7 @@ mod tests {
                 get_balance(&env.token_contract, env.bridge_contract.id()).await?;
 
             assert_eq!(0, recipient_balance.0);
-            assert_eq!(U128(0), contract_balance_after);
+            assert_eq!(contract_balance_before, contract_balance_after);
             assert_eq!(relayer_balance_before, relayer_balance_after);
 
             Ok(())
@@ -820,7 +833,7 @@ mod tests {
                 get_balance(&env.token_contract, env.bridge_contract.id()).await?;
             let recipient_balance_before = get_balance(&env.token_contract, &recipient).await?;
 
-            assert_eq!(U128(0), contract_balance_before);
+            assert_eq!(U128(transfer_amount), contract_balance_before);
 
             let result = do_fast_transfer(&env, transfer_amount, fast_transfer_msg, None).await?;
             assert!(!result.failures().is_empty());
@@ -837,7 +850,7 @@ mod tests {
             let recipient_balance_after = get_balance(&env.token_contract, &recipient).await?;
 
             assert_eq!(relayer_balance_before, relayer_balance_after);
-            assert_eq!(U128(0), contract_balance_after);
+            assert_eq!(contract_balance_before, contract_balance_after);
             assert_eq!(recipient_balance_before, recipient_balance_after);
 
             Ok(())
@@ -995,7 +1008,7 @@ mod tests {
             let contract_balance_before =
                 get_balance(&env.token_contract, env.bridge_contract.id()).await?;
 
-            assert_eq!(U128(0), contract_balance_before);
+            assert_eq!(U128(transfer_amount), contract_balance_before);
 
             let result =
                 do_fast_transfer(&env, transfer_amount, fast_transfer_msg.clone(), None).await?;
@@ -1007,7 +1020,7 @@ mod tests {
             let contract_balance_after =
                 get_balance(&env.token_contract, env.bridge_contract.id()).await?;
 
-            assert_eq!(U128(0), contract_balance_after);
+            assert_eq!(contract_balance_before, contract_balance_after);
             assert_eq!(
                 relayer_balance_before,
                 U128(relayer_balance_after.0 + transfer_amount)
@@ -1067,7 +1080,7 @@ mod tests {
             let contract_balance_before =
                 get_balance(&env.token_contract, env.bridge_contract.id()).await?;
 
-            assert_eq!(U128(0), contract_balance_before);
+            assert_eq!(U128(transfer_amount), contract_balance_before);
 
             let result = do_fast_transfer(&env, transfer_amount, fast_transfer_msg, None).await?;
 
@@ -1077,7 +1090,7 @@ mod tests {
                 get_balance(&env.token_contract, env.bridge_contract.id()).await?;
 
             assert_eq!(relayer_balance_before, relayer_balance_after);
-            assert_eq!(U128(0), contract_balance_after);
+            assert_eq!(contract_balance_before, contract_balance_after);
 
             assert_eq!(1, result.failures().len());
             let failure = result.failures()[0].clone().into_result();

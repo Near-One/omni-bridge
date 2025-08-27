@@ -2,7 +2,6 @@ from enum import StrEnum
 from pathlib import Path
 from datetime import datetime
 
-
 # Common
 common_testing_root = Path(__file__).parent.parent
 common_generated_dir = common_testing_root / "generated"
@@ -58,6 +57,7 @@ class NearContract(StrEnum):
     WORMHOLE_OMNI_PROVER_PROXY = "wormhole_omni_prover_proxy"
     MOCK_TOKEN = "mock_token"
 
+
 class NearTestAccount(StrEnum):
     INIT_ACCOUNT = "omni_init_account"
     DAO_ACCOUNT = "omni_dao_account"
@@ -74,6 +74,7 @@ class EvmContract(StrEnum):
     OMNI_BRIDGE = "omni_bridge"
     TEST_TOKEN = "test_token"
     ENEAR = "e_near"
+    USER_ACCOUNT = "user_account"
 
 
 class EvmNetwork(StrEnum):

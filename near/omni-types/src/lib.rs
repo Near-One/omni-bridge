@@ -152,6 +152,8 @@ pub enum ChainKind {
     Arb,
     #[serde(alias = "base")]
     Base,
+    #[serde(alias = "bnb")]
+    Bnb,
     #[serde(alias = "btc")]
     Btc,
 }
@@ -179,7 +181,8 @@ impl TryFrom<u8> for ChainKind {
             2 => Ok(Self::Sol),
             3 => Ok(Self::Arb),
             4 => Ok(Self::Base),
-            5 => Ok(Self::Btc),
+            5 => Ok(Self::Bnb),
+            6 => Ok(Self::Btc),
             _ => Err(format!("{input:?} invalid chain kind")),
         }
     }
@@ -199,6 +202,7 @@ pub enum OmniAddress {
     Sol(SolAddress),
     Arb(EvmAddress),
     Base(EvmAddress),
+    Bnb(EvmAddress),
     Btc(BtcAddress),
 }
 
@@ -213,6 +217,7 @@ impl OmniAddress {
             ChainKind::Sol => Ok(OmniAddress::Sol(SolAddress::ZERO)),
             ChainKind::Arb => Ok(OmniAddress::Arb(H160::ZERO)),
             ChainKind::Base => Ok(OmniAddress::Base(H160::ZERO)),
+            ChainKind::Bnb => Ok(Self::Bnb(H160::ZERO)),
             ChainKind::Btc => Ok(OmniAddress::Btc("1111111111111111111114oLvT2".to_string())),
         }
     }
@@ -225,6 +230,7 @@ impl OmniAddress {
             ChainKind::Eth => Ok(Self::Eth(address)),
             ChainKind::Arb => Ok(Self::Arb(address)),
             ChainKind::Base => Ok(Self::Base(address)),
+            ChainKind::Bnb => Ok(Self::Bnb(address)),
             _ => Err(format!("{chain_kind:?} is not an EVM chain")),
         }
     }
@@ -232,7 +238,7 @@ impl OmniAddress {
     pub fn new_from_slice(chain_kind: ChainKind, address: &[u8]) -> Result<Self, String> {
         match chain_kind {
             ChainKind::Sol => Ok(Self::Sol(Self::to_sol_address(address)?)),
-            ChainKind::Eth | ChainKind::Arb | ChainKind::Base => {
+            ChainKind::Eth | ChainKind::Arb | ChainKind::Base | ChainKind::Bnb => {
                 Self::new_from_evm_address(chain_kind, Self::to_evm_address(address)?)
             }
             ChainKind::Near => Ok(Self::Near(Self::to_near_account_id(address)?)),
@@ -245,23 +251,25 @@ impl OmniAddress {
 
     pub const fn get_chain(&self) -> ChainKind {
         match self {
-            OmniAddress::Eth(_) => ChainKind::Eth,
-            OmniAddress::Near(_) => ChainKind::Near,
-            OmniAddress::Sol(_) => ChainKind::Sol,
-            OmniAddress::Arb(_) => ChainKind::Arb,
-            OmniAddress::Base(_) => ChainKind::Base,
-            OmniAddress::Btc(_) => ChainKind::Btc,
+            Self::Eth(_) => ChainKind::Eth,
+            Self::Near(_) => ChainKind::Near,
+            Self::Sol(_) => ChainKind::Sol,
+            Self::Arb(_) => ChainKind::Arb,
+            Self::Base(_) => ChainKind::Base,
+            Self::Bnb(_) => ChainKind::Bnb,
+            Self::Btc(_) => ChainKind::Btc,
         }
     }
 
     pub fn encode(&self, separator: char, skip_zero_address: bool) -> String {
         let (chain_str, address) = match self {
-            OmniAddress::Eth(address) => ("eth", address.to_string()),
-            OmniAddress::Near(address) => ("near", address.to_string()),
-            OmniAddress::Sol(address) => ("sol", address.to_string()),
-            OmniAddress::Arb(address) => ("arb", address.to_string()),
-            OmniAddress::Base(address) => ("base", address.to_string()),
-            OmniAddress::Btc(address) => ("btc", address.to_string()),
+            Self::Eth(address) => ("eth", address.to_string()),
+            Self::Near(address) => ("near", address.to_string()),
+            Self::Sol(address) => ("sol", address.to_string()),
+            Self::Arb(address) => ("arb", address.to_string()),
+            Self::Base(address) => ("base", address.to_string()),
+            Self::Bnb(address) => ("bnb", address.to_string()),
+            Self::Btc(address) => ("btc", address.to_string()),
         };
 
         if skip_zero_address && self.is_zero() {
@@ -273,12 +281,12 @@ impl OmniAddress {
 
     pub fn is_zero(&self) -> bool {
         match self {
-            OmniAddress::Eth(address) | OmniAddress::Arb(address) | OmniAddress::Base(address) => {
+            Self::Eth(address) | Self::Arb(address) | Self::Base(address) | Self::Bnb(address) => {
                 address.is_zero()
             }
-            OmniAddress::Near(address) => *address == ZERO_ACCOUNT_ID,
-            OmniAddress::Sol(address) => address.is_zero(),
-            OmniAddress::Btc(address) => address == "1111111111111111111114oLvT2",
+            Self::Near(address) => *address == ZERO_ACCOUNT_ID,
+            Self::Sol(address) => address.is_zero(),
+            Self::Btc(address) => address == "1111111111111111111114oLvT2",
         }
     }
 
@@ -354,12 +362,13 @@ impl FromStr for OmniAddress {
         let (chain, recipient) = input.split_once(':').unwrap_or(("eth", input));
 
         match chain {
-            "eth" => Ok(OmniAddress::Eth(recipient.parse().map_err(stringify)?)),
-            "near" => Ok(OmniAddress::Near(recipient.parse().map_err(stringify)?)),
-            "sol" => Ok(OmniAddress::Sol(recipient.parse().map_err(stringify)?)),
-            "arb" => Ok(OmniAddress::Arb(recipient.parse().map_err(stringify)?)),
-            "base" => Ok(OmniAddress::Base(recipient.parse().map_err(stringify)?)),
-            "btc" => Ok(OmniAddress::Btc(recipient.to_string())),
+            "eth" => Ok(Self::Eth(recipient.parse().map_err(stringify)?)),
+            "near" => Ok(Self::Near(recipient.parse().map_err(stringify)?)),
+            "sol" => Ok(Self::Sol(recipient.parse().map_err(stringify)?)),
+            "arb" => Ok(Self::Arb(recipient.parse().map_err(stringify)?)),
+            "base" => Ok(Self::Base(recipient.parse().map_err(stringify)?)),
+            "bnb" => Ok(Self::Bnb(recipient.parse().map_err(stringify)?)),
+            "btc" => Ok(Self::Btc(recipient.to_string())),
             _ => Err(format!("Chain {chain} is not supported")),
         }
     }

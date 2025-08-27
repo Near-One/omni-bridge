@@ -1,6 +1,7 @@
 [workspace.package]
 authors = ["Near One <info@nearone.org>"]
 repository = "https://github.com/Near-One/omni-bridge"
+version = "0.2.13"
 
 [workspace]
 resolver = "2"
@@ -15,6 +16,7 @@ members = [
     "omni-tests",
     "mock/mock-token",
     "mock/mock-prover",
+    "mock/mock-token-receiver"
 ]
 
 [profile.release]

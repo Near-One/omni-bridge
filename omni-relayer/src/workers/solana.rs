@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use anyhow::{Context, Result};
 use bridge_connector_common::result::BridgeSdkError;
-use log::{info, warn};
+use tracing::{info, warn};
 
 use near_bridge_client::{NearBridgeClient, TransactionOptions};
 use near_jsonrpc_client::errors::JsonRpcError;
@@ -15,12 +15,12 @@ use omni_types::{
     prover_args::WormholeVerifyProofArgs, prover_result::ProofKind,
 };
 
-use crate::{config, utils};
+use crate::{config, utils, workers::RetryableEvent};
 
 use super::{DeployToken, EventAction, FinTransfer, Transfer};
 
 pub async fn process_init_transfer_event(
-    config: config::Config,
+    config: &config::Config,
     redis_connection: &mut redis::aio::MultiplexedConnection,
     key: String,
     omni_connector: Arc<OmniConnector>,
@@ -35,7 +35,6 @@ pub async fn process_init_transfer_event(
         native_fee,
         ref emitter,
         sequence,
-        last_update_timestamp,
         ..
     } = transfer
     else {
@@ -45,20 +44,13 @@ pub async fn process_init_transfer_event(
         );
     };
 
-    let current_timestamp = chrono::Utc::now().timestamp();
-
-    if current_timestamp - last_update_timestamp.unwrap_or_default()
-        < utils::redis::CHECK_INSUFFICIENT_FEE_TRANSFERS_EVERY_SECS
-    {
-        return Ok(EventAction::Retry);
-    }
-
     info!("Trying to process InitTransfer log on Solana");
 
     let transfer_id = TransferId {
         origin_chain: sender.get_chain(),
         origin_nonce: sequence,
     };
+
     match omni_connector
         .is_transfer_finalised(Some(sender.get_chain()), recipient.get_chain(), sequence)
         .await
@@ -77,27 +69,30 @@ pub async fn process_init_transfer_event(
                 anyhow::anyhow!("Failed to parse \"{}\" as `OmniAddress`: {:?}", sender, err)
             })?;
 
-        match utils::bridge_api::is_fee_sufficient(
-            &config,
-            Fee {
-                fee,
-                native_fee: u128::from(native_fee).into(),
-            },
-            sender,
-            recipient,
-            &token,
-        )
-        .await
+        let Ok(needed_fee) =
+            utils::bridge_api::TransferFee::get_transfer_fee(config, sender, recipient, &token)
+                .await
+        else {
+            warn!("Failed to get transfer fee for transfer: {transfer:?}");
+            return Ok(EventAction::Retry);
+        };
+
+        let provided_fee = Fee {
+            fee,
+            native_fee: u128::from(native_fee).into(),
+        };
+
+        if let Some(event_action) = needed_fee
+            .check_fee(
+                config,
+                redis_connection,
+                &transfer,
+                transfer_id,
+                &provided_fee,
+            )
+            .await
         {
-            Ok(true) => {}
-            Ok(false) => {
-                warn!("Insufficient fee for transfer: {transfer:?}");
-                return Ok(EventAction::Retry);
-            }
-            Err(err) => {
-                warn!("Failed to check fee sufficiency: {err:?}");
-                return Ok(EventAction::Retry);
-            }
+            return Ok(event_action);
         }
     }
 
@@ -127,8 +122,14 @@ pub async fn process_init_transfer_event(
     {
         Ok(actions) => actions,
         Err(err) => {
-            utils::redis::add_event(redis_connection, utils::redis::STUCK_EVENTS, &key, transfer)
-                .await;
+            utils::redis::add_event(
+                config,
+                redis_connection,
+                utils::redis::STUCK_EVENTS,
+                &key,
+                RetryableEvent::new(transfer),
+            )
+            .await;
             anyhow::bail!("Failed to get storage deposit actions: {}", err);
         }
     };
@@ -175,7 +176,7 @@ pub async fn process_init_transfer_event(
 }
 
 pub async fn process_fin_transfer_event(
-    config: config::Config,
+    config: &config::Config,
     omni_connector: Arc<OmniConnector>,
     fin_transfer: FinTransfer,
     near_nonce: Arc<utils::nonce::NonceManager>,
@@ -246,7 +247,7 @@ pub async fn process_fin_transfer_event(
 }
 
 pub async fn process_deploy_token_event(
-    config: config::Config,
+    config: &config::Config,
     omni_connector: Arc<OmniConnector>,
     deploy_token_event: DeployToken,
     near_nonce: Arc<utils::nonce::NonceManager>,

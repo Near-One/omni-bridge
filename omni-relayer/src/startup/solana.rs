@@ -3,10 +3,10 @@ use std::sync::Arc;
 
 use anyhow::Result;
 use futures::future::join_all;
-use log::{error, info, warn};
 use solana_sdk::signer::EncodableKey;
 use solana_transaction_status::{UiMessage, UiTransactionEncoding};
 use tokio_stream::StreamExt;
+use tracing::{error, info, warn};
 
 use omni_types::ChainKind;
 use solana_client::nonblocking::{pubsub_client::PubsubClient, rpc_client::RpcClient};
@@ -34,11 +34,11 @@ pub fn get_keypair(file: Option<&String>) -> Keypair {
 }
 
 pub async fn start_indexer(
-    config: config::Config,
+    config: &config::Config,
     redis_client: redis::Client,
     mut start_signature: Option<Signature>,
 ) -> Result<()> {
-    let Some(solana_config) = config.solana else {
+    let Some(solana_config) = config.solana.clone() else {
         anyhow::bail!("Failed to get Solana config");
     };
 
@@ -51,6 +51,7 @@ pub async fn start_indexer(
     loop {
         crate::skip_fail!(
             process_recent_signatures(
+                config,
                 &mut redis_connection,
                 rpc_http_url.clone(),
                 &program_id,
@@ -64,7 +65,7 @@ pub async fn start_indexer(
         info!("All historical logs processed, starting Solana WS subscription");
 
         let filter = RpcTransactionLogsFilter::Mentions(vec![program_id.to_string()]);
-        let config = RpcTransactionLogsConfig {
+        let rpc_config = RpcTransactionLogsConfig {
             commitment: Some(CommitmentConfig::confirmed()),
         };
 
@@ -76,7 +77,7 @@ pub async fn start_indexer(
 
         let (mut log_stream, _) = crate::skip_fail!(
             ws_client
-                .logs_subscribe(filter.clone(), config.clone())
+                .logs_subscribe(filter.clone(), rpc_config.clone())
                 .await,
             "Subscription to logs on Solana chain failed",
             5
@@ -88,6 +89,7 @@ pub async fn start_indexer(
             if let Ok(signature) = Signature::from_str(&log.value.signature) {
                 info!("Found a signature on Solana: {signature:?}");
                 utils::redis::add_event(
+                    config,
                     &mut redis_connection,
                     utils::redis::SOLANA_EVENTS,
                     signature.to_string(),
@@ -107,6 +109,7 @@ pub async fn start_indexer(
 }
 
 async fn process_recent_signatures(
+    config: &config::Config,
     redis_connection: &mut redis::aio::MultiplexedConnection,
     rpc_http_url: String,
     program_id: &Pubkey,
@@ -116,6 +119,7 @@ async fn process_recent_signatures(
 
     let from_signature = if let Some(signature) = start_signature {
         utils::redis::add_event(
+            config,
             redis_connection,
             utils::redis::SOLANA_EVENTS,
             signature.to_string(),
@@ -127,6 +131,7 @@ async fn process_recent_signatures(
         signature
     } else {
         let Some(signature) = utils::redis::get_last_processed::<&str, String>(
+            config,
             redis_connection,
             &utils::redis::get_last_processed_key(ChainKind::Sol),
         )
@@ -152,6 +157,7 @@ async fn process_recent_signatures(
 
     for signature_status in &signatures {
         utils::redis::add_event(
+            config,
             redis_connection,
             utils::redis::SOLANA_EVENTS,
             signature_status.signature.clone(),
@@ -164,8 +170,8 @@ async fn process_recent_signatures(
     Ok(())
 }
 
-pub async fn process_signature(config: config::Config, redis_client: redis::Client) -> Result<()> {
-    let Some(solana_config) = config.solana else {
+pub async fn process_signature(config: &config::Config, redis_client: redis::Client) -> Result<()> {
+    let Some(solana_config) = config.solana.clone() else {
         anyhow::bail!("Failed to get Solana config");
     };
 
@@ -184,13 +190,14 @@ pub async fn process_signature(config: config::Config, redis_client: redis::Clie
         let mut redis_connection = redis_connection.clone();
 
         let Some(events) = utils::redis::get_events(
+            config,
             &mut redis_connection,
             utils::redis::SOLANA_EVENTS.to_string(),
         )
         .await
         else {
             tokio::time::sleep(tokio::time::Duration::from_secs(
-                utils::redis::SLEEP_TIME_AFTER_EVENTS_PROCESS_SECS,
+                config.redis.sleep_time_after_events_process_secs,
             ))
             .await;
             continue;
@@ -200,6 +207,7 @@ pub async fn process_signature(config: config::Config, redis_client: redis::Clie
 
         for (key, _) in events {
             handlers.push(tokio::spawn({
+                let config = config.clone();
                 let mut redis_connection = redis_connection.clone();
                 let solana = solana_config.clone();
                 let http_client = http_client.clone();
@@ -224,6 +232,7 @@ pub async fn process_signature(config: config::Config, redis_client: redis::Clie
                             {
                                 if let UiMessage::Raw(ref raw) = tx.message {
                                     utils::solana::process_message(
+                                        &config,
                                         &mut redis_connection,
                                         &solana,
                                         &transaction,
@@ -235,12 +244,14 @@ pub async fn process_signature(config: config::Config, redis_client: redis::Clie
                             }
 
                             utils::redis::remove_event(
+                                &config,
                                 &mut redis_connection,
                                 utils::redis::SOLANA_EVENTS,
                                 &signature.to_string(),
                             )
                             .await;
                             utils::redis::update_last_processed(
+                                &config,
                                 &mut redis_connection,
                                 &utils::redis::get_last_processed_key(ChainKind::Sol),
                                 &signature.to_string(),
@@ -258,7 +269,7 @@ pub async fn process_signature(config: config::Config, redis_client: redis::Clie
         join_all(handlers).await;
 
         tokio::time::sleep(tokio::time::Duration::from_secs(
-            utils::redis::SLEEP_TIME_AFTER_EVENTS_PROCESS_SECS,
+            config.redis.sleep_time_after_events_process_secs,
         ))
         .await;
     }

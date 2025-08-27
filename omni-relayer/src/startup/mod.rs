@@ -1,6 +1,7 @@
 use anyhow::{Context, Result};
 use btc_bridge_client::BtcBridgeClient;
-use log::info;
+use eth_light_client::{EthLightClient, EthLightClientBuilder};
+use tracing::info;
 
 use evm_bridge_client::{EvmBridgeClient, EvmBridgeClientBuilder};
 use near_bridge_client::NearBridgeClientBuilder;
@@ -68,7 +69,10 @@ fn build_evm_bridge_client(
         ChainKind::Eth => &config.eth,
         ChainKind::Base => &config.base,
         ChainKind::Arb => &config.arb,
-        _ => unreachable!("Function `build_evm_bridge_client` supports only EVM chains"),
+        ChainKind::Bnb => &config.bnb,
+        ChainKind::Near | ChainKind::Sol => {
+            unreachable!("Function `build_evm_bridge_client` supports only EVM chains")
+        }
     };
 
     evm.as_ref()
@@ -78,6 +82,7 @@ fn build_evm_bridge_client(
                 .chain_id(Some(evm.chain_id))
                 .private_key(Some(crate::config::get_private_key(chain_kind, None)))
                 .omni_bridge_address(Some(evm.omni_bridge_address.to_string()))
+                .wormhole_core_address(evm.wormhole_address.map(|address| address.to_string()))
                 .build()
                 .context(format!("Failed to build EvmBridgeClient ({chain_kind:?})"))
         })
@@ -117,6 +122,24 @@ fn build_wormhole_bridge_client(config: &config::Config) -> Result<WormholeBridg
         .context("Failed to build WormholeBridgeClient")
 }
 
+fn build_eth_light_client(config: &config::Config) -> Result<Option<EthLightClient>> {
+    config
+        .eth
+        .as_ref()
+        .map(|eth| {
+            EthLightClientBuilder::default()
+                .endpoint(Some(config.near.rpc_url.clone()))
+                .eth_light_client_id(
+                    eth.light_client
+                        .as_ref()
+                        .map(std::string::ToString::to_string),
+                )
+                .build()
+                .context("Failed to build EthLightClient")
+        })
+        .transpose()
+}
+
 pub fn build_omni_connector(
     config: &config::Config,
     near_signer: &InMemorySigner,
@@ -127,18 +150,22 @@ pub fn build_omni_connector(
     let eth_bridge_client = build_evm_bridge_client(config, ChainKind::Eth)?;
     let base_bridge_client = build_evm_bridge_client(config, ChainKind::Base)?;
     let arb_bridge_client = build_evm_bridge_client(config, ChainKind::Arb)?;
+    let bnb_bridge_client = build_evm_bridge_client(config, ChainKind::Bnb)?;
     let solana_bridge_client = build_solana_bridge_client(config)?;
     let btc_bridge_client = build_btc_bridge_client(config)?;
     let wormhole_bridge_client = build_wormhole_bridge_client(config)?;
+    let eth_light_client = build_eth_light_client(config)?;
 
     let omni_connector = OmniConnectorBuilder::default()
         .near_bridge_client(Some(near_bridge_client))
         .eth_bridge_client(eth_bridge_client)
         .base_bridge_client(base_bridge_client)
         .arb_bridge_client(arb_bridge_client)
+        .bnb_bridge_client(bnb_bridge_client)
         .solana_bridge_client(solana_bridge_client)
         .wormhole_bridge_client(Some(wormhole_bridge_client))
         .btc_bridge_client(Some(btc_bridge_client))
+        .eth_light_client(eth_light_client)
         .build()
         .context("Failed to build OmniConnector")?;
 

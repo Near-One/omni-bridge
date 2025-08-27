@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use anyhow::{Context, Result};
 use bridge_connector_common::result::BridgeSdkError;
-use log::{info, warn};
+use tracing::{info, warn};
 
 use near_bridge_client::TransactionOptions;
 use near_jsonrpc_client::{JsonRpcClient, errors::JsonRpcError};
@@ -15,7 +15,10 @@ use solana_sdk::{instruction::InstructionError, pubkey::Pubkey, transaction::Tra
 use omni_connector::OmniConnector;
 use omni_types::{ChainKind, FastTransfer, OmniAddress, TransferId, near_events::OmniBridgeEvent};
 
-use crate::{config, utils, workers::PAUSED_ERROR};
+use crate::{
+    config, utils,
+    workers::{PAUSED_ERROR, RetryableEvent},
+};
 
 use super::{EventAction, Transfer};
 
@@ -29,7 +32,7 @@ pub struct UnverifiedTrasfer {
 }
 
 pub async fn process_transfer_event(
-    config: config::Config,
+    config: &config::Config,
     redis_connection: &mut redis::aio::MultiplexedConnection,
     key: String,
     omni_connector: Arc<OmniConnector>,
@@ -39,20 +42,10 @@ pub async fn process_transfer_event(
 ) -> Result<EventAction> {
     let Transfer::Near {
         ref transfer_message,
-        creation_timestamp,
-        last_update_timestamp,
     } = transfer
     else {
         anyhow::bail!("Expected NearTransferWithTimestamp, got: {:?}", transfer);
     };
-
-    let current_timestamp = chrono::Utc::now().timestamp();
-
-    if current_timestamp - last_update_timestamp.unwrap_or_default()
-        < utils::redis::CHECK_INSUFFICIENT_FEE_TRANSFERS_EVERY_SECS
-    {
-        return Ok(EventAction::Retry);
-    }
 
     info!("Trying to process TransferMessage on NEAR");
 
@@ -79,24 +72,29 @@ pub async fn process_transfer_event(
             .as_ref()
             .is_some_and(|list| list.contains(&transfer_message.sender))
     {
-        match utils::bridge_api::is_fee_sufficient(
-            &config,
-            transfer_message.fee.clone(),
+        let Ok(needed_fee) = utils::bridge_api::TransferFee::get_transfer_fee(
+            config,
             &transfer_message.sender,
             &transfer_message.recipient,
             &transfer_message.token,
         )
         .await
+        else {
+            warn!("Failed to get transfer fee for transfer: {transfer_message:?}");
+            return Ok(EventAction::Retry);
+        };
+
+        if let Some(event_action) = needed_fee
+            .check_fee(
+                config,
+                redis_connection,
+                &transfer_message,
+                transfer_message.get_transfer_id(),
+                &transfer_message.fee,
+            )
+            .await
         {
-            Ok(true) => {}
-            Ok(false) => {
-                warn!("Insufficient fee for transfer: {transfer_message:?}");
-                return Ok(EventAction::Retry);
-            }
-            Err(err) => {
-                warn!("Failed to check fee sufficiency: {err:?}");
-                return Ok(EventAction::Retry);
-            }
+            return Ok(event_action);
         }
     }
 
@@ -123,10 +121,11 @@ pub async fn process_transfer_event(
     {
         Ok(tx_hash) => {
             utils::redis::add_event(
+                config,
                 redis_connection,
                 utils::redis::EVENTS,
                 tx_hash.to_string(),
-                UnverifiedTrasfer {
+                RetryableEvent::new(UnverifiedTrasfer {
                     tx_hash,
                     signer,
                     specific_errors: Some(vec![
@@ -138,7 +137,7 @@ pub async fn process_transfer_event(
                     ]),
                     original_key: key,
                     original_event: transfer,
-                },
+                }),
             )
             .await;
 
@@ -147,12 +146,6 @@ pub async fn process_transfer_event(
             Ok(EventAction::Remove)
         }
         Err(err) => {
-            if current_timestamp - creation_timestamp
-                > utils::redis::KEEP_INSUFFICIENT_FEE_TRANSFERS_FOR
-            {
-                anyhow::bail!("Transfer ({}) is too old", transfer_message.origin_nonce);
-            }
-
             if let BridgeSdkError::NearRpcError(near_rpc_error) = err {
                 match near_rpc_error {
                     NearRpcError::NonceError
@@ -181,20 +174,25 @@ pub async fn process_transfer_event(
 }
 
 pub async fn process_sign_transfer_event(
-    config: config::Config,
+    config: &config::Config,
+    redis_connection: &mut redis::aio::MultiplexedConnection,
     omni_connector: Arc<OmniConnector>,
     signer: AccountId,
-    sign_transfer_event: OmniBridgeEvent,
+    omni_bridge_event: OmniBridgeEvent,
     evm_nonces: Arc<utils::nonce::EvmNonceManagers>,
 ) -> Result<EventAction> {
     let OmniBridgeEvent::SignTransferEvent {
         message_payload, ..
-    } = &sign_transfer_event
+    } = &omni_bridge_event
     else {
-        anyhow::bail!("Expected SignTransferEvent, got: {:?}", sign_transfer_event);
+        anyhow::bail!("Expected SignTransferEvent, got: {:?}", omni_bridge_event);
     };
 
     info!("Trying to process SignTransferEvent log on NEAR");
+
+    if message_payload.fee_recipient != Some(signer) {
+        anyhow::bail!("Fee recipient mismatch");
+    }
 
     match omni_connector
         .is_transfer_finalised(
@@ -213,10 +211,6 @@ pub async fn process_sign_transfer_event(
             warn!("Failed to check if transfer is finalised: {err:?}");
             return Ok(EventAction::Retry);
         }
-    }
-
-    if message_payload.fee_recipient != Some(signer) {
-        anyhow::bail!("Fee recipient mismatch");
     }
 
     if config.is_bridge_api_enabled() {
@@ -242,24 +236,29 @@ pub async fn process_sign_transfer_event(
             }
         };
 
-        match utils::bridge_api::is_fee_sufficient(
-            &config,
-            transfer_message.fee,
+        let Ok(needed_fee) = utils::bridge_api::TransferFee::get_transfer_fee(
+            config,
             &transfer_message.sender,
             &transfer_message.recipient,
             &transfer_message.token,
         )
         .await
+        else {
+            warn!("Failed to get transfer fee for transfer: {transfer_message:?}");
+            return Ok(EventAction::Retry);
+        };
+
+        if let Some(event_action) = needed_fee
+            .check_fee(
+                config,
+                redis_connection,
+                &transfer_message,
+                transfer_message.get_transfer_id(),
+                &transfer_message.fee,
+            )
+            .await
         {
-            Ok(true) => {}
-            Ok(false) => {
-                warn!("Insufficient fee for transfer: {message_payload:?}");
-                return Ok(EventAction::Retry);
-            }
-            Err(err) => {
-                warn!("Failed to check fee sufficiency: {err:?}");
-                return Ok(EventAction::Retry);
-            }
+            return Ok(event_action);
         }
     }
 
@@ -267,7 +266,7 @@ pub async fn process_sign_transfer_event(
         ChainKind::Near => {
             anyhow::bail!("Near to Near transfers are not supported yet");
         }
-        ChainKind::Eth | ChainKind::Base | ChainKind::Arb => {
+        ChainKind::Eth | ChainKind::Base | ChainKind::Arb | ChainKind::Bnb => {
             let nonce = evm_nonces
                 .reserve_nonce(message_payload.recipient.get_chain())
                 .await
@@ -275,7 +274,7 @@ pub async fn process_sign_transfer_event(
 
             omni_connector::FinTransferArgs::EvmFinTransfer {
                 chain_kind: message_payload.recipient.get_chain(),
-                event: sign_transfer_event,
+                event: omni_bridge_event,
                 tx_nonce: Some(nonce.into()),
             }
         }
@@ -288,7 +287,7 @@ pub async fn process_sign_transfer_event(
             };
 
             omni_connector::FinTransferArgs::SolanaFinTransfer {
-                event: sign_transfer_event,
+                event: omni_bridge_event,
                 solana_token: Pubkey::new_from_array(token.0),
             }
         }
@@ -331,11 +330,13 @@ pub async fn process_sign_transfer_event(
 }
 
 pub async fn process_unverified_transfer_event(
+    config: &config::Config,
     redis_connection: &mut redis::aio::MultiplexedConnection,
     jsonrpc_client: JsonRpcClient,
     unverified_event: UnverifiedTrasfer,
 ) {
     utils::redis::remove_event(
+        config,
         redis_connection,
         utils::redis::EVENTS,
         unverified_event.tx_hash.to_string(),
@@ -351,10 +352,11 @@ pub async fn process_unverified_transfer_event(
     .await
     {
         utils::redis::add_event(
+            config,
             redis_connection,
             utils::redis::EVENTS,
             unverified_event.original_key,
-            unverified_event.original_event,
+            RetryableEvent::new(unverified_event.original_event),
         )
         .await;
     }

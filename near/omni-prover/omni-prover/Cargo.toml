@@ -1,6 +1,6 @@
 [package]
 name = "omni-prover"
-version = "0.2.9"
+version = "0.2.10"
 authors = ["Near One <info@nearone.org>"]
 edition = "2021"
 repository.workspace = true

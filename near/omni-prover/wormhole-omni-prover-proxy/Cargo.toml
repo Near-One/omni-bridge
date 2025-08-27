@@ -1,6 +1,6 @@
 [package]
 name = "wormhole-omni-prover-proxy"
-version = "0.2.9"
+version.workspace = true
 authors = ["Near One <info@nearone.org>"]
 edition = "2021"
 repository.workspace = true

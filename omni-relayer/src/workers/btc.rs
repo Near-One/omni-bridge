@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use anyhow::Result;
 use bridge_connector_common::result::BridgeSdkError;
-use log::{info, warn};
+use tracing::{info, warn};
 
 use near_bridge_client::{
     TransactionOptions,
@@ -122,7 +122,7 @@ pub async fn process_btc_to_near_init_transfer_event(
                                 amount: action.amount.0,
                                 memo: action.memo,
                                 msg: action.msg,
-                                gas: action.gas,
+                                gas: action.gas.map(near_sdk::Gas::as_gas),
                             })
                             .collect()
                     }),
