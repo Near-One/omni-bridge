@@ -205,6 +205,8 @@ pub struct Solana {
     pub rpc_ws_url: String,
     pub program_id: String,
     pub wormhole_id: String,
+    pub wormhole_post_message_shim_id: String,
+    pub wormhole_post_message_shim_event_authority: String,
     pub deploy_token_emitter_index: usize,
     pub deploy_token_discriminator: Vec<u8>,
     pub init_transfer_sender_index: usize,
