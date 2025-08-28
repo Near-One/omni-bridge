@@ -550,11 +550,7 @@ impl Contract {
         self.remove_promise(&message_storage_account_id);
 
         if response.is_ok() {
-            self.init_transfer_internal(
-                transfer_message,
-                message_storage_account_id,
-                storage_owner,
-            )
+            self.init_transfer_internal(transfer_message, message_storage_account_id, storage_owner)
         } else {
             env::log_str("Init transfer resume timeout");
             transfer_message.amount
@@ -1536,11 +1532,14 @@ impl Contract {
             .add_transfer_message(transfer_message.clone(), storage_owner)
             .saturating_add(NearToken::from_yoctonear(transfer_message.fee.native_fee.0));
 
-        if self.try_update_storage_balance(
-            storage_payer,
-            required_storage_balance,
-            NearToken::from_yoctonear(0),
-        ).is_err() {
+        if self
+            .try_update_storage_balance(
+                storage_payer,
+                required_storage_balance,
+                NearToken::from_yoctonear(0),
+            )
+            .is_err()
+        {
             return transfer_message.amount;
         }
 
