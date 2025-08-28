@@ -24,7 +24,7 @@ struct InitTransferPayload {
 
 pub async fn process_message(
     config: &config::Config,
-    redis_connection: &mut redis::aio::MultiplexedConnection,
+    redis_connection_manager: &mut redis::aio::ConnectionManager,
     solana: &config::Solana,
     transaction: &EncodedTransactionWithStatusMeta,
     message: &UiRawMessage,
@@ -39,7 +39,7 @@ pub async fn process_message(
 
         if let Err(err) = decode_instruction(
             config,
-            redis_connection,
+            redis_connection_manager,
             solana,
             signature,
             transaction,
@@ -55,7 +55,7 @@ pub async fn process_message(
 
 async fn decode_instruction(
     config: &config::Config,
-    redis_connection: &mut redis::aio::MultiplexedConnection,
+    redis_connection_manager: &mut redis::aio::ConnectionManager,
     solana: &config::Solana,
     signature: Signature,
     transaction: &EncodedTransactionWithStatusMeta,
@@ -157,7 +157,7 @@ async fn decode_instruction(
 
                         utils::redis::add_event(
                             config,
-                            redis_connection,
+                            redis_connection_manager,
                             utils::redis::EVENTS,
                             signature.to_string(),
                             RetryableEvent::new(Transfer::Solana {
@@ -221,7 +221,7 @@ async fn decode_instruction(
 
                     utils::redis::add_event(
                         config,
-                        redis_connection,
+                        redis_connection_manager,
                         utils::redis::EVENTS,
                         signature.to_string(),
                         RetryableEvent::new(FinTransfer::Solana {
@@ -256,7 +256,7 @@ async fn decode_instruction(
 
                     utils::redis::add_event(
                         config,
-                        redis_connection,
+                        redis_connection_manager,
                         utils::redis::EVENTS,
                         signature.to_string(),
                         RetryableEvent::new(DeployToken::Solana {

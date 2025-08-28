@@ -17,7 +17,7 @@ use crate::{
 };
 
 struct ProcessRecentBlocksParams<'a> {
-    redis_connection: &'a mut redis::aio::MultiplexedConnection,
+    redis_connection_manager: &'a mut redis::aio::ConnectionManager,
     http_provider: &'a DynProvider,
     filter: &'a Filter,
     chain_kind: ChainKind,
@@ -49,12 +49,10 @@ fn extract_evm_config(evm: config::Evm) -> Result<(Url, String, Address, u64, i6
 
 pub async fn start_indexer(
     config: config::Config,
-    redis_client: redis::Client,
+    redis_connection_manager: &mut redis::aio::ConnectionManager,
     chain_kind: ChainKind,
     mut start_block: Option<u64>,
 ) -> Result<()> {
-    let mut redis_connection = redis_client.get_multiplexed_tokio_connection().await?;
-
     let is_fast_relayer_enabled = config.is_fast_relayer_enabled();
     let (
         rpc_http_url,
@@ -95,7 +93,7 @@ pub async fn start_indexer(
             DynProvider::new(ProviderBuilder::new().connect_http(rpc_http_url.clone()));
 
         let params = ProcessRecentBlocksParams {
-            redis_connection: &mut redis_connection,
+            redis_connection_manager,
             http_provider: &http_provider,
             filter: &filter,
             chain_kind,
@@ -141,7 +139,7 @@ pub async fn start_indexer(
             process_log(
                 &config,
                 chain_kind,
-                &mut redis_connection,
+                redis_connection_manager,
                 &http_provider,
                 log,
                 expected_finalization_time,
@@ -163,7 +161,7 @@ async fn process_recent_blocks(
     params: ProcessRecentBlocksParams<'_>,
 ) -> Result<()> {
     let ProcessRecentBlocksParams {
-        redis_connection,
+        redis_connection_manager: redis_connection,
         http_provider,
         filter,
         chain_kind,
@@ -236,7 +234,7 @@ async fn process_recent_blocks(
 async fn process_log(
     config: &config::Config,
     chain_kind: ChainKind,
-    redis_connection: &mut redis::aio::MultiplexedConnection,
+    redis_connection_manager: &mut redis::aio::ConnectionManager,
     http_provider: &DynProvider,
     log: Log,
     expected_finalization_time: i64,
@@ -265,8 +263,6 @@ async fn process_log(
         .and_then(|block| i64::try_from(block.header.timestamp).ok())
         .unwrap_or_else(|| chrono::Utc::now().timestamp());
 
-    let topic = log.topic0();
-
     if let Ok(init_log) = log.log_decode::<utils::evm::InitTransfer>() {
         info!("Received InitTransfer on {chain_kind:?} ({tx_hash:?})");
 
@@ -288,7 +284,7 @@ async fn process_log(
 
         utils::redis::add_event(
             config,
-            redis_connection,
+            redis_connection_manager,
             utils::redis::EVENTS,
             tx_hash.to_string(),
             RetryableEvent::new(crate::workers::Transfer::Evm {
@@ -304,7 +300,7 @@ async fn process_log(
         if is_fast_relayer_enabled {
             utils::redis::add_event(
                 config,
-                redis_connection,
+                redis_connection_manager,
                 utils::redis::EVENTS,
                 format!("{tx_hash}_fast"),
                 RetryableEvent::new(crate::workers::Transfer::Fast {
@@ -331,20 +327,14 @@ async fn process_log(
     } else if log.log_decode::<utils::evm::FinTransfer>().is_ok() {
         info!("Received FinTransfer on {chain_kind:?} ({tx_hash:?})");
 
-        let Some(&topic) = topic else {
-            warn!("Topic is empty for log: {log:?}");
-            return;
-        };
-
         utils::redis::add_event(
             config,
-            redis_connection,
+            redis_connection_manager,
             utils::redis::EVENTS,
             tx_hash.to_string(),
             RetryableEvent::new(FinTransfer::Evm {
                 chain_kind,
                 tx_hash,
-                topic,
                 creation_timestamp: timestamp,
                 expected_finalization_time,
             }),
@@ -353,20 +343,14 @@ async fn process_log(
     } else if log.log_decode::<utils::evm::DeployToken>().is_ok() {
         info!("Received DeployToken on {chain_kind:?} ({tx_hash:?})");
 
-        let Some(&topic) = topic else {
-            warn!("Topic is empty for log: {log:?}");
-            return;
-        };
-
         utils::redis::add_event(
             config,
-            redis_connection,
+            redis_connection_manager,
             utils::redis::EVENTS,
             tx_hash.to_string(),
             RetryableEvent::new(DeployToken::Evm {
                 chain_kind,
                 tx_hash,
-                topic,
                 creation_timestamp: timestamp,
                 expected_finalization_time,
             }),
@@ -378,7 +362,7 @@ async fn process_log(
 
     utils::redis::update_last_processed(
         config,
-        redis_connection,
+        redis_connection_manager,
         &utils::redis::get_last_processed_key(chain_kind),
         block_number,
     )

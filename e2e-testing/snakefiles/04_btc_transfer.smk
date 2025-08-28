@@ -23,7 +23,6 @@ nbtc_account_file = const.near_account_dir / f"nbtc.json"
 btc_connector_binary_file = const.near_binary_dir / "btc_connector.wasm"
 nbtc_binary_file = const.near_binary_dir / "nbtc.wasm"
 
-omni_prover_file = const.near_deploy_results_dir / f"{NC.OMNI_PROVER}.json"
 omni_bridge_file = const.near_deploy_results_dir / f"{NC.OMNI_BRIDGE}.json"
 nbtc_file = const.near_deploy_results_dir / f"nbtc.json"
 btc_connector_file = const.near_deploy_results_dir / f"btc_connector.json"

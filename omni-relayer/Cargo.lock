@@ -69,7 +69,7 @@ version = "2.3.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d8e4bb8842e634f00f7f56bed7fcf67464bf2689378b3977350a8d0e6918a1ea"
 dependencies = [
- "ahash",
+ "ahash 0.8.12",
  "solana-epoch-schedule",
  "solana-hash",
  "solana-pubkey",
@@ -86,6 +86,17 @@ dependencies = [
  "agave-feature-set",
  "solana-pubkey",
  "solana-sdk-ids",
+]
+
+[[package]]
+name = "ahash"
+version = "0.7.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "891477e0c6a8957309ee5c45a6368af3ae14bb510732d2684ffa19af310920f9"
+dependencies = [
+ "getrandom 0.2.16",
+ "once_cell",
+ "version_check",
 ]
 
 [[package]]
@@ -1699,6 +1710,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "backon"
+version = "1.5.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "592277618714fbcecda9a02ba7a8781f319d26532a88553bbacc77ba5d2b3a8d"
+dependencies = [
+ "fastrand",
+]
+
+[[package]]
 name = "backtrace"
 version = "0.3.75"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2106,7 +2126,7 @@ dependencies = [
 [[package]]
 name = "bridge-connector-common"
 version = "0.2.1"
-source = "git+https://github.com/Near-One/bridge-sdk-rs?rev=6e6c03017571ae9917cdfd386cfdb26fb0b70d79#6e6c03017571ae9917cdfd386cfdb26fb0b70d79"
+source = "git+https://github.com/Near-One/bridge-sdk-rs?rev=74f0d7162bbf543fd21c994579d91fd557d26740#74f0d7162bbf543fd21c994579d91fd557d26740"
 dependencies = [
  "eth-proof",
  "ethers",
@@ -2183,7 +2203,7 @@ version = "2.15.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7969a9ba84b0ff843813e7249eed1678d9b6607ce5a3b8f0a47af3fcf7978e6e"
 dependencies = [
- "ahash",
+ "ahash 0.8.12",
  "base64 0.22.1",
  "bitvec 1.0.1",
  "getrandom 0.2.16",
@@ -2203,7 +2223,7 @@ dependencies = [
 [[package]]
 name = "btc-bridge-client"
 version = "0.2.0"
-source = "git+https://github.com/Near-One/bridge-sdk-rs?rev=6e6c03017571ae9917cdfd386cfdb26fb0b70d79#6e6c03017571ae9917cdfd386cfdb26fb0b70d79"
+source = "git+https://github.com/Near-One/bridge-sdk-rs?rev=74f0d7162bbf543fd21c994579d91fd557d26740#74f0d7162bbf543fd21c994579d91fd557d26740"
 dependencies = [
  "bitcoin",
  "bitcoincore-rpc",
@@ -2234,7 +2254,7 @@ dependencies = [
 [[package]]
 name = "btc-utils"
 version = "0.2.0"
-source = "git+https://github.com/Near-One/bridge-sdk-rs?rev=6e6c03017571ae9917cdfd386cfdb26fb0b70d79#6e6c03017571ae9917cdfd386cfdb26fb0b70d79"
+source = "git+https://github.com/Near-One/bridge-sdk-rs?rev=74f0d7162bbf543fd21c994579d91fd557d26740#74f0d7162bbf543fd21c994579d91fd557d26740"
 dependencies = [
  "bitcoin",
  "bridge-connector-common",
@@ -2270,6 +2290,28 @@ name = "byte-slice-cast"
 version = "1.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7575182f7272186991736b70173b0ea045398f984bf5ebbb3804736ce1330c9d"
+
+[[package]]
+name = "bytecheck"
+version = "0.6.12"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "23cdc57ce23ac53c931e88a43d06d070a6fd142f2617be5855eb75efc9beb1c2"
+dependencies = [
+ "bytecheck_derive",
+ "ptr_meta",
+ "simdutf8",
+]
+
+[[package]]
+name = "bytecheck_derive"
+version = "0.6.12"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3db406d29fbcd95542e92559bed4d8ad92636d1ca8b3b72ede10b4bcc010e659"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 1.0.109",
+]
 
 [[package]]
 name = "bytemuck"
@@ -2921,7 +2963,7 @@ dependencies = [
 [[package]]
 name = "crypto-utils"
 version = "0.2.0"
-source = "git+https://github.com/Near-One/bridge-sdk-rs?rev=6e6c03017571ae9917cdfd386cfdb26fb0b70d79#6e6c03017571ae9917cdfd386cfdb26fb0b70d79"
+source = "git+https://github.com/Near-One/bridge-sdk-rs?rev=74f0d7162bbf543fd21c994579d91fd557d26740#74f0d7162bbf543fd21c994579d91fd557d26740"
 dependencies = [
  "crypto-shared",
  "ethers",
@@ -3609,7 +3651,7 @@ dependencies = [
 [[package]]
 name = "eth-light-client"
 version = "0.2.1"
-source = "git+https://github.com/Near-One/bridge-sdk-rs?rev=6e6c03017571ae9917cdfd386cfdb26fb0b70d79#6e6c03017571ae9917cdfd386cfdb26fb0b70d79"
+source = "git+https://github.com/Near-One/bridge-sdk-rs?rev=74f0d7162bbf543fd21c994579d91fd557d26740#74f0d7162bbf543fd21c994579d91fd557d26740"
 dependencies = [
  "borsh 1.5.7",
  "bridge-connector-common",
@@ -3623,7 +3665,7 @@ dependencies = [
 [[package]]
 name = "eth-proof"
 version = "0.2.1"
-source = "git+https://github.com/Near-One/bridge-sdk-rs?rev=6e6c03017571ae9917cdfd386cfdb26fb0b70d79#6e6c03017571ae9917cdfd386cfdb26fb0b70d79"
+source = "git+https://github.com/Near-One/bridge-sdk-rs?rev=74f0d7162bbf543fd21c994579d91fd557d26740#74f0d7162bbf543fd21c994579d91fd557d26740"
 dependencies = [
  "borsh 1.5.7",
  "cita_trie",
@@ -4060,7 +4102,7 @@ dependencies = [
 [[package]]
 name = "evm-bridge-client"
 version = "0.2.6"
-source = "git+https://github.com/Near-One/bridge-sdk-rs?rev=6e6c03017571ae9917cdfd386cfdb26fb0b70d79#6e6c03017571ae9917cdfd386cfdb26fb0b70d79"
+source = "git+https://github.com/Near-One/bridge-sdk-rs?rev=74f0d7162bbf543fd21c994579d91fd557d26740#74f0d7162bbf543fd21c994579d91fd557d26740"
 dependencies = [
  "borsh 1.5.7",
  "bridge-connector-common",
@@ -4595,6 +4637,9 @@ name = "hashbrown"
 version = "0.12.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8a9ee70c43aaf417c914396645a0fa852624801b24ebb7ae78fe8272889ac888"
+dependencies = [
+ "ahash 0.7.8",
+]
 
 [[package]]
 name = "hashbrown"
@@ -4602,7 +4647,7 @@ version = "0.13.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "43a3c133739dddd0d2990f9a4bdf8eb4b21ef50e4851ca85ab661199821d510e"
 dependencies = [
- "ahash",
+ "ahash 0.8.12",
 ]
 
 [[package]]
@@ -5972,7 +6017,7 @@ dependencies = [
 [[package]]
 name = "near-bridge-client"
 version = "0.2.1"
-source = "git+https://github.com/Near-One/bridge-sdk-rs?rev=6e6c03017571ae9917cdfd386cfdb26fb0b70d79#6e6c03017571ae9917cdfd386cfdb26fb0b70d79"
+source = "git+https://github.com/Near-One/bridge-sdk-rs?rev=74f0d7162bbf543fd21c994579d91fd557d26740#74f0d7162bbf543fd21c994579d91fd557d26740"
 dependencies = [
  "bitcoin",
  "borsh 1.5.7",
@@ -6215,7 +6260,7 @@ dependencies = [
 [[package]]
 name = "near-light-client-on-eth"
 version = "0.2.0"
-source = "git+https://github.com/Near-One/bridge-sdk-rs?rev=6e6c03017571ae9917cdfd386cfdb26fb0b70d79#6e6c03017571ae9917cdfd386cfdb26fb0b70d79"
+source = "git+https://github.com/Near-One/bridge-sdk-rs?rev=74f0d7162bbf543fd21c994579d91fd557d26740#74f0d7162bbf543fd21c994579d91fd557d26740"
 dependencies = [
  "ethereum-types 0.14.1",
  "ethers",
@@ -6388,7 +6433,7 @@ dependencies = [
 [[package]]
 name = "near-rpc-client"
 version = "0.2.0"
-source = "git+https://github.com/Near-One/bridge-sdk-rs?rev=6e6c03017571ae9917cdfd386cfdb26fb0b70d79#6e6c03017571ae9917cdfd386cfdb26fb0b70d79"
+source = "git+https://github.com/Near-One/bridge-sdk-rs?rev=74f0d7162bbf543fd21c994579d91fd557d26740#74f0d7162bbf543fd21c994579d91fd557d26740"
 dependencies = [
  "borsh 1.5.7",
  "lazy_static",
@@ -6832,7 +6877,7 @@ dependencies = [
 [[package]]
 name = "omni-connector"
 version = "0.2.11"
-source = "git+https://github.com/Near-One/bridge-sdk-rs?rev=6e6c03017571ae9917cdfd386cfdb26fb0b70d79#6e6c03017571ae9917cdfd386cfdb26fb0b70d79"
+source = "git+https://github.com/Near-One/bridge-sdk-rs?rev=74f0d7162bbf543fd21c994579d91fd557d26740#74f0d7162bbf543fd21c994579d91fd557d26740"
 dependencies = [
  "borsh 1.5.7",
  "bridge-connector-common",
@@ -6863,7 +6908,7 @@ dependencies = [
 
 [[package]]
 name = "omni-relayer"
-version = "0.3.21"
+version = "0.3.22"
 dependencies = [
  "alloy",
  "anyhow",
@@ -6875,7 +6920,6 @@ dependencies = [
  "clap",
  "dotenv",
  "eth-light-client",
- "eth-proof",
  "ethereum-types 0.14.1",
  "evm-bridge-client",
  "futures",
@@ -6893,6 +6937,7 @@ dependencies = [
  "omni-types",
  "redis",
  "reqwest 0.12.22",
+ "rust_decimal",
  "rustls 0.23.31",
  "serde",
  "serde_json",
@@ -7585,6 +7630,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "ptr_meta"
+version = "0.1.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0738ccf7ea06b608c10564b31debd4f5bc5e197fc8bfe088f68ae5ce81e7a4f1"
+dependencies = [
+ "ptr_meta_derive",
+]
+
+[[package]]
+name = "ptr_meta_derive"
+version = "0.1.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "16b845dbfca988fa33db069c0e230574d15a3088f147a87b64c7589eb662c9ac"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 1.0.109",
+]
+
+[[package]]
 name = "qstring"
 version = "0.7.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7848,14 +7913,16 @@ dependencies = [
 
 [[package]]
 name = "redis"
-version = "0.30.0"
+version = "0.32.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "438a4e5f8e9aa246d6f3666d6978441bf1b37d5f417b50c4dd220be09f5fcc17"
+checksum = "7cd3650deebc68526b304898b192fa4102a4ef0b9ada24da096559cb60e0eef8"
 dependencies = [
  "arc-swap",
+ "backon",
  "bytes",
  "cfg-if 1.0.1",
  "combine",
+ "futures-channel",
  "futures-util",
  "itoa",
  "num-bigint 0.4.6",
@@ -7863,7 +7930,7 @@ dependencies = [
  "pin-project-lite",
  "ryu",
  "sha1_smol",
- "socket2 0.5.10",
+ "socket2 0.6.0",
  "tokio",
  "tokio-util",
  "url",
@@ -7958,6 +8025,15 @@ name = "regex-syntax"
 version = "0.8.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2b15c43186be67a4fd63bee50d0303afffcef381492ebe2c5d87f324e1b8815c"
+
+[[package]]
+name = "rend"
+version = "0.4.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "71fe3824f5629716b1589be05dacd749f6aa084c87e00e016714a8cdfccc997c"
+dependencies = [
+ "bytecheck",
+]
 
 [[package]]
 name = "reqwest"
@@ -8129,6 +8205,35 @@ dependencies = [
 ]
 
 [[package]]
+name = "rkyv"
+version = "0.7.45"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9008cd6385b9e161d8229e1f6549dd23c3d022f132a2ea37ac3a10ac4935779b"
+dependencies = [
+ "bitvec 1.0.1",
+ "bytecheck",
+ "bytes",
+ "hashbrown 0.12.3",
+ "ptr_meta",
+ "rend",
+ "rkyv_derive",
+ "seahash",
+ "tinyvec",
+ "uuid 1.17.0",
+]
+
+[[package]]
+name = "rkyv_derive"
+version = "0.7.45"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "503d1d27590a2b0a3a4ca4c94755aa2875657196ecbf401a42eff41d7de532c0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 1.0.109",
+]
+
+[[package]]
 name = "rlp"
 version = "0.4.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8201,6 +8306,22 @@ name = "ruint-macro"
 version = "1.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "48fd7bd8a6377e15ad9d42a8ec25371b94ddc67abe7c8b9127bec79bebaaae18"
+
+[[package]]
+name = "rust_decimal"
+version = "1.37.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b203a6425500a03e0919c42d3c47caca51e79f1132046626d2c8871c5092035d"
+dependencies = [
+ "arrayvec 0.7.6",
+ "borsh 1.5.7",
+ "bytes",
+ "num-traits",
+ "rand 0.8.5",
+ "rkyv",
+ "serde",
+ "serde_json",
+]
 
 [[package]]
 name = "rustc-demangle"
@@ -8567,6 +8688,12 @@ dependencies = [
  "ring 0.17.14",
  "untrusted 0.9.0",
 ]
+
+[[package]]
+name = "seahash"
+version = "4.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1c107b6f4780854c8b126e228ea8869f4d7b71260f962fefb57b996b8959ba6b"
 
 [[package]]
 name = "sec1"
@@ -8989,6 +9116,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "simdutf8"
+version = "0.1.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e3a9fe34e3e7a50316060351f37187a3f546bce95496156754b601a5fa71b76e"
+
+[[package]]
 name = "simple_asn1"
 version = "0.6.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -9241,9 +9374,10 @@ dependencies = [
 
 [[package]]
 name = "solana-bridge-client"
-version = "0.2.5"
-source = "git+https://github.com/Near-One/bridge-sdk-rs?rev=6e6c03017571ae9917cdfd386cfdb26fb0b70d79#6e6c03017571ae9917cdfd386cfdb26fb0b70d79"
+version = "0.2.6"
+source = "git+https://github.com/Near-One/bridge-sdk-rs?rev=74f0d7162bbf543fd21c994579d91fd557d26740#74f0d7162bbf543fd21c994579d91fd557d26740"
 dependencies = [
+ "base64 0.22.1",
  "bitvec 1.0.1",
  "borsh 1.5.7",
  "derive_builder",
@@ -9573,7 +9707,7 @@ version = "2.2.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "93b93971e289d6425f88e6e3cb6668c4b05df78b3c518c249be55ced8efd6b6d"
 dependencies = [
- "ahash",
+ "ahash 0.8.12",
  "lazy_static",
  "solana-epoch-schedule",
  "solana-hash",
@@ -9951,7 +10085,7 @@ version = "2.3.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "305dc857cdc4b9d9d4c23e5c3f80a32e86362a7031f5d8c7885916ba8142f7cc"
 dependencies = [
- "ahash",
+ "ahash 0.8.12",
  "bincode",
  "bv",
  "bytes",
@@ -13613,7 +13747,7 @@ dependencies = [
 [[package]]
 name = "wormhole-bridge-client"
 version = "0.2.0"
-source = "git+https://github.com/Near-One/bridge-sdk-rs?rev=6e6c03017571ae9917cdfd386cfdb26fb0b70d79#6e6c03017571ae9917cdfd386cfdb26fb0b70d79"
+source = "git+https://github.com/Near-One/bridge-sdk-rs?rev=74f0d7162bbf543fd21c994579d91fd557d26740#74f0d7162bbf543fd21c994579d91fd557d26740"
 dependencies = [
  "bridge-connector-common",
  "derive_builder",

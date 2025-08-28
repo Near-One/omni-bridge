@@ -1,8 +1,10 @@
+declare_program!(wormhole_post_message_shim);
 use anchor_lang::{
     prelude::*,
     system_program::{transfer, Transfer},
 };
 use wormhole_anchor_sdk::wormhole::{self, program::Wormhole};
+use wormhole_post_message_shim::program::WormholePostMessageShim;
 
 use crate::{constants::CONFIG_SEED, state::config::Config};
 
@@ -51,10 +53,10 @@ pub struct WormholeCPI<'info> {
     /// [`wormhole::post_message`] requires this account be mutable.
     pub sequence: Account<'info, wormhole::SequenceTracker>,
 
-    /// CHECK: Wormhole Message. [`wormhole::post_message`] requires this
-    /// account be mutable.
-    #[account(mut)]
-    pub message: Signer<'info>,
+    #[account(mut, seeds = [config.key().as_ref()], bump, seeds::program = wormhole_post_message_shim::ID)]
+    /// CHECK: Wormhole Message. Wormhole shim doesn't require this to be signer or mutable
+    /// Seeds constraint added for IDL generation / convenience, it will be enforced by the shim.
+    pub message: UncheckedAccount<'info>,
 
     #[account(mut)]
     pub payer: Signer<'info>,
@@ -65,6 +67,12 @@ pub struct WormholeCPI<'info> {
     /// Wormhole program.
     pub wormhole_program: Program<'info, Wormhole>,
     pub system_program: Program<'info, System>,
+
+    pub wormhole_post_message_shim: Program<'info, WormholePostMessageShim>,
+    /// CHECK: Shim event authority
+    /// TODO: An address constraint could be included if this address was published to `wormhole_solana_consts`
+    /// Address will be enforced by the shim.
+    pub wormhole_post_message_shim_ea: UncheckedAccount<'info>,
 }
 
 impl WormholeCPI<'_> {
@@ -86,27 +94,29 @@ impl WormholeCPI<'_> {
             )?;
         }
 
-        wormhole::post_message(
+        wormhole_post_message_shim::cpi::post_message(
             CpiContext::new_with_signer(
-                self.wormhole_program.to_account_info(),
-                wormhole::PostMessage {
-                    config: self.bridge.to_account_info(),
+                self.wormhole_post_message_shim.to_account_info(),
+                wormhole_post_message_shim::cpi::accounts::PostMessage {
+                    bridge: self.bridge.to_account_info(),
                     message: self.message.to_account_info(),
                     emitter: self.config.to_account_info(),
                     sequence: self.sequence.to_account_info(),
                     payer: self.payer.to_account_info(),
                     fee_collector: self.fee_collector.to_account_info(),
                     clock: self.clock.to_account_info(),
-                    rent: self.rent.to_account_info(),
                     system_program: self.system_program.to_account_info(),
+                    wormhole_program: self.wormhole_program.to_account_info(),
+                    program: self.wormhole_post_message_shim.to_account_info(),
+                    event_authority: self.wormhole_post_message_shim_ea.to_account_info(),
                 },
                 &[
                     &[CONFIG_SEED, &[self.config.bumps.config]], // emitter
                 ],
             ),
             0,
+            wormhole_post_message_shim::types::Finality::Finalized,
             data,
-            wormhole::Finality::Finalized,
         )
     }
 }

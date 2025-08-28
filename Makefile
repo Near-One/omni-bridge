@@ -10,11 +10,10 @@ NEAR_MANIFEST := $(MAKEFILE_DIR)/near/Cargo.toml
 OMNI_BRIDGE_MANIFEST := $(MAKEFILE_DIR)/near/omni-bridge/Cargo.toml
 OMNI_TOKEN_MANIFEST := $(MAKEFILE_DIR)/near/omni-token/Cargo.toml
 TOKEN_DEPLOYER := $(MAKEFILE_DIR)/near/token-deployer/Cargo.toml
-OMNI_PROVER_MANIFEST := $(MAKEFILE_DIR)/near/omni-prover/omni-prover/Cargo.toml
 EVM_PROVER_MANIFEST := $(MAKEFILE_DIR)/near/omni-prover/evm-prover/Cargo.toml
-BTC_PROVER_MANIFEST := $(MAKEFILE_DIR)/near/omni-prover/btc-prover/Cargo.toml
 WORMHOLE_OMNI_PROVER_PROXY_MANIFEST := $(MAKEFILE_DIR)/near/omni-prover/wormhole-omni-prover-proxy/Cargo.toml
-MOCK_PROVER_MANIFEST := $(MAKEFILE_DIR)/near/mock/mock-prover/Cargo.toml
+MOCK_EVM_PROVER_MANIFEST := $(MAKEFILE_DIR)/near/mock/mock-evm-prover/Cargo.toml
+MOCK_WORMHOLE_PROVER_MANIFEST := $(MAKEFILE_DIR)/near/mock/mock-wormhole-prover/Cargo.toml
 MOCK_TOKEN_MANIFEST := $(MAKEFILE_DIR)/near/mock/mock-token/Cargo.toml
 
 OMNI_RELAYER_MANIFEST := $(MAKEFILE_DIR)/omni-relayer/Cargo.toml
@@ -42,9 +41,6 @@ rust-build-omni-token:
 rust-build-token-deployer:
 	cargo near build reproducible-wasm --manifest-path $(TOKEN_DEPLOYER) --out-dir $(OUT_DIR)
 
-rust-build-omni-prover:
-	cargo near build reproducible-wasm --manifest-path $(OMNI_PROVER_MANIFEST) --out-dir $(OUT_DIR)
-
 rust-build-evm-prover:
 	cargo near build reproducible-wasm --manifest-path $(EVM_PROVER_MANIFEST) --out-dir $(OUT_DIR)
 
@@ -57,7 +53,7 @@ rust-build-mock-prover:
 rust-build-mock-token:
 	cargo near build reproducible-wasm --manifest-path $(MOCK_TOKEN_MANIFEST) --out-dir $(OUT_DIR)
 
-rust-build-near: rust-build-omni-bridge rust-build-omni-token rust-build-token-deployer rust-build-omni-prover rust-build-evm-prover rust-build-wormhole-omni-prover-proxy rust-build-mock-prover rust-build-mock-token
+rust-build-near: rust-build-omni-bridge rust-build-omni-token rust-build-token-deployer rust-build-evm-prover rust-build-wormhole-omni-prover-proxy rust-build-mock-prover rust-build-mock-token
 
 solana-generate-program-id:
 	solana-keygen new -o solana/bridge_token_factory/target/deploy/bridge_token_factory-keypair.json --no-passphrase

@@ -49,6 +49,7 @@ mod tests {
         required_balance_for_fin_transfer: NearToken,
     }
 
+    #[allow(clippy::too_many_lines)]
     async fn setup_contracts(
         is_wnear: bool,
         deploy_minted_token: bool,
@@ -68,7 +69,6 @@ mod tests {
             .await?
             .into_result()?;
 
-        let prover_contract = worker.dev_deploy(&mock_prover_wasm()).await?;
         let token_receiver_contract = worker.dev_deploy(&mock_token_receiver_wasm()).await?;
 
         // Deploy and init locker
@@ -81,11 +81,22 @@ mod tests {
         locker_contract
             .call("new")
             .args_json(json!({
-                "prover_account": prover_contract.id(),
                 "mpc_signer": "mpc.testnet",
                 "nonce": U128(0),
                 "wnear_account_id": wnear_account_id,
                 "btc_connector": "brg-dev.testnet",
+            }))
+            .max_gas()
+            .transact()
+            .await?
+            .into_result()?;
+
+        let prover = worker.dev_deploy(&mock_prover_wasm()).await?;
+        locker_contract
+            .call("add_prover")
+            .args_json(json!({
+                "chain": "Eth",
+                "account_id": prover.id(),
             }))
             .max_gas()
             .transact()

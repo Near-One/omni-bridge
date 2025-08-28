@@ -1,5 +1,6 @@
-use std::str::FromStr;
+use std::{str::FromStr, sync::Arc};
 
+use omni_connector::OmniConnector;
 use tracing::warn;
 
 use anyhow::Result;
@@ -12,8 +13,6 @@ use omni_types::{
 
 use alloy::{primitives::Address, sol};
 use ethereum_types::H256;
-
-use crate::config;
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct InitTransferMessage {
@@ -71,10 +70,9 @@ sol!(
 );
 
 pub async fn construct_prover_args(
-    config: &config::Config,
+    omni_connector: Arc<OmniConnector>,
     vaa: Option<String>,
     tx_hash: H256,
-    topic: H256,
     proof_kind: ProofKind,
 ) -> Option<Vec<u8>> {
     if let Some(vaa) = vaa {
@@ -83,20 +81,16 @@ pub async fn construct_prover_args(
         return borsh::to_vec(&wormhole_proof_args).ok();
     }
 
-    // For now only Eth chain is supported since it has a light client
-    let Some(ref eth) = config.eth else {
-        warn!("Eth chain is not configured");
-        return None;
+    let evm_proof_args = match omni_connector
+        .get_proof_for_event(tx_hash, proof_kind, ChainKind::Eth)
+        .await
+    {
+        Ok(proof) => proof,
+        Err(err) => {
+            warn!("Failed to get proof: {err:?}");
+            return None;
+        }
     };
-
-    let evm_proof_args =
-        match eth_proof::get_proof_for_event(tx_hash, topic, &eth.rpc_http_url).await {
-            Ok(proof) => proof,
-            Err(err) => {
-                warn!("Failed to get proof: {err:?}");
-                return None;
-            }
-        };
 
     let evm_proof_args = EvmVerifyProofArgs {
         proof_kind,

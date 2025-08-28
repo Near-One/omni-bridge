@@ -5,7 +5,7 @@ use crate::{
 use borsh::{BorshDeserialize, BorshSerialize};
 use near_contract_standards::storage_management::StorageBalance;
 use near_sdk::{
-    collections::{LookupMap, LookupSet},
+    collections::{LookupMap, LookupSet, UnorderedMap},
     env, near, AccountId, PanicOnDefault,
 };
 use omni_types::{ChainKind, FastTransferId, Nonce, OmniAddress, TransferId};
@@ -16,6 +16,7 @@ pub struct StateV0 {
     pub factories: LookupMap<ChainKind, OmniAddress>,
     pub pending_transfers: LookupMap<TransferId, TransferMessageStorage>,
     pub finalised_transfers: LookupSet<TransferId>,
+    pub fast_transfers: LookupMap<FastTransferId, FastTransferStatusStorage>,
     pub token_id_to_address: LookupMap<(ChainKind, AccountId), OmniAddress>,
     pub token_address_to_id: LookupMap<OmniAddress, AccountId>,
     pub token_decimals: LookupMap<OmniAddress, Decimals>,
@@ -69,6 +70,7 @@ impl Contract {
                 destination_nonces: old_state.destination_nonces,
                 accounts_balances: old_state.accounts_balances,
                 wnear_account_id: old_state.wnear_account_id,
+                provers: UnorderedMap::new(StorageKey::RegisteredProvers),
                 utxo_chain_connectors: LookupMap::new(StorageKey::UtxoChainConnectors),
             }
         } else if let Some(old_state) = env::state_read::<StateV1>() {
@@ -88,6 +90,7 @@ impl Contract {
                 destination_nonces: old_state.destination_nonces,
                 accounts_balances: old_state.accounts_balances,
                 wnear_account_id: old_state.wnear_account_id,
+                provers: UnorderedMap::new(StorageKey::RegisteredProvers),
                 utxo_chain_connectors: LookupMap::new(StorageKey::UtxoChainConnectors),
             }
         } else {
