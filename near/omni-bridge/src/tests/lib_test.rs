@@ -1,9 +1,7 @@
 use std::collections::HashMap;
 use std::str::FromStr;
 
-use near_contract_standards::{
-    fungible_token::receiver::FungibleTokenReceiver, storage_management::StorageBalance,
-};
+use near_contract_standards::storage_management::StorageBalance;
 use near_sdk::{
     borsh, json_types::U128, serde_json, test_utils::VMContextBuilder, test_vm_config, testing_env,
     AccountId, NearToken, PromiseOrValue, PromiseResult, RuntimeFeesConfig,
