@@ -113,6 +113,7 @@ rule get_btc_user_deposit_address:
     shell: """
     {params.mkdir} && \
          bridge-cli testnet get-bitcoin-address \
+         --chain bitcoin-testnet \
          --btc-connector {params.btc_connector} \
          -r {params.user_account_id} \
          --near-signer {params.user_account_id} \
@@ -147,6 +148,7 @@ rule fin_btc_transfer_on_near:
         btc_tx_hash = lambda wc, input: get_last_value(input.step_3),
     shell: """
     bridge-cli testnet  near-fin-transfer-btc \
+        --chain bitcoin-testnet \
         -b {params.btc_tx_hash} \
         -v 0 \
         -r {params.user_account_id} \
@@ -186,7 +188,7 @@ rule omni_bridge_storage_deposit:
         omni_bridge_contract_file = omni_bridge_file,
         user_account_file = user_account_file
     output:
-        call_dir / "06_storage_deposit_btc_for_omni_bridge.json"
+        call_dir / "06_omni_bridge_storage_deposit.json"
     params:
         scripts_dir = const.common_scripts_dir,
         omni_bridge_address = lambda wc, input: get_json_field(input.omni_bridge_contract_file, "contract_id"),
@@ -215,7 +217,7 @@ rule set_native_token:
         nbtc_account = lambda wc, input: get_json_field(input.nbtc_file, "contract_id"),
     shell: """
     {params.scripts_dir}/call-near-contract.sh -c {params.omni_bridge_account} \
-        -m set_native_token \
+        -m set_utxo_chain_token \
         -a '{{\"chain_kind\": \"Btc\", \"token_id\": \"{params.nbtc_account}\", \"decimals\": 8}}' \
         -f {input.init_account_file}  \
         -d "1 NEAR" \
@@ -267,6 +269,7 @@ rule submit_transfer_to_btc_connector:
 
     shell: """
     bridge-cli testnet near-sign-btc-transfer \
+        --chain bitcoin-testnet \
         -n {params.near_tx_hash} \
         -s {params.user_account_id} \
         --near-token-locker-id {params.omni_bridge_account} \
@@ -294,6 +297,7 @@ rule sign_btc_connector_transfer:
 
     shell: """
     bridge-cli testnet near-sign-btc-transaction \
+        --chain bitcoin-testnet \
         --near-tx-hash {params.near_tx_hash} \
         --btc-relayer {params.user_account_id} \
         --btc-connector {params.btc_connector} \
@@ -315,6 +319,7 @@ rule send_btc_transfer:
         bridge_sdk_config_file = const.common_bridge_sdk_config_file,
     shell: """
     bridge-cli testnet btc-fin-transfer \
+    --chain bitcoin-testnet \
     --near-tx-hash {params.near_tx_hash} \
     --btc-relayer {params.user_account_id} \
     --config {params.bridge_sdk_config_file} \
