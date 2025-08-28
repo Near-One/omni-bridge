@@ -637,7 +637,7 @@ dependencies = [
 
 [[package]]
 name = "bridge_token_factory"
-version = "0.2.4"
+version = "0.2.5"
 dependencies = [
  "anchor-lang",
  "anchor-spl",
