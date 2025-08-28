@@ -1,5 +1,4 @@
 use crate::{ext_token, Contract, ContractExt, Role, FT_TRANSFER_CALL_GAS, ONE_YOCTO};
-use bitcoin::{Address, Network, TxOut};
 use near_plugins::{access_control_any, pause, AccessControllable, Pausable};
 use near_sdk::json_types::U128;
 use near_sdk::{
@@ -7,7 +6,6 @@ use near_sdk::{
 };
 use omni_types::btc::TokenReceiverMessage;
 use omni_types::{ChainKind, Fee, TransferId, TransferMessage};
-use std::str::FromStr;
 
 const SUBMIT_TRANSFER_TO_BTC_CONNECTOR_CALLBACK_GAS: Gas = Gas::from_tgas(5);
 
@@ -31,20 +29,20 @@ impl Contract {
             if let TokenReceiverMessage::Withdraw {
                 target_btc_address,
                 input: _,
-                output,
+                output: _,
+                max_gas_fee,
             } = message
             {
                 require!(
                     btc_address == target_btc_address,
                     "Incorrect target address"
                 );
-                let output_amount = Self::get_output_amount(&output, &target_btc_address);
 
                 let max_fee = transfer.message.msg.parse::<u64>();
                 if let Ok(max_fee) = max_fee {
                     require!(
-                        amount.0 - u128::from(output_amount) <= u128::from(max_fee),
-                        "Fee exceeds max allowed fee"
+                        max_gas_fee.expect("max_gas_fee is missing").0 == max_fee.into(),
+                        "Invalid max fee"
                     );
                 }
             } else {
@@ -82,36 +80,6 @@ impl Contract {
                         fee_recipient,
                     ),
             )
-    }
-
-    fn get_output_amount(output: &[TxOut], target_address: &str) -> u64 {
-        let Ok(target_address) = Address::from_str(target_address) else {
-            env::panic_str("Invalid target address")
-        };
-
-        let network = Self::get_btc_network();
-
-        let Ok(checked_address) = target_address.require_network(network) else {
-            env::panic_str("Invalid target address")
-        };
-
-        output
-            .iter()
-            .filter_map(|txout| {
-                Address::from_script(&txout.script_pubkey, network)
-                    .ok()
-                    .filter(|addr| addr == &checked_address)
-                    .map(|_| txout.value.to_sat())
-            })
-            .sum()
-    }
-
-    fn get_btc_network() -> Network {
-        if env::current_account_id().as_str().ends_with(".testnet") {
-            Network::Testnet
-        } else {
-            Network::Bitcoin
-        }
     }
 
     #[private]
