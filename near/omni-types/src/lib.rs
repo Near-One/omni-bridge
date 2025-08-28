@@ -156,6 +156,8 @@ pub enum ChainKind {
     Bnb,
     #[serde(alias = "btc")]
     Btc,
+    #[serde(alias = "zcash")]
+    Zcash,
 }
 
 impl FromStr for ChainKind {
@@ -183,13 +185,14 @@ impl TryFrom<u8> for ChainKind {
             4 => Ok(Self::Base),
             5 => Ok(Self::Bnb),
             6 => Ok(Self::Btc),
+            7 => Ok(Self::Zcash),
             _ => Err(format!("{input:?} invalid chain kind")),
         }
     }
 }
 
 pub type EvmAddress = H160;
-pub type BtcAddress = String;
+pub type UTXOChainAddress = String;
 
 pub const ZERO_ACCOUNT_ID: &str =
     "0000000000000000000000000000000000000000000000000000000000000000";
@@ -203,7 +206,8 @@ pub enum OmniAddress {
     Arb(EvmAddress),
     Base(EvmAddress),
     Bnb(EvmAddress),
-    Btc(BtcAddress),
+    Btc(UTXOChainAddress),
+    Zcash(UTXOChainAddress),
 }
 
 impl OmniAddress {
@@ -219,6 +223,7 @@ impl OmniAddress {
             ChainKind::Base => Ok(OmniAddress::Base(H160::ZERO)),
             ChainKind::Bnb => Ok(Self::Bnb(H160::ZERO)),
             ChainKind::Btc => Ok(OmniAddress::Btc("1111111111111111111114oLvT2".to_string())),
+            ChainKind::Zcash => Ok(OmniAddress::Zcash("1111111111111111111114oLvT2".to_string())),
         }
     }
 
@@ -246,6 +251,10 @@ impl OmniAddress {
                 String::from_utf8(address.to_vec())
                     .map_err(|e| format!("Invalid BTC address: {e}"))?,
             )),
+            ChainKind::Zcash => Ok(Self::Zcash(
+                String::from_utf8(address.to_vec())
+                    .map_err(|e| format!("Invalid ZCash address: {e}"))?,
+            )),
         }
     }
 
@@ -258,6 +267,7 @@ impl OmniAddress {
             Self::Base(_) => ChainKind::Base,
             Self::Bnb(_) => ChainKind::Bnb,
             Self::Btc(_) => ChainKind::Btc,
+            Self::Zcash(_) => ChainKind::Zcash,
         }
     }
 
@@ -270,6 +280,7 @@ impl OmniAddress {
             Self::Base(address) => ("base", address.to_string()),
             Self::Bnb(address) => ("bnb", address.to_string()),
             Self::Btc(address) => ("btc", address.to_string()),
+            Self::Zcash(address) => ("zcash", address.to_string()),
         };
 
         if skip_zero_address && self.is_zero() {
@@ -287,6 +298,7 @@ impl OmniAddress {
             Self::Near(address) => *address == ZERO_ACCOUNT_ID,
             Self::Sol(address) => address.is_zero(),
             Self::Btc(address) => address == "1111111111111111111114oLvT2",
+            Self::Zcash(address) => address == "1111111111111111111114oLvT2",
         }
     }
 
@@ -318,15 +330,16 @@ impl OmniAddress {
         }
     }
 
-    pub fn get_btc_address(&self) -> Option<BtcAddress> {
+    pub fn get_utxo_address(&self) -> Option<UTXOChainAddress> {
         match self {
             OmniAddress::Btc(btc_address) => Some(btc_address.clone()),
+            OmniAddress::Zcash(zcash_address) => Some(zcash_address.clone()),
             _ => None,
         }
     }
 
     pub fn is_utxo_chain(&self) -> bool {
-        matches!(self, OmniAddress::Btc(_))
+        matches!(self, OmniAddress::Btc(_) | OmniAddress::Zcash(_))
     }
 
     fn to_evm_address(address: &[u8]) -> Result<EvmAddress, String> {
@@ -369,6 +382,7 @@ impl FromStr for OmniAddress {
             "base" => Ok(Self::Base(recipient.parse().map_err(stringify)?)),
             "bnb" => Ok(Self::Bnb(recipient.parse().map_err(stringify)?)),
             "btc" => Ok(Self::Btc(recipient.to_string())),
+            "zcash" => Ok(Self::Zcash(recipient.to_string())),
             _ => Err(format!("Chain {chain} is not supported")),
         }
     }

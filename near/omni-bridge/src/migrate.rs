@@ -55,7 +55,6 @@ impl Contract {
     pub fn migrate() -> Self {
         if let Some(old_state) = env::state_read::<StateV0>() {
             Self {
-                prover_account: old_state.prover_account,
                 factories: old_state.factories,
                 pending_transfers: old_state.pending_transfers,
                 finalised_transfers: old_state.finalised_transfers,
@@ -75,7 +74,6 @@ impl Contract {
             }
         } else if let Some(old_state) = env::state_read::<StateV1>() {
             Self {
-                prover_account: old_state.prover_account,
                 factories: old_state.factories,
                 pending_transfers: old_state.pending_transfers,
                 finalised_transfers: old_state.finalised_transfers,
