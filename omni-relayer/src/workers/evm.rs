@@ -4,8 +4,6 @@ use anyhow::{Context, Result};
 use bridge_connector_common::result::BridgeSdkError;
 use tracing::{info, warn};
 
-use ethereum_types::H256;
-
 use near_bridge_client::{NearBridgeClient, TransactionOptions};
 use near_jsonrpc_client::errors::JsonRpcError;
 use near_primitives::views::TxExecutionStatus;
@@ -27,7 +25,7 @@ use super::{EventAction, Transfer};
 #[allow(clippy::too_many_lines)]
 pub async fn process_init_transfer_event(
     config: &config::Config,
-    redis_connection: &mut redis::aio::MultiplexedConnection,
+    redis_connection_manager: &mut redis::aio::ConnectionManager,
     omni_connector: Arc<OmniConnector>,
     transfer: Transfer,
     near_omni_nonce: Arc<utils::nonce::NonceManager>,
@@ -112,7 +110,7 @@ pub async fn process_init_transfer_event(
         if let Some(event_action) = needed_fee
             .check_fee(
                 config,
-                redis_connection,
+                redis_connection_manager,
                 &transfer,
                 transfer_id,
                 &provided_fee,
@@ -234,6 +232,7 @@ pub async fn process_init_transfer_event(
                 match near_rpc_error {
                     NearRpcError::NonceError
                     | NearRpcError::FinalizationError
+                    | NearRpcError::RpcBroadcastTxAsyncError(_)
                     | NearRpcError::RpcTransactionError(JsonRpcError::TransportError(_)) => {
                         warn!(
                             "Failed to finalize transfer ({}), retrying: {near_rpc_error:?}",
@@ -267,7 +266,6 @@ pub async fn process_init_transfer_event(
 }
 
 pub async fn process_evm_transfer_event(
-    config: &config::Config,
     omni_connector: Arc<OmniConnector>,
     fin_transfer: FinTransfer,
     near_nonce: Arc<utils::nonce::NonceManager>,
@@ -275,7 +273,6 @@ pub async fn process_evm_transfer_event(
     let FinTransfer::Evm {
         chain_kind,
         tx_hash: transaction_hash,
-        topic,
         creation_timestamp,
         expected_finalization_time,
     } = fin_transfer
@@ -304,10 +301,9 @@ pub async fn process_evm_transfer_event(
     };
 
     let Some(prover_args) = utils::evm::construct_prover_args(
-        config,
+        omni_connector.clone(),
         vaa,
         transaction_hash,
-        H256::from_slice(topic.as_slice()),
         ProofKind::FinTransfer,
     )
     .await
@@ -346,6 +342,7 @@ pub async fn process_evm_transfer_event(
                 match near_rpc_error {
                     NearRpcError::NonceError
                     | NearRpcError::FinalizationError
+                    | NearRpcError::RpcBroadcastTxAsyncError(_)
                     | NearRpcError::RpcTransactionError(JsonRpcError::TransportError(_)) => {
                         warn!("Failed to claim fee, retrying: {near_rpc_error:?}");
                         return Ok(EventAction::Retry);
@@ -367,7 +364,6 @@ pub async fn process_evm_transfer_event(
 }
 
 pub async fn process_deploy_token_event(
-    config: &config::Config,
     omni_connector: Arc<OmniConnector>,
     deploy_token_event: DeployToken,
     near_nonce: Arc<utils::nonce::NonceManager>,
@@ -375,7 +371,6 @@ pub async fn process_deploy_token_event(
     let DeployToken::Evm {
         chain_kind,
         tx_hash: transaction_hash,
-        topic,
         creation_timestamp,
         expected_finalization_time,
     } = deploy_token_event
@@ -404,10 +399,9 @@ pub async fn process_deploy_token_event(
     };
 
     let Some(prover_args) = utils::evm::construct_prover_args(
-        config,
+        omni_connector.clone(),
         vaa,
         transaction_hash,
-        H256::from_slice(topic.as_slice()),
         ProofKind::DeployToken,
     )
     .await
@@ -441,6 +435,7 @@ pub async fn process_deploy_token_event(
                 match near_rpc_error {
                     NearRpcError::NonceError
                     | NearRpcError::FinalizationError
+                    | NearRpcError::RpcBroadcastTxAsyncError(_)
                     | NearRpcError::RpcTransactionError(JsonRpcError::TransportError(_)) => {
                         warn!("Failed to bind token, retrying: {near_rpc_error:?}");
                         return Ok(EventAction::Retry);

@@ -98,6 +98,12 @@ fn build_solana_bridge_client(config: &config::Config) -> Result<Option<SolanaBr
                 .client(Some(RpcClient::new(solana.rpc_http_url.clone())))
                 .program_id(Some(solana.program_id.parse()?))
                 .wormhole_core(Some(solana.wormhole_id.parse()?))
+                .wormhole_post_message_shim_program_id(Some(
+                    solana.wormhole_post_message_shim_id.parse()?,
+                ))
+                .wormhole_post_message_shim_event_authority(Some(
+                    solana.wormhole_post_message_shim_event_authority.parse()?,
+                ))
                 .keypair(Some(startup::solana::get_keypair(
                     solana.credentials_path.as_ref(),
                 )))

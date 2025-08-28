@@ -63,16 +63,26 @@ mod tests {
             let sender_balance_token = 1_000_000_000_000;
             let worker = near_workspaces::sandbox().await?;
 
-            let prover_contract = worker.dev_deploy(&mock_prover_wasm()).await?;
             // Deploy and initialize bridge
             let bridge_contract = worker.dev_deploy(&locker_wasm()).await?;
             bridge_contract
                 .call("new")
                 .args_json(json!({
-                    "prover_account": prover_contract.id(),
                     "mpc_signer": "mpc.testnet",
                     "nonce": U128(0),
                     "wnear_account_id": "wnear.testnet",
+                }))
+                .max_gas()
+                .transact()
+                .await?
+                .into_result()?;
+
+            let prover = worker.dev_deploy(&mock_prover_wasm()).await?;
+            bridge_contract
+                .call("add_prover")
+                .args_json(json!({
+                    "chain": "Eth",
+                    "account_id": prover.id(),
                 }))
                 .max_gas()
                 .transact()
@@ -402,7 +412,7 @@ mod tests {
             bridge_contract
                 .call("fin_transfer")
                 .args_borsh(FinTransferArgs {
-                    chain_kind: ChainKind::Near,
+                    chain_kind: ChainKind::Eth,
                     storage_deposit_actions,
                     prover_args: borsh::to_vec(&ProverResult::InitTransfer(InitTransferMessage {
                         origin_nonce: nonce,
