@@ -21,7 +21,7 @@ use super::{DeployToken, EventAction, FinTransfer, Transfer};
 
 pub async fn process_init_transfer_event(
     config: &config::Config,
-    redis_connection: &mut redis::aio::MultiplexedConnection,
+    redis_connection_manager: &mut redis::aio::ConnectionManager,
     key: String,
     omni_connector: Arc<OmniConnector>,
     transfer: Transfer,
@@ -85,7 +85,7 @@ pub async fn process_init_transfer_event(
         if let Some(event_action) = needed_fee
             .check_fee(
                 config,
-                redis_connection,
+                redis_connection_manager,
                 &transfer,
                 transfer_id,
                 &provided_fee,
@@ -124,7 +124,7 @@ pub async fn process_init_transfer_event(
         Err(err) => {
             utils::redis::add_event(
                 config,
-                redis_connection,
+                redis_connection_manager,
                 utils::redis::STUCK_EVENTS,
                 &key,
                 RetryableEvent::new(transfer),

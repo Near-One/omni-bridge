@@ -25,7 +25,7 @@ use super::{EventAction, Transfer};
 #[allow(clippy::too_many_lines)]
 pub async fn process_init_transfer_event(
     config: &config::Config,
-    redis_connection: &mut redis::aio::MultiplexedConnection,
+    redis_connection_manager: &mut redis::aio::ConnectionManager,
     omni_connector: Arc<OmniConnector>,
     transfer: Transfer,
     near_omni_nonce: Arc<utils::nonce::NonceManager>,
@@ -110,7 +110,7 @@ pub async fn process_init_transfer_event(
         if let Some(event_action) = needed_fee
             .check_fee(
                 config,
-                redis_connection,
+                redis_connection_manager,
                 &transfer,
                 transfer_id,
                 &provided_fee,

@@ -1,5 +1,5 @@
 use omni_types::ChainKind;
-use redis::{AsyncCommands, aio::MultiplexedConnection};
+use redis::{AsyncCommands, aio::ConnectionManager};
 use tracing::warn;
 
 use crate::config;
@@ -17,11 +17,11 @@ pub const FEE_MAPPING: &str = "fee_mapping";
 
 pub async fn get_fee(
     config: &config::Config,
-    redis_connection: &mut MultiplexedConnection,
+    redis_connection_manager: &mut ConnectionManager,
     transfer_id: &str,
 ) -> Option<TransferFee> {
     for _ in 0..config.redis.query_retry_attempts {
-        match redis_connection
+        match redis_connection_manager
             .hget::<&str, &str, Option<String>>(FEE_MAPPING, transfer_id)
             .await
         {
@@ -60,7 +60,7 @@ pub fn get_last_processed_key(chain_kind: ChainKind) -> String {
 
 pub async fn get_last_processed<K, V>(
     config: &config::Config,
-    redis_connection: &mut MultiplexedConnection,
+    redis_connection_manager: &mut ConnectionManager,
     key: K,
 ) -> Option<V>
 where
@@ -68,7 +68,7 @@ where
     V: redis::FromRedisValue + Send + Sync,
 {
     for _ in 0..config.redis.query_retry_attempts {
-        if let Ok(res) = redis_connection.get::<K, V>(key).await {
+        if let Ok(res) = redis_connection_manager.get::<K, V>(key).await {
             return Some(res);
         }
 
@@ -84,7 +84,7 @@ where
 
 pub async fn update_last_processed<K, V>(
     config: &config::Config,
-    redis_connection: &mut MultiplexedConnection,
+    redis_connection: &mut ConnectionManager,
     key: K,
     value: V,
 ) where
@@ -107,11 +107,11 @@ pub async fn update_last_processed<K, V>(
 
 pub async fn get_events(
     config: &config::Config,
-    redis_connection: &mut MultiplexedConnection,
+    redis_connection_manager: &mut ConnectionManager,
     key: String,
 ) -> Option<Vec<(String, String)>> {
     for _ in 0..config.redis.query_retry_attempts {
-        if let Ok(mut iter) = redis_connection
+        if let Ok(mut iter) = redis_connection_manager
             .hscan::<String, (String, String)>(key.clone())
             .await
         {
@@ -136,7 +136,7 @@ pub async fn get_events(
 
 pub async fn add_event<F, E>(
     config: &config::Config,
-    redis_connection: &mut MultiplexedConnection,
+    redis_connection_manager: &mut ConnectionManager,
     key: &str,
     field: F,
     event: E,
@@ -150,7 +150,7 @@ pub async fn add_event<F, E>(
     };
 
     for _ in 0..config.redis.query_retry_attempts {
-        if redis_connection
+        if redis_connection_manager
             .hset::<&str, F, String, ()>(key, field.clone(), serialized_event.clone())
             .await
             .is_ok()
@@ -169,14 +169,14 @@ pub async fn add_event<F, E>(
 
 pub async fn remove_event<F>(
     config: &config::Config,
-    redis_connection: &mut MultiplexedConnection,
+    redis_connection_manager: &mut ConnectionManager,
     key: &str,
     field: F,
 ) where
     F: redis::ToRedisArgs + Clone + Send + Sync,
 {
     for _ in 0..config.redis.query_retry_attempts {
-        if redis_connection
+        if redis_connection_manager
             .hdel::<&str, F, ()>(key, field.clone())
             .await
             .is_ok()

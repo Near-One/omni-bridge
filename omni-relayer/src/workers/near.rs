@@ -33,7 +33,7 @@ pub struct UnverifiedTrasfer {
 
 pub async fn process_transfer_event(
     config: &config::Config,
-    redis_connection: &mut redis::aio::MultiplexedConnection,
+    redis_connection_manager: &mut redis::aio::ConnectionManager,
     key: String,
     omni_connector: Arc<OmniConnector>,
     signer: AccountId,
@@ -87,7 +87,7 @@ pub async fn process_transfer_event(
         if let Some(event_action) = needed_fee
             .check_fee(
                 config,
-                redis_connection,
+                redis_connection_manager,
                 &transfer_message,
                 transfer_message.get_transfer_id(),
                 &transfer_message.fee,
@@ -122,7 +122,7 @@ pub async fn process_transfer_event(
         Ok(tx_hash) => {
             utils::redis::add_event(
                 config,
-                redis_connection,
+                redis_connection_manager,
                 utils::redis::EVENTS,
                 tx_hash.to_string(),
                 RetryableEvent::new(UnverifiedTrasfer {
@@ -176,7 +176,7 @@ pub async fn process_transfer_event(
 
 pub async fn process_sign_transfer_event(
     config: &config::Config,
-    redis_connection: &mut redis::aio::MultiplexedConnection,
+    redis_connection_manager: &mut redis::aio::ConnectionManager,
     omni_connector: Arc<OmniConnector>,
     signer: AccountId,
     omni_bridge_event: OmniBridgeEvent,
@@ -252,7 +252,7 @@ pub async fn process_sign_transfer_event(
         if let Some(event_action) = needed_fee
             .check_fee(
                 config,
-                redis_connection,
+                redis_connection_manager,
                 &transfer_message,
                 transfer_message.get_transfer_id(),
                 &transfer_message.fee,
@@ -362,13 +362,13 @@ pub async fn process_sign_transfer_event(
 
 pub async fn process_unverified_transfer_event(
     config: &config::Config,
-    redis_connection: &mut redis::aio::MultiplexedConnection,
+    redis_connection_manager: &mut redis::aio::ConnectionManager,
     jsonrpc_client: JsonRpcClient,
     unverified_event: UnverifiedTrasfer,
 ) {
     utils::redis::remove_event(
         config,
-        redis_connection,
+        redis_connection_manager,
         utils::redis::EVENTS,
         unverified_event.tx_hash.to_string(),
     )
@@ -384,7 +384,7 @@ pub async fn process_unverified_transfer_event(
     {
         utils::redis::add_event(
             config,
-            redis_connection,
+            redis_connection_manager,
             utils::redis::EVENTS,
             unverified_event.original_key,
             RetryableEvent::new(unverified_event.original_event),
