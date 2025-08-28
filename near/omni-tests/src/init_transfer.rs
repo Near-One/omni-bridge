@@ -22,6 +22,8 @@ mod tests {
     const EXPECTED_RELAYER_GAS_COST: NearToken =
         NearToken::from_yoctonear(1_500_000_000_000_000_000_000);
 
+    const PREV_LOCKER_WASM_FILEPATH: &str = "src/data/omni_bridge-0_2_13.wasm";
+
     struct TestEnv {
         worker: near_workspaces::Worker<near_workspaces::network::Sandbox>,
         token_contract: near_workspaces::Contract,
@@ -38,6 +40,7 @@ mod tests {
             mock_token_wasm: Vec<u8>,
             mock_prover_wasm: Vec<u8>,
             locker_wasm: Vec<u8>,
+            is_old_locker: bool,
         ) -> anyhow::Result<Self> {
             let worker = near_workspaces::sandbox().await?;
             // Deploy and initialize FT token
@@ -53,21 +56,37 @@ mod tests {
                 .await?
                 .into_result()?;
 
-            let prover_contract = worker.dev_deploy(&mock_prover_wasm).await?;
             // Deploy and initialize locker
             let locker_contract = worker.dev_deploy(&locker_wasm).await?;
+            let mut args = serde_json::Map::new();
+            if is_old_locker {
+                args.insert("prover_account".to_string(), json!("prover.testnet"));
+            }
+            args.insert("mpc_signer".to_string(), json!("mpc.testnet"));
+            args.insert("nonce".to_string(), json!(U128(0)));
+            args.insert("wnear_account_id".to_string(), json!("wnear.testnet"));
+
             locker_contract
                 .call("new")
-                .args_json(json!({
-                    "prover_account": prover_contract.id(),
-                    "mpc_signer": "mpc.testnet",
-                    "nonce": U128(0),
-                    "wnear_account_id": "wnear.testnet",
-                }))
+                .args_json(json!(args))
                 .max_gas()
                 .transact()
                 .await?
                 .into_result()?;
+
+            if !is_old_locker {
+                let prover = worker.dev_deploy(&mock_prover_wasm).await?;
+                locker_contract
+                    .call("add_prover")
+                    .args_json(json!({
+                        "chain": "Eth",
+                        "account_id": prover.id(),
+                    }))
+                    .max_gas()
+                    .transact()
+                    .await?
+                    .into_result()?;
+            }
 
             // Register the locker contract in the token contract
             token_contract
@@ -465,6 +484,7 @@ mod tests {
             mock_token_wasm,
             mock_prover_wasm,
             locker_wasm,
+            false,
         )
         .await?;
 
@@ -521,6 +541,7 @@ mod tests {
             mock_token_wasm,
             mock_prover_wasm,
             locker_wasm,
+            false,
         )
         .await?;
 
@@ -575,6 +596,7 @@ mod tests {
             mock_token_wasm,
             mock_prover_wasm,
             locker_wasm,
+            false,
         )
         .await?;
 
@@ -643,6 +665,7 @@ mod tests {
             mock_token_wasm,
             mock_prover_wasm,
             locker_wasm,
+            false,
         )
         .await?;
 
@@ -706,6 +729,7 @@ mod tests {
             mock_token_wasm,
             mock_prover_wasm,
             locker_wasm,
+            false,
         )
         .await?;
 
@@ -769,6 +793,7 @@ mod tests {
             mock_token_wasm,
             mock_prover_wasm,
             locker_wasm,
+            false,
         )
         .await
         .unwrap();
@@ -811,6 +836,7 @@ mod tests {
             mock_token_wasm,
             mock_prover_wasm,
             locker_wasm,
+            false,
         )
         .await
         .unwrap();
@@ -853,6 +879,7 @@ mod tests {
             mock_token_wasm,
             mock_prover_wasm,
             locker_wasm,
+            false,
         )
         .await
         .unwrap();
@@ -892,6 +919,7 @@ mod tests {
             mock_token_wasm,
             mock_prover_wasm,
             locker_wasm,
+            false,
         )
         .await
         .unwrap();
@@ -910,7 +938,7 @@ mod tests {
 
     #[rstest]
     #[tokio::test]
-    async fn test_legacy_transfer(
+    async fn test_migrate(
         mock_token_wasm: Vec<u8>,
         mock_prover_wasm: Vec<u8>,
         locker_wasm: Vec<u8>,
@@ -923,16 +951,37 @@ mod tests {
             recipient: eth_eoa_address(),
         };
 
+        let prev_locker_wasm = std::fs::read(PREV_LOCKER_WASM_FILEPATH).unwrap();
         let env = TestEnv::new(
             sender_balance_token,
             mock_token_wasm,
             mock_prover_wasm,
-            locker_wasm,
+            prev_locker_wasm,
+            true,
         )
         .await?;
 
         let transfer_message =
             init_transfer_legacy(&env, transfer_amount, init_transfer_msg.clone()).await?;
+
+        let res = env
+            .locker_contract
+            .as_account()
+            .deploy(&locker_wasm)
+            .await
+            .unwrap();
+
+        assert!(res.is_success(), "Failed to upgrade locker");
+
+        let res = env
+            .locker_contract
+            .call("migrate")
+            .args_json(json!({}))
+            .max_gas()
+            .transact()
+            .await?;
+
+        assert!(res.is_success(), "Migration didn't succeed");
 
         let transfer = env
             .locker_contract

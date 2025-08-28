@@ -22,7 +22,6 @@ const DEFAULT_TRANSFER_ID: TransferId = TransferId {
     origin_chain: ChainKind::Near,
     origin_nonce: DEFAULT_NONCE,
 };
-const DEFAULT_PROVER_ACCOUNT: &str = "prover.testnet";
 const DEFAULT_MPC_SIGNER_ACCOUNT: &str = "mpc_signer.testnet";
 const DEFAULT_WNEAR_ACCOUNT: &str = "wnear.testnet";
 
@@ -56,9 +55,8 @@ fn setup_test_env(
     }
 }
 
-fn setup_contract(prover_id: String, mpc_signer_id: String, wnear_id: String) -> Contract {
+fn setup_contract(mpc_signer_id: String, wnear_id: String) -> Contract {
     Contract::new(
-        AccountId::try_from(prover_id).expect("Invalid default prover ID"),
         AccountId::try_from(mpc_signer_id).expect("Invalid default mpc signer ID"),
         AccountId::try_from(wnear_id).expect("Invalid default wnear ID"),
     )
@@ -66,7 +64,6 @@ fn setup_contract(prover_id: String, mpc_signer_id: String, wnear_id: String) ->
 
 fn get_default_contract() -> Contract {
     setup_contract(
-        DEFAULT_PROVER_ACCOUNT.to_string(),
         DEFAULT_MPC_SIGNER_ACCOUNT.to_string(),
         DEFAULT_WNEAR_ACCOUNT.to_string(),
     )
@@ -147,7 +144,6 @@ fn run_ft_on_transfer_legacy(
 fn test_initialize_contract() {
     let contract = get_default_contract();
 
-    assert_eq!(contract.prover_account, DEFAULT_PROVER_ACCOUNT);
     assert_eq!(contract.mpc_signer, DEFAULT_MPC_SIGNER_ACCOUNT);
     assert_eq!(contract.current_origin_nonce, DEFAULT_NONCE);
     assert_eq!(contract.wnear_account_id, DEFAULT_WNEAR_ACCOUNT);

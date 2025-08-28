@@ -5,7 +5,7 @@ use crate::{
 use borsh::{BorshDeserialize, BorshSerialize};
 use near_contract_standards::storage_management::StorageBalance;
 use near_sdk::{
-    collections::{LookupMap, LookupSet},
+    collections::{LookupMap, LookupSet, UnorderedMap},
     env, near, AccountId, PanicOnDefault,
 };
 use omni_types::{ChainKind, FastTransferId, Nonce, OmniAddress, TransferId};
@@ -38,7 +38,6 @@ impl Contract {
             .unwrap_or_else(|| env::panic_str("Old state not found. Migration is not needed."));
 
         Self {
-            prover_account: old_state.prover_account,
             factories: old_state.factories,
             pending_transfers: old_state.pending_transfers,
             finalised_transfers: old_state.finalised_transfers,
@@ -53,6 +52,7 @@ impl Contract {
             destination_nonces: old_state.destination_nonces,
             accounts_balances: old_state.accounts_balances,
             wnear_account_id: old_state.wnear_account_id,
+            provers: UnorderedMap::new(StorageKey::RegisteredProvers),
             init_transfer_promises: LookupMap::new(StorageKey::InitTransferPromises),
         }
     }
