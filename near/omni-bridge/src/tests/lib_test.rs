@@ -113,7 +113,7 @@ fn run_ft_on_transfer(
 
     let msg = serde_json::to_string(msg).expect("Failed to serialize transfer message");
 
-    contract.ft_on_transfer(sender_id, amount, msg)
+    contract.ft_on_transfer(sender_id, amount, msg);
 }
 
 fn run_ft_on_transfer_legacy(
@@ -140,7 +140,7 @@ fn run_ft_on_transfer_legacy(
 
     let msg = serde_json::to_string(msg).expect("Failed to serialize transfer message");
 
-    contract.ft_on_transfer(sender_id, amount, msg)
+    contract.ft_on_transfer(sender_id, amount, msg);
 }
 
 #[test]
