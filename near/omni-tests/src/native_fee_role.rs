@@ -21,6 +21,7 @@ mod tests {
     }
 
     impl TestEnv {
+        #[allow(clippy::too_many_lines)]
         async fn new(
             mock_token_wasm: Vec<u8>,
             mock_prover_wasm: Vec<u8>,
@@ -41,17 +42,26 @@ mod tests {
                 .await?
                 .into_result()?;
 
-            let prover_contract = worker.dev_deploy(&mock_prover_wasm).await?;
-
             // Deploy and initialize locker
             let locker_contract = worker.dev_deploy(&locker_wasm).await?;
             locker_contract
                 .call("new")
                 .args_json(json!({
-                    "prover_account": prover_contract.id(),
                     "mpc_signer": "mpc.testnet",
                     "nonce": U128(0),
                     "wnear_account_id": "wnear.testnet",
+                }))
+                .max_gas()
+                .transact()
+                .await?
+                .into_result()?;
+
+            let prover = worker.dev_deploy(&mock_prover_wasm).await?;
+            locker_contract
+                .call("add_prover")
+                .args_json(json!({
+                    "chain": "Eth",
+                    "account_id": prover.id(),
                 }))
                 .max_gas()
                 .transact()
