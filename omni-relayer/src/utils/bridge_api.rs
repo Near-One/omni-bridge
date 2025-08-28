@@ -58,7 +58,7 @@ impl TransferFee {
     pub async fn check_fee<T: std::fmt::Debug>(
         &self,
         config: &config::Config,
-        redis_connection: &mut redis::aio::MultiplexedConnection,
+        redis_connection_manager: &mut redis::aio::ConnectionManager,
         transfer: &T,
         transfer_id: TransferId,
         provided_fee: &Fee,
@@ -75,7 +75,7 @@ impl TransferFee {
             };
 
             if let Some(historical_fee) =
-                utils::redis::get_fee(config, redis_connection, &transfer_id).await
+                utils::redis::get_fee(config, redis_connection_manager, &transfer_id).await
             {
                 if historical_fee.is_fee_sufficient(config, provided_fee) {
                     info!(
@@ -88,7 +88,7 @@ impl TransferFee {
             } else {
                 utils::redis::add_event(
                     config,
-                    redis_connection,
+                    redis_connection_manager,
                     utils::redis::FEE_MAPPING,
                     transfer_id,
                     self,
