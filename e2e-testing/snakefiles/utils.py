@@ -7,6 +7,10 @@ def get_json_field(json_file, field):
         return json.load(f)[field]
 
 
+def get_zcash_tx_hash(file_name):
+    return open(str(file_name)).readlines()[-3].split('"')[1]
+
+
 def progress_wait(seconds):
     """
     Generates a simple progress bar command that waits for the specified seconds.
@@ -60,3 +64,15 @@ def extract_tx_hash(pattern_type, output_file):
 
 def get_mkdir_cmd(directory):
     return f"mkdir -p {directory}"
+
+
+def get_btc_address(filename):
+    return open(str(filename)).readline().strip().split()[-1]
+
+
+def get_last_value(filename):
+    return open(str(filename)).readlines()[-1].split()[-1]
+
+
+def get_tx_hash(filename):
+    return open(str(filename)).readlines()[-1].split('"')[-2]

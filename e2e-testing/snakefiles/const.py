@@ -2,7 +2,6 @@ from enum import StrEnum
 from pathlib import Path
 from datetime import datetime
 
-
 # Common
 common_testing_root = Path(__file__).parent.parent
 common_generated_dir = common_testing_root / "generated"
@@ -55,6 +54,11 @@ class NearContract(StrEnum):
     TOKEN_DEPLOYER = "token_deployer"
     WORMHOLE_OMNI_PROVER_PROXY = "wormhole_omni_prover_proxy"
     MOCK_TOKEN = "mock_token"
+
+
+class NearExternalContract(StrEnum):
+    ZCASH_CONNECTOR = "zcash_connector"
+    ZCASH_TOKEN = "zcash"
 
 
 class NearTestAccount(StrEnum):
