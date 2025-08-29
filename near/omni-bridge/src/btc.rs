@@ -114,17 +114,27 @@ impl Contract {
         );
     }
 
+    /// Returns the `AccountId` of the connector for the given UTXO chain.
+    ///
+    /// # Panics
+    ///
+    /// Panics if a Сonnector for the specified `chain_kind` has not been configured.
     pub fn get_utxo_chain_connector(&self, chain_kind: ChainKind) -> AccountId {
         self.utxo_chain_connectors
             .get(&chain_kind)
-            .expect("BTC Connector has not been set up for {chain_kind}")
+            .expect("Connector has not been set up for this chain")
             .connector
     }
 
+    /// Returns the `AccountId` of the token for the given UTXO chain.
+    ///
+    /// # Panics
+    ///
+    /// Panics if a UTXO chain Token for the specified `chain_kind` has not been configured.
     pub fn get_utxo_chain_token(&self, chain_kind: ChainKind) -> AccountId {
         self.utxo_chain_connectors
             .get(&chain_kind)
-            .expect("BTC Connector has not been set up for {chain_kind}")
+            .expect("UTXO Token has not been set up for this chain")
             .token_id
     }
 }
