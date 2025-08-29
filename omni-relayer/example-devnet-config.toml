@@ -19,7 +19,7 @@ db_name = "testnet_omni_bridge_db"
 
 [near]
 network = "testnet"
-rpc_url = "https://rpc.testnet.near.org/"
+rpc_url = "https://rpc.testnet.fastnear.com?apiKey=FASTNEAR_API_KEY"
 omni_bridge_id = "omni-locker.testnet"
 btc_connector = "brg-dev.testnet"
 btc = "nbtc-dev.testnet"
