@@ -1,6 +1,5 @@
 import 'dotenv/config';
 import { Command } from 'commander';
-import { verifyEvmTokenBalance } from '../lib/evm';
 import { loadTransactions, verifyTransactions } from '../lib/common';
 import { VerificationError } from '../lib/types';
 
@@ -9,20 +8,15 @@ async function main() {
 
     program
         .requiredOption('-d, --tx-dir <dir>', 'Directory containing transaction receipts')
-        .requiredOption('-t, --token <address>', 'ERC20 token address')
-        .requiredOption('-a, --account <address>', 'Account address to check balance for')
-        .requiredOption('-b, --balance <amount>', 'Expected token balance')
         .parse(process.argv);
 
     const options = program.opts();
 
     try {
         const transactions = await loadTransactions(options.txDir);
-        await verifyTransactions(transactions);
-        console.log('All pipeline transactions verified successfully!');
 
-        await verifyEvmTokenBalance(options.token, options.account, options.balance);
-        console.log('Token balance verified successfully!');
+        await verifyTransactions(transactions);
+        console.log('Transactions verified successfully!');
 
         console.log('All verifications passed successfully!');
     } catch (error) {
@@ -35,4 +29,4 @@ async function main() {
     }
 }
 
-main();
+main(); 

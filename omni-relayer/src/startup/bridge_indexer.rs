@@ -1,6 +1,6 @@
 use std::str::FromStr;
 
-use alloy::{primitives::Address, sol_types::SolEvent};
+use alloy::primitives::Address;
 use anyhow::{Context, Result};
 use bridge_indexer_types::documents_types::{
     BtcConnectorEvent, BtcConnectorEventDetails, OmniEvent, OmniEventData, OmniMetaEvent,
@@ -37,7 +37,7 @@ fn get_evm_config(config: &config::Config, chain_kind: ChainKind) -> Result<&con
 
 async fn handle_transaction_event(
     config: &config::Config,
-    mut redis_connection: redis::aio::MultiplexedConnection,
+    redis_connection_manager: &mut redis::aio::ConnectionManager,
     origin_transaction_id: String,
     origin: OmniTransactionOrigin,
     event: OmniTransactionEvent,
@@ -52,7 +52,7 @@ async fn handle_transaction_event(
             if transfer_message.recipient.get_chain() != ChainKind::Near {
                 utils::redis::add_event(
                     config,
-                    &mut redis_connection,
+                    redis_connection_manager,
                     utils::redis::EVENTS,
                     transfer_message.origin_nonce.to_string(),
                     RetryableEvent::new(crate::workers::Transfer::Near { transfer_message }),
@@ -65,7 +65,7 @@ async fn handle_transaction_event(
 
             utils::redis::add_event(
                 config,
-                &mut redis_connection,
+                redis_connection_manager,
                 utils::redis::EVENTS,
                 sign_event
                     .message_payload
@@ -145,7 +145,7 @@ async fn handle_transaction_event(
 
             utils::redis::add_event(
                 config,
-                &mut redis_connection,
+                redis_connection_manager,
                 utils::redis::EVENTS,
                 origin_transaction_id.clone(),
                 RetryableEvent::new(workers::Transfer::Evm {
@@ -161,7 +161,7 @@ async fn handle_transaction_event(
             if config.is_fast_relayer_enabled() {
                 utils::redis::add_event(
                     config,
-                    &mut redis_connection,
+                    redis_connection_manager,
                     utils::redis::EVENTS,
                     format!("{origin_transaction_id}_fast"),
                     RetryableEvent::new(crate::workers::Transfer::Fast {
@@ -217,13 +217,12 @@ async fn handle_transaction_event(
 
             utils::redis::add_event(
                 config,
-                &mut redis_connection,
+                redis_connection_manager,
                 utils::redis::EVENTS,
                 origin_transaction_id,
                 RetryableEvent::new(workers::FinTransfer::Evm {
                     chain_kind,
                     tx_hash,
-                    topic: utils::evm::FinTransfer::SIGNATURE_HASH,
                     creation_timestamp,
                     expected_finalization_time,
                 }),
@@ -254,7 +253,7 @@ async fn handle_transaction_event(
 
             utils::redis::add_event(
                 config,
-                &mut redis_connection,
+                redis_connection_manager,
                 utils::redis::EVENTS,
                 origin_transaction_id,
                 RetryableEvent::new(crate::workers::Transfer::Solana {
@@ -286,7 +285,7 @@ async fn handle_transaction_event(
 
             utils::redis::add_event(
                 config,
-                &mut redis_connection,
+                redis_connection_manager,
                 utils::redis::EVENTS,
                 origin_transaction_id,
                 RetryableEvent::new(crate::workers::FinTransfer::Solana { emitter, sequence }),
@@ -296,6 +295,9 @@ async fn handle_transaction_event(
         OmniTransferMessage::NearFastTransferMessage { .. } => {
             info!("Received NearFastTransferMessage, skipping");
         }
+        OmniTransferMessage::NearFailedTransferMessage { .. } => {
+            info!("Received NearFailedTransferMessage, skipping");
+        }
     }
 
     Ok(())
@@ -303,7 +305,7 @@ async fn handle_transaction_event(
 
 async fn handle_meta_event(
     config: &config::Config,
-    mut redis_connection: redis::aio::MultiplexedConnection,
+    redis_connection_manager: &mut redis::aio::ConnectionManager,
     origin_transaction_id: String,
     origin: OmniTransactionOrigin,
     event: OmniMetaEvent,
@@ -343,13 +345,12 @@ async fn handle_meta_event(
 
             utils::redis::add_event(
                 config,
-                &mut redis_connection,
+                redis_connection_manager,
                 utils::redis::EVENTS,
                 origin_transaction_id,
                 RetryableEvent::new(workers::DeployToken::Evm {
                     chain_kind,
                     tx_hash,
-                    topic: utils::evm::DeployToken::SIGNATURE_HASH,
                     creation_timestamp,
                     expected_finalization_time,
                 }),
@@ -362,7 +363,7 @@ async fn handle_meta_event(
             info!("Received EVMDeployToken: {sequence}");
             utils::redis::add_event(
                 config,
-                &mut redis_connection,
+                redis_connection_manager,
                 utils::redis::EVENTS,
                 origin_transaction_id,
                 RetryableEvent::new(workers::DeployToken::Solana { emitter, sequence }),
@@ -383,7 +384,7 @@ async fn handle_meta_event(
 
 async fn handle_btc_event(
     config: &config::Config,
-    mut redis_connection: redis::aio::MultiplexedConnection,
+    redis_connection_manager: &mut redis::aio::ConnectionManager,
     origin_transaction_id: String,
     event: BtcConnectorEvent,
 ) -> Result<()> {
@@ -392,7 +393,7 @@ async fn handle_btc_event(
             info!("Received SignBtcTransaction: {origin_transaction_id}");
             utils::redis::add_event(
                 config,
-                &mut redis_connection,
+                redis_connection_manager,
                 utils::redis::EVENTS,
                 origin_transaction_id.clone(),
                 RetryableEvent::new(workers::btc::SignBtcTransaction {
@@ -405,6 +406,7 @@ async fn handle_btc_event(
         BtcConnectorEventDetails::TransferNearToBtc {
             btc_pending_id,
             utxo_count,
+            ..
         } => {
             if config.is_signing_btc_transaction_enabled() {
                 info!("Received NearToBtcInitTransfer: {origin_transaction_id}");
@@ -415,7 +417,7 @@ async fn handle_btc_event(
                     );
                     utils::redis::add_event(
                         config,
-                        &mut redis_connection,
+                        redis_connection_manager,
                         utils::redis::EVENTS,
                         origin_transaction_id.clone(),
                         RetryableEvent::new(workers::Transfer::NearToBtc {
@@ -435,7 +437,7 @@ async fn handle_btc_event(
             info!("Received BtcToNearInitTransfer: {btc_tx_hash}");
             utils::redis::add_event(
                 config,
-                &mut redis_connection,
+                redis_connection_manager,
                 utils::redis::EVENTS,
                 origin_transaction_id,
                 RetryableEvent::new(workers::Transfer::BtcToNear {
@@ -451,7 +453,7 @@ async fn handle_btc_event(
                 info!("Received ConfirmedTxHash on Btc: {btc_tx_hash}");
                 utils::redis::add_event(
                     config,
-                    &mut redis_connection,
+                    redis_connection_manager,
                     utils::redis::EVENTS,
                     origin_transaction_id,
                     RetryableEvent::new(workers::btc::ConfirmedTxHash { btc_tx_hash }),
@@ -460,6 +462,7 @@ async fn handle_btc_event(
             }
         }
         BtcConnectorEventDetails::VerifyDeposit { .. }
+        | BtcConnectorEventDetails::VerifyWithdraw { .. }
         | BtcConnectorEventDetails::LogDepositAddress(_) => {}
     }
 
@@ -469,7 +472,7 @@ async fn handle_btc_event(
 async fn watch_omni_events_collection(
     collection: &Collection<OmniEvent>,
     config: &config::Config,
-    mut redis_connection: redis::aio::MultiplexedConnection,
+    redis_connection_manager: &mut redis::aio::ConnectionManager,
     start_timestamp: Option<u32>,
 ) -> Result<()> {
     let mut stream = if let Some(time) = start_timestamp {
@@ -482,7 +485,7 @@ async fn watch_omni_events_collection(
     } else {
         let resume_token: Option<ResumeToken> = utils::redis::get_last_processed::<&str, String>(
             config,
-            &mut redis_connection,
+            redis_connection_manager,
             utils::redis::MONGODB_OMNI_EVENTS_RT,
         )
         .await
@@ -501,13 +504,13 @@ async fn watch_omni_events_collection(
                     match event.event {
                         OmniEventData::Transaction(transaction_event) => {
                             tokio::spawn({
-                                let redis_connection = redis_connection.clone();
+                                let mut redis_connection_manager = redis_connection_manager.clone();
                                 let config = config.clone();
 
                                 async move {
                                     if let Err(err) = handle_transaction_event(
                                         &config,
-                                        redis_connection,
+                                        &mut redis_connection_manager,
                                         event.transaction_id,
                                         event.origin,
                                         transaction_event,
@@ -521,13 +524,13 @@ async fn watch_omni_events_collection(
                         }
                         OmniEventData::Meta(meta_event) => {
                             tokio::spawn({
-                                let redis_connection = redis_connection.clone();
+                                let mut redis_connection_manager = redis_connection_manager.clone();
                                 let config = config.clone();
 
                                 async move {
                                     if let Err(err) = handle_meta_event(
                                         &config,
-                                        redis_connection,
+                                        &mut redis_connection_manager,
                                         event.transaction_id,
                                         event.origin,
                                         meta_event,
@@ -541,13 +544,13 @@ async fn watch_omni_events_collection(
                         }
                         OmniEventData::BtcConnector(btc_event) => {
                             tokio::spawn({
-                                let redis_connection = redis_connection.clone();
+                                let mut redis_connection_manager = redis_connection_manager.clone();
                                 let config = config.clone();
 
                                 async move {
                                     if let Err(err) = handle_btc_event(
                                         &config,
-                                        redis_connection,
+                                        &mut redis_connection_manager,
                                         event.transaction_id,
                                         btc_event,
                                     )
@@ -570,7 +573,7 @@ async fn watch_omni_events_collection(
         {
             utils::redis::update_last_processed(
                 config,
-                &mut redis_connection,
+                redis_connection_manager,
                 utils::redis::MONGODB_OMNI_EVENTS_RT,
                 resume_token,
             )
@@ -583,7 +586,7 @@ async fn watch_omni_events_collection(
 
 pub async fn start_indexer(
     config: config::Config,
-    redis_client: redis::Client,
+    redis_connection_manager: &mut redis::aio::ConnectionManager,
     start_timestamp: Option<u32>,
 ) -> Result<()> {
     info!("Connecting to bridge-indexer");
@@ -594,8 +597,6 @@ pub async fn start_indexer(
     let Some(ref db_name) = config.bridge_indexer.db_name else {
         anyhow::bail!("DB_NAME is not set");
     };
-
-    let redis_connection = redis_client.get_multiplexed_tokio_connection().await?;
 
     let client_options = ClientOptions::parse(uri).await?;
     let client = Client::with_options(client_options)?;
@@ -609,7 +610,7 @@ pub async fn start_indexer(
         if let Err(err) = watch_omni_events_collection(
             &omni_events_collection,
             &config,
-            redis_connection.clone(),
+            redis_connection_manager,
             start_timestamp,
         )
         .await

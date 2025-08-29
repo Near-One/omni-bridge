@@ -109,6 +109,7 @@ async fn main() -> Result<()> {
     init_logging(&config.near.network).context("Failed to initialize logging")?;
 
     let redis_client = redis::Client::open(config.redis.url.clone())?;
+    let redis_connection_manager = redis::aio::ConnectionManager::new(redis_client.clone()).await?;
     let jsonrpc_client = near_jsonrpc_client::JsonRpcClient::connect(config.near.rpc_url.clone());
 
     let near_omni_signer = startup::near::get_signer(&config, config::NearSignerType::Omni)?;
@@ -146,21 +147,25 @@ async fn main() -> Result<()> {
     if config.is_bridge_indexer_enabled() {
         handles.push(tokio::spawn({
             let config = config.clone();
-            let redis_client = redis_client.clone();
+            let mut redis_connection_manager = redis_connection_manager.clone();
             async move {
-                startup::bridge_indexer::start_indexer(config, redis_client, args.start_timestamp)
-                    .await
+                startup::bridge_indexer::start_indexer(
+                    config,
+                    &mut redis_connection_manager,
+                    args.start_timestamp,
+                )
+                .await
             }
         }));
     } else {
         handles.push(tokio::spawn({
             let config = config.clone();
-            let redis_client = redis_client.clone();
+            let mut redis_connection_manager = redis_connection_manager.clone();
             let jsonrpc_client = jsonrpc_client.clone();
             async move {
                 startup::near::start_indexer(
                     config,
-                    redis_client,
+                    &mut redis_connection_manager,
                     jsonrpc_client,
                     args.near_start_block,
                 )
@@ -170,11 +175,11 @@ async fn main() -> Result<()> {
         if config.eth.is_some() {
             handles.push(tokio::spawn({
                 let config = config.clone();
-                let redis_client = redis_client.clone();
+                let mut redis_connection_manager = redis_connection_manager.clone();
                 async move {
                     startup::evm::start_indexer(
                         config,
-                        redis_client,
+                        &mut redis_connection_manager,
                         ChainKind::Eth,
                         args.eth_start_block,
                     )
@@ -185,11 +190,11 @@ async fn main() -> Result<()> {
         if config.base.is_some() {
             handles.push(tokio::spawn({
                 let config = config.clone();
-                let redis_client = redis_client.clone();
+                let mut redis_connection_manager = redis_connection_manager.clone();
                 async move {
                     startup::evm::start_indexer(
                         config,
-                        redis_client,
+                        &mut redis_connection_manager,
                         ChainKind::Base,
                         args.base_start_block,
                     )
@@ -200,11 +205,11 @@ async fn main() -> Result<()> {
         if config.arb.is_some() {
             handles.push(tokio::spawn({
                 let config = config.clone();
-                let redis_client = redis_client.clone();
+                let mut redis_connection_manager = redis_connection_manager.clone();
                 async move {
                     startup::evm::start_indexer(
                         config,
-                        redis_client,
+                        &mut redis_connection_manager,
                         ChainKind::Arb,
                         args.arb_start_block,
                     )
@@ -215,11 +220,11 @@ async fn main() -> Result<()> {
         if config.bnb.is_some() {
             handles.push(tokio::spawn({
                 let config = config.clone();
-                let redis_client = redis_client.clone();
+                let mut redis_connection_manager = redis_connection_manager.clone();
                 async move {
                     startup::evm::start_indexer(
                         config,
-                        redis_client,
+                        &mut redis_connection_manager,
                         ChainKind::Bnb,
                         args.bnb_start_block,
                     )
@@ -230,11 +235,11 @@ async fn main() -> Result<()> {
         if config.solana.is_some() {
             handles.push(tokio::spawn({
                 let config = config.clone();
-                let redis_client = redis_client.clone();
+                let mut redis_connection_manager = redis_connection_manager.clone();
                 async move {
                     startup::solana::start_indexer(
                         &config,
-                        redis_client,
+                        &mut redis_connection_manager,
                         args.solana_start_signature,
                     )
                     .await
@@ -242,15 +247,17 @@ async fn main() -> Result<()> {
             }));
             handles.push(tokio::spawn({
                 let config = config.clone();
-                let redis_client = redis_client.clone();
-                async move { startup::solana::process_signature(&config, redis_client).await }
+                let mut redis_connection_manager = redis_connection_manager.clone();
+                async move {
+                    startup::solana::process_signature(&config, &mut redis_connection_manager).await
+                }
             }));
         }
     }
 
     handles.push(tokio::spawn({
         let config = config.clone();
-        let redis_client = redis_client.clone();
+        let redis_connection_manager = redis_connection_manager.clone();
         let omni_connector = omni_connector.clone();
         let fast_connector = fast_connector.clone();
         let jsonrpc_client = jsonrpc_client.clone();
@@ -261,7 +268,7 @@ async fn main() -> Result<()> {
         async move {
             workers::process_events(
                 config,
-                redis_client,
+                redis_connection_manager,
                 omni_connector,
                 fast_connector,
                 jsonrpc_client,

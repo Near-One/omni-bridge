@@ -1,14 +1,13 @@
 [workspace.package]
 authors = ["Near One <info@nearone.org>"]
 repository = "https://github.com/Near-One/omni-bridge"
-version = "0.2.12"
+version = "0.2.14"
 
 [workspace]
 resolver = "2"
 members = [
     "omni-bridge",
     "token-deployer",
-    "omni-prover/omni-prover",
     "omni-prover/wormhole-omni-prover-proxy",
     "omni-prover/evm-prover",
     "omni-token",

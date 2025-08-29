@@ -93,7 +93,7 @@ pub async fn is_tx_successful(
 
 pub async fn handle_streamer_message(
     config: &config::Config,
-    redis_connection: &mut redis::aio::MultiplexedConnection,
+    redis_connection_manager: &mut redis::aio::ConnectionManager,
     streamer_message: &StreamerMessage,
 ) {
     let nep_locker_event_outcomes = find_nep_locker_event_outcomes(config, streamer_message);
@@ -112,7 +112,7 @@ pub async fn handle_streamer_message(
             | OmniBridgeEvent::UpdateFeeEvent { transfer_message } => {
                 utils::redis::add_event(
                     config,
-                    redis_connection,
+                    redis_connection_manager,
                     utils::redis::EVENTS,
                     transfer_message.origin_nonce.to_string(),
                     RetryableEvent::new(crate::workers::Transfer::Near { transfer_message }),
@@ -125,7 +125,7 @@ pub async fn handle_streamer_message(
             } => {
                 utils::redis::add_event(
                     config,
-                    redis_connection,
+                    redis_connection_manager,
                     utils::redis::EVENTS,
                     message_payload.transfer_id.origin_nonce.to_string(),
                     RetryableEvent::new(log),
@@ -136,7 +136,7 @@ pub async fn handle_streamer_message(
                 if transfer_message.recipient.get_chain() != ChainKind::Near {
                     utils::redis::add_event(
                         config,
-                        redis_connection,
+                        redis_connection_manager,
                         utils::redis::EVENTS,
                         transfer_message.origin_nonce.to_string(),
                         RetryableEvent::new(crate::workers::Transfer::Near { transfer_message }),
@@ -144,7 +144,8 @@ pub async fn handle_streamer_message(
                     .await;
                 }
             }
-            OmniBridgeEvent::FastTransferEvent { .. }
+            OmniBridgeEvent::FailedFinTransferEvent { .. }
+            | OmniBridgeEvent::FastTransferEvent { .. }
             | OmniBridgeEvent::ClaimFeeEvent { .. }
             | OmniBridgeEvent::LogMetadataEvent { .. }
             | OmniBridgeEvent::DeployTokenEvent { .. }

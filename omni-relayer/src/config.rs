@@ -4,6 +4,7 @@ use alloy::{
 };
 use near_primitives::types::AccountId;
 use omni_types::{ChainKind, OmniAddress};
+use rust_decimal::Decimal;
 use serde::Deserialize;
 
 pub enum NearSignerType {
@@ -64,11 +65,16 @@ fn replace_rpc_api_key<'de, D>(deserializer: D) -> Result<String, D::Error>
 where
     D: serde::Deserializer<'de>,
 {
-    let url = String::deserialize(deserializer)?;
+    let mut url = String::deserialize(deserializer)?;
 
-    let api_key = std::env::var("INFURA_API_KEY").map_err(serde::de::Error::custom)?;
+    for key in ["INFURA_API_KEY", "TATUM_API_KEY", "FASTNEAR_API_KEY"] {
+        if let Ok(val) = std::env::var(key) {
+            url = url.replace(key, &val);
+            break;
+        }
+    }
 
-    Ok(url.replace("INFURA_API_KEY", &api_key))
+    Ok(url)
 }
 
 fn validate_fee_discount<'de, D>(deserializer: D) -> Result<u8, D::Error>
@@ -131,7 +137,7 @@ pub struct Redis {
     pub sleep_time_after_events_process_secs: u64,
     pub query_retry_attempts: u64,
     pub query_retry_sleep_secs: u64,
-    pub fee_retry_base_sleep_secs: i64,
+    pub fee_retry_base_secs: Decimal,
     pub fee_retry_max_sleep_secs: i64,
     pub keep_transfers_for_secs: i64,
 }
@@ -167,6 +173,7 @@ impl std::fmt::Display for Network {
 #[derive(Debug, Clone, Deserialize)]
 pub struct Near {
     pub network: Network,
+    #[serde(deserialize_with = "replace_rpc_api_key")]
     pub rpc_url: String,
     pub omni_bridge_id: AccountId,
     pub btc_connector: Option<AccountId>,
@@ -192,6 +199,8 @@ pub struct Evm {
     pub expected_finalization_time: i64,
     #[serde(default = "u64::max_value")]
     pub safe_confirmations: u64,
+    #[serde(default)]
+    pub error_selectors_to_remove: Vec<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -202,6 +211,8 @@ pub struct Solana {
     pub rpc_ws_url: String,
     pub program_id: String,
     pub wormhole_id: String,
+    pub wormhole_post_message_shim_id: String,
+    pub wormhole_post_message_shim_event_authority: String,
     pub deploy_token_emitter_index: usize,
     pub deploy_token_discriminator: Vec<u8>,
     pub init_transfer_sender_index: usize,
@@ -220,6 +231,7 @@ pub struct Solana {
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct Btc {
+    #[serde(deserialize_with = "replace_rpc_api_key")]
     pub rpc_http_url: String,
     pub signing_enabled: bool,
     pub verifying_withdraw_enabled: bool,

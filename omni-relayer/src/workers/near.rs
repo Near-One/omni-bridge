@@ -33,7 +33,7 @@ pub struct UnverifiedTrasfer {
 
 pub async fn process_transfer_event(
     config: &config::Config,
-    redis_connection: &mut redis::aio::MultiplexedConnection,
+    redis_connection_manager: &mut redis::aio::ConnectionManager,
     key: String,
     omni_connector: Arc<OmniConnector>,
     signer: AccountId,
@@ -87,7 +87,7 @@ pub async fn process_transfer_event(
         if let Some(event_action) = needed_fee
             .check_fee(
                 config,
-                redis_connection,
+                redis_connection_manager,
                 &transfer_message,
                 transfer_message.get_transfer_id(),
                 &transfer_message.fee,
@@ -122,7 +122,7 @@ pub async fn process_transfer_event(
         Ok(tx_hash) => {
             utils::redis::add_event(
                 config,
-                redis_connection,
+                redis_connection_manager,
                 utils::redis::EVENTS,
                 tx_hash.to_string(),
                 RetryableEvent::new(UnverifiedTrasfer {
@@ -150,6 +150,7 @@ pub async fn process_transfer_event(
                 match near_rpc_error {
                     NearRpcError::NonceError
                     | NearRpcError::FinalizationError
+                    | NearRpcError::RpcBroadcastTxAsyncError(_)
                     | NearRpcError::RpcTransactionError(JsonRpcError::TransportError(_)) => {
                         warn!(
                             "Failed to sign transfer ({}), retrying: {near_rpc_error:?}",
@@ -175,7 +176,7 @@ pub async fn process_transfer_event(
 
 pub async fn process_sign_transfer_event(
     config: &config::Config,
-    redis_connection: &mut redis::aio::MultiplexedConnection,
+    redis_connection_manager: &mut redis::aio::ConnectionManager,
     omni_connector: Arc<OmniConnector>,
     signer: AccountId,
     omni_bridge_event: OmniBridgeEvent,
@@ -251,7 +252,7 @@ pub async fn process_sign_transfer_event(
         if let Some(event_action) = needed_fee
             .check_fee(
                 config,
-                redis_connection,
+                redis_connection_manager,
                 &transfer_message,
                 transfer_message.get_transfer_id(),
                 &transfer_message.fee,
@@ -262,18 +263,20 @@ pub async fn process_sign_transfer_event(
         }
     }
 
-    let fin_transfer_args = match message_payload.recipient.get_chain() {
+    let chain_kind = message_payload.recipient.get_chain();
+
+    let fin_transfer_args = match chain_kind {
         ChainKind::Near => {
             anyhow::bail!("Near to Near transfers are not supported yet");
         }
         ChainKind::Eth | ChainKind::Base | ChainKind::Arb | ChainKind::Bnb => {
             let nonce = evm_nonces
-                .reserve_nonce(message_payload.recipient.get_chain())
+                .reserve_nonce(chain_kind)
                 .await
                 .context("Failed to reserve nonce for evm transaction")?;
 
             omni_connector::FinTransferArgs::EvmFinTransfer {
-                chain_kind: message_payload.recipient.get_chain(),
+                chain_kind,
                 event: omni_bridge_event,
                 tx_nonce: Some(nonce.into()),
             }
@@ -299,8 +302,36 @@ pub async fn process_sign_transfer_event(
             Ok(EventAction::Remove)
         }
         Err(err) => {
-            if let BridgeSdkError::EvmGasEstimateError(_) = err {
-                anyhow::bail!("Failed to finalize deposit: {}", err);
+            if let BridgeSdkError::EvmGasEstimateError(err) = err {
+                let Some(evm) = (match chain_kind {
+                    ChainKind::Eth => &config.eth,
+                    ChainKind::Base => &config.base,
+                    ChainKind::Arb => &config.arb,
+                    ChainKind::Bnb => &config.bnb,
+                    ChainKind::Near | ChainKind::Sol => {
+                        anyhow::bail!(
+                            "Failed to finalize deposit (unexpected: failed to get evm config): {}",
+                            err
+                        );
+                    }
+                }) else {
+                    anyhow::bail!(
+                        "Failed to finalize deposit (unexpected: config for {chain_kind:?} is not accessible): {err}"
+                    );
+                };
+
+                if evm
+                    .error_selectors_to_remove
+                    .iter()
+                    .any(|selector| err.contains(selector))
+                {
+                    anyhow::bail!(
+                        "Failed to finalize deposit: {err}. Found selector from the list of non-retryable errors in the config"
+                    );
+                }
+
+                warn!("Failed to finalize deposit, retrying: {err}");
+                return Ok(EventAction::Retry);
             }
 
             if let BridgeSdkError::SolanaRpcError(ref client_error) = err {
@@ -331,13 +362,13 @@ pub async fn process_sign_transfer_event(
 
 pub async fn process_unverified_transfer_event(
     config: &config::Config,
-    redis_connection: &mut redis::aio::MultiplexedConnection,
+    redis_connection_manager: &mut redis::aio::ConnectionManager,
     jsonrpc_client: JsonRpcClient,
     unverified_event: UnverifiedTrasfer,
 ) {
     utils::redis::remove_event(
         config,
-        redis_connection,
+        redis_connection_manager,
         utils::redis::EVENTS,
         unverified_event.tx_hash.to_string(),
     )
@@ -353,7 +384,7 @@ pub async fn process_unverified_transfer_event(
     {
         utils::redis::add_event(
             config,
-            redis_connection,
+            redis_connection_manager,
             utils::redis::EVENTS,
             unverified_event.original_key,
             RetryableEvent::new(unverified_event.original_event),
@@ -479,6 +510,7 @@ pub async fn initiate_fast_transfer(
                 match near_rpc_error {
                     NearRpcError::NonceError
                     | NearRpcError::FinalizationError
+                    | NearRpcError::RpcBroadcastTxAsyncError(_)
                     | NearRpcError::RpcTransactionError(JsonRpcError::TransportError(_)) => {
                         warn!("Failed to initiate fast transfer, retrying: {near_rpc_error:?}");
                         return Ok(EventAction::Retry);

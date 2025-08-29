@@ -28,7 +28,6 @@ near_evm_prover_setup_call_file = const.near_deploy_results_dir / "{network}-evm
 
 # Contract / account files
 omni_bridge_file = const.near_deploy_results_dir / f"{NC.OMNI_BRIDGE}.json"
-omni_prover_file = const.near_deploy_results_dir / f"{NC.OMNI_PROVER}.json"
 token_deployer_file = const.near_deploy_results_dir / f"{NC.TOKEN_DEPLOYER}.json"
 mock_token_file = const.near_deploy_results_dir / f"{NC.MOCK_TOKEN}.json"
 evm_prover_file = const.near_deploy_results_dir / f"{NC.EVM_PROVER}.json"
@@ -101,59 +100,22 @@ rule near_generate_mock_token_init_args:
     """
 
 
-rule near_generate_omni_bridge_init_args:
-    message: "Generating omni bridge init args"
-    input: omni_prover_file
-    output: const.common_generated_dir / "omni_bridge_dyn_init_args.json"
-    params:
-        mkdir = get_mkdir_cmd(const.common_generated_dir),
-        prover_address = lambda wc, input: get_json_field(input, "contract_id")
-    shell: """
-    {params.mkdir} && \
-    echo '{{\"prover_account\": \"{params.prover_address}\"}}' > {output}
-    """
-
-
-rule near_omni_prover_dau_grant:
-    message: "Granting DAO role to omni prover"
-    input:
-        init_account = near_init_account_credentials_file,
-        dao_account = near_dao_account_credentials_file,
-        omni_prover = omni_prover_file
-    output: near_prover_dau_grant_call_file
-    params:
-        mkdir = get_mkdir_cmd(const.near_deploy_results_dir),
-        omni_prover_address = lambda wc, input: get_json_field(input.omni_prover, "contract_id"),
-        dao_account_id = lambda wc, input: get_json_field(input.dao_account, "account_id"),
-        extract_tx = lambda wc, output: extract_tx_hash("near", output)
-    shell: """
-    {params.mkdir} && \
-    {const.common_scripts_dir}/call-near-contract.sh -c {params.omni_prover_address} \
-        -m acl_grant_role \
-        -a '{{\"role\": \"DAO\", \"account_id\": \"{params.dao_account_id}\"}}' \
-        -f {input.init_account} \
-        -n testnet 2>&1 | tee {output} && \
-    {params.extract_tx}
-    """
-
-
 rule near_evm_prover_setup:
     message: "Setting up EVM prover"
     input:
-        omni_prover = omni_prover_file,
+        omni_bridge = omni_bridge_file,
         evm_prover = evm_prover_file,
-        dau_grant = rules.near_omni_prover_dau_grant.output,
         dao_account = near_dao_account_credentials_file
     output: near_evm_prover_setup_call_file
     params:
         mkdir = get_mkdir_cmd(const.near_deploy_results_dir),
         evm_chain_str = lambda wc: const.Chain.from_evm_network(wc.network),
-        omni_prover_account_id = lambda wc, input: get_json_field(input.omni_prover, "contract_id"),
+        controller_address = lambda wc, input: get_json_field(input.omni_bridge, "contract_id"),
         evm_prover_account_id = lambda wc, input: get_json_field(input.evm_prover, "contract_id"),
         extract_tx = lambda wc, output: extract_tx_hash("near", output)
     shell: """
     {params.mkdir} && \
-    {const.common_scripts_dir}/call-near-contract.sh -c {params.omni_prover_account_id} \
+    {const.common_scripts_dir}/call-near-contract.sh -c {params.controller_address} \
         -m add_prover \
         -a '{{\"account_id\": \"{params.evm_prover_account_id}\", \"prover_id\": \"{params.evm_chain_str}\"}}' \
         -f {input.dao_account} \

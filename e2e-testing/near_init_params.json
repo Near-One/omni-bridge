@@ -12,10 +12,6 @@
       "prover_account": "prover.sepolia.testnet"
     }
   },
-  "omni_prover": {
-    "init_function": "init",
-    "init_args": {}
-  },
   "omni_bridge": {
     "init_function": "new",
     "init_args": {
@@ -41,7 +37,7 @@
   "mock_token": {
     "init_function": "new_default_meta",
     "init_args": {
-      "total_supply": "1000000000"
+      "total_supply": "10000000000000000000000"
     }
   },
   "bridge_token": {
