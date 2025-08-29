@@ -453,7 +453,7 @@ pub async fn process_events(
                         let near_omni_nonce = near_omni_nonce.clone();
 
                         async move {
-                            match utxo::process_near_to_btc_init_transfer_event(
+                            match utxo::process_utxo_to_btc_init_transfer_event(
                                 omni_connector,
                                 transfer,
                                 near_omni_nonce,
@@ -491,7 +491,7 @@ pub async fn process_events(
                         let near_nonce = near_omni_nonce.clone();
 
                         async move {
-                            match utxo::process_btc_to_near_init_transfer_event(
+                            match utxo::process_utxo_to_near_init_transfer_event(
                                 omni_connector,
                                 transfer,
                                 near_nonce,
