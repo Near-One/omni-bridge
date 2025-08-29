@@ -2994,7 +2994,6 @@ dependencies = [
 name = "omni-bridge"
 version = "0.2.14"
 dependencies = [
- "bitcoin",
  "borsh",
  "near-contract-standards",
  "near-plugins",

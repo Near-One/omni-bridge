@@ -110,7 +110,7 @@ mod tests {
                 ChainKind::Arb => arb_factory_address(),
                 ChainKind::Base => base_factory_address(),
                 ChainKind::Bnb => bnb_factory_address(),
-                ChainKind::Near | ChainKind::Btc => panic!("Unsupported chain"),
+                ChainKind::Near | ChainKind::Btc | ChainKind::Zcash => panic!("Unsupported chain"),
             };
 
             locker_contract
