@@ -15,6 +15,7 @@ use near_sdk::{
     env, ext_contract, near, require, serde_json, AccountId, BorshStorageKey, Gas, NearToken,
     PanicOnDefault, Promise, PromiseError, PromiseOrValue, PromiseResult,
 };
+use omni_types::btc::UTXOChainConfig;
 use omni_types::locker_args::{
     AddDeployedTokenArgs, BindTokenArgs, ClaimFeeArgs, DeployTokenArgs, FinTransferArgs,
     StorageDepositAction,
@@ -202,7 +203,7 @@ pub struct Contract {
     pub accounts_balances: LookupMap<AccountId, StorageBalance>,
     pub wnear_account_id: AccountId,
     pub provers: UnorderedMap<ChainKind, AccountId>,
-    pub utxo_chain_connectors: LookupMap<ChainKind, AccountId>,
+    pub utxo_chain_connectors: LookupMap<ChainKind, UTXOChainConfig>,
 }
 
 #[near]
@@ -770,7 +771,7 @@ impl Contract {
         relayer_id: AccountId,
     ) {
         if fast_transfer.recipient.is_utxo_chain() {
-            let btc_account_id = self.get_native_token_id(fast_transfer.recipient.get_chain());
+            let btc_account_id = self.get_utxo_chain_token(fast_transfer.recipient.get_chain());
             require!(
                 fast_transfer.token_id == btc_account_id,
                 "Only BTC can be transferred to the Bitcoin network."
@@ -1516,8 +1517,8 @@ impl Contract {
         let mut required_balance = self.add_fin_transfer(&transfer_message.get_transfer_id());
         let token = self.get_token_id(&transfer_message.token);
 
-        if let OmniAddress::Btc(_) = transfer_message.recipient {
-            let btc_account_id = self.get_native_token_id(ChainKind::Btc);
+        if transfer_message.recipient.is_utxo_chain() {
+            let btc_account_id = self.get_utxo_chain_token(transfer_message.recipient.get_chain());
             require!(
                 token == btc_account_id,
                 "Only BTC can be transferred to the Bitcoin network."

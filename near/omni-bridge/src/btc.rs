@@ -4,11 +4,10 @@ use near_sdk::json_types::U128;
 use near_sdk::{
     env, near, require, serde_json, AccountId, Gas, Promise, PromiseError, PromiseOrValue,
 };
-use omni_types::btc::TokenReceiverMessage;
+use omni_types::btc::{TokenReceiverMessage, UTXOChainConfig};
 use omni_types::{ChainKind, Fee, TransferId, TransferMessage};
 
 const SUBMIT_TRANSFER_TO_BTC_CONNECTOR_CALLBACK_GAS: Gas = Gas::from_tgas(5);
-
 #[near]
 impl Contract {
     #[payable]
@@ -70,7 +69,7 @@ impl Contract {
         ext_token::ext(btc_account_id)
             .with_attached_deposit(ONE_YOCTO)
             .with_static_gas(FT_TRANSFER_CALL_GAS)
-            .ft_transfer_call(self.get_btc_connector(chain_kind), amount, None, msg)
+            .ft_transfer_call(self.get_utxo_chain_connector(chain_kind), amount, None, msg)
             .then(
                 Self::ext(env::current_account_id())
                     .with_static_gas(SUBMIT_TRANSFER_TO_BTC_CONNECTOR_CALLBACK_GAS)
@@ -104,14 +103,28 @@ impl Contract {
         &mut self,
         chain_kind: ChainKind,
         utxo_chain_connector_id: AccountId,
+        utxo_chain_token_id: AccountId,
     ) {
-        self.utxo_chain_connectors
-            .insert(&chain_kind, &utxo_chain_connector_id);
+        self.utxo_chain_connectors.insert(
+            &chain_kind,
+            &UTXOChainConfig {
+                connector: utxo_chain_connector_id,
+                token_id: utxo_chain_token_id,
+            },
+        );
     }
 
-    fn get_btc_connector(&self, chain_kind: ChainKind) -> AccountId {
+    pub fn get_utxo_chain_connector(&self, chain_kind: ChainKind) -> AccountId {
         self.utxo_chain_connectors
             .get(&chain_kind)
             .expect("BTC Connector has not been set up for {chain_kind}")
+            .connector
+    }
+
+    pub fn get_utxo_chain_token(&self, chain_kind: ChainKind) -> AccountId {
+        self.utxo_chain_connectors
+            .get(&chain_kind)
+            .expect("BTC Connector has not been set up for {chain_kind}")
+            .token_id
     }
 }
