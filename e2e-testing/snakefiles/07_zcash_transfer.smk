@@ -26,6 +26,8 @@ zcash_binary_file = const.near_binary_dir / f"{NEC.ZCASH_TOKEN}.wasm"
 zcash_connector_file = const.near_deploy_results_dir / f"{NEC.ZCASH_CONNECTOR}.json"
 zcash_file = const.near_deploy_results_dir / f"{NEC.ZCASH_TOKEN}.json"
 
+report_file = call_dir / "zcash-transfer-report.txt"
+
 rule near_generate_zcash_init_args:
     message: "Generating zcash init args"
     input:
@@ -62,7 +64,7 @@ rule sync_zcash_connector:
     input:
         zcash_connector_file = zcash_connector_file,
         init_account_file = near_init_account_file
-    output: call_dir / "01_sync_zcash_connector.json"
+    output: call_dir / "01_sync_zcash_connector"
     params:
         mkdir = get_mkdir_cmd(call_dir),
         scripts_dir = const.common_scripts_dir,
@@ -84,7 +86,7 @@ rule get_zcash_user_deposit_address:
         step_1 = rules.sync_zcash_connector.output,
         zcash_connector_file = zcash_connector_file,
         user_account_file = user_account_file
-    output: call_dir / "02_zcash_user_deposit_address.json"
+    output: call_dir / "02_zcash_user_deposit_address"
     params:
         mkdir = get_mkdir_cmd(call_dir),
         zcash_connector = lambda wc, input: get_json_field(input.zcash_connector_file, "contract_id"),
@@ -105,7 +107,7 @@ rule send_zcash_to_deposit_address:
     message: "Send TAZ to user deposit address on ZCash"
     input:
         step_2 = rules.get_zcash_user_deposit_address.output
-    output: call_dir / "03_send_zcash_to_deposit_address.json"
+    output: call_dir / "03_send_zcash_to_deposit_address"
     params:
         scripts_dir = const.common_scripts_dir,
         zcash_address = lambda wc, input: get_btc_address(input.step_2)
@@ -120,7 +122,7 @@ rule fin_zcash_transfer_on_near:
         zcash_connector_file = zcash_connector_file,
         zcash_file = zcash_file,
         user_account_file = user_account_file
-    output: call_dir / "04_fin_zcash_transfer_on_near.json"
+    output: call_dir / "04_fin_zcash_transfer_on_near"
     params:
         zcash_connector = lambda wc, input: get_json_field(input.zcash_connector_file, "contract_id"),
         user_account_id = lambda wc, input: get_json_field(input.user_account_file, "account_id"),
@@ -147,7 +149,7 @@ rule init_zcash_transfer_to_zcash:
         zcash_connector_file = zcash_connector_file,
         zcash_file = zcash_file,
         user_account_file = user_account_file
-    output: call_dir / "05_init_zcash_transfer_to_zcash.json"
+    output: call_dir / "05_init_zcash_transfer_to_zcash"
     params:
         zcash_connector = lambda wc, input: get_json_field(input.zcash_connector_file, "contract_id"),
         zcash_token = lambda wc, input: get_json_field(input.zcash_file, "contract_id"),
@@ -177,7 +179,7 @@ rule submit_transfer_to_btc_connector:
        step_5 = rules.init_zcash_transfer_to_zcash.output,
        zcash_connector_file = zcash_connector_file,
        user_account_file = user_account_file
-    output: call_dir / "06_sign_btc_transfer.json"
+    output: call_dir / "06_sign_btc_transfer"
     params:
         near_tx_hash = lambda wc, input: get_tx_hash(input.step_5),
         zcash_connector = lambda wc, input: get_json_field(input.zcash_connector_file, "contract_id"),
@@ -203,7 +205,7 @@ rule send_btc_transfer:
         step_6 = rules.submit_transfer_to_btc_connector.output,
         zcash_connector_file = zcash_connector_file,
         user_account_file = user_account_file,
-    output: call_dir / "07_send_zcash_transfer.json"
+    output: call_dir / "07_send_zcash_transfer"
     params:
         near_tx_hash = lambda wc, input: get_tx_hash(input.step_6),
         zcash_connector = lambda wc, input: get_json_field(input.zcash_connector_file, "contract_id"),
@@ -214,7 +216,7 @@ rule send_btc_transfer:
     --chain zcash-testnet \
     --zcash-connector {params.zcash_connector} \
     --near-tx-hash {params.near_tx_hash} \
-    --satoshi-relayer {params.user_account_id} \
+    --relayer {params.user_account_id} \
     --config {params.bridge_sdk_config_file} \
     > {output} \
     """
@@ -233,6 +235,7 @@ rule verify_withdraw:
         user_private_key = lambda wc, input: get_json_field(input.user_account_file, "private_key"),
         bridge_sdk_config_file = const.common_bridge_sdk_config_file,
         zcash_tx_hash = lambda wc, input: get_last_value(input.step_7),
+        extract_tx = lambda wc, output: extract_tx_hash("bridge", output),
     shell: """
         bridge-cli testnet btc-verify-withdraw \
         --chain zcash-testnet \
@@ -241,10 +244,25 @@ rule verify_withdraw:
         --near-signer {params.user_account_id} \
         --near-private-key {params.user_private_key} \
         --config {params.bridge_sdk_config_file} \
-         > {output} \
+         > {output} && \
+        {params.extract_tx}\
+    """
+
+rule verify_last_transfer:
+    message: "Zcash Transfer. Verification"
+    input:
+        rules.verify_withdraw.output,
+    output: report_file
+    params:
+        config_file = const.common_bridge_sdk_config_file,
+        call_dir = call_dir
+    shell: """
+        yarn --cwd {const.common_tools_dir} --silent verify-near-transfer \
+        --tx-dir {params.call_dir} \
+        | tee {output}
     """
 
 rule all:
     input:
-        rules.verify_withdraw.output,
+        rules.verify_last_transfer.output,
     default_target: True
