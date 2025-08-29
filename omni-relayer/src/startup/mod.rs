@@ -1,6 +1,9 @@
+use std::collections::HashMap;
+
 use anyhow::{Context, Result};
 use bridge_indexer_types::documents_types::UtxoChain;
 use btc_bridge_client::{AuthOptions, UTXOBridgeClient, types::UTXOChain};
+use btc_utils::address::Chain;
 use eth_light_client::{EthLightClient, EthLightClientBuilder};
 use tracing::info;
 
@@ -13,7 +16,10 @@ use solana_bridge_client::{SolanaBridgeClient, SolanaBridgeClientBuilder};
 use solana_client::nonblocking::rpc_client::RpcClient;
 use wormhole_bridge_client::{WormholeBridgeClient, WormholeBridgeClientBuilder};
 
-use crate::{config, startup};
+use crate::{
+    config::{self, Network},
+    startup,
+};
 
 pub mod bridge_indexer;
 pub mod evm;
@@ -34,6 +40,46 @@ macro_rules! skip_fail {
     };
 }
 
+pub fn to_chain(config: &config::Config, utxo_chain: UtxoChain) -> Chain {
+    match (&config.near.network, utxo_chain) {
+        (Network::Mainnet, UtxoChain::Btc) => Chain::BitcoinMainnet,
+        (Network::Mainnet, UtxoChain::Zcash) => Chain::ZcashMainnet,
+        (Network::Testnet, UtxoChain::Btc) => Chain::BitcoinTestnet,
+        (Network::Testnet, UtxoChain::Zcash) => Chain::ZcashTestnet,
+    }
+}
+
+fn build_utxo_bridges(
+    config: &config::Config,
+    near_signer: &InMemorySigner,
+) -> HashMap<btc_utils::address::Chain, UTXOChainAccounts> {
+    let mut utxo_bridges = HashMap::new();
+
+    for (chain, connector, token) in [
+        (
+            UtxoChain::Btc,
+            config.near.btc_connector.as_ref(),
+            config.near.btc.as_ref(),
+        ),
+        (
+            UtxoChain::Zcash,
+            config.near.zcash_connector.as_ref(),
+            config.near.zcash.as_ref(),
+        ),
+    ] {
+        utxo_bridges.insert(
+            to_chain(config, chain),
+            UTXOChainAccounts {
+                utxo_chain_connector: connector.map(std::string::ToString::to_string),
+                utxo_chain_token: token.map(std::string::ToString::to_string),
+                satoshi_relayer: Some(near_signer.account_id.to_string()),
+            },
+        );
+    }
+
+    utxo_bridges
+}
+
 fn build_near_bridge_client(
     config: &config::Config,
     near_signer: &InMemorySigner,
@@ -43,32 +89,7 @@ fn build_near_bridge_client(
         .private_key(Some(near_signer.secret_key.to_string()))
         .signer(Some(near_signer.account_id.to_string()))
         .omni_bridge_id(Some(config.near.omni_bridge_id.to_string()))
-        .btc_bridge(Some(UTXOChainAccounts {
-            utxo_chain_connector: config
-                .near
-                .btc_connector
-                .as_ref()
-                .map(std::string::ToString::to_string),
-            utxo_chain_token: config
-                .near
-                .btc
-                .as_ref()
-                .map(std::string::ToString::to_string),
-            satoshi_relayer: Some(near_signer.account_id.to_string()),
-        }))
-        .zcash_bridge(Some(UTXOChainAccounts {
-            utxo_chain_connector: config
-                .near
-                .zcash_connector
-                .as_ref()
-                .map(std::string::ToString::to_string),
-            utxo_chain_token: config
-                .near
-                .zcash
-                .as_ref()
-                .map(std::string::ToString::to_string),
-            satoshi_relayer: Some(near_signer.account_id.to_string()),
-        }))
+        .utxo_bridges(build_utxo_bridges(config, near_signer))
         .build()
         .context("Failed to build NearBridgeClient")
 }
@@ -110,6 +131,12 @@ fn build_solana_bridge_client(config: &config::Config) -> Result<Option<SolanaBr
                 .client(Some(RpcClient::new(solana.rpc_http_url.clone())))
                 .program_id(Some(solana.program_id.parse()?))
                 .wormhole_core(Some(solana.wormhole_id.parse()?))
+                .wormhole_post_message_shim_program_id(Some(
+                    solana.wormhole_post_message_shim_id.parse()?,
+                ))
+                .wormhole_post_message_shim_event_authority(Some(
+                    solana.wormhole_post_message_shim_event_authority.parse()?,
+                ))
                 .keypair(Some(startup::solana::get_keypair(
                     solana.credentials_path.as_ref(),
                 )))

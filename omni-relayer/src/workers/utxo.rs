@@ -57,7 +57,9 @@ pub async fn process_near_to_btc_init_transfer_event(
     match omni_connector
         .near_sign_btc_transaction(
             chain,
-            btc_pending_id,
+            Some(btc_pending_id),
+            None,
+            None,
             sign_index,
             TransactionOptions {
                 nonce,
@@ -76,6 +78,7 @@ pub async fn process_near_to_btc_init_transfer_event(
                 match near_rpc_error {
                     NearRpcError::NonceError
                     | NearRpcError::FinalizationError
+                    | NearRpcError::RpcBroadcastTxAsyncError(_)
                     | NearRpcError::RpcTransactionError(JsonRpcError::TransportError(_)) => {
                         warn!("Failed to sign BTC transaction, retrying: {near_rpc_error:?}");
                         return Ok(EventAction::Retry);
@@ -153,6 +156,7 @@ pub async fn process_btc_to_near_init_transfer_event(
                 match near_rpc_error {
                     NearRpcError::NonceError
                     | NearRpcError::FinalizationError
+                    | NearRpcError::RpcBroadcastTxAsyncError(_)
                     | NearRpcError::RpcTransactionError(JsonRpcError::TransportError(_)) => {
                         warn!("Failed to finalize BTC transaction, retrying: {near_rpc_error:?}");
                         return Ok(EventAction::Retry);
@@ -190,6 +194,7 @@ pub async fn process_sign_transaction_event(
                 match near_rpc_error {
                     NearRpcError::NonceError
                     | NearRpcError::FinalizationError
+                    | NearRpcError::RpcBroadcastTxAsyncError(_)
                     | NearRpcError::RpcTransactionError(JsonRpcError::TransportError(_)) => {
                         warn!(
                             "Failed to finalize btc transaction ({}), retrying: {near_rpc_error:?}",
@@ -247,6 +252,7 @@ pub async fn process_confirmed_tx_hash(
                 match near_rpc_error {
                     NearRpcError::NonceError
                     | NearRpcError::FinalizationError
+                    | NearRpcError::RpcBroadcastTxAsyncError(_)
                     | NearRpcError::RpcTransactionError(JsonRpcError::TransportError(_)) => {
                         warn!("Failed to verify withdraw, retrying: {near_rpc_error:?}");
                         return Ok(EventAction::Retry);

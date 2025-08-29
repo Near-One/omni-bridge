@@ -71,7 +71,7 @@ class NearClient {
             method_name: 'get_token_address',
             args_base64: Buffer.from(JSON.stringify({
                 chain_kind: evmChainKind,
-                token: nearToken
+                token: nearToken.toLowerCase()
             })).toString('base64'),
             finality: 'final'
         });

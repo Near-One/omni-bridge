@@ -4,6 +4,7 @@ use alloy::{
 };
 use near_primitives::types::AccountId;
 use omni_types::{ChainKind, OmniAddress};
+use rust_decimal::Decimal;
 use serde::Deserialize;
 
 pub enum NearSignerType {
@@ -136,7 +137,7 @@ pub struct Redis {
     pub sleep_time_after_events_process_secs: u64,
     pub query_retry_attempts: u64,
     pub query_retry_sleep_secs: u64,
-    pub fee_retry_base_sleep_secs: i64,
+    pub fee_retry_base_secs: Decimal,
     pub fee_retry_max_sleep_secs: i64,
     pub keep_transfers_for_secs: i64,
 }
@@ -199,6 +200,8 @@ pub struct Evm {
     pub expected_finalization_time: i64,
     #[serde(default = "u64::max_value")]
     pub safe_confirmations: u64,
+    #[serde(default)]
+    pub error_selectors_to_remove: Vec<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -209,6 +212,8 @@ pub struct Solana {
     pub rpc_ws_url: String,
     pub program_id: String,
     pub wormhole_id: String,
+    pub wormhole_post_message_shim_id: String,
+    pub wormhole_post_message_shim_event_authority: String,
     pub deploy_token_emitter_index: usize,
     pub deploy_token_discriminator: Vec<u8>,
     pub init_transfer_sender_index: usize,

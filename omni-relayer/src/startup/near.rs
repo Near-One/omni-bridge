@@ -15,7 +15,7 @@ pub fn get_signer(
     config: &config::Config,
     near_signer_type: config::NearSignerType,
 ) -> Result<InMemorySigner> {
-    info!("Creating NEAR signer");
+    info!("Getting NEAR signer");
 
     let file = match near_signer_type {
         config::NearSignerType::Omni => config.near.omni_credentials_path.as_deref(),
@@ -56,7 +56,7 @@ pub fn get_signer(
 
 async fn create_lake_config(
     config: &config::Config,
-    redis_connection: &mut redis::aio::MultiplexedConnection,
+    redis_connection_manager: &mut redis::aio::ConnectionManager,
     jsonrpc_client: &JsonRpcClient,
     start_block: Option<u64>,
 ) -> Result<LakeConfig> {
@@ -64,7 +64,7 @@ async fn create_lake_config(
         Some(block) => block,
         None => utils::redis::get_last_processed::<&str, u64>(
             config,
-            redis_connection,
+            redis_connection_manager,
             &utils::redis::get_last_processed_key(ChainKind::Near),
         )
         .await
@@ -92,35 +92,38 @@ async fn create_lake_config(
 
 pub async fn start_indexer(
     config: config::Config,
-    redis_client: redis::Client,
+    redis_connection_manager: &mut redis::aio::ConnectionManager,
     jsonrpc_client: JsonRpcClient,
     start_block: Option<u64>,
 ) -> Result<()> {
     info!("Starting NEAR indexer");
 
-    let mut redis_connection = redis_client.get_multiplexed_tokio_connection().await?;
-
-    let lake_config =
-        create_lake_config(&config, &mut redis_connection, &jsonrpc_client, start_block).await?;
+    let lake_config = create_lake_config(
+        &config,
+        redis_connection_manager,
+        &jsonrpc_client,
+        start_block,
+    )
+    .await?;
     let (_, stream) = near_lake_framework::streamer(lake_config);
     let stream = tokio_stream::wrappers::ReceiverStream::new(stream);
 
     stream
         .map(move |streamer_message| {
             let config = config.clone();
-            let mut redis_connection = redis_connection.clone();
+            let mut redis_connection_manager = redis_connection_manager.clone();
 
             async move {
                 utils::near::handle_streamer_message(
                     &config,
-                    &mut redis_connection,
+                    &mut redis_connection_manager,
                     &streamer_message,
                 )
                 .await;
 
                 utils::redis::update_last_processed(
                     &config,
-                    &mut redis_connection,
+                    &mut redis_connection_manager,
                     &utils::redis::get_last_processed_key(ChainKind::Near),
                     streamer_message.block.header.height,
                 )

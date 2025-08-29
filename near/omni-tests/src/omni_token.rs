@@ -15,9 +15,10 @@ mod tests {
 
     use crate::helpers::tests::{
         account_n, arb_factory_address, arb_token_address, base_factory_address,
-        base_token_address, bnb_factory_address, eth_eoa_address, eth_factory_address,
-        eth_token_address, get_test_deploy_token_args, locker_wasm, mock_prover_wasm,
-        sol_factory_address, sol_token_address, token_deployer_wasm, NEP141_DEPOSIT,
+        base_token_address, bnb_factory_address, bnb_token_address, eth_eoa_address,
+        eth_factory_address, eth_token_address, get_test_deploy_token_args, locker_wasm,
+        mock_prover_wasm, sol_factory_address, sol_token_address, token_deployer_wasm,
+        NEP141_DEPOSIT,
     };
 
     struct TestEnv {
@@ -43,15 +44,11 @@ mod tests {
                 decimals: 18,
             };
 
-            // Setup prover
-            let prover_contract = worker.dev_deploy(&mock_prover_wasm).await?;
-
             // setup locker
             let locker_contract = worker.dev_deploy(&locker_wasm).await?;
             locker_contract
                 .call("new")
                 .args_json(json!({
-                    "prover_account": prover_contract.id(),
                     "mpc_signer": "mpc.testnet",
                     "nonce": U128(0),
                     "wnear_account_id": "wnear.testnet",
@@ -60,6 +57,18 @@ mod tests {
                 .transact()
                 .await?
                 .into_result()?;
+
+            let prover = worker.dev_deploy(&mock_prover_wasm).await?;
+
+            for chain in ["Eth", "Base", "Arb", "Bnb", "Sol"] {
+                locker_contract
+                    .call("add_prover")
+                    .args_json(json!({ "chain": chain, "account_id": prover.id() }))
+                    .max_gas()
+                    .transact()
+                    .await?
+                    .into_result()?;
+            }
 
             // Setup token deployer
             let token_deployer = worker
@@ -244,10 +253,12 @@ mod tests {
     #[case(sol_token_address(), false)]
     #[case(arb_token_address(), false)]
     #[case(base_token_address(), false)]
+    #[case(bnb_token_address(), false)]
     #[case(eth_token_address(), true)]
     #[case(sol_token_address(), true)]
     #[case(arb_token_address(), true)]
     #[case(base_token_address(), true)]
+    #[case(bnb_token_address(), true)]
     #[tokio::test]
     async fn test_token_metadata(
         #[case] init_token_address: OmniAddress,
@@ -289,6 +300,7 @@ mod tests {
     #[case(sol_token_address())]
     #[case(arb_token_address())]
     #[case(base_token_address())]
+    #[case(bnb_token_address())]
     #[tokio::test]
     async fn test_set_token_metadata(
         #[case] init_token_address: OmniAddress,
@@ -338,10 +350,12 @@ mod tests {
     #[case(sol_token_address(), false)]
     #[case(arb_token_address(), false)]
     #[case(base_token_address(), false)]
+    #[case(bnb_token_address(), false)]
     #[case(eth_token_address(), true)]
     #[case(sol_token_address(), true)]
     #[case(arb_token_address(), true)]
     #[case(base_token_address(), true)]
+    #[case(bnb_token_address(), true)]
     #[tokio::test]
     async fn test_token_minting(
         #[case] init_token_address: OmniAddress,
@@ -407,10 +421,12 @@ mod tests {
     #[case(sol_token_address(), false)]
     #[case(arb_token_address(), false)]
     #[case(base_token_address(), false)]
+    #[case(bnb_token_address(), false)]
     #[case(eth_token_address(), true)]
     #[case(sol_token_address(), true)]
     #[case(arb_token_address(), true)]
     #[case(base_token_address(), true)]
+    #[case(bnb_token_address(), true)]
     #[tokio::test]
     async fn test_token_transfer(
         #[case] init_token_address: OmniAddress,
@@ -522,7 +538,7 @@ mod tests {
         locker_contract
             .call("fin_transfer")
             .args_borsh(FinTransferArgs {
-                chain_kind: ChainKind::Near,
+                chain_kind: ChainKind::Eth,
                 storage_deposit_actions,
                 prover_args: borsh::to_vec(&ProverResult::InitTransfer(InitTransferMessage {
                     origin_nonce: 1,
