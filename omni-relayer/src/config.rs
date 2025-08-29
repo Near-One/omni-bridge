@@ -70,6 +70,7 @@ where
     for key in ["INFURA_API_KEY", "TATUM_API_KEY", "FASTNEAR_API_KEY"] {
         if let Ok(val) = std::env::var(key) {
             url = url.replace(key, &val);
+            break;
         }
     }
 
