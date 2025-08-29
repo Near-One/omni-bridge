@@ -65,6 +65,7 @@ mod tests {
             args.insert("mpc_signer".to_string(), json!("mpc.testnet"));
             args.insert("nonce".to_string(), json!(U128(0)));
             args.insert("wnear_account_id".to_string(), json!("wnear.testnet"));
+            args.insert("btc_connector".to_string(), json!("brg-dev.testnet"));
 
             locker_contract
                 .call("new")
@@ -975,7 +976,9 @@ mod tests {
         let res = env
             .locker_contract
             .call("migrate")
-            .args_json(json!({}))
+            .args_json(json!({
+                "btc_connector": "brg-dev.testnet",
+            }))
             .max_gas()
             .transact()
             .await?;

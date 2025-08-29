@@ -34,29 +34,26 @@ clippy-omni-relayer:
 
 rust-build-omni-bridge:
 	cargo near build reproducible-wasm --manifest-path $(OMNI_BRIDGE_MANIFEST) --out-dir $(OUT_DIR)
-	
+
 rust-build-omni-token:
 	cargo near build reproducible-wasm --manifest-path $(OMNI_TOKEN_MANIFEST) --out-dir $(OUT_DIR)
-	
+
 rust-build-token-deployer:
 	cargo near build reproducible-wasm --manifest-path $(TOKEN_DEPLOYER) --out-dir $(OUT_DIR)
-	
+
 rust-build-evm-prover:
 	cargo near build reproducible-wasm --manifest-path $(EVM_PROVER_MANIFEST) --out-dir $(OUT_DIR)
-	
+
 rust-build-wormhole-omni-prover-proxy:
 	cargo near build reproducible-wasm --manifest-path $(WORMHOLE_OMNI_PROVER_PROXY_MANIFEST) --out-dir $(OUT_DIR)
 
-rust-build-mock-evm-prover:
-	cargo near build reproducible-wasm --manifest-path $(MOCK_EVM_PROVER_MANIFEST) --out-dir $(OUT_DIR)
-	
-rust-build-mock-wormhole-prover:
-	cargo near build reproducible-wasm --manifest-path $(MOCK_WORMHOLE_PROVER_MANIFEST) --out-dir $(OUT_DIR)
+rust-build-mock-prover:
+	cargo near build reproducible-wasm --manifest-path $(MOCK_PROVER_MANIFEST) --out-dir $(OUT_DIR)
 
 rust-build-mock-token:
 	cargo near build reproducible-wasm --manifest-path $(MOCK_TOKEN_MANIFEST) --out-dir $(OUT_DIR)
 
-rust-build-near: rust-build-omni-bridge rust-build-omni-token rust-build-token-deployer rust-build-evm-prover rust-build-wormhole-omni-prover-proxy rust-build-mock-evm-prover rust-build-mock-wormhole-prover rust-build-mock-token
+rust-build-near: rust-build-omni-bridge rust-build-omni-token rust-build-token-deployer rust-build-evm-prover rust-build-wormhole-omni-prover-proxy rust-build-mock-prover rust-build-mock-token
 
 solana-generate-program-id:
 	solana-keygen new -o solana/bridge_token_factory/target/deploy/bridge_token_factory-keypair.json --no-passphrase

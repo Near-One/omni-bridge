@@ -2,7 +2,6 @@ from enum import StrEnum
 from pathlib import Path
 from datetime import datetime
 
-
 # Common
 common_testing_root = Path(__file__).parent.parent
 common_generated_dir = common_testing_root / "generated"
@@ -36,6 +35,7 @@ class Chain(StrEnum):
     SOL = "Sol"
     BASE = "Base"
     ARB = "Arb"
+    BTC = "Btc"
 
     @classmethod
     def from_evm_network(cls, evm_network):

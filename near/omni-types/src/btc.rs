@@ -1,0 +1,22 @@
+use bitcoin::{OutPoint, TxOut};
+use near_sdk::json_types::U128;
+use near_sdk::serde::{Deserialize, Serialize};
+use near_sdk::{near, AccountId};
+
+#[derive(Debug, Serialize, Deserialize)]
+pub enum TokenReceiverMessage {
+    DepositProtocolFee,
+    Withdraw {
+        target_btc_address: String,
+        input: Vec<OutPoint>,
+        output: Vec<TxOut>,
+        max_gas_fee: Option<U128>,
+    },
+}
+
+#[near(serializers=[borsh])]
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
+pub struct UTXOChainConfig {
+    pub connector: AccountId,
+    pub token_id: AccountId,
+}

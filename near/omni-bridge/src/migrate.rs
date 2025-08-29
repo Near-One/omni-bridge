@@ -34,25 +34,27 @@ impl Contract {
     #[private]
     #[init(ignore_state)]
     pub fn migrate() -> Self {
-        let old_state: OldState = env::state_read()
-            .unwrap_or_else(|| env::panic_str("Old state not found. Migration is not needed."));
-
-        Self {
-            factories: old_state.factories,
-            pending_transfers: old_state.pending_transfers,
-            finalised_transfers: old_state.finalised_transfers,
-            fast_transfers: old_state.fast_transfers,
-            token_id_to_address: old_state.token_id_to_address,
-            token_address_to_id: old_state.token_address_to_id,
-            token_decimals: old_state.token_decimals,
-            deployed_tokens: old_state.deployed_tokens,
-            token_deployer_accounts: old_state.token_deployer_accounts,
-            mpc_signer: old_state.mpc_signer,
-            current_origin_nonce: old_state.current_origin_nonce,
-            destination_nonces: old_state.destination_nonces,
-            accounts_balances: old_state.accounts_balances,
-            wnear_account_id: old_state.wnear_account_id,
-            provers: UnorderedMap::new(StorageKey::RegisteredProvers),
+        if let Some(old_state) = env::state_read::<OldState>() {
+            Self {
+                factories: old_state.factories,
+                pending_transfers: old_state.pending_transfers,
+                finalised_transfers: old_state.finalised_transfers,
+                fast_transfers: old_state.fast_transfers,
+                token_id_to_address: old_state.token_id_to_address,
+                token_address_to_id: old_state.token_address_to_id,
+                token_decimals: old_state.token_decimals,
+                deployed_tokens: old_state.deployed_tokens,
+                token_deployer_accounts: old_state.token_deployer_accounts,
+                mpc_signer: old_state.mpc_signer,
+                current_origin_nonce: old_state.current_origin_nonce,
+                destination_nonces: old_state.destination_nonces,
+                accounts_balances: old_state.accounts_balances,
+                wnear_account_id: old_state.wnear_account_id,
+                provers: UnorderedMap::new(StorageKey::RegisteredProvers),
+                utxo_chain_connectors: LookupMap::new(StorageKey::UtxoChainConnectors),
+            }
+        } else {
+            env::panic_str("Old state not found. Migration is not needed.")
         }
     }
 }

@@ -52,6 +52,7 @@ mod tests {
                     "mpc_signer": "mpc.testnet",
                     "nonce": U128(0),
                     "wnear_account_id": "wnear.testnet",
+                    "btc_connector": "brg-dev.testnet",
                 }))
                 .max_gas()
                 .transact()
@@ -109,7 +110,7 @@ mod tests {
                 ChainKind::Arb => arb_factory_address(),
                 ChainKind::Base => base_factory_address(),
                 ChainKind::Bnb => bnb_factory_address(),
-                ChainKind::Near => panic!("Unsupported chain"),
+                ChainKind::Near | ChainKind::Btc | ChainKind::Zcash => panic!("Unsupported chain"),
             };
 
             locker_contract
@@ -232,8 +233,8 @@ mod tests {
                 .await?
                 .unwrap();
 
-            self.token_contract
-                .call("storage_deposit")
+            account
+                .call(self.token_contract.id(), "storage_deposit")
                 .args_json(json!({
                     "account_id": Some(account.id()),
                     "registration_only": Some(true),
