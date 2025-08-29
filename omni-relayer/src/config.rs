@@ -70,6 +70,7 @@ where
     for key in ["INFURA_API_KEY", "TATUM_API_KEY", "FASTNEAR_API_KEY"] {
         if let Ok(val) = std::env::var(key) {
             url = url.replace(key, &val);
+            break;
         }
     }
 
@@ -173,6 +174,7 @@ impl std::fmt::Display for Network {
 #[derive(Debug, Clone, Deserialize)]
 pub struct Near {
     pub network: Network,
+    #[serde(deserialize_with = "replace_rpc_api_key")]
     pub rpc_url: String,
     pub omni_bridge_id: AccountId,
     pub btc_connector: Option<AccountId>,
