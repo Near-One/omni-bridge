@@ -212,17 +212,17 @@ impl Contract {
             .sdk_expect("ERR_PARSE_MSG");
 
         // We can't trust sender_id to pay for storage as it can be spoofed.
-        let storage_payer = env::signer_account_id();
+        let signer_id = env::signer_account_id();
         let promise_or_promise_index_or_value = match parsed_msg {
             BridgeOnTransferMsg::InitTransfer(init_transfer_msg) => self.init_transfer(
                 sender_id,
-                storage_payer,
+                signer_id,
                 token_id,
                 amount,
                 init_transfer_msg,
             ),
             BridgeOnTransferMsg::FastFinTransfer(fast_fin_transfer_msg) => {
-                self.fast_fin_transfer(token_id, amount, storage_payer, fast_fin_transfer_msg)
+                self.fast_fin_transfer(token_id, amount, signer_id, fast_fin_transfer_msg)
             }
         };
 
@@ -519,7 +519,7 @@ impl Contract {
             let yield_id: CryptoHash = env::read_register(PROMISE_REGISTER_ID)
                 .sdk_expect("ERR_READ_PROMISE_REGISTER")
                 .try_into()
-                .sdk_expect("ERR_READ_PROMISE_REGISTER");
+                .sdk_expect("ERR_READ_PROMISE_YIELD_ID");
 
             let required_storage_balance = self.add_promise(&message_storage_account_id, &yield_id);
 

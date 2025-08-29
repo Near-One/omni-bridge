@@ -176,7 +176,7 @@ impl Contract {
         self.accounts_balances.get(account_id)
     }
 
-    pub fn has_storage_balance(&self, account_id: &AccountId, balance: NearToken) -> bool {
+    pub(crate) fn has_storage_balance(&self, account_id: &AccountId, balance: NearToken) -> bool {
         match self.storage_balance_of(account_id) {
             Some(storage_balance) => storage_balance.available >= balance,
             None => false,
