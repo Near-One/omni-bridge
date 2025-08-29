@@ -2,7 +2,7 @@ import pathlib
 import const
 import time
 from const import (get_evm_deploy_results_dir, get_evm_account_dir,
-                     EvmNetwork as EN, NearContract as NC, EvmContract as EC, NearTestAccount as NTA)
+                     EvmNetwork as EN, NearContract as NC, EvmContract as EC, NearTestAccount as NTA, NearExternalContract as NEC)
 from utils import get_mkdir_cmd, get_json_field, extract_tx_hash, get_btc_address, get_last_value, get_tx_hash, get_zcash_tx_hash
 
 module near:
@@ -16,15 +16,15 @@ call_dir = const.common_generated_dir / "07-zcash-transfer"
 near_init_account_file = const.near_account_dir / f"{NTA.INIT_ACCOUNT}.json"
 near_dao_account_file = const.near_account_dir / f"{NTA.DAO_ACCOUNT}.json"
 user_account_file = const.near_account_dir / f"{NTA.USER_ACCOUNT}.json"
-zcash_connector_account_file = const.near_account_dir / f"zcash_connector.json"
-zcash_account_file = const.near_account_dir / f"zcash.json"
+zcash_connector_account_file = const.near_account_dir / f"{NEC.ZCASH_CONNECTOR}.json"
+zcash_account_file = const.near_account_dir / f"{NEC.ZCASH_TOKEN}.json"
 
 # Binary files
-zcash_connector_binary_file = const.near_binary_dir / "zcash_connector.wasm"
-zcash_binary_file = const.near_binary_dir / "zcash.wasm"
+zcash_connector_binary_file = const.near_binary_dir / f"{NEC.ZCASH_CONNECTOR}.wasm"
+zcash_binary_file = const.near_binary_dir / f"{NEC.ZCASH_TOKEN}.wasm"
 
-zcash_file = const.near_deploy_results_dir / f"zcash.json"
-zcash_connector_file = const.near_deploy_results_dir / f"zcash_connector.json"
+zcash_connector_file = const.near_deploy_results_dir / f"{NEC.ZCASH_CONNECTOR}.json"
+zcash_file = const.near_deploy_results_dir / f"{NEC.ZCASH_TOKEN}.json"
 
 rule near_generate_zcash_init_args:
     message: "Generating zcash init args"
