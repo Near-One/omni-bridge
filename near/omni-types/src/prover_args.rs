@@ -2,15 +2,6 @@ use near_sdk::near;
 
 use crate::prover_result::ProofKind;
 
-pub type ProverId = String;
-
-#[near(serializers=[borsh, json])]
-#[derive(Debug, Clone)]
-pub struct VerifyProofArgs {
-    pub prover_id: ProverId,
-    pub prover_args: Vec<u8>,
-}
-
 #[near(serializers=[borsh])]
 #[derive(Debug, Clone)]
 pub struct EvmVerifyProofArgs {

@@ -37,10 +37,20 @@ impl TestEnvBuilder {
         bridge_contract
             .call("new")
             .args_json(json!({
-                "prover_account": prover_contract.id(),
                 "mpc_signer": "mpc.testnet",
                 "nonce": U128(0),
                 "wnear_account_id": "wnear.testnet",
+            }))
+            .max_gas()
+            .transact()
+            .await?
+            .into_result()?;
+
+        bridge_contract
+            .call("add_prover")
+            .args_json(json!({
+                "chain": "Eth",
+                "account_id": prover_contract.id(),
             }))
             .max_gas()
             .transact()
@@ -276,7 +286,7 @@ impl TestEnvBuilder {
             self.bridge_contract
                 .call("fin_transfer")
                 .args_borsh(FinTransferArgs {
-                    chain_kind: ChainKind::Near,
+                    chain_kind: ChainKind::Eth,
                     storage_deposit_actions,
                     prover_args: borsh::to_vec(&ProverResult::InitTransfer(InitTransferMessage {
                         origin_nonce: self.token_transfer_nonce,

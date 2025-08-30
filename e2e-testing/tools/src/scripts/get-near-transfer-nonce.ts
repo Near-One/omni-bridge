@@ -6,7 +6,7 @@ async function main() {
     const program = new Command();
 
     program
-        .requiredOption('-t, --tx-hash <dir>', 'Directory containing transaction receipts')
+        .requiredOption('-t, --tx-hash <dir>', 'Transaction hash of init transfer')
         .parse(process.argv);
 
     const options = program.opts();

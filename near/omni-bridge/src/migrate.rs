@@ -1,14 +1,14 @@
 use crate::{
-    storage::{Decimals, TransferMessageStorage},
+    storage::{Decimals, FastTransferStatusStorage, TransferMessageStorage},
     Contract, ContractExt, StorageKey,
 };
 use borsh::{BorshDeserialize, BorshSerialize};
 use near_contract_standards::storage_management::StorageBalance;
 use near_sdk::{
-    collections::{LookupMap, LookupSet},
+    collections::{LookupMap, LookupSet, UnorderedMap},
     env, near, AccountId, PanicOnDefault,
 };
-use omni_types::{ChainKind, Nonce, OmniAddress, TransferId};
+use omni_types::{ChainKind, FastTransferId, Nonce, OmniAddress, TransferId};
 
 #[derive(BorshDeserialize, BorshSerialize, PanicOnDefault)]
 pub struct OldState {
@@ -16,6 +16,7 @@ pub struct OldState {
     pub factories: LookupMap<ChainKind, OmniAddress>,
     pub pending_transfers: LookupMap<TransferId, TransferMessageStorage>,
     pub finalised_transfers: LookupSet<TransferId>,
+    pub fast_transfers: LookupMap<FastTransferId, FastTransferStatusStorage>,
     pub token_id_to_address: LookupMap<(ChainKind, AccountId), OmniAddress>,
     pub token_address_to_id: LookupMap<OmniAddress, AccountId>,
     pub token_decimals: LookupMap<OmniAddress, Decimals>,
@@ -37,11 +38,10 @@ impl Contract {
             .unwrap_or_else(|| env::panic_str("Old state not found. Migration is not needed."));
 
         Self {
-            prover_account: old_state.prover_account,
             factories: old_state.factories,
             pending_transfers: old_state.pending_transfers,
             finalised_transfers: old_state.finalised_transfers,
-            fast_transfers: LookupMap::new(StorageKey::FastTransfers),
+            fast_transfers: old_state.fast_transfers,
             token_id_to_address: old_state.token_id_to_address,
             token_address_to_id: old_state.token_address_to_id,
             token_decimals: old_state.token_decimals,
@@ -52,6 +52,8 @@ impl Contract {
             destination_nonces: old_state.destination_nonces,
             accounts_balances: old_state.accounts_balances,
             wnear_account_id: old_state.wnear_account_id,
+            provers: UnorderedMap::new(StorageKey::RegisteredProvers),
+            init_transfer_promises: LookupMap::new(StorageKey::InitTransferPromises),
         }
     }
 }

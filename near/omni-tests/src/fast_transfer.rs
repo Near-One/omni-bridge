@@ -147,6 +147,9 @@ mod tests {
 
         let required_balance_init_transfer: NearToken = bridge_contract
             .view("required_balance_for_init_transfer")
+            .args_json(json!({
+                "msg": None::<String>,
+            }))
             .await?
             .json()?;
 
@@ -217,6 +220,9 @@ mod tests {
         let required_balance_for_init_transfer: NearToken = env
             .bridge_contract
             .view("required_balance_for_init_transfer")
+            .args_json(json!({
+                "msg": None::<String>,
+            }))
             .await?
             .json()?;
 
@@ -264,7 +270,7 @@ mod tests {
         Ok(balance)
     }
 
-    fn has_error_message(result: ExecutionFinalResult, error_msg: &str) -> bool {
+    fn has_error_message(result: &ExecutionFinalResult, error_msg: &str) -> bool {
         result.failures().into_iter().any(|outcome| {
             outcome
                 .clone()
@@ -372,7 +378,7 @@ mod tests {
 
             if let Some(error_msg) = error {
                 assert!(
-                    has_error_message(result, error_msg),
+                    has_error_message(&result, error_msg),
                     "Expected error message: {error_msg}"
                 );
 
@@ -591,7 +597,7 @@ mod tests {
             case.first_transfer.fast_transfer_msg.relayer = env.relayer_account.id().clone();
             case.second_transfer.fast_transfer_msg.relayer = env.relayer_account.id().clone();
 
-            let _ = assert_transfer_to_near(&env, case.first_transfer, None).await?;
+            assert_transfer_to_near(&env, case.first_transfer, None).await?;
             assert_transfer_to_near(&env, case.second_transfer, case.error).await
         }
     }
@@ -615,7 +621,7 @@ mod tests {
                 get_balance(&env.token_contract, env.bridge_contract.id()).await?;
 
             let result = do_fast_transfer(
-                &env,
+                env,
                 params.amount_to_send,
                 params.fast_transfer_msg.clone(),
                 None,
@@ -629,7 +635,7 @@ mod tests {
 
             if let Some(error_msg) = error {
                 assert!(
-                    has_error_message(result, error_msg),
+                    has_error_message(&result, error_msg),
                     "Expected error message: {error_msg}"
                 );
 
@@ -801,13 +807,8 @@ mod tests {
             case.first_transfer.fast_transfer_msg.relayer = env.relayer_account.id().clone();
             case.second_transfer.fast_transfer_msg.relayer = env.relayer_account.id().clone();
 
-            let _ = assert_transfer_to_other_chain(
-                &env,
-                case.first_transfer,
-                case.is_bridged_token,
-                None,
-            )
-            .await?;
+            assert_transfer_to_other_chain(&env, case.first_transfer, case.is_bridged_token, None)
+                .await?;
 
             assert_transfer_to_other_chain(
                 &env,
@@ -847,10 +848,8 @@ mod tests {
             let contract_balance_before =
                 get_balance(&env.token_contract, env.bridge_contract.id()).await?;
 
-            assert!(contract_balance_before > U128(0));
-
             let result = do_fast_transfer(&env, transfer_amount, fast_transfer_msg, None).await?;
-            assert!(has_error_message(result, "ERR_TRANSFER_ALREADY_FINALISED"));
+            assert!(has_error_message(&result, "ERR_TRANSFER_ALREADY_FINALISED"));
 
             let relayer_balance_after =
                 get_balance(&env.token_contract, env.relayer_account.id()).await?;
@@ -896,7 +895,7 @@ mod tests {
                 get_balance(&env.token_contract, env.fast_relayer_account.id()).await?;
 
             let result =
-                do_fin_transfer(&env, params.transfer_msg, params.fast_relayer_account).await?;
+                do_fin_transfer(env, params.transfer_msg, params.fast_relayer_account).await?;
 
             let relayer_balance_after =
                 get_balance(&env.token_contract, env.relayer_account.id()).await?;
@@ -905,7 +904,7 @@ mod tests {
 
             if let Some(error_msg) = error {
                 assert!(
-                    has_error_message(result, error_msg),
+                    has_error_message(&result, error_msg),
                     "Expected error message: {error_msg}"
                 );
 
@@ -917,7 +916,7 @@ mod tests {
 
             assert_eq!(0, result.failures().len());
 
-            if let Some(_) = params.fast_relayer_account {
+            if params.fast_relayer_account.is_some() {
                 assert_eq!(
                     expected_to_receive,
                     fast_relayer_balance_after.0 - fast_relayer_balance_before.0

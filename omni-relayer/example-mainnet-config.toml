@@ -3,8 +3,8 @@ url = "redis://127.0.0.1/"
 sleep_time_after_events_process_secs = 1
 query_retry_attempts = 10
 query_retry_sleep_secs = 1
-fee_retry_base_sleep_secs = 10
-fee_retry_max_sleep_secs = 43200 # 60 * 60 * 12
+fee_retry_base_secs = 1.2
+fee_retry_max_sleep_secs = 3600 # 60 * 60
 keep_transfers_for_secs = 604800 # 60 * 60 * 24 * 7
 
 [bridge_indexer]
@@ -19,7 +19,7 @@ db_name = "mainnet_omni_bridge_db"
 
 [near]
 network = "mainnet"
-rpc_url = "https://rpc.mainnet.near.org/"
+rpc_url = "https://rpc.mainnet.fastnear.com?apiKey=FASTNEAR_API_KEY"
 omni_bridge_id = "omni.bridge.near"
 btc_connector = "btc-connector.bridge.near"
 btc = "btc-client.bridge.near"
@@ -42,6 +42,10 @@ block_processing_batch_size = 10_000
 # https://wormhole.com/docs/build/reference/consistency-levels/
 expected_finalization_time = 1095
 safe_confirmations = 12
+error_selectors_to_remove = [
+	"0x8baa579f", # InvalidSignature()
+	"0xdcf35db0" # FailedToSendEther()
+]
 
 [base]
 rpc_http_url = "https://base-mainnet.infura.io/v3/INFURA_API_KEY"
@@ -53,6 +57,11 @@ block_processing_batch_size = 10_000
 # https://wormhole.com/docs/build/reference/consistency-levels/
 expected_finalization_time = 1026
 safe_confirmations = 30
+error_selectors_to_remove = [
+	"0x8baa579f", # InvalidSignature()
+	"0xdcf35db0", # FailedToSendEther()
+	"696e76616c696420666565" # Wormhole's "invalid fee"
+]
 
 [arb]
 rpc_http_url = "https://arbitrum-mainnet.infura.io/v3/INFURA_API_KEY"
@@ -64,6 +73,11 @@ block_processing_batch_size = 10_000
 # https://wormhole.com/docs/build/reference/consistency-levels/
 expected_finalization_time = 1066
 safe_confirmations = 30
+error_selectors_to_remove = [
+	"0x8baa579f", # InvalidSignature()
+	"0xdcf35db0", # FailedToSendEther()
+	"696e76616c696420666565" # Wormhole's "invalid fee"
+]
 
 [bnb]
 rpc_http_url = "https://bsc-mainnet.infura.io/v3/INFURA_API_KEY"
@@ -75,6 +89,11 @@ block_processing_batch_size = 10_000
 # https://wormhole.com/docs/build/reference/consistency-levels/
 expected_finalization_time = 48
 safe_confirmations = 25
+error_selectors_to_remove = [
+	"0x8baa579f", # InvalidSignature()
+	"0xdcf35db0", # FailedToSendEther()
+	"696e76616c696420666565" # Wormhole's "invalid fee"
+]
 
 [solana]
 rpc_http_url = "https://api.mainnet-beta.solana.com"
@@ -83,6 +102,8 @@ rpc_ws_url = "wss://api.mainnet-beta.solana.com"
 program_id = "dahPEoZGXfyV58JqqH85okdHmpN8U2q8owgPUXSCPxe"
 # This is the wormhole contract ID on Solana (can be found here https://wormhole.com/docs/build/reference/contract-addresses/#__tabbed_1_2)
 wormhole_id = "worm2ZoG2kUd4vFXhvjh93UUH596ayRfgQ2MgjNMTth"
+wormhole_post_message_shim_id = "EtZMZM22ViKMo4r5y4Anovs3wKQ2owUmDpjygnMMcdEX"
+wormhole_post_message_shim_event_authority = "HQS31aApX3DDkuXgSpV9XyDUNtFgQ31pUn5BNWHG2PSp"
 deploy_token_emitter_index = 3
 deploy_token_discriminator = [144, 104, 20, 192, 18, 112, 224, 140]
 # There's a list of account keys and they are store in a strict order. We need indexes to get the right key

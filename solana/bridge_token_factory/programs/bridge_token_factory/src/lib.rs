@@ -1,12 +1,12 @@
 use anchor_lang::prelude::*;
 use instructions::{
-    ChangeConfig, DeployToken, FinalizeTransfer, FinalizeTransferSol, InitTransfer,
+    ChangeConfig, DeployToken, FinalizeTransfer, FinalizeTransferSol, GetVersion, InitTransfer,
     InitTransferSol, Initialize, LogMetadata, Pause, UpdateMetadata,
     __client_accounts_change_config, __client_accounts_deploy_token,
     __client_accounts_finalize_transfer, __client_accounts_finalize_transfer_sol,
-    __client_accounts_init_transfer, __client_accounts_init_transfer_sol,
-    __client_accounts_initialize, __client_accounts_log_metadata, __client_accounts_pause,
-    __client_accounts_update_metadata,
+    __client_accounts_get_version, __client_accounts_init_transfer,
+    __client_accounts_init_transfer_sol, __client_accounts_initialize,
+    __client_accounts_log_metadata, __client_accounts_pause, __client_accounts_update_metadata,
 };
 use state::message::{
     deploy_token::DeployTokenPayload, finalize_transfer::FinalizeTransferPayload,
@@ -29,9 +29,9 @@ pub mod bridge_token_factory {
     use super::constants::{FINALIZE_TRANSFER_PAUSED, INIT_TRANSFER_PAUSED};
     use super::{
         msg, ChangeConfig, Context, DeployToken, DeployTokenPayload, FinalizeTransfer,
-        FinalizeTransferPayload, FinalizeTransferSol, InitTransfer, InitTransferPayload,
-        InitTransferSol, Initialize, Key, LogMetadata, Pause, Pubkey, Result, SignedPayload,
-        UpdateMetadata,
+        FinalizeTransferPayload, FinalizeTransferSol, GetVersion, InitTransfer,
+        InitTransferPayload, InitTransferSol, Initialize, Key, LogMetadata, Pause, Pubkey, Result,
+        SignedPayload, UpdateMetadata,
     };
 
     pub fn initialize(
@@ -57,6 +57,10 @@ pub mod bridge_token_factory {
         )?;
 
         Ok(())
+    }
+
+    pub fn get_version(_ctx: Context<GetVersion>) -> Result<String> {
+        Ok(env!("CARGO_PKG_VERSION").to_string())
     }
 
     pub fn deploy_token(

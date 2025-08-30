@@ -141,6 +141,12 @@ pub mod tests {
             .unwrap()
     }
 
+    pub fn bnb_token_address() -> OmniAddress {
+        "bnb:0x1234567890123456789012345678901234567890"
+            .parse()
+            .unwrap()
+    }
+
     pub fn get_claim_fee_args_near(
         origin_chain: ChainKind,
         destination_chain: ChainKind,
