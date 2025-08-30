@@ -1,10 +1,14 @@
+use std::collections::HashMap;
+
 use anyhow::{Context, Result};
-use btc_bridge_client::BtcBridgeClient;
+use bridge_indexer_types::documents_types::UtxoChain;
+use btc_bridge_client::{AuthOptions, UTXOBridgeClient, types::UTXOChain};
+use btc_utils::address::Chain;
 use eth_light_client::{EthLightClient, EthLightClientBuilder};
 use tracing::info;
 
 use evm_bridge_client::{EvmBridgeClient, EvmBridgeClientBuilder};
-use near_bridge_client::NearBridgeClientBuilder;
+use near_bridge_client::{NearBridgeClientBuilder, UTXOChainAccounts};
 use near_crypto::InMemorySigner;
 use omni_connector::{OmniConnector, OmniConnectorBuilder};
 use omni_types::ChainKind;
@@ -12,7 +16,10 @@ use solana_bridge_client::{SolanaBridgeClient, SolanaBridgeClientBuilder};
 use solana_client::nonblocking::rpc_client::RpcClient;
 use wormhole_bridge_client::{WormholeBridgeClient, WormholeBridgeClientBuilder};
 
-use crate::{config, startup};
+use crate::{
+    config::{self, Network},
+    startup,
+};
 
 pub mod bridge_indexer;
 pub mod evm;
@@ -33,6 +40,46 @@ macro_rules! skip_fail {
     };
 }
 
+pub fn to_chain(config: &config::Config, utxo_chain: UtxoChain) -> Chain {
+    match (&config.near.network, utxo_chain) {
+        (Network::Mainnet, UtxoChain::Btc) => Chain::BitcoinMainnet,
+        (Network::Mainnet, UtxoChain::Zcash) => Chain::ZcashMainnet,
+        (Network::Testnet, UtxoChain::Btc) => Chain::BitcoinTestnet,
+        (Network::Testnet, UtxoChain::Zcash) => Chain::ZcashTestnet,
+    }
+}
+
+fn build_utxo_bridges(
+    config: &config::Config,
+    near_signer: &InMemorySigner,
+) -> HashMap<btc_utils::address::Chain, UTXOChainAccounts> {
+    let mut utxo_bridges = HashMap::new();
+
+    for (chain, connector, token) in [
+        (
+            UtxoChain::Btc,
+            config.near.btc_connector.as_ref(),
+            config.near.btc.as_ref(),
+        ),
+        (
+            UtxoChain::Zcash,
+            config.near.zcash_connector.as_ref(),
+            config.near.zcash.as_ref(),
+        ),
+    ] {
+        utxo_bridges.insert(
+            to_chain(config, chain),
+            UTXOChainAccounts {
+                utxo_chain_connector: connector.map(std::string::ToString::to_string),
+                utxo_chain_token: token.map(std::string::ToString::to_string),
+                satoshi_relayer: Some(near_signer.account_id.to_string()),
+            },
+        );
+    }
+
+    utxo_bridges
+}
+
 fn build_near_bridge_client(
     config: &config::Config,
     near_signer: &InMemorySigner,
@@ -42,21 +89,7 @@ fn build_near_bridge_client(
         .private_key(Some(near_signer.secret_key.to_string()))
         .signer(Some(near_signer.account_id.to_string()))
         .omni_bridge_id(Some(config.near.omni_bridge_id.to_string()))
-        .btc_connector(
-            config
-                .near
-                .btc_connector
-                .as_ref()
-                .map(std::string::ToString::to_string),
-        )
-        .btc(
-            config
-                .near
-                .btc
-                .as_ref()
-                .map(std::string::ToString::to_string),
-        )
-        .satoshi_relayer(Some(near_signer.account_id.to_string()))
+        .utxo_bridges(build_utxo_bridges(config, near_signer))
         .build()
         .context("Failed to build NearBridgeClient")
 }
@@ -113,12 +146,18 @@ fn build_solana_bridge_client(config: &config::Config) -> Result<Option<SolanaBr
         .transpose()
 }
 
-fn build_btc_bridge_client(config: &config::Config) -> Result<BtcBridgeClient> {
-    config
-        .btc
-        .as_ref()
-        .map(|btc| BtcBridgeClient::new(&btc.rpc_http_url))
-        .context("Failed to create BtcBridgeClient")
+fn build_utxo_bridge_client<C: UTXOChain>(
+    config: &config::Config,
+    chain: UtxoChain,
+) -> Result<UTXOBridgeClient<C>> {
+    let utxo = match chain {
+        UtxoChain::Btc => &config.btc,
+        UtxoChain::Zcash => &config.zcash,
+    };
+
+    utxo.as_ref()
+        .map(|utxo| UTXOBridgeClient::new(utxo.rpc_http_url.clone(), AuthOptions::None))
+        .context("Failed to create UtxoBridgeClient")
 }
 
 fn build_wormhole_bridge_client(config: &config::Config) -> Result<WormholeBridgeClient> {
@@ -158,7 +197,8 @@ pub fn build_omni_connector(
     let arb_bridge_client = build_evm_bridge_client(config, ChainKind::Arb)?;
     let bnb_bridge_client = build_evm_bridge_client(config, ChainKind::Bnb)?;
     let solana_bridge_client = build_solana_bridge_client(config)?;
-    let btc_bridge_client = build_btc_bridge_client(config)?;
+    let btc_bridge_client = build_utxo_bridge_client(config, UtxoChain::Btc)?;
+    let zcash_bridge_client = build_utxo_bridge_client(config, UtxoChain::Zcash)?;
     let wormhole_bridge_client = build_wormhole_bridge_client(config)?;
     let eth_light_client = build_eth_light_client(config)?;
 
@@ -171,6 +211,7 @@ pub fn build_omni_connector(
         .solana_bridge_client(solana_bridge_client)
         .wormhole_bridge_client(Some(wormhole_bridge_client))
         .btc_bridge_client(Some(btc_bridge_client))
+        .zcash_bridge_client(Some(zcash_bridge_client))
         .eth_light_client(eth_light_client)
         .build()
         .context("Failed to build OmniConnector")?;

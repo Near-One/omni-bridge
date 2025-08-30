@@ -102,7 +102,8 @@ pub struct Config {
     pub arb: Option<Evm>,
     pub bnb: Option<Evm>,
     pub solana: Option<Solana>,
-    pub btc: Option<Btc>,
+    pub btc: Option<Utxo>,
+    pub zcash: Option<Utxo>,
     pub wormhole: Wormhole,
 }
 
@@ -178,6 +179,8 @@ pub struct Near {
     pub omni_bridge_id: AccountId,
     pub btc_connector: Option<AccountId>,
     pub btc: Option<AccountId>,
+    pub zcash_connector: Option<AccountId>,
+    pub zcash: Option<AccountId>,
     pub omni_credentials_path: Option<String>,
     pub fast_credentials_path: Option<String>,
     pub sign_without_checking_fee: Option<Vec<OmniAddress>>,
@@ -230,7 +233,7 @@ pub struct Solana {
 }
 
 #[derive(Debug, Clone, Deserialize)]
-pub struct Btc {
+pub struct Utxo {
     #[serde(deserialize_with = "replace_rpc_api_key")]
     pub rpc_http_url: String,
     pub signing_enabled: bool,

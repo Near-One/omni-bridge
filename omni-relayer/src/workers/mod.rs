@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use anyhow::Result;
 use bridge_indexer_types::documents_types::DepositMsg;
+use btc_utils::address::Chain;
 use futures::future::join_all;
 use rust_decimal::MathematicalOps;
 use tracing::warn;
@@ -19,10 +20,10 @@ use omni_types::{
 
 use crate::{config, utils};
 
-pub mod btc;
 mod evm;
 mod near;
 mod solana;
+pub mod utxo;
 
 const PAUSED_ERROR: u32 = 6008;
 
@@ -76,11 +77,13 @@ pub enum Transfer {
         emitter: Pubkey,
         sequence: u64,
     },
-    NearToBtc {
+    NearToUtxo {
+        chain: Chain,
         btc_pending_id: String,
         sign_index: u64,
     },
-    BtcToNear {
+    UtxoToNear {
+        chain: Chain,
         btc_tx_hash: String,
         vout: u64,
         deposit_msg: DepositMsg,
@@ -442,7 +445,7 @@ pub async fn process_events(
                             }
                         }
                     }));
-                } else if let Transfer::NearToBtc { .. } = transfer {
+                } else if let Transfer::NearToUtxo { .. } = transfer {
                     handlers.push(tokio::spawn({
                         let config = config.clone();
                         let mut redis_connection_manager = redis_connection_manager.clone();
@@ -450,7 +453,7 @@ pub async fn process_events(
                         let near_omni_nonce = near_omni_nonce.clone();
 
                         async move {
-                            match btc::process_near_to_btc_init_transfer_event(
+                            match utxo::process_utxo_to_btc_init_transfer_event(
                                 omni_connector,
                                 transfer,
                                 near_omni_nonce,
@@ -480,7 +483,7 @@ pub async fn process_events(
                             }
                         }
                     }));
-                } else if let Transfer::BtcToNear { .. } = transfer {
+                } else if let Transfer::UtxoToNear { .. } = transfer {
                     handlers.push(tokio::spawn({
                         let config = config.clone();
                         let mut redis_connection_manager = redis_connection_manager.clone();
@@ -488,7 +491,7 @@ pub async fn process_events(
                         let near_nonce = near_omni_nonce.clone();
 
                         async move {
-                            match btc::process_btc_to_near_init_transfer_event(
+                            match utxo::process_utxo_to_near_init_transfer_event(
                                 omni_connector,
                                 transfer,
                                 near_nonce,
@@ -785,7 +788,7 @@ pub async fn process_events(
                     }));
                 }
             } else if let Ok(sign_btc_transaction_event) =
-                serde_json::from_value::<btc::SignBtcTransaction>(event.clone())
+                serde_json::from_value::<utxo::SignUtxoTransaction>(event.clone())
             {
                 handlers.push(tokio::spawn({
                     let config = config.clone();
@@ -793,7 +796,7 @@ pub async fn process_events(
                     let omni_connector = omni_connector.clone();
 
                     async move {
-                        match btc::process_sign_transaction_event(
+                        match utxo::process_sign_transaction_event(
                             omni_connector,
                             sign_btc_transaction_event,
                         )
@@ -823,7 +826,7 @@ pub async fn process_events(
                     }
                 }));
             } else if let Ok(confirmed_tx_hash) =
-                serde_json::from_value::<btc::ConfirmedTxHash>(event.clone())
+                serde_json::from_value::<utxo::ConfirmedTxHash>(event.clone())
             {
                 handlers.push(tokio::spawn({
                     let config = config.clone();
@@ -832,9 +835,9 @@ pub async fn process_events(
                     let near_nonce = near_omni_nonce.clone();
 
                     async move {
-                        match btc::process_confirmed_tx_hash(
+                        match utxo::process_confirmed_tx_hash(
                             omni_connector,
-                            confirmed_tx_hash.btc_tx_hash,
+                            confirmed_tx_hash,
                             near_nonce,
                         )
                         .await
