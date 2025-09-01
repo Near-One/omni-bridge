@@ -462,6 +462,7 @@ pub struct InitTransferMsg {
     pub recipient: OmniAddress,
     pub fee: U128,
     pub native_token_fee: U128,
+    pub msg: Option<String>,
 }
 
 #[near(serializers=[borsh, json])]

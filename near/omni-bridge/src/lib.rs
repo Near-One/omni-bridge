@@ -478,7 +478,7 @@ impl Contract {
                 native_fee: init_transfer_msg.native_token_fee,
             },
             sender: OmniAddress::Near(sender_id),
-            msg: String::new(),
+            msg: init_transfer_msg.msg.unwrap_or_default(),
             destination_nonce,
             origin_transfer_id: None,
         };

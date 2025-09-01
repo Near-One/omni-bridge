@@ -11,6 +11,7 @@ use omni_types::btc::{TokenReceiverMessage, UTXOChainConfig};
 use omni_types::{ChainKind, Fee, OmniAddress, TransferId, TransferMessage};
 
 const SUBMIT_TRANSFER_TO_BTC_CONNECTOR_CALLBACK_GAS: Gas = Gas::from_tgas(5);
+
 #[near]
 impl Contract {
     #[payable]
