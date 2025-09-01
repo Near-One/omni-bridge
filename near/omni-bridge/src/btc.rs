@@ -1,4 +1,7 @@
-use crate::{ext_token, Contract, ContractExt, Role, FT_TRANSFER_CALL_GAS, ONE_YOCTO};
+use crate::storage::NEP141_DEPOSIT;
+use crate::{
+    ext_token, Contract, ContractExt, Role, FT_TRANSFER_CALL_GAS, ONE_YOCTO, STORAGE_DEPOSIT_GAS,
+};
 use near_plugins::{access_control_any, pause, AccessControllable, Pausable};
 use near_sdk::json_types::U128;
 use near_sdk::{
@@ -117,17 +120,24 @@ impl Contract {
             &chain_kind,
             &UTXOChainConfig {
                 connector: utxo_chain_connector_id,
-                token_id: utxo_chain_token_id,
+                token_id: utxo_chain_token_id.clone(),
             },
         );
 
-        let required_deposit = env::storage_byte_cost()
-            .saturating_mul((env::storage_usage().saturating_sub(storage_usage)).into());
+        let required_deposit = NEP141_DEPOSIT.saturating_add(
+            env::storage_byte_cost()
+                .saturating_mul((env::storage_usage().saturating_sub(storage_usage)).into()),
+        );
 
         require!(
             env::attached_deposit() >= required_deposit,
             "ERROR: The deposit is not sufficient to cover the storage."
         );
+
+        ext_token::ext(utxo_chain_token_id)
+            .with_static_gas(STORAGE_DEPOSIT_GAS)
+            .with_attached_deposit(NEP141_DEPOSIT)
+            .storage_deposit(&env::current_account_id(), Some(true));
     }
 
     /// Returns the `AccountId` of the connector for the given UTXO chain.
