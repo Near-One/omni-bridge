@@ -63,6 +63,7 @@ mod tests {
             let sender_balance_token = 1_000_000_000_000;
 
             let mut env_builder = TestEnvBuilder::new().await?;
+            env_builder.deploy_bridge(false, None).await?;
             env_builder.add_factory(eth_factory_address()).await?;
             env_builder.add_factory(base_factory_address()).await?;
             env_builder.deploy_token_deployer(ChainKind::Eth).await?;
@@ -74,7 +75,7 @@ mod tests {
             if is_bridged_token {
                 env_builder.deploy_eth_token().await?;
             } else {
-                env_builder.deploy_native_nep141_token().await?;
+                env_builder.deploy_and_bind_nep141_token(18).await?;
             }
             env_builder
                 .mint_tokens(&relayer_account_id(), sender_balance_token)
@@ -84,7 +85,7 @@ mod tests {
                 .await?;
             env_builder
                 .mint_tokens(
-                    &env_builder.bridge_contract.id().clone(),
+                    &env_builder.bridge_contract().id().clone(),
                     sender_balance_token / 2,
                 )
                 .await?;
@@ -94,7 +95,7 @@ mod tests {
             Ok(Self {
                 token_contract: bridge_token.contract,
                 eth_token_address: bridge_token.eth_address,
-                bridge_contract: env_builder.bridge_contract,
+                bridge_contract: env_builder.bridge_contract.unwrap(),
                 relayer_account: env_builder
                     .accounts
                     .get(&relayer_account_id())

@@ -9,17 +9,19 @@ mod tests {
     };
     use near_workspaces::{network::Sandbox, types::NearToken, Contract, Worker};
     use omni_types::{
-        locker_args::{BindTokenArgs, FinTransferArgs, StorageDepositAction},
-        prover_result::{DeployTokenMessage, InitTransferMessage, ProverResult},
-        BasicMetadata, Fee, OmniAddress,
+        locker_args::{FinTransferArgs, StorageDepositAction},
+        prover_result::{InitTransferMessage, ProverResult},
+        ChainKind, Fee, OmniAddress,
     };
     use rand::RngCore;
     use rstest::rstest;
 
-    use crate::helpers::tests::{
-        account_n, eth_eoa_address, eth_factory_address, eth_token_address,
-        get_test_deploy_token_args, locker_wasm, mock_prover_wasm, mock_token_receiver_wasm,
-        mock_token_wasm, relayer_account_id, token_deployer_wasm, NEP141_DEPOSIT,
+    use crate::{
+        environment::TestEnvBuilder,
+        helpers::tests::{
+            account_n, eth_eoa_address, eth_factory_address, eth_token_address, relayer_account_id,
+            NEP141_DEPOSIT,
+        },
     };
 
     static HEX_STRING_2000: std::sync::LazyLock<String> = std::sync::LazyLock::new(|| {
@@ -54,209 +56,46 @@ mod tests {
         is_wnear: bool,
         deploy_minted_token: bool,
     ) -> anyhow::Result<TestSetup> {
-        let worker = near_workspaces::sandbox().await?;
+        let mut env_builder = TestEnvBuilder::new().await?;
 
-        // Deploy and init FT token
-        let token_contract = worker.dev_deploy(&mock_token_wasm()).await?;
-        token_contract
-            .call("new_default_meta")
-            .args_json(json!({
-                "owner_id": token_contract.id(),
-                "total_supply": U128(u128::MAX)
-            }))
-            .max_gas()
-            .transact()
-            .await?
-            .into_result()?;
-
-        let token_receiver_contract = worker.dev_deploy(&mock_token_receiver_wasm()).await?;
-
-        // Deploy and init locker
-        let locker_contract = worker.dev_deploy(&locker_wasm()).await?;
-        let wnear_account_id: AccountId = if is_wnear {
-            token_contract.id().clone()
+        let token_contract = env_builder.deploy_nep141_token().await?;
+        if is_wnear {
+            env_builder
+                .deploy_bridge(false, Some(token_contract.id().clone()))
+                .await?;
         } else {
-            "wnear.testnet".parse().unwrap()
-        };
-        locker_contract
-            .call("new")
-            .args_json(json!({
-                "mpc_signer": "mpc.testnet",
-                "nonce": U128(0),
-                "wnear_account_id": wnear_account_id,
-            }))
-            .max_gas()
-            .transact()
-            .await?
-            .into_result()?;
+            env_builder.deploy_bridge(false, None).await?;
+        }
 
-        let prover = worker.dev_deploy(&mock_prover_wasm()).await?;
-        locker_contract
-            .call("add_prover")
-            .args_json(json!({
-                "chain": "Eth",
-                "account_id": prover.id(),
-            }))
-            .max_gas()
-            .transact()
-            .await?
-            .into_result()?;
+        env_builder.add_factory(eth_factory_address()).await?;
 
-        // Get required balances
-        let required_balance_for_fin_transfer: NearToken = locker_contract
+        if deploy_minted_token {
+            env_builder.deploy_token_deployer(ChainKind::Eth).await?;
+            env_builder
+                .deploy_bridged_token(eth_token_address())
+                .await?;
+        } else {
+            env_builder.bind_token(token_contract, 24).await?;
+        }
+
+        env_builder.deploy_mock_receiver().await?;
+
+        env_builder.create_account(relayer_account_id()).await?;
+
+        let required_balance_for_fin_transfer: NearToken = env_builder
+            .bridge_contract()
             .view("required_balance_for_fin_transfer")
             .await?
             .json()?;
 
-        // Create relayer account
-        let relayer_account = worker
-            .create_tla(relayer_account_id(), worker.dev_generate().await.1)
-            .await?
-            .into_result()?;
-
-        locker_contract
-            .call("add_factory")
-            .args_json(json!({
-                "address": eth_factory_address(),
-            }))
-            .max_gas()
-            .transact()
-            .await?
-            .into_result()?;
-
-        let token_contract = if deploy_minted_token {
-            setup_deployed_token(&worker, &locker_contract).await?
-        } else {
-            // Bind token
-            let required_balance_for_bind_token: NearToken = locker_contract
-                .view("required_balance_for_bind_token")
-                .await?
-                .json()?;
-
-            relayer_account
-                .call(locker_contract.id(), "bind_token")
-                .args_borsh(BindTokenArgs {
-                    chain_kind: omni_types::ChainKind::Eth,
-                    prover_args: borsh::to_vec(&ProverResult::DeployToken(DeployTokenMessage {
-                        token: token_contract.id().clone(),
-                        token_address: eth_token_address(),
-                        decimals: 24,
-                        origin_decimals: 24,
-                        emitter_address: eth_factory_address(),
-                    }))
-                    .unwrap(),
-                })
-                .deposit(required_balance_for_bind_token)
-                .max_gas()
-                .transact()
-                .await?
-                .into_result()?;
-
-            // Storage deposit
-            token_contract
-                .call("storage_deposit")
-                .args_json(json!({
-                    "account_id": locker_contract.id(),
-                    "registration_only": true,
-                }))
-                .deposit(NEP141_DEPOSIT)
-                .max_gas()
-                .transact()
-                .await?
-                .into_result()?;
-
-            token_contract
-        };
-
         Ok(TestSetup {
-            worker,
-            token_contract,
-            locker_contract,
-            token_receiver_contract,
-            relayer_account,
+            worker: env_builder.worker,
+            token_contract: env_builder.bridge_token.unwrap().contract,
+            locker_contract: env_builder.bridge_contract.unwrap(),
+            token_receiver_contract: env_builder.token_receiver.unwrap(),
+            relayer_account: env_builder.accounts[&relayer_account_id()].clone(),
             required_balance_for_fin_transfer,
         })
-    }
-
-    async fn setup_deployed_token(
-        worker: &near_workspaces::Worker<near_workspaces::network::Sandbox>,
-        locker: &near_workspaces::Contract,
-    ) -> anyhow::Result<near_workspaces::Contract> {
-        // Setup token deployer
-        let token_deployer = worker
-            .create_tla_and_deploy(
-                account_n(10),
-                worker.dev_generate().await.1,
-                &token_deployer_wasm(),
-            )
-            .await?
-            .unwrap();
-
-        token_deployer
-            .call("new")
-            .args_json(json!({
-                "controller": locker.id(),
-                "dao": "dao.near",
-            }))
-            .max_gas()
-            .transact()
-            .await?
-            .into_result()?;
-
-        let init_token_address = eth_token_address();
-        // Configure locker
-        locker
-            .call("add_token_deployer")
-            .args_json(json!({
-                "chain": init_token_address.get_chain(),
-                "account_id": token_deployer.id(),
-            }))
-            .max_gas()
-            .transact()
-            .await?
-            .into_result()?;
-
-        let token_deploy_initiator = worker
-            .create_tla(account_n(2), worker.dev_generate().await.1)
-            .await?
-            .unwrap();
-
-        let required_storage: NearToken = locker
-            .view("required_balance_for_deploy_token")
-            .await?
-            .json()?;
-
-        token_deploy_initiator
-            .call(locker.id(), "deploy_token")
-            .args_borsh(get_test_deploy_token_args(
-                &init_token_address,
-                &eth_factory_address(),
-                &BasicMetadata {
-                    name: "Test Token".to_string(),
-                    symbol: "TEST".to_string(),
-                    decimals: 18,
-                },
-            ))
-            .deposit(required_storage)
-            .max_gas()
-            .transact()
-            .await?
-            .into_result()?;
-
-        let token_account_id: AccountId = locker
-            .view("get_token_id")
-            .args_json(json!({
-                "address": init_token_address
-            }))
-            .await?
-            .json()?;
-
-        let token_contract = worker
-            .import_contract(&token_account_id, worker)
-            .transact()
-            .await?;
-
-        Ok(token_contract)
     }
 
     #[rstest]
