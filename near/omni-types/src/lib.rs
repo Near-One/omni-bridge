@@ -222,10 +222,9 @@ impl OmniAddress {
             ChainKind::Arb => Ok(OmniAddress::Arb(H160::ZERO)),
             ChainKind::Base => Ok(OmniAddress::Base(H160::ZERO)),
             ChainKind::Bnb => Ok(Self::Bnb(H160::ZERO)),
-            ChainKind::Btc => Ok(OmniAddress::Btc("1111111111111111111114oLvT2".to_string())),
-            ChainKind::Zcash => Ok(OmniAddress::Zcash(
-                "1111111111111111111114oLvT2".to_string(),
-            )),
+            ChainKind::Btc | ChainKind::Zcash => {
+                Err("Zero address is not defined for UTXO chains".to_string())
+            }
         }
     }
 
@@ -299,7 +298,7 @@ impl OmniAddress {
             }
             Self::Near(address) => *address == ZERO_ACCOUNT_ID,
             Self::Sol(address) => address.is_zero(),
-            Self::Btc(address) | Self::Zcash(address) => address == "1111111111111111111114oLvT2",
+            Self::Btc(_) | Self::Zcash(_) => false,
         }
     }
 

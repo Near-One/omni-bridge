@@ -56,7 +56,7 @@ impl Contract {
         }
 
         let chain_kind = transfer.message.get_destination_chain();
-        let btc_account_id = self.get_native_token_id(chain_kind);
+        let btc_account_id = self.get_utxo_chain_token(chain_kind);
         require!(
             self.get_token_id(&transfer.message.token) == btc_account_id,
             "Only the native token of this UTXO chain can be transferred."
