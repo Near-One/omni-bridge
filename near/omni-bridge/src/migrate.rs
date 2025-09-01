@@ -52,7 +52,7 @@ impl Contract {
                 wnear_account_id: old_state.wnear_account_id,
                 provers: UnorderedMap::new(StorageKey::RegisteredProvers),
                 init_transfer_promises: LookupMap::new(StorageKey::InitTransferPromises),
-                utxo_chain_connectors: LookupMap::new(StorageKey::UtxoChainConnectors),
+                utxo_chain_connectors: UnorderedMap::new(StorageKey::UtxoChainConnectors),
             }
         } else {
             env::panic_str("Old state not found. Migration is not needed.")

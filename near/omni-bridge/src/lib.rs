@@ -209,7 +209,7 @@ pub struct Contract {
     pub wnear_account_id: AccountId,
     pub provers: UnorderedMap<ChainKind, AccountId>,
     pub init_transfer_promises: LookupMap<AccountId, CryptoHash>,
-    pub utxo_chain_connectors: LookupMap<ChainKind, UTXOChainConfig>,
+    pub utxo_chain_connectors: UnorderedMap<ChainKind, UTXOChainConfig>,
 }
 
 #[near]
@@ -254,7 +254,7 @@ impl Contract {
             wnear_account_id,
             provers: UnorderedMap::new(StorageKey::RegisteredProvers),
             init_transfer_promises: LookupMap::new(StorageKey::InitTransferPromises),
-            utxo_chain_connectors: LookupMap::new(StorageKey::UtxoChainConnectors),
+            utxo_chain_connectors: UnorderedMap::new(StorageKey::UtxoChainConnectors),
         };
 
         contract.acl_init_super_admin(near_sdk::env::predecessor_account_id());
@@ -1415,6 +1415,11 @@ impl Contract {
     #[must_use]
     pub fn get_provers(&self) -> Vec<(ChainKind, AccountId)> {
         self.provers.iter().collect()
+    }
+
+    #[must_use]
+    pub fn get_utxo_chain_connectors(&self) -> Vec<(ChainKind, UTXOChainConfig)> {
+        self.utxo_chain_connectors.iter().collect()
     }
 }
 
