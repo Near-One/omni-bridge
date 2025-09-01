@@ -222,8 +222,8 @@ impl OmniAddress {
             ChainKind::Arb => Ok(OmniAddress::Arb(H160::ZERO)),
             ChainKind::Base => Ok(OmniAddress::Base(H160::ZERO)),
             ChainKind::Bnb => Ok(Self::Bnb(H160::ZERO)),
-            ChainKind::Btc => Ok(Self::Btc("".to_string())),
-            ChainKind::Zcash => Ok(Self::Zcash("".to_string())),
+            ChainKind::Btc => Ok(Self::Btc(String::new())),
+            ChainKind::Zcash => Ok(Self::Zcash(String::new())),
         }
     }
 
