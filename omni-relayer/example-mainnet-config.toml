@@ -19,7 +19,7 @@ db_name = "mainnet_omni_bridge_db"
 
 [near]
 network = "mainnet"
-rpc_url = "https://rpc.mainnet.near.org/"
+rpc_url = "https://rpc.mainnet.fastnear.com?apiKey=FASTNEAR_API_KEY"
 omni_bridge_id = "omni.bridge.near"
 btc_connector = "btc-connector.bridge.near"
 btc = "btc-client.bridge.near"

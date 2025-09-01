@@ -51,6 +51,7 @@ impl Contract {
                 accounts_balances: old_state.accounts_balances,
                 wnear_account_id: old_state.wnear_account_id,
                 provers: UnorderedMap::new(StorageKey::RegisteredProvers),
+                init_transfer_promises: LookupMap::new(StorageKey::InitTransferPromises),
                 utxo_chain_connectors: LookupMap::new(StorageKey::UtxoChainConnectors),
             }
         } else {

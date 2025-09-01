@@ -65,11 +65,16 @@ fn replace_rpc_api_key<'de, D>(deserializer: D) -> Result<String, D::Error>
 where
     D: serde::Deserializer<'de>,
 {
-    let url = String::deserialize(deserializer)?;
+    let mut url = String::deserialize(deserializer)?;
 
-    let api_key = std::env::var("INFURA_API_KEY").map_err(serde::de::Error::custom)?;
+    for key in ["INFURA_API_KEY", "TATUM_API_KEY", "FASTNEAR_API_KEY"] {
+        if let Ok(val) = std::env::var(key) {
+            url = url.replace(key, &val);
+            break;
+        }
+    }
 
-    Ok(url.replace("INFURA_API_KEY", &api_key))
+    Ok(url)
 }
 
 fn validate_fee_discount<'de, D>(deserializer: D) -> Result<u8, D::Error>
@@ -168,6 +173,7 @@ impl std::fmt::Display for Network {
 #[derive(Debug, Clone, Deserialize)]
 pub struct Near {
     pub network: Network,
+    #[serde(deserialize_with = "replace_rpc_api_key")]
     pub rpc_url: String,
     pub omni_bridge_id: AccountId,
     pub btc_connector: Option<AccountId>,
@@ -225,6 +231,7 @@ pub struct Solana {
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct Btc {
+    #[serde(deserialize_with = "replace_rpc_api_key")]
     pub rpc_http_url: String,
     pub signing_enabled: bool,
     pub verifying_withdraw_enabled: bool,

@@ -477,6 +477,9 @@ mod tests {
 
         let required_balance_init_transfer: NearToken = bridge_contract
             .view("required_balance_for_init_transfer")
+            .args_json(json!({
+                "msg": None::<String>,
+            }))
             .await?
             .json()?;
 
@@ -547,6 +550,9 @@ mod tests {
         let required_balance_for_init_transfer: NearToken = env
             .bridge_contract
             .view("required_balance_for_init_transfer")
+            .args_json(json!({
+                "msg": None::<String>,
+            }))
             .await?
             .json()?;
 

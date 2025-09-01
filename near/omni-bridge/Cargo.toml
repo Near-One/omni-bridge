@@ -33,6 +33,7 @@ borsh.workspace = true
 serde.workspace = true
 near-plugins.workspace = true
 omni-types.workspace = true
+hex.workspace = true
 
 [dev-dependencies]
 near-sdk = { workspace = true, features = ["unit-testing"] }
