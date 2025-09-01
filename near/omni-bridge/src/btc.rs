@@ -5,7 +5,7 @@ use near_sdk::{
     env, near, require, serde_json, AccountId, Gas, Promise, PromiseError, PromiseOrValue,
 };
 use omni_types::btc::{TokenReceiverMessage, UTXOChainConfig};
-use omni_types::{ChainKind, Fee, TransferId, TransferMessage};
+use omni_types::{ChainKind, Fee, OmniAddress, TransferId, TransferMessage};
 
 const SUBMIT_TRANSFER_TO_BTC_CONNECTOR_CALLBACK_GAS: Gas = Gas::from_tgas(5);
 #[near]
@@ -98,19 +98,35 @@ impl Contract {
         }
     }
 
+    #[payable]
     #[access_control_any(roles(Role::DAO))]
     pub fn add_utxo_chain_connector(
         &mut self,
         chain_kind: ChainKind,
         utxo_chain_connector_id: AccountId,
         utxo_chain_token_id: AccountId,
+        decimals: u8,
     ) {
+        let storage_usage = env::storage_usage();
+        let token_address = OmniAddress::new_zero(chain_kind)
+            .unwrap_or_else(|_| env::panic_str("ERR_FAILED_TO_GET_ZERO_ADDRESS"));
+
+        self.add_token(&utxo_chain_token_id, &token_address, decimals, decimals);
+
         self.utxo_chain_connectors.insert(
             &chain_kind,
             &UTXOChainConfig {
                 connector: utxo_chain_connector_id,
                 token_id: utxo_chain_token_id,
             },
+        );
+
+        let required_deposit = env::storage_byte_cost()
+            .saturating_mul((env::storage_usage().saturating_sub(storage_usage)).into());
+
+        require!(
+            env::attached_deposit() >= required_deposit,
+            "ERROR: The deposit is not sufficient to cover the storage."
         );
     }
 

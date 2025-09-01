@@ -1010,29 +1010,6 @@ impl Contract {
     }
 
     #[payable]
-    #[access_control_any(roles(Role::DAO))]
-    pub fn set_utxo_chain_token(
-        &mut self,
-        chain_kind: ChainKind,
-        token_id: AccountId,
-        decimals: u8,
-    ) {
-        let storage_usage = env::storage_usage();
-        let token_address = OmniAddress::new_zero(chain_kind)
-            .unwrap_or_else(|_| env::panic_str("ERR_FAILED_TO_GET_ZERO_ADDRESS"));
-
-        self.add_token(&token_id, &token_address, decimals, decimals);
-
-        let required_deposit = env::storage_byte_cost()
-            .saturating_mul((env::storage_usage().saturating_sub(storage_usage)).into());
-
-        require!(
-            env::attached_deposit() >= required_deposit,
-            "ERROR: The deposit is not sufficient to cover the storage."
-        );
-    }
-
-    #[payable]
     #[pause(except(roles(Role::DAO, Role::UnrestrictedRelayer)))]
     pub fn bind_token(&mut self, #[serializer(borsh)] args: BindTokenArgs) -> Promise {
         self.verify_proof(args.chain_kind, args.prover_args)
