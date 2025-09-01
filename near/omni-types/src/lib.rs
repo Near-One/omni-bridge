@@ -214,13 +214,13 @@ impl OmniAddress {
     #[allow(clippy::missing_panics_doc)]
     pub fn new_zero(chain_kind: ChainKind) -> Result<Self, String> {
         match chain_kind {
-            ChainKind::Eth => Ok(OmniAddress::Eth(H160::ZERO)),
-            ChainKind::Near => Ok(OmniAddress::Near(
+            ChainKind::Eth => Ok(Self::Eth(H160::ZERO)),
+            ChainKind::Near => Ok(Self::Near(
                 ZERO_ACCOUNT_ID.parse().map_err(stringify)?,
             )),
-            ChainKind::Sol => Ok(OmniAddress::Sol(SolAddress::ZERO)),
-            ChainKind::Arb => Ok(OmniAddress::Arb(H160::ZERO)),
-            ChainKind::Base => Ok(OmniAddress::Base(H160::ZERO)),
+            ChainKind::Sol => Ok(Self::Sol(SolAddress::ZERO)),
+            ChainKind::Arb => Ok(Self::Arb(H160::ZERO)),
+            ChainKind::Base => Ok(Self::Base(H160::ZERO)),
             ChainKind::Bnb => Ok(Self::Bnb(H160::ZERO)),
             ChainKind::Btc => Ok(Self::Btc(String::new())),
             ChainKind::Zcash => Ok(Self::Zcash(String::new())),
@@ -331,14 +331,14 @@ impl OmniAddress {
 
     pub fn get_utxo_address(&self) -> Option<UTXOChainAddress> {
         match self {
-            OmniAddress::Btc(btc_address) => Some(btc_address.clone()),
-            OmniAddress::Zcash(zcash_address) => Some(zcash_address.clone()),
+            Self::Btc(btc_address) => Some(btc_address.clone()),
+            Self::Zcash(zcash_address) => Some(zcash_address.clone()),
             _ => None,
         }
     }
 
     pub fn is_utxo_chain(&self) -> bool {
-        matches!(self, OmniAddress::Btc(_) | OmniAddress::Zcash(_))
+        matches!(self, Self::Btc(_) | Self::Zcash(_))
     }
 
     fn to_evm_address(address: &[u8]) -> Result<EvmAddress, String> {
