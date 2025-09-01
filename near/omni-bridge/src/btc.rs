@@ -12,6 +12,12 @@ use omni_types::{ChainKind, Fee, OmniAddress, TransferId, TransferMessage};
 
 const SUBMIT_TRANSFER_TO_BTC_CONNECTOR_CALLBACK_GAS: Gas = Gas::from_tgas(5);
 
+#[derive(Debug, near_sdk::serde::Deserialize)]
+struct UTXOChainMsg {
+    version: u8,
+    max_fee: u64,
+}
+
 #[near]
 impl Contract {
     #[payable]
@@ -41,8 +47,12 @@ impl Contract {
                     "Incorrect target address"
                 );
 
-                let max_fee = transfer.message.msg.parse::<u64>();
-                if let Ok(max_fee) = max_fee {
+                if !transfer.message.msg.is_empty() {
+                    let utxo_chain_extra_info: UTXOChainMsg =
+                        serde_json::from_str(&transfer.message.msg)
+                            .expect("Invalid Transfer MSG for UTXO chain");
+                    require!(utxo_chain_extra_info.version == 0, "Unexpected version");
+                    let max_fee = utxo_chain_extra_info.max_fee;
                     require!(
                         max_gas_fee.expect("max_gas_fee is missing").0 == max_fee.into(),
                         "Invalid max fee"

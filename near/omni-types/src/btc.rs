@@ -14,7 +14,7 @@ pub enum TokenReceiverMessage {
     },
 }
 
-#[near(serializers=[borsh])]
+#[near(serializers=[borsh, json])]
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub struct UTXOChainConfig {
     pub connector: AccountId,
