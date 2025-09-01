@@ -83,6 +83,7 @@ fn get_init_transfer_msg(recipient: &str, fee: u128, native_token_fee: u128) -> 
         recipient: OmniAddress::Eth(EvmAddress::from_str(recipient).unwrap()),
         fee: U128(fee),
         native_token_fee: U128(native_token_fee),
+        msg: None,
     }
 }
 

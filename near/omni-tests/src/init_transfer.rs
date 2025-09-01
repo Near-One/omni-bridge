@@ -478,6 +478,7 @@ mod tests {
             native_token_fee: U128(NearToken::from_near(1).as_yoctonear()),
             fee: U128(0),
             recipient: eth_eoa_address(),
+            msg: None,
         };
 
         let env = TestEnv::new(
@@ -535,6 +536,7 @@ mod tests {
             native_token_fee: U128(0),
             fee: U128(1000),
             recipient: eth_eoa_address(),
+            msg: None,
         };
 
         let env = TestEnv::new(
@@ -590,6 +592,7 @@ mod tests {
             native_token_fee: U128(NearToken::from_near(1).as_yoctonear()),
             fee: U128(1000),
             recipient: eth_eoa_address(),
+            msg: None,
         };
 
         let env = TestEnv::new(
@@ -654,6 +657,7 @@ mod tests {
             native_token_fee: U128(NearToken::from_near(1).as_yoctonear()),
             fee: U128(1000),
             recipient: eth_eoa_address(),
+            msg: None,
         };
         let update_fee_value = Fee {
             native_fee: U128(NearToken::from_near(2).as_yoctonear()),
@@ -723,6 +727,7 @@ mod tests {
             native_token_fee: U128(NearToken::from_near(1).as_yoctonear()),
             fee: U128(0),
             recipient: eth_eoa_address(),
+            msg: None,
         };
 
         let env = TestEnv::new(
@@ -782,6 +787,7 @@ mod tests {
             native_token_fee: U128(NearToken::from_near(1).as_yoctonear()),
             fee: U128(1000),
             recipient: eth_eoa_address(),
+            msg: None,
         };
         let update_fee_value = Fee {
             native_fee: U128(NearToken::from_near(0).as_yoctonear()),
@@ -825,6 +831,7 @@ mod tests {
             native_token_fee: U128(NearToken::from_near(1).as_yoctonear()),
             fee: U128(1000),
             recipient: eth_eoa_address(),
+            msg: None,
         };
         let update_fee_value = Fee {
             native_fee: U128(NearToken::from_near(1).as_yoctonear()),
@@ -868,6 +875,7 @@ mod tests {
             native_token_fee: U128(NearToken::from_near(1).as_yoctonear()),
             fee: U128(1000),
             recipient: eth_eoa_address(),
+            msg: None,
         };
         let update_fee_value = Fee {
             native_fee: U128(NearToken::from_near(1).as_yoctonear()),
@@ -912,6 +920,7 @@ mod tests {
             native_token_fee: U128(NearToken::from_near(1).as_yoctonear()),
             fee: U128(1000),
             recipient: eth_eoa_address(),
+            msg: None,
         };
         let update_fee = UpdateFee::Proof(vec![]);
 
@@ -950,6 +959,7 @@ mod tests {
             native_token_fee: U128(0),
             fee: U128(0),
             recipient: eth_eoa_address(),
+            msg: None,
         };
 
         let prev_locker_wasm = std::fs::read(PREV_LOCKER_WASM_FILEPATH).unwrap();
