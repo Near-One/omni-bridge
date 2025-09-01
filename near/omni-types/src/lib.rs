@@ -215,9 +215,7 @@ impl OmniAddress {
     pub fn new_zero(chain_kind: ChainKind) -> Result<Self, String> {
         match chain_kind {
             ChainKind::Eth => Ok(Self::Eth(H160::ZERO)),
-            ChainKind::Near => Ok(Self::Near(
-                ZERO_ACCOUNT_ID.parse().map_err(stringify)?,
-            )),
+            ChainKind::Near => Ok(Self::Near(ZERO_ACCOUNT_ID.parse().map_err(stringify)?)),
             ChainKind::Sol => Ok(Self::Sol(SolAddress::ZERO)),
             ChainKind::Arb => Ok(Self::Arb(H160::ZERO)),
             ChainKind::Base => Ok(Self::Base(H160::ZERO)),
