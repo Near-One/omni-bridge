@@ -141,6 +141,7 @@ pub async fn process_init_transfer_event(
 
     let fin_transfer_args = omni_connector::FinTransferArgs::NearFinTransferWithVaa {
         chain_kind: ChainKind::Sol,
+        destination_chain: recipient.get_chain(),
         storage_deposit_actions,
         vaa,
         transaction_options: TransactionOptions {
