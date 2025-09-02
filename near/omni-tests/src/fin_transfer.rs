@@ -19,8 +19,8 @@ mod tests {
     use crate::{
         environment::TestEnvBuilder,
         helpers::tests::{
-            account_n, eth_eoa_address, eth_factory_address, eth_token_address, relayer_account_id,
-            NEP141_DEPOSIT,
+            account_n, build_artifacts, eth_eoa_address, eth_factory_address, eth_token_address,
+            relayer_account_id, BuildArtifacts, NEP141_DEPOSIT,
         },
     };
 
@@ -55,13 +55,20 @@ mod tests {
     async fn setup_contracts(
         is_wnear: bool,
         deploy_minted_token: bool,
+        build_artifacts: &BuildArtifacts,
     ) -> anyhow::Result<TestSetup> {
         let env_builder = if is_wnear {
-            TestEnvBuilder::new().await?.with_custom_wnear().await?
+            TestEnvBuilder::new(build_artifacts.clone())
+                .await?
+                .with_custom_wnear()
+                .await?
         } else if deploy_minted_token {
-            TestEnvBuilder::new().await?.with_bridged_token().await?
+            TestEnvBuilder::new(build_artifacts.clone())
+                .await?
+                .with_bridged_token()
+                .await?
         } else {
-            TestEnvBuilder::new()
+            TestEnvBuilder::new(build_artifacts.clone())
                 .await?
                 .with_native_nep141_token(24)
                 .await?
@@ -70,7 +77,6 @@ mod tests {
         let token_receiver_contract = env_builder.deploy_mock_receiver().await?;
 
         let relayer_account = env_builder.create_account(relayer_account_id()).await?;
-        // let _ = env_builder.create_account(account_n(2)).await?;
 
         let required_balance_for_fin_transfer: NearToken = env_builder
             .bridge_contract
@@ -135,6 +141,7 @@ mod tests {
     )]
     #[tokio::test]
     async fn test_storage_deposit_on_fin_transfer(
+        build_artifacts: &BuildArtifacts,
         #[case] storage_deposit_accounts: Vec<(AccountId, bool)>,
         #[case] amount: u128,
         #[case] fee: u128,
@@ -149,6 +156,7 @@ mod tests {
             fee,
             0,
             false, // is_deployed_token
+            build_artifacts,
         )
         .await;
 
@@ -179,6 +187,7 @@ mod tests {
         expected_relayer_balance: u128,
         expected_locker_balance: u128,
         is_deployed_token: bool,
+        build_artifacts: &BuildArtifacts,
     ) -> anyhow::Result<()> {
         let TestSetup {
             token_contract,
@@ -187,7 +196,7 @@ mod tests {
             token_receiver_contract,
             required_balance_for_fin_transfer,
             ..
-        } = setup_contracts(false, is_deployed_token).await?;
+        } = setup_contracts(false, is_deployed_token, build_artifacts).await?;
 
         if !is_deployed_token {
             token_contract
@@ -286,7 +295,10 @@ mod tests {
     #[case(50)]
     #[case(1_000_000)]
     #[tokio::test]
-    async fn test_near_withdrawal(#[case] near_amount: u128) -> anyhow::Result<()> {
+    async fn test_near_withdrawal(
+        build_artifacts: &BuildArtifacts,
+        #[case] near_amount: u128,
+    ) -> anyhow::Result<()> {
         let TestSetup {
             worker,
             token_contract,
@@ -294,7 +306,7 @@ mod tests {
             relayer_account,
             required_balance_for_fin_transfer,
             ..
-        } = setup_contracts(true, false).await?;
+        } = setup_contracts(true, false, build_artifacts).await?;
 
         // Provide locker contract with large wNEAR balance
         let wnear_amount = NearToken::from_near(near_amount);
@@ -475,7 +487,10 @@ mod tests {
         expected_locker_balance: 0,
     })]
     #[tokio::test]
-    async fn test_fin_transfer_with_msg(#[case] case: FinTransferWithMsgCase) {
+    async fn test_fin_transfer_with_msg(
+        build_artifacts: &BuildArtifacts,
+        #[case] case: FinTransferWithMsgCase,
+    ) {
         let msg = serde_json::to_string(&case.msg).unwrap();
         internal_test_fin_transfer(
             case.storage_deposit_accounts,
@@ -486,6 +501,7 @@ mod tests {
             case.expected_relayer_balance,
             case.expected_locker_balance,
             false, // is_deployed_token
+            build_artifacts,
         )
         .await
         .unwrap();
@@ -584,7 +600,10 @@ mod tests {
         expected_locker_balance: 0,
     })]
     #[tokio::test]
-    async fn test_fin_transfer_with_msg_for_deployed_token(#[case] case: FinTransferWithMsgCase) {
+    async fn test_fin_transfer_with_msg_for_deployed_token(
+        build_artifacts: &BuildArtifacts,
+        #[case] case: FinTransferWithMsgCase,
+    ) {
         let msg = serde_json::to_string(&case.msg).unwrap();
         internal_test_fin_transfer(
             case.storage_deposit_accounts,
@@ -595,6 +614,7 @@ mod tests {
             case.expected_relayer_balance,
             case.expected_locker_balance,
             true, // is_deployed_token
+            build_artifacts,
         )
         .await
         .unwrap();

@@ -15,8 +15,9 @@ mod tests {
     use crate::{
         environment::TestEnvBuilder,
         helpers::tests::{
-            account_n, eth_eoa_address, eth_factory_address, get_claim_fee_args_near,
-            get_event_data, locker_wasm, relayer_account_id,
+            account_n, build_artifacts, eth_eoa_address, eth_factory_address,
+            get_claim_fee_args_near, get_event_data, locker_wasm, relayer_account_id,
+            BuildArtifacts,
         },
     };
 
@@ -35,8 +36,12 @@ mod tests {
 
     impl TestEnv {
         #[allow(clippy::too_many_lines)]
-        async fn new(sender_balance_token: u128, is_old_locker: bool) -> anyhow::Result<Self> {
-            let env_builder = TestEnvBuilder::new()
+        async fn new(
+            sender_balance_token: u128,
+            is_old_locker: bool,
+            build_artifacts: &BuildArtifacts,
+        ) -> anyhow::Result<Self> {
+            let env_builder = TestEnvBuilder::new(build_artifacts.clone())
                 .await?
                 .deploy_old_version(is_old_locker)
                 .with_native_nep141_token(24)
@@ -330,7 +335,7 @@ mod tests {
 
     #[rstest]
     #[tokio::test]
-    async fn test_native_fee() -> anyhow::Result<()> {
+    async fn test_native_fee(build_artifacts: &BuildArtifacts) -> anyhow::Result<()> {
         let sender_balance_token = 1_000_000;
         let transfer_amount = 100;
         let init_transfer_msg = InitTransferMsg {
@@ -339,7 +344,7 @@ mod tests {
             recipient: eth_eoa_address(),
         };
 
-        let env = TestEnv::new(sender_balance_token, false).await?;
+        let env = TestEnv::new(sender_balance_token, false, build_artifacts).await?;
 
         init_transfer_flow_on_near(
             &env,
@@ -376,7 +381,7 @@ mod tests {
 
     #[rstest]
     #[tokio::test]
-    async fn test_transfer_fee() -> anyhow::Result<()> {
+    async fn test_transfer_fee(build_artifacts: &BuildArtifacts) -> anyhow::Result<()> {
         let sender_balance_token = 1_000_000;
         let transfer_amount = 5000;
         let init_transfer_msg = InitTransferMsg {
@@ -385,7 +390,7 @@ mod tests {
             recipient: eth_eoa_address(),
         };
 
-        let env = TestEnv::new(sender_balance_token, false).await?;
+        let env = TestEnv::new(sender_balance_token, false, build_artifacts).await?;
 
         init_transfer_flow_on_near(
             &env,
@@ -420,7 +425,7 @@ mod tests {
 
     #[rstest]
     #[tokio::test]
-    async fn test_both_fee() -> anyhow::Result<()> {
+    async fn test_both_fee(build_artifacts: &BuildArtifacts) -> anyhow::Result<()> {
         let sender_balance_token = 1_000_000;
         let transfer_amount = 5000;
         let init_transfer_msg = InitTransferMsg {
@@ -429,7 +434,7 @@ mod tests {
             recipient: eth_eoa_address(),
         };
 
-        let env = TestEnv::new(sender_balance_token, false).await?;
+        let env = TestEnv::new(sender_balance_token, false, build_artifacts).await?;
 
         init_transfer_flow_on_near(
             &env,
@@ -473,7 +478,7 @@ mod tests {
 
     #[rstest]
     #[tokio::test]
-    async fn test_update_fee() -> anyhow::Result<()> {
+    async fn test_update_fee(build_artifacts: &BuildArtifacts) -> anyhow::Result<()> {
         let sender_balance_token = 1_000_000;
         let transfer_amount = 5000;
         let init_transfer_msg = InitTransferMsg {
@@ -487,7 +492,7 @@ mod tests {
         };
         let update_fee = UpdateFee::Fee(update_fee_value.clone());
 
-        let env = TestEnv::new(sender_balance_token, false).await?;
+        let env = TestEnv::new(sender_balance_token, false, build_artifacts).await?;
 
         init_transfer_flow_on_near(
             &env,
@@ -531,7 +536,7 @@ mod tests {
 
     #[rstest]
     #[tokio::test]
-    async fn test_relayer_sign() -> anyhow::Result<()> {
+    async fn test_relayer_sign(build_artifacts: &BuildArtifacts) -> anyhow::Result<()> {
         let sender_balance_token = 1_000_000;
         let transfer_amount = 100;
         let init_transfer_msg = InitTransferMsg {
@@ -540,7 +545,7 @@ mod tests {
             recipient: eth_eoa_address(),
         };
 
-        let env = TestEnv::new(sender_balance_token, false).await?;
+        let env = TestEnv::new(sender_balance_token, false, build_artifacts).await?;
 
         init_transfer_flow_on_near(
             &env,
@@ -579,7 +584,7 @@ mod tests {
     #[rstest]
     #[tokio::test]
     #[should_panic(expected = "ERR_LOWER_FEE")]
-    async fn test_update_fee_native_too_small() {
+    async fn test_update_fee_native_too_small(build_artifacts: &BuildArtifacts) {
         let sender_balance_token = 1_000_000;
         let transfer_amount = 5000;
         let init_transfer_msg = InitTransferMsg {
@@ -593,7 +598,9 @@ mod tests {
         };
         let update_fee = UpdateFee::Fee(update_fee_value.clone());
 
-        let env = TestEnv::new(sender_balance_token, false).await.unwrap();
+        let env = TestEnv::new(sender_balance_token, false, build_artifacts)
+            .await
+            .unwrap();
 
         init_transfer_flow_on_near(
             &env,
@@ -610,7 +617,7 @@ mod tests {
     #[rstest]
     #[tokio::test]
     #[should_panic(expected = "ERR_INVALID_FEE")]
-    async fn test_update_fee_transfer_fee_too_small() {
+    async fn test_update_fee_transfer_fee_too_small(build_artifacts: &BuildArtifacts) {
         let sender_balance_token = 1_000_000;
         let transfer_amount = 5000;
         let init_transfer_msg = InitTransferMsg {
@@ -624,7 +631,9 @@ mod tests {
         };
         let update_fee = UpdateFee::Fee(update_fee_value.clone());
 
-        let env = TestEnv::new(sender_balance_token, false).await.unwrap();
+        let env = TestEnv::new(sender_balance_token, false, build_artifacts)
+            .await
+            .unwrap();
 
         init_transfer_flow_on_near(
             &env,
@@ -641,7 +650,7 @@ mod tests {
     #[rstest]
     #[tokio::test]
     #[should_panic(expected = "ERR_INVALID_FEE")]
-    async fn test_update_fee_transfer_fee_too_big() {
+    async fn test_update_fee_transfer_fee_too_big(build_artifacts: &BuildArtifacts) {
         let sender_balance_token = 1_000_000;
         let transfer_amount = 5000;
         let init_transfer_msg = InitTransferMsg {
@@ -655,7 +664,9 @@ mod tests {
         };
         let update_fee = UpdateFee::Fee(update_fee_value.clone());
 
-        let env = TestEnv::new(sender_balance_token, false).await.unwrap();
+        let env = TestEnv::new(sender_balance_token, false, build_artifacts)
+            .await
+            .unwrap();
 
         init_transfer_flow_on_near(
             &env,
@@ -673,7 +684,7 @@ mod tests {
     #[tokio::test]
     #[should_panic(expected = "TODO")]
     // Add a test once the Proof update fee is implemented
-    async fn test_update_fee_proof() {
+    async fn test_update_fee_proof(build_artifacts: &BuildArtifacts) {
         let sender_balance_token = 1_000_000;
         let transfer_amount = 5000;
         let init_transfer_msg = InitTransferMsg {
@@ -683,7 +694,9 @@ mod tests {
         };
         let update_fee = UpdateFee::Proof(vec![]);
 
-        let env = TestEnv::new(sender_balance_token, false).await.unwrap();
+        let env = TestEnv::new(sender_balance_token, false, build_artifacts)
+            .await
+            .unwrap();
 
         init_transfer_flow_on_near(
             &env,
@@ -699,7 +712,7 @@ mod tests {
 
     #[rstest]
     #[tokio::test]
-    async fn test_migrate() -> anyhow::Result<()> {
+    async fn test_migrate(build_artifacts: &BuildArtifacts) -> anyhow::Result<()> {
         let sender_balance_token = 1_000_000;
         let transfer_amount = 5000;
         let init_transfer_msg = InitTransferMsg {
@@ -708,7 +721,7 @@ mod tests {
             recipient: eth_eoa_address(),
         };
 
-        let env = TestEnv::new(sender_balance_token, true).await?;
+        let env = TestEnv::new(sender_balance_token, true, build_artifacts).await?;
 
         let transfer_message =
             init_transfer_legacy(&env, transfer_amount, init_transfer_msg.clone()).await?;

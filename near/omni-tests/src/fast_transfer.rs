@@ -17,11 +17,11 @@ mod tests {
     };
     use rstest::rstest;
 
-    use crate::environment::*;
     use crate::helpers::tests::{
-        account_n, base_eoa_address, eth_eoa_address, eth_factory_address,
+        account_n, base_eoa_address, build_artifacts, eth_eoa_address, eth_factory_address,
         fast_relayer_account_id, relayer_account_id, NEP141_DEPOSIT,
     };
+    use crate::{environment::*, helpers::tests::BuildArtifacts};
 
     struct FastTransferParams {
         amount_to_send: u128,
@@ -50,22 +50,19 @@ mod tests {
     }
 
     impl TestEnv {
-        async fn new_with_native_token() -> anyhow::Result<Self> {
-            Self::new(false).await
-        }
-
-        async fn new_with_bridged_token() -> anyhow::Result<Self> {
-            Self::new(true).await
-        }
-
-        #[allow(clippy::too_many_lines)]
-        async fn new(is_bridged_token: bool) -> anyhow::Result<Self> {
+        async fn new(
+            build_artifacts: &BuildArtifacts,
+            is_bridged_token: bool,
+        ) -> anyhow::Result<Self> {
             let sender_balance_token = 1_000_000_000_000;
 
             let env_builder = if is_bridged_token {
-                TestEnvBuilder::new().await?.with_bridged_eth().await?
+                TestEnvBuilder::new(build_artifacts.clone())
+                    .await?
+                    .with_bridged_eth()
+                    .await?
             } else {
-                TestEnvBuilder::new()
+                TestEnvBuilder::new(build_artifacts.clone())
                     .await?
                     .with_native_nep141_token(18)
                     .await?
@@ -77,16 +74,16 @@ mod tests {
                 .await?;
             let _ = env_builder.create_account(account_n(1)).await?;
 
-            env_builder.storage_deposit(&relayer_account_id()).await?;
+            env_builder.storage_deposit(&relayer_account.id()).await?;
             env_builder
-                .storage_deposit(&fast_relayer_account_id())
+                .storage_deposit(&fast_relayer_account.id())
                 .await?;
 
             env_builder
-                .mint_tokens(&relayer_account_id(), sender_balance_token)
+                .mint_tokens(&relayer_account.id(), sender_balance_token)
                 .await?;
             env_builder
-                .mint_tokens(&fast_relayer_account_id(), sender_balance_token * 2)
+                .mint_tokens(&fast_relayer_account.id(), sender_balance_token * 2)
                 .await?;
             env_builder
                 .mint_tokens(
@@ -554,8 +551,11 @@ mod tests {
             error: Some("CodeDoesNotExist"),
         })]
         #[tokio::test]
-        async fn single(#[case] mut case: FastTransferCase) -> anyhow::Result<()> {
-            let env = TestEnv::new(case.is_bridged_token).await?;
+        async fn single(
+            build_artifacts: &BuildArtifacts,
+            #[case] mut case: FastTransferCase,
+        ) -> anyhow::Result<()> {
+            let env = TestEnv::new(build_artifacts, case.is_bridged_token).await?;
             case.transfer.fast_transfer_msg.relayer = env.relayer_account.id().clone();
 
             assert_transfer_to_near(&env, case.transfer, case.error).await
@@ -588,8 +588,11 @@ mod tests {
             error: Some("Fast transfer is already performed"),
         })]
         #[tokio::test]
-        async fn multiple(#[case] mut case: FastTransferMultipleCase) -> anyhow::Result<()> {
-            let env = TestEnv::new(case.is_bridged_token).await?;
+        async fn multiple(
+            build_artifacts: &BuildArtifacts,
+            #[case] mut case: FastTransferMultipleCase,
+        ) -> anyhow::Result<()> {
+            let env = TestEnv::new(build_artifacts, case.is_bridged_token).await?;
             case.first_transfer.fast_transfer_msg.relayer = env.relayer_account.id().clone();
             case.second_transfer.fast_transfer_msg.relayer = env.relayer_account.id().clone();
 
@@ -599,6 +602,8 @@ mod tests {
     }
 
     mod transfer_to_other_chain {
+        use crate::helpers::tests::build_artifacts;
+
         use super::*;
 
         async fn assert_transfer_to_other_chain(
@@ -744,9 +749,10 @@ mod tests {
         })]
         #[tokio::test]
         async fn test_transfer_to_other_chain(
+            build_artifacts: &BuildArtifacts,
             #[case] mut case: FastTransferCase,
         ) -> anyhow::Result<()> {
-            let env = TestEnv::new(case.is_bridged_token).await?;
+            let env = TestEnv::new(build_artifacts, case.is_bridged_token).await?;
             case.transfer.fast_transfer_msg.relayer = env.relayer_account.id().clone();
 
             assert_transfer_to_other_chain(&env, case.transfer, case.is_bridged_token, case.error)
@@ -797,9 +803,10 @@ mod tests {
         })]
         #[tokio::test]
         async fn test_transfer_to_other_chain_multiple(
+            build_artifacts: &BuildArtifacts,
             #[case] mut case: FastTransferMultipleCase,
         ) -> anyhow::Result<()> {
-            let env = TestEnv::new(case.is_bridged_token).await?;
+            let env = TestEnv::new(build_artifacts, case.is_bridged_token).await?;
             case.first_transfer.fast_transfer_msg.relayer = env.relayer_account.id().clone();
             case.second_transfer.fast_transfer_msg.relayer = env.relayer_account.id().clone();
 
@@ -815,9 +822,12 @@ mod tests {
             .await
         }
 
+        #[rstest]
         #[tokio::test]
-        async fn fails_due_to_already_finalised() -> anyhow::Result<()> {
-            let env = TestEnv::new_with_bridged_token().await?;
+        async fn fails_due_to_already_finalised(
+            build_artifacts: &BuildArtifacts,
+        ) -> anyhow::Result<()> {
+            let env = TestEnv::new(build_artifacts, true).await?;
 
             let transfer_amount = 100_000_000;
             let transfer_msg = InitTransferMessage {
@@ -932,9 +942,10 @@ mod tests {
         mod to_near {
             use super::*;
 
+            #[rstest]
             #[tokio::test]
-            async fn succeeds() -> anyhow::Result<()> {
-                let env = TestEnv::new_with_native_token().await?;
+            async fn succeeds(build_artifacts: &BuildArtifacts) -> anyhow::Result<()> {
+                let env = TestEnv::new(build_artifacts, false).await?;
 
                 let fast_transfer_amount = 100_000_000;
                 let transfer_msg = InitTransferMessage {
@@ -987,9 +998,12 @@ mod tests {
                 .await
             }
 
+            #[rstest]
             #[tokio::test]
-            async fn fails_due_to_duplicate_finalisation() -> anyhow::Result<()> {
-                let env = TestEnv::new_with_native_token().await?;
+            async fn fails_due_to_duplicate_finalisation(
+                build_artifacts: &BuildArtifacts,
+            ) -> anyhow::Result<()> {
+                let env = TestEnv::new(build_artifacts, false).await?;
 
                 let fast_transfer_amount = 100_000_000;
                 let transfer_msg = InitTransferMessage {
@@ -1053,9 +1067,10 @@ mod tests {
         mod to_other_chain {
             use super::*;
 
+            #[rstest]
             #[tokio::test]
-            async fn succeeds() -> anyhow::Result<()> {
-                let env = TestEnv::new_with_native_token().await?;
+            async fn succeeds(build_artifacts: &BuildArtifacts) -> anyhow::Result<()> {
+                let env = TestEnv::new(build_artifacts, false).await?;
 
                 let transfer_amount = 100_000_000;
                 let transfer_msg = InitTransferMessage {
@@ -1091,9 +1106,12 @@ mod tests {
                 .await
             }
 
+            #[rstest]
             #[tokio::test]
-            async fn fails_due_to_duplicate_finalisation() -> anyhow::Result<()> {
-                let env = TestEnv::new_with_native_token().await?;
+            async fn fails_due_to_duplicate_finalisation(
+                build_artifacts: &BuildArtifacts,
+            ) -> anyhow::Result<()> {
+                let env = TestEnv::new(build_artifacts, false).await?;
 
                 let transfer_amount = 100_000_000;
                 let transfer_msg = InitTransferMessage {

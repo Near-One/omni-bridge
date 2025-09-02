@@ -16,8 +16,7 @@ use omni_types::{
 
 use crate::helpers::tests::{
     account_n, eth_eoa_address, eth_factory_address, eth_token_address, get_bind_token_args,
-    get_test_deploy_token_args, locker_wasm, mock_prover_wasm, mock_token_receiver_wasm,
-    mock_token_wasm, token_deployer_wasm, NEP141_DEPOSIT,
+    get_test_deploy_token_args, BuildArtifacts, NEP141_DEPOSIT,
 };
 
 const PREV_LOCKER_WASM_FILEPATH: &str = "src/data/omni_bridge-0_2_13.wasm";
@@ -30,6 +29,7 @@ pub struct BridgeToken {
 
 pub struct TestEnvBuilder {
     pub worker: Worker<Sandbox>,
+    pub build_artifacts: BuildArtifacts,
     pub deploy_old_version: bool,
 }
 
@@ -37,15 +37,17 @@ pub struct TestEnvBuilderWithToken {
     pub worker: Worker<Sandbox>,
     pub bridge_contract: Contract,
     pub token: BridgeToken,
-    token_transfer_nonce: RefCell<u64>,
+    pub build_artifacts: BuildArtifacts,
+    pub token_transfer_nonce: RefCell<u64>,
 }
 
 impl TestEnvBuilder {
-    pub async fn new() -> anyhow::Result<Self> {
+    pub async fn new(build_artifacts: BuildArtifacts) -> anyhow::Result<Self> {
         let worker = near_workspaces::sandbox().await?;
 
         Ok(Self {
             worker,
+            build_artifacts,
             deploy_old_version: false,
         })
     }
@@ -56,15 +58,14 @@ impl TestEnvBuilder {
     }
 
     pub async fn with_custom_wnear(self) -> anyhow::Result<TestEnvBuilderWithToken> {
-        let token_contract = deploy_nep141_token(&self.worker).await?;
+        let token_contract = self.deploy_nep141_token().await?;
 
-        let bridge_contract = deploy_bridge(
-            &self.worker,
-            self.deploy_old_version,
-            Some(token_contract.id().clone()),
-        )
-        .await?;
+        let bridge_contract = self
+            .deploy_bridge(Some(token_contract.id().clone()))
+            .await?;
+
         add_factory(&bridge_contract, eth_factory_address()).await?;
+        
         bind_token(
             &bridge_contract,
             &eth_token_address(),
@@ -84,6 +85,7 @@ impl TestEnvBuilder {
                 contract: token_contract,
                 eth_address: eth_token_address(),
             },
+            build_artifacts: self.build_artifacts,
             token_transfer_nonce: RefCell::new(1),
         })
     }
@@ -92,9 +94,9 @@ impl TestEnvBuilder {
         self,
         destination_decimals: u8,
     ) -> anyhow::Result<TestEnvBuilderWithToken> {
-        let bridge_contract = deploy_bridge(&self.worker, self.deploy_old_version, None).await?;
+        let bridge_contract = self.deploy_bridge(None).await?;
 
-        let token_contract = deploy_nep141_token(&self.worker).await?;
+        let token_contract = self.deploy_nep141_token().await?;
 
         add_factory(&bridge_contract, eth_factory_address()).await?;
 
@@ -117,13 +119,15 @@ impl TestEnvBuilder {
                 contract: token_contract,
                 eth_address: eth_token_address(),
             },
+            build_artifacts: self.build_artifacts,
             token_transfer_nonce: RefCell::new(1),
         })
     }
 
     pub async fn with_bridged_eth(self) -> anyhow::Result<TestEnvBuilderWithToken> {
-        let bridge_contract = deploy_bridge(&self.worker, self.deploy_old_version, None).await?;
-        deploy_token_deployer(&self.worker, &bridge_contract, ChainKind::Eth).await?;
+        let bridge_contract = self.deploy_bridge(None).await?;
+        self.deploy_token_deployer(&bridge_contract, ChainKind::Eth)
+            .await?;
 
         add_factory(&bridge_contract, eth_factory_address()).await?;
 
@@ -153,8 +157,9 @@ impl TestEnvBuilder {
             .await?
             .into_result()?;
 
-        let token_contract =
-            get_token_contract(&self.worker, &bridge_contract, &init_token_address).await?;
+        let token_contract = self
+            .get_token_contract(&bridge_contract, &init_token_address)
+            .await?;
 
         storage_deposit(&token_contract, bridge_contract.id()).await?;
 
@@ -166,13 +171,17 @@ impl TestEnvBuilder {
                 contract: token_contract,
                 eth_address: init_token_address,
             },
+            build_artifacts: self.build_artifacts,
             token_transfer_nonce: RefCell::new(1),
         })
     }
 
     pub async fn with_bridged_token(self) -> anyhow::Result<TestEnvBuilderWithToken> {
-        let bridge_contract = deploy_bridge(&self.worker, self.deploy_old_version, None).await?;
-        deploy_token_deployer(&self.worker, &bridge_contract, ChainKind::Eth).await?;
+        let bridge_contract = self.deploy_bridge(None).await?;
+        
+        self.deploy_token_deployer(&bridge_contract, ChainKind::Eth)
+            .await?;
+        
         add_factory(&bridge_contract, eth_factory_address()).await?;
 
         let token_deploy_initiator = self
@@ -203,8 +212,9 @@ impl TestEnvBuilder {
             .await?
             .into_result()?;
 
-        let token_contract =
-            get_token_contract(&self.worker, &bridge_contract, &eth_token_address()).await?;
+        let token_contract = self
+            .get_token_contract(&bridge_contract, &eth_token_address())
+            .await?;
 
         storage_deposit(&token_contract, bridge_contract.id()).await?;
 
@@ -216,8 +226,138 @@ impl TestEnvBuilder {
                 contract: token_contract,
                 eth_address: eth_token_address(),
             },
+            build_artifacts: self.build_artifacts,
             token_transfer_nonce: RefCell::new(1),
         })
+    }
+
+    async fn deploy_token_deployer(
+        &self,
+        bridge_contract: &Contract,
+        chain: ChainKind,
+    ) -> anyhow::Result<()> {
+        let token_deployer = self
+            .worker
+            .create_tla_and_deploy(
+                account_n(9),
+                self.worker.dev_generate().await.1,
+                &self.build_artifacts.token_deployer,
+            )
+            .await?
+            .unwrap();
+
+        token_deployer
+            .call("new")
+            .args_json(json!({
+                "controller": bridge_contract.id(),
+                "dao": AccountId::from_str("dao.near").unwrap(),
+            }))
+            .max_gas()
+            .transact()
+            .await?
+            .into_result()?;
+
+        bridge_contract
+            .call("add_token_deployer")
+            .args_json(json!({
+                "chain": chain,
+                "account_id": token_deployer.id(),
+            }))
+            .max_gas()
+            .transact()
+            .await?
+            .into_result()?;
+
+        Ok(())
+    }
+
+    async fn deploy_bridge(&self, wnear_account_id: Option<AccountId>) -> anyhow::Result<Contract> {
+        let locker_wasm = if self.deploy_old_version {
+            &std::fs::read(PREV_LOCKER_WASM_FILEPATH).unwrap()
+        } else {
+            &self.build_artifacts.locker
+        };
+
+        let prover_contract = self
+            .worker
+            .dev_deploy(&self.build_artifacts.mock_prover)
+            .await?;
+        let bridge_contract = self.worker.dev_deploy(&locker_wasm).await?;
+
+        let mut args = serde_json::Map::new();
+        if self.deploy_old_version {
+            args.insert("prover_account".to_string(), json!("prover.testnet"));
+        }
+        args.insert("mpc_signer".to_string(), json!("mpc.testnet"));
+        args.insert("nonce".to_string(), json!(U128(0)));
+        args.insert(
+            "wnear_account_id".to_string(),
+            json!(wnear_account_id.unwrap_or("wnear.testnet".parse().unwrap())),
+        );
+
+        bridge_contract
+            .call("new")
+            .args_json(json!(args))
+            .max_gas()
+            .transact()
+            .await?
+            .into_result()?;
+
+        if !self.deploy_old_version {
+            bridge_contract
+                .call("add_prover")
+                .args_json(json!({
+                    "chain": "Eth",
+                    "account_id": prover_contract.id(),
+                }))
+                .max_gas()
+                .transact()
+                .await?
+                .into_result()?;
+        }
+
+        Ok(bridge_contract)
+    }
+
+    async fn deploy_nep141_token(&self) -> anyhow::Result<Contract> {
+        let token_contract = self
+            .worker
+            .dev_deploy(&self.build_artifacts.mock_token)
+            .await?;
+        token_contract
+            .call("new_default_meta")
+            .args_json(json!({
+                "owner_id": token_contract.id(),
+                "total_supply": U128(u128::MAX)
+            }))
+            .max_gas()
+            .transact()
+            .await?
+            .into_result()?;
+
+        Ok(token_contract)
+    }
+
+    async fn get_token_contract(
+        &self,
+        bridge_contract: &Contract,
+        token_address: &OmniAddress,
+    ) -> anyhow::Result<Contract> {
+        let token_account_id: AccountId = bridge_contract
+            .view("get_token_id")
+            .args_json(json!({
+                "address": token_address
+            }))
+            .await?
+            .json()?;
+
+        let token_contract = self
+            .worker
+            .import_contract(&token_account_id, &self.worker)
+            .transact()
+            .await?;
+
+        Ok(token_contract)
     }
 }
 
@@ -298,41 +438,12 @@ impl TestEnvBuilderWithToken {
     }
 
     pub async fn deploy_mock_receiver(&self) -> anyhow::Result<Contract> {
-        let token_receiver = self.worker.dev_deploy(&mock_token_receiver_wasm()).await?;
+        let token_receiver = self
+            .worker
+            .dev_deploy(&self.build_artifacts.mock_token_receiver)
+            .await?;
         Ok(token_receiver)
     }
-}
-
-async fn storage_deposit(token_contract: &Contract, account_id: &AccountId) -> anyhow::Result<()> {
-    token_contract
-        .call("storage_deposit")
-        .args_json(json!({
-            "account_id": account_id,
-            "registration_only": true,
-        }))
-        .deposit(NEP141_DEPOSIT)
-        .max_gas()
-        .transact()
-        .await?
-        .into_result()?;
-
-    Ok(())
-}
-
-async fn deploy_nep141_token(worker: &Worker<Sandbox>) -> anyhow::Result<Contract> {
-    let token_contract = worker.dev_deploy(&mock_token_wasm()).await?;
-    token_contract
-        .call("new_default_meta")
-        .args_json(json!({
-            "owner_id": token_contract.id(),
-            "total_supply": U128(u128::MAX)
-        }))
-        .max_gas()
-        .transact()
-        .await?
-        .into_result()?;
-
-    Ok(token_contract)
 }
 
 async fn bind_token(
@@ -382,111 +493,18 @@ async fn add_factory(
     Ok(())
 }
 
-async fn deploy_bridge(
-    worker: &Worker<Sandbox>,
-    is_old_version: bool,
-    wnear_account_id: Option<AccountId>,
-) -> anyhow::Result<Contract> {
-    let locker_wasm = if is_old_version {
-        &std::fs::read(PREV_LOCKER_WASM_FILEPATH).unwrap()
-    } else {
-        &locker_wasm()
-    };
-
-    let prover_contract = worker.dev_deploy(&mock_prover_wasm()).await?;
-    let bridge_contract = worker.dev_deploy(&locker_wasm).await?;
-
-    let mut args = serde_json::Map::new();
-    if is_old_version {
-        args.insert("prover_account".to_string(), json!("prover.testnet"));
-    }
-    args.insert("mpc_signer".to_string(), json!("mpc.testnet"));
-    args.insert("nonce".to_string(), json!(U128(0)));
-    args.insert(
-        "wnear_account_id".to_string(),
-        json!(wnear_account_id.unwrap_or("wnear.testnet".parse().unwrap())),
-    );
-
-    bridge_contract
-        .call("new")
-        .args_json(json!(args))
-        .max_gas()
-        .transact()
-        .await?
-        .into_result()?;
-
-    if !is_old_version {
-        bridge_contract
-            .call("add_prover")
-            .args_json(json!({
-                "chain": "Eth",
-                "account_id": prover_contract.id(),
-            }))
-            .max_gas()
-            .transact()
-            .await?
-            .into_result()?;
-    }
-
-    Ok(bridge_contract)
-}
-
-async fn deploy_token_deployer(
-    worker: &Worker<Sandbox>,
-    bridge_contract: &Contract,
-    chain: ChainKind,
-) -> anyhow::Result<()> {
-    let token_deployer = worker
-        .create_tla_and_deploy(
-            account_n(9),
-            worker.dev_generate().await.1,
-            &token_deployer_wasm(),
-        )
-        .await?
-        .unwrap();
-
-    token_deployer
-        .call("new")
+async fn storage_deposit(token_contract: &Contract, account_id: &AccountId) -> anyhow::Result<()> {
+    token_contract
+        .call("storage_deposit")
         .args_json(json!({
-            "controller": bridge_contract.id(),
-            "dao": AccountId::from_str("dao.near").unwrap(),
+            "account_id": account_id,
+            "registration_only": true,
         }))
-        .max_gas()
-        .transact()
-        .await?
-        .into_result()?;
-
-    bridge_contract
-        .call("add_token_deployer")
-        .args_json(json!({
-            "chain": chain,
-            "account_id": token_deployer.id(),
-        }))
+        .deposit(NEP141_DEPOSIT)
         .max_gas()
         .transact()
         .await?
         .into_result()?;
 
     Ok(())
-}
-
-async fn get_token_contract(
-    worker: &Worker<Sandbox>,
-    bridge_contract: &Contract,
-    token_address: &OmniAddress,
-) -> anyhow::Result<Contract> {
-    let token_account_id: AccountId = bridge_contract
-        .view("get_token_id")
-        .args_json(json!({
-            "address": token_address
-        }))
-        .await?
-        .json()?;
-
-    let token_contract = worker
-        .import_contract(&token_account_id, worker)
-        .transact()
-        .await?;
-
-    Ok(token_contract)
 }
