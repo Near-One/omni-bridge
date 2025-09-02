@@ -11,7 +11,7 @@ mod tests {
     use omni_types::{
         locker_args::{FinTransferArgs, StorageDepositAction},
         prover_result::{InitTransferMessage, ProverResult},
-        ChainKind, Fee, OmniAddress,
+        Fee, OmniAddress,
     };
     use rand::RngCore;
     use rstest::rstest;
@@ -56,44 +56,34 @@ mod tests {
         is_wnear: bool,
         deploy_minted_token: bool,
     ) -> anyhow::Result<TestSetup> {
-        let mut env_builder = TestEnvBuilder::new().await?;
-
-        let token_contract = env_builder.deploy_nep141_token().await?;
-        if is_wnear {
-            env_builder
-                .deploy_bridge(false, Some(token_contract.id().clone()))
-                .await?;
+        let env_builder = if is_wnear {
+            TestEnvBuilder::new().await?.with_custom_wnear().await?
+        } else if deploy_minted_token {
+            TestEnvBuilder::new().await?.with_bridged_token().await?
         } else {
-            env_builder.deploy_bridge(false, None).await?;
-        }
+            TestEnvBuilder::new()
+                .await?
+                .with_native_nep141_token(24)
+                .await?
+        };
 
-        env_builder.add_factory(eth_factory_address()).await?;
+        let token_receiver_contract = env_builder.deploy_mock_receiver().await?;
 
-        if deploy_minted_token {
-            env_builder.deploy_token_deployer(ChainKind::Eth).await?;
-            env_builder
-                .deploy_bridged_token(eth_token_address())
-                .await?;
-        } else {
-            env_builder.bind_token(token_contract, 24).await?;
-        }
-
-        env_builder.deploy_mock_receiver().await?;
-
-        env_builder.create_account(relayer_account_id()).await?;
+        let relayer_account = env_builder.create_account(relayer_account_id()).await?;
+        // let _ = env_builder.create_account(account_n(2)).await?;
 
         let required_balance_for_fin_transfer: NearToken = env_builder
-            .bridge_contract()
+            .bridge_contract
             .view("required_balance_for_fin_transfer")
             .await?
             .json()?;
 
         Ok(TestSetup {
             worker: env_builder.worker,
-            token_contract: env_builder.bridge_token.unwrap().contract,
-            locker_contract: env_builder.bridge_contract.unwrap(),
-            token_receiver_contract: env_builder.token_receiver.unwrap(),
-            relayer_account: env_builder.accounts[&relayer_account_id()].clone(),
+            token_contract: env_builder.token.contract,
+            locker_contract: env_builder.bridge_contract,
+            token_receiver_contract,
+            relayer_account,
             required_balance_for_fin_transfer,
         })
     }

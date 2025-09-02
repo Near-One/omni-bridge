@@ -19,7 +19,7 @@ mod tests {
 
     use crate::environment::*;
     use crate::helpers::tests::{
-        account_n, base_eoa_address, base_factory_address, eth_eoa_address, eth_factory_address,
+        account_n, base_eoa_address, eth_eoa_address, eth_factory_address,
         fast_relayer_account_id, relayer_account_id, NEP141_DEPOSIT,
     };
 
@@ -62,21 +62,26 @@ mod tests {
         async fn new(is_bridged_token: bool) -> anyhow::Result<Self> {
             let sender_balance_token = 1_000_000_000_000;
 
-            let mut env_builder = TestEnvBuilder::new().await?;
-            env_builder.deploy_bridge(false, None).await?;
-            env_builder.add_factory(eth_factory_address()).await?;
-            env_builder.add_factory(base_factory_address()).await?;
-            env_builder.deploy_token_deployer(ChainKind::Eth).await?;
-            env_builder.create_account(relayer_account_id()).await?;
-            env_builder
+            let env_builder = if is_bridged_token {
+                TestEnvBuilder::new().await?.with_bridged_eth().await?
+            } else {
+                TestEnvBuilder::new()
+                    .await?
+                    .with_native_nep141_token(18)
+                    .await?
+            };
+
+            let relayer_account = env_builder.create_account(relayer_account_id()).await?;
+            let fast_relayer_account = env_builder
                 .create_account(fast_relayer_account_id())
                 .await?;
-            env_builder.create_account(account_n(1)).await?;
-            if is_bridged_token {
-                env_builder.deploy_eth_token().await?;
-            } else {
-                env_builder.deploy_and_bind_nep141_token(18).await?;
-            }
+            let _ = env_builder.create_account(account_n(1)).await?;
+
+            env_builder.storage_deposit(&relayer_account_id()).await?;
+            env_builder
+                .storage_deposit(&fast_relayer_account_id())
+                .await?;
+
             env_builder
                 .mint_tokens(&relayer_account_id(), sender_balance_token)
                 .await?;
@@ -85,27 +90,17 @@ mod tests {
                 .await?;
             env_builder
                 .mint_tokens(
-                    &env_builder.bridge_contract().id().clone(),
+                    &env_builder.bridge_contract.id().clone(),
                     sender_balance_token / 2,
                 )
                 .await?;
 
-            let bridge_token = env_builder.bridge_token.unwrap();
-
             Ok(Self {
-                token_contract: bridge_token.contract,
-                eth_token_address: bridge_token.eth_address,
-                bridge_contract: env_builder.bridge_contract.unwrap(),
-                relayer_account: env_builder
-                    .accounts
-                    .get(&relayer_account_id())
-                    .unwrap()
-                    .clone(),
-                fast_relayer_account: env_builder
-                    .accounts
-                    .get(&fast_relayer_account_id())
-                    .unwrap()
-                    .clone(),
+                token_contract: env_builder.token.contract,
+                eth_token_address: env_builder.token.eth_address,
+                bridge_contract: env_builder.bridge_contract,
+                relayer_account,
+                fast_relayer_account,
             })
         }
     }

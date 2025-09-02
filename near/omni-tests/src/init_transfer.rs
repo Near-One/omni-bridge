@@ -36,35 +36,26 @@ mod tests {
     impl TestEnv {
         #[allow(clippy::too_many_lines)]
         async fn new(sender_balance_token: u128, is_old_locker: bool) -> anyhow::Result<Self> {
-            let mut env_builder = TestEnvBuilder::new().await?;
-            env_builder.deploy_bridge(is_old_locker, None).await?;
-            env_builder.create_account(relayer_account_id()).await?;
-            env_builder.create_account(account_n(1)).await?;
-            env_builder.add_factory(eth_factory_address()).await?;
-            env_builder.deploy_and_bind_nep141_token(24).await?;
-            env_builder
-                .mint_tokens(&account_n(1), sender_balance_token)
+            let env_builder = TestEnvBuilder::new()
+                .await?
+                .deploy_old_version(is_old_locker)
+                .with_native_nep141_token(24)
                 .await?;
-
+            let relayer_account = env_builder.create_account(relayer_account_id()).await?;
+            let sender_account = env_builder.create_account(account_n(1)).await?;
+            env_builder.storage_deposit(relayer_account.id()).await?;
+            env_builder.storage_deposit(sender_account.id()).await?;
             env_builder
-                .token_deposit_storage(&relayer_account_id())
+                .mint_tokens(sender_account.id(), sender_balance_token)
                 .await?;
 
             Ok(Self {
                 worker: env_builder.worker,
-                token_contract: env_builder.bridge_token.unwrap().contract,
-                locker_contract: env_builder.bridge_contract.unwrap(),
-                relayer_account: env_builder
-                    .accounts
-                    .get(&relayer_account_id())
-                    .unwrap()
-                    .clone(),
-                sender_account: env_builder.accounts.get(&account_n(1)).unwrap().clone(),
-                eth_factory_address: env_builder
-                    .factories
-                    .get(&ChainKind::Eth.into())
-                    .unwrap()
-                    .clone(),
+                token_contract: env_builder.token.contract,
+                locker_contract: env_builder.bridge_contract,
+                relayer_account,
+                sender_account,
+                eth_factory_address: eth_factory_address(),
             })
         }
     }
