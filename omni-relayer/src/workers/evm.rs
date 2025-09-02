@@ -55,11 +55,7 @@ pub async fn process_init_transfer_event(
     };
 
     match omni_connector
-        .is_transfer_finalised(
-            Some(chain_kind),
-            log.recipient.get_chain(),
-            log.origin_nonce,
-        )
+        .is_transfer_finalised(Some(chain_kind), ChainKind::Near, log.origin_nonce)
         .await
     {
         Ok(true) => anyhow::bail!("Transfer is already finalised: {:?}", transfer_id),
