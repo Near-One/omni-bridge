@@ -32,7 +32,7 @@ pub struct ConfirmedTxHash {
     pub btc_tx_hash: String,
 }
 
-pub async fn process_utxo_to_btc_init_transfer_event(
+pub async fn process_near_to_utxo_init_transfer_event(
     omni_connector: Arc<OmniConnector>,
     transfer: Transfer,
     near_nonce: Arc<utils::nonce::NonceManager>,
