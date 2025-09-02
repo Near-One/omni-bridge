@@ -970,6 +970,7 @@ mod tests {
             .deploy(&locker_wasm)
             .await
             .unwrap();
+
         assert!(res.is_success(), "Failed to upgrade locker");
 
         let res = env
@@ -979,6 +980,7 @@ mod tests {
             .max_gas()
             .transact()
             .await?;
+
         assert!(res.is_success(), "Migration didn't succeed");
 
         let transfer = env

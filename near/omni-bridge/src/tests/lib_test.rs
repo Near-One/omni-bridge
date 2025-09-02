@@ -1,9 +1,7 @@
 use std::collections::HashMap;
 use std::str::FromStr;
 
-use near_contract_standards::{
-    fungible_token::receiver::FungibleTokenReceiver, storage_management::StorageBalance,
-};
+use near_contract_standards::storage_management::StorageBalance;
 use near_sdk::{
     borsh, json_types::U128, serde_json, test_utils::VMContextBuilder, test_vm_config, testing_env,
     AccountId, NearToken, PromiseOrValue, PromiseResult, RuntimeFeesConfig,
@@ -95,7 +93,7 @@ fn run_ft_on_transfer(
     amount: U128,
     attached_deposit: Option<NearToken>,
     msg: &BridgeOnTransferMsg,
-) -> PromiseOrValue<U128> {
+) {
     let sender_id = AccountId::try_from(sender_id).expect("Invalid sender ID");
     let token_id = AccountId::try_from(token_id).expect("Invalid token ID");
 
@@ -103,7 +101,7 @@ fn run_ft_on_transfer(
         deplosit
     } else {
         let min_storage_balance = contract.required_balance_for_account();
-        let init_transfer_balance = contract.required_balance_for_init_transfer();
+        let init_transfer_balance = contract.required_balance_for_init_transfer(None);
         min_storage_balance.saturating_add(init_transfer_balance)
     };
 
@@ -112,7 +110,7 @@ fn run_ft_on_transfer(
 
     let msg = serde_json::to_string(msg).expect("Failed to serialize transfer message");
 
-    contract.ft_on_transfer(sender_id, amount, msg)
+    contract.ft_on_transfer(sender_id, amount, msg);
 }
 
 fn run_ft_on_transfer_legacy(
@@ -122,7 +120,7 @@ fn run_ft_on_transfer_legacy(
     amount: U128,
     attached_deposit: Option<NearToken>,
     msg: &InitTransferMsg,
-) -> PromiseOrValue<U128> {
+) {
     let sender_id = AccountId::try_from(sender_id).expect("Invalid sender ID");
     let token_id = AccountId::try_from(token_id).expect("Invalid token ID");
 
@@ -130,7 +128,7 @@ fn run_ft_on_transfer_legacy(
         deposit
     } else {
         let min_storage_balance = contract.required_balance_for_account();
-        let init_transfer_balance = contract.required_balance_for_init_transfer();
+        let init_transfer_balance = contract.required_balance_for_init_transfer(None);
         min_storage_balance.saturating_add(init_transfer_balance)
     };
 
@@ -139,7 +137,7 @@ fn run_ft_on_transfer_legacy(
 
     let msg = serde_json::to_string(msg).expect("Failed to serialize transfer message");
 
-    contract.ft_on_transfer(sender_id, amount, msg)
+    contract.ft_on_transfer(sender_id, amount, msg);
 }
 
 #[test]
@@ -212,26 +210,6 @@ fn test_init_transfer_stored_transfer_message() {
 }
 
 #[test]
-fn test_init_transfer_promise_result() {
-    let mut contract = get_default_contract();
-
-    let promise = run_ft_on_transfer(
-        &mut contract,
-        DEFAULT_NEAR_USER_ACCOUNT.to_string(),
-        DEFAULT_FT_CONTRACT_ACCOUNT.to_string(),
-        U128(DEFAULT_TRANSFER_AMOUNT),
-        None,
-        &BridgeOnTransferMsg::InitTransfer(get_init_transfer_msg(DEFAULT_ETH_USER_ADDRESS, 0, 0)),
-    );
-
-    let remaining = match promise {
-        PromiseOrValue::Value(remaining) => remaining,
-        PromiseOrValue::Promise(_) => panic!("Expected Value variant, got Promise"),
-    };
-    assert_eq!(remaining, U128(0), "Expected remaining amount to be 0");
-}
-
-#[test]
 #[should_panic(expected = "ERR_INVALID_FEE")]
 fn test_init_transfer_invalid_fee() {
     let mut contract = get_default_contract();
@@ -254,7 +232,7 @@ fn test_init_transfer_balance_updated() {
     let mut contract = get_default_contract();
 
     let min_storage_balance = contract.required_balance_for_account();
-    let init_transfer_balance = contract.required_balance_for_init_transfer();
+    let init_transfer_balance = contract.required_balance_for_init_transfer(None);
     let total_balance = min_storage_balance.saturating_add(init_transfer_balance);
 
     run_ft_on_transfer(

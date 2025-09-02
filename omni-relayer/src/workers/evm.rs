@@ -55,11 +55,7 @@ pub async fn process_init_transfer_event(
     };
 
     match omni_connector
-        .is_transfer_finalised(
-            Some(chain_kind),
-            log.recipient.get_chain(),
-            log.origin_nonce,
-        )
+        .is_transfer_finalised(Some(chain_kind), ChainKind::Near, log.origin_nonce)
         .await
     {
         Ok(true) => anyhow::bail!("Transfer is already finalised: {:?}", transfer_id),
@@ -201,6 +197,7 @@ pub async fn process_init_transfer_event(
     let fin_transfer_args = if let Some(vaa) = vaa {
         omni_connector::FinTransferArgs::NearFinTransferWithVaa {
             chain_kind,
+            destination_chain: recipient.get_chain(),
             storage_deposit_actions,
             vaa,
             transaction_options: TransactionOptions {
@@ -212,6 +209,7 @@ pub async fn process_init_transfer_event(
     } else {
         omni_connector::FinTransferArgs::NearFinTransferWithEvmProof {
             chain_kind,
+            destination_chain: recipient.get_chain(),
             tx_hash: transaction_hash,
             storage_deposit_actions,
             transaction_options: TransactionOptions {
