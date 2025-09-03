@@ -16,8 +16,7 @@ mod tests {
         environment::TestEnvBuilder,
         helpers::tests::{
             account_n, build_artifacts, eth_eoa_address, eth_factory_address,
-            get_claim_fee_args_near, get_event_data, locker_wasm, relayer_account_id,
-            BuildArtifacts,
+            get_claim_fee_args_near, get_event_data, relayer_account_id, BuildArtifacts,
         },
     };
 
@@ -729,7 +728,7 @@ mod tests {
         let res = env
             .locker_contract
             .as_account()
-            .deploy(&locker_wasm())
+            .deploy(&build_artifacts.locker)
             .await
             .unwrap();
 

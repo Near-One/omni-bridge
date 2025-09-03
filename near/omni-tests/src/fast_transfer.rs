@@ -74,16 +74,16 @@ mod tests {
                 .await?;
             let _ = env_builder.create_account(account_n(1)).await?;
 
-            env_builder.storage_deposit(&relayer_account.id()).await?;
+            env_builder.storage_deposit(relayer_account.id()).await?;
             env_builder
-                .storage_deposit(&fast_relayer_account.id())
+                .storage_deposit(fast_relayer_account.id())
                 .await?;
 
             env_builder
-                .mint_tokens(&relayer_account.id(), sender_balance_token)
+                .mint_tokens(relayer_account.id(), sender_balance_token)
                 .await?;
             env_builder
-                .mint_tokens(&fast_relayer_account.id(), sender_balance_token * 2)
+                .mint_tokens(fast_relayer_account.id(), sender_balance_token * 2)
                 .await?;
             env_builder
                 .mint_tokens(
@@ -360,7 +360,7 @@ mod tests {
                 get_balance(&env.token_contract, env.bridge_contract.id()).await?;
 
             let result =
-                do_fast_transfer(&env, params.amount_to_send, params.fast_transfer_msg, None)
+                do_fast_transfer(env, params.amount_to_send, params.fast_transfer_msg, None)
                     .await?;
 
             let recipient_balance_after = get_balance(&env.token_contract, &recipient).await?;

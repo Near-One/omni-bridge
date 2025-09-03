@@ -28,17 +28,17 @@ pub struct BridgeToken {
 }
 
 pub struct TestEnvBuilder {
-    pub worker: Worker<Sandbox>,
-    pub build_artifacts: BuildArtifacts,
-    pub deploy_old_version: bool,
+    worker: Worker<Sandbox>,
+    build_artifacts: BuildArtifacts,
+    deploy_old_version: bool,
 }
 
 pub struct TestEnvBuilderWithToken {
     pub worker: Worker<Sandbox>,
     pub bridge_contract: Contract,
     pub token: BridgeToken,
-    pub build_artifacts: BuildArtifacts,
-    pub token_transfer_nonce: RefCell<u64>,
+    build_artifacts: BuildArtifacts,
+    token_transfer_nonce: RefCell<u64>,
 }
 
 impl TestEnvBuilder {
@@ -65,7 +65,7 @@ impl TestEnvBuilder {
             .await?;
 
         add_factory(&bridge_contract, eth_factory_address()).await?;
-        
+
         bind_token(
             &bridge_contract,
             &eth_token_address(),
@@ -178,10 +178,10 @@ impl TestEnvBuilder {
 
     pub async fn with_bridged_token(self) -> anyhow::Result<TestEnvBuilderWithToken> {
         let bridge_contract = self.deploy_bridge(None).await?;
-        
+
         self.deploy_token_deployer(&bridge_contract, ChainKind::Eth)
             .await?;
-        
+
         add_factory(&bridge_contract, eth_factory_address()).await?;
 
         let token_deploy_initiator = self
@@ -282,7 +282,7 @@ impl TestEnvBuilder {
             .worker
             .dev_deploy(&self.build_artifacts.mock_prover)
             .await?;
-        let bridge_contract = self.worker.dev_deploy(&locker_wasm).await?;
+        let bridge_contract = self.worker.dev_deploy(locker_wasm).await?;
 
         let mut args = serde_json::Map::new();
         if self.deploy_old_version {
@@ -369,21 +369,7 @@ impl TestEnvBuilderWithToken {
     }
 
     pub async fn mint_tokens(&self, recipient: &AccountId, amount: u128) -> anyhow::Result<()> {
-        if !self.token.is_deployed {
-            self.token
-                .contract
-                .call("ft_transfer")
-                .args_json(json!({
-                    "receiver_id": recipient.clone(),
-                    "amount": U128(amount),
-                    "memo": None::<String>,
-                }))
-                .deposit(NearToken::from_yoctonear(1))
-                .max_gas()
-                .transact()
-                .await?
-                .into_result()?;
-        } else {
+        if self.token.is_deployed {
             let storage_deposit_actions = vec![StorageDepositAction {
                 token_id: self.token.contract.id().clone(),
                 account_id: recipient.clone(),
@@ -403,7 +389,7 @@ impl TestEnvBuilderWithToken {
                     chain_kind: ChainKind::Eth,
                     storage_deposit_actions,
                     prover_args: borsh::to_vec(&ProverResult::InitTransfer(InitTransferMessage {
-                        origin_nonce: self.token_transfer_nonce.borrow().clone(),
+                        origin_nonce: { *self.token_transfer_nonce.borrow() },
                         token: self.token.eth_address.clone(),
                         recipient: OmniAddress::Near(recipient.clone()),
                         amount: U128(amount),
@@ -423,6 +409,20 @@ impl TestEnvBuilderWithToken {
                 .into_result()?;
 
             *self.token_transfer_nonce.borrow_mut() += 1;
+        } else {
+            self.token
+                .contract
+                .call("ft_transfer")
+                .args_json(json!({
+                    "receiver_id": recipient.clone(),
+                    "amount": U128(amount),
+                    "memo": None::<String>,
+                }))
+                .deposit(NearToken::from_yoctonear(1))
+                .max_gas()
+                .transact()
+                .await?
+                .into_result()?;
         }
 
         Ok(())
