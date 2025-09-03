@@ -414,7 +414,7 @@ async fn handle_btc_event(
             utxo_count,
             ..
         } => {
-            if config.is_signing_btc_transaction_enabled() {
+            if config.is_signing_utxo_transaction_enabled(event.utxo_chain) {
                 info!(
                     "Received TransferNearToUtxo on {:?}: {origin_transaction_id}",
                     event.utxo_chain
@@ -463,7 +463,7 @@ async fn handle_btc_event(
             .await;
         }
         UtxoConnectorEventDetails::ConfirmedTxHash { btc_tx_hash } => {
-            if config.is_verifying_withdraw_enabled() {
+            if config.is_verifying_utxo_withdraw_enabled(event.utxo_chain) {
                 info!(
                     "Received ConfirmedTxHash on {:?}: {btc_tx_hash}",
                     event.utxo_chain

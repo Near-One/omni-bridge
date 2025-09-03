@@ -2,6 +2,7 @@ use alloy::{
     primitives::Address,
     signers::{k256::ecdsa::SigningKey, local::LocalSigner},
 };
+use bridge_indexer_types::documents_types::UtxoChain;
 use near_primitives::types::AccountId;
 use omni_types::{ChainKind, OmniAddress};
 use rust_decimal::Decimal;
@@ -70,7 +71,6 @@ where
     for key in ["INFURA_API_KEY", "TATUM_API_KEY", "FASTNEAR_API_KEY"] {
         if let Ok(val) = std::env::var(key) {
             url = url.replace(key, &val);
-            break;
         }
     }
 
@@ -120,14 +120,20 @@ impl Config {
         self.near.fast_relayer_enabled
     }
 
-    pub fn is_signing_btc_transaction_enabled(&self) -> bool {
-        self.btc.as_ref().is_some_and(|btc| btc.signing_enabled)
+    pub fn is_signing_utxo_transaction_enabled(&self, chain: UtxoChain) -> bool {
+        let config = match chain {
+            UtxoChain::Btc => self.btc.as_ref(),
+            UtxoChain::Zcash => self.zcash.as_ref(),
+        };
+        config.is_some_and(|btc| btc.signing_enabled)
     }
 
-    pub fn is_verifying_withdraw_enabled(&self) -> bool {
-        self.btc
-            .as_ref()
-            .is_some_and(|btc| btc.verifying_withdraw_enabled)
+    pub fn is_verifying_utxo_withdraw_enabled(&self, chain: UtxoChain) -> bool {
+        let config = match chain {
+            UtxoChain::Btc => self.btc.as_ref(),
+            UtxoChain::Zcash => self.zcash.as_ref(),
+        };
+        config.is_some_and(|btc| btc.verifying_withdraw_enabled)
     }
 }
 
