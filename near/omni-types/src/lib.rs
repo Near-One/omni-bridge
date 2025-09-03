@@ -508,6 +508,7 @@ pub struct TransferMessageStorageAccount {
 }
 
 impl TransferMessageStorageAccount {
+    #[allow(clippy::missing_panics_doc)]
     pub fn id(&self) -> AccountId {
         let hash = utils::sha256(&borsh::to_vec(self).unwrap());
         let implicit_account_id = hex::encode(hash);
