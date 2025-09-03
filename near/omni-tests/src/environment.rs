@@ -389,7 +389,7 @@ impl TestEnvBuilderWithToken {
                     chain_kind: ChainKind::Eth,
                     storage_deposit_actions,
                     prover_args: borsh::to_vec(&ProverResult::InitTransfer(InitTransferMessage {
-                        origin_nonce: { 
+                        origin_nonce: {
                             let current_nonce = *self.token_transfer_nonce.borrow();
                             current_nonce
                         },
