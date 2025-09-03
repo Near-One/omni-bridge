@@ -2955,6 +2955,7 @@ dependencies = [
  "rlp",
  "schemars 0.8.22",
  "serde",
+ "sha2",
  "sha3",
  "strum_macros 0.27.1",
 ]

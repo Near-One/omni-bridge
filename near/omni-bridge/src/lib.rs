@@ -482,8 +482,7 @@ impl Contract {
                 init_transfer_msg.native_token_fee.0,
             ));
 
-        let message_storage_account_id =
-            Self::calculate_message_storage_account_id(&transfer_message, &signer_id);
+        let message_storage_account_id = transfer_message.calculate_storage_account_id();
         // Choose storage payer or whether to yield execution until storage is available
         if self.has_storage_balance(&message_storage_account_id, required_storage_balance) {
             PromiseOrPromiseIndexOrValue::Value(self.init_transfer_internal(
@@ -1437,27 +1436,6 @@ impl Contract {
 }
 
 impl Contract {
-    // Hashing the transfer message to calculate virtual account ID that can be used to deposit storage required for the message
-    fn calculate_message_storage_account_id(
-        message: &TransferMessage,
-        signer_id: &AccountId,
-    ) -> AccountId {
-        let mut data = Vec::new();
-        data.extend_from_slice(message.token.to_string().as_bytes());
-        data.extend_from_slice(&message.amount.0.to_le_bytes());
-        data.extend_from_slice(message.recipient.to_string().as_bytes());
-        data.extend_from_slice(&message.fee.fee.0.to_le_bytes());
-        data.extend_from_slice(&message.fee.native_fee.0.to_le_bytes());
-        data.extend_from_slice(message.sender.to_string().as_bytes());
-        data.extend_from_slice(message.msg.as_bytes());
-        data.extend_from_slice(signer_id.as_bytes());
-
-        let hash = near_sdk::env::sha256_array(&data);
-
-        let implicit_account_id = hex::encode(hash);
-        AccountId::try_from(implicit_account_id).sdk_expect("ERR_CALCULATE_MESSAGE_ACCOUNT_ID")
-    }
-
     fn is_refund_required(is_ft_transfer_call: bool) -> bool {
         if is_ft_transfer_call {
             match env::promise_result(0) {

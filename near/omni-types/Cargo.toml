@@ -19,3 +19,4 @@ alloy.workspace = true
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 sha3.workspace = true
+sha2.workspace = true
