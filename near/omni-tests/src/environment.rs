@@ -389,7 +389,10 @@ impl TestEnvBuilderWithToken {
                     chain_kind: ChainKind::Eth,
                     storage_deposit_actions,
                     prover_args: borsh::to_vec(&ProverResult::InitTransfer(InitTransferMessage {
-                        origin_nonce: { *self.token_transfer_nonce.borrow() },
+                        origin_nonce: { 
+                            let current_nonce = *self.token_transfer_nonce.borrow();
+                            current_nonce
+                        },
                         token: self.token.eth_address.clone(),
                         recipient: OmniAddress::Near(recipient.clone()),
                         amount: U128(amount),
