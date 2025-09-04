@@ -489,6 +489,44 @@ impl TransferMessage {
     pub const fn get_destination_chain(&self) -> ChainKind {
         self.recipient.get_chain()
     }
+
+    pub fn calculate_storage_account_id(&self) -> AccountId {
+        TransferMessageStorageAccount::from(self.clone()).id()
+    }
+}
+
+// Used to calculate virtual account ID that can be used to deposit storage required for the message
+#[near(serializers=[borsh])]
+#[derive(Debug, Clone)]
+pub struct TransferMessageStorageAccount {
+    pub token: OmniAddress,
+    pub amount: U128,
+    pub recipient: OmniAddress,
+    pub fee: Fee,
+    pub sender: OmniAddress,
+    pub msg: String,
+}
+
+impl TransferMessageStorageAccount {
+    #[allow(clippy::missing_panics_doc)]
+    pub fn id(&self) -> AccountId {
+        let hash = utils::sha256(&borsh::to_vec(self).unwrap());
+        let implicit_account_id = hex::encode(hash);
+        AccountId::try_from(implicit_account_id).unwrap()
+    }
+}
+
+impl From<TransferMessage> for TransferMessageStorageAccount {
+    fn from(value: TransferMessage) -> Self {
+        Self {
+            token: value.token,
+            amount: value.amount,
+            recipient: value.recipient,
+            fee: value.fee,
+            sender: value.sender,
+            msg: value.msg,
+        }
+    }
 }
 
 #[near(serializers = [borsh, json])]
@@ -568,7 +606,7 @@ pub struct FastTransfer {
 impl FastTransfer {
     #[allow(clippy::missing_panics_doc)]
     pub fn id(&self) -> FastTransferId {
-        FastTransferId(near_sdk::env::sha256_array(&borsh::to_vec(self).unwrap()))
+        FastTransferId(utils::sha256(&borsh::to_vec(self).unwrap()))
     }
 }
 
