@@ -1,7 +1,7 @@
 [workspace.package]
 authors = ["Near One <info@nearone.org>"]
 repository = "https://github.com/Near-One/omni-bridge"
-version = "0.2.16"
+version = "0.2.17"
 
 [workspace]
 resolver = "2"
