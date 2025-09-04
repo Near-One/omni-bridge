@@ -13,6 +13,15 @@ pub mod tests {
 
     pub const NEP141_DEPOSIT: NearToken = NearToken::from_yoctonear(1_250_000_000_000_000_000_000);
 
+    #[derive(Clone)]
+    pub struct BuildArtifacts {
+        pub mock_token: Vec<u8>,
+        pub mock_prover: Vec<u8>,
+        pub mock_token_receiver: Vec<u8>,
+        pub locker: Vec<u8>,
+        pub token_deployer: Vec<u8>,
+    }
+
     fn build_wasm(path: &str, target_dir: &str) -> Vec<u8> {
         let pwd = Path::new("./").canonicalize().expect("new path");
         let sub_target = pwd.join(format!("target/{target_dir}"));
@@ -28,6 +37,18 @@ pub mod tests {
         .unwrap_or_else(|_| panic!("building contract from {path}"));
 
         std::fs::read(&artifact.path).unwrap()
+    }
+
+    #[fixture]
+    #[once]
+    pub fn build_artifacts() -> BuildArtifacts {
+        BuildArtifacts {
+            mock_token: mock_token_wasm(),
+            mock_prover: mock_prover_wasm(),
+            mock_token_receiver: mock_token_receiver_wasm(),
+            locker: locker_wasm(),
+            token_deployer: token_deployer_wasm(),
+        }
     }
 
     #[fixture]
