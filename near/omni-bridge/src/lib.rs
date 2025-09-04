@@ -68,7 +68,7 @@ const NO_DEPOSIT: NearToken = NearToken::from_near(0);
 const ONE_YOCTO: NearToken = NearToken::from_yoctonear(1);
 const SEND_TOKENS_CALLBACK_GAS: Gas = Gas::from_tgas(15);
 const VERIFY_PROOF_GAS: Gas = Gas::from_tgas(15);
-const INIT_TRANSFER_RESUME_GAS: Gas = Gas::from_tgas(5);
+const INIT_TRANSFER_RESUME_GAS: Gas = Gas::from_tgas(10);
 const SIGN_PATH: &str = "bridge-1";
 
 const PROMISE_REGISTER_ID: u64 = 0;
@@ -523,6 +523,10 @@ impl Contract {
                 required_storage_balance,
                 NearToken::from_yoctonear(0),
             );
+
+            env::log_str(&format!(
+                "Yield init transfer until storage is available at {message_storage_account_id}"
+            ));
 
             PromiseOrPromiseIndexOrValue::PromiseIndex(promise_index)
         }
