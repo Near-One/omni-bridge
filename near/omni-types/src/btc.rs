@@ -1,4 +1,3 @@
-use bitcoin::{OutPoint, TxOut};
 use near_sdk::json_types::U128;
 use near_sdk::serde::{Deserialize, Serialize};
 use near_sdk::{near, AccountId};
@@ -19,4 +18,18 @@ pub enum TokenReceiverMessage {
 pub struct UTXOChainConfig {
     pub connector: AccountId,
     pub token_id: AccountId,
+}
+
+#[near(serializers=[json])]
+#[derive(Debug)]
+pub struct OutPoint {
+    pub txid: String,
+    pub vout: u32,
+}
+
+#[near(serializers=[json])]
+#[derive(Debug)]
+pub struct TxOut {
+    pub value: u64,
+    pub script_pubkey: String,
 }

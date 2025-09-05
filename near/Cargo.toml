@@ -28,7 +28,6 @@ panic = "abort"
 overflow-checks = true
 
 [workspace.dependencies]
-bitcoin = { version = "0.32.0", default-features = false, features = ["serde"] }
 cargo-near-build = "0.4.3"
 near-sdk = "5.15.1"
 near-contract-standards = "=5.15.1"
