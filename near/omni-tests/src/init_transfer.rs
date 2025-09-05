@@ -22,7 +22,7 @@ mod tests {
     const EXPECTED_RELAYER_GAS_COST: NearToken =
         NearToken::from_yoctonear(1_500_000_000_000_000_000_000);
 
-    const PREV_LOCKER_WASM_FILEPATH: &str = "src/data/omni_bridge-0_2_13.wasm";
+    const PREV_LOCKER_WASM_FILEPATH: &str = "src/data/omni_bridge-0_2_17.wasm";
 
     struct TestEnv {
         worker: near_workspaces::Worker<near_workspaces::network::Sandbox>,
