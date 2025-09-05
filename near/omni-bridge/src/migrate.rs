@@ -6,7 +6,7 @@ use borsh::{BorshDeserialize, BorshSerialize};
 use near_contract_standards::storage_management::StorageBalance;
 use near_sdk::{
     collections::{LookupMap, LookupSet, UnorderedMap},
-    env, near, AccountId, PanicOnDefault,
+    env, near, AccountId, CryptoHash, PanicOnDefault,
 };
 use omni_types::{ChainKind, FastTransferId, Nonce, OmniAddress, TransferId};
 
@@ -27,6 +27,8 @@ pub struct OldState {
     pub destination_nonces: LookupMap<ChainKind, Nonce>,
     pub accounts_balances: LookupMap<AccountId, StorageBalance>,
     pub wnear_account_id: AccountId,
+    pub provers: UnorderedMap<ChainKind, AccountId>,
+    pub init_transfer_promises: LookupMap<AccountId, CryptoHash>,
 }
 
 #[near]
@@ -50,8 +52,8 @@ impl Contract {
                 destination_nonces: old_state.destination_nonces,
                 accounts_balances: old_state.accounts_balances,
                 wnear_account_id: old_state.wnear_account_id,
-                provers: UnorderedMap::new(StorageKey::RegisteredProvers),
-                init_transfer_promises: LookupMap::new(StorageKey::InitTransferPromises),
+                provers: old_state.provers,
+                init_transfer_promises: old_state.init_transfer_promises,
                 utxo_chain_connectors: UnorderedMap::new(StorageKey::UtxoChainConnectors),
             }
         } else {
