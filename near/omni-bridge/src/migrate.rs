@@ -12,7 +12,6 @@ use omni_types::{ChainKind, FastTransferId, Nonce, OmniAddress, TransferId};
 
 #[derive(BorshDeserialize, BorshSerialize, PanicOnDefault)]
 pub struct OldState {
-    pub prover_account: AccountId,
     pub factories: LookupMap<ChainKind, OmniAddress>,
     pub pending_transfers: LookupMap<TransferId, TransferMessageStorage>,
     pub finalised_transfers: LookupSet<TransferId>,
