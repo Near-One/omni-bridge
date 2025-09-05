@@ -1,12 +1,12 @@
 #![allow(clippy::too_many_arguments)]
 use helpers::{PromiseOrPromiseIndexOrValue, SdkExpect};
+use near_contract_standards::fungible_token::metadata::FungibleTokenMetadata;
+use near_contract_standards::storage_management::StorageBalance;
 use near_plugins::{
     access_control, access_control_any, pause, AccessControlRole, AccessControllable, Pausable,
     Upgradable,
 };
 
-use near_contract_standards::fungible_token::metadata::FungibleTokenMetadata;
-use near_contract_standards::storage_management::StorageBalance;
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::collections::{LookupMap, LookupSet, UnorderedMap};
 use near_sdk::json_types::{Base64VecU8, U128};
@@ -16,6 +16,7 @@ use near_sdk::{
     env, ext_contract, near, require, serde_json, AccountId, BorshStorageKey, CryptoHash, Gas,
     GasWeight, NearToken, PanicOnDefault, Promise, PromiseError, PromiseOrValue, PromiseResult,
 };
+use omni_types::btc::UTXOChainConfig;
 use omni_types::locker_args::{
     AddDeployedTokenArgs, BindTokenArgs, ClaimFeeArgs, DeployTokenArgs, FinTransferArgs,
     StorageDepositAction,
@@ -34,6 +35,7 @@ use storage::{
     NEP141_DEPOSIT,
 };
 
+mod btc;
 mod helpers;
 mod migrate;
 mod storage;
@@ -88,6 +90,7 @@ enum StorageKey {
     FastTransfers,
     RegisteredProvers,
     InitTransferPromises,
+    UtxoChainConnectors,
 }
 
 #[derive(AccessControlRole, Deserialize, Serialize, Copy, Clone)]
@@ -146,6 +149,12 @@ pub trait ExtToken {
     );
 }
 
+#[near(serializers = [json])]
+#[derive(Clone)]
+pub struct BtcConfig {
+    pub chain_signatures_root_public_key: Option<near_sdk::PublicKey>,
+}
+
 #[ext_contract(ext_bridge_token_facory)]
 pub trait ExtBridgeTokenFactory {
     fn set_controller_for_tokens(&self, tokens_account_id: Vec<AccountId>);
@@ -200,6 +209,7 @@ pub struct Contract {
     pub wnear_account_id: AccountId,
     pub provers: UnorderedMap<ChainKind, AccountId>,
     pub init_transfer_promises: LookupMap<AccountId, CryptoHash>,
+    pub utxo_chain_connectors: UnorderedMap<ChainKind, UTXOChainConfig>,
 }
 
 #[near]
@@ -244,6 +254,7 @@ impl Contract {
             wnear_account_id,
             provers: UnorderedMap::new(StorageKey::RegisteredProvers),
             init_transfer_promises: LookupMap::new(StorageKey::InitTransferPromises),
+            utxo_chain_connectors: UnorderedMap::new(StorageKey::UtxoChainConnectors),
         };
 
         contract.acl_init_super_admin(near_sdk::env::predecessor_account_id());
@@ -467,7 +478,7 @@ impl Contract {
                 native_fee: init_transfer_msg.native_token_fee,
             },
             sender: OmniAddress::Near(sender_id),
-            msg: String::new(),
+            msg: init_transfer_msg.msg.unwrap_or_default(),
             destination_nonce,
             origin_transfer_id: None,
         };
@@ -811,6 +822,14 @@ impl Contract {
         storage_payer: AccountId,
         relayer_id: AccountId,
     ) {
+        if fast_transfer.recipient.is_utxo_chain() {
+            let btc_account_id = self.get_utxo_chain_token(fast_transfer.recipient.get_chain());
+            require!(
+                fast_transfer.token_id == btc_account_id,
+                "Only BTC can be transferred to the Bitcoin network."
+            );
+        }
+
         if self.is_transfer_finalised(fast_transfer.transfer_id) {
             env::panic_str("ERR_TRANSFER_ALREADY_FINALISED");
         }
@@ -914,29 +933,7 @@ impl Contract {
             self.remove_fast_transfer(&fast_transfer.id());
         }
 
-        if message.fee.native_fee.0 != 0 {
-            let origin_chain = message.origin_transfer_id.map_or_else(
-                || message.get_origin_chain(),
-                |origin_transfer_id| origin_transfer_id.origin_chain,
-            );
-            if origin_chain == ChainKind::Near {
-                Promise::new(fee_recipient.clone())
-                    .transfer(NearToken::from_yoctonear(message.fee.native_fee.0));
-            } else {
-                ext_token::ext(self.get_native_token_id(origin_chain))
-                    .with_static_gas(MINT_TOKEN_GAS)
-                    .mint(fee_recipient.clone(), message.fee.native_fee, None);
-            }
-        }
-
         let token = self.get_token_id(&message.token);
-        env::log_str(
-            &OmniBridgeEvent::ClaimFeeEvent {
-                transfer_message: message.clone(),
-            }
-            .to_log_string(),
-        );
-
         let token_address = self
             .get_token_address(message.get_destination_chain(), token.clone())
             .unwrap_or_else(|| env::panic_str("ERR_FAILED_TO_GET_TOKEN_ADDRESS"));
@@ -949,24 +946,7 @@ impl Contract {
         );
         let fee = message.amount.0 - denormalized_amount;
 
-        if fee > 0 {
-            if self.deployed_tokens.contains(&token) {
-                PromiseOrValue::Promise(ext_token::ext(token).with_static_gas(MINT_TOKEN_GAS).mint(
-                    fee_recipient,
-                    U128(fee),
-                    None,
-                ))
-            } else {
-                PromiseOrValue::Promise(
-                    ext_token::ext(token)
-                        .with_static_gas(FT_TRANSFER_GAS)
-                        .with_attached_deposit(ONE_YOCTO)
-                        .ft_transfer(fee_recipient, U128(fee), None),
-                )
-            }
-        } else {
-            PromiseOrValue::Value(())
-        }
+        self.send_fee_internal(&message, fee_recipient, fee)
     }
 
     #[payable]
@@ -1070,22 +1050,12 @@ impl Contract {
         );
 
         let storage_usage = env::storage_usage();
-        self.token_id_to_address.insert(
-            &(
-                deploy_token.token_address.get_chain(),
-                deploy_token.token.clone(),
-            ),
-            &deploy_token.token_address,
-        );
-        self.token_address_to_id
-            .insert(&deploy_token.token_address, &deploy_token.token);
 
-        self.token_decimals.insert(
+        self.add_token(
+            &deploy_token.token,
             &deploy_token.token_address,
-            &Decimals {
-                decimals: deploy_token.decimals,
-                origin_decimals: deploy_token.origin_decimals,
-            },
+            deploy_token.decimals,
+            deploy_token.origin_decimals,
         );
 
         let required_deposit = env::storage_byte_cost()
@@ -1296,23 +1266,12 @@ impl Contract {
 
         for token_info in tokens {
             self.deployed_tokens.insert(&token_info.token_id);
-            self.token_address_to_id
-                .insert(&token_info.token_address, &token_info.token_id);
-            self.token_id_to_address.insert(
-                &(
-                    token_info.token_address.get_chain(),
-                    token_info.token_id.clone(),
-                ),
+            self.add_token(
+                &token_info.token_id,
                 &token_info.token_address,
+                token_info.decimals,
+                token_info.decimals,
             );
-            self.token_decimals.insert(
-                &token_info.token_address,
-                &Decimals {
-                    decimals: token_info.decimals,
-                    origin_decimals: token_info.decimals,
-                },
-            );
-
             ext_token::ext(token_info.token_id)
                 .with_static_gas(STORAGE_DEPOSIT_GAS)
                 .with_attached_deposit(NEP141_DEPOSIT)
@@ -1436,6 +1395,11 @@ impl Contract {
     #[must_use]
     pub fn get_provers(&self) -> Vec<(ChainKind, AccountId)> {
         self.provers.iter().collect()
+    }
+
+    #[must_use]
+    pub fn get_utxo_chain_connectors(&self) -> Vec<(ChainKind, UTXOChainConfig)> {
+        self.utxo_chain_connectors.iter().collect()
     }
 }
 
@@ -1617,6 +1581,14 @@ impl Contract {
     ) {
         let mut required_balance = self.add_fin_transfer(&transfer_message.get_transfer_id());
         let token = self.get_token_id(&transfer_message.token);
+
+        if transfer_message.recipient.is_utxo_chain() {
+            let btc_account_id = self.get_utxo_chain_token(transfer_message.recipient.get_chain());
+            require!(
+                token == btc_account_id,
+                "Only BTC can be transferred to the Bitcoin network."
+            );
+        }
 
         let fast_transfer = FastTransfer::from_transfer(transfer_message.clone(), token.clone());
         let recipient = match self.get_fast_transfer_status(&fast_transfer.id()) {
@@ -1953,30 +1925,13 @@ impl Contract {
             .unwrap_or_else(|_| env::panic_str("ERR_PARSE_ACCOUNT"));
 
         let storage_usage = env::storage_usage();
-        require!(
-            self.token_id_to_address
-                .insert(&(chain_kind, token_id.clone()), token_address)
-                .is_none(),
-            "ERR_TOKEN_EXIST"
+        self.add_token(
+            &token_id,
+            token_address,
+            metadata.decimals,
+            metadata.decimals,
         );
-        require!(
-            self.token_address_to_id
-                .insert(token_address, &token_id)
-                .is_none(),
-            "ERR_TOKEN_EXIST"
-        );
-        require!(
-            self.token_decimals
-                .insert(
-                    token_address,
-                    &Decimals {
-                        decimals: metadata.decimals,
-                        origin_decimals: metadata.decimals
-                    }
-                )
-                .is_none(),
-            "ERR_TOKEN_EXIST"
-        );
+
         require!(self.deployed_tokens.insert(&token_id), "ERR_TOKEN_EXIST");
         let required_deposit = env::storage_byte_cost()
             .saturating_mul((env::storage_usage().saturating_sub(storage_usage)).into())
@@ -2009,6 +1964,88 @@ impl Contract {
             )
     }
 
+    fn send_fee_internal(
+        &mut self,
+        message: &TransferMessage,
+        fee_recipient: AccountId,
+        token_fee: u128,
+    ) -> PromiseOrValue<()> {
+        if message.fee.native_fee.0 != 0 {
+            let origin_chain = message.origin_transfer_id.map_or_else(
+                || message.get_origin_chain(),
+                |origin_transfer_id| origin_transfer_id.origin_chain,
+            );
+            if origin_chain == ChainKind::Near {
+                Promise::new(fee_recipient.clone())
+                    .transfer(NearToken::from_yoctonear(message.fee.native_fee.0));
+            } else {
+                ext_token::ext(self.get_native_token_id(origin_chain))
+                    .with_static_gas(MINT_TOKEN_GAS)
+                    .mint(fee_recipient.clone(), message.fee.native_fee, None);
+            }
+        }
+
+        let token = self.get_token_id(&message.token);
+        env::log_str(
+            &OmniBridgeEvent::ClaimFeeEvent {
+                transfer_message: message.clone(),
+            }
+            .to_log_string(),
+        );
+
+        if token_fee > 0 {
+            if self.deployed_tokens.contains(&token) {
+                PromiseOrValue::Promise(ext_token::ext(token).with_static_gas(MINT_TOKEN_GAS).mint(
+                    fee_recipient,
+                    U128(token_fee),
+                    None,
+                ))
+            } else {
+                PromiseOrValue::Promise(
+                    ext_token::ext(token)
+                        .with_static_gas(FT_TRANSFER_GAS)
+                        .with_attached_deposit(ONE_YOCTO)
+                        .ft_transfer(fee_recipient, U128(token_fee), None),
+                )
+            }
+        } else {
+            PromiseOrValue::Value(())
+        }
+    }
+
+    fn add_token(
+        &mut self,
+        token_id: &AccountId,
+        token_address: &OmniAddress,
+        decimals: u8,
+        origin_decimals: u8,
+    ) {
+        let chain_kind = token_address.get_chain();
+        require!(
+            self.token_id_to_address
+                .insert(&(chain_kind, token_id.clone()), token_address)
+                .is_none(),
+            "ERR_TOKEN_EXIST"
+        );
+        require!(
+            self.token_address_to_id
+                .insert(token_address, token_id)
+                .is_none(),
+            "ERR_TOKEN_EXIST"
+        );
+        require!(
+            self.token_decimals
+                .insert(
+                    token_address,
+                    &Decimals {
+                        decimals,
+                        origin_decimals,
+                    }
+                )
+                .is_none(),
+            "ERR_TOKEN_EXIST"
+        );
+    }
     fn verify_proof(&self, chain_kind: ChainKind, prover_args: Vec<u8>) -> Promise {
         let prover_account_id = self
             .provers

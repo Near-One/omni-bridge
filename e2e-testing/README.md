@@ -17,6 +17,8 @@ You will need the following tools installed on your environment before proceedin
 `cargo install --git https://github.com/Near-One/bridge-sdk-rs/ --rev <actual_revision> bridge-cli`, look for `<actual_revision>` in the `.github/workflows/e2e-test.yml` file.
 - **Cargo Near**. Used to build NEAR contracts. Install with:
 `cargo install --locked cargo-near`
+- **bitcoinjs-lib, axios**. The ОЫ Lib for work with bitcoin.
+`yarn add bitcoinjs-lib axios ecpair tiny-secp256k1 dotenv`
 Enables bridging functionality for various blockchain environments.
 
 ## Project Structure

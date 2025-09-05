@@ -10,6 +10,7 @@ use schemars::JsonSchema;
 use serde::de::Visitor;
 use sol_address::SolAddress;
 
+pub mod btc;
 pub mod evm;
 pub mod locker_args;
 pub mod mpc_types;
@@ -153,6 +154,10 @@ pub enum ChainKind {
     Base,
     #[serde(alias = "bnb")]
     Bnb,
+    #[serde(alias = "btc")]
+    Btc,
+    #[serde(alias = "zcash")]
+    Zcash,
 }
 
 impl FromStr for ChainKind {
@@ -179,12 +184,15 @@ impl TryFrom<u8> for ChainKind {
             3 => Ok(Self::Arb),
             4 => Ok(Self::Base),
             5 => Ok(Self::Bnb),
+            6 => Ok(Self::Btc),
+            7 => Ok(Self::Zcash),
             _ => Err(format!("{input:?} invalid chain kind")),
         }
     }
 }
 
 pub type EvmAddress = H160;
+pub type UTXOChainAddress = String;
 
 pub const ZERO_ACCOUNT_ID: &str =
     "0000000000000000000000000000000000000000000000000000000000000000";
@@ -198,6 +206,8 @@ pub enum OmniAddress {
     Arb(EvmAddress),
     Base(EvmAddress),
     Bnb(EvmAddress),
+    Btc(UTXOChainAddress),
+    Zcash(UTXOChainAddress),
 }
 
 impl OmniAddress {
@@ -210,6 +220,8 @@ impl OmniAddress {
             ChainKind::Arb => Ok(Self::Arb(H160::ZERO)),
             ChainKind::Base => Ok(Self::Base(H160::ZERO)),
             ChainKind::Bnb => Ok(Self::Bnb(H160::ZERO)),
+            ChainKind::Btc => Ok(Self::Btc(String::new())),
+            ChainKind::Zcash => Ok(Self::Zcash(String::new())),
         }
     }
 
@@ -233,6 +245,14 @@ impl OmniAddress {
                 Self::new_from_evm_address(chain_kind, Self::to_evm_address(address)?)
             }
             ChainKind::Near => Ok(Self::Near(Self::to_near_account_id(address)?)),
+            ChainKind::Btc => Ok(Self::Btc(
+                String::from_utf8(address.to_vec())
+                    .map_err(|e| format!("Invalid BTC address: {e}"))?,
+            )),
+            ChainKind::Zcash => Ok(Self::Zcash(
+                String::from_utf8(address.to_vec())
+                    .map_err(|e| format!("Invalid ZCash address: {e}"))?,
+            )),
         }
     }
 
@@ -244,6 +264,8 @@ impl OmniAddress {
             Self::Arb(_) => ChainKind::Arb,
             Self::Base(_) => ChainKind::Base,
             Self::Bnb(_) => ChainKind::Bnb,
+            Self::Btc(_) => ChainKind::Btc,
+            Self::Zcash(_) => ChainKind::Zcash,
         }
     }
 
@@ -255,6 +277,8 @@ impl OmniAddress {
             Self::Arb(address) => ("arb", address.to_string()),
             Self::Base(address) => ("base", address.to_string()),
             Self::Bnb(address) => ("bnb", address.to_string()),
+            Self::Btc(address) => ("btc", address.to_string()),
+            Self::Zcash(address) => ("zcash", address.to_string()),
         };
 
         if skip_zero_address && self.is_zero() {
@@ -271,6 +295,7 @@ impl OmniAddress {
             }
             Self::Near(address) => *address == ZERO_ACCOUNT_ID,
             Self::Sol(address) => address.is_zero(),
+            Self::Btc(address) | Self::Zcash(address) => address.is_empty(),
         }
     }
 
@@ -300,6 +325,18 @@ impl OmniAddress {
             }
             _ => self.encode('-', true),
         }
+    }
+
+    pub fn get_utxo_address(&self) -> Option<UTXOChainAddress> {
+        match self {
+            Self::Btc(btc_address) => Some(btc_address.clone()),
+            Self::Zcash(zcash_address) => Some(zcash_address.clone()),
+            _ => None,
+        }
+    }
+
+    pub fn is_utxo_chain(&self) -> bool {
+        matches!(self, Self::Btc(_) | Self::Zcash(_))
     }
 
     fn to_evm_address(address: &[u8]) -> Result<EvmAddress, String> {
@@ -341,6 +378,8 @@ impl FromStr for OmniAddress {
             "arb" => Ok(Self::Arb(recipient.parse().map_err(stringify)?)),
             "base" => Ok(Self::Base(recipient.parse().map_err(stringify)?)),
             "bnb" => Ok(Self::Bnb(recipient.parse().map_err(stringify)?)),
+            "btc" => Ok(Self::Btc(recipient.to_string())),
+            "zcash" => Ok(Self::Zcash(recipient.to_string())),
             _ => Err(format!("Chain {chain} is not supported")),
         }
     }
@@ -423,6 +462,7 @@ pub struct InitTransferMsg {
     pub recipient: OmniAddress,
     pub fee: U128,
     pub native_token_fee: U128,
+    pub msg: Option<String>,
 }
 
 #[near(serializers=[borsh, json])]
