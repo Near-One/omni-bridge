@@ -138,6 +138,7 @@ impl Serialize for H160 {
     strum_macros::AsRefStr,
     Default,
     IntoPrimitive,
+    Hash,
 )]
 #[repr(u8)]
 pub enum ChainKind {
