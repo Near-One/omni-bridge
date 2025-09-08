@@ -2,6 +2,8 @@ use near_sdk::json_types::U128;
 use near_sdk::serde::{Deserialize, Serialize};
 use near_sdk::{near, AccountId};
 
+type OutPoint = String;
+
 #[derive(Debug, Serialize, Deserialize)]
 pub enum TokenReceiverMessage {
     DepositProtocolFee,
@@ -18,13 +20,6 @@ pub enum TokenReceiverMessage {
 pub struct UTXOChainConfig {
     pub connector: AccountId,
     pub token_id: AccountId,
-}
-
-#[near(serializers=[json])]
-#[derive(Debug)]
-pub struct OutPoint {
-    pub txid: String,
-    pub vout: u32,
 }
 
 #[near(serializers=[json])]
