@@ -161,6 +161,16 @@ pub enum ChainKind {
     Zcash,
 }
 
+impl ChainKind {
+    pub const fn is_evm_chain(&self) -> bool {
+        matches!(self, Self::Eth | Self::Arb | Self::Base | Self::Bnb)
+    }
+
+    pub const fn is_utxo_chain(&self) -> bool {
+        matches!(self, Self::Btc | Self::Zcash)
+    }
+}
+
 impl FromStr for ChainKind {
     type Err = String;
 
