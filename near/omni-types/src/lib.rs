@@ -163,11 +163,17 @@ pub enum ChainKind {
 
 impl ChainKind {
     pub const fn is_evm_chain(&self) -> bool {
-        matches!(self, Self::Eth | Self::Arb | Self::Base | Self::Bnb)
+        match self {
+            Self::Eth | Self::Arb | Self::Base | Self::Bnb => true,
+            Self::Btc | Self::Zcash | Self::Near | Self::Sol => false,
+        }
     }
 
     pub const fn is_utxo_chain(&self) -> bool {
-        matches!(self, Self::Btc | Self::Zcash)
+        match self {
+            Self::Btc | Self::Zcash => true,
+            Self::Eth | Self::Arb | Self::Base | Self::Bnb | Self::Near | Self::Sol => false,
+        }
     }
 }
 
