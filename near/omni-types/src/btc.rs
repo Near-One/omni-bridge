@@ -7,7 +7,7 @@ pub enum TokenReceiverMessage {
     DepositProtocolFee,
     Withdraw {
         target_btc_address: String,
-        input: Vec<OutPoint>,
+        input: Vec<String>,
         output: Vec<TxOut>,
         max_gas_fee: Option<U128>,
     },
@@ -18,13 +18,6 @@ pub enum TokenReceiverMessage {
 pub struct UTXOChainConfig {
     pub connector: AccountId,
     pub token_id: AccountId,
-}
-
-#[near(serializers=[json])]
-#[derive(Debug)]
-pub struct OutPoint {
-    pub txid: String,
-    pub vout: u32,
 }
 
 #[near(serializers=[json])]
