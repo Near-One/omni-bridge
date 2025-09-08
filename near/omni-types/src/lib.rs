@@ -138,6 +138,7 @@ impl Serialize for H160 {
     strum_macros::AsRefStr,
     Default,
     IntoPrimitive,
+    Hash,
 )]
 #[repr(u8)]
 pub enum ChainKind {
@@ -158,6 +159,22 @@ pub enum ChainKind {
     Btc,
     #[serde(alias = "zcash")]
     Zcash,
+}
+
+impl ChainKind {
+    pub const fn is_evm_chain(&self) -> bool {
+        match self {
+            Self::Eth | Self::Arb | Self::Base | Self::Bnb => true,
+            Self::Btc | Self::Zcash | Self::Near | Self::Sol => false,
+        }
+    }
+
+    pub const fn is_utxo_chain(&self) -> bool {
+        match self {
+            Self::Btc | Self::Zcash => true,
+            Self::Eth | Self::Arb | Self::Base | Self::Bnb | Self::Near | Self::Sol => false,
+        }
+    }
 }
 
 impl FromStr for ChainKind {
