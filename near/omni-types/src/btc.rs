@@ -2,12 +2,14 @@ use near_sdk::json_types::U128;
 use near_sdk::serde::{Deserialize, Serialize};
 use near_sdk::{near, AccountId};
 
+type OutPoint = String;
+
 #[derive(Debug, Serialize, Deserialize)]
 pub enum TokenReceiverMessage {
     DepositProtocolFee,
     Withdraw {
         target_btc_address: String,
-        input: Vec<String>,
+        input: Vec<OutPoint>,
         output: Vec<TxOut>,
         max_gas_fee: Option<U128>,
     },
