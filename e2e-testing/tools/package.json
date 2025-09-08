@@ -45,6 +45,7 @@
     "verify-bridge-token-near-to-evm": "ts-node src/scripts/verify-bridge-token-near-to-evm.ts",
     "verify-transfer-near-to-evm": "ts-node src/scripts/verify-transfer-near-to-evm.ts",
     "verify-fast-transfer-evm-to-near": "ts-node src/scripts/verify-fast-transfer-evm-to-near.ts",
+    "verify-near-transfer": "ts-node src/scripts/verify-near-transfer.ts",
     "get-near-transfer-nonce": "ts-node src/scripts/get-near-transfer-nonce.ts",
     "get-evm-token-address": "ts-node src/scripts/get-evm-token-address.ts",
     "test": "yarn hardhat test",

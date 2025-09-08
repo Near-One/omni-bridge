@@ -57,6 +57,12 @@
       "locker_address": "d42c7b1d5c014c66e0dd31dca0e53758bb19ed16"
     }
   },
+  "zcash": {
+    "init_function": "new"
+  },
+  "zcash_connector": {
+    "init_function": "new"
+  },
   "nbtc": {
     "init_function": "new",
     "init_args": {}

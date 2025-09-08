@@ -1,6 +1,6 @@
 import pathlib
 import const
-from const import NearContract as NC, NearTestAccount as NTA
+from const import NearContract as NC, NearTestAccount as NTA, NearExternalContract as NEC
 from utils import get_json_field, extract_tx_hash
 
 module common_module:
@@ -16,13 +16,14 @@ near_init_params_file = const.near_init_params_file
 near_binaries = [f"{contract}.wasm" for contract in NC]
 
 # List of binaries that require dynamic init args
-near_contracts_with_dynamic_args = [NC.TOKEN_DEPLOYER, NC.MOCK_TOKEN, NC.OMNI_BRIDGE, "nbtc", "btc_connector"]
+near_contracts_with_dynamic_args = [NC.TOKEN_DEPLOYER, NC.MOCK_TOKEN, NC.OMNI_BRIDGE, NEC.ZCASH_CONNECTOR,
+                                    NEC.ZCASH_TOKEN, NEC.BTC_TOKEN, NEC.BTC_CONNECTOR]
 
 # Account credential files
 near_init_account_credentials_file = const.near_account_dir / f"{NTA.INIT_ACCOUNT}.json"
 near_dao_account_credentials_file = const.near_account_dir / f"{NTA.DAO_ACCOUNT}.json"
-btc_connector_account_file = const.near_account_dir / f"btc_connector.json"
-nbtc_account_file = const.near_account_dir / f"nbtc.json"
+btc_connector_account_file = const.near_account_dir / f"{NEC.BTC_CONNECTOR}.json"
+nbtc_account_file = const.near_account_dir / f"{NEC.BTC_TOKEN}.json"
 
 # Call result files
 near_prover_dau_grant_call_file = const.near_deploy_results_dir / "omni-prover-dau-grant-call.json"

@@ -23,7 +23,36 @@ You will need the following tools installed on your environment before proceedin
   `cargo install --git https://github.com/Near-One/bridge-sdk-rs/ --rev <actual_revision> bridge-cli`, look for
   `<actual_revision>` in the `.github/workflows/e2e-test.yml` file.
 - **Cargo Near**. Used to build NEAR contracts. Install with:
-  `cargo install --locked cargo-near` Enables bridging functionality for various blockchain environments.
+  `cargo install --locked cargo-near`
+  Enables bridging functionality for various blockchain environments.
+- **Zingo**. A command-line interface for interacting with ZCash Blockchain.
+
+### Set Up Zingo
+
+Currently, Zingo does not support the latest Zcash updates. However, Karim has provided the necessary fix in a separate
+branch. Here is the patched version:
+https://github.com/karim-en/zingolib/tree/fix-branch-id
+
+Install Zingo:
+
+```shell
+https://github.com/karim-en/zingolib.git
+cd zingolib
+git checkout fix-branch-id
+cargo install --path=./zingocli
+```
+
+Get addresses:
+
+```shell
+zingo-cli --data-dir <DATA_DIR> -c testnet addresses
+```
+
+On the first run, <DATA_DIR> can be any value — the folder will be created automatically. Afterwards, the path to the
+folder (ZCASH_DATA_DIR) and the unified or transparent address (ZCASH_ACCOUNT_ID) need to be saved in tools/.env.
+
+Tokens need to be transferred to the Unified Address. For example, you can use this
+faucet: https://testnet.zecfaucet.com/
 
 ## Project Structure
 

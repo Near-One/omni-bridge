@@ -57,6 +57,13 @@ class NearContract(StrEnum):
     MOCK_TOKEN = "mock_token"
 
 
+class NearExternalContract(StrEnum):
+    ZCASH_CONNECTOR = "zcash_connector"
+    ZCASH_TOKEN = "zcash"
+    BTC_TOKEN = "nbtc"
+    BTC_CONNECTOR = "btc_connector"
+
+
 class NearTestAccount(StrEnum):
     INIT_ACCOUNT = "omni_init_account"
     DAO_ACCOUNT = "omni_dao_account"
