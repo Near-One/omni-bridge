@@ -6,6 +6,13 @@
       "chain_kind": "Eth"
     }
   },
+  "btc_prover": {
+    "init_function": "init",
+    "init_args": {
+      "light_client": "btc-client-v4.testnet",
+      "chain_kind": "Btc"
+    }
+  },
   "wormhole_omni_prover_proxy": {
     "init_function": "init",
     "init_args": {
@@ -55,5 +62,13 @@
   },
   "zcash_connector": {
     "init_function": "new"
+  },
+  "nbtc": {
+    "init_function": "new",
+    "init_args": {}
+  },
+  "btc_connector": {
+    "init_function": "new",
+    "init_args": {}
   }
 }

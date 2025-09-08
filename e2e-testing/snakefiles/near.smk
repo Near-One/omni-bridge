@@ -16,11 +16,14 @@ near_init_params_file = const.near_init_params_file
 near_binaries = [f"{contract}.wasm" for contract in NC]
 
 # List of binaries that require dynamic init args
-near_contracts_with_dynamic_args = [NC.TOKEN_DEPLOYER, NC.MOCK_TOKEN, NC.OMNI_BRIDGE, NEC.ZCASH_CONNECTOR, NEC.ZCASH_TOKEN]
+near_contracts_with_dynamic_args = [NC.TOKEN_DEPLOYER, NC.MOCK_TOKEN, NC.OMNI_BRIDGE, NEC.ZCASH_CONNECTOR,
+                                    NEC.ZCASH_TOKEN, NEC.BTC_TOKEN, NEC.BTC_CONNECTOR]
 
 # Account credential files
 near_init_account_credentials_file = const.near_account_dir / f"{NTA.INIT_ACCOUNT}.json"
 near_dao_account_credentials_file = const.near_account_dir / f"{NTA.DAO_ACCOUNT}.json"
+btc_connector_account_file = const.near_account_dir / f"{NEC.BTC_CONNECTOR}.json"
+nbtc_account_file = const.near_account_dir / f"{NEC.BTC_TOKEN}.json"
 
 # Call result files
 near_prover_dau_grant_call_file = const.near_deploy_results_dir / "omni-prover-dau-grant-call.json"
@@ -31,7 +34,6 @@ omni_bridge_file = const.near_deploy_results_dir / f"{NC.OMNI_BRIDGE}.json"
 token_deployer_file = const.near_deploy_results_dir / f"{NC.TOKEN_DEPLOYER}.json"
 mock_token_file = const.near_deploy_results_dir / f"{NC.MOCK_TOKEN}.json"
 evm_prover_file = const.near_deploy_results_dir / f"{NC.EVM_PROVER}.json"
-
 
 def get_dyn_init_args_path(contract_name):
     return f"{const.common_generated_dir}/{contract_name}_dyn_init_args.json"
@@ -100,6 +102,21 @@ rule near_generate_mock_token_init_args:
     """
 
 
+rule near_generate_omni_bridge_init_args:
+    message: "Generating omni bridge init args"
+    input:
+        nbtc_file = nbtc_account_file,
+        btc_connector_file = btc_connector_account_file
+    output: const.common_generated_dir / "omni_bridge_dyn_init_args.json"
+    params:
+        mkdir = get_mkdir_cmd(const.common_generated_dir),
+        btc_account_id = lambda wc, input: get_json_field(input.nbtc_file, "account_id"),
+        btc_connector_account_id = lambda wc, input: get_json_field(input.btc_connector_file, "account_id"),
+    shell: """
+    {params.mkdir} && \
+    echo '{{\"btc_account_id\": \"{params.btc_account_id}\", \"btc_connector\":\"{params.btc_connector_account_id}\"}}' > {output}
+    """
+
 rule near_evm_prover_setup:
     message: "Setting up EVM prover"
     input:
@@ -137,7 +154,6 @@ rule near_deploy_contract:
         mkdir=get_mkdir_cmd(const.near_deploy_results_dir),
         base_name="{contract}",
         scripts_dir=const.common_scripts_dir,
-        ts=const.common_timestamp,
         contract_id = lambda wc, input: get_json_field(input.contract_account, "account_id")
     shell: """
     {params.mkdir} && \

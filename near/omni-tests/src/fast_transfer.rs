@@ -182,8 +182,9 @@ mod tests {
                 .await?;
 
                 // Register the bridge in the token contract
-                token_contract
-                    .call("storage_deposit")
+                bridge_contract
+                    .as_account()
+                    .call(token_contract.id(), "storage_deposit")
                     .args_json(json!({
                         "account_id": bridge_contract.id(),
                         "registration_only": true,
@@ -476,6 +477,9 @@ mod tests {
 
         let required_balance_init_transfer: NearToken = bridge_contract
             .view("required_balance_for_init_transfer")
+            .args_json(json!({
+                "msg": None::<String>,
+            }))
             .await?
             .json()?;
 
@@ -546,6 +550,9 @@ mod tests {
         let required_balance_for_init_transfer: NearToken = env
             .bridge_contract
             .view("required_balance_for_init_transfer")
+            .args_json(json!({
+                "msg": None::<String>,
+            }))
             .await?
             .json()?;
 

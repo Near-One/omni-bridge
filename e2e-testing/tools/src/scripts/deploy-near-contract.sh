@@ -43,6 +43,9 @@ fi
 
 INIT_ARGS=$(echo "$STATIC_INIT_ARGS $DYN_INIT_ARGS" | jq -s add)
 
+# Delay to allow the account to be created
+sleep 3
+
 # Deploy the contract
 echo "Deploying the contract"
 if ! near contract deploy "$CONTRACT_ID" use-file "$WASM_PATH" \
