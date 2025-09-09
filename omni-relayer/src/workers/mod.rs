@@ -265,6 +265,7 @@ pub async fn process_events(
         }
 
         let mut handlers = Vec::new();
+        let mut mpc_signing_handlers = Vec::new();
 
         for (key, event) in events {
             if let Ok(transfer) = serde_json::from_value::<Transfer>(event.clone()) {
@@ -573,7 +574,7 @@ pub async fn process_events(
                     message_payload, ..
                 } = omni_bridge_event.clone()
                 {
-                    handlers.push(tokio::spawn({
+                    mpc_signing_handlers.push(tokio::spawn({
                         let config = config.clone();
                         let mut redis_connection_manager = redis_connection_manager.clone();
                         let omni_connector = omni_connector.clone();
@@ -892,7 +893,20 @@ pub async fn process_events(
             }
         }
 
+        // Process regular handlers first
         join_all(handlers).await;
+
+        // Check if shutdown is requested before processing MPC signing tasks
+        if shutdown_requested.load(Ordering::SeqCst) {
+            info!("Shutdown requested, waiting for MPC signing tasks to complete");
+            // Wait for MPC signing tasks to complete gracefully
+            join_all(mpc_signing_handlers).await;
+            info!("All MPC signing tasks completed, stopping event processing");
+            break;
+        }
+
+        // If no shutdown requested, process MPC signing tasks normally
+        join_all(mpc_signing_handlers).await;
 
         if shutdown_requested.load(Ordering::SeqCst) {
             info!("Shutdown requested, stopping event processing");
