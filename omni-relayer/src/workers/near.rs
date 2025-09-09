@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::sync::{Arc, atomic::AtomicU64};
 
 use anyhow::{Context, Result};
 use bridge_connector_common::result::BridgeSdkError;
@@ -31,6 +31,7 @@ pub struct UnverifiedTrasfer {
     original_event: Transfer,
 }
 
+#[allow(clippy::too_many_arguments)]
 pub async fn process_transfer_event(
     config: &config::Config,
     redis_connection_manager: &mut redis::aio::ConnectionManager,
@@ -39,6 +40,7 @@ pub async fn process_transfer_event(
     signer: AccountId,
     transfer: Transfer,
     near_nonce: Arc<utils::nonce::NonceManager>,
+    unverified_inflight: Arc<AtomicU64>,
 ) -> Result<EventAction> {
     let Transfer::Near {
         ref transfer_message,
@@ -136,12 +138,17 @@ pub async fn process_transfer_event(
                         "Exceeded the prepaid gas.".to_string(),
                     ]),
                     original_key: key,
-                    original_event: transfer,
+                    original_event: transfer.clone(),
                 }),
             )
             .await;
 
-            info!("Signed transfer: {tx_hash:?}");
+            unverified_inflight.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+
+            info!(
+                "Signed transfer ({}): {tx_hash:?}",
+                transfer_message.origin_nonce
+            );
 
             Ok(EventAction::Remove)
         }
@@ -365,6 +372,7 @@ pub async fn process_unverified_transfer_event(
     redis_connection_manager: &mut redis::aio::ConnectionManager,
     jsonrpc_client: JsonRpcClient,
     unverified_event: UnverifiedTrasfer,
+    unverified_inflight: Arc<AtomicU64>,
 ) {
     utils::redis::remove_event(
         config,
@@ -373,6 +381,7 @@ pub async fn process_unverified_transfer_event(
         unverified_event.tx_hash.to_string(),
     )
     .await;
+    unverified_inflight.fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
 
     if !utils::near::is_tx_successful(
         &jsonrpc_client,
@@ -390,6 +399,7 @@ pub async fn process_unverified_transfer_event(
             RetryableEvent::new(unverified_event.original_event),
         )
         .await;
+        unverified_inflight.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
     }
 }
 

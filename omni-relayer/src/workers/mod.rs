@@ -1,6 +1,6 @@
 use std::sync::{
     Arc,
-    atomic::{AtomicBool, Ordering},
+    atomic::{AtomicBool, AtomicU64, Ordering},
 };
 
 use anyhow::Result;
@@ -148,9 +148,15 @@ pub async fn process_events(
         .near_bridge_client()
         .and_then(near_bridge_client::NearBridgeClient::account_id)?;
 
+    let unverified_inflight = Arc::new(AtomicU64::new(0));
+
     loop {
         if shutdown_requested.load(Ordering::SeqCst) {
-            info!("Shutdown requested, stopping event processing");
+            info!("Shutdown requested, waiting for unverified transfer tasks to complete");
+            while unverified_inflight.load(Ordering::SeqCst) > 0 {
+                tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+            }
+            info!("All unverified event tasks completed, stopping event processing");
             break;
         }
 
@@ -265,7 +271,6 @@ pub async fn process_events(
         }
 
         let mut handlers = Vec::new();
-        let mut mpc_signing_handlers = Vec::new();
 
         for (key, event) in events {
             if let Ok(transfer) = serde_json::from_value::<Transfer>(event.clone()) {
@@ -279,6 +284,7 @@ pub async fn process_events(
                         let omni_connector = omni_connector.clone();
                         let signer = signer.clone();
                         let near_nonce = near_omni_nonce.clone();
+                        let unverified_inflight = unverified_inflight.clone();
 
                         async move {
                             match near::process_transfer_event(
@@ -289,6 +295,7 @@ pub async fn process_events(
                                 signer,
                                 transfer,
                                 near_nonce,
+                                unverified_inflight,
                             )
                             .await
                             {
@@ -574,7 +581,7 @@ pub async fn process_events(
                     message_payload, ..
                 } = omni_bridge_event.clone()
                 {
-                    mpc_signing_handlers.push(tokio::spawn({
+                    handlers.push(tokio::spawn({
                         let config = config.clone();
                         let mut redis_connection_manager = redis_connection_manager.clone();
                         let omni_connector = omni_connector.clone();
@@ -879,6 +886,7 @@ pub async fn process_events(
                     let config = config.clone();
                     let mut redis_connection_manager = redis_connection_manager.clone();
                     let jsonrpc_client = jsonrpc_client.clone();
+                    let unverified_inflight = unverified_inflight.clone();
 
                     async move {
                         near::process_unverified_transfer_event(
@@ -886,6 +894,7 @@ pub async fn process_events(
                             &mut redis_connection_manager,
                             jsonrpc_client,
                             unverified_event,
+                            unverified_inflight,
                         )
                         .await;
                     }
@@ -893,30 +902,13 @@ pub async fn process_events(
             }
         }
 
-        // Process regular handlers first
         join_all(handlers).await;
-
-        // Check if shutdown is requested before processing MPC signing tasks
-        if shutdown_requested.load(Ordering::SeqCst) {
-            info!("Shutdown requested, waiting for MPC signing tasks to complete");
-            // Wait for MPC signing tasks to complete gracefully
-            join_all(mpc_signing_handlers).await;
-            info!("All MPC signing tasks completed, stopping event processing");
-            break;
-        }
-
-        // If no shutdown requested, process MPC signing tasks normally
-        join_all(mpc_signing_handlers).await;
-
-        if shutdown_requested.load(Ordering::SeqCst) {
-            info!("Shutdown requested, stopping event processing");
-            break;
-        }
 
         tokio::time::sleep(tokio::time::Duration::from_secs(
             config.redis.sleep_time_after_events_process_secs,
         ))
         .await;
     }
+
     Ok(())
 }

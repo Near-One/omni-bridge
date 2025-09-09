@@ -222,7 +222,7 @@ pub async fn process_init_transfer_event(
 
     match omni_connector.fin_transfer(fin_transfer_args).await {
         Ok(tx_hash) => {
-            info!("Finalized InitTransfer: {tx_hash:?}");
+            info!("Finalized InitTransfer ({}): {tx_hash:?}", log.origin_nonce);
             Ok(EventAction::Remove)
         }
         Err(err) => {
