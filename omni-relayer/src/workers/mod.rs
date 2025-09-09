@@ -154,6 +154,10 @@ pub async fn process_events(
         if shutdown_requested.load(Ordering::SeqCst) {
             info!("Shutdown requested, waiting for unverified transfer tasks to complete");
             while unverified_inflight.load(Ordering::SeqCst) > 0 {
+                info!(
+                    "Waiting for {} unverified transfer tasks to complete",
+                    unverified_inflight.load(Ordering::SeqCst)
+                );
                 tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
             }
             info!("All unverified event tasks completed, stopping event processing");

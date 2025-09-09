@@ -10,6 +10,8 @@ use near_sdk::base64::{Engine, engine::general_purpose};
 use omni_types::ChainKind;
 use reqwest::Url;
 use solana_sdk::signature::Signature;
+use tokio::signal::unix::{SignalKind, signal};
+use tokio::task::JoinSet;
 use tracing::{error, info, warn};
 use tracing_subscriber::{EnvFilter, fmt, layer::SubscriberExt, util::SubscriberInitExt};
 
@@ -146,10 +148,10 @@ async fn main() -> Result<()> {
     let evm_nonces = Arc::new(utils::nonce::EvmNonceManagers::new(&config));
 
     let shutdown_requested = Arc::new(AtomicBool::new(false));
-    let mut handles = Vec::new();
+    let mut set = JoinSet::new();
 
     if config.is_bridge_indexer_enabled() {
-        handles.push(tokio::spawn({
+        set.spawn({
             let config = config.clone();
             let mut redis_connection_manager = redis_connection_manager.clone();
             let shutdown_flag = shutdown_requested.clone();
@@ -162,9 +164,9 @@ async fn main() -> Result<()> {
                 )
                 .await
             }
-        }));
+        });
     } else {
-        handles.push(tokio::spawn({
+        set.spawn({
             let config = config.clone();
             let mut redis_connection_manager = redis_connection_manager.clone();
             let jsonrpc_client = jsonrpc_client.clone();
@@ -179,9 +181,9 @@ async fn main() -> Result<()> {
                 )
                 .await
             }
-        }));
+        });
         if config.eth.is_some() {
-            handles.push(tokio::spawn({
+            set.spawn({
                 let config = config.clone();
                 let mut redis_connection_manager = redis_connection_manager.clone();
                 let shutdown_flag = shutdown_requested.clone();
@@ -195,10 +197,10 @@ async fn main() -> Result<()> {
                     )
                     .await
                 }
-            }));
+            });
         }
         if config.base.is_some() {
-            handles.push(tokio::spawn({
+            set.spawn({
                 let config = config.clone();
                 let mut redis_connection_manager = redis_connection_manager.clone();
                 let shutdown_flag = shutdown_requested.clone();
@@ -212,10 +214,10 @@ async fn main() -> Result<()> {
                     )
                     .await
                 }
-            }));
+            });
         }
         if config.arb.is_some() {
-            handles.push(tokio::spawn({
+            set.spawn({
                 let config = config.clone();
                 let mut redis_connection_manager = redis_connection_manager.clone();
                 let shutdown_flag = shutdown_requested.clone();
@@ -229,10 +231,10 @@ async fn main() -> Result<()> {
                     )
                     .await
                 }
-            }));
+            });
         }
         if config.bnb.is_some() {
-            handles.push(tokio::spawn({
+            set.spawn({
                 let config = config.clone();
                 let mut redis_connection_manager = redis_connection_manager.clone();
                 let shutdown_flag = shutdown_requested.clone();
@@ -246,10 +248,10 @@ async fn main() -> Result<()> {
                     )
                     .await
                 }
-            }));
+            });
         }
         if config.solana.is_some() {
-            handles.push(tokio::spawn({
+            set.spawn({
                 let config = config.clone();
                 let mut redis_connection_manager = redis_connection_manager.clone();
                 let shutdown_flag = shutdown_requested.clone();
@@ -262,8 +264,8 @@ async fn main() -> Result<()> {
                     )
                     .await
                 }
-            }));
-            handles.push(tokio::spawn({
+            });
+            set.spawn({
                 let config = config.clone();
                 let mut redis_connection_manager = redis_connection_manager.clone();
                 let shutdown_flag = shutdown_requested.clone();
@@ -275,11 +277,11 @@ async fn main() -> Result<()> {
                     )
                     .await
                 }
-            }));
+            });
         }
     }
 
-    handles.push(tokio::spawn({
+    set.spawn({
         let config = config.clone();
         let redis_connection_manager = redis_connection_manager.clone();
         let omni_connector = omni_connector.clone();
@@ -304,41 +306,74 @@ async fn main() -> Result<()> {
             )
             .await
         }
-    }));
+    });
 
     tokio::select! {
         Ok(()) = tokio::signal::ctrl_c() => {
             info!("Received Ctrl+C signal, shutting down.");
+            shutdown_requested.store(true, Ordering::SeqCst);
+
+            while let Some(res) = set.join_next().await {
+                match res {
+                    Ok(Ok(())) => {}
+                    Ok(Err(e)) => error!("Worker returned error while draining: {e:?}"),
+                    Err(join_err) => error!("Worker panicked/aborted while draining: {join_err:?}"),
+                }
+            }
+
+            info!("All workers finished after signal. Exiting.");
         }
         () = wait_for_sigterm() => {
             info!("Received SIGTERM signal, shutting down gracefully.");
-        }
-        result = futures::future::select_all(handles) => {
-            let (res, _, _) = result;
-            if let Ok(Err(err)) = res {
-                error!("A worker encountered an error: {err:?}");
+            shutdown_requested.store(true, Ordering::SeqCst);
+
+            while let Some(res) = set.join_next().await {
+                match res {
+                    Ok(Ok(())) => {}
+                    Ok(Err(e)) => error!("Worker returned error while draining: {e:?}"),
+                    Err(join_err) => error!("Worker panicked/aborted while draining: {join_err:?}"),
+                }
             }
+
+            info!("All workers finished after SIGTERM. Exiting.");
+        }
+        maybe = set.join_next() => {
+            match maybe {
+                Some(Ok(Ok(()))) => {
+                    warn!("A worker finished early; initiating shutdown.");
+                }
+                Some(Ok(Err(e))) => {
+                    error!("A worker returned error: {e:?}");
+                }
+                Some(Err(join_err)) => {
+                    error!("A worker panicked/aborted: {join_err:?}");
+                }
+                None => {
+                    info!("No workers in set. Exiting.");
+                    return Ok(());
+                }
+            }
+
+            shutdown_requested.store(true, Ordering::SeqCst);
+
+            let _ = tokio::time::timeout(tokio::time::Duration::from_secs(30), async {
+                while let Some(res) = set.join_next().await {
+                    match res {
+                        Ok(Ok(())) => {}
+                        Ok(Err(e)) => error!("Worker error during 30s grace: {e:?}"),
+                        Err(join_err) => error!("Worker panic/abort during 30s grace: {join_err:?}"),
+                    }
+                }
+            }).await;
+
+            warn!("Exiting after 30s grace period.");
         }
     }
-
-    info!("Setting shutdown flag for all workers...");
-    shutdown_requested.store(true, Ordering::SeqCst);
-
-    tokio::time::sleep(tokio::time::Duration::from_secs(30)).await;
-    info!("Shutdown complete.");
 
     Ok(())
 }
 
-#[cfg(unix)]
 async fn wait_for_sigterm() {
-    use tokio::signal::unix::{SignalKind, signal};
     let mut sigterm = signal(SignalKind::terminate()).expect("Failed to install SIGTERM handler");
     sigterm.recv().await;
-}
-
-#[cfg(not(unix))]
-async fn wait_for_sigterm() {
-    // On non-Unix systems, just wait indefinitely
-    futures::future::pending::<()>().await;
 }

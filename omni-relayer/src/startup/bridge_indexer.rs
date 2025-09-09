@@ -620,7 +620,7 @@ pub async fn start_indexer(
     loop {
         if shutdown_requested.load(Ordering::SeqCst) {
             info!("Shutdown requested, stopping bridge indexer");
-            break Ok(());
+            break;
         }
 
         info!("Starting a mongodb stream that track changes in {OMNI_EVENTS}");
@@ -637,12 +637,9 @@ pub async fn start_indexer(
             warn!("Error watching changes: {err:?}");
         }
 
-        if shutdown_requested.load(Ordering::SeqCst) {
-            info!("Shutdown requested, stopping bridge indexer");
-            break Ok(());
-        }
-
         warn!("Mongodb stream was closed, restarting...");
         tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
     }
+
+    Ok(())
 }
