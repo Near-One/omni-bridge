@@ -307,10 +307,10 @@ async fn main() -> Result<()> {
     }));
 
     tokio::select! {
-        _ = tokio::signal::ctrl_c() => {
+        Ok(()) = tokio::signal::ctrl_c() => {
             info!("Received Ctrl+C signal, shutting down.");
         }
-        _ = wait_for_sigterm() => {
+        () = wait_for_sigterm() => {
             info!("Received SIGTERM signal, shutting down gracefully.");
         }
         result = futures::future::select_all(handles) => {
