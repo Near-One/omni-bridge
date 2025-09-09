@@ -1,4 +1,10 @@
-use std::path::Path;
+use std::{
+    path::Path,
+    sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+    },
+};
 
 use anyhow::{Context, Result};
 use futures::StreamExt;
@@ -95,6 +101,7 @@ pub async fn start_indexer(
     redis_connection_manager: &mut redis::aio::ConnectionManager,
     jsonrpc_client: JsonRpcClient,
     start_block: Option<u64>,
+    shutdown_requested: Arc<AtomicBool>,
 ) -> Result<()> {
     info!("Starting NEAR indexer");
 
@@ -106,33 +113,25 @@ pub async fn start_indexer(
     )
     .await?;
     let (_, stream) = near_lake_framework::streamer(lake_config);
-    let stream = tokio_stream::wrappers::ReceiverStream::new(stream);
+    let mut stream = tokio_stream::wrappers::ReceiverStream::new(stream);
 
-    stream
-        .map(move |streamer_message| {
-            let config = config.clone();
-            let mut redis_connection_manager = redis_connection_manager.clone();
+    while let Some(streamer_message) = stream.next().await {
+        if shutdown_requested.load(Ordering::SeqCst) {
+            info!("Shutdown requested, stopping NEAR indexer");
+            break;
+        }
 
-            async move {
-                utils::near::handle_streamer_message(
-                    &config,
-                    &mut redis_connection_manager,
-                    &streamer_message,
-                )
-                .await;
+        utils::near::handle_streamer_message(&config, redis_connection_manager, &streamer_message)
+            .await;
 
-                utils::redis::update_last_processed(
-                    &config,
-                    &mut redis_connection_manager,
-                    &utils::redis::get_last_processed_key(ChainKind::Near),
-                    streamer_message.block.header.height,
-                )
-                .await;
-            }
-        })
-        .buffer_unordered(10)
-        .for_each(|()| async {})
+        utils::redis::update_last_processed(
+            &config,
+            redis_connection_manager,
+            &utils::redis::get_last_processed_key(ChainKind::Near),
+            streamer_message.block.header.height,
+        )
         .await;
+    }
 
     Ok(())
 }

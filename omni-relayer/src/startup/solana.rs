@@ -1,5 +1,8 @@
 use std::str::FromStr;
-use std::sync::Arc;
+use std::sync::{
+    Arc,
+    atomic::{AtomicBool, Ordering},
+};
 
 use anyhow::Result;
 use futures::future::join_all;
@@ -37,6 +40,7 @@ pub async fn start_indexer(
     config: &config::Config,
     redis_connection_manager: &mut redis::aio::ConnectionManager,
     mut start_signature: Option<Signature>,
+    shutdown_requested: Arc<AtomicBool>,
 ) -> Result<()> {
     let Some(solana_config) = config.solana.clone() else {
         anyhow::bail!("Failed to get Solana config");
@@ -47,6 +51,11 @@ pub async fn start_indexer(
     let program_id = Pubkey::from_str(&solana_config.program_id)?;
 
     loop {
+        if shutdown_requested.load(Ordering::SeqCst) {
+            info!("Shutdown requested, stopping Solana indexer");
+            break Ok(());
+        }
+
         crate::skip_fail!(
             process_recent_signatures(
                 config,
@@ -84,6 +93,11 @@ pub async fn start_indexer(
         info!("Subscribed to Solana logs");
 
         while let Some(log) = log_stream.next().await {
+            if shutdown_requested.load(Ordering::SeqCst) {
+                info!("Shutdown requested, stopping Solana log stream processing");
+                break;
+            }
+
             if let Ok(signature) = Signature::from_str(&log.value.signature) {
                 info!("Found a signature on Solana: {signature:?}");
                 utils::redis::add_event(
@@ -97,6 +111,11 @@ pub async fn start_indexer(
             } else {
                 warn!("Failed to parse signature: {:?}", log.value.signature);
             }
+        }
+
+        if shutdown_requested.load(Ordering::SeqCst) {
+            info!("Shutdown requested, stopping Solana indexer");
+            break Ok(());
         }
 
         error!("Solana WebSocket stream closed, reconnecting...");
@@ -171,6 +190,7 @@ async fn process_recent_signatures(
 pub async fn process_signature(
     config: &config::Config,
     redis_connection_manager: &mut redis::aio::ConnectionManager,
+    shutdown_requested: Arc<AtomicBool>,
 ) -> Result<()> {
     let Some(solana_config) = config.solana.clone() else {
         anyhow::bail!("Failed to get Solana config");
@@ -186,6 +206,11 @@ pub async fn process_signature(
     };
 
     loop {
+        if shutdown_requested.load(Ordering::SeqCst) {
+            info!("Shutdown requested, stopping Solana signature processing");
+            break Ok(());
+        }
+
         let Some(events) = utils::redis::get_events(
             config,
             redis_connection_manager,
@@ -264,6 +289,11 @@ pub async fn process_signature(
         }
 
         join_all(handlers).await;
+
+        if shutdown_requested.load(Ordering::SeqCst) {
+            info!("Shutdown requested, stopping Solana signature processing");
+            break Ok(());
+        }
 
         tokio::time::sleep(tokio::time::Duration::from_secs(
             config.redis.sleep_time_after_events_process_secs,

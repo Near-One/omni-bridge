@@ -1,10 +1,13 @@
-use std::sync::Arc;
+use std::sync::{
+    Arc,
+    atomic::{AtomicBool, Ordering},
+};
 
 use anyhow::Result;
 use bridge_indexer_types::documents_types::DepositMsg;
 use futures::future::join_all;
 use rust_decimal::MathematicalOps;
-use tracing::warn;
+use tracing::{info, warn};
 
 use ethereum_types::H256;
 
@@ -139,12 +142,18 @@ pub async fn process_events(
     near_omni_nonce: Arc<utils::nonce::NonceManager>,
     near_fast_nonce: Option<Arc<utils::nonce::NonceManager>>,
     evm_nonces: Arc<utils::nonce::EvmNonceManagers>,
+    shutdown_requested: Arc<AtomicBool>,
 ) -> Result<()> {
     let signer = omni_connector
         .near_bridge_client()
         .and_then(near_bridge_client::NearBridgeClient::account_id)?;
 
     loop {
+        if shutdown_requested.load(Ordering::SeqCst) {
+            info!("Shutdown requested, stopping event processing");
+            break;
+        }
+
         let mut redis_connection_manager_clone = redis_connection_manager.clone();
 
         let Some(retryable_events) = utils::redis::get_events(
@@ -885,9 +894,15 @@ pub async fn process_events(
 
         join_all(handlers).await;
 
+        if shutdown_requested.load(Ordering::SeqCst) {
+            info!("Shutdown requested, stopping event processing");
+            break;
+        }
+
         tokio::time::sleep(tokio::time::Duration::from_secs(
             config.redis.sleep_time_after_events_process_secs,
         ))
         .await;
     }
+    Ok(())
 }

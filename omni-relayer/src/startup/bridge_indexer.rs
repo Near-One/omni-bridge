@@ -1,4 +1,10 @@
-use std::str::FromStr;
+use std::{
+    str::FromStr,
+    sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+    },
+};
 
 use alloy::primitives::Address;
 use anyhow::{Context, Result};
@@ -474,6 +480,7 @@ async fn watch_omni_events_collection(
     config: &config::Config,
     redis_connection_manager: &mut redis::aio::ConnectionManager,
     start_timestamp: Option<u32>,
+    shutdown_requested: Arc<AtomicBool>,
 ) -> Result<()> {
     let mut stream = if let Some(time) = start_timestamp {
         info!("Starting from timestamp: {time}");
@@ -498,6 +505,11 @@ async fn watch_omni_events_collection(
     };
 
     while let Some(change) = stream.next().await {
+        if shutdown_requested.load(Ordering::SeqCst) {
+            info!("Shutdown requested, stopping mongodb stream processing");
+            break;
+        }
+
         match change {
             Ok(doc) => {
                 if let Some(event) = doc.full_document {
@@ -588,6 +600,7 @@ pub async fn start_indexer(
     config: config::Config,
     redis_connection_manager: &mut redis::aio::ConnectionManager,
     start_timestamp: Option<u32>,
+    shutdown_requested: Arc<AtomicBool>,
 ) -> Result<()> {
     info!("Connecting to bridge-indexer");
 
@@ -605,6 +618,11 @@ pub async fn start_indexer(
     let omni_events_collection = db.collection::<OmniEvent>(OMNI_EVENTS);
 
     loop {
+        if shutdown_requested.load(Ordering::SeqCst) {
+            info!("Shutdown requested, stopping bridge indexer");
+            break Ok(());
+        }
+
         info!("Starting a mongodb stream that track changes in {OMNI_EVENTS}");
 
         if let Err(err) = watch_omni_events_collection(
@@ -612,10 +630,16 @@ pub async fn start_indexer(
             &config,
             redis_connection_manager,
             start_timestamp,
+            shutdown_requested.clone(),
         )
         .await
         {
             warn!("Error watching changes: {err:?}");
+        }
+
+        if shutdown_requested.load(Ordering::SeqCst) {
+            info!("Shutdown requested, stopping bridge indexer");
+            break Ok(());
         }
 
         warn!("Mongodb stream was closed, restarting...");

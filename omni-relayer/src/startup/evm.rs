@@ -1,3 +1,8 @@
+use std::sync::{
+    Arc,
+    atomic::{AtomicBool, Ordering},
+};
+
 use alloy::{
     primitives::Address,
     providers::{DynProvider, Provider, ProviderBuilder, WsConnect},
@@ -52,6 +57,7 @@ pub async fn start_indexer(
     redis_connection_manager: &mut redis::aio::ConnectionManager,
     chain_kind: ChainKind,
     mut start_block: Option<u64>,
+    shutdown_requested: Arc<AtomicBool>,
 ) -> Result<()> {
     let is_fast_relayer_enabled = config.is_fast_relayer_enabled();
     let (
@@ -89,6 +95,11 @@ pub async fn start_indexer(
         );
 
     loop {
+        if shutdown_requested.load(Ordering::SeqCst) {
+            info!("Shutdown requested, stopping {chain_kind:?} indexer");
+            break Ok(());
+        }
+
         let http_provider =
             DynProvider::new(ProviderBuilder::new().connect_http(rpc_http_url.clone()));
 
@@ -136,6 +147,11 @@ pub async fn start_indexer(
         info!("Subscribed to {chain_kind:?} logs");
 
         while let Some(log) = stream.next().await {
+            if shutdown_requested.load(Ordering::SeqCst) {
+                info!("Shutdown requested, stopping {chain_kind:?} stream processing");
+                break;
+            }
+
             process_log(
                 &config,
                 chain_kind,

@@ -1,4 +1,7 @@
-use std::sync::Arc;
+use std::sync::{
+    Arc,
+    atomic::{AtomicBool, Ordering},
+};
 
 use anyhow::{Context, Result};
 use clap::Parser;
@@ -142,17 +145,20 @@ async fn main() -> Result<()> {
     });
     let evm_nonces = Arc::new(utils::nonce::EvmNonceManagers::new(&config));
 
+    let shutdown_requested = Arc::new(AtomicBool::new(false));
     let mut handles = Vec::new();
 
     if config.is_bridge_indexer_enabled() {
         handles.push(tokio::spawn({
             let config = config.clone();
             let mut redis_connection_manager = redis_connection_manager.clone();
+            let shutdown_flag = shutdown_requested.clone();
             async move {
                 startup::bridge_indexer::start_indexer(
                     config,
                     &mut redis_connection_manager,
                     args.start_timestamp,
+                    shutdown_flag,
                 )
                 .await
             }
@@ -162,12 +168,14 @@ async fn main() -> Result<()> {
             let config = config.clone();
             let mut redis_connection_manager = redis_connection_manager.clone();
             let jsonrpc_client = jsonrpc_client.clone();
+            let shutdown_flag = shutdown_requested.clone();
             async move {
                 startup::near::start_indexer(
                     config,
                     &mut redis_connection_manager,
                     jsonrpc_client,
                     args.near_start_block,
+                    shutdown_flag,
                 )
                 .await
             }
@@ -176,12 +184,14 @@ async fn main() -> Result<()> {
             handles.push(tokio::spawn({
                 let config = config.clone();
                 let mut redis_connection_manager = redis_connection_manager.clone();
+                let shutdown_flag = shutdown_requested.clone();
                 async move {
                     startup::evm::start_indexer(
                         config,
                         &mut redis_connection_manager,
                         ChainKind::Eth,
                         args.eth_start_block,
+                        shutdown_flag,
                     )
                     .await
                 }
@@ -191,12 +201,14 @@ async fn main() -> Result<()> {
             handles.push(tokio::spawn({
                 let config = config.clone();
                 let mut redis_connection_manager = redis_connection_manager.clone();
+                let shutdown_flag = shutdown_requested.clone();
                 async move {
                     startup::evm::start_indexer(
                         config,
                         &mut redis_connection_manager,
                         ChainKind::Base,
                         args.base_start_block,
+                        shutdown_flag,
                     )
                     .await
                 }
@@ -206,12 +218,14 @@ async fn main() -> Result<()> {
             handles.push(tokio::spawn({
                 let config = config.clone();
                 let mut redis_connection_manager = redis_connection_manager.clone();
+                let shutdown_flag = shutdown_requested.clone();
                 async move {
                     startup::evm::start_indexer(
                         config,
                         &mut redis_connection_manager,
                         ChainKind::Arb,
                         args.arb_start_block,
+                        shutdown_flag,
                     )
                     .await
                 }
@@ -221,12 +235,14 @@ async fn main() -> Result<()> {
             handles.push(tokio::spawn({
                 let config = config.clone();
                 let mut redis_connection_manager = redis_connection_manager.clone();
+                let shutdown_flag = shutdown_requested.clone();
                 async move {
                     startup::evm::start_indexer(
                         config,
                         &mut redis_connection_manager,
                         ChainKind::Bnb,
                         args.bnb_start_block,
+                        shutdown_flag,
                     )
                     .await
                 }
@@ -236,11 +252,13 @@ async fn main() -> Result<()> {
             handles.push(tokio::spawn({
                 let config = config.clone();
                 let mut redis_connection_manager = redis_connection_manager.clone();
+                let shutdown_flag = shutdown_requested.clone();
                 async move {
                     startup::solana::start_indexer(
                         &config,
                         &mut redis_connection_manager,
                         args.solana_start_signature,
+                        shutdown_flag,
                     )
                     .await
                 }
@@ -248,8 +266,14 @@ async fn main() -> Result<()> {
             handles.push(tokio::spawn({
                 let config = config.clone();
                 let mut redis_connection_manager = redis_connection_manager.clone();
+                let shutdown_flag = shutdown_requested.clone();
                 async move {
-                    startup::solana::process_signature(&config, &mut redis_connection_manager).await
+                    startup::solana::process_signature(
+                        &config,
+                        &mut redis_connection_manager,
+                        shutdown_flag,
+                    )
+                    .await
                 }
             }));
         }
@@ -264,6 +288,7 @@ async fn main() -> Result<()> {
         let near_omni_nonce = near_omni_nonce.clone();
         let near_fast_nonce = near_fast_nonce.clone();
         let evm_nonces = evm_nonces.clone();
+        let shutdown_flag = shutdown_requested.clone();
 
         async move {
             workers::process_events(
@@ -275,6 +300,7 @@ async fn main() -> Result<()> {
                 near_omni_nonce,
                 near_fast_nonce,
                 evm_nonces,
+                shutdown_flag,
             )
             .await
         }
@@ -284,6 +310,9 @@ async fn main() -> Result<()> {
         _ = tokio::signal::ctrl_c() => {
             info!("Received Ctrl+C signal, shutting down.");
         }
+        _ = wait_for_sigterm() => {
+            info!("Received SIGTERM signal, shutting down gracefully.");
+        }
         result = futures::future::select_all(handles) => {
             let (res, _, _) = result;
             if let Ok(Err(err)) = res {
@@ -292,5 +321,24 @@ async fn main() -> Result<()> {
         }
     }
 
+    info!("Setting shutdown flag for all workers...");
+    shutdown_requested.store(true, Ordering::SeqCst);
+
+    tokio::time::sleep(tokio::time::Duration::from_secs(30)).await;
+    info!("Shutdown complete.");
+
     Ok(())
+}
+
+#[cfg(unix)]
+async fn wait_for_sigterm() {
+    use tokio::signal::unix::{SignalKind, signal};
+    let mut sigterm = signal(SignalKind::terminate()).expect("Failed to install SIGTERM handler");
+    sigterm.recv().await;
+}
+
+#[cfg(not(unix))]
+async fn wait_for_sigterm() {
+    // On non-Unix systems, just wait indefinitely
+    futures::future::pending::<()>().await;
 }
