@@ -177,7 +177,7 @@ pub struct BridgeIndexer {
     pub fee_discount: u8,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Copy, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Network {
     Testnet,
@@ -189,6 +189,15 @@ impl std::fmt::Display for Network {
         match self {
             Network::Testnet => write!(f, "testnet"),
             Network::Mainnet => write!(f, "mainnet"),
+        }
+    }
+}
+
+impl From<Network> for utxo_utils::address::Network {
+    fn from(value: Network) -> Self {
+        match value {
+            Network::Testnet => utxo_utils::address::Network::Testnet,
+            Network::Mainnet => utxo_utils::address::Network::Mainnet,
         }
     }
 }

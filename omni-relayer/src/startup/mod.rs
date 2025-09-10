@@ -199,6 +199,7 @@ pub fn build_omni_connector(
     let eth_light_client = build_eth_light_client(config)?;
 
     let omni_connector = OmniConnectorBuilder::default()
+        .network(Some(config.near.network.into()))
         .near_bridge_client(Some(near_bridge_client))
         .eth_bridge_client(eth_bridge_client)
         .base_bridge_client(base_bridge_client)
