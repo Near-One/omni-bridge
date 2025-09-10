@@ -24,6 +24,7 @@ pub fn get_private_key(chain_kind: ChainKind, near_signer_type: Option<NearSigne
         ChainKind::Arb => "ARB_PRIVATE_KEY",
         ChainKind::Bnb => "BNB_PRIVATE_KEY",
         ChainKind::Sol => "SOLANA_PRIVATE_KEY",
+        ChainKind::Btc | ChainKind::Zcash => unreachable!("No private key for UTXO chains"),
     };
 
     std::env::var(env_var).unwrap_or_else(|_| panic!("Failed to get `{env_var}` env variable"))

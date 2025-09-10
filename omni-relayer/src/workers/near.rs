@@ -294,6 +294,9 @@ pub async fn process_sign_transfer_event(
                 solana_token: Pubkey::new_from_array(token.0),
             }
         }
+        ChainKind::Btc | ChainKind::Zcash => {
+            anyhow::bail!("Finishing BTC/ZEC transfers is not supported");
+        }
     };
 
     match omni_connector.fin_transfer(fin_transfer_args).await {
@@ -308,7 +311,7 @@ pub async fn process_sign_transfer_event(
                     ChainKind::Base => &config.base,
                     ChainKind::Arb => &config.arb,
                     ChainKind::Bnb => &config.bnb,
-                    ChainKind::Near | ChainKind::Sol => {
+                    ChainKind::Near | ChainKind::Sol | ChainKind::Btc | ChainKind::Zcash => {
                         anyhow::bail!(
                             "Failed to finalize deposit (unexpected: failed to get evm config): {}",
                             err

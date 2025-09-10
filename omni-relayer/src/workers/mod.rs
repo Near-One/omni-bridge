@@ -2,7 +2,6 @@ use std::sync::Arc;
 
 use anyhow::Result;
 use bridge_indexer_types::documents_types::DepositMsg;
-use btc_utils::address::Chain;
 use futures::future::join_all;
 use rust_decimal::MathematicalOps;
 use tracing::warn;
@@ -17,6 +16,7 @@ use omni_connector::OmniConnector;
 use omni_types::{
     ChainKind, Fee, OmniAddress, TransferId, TransferMessage, near_events::OmniBridgeEvent,
 };
+use utxo_utils::address::UTXOChain;
 
 use crate::{config, utils};
 
@@ -78,12 +78,12 @@ pub enum Transfer {
         sequence: u64,
     },
     NearToUtxo {
-        chain: Chain,
+        chain: UTXOChain,
         btc_pending_id: String,
         sign_index: u64,
     },
     UtxoToNear {
-        chain: Chain,
+        chain: UTXOChain,
         btc_tx_hash: String,
         vout: u64,
         deposit_msg: DepositMsg,

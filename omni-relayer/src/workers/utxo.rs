@@ -1,19 +1,19 @@
-use std::sync::Arc;
+use std::{str::FromStr, sync::Arc};
 
 use anyhow::Result;
 use bridge_connector_common::result::BridgeSdkError;
-use btc_utils::address::Chain;
 use tracing::{info, warn};
 
 use near_bridge_client::{
-    TransactionOptions,
-    btc_connector::{DepositMsg, PostAction},
+    TransactionOptions, // utxo_connector::{DepositMsg, PostAction},
+    btc::{DepositMsg, PostAction},
 };
 use near_jsonrpc_client::errors::JsonRpcError;
-use near_primitives::types::AccountId;
+use near_primitives::{hash::CryptoHash, types::AccountId};
 use near_rpc_client::NearRpcError;
 
 use omni_connector::{BtcDepositArgs, OmniConnector};
+use utxo_utils::address::UTXOChain;
 
 use crate::utils;
 
@@ -21,14 +21,14 @@ use super::{EventAction, Transfer};
 
 #[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
 pub struct SignUtxoTransaction {
-    pub chain: Chain,
+    pub chain: UTXOChain,
     pub near_tx_hash: String,
     pub relayer: AccountId,
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
 pub struct ConfirmedTxHash {
-    pub chain: Chain,
+    pub chain: UTXOChain,
     pub btc_tx_hash: String,
 }
 
@@ -57,9 +57,7 @@ pub async fn process_near_to_utxo_init_transfer_event(
     match omni_connector
         .near_sign_btc_transaction(
             chain,
-            Some(btc_pending_id),
-            None,
-            None,
+            btc_pending_id,
             sign_index,
             TransactionOptions {
                 nonce,
@@ -177,10 +175,17 @@ pub async fn process_sign_transaction_event(
 ) -> Result<EventAction> {
     info!("Trying to process SignBtcTransaction log on NEAR");
 
+    let Ok(near_tx_hash) = CryptoHash::from_str(&sign_utxo_transaction_event.near_tx_hash) else {
+        anyhow::bail!(
+            "Invalid near tx hash: {}",
+            sign_utxo_transaction_event.near_tx_hash
+        );
+    };
+
     match omni_connector
         .btc_fin_transfer(
             sign_utxo_transaction_event.chain,
-            sign_utxo_transaction_event.near_tx_hash.clone(),
+            near_tx_hash,
             Some(sign_utxo_transaction_event.relayer),
         )
         .await

@@ -226,7 +226,7 @@ impl EvmNonceManagers {
                     .reserve_nonce()
                     .await
             }
-            ChainKind::Near | ChainKind::Sol => {
+            ChainKind::Near | ChainKind::Sol | ChainKind::Btc | ChainKind::Zcash => {
                 anyhow::bail!("Unsupported chain kind: {chain_kind:?}")
             }
         }
