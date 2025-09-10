@@ -10,7 +10,7 @@ use omni_connector::{OmniConnector, OmniConnectorBuilder};
 use omni_types::ChainKind;
 use solana_bridge_client::{SolanaBridgeClient, SolanaBridgeClientBuilder};
 use solana_client::nonblocking::rpc_client::RpcClient;
-use tracing::info;
+use tracing::{info, warn};
 use utxo_bridge_client::{AuthOptions, UTXOBridgeClient};
 use utxo_utils::address::UTXOChain;
 use wormhole_bridge_client::{WormholeBridgeClient, WormholeBridgeClientBuilder};
@@ -39,12 +39,13 @@ macro_rules! skip_fail {
     };
 }
 
-pub fn to_chain(config: &config::Config, utxo_chain: UtxoChain) -> UTXOChain {
-    match (&config.near.network, utxo_chain) {
-        (Network::Mainnet, UtxoChain::Btc) => UTXOChain::BitcoinMainnet,
-        (Network::Mainnet, UtxoChain::Zcash) => UTXOChain::ZcashMainnet,
-        (Network::Testnet, UtxoChain::Btc) => UTXOChain::BitcoinTestnet,
-        (Network::Testnet, UtxoChain::Zcash) => UTXOChain::ZcashTestnet,
+pub fn to_chain(config: &config::Config, chain: ChainKind) -> Option<UTXOChain> {
+    match (&config.near.network, chain) {
+        (Network::Mainnet, ChainKind::Btc) => Some(UTXOChain::BitcoinMainnet),
+        (Network::Mainnet, ChainKind::Zcash) => Some(UTXOChain::ZcashMainnet),
+        (Network::Testnet, ChainKind::Btc) => Some(UTXOChain::BitcoinTestnet),
+        (Network::Testnet, ChainKind::Zcash) => Some(UTXOChain::ZcashTestnet),
+        _ => None,
     }
 }
 
@@ -56,18 +57,22 @@ fn build_utxo_bridges(
 
     for (chain, connector, token) in [
         (
-            UtxoChain::Btc,
+            ChainKind::Btc,
             config.near.btc_connector.as_ref(),
             config.near.btc.as_ref(),
         ),
         (
-            UtxoChain::Zcash,
+            ChainKind::Zcash,
             config.near.zcash_connector.as_ref(),
             config.near.zcash.as_ref(),
         ),
     ] {
+        let Some(chain) = to_chain(config, chain) else {
+            warn!("Skipping UTXO bridge for unsupported chain: {chain:?}");
+            continue;
+        };
         utxo_bridges.insert(
-            to_chain(config, chain),
+            chain,
             UTXOChainAccounts {
                 utxo_chain_connector: connector.map(std::string::ToString::to_string),
                 utxo_chain_token: token.map(std::string::ToString::to_string),

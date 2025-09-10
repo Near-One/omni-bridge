@@ -16,7 +16,9 @@ use omni_connector::OmniConnector;
 use omni_types::{ChainKind, FastTransfer, OmniAddress, TransferId, near_events::OmniBridgeEvent};
 
 use crate::{
-    config, utils,
+    config,
+    startup::to_chain,
+    utils,
     workers::{PAUSED_ERROR, RetryableEvent},
 };
 
@@ -168,6 +170,95 @@ pub async fn process_transfer_event(
             }
             anyhow::bail!(
                 "Failed to sign transfer ({}): {err:?}",
+                transfer_message.origin_nonce
+            );
+        }
+    }
+}
+
+pub async fn process_transfer_to_utxo_event(
+    config: &config::Config,
+    omni_connector: Arc<OmniConnector>,
+    transfer: Transfer,
+    near_nonce: Arc<utils::nonce::NonceManager>,
+) -> Result<EventAction> {
+    let Transfer::Near {
+        ref transfer_message,
+    } = transfer
+    else {
+        anyhow::bail!("Expected NearTransferWithTimestamp, got: {:?}", transfer);
+    };
+
+    info!("Trying to process UtxoTransferMessage on NEAR");
+
+    let Some(recipient) = transfer_message.recipient.get_utxo_address() else {
+        anyhow::bail!(
+            "Expected UTXO recipient address, got: {:?}",
+            transfer_message.recipient
+        );
+    };
+
+    let nonce = near_nonce
+        .reserve_nonce()
+        .await
+        .context("Failed to reserve nonce for near transaction")?;
+
+    match omni_connector
+        .near_submit_btc_transfer(
+            to_chain(config, transfer_message.recipient.get_chain()).ok_or_else(|| {
+                anyhow::anyhow!(
+                    "UTXO bridge is not configured for chain: {:?}",
+                    transfer_message.recipient.get_chain()
+                )
+            })?,
+            recipient,
+            transfer_message.amount.0,
+            TransferId {
+                origin_chain: transfer_message.sender.get_chain(),
+                origin_nonce: transfer_message.origin_nonce,
+            },
+            TransactionOptions {
+                nonce: Some(nonce),
+                wait_until: near_primitives::views::TxExecutionStatus::Included,
+                wait_final_outcome_timeout_sec: None,
+            },
+        )
+        .await
+    {
+        Ok(tx_hash) => {
+            info!(
+                "Submitted {:?} transfer: {tx_hash:?}",
+                transfer_message.recipient.get_chain()
+            );
+
+            Ok(EventAction::Remove)
+        }
+        Err(err) => {
+            if let BridgeSdkError::NearRpcError(near_rpc_error) = err {
+                match near_rpc_error {
+                    NearRpcError::NonceError
+                    | NearRpcError::FinalizationError
+                    | NearRpcError::RpcBroadcastTxAsyncError(_)
+                    | NearRpcError::RpcTransactionError(JsonRpcError::TransportError(_)) => {
+                        warn!(
+                            "Failed to submit {:?} transfer ({}), retrying: {near_rpc_error:?}",
+                            transfer_message.recipient.get_chain(),
+                            transfer_message.origin_nonce
+                        );
+                        return Ok(EventAction::Retry);
+                    }
+                    _ => {
+                        anyhow::bail!(
+                            "Failed to submit {:?} transfer ({}): {near_rpc_error:?}",
+                            transfer_message.recipient.get_chain(),
+                            transfer_message.origin_nonce
+                        );
+                    }
+                };
+            }
+            anyhow::bail!(
+                "Failed to submit {:?} transfer ({}): {err:?}",
+                transfer_message.recipient.get_chain(),
                 transfer_message.origin_nonce
             );
         }

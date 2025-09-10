@@ -274,17 +274,28 @@ pub async fn process_events(
                         let near_nonce = near_omni_nonce.clone();
 
                         async move {
-                            match near::process_transfer_event(
-                                &config,
-                                &mut redis_connection_manager,
-                                key.clone(),
-                                omni_connector,
-                                signer,
-                                transfer,
-                                near_nonce,
-                            )
-                            .await
-                            {
+                            let process = if transfer_message.recipient.is_utxo_chain() {
+                                near::process_transfer_to_utxo_event(
+                                    &config,
+                                    omni_connector,
+                                    transfer,
+                                    near_nonce,
+                                )
+                                .await
+                            } else {
+                                near::process_transfer_event(
+                                    &config,
+                                    &mut redis_connection_manager,
+                                    key.clone(),
+                                    omni_connector,
+                                    signer,
+                                    transfer,
+                                    near_nonce,
+                                )
+                                .await
+                            };
+
+                            match process {
                                 Ok(EventAction::Retry) => {}
                                 Ok(EventAction::Remove) => {
                                     utils::redis::remove_event(
