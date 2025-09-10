@@ -21,7 +21,6 @@ near_contracts_with_dynamic_args = [NC.TOKEN_DEPLOYER, NC.MOCK_TOKEN, NC.OMNI_BR
 
 # Account credential files
 near_init_account_credentials_file = const.near_account_dir / f"{NTA.INIT_ACCOUNT}.json"
-near_dao_account_credentials_file = const.near_account_dir / f"{NTA.DAO_ACCOUNT}.json"
 btc_connector_account_file = const.near_account_dir / f"{NEC.BTC_CONNECTOR}.json"
 nbtc_account_file = const.near_account_dir / f"{NEC.BTC_TOKEN}.json"
 
@@ -122,7 +121,7 @@ rule near_evm_prover_setup:
     input:
         omni_bridge = omni_bridge_file,
         evm_prover = evm_prover_file,
-        dao_account = near_dao_account_credentials_file
+        dao_account = near_init_account_credentials_file,
     output: near_evm_prover_setup_call_file
     params:
         mkdir = get_mkdir_cmd(const.near_deploy_results_dir),
@@ -134,7 +133,7 @@ rule near_evm_prover_setup:
     {params.mkdir} && \
     {const.common_scripts_dir}/call-near-contract.sh -c {params.controller_address} \
         -m add_prover \
-        -a '{{\"account_id\": \"{params.evm_prover_account_id}\", \"prover_id\": \"{params.evm_chain_str}\"}}' \
+        -a '{{\"account_id\": \"{params.evm_prover_account_id}\", \"chain\": \"{params.evm_chain_str}\"}}' \
         -f {input.dao_account} \
         -n testnet 2>&1 | tee {output} && \
     {params.extract_tx}
