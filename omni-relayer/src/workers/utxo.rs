@@ -190,7 +190,10 @@ pub async fn process_sign_transaction_event(
         .await
     {
         Ok(tx_hash) => {
-            info!("Finalized BTC transaction: {tx_hash}");
+            info!(
+                "Finalized {:?} transaction: {tx_hash}",
+                sign_utxo_transaction_event.chain
+            );
             Ok(EventAction::Remove)
         }
         Err(err) => {
@@ -201,21 +204,24 @@ pub async fn process_sign_transaction_event(
                     | NearRpcError::RpcBroadcastTxAsyncError(_)
                     | NearRpcError::RpcTransactionError(JsonRpcError::TransportError(_)) => {
                         warn!(
-                            "Failed to finalize btc transaction ({}), retrying: {near_rpc_error:?}",
+                            "Failed to finalize {:?} transaction ({}), retrying: {near_rpc_error:?}",
+                            sign_utxo_transaction_event.chain,
                             sign_utxo_transaction_event.near_tx_hash
                         );
                         return Ok(EventAction::Retry);
                     }
                     _ => {
                         anyhow::bail!(
-                            "Failed to finalize btc transaction ({}): {near_rpc_error:?}",
+                            "Failed to finalize {:?} transaction ({}): {near_rpc_error:?}",
+                            sign_utxo_transaction_event.chain,
                             sign_utxo_transaction_event.near_tx_hash
                         );
                     }
                 };
             }
             anyhow::bail!(
-                "Failed to finalize btc transaction ({}): {err:?}",
+                "Failed to finalize {:?} transaction ({}): {err:?}",
+                sign_utxo_transaction_event.chain,
                 sign_utxo_transaction_event.near_tx_hash
             );
         }
