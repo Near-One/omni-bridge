@@ -38,7 +38,7 @@ rule get_btc_user_deposit_address:
         user_account_file = user_account_file,
         evm_account = evm_account_file,
         omni_bridge_file = omni_bridge_file
-    output: call_dir / "02_btc_user_deposit_address"
+    output: call_dir / "01_btc_user_deposit_address"
     params:
         mkdir = get_mkdir_cmd(call_dir),
         btc_connector = lambda wc, input: get_json_field(input.btc_connector_file, "contract_id"),
@@ -63,7 +63,7 @@ rule send_btc_to_deposit_address:
     message: "Send BTC to user deposit address on Bitcoin"
     input:
         step_2 = rules.get_btc_user_deposit_address.output,
-    output: call_dir / "03_send_btc_to_deposit_address"
+    output: call_dir / "02_send_btc_to_deposit_address"
     params:
         scripts_dir = const.common_scripts_dir,
         btc_address = lambda wc, input: get_btc_address(input.step_2)
@@ -78,7 +78,7 @@ rule add_omni_bridge_to_whitelist:
         btc_connector_file = btc_connector_file,
         near_init_account_file = near_init_account_file,
         omni_bridge_file = omni_bridge_file
-    output: call_dir / "add_omni_bridge_to_whitelist.json"
+    output: call_dir / "03_add_omni_bridge_to_whitelist.json"
     params:
         mkdir = get_mkdir_cmd(call_dir),
         scripts_dir = const.common_scripts_dir,
@@ -103,7 +103,7 @@ rule add_utxo_chain_connector:
         btc_connector_file = btc_connector_file,
         init_account_file = near_init_account_file,
         nbtc_file = nbtc_file,
-    output: call_dir / "add_utxo_chain_connector.json"
+    output: call_dir / "04_add_utxo_chain_connector.json"
     params:
         scripts_dir = const.common_scripts_dir,
         omni_bridge_account = lambda wc, input: get_json_field(input.omni_bridge_file, "contract_id"),
@@ -120,13 +120,13 @@ rule add_utxo_chain_connector:
             echo '{{\"tx_hash\": \"'$TX_HASH'\"}}' > {output}
     """
 
-rule omni_bridge_storage_deposit_0:
+rule omni_bridge_storage_deposit_for_omni_bridge:
     message: "Depositing storage for Omni Bridge on Omni Bridge"
     input:
         omni_bridge_contract_file = omni_bridge_file,
         user_account_file = user_account_file
     output:
-        call_dir / "omni_bridge_storage_deposit_0.json"
+        call_dir / "05_omni_bridge_storage_deposit_for_omni_bridge.json"
     params:
         scripts_dir = const.common_scripts_dir,
         omni_bridge_address = lambda wc, input: get_json_field(input.omni_bridge_contract_file, "contract_id"),
@@ -148,14 +148,14 @@ rule fin_btc_transfer_on_near:
     input:
         omni_bridge_whitelist = rules.add_omni_bridge_to_whitelist.output,
         add_utxo_chain_connector = rules.add_utxo_chain_connector.output,
-        omni_bridge_storage_deposit_0 = rules.omni_bridge_storage_deposit_0.output,
+        omni_bridge_storage_deposit_0 = rules.omni_bridge_storage_deposit_for_omni_bridge.output,
         step_3 = rules.send_btc_to_deposit_address.output,
         btc_connector_file = btc_connector_file,
         nbtc_file = nbtc_file,
         user_account_file = user_account_file,
         evm_account = evm_account_file,
         omni_bridge_file = omni_bridge_file
-    output: call_dir / "04_fin_btc_transfer_on_near.json"
+    output: call_dir / "06_fin_btc_transfer_on_near.json"
     params:
         btc_connector = lambda wc, input: get_json_field(input.btc_connector_file, "contract_id"),
         user_account_id = lambda wc, input: get_json_field(input.user_account_file, "account_id"),
@@ -187,7 +187,7 @@ rule add_evm_factory_to_locker:
         bridge_contract = omni_bridge_file,
         init_account = near_init_account_file,
         evm_bridge = evm_bridge_contract_file
-    output: call_dir / "add_evm_factory_to_locker.json"
+    output: call_dir / "07_add_evm_factory_to_locker.json"
     params:
         mkdir = get_mkdir_cmd(call_dir),
         token_locker_id = lambda wc, input: get_json_field(input.bridge_contract, "contract_id"),
@@ -209,7 +209,7 @@ rule near_log_metadata_call:
         sender_account = user_account_file,
         bridge_contract = omni_bridge_file,
         test_token = nbtc_file,
-    output: call_dir / "log_metadata.json"
+    output: call_dir / "08_log_metadata.json"
     params:
         config_file = const.common_bridge_sdk_config_file,
         mkdir = get_mkdir_cmd(call_dir),
@@ -234,7 +234,7 @@ rule evm_deploy_token:
     input:
         log_metadata = rules.near_log_metadata_call.output,
         evm_bridge = evm_bridge_contract_file,
-    output: call_dir / "evm_deploy_token.json"
+    output: call_dir / "09_evm_deploy_token.json"
     params:
         config_file = const.common_bridge_sdk_config_file,
         mkdir = get_mkdir_cmd(call_dir),
@@ -264,7 +264,7 @@ rule near_bind_token:
         evm_deploy_token = rules.evm_deploy_token.output,
         relayer_account = user_account_file,
         bridge_contract = omni_bridge_file
-    output: call_dir / "near_bind_token.json"
+    output: call_dir / "10_near_bind_token.json"
     params:
         config_file = const.common_bridge_sdk_config_file,
         mkdir = get_mkdir_cmd(call_dir),
@@ -295,7 +295,7 @@ rule near_sign_transfer:
         near_bind_token = rules.near_bind_token.output,
         sender_account = user_account_file,
         bridge_contract = omni_bridge_file,
-    output: call_dir / "05_sign-transfer.json"
+    output: call_dir / "11_sign-transfer.json"
     params:
         config_file = const.common_bridge_sdk_config_file,
         mkdir = get_mkdir_cmd(call_dir),
@@ -325,7 +325,7 @@ rule evm_fin_transfer:
     input:
         near_sign_transfer = rules.near_sign_transfer.output,
         evm_bridge = evm_bridge_contract_file,
-    output: call_dir / "06_eth_fin-transfer.json"
+    output: call_dir / "12_eth_fin-transfer.json"
     params:
         config_file = const.common_bridge_sdk_config_file,
         mkdir = get_mkdir_cmd(call_dir),
