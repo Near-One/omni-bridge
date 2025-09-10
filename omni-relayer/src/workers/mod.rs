@@ -16,7 +16,6 @@ use omni_connector::OmniConnector;
 use omni_types::{
     ChainKind, Fee, OmniAddress, TransferId, TransferMessage, near_events::OmniBridgeEvent,
 };
-use utxo_utils::address::UTXOChain;
 
 use crate::{config, utils};
 
@@ -78,12 +77,12 @@ pub enum Transfer {
         sequence: u64,
     },
     NearToUtxo {
-        chain: UTXOChain,
+        chain: ChainKind,
         btc_pending_id: String,
         sign_index: u64,
     },
     UtxoToNear {
-        chain: UTXOChain,
+        chain: ChainKind,
         btc_tx_hash: String,
         vout: u64,
         deposit_msg: DepositMsg,
@@ -276,7 +275,6 @@ pub async fn process_events(
                         async move {
                             let process = if transfer_message.recipient.is_utxo_chain() {
                                 near::process_transfer_to_utxo_event(
-                                    &config,
                                     omni_connector,
                                     transfer,
                                     near_nonce,

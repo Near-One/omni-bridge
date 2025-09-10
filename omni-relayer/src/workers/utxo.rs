@@ -2,18 +2,17 @@ use std::{str::FromStr, sync::Arc};
 
 use anyhow::Result;
 use bridge_connector_common::result::BridgeSdkError;
-use tracing::{info, warn};
-
 use near_bridge_client::{
-    TransactionOptions, // utxo_connector::{DepositMsg, PostAction},
+    TransactionOptions,
     btc::{DepositMsg, PostAction},
 };
 use near_jsonrpc_client::errors::JsonRpcError;
 use near_primitives::{hash::CryptoHash, types::AccountId};
 use near_rpc_client::NearRpcError;
+use omni_types::ChainKind;
+use tracing::{info, warn};
 
 use omni_connector::{BtcDepositArgs, OmniConnector};
-use utxo_utils::address::UTXOChain;
 
 use crate::utils;
 
@@ -21,14 +20,14 @@ use super::{EventAction, Transfer};
 
 #[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
 pub struct SignUtxoTransaction {
-    pub chain: UTXOChain,
+    pub chain: ChainKind,
     pub near_tx_hash: String,
     pub relayer: AccountId,
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
 pub struct ConfirmedTxHash {
-    pub chain: UTXOChain,
+    pub chain: ChainKind,
     pub btc_tx_hash: String,
 }
 

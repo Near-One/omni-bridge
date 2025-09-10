@@ -16,9 +16,7 @@ use omni_connector::OmniConnector;
 use omni_types::{ChainKind, FastTransfer, OmniAddress, TransferId, near_events::OmniBridgeEvent};
 
 use crate::{
-    config,
-    startup::to_chain,
-    utils,
+    config, utils,
     workers::{PAUSED_ERROR, RetryableEvent},
 };
 
@@ -177,7 +175,6 @@ pub async fn process_transfer_event(
 }
 
 pub async fn process_transfer_to_utxo_event(
-    config: &config::Config,
     omni_connector: Arc<OmniConnector>,
     transfer: Transfer,
     near_nonce: Arc<utils::nonce::NonceManager>,
@@ -205,12 +202,7 @@ pub async fn process_transfer_to_utxo_event(
 
     match omni_connector
         .near_submit_btc_transfer(
-            to_chain(config, transfer_message.recipient.get_chain()).ok_or_else(|| {
-                anyhow::anyhow!(
-                    "UTXO bridge is not configured for chain: {:?}",
-                    transfer_message.recipient.get_chain()
-                )
-            })?,
+            transfer_message.recipient.get_chain(),
             recipient,
             transfer_message.amount.0,
             TransferId {

@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 
 use anyhow::{Context, Result};
-use bridge_indexer_types::documents_types::UtxoChain;
 use eth_light_client::{EthLightClient, EthLightClientBuilder};
 use evm_bridge_client::{EvmBridgeClient, EvmBridgeClientBuilder};
 use near_bridge_client::{NearBridgeClientBuilder, UTXOChainAccounts};
@@ -10,13 +9,12 @@ use omni_connector::{OmniConnector, OmniConnectorBuilder};
 use omni_types::ChainKind;
 use solana_bridge_client::{SolanaBridgeClient, SolanaBridgeClientBuilder};
 use solana_client::nonblocking::rpc_client::RpcClient;
-use tracing::{info, warn};
+use tracing::info;
 use utxo_bridge_client::{AuthOptions, UTXOBridgeClient};
-use utxo_utils::address::UTXOChain;
 use wormhole_bridge_client::{WormholeBridgeClient, WormholeBridgeClientBuilder};
 
 use crate::{
-    config::{self, Network},
+    config::{self},
     startup,
 };
 
@@ -39,20 +37,10 @@ macro_rules! skip_fail {
     };
 }
 
-pub fn to_chain(config: &config::Config, chain: ChainKind) -> Option<UTXOChain> {
-    match (&config.near.network, chain) {
-        (Network::Mainnet, ChainKind::Btc) => Some(UTXOChain::BitcoinMainnet),
-        (Network::Mainnet, ChainKind::Zcash) => Some(UTXOChain::ZcashMainnet),
-        (Network::Testnet, ChainKind::Btc) => Some(UTXOChain::BitcoinTestnet),
-        (Network::Testnet, ChainKind::Zcash) => Some(UTXOChain::ZcashTestnet),
-        _ => None,
-    }
-}
-
 fn build_utxo_bridges(
     config: &config::Config,
     near_signer: &InMemorySigner,
-) -> HashMap<UTXOChain, UTXOChainAccounts> {
+) -> HashMap<ChainKind, UTXOChainAccounts> {
     let mut utxo_bridges = HashMap::new();
 
     for (chain, connector, token) in [
@@ -67,10 +55,6 @@ fn build_utxo_bridges(
             config.near.zcash.as_ref(),
         ),
     ] {
-        let Some(chain) = to_chain(config, chain) else {
-            warn!("Skipping UTXO bridge for unsupported chain: {chain:?}");
-            continue;
-        };
         utxo_bridges.insert(
             chain,
             UTXOChainAccounts {
@@ -152,11 +136,19 @@ fn build_solana_bridge_client(config: &config::Config) -> Result<Option<SolanaBr
 
 fn build_utxo_bridge_client<C: utxo_bridge_client::types::UTXOChain>(
     config: &config::Config,
-    chain: UtxoChain,
+    chain: ChainKind,
 ) -> Result<UTXOBridgeClient<C>> {
     let utxo = match chain {
-        UtxoChain::Btc => &config.btc,
-        UtxoChain::Zcash => &config.zcash,
+        ChainKind::Btc => &config.btc,
+        ChainKind::Zcash => &config.zcash,
+        ChainKind::Near
+        | ChainKind::Eth
+        | ChainKind::Base
+        | ChainKind::Arb
+        | ChainKind::Bnb
+        | ChainKind::Sol => {
+            anyhow::bail!("Chain {chain:?} is not supported for building UTXO bridge client")
+        }
     };
 
     utxo.as_ref()
@@ -201,8 +193,8 @@ pub fn build_omni_connector(
     let arb_bridge_client = build_evm_bridge_client(config, ChainKind::Arb)?;
     let bnb_bridge_client = build_evm_bridge_client(config, ChainKind::Bnb)?;
     let solana_bridge_client = build_solana_bridge_client(config)?;
-    let btc_bridge_client = build_utxo_bridge_client(config, UtxoChain::Btc)?;
-    let zcash_bridge_client = build_utxo_bridge_client(config, UtxoChain::Zcash)?;
+    let btc_bridge_client = build_utxo_bridge_client(config, ChainKind::Btc)?;
+    let zcash_bridge_client = build_utxo_bridge_client(config, ChainKind::Zcash)?;
     let wormhole_bridge_client = build_wormhole_bridge_client(config)?;
     let eth_light_client = build_eth_light_client(config)?;
 

@@ -2,7 +2,6 @@ use alloy::{
     primitives::Address,
     signers::{k256::ecdsa::SigningKey, local::LocalSigner},
 };
-use bridge_indexer_types::documents_types::UtxoChain;
 use near_primitives::types::AccountId;
 use omni_types::{ChainKind, OmniAddress};
 use rust_decimal::Decimal;
@@ -121,18 +120,34 @@ impl Config {
         self.near.fast_relayer_enabled
     }
 
-    pub fn is_signing_utxo_transaction_enabled(&self, chain: UtxoChain) -> bool {
+    pub fn is_signing_utxo_transaction_enabled(&self, chain: ChainKind) -> bool {
         let config = match chain {
-            UtxoChain::Btc => self.btc.as_ref(),
-            UtxoChain::Zcash => self.zcash.as_ref(),
+            ChainKind::Btc => self.btc.as_ref(),
+            ChainKind::Zcash => self.zcash.as_ref(),
+            ChainKind::Near
+            | ChainKind::Eth
+            | ChainKind::Base
+            | ChainKind::Arb
+            | ChainKind::Bnb
+            | ChainKind::Sol => {
+                panic!("Verifying withdraw is not applicable for {chain:?}")
+            }
         };
         config.is_some_and(|btc| btc.signing_enabled)
     }
 
-    pub fn is_verifying_utxo_withdraw_enabled(&self, chain: UtxoChain) -> bool {
+    pub fn is_verifying_utxo_withdraw_enabled(&self, chain: ChainKind) -> bool {
         let config = match chain {
-            UtxoChain::Btc => self.btc.as_ref(),
-            UtxoChain::Zcash => self.zcash.as_ref(),
+            ChainKind::Btc => self.btc.as_ref(),
+            ChainKind::Zcash => self.zcash.as_ref(),
+            ChainKind::Near
+            | ChainKind::Eth
+            | ChainKind::Base
+            | ChainKind::Arb
+            | ChainKind::Bnb
+            | ChainKind::Sol => {
+                panic!("Verifying withdraw is not applicable for {chain:?}")
+            }
         };
         config.is_some_and(|btc| btc.verifying_withdraw_enabled)
     }
