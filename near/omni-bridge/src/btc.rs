@@ -1,16 +1,18 @@
 use crate::storage::NEP141_DEPOSIT;
 use crate::{
-    ext_token, Contract, ContractExt, Role, FT_TRANSFER_CALL_GAS, ONE_YOCTO, STORAGE_DEPOSIT_GAS,
+    ext_token, ext_utxo_connector, Contract, ContractExt, Role, FT_TRANSFER_CALL_GAS, ONE_YOCTO,
+    STORAGE_DEPOSIT_GAS,
 };
 use near_plugins::{access_control_any, pause, AccessControllable, Pausable};
 use near_sdk::json_types::U128;
 use near_sdk::{
     env, near, require, serde_json, AccountId, Gas, Promise, PromiseError, PromiseOrValue,
 };
-use omni_types::btc::{TokenReceiverMessage, UTXOChainConfig};
+use omni_types::btc::{TokenReceiverMessage, TxOut, UTXOChainConfig};
 use omni_types::{ChainKind, Fee, OmniAddress, TransferId, TransferMessage};
 
 const SUBMIT_TRANSFER_TO_BTC_CONNECTOR_CALLBACK_GAS: Gas = Gas::from_tgas(5);
+const WITHDRAW_RBF_GAS: Gas = Gas::from_tgas(100);
 
 #[derive(Debug, near_sdk::serde::Deserialize)]
 #[serde(tag = "type", content = "data")]
@@ -150,6 +152,18 @@ impl Contract {
             .with_static_gas(STORAGE_DEPOSIT_GAS)
             .with_attached_deposit(NEP141_DEPOSIT)
             .storage_deposit(&env::current_account_id(), Some(true));
+    }
+
+    #[access_control_any(roles(Role::DAO, Role::RbfOperator))]
+    pub fn rbf_increase_gas_fee(
+        &self,
+        chain_kind: ChainKind,
+        original_btc_pending_verify_id: String,
+        output: Vec<TxOut>,
+    ) -> Promise {
+        ext_utxo_connector::ext(self.get_utxo_chain_connector(chain_kind))
+            .with_static_gas(WITHDRAW_RBF_GAS)
+            .withdraw_rbf(original_btc_pending_verify_id, output)
     }
 
     /// Returns the `AccountId` of the connector for the given UTXO chain.
