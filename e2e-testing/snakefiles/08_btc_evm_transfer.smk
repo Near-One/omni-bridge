@@ -166,7 +166,7 @@ rule fin_btc_transfer_on_near:
         recipient_address = lambda wc, input: get_json_field(input.evm_account, "address"),
         extract_tx = lambda wc, output: extract_tx_hash("bridge", output)
     shell: """
-    bridge-cli testnet  near-fin-transfer-btc \
+    bridge-cli testnet near-fin-transfer-btc \
         --chain bitcoin-testnet \
         -b {params.btc_tx_hash} \
         -v 0 \
