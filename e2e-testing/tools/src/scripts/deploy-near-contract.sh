@@ -41,7 +41,7 @@ else
     DYN_INIT_ARGS="{}"
 fi
 
-INIT_ARGS=$(echo "$STATIC_INIT_ARGS $DYN_INIT_ARGS" | jq -s add)
+INIT_ARGS=$(echo "$STATIC_INIT_ARGS $DYN_INIT_ARGS" | jq -s 'reduce .[] as $item ({}; . * $item)')
 
 # Delay to allow the account to be created
 sleep 3
