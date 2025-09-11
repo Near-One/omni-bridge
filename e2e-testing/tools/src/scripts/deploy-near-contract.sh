@@ -41,6 +41,8 @@ else
     DYN_INIT_ARGS="{}"
 fi
 
+echo $STATIC_INIT_ARGS
+
 INIT_ARGS=$(echo "$STATIC_INIT_ARGS $DYN_INIT_ARGS" | jq -s add)
 
 # Delay to allow the account to be created

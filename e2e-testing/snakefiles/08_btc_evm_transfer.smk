@@ -62,11 +62,11 @@ rule get_btc_user_deposit_address:
 rule send_btc_to_deposit_address:
     message: "Send BTC to user deposit address on Bitcoin"
     input:
-        rules.get_btc_user_deposit_address.output,
+        step_1 = rules.get_btc_user_deposit_address.output,
     output: call_dir / "02_send_btc_to_deposit_address"
     params:
         scripts_dir = const.common_scripts_dir,
-        btc_address = lambda wc, input: get_btc_address(input.step_2)
+        btc_address = lambda wc, input: get_btc_address(input.step_1)
     shell: """
         node {params.scripts_dir}/send_btc.js {params.btc_address} 7500 > {output}
     """
@@ -77,13 +77,13 @@ rule fin_btc_transfer_on_near:
     input:
         omni_bridge_whitelist = rules.add_omni_bridge_to_whitelist.output,
         add_utxo_chain_connector = rules.add_utxo_chain_connector.output,
-        omni_bridge_storage_deposit_0 = rules.omni_bridge_storage_deposit_for_omni_bridge.output,
-        rules.send_btc_to_deposit_address.output,
+        omni_bridge_storage_deposit = rules.omni_bridge_storage_deposit.output,
+        step_2 = rules.send_btc_to_deposit_address.output,
         btc_connector_file = btc_connector_file,
         nbtc_file = nbtc_file,
         user_account_file = user_account_file,
         evm_account = evm_account_file,
-        omni_bridge_file = omni_bridge_file
+        omni_bridge_file = omni_bridge_file,
     output: call_dir / "03_fin_btc_transfer_on_near.json"
     params:
         btc_connector = lambda wc, input: get_json_field(input.btc_connector_file, "contract_id"),
@@ -91,7 +91,7 @@ rule fin_btc_transfer_on_near:
         token_locker_id = lambda wc, input: get_json_field(input.omni_bridge_file, "contract_id"),
         user_private_key = lambda wc, input: get_json_field(input.user_account_file, "private_key"),
         bridge_sdk_config_file = const.common_bridge_sdk_config_file,
-        btc_tx_hash = lambda wc, input: get_last_value(input.step_3),
+        btc_tx_hash = lambda wc, input: get_last_value(input.step_2),
         recipient_address = lambda wc, input: get_json_field(input.evm_account, "address"),
         extract_tx = lambda wc, output: extract_tx_hash("bridge", output)
     shell: """

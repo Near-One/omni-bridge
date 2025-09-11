@@ -133,13 +133,11 @@ rule add_omni_bridge_to_whitelist:
         omni_bridge_file = omni_bridge_file
     output: const.common_generated_dir / "add_omni_bridge_to_whitelist.json"
     params:
-        mkdir = get_mkdir_cmd(call_dir),
         scripts_dir = const.common_scripts_dir,
         btc_connector = lambda wc, input: get_json_field(input.btc_connector_file, "contract_id"),
         token_locker_id = lambda wc, input: get_json_field(input.omni_bridge_file, "contract_id"),
         extract_tx = lambda wc, output: extract_tx_hash("near", output)
     shell: """
-        {params.mkdir} && \
         {params.scripts_dir}/call-near-contract.sh -c {params.btc_connector} \
            -m extend_post_action_receiver_id_white_list \
            -a '{{\"receiver_ids\": [\"{params.token_locker_id}\"]}}' \
