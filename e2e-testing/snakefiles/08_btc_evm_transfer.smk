@@ -33,7 +33,7 @@ evm_prover_setup_file = const.near_deploy_results_dir / "sepolia-evm-prover-setu
 rule get_btc_user_deposit_address:
     message: "Get BTC user deposit address"
     input:
-        step_1 = rules.sync_btc_connector.output,
+        rules.sync_btc_connector.output,
         btc_connector_file = btc_connector_file,
         user_account_file = user_account_file,
         evm_account = evm_account_file,
@@ -62,84 +62,13 @@ rule get_btc_user_deposit_address:
 rule send_btc_to_deposit_address:
     message: "Send BTC to user deposit address on Bitcoin"
     input:
-        step_2 = rules.get_btc_user_deposit_address.output,
+        rules.get_btc_user_deposit_address.output,
     output: call_dir / "02_send_btc_to_deposit_address"
     params:
         scripts_dir = const.common_scripts_dir,
         btc_address = lambda wc, input: get_btc_address(input.step_2)
     shell: """
         node {params.scripts_dir}/send_btc.js {params.btc_address} 7500 > {output}
-    """
-
-rule add_omni_bridge_to_whitelist:
-    message: "Add OmniBridge to whitelist for Post Action in Btc Connector"
-    input:
-        step_1 = rules.sync_btc_connector.output,
-        btc_connector_file = btc_connector_file,
-        near_init_account_file = near_init_account_file,
-        omni_bridge_file = omni_bridge_file
-    output: call_dir / "03_add_omni_bridge_to_whitelist.json"
-    params:
-        mkdir = get_mkdir_cmd(call_dir),
-        scripts_dir = const.common_scripts_dir,
-        btc_connector = lambda wc, input: get_json_field(input.btc_connector_file, "contract_id"),
-        token_locker_id = lambda wc, input: get_json_field(input.omni_bridge_file, "contract_id"),
-        extract_tx = lambda wc, output: extract_tx_hash("near", output)
-    shell: """
-        {params.mkdir} && \
-        {params.scripts_dir}/call-near-contract.sh -c {params.btc_connector} \
-           -m extend_post_action_receiver_id_white_list \
-           -a '{{\"receiver_ids\": [\"{params.token_locker_id}\"]}}' \
-           -f {input.near_init_account_file} \
-           -d "1 yoctoNEAR"\
-           -n testnet 2>&1 | tee {output} && \
-        {params.extract_tx}
-    """
-
-rule add_utxo_chain_connector:
-    message: "Add BTC connector to OmniBridge on Near"
-    input:
-        omni_bridge_file = omni_bridge_file,
-        btc_connector_file = btc_connector_file,
-        init_account_file = near_init_account_file,
-        nbtc_file = nbtc_file,
-    output: call_dir / "04_add_utxo_chain_connector.json"
-    params:
-        scripts_dir = const.common_scripts_dir,
-        omni_bridge_account = lambda wc, input: get_json_field(input.omni_bridge_file, "contract_id"),
-        btc_connector_account = lambda wc, input: get_json_field(input.btc_connector_file, "contract_id"),
-        nbtc_account = lambda wc, input: get_json_field(input.nbtc_file, "contract_id"),
-    shell: """
-        {params.scripts_dir}/call-near-contract.sh -c {params.omni_bridge_account} \
-            -m add_utxo_chain_connector \
-            -a '{{\"chain_kind\": \"Btc\", \"utxo_chain_connector_id\": \"{params.btc_connector_account}\", \"utxo_chain_token_id\": \"{params.nbtc_account}\", \"decimals\": 8}}' \
-            -f {input.init_account_file}  \
-            -d "1 NEAR" \
-            -n testnet 2>&1 | tee {output} && \
-            TX_HASH=$(grep -o 'Transaction ID: [^ ]*' {output} | cut -d' ' -f3) && \
-            echo '{{\"tx_hash\": \"'$TX_HASH'\"}}' > {output}
-    """
-
-rule omni_bridge_storage_deposit_for_omni_bridge:
-    message: "Depositing storage for Omni Bridge on Omni Bridge"
-    input:
-        omni_bridge_contract_file = omni_bridge_file,
-        user_account_file = user_account_file
-    output:
-        call_dir / "05_omni_bridge_storage_deposit_for_omni_bridge.json"
-    params:
-        scripts_dir = const.common_scripts_dir,
-        omni_bridge_address = lambda wc, input: get_json_field(input.omni_bridge_contract_file, "contract_id"),
-        user_account_id = lambda wc, input: get_json_field(input.user_account_file, "account_id"),
-        extract_tx = lambda wc, output: extract_tx_hash("near", output)
-    shell: """
-        {params.scripts_dir}/call-near-contract.sh -c {params.omni_bridge_address} \
-        -m storage_deposit \
-        -a '{{\"account_id\": \"{params.user_account_id}\"}}' \
-        -d "1 NEAR" \
-        -f {input.user_account_file} \
-        -n testnet 2>&1 | tee {output} && \
-        {params.extract_tx}
     """
 
 
@@ -149,13 +78,13 @@ rule fin_btc_transfer_on_near:
         omni_bridge_whitelist = rules.add_omni_bridge_to_whitelist.output,
         add_utxo_chain_connector = rules.add_utxo_chain_connector.output,
         omni_bridge_storage_deposit_0 = rules.omni_bridge_storage_deposit_for_omni_bridge.output,
-        step_3 = rules.send_btc_to_deposit_address.output,
+        rules.send_btc_to_deposit_address.output,
         btc_connector_file = btc_connector_file,
         nbtc_file = nbtc_file,
         user_account_file = user_account_file,
         evm_account = evm_account_file,
         omni_bridge_file = omni_bridge_file
-    output: call_dir / "06_fin_btc_transfer_on_near.json"
+    output: call_dir / "03_fin_btc_transfer_on_near.json"
     params:
         btc_connector = lambda wc, input: get_json_field(input.btc_connector_file, "contract_id"),
         user_account_id = lambda wc, input: get_json_field(input.user_account_file, "account_id"),
@@ -187,7 +116,7 @@ rule add_evm_factory_to_locker:
         bridge_contract = omni_bridge_file,
         init_account = near_init_account_file,
         evm_bridge = evm_bridge_contract_file
-    output: call_dir / "07_add_evm_factory_to_locker.json"
+    output: call_dir / "04_add_evm_factory_to_locker.json"
     params:
         mkdir = get_mkdir_cmd(call_dir),
         token_locker_id = lambda wc, input: get_json_field(input.bridge_contract, "contract_id"),
@@ -209,7 +138,7 @@ rule near_log_metadata_call:
         sender_account = user_account_file,
         bridge_contract = omni_bridge_file,
         test_token = nbtc_file,
-    output: call_dir / "08_log_metadata.json"
+    output: call_dir / "05_log_metadata.json"
     params:
         config_file = const.common_bridge_sdk_config_file,
         mkdir = get_mkdir_cmd(call_dir),
@@ -234,7 +163,7 @@ rule evm_deploy_token:
     input:
         log_metadata = rules.near_log_metadata_call.output,
         evm_bridge = evm_bridge_contract_file,
-    output: call_dir / "09_evm_deploy_token.json"
+    output: call_dir / "06_evm_deploy_token.json"
     params:
         config_file = const.common_bridge_sdk_config_file,
         mkdir = get_mkdir_cmd(call_dir),
@@ -264,7 +193,7 @@ rule near_bind_token:
         evm_deploy_token = rules.evm_deploy_token.output,
         relayer_account = user_account_file,
         bridge_contract = omni_bridge_file
-    output: call_dir / "10_near_bind_token.json"
+    output: call_dir / "07_near_bind_token.json"
     params:
         config_file = const.common_bridge_sdk_config_file,
         mkdir = get_mkdir_cmd(call_dir),
@@ -295,7 +224,7 @@ rule near_sign_transfer:
         near_bind_token = rules.near_bind_token.output,
         sender_account = user_account_file,
         bridge_contract = omni_bridge_file,
-    output: call_dir / "11_sign-transfer.json"
+    output: call_dir / "08_sign-transfer.json"
     params:
         config_file = const.common_bridge_sdk_config_file,
         mkdir = get_mkdir_cmd(call_dir),
@@ -325,7 +254,7 @@ rule evm_fin_transfer:
     input:
         near_sign_transfer = rules.near_sign_transfer.output,
         evm_bridge = evm_bridge_contract_file,
-    output: call_dir / "12_eth_fin-transfer.json"
+    output: call_dir / "09_eth_fin-transfer.json"
     params:
         config_file = const.common_bridge_sdk_config_file,
         mkdir = get_mkdir_cmd(call_dir),

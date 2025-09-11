@@ -24,10 +24,10 @@ btc_connector_file = const.near_deploy_results_dir / f"btc_connector.json"
 rule get_btc_user_deposit_address:
     message: "Get BTC user deposit address"
     input:
-        step_1 = rules.sync_btc_connector.output,
+        rules.sync_btc_connector.output,
         btc_connector_file = btc_connector_file,
         user_account_file = user_account_file
-    output: call_dir / "02_btc_user_deposit_address.json"
+    output: call_dir / "01_btc_user_deposit_address.json"
     params:
         mkdir = get_mkdir_cmd(call_dir),
         btc_connector = lambda wc, input: get_json_field(input.btc_connector_file, "contract_id"),
@@ -48,7 +48,7 @@ rule send_btc_to_deposit_address:
     message: "Send BTC to user deposit address on Bitcoin"
     input:
         step_2 = rules.get_btc_user_deposit_address.output,
-    output: call_dir / "03_send_btc_to_deposit_address.json"
+    output: call_dir / "02_send_btc_to_deposit_address.json"
     params:
         scripts_dir = const.common_scripts_dir,
         btc_address = lambda wc, input: get_btc_address(input.step_2),
@@ -62,7 +62,7 @@ rule fin_btc_transfer_on_near:
         step_3 = rules.send_btc_to_deposit_address.output,
         btc_connector_file = btc_connector_file,
         user_account_file = user_account_file
-    output: call_dir / "04_fin_btc_transfer_on_near.json"
+    output: call_dir / "03_fin_btc_transfer_on_near.json"
     params:
         btc_connector = lambda wc, input: get_json_field(input.btc_connector_file, "contract_id"),
         user_account_id = lambda wc, input: get_json_field(input.user_account_file, "account_id"),
@@ -82,52 +82,6 @@ rule fin_btc_transfer_on_near:
          > {output} \
     """
 
-rule omni_bridge_storage_deposit:
-    message: "Depositing storage for User on Omni Bridge"
-    input:
-        omni_bridge_contract_file = omni_bridge_file,
-        user_account_file = user_account_file
-    output:
-        call_dir / "06_omni_bridge_storage_deposit.json"
-    params:
-        scripts_dir = const.common_scripts_dir,
-        omni_bridge_address = lambda wc, input: get_json_field(input.omni_bridge_contract_file, "contract_id"),
-        user_account_id = lambda wc, input: get_json_field(input.user_account_file, "account_id"),
-        extract_tx = lambda wc, output: extract_tx_hash("near", output)
-    shell: """
-    {params.scripts_dir}/call-near-contract.sh -c {params.omni_bridge_address} \
-        -m storage_deposit \
-        -a '{{\"account_id\": \"{params.user_account_id}\"}}' \
-        -d "1 NEAR" \
-        -f {input.user_account_file} \
-        -n testnet 2>&1 | tee {output} && \
-    {params.extract_tx}
-    """
-
-rule add_utxo_chain_connector:
-    message: "Add BTC connector to OmniBridge on Near"
-    input:
-        omni_bridge_file = omni_bridge_file,
-        btc_connector_file = btc_connector_file,
-        init_account_file = near_init_account_file,
-        nbtc_file = nbtc_file,
-    output: call_dir / "add_utxo_chain_connector.json"
-    params:
-        scripts_dir = const.common_scripts_dir,
-        omni_bridge_account = lambda wc, input: get_json_field(input.omni_bridge_file, "contract_id"),
-        btc_connector_account = lambda wc, input: get_json_field(input.btc_connector_file, "contract_id"),
-        nbtc_account = lambda wc, input: get_json_field(input.nbtc_file, "contract_id"),
-    shell: """
-        {params.scripts_dir}/call-near-contract.sh -c {params.omni_bridge_account} \
-            -m add_utxo_chain_connector \
-            -a '{{\"chain_kind\": \"Btc\", \"utxo_chain_connector_id\": \"{params.btc_connector_account}\", \"utxo_chain_token_id\": \"{params.nbtc_account}\", \"decimals\": 8}}' \
-            -f {input.init_account_file}  \
-            -d "1 NEAR" \
-            -n testnet 2>&1 | tee {output} && \
-            TX_HASH=$(grep -o 'Transaction ID: [^ ]*' {output} | cut -d' ' -f3) && \
-            echo '{{\"tx_hash\": \"'$TX_HASH'\"}}' > {output}
-    """
-
 rule ft_transfer_btc_to_omni_bridge:
     message: "Init BTC transfer to OmniBridge on Near"
     input:
@@ -137,7 +91,7 @@ rule ft_transfer_btc_to_omni_bridge:
         nbtc_file = nbtc_file,
         omni_bridge_file = omni_bridge_file,
         user_account_file = user_account_file,
-    output: call_dir / "07_ft_transfer_btc_to_omni_bridge.json"
+    output: call_dir / "04_ft_transfer_btc_to_omni_bridge.json"
     params:
         scripts_dir = const.common_scripts_dir,
         nbtc_account = lambda wc, input: get_json_field(input.nbtc_file, "contract_id"),
@@ -160,7 +114,7 @@ rule submit_transfer_to_btc_connector:
        btc_connector_file = btc_connector_file,
        omni_bridge_file = omni_bridge_file,
        user_account_file = user_account_file
-    output: call_dir / "08_sign_btc_transfer.json"
+    output: call_dir / "05_sign_btc_transfer.json"
     params:
         btc_connector = lambda wc, input: get_json_field(input.btc_connector_file, "contract_id"),
         user_account_id = lambda wc, input: get_json_field(input.user_account_file, "account_id"),
@@ -190,7 +144,7 @@ rule sign_btc_connector_transfer:
         btc_connector_file = btc_connector_file,
         omni_bridge_file = omni_bridge_file,
         user_account_file = user_account_file
-    output: call_dir / "09_sign_btc_connector_transfer.json"
+    output: call_dir / "06_sign_btc_connector_transfer.json"
     params:
         btc_connector = lambda wc, input: get_json_field(input.btc_connector_file, "contract_id"),
         user_account_id = lambda wc, input: get_json_field(input.user_account_file, "account_id"),
@@ -215,7 +169,7 @@ rule send_btc_transfer:
     input:
         step_9 = rules.sign_btc_connector_transfer.output,
         user_account_file = user_account_file,
-    output: call_dir / "10_send_btc_transfer.json"
+    output: call_dir / "07_send_btc_transfer.json"
     params:
         near_tx_hash = lambda wc, input: get_tx_hash(input.step_9),
         user_account_id = lambda wc, input: get_json_field(input.user_account_file, "account_id"),
