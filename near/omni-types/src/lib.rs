@@ -483,7 +483,8 @@ pub struct FastFinTransferMsg {
     pub relayer: AccountId,
 }
 
-#[derive(Serialize, Deserialize, BorshSerialize, BorshDeserialize, Debug, Clone)]
+#[near(serializers=[borsh, json])]
+#[derive(Debug, Clone)]
 pub struct UtxoTransferMsg {
     pub utxo_id: String,
     pub token: OmniAddress,
@@ -692,6 +693,20 @@ impl FastTransfer {
             token_id,
             amount: transfer.amount,
             fee: transfer.fee,
+            recipient: transfer.recipient,
+            msg: transfer.msg,
+        }
+    }
+
+    pub fn from_utxo_transfer(transfer: UtxoTransferMsg, token_id: AccountId) -> Self {
+        Self {
+            transfer_id: UnifiedTransferId::Utxo(transfer.utxo_id),
+            token_id,
+            amount: transfer.amount,
+            fee: Fee {
+                fee: transfer.fee,
+                native_fee: U128(0),
+            },
             recipient: transfer.recipient,
             msg: transfer.msg,
         }
