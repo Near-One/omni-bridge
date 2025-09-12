@@ -461,17 +461,7 @@ impl<'de> Deserialize<'de> for OmniAddress {
 pub enum BridgeOnTransferMsg {
     InitTransfer(InitTransferMsg),
     FastFinTransfer(FastFinTransferMsg),
-}
-
-#[derive(Serialize, Deserialize, BorshSerialize, BorshDeserialize, Debug, Clone)]
-pub struct FastFinTransferMsg {
-    pub transfer_id: TransferId,
-    pub recipient: OmniAddress,
-    pub fee: Fee,
-    pub msg: String,
-    pub amount: U128,
-    pub storage_deposit_amount: Option<U128>,
-    pub relayer: AccountId,
+    UtxoTransfer(UtxoTransferMsg),
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -480,6 +470,27 @@ pub struct InitTransferMsg {
     pub fee: U128,
     pub native_token_fee: U128,
     pub msg: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, BorshSerialize, BorshDeserialize, Debug, Clone)]
+pub struct FastFinTransferMsg {
+    pub transfer_id: UnifiedTransferId,
+    pub recipient: OmniAddress,
+    pub fee: Fee,
+    pub msg: String,
+    pub amount: U128,
+    pub storage_deposit_amount: Option<U128>,
+    pub relayer: AccountId,
+}
+
+#[derive(Serialize, Deserialize, BorshSerialize, BorshDeserialize, Debug, Clone)]
+pub struct UtxoTransferMsg {
+    pub utxo_id: String,
+    pub token: OmniAddress,
+    pub recipient: OmniAddress,
+    pub amount: U128,
+    pub fee: U128,
+    pub msg: String,
 }
 
 #[near(serializers=[borsh, json])]
@@ -647,12 +658,19 @@ pub struct BasicMetadata {
 
 #[near(serializers=[borsh, json])]
 #[derive(Debug, Clone)]
+pub enum UnifiedTransferId {
+    General(TransferId),
+    Utxo(String),
+}
+
+#[near(serializers=[borsh, json])]
+#[derive(Debug, Clone)]
 pub struct FastTransferId(pub [u8; 32]);
 
 #[near(serializers=[borsh, json])]
 #[derive(Debug, Clone)]
 pub struct FastTransfer {
-    pub transfer_id: TransferId,
+    pub transfer_id: UnifiedTransferId,
     pub token_id: AccountId,
     pub amount: U128,
     pub fee: Fee,
@@ -670,7 +688,7 @@ impl FastTransfer {
 impl FastTransfer {
     pub fn from_transfer(transfer: TransferMessage, token_id: AccountId) -> Self {
         Self {
-            transfer_id: transfer.get_transfer_id(),
+            transfer_id: UnifiedTransferId::General(transfer.get_transfer_id()),
             token_id,
             amount: transfer.amount,
             fee: transfer.fee,

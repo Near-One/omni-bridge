@@ -25,9 +25,7 @@ use omni_types::mpc_types::SignatureResponse;
 use omni_types::near_events::OmniBridgeEvent;
 use omni_types::prover_result::ProverResult;
 use omni_types::{
-    BasicMetadata, BridgeOnTransferMsg, ChainKind, FastFinTransferMsg, FastTransfer,
-    FastTransferId, FastTransferStatus, Fee, InitTransferMsg, MetadataPayload, Nonce, OmniAddress,
-    PayloadType, SignRequest, TransferId, TransferMessage, TransferMessagePayload, UpdateFee, H160,
+    BasicMetadata, BridgeOnTransferMsg, ChainKind, FastFinTransferMsg, FastTransfer, FastTransferId, FastTransferStatus, Fee, InitTransferMsg, MetadataPayload, Nonce, OmniAddress, PayloadType, SignRequest, TransferId, TransferMessage, TransferMessagePayload, UnifiedTransferId, UpdateFee, UtxoTransferMsg, H160
 };
 use std::str::FromStr;
 use storage::{
@@ -229,6 +227,9 @@ impl Contract {
             }
             BridgeOnTransferMsg::FastFinTransfer(fast_fin_transfer_msg) => {
                 self.fast_fin_transfer(token_id, amount, signer_id, fast_fin_transfer_msg)
+            }
+            BridgeOnTransferMsg::UtxoTransfer(utxo_transfer_msg) => {
+                self.utxo_transfer(token_id, amount, utxo_transfer_msg)
             }
         };
 
@@ -668,12 +669,21 @@ impl Contract {
         storage_payer: AccountId,
         fast_fin_transfer_msg: FastFinTransferMsg,
     ) -> PromiseOrPromiseIndexOrValue<U128> {
+        let origin_chain = match fast_fin_transfer_msg.transfer_id {
+            UnifiedTransferId::General(transfer_id) => transfer_id.origin_chain,
+            UnifiedTransferId::Utxo(_) => {
+                self.get_utxo_chain_by_token(&token_id)
+                    .sdk_expect("ERR_CHAIN_NOT_FOUND")
+            },
+        };
+
         let origin_token = self
             .get_token_address(
-                fast_fin_transfer_msg.transfer_id.origin_chain,
+                origin_chain,
                 token_id.clone(),
             )
             .sdk_expect("ERR_TOKEN_NOT_FOUND");
+
         let decimals = self
             .token_decimals
             .get(&origin_token)
@@ -830,9 +840,9 @@ impl Contract {
             );
         }
 
-        if self.is_transfer_finalised(fast_transfer.transfer_id) {
-            env::panic_str("ERR_TRANSFER_ALREADY_FINALISED");
-        }
+        // if self.is_transfer_finalised(fast_transfer.transfer_id) {
+        //     env::panic_str("ERR_TRANSFER_ALREADY_FINALISED");
+        // }
 
         let mut required_balance =
             self.add_fast_transfer(fast_transfer, relayer_id.clone(), storage_payer.clone());
@@ -850,7 +860,11 @@ impl Contract {
             sender: OmniAddress::Near(relayer_id),
             msg: fast_transfer.msg.clone(),
             destination_nonce,
-            origin_transfer_id: Some(fast_transfer.transfer_id),
+            origin_transfer_id: if let UnifiedTransferId::General(transfer_id) = fast_transfer.transfer_id {
+                Some(transfer_id)
+            } else {
+                None
+            },
         };
         let new_transfer_id = transfer_message.get_transfer_id();
 
@@ -867,6 +881,49 @@ impl Contract {
         );
 
         self.update_storage_balance(storage_payer, required_balance, NearToken::from_near(0));
+    }
+
+    fn utxo_transfer(&mut self, token_id: AccountId, amount: U128, utxo_transfer_msg: UtxoTransferMsg) -> PromiseOrPromiseIndexOrValue<U128> {
+        // Verify this is indeed a UTXO chain token
+        let _ = self
+            .get_utxo_chain_by_token(&token_id)
+            .sdk_expect("ERR_TOKEN_NOT_FROM_UTXO_CHAIN");
+
+        // Transfer to Near
+        if let OmniAddress::Near(recipient) = &utxo_transfer_msg.recipient {
+            let fast_transfer = FastTransfer {
+                token_id: token_id.clone(),
+                recipient: utxo_transfer_msg.recipient.clone(),
+                amount,
+                fee: Fee {
+                    fee: utxo_transfer_msg.fee.clone(),
+                    native_fee: U128(0),
+                },
+                transfer_id: UnifiedTransferId::Utxo(utxo_transfer_msg.utxo_id),
+                msg: utxo_transfer_msg.msg.clone(),
+            };
+
+            let (recipient, msg) = match self.get_fast_transfer_status(&fast_transfer.id()) {
+                // If fast transfer exists, send full amount to the relayer
+                Some(status) => {
+                    require!(!status.finalised, "ERR_FAST_TRANSFER_ALREADY_FINALISED");
+                    self.remove_fast_transfer(&fast_transfer.id());
+                    (status.relayer.clone(), String::new())
+                }
+                // If fast transfer doesn't exist, send full amount (including fee) to the recipient
+                None => (
+                    recipient.clone(),
+                    utxo_transfer_msg.msg,
+                ),
+            };
+
+            PromiseOrPromiseIndexOrValue::Promise(
+                self.send_tokens(token_id, recipient, amount, &msg)
+                // TODO: refund?
+            )
+        } else {
+            env::panic_str("TODO transfer to other chain");
+        }
     }
 
     #[private]
@@ -923,7 +980,7 @@ impl Contract {
         if let Some(origin_transfer_id) = message.origin_transfer_id {
             let mut fast_transfer =
                 FastTransfer::from_transfer(message.clone(), self.get_token_id(&message.token));
-            fast_transfer.transfer_id = origin_transfer_id;
+            fast_transfer.transfer_id = UnifiedTransferId::General(origin_transfer_id);
 
             require!(
                 self.is_fast_transfer_finalised(&fast_transfer.id()),
@@ -1400,6 +1457,15 @@ impl Contract {
     #[must_use]
     pub fn get_utxo_chain_connectors(&self) -> Vec<(ChainKind, UTXOChainConfig)> {
         self.utxo_chain_connectors.iter().collect()
+    }
+
+    pub fn get_utxo_chain_by_token(&self, token: &AccountId) -> Option<ChainKind> {
+        for (chain, config) in self.utxo_chain_connectors.iter() {
+            if &config.token_id == token {
+                return Some(chain);
+            }
+        }
+        None
     }
 }
 
