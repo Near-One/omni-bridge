@@ -489,7 +489,6 @@ pub struct UtxoTransferMsg {
     pub utxo_id: String,
     pub token: OmniAddress,
     pub recipient: OmniAddress,
-    pub amount: U128,
     pub fee: U128,
     pub msg: String,
 }
@@ -540,7 +539,7 @@ pub struct TransferMessage {
     pub sender: OmniAddress,
     pub msg: String,
     pub destination_nonce: Nonce,
-    pub origin_transfer_id: Option<TransferId>,
+    pub origin_transfer_id: Option<UnifiedTransferId>,
 }
 
 impl TransferMessage {
@@ -698,11 +697,15 @@ impl FastTransfer {
         }
     }
 
-    pub fn from_utxo_transfer(transfer: UtxoTransferMsg, token_id: AccountId) -> Self {
+    pub fn from_utxo_transfer(
+        transfer: UtxoTransferMsg,
+        token_id: AccountId,
+        amount: U128,
+    ) -> Self {
         Self {
             transfer_id: UnifiedTransferId::Utxo(transfer.utxo_id),
             token_id,
-            amount: transfer.amount,
+            amount,
             fee: Fee {
                 fee: transfer.fee,
                 native_fee: U128(0),

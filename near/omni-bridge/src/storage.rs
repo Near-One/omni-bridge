@@ -1,7 +1,7 @@
 use near_contract_standards::storage_management::{StorageBalance, StorageBalanceBounds};
 use near_sdk::{assert_one_yocto, borsh, near};
 use near_sdk::{env, near_bindgen, AccountId, NearToken};
-use omni_types::{FastTransferStatus, TransferId, TransferMessageV0};
+use omni_types::{FastTransferStatus, TransferId, TransferMessageV0, UnifiedTransferId};
 
 use crate::{
     require, ChainKind, Contract, ContractExt, Fee, OmniAddress, Promise, SdkExpect,
@@ -210,10 +210,7 @@ impl Contract {
             sender: OmniAddress::Near(max_account_id.clone()),
             msg: msg.unwrap_or_default(),
             destination_nonce: 0,
-            origin_transfer_id: Some(TransferId {
-                origin_chain: ChainKind::Near,
-                origin_nonce: 0,
-            }),
+            origin_transfer_id: Some(UnifiedTransferId::Utxo("a".repeat(64))),
         })
     }
 

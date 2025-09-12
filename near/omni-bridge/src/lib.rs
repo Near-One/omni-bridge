@@ -859,13 +859,7 @@ impl Contract {
             sender: OmniAddress::Near(relayer_id),
             msg: fast_transfer.msg.clone(),
             destination_nonce,
-            origin_transfer_id: if let UnifiedTransferId::General(transfer_id) =
-                fast_transfer.transfer_id
-            {
-                Some(transfer_id)
-            } else {
-                None
-            },
+            origin_transfer_id: Some(fast_transfer.transfer_id.clone()),
         };
         let new_transfer_id = transfer_message.get_transfer_id();
 
@@ -904,11 +898,18 @@ impl Contract {
         );
 
         let fast_transfer =
-            FastTransfer::from_utxo_transfer(utxo_transfer_msg.clone(), token_id.clone());
+            FastTransfer::from_utxo_transfer(utxo_transfer_msg.clone(), token_id.clone(), amount);
 
         if let Some(status) = self.get_fast_transfer_status(&fast_transfer.id()) {
             require!(!status.finalised, "ERR_FAST_TRANSFER_ALREADY_FINALISED");
-            self.remove_fast_transfer(&fast_transfer.id());
+
+            let amount = if utxo_transfer_msg.recipient.get_chain() == ChainKind::Near {
+                self.remove_fast_transfer(&fast_transfer.id());
+                amount
+            } else {
+                // With transfers to other chain the fee will be claimed after finalization on the destination chain
+                U128(amount.0 - fast_transfer.fee.fee.0)
+            };
 
             return self
                 .send_tokens(token_id, status.relayer, amount, &String::new())
@@ -1001,10 +1002,10 @@ impl Contract {
         let message = self.remove_transfer_message(fin_transfer.transfer_id);
 
         // Need to make sure fast transfer is finalised because it means transfer parameters are correct. Otherwise, fee can be set as anything.
-        if let Some(origin_transfer_id) = message.origin_transfer_id {
+        if let Some(origin_transfer_id) = message.origin_transfer_id.clone() {
             let mut fast_transfer =
                 FastTransfer::from_transfer(message.clone(), self.get_token_id(&message.token));
-            fast_transfer.transfer_id = UnifiedTransferId::General(origin_transfer_id);
+            fast_transfer.transfer_id = origin_transfer_id;
 
             require!(
                 self.is_fast_transfer_finalised(&fast_transfer.id()),
@@ -2061,9 +2062,14 @@ impl Contract {
         token_fee: u128,
     ) -> PromiseOrValue<()> {
         if message.fee.native_fee.0 != 0 {
-            let origin_chain = message.origin_transfer_id.map_or_else(
+            let origin_chain = message.origin_transfer_id.as_ref().map_or_else(
                 || message.get_origin_chain(),
-                |origin_transfer_id| origin_transfer_id.origin_chain,
+                |origin_transfer_id| match origin_transfer_id {
+                    UnifiedTransferId::General(transfer_id) => transfer_id.origin_chain,
+                    UnifiedTransferId::Utxo(_) => {
+                        env::panic_str("Can't have native fee for transfers from UTXO chains")
+                    }
+                },
             );
             if origin_chain == ChainKind::Near {
                 Promise::new(fee_recipient.clone())
