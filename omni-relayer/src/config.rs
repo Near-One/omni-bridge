@@ -267,6 +267,7 @@ pub struct Solana {
 pub struct Utxo {
     #[serde(deserialize_with = "replace_rpc_api_key")]
     pub rpc_http_url: String,
+    pub light_client: AccountId,
     pub signing_enabled: bool,
     pub verifying_withdraw_enabled: bool,
 }

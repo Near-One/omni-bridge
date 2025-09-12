@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 
 use anyhow::{Context, Result};
-use eth_light_client::{EthLightClient, EthLightClientBuilder};
 use evm_bridge_client::{EvmBridgeClient, EvmBridgeClientBuilder};
+use light_client::{LightClient, LightClientBuilder};
 use near_bridge_client::{NearBridgeClientBuilder, UTXOChainAccounts};
 use near_crypto::InMemorySigner;
 use omni_connector::{OmniConnector, OmniConnectorBuilder};
@@ -163,18 +163,26 @@ fn build_wormhole_bridge_client(config: &config::Config) -> Result<WormholeBridg
         .context("Failed to build WormholeBridgeClient")
 }
 
-fn build_eth_light_client(config: &config::Config) -> Result<Option<EthLightClient>> {
-    config
-        .eth
+fn build_light_client(config: &config::Config, chain: ChainKind) -> Result<Option<LightClient>> {
+    let light_client = match chain {
+        ChainKind::Eth => config.eth.as_ref().and_then(|eth| eth.light_client.clone()),
+        ChainKind::Btc => config.btc.as_ref().map(|btc| btc.light_client.clone()),
+        ChainKind::Zcash => config
+            .zcash
+            .as_ref()
+            .map(|zcash| zcash.light_client.clone()),
+        ChainKind::Near | ChainKind::Base | ChainKind::Arb | ChainKind::Bnb | ChainKind::Sol => {
+            anyhow::bail!("Chain {chain:?} is not supported for building light client")
+        }
+    };
+
+    light_client
         .as_ref()
-        .map(|eth| {
-            EthLightClientBuilder::default()
+        .map(|light_client| {
+            LightClientBuilder::default()
                 .endpoint(Some(config.near.rpc_url.clone()))
-                .eth_light_client_id(
-                    eth.light_client
-                        .as_ref()
-                        .map(std::string::ToString::to_string),
-                )
+                .chain(Some(chain))
+                .light_client_id(Some(light_client.clone()))
                 .build()
                 .context("Failed to build EthLightClient")
         })
@@ -196,7 +204,9 @@ pub fn build_omni_connector(
     let btc_bridge_client = build_utxo_bridge_client(config, ChainKind::Btc)?;
     let zcash_bridge_client = build_utxo_bridge_client(config, ChainKind::Zcash)?;
     let wormhole_bridge_client = build_wormhole_bridge_client(config)?;
-    let eth_light_client = build_eth_light_client(config)?;
+    let eth_light_client = build_light_client(config, ChainKind::Eth)?;
+    let btc_light_client = build_light_client(config, ChainKind::Btc)?;
+    let zcash_light_client = build_light_client(config, ChainKind::Zcash)?;
 
     let omni_connector = OmniConnectorBuilder::default()
         .network(Some(config.near.network.into()))
@@ -210,6 +220,8 @@ pub fn build_omni_connector(
         .btc_bridge_client(Some(btc_bridge_client))
         .zcash_bridge_client(Some(zcash_bridge_client))
         .eth_light_client(eth_light_client)
+        .btc_light_client(btc_light_client)
+        .zcash_light_client(zcash_light_client)
         .build()
         .context("Failed to build OmniConnector")?;
 

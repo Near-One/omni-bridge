@@ -116,7 +116,7 @@ pub async fn process_utxo_to_near_init_transfer_event(
     match omni_connector
         .near_fin_transfer_btc(
             chain,
-            btc_tx_hash,
+            btc_tx_hash.clone(),
             usize::try_from(vout)?,
             BtcDepositArgs::DepositMsg {
                 msg: DepositMsg {
@@ -163,6 +163,14 @@ pub async fn process_utxo_to_near_init_transfer_event(
                     }
                 };
             }
+
+            if let BridgeSdkError::LightClientNotSynced(block) = err {
+                warn!(
+                    "Light client is not synced yet for transfer ({btc_tx_hash}), block: {block}",
+                );
+                return Ok(EventAction::Retry);
+            }
+
             anyhow::bail!("Failed to finalize BTC transaction: {err:?}");
         }
     }
@@ -244,7 +252,7 @@ pub async fn process_confirmed_tx_hash(
     match omni_connector
         .near_btc_verify_withdraw(
             confirmed_tx_hash.chain,
-            confirmed_tx_hash.btc_tx_hash,
+            confirmed_tx_hash.btc_tx_hash.clone(),
             TransactionOptions {
                 nonce,
                 wait_until: near_primitives::views::TxExecutionStatus::Included,
@@ -271,6 +279,14 @@ pub async fn process_confirmed_tx_hash(
                         anyhow::bail!("Failed to verify withdraw: {near_rpc_error:?}");
                     }
                 };
+            }
+
+            if let BridgeSdkError::LightClientNotSynced(block) = err {
+                warn!(
+                    "Light client is not synced yet for {}, block: {block}",
+                    confirmed_tx_hash.btc_tx_hash
+                );
+                return Ok(EventAction::Retry);
             }
 
             anyhow::bail!("Failed to verify withdraw: {err:?}");
