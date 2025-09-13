@@ -128,6 +128,7 @@ finalize_transfer_sol_discriminator = [104, 27, 121, 69, 3, 70, 217, 66]
 [btc]
 rpc_http_url = "https://x-api-key:TATUM_API_KEY@bitcoin-mainnet.gateway.tatum.io"
 light_client = "btc-client.bridge.near"
+expected_finalization_time = 1000
 # If this is set to true, then omni relayer will call `sign_btc_transaction`
 signing_enabled = false
 # If this is set to true, then omni relayer will call `verify_withdraw`
@@ -136,6 +137,7 @@ verifying_withdraw_enabled = false
 [zcash]
 rpc_http_url = "https://x-api-key:TATUM_API_KEY@zcash-mainnet.gateway.tatum.io"
 light_client = "zcash-client.bridge.near"
+expected_finalization_time = 3000
 # If this is set to true, then omni relayer will call `sign_btc_transaction`
 signing_enabled = true
 # If this is set to true, then omni relayer will call `verify_withdraw`

@@ -175,7 +175,11 @@ pub async fn process_transfer_event(
 }
 
 pub async fn process_transfer_to_utxo_event(
+    config: &config::Config,
+    redis_connection_manager: &mut redis::aio::ConnectionManager,
+    key: String,
     omni_connector: Arc<OmniConnector>,
+    signer: AccountId,
     transfer: Transfer,
     near_nonce: Arc<utils::nonce::NonceManager>,
 ) -> Result<EventAction> {
@@ -222,6 +226,24 @@ pub async fn process_transfer_to_utxo_event(
                 "Submitted {:?} transfer: {tx_hash:?}",
                 transfer_message.recipient.get_chain()
             );
+
+            utils::redis::add_event(
+                config,
+                redis_connection_manager,
+                utils::redis::EVENTS,
+                tx_hash.to_string(),
+                RetryableEvent::new(UnverifiedTrasfer {
+                    tx_hash,
+                    signer,
+                    specific_errors: Some(vec![
+                        "not exist".to_string(),
+                        "Previous btc tx has not been signed".to_string(),
+                    ]),
+                    original_key: key,
+                    original_event: transfer,
+                }),
+            )
+            .await;
 
             Ok(EventAction::Remove)
         }
