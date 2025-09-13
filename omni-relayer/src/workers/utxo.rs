@@ -1,16 +1,16 @@
-use std::sync::Arc;
+use std::{str::FromStr, sync::Arc};
 
 use anyhow::Result;
 use bridge_connector_common::result::BridgeSdkError;
-use tracing::{info, warn};
-
 use near_bridge_client::{
     TransactionOptions,
-    btc_connector::{DepositMsg, PostAction},
+    btc::{DepositMsg, PostAction},
 };
 use near_jsonrpc_client::errors::JsonRpcError;
-use near_primitives::types::AccountId;
+use near_primitives::{hash::CryptoHash, types::AccountId};
 use near_rpc_client::NearRpcError;
+use omni_types::ChainKind;
+use tracing::{info, warn};
 
 use omni_connector::{BtcDepositArgs, OmniConnector};
 
@@ -19,27 +19,32 @@ use crate::utils;
 use super::{EventAction, Transfer};
 
 #[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
-pub struct SignBtcTransaction {
+pub struct SignUtxoTransaction {
+    pub chain: ChainKind,
     pub near_tx_hash: String,
     pub relayer: AccountId,
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
 pub struct ConfirmedTxHash {
+    pub chain: ChainKind,
     pub btc_tx_hash: String,
+    pub creation_timestamp: i64,
+    pub expected_finalization_time: i64,
 }
 
-pub async fn process_near_to_btc_init_transfer_event(
+pub async fn process_near_to_utxo_init_transfer_event(
     omni_connector: Arc<OmniConnector>,
     transfer: Transfer,
     near_nonce: Arc<utils::nonce::NonceManager>,
 ) -> Result<EventAction> {
-    let Transfer::NearToBtc {
+    let Transfer::NearToUtxo {
+        chain,
         btc_pending_id,
         sign_index,
     } = transfer
     else {
-        anyhow::bail!("Expected NearToBtcTransfer, got: {:?}", transfer);
+        anyhow::bail!("Expected NearToUtxoTransfer, got: {:?}", transfer);
     };
 
     let nonce = match near_nonce.reserve_nonce().await {
@@ -52,6 +57,7 @@ pub async fn process_near_to_btc_init_transfer_event(
 
     match omni_connector
         .near_sign_btc_transaction(
+            chain,
             btc_pending_id,
             sign_index,
             TransactionOptions {
@@ -63,7 +69,7 @@ pub async fn process_near_to_btc_init_transfer_event(
         .await
     {
         Ok(tx_hash) => {
-            info!("Signed BTC transaction: {tx_hash:?}");
+            info!("Signed UTXO transaction: {tx_hash:?}");
             Ok(EventAction::Remove)
         }
         Err(err) => {
@@ -86,19 +92,28 @@ pub async fn process_near_to_btc_init_transfer_event(
     }
 }
 
-pub async fn process_btc_to_near_init_transfer_event(
+pub async fn process_utxo_to_near_init_transfer_event(
     omni_connector: Arc<OmniConnector>,
     transfer: Transfer,
     near_nonce: Arc<utils::nonce::NonceManager>,
 ) -> Result<EventAction> {
-    let Transfer::BtcToNear {
+    let Transfer::UtxoToNear {
+        chain,
         btc_tx_hash,
         vout,
         deposit_msg,
+        creation_timestamp,
+        expected_finalization_time,
     } = transfer
     else {
-        anyhow::bail!("Expected BtcToNearTransfer, got: {:?}", transfer);
+        anyhow::bail!("Expected UtxoToNearTransfer, got: {:?}", transfer);
     };
+
+    let current_timestamp = chrono::Utc::now().timestamp();
+
+    if current_timestamp < creation_timestamp + expected_finalization_time {
+        return Ok(EventAction::Retry);
+    }
 
     let nonce = match near_nonce.reserve_nonce().await {
         Ok(nonce) => Some(nonce),
@@ -110,7 +125,8 @@ pub async fn process_btc_to_near_init_transfer_event(
 
     match omni_connector
         .near_fin_transfer_btc(
-            btc_tx_hash,
+            chain,
+            btc_tx_hash.clone(),
             usize::try_from(vout)?,
             BtcDepositArgs::DepositMsg {
                 msg: DepositMsg {
@@ -139,7 +155,7 @@ pub async fn process_btc_to_near_init_transfer_event(
         .await
     {
         Ok(tx_hash) => {
-            info!("Finalized BTC transaction: {tx_hash:?}");
+            info!("Finalized UTXO transaction: {tx_hash:?}");
             Ok(EventAction::Remove)
         }
         Err(err) => {
@@ -156,7 +172,13 @@ pub async fn process_btc_to_near_init_transfer_event(
                         anyhow::bail!("Failed to finalize BTC transaction: {near_rpc_error:?}");
                     }
                 };
+            } else if let BridgeSdkError::LightClientNotSynced(block) = err {
+                warn!(
+                    "Light client is not synced yet for transfer ({btc_tx_hash}), block: {block}",
+                );
+                return Ok(EventAction::Retry);
             }
+
             anyhow::bail!("Failed to finalize BTC transaction: {err:?}");
         }
     }
@@ -164,19 +186,30 @@ pub async fn process_btc_to_near_init_transfer_event(
 
 pub async fn process_sign_transaction_event(
     omni_connector: Arc<OmniConnector>,
-    sign_btc_transaction_event: SignBtcTransaction,
+    sign_utxo_transaction_event: SignUtxoTransaction,
 ) -> Result<EventAction> {
     info!("Trying to process SignBtcTransaction log on NEAR");
 
+    let Ok(near_tx_hash) = CryptoHash::from_str(&sign_utxo_transaction_event.near_tx_hash) else {
+        anyhow::bail!(
+            "Invalid near tx hash: {}",
+            sign_utxo_transaction_event.near_tx_hash
+        );
+    };
+
     match omni_connector
         .btc_fin_transfer(
-            sign_btc_transaction_event.near_tx_hash.clone(),
-            Some(sign_btc_transaction_event.relayer),
+            sign_utxo_transaction_event.chain,
+            near_tx_hash,
+            Some(sign_utxo_transaction_event.relayer),
         )
         .await
     {
         Ok(tx_hash) => {
-            info!("Finalized BTC transaction: {tx_hash}");
+            info!(
+                "Finalized {:?} transaction: {tx_hash}",
+                sign_utxo_transaction_event.chain
+            );
             Ok(EventAction::Remove)
         }
         Err(err) => {
@@ -187,22 +220,25 @@ pub async fn process_sign_transaction_event(
                     | NearRpcError::RpcBroadcastTxAsyncError(_)
                     | NearRpcError::RpcTransactionError(JsonRpcError::TransportError(_)) => {
                         warn!(
-                            "Failed to finalize btc transaction ({}), retrying: {near_rpc_error:?}",
-                            sign_btc_transaction_event.near_tx_hash
+                            "Failed to finalize {:?} transaction ({}), retrying: {near_rpc_error:?}",
+                            sign_utxo_transaction_event.chain,
+                            sign_utxo_transaction_event.near_tx_hash
                         );
                         return Ok(EventAction::Retry);
                     }
                     _ => {
                         anyhow::bail!(
-                            "Failed to finalize btc transaction ({}): {near_rpc_error:?}",
-                            sign_btc_transaction_event.near_tx_hash
+                            "Failed to finalize {:?} transaction ({}): {near_rpc_error:?}",
+                            sign_utxo_transaction_event.chain,
+                            sign_utxo_transaction_event.near_tx_hash
                         );
                     }
                 };
             }
             anyhow::bail!(
-                "Failed to finalize btc transaction ({}): {err:?}",
-                sign_btc_transaction_event.near_tx_hash
+                "Failed to finalize {:?} transaction ({}): {err:?}",
+                sign_utxo_transaction_event.chain,
+                sign_utxo_transaction_event.near_tx_hash
             );
         }
     }
@@ -210,9 +246,17 @@ pub async fn process_sign_transaction_event(
 
 pub async fn process_confirmed_tx_hash(
     omni_connector: Arc<OmniConnector>,
-    btc_tx_hash: String,
+    confirmed_tx_hash: ConfirmedTxHash,
     near_nonce: Arc<utils::nonce::NonceManager>,
 ) -> Result<EventAction> {
+    let current_timestamp = chrono::Utc::now().timestamp();
+
+    if current_timestamp
+        < confirmed_tx_hash.creation_timestamp + confirmed_tx_hash.expected_finalization_time
+    {
+        return Ok(EventAction::Retry);
+    }
+
     let nonce = match near_nonce.reserve_nonce().await {
         Ok(nonce) => Some(nonce),
         Err(err) => {
@@ -223,7 +267,8 @@ pub async fn process_confirmed_tx_hash(
 
     match omni_connector
         .near_btc_verify_withdraw(
-            btc_tx_hash,
+            confirmed_tx_hash.chain,
+            confirmed_tx_hash.btc_tx_hash.clone(),
             TransactionOptions {
                 nonce,
                 wait_until: near_primitives::views::TxExecutionStatus::Included,
@@ -250,6 +295,12 @@ pub async fn process_confirmed_tx_hash(
                         anyhow::bail!("Failed to verify withdraw: {near_rpc_error:?}");
                     }
                 };
+            } else if let BridgeSdkError::LightClientNotSynced(block) = err {
+                warn!(
+                    "Light client is not synced yet for {}, block: {block}",
+                    confirmed_tx_hash.btc_tx_hash
+                );
+                return Ok(EventAction::Retry);
             }
 
             anyhow::bail!("Failed to verify withdraw: {err:?}");

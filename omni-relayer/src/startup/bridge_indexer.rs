@@ -3,8 +3,8 @@ use std::str::FromStr;
 use alloy::primitives::Address;
 use anyhow::{Context, Result};
 use bridge_indexer_types::documents_types::{
-    BtcConnectorEvent, BtcConnectorEventDetails, OmniEvent, OmniEventData, OmniMetaEvent,
-    OmniMetaEventDetails, OmniTransactionEvent, OmniTransactionOrigin, OmniTransferMessage,
+    OmniEvent, OmniEventData, OmniMetaEvent, OmniMetaEventDetails, OmniTransactionEvent,
+    OmniTransactionOrigin, OmniTransferMessage, UtxoConnectorEvent, UtxoConnectorEventDetails,
 };
 use ethereum_types::H256;
 use mongodb::{Client, Collection, change_stream::event::ResumeToken, options::ClientOptions};
@@ -14,7 +14,8 @@ use tokio_stream::StreamExt;
 use tracing::{info, warn};
 
 use crate::{
-    config, utils,
+    config::{self},
+    utils,
     workers::{self, RetryableEvent},
 };
 
@@ -29,8 +30,29 @@ fn get_evm_config(config: &config::Config, chain_kind: ChainKind) -> Result<&con
             .context("EVM config for Base is not set"),
         ChainKind::Arb => config.arb.as_ref().context("EVM config for Arb is not set"),
         ChainKind::Bnb => config.bnb.as_ref().context("EVM config for Bnb is not set"),
-        ChainKind::Near | ChainKind::Sol => {
+        ChainKind::Near | ChainKind::Sol | ChainKind::Btc | ChainKind::Zcash => {
             anyhow::bail!("Unsupported chain kind for EVM: {:?}", chain_kind)
+        }
+    }
+}
+
+fn get_utxo_config(config: &config::Config, chain_kind: ChainKind) -> Result<&config::Utxo> {
+    match chain_kind {
+        ChainKind::Btc => config
+            .btc
+            .as_ref()
+            .context("UTXO config for Btc is not set"),
+        ChainKind::Zcash => config
+            .zcash
+            .as_ref()
+            .context("UTXO config for Zcash is not set"),
+        ChainKind::Eth
+        | ChainKind::Base
+        | ChainKind::Arb
+        | ChainKind::Bnb
+        | ChainKind::Near
+        | ChainKind::Sol => {
+            anyhow::bail!("Unsupported chain kind for UTXO: {:?}", chain_kind)
         }
     }
 }
@@ -386,30 +408,38 @@ async fn handle_btc_event(
     config: &config::Config,
     redis_connection_manager: &mut redis::aio::ConnectionManager,
     origin_transaction_id: String,
-    event: BtcConnectorEvent,
+    origin: OmniTransactionOrigin,
+    event: UtxoConnectorEvent,
 ) -> Result<()> {
     match event.details {
-        BtcConnectorEventDetails::SignTransaction { relayer, .. } => {
-            info!("Received SignBtcTransaction: {origin_transaction_id}");
+        UtxoConnectorEventDetails::SignTransaction { relayer, .. } => {
+            info!(
+                "Received SignBtcTransaction on {:?}: {origin_transaction_id}",
+                event.chain
+            );
             utils::redis::add_event(
                 config,
                 redis_connection_manager,
                 utils::redis::EVENTS,
                 origin_transaction_id.clone(),
-                RetryableEvent::new(workers::btc::SignBtcTransaction {
+                RetryableEvent::new(workers::utxo::SignUtxoTransaction {
+                    chain: event.chain,
                     near_tx_hash: origin_transaction_id,
                     relayer,
                 }),
             )
             .await;
         }
-        BtcConnectorEventDetails::TransferNearToBtc {
+        UtxoConnectorEventDetails::TransferNearToUtxo {
             btc_pending_id,
             utxo_count,
             ..
         } => {
-            if config.is_signing_btc_transaction_enabled() {
-                info!("Received NearToBtcInitTransfer: {origin_transaction_id}");
+            if config.is_signing_utxo_transaction_enabled(event.chain) {
+                info!(
+                    "Received TransferNearToUtxo on {:?}: {origin_transaction_id}",
+                    event.chain
+                );
                 for sign_index in 0..utxo_count {
                     info!(
                         "Received sign index {sign_index} for BTC pending ID: {}",
@@ -420,7 +450,8 @@ async fn handle_btc_event(
                         redis_connection_manager,
                         utils::redis::EVENTS,
                         origin_transaction_id.clone(),
-                        RetryableEvent::new(workers::Transfer::NearToBtc {
+                        RetryableEvent::new(workers::Transfer::NearToUtxo {
+                            chain: event.chain,
                             btc_pending_id: btc_pending_id.clone(),
                             sign_index,
                         }),
@@ -429,41 +460,85 @@ async fn handle_btc_event(
                 }
             }
         }
-        BtcConnectorEventDetails::TransferBtcToNear {
-            btc_tx_hash,
+        UtxoConnectorEventDetails::TransferUtxoToNear {
+            ref btc_tx_hash,
             vout,
-            deposit_msg,
+            ref deposit_msg,
         } => {
-            info!("Received BtcToNearInitTransfer: {btc_tx_hash}");
+            let OmniTransactionOrigin::UtxoTransaction { block_time, .. } = origin else {
+                anyhow::bail!(
+                    "Expected UtxoTransaction for UtxoConnector event: {:?}",
+                    event
+                );
+            };
+
+            let Ok(creation_timestamp) = i64::try_from(block_time) else {
+                anyhow::bail!("Failed to parse block_timestamp as i64: {}", block_time);
+            };
+
+            let expected_finalization_time = get_utxo_config(config, event.chain)
+                .map(|evm_config| evm_config.expected_finalization_time)?;
+
+            info!(
+                "Received TransferUtxoToNear on {:?}: {btc_tx_hash}",
+                event.chain
+            );
+
             utils::redis::add_event(
                 config,
                 redis_connection_manager,
                 utils::redis::EVENTS,
                 origin_transaction_id,
-                RetryableEvent::new(workers::Transfer::BtcToNear {
-                    btc_tx_hash,
+                RetryableEvent::new(workers::Transfer::UtxoToNear {
+                    chain: event.chain,
+                    btc_tx_hash: btc_tx_hash.clone(),
                     vout,
-                    deposit_msg,
+                    deposit_msg: deposit_msg.clone(),
+                    creation_timestamp,
+                    expected_finalization_time,
                 }),
             )
             .await;
         }
-        BtcConnectorEventDetails::ConfirmedTxHash { btc_tx_hash } => {
-            if config.is_verifying_withdraw_enabled() {
-                info!("Received ConfirmedTxHash on Btc: {btc_tx_hash}");
+        UtxoConnectorEventDetails::ConfirmedTxHash { ref btc_tx_hash } => {
+            if config.is_verifying_utxo_withdraw_enabled(event.chain) {
+                let OmniTransactionOrigin::UtxoTransaction { block_time, .. } = origin else {
+                    anyhow::bail!(
+                        "Expected UtxoTransaction for UtxoConnector event: {:?}",
+                        event
+                    );
+                };
+
+                let Ok(creation_timestamp) = i64::try_from(block_time) else {
+                    anyhow::bail!("Failed to parse block_timestamp as i64: {}", block_time);
+                };
+
+                let expected_finalization_time = get_utxo_config(config, event.chain)
+                    .map(|evm_config| evm_config.expected_finalization_time)?;
+
+                info!(
+                    "Received ConfirmedTxHash on {:?}: {btc_tx_hash}",
+                    event.chain,
+                );
+
                 utils::redis::add_event(
                     config,
                     redis_connection_manager,
                     utils::redis::EVENTS,
                     origin_transaction_id,
-                    RetryableEvent::new(workers::btc::ConfirmedTxHash { btc_tx_hash }),
+                    RetryableEvent::new(workers::utxo::ConfirmedTxHash {
+                        chain: event.chain,
+                        btc_tx_hash: btc_tx_hash.clone(),
+                        creation_timestamp,
+                        expected_finalization_time,
+                    }),
                 )
                 .await;
             }
         }
-        BtcConnectorEventDetails::VerifyDeposit { .. }
-        | BtcConnectorEventDetails::VerifyWithdraw { .. }
-        | BtcConnectorEventDetails::LogDepositAddress(_) => {}
+        UtxoConnectorEventDetails::VerifyDeposit { .. }
+        | UtxoConnectorEventDetails::VerifyWithdraw { .. }
+        | UtxoConnectorEventDetails::LogDepositAddress(_) => {}
     }
 
     Ok(())
@@ -542,7 +617,7 @@ async fn watch_omni_events_collection(
                                 }
                             });
                         }
-                        OmniEventData::BtcConnector(btc_event) => {
+                        OmniEventData::UtxoConnector(btc_event) => {
                             tokio::spawn({
                                 let mut redis_connection_manager = redis_connection_manager.clone();
                                 let config = config.clone();
@@ -552,11 +627,12 @@ async fn watch_omni_events_collection(
                                         &config,
                                         &mut redis_connection_manager,
                                         event.transaction_id,
+                                        event.origin,
                                         btc_event,
                                     )
                                     .await
                                     {
-                                        warn!("Failed to handle meta event: {err:?}");
+                                        warn!("Failed to handle btc event: {err:?}");
                                     }
                                 }
                             });
