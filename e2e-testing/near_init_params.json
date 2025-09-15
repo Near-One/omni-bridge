@@ -156,8 +156,7 @@
         "rbf_num_limit": 99,
         "max_btc_tx_pending_sec": 86400,
         "extra_msg_confirmations_delta": 0,
-        "unhealthy_utxo_amount": 0,
-        "expiry_height_gap": 1000
+        "unhealthy_utxo_amount": 0
       }
     }
   }

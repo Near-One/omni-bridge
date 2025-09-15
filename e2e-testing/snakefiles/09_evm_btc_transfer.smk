@@ -90,6 +90,7 @@ rule near_fin_transfer:
         {params.progress_wait_cmd} \
         bridge-cli testnet near-fin-transfer \
             --chain {params.evm_chain_str} \
+            --destination-chain btc \
             --tx-hash {params.init_transfer_tx_hash} \
             --near-signer {params.relayer_account_id} \
             --near-private-key {params.relayer_private_key} \
@@ -104,21 +105,23 @@ rule submit_transfer_to_btc_connector:
        step_2 = rules.near_fin_transfer.output,
        btc_connector_file = btc_connector_file,
        omni_bridge_file = omni_bridge_file,
-       user_account_file = user_account_file
-    output: call_dir / "03_sign_btc_transfer.json"
+       user_account_file = user_account_file,
+       relayer_account = near_relayer_account_file,
+    output: call_dir / "03_sign_btc_transfer"
     params:
         btc_connector = lambda wc, input: get_json_field(input.btc_connector_file, "contract_id"),
         user_account_id = lambda wc, input: get_json_field(input.user_account_file, "account_id"),
         user_private_key = lambda wc, input: get_json_field(input.user_account_file, "private_key"),
         bridge_sdk_config_file = const.common_bridge_sdk_config_file,
+        relayer_account_id = lambda wc, input: get_json_field(input.relayer_account, "account_id"),
         omni_bridge_account = lambda wc, input: get_json_field(input.omni_bridge_file, "contract_id"),
         near_tx_hash = lambda wc, input: get_json_field(input.step_2, "tx_hash"),
 
     shell: """
-    bridge-cli testnet omni-bridge-sign-btc-transfer \
-        --chain bitcoin-testnet \
+    bridge-cli testnet near-sign-btc-transfer \
+        --chain btc \
         -n {params.near_tx_hash} \
-        -s {params.user_account_id} \
+        -s {params.omni_bridge_account} \
         --near-token-locker-id {params.omni_bridge_account} \
         --btc-connector {params.btc_connector} \
         --near-signer {params.user_account_id} \
@@ -135,7 +138,7 @@ rule sign_btc_connector_transfer:
         btc_connector_file = btc_connector_file,
         omni_bridge_file = omni_bridge_file,
         user_account_file = user_account_file
-    output: call_dir / "04_sign_btc_connector_transfer.json"
+    output: call_dir / "04_sign_btc_connector_transfer"
     params:
         btc_connector = lambda wc, input: get_json_field(input.btc_connector_file, "contract_id"),
         user_account_id = lambda wc, input: get_json_field(input.user_account_file, "account_id"),
@@ -144,7 +147,7 @@ rule sign_btc_connector_transfer:
         near_tx_hash = lambda wc, input: get_tx_hash(input.step_3)
     shell: """
     bridge-cli testnet near-sign-btc-transaction \
-        --chain bitcoin-testnet \
+        --chain btc \
         --near-tx-hash {params.near_tx_hash} \
         --user-account {params.user_account_id} \
         --btc-connector {params.btc_connector} \
@@ -159,14 +162,14 @@ rule send_btc_transfer:
     input:
         step_4 = rules.sign_btc_connector_transfer.output,
         user_account_file = user_account_file,
-    output: call_dir / "05_send_btc_transfer.json"
+    output: call_dir / "05_send_btc_transfer"
     params:
         near_tx_hash = lambda wc, input: get_tx_hash(input.step_4),
         user_account_id = lambda wc, input: get_json_field(input.user_account_file, "account_id"),
         bridge_sdk_config_file = const.common_bridge_sdk_config_file,
     shell: """
     bridge-cli testnet btc-fin-transfer \
-         --chain bitcoin-testnet \
+         --chain btc \
          --near-tx-hash {params.near_tx_hash} \
          --config {params.bridge_sdk_config_file} \
          > {output} \
@@ -179,7 +182,7 @@ rule verify_withdraw:
         btc_connector_file = btc_connector_file,
         nbtc_file = nbtc_file,
         user_account_file = user_account_file
-    output: call_dir / "07_verify_withdraw.json"
+    output: call_dir / "06_verify_withdraw.json"
     params:
         btc_connector = lambda wc, input: get_json_field(input.btc_connector_file, "contract_id"),
         user_account_id = lambda wc, input: get_json_field(input.user_account_file, "account_id"),
@@ -189,7 +192,7 @@ rule verify_withdraw:
         extract_tx = lambda wc, output: extract_tx_hash("bridge", output),
     shell: """
         bridge-cli testnet btc-verify-withdraw \
-        --chain btc-testnet \
+        --chain btc \
         -b {params.btc_tx_hash} \
         --btc-connector {params.btc_connector} \
         --near-signer {params.user_account_id} \
