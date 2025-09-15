@@ -269,7 +269,15 @@ pub async fn process_transfer_to_utxo_event(
                         );
                     }
                 };
+            } else if let BridgeSdkError::InsufficientUTXOBalance = err {
+                warn!(
+                    "Insufficient UTXO balance for {:?} transfer ({}), retrying",
+                    transfer_message.recipient.get_chain(),
+                    transfer_message.origin_nonce
+                );
+                return Ok(EventAction::Retry);
             }
+
             anyhow::bail!(
                 "Failed to submit {:?} transfer ({}): {err:?}",
                 transfer_message.recipient.get_chain(),
