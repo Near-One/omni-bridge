@@ -29,8 +29,6 @@ pub struct SignUtxoTransaction {
 pub struct ConfirmedTxHash {
     pub chain: ChainKind,
     pub btc_tx_hash: String,
-    pub creation_timestamp: i64,
-    pub expected_finalization_time: i64,
 }
 
 pub async fn process_near_to_utxo_init_transfer_event(
@@ -102,18 +100,10 @@ pub async fn process_utxo_to_near_init_transfer_event(
         btc_tx_hash,
         vout,
         deposit_msg,
-        creation_timestamp,
-        expected_finalization_time,
     } = transfer
     else {
         anyhow::bail!("Expected UtxoToNearTransfer, got: {:?}", transfer);
     };
-
-    let current_timestamp = chrono::Utc::now().timestamp();
-
-    if current_timestamp < creation_timestamp + expected_finalization_time {
-        return Ok(EventAction::Retry);
-    }
 
     let nonce = match near_nonce.reserve_nonce().await {
         Ok(nonce) => Some(nonce),
@@ -176,7 +166,9 @@ pub async fn process_utxo_to_near_init_transfer_event(
                         );
                     }
                 };
-            } else if let BridgeSdkError::LightClientNotSynced(block) = err {
+            }
+
+            if let BridgeSdkError::LightClientNotSynced(block) = err {
                 warn!(
                     "{chain:?} light client is not synced yet for transfer ({btc_tx_hash}), block: {block}",
                 );
@@ -253,14 +245,6 @@ pub async fn process_confirmed_tx_hash(
     confirmed_tx_hash: ConfirmedTxHash,
     near_nonce: Arc<utils::nonce::NonceManager>,
 ) -> Result<EventAction> {
-    let current_timestamp = chrono::Utc::now().timestamp();
-
-    if current_timestamp
-        < confirmed_tx_hash.creation_timestamp + confirmed_tx_hash.expected_finalization_time
-    {
-        return Ok(EventAction::Retry);
-    }
-
     let nonce = match near_nonce.reserve_nonce().await {
         Ok(nonce) => Some(nonce),
         Err(err) => {
@@ -299,7 +283,9 @@ pub async fn process_confirmed_tx_hash(
                         anyhow::bail!("Failed to verify withdraw: {near_rpc_error:?}");
                     }
                 };
-            } else if let BridgeSdkError::LightClientNotSynced(block) = err {
+            }
+
+            if let BridgeSdkError::LightClientNotSynced(block) = err {
                 warn!(
                     "Light client is not synced yet for {}, block: {block}",
                     confirmed_tx_hash.btc_tx_hash
