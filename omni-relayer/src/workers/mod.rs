@@ -275,7 +275,11 @@ pub async fn process_events(
                         async move {
                             let process = if transfer_message.recipient.is_utxo_chain() {
                                 near::process_transfer_to_utxo_event(
+                                    &config,
+                                    &mut redis_connection_manager,
+                                    key.clone(),
                                     omni_connector,
+                                    signer,
                                     transfer,
                                     near_nonce,
                                 )
