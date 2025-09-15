@@ -69,7 +69,7 @@ pub async fn process_near_to_utxo_init_transfer_event(
         .await
     {
         Ok(tx_hash) => {
-            info!("Signed UTXO transaction: {tx_hash:?}");
+            info!("Signed {chain:?} transaction: {tx_hash:?}");
             Ok(EventAction::Remove)
         }
         Err(err) => {
@@ -79,15 +79,15 @@ pub async fn process_near_to_utxo_init_transfer_event(
                     | NearRpcError::FinalizationError
                     | NearRpcError::RpcBroadcastTxAsyncError(_)
                     | NearRpcError::RpcTransactionError(JsonRpcError::TransportError(_)) => {
-                        warn!("Failed to sign BTC transaction, retrying: {near_rpc_error:?}");
+                        warn!("Failed to sign {chain:?} transaction, retrying: {near_rpc_error:?}");
                         return Ok(EventAction::Retry);
                     }
                     _ => {
-                        anyhow::bail!("Failed to sign BTC transaction: {near_rpc_error:?}");
+                        anyhow::bail!("Failed to sign {chain:?} transaction: {near_rpc_error:?}");
                     }
                 };
             }
-            anyhow::bail!("Failed to sign BTC transaction: {err:?}");
+            anyhow::bail!("Failed to sign {chain:?} transaction: {err:?}");
         }
     }
 }
@@ -155,7 +155,7 @@ pub async fn process_utxo_to_near_init_transfer_event(
         .await
     {
         Ok(tx_hash) => {
-            info!("Finalized UTXO transaction: {tx_hash:?}");
+            info!("Finalized {chain:?} transaction: {tx_hash:?}");
             Ok(EventAction::Remove)
         }
         Err(err) => {
@@ -165,21 +165,25 @@ pub async fn process_utxo_to_near_init_transfer_event(
                     | NearRpcError::FinalizationError
                     | NearRpcError::RpcBroadcastTxAsyncError(_)
                     | NearRpcError::RpcTransactionError(JsonRpcError::TransportError(_)) => {
-                        warn!("Failed to finalize BTC transaction, retrying: {near_rpc_error:?}");
+                        warn!(
+                            "Failed to finalize {chain:?} transaction, retrying: {near_rpc_error:?}"
+                        );
                         return Ok(EventAction::Retry);
                     }
                     _ => {
-                        anyhow::bail!("Failed to finalize BTC transaction: {near_rpc_error:?}");
+                        anyhow::bail!(
+                            "Failed to finalize {chain:?} transaction: {near_rpc_error:?}"
+                        );
                     }
                 };
             } else if let BridgeSdkError::LightClientNotSynced(block) = err {
                 warn!(
-                    "Light client is not synced yet for transfer ({btc_tx_hash}), block: {block}",
+                    "{chain:?} light client is not synced yet for transfer ({btc_tx_hash}), block: {block}",
                 );
                 return Ok(EventAction::Retry);
             }
 
-            anyhow::bail!("Failed to finalize BTC transaction: {err:?}");
+            anyhow::bail!("Failed to finalize {chain:?} transaction: {err:?}");
         }
     }
 }
