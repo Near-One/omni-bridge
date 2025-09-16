@@ -49,7 +49,7 @@ rule get_btc_user_deposit_address:
     shell: """
     {params.mkdir} && \
          bridge-cli testnet get-bitcoin-address \
-         --chain bitcoin-testnet \
+         --chain btc \
          --btc-connector {params.btc_connector} \
          --amount 7300 \
          -r eth:{params.recipient_address} \
@@ -96,7 +96,7 @@ rule fin_btc_transfer_on_near:
         extract_tx = lambda wc, output: extract_tx_hash("bridge", output)
     shell: """
     bridge-cli testnet near-fin-transfer-btc \
-        --chain bitcoin-testnet \
+        --chain btc \
         -b {params.btc_tx_hash} \
         -v 0 \
         -r eth:{params.recipient_address} \

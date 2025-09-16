@@ -13,26 +13,27 @@ btc_connector_account_file = const.near_account_dir / f"btc_connector.json"
 nbtc_account_file = const.near_account_dir / f"nbtc.json"
 
 btc_connector_file = const.near_deploy_results_dir / f"btc_connector.json"
+nbtc_contract_file = const.near_deploy_results_dir / f"nbtc.json"
 omni_bridge_file = const.near_deploy_results_dir / f"{NC.OMNI_BRIDGE}.json"
 user_account_file = const.near_account_dir / f"{NTA.USER_ACCOUNT}.json"
 
-rule get_btc_connector_binary_file:
-    output: btc_connector_binary_file
-    params:
-        mkdir_cmd = get_mkdir_cmd(const.near_binary_dir)
-    shell: """
-    {params.mkdir_cmd} && \
-    wget https://github.com/Near-Bridge-Lab/resources/raw/refs/heads/master/contracts/satoshi_bridge_release.wasm -O {output}
-    """
+#rule get_btc_connector_binary_file:
+#    output: btc_connector_binary_file
+#    params:
+#        mkdir_cmd = get_mkdir_cmd(const.near_binary_dir)
+#    shell: """
+#    {params.mkdir_cmd} && \
+#    wget https://github.com/Near-Bridge-Lab/resources/raw/refs/heads/master/contracts/satoshi_bridge_release.wasm -O {output}
+#    """
 
-rule get_nbtc_binary_file:
-    output: nbtc_binary_file
-    params:
-        mkdir_cmd = get_mkdir_cmd(const.near_binary_dir)
-    shell: """
-    {params.mkdir_cmd} && \
-    wget https://github.com/Near-Bridge-Lab/resources/raw/refs/heads/master/contracts/nbtc_release.wasm -O {output}
-    """
+#rule get_nbtc_binary_file:
+#    output: nbtc_binary_file
+#    params:
+#        mkdir_cmd = get_mkdir_cmd(const.near_binary_dir)
+#    shell: """
+#    {params.mkdir_cmd} && \
+#    wget https://github.com/Near-Bridge-Lab/resources/raw/refs/heads/master/contracts/nbtc_release.wasm -O {output}
+#    """
 
 rule near_generate_nbtc_init_args:
     message: "Generating nbtc init args"
@@ -106,13 +107,13 @@ rule add_utxo_chain_connector:
         omni_bridge_file = omni_bridge_file,
         btc_connector_file = btc_connector_file,
         init_account_file = near_init_account_file,
-        nbtc_account_file = nbtc_account_file,
+        nbtc_contract_file = nbtc_contract_file,
     output: const.common_generated_dir / "add_utxo_chain_connector.json"
     params:
         scripts_dir = const.common_scripts_dir,
         omni_bridge_account = lambda wc, input: get_json_field(input.omni_bridge_file, "contract_id"),
         btc_connector_account = lambda wc, input: get_json_field(input.btc_connector_file, "contract_id"),
-        nbtc_account = lambda wc, input: get_json_field(input.nbtc_account_file, "account_id"),
+        nbtc_account = lambda wc, input: get_json_field(input.nbtc_contract_file, "contract_id"),
     shell: """
         {params.scripts_dir}/call-near-contract.sh -c {params.omni_bridge_account} \
             -m add_utxo_chain_connector \

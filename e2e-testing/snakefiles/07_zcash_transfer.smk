@@ -68,7 +68,7 @@ rule get_zcash_user_deposit_address:
     shell: """
     {params.mkdir} && \
          bridge-cli testnet get-bitcoin-address \
-         --chain zcash-testnet \
+         --chain zcash \
          --zcash-connector {params.zcash_connector} \
          -r {params.user_account_id} \
          --near-signer {params.user_account_id} \
@@ -104,7 +104,7 @@ rule fin_zcash_transfer_on_near:
         zcash_tx_hash = lambda wc, input: get_zcash_tx_hash(input.step_3),
     shell: """
     bridge-cli testnet  near-fin-transfer-btc \
-        --chain zcash-testnet \
+        --chain zcash \
         -b {params.zcash_tx_hash} \
         -v 0 \
         -r {params.user_account_id} \
@@ -135,7 +135,7 @@ rule init_zcash_transfer_to_zcash:
     set +a
     
     bridge-cli testnet  init-near-to-bitcoin-transfer\
-        --chain zcash-testnet \
+        --chain zcash \
         --target-btc-address $ZCASH_ACCOUNT_ID \
         --amount 3000 \
         --zcash-connector {params.zcash_connector} \
@@ -164,7 +164,7 @@ rule submit_transfer_to_btc_connector:
     bridge-cli testnet near-sign-btc-transaction \
         --near-tx-hash {params.near_tx_hash} \
         --user-account {params.user_account_id} \
-        --chain zcash-testnet \
+        --chain zcash \
         --zcash-connector {params.zcash_connector} \
         --near-signer {params.user_account_id} \
         --near-private-key {params.user_private_key} \
@@ -186,7 +186,7 @@ rule send_btc_transfer:
         bridge_sdk_config_file = const.common_bridge_sdk_config_file,
     shell: """
     bridge-cli testnet btc-fin-transfer \
-    --chain zcash-testnet \
+    --chain zcash \
     --zcash-connector {params.zcash_connector} \
     --near-tx-hash {params.near_tx_hash} \
     --relayer {params.user_account_id} \
@@ -211,7 +211,7 @@ rule verify_withdraw:
         extract_tx = lambda wc, output: extract_tx_hash("bridge", output),
     shell: """
         bridge-cli testnet btc-verify-withdraw \
-        --chain zcash-testnet \
+        --chain zcash \
         -b {params.zcash_tx_hash} \
         --zcash-connector {params.zcash_connector} \
         --near-signer {params.user_account_id} \
