@@ -27,4 +27,4 @@ export async function verifyTransactions(transactions: TransactionInfo[]): Promi
             await verifyEvmTransaction(tx.hash);
         }
     }
-} 
+}

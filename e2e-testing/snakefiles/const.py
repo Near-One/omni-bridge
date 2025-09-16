@@ -2,7 +2,6 @@ from enum import StrEnum
 from pathlib import Path
 from datetime import datetime
 
-
 # Common
 common_testing_root = Path(__file__).parent.parent
 common_generated_dir = common_testing_root / "generated"
@@ -36,6 +35,7 @@ class Chain(StrEnum):
     SOL = "Sol"
     BASE = "Base"
     ARB = "Arb"
+    BTC = "Btc"
 
     @classmethod
     def from_evm_network(cls, evm_network):
@@ -55,6 +55,13 @@ class NearContract(StrEnum):
     TOKEN_DEPLOYER = "token_deployer"
     WORMHOLE_OMNI_PROVER_PROXY = "wormhole_omni_prover_proxy"
     MOCK_TOKEN = "mock_token"
+
+
+class NearExternalContract(StrEnum):
+    ZCASH_CONNECTOR = "zcash_connector"
+    ZCASH_TOKEN = "zcash"
+    BTC_TOKEN = "nbtc"
+    BTC_CONNECTOR = "btc_connector"
 
 
 class NearTestAccount(StrEnum):

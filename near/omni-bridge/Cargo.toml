@@ -6,8 +6,8 @@ edition = "2021"
 publish = false
 repository.workspace = true
 
-# fields to configure build with WASM reproducibility, according to specs  
-# in https://github.com/near/NEPs/blob/master/neps/nep-0330.md 
+# fields to configure build with WASM reproducibility, according to specs
+# in https://github.com/near/NEPs/blob/master/neps/nep-0330.md
 [package.metadata.near.reproducible_build]
 # docker image, descriptor of build environment
 image = "sourcescan/cargo-near:0.16.0-rust-1.86.0"
@@ -17,7 +17,7 @@ image_digest = "sha256:3220302ebb7036c1942e772810f21edd9381edf9a339983da43487c77
 # in a reproducible manner
 # supported by `sourcescan/cargo-near:0.10.1-rust-1.82.0` image or later images
 passed_env = []
-# build command inside of docker container 
+# build command inside of docker container
 # if docker image from default gallery is used https://hub.docker.com/r/sourcescan/cargo-near/tags,
 # the command may be any combination of flags of `cargo-near`,
 # supported by respective version of binary inside the container besides `--no-locked` flag
@@ -29,11 +29,11 @@ crate-type = ["cdylib", "rlib"]
 [dependencies]
 near-sdk.workspace = true
 near-contract-standards.workspace = true
-hex.workspace = true
 borsh.workspace = true
 serde.workspace = true
 near-plugins.workspace = true
 omni-types.workspace = true
+hex.workspace = true
 
 [dev-dependencies]
 near-sdk = { workspace = true, features = ["unit-testing"] }

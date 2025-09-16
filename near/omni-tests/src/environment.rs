@@ -19,7 +19,7 @@ use crate::helpers::tests::{
     get_test_deploy_token_args, BuildArtifacts, NEP141_DEPOSIT,
 };
 
-const PREV_LOCKER_WASM_FILEPATH: &str = "src/data/omni_bridge-0_2_13.wasm";
+const PREV_LOCKER_WASM_FILEPATH: &str = "src/data/omni_bridge-0_2_17.wasm";
 
 pub struct BridgeToken {
     pub is_deployed: bool,
@@ -285,9 +285,6 @@ impl TestEnvBuilder {
         let bridge_contract = self.worker.dev_deploy(locker_wasm).await?;
 
         let mut args = serde_json::Map::new();
-        if self.deploy_old_version {
-            args.insert("prover_account".to_string(), json!("prover.testnet"));
-        }
         args.insert("mpc_signer".to_string(), json!("mpc.testnet"));
         args.insert("nonce".to_string(), json!(U128(0)));
         args.insert(
@@ -303,18 +300,16 @@ impl TestEnvBuilder {
             .await?
             .into_result()?;
 
-        if !self.deploy_old_version {
-            bridge_contract
-                .call("add_prover")
-                .args_json(json!({
-                    "chain": "Eth",
-                    "account_id": prover_contract.id(),
-                }))
-                .max_gas()
-                .transact()
-                .await?
-                .into_result()?;
-        }
+        bridge_contract
+            .call("add_prover")
+            .args_json(json!({
+                "chain": "Eth",
+                "account_id": prover_contract.id(),
+            }))
+            .max_gas()
+            .transact()
+            .await?
+            .into_result()?;
 
         Ok(bridge_contract)
     }

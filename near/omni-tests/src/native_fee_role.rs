@@ -50,6 +50,7 @@ mod tests {
                     "mpc_signer": "mpc.testnet",
                     "nonce": U128(0),
                     "wnear_account_id": "wnear.testnet",
+                    "btc_connector": "brg-dev.testnet",
                 }))
                 .max_gas()
                 .transact()
@@ -205,6 +206,7 @@ mod tests {
                 native_token_fee: U128(native_fee),
                 fee: U128(token_fee),
                 recipient: eth_eoa_address(),
+                msg: None,
             };
 
             let required_balance_init_transfer: NearToken = self

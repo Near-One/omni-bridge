@@ -341,6 +341,7 @@ mod tests {
             native_token_fee: U128(NearToken::from_near(1).as_yoctonear()),
             fee: U128(0),
             recipient: eth_eoa_address(),
+            msg: None,
         };
 
         let env = TestEnv::new(sender_balance_token, false, build_artifacts).await?;
@@ -387,6 +388,7 @@ mod tests {
             native_token_fee: U128(0),
             fee: U128(1000),
             recipient: eth_eoa_address(),
+            msg: None,
         };
 
         let env = TestEnv::new(sender_balance_token, false, build_artifacts).await?;
@@ -431,6 +433,7 @@ mod tests {
             native_token_fee: U128(NearToken::from_near(1).as_yoctonear()),
             fee: U128(1000),
             recipient: eth_eoa_address(),
+            msg: None,
         };
 
         let env = TestEnv::new(sender_balance_token, false, build_artifacts).await?;
@@ -484,6 +487,7 @@ mod tests {
             native_token_fee: U128(NearToken::from_near(1).as_yoctonear()),
             fee: U128(1000),
             recipient: eth_eoa_address(),
+            msg: None,
         };
         let update_fee_value = Fee {
             native_fee: U128(NearToken::from_near(2).as_yoctonear()),
@@ -542,6 +546,7 @@ mod tests {
             native_token_fee: U128(NearToken::from_near(1).as_yoctonear()),
             fee: U128(0),
             recipient: eth_eoa_address(),
+            msg: None,
         };
 
         let env = TestEnv::new(sender_balance_token, false, build_artifacts).await?;
@@ -590,6 +595,7 @@ mod tests {
             native_token_fee: U128(NearToken::from_near(1).as_yoctonear()),
             fee: U128(1000),
             recipient: eth_eoa_address(),
+            msg: None,
         };
         let update_fee_value = Fee {
             native_fee: U128(NearToken::from_near(0).as_yoctonear()),
@@ -623,6 +629,7 @@ mod tests {
             native_token_fee: U128(NearToken::from_near(1).as_yoctonear()),
             fee: U128(1000),
             recipient: eth_eoa_address(),
+            msg: None,
         };
         let update_fee_value = Fee {
             native_fee: U128(NearToken::from_near(1).as_yoctonear()),
@@ -656,6 +663,7 @@ mod tests {
             native_token_fee: U128(NearToken::from_near(1).as_yoctonear()),
             fee: U128(1000),
             recipient: eth_eoa_address(),
+            msg: None,
         };
         let update_fee_value = Fee {
             native_fee: U128(NearToken::from_near(1).as_yoctonear()),
@@ -690,6 +698,7 @@ mod tests {
             native_token_fee: U128(NearToken::from_near(1).as_yoctonear()),
             fee: U128(1000),
             recipient: eth_eoa_address(),
+            msg: None,
         };
         let update_fee = UpdateFee::Proof(vec![]);
 
@@ -718,6 +727,7 @@ mod tests {
             native_token_fee: U128(0),
             fee: U128(0),
             recipient: eth_eoa_address(),
+            msg: None,
         };
 
         let env = TestEnv::new(sender_balance_token, true, build_artifacts).await?;
@@ -737,7 +747,6 @@ mod tests {
         let res = env
             .locker_contract
             .call("migrate")
-            .args_json(json!({}))
             .max_gas()
             .transact()
             .await?;

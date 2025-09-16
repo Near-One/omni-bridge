@@ -33,16 +33,16 @@ clippy-omni-relayer:
 
 rust-build-omni-bridge:
 	cargo near build reproducible-wasm --manifest-path $(OMNI_BRIDGE_MANIFEST) --out-dir $(OUT_DIR)
-	
+
 rust-build-omni-token:
 	cargo near build reproducible-wasm --manifest-path $(OMNI_TOKEN_MANIFEST) --out-dir $(OUT_DIR)
-	
+
 rust-build-token-deployer:
 	cargo near build reproducible-wasm --manifest-path $(TOKEN_DEPLOYER) --out-dir $(OUT_DIR)
-	
+
 rust-build-evm-prover:
 	cargo near build reproducible-wasm --manifest-path $(EVM_PROVER_MANIFEST) --out-dir $(OUT_DIR)
-	
+
 rust-build-wormhole-omni-prover-proxy:
 	cargo near build reproducible-wasm --manifest-path $(WORMHOLE_OMNI_PROVER_PROXY_MANIFEST) --out-dir $(OUT_DIR)
 

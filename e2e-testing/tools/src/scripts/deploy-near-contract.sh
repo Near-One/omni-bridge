@@ -41,20 +41,12 @@ else
     DYN_INIT_ARGS="{}"
 fi
 
-INIT_ARGS=$(echo "$STATIC_INIT_ARGS $DYN_INIT_ARGS" | jq -s add)
-
-echo "Creating the contract account"
-# Create the contract account
-if ! near account create-account sponsor-by-faucet-service "$CONTRACT_ID" \
-    autogenerate-new-keypair save-to-legacy-keychain network-config testnet create; then
-    echo "Failed to create account for ${CONTRACT_NAME}"
-    exit 1
-fi
+INIT_ARGS=$(echo "$STATIC_INIT_ARGS $DYN_INIT_ARGS" | jq -s 'reduce .[] as $item ({}; . * $item)')
 
 # Delay to allow the account to be created
 sleep 3
 
-# Deploy the contract 
+# Deploy the contract
 echo "Deploying the contract"
 if ! near contract deploy "$CONTRACT_ID" use-file "$WASM_PATH" \
     without-init-call network-config testnet sign-with-legacy-keychain send; then
@@ -74,7 +66,7 @@ if [ -n "$INIT_FUNCTION" ]; then
         prepaid-gas '100.0 Tgas' attached-deposit '0 NEAR' \
         sign-as "$INIT_ACCOUNT_ID" \
         network-config testnet \
-        sign-with-plaintext-private-key --signer-public-key "$INIT_ACCOUNT_PUBLIC_KEY" --signer-private-key "$INIT_ACCOUNT_PRIVATE_KEY" \
+        sign-with-plaintext-private-key "$INIT_ACCOUNT_PRIVATE_KEY" \
         send; then
         echo "Failed to init ${CONTRACT_NAME}"
         exit 1
@@ -84,4 +76,4 @@ else
 fi
 
 echo "{\"contract_id\": \"$CONTRACT_ID\"}" > "$OUTPUT_JSON"
-echo "Deployment successful, saved to $OUTPUT_JSON" 
+echo "Deployment successful, saved to $OUTPUT_JSON"
