@@ -16,7 +16,7 @@ use near_sdk::{
     env, ext_contract, near, require, serde_json, AccountId, BorshStorageKey, CryptoHash, Gas,
     GasWeight, NearToken, PanicOnDefault, Promise, PromiseError, PromiseOrValue, PromiseResult,
 };
-use omni_types::btc::UTXOChainConfig;
+use omni_types::btc::{TxOut, UTXOChainConfig};
 use omni_types::locker_args::{
     AddDeployedTokenArgs, BindTokenArgs, ClaimFeeArgs, DeployTokenArgs, FinTransferArgs,
     StorageDepositAction,
@@ -105,6 +105,7 @@ pub enum Role {
     UnrestrictedRelayer,
     TokenControllerUpdater,
     NativeFeeRestricted,
+    RbfOperator,
 }
 
 #[ext_contract(ext_token)]
@@ -178,6 +179,11 @@ pub trait ExtWNearToken {
 #[ext_contract(ext_deployer)]
 pub trait TokenDeployer {
     fn deploy_token(&self, account_id: AccountId, metadata: BasicMetadata) -> Promise;
+}
+
+#[ext_contract(ext_utxo_connector)]
+pub trait ExtUTXOConnector {
+    fn withdraw_rbf(&mut self, original_btc_pending_verify_id: String, output: Vec<TxOut>);
 }
 
 #[near(contract_state)]
