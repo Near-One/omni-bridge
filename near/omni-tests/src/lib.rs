@@ -1,3 +1,5 @@
+#[cfg(test)]
+mod environment;
 mod fast_transfer;
 mod fin_transfer;
 mod helpers;
