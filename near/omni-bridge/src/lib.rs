@@ -458,13 +458,6 @@ impl Contract {
         amount: U128,
         init_transfer_msg: InitTransferMsg,
     ) -> PromiseOrPromiseIndexOrValue<U128> {
-        // Avoid extra storage read by verifying native fee before checking the role
-        if init_transfer_msg.native_token_fee.0 > 0
-            && self.acl_has_role(Role::NativeFeeRestricted.into(), signer_id.clone())
-        {
-            env::panic_str("ERR_ACCOUNT_RESTRICTED_FROM_USING_NATIVE_FEE");
-        }
-
         require!(
             init_transfer_msg.recipient.get_chain() != ChainKind::Near,
             "ERR_INVALID_RECIPIENT_CHAIN"
@@ -501,13 +494,24 @@ impl Contract {
 
         let message_storage_account_id = transfer_message.calculate_storage_account_id();
         // Choose storage payer or whether to yield execution until storage is available
-        if self.has_storage_balance(&message_storage_account_id, required_storage_balance) {
+        if self.has_storage_balance(
+            &message_storage_account_id,
+            NearToken::from_yoctonear(init_transfer_msg.native_token_fee.0),
+        ) {
+            self.pay_native_fee_from_message_account(
+                &message_storage_account_id,
+                init_transfer_msg.native_token_fee.0,
+                &signer_id,
+            );
             PromiseOrPromiseIndexOrValue::Value(self.init_transfer_internal(
                 transfer_message,
-                message_storage_account_id,
+                signer_id.clone(),
                 signer_id,
             ))
-        } else if self.has_storage_balance(&signer_id, required_storage_balance) {
+        } else if self.has_storage_balance(&signer_id, required_storage_balance)
+            && (init_transfer_msg.native_token_fee.0 == 0
+                || !self.acl_has_role(Role::NativeFeeRestricted.into(), signer_id.clone()))
+        {
             PromiseOrPromiseIndexOrValue::Value(self.init_transfer_internal(
                 transfer_message,
                 signer_id.clone(),

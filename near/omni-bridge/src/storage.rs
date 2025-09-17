@@ -183,6 +183,29 @@ impl Contract {
         }
     }
 
+    // Deducts `native_fee` from `account_id` and credits the remaining balance to `signer_id`.
+    // Panics if `account_id` does not have enough balance to cover `native_fee` or if `signer_id` is not registered.
+    pub(crate) fn pay_native_fee_from_message_account(
+        &mut self,
+        account_id: &AccountId,
+        native_fee: u128,
+        signer_id: &AccountId,
+    ) {
+        if let Some(balance) = self.accounts_balances.remove(account_id) {
+            let remaining = balance
+                .total
+                .checked_sub(NearToken::from_yoctonear(native_fee))
+                .sdk_expect("ERR_NOT_ENOUGH_BALANCE_FOR_FEE");
+
+            let mut storage = self
+                .accounts_balances
+                .get(signer_id)
+                .sdk_expect("ERR_SIGNER_NOT_REGISTERED");
+            storage.available = storage.available.saturating_add(remaining);
+            self.accounts_balances.insert(signer_id, &storage);
+        }
+    }
+
     pub fn required_balance_for_account(&self) -> NearToken {
         let key_len = Self::max_key_len_of_account_id();
         let value_len: u64 = borsh::to_vec(&StorageBalance {
