@@ -254,9 +254,8 @@ mod tests {
             if !should_succeed {
                 assert_eq!(U128(0), transfer_result.clone().json().unwrap());
                 return Ok(None);
-            } else {
-                assert_eq!(U128(amount), transfer_result.clone().json().unwrap());
             }
+            assert_eq!(U128(amount), transfer_result.clone().json().unwrap());
 
             // For successful case, extract the transfer message
             let logs = transfer_result
