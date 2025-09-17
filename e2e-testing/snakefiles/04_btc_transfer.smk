@@ -137,7 +137,7 @@ rule submit_transfer_to_btc_connector:
     """
 
 rule sign_btc_connector_transfer:
-    message: "Sign BTC transfer on BtcConnectro"
+    message: "Sign BTC transfer on BtcConnector"
     input:
         add_utxo_chain = rules.add_utxo_chain_connector.output,
         step_8 = rules.submit_transfer_to_btc_connector.output,
