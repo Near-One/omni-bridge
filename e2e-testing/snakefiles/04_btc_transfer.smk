@@ -124,7 +124,7 @@ rule submit_transfer_to_btc_connector:
         near_tx_hash = lambda wc, input: get_json_field(input.step_7, "tx_hash"),
 
     shell: """
-    bridge-cli testnet omni-bridge-sign-btc-transfer \
+    bridge-cli testnet near-sign-btc-transfer \
         --chain btc \
         -n {params.near_tx_hash} \
         -s {params.user_account_id} \
