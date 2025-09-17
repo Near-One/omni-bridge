@@ -197,12 +197,14 @@ impl Contract {
                 .checked_sub(NearToken::from_yoctonear(native_fee))
                 .sdk_expect("ERR_NOT_ENOUGH_BALANCE_FOR_FEE");
 
-            let mut storage = self
-                .accounts_balances
-                .get(signer_id)
-                .sdk_expect("ERR_SIGNER_NOT_REGISTERED");
-            storage.available = storage.available.saturating_add(remaining);
-            self.accounts_balances.insert(signer_id, &storage);
+            if remaining.as_yoctonear() > 0 {
+                let mut storage = self
+                    .accounts_balances
+                    .get(signer_id)
+                    .sdk_expect("ERR_SIGNER_NOT_REGISTERED");
+                storage.available = storage.available.saturating_add(remaining);
+                self.accounts_balances.insert(signer_id, &storage);
+            }
         }
     }
 
