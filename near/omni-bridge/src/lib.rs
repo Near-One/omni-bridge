@@ -391,63 +391,11 @@ impl Contract {
     /// - If a `fee` is provided and it doesn't match the fee in the stored transfer message.
     #[payable]
     #[pause(except(roles(Role::DAO, Role::UnrestrictedRelayer)))]
-    pub fn sign_transfer(
-        &mut self,
-        transfer_id: TransferId,
-        fee_recipient: Option<AccountId>,
-        fee: &Option<Fee>,
-    ) -> Promise {
-        let transfer_message = self.get_transfer_message(transfer_id);
-
-        if let Some(fee) = &fee {
-            require!(&transfer_message.fee == fee, "Invalid fee");
-        }
-
-        let token_address = self
-            .get_token_address(
-                transfer_message.get_destination_chain(),
-                self.get_token_id(&transfer_message.token),
-            )
-            .unwrap_or_else(|| env::panic_str("ERR_FAILED_TO_GET_TOKEN_ADDRESS"));
-
-        let decimals = self
-            .token_decimals
-            .get(&token_address)
-            .sdk_expect("ERR_TOKEN_DECIMALS_NOT_FOUND");
-        let amount_to_transfer = Self::normalize_amount(
-            transfer_message.amount.0 - transfer_message.fee.fee.0,
-            decimals,
+    pub fn sign_transfer(&mut self, yield_id: CryptoHash) {
+        let _ = env::promise_yield_resume(
+            &yield_id,
+            &borsh::to_vec(&env::predecessor_account_id()).unwrap(),
         );
-
-        require!(amount_to_transfer > 0, "Invalid amount to transfer");
-
-        let transfer_payload = TransferMessagePayload {
-            prefix: PayloadType::TransferMessage,
-            destination_nonce: transfer_message.destination_nonce,
-            transfer_id,
-            token_address,
-            amount: U128(amount_to_transfer),
-            recipient: transfer_message.recipient,
-            fee_recipient,
-        };
-
-        let payload = near_sdk::env::keccak256_array(
-            &borsh::to_vec(&transfer_payload).sdk_expect("ERR_BORSH"),
-        );
-
-        ext_signer::ext(self.mpc_signer.clone())
-            .with_static_gas(MPC_SIGNING_GAS)
-            .with_attached_deposit(env::attached_deposit())
-            .sign(SignRequest {
-                payload,
-                path: SIGN_PATH.to_owned(),
-                key_version: 0,
-            })
-            .then(
-                Self::ext(env::current_account_id())
-                    .with_static_gas(SIGN_TRANSFER_CALLBACK_GAS)
-                    .sign_transfer_callback(transfer_payload, &transfer_message.fee),
-            )
     }
 
     fn init_transfer(
@@ -470,13 +418,60 @@ impl Contract {
             "ERR_INVALID_RECIPIENT_CHAIN"
         );
 
+        require!(init_transfer_msg.fee < amount, "ERR_INVALID_FEE");
+
+        let promise_index = env::promise_yield_create(
+            "init_transfer_resume",
+            json!({
+                "sender_id": sender_id,
+                "token_id": token_id,
+                "amount": amount,
+                "native_fee_payer": signer_id,
+                "init_transfer_msg": init_transfer_msg,
+            })
+            .to_string()
+            .as_bytes(),
+            INIT_TRANSFER_RESUME_GAS,
+            GasWeight(0),
+            PROMISE_REGISTER_ID,
+        );
+
+        let yield_id: CryptoHash = env::read_register(PROMISE_REGISTER_ID)
+            .sdk_expect("ERR_READ_PROMISE_REGISTER")
+            .try_into()
+            .sdk_expect("ERR_READ_PROMISE_YIELD_ID");
+
+        env::log_str(&format!("Yield init transfer {yield_id:?}"));
+        //env::log_str(&OmniBridgeEvent::InitTransferEvent { transfer_message }.to_log_string());
+
+        PromiseOrPromiseIndexOrValue::PromiseIndex(promise_index)
+    }
+
+    #[private]
+    #[allow(clippy::needless_pass_by_value)]
+    pub fn init_transfer_resume(
+        &mut self,
+        sender_id: AccountId,
+        token_id: AccountId,
+        amount: U128,
+        native_fee_payer: AccountId,
+        init_transfer_msg: InitTransferMsg,
+        #[callback_result] response: Result<AccountId, PromiseError>,
+    ) -> PromiseOrValue<U128> {
+        let relayer_id = if let Some(relayer_id) = response.ok() {
+            relayer_id
+        } else {
+            // Refund
+            return PromiseOrValue::Value(amount);
+        };
+
         self.current_origin_nonce += 1;
         let destination_nonce =
             self.get_next_destination_nonce(init_transfer_msg.recipient.get_chain());
 
         let transfer_message = TransferMessage {
             origin_nonce: self.current_origin_nonce,
-            token: OmniAddress::Near(token_id),
+            token: OmniAddress::Near(token_id.clone()),
             amount,
             recipient: init_transfer_msg.recipient,
             fee: Fee {
@@ -488,84 +483,88 @@ impl Contract {
             destination_nonce,
             origin_transfer_id: None,
         };
-        require!(
-            transfer_message.fee.fee < transfer_message.amount,
-            "ERR_INVALID_FEE"
+
+        // Store transfer for claiming fee after finalisation
+        if !transfer_message.fee.is_zero() {
+            // Can use less storage by only storing transfer_id
+            let required_storage_balance =
+                self.required_balance_for_init_transfer_message(transfer_message.clone());
+
+            self.add_transfer_message(transfer_message.clone(), relayer_id.clone());
+
+            if self
+                .try_update_storage_balance(
+                    relayer_id,
+                    required_storage_balance,
+                    env::attached_deposit(),
+                )
+                .is_err()
+            {
+                return PromiseOrValue::Value(amount);
+            }
+        }
+
+        // Pay native fee
+        if self
+            .try_update_storage_balance(
+                native_fee_payer,
+                NearToken::from_yoctonear(init_transfer_msg.native_token_fee.0),
+                NearToken::from_yoctonear(0),
+            )
+            .is_err()
+        {
+            return PromiseOrValue::Value(amount);
+        }
+
+        // TODO: refund if fails
+        let token_address = self
+            .get_token_address(
+                transfer_message.get_destination_chain(),
+                self.get_token_id(&transfer_message.token),
+            )
+            .unwrap_or_else(|| env::panic_str("ERR_FAILED_TO_GET_TOKEN_ADDRESS"));
+
+        // TODO: refund if fails
+        let decimals = self
+            .token_decimals
+            .get(&token_address)
+            .sdk_expect("ERR_TOKEN_DECIMALS_NOT_FOUND");
+
+        let amount_to_transfer = Self::normalize_amount(
+            transfer_message.amount.0 - transfer_message.fee.fee.0,
+            decimals,
         );
 
-        let required_storage_balance = self
-            .required_balance_for_init_transfer_message(transfer_message.clone())
-            .saturating_add(NearToken::from_yoctonear(
-                init_transfer_msg.native_token_fee.0,
-            ));
+        require!(amount_to_transfer > 0, "Invalid amount to transfer");
 
-        let message_storage_account_id = transfer_message.calculate_storage_account_id();
-        // Choose storage payer or whether to yield execution until storage is available
-        if self.has_storage_balance(&message_storage_account_id, required_storage_balance) {
-            PromiseOrPromiseIndexOrValue::Value(self.init_transfer_internal(
-                transfer_message,
-                message_storage_account_id,
-                signer_id,
-            ))
-        } else if self.has_storage_balance(&signer_id, required_storage_balance) {
-            PromiseOrPromiseIndexOrValue::Value(self.init_transfer_internal(
-                transfer_message,
-                signer_id.clone(),
-                signer_id,
-            ))
-        } else {
-            let promise_index = env::promise_yield_create(
-                "init_transfer_resume",
-                json!({
-                    "transfer_message": transfer_message,
-                    "message_storage_account_id": message_storage_account_id,
-                    "storage_owner": signer_id,
-                })
-                .to_string()
-                .as_bytes(),
-                INIT_TRANSFER_RESUME_GAS,
-                GasWeight(0),
-                PROMISE_REGISTER_ID,
-            );
+        let transfer_payload = TransferMessagePayload {
+            prefix: PayloadType::TransferMessage,
+            destination_nonce: transfer_message.destination_nonce,
+            transfer_id: transfer_message.get_transfer_id(),
+            token_address,
+            amount: U128(amount_to_transfer),
+            recipient: transfer_message.recipient,
+            fee_recipient: None,
+        };
 
-            let yield_id: CryptoHash = env::read_register(PROMISE_REGISTER_ID)
-                .sdk_expect("ERR_READ_PROMISE_REGISTER")
-                .try_into()
-                .sdk_expect("ERR_READ_PROMISE_YIELD_ID");
+        let payload = near_sdk::env::keccak256_array(
+            &borsh::to_vec(&transfer_payload).sdk_expect("ERR_BORSH"),
+        );
 
-            let required_storage_balance = self.add_promise(&message_storage_account_id, &yield_id);
-
-            self.update_storage_balance(
-                env::current_account_id(),
-                required_storage_balance,
-                NearToken::from_yoctonear(0),
-            );
-
-            env::log_str(&format!(
-                "Yield init transfer until storage is available at {message_storage_account_id}"
-            ));
-
-            PromiseOrPromiseIndexOrValue::PromiseIndex(promise_index)
-        }
-    }
-
-    #[private]
-    #[allow(clippy::needless_pass_by_value)]
-    pub fn init_transfer_resume(
-        &mut self,
-        transfer_message: TransferMessage,
-        message_storage_account_id: AccountId,
-        storage_owner: AccountId,
-        #[callback_result] response: Result<(), PromiseError>,
-    ) -> U128 {
-        self.remove_promise(&message_storage_account_id);
-
-        if response.is_ok() {
-            self.init_transfer_internal(transfer_message, message_storage_account_id, storage_owner)
-        } else {
-            env::log_str("Init transfer resume timeout");
-            transfer_message.amount
-        }
+        ext_signer::ext(self.mpc_signer.clone())
+            .with_static_gas(MPC_SIGNING_GAS)
+            .with_attached_deposit(env::attached_deposit())
+            .sign(SignRequest {
+                payload,
+                path: SIGN_PATH.to_owned(),
+                key_version: 0,
+            })
+            .then(
+                Self::ext(env::current_account_id())
+                    .with_static_gas(SIGN_TRANSFER_CALLBACK_GAS)
+                    .sign_transfer_callback(transfer_payload),
+            )
+            .into()
     }
 
     #[private]
@@ -573,12 +572,9 @@ impl Contract {
         &mut self,
         #[callback_result] call_result: Result<SignatureResponse, PromiseError>,
         #[serializer(borsh)] message_payload: TransferMessagePayload,
-        #[serializer(borsh)] fee: &Fee,
     ) {
         if let Ok(signature) = call_result {
-            if fee.is_zero() {
-                self.remove_transfer_message(message_payload.transfer_id);
-            }
+            // self.burn_tokens_if_needed(token_id, amount);
 
             env::log_str(
                 &OmniBridgeEvent::SignTransferEvent {
@@ -1452,37 +1448,6 @@ impl Contract {
         self.destination_nonces.insert(&chain_kind, &payload_nonce);
 
         payload_nonce
-    }
-
-    fn init_transfer_internal(
-        &mut self,
-        transfer_message: TransferMessage,
-        storage_payer: AccountId,
-        storage_owner: AccountId,
-    ) -> U128 {
-        let required_storage_balance = self
-            .add_transfer_message(transfer_message.clone(), storage_owner)
-            .saturating_add(NearToken::from_yoctonear(transfer_message.fee.native_fee.0));
-
-        if self
-            .try_update_storage_balance(
-                storage_payer,
-                required_storage_balance,
-                NearToken::from_yoctonear(0),
-            )
-            .is_err()
-        {
-            return transfer_message.amount;
-        }
-
-        if let OmniAddress::Near(token_id) = transfer_message.token.clone() {
-            self.burn_tokens_if_needed(token_id, transfer_message.amount);
-        } else {
-            return transfer_message.amount;
-        }
-
-        env::log_str(&OmniBridgeEvent::InitTransferEvent { transfer_message }.to_log_string());
-        U128(0)
     }
 
     #[allow(clippy::too_many_lines, clippy::ptr_arg)]
