@@ -182,6 +182,22 @@ rule send_btc_transfer:
     > {output} \
     """
 
+rule rbf_increase_gas_fee:
+    message: "RBF Increase Gas Fee"
+    input:
+        step_10 = rules.send_btc_transfer.output,
+    output: call_dir / "08_rbf_increase_gas_fee.json"
+    params:
+        btc_tx_hash = lambda wc, input: get_last_value(input.step_3),
+        bridge_sdk_config_file = const.common_bridge_sdk_config_file,
+    shell: """
+    bridge-cli testnet btc-rbf-increase-gas-fee \
+    --chain btc \
+    -b {params.btc_tx_hash} \
+    --config {params.bridge_sdk_config_file} \
+    > {output} \
+    """
+
 rule all:
     input:
         rules.send_btc_transfer.output,
