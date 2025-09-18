@@ -565,7 +565,12 @@ impl Contract {
         self.remove_promise(&message_storage_account_id);
 
         if response.is_ok() {
-            self.init_transfer_internal(transfer_message, message_storage_account_id, storage_owner)
+            self.pay_native_fee_from_message_account(
+                &message_storage_account_id,
+                transfer_message.fee.native_fee.0,
+                &storage_owner,
+            );
+            self.init_transfer_internal(transfer_message, storage_owner.clone(), storage_owner)
         } else {
             env::log_str("Init transfer resume timeout");
             transfer_message.amount
