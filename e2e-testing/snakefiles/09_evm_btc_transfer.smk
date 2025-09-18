@@ -61,6 +61,7 @@ rule evm_init_transfer:
             --recipient btc:tb1q4vvl8ykwprwv9dw3y5nrnpk7f2jech7atz45v5 \
             --fee 300 \
             --native-fee 0 \
+            --message "{{\\"V0\\":{{\\"max_fee\\":200}}}}" \
             --eth-bridge-token-factory-address {params.evm_bridge_address} \
             --config {params.config_file} > {output} && \
         {params.extract_tx}
@@ -118,7 +119,7 @@ rule submit_transfer_to_btc_connector:
         near_tx_hash = lambda wc, input: get_json_field(input.step_2, "tx_hash"),
 
     shell: """
-    bridge-cli testnet near-sign-btc-transfer \
+    bridge-cli testnet near-submit-btc-transfer \
         --chain btc \
         -n {params.near_tx_hash} \
         -s {params.omni_bridge_account} \
