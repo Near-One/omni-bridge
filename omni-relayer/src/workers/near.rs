@@ -209,6 +209,7 @@ pub async fn process_transfer_to_utxo_event(
             transfer_message.recipient.get_chain(),
             recipient,
             transfer_message.amount.0,
+            None,
             TransferId {
                 origin_chain: transfer_message.sender.get_chain(),
                 origin_nonce: transfer_message.origin_nonce,
@@ -276,6 +277,15 @@ pub async fn process_transfer_to_utxo_event(
                     transfer_message.origin_nonce
                 );
                 return Ok(EventAction::Retry);
+            } else if let BridgeSdkError::BtcClientError(ref msg) = err {
+                if msg == "Failed to estimate fee_rate" {
+                    warn!(
+                        "Failed to estimate fee_rate for {:?} transfer ({}), retrying",
+                        transfer_message.recipient.get_chain(),
+                        transfer_message.origin_nonce
+                    );
+                    return Ok(EventAction::Retry);
+                }
             }
 
             anyhow::bail!(
