@@ -43,7 +43,7 @@ struct CliArgs {
     start_timestamp: Option<u32>,
 }
 
-fn init_logging(network: &Network) -> Result<()> {
+fn init_logging(network: Network) -> Result<()> {
     let fmt_layer = fmt::Layer::default()
         .with_timer(fmt::time::ChronoLocal::rfc_3339())
         .with_target(false);
@@ -106,7 +106,7 @@ async fn main() -> Result<()> {
     )
     .context("Failed to parse config file")?;
 
-    init_logging(&config.near.network).context("Failed to initialize logging")?;
+    init_logging(config.near.network).context("Failed to initialize logging")?;
 
     let redis_client = redis::Client::open(config.redis.url.clone())?;
     let redis_connection_manager = redis::aio::ConnectionManager::new(redis_client.clone()).await?;

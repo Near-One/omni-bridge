@@ -21,8 +21,10 @@ db_name = "testnet_omni_bridge_db"
 network = "testnet"
 rpc_url = "https://rpc.testnet.fastnear.com?apiKey=FASTNEAR_API_KEY"
 omni_bridge_id = "omni-locker.testnet"
-btc_connector = "brg-dev.testnet"
-btc = "nbtc-dev.testnet"
+btc_connector = "btc-connector.n-bridge.testnet"
+btc = "nbtc.n-bridge.testnet"
+zcash_connector = "zcash_connector.n-bridge.testnet"
+zcash = "nzcash.n-bridge.testnet"
 # Either provide a path to a credentials file or set it in the environment
 # Note: the path must be absolute
 # omni_credentials_path = "/Users/username/.near-credentials/testnet/omni-relayer.testnet.json"
@@ -125,10 +127,19 @@ finalize_transfer_sol_discriminator = [104, 27, 121, 69, 3, 70, 217, 66]
 
 [btc]
 rpc_http_url = "https://bitcoin-testnet-rpc.publicnode.com"
+light_client = "btc-client-v4.testnet"
 # If this is set to true, then omni relayer will call `sign_btc_transaction`
 signing_enabled = false
 # If this is set to true, then omni relayer will call `verify_withdraw`
 verifying_withdraw_enabled = false
+
+[zcash]
+rpc_http_url = "https://x-api-key:TATUM_API_KEY@zcash-testnet.gateway.tatum.io"
+light_client = "zcash-client.n-bridge.testnet"
+# If this is set to true, then omni relayer will call `sign_btc_transaction`
+signing_enabled = true
+# If this is set to true, then omni relayer will call `verify_withdraw`
+verifying_withdraw_enabled = true
 
 [wormhole]
 api_url = "https://api.testnet.wormholescan.io/"
