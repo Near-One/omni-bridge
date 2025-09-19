@@ -14,8 +14,8 @@ use omni_types::{ChainKind, Fee, OmniAddress, TransferId, TransferMessage};
 const SUBMIT_TRANSFER_TO_BTC_CONNECTOR_CALLBACK_GAS: Gas = Gas::from_tgas(5);
 const WITHDRAW_RBF_GAS: Gas = Gas::from_tgas(100);
 
-#[derive(Debug, near_sdk::serde::Deserialize)]
-#[serde(tag = "type", content = "data")]
+#[near(serializers=[json])]
+#[derive(Debug, PartialEq)]
 enum UTXOChainMsg {
     V0 { max_fee: u64 },
 }
@@ -188,5 +188,18 @@ impl Contract {
             .get(&chain_kind)
             .expect("UTXO Token has not been set up for this chain")
             .token_id
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_deserialize_utxo_chain_msg() {
+        let serialized_msg = r#"{"V0":{"max_fee":12345}}"#;
+        let deserialized: UTXOChainMsg = serde_json::from_str(serialized_msg).unwrap();
+        let original = UTXOChainMsg::V0 { max_fee: 12345 };
+        assert_eq!(original, deserialized);
     }
 }
