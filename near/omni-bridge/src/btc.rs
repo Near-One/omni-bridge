@@ -14,7 +14,8 @@ use omni_types::{ChainKind, Fee, OmniAddress, TransferId, TransferMessage};
 const SUBMIT_TRANSFER_TO_BTC_CONNECTOR_CALLBACK_GAS: Gas = Gas::from_tgas(5);
 const WITHDRAW_RBF_GAS: Gas = Gas::from_tgas(100);
 
-#[derive(Debug, PartialEq, near_sdk::serde::Deserialize, near_sdk::serde::Serialize)]
+#[near(serializers=[json])]
+#[derive(Debug, PartialEq)]
 enum UTXOChainMsg {
     V0 { max_fee: u64 },
 }
