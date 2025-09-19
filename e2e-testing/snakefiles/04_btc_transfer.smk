@@ -17,6 +17,7 @@ call_dir = const.common_generated_dir / "04-btc-transfer"
 near_init_account_file = const.near_account_dir / f"{NTA.INIT_ACCOUNT}.json"
 user_account_file = const.near_account_dir / f"{NTA.USER_ACCOUNT}.json"
 
+near_dao_account_file = const.near_account_dir / f"{NTA.INIT_ACCOUNT}.json"
 omni_bridge_file = const.near_deploy_results_dir / f"{NC.OMNI_BRIDGE}.json"
 nbtc_file = const.near_deploy_results_dir / f"nbtc.json"
 btc_connector_file = const.near_deploy_results_dir / f"btc_connector.json"
@@ -190,19 +191,18 @@ rule rbf_increase_gas_fee:
         step_10 = rules.send_btc_transfer.output,
         btc_connector_file = btc_connector_file,
         omni_bridge_file = omni_bridge_file,
-        user_account_file = user_account_file,
+        near_dao_account_file = near_dao_account_file
     output: call_dir / "08_rbf_increase_gas_fee.json"
     params:
         btc_tx_hash = lambda wc, input: get_last_value(input.step_10),
         btc_connector = lambda wc, input: get_json_field(input.btc_connector_file, "contract_id"),
-        user_account_id = lambda wc, input: get_json_field(input.user_account_file, "account_id"),
-        user_private_key = lambda wc, input: get_json_field(input.user_account_file, "private_key"),
+        user_account_id = lambda wc, input: get_json_field(input.near_dao_account_file, "account_id"),
+        user_private_key = lambda wc, input: get_json_field(input.near_dao_account_file, "private_key"),
         bridge_sdk_config_file = const.common_bridge_sdk_config_file,
         omni_bridge_account = lambda wc, input: get_json_field(input.omni_bridge_file, "contract_id"),
     shell: """
     bridge-cli testnet btc-rbf-increase-gas-fee \
     --chain btc \
-    -f 1 \
     -b {params.btc_tx_hash} \
     --near-token-locker-id {params.omni_bridge_account} \
     --btc-connector {params.btc_connector} \
