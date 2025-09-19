@@ -219,6 +219,7 @@ pub async fn process_transfer_to_utxo_event(
                 wait_until: near_primitives::views::TxExecutionStatus::Included,
                 wait_final_outcome_timeout_sec: None,
             },
+            None,
         )
         .await
     {
@@ -277,17 +278,17 @@ pub async fn process_transfer_to_utxo_event(
                     transfer_message.origin_nonce
                 );
                 return Ok(EventAction::Retry);
+            } else if let BridgeSdkError::InsufficientUTXOGasFee(_) = err {
+                warn!(
+                    "Gas fee is too large for {:?} transfer ({}), retrying",
+                    transfer_message.recipient.get_chain(),
+                    transfer_message.origin_nonce
+                );
+                return Ok(EventAction::Retry);
             } else if let BridgeSdkError::BtcClientError(ref msg) = err {
                 if msg == "Failed to estimate fee_rate" {
                     warn!(
                         "Failed to estimate fee_rate for {:?} transfer ({}), retrying",
-                        transfer_message.recipient.get_chain(),
-                        transfer_message.origin_nonce
-                    );
-                    return Ok(EventAction::Retry);
-                } else if msg == "Gas fee is too large" {
-                    warn!(
-                        "Gas fee is too large for {:?} transfer ({}), retrying",
                         transfer_message.recipient.get_chain(),
                         transfer_message.origin_nonce
                     );
