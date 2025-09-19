@@ -12,17 +12,17 @@ mod tests {
     };
     use rstest::rstest;
 
-    use crate::helpers::tests::{
-        account_n, eth_eoa_address, eth_factory_address, eth_token_address, get_bind_token_args,
-        get_claim_fee_args_near, get_event_data, locker_wasm, mock_prover_wasm, mock_token_wasm,
-        relayer_account_id, NEP141_DEPOSIT,
+    use crate::{
+        environment::TestEnvBuilder,
+        helpers::tests::{
+            account_n, build_artifacts, eth_eoa_address, eth_factory_address,
+            get_claim_fee_args_near, get_event_data, relayer_account_id, BuildArtifacts,
+        },
     };
 
     const DEFAULT_NEAR_SANDBOX_BALANCE: NearToken = NearToken::from_near(100);
     const EXPECTED_RELAYER_GAS_COST: NearToken =
         NearToken::from_yoctonear(1_500_000_000_000_000_000_000);
-
-    const PREV_LOCKER_WASM_FILEPATH: &str = "src/data/omni_bridge-0_2_17.wasm";
 
     struct TestEnv {
         worker: near_workspaces::Worker<near_workspaces::network::Sandbox>,
@@ -37,156 +37,29 @@ mod tests {
         #[allow(clippy::too_many_lines)]
         async fn new(
             sender_balance_token: u128,
-            mock_token_wasm: Vec<u8>,
-            mock_prover_wasm: Vec<u8>,
-            locker_wasm: Vec<u8>,
+            is_old_locker: bool,
+            build_artifacts: &BuildArtifacts,
         ) -> anyhow::Result<Self> {
-            let worker = near_workspaces::sandbox().await?;
-            // Deploy and initialize FT token
-            let token_contract = worker.dev_deploy(&mock_token_wasm).await?;
-            token_contract
-                .call("new_default_meta")
-                .args_json(json!({
-                    "owner_id": token_contract.id(),
-                    "total_supply": U128(u128::MAX)
-                }))
-                .max_gas()
-                .transact()
+            let env_builder = TestEnvBuilder::new(build_artifacts.clone())
                 .await?
-                .into_result()?;
-
-            // Deploy and initialize locker
-            let locker_contract = worker.dev_deploy(&locker_wasm).await?;
-            let mut args = serde_json::Map::new();
-            args.insert("mpc_signer".to_string(), json!("mpc.testnet"));
-            args.insert("nonce".to_string(), json!(U128(0)));
-            args.insert("wnear_account_id".to_string(), json!("wnear.testnet"));
-            args.insert("btc_connector".to_string(), json!("brg-dev.testnet"));
-
-            locker_contract
-                .call("new")
-                .args_json(json!(args))
-                .max_gas()
-                .transact()
-                .await?
-                .into_result()?;
-
-            let prover = worker.dev_deploy(&mock_prover_wasm).await?;
-            locker_contract
-                .call("add_prover")
-                .args_json(json!({
-                    "chain": "Eth",
-                    "account_id": prover.id(),
-                }))
-                .max_gas()
-                .transact()
-                .await?
-                .into_result()?;
-
-            // Register the locker contract in the token contract
-            token_contract
-                .call("storage_deposit")
-                .args_json(json!({
-                    "account_id": locker_contract.id(),
-                    "registration_only": true,
-                }))
-                .deposit(NEP141_DEPOSIT)
-                .max_gas()
-                .transact()
-                .await?
-                .into_result()?;
-
-            // Create relayer account. (Default account in sandbox has 100 NEAR)
-            let relayer_account = worker
-                .create_tla(relayer_account_id(), worker.dev_generate().await.1)
-                .await?
-                .unwrap();
-
-            // Create sender account. (Default account in sandbox has 100 NEAR)
-            let sender_account = worker
-                .create_tla(account_n(1), worker.dev_generate().await.1)
-                .await?
-                .unwrap();
-
-            // Register the sender in the token contract
-            token_contract
-                .call("storage_deposit")
-                .args_json(json!({
-                    "account_id": sender_account.id(),
-                    "registration_only": true,
-                }))
-                .deposit(NEP141_DEPOSIT)
-                .max_gas()
-                .transact()
-                .await?
-                .into_result()?;
-
-            // Register the relayer in the token contract
-            token_contract
-                .call("storage_deposit")
-                .args_json(json!({
-                    "account_id": relayer_account.id(),
-                    "registration_only": true,
-                }))
-                .deposit(NEP141_DEPOSIT)
-                .max_gas()
-                .transact()
-                .await?
-                .into_result()?;
-
-            // Transfer initial tokens to the sender account
-            token_contract
-                .call("ft_transfer")
-                .args_json(json!({
-                    "receiver_id": sender_account.id(),
-                    "amount": U128(sender_balance_token),
-                    "memo": None::<String>,
-                }))
-                .deposit(NearToken::from_yoctonear(1))
-                .max_gas()
-                .transact()
-                .await?
-                .into_result()?;
-
-            // Add the ETH factory address to the locker contract
-            let eth_factory_address = eth_factory_address();
-            locker_contract
-                .call("add_factory")
-                .args_json(json!({
-                    "address": eth_factory_address,
-                }))
-                .max_gas()
-                .transact()
-                .await?
-                .into_result()?;
-
-            // Bind the token to the locker contract
-            let required_deposit_for_bind_token = locker_contract
-                .view("required_balance_for_bind_token")
-                .await?
-                .json()?;
-            locker_contract
-                .call("bind_token")
-                .args_borsh(get_bind_token_args(
-                    token_contract.id(),
-                    &eth_token_address(),
-                    &eth_factory_address,
-                    24,
-                    24,
-                ))
-                .deposit(required_deposit_for_bind_token)
-                .max_gas()
-                .transact()
-                .await?
-                .into_result()?;
+                .deploy_old_version(is_old_locker)
+                .with_native_nep141_token(24)
+                .await?;
+            let relayer_account = env_builder.create_account(relayer_account_id()).await?;
+            let sender_account = env_builder.create_account(account_n(1)).await?;
+            env_builder.storage_deposit(relayer_account.id()).await?;
+            env_builder.storage_deposit(sender_account.id()).await?;
+            env_builder
+                .mint_tokens(sender_account.id(), sender_balance_token)
+                .await?;
 
             Ok(Self {
-                worker,
-                token_contract,
-                locker_contract,
+                worker: env_builder.worker,
+                token_contract: env_builder.token.contract,
+                locker_contract: env_builder.bridge_contract,
                 relayer_account,
                 sender_account,
-                eth_factory_address,
+                eth_factory_address: eth_factory_address(),
             })
         }
     }
@@ -461,11 +334,7 @@ mod tests {
 
     #[rstest]
     #[tokio::test]
-    async fn test_native_fee(
-        mock_token_wasm: Vec<u8>,
-        mock_prover_wasm: Vec<u8>,
-        locker_wasm: Vec<u8>,
-    ) -> anyhow::Result<()> {
+    async fn test_native_fee(build_artifacts: &BuildArtifacts) -> anyhow::Result<()> {
         let sender_balance_token = 1_000_000;
         let transfer_amount = 100;
         let init_transfer_msg = InitTransferMsg {
@@ -475,13 +344,7 @@ mod tests {
             msg: None,
         };
 
-        let env = TestEnv::new(
-            sender_balance_token,
-            mock_token_wasm,
-            mock_prover_wasm,
-            locker_wasm,
-        )
-        .await?;
+        let env = TestEnv::new(sender_balance_token, false, build_artifacts).await?;
 
         init_transfer_flow_on_near(
             &env,
@@ -518,11 +381,7 @@ mod tests {
 
     #[rstest]
     #[tokio::test]
-    async fn test_transfer_fee(
-        mock_token_wasm: Vec<u8>,
-        mock_prover_wasm: Vec<u8>,
-        locker_wasm: Vec<u8>,
-    ) -> anyhow::Result<()> {
+    async fn test_transfer_fee(build_artifacts: &BuildArtifacts) -> anyhow::Result<()> {
         let sender_balance_token = 1_000_000;
         let transfer_amount = 5000;
         let init_transfer_msg = InitTransferMsg {
@@ -532,13 +391,7 @@ mod tests {
             msg: None,
         };
 
-        let env = TestEnv::new(
-            sender_balance_token,
-            mock_token_wasm,
-            mock_prover_wasm,
-            locker_wasm,
-        )
-        .await?;
+        let env = TestEnv::new(sender_balance_token, false, build_artifacts).await?;
 
         init_transfer_flow_on_near(
             &env,
@@ -573,11 +426,7 @@ mod tests {
 
     #[rstest]
     #[tokio::test]
-    async fn test_both_fee(
-        mock_token_wasm: Vec<u8>,
-        mock_prover_wasm: Vec<u8>,
-        locker_wasm: Vec<u8>,
-    ) -> anyhow::Result<()> {
+    async fn test_both_fee(build_artifacts: &BuildArtifacts) -> anyhow::Result<()> {
         let sender_balance_token = 1_000_000;
         let transfer_amount = 5000;
         let init_transfer_msg = InitTransferMsg {
@@ -587,13 +436,7 @@ mod tests {
             msg: None,
         };
 
-        let env = TestEnv::new(
-            sender_balance_token,
-            mock_token_wasm,
-            mock_prover_wasm,
-            locker_wasm,
-        )
-        .await?;
+        let env = TestEnv::new(sender_balance_token, false, build_artifacts).await?;
 
         init_transfer_flow_on_near(
             &env,
@@ -637,11 +480,7 @@ mod tests {
 
     #[rstest]
     #[tokio::test]
-    async fn test_update_fee(
-        mock_token_wasm: Vec<u8>,
-        mock_prover_wasm: Vec<u8>,
-        locker_wasm: Vec<u8>,
-    ) -> anyhow::Result<()> {
+    async fn test_update_fee(build_artifacts: &BuildArtifacts) -> anyhow::Result<()> {
         let sender_balance_token = 1_000_000;
         let transfer_amount = 5000;
         let init_transfer_msg = InitTransferMsg {
@@ -656,13 +495,7 @@ mod tests {
         };
         let update_fee = UpdateFee::Fee(update_fee_value.clone());
 
-        let env = TestEnv::new(
-            sender_balance_token,
-            mock_token_wasm,
-            mock_prover_wasm,
-            locker_wasm,
-        )
-        .await?;
+        let env = TestEnv::new(sender_balance_token, false, build_artifacts).await?;
 
         init_transfer_flow_on_near(
             &env,
@@ -706,11 +539,7 @@ mod tests {
 
     #[rstest]
     #[tokio::test]
-    async fn test_relayer_sign(
-        mock_token_wasm: Vec<u8>,
-        mock_prover_wasm: Vec<u8>,
-        locker_wasm: Vec<u8>,
-    ) -> anyhow::Result<()> {
+    async fn test_relayer_sign(build_artifacts: &BuildArtifacts) -> anyhow::Result<()> {
         let sender_balance_token = 1_000_000;
         let transfer_amount = 100;
         let init_transfer_msg = InitTransferMsg {
@@ -720,13 +549,7 @@ mod tests {
             msg: None,
         };
 
-        let env = TestEnv::new(
-            sender_balance_token,
-            mock_token_wasm,
-            mock_prover_wasm,
-            locker_wasm,
-        )
-        .await?;
+        let env = TestEnv::new(sender_balance_token, false, build_artifacts).await?;
 
         init_transfer_flow_on_near(
             &env,
@@ -765,11 +588,7 @@ mod tests {
     #[rstest]
     #[tokio::test]
     #[should_panic(expected = "ERR_LOWER_FEE")]
-    async fn test_update_fee_native_too_small(
-        mock_token_wasm: Vec<u8>,
-        mock_prover_wasm: Vec<u8>,
-        locker_wasm: Vec<u8>,
-    ) {
+    async fn test_update_fee_native_too_small(build_artifacts: &BuildArtifacts) {
         let sender_balance_token = 1_000_000;
         let transfer_amount = 5000;
         let init_transfer_msg = InitTransferMsg {
@@ -784,14 +603,9 @@ mod tests {
         };
         let update_fee = UpdateFee::Fee(update_fee_value.clone());
 
-        let env = TestEnv::new(
-            sender_balance_token,
-            mock_token_wasm,
-            mock_prover_wasm,
-            locker_wasm,
-        )
-        .await
-        .unwrap();
+        let env = TestEnv::new(sender_balance_token, false, build_artifacts)
+            .await
+            .unwrap();
 
         init_transfer_flow_on_near(
             &env,
@@ -808,11 +622,7 @@ mod tests {
     #[rstest]
     #[tokio::test]
     #[should_panic(expected = "ERR_INVALID_FEE")]
-    async fn test_update_fee_transfer_fee_too_small(
-        mock_token_wasm: Vec<u8>,
-        mock_prover_wasm: Vec<u8>,
-        locker_wasm: Vec<u8>,
-    ) {
+    async fn test_update_fee_transfer_fee_too_small(build_artifacts: &BuildArtifacts) {
         let sender_balance_token = 1_000_000;
         let transfer_amount = 5000;
         let init_transfer_msg = InitTransferMsg {
@@ -827,14 +637,9 @@ mod tests {
         };
         let update_fee = UpdateFee::Fee(update_fee_value.clone());
 
-        let env = TestEnv::new(
-            sender_balance_token,
-            mock_token_wasm,
-            mock_prover_wasm,
-            locker_wasm,
-        )
-        .await
-        .unwrap();
+        let env = TestEnv::new(sender_balance_token, false, build_artifacts)
+            .await
+            .unwrap();
 
         init_transfer_flow_on_near(
             &env,
@@ -851,11 +656,7 @@ mod tests {
     #[rstest]
     #[tokio::test]
     #[should_panic(expected = "ERR_INVALID_FEE")]
-    async fn test_update_fee_transfer_fee_too_big(
-        mock_token_wasm: Vec<u8>,
-        mock_prover_wasm: Vec<u8>,
-        locker_wasm: Vec<u8>,
-    ) {
+    async fn test_update_fee_transfer_fee_too_big(build_artifacts: &BuildArtifacts) {
         let sender_balance_token = 1_000_000;
         let transfer_amount = 5000;
         let init_transfer_msg = InitTransferMsg {
@@ -870,14 +671,9 @@ mod tests {
         };
         let update_fee = UpdateFee::Fee(update_fee_value.clone());
 
-        let env = TestEnv::new(
-            sender_balance_token,
-            mock_token_wasm,
-            mock_prover_wasm,
-            locker_wasm,
-        )
-        .await
-        .unwrap();
+        let env = TestEnv::new(sender_balance_token, false, build_artifacts)
+            .await
+            .unwrap();
 
         init_transfer_flow_on_near(
             &env,
@@ -895,11 +691,7 @@ mod tests {
     #[tokio::test]
     #[should_panic(expected = "TODO")]
     // Add a test once the Proof update fee is implemented
-    async fn test_update_fee_proof(
-        mock_token_wasm: Vec<u8>,
-        mock_prover_wasm: Vec<u8>,
-        locker_wasm: Vec<u8>,
-    ) {
+    async fn test_update_fee_proof(build_artifacts: &BuildArtifacts) {
         let sender_balance_token = 1_000_000;
         let transfer_amount = 5000;
         let init_transfer_msg = InitTransferMsg {
@@ -910,14 +702,9 @@ mod tests {
         };
         let update_fee = UpdateFee::Proof(vec![]);
 
-        let env = TestEnv::new(
-            sender_balance_token,
-            mock_token_wasm,
-            mock_prover_wasm,
-            locker_wasm,
-        )
-        .await
-        .unwrap();
+        let env = TestEnv::new(sender_balance_token, false, build_artifacts)
+            .await
+            .unwrap();
 
         init_transfer_flow_on_near(
             &env,
@@ -933,11 +720,7 @@ mod tests {
 
     #[rstest]
     #[tokio::test]
-    async fn test_migrate(
-        mock_token_wasm: Vec<u8>,
-        mock_prover_wasm: Vec<u8>,
-        locker_wasm: Vec<u8>,
-    ) -> anyhow::Result<()> {
+    async fn test_migrate(build_artifacts: &BuildArtifacts) -> anyhow::Result<()> {
         let sender_balance_token = 1_000_000;
         let transfer_amount = 5000;
         let init_transfer_msg = InitTransferMsg {
@@ -947,14 +730,7 @@ mod tests {
             msg: None,
         };
 
-        let prev_locker_wasm = std::fs::read(PREV_LOCKER_WASM_FILEPATH).unwrap();
-        let env = TestEnv::new(
-            sender_balance_token,
-            mock_token_wasm,
-            mock_prover_wasm,
-            prev_locker_wasm,
-        )
-        .await?;
+        let env = TestEnv::new(sender_balance_token, true, build_artifacts).await?;
 
         let transfer_message =
             init_transfer_legacy(&env, transfer_amount, init_transfer_msg.clone()).await?;
@@ -962,7 +738,7 @@ mod tests {
         let res = env
             .locker_contract
             .as_account()
-            .deploy(&locker_wasm)
+            .deploy(&build_artifacts.locker)
             .await
             .unwrap();
 

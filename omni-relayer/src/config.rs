@@ -23,6 +23,7 @@ pub fn get_private_key(chain_kind: ChainKind, near_signer_type: Option<NearSigne
         ChainKind::Arb => "ARB_PRIVATE_KEY",
         ChainKind::Bnb => "BNB_PRIVATE_KEY",
         ChainKind::Sol => "SOLANA_PRIVATE_KEY",
+        ChainKind::Btc | ChainKind::Zcash => unreachable!("No private key for UTXO chains"),
     };
 
     std::env::var(env_var).unwrap_or_else(|_| panic!("Failed to get `{env_var}` env variable"))
@@ -101,7 +102,8 @@ pub struct Config {
     pub arb: Option<Evm>,
     pub bnb: Option<Evm>,
     pub solana: Option<Solana>,
-    pub btc: Option<Btc>,
+    pub btc: Option<Utxo>,
+    pub zcash: Option<Utxo>,
     pub wormhole: Wormhole,
 }
 
@@ -118,14 +120,36 @@ impl Config {
         self.near.fast_relayer_enabled
     }
 
-    pub fn is_signing_btc_transaction_enabled(&self) -> bool {
-        self.btc.as_ref().is_some_and(|btc| btc.signing_enabled)
+    pub fn is_signing_utxo_transaction_enabled(&self, chain: ChainKind) -> bool {
+        let config = match chain {
+            ChainKind::Btc => self.btc.as_ref(),
+            ChainKind::Zcash => self.zcash.as_ref(),
+            ChainKind::Near
+            | ChainKind::Eth
+            | ChainKind::Base
+            | ChainKind::Arb
+            | ChainKind::Bnb
+            | ChainKind::Sol => {
+                panic!("Verifying withdraw is not applicable for {chain:?}")
+            }
+        };
+        config.is_some_and(|btc| btc.signing_enabled)
     }
 
-    pub fn is_verifying_withdraw_enabled(&self) -> bool {
-        self.btc
-            .as_ref()
-            .is_some_and(|btc| btc.verifying_withdraw_enabled)
+    pub fn is_verifying_utxo_withdraw_enabled(&self, chain: ChainKind) -> bool {
+        let config = match chain {
+            ChainKind::Btc => self.btc.as_ref(),
+            ChainKind::Zcash => self.zcash.as_ref(),
+            ChainKind::Near
+            | ChainKind::Eth
+            | ChainKind::Base
+            | ChainKind::Arb
+            | ChainKind::Bnb
+            | ChainKind::Sol => {
+                panic!("Verifying withdraw is not applicable for {chain:?}")
+            }
+        };
+        config.is_some_and(|btc| btc.verifying_withdraw_enabled)
     }
 }
 
@@ -153,7 +177,7 @@ pub struct BridgeIndexer {
     pub fee_discount: u8,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Copy, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Network {
     Testnet,
@@ -169,6 +193,15 @@ impl std::fmt::Display for Network {
     }
 }
 
+impl From<Network> for utxo_utils::address::Network {
+    fn from(value: Network) -> Self {
+        match value {
+            Network::Testnet => utxo_utils::address::Network::Testnet,
+            Network::Mainnet => utxo_utils::address::Network::Mainnet,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Deserialize)]
 pub struct Near {
     pub network: Network,
@@ -177,6 +210,8 @@ pub struct Near {
     pub omni_bridge_id: AccountId,
     pub btc_connector: Option<AccountId>,
     pub btc: Option<AccountId>,
+    pub zcash_connector: Option<AccountId>,
+    pub zcash: Option<AccountId>,
     pub omni_credentials_path: Option<String>,
     pub fast_credentials_path: Option<String>,
     pub sign_without_checking_fee: Option<Vec<OmniAddress>>,
@@ -229,9 +264,10 @@ pub struct Solana {
 }
 
 #[derive(Debug, Clone, Deserialize)]
-pub struct Btc {
+pub struct Utxo {
     #[serde(deserialize_with = "replace_rpc_api_key")]
     pub rpc_http_url: String,
+    pub light_client: AccountId,
     pub signing_enabled: bool,
     pub verifying_withdraw_enabled: bool,
 }

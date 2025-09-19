@@ -47,11 +47,11 @@ rule get_btc_user_deposit_address:
 rule send_btc_to_deposit_address:
     message: "Send BTC to user deposit address on Bitcoin"
     input:
-        step_2 = rules.get_btc_user_deposit_address.output,
+        step_1 = rules.get_btc_user_deposit_address.output,
     output: call_dir / "02_send_btc_to_deposit_address.json"
     params:
         scripts_dir = const.common_scripts_dir,
-        btc_address = lambda wc, input: get_btc_address(input.step_2),
+        btc_address = lambda wc, input: get_btc_address(input.step_1),
     shell: """
     node {params.scripts_dir}/send_btc.js {params.btc_address} 7500 > {output}
     """
@@ -59,7 +59,8 @@ rule send_btc_to_deposit_address:
 rule fin_btc_transfer_on_near:
     message: "Finalizing BTC transfer on Near"
     input:
-        step_3 = rules.send_btc_to_deposit_address.output,
+        step_2 = rules.send_btc_to_deposit_address.output,
+        nbtc_file = nbtc_file,
         btc_connector_file = btc_connector_file,
         user_account_file = user_account_file
     output: call_dir / "03_fin_btc_transfer_on_near.json"
@@ -68,7 +69,7 @@ rule fin_btc_transfer_on_near:
         user_account_id = lambda wc, input: get_json_field(input.user_account_file, "account_id"),
         user_private_key = lambda wc, input: get_json_field(input.user_account_file, "private_key"),
         bridge_sdk_config_file = const.common_bridge_sdk_config_file,
-        btc_tx_hash = lambda wc, input: get_last_value(input.step_3),
+        btc_tx_hash = lambda wc, input: get_last_value(input.step_2),
     shell: """
     bridge-cli testnet  near-fin-transfer-btc \
         --chain btc \
@@ -86,8 +87,8 @@ rule ft_transfer_btc_to_omni_bridge:
     message: "Init BTC transfer to OmniBridge on Near"
     input:
         add_utxo_chain = rules.add_utxo_chain_connector.output,
-        step_6 = rules.omni_bridge_storage_deposit.output,
-        step_4 = rules.fin_btc_transfer_on_near.output,
+        omni_bridge_storage_deposit = rules.omni_bridge_storage_deposit.output,
+        step_3 = rules.fin_btc_transfer_on_near.output,
         nbtc_file = nbtc_file,
         omni_bridge_file = omni_bridge_file,
         user_account_file = user_account_file,
@@ -108,13 +109,13 @@ rule ft_transfer_btc_to_omni_bridge:
     """
 
 rule submit_transfer_to_btc_connector:
-    message: "Sign BTC transfer on OmniBridge"
+    message: "Submit BTC transfer on OmniBridge"
     input:
        step_7 = rules.ft_transfer_btc_to_omni_bridge.output,
        btc_connector_file = btc_connector_file,
        omni_bridge_file = omni_bridge_file,
        user_account_file = user_account_file
-    output: call_dir / "05_sign_btc_transfer.json"
+    output: call_dir / "05_submit_btc_transfer.json"
     params:
         btc_connector = lambda wc, input: get_json_field(input.btc_connector_file, "contract_id"),
         user_account_id = lambda wc, input: get_json_field(input.user_account_file, "account_id"),
@@ -141,7 +142,7 @@ rule sign_btc_connector_transfer:
     message: "Sign BTC transfer on BtcConnector"
     input:
         add_utxo_chain = rules.add_utxo_chain_connector.output,
-        step_8 = rules.submit_transfer_to_btc_connector.output,
+        step_7 = rules.submit_transfer_to_btc_connector.output,
         btc_connector_file = btc_connector_file,
         omni_bridge_file = omni_bridge_file,
         user_account_file = user_account_file
@@ -151,7 +152,7 @@ rule sign_btc_connector_transfer:
         user_account_id = lambda wc, input: get_json_field(input.user_account_file, "account_id"),
         user_private_key = lambda wc, input: get_json_field(input.user_account_file, "private_key"),
         bridge_sdk_config_file = const.common_bridge_sdk_config_file,
-        near_tx_hash = lambda wc, input: get_tx_hash(input.step_8),
+        near_tx_hash = lambda wc, input: get_tx_hash(input.step_7),
 
     shell: """
     bridge-cli testnet near-sign-btc-transaction \
@@ -168,11 +169,11 @@ rule sign_btc_connector_transfer:
 rule send_btc_transfer:
     message: "Send BTC transfer"
     input:
-        step_9 = rules.sign_btc_connector_transfer.output,
+        step_8 = rules.sign_btc_connector_transfer.output,
         user_account_file = user_account_file,
     output: call_dir / "07_send_btc_transfer.json"
     params:
-        near_tx_hash = lambda wc, input: get_tx_hash(input.step_9),
+        near_tx_hash = lambda wc, input: get_tx_hash(input.step_8),
         user_account_id = lambda wc, input: get_json_field(input.user_account_file, "account_id"),
         bridge_sdk_config_file = const.common_bridge_sdk_config_file,
     shell: """

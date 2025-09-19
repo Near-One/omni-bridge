@@ -174,6 +174,129 @@ pub async fn process_transfer_event(
     }
 }
 
+pub async fn process_transfer_to_utxo_event(
+    config: &config::Config,
+    redis_connection_manager: &mut redis::aio::ConnectionManager,
+    key: String,
+    omni_connector: Arc<OmniConnector>,
+    signer: AccountId,
+    transfer: Transfer,
+    near_nonce: Arc<utils::nonce::NonceManager>,
+) -> Result<EventAction> {
+    let Transfer::Near {
+        ref transfer_message,
+    } = transfer
+    else {
+        anyhow::bail!("Expected NearTransferWithTimestamp, got: {:?}", transfer);
+    };
+
+    info!("Trying to process UtxoTransferMessage on NEAR");
+
+    let Some(recipient) = transfer_message.recipient.get_utxo_address() else {
+        anyhow::bail!(
+            "Expected UTXO recipient address, got: {:?}",
+            transfer_message.recipient
+        );
+    };
+
+    let nonce = near_nonce
+        .reserve_nonce()
+        .await
+        .context("Failed to reserve nonce for near transaction")?;
+
+    match omni_connector
+        .near_submit_btc_transfer(
+            transfer_message.recipient.get_chain(),
+            recipient,
+            transfer_message.amount.0,
+            None,
+            TransferId {
+                origin_chain: transfer_message.sender.get_chain(),
+                origin_nonce: transfer_message.origin_nonce,
+            },
+            TransactionOptions {
+                nonce: Some(nonce),
+                wait_until: near_primitives::views::TxExecutionStatus::Included,
+                wait_final_outcome_timeout_sec: None,
+            },
+        )
+        .await
+    {
+        Ok(tx_hash) => {
+            info!(
+                "Submitted {:?} transfer: {tx_hash:?}",
+                transfer_message.recipient.get_chain()
+            );
+
+            utils::redis::add_event(
+                config,
+                redis_connection_manager,
+                utils::redis::EVENTS,
+                tx_hash.to_string(),
+                RetryableEvent::new(UnverifiedTrasfer {
+                    tx_hash,
+                    signer,
+                    specific_errors: Some(vec![
+                        "not exist".to_string(),
+                        "Previous btc tx has not been signed".to_string(),
+                    ]),
+                    original_key: key,
+                    original_event: transfer,
+                }),
+            )
+            .await;
+
+            Ok(EventAction::Remove)
+        }
+        Err(err) => {
+            if let BridgeSdkError::NearRpcError(near_rpc_error) = err {
+                match near_rpc_error {
+                    NearRpcError::NonceError
+                    | NearRpcError::FinalizationError
+                    | NearRpcError::RpcBroadcastTxAsyncError(_)
+                    | NearRpcError::RpcTransactionError(JsonRpcError::TransportError(_)) => {
+                        warn!(
+                            "Failed to submit {:?} transfer ({}), retrying: {near_rpc_error:?}",
+                            transfer_message.recipient.get_chain(),
+                            transfer_message.origin_nonce
+                        );
+                        return Ok(EventAction::Retry);
+                    }
+                    _ => {
+                        anyhow::bail!(
+                            "Failed to submit {:?} transfer ({}): {near_rpc_error:?}",
+                            transfer_message.recipient.get_chain(),
+                            transfer_message.origin_nonce
+                        );
+                    }
+                };
+            } else if let BridgeSdkError::InsufficientUTXOBalance = err {
+                warn!(
+                    "Insufficient UTXO balance for {:?} transfer ({}), retrying",
+                    transfer_message.recipient.get_chain(),
+                    transfer_message.origin_nonce
+                );
+                return Ok(EventAction::Retry);
+            } else if let BridgeSdkError::BtcClientError(ref msg) = err {
+                if msg == "Failed to estimate fee_rate" {
+                    warn!(
+                        "Failed to estimate fee_rate for {:?} transfer ({}), retrying",
+                        transfer_message.recipient.get_chain(),
+                        transfer_message.origin_nonce
+                    );
+                    return Ok(EventAction::Retry);
+                }
+            }
+
+            anyhow::bail!(
+                "Failed to submit {:?} transfer ({}): {err:?}",
+                transfer_message.recipient.get_chain(),
+                transfer_message.origin_nonce
+            );
+        }
+    }
+}
+
 pub async fn process_sign_transfer_event(
     config: &config::Config,
     redis_connection_manager: &mut redis::aio::ConnectionManager,
@@ -294,6 +417,9 @@ pub async fn process_sign_transfer_event(
                 solana_token: Pubkey::new_from_array(token.0),
             }
         }
+        ChainKind::Btc | ChainKind::Zcash => {
+            anyhow::bail!("Finishing BTC/ZEC transfers is not supported");
+        }
     };
 
     match omni_connector.fin_transfer(fin_transfer_args).await {
@@ -308,7 +434,7 @@ pub async fn process_sign_transfer_event(
                     ChainKind::Base => &config.base,
                     ChainKind::Arb => &config.arb,
                     ChainKind::Bnb => &config.bnb,
-                    ChainKind::Near | ChainKind::Sol => {
+                    ChainKind::Near | ChainKind::Sol | ChainKind::Btc | ChainKind::Zcash => {
                         anyhow::bail!(
                             "Failed to finalize deposit (unexpected: failed to get evm config): {}",
                             err
