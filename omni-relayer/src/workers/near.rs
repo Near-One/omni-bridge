@@ -285,6 +285,13 @@ pub async fn process_transfer_to_utxo_event(
                         transfer_message.origin_nonce
                     );
                     return Ok(EventAction::Retry);
+                } else if msg == "Gas fee is too large" {
+                    warn!(
+                        "Gas fee is too large for {:?} transfer ({}), retrying",
+                        transfer_message.recipient.get_chain(),
+                        transfer_message.origin_nonce
+                    );
+                    return Ok(EventAction::Retry);
                 }
             }
 
