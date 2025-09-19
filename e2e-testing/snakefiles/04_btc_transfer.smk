@@ -188,19 +188,31 @@ rule rbf_increase_gas_fee:
     message: "RBF Increase Gas Fee"
     input:
         step_10 = rules.send_btc_transfer.output,
+        btc_connector_file = btc_connector_file,
+        omni_bridge_file = omni_bridge_file,
+        user_account_file = user_account_file,
     output: call_dir / "08_rbf_increase_gas_fee.json"
     params:
-        btc_tx_hash = lambda wc, input: get_last_value(input.step_3),
+        btc_tx_hash = lambda wc, input: get_last_value(input.step_10),
+        btc_connector = lambda wc, input: get_json_field(input.btc_connector_file, "contract_id"),
+        user_account_id = lambda wc, input: get_json_field(input.user_account_file, "account_id"),
+        user_private_key = lambda wc, input: get_json_field(input.user_account_file, "private_key"),
         bridge_sdk_config_file = const.common_bridge_sdk_config_file,
+        omni_bridge_account = lambda wc, input: get_json_field(input.omni_bridge_file, "contract_id"),
     shell: """
     bridge-cli testnet btc-rbf-increase-gas-fee \
     --chain btc \
+    -f 1 \
     -b {params.btc_tx_hash} \
+    --near-token-locker-id {params.omni_bridge_account} \
+    --btc-connector {params.btc_connector} \
+    --near-signer {params.user_account_id} \
+    --near-private-key {params.user_private_key} \
     --config {params.bridge_sdk_config_file} \
     > {output} \
     """
 
 rule all:
     input:
-        rules.send_btc_transfer.output,
+        rules.rbf_increase_gas_fee.output,
     default_target: True
