@@ -212,7 +212,53 @@ rule rbf_increase_gas_fee:
     > {output} \
     """
 
+rule sign_btc_connector_transfer_after_rbf:
+    message: "Sign BTC transfer on BtcConnector after RBF"
+    input:
+        add_utxo_chain = rules.add_utxo_chain_connector.output,
+        step_11 = rules.rbf_increase_gas_fee.output,
+        btc_connector_file = btc_connector_file,
+        omni_bridge_file = omni_bridge_file,
+        user_account_file = user_account_file
+    output: call_dir / "09_sign_btc_connector_transfer_after_rbf.json"
+    params:
+        btc_connector = lambda wc, input: get_json_field(input.btc_connector_file, "contract_id"),
+        user_account_id = lambda wc, input: get_json_field(input.user_account_file, "account_id"),
+        user_private_key = lambda wc, input: get_json_field(input.user_account_file, "private_key"),
+        bridge_sdk_config_file = const.common_bridge_sdk_config_file,
+        near_tx_hash = lambda wc, input: get_tx_hash(input.step_11),
+
+    shell: """
+    bridge-cli testnet near-sign-btc-transaction \
+        --chain btc \
+        --near-tx-hash {params.near_tx_hash} \
+        --user-account {params.user_account_id} \
+        --btc-connector {params.btc_connector} \
+        --near-signer {params.user_account_id} \
+        --near-private-key {params.user_private_key} \
+        --config {params.bridge_sdk_config_file} \
+         > {output} \
+    """
+
+rule send_btc_transfer_after_rbf:
+    message: "Send BTC transfer after RBF"
+    input:
+        step_12 = rules.sign_btc_connector_transfer_after_rbf.output,
+        user_account_file = user_account_file,
+    output: call_dir / "10_send_btc_transfer_after_rbf.json"
+    params:
+        near_tx_hash = lambda wc, input: get_tx_hash(input.step_12),
+        user_account_id = lambda wc, input: get_json_field(input.user_account_file, "account_id"),
+        bridge_sdk_config_file = const.common_bridge_sdk_config_file,
+    shell: """
+    bridge-cli testnet btc-fin-transfer \
+    --chain btc \
+    --near-tx-hash {params.near_tx_hash} \
+    --config {params.bridge_sdk_config_file} \
+    > {output} \
+    """
+
 rule all:
     input:
-        rules.rbf_increase_gas_fee.output,
+        rules.send_btc_transfer_after_rbf.output,
     default_target: True
