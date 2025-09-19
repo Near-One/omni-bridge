@@ -125,6 +125,7 @@ rule submit_transfer_to_btc_connector:
         -s {params.omni_bridge_account} \
         --near-token-locker-id {params.omni_bridge_account} \
         --btc-connector {params.btc_connector} \
+        --fee-rate 1000\
         --near-signer {params.user_account_id} \
         --near-private-key {params.user_private_key} \
         --config {params.bridge_sdk_config_file} \

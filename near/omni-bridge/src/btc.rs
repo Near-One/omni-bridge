@@ -197,7 +197,7 @@ mod tests {
     #[test]
     fn test_deserialize_utxo_chain_msg() {
         let serialized_msg = r#"{"V0":{"max_fee":12345}}"#;
-        let deserialized: UTXOChainMsg = serde_json::from_str(&serialized_msg).unwrap();
+        let deserialized: UTXOChainMsg = serde_json::from_str(serialized_msg).unwrap();
         let original = UTXOChainMsg::V0 { max_fee: 12345 };
         assert_eq!(original, deserialized);
     }
