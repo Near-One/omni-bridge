@@ -230,7 +230,14 @@ pub async fn process_sign_transaction_event(
                         );
                     }
                 };
+            } else if let BridgeSdkError::BtcRpcError(err) = err {
+                warn!(
+                    "Failed to finalize {:?} transaction ({}), retrying: {err:?}",
+                    sign_utxo_transaction_event.chain, sign_utxo_transaction_event.near_tx_hash
+                );
+                return Ok(EventAction::Retry);
             }
+
             anyhow::bail!(
                 "Failed to finalize {:?} transaction ({}): {err:?}",
                 sign_utxo_transaction_event.chain,
