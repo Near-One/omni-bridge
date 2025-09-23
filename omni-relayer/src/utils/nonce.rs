@@ -117,13 +117,13 @@ impl NonceManager {
                 .map_resp(|x: U64| x.to::<u64>())
                 .await;
 
-            let Ok(nonce) = response else {
-                warn!("Failed to get transaction count, retrying...");
-                tokio::time::sleep(tokio::time::Duration::from_secs(RETRY_SLEEP_SECS)).await;
-                continue;
+            match response {
+                Ok(nonce) => return Ok(nonce),
+                Err(err) => {
+                    warn!("Failed to get transaction count: {err:?}, retrying...");
+                    tokio::time::sleep(tokio::time::Duration::from_secs(RETRY_SLEEP_SECS)).await;
+                }
             };
-
-            return Ok(nonce);
         }
 
         anyhow::bail!("Failed to get current nonce")

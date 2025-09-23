@@ -82,7 +82,7 @@ error_selectors_to_remove = [
 ]
 
 [bnb]
-rpc_http_url = "https://bsc-mainnet.infura.io/v3/INFURA_API_KEY"
+rpc_http_url = "https://x-api-key:TATUM_API_KEY@bsc-mainnet.gateway.tatum.io"
 rpc_ws_url = "wss://bsc-mainnet.infura.io/ws/v3/INFURA_API_KEY"
 chain_id = 56
 omni_bridge_address = "0x073C8a225c8Cf9d3f9157F5C1a1DbE02407f5720"
