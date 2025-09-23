@@ -486,31 +486,26 @@ impl Contract {
             "ERR_INVALID_FEE"
         );
 
-        let required_storage_balance = self
-            .required_balance_for_init_transfer_message(transfer_message.clone())
-            .saturating_add(NearToken::from_yoctonear(
-                init_transfer_msg.native_token_fee.0,
-            ));
+        let required_storage_balance =
+            self.required_balance_for_init_transfer_message(transfer_message.clone());
 
         let message_storage_account_id = transfer_message.calculate_storage_account_id();
         // Choose storage payer or whether to yield execution until storage is available
-        if self.has_storage_balance(
-            &message_storage_account_id,
-            NearToken::from_yoctonear(init_transfer_msg.native_token_fee.0),
-        ) {
-            self.pay_native_fee_from_message_account(
+        if self
+            .try_pay_native_fee_from_message_account(
                 &message_storage_account_id,
                 init_transfer_msg.native_token_fee.0,
                 &signer_id,
-            );
-            PromiseOrPromiseIndexOrValue::Value(self.init_transfer_internal(
-                transfer_message,
-                signer_id.clone(),
-                signer_id,
-            ))
-        } else if self.has_storage_balance(&signer_id, required_storage_balance)
-            && (init_transfer_msg.native_token_fee.0 == 0
-                || !self.acl_has_role(Role::NativeFeeRestricted.into(), signer_id.clone()))
+                required_storage_balance,
+            )
+            .is_ok()
+            || (self.has_storage_balance(
+                &signer_id,
+                required_storage_balance.saturating_add(NearToken::from_yoctonear(
+                    init_transfer_msg.native_token_fee.0,
+                )),
+            ) && (init_transfer_msg.native_token_fee.0 == 0
+                || !self.acl_has_role(Role::NativeFeeRestricted.into(), signer_id.clone())))
         {
             PromiseOrPromiseIndexOrValue::Value(self.init_transfer_internal(
                 transfer_message,
@@ -565,11 +560,16 @@ impl Contract {
         self.remove_promise(&message_storage_account_id);
 
         if response.is_ok() {
-            self.pay_native_fee_from_message_account(
+            if let Err(err) = self.try_pay_native_fee_from_message_account(
                 &message_storage_account_id,
                 transfer_message.fee.native_fee.0,
                 &storage_owner,
-            );
+                self.required_balance_for_init_transfer(Some(transfer_message.msg.clone())),
+            ) {
+                env::log_str(&format!("Error paying native fee: {err}"));
+                return transfer_message.amount;
+            }
+
             self.init_transfer_internal(transfer_message, storage_owner.clone(), storage_owner)
         } else {
             env::log_str("Init transfer resume timeout");
