@@ -123,7 +123,7 @@ impl NonceManager {
                     warn!("Failed to get transaction count: {err:?}, retrying...");
                     tokio::time::sleep(tokio::time::Duration::from_secs(RETRY_SLEEP_SECS)).await;
                 }
-            };
+            }
         }
 
         anyhow::bail!("Failed to get current nonce")
