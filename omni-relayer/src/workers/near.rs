@@ -214,11 +214,7 @@ pub async fn process_transfer_to_utxo_event(
             transfer_message.recipient.get_chain(),
             recipient,
             transfer_message.amount.0,
-            serde_json::from_str::<UTXOChainMsg>(&transfer_message.msg)
-                .map(|msg| match msg {
-                    UTXOChainMsg::V0 { max_fee } => max_fee,
-                })
-                .ok(),
+            None,
             TransferId {
                 origin_chain: transfer_message.sender.get_chain(),
                 origin_nonce: transfer_message.origin_nonce,
@@ -228,7 +224,11 @@ pub async fn process_transfer_to_utxo_event(
                 wait_until: near_primitives::views::TxExecutionStatus::Included,
                 wait_final_outcome_timeout_sec: None,
             },
-            None,
+            serde_json::from_str::<UTXOChainMsg>(&transfer_message.msg)
+                .map(|msg| match msg {
+                    UTXOChainMsg::V0 { max_fee } => max_fee,
+                })
+                .ok(),
         )
         .await
     {
