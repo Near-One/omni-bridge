@@ -507,11 +507,9 @@ impl Contract {
             ) && (init_transfer_msg.native_token_fee.0 == 0
                 || !self.acl_has_role(Role::NativeFeeRestricted.into(), signer_id.clone())))
         {
-            PromiseOrPromiseIndexOrValue::Value(self.init_transfer_internal(
-                transfer_message,
-                signer_id.clone(),
-                signer_id,
-            ))
+            PromiseOrPromiseIndexOrValue::Value(
+                self.init_transfer_internal(transfer_message, signer_id),
+            )
         } else {
             let promise_index = env::promise_yield_create(
                 "init_transfer_resume",
@@ -566,11 +564,11 @@ impl Contract {
                 &storage_owner,
                 self.required_balance_for_init_transfer(Some(transfer_message.msg.clone())),
             ) {
-                env::log_str(&format!("Error paying native fee: {err}"));
+                env::log_str(&format!("Error paying native fee and storage: {err}"));
                 return transfer_message.amount;
             }
 
-            self.init_transfer_internal(transfer_message, storage_owner.clone(), storage_owner)
+            self.init_transfer_internal(transfer_message, storage_owner)
         } else {
             env::log_str("Init transfer resume timeout");
             transfer_message.amount
@@ -1466,16 +1464,15 @@ impl Contract {
     fn init_transfer_internal(
         &mut self,
         transfer_message: TransferMessage,
-        storage_payer: AccountId,
         storage_owner: AccountId,
     ) -> U128 {
         let required_storage_balance = self
-            .add_transfer_message(transfer_message.clone(), storage_owner)
+            .add_transfer_message(transfer_message.clone(), storage_owner.clone())
             .saturating_add(NearToken::from_yoctonear(transfer_message.fee.native_fee.0));
 
         if self
             .try_update_storage_balance(
-                storage_payer,
+                storage_owner,
                 required_storage_balance,
                 NearToken::from_yoctonear(0),
             )

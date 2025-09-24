@@ -189,8 +189,8 @@ impl Contract {
         &mut self,
         account_id: &AccountId,
         native_fee: u128,
-        signer_id: &AccountId,
-        required_signer_balance: NearToken,
+        storage_payer: &AccountId,
+        required_storage_payer_balance: NearToken,
     ) -> Result<(), String> {
         let balance = self
             .accounts_balances
@@ -204,17 +204,17 @@ impl Contract {
 
         let mut storage = self
             .accounts_balances
-            .get(signer_id)
+            .get(storage_payer)
             .ok_or("ERR_SIGNER_NOT_REGISTERED")?;
 
         storage.available = storage.available.saturating_add(remaining);
 
-        if storage.available < required_signer_balance {
+        if storage.available < required_storage_payer_balance {
             return Err("ERR_SIGNER_NOT_ENOUGH_BALANCE".to_string());
         }
 
         if remaining.as_yoctonear() > 0 {
-            self.accounts_balances.insert(signer_id, &storage);
+            self.accounts_balances.insert(storage_payer, &storage);
         }
 
         self.accounts_balances.remove(account_id);
