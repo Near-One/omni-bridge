@@ -31,6 +31,11 @@ pub struct UnverifiedTrasfer {
     original_event: Transfer,
 }
 
+#[derive(Debug, serde::Deserialize)]
+enum UTXOChainMsg {
+    V0 { max_fee: u64 },
+}
+
 pub async fn process_transfer_event(
     config: &config::Config,
     redis_connection_manager: &mut redis::aio::ConnectionManager,
@@ -209,7 +214,11 @@ pub async fn process_transfer_to_utxo_event(
             transfer_message.recipient.get_chain(),
             recipient,
             transfer_message.amount.0,
-            None,
+            serde_json::from_str::<UTXOChainMsg>(&transfer_message.msg)
+                .map(|msg| match msg {
+                    UTXOChainMsg::V0 { max_fee } => max_fee,
+                })
+                .ok(),
             TransferId {
                 origin_chain: transfer_message.sender.get_chain(),
                 origin_nonce: transfer_message.origin_nonce,
