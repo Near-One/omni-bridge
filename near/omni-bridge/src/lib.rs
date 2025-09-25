@@ -490,15 +490,17 @@ impl Contract {
             self.required_balance_for_init_transfer_message(transfer_message.clone());
 
         let message_storage_account_id = transfer_message.calculate_storage_account_id();
-        // Choose storage payer or whether to yield execution until storage is available
-        if self
+        let is_native_fee_paied_by_message_account = self
             .try_pay_native_fee_from_message_account(
                 &message_storage_account_id,
                 init_transfer_msg.native_token_fee.0,
                 &signer_id,
                 required_storage_balance,
             )
-            .is_ok()
+            .is_ok();
+
+        // Choose storage payer or whether to yield execution until storage is available
+        if is_native_fee_paied_by_message_account
             || (self.has_storage_balance(
                 &signer_id,
                 required_storage_balance.saturating_add(NearToken::from_yoctonear(
@@ -507,9 +509,11 @@ impl Contract {
             ) && (init_transfer_msg.native_token_fee.0 == 0
                 || !self.acl_has_role(Role::NativeFeeRestricted.into(), signer_id.clone())))
         {
-            PromiseOrPromiseIndexOrValue::Value(
-                self.init_transfer_internal(transfer_message, signer_id),
-            )
+            PromiseOrPromiseIndexOrValue::Value(self.init_transfer_internal(
+                transfer_message,
+                signer_id,
+                !is_native_fee_paied_by_message_account,
+            ))
         } else {
             let promise_index = env::promise_yield_create(
                 "init_transfer_resume",
@@ -568,7 +572,7 @@ impl Contract {
                 return transfer_message.amount;
             }
 
-            self.init_transfer_internal(transfer_message, storage_owner)
+            self.init_transfer_internal(transfer_message, storage_owner, false)
         } else {
             env::log_str("Init transfer resume timeout");
             transfer_message.amount
@@ -1465,10 +1469,15 @@ impl Contract {
         &mut self,
         transfer_message: TransferMessage,
         storage_owner: AccountId,
+        pay_native_fee_by_storage_owner: bool,
     ) -> U128 {
         let required_storage_balance = self
             .add_transfer_message(transfer_message.clone(), storage_owner.clone())
-            .saturating_add(NearToken::from_yoctonear(transfer_message.fee.native_fee.0));
+            .saturating_add(if pay_native_fee_by_storage_owner {
+                NearToken::from_yoctonear(transfer_message.fee.native_fee.0)
+            } else {
+                NearToken::from_yoctonear(0)
+            });
 
         if self
             .try_update_storage_balance(
