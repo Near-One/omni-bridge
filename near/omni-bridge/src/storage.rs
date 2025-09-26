@@ -210,7 +210,7 @@ impl Contract {
             sender: OmniAddress::Near(max_account_id.clone()),
             msg: msg.unwrap_or_default(),
             destination_nonce: 0,
-            origin_transfer_id: Some(UnifiedTransferId::Utxo("a".repeat(64))),
+            origin_transfer_id: Some(UnifiedTransferId::Utxo("a".repeat(75))), // tx_id@vout = 64 + 1 + 10
         })
     }
 
