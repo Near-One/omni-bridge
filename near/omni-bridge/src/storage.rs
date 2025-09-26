@@ -183,9 +183,9 @@ impl Contract {
         }
     }
 
-    // Deducts `native_fee` from `account_id` and credits the remaining balance to `signer_id` and verify the `signer_id` has enough balance.
+    // Deducts the total balance from `account_id` and credits it to `storage_payer` and verify the `storage_payer` has enough balance.
     // Returns an error if `account_id` does not have enough balance to cover `native_fee` or if `signer_id` is not registered.
-    pub(crate) fn try_pay_native_fee_from_message_account(
+    pub(crate) fn try_to_transfer_balance_from_message_account(
         &mut self,
         account_id: &AccountId,
         native_fee: u128,
@@ -195,28 +195,24 @@ impl Contract {
         let balance = self
             .accounts_balances
             .get(account_id)
-            .ok_or("ERR_ACCOUNT_NOT_REGISTERED")?;
+            .ok_or("ERR_MESSAGE_ACCOUNT_NOT_REGISTERED")?;
 
-        let remaining = balance
-            .total
-            .checked_sub(NearToken::from_yoctonear(native_fee))
-            .ok_or("ERR_NOT_ENOUGH_BALANCE_FOR_FEE")?;
+        if balance.total.as_yoctonear() < native_fee {
+            return Err("ERR_NOT_ENOUGH_BALANCE_FOR_FEE".to_string());
+        }
 
         let mut storage = self
             .accounts_balances
             .get(storage_payer)
             .ok_or("ERR_SIGNER_NOT_REGISTERED")?;
 
-        storage.available = storage.available.saturating_add(remaining);
+        storage.available = storage.available.saturating_add(balance.total);
 
         if storage.available < required_storage_payer_balance {
             return Err("ERR_SIGNER_NOT_ENOUGH_BALANCE".to_string());
         }
 
-        if remaining.as_yoctonear() > 0 {
-            self.accounts_balances.insert(storage_payer, &storage);
-        }
-
+        self.accounts_balances.insert(storage_payer, &storage);
         self.accounts_balances.remove(account_id);
         Ok(())
     }
