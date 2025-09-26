@@ -4,7 +4,7 @@ use near_sdk::{near, AccountId};
 use crate::mpc_types::SignatureResponse;
 use crate::{
     BasicMetadata, FastTransfer, MetadataPayload, OmniAddress, TransferId, TransferMessage,
-    TransferMessagePayload, UtxoTransferMsg,
+    TransferMessagePayload, UtxoFinTransferMsg,
 };
 
 #[near(serializers=[json])]
@@ -49,7 +49,7 @@ pub enum OmniBridgeEvent {
         new_transfer_id: Option<TransferId>,
     },
     UtxoTransferEvent {
-        transfer_message: UtxoTransferMsg,
+        transfer_message: UtxoFinTransferMsg,
     },
 }
 

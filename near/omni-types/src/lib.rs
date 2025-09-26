@@ -461,7 +461,7 @@ impl<'de> Deserialize<'de> for OmniAddress {
 pub enum BridgeOnTransferMsg {
     InitTransfer(InitTransferMsg),
     FastFinTransfer(FastFinTransferMsg),
-    UtxoTransfer(UtxoTransferMsg),
+    UtxoFinTransfer(UtxoFinTransferMsg),
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -485,7 +485,7 @@ pub struct FastFinTransferMsg {
 
 #[near(serializers=[borsh, json])]
 #[derive(Debug, Clone)]
-pub struct UtxoTransferMsg {
+pub struct UtxoFinTransferMsg {
     pub utxo_id: String,
     pub token: OmniAddress,
     pub recipient: OmniAddress,
@@ -698,7 +698,7 @@ impl FastTransfer {
     }
 
     pub fn from_utxo_transfer(
-        transfer: UtxoTransferMsg,
+        transfer: UtxoFinTransferMsg,
         token_id: AccountId,
         amount: U128,
     ) -> Self {
