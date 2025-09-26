@@ -208,7 +208,9 @@ impl Contract {
 
         storage.available = storage.available.saturating_add(balance.total);
 
-        if storage.available < required_storage_payer_balance {
+        if storage.available
+            < required_storage_payer_balance.saturating_add(NearToken::from_yoctonear(native_fee))
+        {
             return Err("ERR_SIGNER_NOT_ENOUGH_BALANCE".to_string());
         }
 
