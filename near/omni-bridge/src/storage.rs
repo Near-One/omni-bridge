@@ -188,7 +188,7 @@ impl Contract {
     pub(crate) fn try_to_transfer_balance_from_message_account(
         &mut self,
         account_id: &AccountId,
-        native_fee: u128,
+        native_fee: NearToken,
         storage_payer: &AccountId,
         required_storage_payer_balance: NearToken,
     ) -> Result<(), String> {
@@ -197,7 +197,7 @@ impl Contract {
             .get(account_id)
             .ok_or("ERR_MESSAGE_ACCOUNT_NOT_REGISTERED")?;
 
-        if balance.total.as_yoctonear() < native_fee {
+        if balance.total < native_fee {
             return Err("ERR_NOT_ENOUGH_BALANCE_FOR_FEE".to_string());
         }
 
@@ -208,9 +208,7 @@ impl Contract {
 
         storage.available = storage.available.saturating_add(balance.total);
 
-        if storage.available
-            < required_storage_payer_balance.saturating_add(NearToken::from_yoctonear(native_fee))
-        {
+        if storage.available < required_storage_payer_balance.saturating_add(native_fee) {
             return Err("ERR_SIGNER_NOT_ENOUGH_BALANCE".to_string());
         }
 
