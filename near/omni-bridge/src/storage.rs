@@ -183,8 +183,9 @@ impl Contract {
         }
     }
 
-    // Deducts the total balance from `account_id` and credits it to `storage_payer` and verify the `storage_payer` has enough balance.
-    // Returns an error if `account_id` does not have enough balance to cover `native_fee` or if `signer_id` is not registered.
+    // Used when native fee for the transfer is deposited to the dedicated message account.
+    // Deducts the total balance from `account_id` and credits it to `storage_payer`.
+    // Returns an error if `account_id` does not have enough balance to cover `native_fee` or if `storage_payer` doesn't have enough balance to complete the transfer.
     pub(crate) fn try_to_transfer_balance_from_message_account(
         &mut self,
         account_id: &AccountId,
