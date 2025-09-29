@@ -487,7 +487,6 @@ pub struct FastFinTransferMsg {
 #[derive(Debug, Clone)]
 pub struct UtxoFinTransferMsg {
     pub utxo_id: String,
-    pub token: OmniAddress,
     pub recipient: OmniAddress,
     pub fee: U128,
     pub msg: String,

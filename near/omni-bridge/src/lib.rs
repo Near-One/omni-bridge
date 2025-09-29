@@ -898,62 +898,116 @@ impl Contract {
             .to_log_string(),
         );
 
-        let fast_transfer =
-            FastTransfer::from_utxo_transfer(utxo_fin_transfer_msg.clone(), token_id.clone(), amount);
+        let fast_transfer = FastTransfer::from_utxo_transfer(
+            utxo_fin_transfer_msg.clone(),
+            token_id.clone(),
+            amount,
+        );
 
         if let Some(status) = self.get_fast_transfer_status(&fast_transfer.id()) {
-            require!(!status.finalised, "ERR_FAST_TRANSFER_ALREADY_FINALISED");
-
-            let amount = if utxo_fin_transfer_msg.recipient.get_chain() == ChainKind::Near {
-                self.remove_fast_transfer(&fast_transfer.id());
-                amount
-            } else {
-                // With transfers to other chain the fee will be claimed after finalization on the destination chain
-                U128(amount.0 - fast_transfer.fee.fee.0)
-            };
-
-            self.send_tokens(token_id, status.relayer, amount, &String::new());
-            return PromiseOrPromiseIndexOrValue::Value(U128(0));
+            return self.utxo_fin_transfer_fast(fast_transfer, status);
         }
 
         if let OmniAddress::Near(recipient) = utxo_fin_transfer_msg.recipient {
-            // Fast transfer didn't happen so we send the user full amount including fee
             return self
-                .send_tokens(token_id, recipient, amount, &utxo_fin_transfer_msg.msg)
-                .then(
-                    Self::ext(env::current_account_id())
-                        .with_static_gas(RESOLVE_UTXO_FIN_TRANSFER_GAS)
-                        .resolve_utxo_fin_transfer(amount, !utxo_fin_transfer_msg.msg.is_empty()),
-                )
+                .utxo_fin_transfer_to_near(recipient, token_id, amount, &utxo_fin_transfer_msg.msg)
                 .into();
         } else {
-            let transfer_message = TransferMessage {
-                origin_nonce: self.current_origin_nonce + 1,
-                token: OmniAddress::Near(token_id),
+            return self.utxo_fin_transfer_to_other_chain(
+                token_id,
                 amount,
-                recipient: utxo_fin_transfer_msg.recipient.clone(),
-                fee: Fee {
-                    fee: utxo_fin_transfer_msg.fee,
-                    native_fee: U128(0),
-                },
-                sender: OmniAddress::Near(env::predecessor_account_id()),
-                msg: utxo_fin_transfer_msg.msg,
-                destination_nonce: self
-                    .get_next_destination_nonce(utxo_fin_transfer_msg.recipient.get_chain()),
-                origin_transfer_id: None,
-            };
-
-            let required_storage_balance =
-                self.add_transfer_message(transfer_message.clone(), signer_id.clone());
-
-            self.update_storage_balance(
+                utxo_fin_transfer_msg,
                 signer_id,
-                required_storage_balance,
-                NearToken::from_yoctonear(0),
             );
-
-            return PromiseOrPromiseIndexOrValue::Value(U128(0));
         }
+    }
+
+    fn utxo_fin_transfer_fast(
+        &mut self,
+        fast_transfer: FastTransfer,
+        fast_transfer_status: FastTransferStatus,
+    ) -> PromiseOrPromiseIndexOrValue<U128> {
+        require!(
+            !fast_transfer_status.finalised,
+            "ERR_FAST_TRANSFER_ALREADY_FINALISED"
+        );
+
+        let amount = if fast_transfer.recipient.get_chain() == ChainKind::Near {
+            self.remove_fast_transfer(&fast_transfer.id());
+            fast_transfer.amount
+        } else {
+            // With transfers to other chain the fee will be claimed after finalization on the destination chain
+            U128(fast_transfer.amount.0 - fast_transfer.fee.fee.0)
+        };
+
+        self.send_tokens(
+            fast_transfer.token_id,
+            fast_transfer_status.relayer,
+            amount,
+            &String::new(),
+        );
+
+        return PromiseOrPromiseIndexOrValue::Value(U128(0));
+    }
+
+    fn utxo_fin_transfer_to_near(
+        &self,
+        recipient: AccountId,
+        token_id: AccountId,
+        amount: U128,
+        msg: &str,
+    ) -> Promise {
+        let deposit_action = StorageDepositAction {
+            account_id: recipient.clone(),
+            token_id: token_id.clone(),
+            storage_deposit_amount: None,
+        };
+
+        // We send the recipient full amount including fee, because fee is only taken in case of fast transfers
+        Self::check_or_pay_ft_storage(&deposit_action, &mut NearToken::from_yoctonear(0))
+            .then(
+                self.send_tokens(token_id, recipient, amount, msg).then(
+                    Self::ext(env::current_account_id())
+                        .with_static_gas(RESOLVE_UTXO_FIN_TRANSFER_GAS)
+                        .resolve_utxo_fin_transfer(amount, !msg.is_empty()),
+                ),
+            )
+            .into()
+    }
+
+    fn utxo_fin_transfer_to_other_chain(
+        &mut self,
+        token_id: AccountId,
+        amount: U128,
+        utxo_fin_transfer_msg: UtxoFinTransferMsg,
+        storage_owner: AccountId,
+    ) -> PromiseOrPromiseIndexOrValue<U128> {
+        let transfer_message = TransferMessage {
+            origin_nonce: self.current_origin_nonce + 1,
+            token: OmniAddress::Near(token_id),
+            amount,
+            recipient: utxo_fin_transfer_msg.recipient.clone(),
+            fee: Fee {
+                fee: utxo_fin_transfer_msg.fee,
+                native_fee: U128(0),
+            },
+            sender: OmniAddress::Near(env::predecessor_account_id()),
+            msg: utxo_fin_transfer_msg.msg,
+            destination_nonce: self
+                .get_next_destination_nonce(utxo_fin_transfer_msg.recipient.get_chain()),
+            origin_transfer_id: None,
+        };
+
+        let required_storage_balance =
+            self.add_transfer_message(transfer_message.clone(), storage_owner.clone());
+
+        self.update_storage_balance(
+            storage_owner,
+            required_storage_balance,
+            NearToken::from_yoctonear(0),
+        );
+
+        return PromiseOrPromiseIndexOrValue::Value(U128(0));
     }
 
     #[private]

@@ -1,7 +1,7 @@
 use near_contract_standards::storage_management::{StorageBalance, StorageBalanceBounds};
 use near_sdk::{assert_one_yocto, borsh, near};
 use near_sdk::{env, near_bindgen, AccountId, NearToken};
-use omni_types::{FastTransferStatus, TransferId, TransferMessageV0, UnifiedTransferId};
+use omni_types::{FastTransferStatus, TransferMessageV0, UnifiedTransferId};
 
 use crate::{
     require, ChainKind, Contract, ContractExt, Fee, OmniAddress, Promise, SdkExpect,
