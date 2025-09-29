@@ -697,6 +697,14 @@ impl Contract {
             "ERR_INVALID_FAST_TRANSFER_AMOUNT"
         );
 
+        if let UnifiedTransferId::General(transfer_id) = &fast_fin_transfer_msg.transfer_id {
+            if self.is_transfer_finalised(transfer_id.clone()) {
+                env::panic_str("ERR_TRANSFER_ALREADY_FINALISED");
+            }
+        } else {
+            // Currently we don't store finalised transfers for UTXO chains so we have no way to check
+        }
+
         let fast_transfer = FastTransfer {
             token_id: token_id.clone(),
             recipient: fast_fin_transfer_msg.recipient.clone(),
@@ -839,10 +847,6 @@ impl Contract {
                 "Only BTC can be transferred to the Bitcoin network."
             );
         }
-
-        // if self.is_transfer_finalised(fast_transfer.transfer_id) {
-        //     env::panic_str("ERR_TRANSFER_ALREADY_FINALISED");
-        // }
 
         let mut required_balance =
             self.add_fast_transfer(fast_transfer, relayer_id.clone(), storage_payer.clone());
