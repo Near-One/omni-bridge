@@ -183,6 +183,41 @@ impl Contract {
         }
     }
 
+    // Used when native fee for the transfer is deposited to the dedicated message account.
+    // Deducts the total balance from `account_id` and credits it to `storage_payer`.
+    // Returns an error if `account_id` does not have enough balance to cover `native_fee` or if `storage_payer` doesn't have enough balance to complete the transfer.
+    pub(crate) fn try_to_transfer_balance_from_message_account(
+        &mut self,
+        account_id: &AccountId,
+        native_fee: NearToken,
+        storage_payer: &AccountId,
+        required_storage_payer_balance: NearToken,
+    ) -> Result<(), String> {
+        let balance = self
+            .accounts_balances
+            .get(account_id)
+            .ok_or("ERR_MESSAGE_ACCOUNT_NOT_REGISTERED")?;
+
+        if balance.total < native_fee {
+            return Err("ERR_NOT_ENOUGH_BALANCE_FOR_FEE".to_string());
+        }
+
+        let mut storage = self
+            .accounts_balances
+            .get(storage_payer)
+            .ok_or("ERR_SIGNER_NOT_REGISTERED")?;
+
+        storage.available = storage.available.saturating_add(balance.total);
+
+        if storage.available < required_storage_payer_balance.saturating_add(native_fee) {
+            return Err("ERR_SIGNER_NOT_ENOUGH_BALANCE".to_string());
+        }
+
+        self.accounts_balances.insert(storage_payer, &storage);
+        self.accounts_balances.remove(account_id);
+        Ok(())
+    }
+
     pub fn required_balance_for_account(&self) -> NearToken {
         let key_len = Self::max_key_len_of_account_id();
         let value_len: u64 = borsh::to_vec(&StorageBalance {
