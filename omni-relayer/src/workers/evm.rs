@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use anyhow::{Context, Result};
 use bridge_connector_common::result::BridgeSdkError;
+use chrono::Utc;
 use tracing::{info, warn};
 
 use near_bridge_client::{NearBridgeClient, TransactionOptions};
@@ -222,7 +223,7 @@ pub async fn process_init_transfer_event(
 
     match omni_connector.fin_transfer(fin_transfer_args).await {
         Ok(tx_hash) => {
-            info!("Finalized InitTransfer: {tx_hash:?}");
+            info!("Finalized InitTransfer: {tx_hash:?} at {}", Utc::now().to_rfc3339());
             Ok(EventAction::Remove)
         }
         Err(err) => {

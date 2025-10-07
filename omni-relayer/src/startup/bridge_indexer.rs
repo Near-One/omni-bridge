@@ -6,6 +6,7 @@ use bridge_indexer_types::documents_types::{
     OmniEvent, OmniEventData, OmniMetaEvent, OmniMetaEventDetails, OmniTransactionEvent,
     OmniTransactionOrigin, OmniTransferMessage, UtxoConnectorEvent, UtxoConnectorEventDetails,
 };
+use chrono::Utc;
 use ethereum_types::H256;
 use mongodb::{Client, Collection, change_stream::event::ResumeToken, options::ClientOptions};
 use omni_types::{ChainKind, Fee, OmniAddress, TransferId, near_events::OmniBridgeEvent};
@@ -46,8 +47,9 @@ async fn handle_transaction_event(
     match event.transfer_message {
         OmniTransferMessage::NearTransferMessage(transfer_message) => {
             info!(
-                "Received NearTransferMessage: {}",
-                transfer_message.origin_nonce
+                "Received NearTransferMessage: {} at {}",
+                transfer_message.origin_nonce,
+                Utc::now().to_rfc3339()
             );
 
             if transfer_message.recipient.get_chain() != ChainKind::Near {
@@ -62,7 +64,7 @@ async fn handle_transaction_event(
             }
         }
         OmniTransferMessage::NearSignTransferEvent(sign_event) => {
-            info!("Received NearSignTransferEvent");
+            info!("Received NearSignTransferEvent at {}", Utc::now().to_rfc3339());
 
             utils::redis::add_event(
                 config,
