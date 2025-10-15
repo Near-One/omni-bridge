@@ -294,7 +294,7 @@ pub async fn process_transfer_to_utxo_event(
                     transfer_message.origin_nonce
                 );
                 return Ok(EventAction::Retry);
-            } else if let BridgeSdkError::BtcClientError(ref msg) = err {
+            } else if let BridgeSdkError::UtxoClientError(ref msg) = err {
                 if msg == "Failed to estimate fee_rate" {
                     warn!(
                         "Failed to estimate fee_rate for {:?} transfer ({}), retrying",
