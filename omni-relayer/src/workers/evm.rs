@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use anyhow::{Context, Result};
-use bridge_connector_common::result::BridgeSdkError;
+use bridge_connector_common::result::{BridgeSdkError, EthRpcError};
 use tracing::{info, warn};
 
 use near_bridge_client::{NearBridgeClient, TransactionOptions};
@@ -249,6 +249,12 @@ pub async fn process_init_transfer_event(
                 warn!(
                     "Light client is not synced yet for transfer ({}), block: {}",
                     log.origin_nonce, block
+                );
+                return Ok(EventAction::Retry);
+            } else if let BridgeSdkError::EthRpcError(EthRpcError::EthClientError(err)) = err {
+                warn!(
+                    "Ethereum client error occurred while finalizing transfer ({}), retrying: {err:?}",
+                    log.origin_nonce
                 );
                 return Ok(EventAction::Retry);
             }
