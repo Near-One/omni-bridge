@@ -698,7 +698,7 @@ impl Contract {
         );
 
         if let UnifiedTransferId::General(transfer_id) = &fast_fin_transfer_msg.transfer_id {
-            if self.is_transfer_finalised(transfer_id.clone()) {
+            if self.is_transfer_finalised(*transfer_id) {
                 env::panic_str("ERR_TRANSFER_ALREADY_FINALISED");
             }
         } else {
@@ -913,16 +913,15 @@ impl Contract {
         }
 
         if let OmniAddress::Near(recipient) = utxo_fin_transfer_msg.recipient {
-            return self
-                .utxo_fin_transfer_to_near(recipient, token_id, amount, &utxo_fin_transfer_msg.msg)
-                .into();
+            self.utxo_fin_transfer_to_near(recipient, token_id, amount, &utxo_fin_transfer_msg.msg)
+                .into()
         } else {
-            return self.utxo_fin_transfer_to_other_chain(
+            self.utxo_fin_transfer_to_other_chain(
                 token_id,
                 amount,
                 utxo_fin_transfer_msg,
                 signer_id,
-            );
+            )
         }
     }
 
@@ -948,10 +947,10 @@ impl Contract {
             fast_transfer.token_id,
             fast_transfer_status.relayer,
             amount,
-            &String::new(),
+            "",
         );
 
-        return PromiseOrPromiseIndexOrValue::Value(U128(0));
+        PromiseOrPromiseIndexOrValue::Value(U128(0))
     }
 
     fn utxo_fin_transfer_to_near(
@@ -968,15 +967,13 @@ impl Contract {
         };
 
         // We send the recipient full amount including fee, because fee is only taken in case of fast transfers
-        Self::check_or_pay_ft_storage(&deposit_action, &mut NearToken::from_yoctonear(0))
-            .then(
-                self.send_tokens(token_id, recipient, amount, msg).then(
-                    Self::ext(env::current_account_id())
-                        .with_static_gas(RESOLVE_UTXO_FIN_TRANSFER_GAS)
-                        .resolve_utxo_fin_transfer(amount, !msg.is_empty()),
-                ),
-            )
-            .into()
+        Self::check_or_pay_ft_storage(&deposit_action, &mut NearToken::from_yoctonear(0)).then(
+            self.send_tokens(token_id, recipient, amount, msg).then(
+                Self::ext(env::current_account_id())
+                    .with_static_gas(RESOLVE_UTXO_FIN_TRANSFER_GAS)
+                    .resolve_utxo_fin_transfer(amount, !msg.is_empty()),
+            ),
+        )
     }
 
     fn utxo_fin_transfer_to_other_chain(
@@ -1011,7 +1008,7 @@ impl Contract {
             NearToken::from_yoctonear(0),
         );
 
-        return PromiseOrPromiseIndexOrValue::Value(U128(0));
+        PromiseOrPromiseIndexOrValue::Value(U128(0))
     }
 
     #[private]
@@ -1557,7 +1554,7 @@ impl Contract {
     }
 
     pub fn get_utxo_chain_by_token(&self, token: &AccountId) -> Option<ChainKind> {
-        for (chain, config) in self.utxo_chain_connectors.iter() {
+        for (chain, config) in &self.utxo_chain_connectors {
             if &config.token_id == token {
                 return Some(chain);
             }

@@ -656,10 +656,16 @@ pub struct BasicMetadata {
 }
 
 #[near(serializers=[borsh, json])]
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum UnifiedTransferId {
     General(TransferId),
     Utxo(String),
+}
+
+impl From<TransferId> for UnifiedTransferId {
+    fn from(value: TransferId) -> Self {
+        Self::General(value)
+    }
 }
 
 #[near(serializers=[borsh, json])]
