@@ -15,6 +15,7 @@ pub mod evm;
 pub mod locker_args;
 pub mod mpc_types;
 pub mod near_events;
+pub mod polymer;
 pub mod prover_args;
 pub mod prover_result;
 pub mod sol_address;
