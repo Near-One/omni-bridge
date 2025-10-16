@@ -38,7 +38,7 @@ pub async fn process_init_transfer_event(
         expected_finalization_time,
     } = transfer
     else {
-        anyhow::bail!("Expected EvmInitTransferWithTimestamp, got: {:?}", transfer);
+        anyhow::bail!("Expected EvmInitTransferWithTimestamp, got: {transfer:?}");
     };
 
     let current_timestamp = chrono::Utc::now().timestamp();
@@ -58,7 +58,7 @@ pub async fn process_init_transfer_event(
         .is_transfer_finalised(Some(chain_kind), ChainKind::Near, log.origin_nonce)
         .await
     {
-        Ok(true) => anyhow::bail!("Transfer is already finalised: {:?}", transfer_id),
+        Ok(true) => anyhow::bail!("Transfer is already finalised: {transfer_id:?}"),
         Ok(false) => {}
         Err(err) => {
             warn!("Failed to check if transfer is finalised: {err:?}");
@@ -279,7 +279,7 @@ pub async fn process_evm_transfer_event(
         expected_finalization_time,
     } = fin_transfer
     else {
-        anyhow::bail!("Expected Evm FinTransfer, got: {:?}", fin_transfer);
+        anyhow::bail!("Expected Evm FinTransfer, got: {fin_transfer:?}");
     };
 
     let current_timestamp = chrono::Utc::now().timestamp();
@@ -375,7 +375,7 @@ pub async fn process_deploy_token_event(
         expected_finalization_time,
     } = deploy_token_event
     else {
-        anyhow::bail!("Expected Evm DeployToken, got: {:?}", deploy_token_event);
+        anyhow::bail!("Expected Evm DeployToken, got: {deploy_token_event:?}");
     };
 
     let current_timestamp = chrono::Utc::now().timestamp();

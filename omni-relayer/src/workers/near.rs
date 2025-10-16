@@ -49,7 +49,7 @@ pub async fn process_transfer_event(
         ref transfer_message,
     } = transfer
     else {
-        anyhow::bail!("Expected NearTransferWithTimestamp, got: {:?}", transfer);
+        anyhow::bail!("Expected NearTransferWithTimestamp, got: {transfer:?}");
     };
 
     info!("Trying to process TransferMessage on NEAR");
@@ -62,7 +62,7 @@ pub async fn process_transfer_event(
         )
         .await
     {
-        Ok(true) => anyhow::bail!("Transfer is already finalised: {:?}", transfer_message),
+        Ok(true) => anyhow::bail!("Transfer is already finalised: {transfer_message:?}"),
         Ok(false) => {}
         Err(err) => {
             warn!("Failed to check if transfer is finalised: {err:?}");
@@ -192,7 +192,7 @@ pub async fn process_transfer_to_utxo_event(
         ref transfer_message,
     } = transfer
     else {
-        anyhow::bail!("Expected NearTransferWithTimestamp, got: {:?}", transfer);
+        anyhow::bail!("Expected NearTransferWithTimestamp, got: {transfer:?}");
     };
 
     info!("Trying to process UtxoTransferMessage on NEAR");
@@ -326,7 +326,7 @@ pub async fn process_sign_transfer_event(
         message_payload, ..
     } = &omni_bridge_event
     else {
-        anyhow::bail!("Expected SignTransferEvent, got: {:?}", omni_bridge_event);
+        anyhow::bail!("Expected SignTransferEvent, got: {omni_bridge_event:?}");
     };
 
     info!("Trying to process SignTransferEvent log on NEAR");
@@ -453,8 +453,7 @@ pub async fn process_sign_transfer_event(
                     ChainKind::Bnb => &config.bnb,
                     ChainKind::Near | ChainKind::Sol | ChainKind::Btc | ChainKind::Zcash => {
                         anyhow::bail!(
-                            "Failed to finalize deposit (unexpected: failed to get evm config): {}",
-                            err
+                            "Failed to finalize deposit (unexpected: failed to get evm config): {err}"
                         );
                     }
                 }) else {
@@ -554,7 +553,7 @@ pub async fn initiate_fast_transfer(
         safe_confirmations,
     } = transfer.clone()
     else {
-        anyhow::bail!("Expected FastTransferEvent, got: {:?}", transfer);
+        anyhow::bail!("Expected FastTransferEvent, got: {transfer:?}");
     };
 
     // TODO: Fast transfer to other chain increases origin nonce by one, so regular relayer won't
@@ -587,7 +586,7 @@ pub async fn initiate_fast_transfer(
     };
 
     match fast_connector.near_is_transfer_finalised(transfer_id).await {
-        Ok(true) => anyhow::bail!("Transfer is already finalised: {:?}", transfer),
+        Ok(true) => anyhow::bail!("Transfer is already finalised: {transfer:?}"),
         Ok(false) => {}
         Err(err) => {
             warn!("Failed to check if transfer is finalised: {err:?}");
@@ -599,7 +598,7 @@ pub async fn initiate_fast_transfer(
         .near_get_fast_transfer_status(fast_transfer.id())
         .await
     {
-        Ok(Some(_)) => anyhow::bail!("Fast transfer is already finalised: {:?}", transfer),
+        Ok(Some(_)) => anyhow::bail!("Fast transfer is already finalised: {transfer:?}"),
         Ok(None) => {}
         Err(err) => {
             warn!("Failed to check if fast transfer is finalised: {err:?}");

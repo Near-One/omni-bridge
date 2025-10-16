@@ -42,7 +42,7 @@ pub async fn process_near_to_utxo_init_transfer_event(
         sign_index,
     } = transfer
     else {
-        anyhow::bail!("Expected NearToUtxoTransfer, got: {:?}", transfer);
+        anyhow::bail!("Expected NearToUtxoTransfer, got: {transfer:?}");
     };
 
     let nonce = match near_nonce.reserve_nonce().await {
@@ -102,7 +102,7 @@ pub async fn process_utxo_to_near_init_transfer_event(
         deposit_msg,
     } = transfer
     else {
-        anyhow::bail!("Expected UtxoToNearTransfer, got: {:?}", transfer);
+        anyhow::bail!("Expected UtxoToNearTransfer, got: {transfer:?}");
     };
 
     let nonce = match near_nonce.reserve_nonce().await {

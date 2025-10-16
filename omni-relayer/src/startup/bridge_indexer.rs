@@ -31,7 +31,7 @@ fn get_evm_config(config: &config::Config, chain_kind: ChainKind) -> Result<&con
         ChainKind::Arb => config.arb.as_ref().context("EVM config for Arb is not set"),
         ChainKind::Bnb => config.bnb.as_ref().context("EVM config for Bnb is not set"),
         ChainKind::Near | ChainKind::Sol | ChainKind::Btc | ChainKind::Zcash => {
-            anyhow::bail!("Unsupported chain kind for EVM: {:?}", chain_kind)
+            anyhow::bail!("Unsupported chain kind for EVM: {chain_kind:?}")
         }
     }
 }
@@ -94,14 +94,11 @@ async fn handle_transaction_event(
                 ..
             } = origin
             else {
-                anyhow::bail!("Expected EVMLog for EvmInitTransfer: {:?}", init_transfer);
+                anyhow::bail!("Expected EVMLog for EvmInitTransfer: {init_transfer:?}");
             };
 
             let Ok(tx_hash) = H256::from_str(&origin_transaction_id) else {
-                anyhow::bail!(
-                    "Failed to parse transaction_id as H256: {:?}",
-                    origin_transaction_id
-                );
+                anyhow::bail!("Failed to parse transaction_id as H256: {origin_transaction_id:?}");
             };
 
             let (OmniAddress::Eth(sender)
@@ -132,10 +129,7 @@ async fn handle_transaction_event(
             };
 
             let Ok(creation_timestamp) = i64::try_from(block_timestamp) else {
-                anyhow::bail!(
-                    "Failed to parse block_timestamp as i64: {}",
-                    block_timestamp
-                );
+                anyhow::bail!("Failed to parse block_timestamp as i64: {block_timestamp}");
             };
 
             let expected_finalization_time = get_evm_config(config, chain_kind)
@@ -196,21 +190,15 @@ async fn handle_transaction_event(
                 ..
             } = origin
             else {
-                anyhow::bail!("Expected EVMLog for EvmFinTransfer: {:?}", fin_transfer);
+                anyhow::bail!("Expected EVMLog for EvmFinTransfer: {fin_transfer:?}");
             };
 
             let Ok(tx_hash) = H256::from_str(&origin_transaction_id) else {
-                anyhow::bail!(
-                    "Failed to parse transaction_id as H256: {:?}",
-                    origin_transaction_id
-                );
+                anyhow::bail!("Failed to parse transaction_id as H256: {origin_transaction_id:?}");
             };
 
             let Ok(creation_timestamp) = i64::try_from(block_timestamp) else {
-                anyhow::bail!(
-                    "Failed to parse block_timestamp as i64: {}",
-                    block_timestamp
-                );
+                anyhow::bail!("Failed to parse block_timestamp as i64: {block_timestamp}");
             };
 
             let expected_finalization_time = get_evm_config(config, chain_kind)
@@ -240,16 +228,10 @@ async fn handle_transaction_event(
                 anyhow::bail!("Unexpected token address: {}", init_transfer.token);
             };
             let Ok(native_fee) = u64::try_from(init_transfer.fee.native_fee.0) else {
-                anyhow::bail!(
-                    "Failed to parse native fee for Solana transfer: {:?}",
-                    init_transfer
-                );
+                anyhow::bail!("Failed to parse native fee for Solana transfer: {init_transfer:?}");
             };
             let Some(emitter) = init_transfer.emitter else {
-                anyhow::bail!(
-                    "Emitter is not set for Solana transfer: {:?}",
-                    init_transfer
-                );
+                anyhow::bail!("Emitter is not set for Solana transfer: {init_transfer:?}");
             };
 
             utils::redis::add_event(
@@ -275,13 +257,10 @@ async fn handle_transaction_event(
             info!("Received SolanaFinTransfer");
 
             let Some(emitter) = fin_transfer.emitter.clone() else {
-                anyhow::bail!("Emitter is not set for Solana transfer: {:?}", fin_transfer);
+                anyhow::bail!("Emitter is not set for Solana transfer: {fin_transfer:?}");
             };
             let Some(sequence) = fin_transfer.sequence else {
-                anyhow::bail!(
-                    "Sequence is not set for Solana transfer: {:?}",
-                    fin_transfer
-                );
+                anyhow::bail!("Sequence is not set for Solana transfer: {fin_transfer:?}");
             };
 
             utils::redis::add_event(
@@ -321,24 +300,15 @@ async fn handle_meta_event(
                 ..
             } = origin
             else {
-                anyhow::bail!(
-                    "Expected EVMLog for EvmDeployToken: {:?}",
-                    deploy_token_event
-                );
+                anyhow::bail!("Expected EVMLog for EvmDeployToken: {deploy_token_event:?}");
             };
 
             let Ok(tx_hash) = H256::from_str(&origin_transaction_id) else {
-                anyhow::bail!(
-                    "Failed to parse transaction_id as H256: {:?}",
-                    origin_transaction_id
-                );
+                anyhow::bail!("Failed to parse transaction_id as H256: {origin_transaction_id:?}");
             };
 
             let Ok(creation_timestamp) = i64::try_from(block_timestamp) else {
-                anyhow::bail!(
-                    "Failed to parse block_timestamp as i64: {}",
-                    block_timestamp
-                );
+                anyhow::bail!("Failed to parse block_timestamp as i64: {block_timestamp}");
             };
 
             let expected_finalization_time = get_evm_config(config, chain_kind)
