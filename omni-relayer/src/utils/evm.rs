@@ -7,7 +7,7 @@ use anyhow::Result;
 use near_sdk::json_types::U128;
 use omni_types::{
     ChainKind, H160, OmniAddress,
-    prover_args::{EvmVerifyProofArgs, WormholeVerifyProofArgs},
+    prover_args::{EvmVerifyProofArgs, PolymerVerifyProofArgs, WormholeVerifyProofArgs},
     prover_result::ProofKind,
 };
 
@@ -98,6 +98,36 @@ pub async fn construct_prover_args(
     };
 
     borsh::to_vec(&evm_proof_args).ok()
+}
+
+pub async fn construct_polymer_prover_args(
+    omni_connector: Arc<OmniConnector>,
+    tx_hash: H256,
+    proof_kind: ProofKind,
+    chain_id: u64,
+    log_index: u64,
+    block_number: u64,
+) -> Option<Vec<u8>> {
+    let proof = match omni_connector
+        .polymer_get_proof(chain_id, format!("{tx_hash:?}"), log_index)
+        .await
+    {
+        Ok(proof) => proof,
+        Err(err) => {
+            warn!("Failed to get Polymer proof: {err:?}");
+            return None;
+        }
+    };
+
+    let polymer_proof_args = PolymerVerifyProofArgs {
+        proof_kind,
+        proof,
+        src_chain_id: chain_id,
+        src_block_number: block_number,
+        global_log_index: log_index,
+    };
+
+    borsh::to_vec(&polymer_proof_args).ok()
 }
 
 pub fn string_to_evm_omniaddress(chain_kind: ChainKind, address: &str) -> Result<OmniAddress> {
