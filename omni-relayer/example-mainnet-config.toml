@@ -132,6 +132,8 @@ light_client = "btc-client.bridge.near"
 signing_enabled = false
 # If this is set to true, then omni relayer will call `verify_withdraw`
 verifying_withdraw_enabled = false
+# If this is set to true, then omni relayer will call `safe_verify_deposit`
+is_safe_verify_deposit_enabled = true
 
 [zcash]
 rpc_http_url = "https://x-api-key:TATUM_API_KEY@zcash-mainnet.gateway.tatum.io"
@@ -140,6 +142,8 @@ light_client = "zcash-client.bridge.near"
 signing_enabled = true
 # If this is set to true, then omni relayer will call `verify_withdraw`
 verifying_withdraw_enabled = true
+# If this is set to true, then omni relayer will call `safe_verify_deposit`
+is_safe_verify_deposit_enabled = true
 
 [wormhole]
 api_url = "https://api.wormholescan.io/"

@@ -4,7 +4,7 @@ use anyhow::Result;
 use bridge_connector_common::result::BridgeSdkError;
 use near_bridge_client::{
     TransactionOptions,
-    btc::{DepositMsg, PostAction},
+    btc::{DepositMsg, PostAction, SafeDepositMsg},
 };
 use near_jsonrpc_client::errors::JsonRpcError;
 use near_primitives::{hash::CryptoHash, types::AccountId};
@@ -134,6 +134,9 @@ pub async fn process_utxo_to_near_init_transfer_event(
                             .collect()
                     }),
                     extra_msg: deposit_msg.extra_msg,
+                    safe_deposit: deposit_msg.safe_deposit.map(|safe_deposit| SafeDepositMsg {
+                        msg: safe_deposit.msg,
+                    }),
                 },
             },
             TransactionOptions {
