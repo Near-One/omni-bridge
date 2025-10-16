@@ -38,7 +38,7 @@ rule get_btc_user_deposit_address:
          bridge-cli testnet get-bitcoin-address \
          --chain btc \
          --btc-connector {params.btc_connector} \
-         -r {params.user_account_id} \
+         -r near:{params.user_account_id} \
          --near-signer {params.user_account_id} \
          --config {params.bridge_sdk_config_file} \
          > {output} \
@@ -75,7 +75,7 @@ rule fin_btc_transfer_on_near:
         --chain btc \
         -b {params.btc_tx_hash} \
         -v 0 \
-        -r {params.user_account_id} \
+        -r near:{params.user_account_id} \
         --btc-connector {params.btc_connector} \
         --near-signer {params.user_account_id} \
         --near-private-key {params.user_private_key} \

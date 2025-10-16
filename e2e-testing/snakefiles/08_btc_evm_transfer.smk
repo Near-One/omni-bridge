@@ -100,7 +100,6 @@ rule fin_btc_transfer_on_near:
         -b {params.btc_tx_hash} \
         -v 0 \
         -r eth:{params.recipient_address} \
-        --amount 7300 \
         --btc-connector {params.btc_connector} \
         --near-token-locker-id {params.token_locker_id} \
         --near-signer {params.user_account_id} \
@@ -236,7 +235,7 @@ rule near_sign_transfer:
     shell: """
         {params.mkdir} && \
         NONCE=$(yarn --cwd {const.common_tools_dir} --silent get-near-transfer-nonce \
-            --tx-hash {params.init_transfer_tx_hash} -r 7) && \
+            --tx-hash {params.init_transfer_tx_hash} -r 5) && \
         bridge-cli testnet near-sign-transfer \
         --origin-chain Near \
         --origin-nonce $NONCE \
