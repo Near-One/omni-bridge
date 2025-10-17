@@ -48,7 +48,7 @@ rule init_btc_transfer_to_btc:
         --chain btc \
         --target-btc-address $BTC_ACCOUNT_ID \
         --amount 3000 \
-        --fee-rate 1000 \
+        --fee-rate 500 \
         --btc-connector {params.btc_connector} \
         --btc {params.btc_token} \
         --near-signer {params.user_account_id} \
@@ -57,13 +57,17 @@ rule init_btc_transfer_to_btc:
          > {output} \
     """
 
-rule submit_transfer_to_btc_connector:
+rule sign_btc_transfer:
     message: "Sign BTC transfer"
     input:
-       step_1 = rules.init_btc_transfer_to_btc.output,
+       step_1=lambda wc: {
+            "02": rules.init_btc_transfer_to_btc.output,
+            "05": call_dir / "04_rbf_subsidize",
+            "07": call_dir / "06_rbf_subsidize",
+        }[wc.step],
        btc_connector_file = btc_connector_file,
        user_account_file = user_account_file
-    output: call_dir / "02_sign_btc_transfer"
+    output: call_dir / "{step}_sign_btc_transfer"
     params:
         near_tx_hash = lambda wc, input: get_tx_hash(input.step_1),
         btc_connector = lambda wc, input: get_json_field(input.btc_connector_file, "contract_id"),
@@ -89,8 +93,8 @@ rule send_btc_transfer:
         btc_connector_file=btc_connector_file,
         user_account_file=user_account_file,
         step=lambda wc: {
-            "03": rules.submit_transfer_to_btc_connector.output,
-            "06": call_dir / "05_rbf_subsidize",
+            "03": call_dir / "02_sign_btc_transfer",
+            "08": call_dir / "07_sign_btc_transfer",
         }[wc.step],
     output:
         call_dir / "{step}_send_btc_transfer"
@@ -113,7 +117,7 @@ rule rbf_subsidize:
     message: "RBF subsidize"
     input:
         step=lambda wc: {
-            "05": call_dir / "04_rbf_subsidize",
+            "06": call_dir / "05_sign_btc_transfer",
             "04": call_dir / "03_send_btc_transfer",
         }[wc.step],
         step_3 = call_dir / "03_send_btc_transfer",
@@ -129,7 +133,7 @@ rule rbf_subsidize:
         bridge_sdk_config_file = const.common_bridge_sdk_config_file,
         btc_tx_hash = lambda wc, input: get_last_value(input.step_3),
         fee_rate=lambda wc: {
-            "05": 3000,
+            "06": 3000,
             "04": 2000,
         }[wc.step],
     shell: """
@@ -144,7 +148,49 @@ rule rbf_subsidize:
          > {output} \
     """
 
-rule all:
+rule verify_withdraw:
+    message: "Verify withdraw"
     input:
-        call_dir / "06_send_btc_transfer"
+        step_8 = call_dir / "08_send_btc_transfer",
+        btc_connector_file = btc_connector_file,
+        nbtc_file = nbtc_file,
+        user_account_file = user_account_file
+    output: call_dir / "09_verify_withdraw.json"
+    params:
+        btc_connector = lambda wc, input: get_json_field(input.btc_connector_file, "contract_id"),
+        user_account_id = lambda wc, input: get_json_field(input.user_account_file, "account_id"),
+        user_private_key = lambda wc, input: get_json_field(input.user_account_file, "private_key"),
+        bridge_sdk_config_file = const.common_bridge_sdk_config_file,
+        btc_tx_hash = lambda wc, input: get_last_value(input.step_8),
+        extract_tx = lambda wc, output: extract_tx_hash("bridge", output),
+    shell: """
+        bridge-cli testnet btc-verify-withdraw \
+        --chain btc \
+        -b {params.btc_tx_hash} \
+        --btc-connector {params.btc_connector} \
+        --near-signer {params.user_account_id} \
+        --near-private-key {params.user_private_key} \
+        --config {params.bridge_sdk_config_file} \
+         > {output} && \
+        {params.extract_tx}\
+    """
+
+
+rule verify_last_transfer:
+    message: "Verification"
+    input:
+        rules.verify_withdraw.output,
+    output: call_dir / "report"
+    params:
+        config_file = const.common_bridge_sdk_config_file,
+        call_dir = call_dir
+    shell: """
+        yarn --cwd {const.common_tools_dir} --silent verify-near-transfer \
+        --tx-dir {params.call_dir} \
+        | tee {output}
+    """
+
+rule all:
+    input: rules.verify_last_transfer.output
+    message: "Transfer NEAR to BTC with RBF pipeline completed"
     default_target: True
