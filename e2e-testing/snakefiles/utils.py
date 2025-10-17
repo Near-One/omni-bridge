@@ -67,7 +67,11 @@ def get_mkdir_cmd(directory):
 
 
 def get_btc_address(filename):
-    return open(str(filename)).readline().strip().split()[-1]
+    with open(str(filename)) as f:
+        for line in f:
+            if "BTC Address:" in line:
+                return line.split("BTC Address:", 1)[1].strip()
+    return None
 
 
 def get_last_value(filename):
@@ -75,4 +79,7 @@ def get_last_value(filename):
 
 
 def get_tx_hash(filename):
-    return open(str(filename)).readlines()[-1].split('"')[-2]
+    try:
+        return open(str(filename)).readlines()[-1].split('"')[-2]
+    except:
+        return open(str(filename)).readlines()[-1].split(' ')[-1].strip()

@@ -62,7 +62,7 @@ rule near_fund_btc_connector:
         bridge_id = lambda wc, input: get_json_field(input.btc_connector_account_file, "account_id")
     shell: """
     {params.mkdir} && \
-    near tokens {params.nbtc_id} send-near {params.bridge_id} '2 NEAR' network-config testnet sign-with-keychain send > {output}
+    near tokens {params.nbtc_id} send-near {params.bridge_id} '3 NEAR' network-config testnet sign-with-keychain send > {output}
     """
 
 rule near_generate_btc_connector_init_args:
