@@ -75,4 +75,7 @@ def get_last_value(filename):
 
 
 def get_tx_hash(filename):
-    return open(str(filename)).readlines()[-1].split('"')[-2]
+    with open(str(filename), "r", encoding="utf-8") as f:
+        for line in f:
+            if 'tx_hash="' in line:
+                return line.split('tx_hash="', 1)[1].split('"', 1)[0]
