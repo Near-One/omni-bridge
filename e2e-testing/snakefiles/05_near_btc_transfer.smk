@@ -15,7 +15,7 @@ module btc_near_transfer:
 use rule * from btc_near_transfer
 
 # Directories
-call_dir = const.common_generated_dir / "04-btc-near-transfer"
+call_dir = const.common_generated_dir / "05-near-btc-transfer"
 
 # Account files
 near_init_account_file = const.near_account_dir / f"{NTA.INIT_ACCOUNT}.json"

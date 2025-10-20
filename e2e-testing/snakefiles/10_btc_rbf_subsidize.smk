@@ -32,7 +32,7 @@ rule init_btc_transfer_to_btc:
         btc_connector_file = btc_connector_file,
         btc_file = nbtc_file,
         user_account_file = user_account_file
-    output: call_dir / "01_init_btc_transfer_to_btc"
+    output: call_dir / "01_1_init_btc_transfer_to_btc"
     params:
         btc_connector = lambda wc, input: get_json_field(input.btc_connector_file, "contract_id"),
         btc_token = lambda wc, input: get_json_field(input.btc_file, "contract_id"),
@@ -48,7 +48,7 @@ rule init_btc_transfer_to_btc:
         --chain btc \
         --target-btc-address $BTC_ACCOUNT_ID \
         --amount 3000 \
-        --fee-rate 500 \
+        --fee-rate 300 \
         --btc-connector {params.btc_connector} \
         --btc {params.btc_token} \
         --near-signer {params.user_account_id} \
@@ -61,9 +61,9 @@ rule sign_btc_transfer:
     message: "Sign BTC transfer"
     input:
        step_1=lambda wc: {
-            "02": rules.init_btc_transfer_to_btc.output,
-            "05": call_dir / "04_rbf_subsidize",
-            "07": call_dir / "06_rbf_subsidize",
+            "01_2": rules.init_btc_transfer_to_btc.output,
+            "02_2": call_dir / "02_1_rbf_subsidize",
+            "03_2": call_dir / "03_1_rbf_subsidize",
         }[wc.step],
        btc_connector_file = btc_connector_file,
        user_account_file = user_account_file
@@ -93,8 +93,9 @@ rule send_btc_transfer:
         btc_connector_file=btc_connector_file,
         user_account_file=user_account_file,
         step=lambda wc: {
-            "03": call_dir / "02_sign_btc_transfer",
-            "08": call_dir / "07_sign_btc_transfer",
+            "01_3": call_dir / "01_2_sign_btc_transfer",
+            "02_3": call_dir / "02_2_sign_btc_transfer",
+            "03_3": call_dir / "03_2_sign_btc_transfer",
         }[wc.step],
     output:
         call_dir / "{step}_send_btc_transfer"
@@ -117,10 +118,10 @@ rule rbf_subsidize:
     message: "RBF subsidize"
     input:
         step=lambda wc: {
-            "06": call_dir / "05_sign_btc_transfer",
-            "04": call_dir / "03_send_btc_transfer",
+            "03_1": call_dir / "02_3_send_btc_transfer",
+            "02_1": call_dir / "01_3_send_btc_transfer",
         }[wc.step],
-        step_3 = call_dir / "03_send_btc_transfer",
+        step_3 = call_dir / "01_3_send_btc_transfer",
         btc_connector_file = btc_connector_file,
         btc_file = nbtc_file,
         user_account_file = user_account_file
@@ -133,8 +134,8 @@ rule rbf_subsidize:
         bridge_sdk_config_file = const.common_bridge_sdk_config_file,
         btc_tx_hash = lambda wc, input: get_last_value(input.step_3),
         fee_rate=lambda wc: {
-            "06": 3000,
-            "04": 2000,
+            "03_1": 3000,
+            "02_1": 1500,
         }[wc.step],
     shell: """
     bridge-cli testnet btc-subsidize-rbf \
@@ -151,17 +152,17 @@ rule rbf_subsidize:
 rule verify_withdraw:
     message: "Verify withdraw"
     input:
-        step_8 = call_dir / "08_send_btc_transfer",
+        prev_step = call_dir / "03_3_send_btc_transfer",
         btc_connector_file = btc_connector_file,
         nbtc_file = nbtc_file,
         user_account_file = user_account_file
-    output: call_dir / "09_verify_withdraw.json"
+    output: call_dir / "04_verify_withdraw.json"
     params:
         btc_connector = lambda wc, input: get_json_field(input.btc_connector_file, "contract_id"),
         user_account_id = lambda wc, input: get_json_field(input.user_account_file, "account_id"),
         user_private_key = lambda wc, input: get_json_field(input.user_account_file, "private_key"),
         bridge_sdk_config_file = const.common_bridge_sdk_config_file,
-        btc_tx_hash = lambda wc, input: get_last_value(input.step_8),
+        btc_tx_hash = lambda wc, input: get_last_value(input.prev_step),
         extract_tx = lambda wc, output: extract_tx_hash("bridge", output),
     shell: """
         bridge-cli testnet btc-verify-withdraw \
