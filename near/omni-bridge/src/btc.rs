@@ -53,9 +53,7 @@ impl Contract {
                     let utxo_chain_extra_info: UTXOChainMsg =
                         serde_json::from_str(&transfer.message.msg)
                             .expect("Invalid Transfer MSG for UTXO chain");
-                    let max_gas_fee_from_msg = match utxo_chain_extra_info {
-                        UTXOChainMsg::MaxGasFee(max_fee) => max_fee,
-                    };
+                    let UTXOChainMsg::MaxGasFee(max_gas_fee_from_msg) = utxo_chain_extra_info;
                     require!(
                         max_gas_fee.expect("max_gas_fee is missing").0
                             == max_gas_fee_from_msg.into(),
