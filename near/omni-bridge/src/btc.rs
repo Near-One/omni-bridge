@@ -17,7 +17,7 @@ const WITHDRAW_RBF_GAS: Gas = Gas::from_tgas(100);
 #[near(serializers=[json])]
 #[derive(Debug, PartialEq)]
 enum UTXOChainMsg {
-    V0 { max_fee: u64 },
+    MaxGasFee(u64),
 }
 
 #[near]
@@ -53,12 +53,11 @@ impl Contract {
                     let utxo_chain_extra_info: UTXOChainMsg =
                         serde_json::from_str(&transfer.message.msg)
                             .expect("Invalid Transfer MSG for UTXO chain");
-                    let max_fee = match utxo_chain_extra_info {
-                        UTXOChainMsg::V0 { max_fee } => max_fee,
-                    };
+                    let UTXOChainMsg::MaxGasFee(max_gas_fee_from_msg) = utxo_chain_extra_info;
                     require!(
-                        max_gas_fee.expect("max_gas_fee is missing").0 == max_fee.into(),
-                        "Invalid max fee"
+                        max_gas_fee.expect("max_gas_fee is missing").0
+                            == max_gas_fee_from_msg.into(),
+                        "Invalid max gas fee"
                     );
                 }
             } else {
@@ -197,9 +196,9 @@ mod tests {
 
     #[test]
     fn test_deserialize_utxo_chain_msg() {
-        let serialized_msg = r#"{"V0":{"max_fee":12345}}"#;
+        let serialized_msg = r#"{"MaxGasFee":12345}"#;
         let deserialized: UTXOChainMsg = serde_json::from_str(serialized_msg).unwrap();
-        let original = UTXOChainMsg::V0 { max_fee: 12345 };
+        let original = UTXOChainMsg::MaxGasFee(12345);
         assert_eq!(original, deserialized);
     }
 }
