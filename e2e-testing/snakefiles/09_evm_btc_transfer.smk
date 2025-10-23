@@ -61,7 +61,7 @@ rule evm_init_transfer:
             --recipient btc:tb1q4vvl8ykwprwv9dw3y5nrnpk7f2jech7atz45v5 \
             --fee 300 \
             --native-fee 0 \
-            --message "{{\\"MAX_GAS_FEE\\":200}}" \
+            --message "{{\\"MaxGasFee\\":200}}" \
             --eth-bridge-token-factory-address {params.evm_bridge_address} \
             --config {params.config_file} > {output} && \
         {params.extract_tx}
