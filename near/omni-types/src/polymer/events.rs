@@ -4,12 +4,60 @@ use crate::{
     evm::events::{DeployToken, FinTransfer, InitTransfer, LogMetadata, TryFromLog},
     prover_result::{
         DeployTokenMessage, FinTransferMessage, InitTransferMessage, LogMetadataMessage,
+        ProofKind, ProverResult,
     },
     stringify, ChainKind,
 };
 
+/// Generic parser that routes to specific event type based on ProofKind
+/// This matches the pattern from evm-prover for consistency
+pub fn parse_polymer_event_by_kind(
+    proof_kind: ProofKind,
+    chain_id: u64,
+    emitting_contract: &str,
+    topics: &[u8],
+    unindexed_data: &[u8],
+) -> Result<ProverResult, String> {
+    let chain_kind = map_chain_id_to_kind(chain_id)?;
+
+    match proof_kind {
+        ProofKind::InitTransfer => Ok(ProverResult::InitTransfer(
+            parse_polymer_event::<InitTransfer, InitTransferMessage>(
+                chain_kind,
+                emitting_contract,
+                topics,
+                unindexed_data,
+            )?
+        )),
+        ProofKind::FinTransfer => Ok(ProverResult::FinTransfer(
+            parse_polymer_event::<FinTransfer, FinTransferMessage>(
+                chain_kind,
+                emitting_contract,
+                topics,
+                unindexed_data,
+            )?
+        )),
+        ProofKind::DeployToken => Ok(ProverResult::DeployToken(
+            parse_polymer_event::<DeployToken, DeployTokenMessage>(
+                chain_kind,
+                emitting_contract,
+                topics,
+                unindexed_data,
+            )?
+        )),
+        ProofKind::LogMetadata => Ok(ProverResult::LogMetadata(
+            parse_polymer_event::<LogMetadata, LogMetadataMessage>(
+                chain_kind,
+                emitting_contract,
+                topics,
+                unindexed_data,
+            )?
+        )),
+    }
+}
+
 /// Parse Polymer event from raw topics and unindexed data
-pub fn parse_polymer_event<T: SolEvent, V: TryFromLog<Log<T>>>(
+fn parse_polymer_event<T: SolEvent, V: TryFromLog<Log<T>>>(
     chain_kind: ChainKind,
     emitting_contract: &str,
     topics_bytes: &[u8],
@@ -34,16 +82,16 @@ where
     // Create Log structure
     let log = Log {
         address,
-        data: LogData {
+        data: LogData::new_unchecked(
             topics,
-            data: Bytes::copy_from_slice(unindexed_data),
-        },
+            Bytes::copy_from_slice(unindexed_data),
+        ),
     };
 
     // Decode and validate
     V::try_from_log(
         chain_kind,
-        T::decode_log(&log, true).map_err(stringify)?,
+        T::decode_log(&log).map_err(stringify)?,
     )
     .map_err(stringify)
 }

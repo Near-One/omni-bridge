@@ -1,12 +1,9 @@
 use near_sdk::borsh::BorshDeserialize;
 use near_sdk::{
-    env, ext_contract, near, near_bindgen, require, AccountId, Gas, PanicOnDefault, Promise,
+    env, ext_contract, near, near_bindgen, AccountId, Gas, PanicOnDefault, Promise,
     PromiseError,
 };
-use omni_types::polymer::events::{
-    parse_deploy_token_event, parse_fin_transfer_event, parse_init_transfer_event,
-    parse_log_metadata_event,
-};
+use omni_types::polymer::events::parse_polymer_event_by_kind;
 use omni_types::prover_args::PolymerVerifyProofArgs;
 use omni_types::prover_result::{ProofKind, ProverResult};
 
@@ -122,23 +119,12 @@ impl PolymerProver {
             return Err("Invalid topics length: must be at least 32 bytes".to_owned());
         }
 
-        match proof_kind {
-            ProofKind::InitTransfer => {
-                let event = parse_init_transfer_event(chain_id, emitting_contract, topics, unindexed_data)?;
-                Ok(ProverResult::InitTransfer(event))
-            }
-            ProofKind::FinTransfer => {
-                let event = parse_fin_transfer_event(chain_id, emitting_contract, topics, unindexed_data)?;
-                Ok(ProverResult::FinTransfer(event))
-            }
-            ProofKind::DeployToken => {
-                let event = parse_deploy_token_event(chain_id, emitting_contract, topics, unindexed_data)?;
-                Ok(ProverResult::DeployToken(event))
-            }
-            ProofKind::LogMetadata => {
-                let event = parse_log_metadata_event(chain_id, emitting_contract, topics, unindexed_data)?;
-                Ok(ProverResult::LogMetadata(event))
-            }
-        }
+        parse_polymer_event_by_kind(
+            proof_kind,
+            chain_id,
+            emitting_contract,
+            topics,
+            unindexed_data,
+        )
     }
 }
