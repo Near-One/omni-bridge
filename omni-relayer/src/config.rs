@@ -105,6 +105,7 @@ pub struct Config {
     pub btc: Option<Utxo>,
     pub zcash: Option<Utxo>,
     pub wormhole: Wormhole,
+    pub polymer: Option<Polymer>,
 }
 
 impl Config {
@@ -276,4 +277,9 @@ pub struct Utxo {
 pub struct Wormhole {
     pub api_url: String,
     pub solana_chain_id: u64,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct Polymer {
+    pub api_url: String,
 }

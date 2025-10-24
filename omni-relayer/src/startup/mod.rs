@@ -12,6 +12,7 @@ use solana_client::nonblocking::rpc_client::RpcClient;
 use tracing::info;
 use utxo_bridge_client::{AuthOptions, UTXOBridgeClient};
 use wormhole_bridge_client::{WormholeBridgeClient, WormholeBridgeClientBuilder};
+use polymer_bridge_client::{PolymerBridgeClient, PolymerBridgeClientBuilder};
 
 use crate::{
     config::{self},
@@ -163,6 +164,19 @@ fn build_wormhole_bridge_client(config: &config::Config) -> Result<WormholeBridg
         .context("Failed to build WormholeBridgeClient")
 }
 
+fn build_polymer_bridge_client(config: &config::Config) -> Result<Option<PolymerBridgeClient>> {
+    config
+        .polymer
+        .as_ref()
+        .map(|polymer| {
+            PolymerBridgeClientBuilder::default()
+                .endpoint(Some(polymer.api_url.clone()))
+                .build()
+                .context("Failed to build PolymerBridgeClient")
+        })
+        .transpose()
+}
+
 fn build_light_client(config: &config::Config, chain: ChainKind) -> Result<Option<LightClient>> {
     let light_client = match chain {
         ChainKind::Eth => config.eth.as_ref().and_then(|eth| eth.light_client.clone()),
@@ -204,6 +218,7 @@ pub fn build_omni_connector(
     let btc_bridge_client = build_utxo_bridge_client(config, ChainKind::Btc)?;
     let zcash_bridge_client = build_utxo_bridge_client(config, ChainKind::Zcash)?;
     let wormhole_bridge_client = build_wormhole_bridge_client(config)?;
+    let polymer_bridge_client = build_polymer_bridge_client(config)?;
     let eth_light_client = build_light_client(config, ChainKind::Eth)?;
     let btc_light_client = build_light_client(config, ChainKind::Btc)?;
     let zcash_light_client = build_light_client(config, ChainKind::Zcash)?;
@@ -217,6 +232,7 @@ pub fn build_omni_connector(
         .bnb_bridge_client(bnb_bridge_client)
         .solana_bridge_client(solana_bridge_client)
         .wormhole_bridge_client(Some(wormhole_bridge_client))
+        .polymer_bridge_client(polymer_bridge_client)
         .btc_bridge_client(Some(btc_bridge_client))
         .zcash_bridge_client(Some(zcash_bridge_client))
         .eth_light_client(eth_light_client)
