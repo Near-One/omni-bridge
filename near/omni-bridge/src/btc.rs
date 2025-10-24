@@ -129,8 +129,8 @@ impl Contract {
         self.add_token(&utxo_chain_token_id, &token_address, decimals, decimals);
 
         self.utxo_chain_connectors.insert(
-            &chain_kind,
-            &UTXOChainConfig {
+            chain_kind,
+            UTXOChainConfig {
                 connector: utxo_chain_connector_id,
                 token_id: utxo_chain_token_id.clone(),
             },
@@ -162,6 +162,7 @@ impl Contract {
             .get(&chain_kind)
             .expect("Connector has not been set up for this chain")
             .connector
+            .clone()
     }
 
     /// Returns the `AccountId` of the token for the given UTXO chain.
@@ -174,5 +175,6 @@ impl Contract {
             .get(&chain_kind)
             .expect("UTXO Token has not been set up for this chain")
             .token_id
+            .clone()
     }
 }

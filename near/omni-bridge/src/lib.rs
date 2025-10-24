@@ -30,6 +30,7 @@ use omni_types::{
     PayloadType, SignRequest, TransferId, TransferMessage, TransferMessagePayload,
     UnifiedTransferId, UpdateFee, UtxoFinTransferMsg, H160,
 };
+use std::collections::HashMap;
 use std::str::FromStr;
 use storage::{
     Decimals, FastTransferStatusStorage, TransferMessageStorage, TransferMessageStorageValue,
@@ -211,7 +212,7 @@ pub struct Contract {
     pub wnear_account_id: AccountId,
     pub provers: UnorderedMap<ChainKind, AccountId>,
     pub init_transfer_promises: LookupMap<AccountId, CryptoHash>,
-    pub utxo_chain_connectors: UnorderedMap<ChainKind, UTXOChainConfig>,
+    pub utxo_chain_connectors: HashMap<ChainKind, UTXOChainConfig>,
 }
 
 #[near]
@@ -259,7 +260,7 @@ impl Contract {
             wnear_account_id,
             provers: UnorderedMap::new(StorageKey::RegisteredProvers),
             init_transfer_promises: LookupMap::new(StorageKey::InitTransferPromises),
-            utxo_chain_connectors: UnorderedMap::new(StorageKey::UtxoChainConnectors),
+            utxo_chain_connectors: HashMap::new(),
         };
 
         contract.acl_init_super_admin(near_sdk::env::predecessor_account_id());
@@ -1550,13 +1551,13 @@ impl Contract {
 
     #[must_use]
     pub fn get_utxo_chain_connectors(&self) -> Vec<(ChainKind, UTXOChainConfig)> {
-        self.utxo_chain_connectors.iter().collect()
+        self.utxo_chain_connectors.clone().into_iter().collect()
     }
 
     pub fn get_utxo_chain_by_token(&self, token: &AccountId) -> Option<ChainKind> {
         for (chain, config) in &self.utxo_chain_connectors {
             if &config.token_id == token {
-                return Some(chain);
+                return Some(*chain);
             }
         }
         None
