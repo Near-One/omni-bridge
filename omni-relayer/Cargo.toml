@@ -51,18 +51,18 @@ mongodb = "3.2.2"
 redis = { version = "0.32.5", features = ["aio", "tokio-comp", "connection-manager"] }
 reqwest = "0.12"
 
-bridge-connector-common = { git = "https://github.com/Near-One/bridge-sdk-rs", package = "bridge-connector-common", rev = "8d48ef856f24851387638e3eb447d316a02c9dad" }
-near-rpc-client = { git = "https://github.com/Near-One/bridge-sdk-rs", package = "near-rpc-client", rev = "8d48ef856f24851387638e3eb447d316a02c9dad" }
+bridge-connector-common = { git = "https://github.com/Near-One/bridge-sdk-rs", package = "bridge-connector-common", rev = "9c236ec750d9ff399942e26a3e8a0ac033f94f02" }
+near-rpc-client = { git = "https://github.com/Near-One/bridge-sdk-rs", package = "near-rpc-client", rev = "9c236ec750d9ff399942e26a3e8a0ac033f94f02" }
 
-near-bridge-client = { git = "https://github.com/Near-One/bridge-sdk-rs", package = "near-bridge-client", rev = "8d48ef856f24851387638e3eb447d316a02c9dad" }
-evm-bridge-client = { git = "https://github.com/Near-One/bridge-sdk-rs", package = "evm-bridge-client", rev = "8d48ef856f24851387638e3eb447d316a02c9dad" }
-solana-bridge-client = { git = "https://github.com/Near-One/bridge-sdk-rs", package = "solana-bridge-client", rev = "8d48ef856f24851387638e3eb447d316a02c9dad" }
-utxo-bridge-client = { git = "https://github.com/Near-One/bridge-sdk-rs", package = "utxo-bridge-client", rev = "8d48ef856f24851387638e3eb447d316a02c9dad" }
-utxo-utils = { git = "https://github.com/Near-One/bridge-sdk-rs", package = "utxo-utils", rev = "8d48ef856f24851387638e3eb447d316a02c9dad" }
-wormhole-bridge-client = { git = "https://github.com/Near-One/bridge-sdk-rs", package = "wormhole-bridge-client", rev = "8d48ef856f24851387638e3eb447d316a02c9dad" }
-light-client = { git = "https://github.com/Near-One/bridge-sdk-rs", package = "light-client", rev = "8d48ef856f24851387638e3eb447d316a02c9dad" }
+near-bridge-client = { git = "https://github.com/Near-One/bridge-sdk-rs", package = "near-bridge-client", rev = "9c236ec750d9ff399942e26a3e8a0ac033f94f02" }
+evm-bridge-client = { git = "https://github.com/Near-One/bridge-sdk-rs", package = "evm-bridge-client", rev = "9c236ec750d9ff399942e26a3e8a0ac033f94f02" }
+solana-bridge-client = { git = "https://github.com/Near-One/bridge-sdk-rs", package = "solana-bridge-client", rev = "9c236ec750d9ff399942e26a3e8a0ac033f94f02" }
+utxo-bridge-client = { git = "https://github.com/Near-One/bridge-sdk-rs", package = "utxo-bridge-client", rev = "9c236ec750d9ff399942e26a3e8a0ac033f94f02" }
+utxo-utils = { git = "https://github.com/Near-One/bridge-sdk-rs", package = "utxo-utils", rev = "9c236ec750d9ff399942e26a3e8a0ac033f94f02" }
+wormhole-bridge-client = { git = "https://github.com/Near-One/bridge-sdk-rs", package = "wormhole-bridge-client", rev = "9c236ec750d9ff399942e26a3e8a0ac033f94f02" }
+light-client = { git = "https://github.com/Near-One/bridge-sdk-rs", package = "light-client", rev = "9c236ec750d9ff399942e26a3e8a0ac033f94f02" }
 
-omni-connector = { git = "https://github.com/Near-One/bridge-sdk-rs", package = "omni-connector", rev = "8d48ef856f24851387638e3eb447d316a02c9dad" }
+omni-connector = { git = "https://github.com/Near-One/bridge-sdk-rs", package = "omni-connector", rev = "9c236ec750d9ff399942e26a3e8a0ac033f94f02" }
 
 # The profile that 'dist' will build with
 [profile.dist]
