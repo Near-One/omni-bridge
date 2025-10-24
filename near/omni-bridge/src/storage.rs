@@ -1,7 +1,7 @@
 use near_contract_standards::storage_management::{StorageBalance, StorageBalanceBounds};
 use near_sdk::{assert_one_yocto, borsh, near};
 use near_sdk::{env, near_bindgen, AccountId, NearToken};
-use omni_types::{ChainTransferId, FastTransferStatus, TransferMessageV0, UnifiedTransferId};
+use omni_types::{ChainTransferId, FastTransferStatus, Nonce, TransferId, UnifiedTransferId};
 
 use crate::{
     require, ChainKind, Contract, ContractExt, Fee, OmniAddress, Promise, SdkExpect,
@@ -11,10 +11,45 @@ use crate::{
 pub const BRIDGE_TOKEN_INIT_BALANCE: NearToken = NearToken::from_near(3);
 pub const NEP141_DEPOSIT: NearToken = NearToken::from_yoctonear(1_250_000_000_000_000_000_000);
 
+
+#[near(serializers=[borsh, json])]
+#[derive(Debug, Clone)]
+pub struct TransferMessageV0 {
+    pub origin_nonce: Nonce,
+    pub token: OmniAddress,
+    pub amount: U128,
+    pub recipient: OmniAddress,
+    pub fee: Fee,
+    pub sender: OmniAddress,
+    pub msg: String,
+    pub destination_nonce: Nonce,
+}
+
+#[near(serializers=[borsh, json])]
+#[derive(Debug, Clone)]
+pub struct TransferMessageV1 {
+    pub origin_nonce: Nonce,
+    pub token: OmniAddress,
+    pub amount: U128,
+    pub recipient: OmniAddress,
+    pub fee: Fee,
+    pub sender: OmniAddress,
+    pub msg: String,
+    pub destination_nonce: Nonce,
+    pub origin_transfer_id: Option<TransferId>,
+}
+
 #[near(serializers=[borsh, json])]
 #[derive(Debug, Clone)]
 pub struct TransferMessageStorageValueV0 {
     pub message: TransferMessageV0,
+    pub owner: AccountId,
+}
+
+#[near(serializers=[borsh, json])]
+#[derive(Debug, Clone)]
+pub struct TransferMessageStorageValueV1 {
+    pub message: TransferMessageV1,
     pub owner: AccountId,
 }
 
@@ -30,7 +65,8 @@ pub struct TransferMessageStorageValue {
 #[derive(Debug, Clone)]
 pub enum TransferMessageStorage {
     V0(TransferMessageStorageValueV0),
-    V1(TransferMessageStorageValue),
+    V1(TransferMessageStorageValueV1),
+    V2(TransferMessageStorageValue)
 }
 
 impl TransferMessageStorage {
@@ -50,7 +86,26 @@ impl TransferMessageStorage {
                 },
                 owner: m.owner,
             },
-            Self::V1(m) => m,
+            Self::V1(m) => TransferMessageStorageValue {
+                message: TransferMessage {
+                    origin_nonce: m.message.origin_nonce,
+                    token: m.message.token,
+                    amount: m.message.amount,
+                    recipient: m.message.recipient,
+                    fee: m.message.fee,
+                    sender: m.message.sender,
+                    msg: m.message.msg,
+                    destination_nonce: m.message.destination_nonce,
+                    origin_transfer_id: m.message.origin_transfer_id.map(|m| {
+                        UnifiedTransferId {
+                            origin_chain: m.origin_chain,
+                            id: ChainTransferId::General(m.origin_nonce),
+                        }
+                    }),
+                },
+                owner: m.owner,
+            },
+            Self::V2(m) => m,
         }
     }
 
@@ -58,7 +113,7 @@ impl TransferMessageStorage {
         message: TransferMessage,
         owner: AccountId,
     ) -> Result<Vec<u8>, std::io::Error> {
-        borsh::to_vec(&Self::V1(TransferMessageStorageValue { message, owner }))
+        borsh::to_vec(&Self::V2(TransferMessageStorageValue { message, owner }))
     }
 }
 
@@ -227,7 +282,7 @@ impl Contract {
             .sdk_expect("ERR_CAST");
 
         let value_len: u64 =
-            borsh::to_vec(&TransferMessageStorage::V1(TransferMessageStorageValue {
+            borsh::to_vec(&TransferMessageStorage::V2(TransferMessageStorageValue {
                 message: transfer_message,
                 owner: max_account_id,
             }))

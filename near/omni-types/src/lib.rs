@@ -516,19 +516,6 @@ pub struct TransferId {
 
 #[near(serializers=[borsh, json])]
 #[derive(Debug, Clone)]
-pub struct TransferMessageV0 {
-    pub origin_nonce: Nonce,
-    pub token: OmniAddress,
-    pub amount: U128,
-    pub recipient: OmniAddress,
-    pub fee: Fee,
-    pub sender: OmniAddress,
-    pub msg: String,
-    pub destination_nonce: Nonce,
-}
-
-#[near(serializers=[borsh, json])]
-#[derive(Debug, Clone)]
 pub struct TransferMessage {
     pub origin_nonce: Nonce,
     pub token: OmniAddress,
