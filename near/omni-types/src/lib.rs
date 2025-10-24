@@ -657,14 +657,43 @@ pub struct BasicMetadata {
 
 #[near(serializers=[borsh, json])]
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum UnifiedTransferId {
-    General(TransferId),
+pub struct UnifiedTransferId {
+    pub origin_chain: ChainKind,
+    pub id: ChainTransferId,
+}
+
+#[near(serializers=[borsh, json])]
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ChainTransferId {
+    General(Nonce),
     Utxo(String),
 }
 
 impl From<TransferId> for UnifiedTransferId {
     fn from(value: TransferId) -> Self {
-        Self::General(value)
+        Self {
+            origin_chain: value.origin_chain,
+            id: ChainTransferId::General(value.origin_nonce),
+        }
+    }
+}
+
+impl UnifiedTransferId {
+    pub fn is_utxo(&self) -> bool {
+        matches!(self.id, ChainTransferId::Utxo(_))
+    }
+
+    pub fn try_into_transfer_id(&self) -> Result<TransferId, &'static str> {
+        let origin_nonce = match self.id {
+            ChainTransferId::General(nonce) => nonce,
+            ChainTransferId::Utxo(_) => {
+                return Err("Cannot convert UTXO transfer ID to general transfer ID")
+            }
+        };
+        Ok(TransferId {
+            origin_chain: self.origin_chain,
+            origin_nonce,
+        })
     }
 }
 
@@ -693,7 +722,10 @@ impl FastTransfer {
 impl FastTransfer {
     pub fn from_transfer(transfer: TransferMessage, token_id: AccountId) -> Self {
         Self {
-            transfer_id: UnifiedTransferId::General(transfer.get_transfer_id()),
+            transfer_id: UnifiedTransferId {
+                origin_chain: transfer.get_origin_chain(),
+                id: ChainTransferId::General(transfer.origin_nonce),
+            },
             token_id,
             amount: transfer.amount,
             fee: transfer.fee,
@@ -706,9 +738,13 @@ impl FastTransfer {
         transfer: UtxoFinTransferMsg,
         token_id: AccountId,
         amount: U128,
+        origin_chain: ChainKind,
     ) -> Self {
         Self {
-            transfer_id: UnifiedTransferId::Utxo(transfer.utxo_id),
+            transfer_id: UnifiedTransferId {
+                origin_chain,
+                id: ChainTransferId::Utxo(transfer.utxo_id),
+            },
             token_id,
             amount,
             fee: Fee {

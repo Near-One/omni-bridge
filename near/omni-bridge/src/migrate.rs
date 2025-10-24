@@ -1,6 +1,6 @@
 use crate::{
     storage::{Decimals, FastTransferStatusStorage, TransferMessageStorage},
-    Contract, ContractExt, StorageKey,
+    Contract, ContractExt,
 };
 use borsh::{BorshDeserialize, BorshSerialize};
 use near_contract_standards::storage_management::StorageBalance;
