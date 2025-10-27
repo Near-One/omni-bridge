@@ -16,7 +16,7 @@ use near_sdk::{
     env, ext_contract, near, require, serde_json, AccountId, BorshStorageKey, CryptoHash, Gas,
     GasWeight, NearToken, PanicOnDefault, Promise, PromiseError, PromiseOrValue, PromiseResult,
 };
-use omni_types::btc::UTXOChainConfig;
+use omni_types::btc::{TxOut, UTXOChainConfig};
 use omni_types::locker_args::{
     AddDeployedTokenArgs, BindTokenArgs, ClaimFeeArgs, DeployTokenArgs, FinTransferArgs,
     StorageDepositAction,
@@ -25,7 +25,10 @@ use omni_types::mpc_types::SignatureResponse;
 use omni_types::near_events::OmniBridgeEvent;
 use omni_types::prover_result::ProverResult;
 use omni_types::{
-    BasicMetadata, BridgeOnTransferMsg, ChainKind, FastFinTransferMsg, FastTransfer, FastTransferId, FastTransferStatus, Fee, InitTransferMsg, MetadataPayload, Nonce, OmniAddress, PayloadType, SignRequest, TransferId, TransferMessage, TransferMessagePayload, UpdateFee, UtxoFinTransferMsg, H160
+    BasicMetadata, BridgeOnTransferMsg, ChainKind, FastFinTransferMsg, FastTransfer,
+    FastTransferId, FastTransferStatus, Fee, InitTransferMsg, MetadataPayload, Nonce, OmniAddress,
+    PayloadType, SignRequest, TransferId, TransferMessage, TransferMessagePayload, UpdateFee,
+    UtxoFinTransferMsg, H160,
 };
 use std::collections::HashMap;
 use std::str::FromStr;
@@ -104,6 +107,7 @@ pub enum Role {
     UnrestrictedRelayer,
     TokenControllerUpdater,
     NativeFeeRestricted,
+    RbfOperator,
 }
 
 #[ext_contract(ext_token)]
@@ -177,6 +181,11 @@ pub trait ExtWNearToken {
 #[ext_contract(ext_deployer)]
 pub trait TokenDeployer {
     fn deploy_token(&self, account_id: AccountId, metadata: BasicMetadata) -> Promise;
+}
+
+#[ext_contract(ext_utxo_connector)]
+pub trait ExtUTXOConnector {
+    fn withdraw_rbf(&mut self, original_btc_pending_verify_id: String, output: Vec<TxOut>);
 }
 
 #[near(contract_state)]
@@ -454,13 +463,6 @@ impl Contract {
         amount: U128,
         init_transfer_msg: InitTransferMsg,
     ) -> PromiseOrPromiseIndexOrValue<U128> {
-        // Avoid extra storage read by verifying native fee before checking the role
-        if init_transfer_msg.native_token_fee.0 > 0
-            && self.acl_has_role(Role::NativeFeeRestricted.into(), signer_id.clone())
-        {
-            env::panic_str("ERR_ACCOUNT_RESTRICTED_FROM_USING_NATIVE_FEE");
-        }
-
         require!(
             init_transfer_msg.recipient.get_chain() != ChainKind::Near,
             "ERR_INVALID_RECIPIENT_CHAIN"
@@ -489,26 +491,31 @@ impl Contract {
             "ERR_INVALID_FEE"
         );
 
-        let required_storage_balance = self
-            .required_balance_for_init_transfer_message(transfer_message.clone())
-            .saturating_add(NearToken::from_yoctonear(
-                init_transfer_msg.native_token_fee.0,
-            ));
+        let required_storage_balance =
+            self.required_balance_for_init_transfer_message(transfer_message.clone());
 
         let message_storage_account_id = transfer_message.calculate_storage_account_id();
+
         // Choose storage payer or whether to yield execution until storage is available
-        if self.has_storage_balance(&message_storage_account_id, required_storage_balance) {
-            PromiseOrPromiseIndexOrValue::Value(self.init_transfer_internal(
-                transfer_message,
-                message_storage_account_id,
-                signer_id,
-            ))
-        } else if self.has_storage_balance(&signer_id, required_storage_balance) {
-            PromiseOrPromiseIndexOrValue::Value(self.init_transfer_internal(
-                transfer_message,
-                signer_id.clone(),
-                signer_id,
-            ))
+        if self
+            .try_to_transfer_balance_from_message_account(
+                &message_storage_account_id,
+                NearToken::from_yoctonear(init_transfer_msg.native_token_fee.0),
+                &signer_id,
+                required_storage_balance,
+            )
+            .is_ok()
+            || (self.has_storage_balance(
+                &signer_id,
+                required_storage_balance.saturating_add(NearToken::from_yoctonear(
+                    init_transfer_msg.native_token_fee.0,
+                )),
+            ) && (init_transfer_msg.native_token_fee.0 == 0
+                || !self.acl_has_role(Role::NativeFeeRestricted.into(), signer_id.clone())))
+        {
+            PromiseOrPromiseIndexOrValue::Value(
+                self.init_transfer_internal(transfer_message, signer_id),
+            )
         } else {
             let promise_index = env::promise_yield_create(
                 "init_transfer_resume",
@@ -557,7 +564,17 @@ impl Contract {
         self.remove_promise(&message_storage_account_id);
 
         if response.is_ok() {
-            self.init_transfer_internal(transfer_message, message_storage_account_id, storage_owner)
+            if let Err(err) = self.try_to_transfer_balance_from_message_account(
+                &message_storage_account_id,
+                NearToken::from_yoctonear(transfer_message.fee.native_fee.0),
+                &storage_owner,
+                self.required_balance_for_init_transfer(Some(transfer_message.msg.clone())),
+            ) {
+                env::log_str(&format!("Error paying native fee and storage: {err}"));
+                return transfer_message.amount;
+            }
+
+            self.init_transfer_internal(transfer_message, storage_owner)
         } else {
             env::log_str("Init transfer resume timeout");
             transfer_message.amount
@@ -671,7 +688,10 @@ impl Contract {
         fast_fin_transfer_msg: FastFinTransferMsg,
     ) -> PromiseOrPromiseIndexOrValue<U128> {
         let origin_token = self
-            .get_token_address(fast_fin_transfer_msg.transfer_id.origin_chain, token_id.clone())
+            .get_token_address(
+                fast_fin_transfer_msg.transfer_id.origin_chain,
+                token_id.clone(),
+            )
             .sdk_expect("ERR_TOKEN_NOT_FOUND");
 
         let decimals = self
@@ -688,7 +708,10 @@ impl Contract {
         );
 
         if !fast_fin_transfer_msg.transfer_id.is_utxo() {
-            let transfer_id = fast_fin_transfer_msg.transfer_id.try_into_transfer_id().unwrap();
+            let transfer_id = fast_fin_transfer_msg
+                .transfer_id
+                .try_into_transfer_id()
+                .unwrap();
             if self.is_transfer_finalised(transfer_id) {
                 env::panic_str("ERR_TRANSFER_ALREADY_FINALISED");
             }
@@ -1603,16 +1626,15 @@ impl Contract {
     fn init_transfer_internal(
         &mut self,
         transfer_message: TransferMessage,
-        storage_payer: AccountId,
         storage_owner: AccountId,
     ) -> U128 {
         let required_storage_balance = self
-            .add_transfer_message(transfer_message.clone(), storage_owner)
+            .add_transfer_message(transfer_message.clone(), storage_owner.clone())
             .saturating_add(NearToken::from_yoctonear(transfer_message.fee.native_fee.0));
 
         if self
             .try_update_storage_balance(
-                storage_payer,
+                storage_owner,
                 required_storage_balance,
                 NearToken::from_yoctonear(0),
             )

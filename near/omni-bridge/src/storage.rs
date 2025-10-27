@@ -11,7 +11,6 @@ use crate::{
 pub const BRIDGE_TOKEN_INIT_BALANCE: NearToken = NearToken::from_near(3);
 pub const NEP141_DEPOSIT: NearToken = NearToken::from_yoctonear(1_250_000_000_000_000_000_000);
 
-
 #[near(serializers=[borsh, json])]
 #[derive(Debug, Clone)]
 pub struct TransferMessageV0 {
@@ -66,7 +65,7 @@ pub struct TransferMessageStorageValue {
 pub enum TransferMessageStorage {
     V0(TransferMessageStorageValueV0),
     V1(TransferMessageStorageValueV1),
-    V2(TransferMessageStorageValue)
+    V2(TransferMessageStorageValue),
 }
 
 impl TransferMessageStorage {
@@ -96,11 +95,9 @@ impl TransferMessageStorage {
                     sender: m.message.sender,
                     msg: m.message.msg,
                     destination_nonce: m.message.destination_nonce,
-                    origin_transfer_id: m.message.origin_transfer_id.map(|m| {
-                        UnifiedTransferId {
-                            origin_chain: m.origin_chain,
-                            id: ChainTransferId::General(m.origin_nonce),
-                        }
+                    origin_transfer_id: m.message.origin_transfer_id.map(|m| UnifiedTransferId {
+                        origin_chain: m.origin_chain,
+                        id: ChainTransferId::General(m.origin_nonce),
                     }),
                 },
                 owner: m.owner,
@@ -238,6 +235,41 @@ impl Contract {
         }
     }
 
+    // Used when native fee for the transfer is deposited to the dedicated message account.
+    // Deducts the total balance from `account_id` and credits it to `storage_payer`.
+    // Returns an error if `account_id` does not have enough balance to cover `native_fee` or if `storage_payer` doesn't have enough balance to complete the transfer.
+    pub(crate) fn try_to_transfer_balance_from_message_account(
+        &mut self,
+        account_id: &AccountId,
+        native_fee: NearToken,
+        storage_payer: &AccountId,
+        required_storage_payer_balance: NearToken,
+    ) -> Result<(), String> {
+        let balance = self
+            .accounts_balances
+            .get(account_id)
+            .ok_or("ERR_MESSAGE_ACCOUNT_NOT_REGISTERED")?;
+
+        if balance.total < native_fee {
+            return Err("ERR_NOT_ENOUGH_BALANCE_FOR_FEE".to_string());
+        }
+
+        let mut storage = self
+            .accounts_balances
+            .get(storage_payer)
+            .ok_or("ERR_SIGNER_NOT_REGISTERED")?;
+
+        storage.available = storage.available.saturating_add(balance.total);
+
+        if storage.available < required_storage_payer_balance.saturating_add(native_fee) {
+            return Err("ERR_SIGNER_NOT_ENOUGH_BALANCE".to_string());
+        }
+
+        self.accounts_balances.insert(storage_payer, &storage);
+        self.accounts_balances.remove(account_id);
+        Ok(())
+    }
+
     pub fn required_balance_for_account(&self) -> NearToken {
         let key_len = Self::max_key_len_of_account_id();
         let value_len: u64 = borsh::to_vec(&StorageBalance {
@@ -265,7 +297,10 @@ impl Contract {
             sender: OmniAddress::Near(max_account_id.clone()),
             msg: msg.unwrap_or_default(),
             destination_nonce: 0,
-            origin_transfer_id: Some(UnifiedTransferId { origin_chain: ChainKind::Eth, id: ChainTransferId::Utxo("a".repeat(75)) }), // tx_id@vout = 64 + 1 + 10
+            origin_transfer_id: Some(UnifiedTransferId {
+                origin_chain: ChainKind::Eth,
+                id: ChainTransferId::Utxo("a".repeat(75)),
+            }), // tx_id@vout = 64 + 1 + 10
         })
     }
 

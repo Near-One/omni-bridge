@@ -1,21 +1,23 @@
 use crate::storage::NEP141_DEPOSIT;
 use crate::{
-    ext_token, Contract, ContractExt, Role, FT_TRANSFER_CALL_GAS, ONE_YOCTO, STORAGE_DEPOSIT_GAS,
+    ext_token, ext_utxo_connector, Contract, ContractExt, Role, FT_TRANSFER_CALL_GAS, ONE_YOCTO,
+    STORAGE_DEPOSIT_GAS,
 };
 use near_plugins::{access_control_any, pause, AccessControllable, Pausable};
 use near_sdk::json_types::U128;
 use near_sdk::{
     env, near, require, serde_json, AccountId, Gas, Promise, PromiseError, PromiseOrValue,
 };
-use omni_types::btc::{TokenReceiverMessage, UTXOChainConfig};
+use omni_types::btc::{TokenReceiverMessage, TxOut, UTXOChainConfig};
 use omni_types::{ChainKind, Fee, OmniAddress, TransferId, TransferMessage};
 
 const SUBMIT_TRANSFER_TO_BTC_CONNECTOR_CALLBACK_GAS: Gas = Gas::from_tgas(5);
+const WITHDRAW_RBF_GAS: Gas = Gas::from_tgas(100);
 
-#[derive(Debug, near_sdk::serde::Deserialize)]
-#[serde(tag = "type", content = "data")]
+#[near(serializers=[json])]
+#[derive(Debug, PartialEq)]
 enum UTXOChainMsg {
-    V0 { max_fee: u64 },
+    MaxGasFee(u64),
 }
 
 #[near]
@@ -51,12 +53,11 @@ impl Contract {
                     let utxo_chain_extra_info: UTXOChainMsg =
                         serde_json::from_str(&transfer.message.msg)
                             .expect("Invalid Transfer MSG for UTXO chain");
-                    let max_fee = match utxo_chain_extra_info {
-                        UTXOChainMsg::V0 { max_fee } => max_fee,
-                    };
+                    let UTXOChainMsg::MaxGasFee(max_gas_fee_from_msg) = utxo_chain_extra_info;
                     require!(
-                        max_gas_fee.expect("max_gas_fee is missing").0 == max_fee.into(),
-                        "Invalid max fee"
+                        max_gas_fee.expect("max_gas_fee is missing").0
+                            == max_gas_fee_from_msg.into(),
+                        "Invalid max gas fee"
                     );
                 }
             } else {
@@ -152,6 +153,18 @@ impl Contract {
             .storage_deposit(&env::current_account_id(), Some(true));
     }
 
+    #[access_control_any(roles(Role::DAO, Role::RbfOperator))]
+    pub fn rbf_increase_gas_fee(
+        &self,
+        chain_kind: ChainKind,
+        original_btc_pending_verify_id: String,
+        output: Vec<TxOut>,
+    ) -> Promise {
+        ext_utxo_connector::ext(self.get_utxo_chain_connector(chain_kind))
+            .with_static_gas(WITHDRAW_RBF_GAS)
+            .withdraw_rbf(original_btc_pending_verify_id, output)
+    }
+
     /// Returns the `AccountId` of the connector for the given UTXO chain.
     ///
     /// # Panics
@@ -176,5 +189,18 @@ impl Contract {
             .expect("UTXO Token has not been set up for this chain")
             .token_id
             .clone()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_deserialize_utxo_chain_msg() {
+        let serialized_msg = r#"{"MaxGasFee":12345}"#;
+        let deserialized: UTXOChainMsg = serde_json::from_str(serialized_msg).unwrap();
+        let original = UTXOChainMsg::MaxGasFee(12345);
+        assert_eq!(original, deserialized);
     }
 }

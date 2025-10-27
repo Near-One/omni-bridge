@@ -117,13 +117,13 @@ impl NonceManager {
                 .map_resp(|x: U64| x.to::<u64>())
                 .await;
 
-            let Ok(nonce) = response else {
-                warn!("Failed to get transaction count, retrying...");
-                tokio::time::sleep(tokio::time::Duration::from_secs(RETRY_SLEEP_SECS)).await;
-                continue;
-            };
-
-            return Ok(nonce);
+            match response {
+                Ok(nonce) => return Ok(nonce),
+                Err(err) => {
+                    warn!("Failed to get transaction count: {err:?}, retrying...");
+                    tokio::time::sleep(tokio::time::Duration::from_secs(RETRY_SLEEP_SECS)).await;
+                }
+            }
         }
 
         anyhow::bail!("Failed to get current nonce")
@@ -226,7 +226,7 @@ impl EvmNonceManagers {
                     .reserve_nonce()
                     .await
             }
-            ChainKind::Near | ChainKind::Sol => {
+            ChainKind::Near | ChainKind::Sol | ChainKind::Btc | ChainKind::Zcash => {
                 anyhow::bail!("Unsupported chain kind: {chain_kind:?}")
             }
         }

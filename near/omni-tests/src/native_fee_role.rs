@@ -252,18 +252,10 @@ mod tests {
 
             // For the case where we expect failure
             if !should_succeed {
-                // Check if any of the receipt outcomes contain our expected error message
-                let contains_expected_error =
-                    transfer_result.receipt_outcomes().iter().any(|outcome| {
-                        // Convert outcome to string to check for the error message
-                        let outcome_str = format!("{outcome:?}");
-                        outcome_str.contains("ERR_ACCOUNT_RESTRICTED_FROM_USING_NATIVE_FEE")
-                    });
-
-                assert!(contains_expected_error,
-                    "Expected to find ERR_ACCOUNT_RESTRICTED_FROM_USING_NATIVE_FEE error in receipts");
+                assert_eq!(U128(0), transfer_result.clone().json().unwrap());
                 return Ok(None);
             }
+            assert_eq!(U128(amount), transfer_result.clone().json().unwrap());
 
             // For successful case, extract the transfer message
             let logs = transfer_result

@@ -22,7 +22,9 @@ network = "mainnet"
 rpc_url = "https://rpc.mainnet.fastnear.com?apiKey=FASTNEAR_API_KEY"
 omni_bridge_id = "omni.bridge.near"
 btc_connector = "btc-connector.bridge.near"
-btc = "btc-client.bridge.near"
+btc = "nbtc.bridge.near"
+zcash_connector = "zcash-connector.bridge.near"
+zcash = "nzec.bridge.near"
 # Either provide a path to a credentials file or set it in the environment
 # Note: the path must be absolute
 # omni_credentials_path = "/Users/username/.near-credentials/mainnet/omni-relayer.bridge.near.json"
@@ -80,7 +82,7 @@ error_selectors_to_remove = [
 ]
 
 [bnb]
-rpc_http_url = "https://bsc-mainnet.infura.io/v3/INFURA_API_KEY"
+rpc_http_url = "https://x-api-key:TATUM_API_KEY@bsc-mainnet.gateway.tatum.io"
 rpc_ws_url = "wss://bsc-mainnet.infura.io/ws/v3/INFURA_API_KEY"
 chain_id = 56
 omni_bridge_address = "0x073C8a225c8Cf9d3f9157F5C1a1DbE02407f5720"
@@ -96,7 +98,7 @@ error_selectors_to_remove = [
 ]
 
 [solana]
-rpc_http_url = "https://api.mainnet-beta.solana.com"
+rpc_http_url = "https://x-api-key:TATUM_API_KEY@solana-mainnet.gateway.tatum.io"
 rpc_ws_url = "wss://api.mainnet-beta.solana.com"
 # Program ID on Solana is an account ID whitch the bridge contract (basically bridge_token_factory_address on Solana)
 program_id = "dahPEoZGXfyV58JqqH85okdHmpN8U2q8owgPUXSCPxe"
@@ -124,11 +126,20 @@ finalize_transfer_sol_discriminator = [104, 27, 121, 69, 3, 70, 217, 66]
 # credentials_path = "/Users/username/my-solana-keypair.json"
 
 [btc]
-rpc_http_url = "https://bitcoin-rpc.publicnode.com"
+rpc_http_url = "https://x-api-key:TATUM_API_KEY@bitcoin-mainnet.gateway.tatum.io"
+light_client = "btc-client.bridge.near"
 # If this is set to true, then omni relayer will call `sign_btc_transaction`
 signing_enabled = false
 # If this is set to true, then omni relayer will call `verify_withdraw`
 verifying_withdraw_enabled = false
+
+[zcash]
+rpc_http_url = "https://x-api-key:TATUM_API_KEY@zcash-mainnet.gateway.tatum.io"
+light_client = "zcash-client.bridge.near"
+# If this is set to true, then omni relayer will call `sign_btc_transaction`
+signing_enabled = true
+# If this is set to true, then omni relayer will call `verify_withdraw`
+verifying_withdraw_enabled = true
 
 [wormhole]
 api_url = "https://api.wormholescan.io/"
