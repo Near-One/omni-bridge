@@ -954,6 +954,8 @@ impl Contract {
             self.remove_fast_transfer(&fast_transfer.id());
             fast_transfer.amount
         } else {
+            require!(!fast_transfer_status.finalised, "ERR_FAST_TRANSFER_ALREADY_FINALISED");
+            self.mark_fast_transfer_as_finalised(&fast_transfer.id());
             // With transfers to other chain the fee will be claimed after finalization on the destination chain
             U128(fast_transfer.amount.0 - fast_transfer.fee.fee.0)
         };
