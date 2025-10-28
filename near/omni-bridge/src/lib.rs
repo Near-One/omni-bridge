@@ -1004,7 +1004,7 @@ impl Contract {
             amount,
             recipient: utxo_fin_transfer_msg.recipient.clone(),
             fee: Fee {
-                fee: utxo_fin_transfer_msg.fee,
+                fee: utxo_fin_transfer_msg.relayer_fee,
                 native_fee: U128(0),
             },
             sender: OmniAddress::Near(env::predecessor_account_id()),

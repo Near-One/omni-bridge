@@ -488,7 +488,7 @@ pub struct FastFinTransferMsg {
 pub struct UtxoFinTransferMsg {
     pub utxo_id: String,
     pub recipient: OmniAddress,
-    pub fee: U128,
+    pub relayer_fee: U128,
     pub msg: String,
 }
 
@@ -735,7 +735,7 @@ impl FastTransfer {
             token_id,
             amount,
             fee: Fee {
-                fee: transfer.fee,
+                fee: transfer.relayer_fee,
                 native_fee: U128(0),
             },
             recipient: transfer.recipient,
