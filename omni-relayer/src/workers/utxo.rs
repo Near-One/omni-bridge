@@ -95,6 +95,10 @@ pub async fn process_utxo_to_near_init_transfer_event(
     transfer: Transfer,
     near_nonce: Arc<utils::nonce::NonceManager>,
 ) -> Result<EventAction> {
+    let Ok(near_bridge_client) = omni_connector.near_bridge_client() else {
+        anyhow::bail!("Near bridge client is not configured");
+    };
+
     let Transfer::UtxoToNear {
         chain,
         btc_tx_hash,
@@ -105,13 +109,45 @@ pub async fn process_utxo_to_near_init_transfer_event(
         anyhow::bail!("Expected UtxoToNearTransfer, got: {transfer:?}");
     };
 
-    let nonce = match near_nonce.reserve_nonce().await {
+    let mut nonce = match near_nonce.reserve_nonce().await {
         Ok(nonce) => Some(nonce),
         Err(err) => {
             warn!("Failed to reserve nonce: {err:?}");
             return Ok(EventAction::Retry);
         }
     };
+
+    match omni_connector
+        .near_get_required_storage_deposit(
+            near_bridge_client.utxo_chain_token(chain)?,
+            deposit_msg.recipient_id.clone(),
+        )
+        .await?
+    {
+        amount if amount > 0 => {
+            omni_connector
+                .near_storage_deposit_for_token(
+                    near_bridge_client.utxo_chain_token(chain)?,
+                    amount,
+                    deposit_msg.recipient_id.clone(),
+                    TransactionOptions {
+                        nonce,
+                        wait_until: near_primitives::views::TxExecutionStatus::Final,
+                        wait_final_outcome_timeout_sec: None,
+                    },
+                )
+                .await?;
+
+            nonce = match near_nonce.reserve_nonce().await {
+                Ok(nonce) => Some(nonce),
+                Err(err) => {
+                    warn!("Failed to reserve nonce: {err:?}");
+                    return Ok(EventAction::Retry);
+                }
+            };
+        }
+        _ => {}
+    }
 
     match omni_connector
         .near_fin_transfer_btc(

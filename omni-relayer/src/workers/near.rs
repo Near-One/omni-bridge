@@ -540,6 +540,10 @@ pub async fn initiate_fast_transfer(
     transfer: Transfer,
     near_omni_nonce: Arc<utils::nonce::NonceManager>,
 ) -> Result<EventAction> {
+    let Ok(near_bridge_client) = fast_connector.near_bridge_client() else {
+        anyhow::bail!("Near bridge client is not configured");
+    };
+
     let Transfer::Fast {
         block_number,
         tx_hash,
@@ -623,12 +627,36 @@ pub async fn initiate_fast_transfer(
         return Ok(EventAction::Retry);
     }
 
-    let nonce = Some(
+    let mut nonce = Some(
         near_omni_nonce
             .reserve_nonce()
             .await
             .context("Failed to reserve nonce for near transaction")?,
     );
+
+    let required_balance = near_bridge_client
+        .get_required_balance_for_fast_fin_transfer()
+        .await?
+        + storage_deposit_amount.unwrap_or(0.into()).0;
+
+    if near_bridge_client
+        .deposit_storage_if_required(
+            required_balance,
+            TransactionOptions {
+                nonce,
+                wait_until: near_primitives::views::TxExecutionStatus::Final,
+                wait_final_outcome_timeout_sec: None,
+            },
+        )
+        .await?
+    {
+        nonce = Some(
+            near_omni_nonce
+                .reserve_nonce()
+                .await
+                .context("Failed to reserve nonce for near transaction")?,
+        );
+    }
 
     match fast_connector
         .near_fast_transfer(

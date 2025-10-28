@@ -64,11 +64,7 @@ impl NonceManager {
         }
 
         let reserved = *local_nonce;
-        if let ChainClient::Near { .. } = self.client {
-            *local_nonce += 2;
-        } else {
-            *local_nonce += 1;
-        }
+        *local_nonce += 1;
         drop(local_nonce);
 
         Ok(reserved)
