@@ -669,8 +669,12 @@ impl UnifiedTransferId {
     pub fn is_utxo(&self) -> bool {
         matches!(self.id, ChainTransferId::Utxo(_))
     }
+}
 
-    pub fn try_into_transfer_id(&self) -> Result<TransferId, &'static str> {
+impl TryInto<TransferId> for &UnifiedTransferId {
+    type Error = &'static str;
+
+    fn try_into(self) -> Result<TransferId, Self::Error> {
         let origin_nonce = match self.id {
             ChainTransferId::General(nonce) => nonce,
             ChainTransferId::Utxo(_) => {

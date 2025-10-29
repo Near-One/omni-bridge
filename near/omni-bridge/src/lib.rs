@@ -239,7 +239,7 @@ impl Contract {
                 self.fast_fin_transfer(token_id, amount, signer_id, fast_fin_transfer_msg)
             }
             BridgeOnTransferMsg::UtxoFinTransfer(utxo_fin_transfer_msg) => {
-                self.utxo_fin_transfer(token_id, amount, utxo_fin_transfer_msg, signer_id)
+                self.utxo_fin_transfer(token_id, amount, signer_id, utxo_fin_transfer_msg)
             }
         };
 
@@ -708,10 +708,7 @@ impl Contract {
         );
 
         if !fast_fin_transfer_msg.transfer_id.is_utxo() {
-            let transfer_id = fast_fin_transfer_msg
-                .transfer_id
-                .try_into_transfer_id()
-                .unwrap();
+            let transfer_id = (&fast_fin_transfer_msg.transfer_id).try_into().unwrap();
             if self.is_transfer_finalised(transfer_id) {
                 env::panic_str("ERR_TRANSFER_ALREADY_FINALISED");
             }
@@ -901,8 +898,8 @@ impl Contract {
         &mut self,
         token_id: AccountId,
         amount: U128,
-        utxo_fin_transfer_msg: UtxoFinTransferMsg,
         signer_id: AccountId,
+        utxo_fin_transfer_msg: UtxoFinTransferMsg,
     ) -> PromiseOrPromiseIndexOrValue<U128> {
         // Verify this is indeed a UTXO chain token
         let origin_chain = self
@@ -954,7 +951,10 @@ impl Contract {
             self.remove_fast_transfer(&fast_transfer.id());
             fast_transfer.amount
         } else {
-            require!(!fast_transfer_status.finalised, "ERR_FAST_TRANSFER_ALREADY_FINALISED");
+            require!(
+                !fast_transfer_status.finalised,
+                "ERR_FAST_TRANSFER_ALREADY_FINALISED"
+            );
             self.mark_fast_transfer_as_finalised(&fast_transfer.id());
             // With transfers to other chain the fee will be claimed after finalization on the destination chain
             U128(fast_transfer.amount.0 - fast_transfer.fee.fee.0)
@@ -1087,7 +1087,7 @@ impl Contract {
 
         let message = self.remove_transfer_message(fin_transfer.transfer_id);
 
-        // Need to make sure fast transfer is finalised because it means transfer parameters are correct. Otherwise, fee can be set as anything.
+        // If fast transfer is finalized, we know that transfer parameters are correct. This way malicious relayer can't exploit it, e.g. by setting a large fee.
         if let Some(origin_transfer_id) = message.origin_transfer_id.clone() {
             let mut fast_transfer =
                 FastTransfer::from_transfer(message.clone(), self.get_token_id(&message.token));

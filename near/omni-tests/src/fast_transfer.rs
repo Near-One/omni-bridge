@@ -342,8 +342,6 @@ mod tests {
     }
 
     mod transfer_to_near {
-        use omni_types::UnifiedTransferId;
-
         use super::*;
 
         async fn assert_transfer_to_near(
