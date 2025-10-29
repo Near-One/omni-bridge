@@ -634,21 +634,25 @@ pub async fn initiate_fast_transfer(
             .context("Failed to reserve nonce for near transaction")?,
     );
 
-    let required_balance = near_bridge_client
+    let Ok(required_balance) = near_bridge_client
         .get_required_balance_for_fast_fin_transfer()
-        .await?
-        + storage_deposit_amount.unwrap_or(0.into()).0;
+        .await
+    else {
+        warn!("Failed to get required balance for fast transfer");
+        return Ok(EventAction::Retry);
+    };
 
     if near_bridge_client
         .deposit_storage_if_required(
-            required_balance,
+            required_balance + storage_deposit_amount.unwrap_or(0.into()).0,
             TransactionOptions {
                 nonce,
                 wait_until: near_primitives::views::TxExecutionStatus::Final,
                 wait_final_outcome_timeout_sec: None,
             },
         )
-        .await?
+        .await
+        .is_ok()
     {
         nonce = Some(
             near_omni_nonce
@@ -656,6 +660,9 @@ pub async fn initiate_fast_transfer(
                 .await
                 .context("Failed to reserve nonce for near transaction")?,
         );
+    } else {
+        warn!("Failed to deposit storage for fast transfer");
+        return Ok(EventAction::Retry);
     }
 
     match fast_connector

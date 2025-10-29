@@ -122,10 +122,10 @@ pub async fn process_utxo_to_near_init_transfer_event(
             near_bridge_client.utxo_chain_token(chain)?,
             deposit_msg.recipient_id.clone(),
         )
-        .await?
+        .await
     {
-        amount if amount > 0 => {
-            omni_connector
+        Ok(amount) if amount > 0 => {
+            if omni_connector
                 .near_storage_deposit_for_token(
                     near_bridge_client.utxo_chain_token(chain)?,
                     amount,
@@ -136,7 +136,16 @@ pub async fn process_utxo_to_near_init_transfer_event(
                         wait_final_outcome_timeout_sec: None,
                     },
                 )
-                .await?;
+                .await
+                .is_err()
+            {
+                warn!(
+                    "Failed to deposit storage for token {:?} to {}",
+                    near_bridge_client.utxo_chain_token(chain)?,
+                    deposit_msg.recipient_id
+                );
+                return Ok(EventAction::Retry);
+            }
 
             nonce = match near_nonce.reserve_nonce().await {
                 Ok(nonce) => Some(nonce),
@@ -146,7 +155,15 @@ pub async fn process_utxo_to_near_init_transfer_event(
                 }
             };
         }
-        _ => {}
+        Ok(_) => {}
+        Err(err) => {
+            warn!(
+                "Failed to get required storage deposit for token {:?} to {}: {err:?}",
+                near_bridge_client.utxo_chain_token(chain)?,
+                deposit_msg.recipient_id
+            );
+            return Ok(EventAction::Retry);
+        }
     }
 
     match omni_connector
