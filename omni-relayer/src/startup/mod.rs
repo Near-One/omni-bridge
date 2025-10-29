@@ -58,9 +58,9 @@ fn build_utxo_bridges(
         utxo_bridges.insert(
             chain,
             UTXOChainAccounts {
-                utxo_chain_connector: connector.map(std::string::ToString::to_string),
-                utxo_chain_token: token.map(std::string::ToString::to_string),
-                satoshi_relayer: Some(near_signer.account_id.to_string()),
+                utxo_chain_connector: connector.cloned(),
+                utxo_chain_token: token.cloned(),
+                satoshi_relayer: Some(near_signer.account_id.clone()),
             },
         );
     }
@@ -75,8 +75,8 @@ fn build_near_bridge_client(
     NearBridgeClientBuilder::default()
         .endpoint(Some(config.near.rpc_url.clone()))
         .private_key(Some(near_signer.secret_key.to_string()))
-        .signer(Some(near_signer.account_id.to_string()))
-        .omni_bridge_id(Some(config.near.omni_bridge_id.to_string()))
+        .signer(Some(near_signer.account_id.clone()))
+        .omni_bridge_id(Some(config.near.omni_bridge_id.clone()))
         .utxo_bridges(build_utxo_bridges(config, near_signer))
         .build()
         .context("Failed to build NearBridgeClient")

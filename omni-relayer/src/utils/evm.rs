@@ -104,7 +104,7 @@ pub fn string_to_evm_omniaddress(chain_kind: ChainKind, address: &str) -> Result
     OmniAddress::new_from_evm_address(
         chain_kind,
         H160::from_str(address)
-            .map_err(|err| anyhow::anyhow!("Failed to parse as H160 address: {:?}", err))?,
+            .map_err(|err| anyhow::anyhow!("Failed to parse as H160 address: {err:?}"))?,
     )
-    .map_err(|err| anyhow::anyhow!("Failed to parse as EvmOmniAddress address: {:?}", err))
+    .map_err(|err| anyhow::anyhow!("Failed to parse as EvmOmniAddress address: {err:?}"))
 }

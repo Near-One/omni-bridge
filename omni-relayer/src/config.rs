@@ -133,7 +133,7 @@ impl Config {
                 panic!("Verifying withdraw is not applicable for {chain:?}")
             }
         };
-        config.is_some_and(|btc| btc.signing_enabled)
+        config.is_some_and(|utxo| utxo.signing_enabled)
     }
 
     pub fn is_verifying_utxo_withdraw_enabled(&self, chain: ChainKind) -> bool {
@@ -149,7 +149,7 @@ impl Config {
                 panic!("Verifying withdraw is not applicable for {chain:?}")
             }
         };
-        config.is_some_and(|btc| btc.verifying_withdraw_enabled)
+        config.is_some_and(|utxo| utxo.verifying_withdraw_enabled)
     }
 }
 

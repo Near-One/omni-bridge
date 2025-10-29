@@ -38,10 +38,7 @@ pub async fn process_init_transfer_event(
         ..
     } = transfer
     else {
-        anyhow::bail!(
-            "Expected SolanaInitTransferWithTimestamp, got: {:?}",
-            transfer
-        );
+        anyhow::bail!("Expected SolanaInitTransferWithTimestamp, got: {transfer:?}");
     };
 
     info!("Trying to process InitTransfer log on Solana");
@@ -55,7 +52,7 @@ pub async fn process_init_transfer_event(
         .is_transfer_finalised(Some(sender.get_chain()), ChainKind::Near, sequence)
         .await
     {
-        Ok(true) => anyhow::bail!("Transfer is already finalised: {:?}", transfer_id),
+        Ok(true) => anyhow::bail!("Transfer is already finalised: {transfer_id:?}"),
         Ok(false) => {}
         Err(err) => {
             warn!("Failed to check if transfer is finalised: {err:?}");
@@ -66,7 +63,7 @@ pub async fn process_init_transfer_event(
     if config.is_bridge_api_enabled() {
         let token =
             OmniAddress::new_from_slice(ChainKind::Sol, &token.to_bytes()).map_err(|err| {
-                anyhow::anyhow!("Failed to parse \"{}\" as `OmniAddress`: {:?}", sender, err)
+                anyhow::anyhow!("Failed to parse \"{sender}\" as `OmniAddress`: {err:?}")
             })?;
 
         let Ok(needed_fee) =
@@ -130,7 +127,7 @@ pub async fn process_init_transfer_event(
                 RetryableEvent::new(transfer),
             )
             .await;
-            anyhow::bail!("Failed to get storage deposit actions: {}", err);
+            anyhow::bail!("Failed to get storage deposit actions: {err}");
         }
     };
 
@@ -184,7 +181,7 @@ pub async fn process_fin_transfer_event(
     near_nonce: Arc<utils::nonce::NonceManager>,
 ) -> Result<EventAction> {
     let FinTransfer::Solana { emitter, sequence } = fin_transfer else {
-        anyhow::bail!("Expected Solana FinTransfer, got: {:?}", fin_transfer);
+        anyhow::bail!("Expected Solana FinTransfer, got: {fin_transfer:?}");
     };
 
     info!("Trying to process FinTransfer log on Solana");
@@ -201,7 +198,7 @@ pub async fn process_fin_transfer_event(
         proof_kind: ProofKind::FinTransfer,
         vaa,
     }) else {
-        anyhow::bail!("Failed to serialize prover args for {:?}", sequence);
+        anyhow::bail!("Failed to serialize prover args for {sequence}");
     };
 
     let claim_fee_args = ClaimFeeArgs {
@@ -256,7 +253,7 @@ pub async fn process_deploy_token_event(
     near_nonce: Arc<utils::nonce::NonceManager>,
 ) -> Result<EventAction> {
     let DeployToken::Solana { emitter, sequence } = deploy_token_event else {
-        anyhow::bail!("Expected Solana DeployToken, got: {:?}", deploy_token_event);
+        anyhow::bail!("Expected Solana DeployToken, got: {deploy_token_event:?}");
     };
 
     info!("Trying to process DeployToken log on Solana");
@@ -273,7 +270,7 @@ pub async fn process_deploy_token_event(
         proof_kind: ProofKind::DeployToken,
         vaa,
     }) else {
-        anyhow::bail!("Failed to serialize prover args for {:?}", sequence);
+        anyhow::bail!("Failed to serialize prover args for {sequence}");
     };
 
     let nonce = match near_nonce.reserve_nonce().await {
