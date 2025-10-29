@@ -666,7 +666,7 @@ pub async fn initiate_fast_transfer(
             warn!("Failed to deposit storage for fast transfer: {err:?}");
             return Ok(EventAction::Retry);
         }
-    };
+    }
 
     match fast_connector
         .near_fast_transfer(
