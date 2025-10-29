@@ -707,13 +707,13 @@ impl Contract {
             "ERR_INVALID_FAST_TRANSFER_AMOUNT"
         );
 
-        if !fast_fin_transfer_msg.transfer_id.is_utxo() {
+        if fast_fin_transfer_msg.transfer_id.is_utxo() {
+            // Currently we don't store finalised transfers for UTXO chains so we have no way to check
+        } else {
             let transfer_id = (&fast_fin_transfer_msg.transfer_id).try_into().unwrap();
             if self.is_transfer_finalised(transfer_id) {
                 env::panic_str("ERR_TRANSFER_ALREADY_FINALISED");
             }
-        } else {
-            // Currently we don't store finalised transfers for UTXO chains so we have no way to check
         }
 
         let fast_transfer = FastTransfer {
