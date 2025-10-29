@@ -642,7 +642,7 @@ pub async fn initiate_fast_transfer(
         return Ok(EventAction::Retry);
     };
 
-    if near_bridge_client
+    match near_bridge_client
         .deposit_storage_if_required(
             required_balance + storage_deposit_amount.unwrap_or(0.into()).0,
             TransactionOptions {
@@ -652,18 +652,21 @@ pub async fn initiate_fast_transfer(
             },
         )
         .await
-        .is_ok()
     {
-        nonce = Some(
-            near_omni_nonce
-                .reserve_nonce()
-                .await
-                .context("Failed to reserve nonce for near transaction")?,
-        );
-    } else {
-        warn!("Failed to deposit storage for fast transfer");
-        return Ok(EventAction::Retry);
-    }
+        Ok(true) => {
+            nonce = Some(
+                near_omni_nonce
+                    .reserve_nonce()
+                    .await
+                    .context("Failed to reserve nonce for near transaction")?,
+            );
+        }
+        Ok(false) => {}
+        Err(err) => {
+            warn!("Failed to deposit storage for fast transfer: {err:?}");
+            return Ok(EventAction::Retry);
+        }
+    };
 
     match fast_connector
         .near_fast_transfer(
