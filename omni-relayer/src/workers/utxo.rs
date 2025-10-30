@@ -14,7 +14,10 @@ use tracing::{info, warn};
 
 use omni_connector::{BtcDepositArgs, OmniConnector};
 
-use crate::utils;
+use crate::{
+    config, utils,
+    workers::{RetryableEvent, near::UnverifiedTrasfer},
+};
 
 use super::{EventAction, Transfer};
 
@@ -304,7 +307,11 @@ pub async fn process_sign_transaction_event(
 }
 
 pub async fn process_confirmed_tx_hash(
+    config: &config::Config,
+    redis_connection_manager: &mut redis::aio::ConnectionManager,
+    key: String,
     omni_connector: Arc<OmniConnector>,
+    signer: AccountId,
     confirmed_tx_hash: ConfirmedTxHash,
     near_nonce: Arc<utils::nonce::NonceManager>,
 ) -> Result<EventAction> {
@@ -330,6 +337,27 @@ pub async fn process_confirmed_tx_hash(
     {
         Ok(tx_hash) => {
             info!("Verified withdraw: {tx_hash:?}");
+
+            let Ok(serialized_event) = serde_json::to_string(&confirmed_tx_hash) else {
+                warn!("Failed to serialize confirmed tx: {confirmed_tx_hash:?}");
+                return Ok(EventAction::Remove);
+            };
+
+            utils::redis::add_event(
+                config,
+                redis_connection_manager,
+                utils::redis::EVENTS,
+                tx_hash.to_string(),
+                RetryableEvent::new(UnverifiedTrasfer {
+                    tx_hash,
+                    signer,
+                    specific_errors: Some(vec!["Not enough blocks confirmed".to_string()]),
+                    original_key: key,
+                    original_event: serialized_event,
+                }),
+            )
+            .await;
+
             Ok(EventAction::Remove)
         }
         Err(err) => {

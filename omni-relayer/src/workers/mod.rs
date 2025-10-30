@@ -845,11 +845,16 @@ pub async fn process_events(
                     let config = config.clone();
                     let mut redis_connection_manager = redis_connection_manager.clone();
                     let omni_connector = omni_connector.clone();
+                    let signer = signer.clone();
                     let near_nonce = near_omni_nonce.clone();
 
                     async move {
                         match utxo::process_confirmed_tx_hash(
+                            &config,
+                            &mut redis_connection_manager,
+                            key.clone(),
                             omni_connector,
+                            signer,
                             confirmed_tx_hash,
                             near_nonce,
                         )
