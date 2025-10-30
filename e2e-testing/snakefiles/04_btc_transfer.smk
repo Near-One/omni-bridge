@@ -22,6 +22,8 @@ nbtc_file = const.near_deploy_results_dir / f"nbtc.json"
 btc_connector_file = const.near_deploy_results_dir / f"btc_connector.json"
 
 rule get_btc_user_deposit_address:
+    wildcard_constraints:
+        mode = "default"
     message: "Get BTC user deposit address"
     input:
         user_account_file = user_account_file
@@ -50,7 +52,11 @@ use rule get_btc_user_deposit_address as get_btc_user_deposit_address_test with:
     input:
         rules.sync_btc_connector.output,
         btc_connector_file = btc_connector_file,
+        user_account_file = user_account_file
     params:
+        mkdir = lambda wc: get_mkdir_cmd(call_dir),
+        bridge_sdk_config_file = const.common_bridge_sdk_config_file,
+        user_account_id = lambda wc, input: get_json_field(input.user_account_file, "account_id"),
         btc_connector_arg = lambda wc, input: (
             f"--btc-connector {get_json_field(input.btc_connector_file, 'contract_id')}"
         ),
@@ -81,6 +87,8 @@ rule wait_tx:
     """
 
 rule fin_btc_transfer_on_near:
+    wildcard_constraints:
+        mode = "default"
     message: "Finalizing BTC transfer on Near"
     input:
         prev_step = call_dir / "02_1_wait_tx.json",
@@ -110,15 +118,24 @@ use rule fin_btc_transfer_on_near as fin_btc_transfer_on_near_test with:
     wildcard_constraints:
         mode = "test"
     input:
+        prev_step = call_dir / "02_1_wait_tx.json",
+        step_2 = rules.send_btc_to_deposit_address.output,
+        user_account_file = user_account_file,
         nbtc_file = nbtc_file,
         btc_connector_file = btc_connector_file,
     params:
         btc_connector_arg = lambda wc, input: (
             f"--btc-connector {get_json_field(input.btc_connector_file, 'contract_id')}"
         ),
+        user_account_id = lambda wc, input: get_json_field(input.user_account_file, "account_id"),
+        user_private_key = lambda wc, input: get_json_field(input.user_account_file, "private_key"),
+        bridge_sdk_config_file = const.common_bridge_sdk_config_file,
+        btc_tx_hash = lambda wc, input: get_last_value(input.step_2),
 
 
 rule ft_transfer_btc_to_omni_bridge:
+    wildcard_constraints:
+        mode = "default"
     message: "Init BTC transfer to OmniBridge on Near"
     input:
         step_3 =  call_dir / "03_fin_btc_transfer_on_near.json",
@@ -144,11 +161,15 @@ use rule ft_transfer_btc_to_omni_bridge as ft_transfer_btc_to_omni_bridge_test w
     wildcard_constraints:
         mode = "test"
     input:
+        step_3 =  call_dir / "03_fin_btc_transfer_on_near.json",
+        omni_bridge_storage_deposit = call_dir / "omni_bridge_storage_deposit.json",
+        user_account_file = user_account_file,
         add_utxo_chain = rules.add_utxo_chain_connector.output,
         nbtc_file = nbtc_file,
         omni_bridge_file = omni_bridge_file,
         btc_connector_file = btc_connector_file,
     params:
+        scripts_dir = const.common_scripts_dir,
         nbtc_account = lambda wc, input: get_json_field(input.nbtc_file, "contract_id"),
         omni_bridge_account = lambda wc, input: get_json_field(input.omni_bridge_file, "contract_id"),
 
@@ -170,7 +191,7 @@ rule submit_transfer_to_btc_connector:
         near_tx_hash = lambda wc, input: get_json_field(input.step_7, "tx_hash"),
 
     shell: """
-    bridge-cli testnet near-sign-btc-transfer \
+    bridge-cli testnet near-submit-btc-transfer \
         --chain btc \
         -n {params.near_tx_hash} \
         -s {params.user_account_id} \

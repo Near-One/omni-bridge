@@ -149,6 +149,8 @@ rule add_omni_bridge_to_whitelist:
     """
 
 rule omni_bridge_storage_deposit:
+    wildcard_constraints:
+        mode = "default"
     message: "Depositing storage for User on Omni Bridge"
     input:
         user_account_file = user_account_file
@@ -175,6 +177,10 @@ use rule omni_bridge_storage_deposit as omni_bridge_storage_deposit_test with:
     input:
         omni_bridge_contract_file = omni_bridge_file,
         btc_connector_file = btc_connector_file,
+        user_account_file = user_account_file
     params:
         omni_bridge_address = lambda wc, input: get_json_field(input.omni_bridge_contract_file, "contract_id"),
+        scripts_dir = const.common_scripts_dir,
+        user_account_id = lambda wc, input: get_json_field(input.user_account_file, "account_id"),
+        extract_tx = lambda wc, output: extract_tx_hash("near", output)
 
