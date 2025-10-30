@@ -59,7 +59,7 @@ use rule get_btc_user_deposit_address as get_btc_user_deposit_address_test with:
 rule send_btc_to_deposit_address:
     message: "Send BTC to user deposit address on Bitcoin"
     input:
-        step_1 = rules.get_btc_user_deposit_address.output,
+        step_1 =  call_dir / "01_btc_user_deposit_address.json",
     output: call_dir / "02_send_btc_to_deposit_address.json"
     params:
         scripts_dir = const.common_scripts_dir,
@@ -68,9 +68,22 @@ rule send_btc_to_deposit_address:
     node {params.scripts_dir}/send_btc.js {params.btc_address} 7500 > {output}
     """
 
+rule wait_tx:
+    message: "Wait for BTC transaction"
+    input:
+        prev_step = call_dir / "02_send_btc_to_deposit_address.json",
+    output: call_dir / "02_1_wait_tx.json"
+    params:
+        scripts_dir = const.common_scripts_dir,
+        btc_tx_hash = lambda wc, input: get_last_value(input.prev_step),
+    shell: """
+    node {params.scripts_dir}/wait_btc.js {params.btc_tx_hash} {output}
+    """
+
 rule fin_btc_transfer_on_near:
     message: "Finalizing BTC transfer on Near"
     input:
+        prev_step = call_dir / "02_1_wait_tx.json",
         step_2 = rules.send_btc_to_deposit_address.output,
         user_account_file = user_account_file
     output: call_dir / "03_fin_btc_transfer_on_near.json"

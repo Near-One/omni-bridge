@@ -47,7 +47,7 @@ def get_mkdir_cmd(wildcards):
     return f"mkdir -p {get_evm_deploy_results_dir(wildcards.network)}"
 
 def get_full_path(file_name):
-    return f"{get_evm_deploy_results_dir("{network}")}/{file_name}"
+    return f"{get_evm_deploy_results_dir('{network}')}/{file_name}"
 
 
 # Rule to deploy all networks
