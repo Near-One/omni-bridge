@@ -24,11 +24,11 @@ use super::{EventAction, Transfer};
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub struct UnverifiedTrasfer {
-    tx_hash: CryptoHash,
-    signer: AccountId,
-    specific_errors: Option<Vec<String>>,
-    original_key: String,
-    original_event: Transfer,
+    pub tx_hash: CryptoHash,
+    pub signer: AccountId,
+    pub specific_errors: Option<Vec<String>>,
+    pub original_key: String,
+    pub original_event: String,
 }
 
 #[derive(Debug, serde::Deserialize)]
@@ -125,6 +125,11 @@ pub async fn process_transfer_event(
         .await
     {
         Ok(tx_hash) => {
+            let Ok(serialized_event) = serde_json::to_string(&transfer) else {
+                warn!("Failed to serialize transfer: {transfer:?}");
+                return Ok(EventAction::Remove);
+            };
+
             utils::redis::add_event(
                 config,
                 redis_connection_manager,
@@ -141,7 +146,7 @@ pub async fn process_transfer_event(
                         "Exceeded the prepaid gas.".to_string(),
                     ]),
                     original_key: key,
-                    original_event: transfer,
+                    original_event: serialized_event,
                 }),
             )
             .await;
@@ -238,6 +243,11 @@ pub async fn process_transfer_to_utxo_event(
                 transfer_message.recipient.get_chain()
             );
 
+            let Ok(serialized_event) = serde_json::to_string(&transfer) else {
+                warn!("Failed to serialize transfer: {transfer:?}");
+                return Ok(EventAction::Remove);
+            };
+
             utils::redis::add_event(
                 config,
                 redis_connection_manager,
@@ -251,7 +261,7 @@ pub async fn process_transfer_to_utxo_event(
                         "Previous btc tx has not been signed".to_string(),
                     ]),
                     original_key: key,
-                    original_event: transfer,
+                    original_event: serialized_event,
                 }),
             )
             .await;
