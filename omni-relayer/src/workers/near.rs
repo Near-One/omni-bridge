@@ -213,7 +213,7 @@ pub async fn process_transfer_to_utxo_event(
         .near_submit_btc_transfer(
             transfer_message.recipient.get_chain(),
             recipient,
-            transfer_message.amount.0,
+            transfer_message.amount.0 - transfer_message.fee.fee.0,
             None,
             TransferId {
                 origin_chain: transfer_message.sender.get_chain(),
