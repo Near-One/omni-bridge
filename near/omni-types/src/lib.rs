@@ -461,17 +461,7 @@ impl<'de> Deserialize<'de> for OmniAddress {
 pub enum BridgeOnTransferMsg {
     InitTransfer(InitTransferMsg),
     FastFinTransfer(FastFinTransferMsg),
-}
-
-#[derive(Serialize, Deserialize, BorshSerialize, BorshDeserialize, Debug, Clone)]
-pub struct FastFinTransferMsg {
-    pub transfer_id: TransferId,
-    pub recipient: OmniAddress,
-    pub fee: Fee,
-    pub msg: String,
-    pub amount: U128,
-    pub storage_deposit_amount: Option<U128>,
-    pub relayer: AccountId,
+    UtxoFinTransfer(UtxoFinTransferMsg),
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -480,6 +470,26 @@ pub struct InitTransferMsg {
     pub fee: U128,
     pub native_token_fee: U128,
     pub msg: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, BorshSerialize, BorshDeserialize, Debug, Clone)]
+pub struct FastFinTransferMsg {
+    pub transfer_id: UnifiedTransferId,
+    pub recipient: OmniAddress,
+    pub fee: Fee,
+    pub msg: String,
+    pub amount: U128,
+    pub storage_deposit_amount: Option<U128>,
+    pub relayer: AccountId,
+}
+
+#[near(serializers=[borsh, json])]
+#[derive(Debug, Clone)]
+pub struct UtxoFinTransferMsg {
+    pub utxo_id: String,
+    pub recipient: OmniAddress,
+    pub relayer_fee: U128,
+    pub msg: String,
 }
 
 #[near(serializers=[borsh, json])]
@@ -506,19 +516,6 @@ pub struct TransferId {
 
 #[near(serializers=[borsh, json])]
 #[derive(Debug, Clone)]
-pub struct TransferMessageV0 {
-    pub origin_nonce: Nonce,
-    pub token: OmniAddress,
-    pub amount: U128,
-    pub recipient: OmniAddress,
-    pub fee: Fee,
-    pub sender: OmniAddress,
-    pub msg: String,
-    pub destination_nonce: Nonce,
-}
-
-#[near(serializers=[borsh, json])]
-#[derive(Debug, Clone)]
 pub struct TransferMessage {
     pub origin_nonce: Nonce,
     pub token: OmniAddress,
@@ -528,7 +525,7 @@ pub struct TransferMessage {
     pub sender: OmniAddress,
     pub msg: String,
     pub destination_nonce: Nonce,
-    pub origin_transfer_id: Option<TransferId>,
+    pub origin_transfer_id: Option<UnifiedTransferId>,
 }
 
 impl TransferMessage {
@@ -646,13 +643,59 @@ pub struct BasicMetadata {
 }
 
 #[near(serializers=[borsh, json])]
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UnifiedTransferId {
+    pub origin_chain: ChainKind,
+    pub id: ChainTransferId,
+}
+
+#[near(serializers=[borsh, json])]
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ChainTransferId {
+    General(Nonce),
+    Utxo(String),
+}
+
+impl From<TransferId> for UnifiedTransferId {
+    fn from(value: TransferId) -> Self {
+        Self {
+            origin_chain: value.origin_chain,
+            id: ChainTransferId::General(value.origin_nonce),
+        }
+    }
+}
+
+impl UnifiedTransferId {
+    pub fn is_utxo(&self) -> bool {
+        matches!(self.id, ChainTransferId::Utxo(_))
+    }
+}
+
+impl TryInto<TransferId> for &UnifiedTransferId {
+    type Error = &'static str;
+
+    fn try_into(self) -> Result<TransferId, Self::Error> {
+        let origin_nonce = match self.id {
+            ChainTransferId::General(nonce) => nonce,
+            ChainTransferId::Utxo(_) => {
+                return Err("Cannot convert UTXO transfer ID to general transfer ID")
+            }
+        };
+        Ok(TransferId {
+            origin_chain: self.origin_chain,
+            origin_nonce,
+        })
+    }
+}
+
+#[near(serializers=[borsh, json])]
 #[derive(Debug, Clone)]
 pub struct FastTransferId(pub [u8; 32]);
 
 #[near(serializers=[borsh, json])]
 #[derive(Debug, Clone)]
 pub struct FastTransfer {
-    pub transfer_id: TransferId,
+    pub transfer_id: UnifiedTransferId,
     pub token_id: AccountId,
     pub amount: U128,
     pub fee: Fee,
@@ -670,10 +713,35 @@ impl FastTransfer {
 impl FastTransfer {
     pub fn from_transfer(transfer: TransferMessage, token_id: AccountId) -> Self {
         Self {
-            transfer_id: transfer.get_transfer_id(),
+            transfer_id: UnifiedTransferId {
+                origin_chain: transfer.get_origin_chain(),
+                id: ChainTransferId::General(transfer.origin_nonce),
+            },
             token_id,
             amount: transfer.amount,
             fee: transfer.fee,
+            recipient: transfer.recipient,
+            msg: transfer.msg,
+        }
+    }
+
+    pub fn from_utxo_transfer(
+        transfer: UtxoFinTransferMsg,
+        token_id: AccountId,
+        amount: U128,
+        origin_chain: ChainKind,
+    ) -> Self {
+        Self {
+            transfer_id: UnifiedTransferId {
+                origin_chain,
+                id: ChainTransferId::Utxo(transfer.utxo_id),
+            },
+            token_id,
+            amount,
+            fee: Fee {
+                fee: transfer.relayer_fee,
+                native_fee: U128(0),
+            },
             recipient: transfer.recipient,
             msg: transfer.msg,
         }
