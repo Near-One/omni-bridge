@@ -149,15 +149,16 @@ rule add_omni_bridge_to_whitelist:
     """
 
 rule omni_bridge_storage_deposit:
+    wildcard_constraints:
+        mode = "default"
     message: "Depositing storage for User on Omni Bridge"
     input:
-        omni_bridge_contract_file = omni_bridge_file,
         user_account_file = user_account_file
     output:
-        const.common_generated_dir / "omni_bridge_storage_deposit.json"
+        const.common_generated_dir / "{test_id}-{mode}" / "omni_bridge_storage_deposit.json"
     params:
         scripts_dir = const.common_scripts_dir,
-        omni_bridge_address = lambda wc, input: get_json_field(input.omni_bridge_contract_file, "contract_id"),
+        omni_bridge_address = lambda wc, input: get_json_field(const.common_bridge_sdk_config_file, "near_token_locker_id"),
         user_account_id = lambda wc, input: get_json_field(input.user_account_file, "account_id"),
         extract_tx = lambda wc, output: extract_tx_hash("near", output)
     shell: """
@@ -169,3 +170,17 @@ rule omni_bridge_storage_deposit:
         -n testnet 2>&1 | tee {output} && \
         {params.extract_tx}
     """
+
+use rule omni_bridge_storage_deposit as omni_bridge_storage_deposit_test with:
+    wildcard_constraints:
+        mode = "test"
+    input:
+        omni_bridge_contract_file = omni_bridge_file,
+        btc_connector_file = btc_connector_file,
+        user_account_file = user_account_file
+    params:
+        omni_bridge_address = lambda wc, input: get_json_field(input.omni_bridge_contract_file, "contract_id"),
+        scripts_dir = const.common_scripts_dir,
+        user_account_id = lambda wc, input: get_json_field(input.user_account_file, "account_id"),
+        extract_tx = lambda wc, output: extract_tx_hash("near", output)
+
