@@ -261,6 +261,19 @@ rule get_btc_tx_hash_from_logs:
     node {params.scripts_dir}/get_btc_tx_from_logs.js {params.near_tx_hash} {output}
     """
 
+rule wait_final_tx:
+    message: "Wait for Final BTC transaction"
+    input:
+        prev_step = call_dir / "btc_tx_hash_from_logs.json",
+    output: call_dir / "wait_final_tx.json"
+    params:
+        scripts_dir = const.common_scripts_dir,
+        btc_tx_hash = lambda wc, input: get_json_field(input.prev_step, "btc_pending_sign_id"),
+    shell: """
+    node {params.scripts_dir}/wait_btc.js {params.btc_tx_hash} {output}
+    """
+
+
 rule all:
     input:
         const.common_generated_dir / "04-btc-transfer-test" / "07_send_btc_transfer.json",
@@ -268,4 +281,4 @@ rule all:
 
 rule btc_transfer_default_contracts:
     input:
-        const.common_generated_dir / "04-btc-transfer-default" / "btc_tx_hash_from_logs.json",
+        const.common_generated_dir / "04-btc-transfer-default" / "wait_final_tx.json",
