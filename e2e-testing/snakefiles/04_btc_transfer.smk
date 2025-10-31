@@ -249,6 +249,18 @@ rule send_btc_transfer:
     > {output} \
     """
 
+rule get_btc_tx_hash_from_logs:
+    message: "Get BTC transaction hash from logs"
+    input:
+        prev_step = call_dir / "04_ft_transfer_btc_to_omni_bridge.json",
+    output: call_dir / "btc_tx_hash_from_logs.json"
+    params:
+        scripts_dir = const.common_scripts_dir,
+        near_tx_hash = lambda wc, input: get_json_field(input.prev_step, "tx_hash"),
+    shell: """
+    node {params.scripts_dir}/get_btc_tx_from_logs.js {params.near_tx_hash} {output}
+    """
+
 rule all:
     input:
         const.common_generated_dir / "04-btc-transfer-test" / "07_send_btc_transfer.json",
@@ -256,4 +268,4 @@ rule all:
 
 rule btc_transfer_default_contracts:
     input:
-        const.common_generated_dir / "04-btc-transfer-default" / "04_ft_transfer_btc_to_omni_bridge.json",
+        const.common_generated_dir / "04-btc-transfer-default" / "btc_tx_hash_from_logs.json",
