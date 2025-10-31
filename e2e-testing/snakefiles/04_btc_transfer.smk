@@ -273,6 +273,31 @@ rule wait_final_tx:
     node {params.scripts_dir}/wait_btc.js {params.btc_tx_hash} {output}
     """
 
+rule check_bridge_finalised:
+    message: "Check if Bridge transfer is finalised"
+    input:
+        prev_step = call_dir / "wait_final_tx.json",
+        near_tx_hash_step = call_dir / "04_ft_transfer_btc_to_omni_bridge.json",
+    output:
+        call_dir / "bridge_finalised"
+    params:
+        bridge_api = "https://testnet.api.bridge.nearone.org/api/v2/transfers/transfer",
+        near_tx_hash = lambda wc, input: get_json_field(input.near_tx_hash_step, "tx_hash"),
+    shell: r"""
+    TX_HASH="{params.near_tx_hash}"
+    API="{params.bridge_api}?transaction_hash=${{TX_HASH}}"
+
+    RESP=$(curl -s "$API")
+
+    FINAL=$(echo "$RESP" | jq -r '.[0].finalised')
+
+    if [ "$FINAL" = "null" ] || [ -z "$FINAL" ]; then
+        echo "Bridge transfer is NOT finalised for $TX_HASH" >&2
+        exit 1
+    else
+        echo "BTC TX IS FINALISED!" > {output}
+    fi
+    """
 
 rule all:
     input:
@@ -281,4 +306,4 @@ rule all:
 
 rule btc_transfer_default_contracts:
     input:
-        const.common_generated_dir / "04-btc-transfer-default" / "wait_final_tx.json",
+        const.common_generated_dir / "04-btc-transfer-default" / "bridge_finalised",
