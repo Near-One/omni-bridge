@@ -48,6 +48,7 @@ async function waitForConfirmations(txid, outputPath) {
           JSON.stringify({ txid, confirmations: confs }, null, 2),
         );
 
+        await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL));
         console.log(`Result saved to: ${outputPath}`);
         return;
       }
