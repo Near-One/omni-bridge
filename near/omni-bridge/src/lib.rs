@@ -25,10 +25,7 @@ use omni_types::mpc_types::SignatureResponse;
 use omni_types::near_events::OmniBridgeEvent;
 use omni_types::prover_result::ProverResult;
 use omni_types::{
-    BasicMetadata, BridgeOnTransferMsg, ChainKind, FastFinTransferMsg, FastTransfer,
-    FastTransferId, FastTransferStatus, Fee, InitTransferMsg, MetadataPayload, Nonce, OmniAddress,
-    PayloadType, SignRequest, TransferId, TransferMessage, TransferMessagePayload, UpdateFee,
-    UtxoFinTransferMsg, H160,
+    BasicMetadata, BridgeOnTransferMsg, ChainKind, ChainTransferId, FastFinTransferMsg, FastTransfer, FastTransferId, FastTransferStatus, Fee, H160, InitTransferMsg, MetadataPayload, Nonce, OmniAddress, PayloadType, SignRequest, TransferId, TransferMessage, TransferMessagePayload, UnifiedTransferId, UpdateFee, UtxoFinTransferMsg
 };
 use std::collections::HashMap;
 use std::str::FromStr;
@@ -932,6 +929,7 @@ impl Contract {
                 token_id,
                 amount,
                 utxo_fin_transfer_msg,
+                origin_chain,
                 signer_id,
             )
         }
@@ -998,6 +996,7 @@ impl Contract {
         token_id: AccountId,
         amount: U128,
         utxo_fin_transfer_msg: UtxoFinTransferMsg,
+        origin_chain: ChainKind,
         storage_owner: AccountId,
     ) -> PromiseOrPromiseIndexOrValue<U128> {
         self.current_origin_nonce += 1;
@@ -1014,7 +1013,10 @@ impl Contract {
             msg: utxo_fin_transfer_msg.msg,
             destination_nonce: self
                 .get_next_destination_nonce(utxo_fin_transfer_msg.recipient.get_chain()),
-            origin_transfer_id: None,
+            origin_transfer_id: Some(UnifiedTransferId {
+                origin_chain,
+                id: ChainTransferId::Utxo(utxo_fin_transfer_msg.utxo_id),
+            }),
         };
 
         let required_storage_balance =
