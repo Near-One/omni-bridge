@@ -236,7 +236,7 @@ impl Contract {
                 self.fast_fin_transfer(token_id, amount, signer_id, fast_fin_transfer_msg)
             }
             BridgeOnTransferMsg::UtxoFinTransfer(utxo_fin_transfer_msg) => {
-                self.utxo_fin_transfer(token_id, amount, signer_id, utxo_fin_transfer_msg)
+                self.utxo_fin_transfer(token_id, amount, signer_id, sender_id, utxo_fin_transfer_msg)
             }
         };
 
@@ -896,12 +896,17 @@ impl Contract {
         token_id: AccountId,
         amount: U128,
         signer_id: AccountId,
+        sender_id: AccountId,
         utxo_fin_transfer_msg: UtxoFinTransferMsg,
     ) -> PromiseOrPromiseIndexOrValue<U128> {
-        // Verify this is indeed a UTXO chain token
         let origin_chain = self
             .get_utxo_chain_by_token(&token_id)
             .sdk_expect("ERR_TOKEN_NOT_FROM_UTXO_CHAIN");
+        let config = self
+            .utxo_chain_connectors
+            .get(&origin_chain)
+            .sdk_expect("ERR_UTXO_CONFIG_MISSING");
+        require!(sender_id == config.connector, "ERR_SENDER_IS_NOT_CONNECTOR");
 
         env::log_str(
             &OmniBridgeEvent::UtxoTransferEvent {
