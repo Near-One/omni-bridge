@@ -1000,8 +1000,9 @@ impl Contract {
         utxo_fin_transfer_msg: UtxoFinTransferMsg,
         storage_owner: AccountId,
     ) -> PromiseOrPromiseIndexOrValue<U128> {
+        self.current_origin_nonce += 1;
         let transfer_message = TransferMessage {
-            origin_nonce: self.current_origin_nonce + 1,
+            origin_nonce: self.current_origin_nonce,
             token: OmniAddress::Near(token_id),
             amount,
             recipient: utxo_fin_transfer_msg.recipient.clone(),
