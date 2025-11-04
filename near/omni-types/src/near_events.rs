@@ -1,3 +1,4 @@
+use near_sdk::json_types::U128;
 use near_sdk::serde_json::json;
 use near_sdk::{near, AccountId};
 
@@ -49,6 +50,8 @@ pub enum OmniBridgeEvent {
         new_transfer_id: Option<TransferId>,
     },
     UtxoTransferEvent {
+        token_id: AccountId,
+        amount: U128,
         utxo_transfer_message: UtxoFinTransferMsg,
         new_transfer_id: Option<TransferId>,
     },

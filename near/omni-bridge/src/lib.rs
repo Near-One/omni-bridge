@@ -958,7 +958,7 @@ impl Contract {
         };
 
         self.send_tokens(
-            fast_transfer.token_id,
+            fast_transfer.token_id.clone(),
             fast_transfer_status.relayer,
             amount,
             "",
@@ -966,6 +966,8 @@ impl Contract {
 
         env::log_str(
             &OmniBridgeEvent::UtxoTransferEvent {
+                token_id: fast_transfer.token_id,
+                amount,
                 utxo_transfer_message: utxo_fin_transfer_msg,
                 new_transfer_id: None,
             }
@@ -990,10 +992,10 @@ impl Contract {
 
         // We send the recipient full amount including fee, because fee is only taken in case of fast transfers
         Self::check_or_pay_ft_storage(&deposit_action, &mut NearToken::from_yoctonear(0)).then(
-            self.send_tokens(token_id, recipient, amount, &utxo_fin_transfer_msg.msg).then(
+            self.send_tokens(token_id.clone(), recipient, amount, &utxo_fin_transfer_msg.msg).then(
                 Self::ext(env::current_account_id())
                     .with_static_gas(RESOLVE_UTXO_FIN_TRANSFER_GAS)
-                    .resolve_utxo_fin_transfer(amount, utxo_fin_transfer_msg),
+                    .resolve_utxo_fin_transfer(token_id, amount, utxo_fin_transfer_msg),
             ),
         )
     }
@@ -1009,7 +1011,7 @@ impl Contract {
         self.current_origin_nonce += 1;
         let transfer_message = TransferMessage {
             origin_nonce: self.current_origin_nonce,
-            token: OmniAddress::Near(token_id),
+            token: OmniAddress::Near(token_id.clone()),
             amount,
             recipient: utxo_fin_transfer_msg.recipient.clone(),
             fee: Fee {
@@ -1037,6 +1039,8 @@ impl Contract {
 
         env::log_str(
             &OmniBridgeEvent::UtxoTransferEvent {
+                token_id,
+                amount,
                 utxo_transfer_message: utxo_fin_transfer_msg,
                 new_transfer_id: Some(transfer_message.get_transfer_id()),
             }
@@ -1047,13 +1051,15 @@ impl Contract {
     }
 
     #[private]
-    pub fn resolve_utxo_fin_transfer(amount: U128, utxo_fin_transfer_msg: UtxoFinTransferMsg) -> U128 {
+    pub fn resolve_utxo_fin_transfer(token_id: AccountId, amount: U128, utxo_fin_transfer_msg: UtxoFinTransferMsg) -> U128 {
         let is_ft_transfer_call = !utxo_fin_transfer_msg.msg.is_empty();
         if Self::is_refund_required(is_ft_transfer_call) {
             amount
         } else {
             env::log_str(
                 &OmniBridgeEvent::UtxoTransferEvent {
+                    token_id,
+                    amount,
                     utxo_transfer_message: utxo_fin_transfer_msg,
                     new_transfer_id: None,
                 }
