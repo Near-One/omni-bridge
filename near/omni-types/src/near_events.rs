@@ -49,7 +49,8 @@ pub enum OmniBridgeEvent {
         new_transfer_id: Option<TransferId>,
     },
     UtxoTransferEvent {
-        transfer_message: UtxoFinTransferMsg,
+        utxo_transfer_message: UtxoFinTransferMsg,
+        new_transfer_id: Option<TransferId>,
     },
 }
 
