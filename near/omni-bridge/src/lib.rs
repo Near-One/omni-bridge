@@ -242,7 +242,7 @@ impl Contract {
                 token_id,
                 amount,
                 signer_id,
-                sender_id,
+                &sender_id,
                 utxo_fin_transfer_msg,
             ),
         };
@@ -903,7 +903,7 @@ impl Contract {
         token_id: AccountId,
         amount: U128,
         signer_id: AccountId,
-        sender_id: AccountId,
+        sender_id: &AccountId,
         utxo_fin_transfer_msg: UtxoFinTransferMsg,
     ) -> PromiseOrPromiseIndexOrValue<U128> {
         let origin_chain = self
@@ -913,7 +913,7 @@ impl Contract {
             .utxo_chain_connectors
             .get(&origin_chain)
             .sdk_expect("ERR_UTXO_CONFIG_MISSING");
-        require!(sender_id == config.connector, "ERR_SENDER_IS_NOT_CONNECTOR");
+        require!(sender_id == &config.connector, "ERR_SENDER_IS_NOT_CONNECTOR");
 
         let fast_transfer = FastTransfer::from_utxo_transfer(
             utxo_fin_transfer_msg.clone(),
