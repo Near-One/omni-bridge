@@ -67,7 +67,8 @@ const BURN_TOKEN_GAS: Gas = Gas::from_tgas(3);
 const MINT_TOKEN_GAS: Gas = Gas::from_tgas(5);
 const SET_METADATA_GAS: Gas = Gas::from_tgas(10);
 const RESOLVE_FAST_TRANSFER_GAS: Gas = Gas::from_tgas(6);
-const RESOLVE_UTXO_FIN_TRANSFER_GAS: Gas = Gas::from_tgas(5);
+const UTXO_FIN_TRANSFER_CALLBACK_GAS: Gas = Gas::from_tgas(5);
+const RESOLVE_UTXO_FIN_TRANSFER_GAS: Gas = Gas::from_tgas(3);
 const FAST_TRANSFER_CALLBACK_GAS: Gas = Gas::from_tgas(10);
 const NO_DEPOSIT: NearToken = NearToken::from_near(0);
 const ONE_YOCTO: NearToken = NearToken::from_yoctonear(1);
@@ -908,7 +909,7 @@ impl Contract {
     ) -> PromiseOrPromiseIndexOrValue<U128> {
         let origin_chain = self
             .get_utxo_chain_by_token(&token_id)
-            .sdk_expect("ERR_TOKEN_NOT_FROM_UTXO_CHAIN");
+            .sdk_expect("ERR_UTXO_CONFIG_MISSING");
         let config = self
             .utxo_chain_connectors
             .get(&origin_chain)
@@ -1000,19 +1001,41 @@ impl Contract {
             storage_deposit_amount: None,
         };
 
-        // We send the recipient full amount including fee, because fee is only taken in case of fast transfers
         Self::check_or_pay_ft_storage(&deposit_action, &mut NearToken::from_yoctonear(0)).then(
-            self.send_tokens(
-                token_id.clone(),
-                recipient,
-                amount,
-                &utxo_fin_transfer_msg.msg,
-            )
-            .then(
-                Self::ext(env::current_account_id())
-                    .with_static_gas(RESOLVE_UTXO_FIN_TRANSFER_GAS)
-                    .resolve_utxo_fin_transfer(token_id, amount, utxo_fin_transfer_msg),
-            ),
+            Self::ext(env::current_account_id())
+                .with_static_gas(UTXO_FIN_TRANSFER_CALLBACK_GAS.saturating_add(FT_TRANSFER_CALL_GAS))
+                .utxo_fin_transfer_to_near_callback(
+                    token_id,
+                    recipient,
+                    amount,
+                    utxo_fin_transfer_msg,
+                ),
+        )
+    }
+
+    #[private]
+    pub fn utxo_fin_transfer_to_near_callback(
+        &self,
+        token_id: AccountId,
+        recipient: AccountId,
+        amount: U128,
+        utxo_fin_transfer_msg: UtxoFinTransferMsg,
+    ) -> Promise {
+        require!(
+            Self::check_storage_balance_result(0),
+            "STORAGE_ERR: The transfer recipient is omitted"
+        );
+
+        self.send_tokens(
+            token_id.clone(),
+            recipient,
+            amount,
+            &utxo_fin_transfer_msg.msg,
+        )
+        .then(
+            Self::ext(env::current_account_id())
+                .with_static_gas(RESOLVE_UTXO_FIN_TRANSFER_GAS)
+                .resolve_utxo_fin_transfer(token_id, amount, utxo_fin_transfer_msg),
         )
     }
 
