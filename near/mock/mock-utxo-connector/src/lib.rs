@@ -24,6 +24,7 @@ pub struct MockUtxoConnector {
     pub token_account: AccountId,
 }
 
+#[allow(clippy::needless_pass_by_value)]
 #[near]
 impl MockUtxoConnector {
     #[init]
@@ -34,6 +35,9 @@ impl MockUtxoConnector {
         }
     }
 
+    /// # Panics
+    ///
+    /// This function will panic if message serialization fails.
     pub fn verify_deposit(&mut self, amount: U128, msg: UtxoFinTransferMsg) -> Promise {
         ext_token::ext(self.token_account.clone())
             .with_attached_deposit(ONE_YOCTO)

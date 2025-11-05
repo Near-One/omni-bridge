@@ -988,6 +988,7 @@ impl Contract {
         PromiseOrPromiseIndexOrValue::Value(U128(0))
     }
 
+    #[allow(clippy::unused_self)]
     fn utxo_fin_transfer_to_near(
         &self,
         recipient: AccountId,
@@ -1003,7 +1004,9 @@ impl Contract {
 
         Self::check_or_pay_ft_storage(&deposit_action, &mut NearToken::from_yoctonear(0)).then(
             Self::ext(env::current_account_id())
-                .with_static_gas(UTXO_FIN_TRANSFER_CALLBACK_GAS.saturating_add(FT_TRANSFER_CALL_GAS))
+                .with_static_gas(
+                    UTXO_FIN_TRANSFER_CALLBACK_GAS.saturating_add(FT_TRANSFER_CALL_GAS),
+                )
                 .utxo_fin_transfer_to_near_callback(
                     token_id,
                     recipient,

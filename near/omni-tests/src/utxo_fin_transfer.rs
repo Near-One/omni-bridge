@@ -283,8 +283,8 @@ mod tests {
             let env = TestEnv::new(build_artifacts).await?;
             let amount = 100_000_000;
 
-            let _ =
-                do_utxo_fin_transfer(&env, amount, base_eoa_address(), String::default(), None).await?;
+            let _ = do_utxo_fin_transfer(&env, amount, base_eoa_address(), String::default(), None)
+                .await?;
 
             // Verify a transfer message was created
             let transfer_message: Option<omni_types::TransferMessage> = env
