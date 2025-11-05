@@ -643,14 +643,14 @@ pub struct BasicMetadata {
 }
 
 #[near(serializers=[borsh, json])]
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct UnifiedTransferId {
     pub origin_chain: ChainKind,
     pub id: ChainTransferId,
 }
 
 #[near(serializers=[borsh, json])]
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum ChainTransferId {
     General(Nonce),
     Utxo(String),
