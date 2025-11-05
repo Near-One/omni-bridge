@@ -4,7 +4,7 @@ use crate::{
     STORAGE_DEPOSIT_GAS,
 };
 use near_plugins::{access_control_any, pause, AccessControllable, Pausable};
-use near_sdk::json_types::U128;
+use near_sdk::json_types::{U128, U64};
 use near_sdk::{
     env, near, require, serde_json, AccountId, Gas, Promise, PromiseError, PromiseOrValue,
 };
@@ -17,7 +17,7 @@ const WITHDRAW_RBF_GAS: Gas = Gas::from_tgas(100);
 #[near(serializers=[json])]
 #[derive(Debug, PartialEq)]
 enum UTXOChainMsg {
-    MaxGasFee(u64),
+    MaxGasFee(U64),
 }
 
 #[near]
@@ -56,7 +56,7 @@ impl Contract {
                     let UTXOChainMsg::MaxGasFee(max_gas_fee_from_msg) = utxo_chain_extra_info;
                     require!(
                         max_gas_fee.expect("max_gas_fee is missing").0
-                            == max_gas_fee_from_msg.into(),
+                            == max_gas_fee_from_msg.0.into(),
                         "Invalid max gas fee"
                     );
                 }
@@ -196,9 +196,9 @@ mod tests {
 
     #[test]
     fn test_deserialize_utxo_chain_msg() {
-        let serialized_msg = r#"{"MaxGasFee":12345}"#;
+        let serialized_msg = r#"{"MaxGasFee":"12345"}"#;
         let deserialized: UTXOChainMsg = serde_json::from_str(serialized_msg).unwrap();
-        let original = UTXOChainMsg::MaxGasFee(12345);
+        let original = UTXOChainMsg::MaxGasFee(12345.into());
         assert_eq!(original, deserialized);
     }
 }
