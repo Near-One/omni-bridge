@@ -35,9 +35,6 @@ impl MockUtxoConnector {
         }
     }
 
-    /// # Panics
-    ///
-    /// This function will panic if message serialization fails.
     pub fn verify_deposit(&mut self, amount: U128, msg: UtxoFinTransferMsg) -> Promise {
         ext_token::ext(self.token_account.clone())
             .with_attached_deposit(ONE_YOCTO)
@@ -48,18 +45,5 @@ impl MockUtxoConnector {
                 None,
                 serde_json::to_string(&BridgeOnTransferMsg::UtxoFinTransfer(msg)).unwrap(),
             )
-    }
-
-    /// NEP-141 ft_on_transfer implementation
-    /// This is called when tokens are transferred to this connector
-    /// Returns the amount to refund (0 means accept all tokens)
-    pub fn ft_on_transfer(&mut self, sender_id: AccountId, amount: U128, msg: String) -> U128 {
-        near_sdk::env::log_str(&format!(
-            "MockUtxoConnector received {} tokens from {} with msg: {}",
-            amount.0, sender_id, msg
-        ));
-
-        // Accept all tokens (no refund)
-        U128(0)
     }
 }

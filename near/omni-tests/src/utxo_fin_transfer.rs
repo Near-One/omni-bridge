@@ -15,6 +15,13 @@ mod tests {
     use crate::helpers::tests::{account_n, base_eoa_address, build_artifacts};
     use crate::{environment::*, helpers::tests::BuildArtifacts};
 
+    struct UtxoFinTransferCase {
+        amount: u128,
+        utxo_msg: UtxoFinTransferMsg,
+        is_fast_transfer: bool,
+        error: Option<&'static str>,
+    }
+
     struct TestEnv {
         token_contract: near_workspaces::Contract,
         bridge_contract: near_workspaces::Contract,
@@ -83,22 +90,22 @@ mod tests {
         })
     }
 
-    fn default_utxo_fin_transfer() -> UtxoFinTransferMsg {
-        UtxoFinTransferMsg {
-            utxo_id: "btc:abc94fc5b954136a691594c7044bcfa6c6f127cdb0802ac8b97c0117482f2305@1"
-                .to_string(),
-            recipient: OmniAddress::Near(account_n(1)),
-            relayer_fee: U128(1000),
-            msg: String::default(),
-        }
-    }
-
     async fn do_utxo_fin_transfer(
         env: &TestEnv,
         amount: u128,
         utxo_msg: UtxoFinTransferMsg,
+        is_fast_transfer: bool,
         error: Option<&str>,
     ) -> anyhow::Result<ExecutionFinalResult> {
+        let is_transfer_to_near = matches!(utxo_msg.recipient, OmniAddress::Near(_));
+
+        let connector_balance_before =
+            get_balance(&env.token_contract, env.utxo_connector.id()).await?;
+        let recipient_balance_before =
+            get_balance(&env.token_contract, env.recipient_account.id()).await?;
+        let relayer_balance_before =
+            get_balance(&env.token_contract, env.relayer_account.id()).await?;
+
         let result = env
             .relayer_account
             .call(env.utxo_connector.id(), "verify_deposit")
@@ -110,10 +117,78 @@ mod tests {
             .transact()
             .await?;
 
+        let connector_balance_after =
+            get_balance(&env.token_contract, env.utxo_connector.id()).await?;
+        let recipient_balance_after =
+            get_balance(&env.token_contract, env.recipient_account.id()).await?;
+        let relayer_balance_after =
+            get_balance(&env.token_contract, env.relayer_account.id()).await?;
+
         if let Some(expected_error) = error {
             assert!(has_error_message(&result, expected_error));
+
+            assert_eq!(
+                connector_balance_before.0, connector_balance_after.0,
+                "Connector balance should be unchanged after failed transfer"
+            );
+            assert_eq!(
+                relayer_balance_before.0, relayer_balance_after.0,
+                "Relayer balance should be unchanged after failed transfer"
+            );
+            assert_eq!(
+                recipient_balance_before.0, recipient_balance_after.0,
+                "Recipient balance should be unchanged after failed transfer"
+            );
         } else {
             assert_eq!(0, result.failures().len());
+
+            assert_eq!(
+                connector_balance_before.0,
+                connector_balance_after.0 + amount,
+                "Connector balance is not correct"
+            );
+
+            let (recipient_change, relayer_change) = match (is_fast_transfer, is_transfer_to_near) {
+                (true, true) => (0, amount),
+                (true, false) => (0, amount - utxo_msg.relayer_fee.0),
+                (false, true) => (amount, 0),
+                (false, false) => (0, 0),
+            };
+
+            assert_eq!(
+                relayer_balance_before.0,
+                relayer_balance_after.0 - relayer_change,
+                "Relayer balance is not correct"
+            );
+            assert_eq!(
+                recipient_balance_before.0,
+                recipient_balance_after.0 - recipient_change,
+                "Recipient balance is not correct"
+            );
+        }
+
+        if !is_fast_transfer && !is_transfer_to_near {
+            let transfer_message: Option<omni_types::TransferMessage> = env
+                .bridge_contract
+                .view("get_transfer_message")
+                .args_json(json!({
+                    "transfer_id": omni_types::TransferId {
+                        origin_chain: ChainKind::Near,
+                        origin_nonce: 1,
+                    },
+                }))
+                .await
+                .ok()
+                .and_then(|r| r.json().ok());
+
+            if error.is_none() {
+                assert!(transfer_message.is_some());
+                let transfer_message = transfer_message.unwrap();
+                assert_eq!(transfer_message.amount.0, amount);
+                assert_eq!(transfer_message.recipient, base_eoa_address());
+            } else {
+                assert!(transfer_message.is_none());
+            }
         }
 
         Ok(result)
@@ -176,209 +251,180 @@ mod tests {
         Ok(result)
     }
 
-    mod transfer_to_near {
-        use super::*;
+    #[rstest]
+    // Succeeds when transferring to Near
+    #[case(
+        UtxoFinTransferCase {
+            amount: 100_000_000,
+            utxo_msg: UtxoFinTransferMsg {
+                utxo_id: "abc94fc5b954136a691594c7044bcfa6c6f127cdb0802ac8b97c0117482f2305@1"
+                    .to_string(),
+                recipient: OmniAddress::Near(account_n(1)),
+                relayer_fee: U128(1000),
+                msg: String::default(),
+            },
+            is_fast_transfer: false,
+            error: None,
+        }
+    )]
+    // Succeeds when transferring to other chain
+    #[case(
+        UtxoFinTransferCase {
+            amount: 100_000_000,
+            utxo_msg: UtxoFinTransferMsg {
+                utxo_id: "abc94fc5b954136a691594c7044bcfa6c6f127cdb0802ac8b97c0117482f2305@1"
+                    .to_string(),
+                recipient: base_eoa_address(),
+                relayer_fee: U128(1000),
+                msg: String::default(),
+            },
+            is_fast_transfer: false,
+            error: None,
+        }
+    )]
+    // Refunds if token transfer fails
+    #[case(
+        UtxoFinTransferCase {
+            amount: 100_000_000,
+            utxo_msg: UtxoFinTransferMsg {
+                utxo_id: "abc94fc5b954136a691594c7044bcfa6c6f127cdb0802ac8b97c0117482f2305@1"
+                    .to_string(),
+                recipient: OmniAddress::Near(account_n(1)),
+                relayer_fee: U128(2000),
+                msg: "Some_message".to_string(),
+            },
+            is_fast_transfer: false,
+            error: Some("CodeDoesNotExist"),
+        }
+    )]
+    // Succeeds after fast transfer to Near
+    #[case(
+        UtxoFinTransferCase {
+            amount: 100_000_000,
+            utxo_msg: UtxoFinTransferMsg {
+                utxo_id: "abc94fc5b954136a691594c7044bcfa6c6f127cdb0802ac8b97c0117482f2305@1"
+                    .to_string(),
+                recipient: OmniAddress::Near(account_n(1)),
+                relayer_fee: U128(1000),
+                msg: String::default(),
+            },
+            is_fast_transfer: true,
+            error: None,
+        }
+    )]
+    // Succeeds after fast transfer to other chain
+    #[case(
+        UtxoFinTransferCase {
+            amount: 100_000_000,
+            utxo_msg: UtxoFinTransferMsg {
+                utxo_id: "abc94fc5b954136a691594c7044bcfa6c6f127cdb0802ac8b97c0117482f2305@1"
+                    .to_string(),
+                recipient: base_eoa_address(),
+                relayer_fee: U128(1000),
+                msg: String::default(),
+            },
+            is_fast_transfer: true,
+            error: None,
+        }
+    )]
+    // Refunds when recipient not registered
+    #[case(
+        UtxoFinTransferCase {
+            amount: 100_000_000,
+            utxo_msg: UtxoFinTransferMsg {
+                utxo_id: "abc94fc5b954136a691594c7044bcfa6c6f127cdb0802ac8b97c0117482f2305@1"
+                    .to_string(),
+                recipient: OmniAddress::Near(account_n(3)),
+                relayer_fee: U128(1000),
+                msg: String::default(),
+            },
+            is_fast_transfer: false,
+            error: Some("recipient is omitted"),
+        }
+    )]
+    #[tokio::test]
+    async fn normal_call(
+        build_artifacts: &BuildArtifacts,
+        #[case] case: UtxoFinTransferCase,
+    ) -> anyhow::Result<()> {
+        let env = TestEnv::new(build_artifacts).await?;
 
-        #[rstest]
-        #[tokio::test]
-        async fn succeeds_basic(build_artifacts: &BuildArtifacts) -> anyhow::Result<()> {
-            let env = TestEnv::new(build_artifacts).await?;
-            let amount = 100_000_000;
-            let utxo_msg = default_utxo_fin_transfer();
-
-            let OmniAddress::Near(recipient) = utxo_msg.recipient.clone() else {
-                panic!("Expected Near recipient");
-            };
-
-            let recipient_balance_before = get_balance(&env.token_contract, &recipient).await?;
-
-            let _ = do_utxo_fin_transfer(&env, amount, utxo_msg, None).await?;
-
-            let recipient_balance_after = get_balance(&env.token_contract, &recipient).await?;
-            assert_eq!(
-                amount,
-                recipient_balance_after.0 - recipient_balance_before.0
-            );
-
-            Ok(())
+        if case.is_fast_transfer {
+            let _ = do_fast_transfer(&env, case.amount, case.utxo_msg.clone()).await?;
         }
 
-        #[rstest]
-        #[tokio::test]
-        async fn fails_when_sender_is_not_connector(
-            build_artifacts: &BuildArtifacts,
-        ) -> anyhow::Result<()> {
-            let env = TestEnv::new(build_artifacts).await?;
-            let amount = 100_000_000;
-            let utxo_msg = default_utxo_fin_transfer();
+        let _ = do_utxo_fin_transfer(
+            &env,
+            case.amount,
+            case.utxo_msg,
+            case.is_fast_transfer,
+            case.error,
+        )
+        .await?;
 
-            // Try to send from relayer (not the connector)
-            let result = env
-                .relayer_account
-                .call(env.token_contract.id(), "ft_transfer_call")
-                .args_json(json!({
-                    "receiver_id": env.bridge_contract.id(),
-                    "amount": U128(amount),
-                    "memo": None::<String>,
-                    "msg": serde_json::to_string(&BridgeOnTransferMsg::UtxoFinTransfer(utxo_msg))?,
-                }))
-                .deposit(NearToken::from_yoctonear(1))
-                .max_gas()
-                .transact()
-                .await?;
-
-            assert!(has_error_message(&result, "ERR_SENDER_IS_NOT_CONNECTOR"));
-
-            Ok(())
-        }
-
-        #[rstest]
-        #[tokio::test]
-        async fn refunds_when_recipient_not_registered(
-            build_artifacts: &BuildArtifacts,
-        ) -> anyhow::Result<()> {
-            let env = TestEnv::new(build_artifacts).await?;
-            let amount = 100_000_000;
-            let utxo_msg = default_utxo_fin_transfer();
-            let recipient = env.recipient_account.id();
-            assert!(OmniAddress::Near(recipient.clone()) == utxo_msg.recipient);
-
-            // Unregister the recipient
-            env.recipient_account
-                .call(env.token_contract.id(), "storage_unregister")
-                .args_json(json!({
-                    "account_id": &recipient,
-                    "force": true,
-                }))
-                .deposit(NearToken::from_yoctonear(1))
-                .max_gas()
-                .transact()
-                .await?
-                .into_result()?;
-
-            let connector_balance_before =
-                get_balance(&env.token_contract, env.utxo_connector.id()).await?;
-            let bridge_balance_before =
-                get_balance(&env.token_contract, env.bridge_contract.id()).await?;
-
-            let _ =
-                do_utxo_fin_transfer(&env, amount, utxo_msg, Some("recipient is omitted")).await?;
-
-            let connector_balance_after =
-                get_balance(&env.token_contract, env.utxo_connector.id()).await?;
-            let bridge_balance_after =
-                get_balance(&env.token_contract, env.bridge_contract.id()).await?;
-
-            assert_eq!(
-                connector_balance_before.0, connector_balance_after.0,
-                "Connector balance should be unchanged after refund"
-            );
-
-            assert_eq!(
-                bridge_balance_before.0, bridge_balance_after.0,
-                "Bridge should not have received tokens"
-            );
-
-            let recipient_balance = get_balance(&env.token_contract, &recipient).await?;
-            assert_eq!(0, recipient_balance.0, "Recipient should have zero balance");
-
-            Ok(())
-        }
+        Ok(())
     }
 
-    mod transfer_to_other_chain {
-        use super::*;
+    #[rstest]
+    #[tokio::test]
+    async fn fails_when_sender_is_not_connector(
+        build_artifacts: &BuildArtifacts,
+    ) -> anyhow::Result<()> {
+        let env = TestEnv::new(build_artifacts).await?;
+        let amount = 100_000_000;
+        let utxo_msg = UtxoFinTransferMsg {
+            utxo_id: "abc94fc5b954136a691594c7044bcfa6c6f127cdb0802ac8b97c0117482f2305@1"
+                .to_string(),
+            recipient: OmniAddress::Near(account_n(1)),
+            relayer_fee: U128(1000),
+            msg: String::default(),
+        };
 
-        #[rstest]
-        #[tokio::test]
-        async fn succeeds_creates_transfer_message(
-            build_artifacts: &BuildArtifacts,
-        ) -> anyhow::Result<()> {
-            let env = TestEnv::new(build_artifacts).await?;
-            let amount = 100_000_000;
-            let mut utxo_msg = default_utxo_fin_transfer();
-            utxo_msg.recipient = base_eoa_address();
+        // Try to send from relayer (not the connector)
+        let result = env
+            .relayer_account
+            .call(env.token_contract.id(), "ft_transfer_call")
+            .args_json(json!({
+                "receiver_id": env.bridge_contract.id(),
+                "amount": U128(amount),
+                "memo": None::<String>,
+                "msg": serde_json::to_string(&BridgeOnTransferMsg::UtxoFinTransfer(utxo_msg))?,
+            }))
+            .deposit(NearToken::from_yoctonear(1))
+            .max_gas()
+            .transact()
+            .await?;
 
-            let _ = do_utxo_fin_transfer(&env, amount, utxo_msg, None).await?;
+        assert!(has_error_message(&result, "ERR_SENDER_IS_NOT_CONNECTOR"));
 
-            // Verify a transfer message was created
-            let transfer_message: Option<omni_types::TransferMessage> = env
-                .bridge_contract
-                .view("get_transfer_message")
-                .args_json(json!({
-                    "transfer_id": omni_types::TransferId {
-                        origin_chain: ChainKind::Near,
-                        origin_nonce: 1,
-                    },
-                }))
-                .await
-                .ok()
-                .and_then(|r| r.json().ok());
-
-            assert!(transfer_message.is_some());
-            let transfer_message = transfer_message.unwrap();
-            assert_eq!(transfer_message.amount.0, amount);
-            assert_eq!(transfer_message.recipient, base_eoa_address());
-
-            Ok(())
-        }
+        Ok(())
     }
 
-    mod fast_transfer_finalization {
-        use super::*;
+    #[rstest]
+    #[tokio::test]
+    async fn fails_on_double_finalization(build_artifacts: &BuildArtifacts) -> anyhow::Result<()> {
+        let env = TestEnv::new(build_artifacts).await?;
+        let amount = 100_000_000;
+        let utxo_msg = UtxoFinTransferMsg {
+            utxo_id: "abc94fc5b954136a691594c7044bcfa6c6f127cdb0802ac8b97c0117482f2305@1"
+                .to_string(),
+            recipient: base_eoa_address(),
+            relayer_fee: U128(1000),
+            msg: String::default(),
+        };
 
-        #[rstest]
-        #[tokio::test]
-        async fn succeeds_for_near(build_artifacts: &BuildArtifacts) -> anyhow::Result<()> {
-            let env = TestEnv::new(build_artifacts).await?;
-            let amount = 100_000_000;
-            let utxo_msg = default_utxo_fin_transfer();
+        let _ = do_fast_transfer(&env, amount, utxo_msg.clone()).await?;
 
-            let _ = do_fast_transfer(&env, amount, utxo_msg.clone()).await?;
+        let _ = do_utxo_fin_transfer(&env, amount, utxo_msg.clone(), true, None).await?;
+        let _ = do_utxo_fin_transfer(
+            &env,
+            amount,
+            utxo_msg,
+            true,
+            Some("ERR_FAST_TRANSFER_ALREADY_FINALISED"),
+        )
+        .await?;
 
-            let relayer_balance_before =
-                get_balance(&env.token_contract, env.relayer_account.id()).await?;
-
-            let _ = do_utxo_fin_transfer(&env, amount, utxo_msg, None).await?;
-
-            let relayer_balance_after =
-                get_balance(&env.token_contract, env.relayer_account.id()).await?;
-
-            assert_eq!(
-                amount,
-                relayer_balance_after.0 - relayer_balance_before.0,
-                "Relayer should receive full amount"
-            );
-
-            Ok(())
-        }
-
-        #[rstest]
-        #[tokio::test]
-        async fn succeeds_for_other_chain(build_artifacts: &BuildArtifacts) -> anyhow::Result<()> {
-            let env = TestEnv::new(build_artifacts).await?;
-            let amount = 100_000_000;
-            let mut utxo_msg = default_utxo_fin_transfer();
-            let fee = utxo_msg.relayer_fee.0;
-            utxo_msg.recipient = base_eoa_address();
-
-            let _ = do_fast_transfer(&env, amount, utxo_msg.clone()).await?;
-
-            let relayer_balance_before =
-                get_balance(&env.token_contract, env.relayer_account.id()).await?;
-
-            let _ = do_utxo_fin_transfer(&env, amount, utxo_msg, None).await?;
-
-            // Verify relayer received amount minus fee
-            let relayer_balance_after =
-                get_balance(&env.token_contract, env.relayer_account.id()).await?;
-            assert_eq!(
-                amount - fee,
-                relayer_balance_after.0 - relayer_balance_before.0,
-                "Relayer should receive amount minus fee for other chain transfers"
-            );
-
-            Ok(())
-        }
+        Ok(())
     }
 }
