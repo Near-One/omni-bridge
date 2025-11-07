@@ -35,6 +35,7 @@ impl MockUtxoConnector {
         }
     }
 
+    #[allow(clippy::missing_panics_doc)]
     pub fn verify_deposit(&mut self, amount: U128, msg: UtxoFinTransferMsg) -> Promise {
         ext_token::ext(self.token_account.clone())
             .with_attached_deposit(ONE_YOCTO)
