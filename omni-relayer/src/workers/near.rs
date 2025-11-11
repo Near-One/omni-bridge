@@ -63,7 +63,7 @@ pub async fn process_transfer_event(
             transfer_message
         }
         _ => {
-            anyhow::bail!("Expected NearTransferWithTimestamp, got: {transfer:?}");
+            anyhow::bail!("Expected Transfer::Near or Transfer::Utxo variant, got: {transfer:?}");
         }
     };
 
