@@ -38,6 +38,7 @@ fn get_evm_config(config: &config::Config, chain_kind: ChainKind) -> Result<&con
     }
 }
 
+#[allow(clippy::too_many_lines)]
 async fn handle_transaction_event(
     config: &config::Config,
     redis_connection_manager: &mut redis::aio::ConnectionManager,
@@ -316,7 +317,9 @@ async fn handle_transaction_event(
         OmniTransferMessage::TransferNearToUtxo { utxo_count, .. } => {
             if config.is_signing_utxo_transaction_enabled(event.transfer_id.origin_chain) {
                 let ChainTransferId::Utxo(utxo_id) = event.transfer_id.id else {
-                    anyhow::bail!("Expected Utxo ChainTransferId for TransferNearToUtxo: {event:?}");
+                    anyhow::bail!(
+                        "Expected Utxo ChainTransferId for TransferNearToUtxo: {event:?}"
+                    );
                 };
 
                 let Some(btc_pending_id) = utxo_id.split('@').next() else {
