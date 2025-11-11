@@ -147,7 +147,7 @@ pub async fn process_init_transfer_event(
     };
 
     let fast_transfer_args = FastTransfer {
-        transfer_id,
+        transfer_id: transfer_id.into(),
         token_id,
         amount: log.amount,
         fee: Fee {
