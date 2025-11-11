@@ -266,10 +266,7 @@ pub async fn process_events(
 
         for (key, event) in events {
             if let Ok(transfer) = serde_json::from_value::<Transfer>(event.clone()) {
-                if let Transfer::Near {
-                    transfer_message, ..
-                } = transfer.clone()
-                {
+                if let Transfer::Near { .. } | Transfer::Utxo { .. } = transfer.clone() {
                     handlers.push(tokio::spawn({
                         let config = config.clone();
                         let mut redis_connection_manager = redis_connection_manager.clone();
@@ -278,14 +275,26 @@ pub async fn process_events(
                         let near_nonce = near_omni_nonce.clone();
 
                         async move {
-                            let process = if transfer_message.recipient.is_utxo_chain() {
+                            let (recipient, transfer_id) = match &transfer {
+                                Transfer::Near { transfer_message } => (
+                                    &transfer_message.recipient,
+                                    &transfer_message.get_transfer_id(),
+                                ),
+                                Transfer::Utxo {
+                                    utxo_transfer_message,
+                                    new_transfer_id,
+                                } => (&utxo_transfer_message.recipient, new_transfer_id),
+                                _ => unreachable!(),
+                            };
+
+                            let process = if recipient.is_utxo_chain() {
                                 near::process_transfer_to_utxo_event(
                                     &config,
                                     &mut redis_connection_manager,
                                     key.clone(),
                                     omni_connector,
                                     signer,
-                                    transfer,
+                                    transfer.clone(),
                                     near_nonce,
                                 )
                                 .await
@@ -296,7 +305,7 @@ pub async fn process_events(
                                     key.clone(),
                                     omni_connector,
                                     signer,
-                                    transfer,
+                                    transfer.clone(),
                                     near_nonce,
                                 )
                                 .await
@@ -326,8 +335,7 @@ pub async fn process_events(
                                         &config,
                                         &mut redis_connection_manager,
                                         utils::redis::FEE_MAPPING,
-                                        serde_json::to_string(&transfer_message.get_transfer_id())
-                                            .unwrap_or_default(),
+                                        serde_json::to_string(&transfer_id).unwrap_or_default(),
                                     )
                                     .await;
                                 }
