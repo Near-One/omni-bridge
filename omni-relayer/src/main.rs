@@ -186,6 +186,21 @@ async fn main() -> Result<()> {
                     .await
                 }
             }));
+
+            if config.is_fee_bumping_enabled(ChainKind::Eth) {
+                handles.push(tokio::spawn({
+                    let config = config.clone();
+                    let mut redis_connection_manager = redis_connection_manager.clone();
+                    async move {
+                        startup::evm_fee_bumping::start_evm_fee_bumping(
+                            config,
+                            ChainKind::Eth,
+                            &mut redis_connection_manager,
+                        )
+                        .await
+                    }
+                }));
+            }
         }
         if config.base.is_some() {
             handles.push(tokio::spawn({

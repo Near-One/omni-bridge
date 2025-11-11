@@ -1,0 +1,281 @@
+use alloy::{
+    consensus::Transaction as TransactionTrait,
+    eips::eip1559::Eip1559Estimation,
+    network::EthereumWallet,
+    providers::{Provider, ProviderBuilder, WalletProvider},
+    rpc::types::Transaction,
+};
+use anyhow::Context;
+use omni_types::ChainKind;
+use tracing::{info, warn};
+
+use crate::{
+    config::{self, Evm},
+    utils::{
+        self,
+        pending_transactions::{self, PendingTransaction},
+    },
+};
+
+enum ShouldBump {
+    Yes(Eip1559Estimation),
+    No(String),
+}
+
+#[allow(dead_code)]
+enum TransactionStatus {
+    Included(Transaction),
+    Pending(Transaction),
+    Missing,
+}
+
+pub async fn start_evm_fee_bumping(
+    config: config::Config,
+    chain_kind: ChainKind,
+    redis_connection_manager: &mut redis::aio::ConnectionManager,
+) -> anyhow::Result<()> {
+    let evm_config = match chain_kind {
+        ChainKind::Eth => &config.eth,
+        ChainKind::Bnb => &config.bnb,
+        ChainKind::Arb => &config.arb,
+        ChainKind::Base => &config.base,
+        _ => {
+            return Err(anyhow::anyhow!(
+                "EVM fee bumping not supported for chain kind: {chain_kind:?}"
+            ));
+        }
+    };
+    let evm_config = evm_config
+        .as_ref()
+        .context(format!("{chain_kind:?} config not found in global config"))?;
+    let fee_bumping_config = evm_config
+        .fee_bumping
+        .as_ref()
+        .context(format!("Fee bumping config not found for {chain_kind:?}"))?;
+
+    let provider = build_provider(chain_kind, evm_config).context("Error building EVM provider")?;
+
+    info!(
+        "Fee bumping for {chain_kind:?} initialized with address: {}",
+        provider.default_signer_address()
+    );
+
+    loop {
+        let redis_key = pending_transactions::get_pending_tx_key(chain_kind);
+
+        let Some(pending_txs) = utils::redis::zrange::<PendingTransaction>(
+            &config,
+            redis_connection_manager,
+            &redis_key,
+            0,
+            0,
+        )
+        .await
+        else {
+            tokio::time::sleep(tokio::time::Duration::from_secs(
+                fee_bumping_config.check_interval_seconds,
+            ))
+            .await;
+            continue;
+        };
+
+        let mut pending_tx = pending_txs[0].clone();
+
+        let current_timestamp = chrono::Utc::now().timestamp();
+        if current_timestamp - pending_tx.sent_timestamp
+            < fee_bumping_config.min_pending_time_seconds
+        {
+            tokio::time::sleep(tokio::time::Duration::from_secs(
+                fee_bumping_config.check_interval_seconds,
+            ))
+            .await;
+            continue;
+        }
+
+        let tx_status = match get_transaction_status(&provider, &pending_tx.tx_hash).await {
+            Ok(status) => status,
+            Err(err) => {
+                warn!(
+                    "Error checking transaction {} status for {chain_kind:?}: {err:?}",
+                    pending_tx.tx_hash
+                );
+                tokio::time::sleep(tokio::time::Duration::from_secs(
+                    fee_bumping_config.check_interval_seconds,
+                ))
+                .await;
+                continue;
+            }
+        };
+
+        match tx_status {
+            TransactionStatus::Included(_) => {
+                let serialized_tx = serde_json::to_string(&pending_tx)?;
+                utils::redis::zrem(&config, redis_connection_manager, &redis_key, serialized_tx)
+                    .await;
+                continue;
+            }
+            TransactionStatus::Missing => {
+                // TODO: Transaction not found in mempool, resend
+                tokio::time::sleep(tokio::time::Duration::from_secs(
+                    fee_bumping_config.check_interval_seconds,
+                ))
+                .await;
+                continue;
+            }
+            TransactionStatus::Pending(tx_data) => {
+                let original_fee = Eip1559Estimation {
+                    max_fee_per_gas: tx_data.max_fee_per_gas(),
+                    max_priority_fee_per_gas: tx_data.max_priority_fee_per_gas().unwrap_or(0),
+                };
+                let suggested_fee = provider.estimate_eip1559_fees().await?;
+
+                let new_fee = match should_bump(fee_bumping_config, original_fee, suggested_fee) {
+                    ShouldBump::Yes(new_fee) => new_fee,
+                    ShouldBump::No(reason) => {
+                        info!(
+                            "Not bumping fee for transaction {} on {chain_kind:?}: {}",
+                            pending_tx.tx_hash, reason
+                        );
+                        tokio::time::sleep(tokio::time::Duration::from_secs(
+                            fee_bumping_config.check_interval_seconds,
+                        ))
+                        .await;
+                        continue;
+                    }
+                };
+
+                info!(
+                    "Bumping fee for transaction {} (nonce: {}) on {chain_kind:?}: {} -> {} gwei",
+                    pending_tx.tx_hash,
+                    pending_tx.nonce,
+                    original_fee.max_fee_per_gas / 1_000_000_000,
+                    new_fee.max_fee_per_gas / 1_000_000_000
+                );
+
+                let replacement_tx = tx_data
+                    .into_request()
+                    .max_fee_per_gas(new_fee.max_fee_per_gas)
+                    .max_priority_fee_per_gas(new_fee.max_priority_fee_per_gas);
+
+                let new_tx_result = match provider.send_transaction(replacement_tx).await {
+                    Ok(result) => result,
+                    Err(err) => {
+                        warn!(
+                            "Error sending replacement transaction for {} on {chain_kind:?}: {err:?}",
+                            pending_tx.tx_hash
+                        );
+                        tokio::time::sleep(tokio::time::Duration::from_secs(
+                            fee_bumping_config.check_interval_seconds,
+                        ))
+                        .await;
+                        continue;
+                    }
+                };
+
+                let new_tx_hash = new_tx_result.tx_hash();
+
+                info!(
+                    "Replacement transaction sent: {} (replaced {}) for {chain_kind:?}",
+                    new_tx_hash, pending_tx.tx_hash
+                );
+
+                let old_serialized_tx = serde_json::to_string(&pending_tx)?;
+                utils::redis::zrem(
+                    &config,
+                    redis_connection_manager,
+                    &redis_key,
+                    old_serialized_tx,
+                )
+                .await;
+
+                pending_tx.bump(new_tx_hash.to_string());
+
+                utils::redis::zadd(
+                    &config,
+                    redis_connection_manager,
+                    &redis_key,
+                    pending_tx.nonce as f64,
+                    pending_tx.clone(),
+                )
+                .await;
+
+                tokio::time::sleep(tokio::time::Duration::from_secs(
+                    fee_bumping_config.check_interval_seconds,
+                ))
+                .await;
+                continue;
+            }
+        };
+    }
+}
+
+fn should_bump(
+    fee_bumping_config: &config::FeeBumping,
+    original_fee: Eip1559Estimation,
+    suggested_fee: Eip1559Estimation,
+) -> ShouldBump {
+    if suggested_fee.max_fee_per_gas < original_fee.max_fee_per_gas {
+        return ShouldBump::No(format!(
+            "new fee ({} gwei) is lower than original ({} gwei)",
+            suggested_fee.max_fee_per_gas / 1_000_000_000,
+            original_fee.max_fee_per_gas / 1_000_000_000,
+        ));
+    }
+
+    let min_bump_multiplier = 100u128 + fee_bumping_config.min_fee_increase_percent as u128;
+    let min_max_fee = (original_fee.max_fee_per_gas * min_bump_multiplier) / 100;
+    let min_priority_fee = (original_fee.max_priority_fee_per_gas * min_bump_multiplier) / 100;
+
+    let new_max_fee = min_max_fee.max(suggested_fee.max_fee_per_gas);
+    let new_priority_fee = min_priority_fee.max(suggested_fee.max_priority_fee_per_gas);
+
+    if new_max_fee > fee_bumping_config.max_fee_in_wei {
+        return ShouldBump::No(format!(
+            "bumped fee ({} gwei) exceeds configured maximum ({} gwei)",
+            new_max_fee / 1_000_000_000,
+            fee_bumping_config.max_fee_in_wei / 1_000_000_000,
+        ));
+    }
+
+    ShouldBump::Yes(Eip1559Estimation {
+        max_fee_per_gas: new_max_fee,
+        max_priority_fee_per_gas: new_priority_fee,
+    })
+}
+
+async fn get_transaction_status<P>(provider: &P, tx_hash: &str) -> anyhow::Result<TransactionStatus>
+where
+    P: Provider,
+{
+    match provider.get_transaction_by_hash(tx_hash.parse()?).await {
+        Ok(Some(tx)) => {
+            if tx.block_number.is_some() {
+                Ok(TransactionStatus::Included(tx))
+            } else {
+                Ok(TransactionStatus::Pending(tx))
+            }
+        }
+        Ok(None) => Ok(TransactionStatus::Missing),
+        Err(err) => Err(anyhow::anyhow!(
+            "Error fetching transaction status: {err:?}"
+        )),
+    }
+}
+
+fn build_provider(
+    chain_kind: ChainKind,
+    evm_config: &Evm,
+) -> anyhow::Result<impl WalletProvider + Provider> {
+    let private_key = config::get_private_key(chain_kind, None);
+    let decoded_key = hex::decode(private_key).context("Failed to decode private key")?;
+    let signing_key = alloy::signers::k256::ecdsa::SigningKey::from_slice(&decoded_key)
+        .context("Invalid private key")?;
+    let signer = alloy::signers::local::LocalSigner::from_signing_key(signing_key);
+    let wallet = EthereumWallet::from(signer.clone());
+
+    let provider = ProviderBuilder::new()
+        .wallet(wallet.clone())
+        .connect_http(evm_config.rpc_http_url.parse().context("Invalid RPC URL")?);
+
+    Ok(provider)
+}
