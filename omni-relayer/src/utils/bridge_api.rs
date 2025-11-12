@@ -19,6 +19,7 @@ impl PartialEq for TransferFee {
         self.usd_fee.total_cmp(&other.usd_fee) == std::cmp::Ordering::Equal
     }
 }
+
 impl Eq for TransferFee {}
 
 impl PartialOrd for TransferFee {
@@ -29,7 +30,15 @@ impl PartialOrd for TransferFee {
 
 impl Ord for TransferFee {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        self.usd_fee.total_cmp(&other.usd_fee)
+        match self.usd_fee.total_cmp(&other.usd_fee) {
+            std::cmp::Ordering::Equal => match self.native_token_fee.cmp(&other.native_token_fee) {
+                std::cmp::Ordering::Equal => {
+                    self.transferred_token_fee.cmp(&other.transferred_token_fee)
+                }
+                other => other,
+            },
+            other => other,
+        }
     }
 }
 
