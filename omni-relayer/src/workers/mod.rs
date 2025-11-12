@@ -89,7 +89,7 @@ pub enum Transfer {
     UtxoToNear {
         chain: ChainKind,
         btc_tx_hash: String,
-        vout: u64,
+        vout: u32,
         deposit_msg: DepositMsg,
     },
     Fast {

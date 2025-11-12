@@ -9,7 +9,7 @@ use bridge_indexer_types::documents_types::{
 use ethereum_types::H256;
 use mongodb::{Client, Collection, change_stream::event::ResumeToken, options::ClientOptions};
 use omni_types::{
-    ChainKind, ChainTransferId, Fee, OmniAddress, TransferId, near_events::OmniBridgeEvent,
+    ChainKind, Fee, OmniAddress, TransferId, TransferIdKind, near_events::OmniBridgeEvent,
 };
 use solana_sdk::pubkey::Pubkey;
 use tokio_stream::StreamExt;
@@ -76,7 +76,7 @@ async fn handle_transaction_event(
                     config,
                     redis_connection_manager,
                     utils::redis::EVENTS,
-                    utxo_transfer_message.utxo_id.clone(),
+                    utxo_transfer_message.utxo_id.to_string(),
                     RetryableEvent::new(crate::workers::Transfer::Utxo {
                         utxo_transfer_message,
                         new_transfer_id,
@@ -316,14 +316,10 @@ async fn handle_transaction_event(
         }
         OmniTransferMessage::TransferNearToUtxo { utxo_count, .. } => {
             if config.is_signing_utxo_transaction_enabled(event.transfer_id.origin_chain) {
-                let ChainTransferId::Utxo(utxo_id) = event.transfer_id.id else {
+                let TransferIdKind::Utxo(utxo_id) = event.transfer_id.kind else {
                     anyhow::bail!(
                         "Expected Utxo ChainTransferId for TransferNearToUtxo: {event:?}"
                     );
-                };
-
-                let Some(btc_pending_id) = utxo_id.split('@').next() else {
-                    anyhow::bail!("Invalid Utxo ID format: {utxo_id}");
                 };
 
                 info!(
@@ -332,7 +328,10 @@ async fn handle_transaction_event(
                 );
 
                 for sign_index in 0..utxo_count {
-                    info!("Received sign index {sign_index} for BTC pending ID: {btc_pending_id}");
+                    info!(
+                        "Received sign index {sign_index} for BTC pending ID: {}",
+                        utxo_id.tx_hash
+                    );
 
                     utils::redis::add_event(
                         config,
@@ -341,7 +340,7 @@ async fn handle_transaction_event(
                         format!("{origin_transaction_id}@{sign_index}"),
                         RetryableEvent::new(workers::Transfer::NearToUtxo {
                             chain: event.transfer_id.origin_chain,
-                            btc_pending_id: btc_pending_id.to_string(),
+                            btc_pending_id: utxo_id.tx_hash.clone(),
                             sign_index,
                         }),
                     )
@@ -349,31 +348,24 @@ async fn handle_transaction_event(
                 }
             }
         }
-        OmniTransferMessage::TransferUtxoToNear {
-            vout,
-            ref deposit_msg,
-        } => {
-            let ChainTransferId::Utxo(utxo_id) = event.transfer_id.id else {
+        OmniTransferMessage::TransferUtxoToNear { ref deposit_msg } => {
+            let TransferIdKind::Utxo(utxo_id) = event.transfer_id.kind else {
                 anyhow::bail!("Expected Utxo ChainTransferId for TransferUtxoToNear: {event:?}");
             };
 
-            let Some(btc_tx_hash) = utxo_id.split('@').next() else {
-                anyhow::bail!("Invalid Utxo ID format: {utxo_id}");
-            };
-
             info!(
-                "Received TransferUtxoToNear on {:?}: {btc_tx_hash}@{vout}",
+                "Received TransferUtxoToNear on {:?}: {utxo_id}",
                 event.transfer_id.origin_chain
             );
             utils::redis::add_event(
                 config,
                 redis_connection_manager,
                 utils::redis::EVENTS,
-                format!("{btc_tx_hash}@{vout}"),
+                utxo_id.to_string(),
                 RetryableEvent::new(workers::Transfer::UtxoToNear {
                     chain: event.transfer_id.origin_chain,
-                    btc_tx_hash: btc_tx_hash.to_string(),
-                    vout,
+                    btc_tx_hash: utxo_id.tx_hash,
+                    vout: utxo_id.vout,
                     deposit_msg: deposit_msg.clone(),
                 }),
             )
@@ -381,12 +373,8 @@ async fn handle_transaction_event(
         }
         OmniTransferMessage::ConfirmedTxHash => {
             if config.is_verifying_utxo_withdraw_enabled(event.transfer_id.origin_chain) {
-                let ChainTransferId::Utxo(utxo_id) = event.transfer_id.id else {
+                let TransferIdKind::Utxo(utxo_id) = event.transfer_id.kind else {
                     anyhow::bail!("Expected Utxo ChainTransferId for ConfirmedTxHash: {event:?}");
-                };
-
-                let Some(btc_tx_hash) = utxo_id.split('@').next() else {
-                    anyhow::bail!("Invalid Utxo ID format: {utxo_id}");
                 };
 
                 info!(
@@ -397,10 +385,10 @@ async fn handle_transaction_event(
                     config,
                     redis_connection_manager,
                     utils::redis::EVENTS,
-                    utxo_id.clone(),
+                    utxo_id.to_string(),
                     RetryableEvent::new(workers::utxo::ConfirmedTxHash {
                         chain: event.transfer_id.origin_chain,
-                        btc_tx_hash: btc_tx_hash.to_string(),
+                        btc_tx_hash: utxo_id.tx_hash,
                     }),
                 )
                 .await;
