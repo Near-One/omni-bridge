@@ -658,8 +658,7 @@ impl std::str::FromStr for UtxoId {
 
         if parts.len() != 2 {
             return Err(format!(
-                "Invalid UtxoId format '{}': expected 'tx_hash@vout'",
-                s
+                "Invalid UtxoId format '{s}': expected 'tx_hash@vout'",
             ));
         }
 
