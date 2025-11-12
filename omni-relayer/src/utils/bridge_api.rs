@@ -44,16 +44,14 @@ impl Ord for TransferFee {
 
 impl TransferFee {
     pub fn apply_discount(&self, discount_percent: u8) -> Self {
-        let discount_multiplier = (100 - discount_percent) as f64 / 100.0;
-
         Self {
             native_token_fee: self
                 .native_token_fee
-                .map(|fee| U128((fee.0 as f64 * discount_multiplier).ceil() as u128)),
+                .map(|fee| U128(fee.0 * u128::from(100 - discount_percent) / 100)),
             transferred_token_fee: self
                 .transferred_token_fee
-                .map(|fee| U128((fee.0 as f64 * discount_multiplier).ceil() as u128)),
-            usd_fee: self.usd_fee * discount_multiplier,
+                .map(|fee| U128(fee.0 * u128::from(100 - discount_percent) / 100)),
+            usd_fee: self.usd_fee * f64::from(100 - discount_percent) / 100.0,
         }
     }
 
