@@ -19,7 +19,7 @@ use crate::helpers::tests::{
     get_test_deploy_token_args, BuildArtifacts, NEP141_DEPOSIT,
 };
 
-const PREV_LOCKER_WASM_FILEPATH: &str = "src/data/omni_bridge-0_2_17.wasm";
+const PREV_LOCKER_WASM_FILEPATH: &str = "src/data/omni_bridge-0_3_2.wasm";
 
 pub struct BridgeToken {
     pub is_deployed: bool,
@@ -37,6 +37,7 @@ pub struct TestEnvBuilderWithToken {
     pub worker: Worker<Sandbox>,
     pub bridge_contract: Contract,
     pub token: BridgeToken,
+    pub utxo_connector: Option<Contract>,
     build_artifacts: BuildArtifacts,
     token_transfer_nonce: RefCell<u64>,
 }
@@ -85,6 +86,7 @@ impl TestEnvBuilder {
                 contract: token_contract,
                 eth_address: eth_token_address(),
             },
+            utxo_connector: None,
             build_artifacts: self.build_artifacts,
             token_transfer_nonce: RefCell::new(1),
         })
@@ -119,6 +121,7 @@ impl TestEnvBuilder {
                 contract: token_contract,
                 eth_address: eth_token_address(),
             },
+            utxo_connector: None,
             build_artifacts: self.build_artifacts,
             token_transfer_nonce: RefCell::new(1),
         })
@@ -171,6 +174,7 @@ impl TestEnvBuilder {
                 contract: token_contract,
                 eth_address: init_token_address,
             },
+            utxo_connector: None,
             build_artifacts: self.build_artifacts,
             token_transfer_nonce: RefCell::new(1),
         })
@@ -226,6 +230,66 @@ impl TestEnvBuilder {
                 contract: token_contract,
                 eth_address: eth_token_address(),
             },
+            utxo_connector: None,
+            build_artifacts: self.build_artifacts,
+            token_transfer_nonce: RefCell::new(1),
+        })
+    }
+
+    pub async fn with_utxo_token(self) -> anyhow::Result<TestEnvBuilderWithToken> {
+        let bridge_contract = self.deploy_bridge(None).await?;
+
+        let token_contract = self.deploy_nep141_token().await?;
+
+        let utxo_connector = self
+            .worker
+            .dev_deploy(&self.build_artifacts.mock_utxo_connector)
+            .await?;
+
+        utxo_connector
+            .call("new")
+            .args_json(json!({
+                "bridge_account": bridge_contract.id(),
+                "token_account": token_contract.id(),
+            }))
+            .max_gas()
+            .transact()
+            .await?
+            .into_result()?;
+
+        bridge_contract
+            .call("add_utxo_chain_connector")
+            .args_json(json!({
+                "chain_kind": ChainKind::Btc,
+                "utxo_chain_connector_id": utxo_connector.id(),
+                "utxo_chain_token_id": token_contract.id(),
+                "decimals": 8,
+            }))
+            .deposit(NEP141_DEPOSIT.saturating_mul(3))
+            .max_gas()
+            .transact()
+            .await?
+            .into_result()?;
+
+        storage_deposit(&token_contract, bridge_contract.id()).await?;
+        storage_deposit(&token_contract, utxo_connector.id()).await?;
+
+        // Transfer some NEAR to the connector for making cross-contract calls
+        self.worker
+            .root_account()?
+            .transfer_near(utxo_connector.id(), NearToken::from_yoctonear(1000))
+            .await?
+            .into_result()?;
+
+        Ok(TestEnvBuilderWithToken {
+            worker: self.worker,
+            bridge_contract,
+            token: BridgeToken {
+                is_deployed: false,
+                contract: token_contract,
+                eth_address: OmniAddress::new_zero(ChainKind::Btc).unwrap(),
+            },
+            utxo_connector: Some(utxo_connector),
             build_artifacts: self.build_artifacts,
             token_transfer_nonce: RefCell::new(1),
         })
@@ -359,6 +423,25 @@ impl TestEnvBuilder {
 impl TestEnvBuilderWithToken {
     pub async fn storage_deposit(&self, account_id: &AccountId) -> anyhow::Result<()> {
         storage_deposit(&self.token.contract, account_id).await?;
+
+        Ok(())
+    }
+
+    pub async fn omni_storage_deposit(
+        &self,
+        account_id: &AccountId,
+        amount: u128,
+    ) -> anyhow::Result<()> {
+        self.bridge_contract
+            .call("storage_deposit")
+            .args_json(json!({
+                "account_id": account_id,
+            }))
+            .deposit(NearToken::from_yoctonear(amount))
+            .max_gas()
+            .transact()
+            .await?
+            .into_result()?;
 
         Ok(())
     }

@@ -16,7 +16,11 @@ async function main() {
     try {
         const initTransferLog = await getNearLog(options.txHash, receiptIdx, 0);
         const log = JSON.parse(initTransferLog);
-        console.log(log.InitTransferEvent.transfer_message.origin_nonce);
+        let originNonce = log?.InitTransferEvent?.transfer_message?.origin_nonce;
+        if (originNonce === undefined || originNonce === null) {
+            originNonce = log?.UtxoTransferEvent?.new_transfer_id?.origin_nonce;
+        }
+        console.log(originNonce);
     } catch (error) {
         process.exit(1);
     }

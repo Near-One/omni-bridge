@@ -1,0 +1,50 @@
+use near_sdk::json_types::U128;
+use near_sdk::serde_json;
+use near_sdk::{ext_contract, near, AccountId, Gas, NearToken, PanicOnDefault, Promise};
+use omni_types::{BridgeOnTransferMsg, UtxoFinTransferMsg};
+
+const FT_TRANSFER_CALL_GAS: Gas = Gas::from_tgas(210);
+const ONE_YOCTO: NearToken = NearToken::from_yoctonear(1);
+
+#[ext_contract(ext_token)]
+pub trait ExtToken {
+    fn ft_transfer_call(
+        &mut self,
+        receiver_id: AccountId,
+        amount: U128,
+        memo: Option<String>,
+        msg: String,
+    );
+}
+
+#[near(contract_state)]
+#[derive(PanicOnDefault)]
+pub struct MockUtxoConnector {
+    pub bridge_account: AccountId,
+    pub token_account: AccountId,
+}
+
+#[allow(clippy::needless_pass_by_value)]
+#[near]
+impl MockUtxoConnector {
+    #[init]
+    pub fn new(bridge_account: AccountId, token_account: AccountId) -> Self {
+        Self {
+            bridge_account,
+            token_account,
+        }
+    }
+
+    #[allow(clippy::missing_panics_doc)]
+    pub fn verify_deposit(&mut self, amount: U128, msg: UtxoFinTransferMsg) -> Promise {
+        ext_token::ext(self.token_account.clone())
+            .with_attached_deposit(ONE_YOCTO)
+            .with_static_gas(FT_TRANSFER_CALL_GAS)
+            .ft_transfer_call(
+                self.bridge_account.clone(),
+                amount,
+                None,
+                serde_json::to_string(&BridgeOnTransferMsg::UtxoFinTransfer(msg)).unwrap(),
+            )
+    }
+}

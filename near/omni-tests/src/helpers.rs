@@ -18,6 +18,7 @@ pub mod tests {
         pub mock_token: Vec<u8>,
         pub mock_prover: Vec<u8>,
         pub mock_token_receiver: Vec<u8>,
+        pub mock_utxo_connector: Vec<u8>,
         pub locker: Vec<u8>,
         pub token_deployer: Vec<u8>,
     }
@@ -46,6 +47,7 @@ pub mod tests {
             mock_token: mock_token_wasm(),
             mock_prover: mock_prover_wasm(),
             mock_token_receiver: mock_token_receiver_wasm(),
+            mock_utxo_connector: mock_utxo_connector_wasm(),
             locker: locker_wasm(),
             token_deployer: token_deployer_wasm(),
         }
@@ -85,6 +87,14 @@ pub mod tests {
         build_wasm(
             "../token-deployer/Cargo.toml",
             "test-target-for-token-deployer",
+        )
+    }
+
+    #[fixture]
+    pub fn mock_utxo_connector_wasm() -> Vec<u8> {
+        build_wasm(
+            "../mock/mock-utxo-connector/Cargo.toml",
+            "test-target-for-mock-utxo-connector",
         )
     }
 
