@@ -1,6 +1,6 @@
 use crate::{
     storage::{Decimals, FastTransferStatusStorage, TransferMessageStorage},
-    Contract, ContractExt, StorageKey,
+    Contract, ContractExt,
 };
 use borsh::{BorshDeserialize, BorshSerialize};
 use near_contract_standards::storage_management::StorageBalance;
@@ -8,7 +8,7 @@ use near_sdk::{
     collections::{LookupMap, LookupSet, UnorderedMap},
     env, near, AccountId, CryptoHash, PanicOnDefault,
 };
-use omni_types::{ChainKind, FastTransferId, Nonce, OmniAddress, TransferId};
+use omni_types::{btc::UTXOChainConfig, ChainKind, FastTransferId, Nonce, OmniAddress, TransferId};
 
 #[derive(BorshDeserialize, BorshSerialize, PanicOnDefault)]
 pub struct OldState {
@@ -28,6 +28,7 @@ pub struct OldState {
     pub wnear_account_id: AccountId,
     pub provers: UnorderedMap<ChainKind, AccountId>,
     pub init_transfer_promises: LookupMap<AccountId, CryptoHash>,
+    pub utxo_chain_connectors: UnorderedMap<ChainKind, UTXOChainConfig>,
 }
 
 #[near]
@@ -53,7 +54,7 @@ impl Contract {
                 wnear_account_id: old_state.wnear_account_id,
                 provers: old_state.provers,
                 init_transfer_promises: old_state.init_transfer_promises,
-                utxo_chain_connectors: UnorderedMap::new(StorageKey::UtxoChainConnectors),
+                utxo_chain_connectors: old_state.utxo_chain_connectors.iter().collect(),
             }
         } else {
             env::panic_str("Old state not found. Migration is not needed.")

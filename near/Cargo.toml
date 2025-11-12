@@ -15,7 +15,8 @@ members = [
     "omni-tests",
     "mock/mock-token",
     "mock/mock-prover",
-    "mock/mock-token-receiver"
+    "mock/mock-token-receiver",
+    "mock/mock-utxo-connector"
 ]
 
 [profile.release]
