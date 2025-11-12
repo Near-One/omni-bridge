@@ -1,7 +1,7 @@
 use near_contract_standards::storage_management::{StorageBalance, StorageBalanceBounds};
 use near_sdk::{assert_one_yocto, borsh, near};
 use near_sdk::{env, near_bindgen, AccountId, NearToken};
-use omni_types::{ChainTransferId, FastTransferStatus, Nonce, TransferId, UnifiedTransferId};
+use omni_types::{FastTransferStatus, Nonce, TransferId, TransferIdKind, UnifiedTransferId};
 
 use crate::{
     require, ChainKind, Contract, ContractExt, Fee, OmniAddress, Promise, SdkExpect,
@@ -97,7 +97,7 @@ impl TransferMessageStorage {
                     destination_nonce: m.message.destination_nonce,
                     origin_transfer_id: m.message.origin_transfer_id.map(|m| UnifiedTransferId {
                         origin_chain: m.origin_chain,
-                        id: ChainTransferId::General(m.origin_nonce),
+                        kind: TransferIdKind::Nonce(m.origin_nonce),
                     }),
                 },
                 owner: m.owner,
@@ -299,8 +299,13 @@ impl Contract {
             destination_nonce: 0,
             origin_transfer_id: Some(UnifiedTransferId {
                 origin_chain: ChainKind::Eth,
-                id: ChainTransferId::Utxo("a".repeat(75)),
-            }), // tx_id@vout = 64 + 1 + 10
+                kind: TransferIdKind::Utxo({
+                    omni_types::UtxoId {
+                        tx_hash: "a".repeat(64),
+                        vout: 0,
+                    }
+                }),
+            }),
         })
     }
 

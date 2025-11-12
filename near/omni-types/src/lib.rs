@@ -486,7 +486,7 @@ pub struct FastFinTransferMsg {
 #[near(serializers=[borsh, json])]
 #[derive(Debug, Clone)]
 pub struct UtxoFinTransferMsg {
-    pub utxo_id: String,
+    pub utxo_id: UtxoId,
     pub recipient: OmniAddress,
     pub relayer_fee: U128,
     pub msg: String,
@@ -644,30 +644,80 @@ pub struct BasicMetadata {
 
 #[near(serializers=[borsh, json])]
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct UnifiedTransferId {
-    pub origin_chain: ChainKind,
-    pub id: ChainTransferId,
+#[serde(try_from = "String", into = "String")]
+pub struct UtxoId {
+    pub tx_hash: String,
+    pub vout: u32,
+}
+
+impl std::str::FromStr for UtxoId {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let parts: Vec<&str> = s.split('@').collect();
+
+        if parts.len() != 2 {
+            return Err(format!(
+                "Invalid UtxoId format '{}': expected 'tx_hash@vout'",
+                s
+            ));
+        }
+
+        let tx_hash = parts[0].to_string();
+        let vout = parts[1]
+            .parse::<u32>()
+            .map_err(|e| format!("Invalid vout '{}' in UtxoId: {}", parts[1], e))?;
+
+        Ok(UtxoId { tx_hash, vout })
+    }
+}
+
+impl std::fmt::Display for UtxoId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}@{}", self.tx_hash, self.vout)
+    }
+}
+
+impl TryFrom<String> for UtxoId {
+    type Error = String;
+
+    fn try_from(s: String) -> Result<Self, Self::Error> {
+        s.parse()
+    }
+}
+
+impl From<UtxoId> for String {
+    fn from(utxo_id: UtxoId) -> Self {
+        format!("{}@{}", utxo_id.tx_hash, utxo_id.vout)
+    }
 }
 
 #[near(serializers=[borsh, json])]
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub enum ChainTransferId {
-    General(Nonce),
-    Utxo(String),
+pub enum TransferIdKind {
+    Nonce(Nonce),
+    Utxo(UtxoId),
+}
+
+#[near(serializers=[borsh, json])]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct UnifiedTransferId {
+    pub origin_chain: ChainKind,
+    pub kind: TransferIdKind,
 }
 
 impl From<TransferId> for UnifiedTransferId {
     fn from(value: TransferId) -> Self {
         Self {
             origin_chain: value.origin_chain,
-            id: ChainTransferId::General(value.origin_nonce),
+            kind: TransferIdKind::Nonce(value.origin_nonce),
         }
     }
 }
 
 impl UnifiedTransferId {
     pub fn is_utxo(&self) -> bool {
-        matches!(self.id, ChainTransferId::Utxo(_))
+        matches!(self.kind, TransferIdKind::Utxo(_))
     }
 }
 
@@ -675,9 +725,9 @@ impl TryInto<TransferId> for &UnifiedTransferId {
     type Error = &'static str;
 
     fn try_into(self) -> Result<TransferId, Self::Error> {
-        let origin_nonce = match self.id {
-            ChainTransferId::General(nonce) => nonce,
-            ChainTransferId::Utxo(_) => {
+        let origin_nonce = match self.kind {
+            TransferIdKind::Nonce(nonce) => nonce,
+            TransferIdKind::Utxo(_) => {
                 return Err("Cannot convert UTXO transfer ID to general transfer ID")
             }
         };
@@ -685,6 +735,17 @@ impl TryInto<TransferId> for &UnifiedTransferId {
             origin_chain: self.origin_chain,
             origin_nonce,
         })
+    }
+}
+
+impl std::fmt::Display for UnifiedTransferId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match &self.kind {
+            TransferIdKind::Nonce(nonce) => write!(f, "{}:{}", self.origin_chain.as_ref(), nonce),
+            TransferIdKind::Utxo(utxo_id) => {
+                write!(f, "{}:{}", self.origin_chain.as_ref(), utxo_id)
+            }
+        }
     }
 }
 
@@ -715,7 +776,7 @@ impl FastTransfer {
         Self {
             transfer_id: UnifiedTransferId {
                 origin_chain: transfer.get_origin_chain(),
-                id: ChainTransferId::General(transfer.origin_nonce),
+                kind: TransferIdKind::Nonce(transfer.origin_nonce),
             },
             token_id,
             amount: transfer.amount,
@@ -734,7 +795,7 @@ impl FastTransfer {
         Self {
             transfer_id: UnifiedTransferId {
                 origin_chain,
-                id: ChainTransferId::Utxo(transfer.utxo_id),
+                kind: TransferIdKind::Utxo(transfer.utxo_id),
             },
             token_id,
             amount,

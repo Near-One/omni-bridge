@@ -12,8 +12,8 @@ mod tests {
     use omni_types::{
         locker_args::{FinTransferArgs, StorageDepositAction},
         prover_result::{InitTransferMessage, ProverResult},
-        BridgeOnTransferMsg, ChainKind, ChainTransferId, FastFinTransferMsg, Fee, OmniAddress,
-        TransferId, TransferMessage, UnifiedTransferId,
+        BridgeOnTransferMsg, ChainKind, FastFinTransferMsg, Fee, OmniAddress, TransferId,
+        TransferIdKind, TransferMessage, UnifiedTransferId,
     };
     use rstest::rstest;
 
@@ -278,7 +278,7 @@ mod tests {
             fast_transfer_msg: FastFinTransferMsg {
                 transfer_id: UnifiedTransferId {
                     origin_chain: ChainKind::Eth,
-                    id: ChainTransferId::General(0),
+                    kind: TransferIdKind::Nonce(0),
                 },
                 recipient: OmniAddress::Near(account_n(1)),
                 fee: Fee {
@@ -299,7 +299,7 @@ mod tests {
             fast_transfer_msg: FastFinTransferMsg {
                 transfer_id: UnifiedTransferId {
                     origin_chain: ChainKind::Eth,
-                    id: ChainTransferId::General(0),
+                    kind: TransferIdKind::Nonce(0),
                 },
                 recipient: OmniAddress::Near(account_n(1)),
                 fee: Fee {
@@ -327,7 +327,7 @@ mod tests {
         FastFinTransferMsg {
             transfer_id: UnifiedTransferId {
                 origin_chain: transfer_msg.sender.get_chain(),
-                id: ChainTransferId::General(transfer_msg.origin_nonce),
+                kind: TransferIdKind::Nonce(transfer_msg.origin_nonce),
             },
             recipient: transfer_msg.recipient.clone(),
             fee: transfer_msg.fee,
@@ -406,7 +406,7 @@ mod tests {
                 fast_transfer_msg: FastFinTransferMsg {
                     transfer_id: UnifiedTransferId {
                         origin_chain: ChainKind::Eth,
-                        id: ChainTransferId::General(0),
+                        kind: TransferIdKind::Nonce(0),
                     },
                     recipient: OmniAddress::Near(account_n(1)),
                     fee: Fee {
@@ -429,7 +429,7 @@ mod tests {
                 fast_transfer_msg: FastFinTransferMsg {
                     transfer_id: UnifiedTransferId {
                         origin_chain: ChainKind::Eth,
-                        id: ChainTransferId::General(0),
+                        kind: TransferIdKind::Nonce(0),
                     },
                     recipient: OmniAddress::Near(account_n(1)),
                     fee: Fee::default(),
@@ -449,7 +449,7 @@ mod tests {
                 fast_transfer_msg: FastFinTransferMsg {
                     transfer_id: UnifiedTransferId {
                         origin_chain: ChainKind::Eth,
-                        id: ChainTransferId::General(0),
+                        kind: TransferIdKind::Nonce(0),
                     },
                     recipient: OmniAddress::Near(account_n(1)),
                     fee: Fee {
@@ -472,7 +472,7 @@ mod tests {
                 fast_transfer_msg: FastFinTransferMsg {
                     transfer_id: UnifiedTransferId {
                         origin_chain: ChainKind::Eth,
-                        id: ChainTransferId::General(0),
+                        kind: TransferIdKind::Nonce(0),
                     },
                     recipient: OmniAddress::Near(account_n(1)),
                     fee: Fee {
@@ -495,7 +495,7 @@ mod tests {
                 fast_transfer_msg: FastFinTransferMsg {
                     transfer_id: UnifiedTransferId {
                         origin_chain: ChainKind::Eth,
-                        id: ChainTransferId::General(0),
+                        kind: TransferIdKind::Nonce(0),
                     },
                     recipient: OmniAddress::Near(account_n(1)),
                     fee: Fee {
@@ -518,7 +518,7 @@ mod tests {
                 fast_transfer_msg: FastFinTransferMsg {
                     transfer_id: UnifiedTransferId {
                         origin_chain: ChainKind::Eth,
-                        id: ChainTransferId::General(0),
+                        kind: TransferIdKind::Nonce(0),
                     },
                     recipient: OmniAddress::Near(account_n(1)),
                     fee: Fee::default(),
@@ -538,7 +538,7 @@ mod tests {
                 fast_transfer_msg: FastFinTransferMsg {
                     transfer_id: UnifiedTransferId {
                         origin_chain: ChainKind::Eth,
-                        id: ChainTransferId::General(0),
+                        kind: TransferIdKind::Nonce(0),
                     },
                     recipient: OmniAddress::Near(account_n(1)),
                     fee: Fee::default(),
@@ -709,7 +709,7 @@ mod tests {
                 fast_transfer_msg: FastFinTransferMsg {
                     transfer_id: UnifiedTransferId {
                         origin_chain: ChainKind::Eth,
-                        id: ChainTransferId::General(0),
+                        kind: TransferIdKind::Nonce(0),
                     },
                     recipient: base_eoa_address(),
                     fee: Fee {
@@ -732,7 +732,7 @@ mod tests {
                 fast_transfer_msg: FastFinTransferMsg {
                     transfer_id: UnifiedTransferId {
                         origin_chain: ChainKind::Eth,
-                        id: ChainTransferId::General(0),
+                        kind: TransferIdKind::Nonce(0),
                     },
                     recipient: base_eoa_address(),
                     fee: Fee {
@@ -768,7 +768,7 @@ mod tests {
                 fast_transfer_msg: FastFinTransferMsg {
                     transfer_id: UnifiedTransferId {
                         origin_chain: ChainKind::Eth,
-                        id: ChainTransferId::General(0),
+                        kind: TransferIdKind::Nonce(0),
                     },
                     recipient: base_eoa_address(),
                     fee: Fee {
@@ -786,7 +786,7 @@ mod tests {
                 fast_transfer_msg: FastFinTransferMsg {
                     transfer_id: UnifiedTransferId {
                         origin_chain: ChainKind::Eth,
-                        id: ChainTransferId::General(0),
+                        kind: TransferIdKind::Nonce(0),
                     },
                     recipient: base_eoa_address(),
                     fee: Fee {
@@ -965,7 +965,7 @@ mod tests {
                 let fast_transfer_msg = FastFinTransferMsg {
                     transfer_id: UnifiedTransferId {
                         origin_chain: transfer_msg.sender.get_chain(),
-                        id: ChainTransferId::General(transfer_msg.origin_nonce),
+                        kind: TransferIdKind::Nonce(transfer_msg.origin_nonce),
                     },
                     recipient: transfer_msg.recipient.clone(),
                     fee: transfer_msg.fee.clone(),
@@ -1023,7 +1023,7 @@ mod tests {
                 let fast_transfer_msg = FastFinTransferMsg {
                     transfer_id: UnifiedTransferId {
                         origin_chain: transfer_msg.sender.get_chain(),
-                        id: ChainTransferId::General(transfer_msg.origin_nonce),
+                        kind: TransferIdKind::Nonce(transfer_msg.origin_nonce),
                     },
                     recipient: transfer_msg.recipient.clone(),
                     fee: transfer_msg.fee.clone(),

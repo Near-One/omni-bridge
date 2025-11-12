@@ -7,7 +7,7 @@ mod tests {
     };
     use near_workspaces::{result::ExecutionFinalResult, types::NearToken};
     use omni_types::{
-        BridgeOnTransferMsg, ChainKind, ChainTransferId, FastFinTransferMsg, Fee, OmniAddress,
+        BridgeOnTransferMsg, ChainKind, FastFinTransferMsg, Fee, OmniAddress, TransferIdKind,
         UnifiedTransferId, UtxoFinTransferMsg,
     };
     use rstest::rstest;
@@ -88,6 +88,13 @@ mod tests {
                 .into_result()
                 .is_err_and(|err| format!("{err:?}").contains(error_msg))
         })
+    }
+
+    fn default_utxo_id() -> omni_types::UtxoId {
+        omni_types::UtxoId {
+            tx_hash: "abc94fc5b954136a691594c7044bcfa6c6f127cdb0802ac8b97c0117482f2305".to_string(),
+            vout: 1,
+        }
     }
 
     async fn do_utxo_fin_transfer(
@@ -202,7 +209,7 @@ mod tests {
         let fast_transfer_msg = FastFinTransferMsg {
             transfer_id: UnifiedTransferId {
                 origin_chain: ChainKind::Btc,
-                id: ChainTransferId::Utxo(utxo_msg.utxo_id.clone()),
+                kind: TransferIdKind::Utxo(utxo_msg.utxo_id.clone()),
             },
             recipient: utxo_msg.recipient.clone(),
             fee: Fee {
@@ -257,8 +264,7 @@ mod tests {
         UtxoFinTransferCase {
             amount: 100_000_000,
             utxo_msg: UtxoFinTransferMsg {
-                utxo_id: "abc94fc5b954136a691594c7044bcfa6c6f127cdb0802ac8b97c0117482f2305@1"
-                    .to_string(),
+                utxo_id: default_utxo_id(),
                 recipient: OmniAddress::Near(account_n(1)),
                 relayer_fee: U128(1000),
                 msg: String::default(),
@@ -272,8 +278,7 @@ mod tests {
         UtxoFinTransferCase {
             amount: 100_000_000,
             utxo_msg: UtxoFinTransferMsg {
-                utxo_id: "abc94fc5b954136a691594c7044bcfa6c6f127cdb0802ac8b97c0117482f2305@1"
-                    .to_string(),
+                utxo_id: default_utxo_id(),
                 recipient: base_eoa_address(),
                 relayer_fee: U128(1000),
                 msg: String::default(),
@@ -287,8 +292,7 @@ mod tests {
         UtxoFinTransferCase {
             amount: 100_000_000,
             utxo_msg: UtxoFinTransferMsg {
-                utxo_id: "abc94fc5b954136a691594c7044bcfa6c6f127cdb0802ac8b97c0117482f2305@1"
-                    .to_string(),
+                utxo_id: default_utxo_id(),
                 recipient: OmniAddress::Near(account_n(1)),
                 relayer_fee: U128(2000),
                 msg: "Some_message".to_string(),
@@ -302,8 +306,7 @@ mod tests {
         UtxoFinTransferCase {
             amount: 100_000_000,
             utxo_msg: UtxoFinTransferMsg {
-                utxo_id: "abc94fc5b954136a691594c7044bcfa6c6f127cdb0802ac8b97c0117482f2305@1"
-                    .to_string(),
+                utxo_id: default_utxo_id(),
                 recipient: OmniAddress::Near(account_n(1)),
                 relayer_fee: U128(1000),
                 msg: String::default(),
@@ -317,8 +320,7 @@ mod tests {
         UtxoFinTransferCase {
             amount: 100_000_000,
             utxo_msg: UtxoFinTransferMsg {
-                utxo_id: "abc94fc5b954136a691594c7044bcfa6c6f127cdb0802ac8b97c0117482f2305@1"
-                    .to_string(),
+                utxo_id: default_utxo_id(),
                 recipient: base_eoa_address(),
                 relayer_fee: U128(1000),
                 msg: String::default(),
@@ -332,8 +334,7 @@ mod tests {
         UtxoFinTransferCase {
             amount: 100_000_000,
             utxo_msg: UtxoFinTransferMsg {
-                utxo_id: "abc94fc5b954136a691594c7044bcfa6c6f127cdb0802ac8b97c0117482f2305@1"
-                    .to_string(),
+                utxo_id: default_utxo_id(),
                 recipient: OmniAddress::Near(account_n(3)),
                 relayer_fee: U128(1000),
                 msg: String::default(),
@@ -373,8 +374,7 @@ mod tests {
         let env = TestEnv::new(build_artifacts).await?;
         let amount = 100_000_000;
         let utxo_msg = UtxoFinTransferMsg {
-            utxo_id: "abc94fc5b954136a691594c7044bcfa6c6f127cdb0802ac8b97c0117482f2305@1"
-                .to_string(),
+            utxo_id: default_utxo_id(),
             recipient: OmniAddress::Near(account_n(1)),
             relayer_fee: U128(1000),
             msg: String::default(),
@@ -406,8 +406,7 @@ mod tests {
         let env = TestEnv::new(build_artifacts).await?;
         let amount = 100_000_000;
         let utxo_msg = UtxoFinTransferMsg {
-            utxo_id: "abc94fc5b954136a691594c7044bcfa6c6f127cdb0802ac8b97c0117482f2305@1"
-                .to_string(),
+            utxo_id: default_utxo_id(),
             recipient: base_eoa_address(),
             relayer_fee: U128(1000),
             msg: String::default(),

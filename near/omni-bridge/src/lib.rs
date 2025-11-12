@@ -25,9 +25,9 @@ use omni_types::mpc_types::SignatureResponse;
 use omni_types::near_events::OmniBridgeEvent;
 use omni_types::prover_result::ProverResult;
 use omni_types::{
-    BasicMetadata, BridgeOnTransferMsg, ChainKind, ChainTransferId, FastFinTransferMsg,
-    FastTransfer, FastTransferId, FastTransferStatus, Fee, InitTransferMsg, MetadataPayload, Nonce,
-    OmniAddress, PayloadType, SignRequest, TransferId, TransferMessage, TransferMessagePayload,
+    BasicMetadata, BridgeOnTransferMsg, ChainKind, FastFinTransferMsg, FastTransfer,
+    FastTransferId, FastTransferStatus, Fee, InitTransferMsg, MetadataPayload, Nonce, OmniAddress,
+    PayloadType, SignRequest, TransferId, TransferIdKind, TransferMessage, TransferMessagePayload,
     UnifiedTransferId, UpdateFee, UtxoFinTransferMsg, H160,
 };
 use std::collections::HashMap;
@@ -2187,7 +2187,7 @@ impl Contract {
                 .get_next_destination_nonce(utxo_fin_transfer_msg.recipient.get_chain()),
             origin_transfer_id: Some(UnifiedTransferId {
                 origin_chain,
-                id: ChainTransferId::Utxo(utxo_fin_transfer_msg.utxo_id.clone()),
+                kind: TransferIdKind::Utxo(utxo_fin_transfer_msg.utxo_id.clone()),
             }),
         };
 
