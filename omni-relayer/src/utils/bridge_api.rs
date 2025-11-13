@@ -7,14 +7,54 @@ use tracing::{info, warn};
 use crate::{config, utils, workers::EventAction};
 
 #[allow(clippy::struct_field_names)]
-#[derive(Debug, serde::Serialize, serde::Deserialize, PartialEq, Clone)]
+#[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
 pub struct TransferFee {
     pub native_token_fee: Option<U128>,
     pub transferred_token_fee: Option<U128>,
     pub usd_fee: f64,
 }
 
+impl PartialEq for TransferFee {
+    fn eq(&self, other: &Self) -> bool {
+        self.usd_fee.total_cmp(&other.usd_fee) == std::cmp::Ordering::Equal
+    }
+}
+
+impl Eq for TransferFee {}
+
+impl PartialOrd for TransferFee {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for TransferFee {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        match self.usd_fee.total_cmp(&other.usd_fee) {
+            std::cmp::Ordering::Equal => match self.native_token_fee.cmp(&other.native_token_fee) {
+                std::cmp::Ordering::Equal => {
+                    self.transferred_token_fee.cmp(&other.transferred_token_fee)
+                }
+                other => other,
+            },
+            other => other,
+        }
+    }
+}
+
 impl TransferFee {
+    pub fn apply_discount(&self, discount_percent: u8) -> Self {
+        Self {
+            native_token_fee: self
+                .native_token_fee
+                .map(|fee| U128(fee.0 * u128::from(100 - discount_percent) / 100)),
+            transferred_token_fee: self
+                .transferred_token_fee
+                .map(|fee| U128(fee.0 * u128::from(100 - discount_percent) / 100)),
+            usd_fee: self.usd_fee * f64::from(100 - discount_percent) / 100.0,
+        }
+    }
+
     pub async fn get_transfer_fee(
         config: &config::Config,
         sender: &OmniAddress,
@@ -36,12 +76,13 @@ impl TransferFee {
     }
 
     pub fn is_fee_sufficient(&self, config: &config::Config, provided_fee: &Fee) -> bool {
-        let native_fee = self.native_token_fee.unwrap_or_default().0
-            * u128::from(100 - config.bridge_indexer.fee_discount)
-            / 100;
-        let transferred_fee = self.transferred_token_fee.unwrap_or_default().0
-            * u128::from(100 - config.bridge_indexer.fee_discount)
-            / 100;
+        let (native_fee, transferred_fee) = {
+            let discounted_fee = self.apply_discount(config.bridge_indexer.fee_discount);
+            (
+                discounted_fee.native_token_fee.unwrap_or_default().0,
+                discounted_fee.transferred_token_fee.unwrap_or_default().0,
+            )
+        };
 
         match (native_fee, transferred_fee) {
             (0, 0) => true,
@@ -82,7 +123,12 @@ impl TransferFee {
                         "Historical fee is sufficient for transfer: {transfer:?}, using historical fee: {historical_fee:?}"
                     );
                 } else {
-                    warn!("Insufficient fee for transfer: {transfer:?}");
+                    warn!(
+                        "Insufficient fee for transfer: {transfer:?}\nGot: {provided_fee:?}, required: {:?}",
+                        self.clone()
+                            .min(historical_fee)
+                            .apply_discount(config.bridge_indexer.fee_discount)
+                    );
                     return Some(EventAction::Retry);
                 }
             } else {
@@ -94,7 +140,10 @@ impl TransferFee {
                     self,
                 )
                 .await;
-                warn!("Insufficient fee for transfer: {transfer:?}");
+                warn!(
+                    "Insufficient fee for transfer: {transfer:?}\nGot: {provided_fee:?}, required: {:?}",
+                    self.apply_discount(config.bridge_indexer.fee_discount)
+                );
                 return Some(EventAction::Retry);
             }
         }
