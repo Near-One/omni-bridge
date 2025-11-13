@@ -45,11 +45,26 @@ pub async fn process_transfer_event(
     transfer: Transfer,
     near_nonce: Arc<utils::nonce::NonceManager>,
 ) -> Result<EventAction> {
-    let Transfer::Near {
-        ref transfer_message,
-    } = transfer
-    else {
-        anyhow::bail!("Expected NearTransferWithTimestamp, got: {transfer:?}");
+    let transfer_message = match transfer {
+        Transfer::Near {
+            ref transfer_message,
+        } => transfer_message.clone(),
+        Transfer::Utxo {
+            new_transfer_id, ..
+        } => {
+            let Ok(transfer_message) = omni_connector
+                .near_get_transfer_message(new_transfer_id)
+                .await
+            else {
+                warn!("Failed to get transfer message for UTXO transfer: {new_transfer_id:?}");
+                return Ok(EventAction::Retry);
+            };
+
+            transfer_message
+        }
+        _ => {
+            anyhow::bail!("Expected Transfer::Near or Transfer::Utxo variant, got: {transfer:?}");
+        }
     };
 
     info!("Trying to process TransferMessage on NEAR");
@@ -161,6 +176,7 @@ pub async fn process_transfer_event(
                     NearRpcError::NonceError
                     | NearRpcError::FinalizationError
                     | NearRpcError::RpcBroadcastTxAsyncError(_)
+                    | NearRpcError::RpcQueryError(JsonRpcError::TransportError(_))
                     | NearRpcError::RpcTransactionError(JsonRpcError::TransportError(_)) => {
                         warn!(
                             "Failed to sign transfer ({}), retrying: {near_rpc_error:?}",
@@ -274,6 +290,7 @@ pub async fn process_transfer_to_utxo_event(
                     NearRpcError::NonceError
                     | NearRpcError::FinalizationError
                     | NearRpcError::RpcBroadcastTxAsyncError(_)
+                    | NearRpcError::RpcQueryError(JsonRpcError::TransportError(_))
                     | NearRpcError::RpcTransactionError(JsonRpcError::TransportError(_)) => {
                         warn!(
                             "Failed to submit {:?} transfer ({}), retrying: {near_rpc_error:?}",
@@ -591,7 +608,7 @@ pub async fn initiate_fast_transfer(
     };
 
     let fast_transfer = FastTransfer {
-        transfer_id,
+        transfer_id: transfer_id.into(),
         token_id: token_id.clone(),
         amount,
         fee: fee.clone(),
@@ -701,6 +718,7 @@ pub async fn initiate_fast_transfer(
                     NearRpcError::NonceError
                     | NearRpcError::FinalizationError
                     | NearRpcError::RpcBroadcastTxAsyncError(_)
+                    | NearRpcError::RpcQueryError(JsonRpcError::TransportError(_))
                     | NearRpcError::RpcTransactionError(JsonRpcError::TransportError(_)) => {
                         warn!("Failed to initiate fast transfer, retrying: {near_rpc_error:?}");
                         return Ok(EventAction::Retry);

@@ -119,6 +119,25 @@ pub async fn handle_streamer_message(
                 )
                 .await;
             }
+            OmniBridgeEvent::UtxoTransferEvent {
+                utxo_transfer_message,
+                new_transfer_id,
+                ..
+            } => {
+                if let Some(new_transfer_id) = new_transfer_id {
+                    utils::redis::add_event(
+                        config,
+                        redis_connection_manager,
+                        utils::redis::EVENTS,
+                        utxo_transfer_message.utxo_id.to_string(),
+                        RetryableEvent::new(crate::workers::Transfer::Utxo {
+                            utxo_transfer_message,
+                            new_transfer_id,
+                        }),
+                    )
+                    .await;
+                }
+            }
             OmniBridgeEvent::SignTransferEvent {
                 ref message_payload,
                 ..
