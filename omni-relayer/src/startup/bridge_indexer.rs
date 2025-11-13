@@ -371,14 +371,14 @@ async fn handle_transaction_event(
             )
             .await;
         }
-        OmniTransferMessage::ConfirmedTxHash => {
+        OmniTransferMessage::UtxoConfirmedTxHash => {
             if config.is_verifying_utxo_withdraw_enabled(event.transfer_id.origin_chain) {
                 let TransferIdKind::Utxo(utxo_id) = event.transfer_id.kind else {
                     anyhow::bail!("Expected Utxo ChainTransferId for ConfirmedTxHash: {event:?}");
                 };
 
                 info!(
-                    "Received ConfirmedTxHash on {:?}: {utxo_id}",
+                    "Received UtxoConfirmedTxHash on {:?}: {utxo_id}",
                     event.transfer_id.origin_chain,
                 );
                 utils::redis::add_event(
@@ -400,11 +400,11 @@ async fn handle_transaction_event(
         OmniTransferMessage::NearFailedTransferMessage { .. } => {
             info!("Received NearFailedTransferMessage, skipping");
         }
-        OmniTransferMessage::VerifyDeposit { .. } => {
-            info!("Received VerifyDeposit, skipping");
+        OmniTransferMessage::UtxoVerifyDeposit { .. } => {
+            info!("Received UtxoVerifyDeposit, skipping");
         }
-        OmniTransferMessage::VerifyWithdraw { .. } => {
-            info!("Received VerifyWithdraw, skipping");
+        OmniTransferMessage::UtxoVerifyWithdraw { .. } => {
+            info!("Received UtxoVerifyWithdraw, skipping");
         }
     }
 
