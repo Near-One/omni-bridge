@@ -342,59 +342,6 @@ pub async fn process_events(
                             }
                         }
                     }));
-                } else if let Transfer::Utxo {
-                    new_transfer_id, ..
-                } = transfer
-                {
-                    handlers.push(tokio::spawn({
-                        let config = config.clone();
-                        let mut redis_connection_manager = redis_connection_manager.clone();
-                        let omni_connector = omni_connector.clone();
-                        let signer = signer.clone();
-                        let near_nonce = near_omni_nonce.clone();
-
-                        async move {
-                            match near::process_transfer_event(
-                                &config,
-                                &mut redis_connection_manager,
-                                key.clone(),
-                                omni_connector,
-                                signer,
-                                transfer,
-                                near_nonce,
-                            )
-                            .await
-                            {
-                                Ok(EventAction::Retry) => {}
-                                Ok(EventAction::Remove) => {
-                                    utils::redis::remove_event(
-                                        &config,
-                                        &mut redis_connection_manager,
-                                        utils::redis::EVENTS,
-                                        &key,
-                                    )
-                                    .await;
-                                }
-                                Err(err) => {
-                                    warn!("{err:?}");
-                                    utils::redis::remove_event(
-                                        &config,
-                                        &mut redis_connection_manager,
-                                        utils::redis::EVENTS,
-                                        &key,
-                                    )
-                                    .await;
-                                    utils::redis::remove_event(
-                                        &config,
-                                        &mut redis_connection_manager,
-                                        utils::redis::FEE_MAPPING,
-                                        serde_json::to_string(&new_transfer_id).unwrap_or_default(),
-                                    )
-                                    .await;
-                                }
-                            }
-                        }
-                    }));
                 } else if let Transfer::Evm {
                     log, chain_kind, ..
                 } = transfer.clone()
