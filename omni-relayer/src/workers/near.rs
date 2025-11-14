@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use anyhow::{Context, Result};
 use bridge_connector_common::result::BridgeSdkError;
+use near_sdk::json_types::U64;
 use tracing::{info, warn};
 
 use near_bridge_client::TransactionOptions;
@@ -33,7 +34,7 @@ pub struct UnverifiedTrasfer {
 
 #[derive(Debug, serde::Deserialize)]
 enum UTXOChainMsg {
-    V0 { max_fee: u64 },
+    MaxGasFee(U64),
 }
 
 pub async fn process_transfer_event(
@@ -247,7 +248,7 @@ pub async fn process_transfer_to_utxo_event(
             },
             serde_json::from_str::<UTXOChainMsg>(&transfer_message.msg)
                 .map(|msg| match msg {
-                    UTXOChainMsg::V0 { max_fee } => max_fee,
+                    UTXOChainMsg::MaxGasFee(max_fee) => max_fee.0,
                 })
                 .ok(),
         )
