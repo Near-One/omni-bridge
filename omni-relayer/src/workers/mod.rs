@@ -14,8 +14,8 @@ use solana_sdk::pubkey::Pubkey;
 
 use omni_connector::OmniConnector;
 use omni_types::{
-    ChainKind, Fee, OmniAddress, TransferId, TransferMessage, UtxoFinTransferMsg,
-    near_events::OmniBridgeEvent,
+    ChainKind, Fee, OmniAddress, TransferId, TransferMessage, UnifiedTransferId,
+    UtxoFinTransferMsg, near_events::OmniBridgeEvent,
 };
 
 use crate::{config, utils};
@@ -79,7 +79,7 @@ pub enum Transfer {
     },
     Utxo {
         utxo_transfer_message: UtxoFinTransferMsg,
-        new_transfer_id: TransferId,
+        new_transfer_id: UnifiedTransferId,
     },
     NearToUtxo {
         chain: ChainKind,
@@ -278,7 +278,7 @@ pub async fn process_events(
                             let (recipient, transfer_id) = match &transfer {
                                 Transfer::Near { transfer_message } => (
                                     &transfer_message.recipient,
-                                    &transfer_message.get_transfer_id(),
+                                    &transfer_message.get_transfer_id().into(),
                                 ),
                                 Transfer::Utxo {
                                     utxo_transfer_message,
