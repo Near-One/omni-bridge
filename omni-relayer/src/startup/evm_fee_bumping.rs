@@ -12,8 +12,7 @@ use tracing::{info, warn};
 use crate::{
     config::{self, Evm},
     utils::{
-        self,
-        pending_transactions::{self, PendingTransaction},
+        self, pending_transactions::{self, PendingTransaction}
     },
 };
 
@@ -72,12 +71,14 @@ pub async fn start_evm_fee_bumping(
         )
         .await
         else {
-            tokio::time::sleep(tokio::time::Duration::from_secs(
-                fee_bumping_config.check_interval_seconds,
-            ))
-            .await;
+            sleep(fee_bumping_config.check_interval_seconds).await;
             continue;
         };
+
+        if pending_txs.is_empty() {
+            sleep(fee_bumping_config.check_interval_seconds).await;
+            continue;
+        }
 
         let mut pending_tx = pending_txs[0].clone();
 
@@ -85,10 +86,7 @@ pub async fn start_evm_fee_bumping(
         if current_timestamp - pending_tx.sent_timestamp
             < fee_bumping_config.min_pending_time_seconds
         {
-            tokio::time::sleep(tokio::time::Duration::from_secs(
-                fee_bumping_config.check_interval_seconds,
-            ))
-            .await;
+            sleep(fee_bumping_config.check_interval_seconds).await;
             continue;
         }
 
@@ -99,10 +97,7 @@ pub async fn start_evm_fee_bumping(
                     "Error checking transaction {} status for {chain_kind:?}: {err:?}",
                     pending_tx.tx_hash
                 );
-                tokio::time::sleep(tokio::time::Duration::from_secs(
-                    fee_bumping_config.check_interval_seconds,
-                ))
-                .await;
+                sleep(fee_bumping_config.check_interval_seconds).await;
                 continue;
             }
         };
@@ -116,10 +111,7 @@ pub async fn start_evm_fee_bumping(
             }
             TransactionStatus::Missing => {
                 // TODO: Transaction not found in mempool, resend
-                tokio::time::sleep(tokio::time::Duration::from_secs(
-                    fee_bumping_config.check_interval_seconds,
-                ))
-                .await;
+                sleep(fee_bumping_config.check_interval_seconds).await;
                 continue;
             }
             TransactionStatus::Pending(tx_data) => {
@@ -136,20 +128,17 @@ pub async fn start_evm_fee_bumping(
                             "Not bumping fee for transaction {} on {chain_kind:?}: {}",
                             pending_tx.tx_hash, reason
                         );
-                        tokio::time::sleep(tokio::time::Duration::from_secs(
-                            fee_bumping_config.check_interval_seconds,
-                        ))
-                        .await;
+                        sleep(fee_bumping_config.check_interval_seconds).await;
                         continue;
                     }
                 };
 
                 info!(
-                    "Bumping fee for transaction {} (nonce: {}) on {chain_kind:?}: {} -> {} gwei",
+                    "Bumping fee for transaction {} (nonce: {}) on {chain_kind:?}: {:.3} -> {:.3} gwei",
                     pending_tx.tx_hash,
                     pending_tx.nonce,
-                    original_fee.max_fee_per_gas / 1_000_000_000,
-                    new_fee.max_fee_per_gas / 1_000_000_000
+                    wei_to_gwei(original_fee.max_fee_per_gas),
+                    wei_to_gwei(new_fee.max_fee_per_gas)
                 );
 
                 let replacement_tx = tx_data
@@ -164,10 +153,7 @@ pub async fn start_evm_fee_bumping(
                             "Error sending replacement transaction for {} on {chain_kind:?}: {err:?}",
                             pending_tx.tx_hash
                         );
-                        tokio::time::sleep(tokio::time::Duration::from_secs(
-                            fee_bumping_config.check_interval_seconds,
-                        ))
-                        .await;
+                        sleep(fee_bumping_config.check_interval_seconds).await;
                         continue;
                     }
                 };
@@ -199,10 +185,7 @@ pub async fn start_evm_fee_bumping(
                 )
                 .await;
 
-                tokio::time::sleep(tokio::time::Duration::from_secs(
-                    fee_bumping_config.check_interval_seconds,
-                ))
-                .await;
+                sleep(fee_bumping_config.check_interval_seconds).await;
                 continue;
             }
         };
@@ -216,9 +199,9 @@ fn should_bump(
 ) -> ShouldBump {
     if suggested_fee.max_fee_per_gas < original_fee.max_fee_per_gas {
         return ShouldBump::No(format!(
-            "new fee ({} gwei) is lower than original ({} gwei)",
-            suggested_fee.max_fee_per_gas / 1_000_000_000,
-            original_fee.max_fee_per_gas / 1_000_000_000,
+            "new fee ({:.3} gwei) is lower than original ({:.3} gwei)",
+            wei_to_gwei(suggested_fee.max_fee_per_gas),
+            wei_to_gwei(original_fee.max_fee_per_gas),
         ));
     }
 
@@ -231,9 +214,9 @@ fn should_bump(
 
     if new_max_fee > fee_bumping_config.max_fee_in_wei {
         return ShouldBump::No(format!(
-            "bumped fee ({} gwei) exceeds configured maximum ({} gwei)",
-            new_max_fee / 1_000_000_000,
-            fee_bumping_config.max_fee_in_wei / 1_000_000_000,
+            "bumped fee ({:.3} gwei) exceeds configured maximum ({:.3} gwei)",
+            wei_to_gwei(new_max_fee),
+            wei_to_gwei(fee_bumping_config.max_fee_in_wei),
         ));
     }
 
@@ -278,4 +261,13 @@ fn build_provider(
         .connect_http(evm_config.rpc_http_url.parse().context("Invalid RPC URL")?);
 
     Ok(provider)
+}
+
+async fn sleep(check_interval_seconds: u64) {
+    tokio::time::sleep(tokio::time::Duration::from_secs(check_interval_seconds)).await;
+}
+
+pub fn wei_to_gwei(wei: u128) -> f64 {
+    let wei: u64 = (wei / 1_000_000).try_into().unwrap_or(u64::MAX);
+    wei as f64 / 1_000.0
 }
