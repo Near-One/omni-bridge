@@ -341,7 +341,7 @@ pub async fn process_confirmed_tx_hash(
         Ok(tx_hash) => {
             info!("Verified withdraw: {tx_hash:?}");
 
-            let Ok(serialized_event) = serde_json::to_string(&confirmed_tx_hash) else {
+            let Ok(serialized_event) = serde_json::to_value(&confirmed_tx_hash) else {
                 warn!("Failed to serialize confirmed tx: {confirmed_tx_hash:?}");
                 return Ok(EventAction::Remove);
             };
