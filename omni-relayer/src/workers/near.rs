@@ -3,6 +3,7 @@ use std::sync::Arc;
 use anyhow::{Context, Result};
 use bridge_connector_common::result::BridgeSdkError;
 use near_sdk::json_types::U64;
+use serde_json::Value;
 use tracing::{info, warn};
 
 use near_bridge_client::TransactionOptions;
@@ -29,7 +30,7 @@ pub struct UnverifiedTrasfer {
     pub signer: AccountId,
     pub specific_errors: Option<Vec<String>>,
     pub original_key: String,
-    pub original_event: String,
+    pub original_event: Value,
 }
 
 #[derive(Debug, serde::Deserialize)]
@@ -141,7 +142,7 @@ pub async fn process_transfer_event(
         .await
     {
         Ok(tx_hash) => {
-            let Ok(serialized_event) = serde_json::to_string(&transfer) else {
+            let Ok(serialized_event) = serde_json::to_value(&transfer) else {
                 warn!("Failed to serialize transfer: {transfer:?}");
                 return Ok(EventAction::Remove);
             };
@@ -260,7 +261,7 @@ pub async fn process_transfer_to_utxo_event(
                 transfer_message.recipient.get_chain()
             );
 
-            let Ok(serialized_event) = serde_json::to_string(&transfer) else {
+            let Ok(serialized_event) = serde_json::to_value(&transfer) else {
                 warn!("Failed to serialize transfer: {transfer:?}");
                 return Ok(EventAction::Remove);
             };
