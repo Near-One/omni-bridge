@@ -35,7 +35,7 @@ solana-rpc-client-api = "2.1.9"
 
 ethereum-types = "0.14.1"
 omni-types = { git = "https://github.com/near-one/omni-bridge", package = "omni-types", rev = "f5e8edfeb41b2dba358ef4f3fb53f111dbbfb92e" }
-bridge-indexer-types = { git = "ssh://git@github.com/near-one/bridge-indexer-rs.git", package = "bridge-indexer-types", rev = "93b7b74d0effbef7b8dc05d3f12b940d25ef1756" }
+bridge-indexer-types = { git = "ssh://git@github.com/near-one/bridge-indexer-rs.git", package = "bridge-indexer-types", rev = "b14f23d74f88135493f8e5f962cdfbd0348efa09" }
 
 near-lake-framework = "0.7.12"
 near-jsonrpc-client = "0.16.0"

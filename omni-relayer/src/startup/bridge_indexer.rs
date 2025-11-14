@@ -314,8 +314,10 @@ async fn handle_transaction_event(
             )
             .await;
         }
-        OmniTransferMessage::TransferNearToUtxo { utxo_count, .. } => {
-            if config.is_signing_utxo_transaction_enabled(event.transfer_id.origin_chain) {
+        OmniTransferMessage::TransferNearToUtxo {
+            utxo_count, chain, ..
+        } => {
+            if config.is_signing_utxo_transaction_enabled(chain) {
                 let TransferIdKind::Utxo(utxo_id) = event.transfer_id.kind else {
                     anyhow::bail!(
                         "Expected Utxo ChainTransferId for TransferNearToUtxo: {event:?}"
@@ -323,7 +325,7 @@ async fn handle_transaction_event(
                 };
 
                 info!(
-                    "Received TransferNearToUtxo on {:?}: {origin_transaction_id}",
+                    "Received TransferNearToUtxo from {:?} to {chain:?}: {origin_transaction_id}",
                     event.transfer_id.origin_chain
                 );
 
@@ -339,7 +341,7 @@ async fn handle_transaction_event(
                         utils::redis::EVENTS,
                         format!("{origin_transaction_id}@{sign_index}"),
                         RetryableEvent::new(workers::Transfer::NearToUtxo {
-                            chain: event.transfer_id.origin_chain,
+                            chain,
                             btc_pending_id: utxo_id.tx_hash.clone(),
                             sign_index,
                         }),
