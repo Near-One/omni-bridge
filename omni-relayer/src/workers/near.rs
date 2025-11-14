@@ -52,8 +52,14 @@ pub async fn process_transfer_event(
             ref transfer_message,
         } => transfer_message.clone(),
         Transfer::Utxo {
-            new_transfer_id, ..
+            ref new_transfer_id,
+            ..
         } => {
+            let Ok(new_transfer_id) = new_transfer_id.try_into() else {
+                warn!("Failed to build TransferId from: {new_transfer_id:?}");
+                return Ok(EventAction::Retry);
+            };
+
             let Ok(transfer_message) = omni_connector
                 .near_get_transfer_message(new_transfer_id)
                 .await
@@ -316,9 +322,9 @@ pub async fn process_transfer_to_utxo_event(
                     transfer_message.origin_nonce
                 );
                 return Ok(EventAction::Retry);
-            } else if let BridgeSdkError::InsufficientUTXOGasFee(_) = err {
+            } else if let BridgeSdkError::InsufficientUTXOGasFee(err) = err {
                 warn!(
-                    "Gas fee is too large for {:?} transfer ({}), retrying",
+                    "Gas fee is too large for {:?} transfer ({}): {err}, retrying",
                     transfer_message.recipient.get_chain(),
                     transfer_message.origin_nonce
                 );

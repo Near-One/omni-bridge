@@ -132,7 +132,7 @@ pub async fn handle_streamer_message(
                         utxo_transfer_message.utxo_id.to_string(),
                         RetryableEvent::new(crate::workers::Transfer::Utxo {
                             utxo_transfer_message,
-                            new_transfer_id,
+                            new_transfer_id: new_transfer_id.into(),
                         }),
                     )
                     .await;
