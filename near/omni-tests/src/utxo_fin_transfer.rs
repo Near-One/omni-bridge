@@ -208,7 +208,7 @@ mod tests {
     ) -> anyhow::Result<ExecutionFinalResult> {
         let fast_transfer_msg = FastFinTransferMsg {
             transfer_id: UnifiedTransferId {
-                origin_chain: ChainKind::Btc,
+                chain: ChainKind::Btc,
                 kind: TransferIdKind::Utxo(utxo_msg.utxo_id.clone()),
             },
             recipient: utxo_msg.recipient.clone(),

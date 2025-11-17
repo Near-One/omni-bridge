@@ -701,14 +701,15 @@ pub enum TransferIdKind {
 #[near(serializers=[borsh, json])]
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct UnifiedTransferId {
-    pub origin_chain: ChainKind,
+    // UTXO chain for UTXO transfers, origin chain for nonce-based transfers
+    pub chain: ChainKind,
     pub kind: TransferIdKind,
 }
 
 impl From<TransferId> for UnifiedTransferId {
     fn from(value: TransferId) -> Self {
         Self {
-            origin_chain: value.origin_chain,
+            chain: value.origin_chain,
             kind: TransferIdKind::Nonce(value.origin_nonce),
         }
     }
@@ -731,7 +732,7 @@ impl TryInto<TransferId> for &UnifiedTransferId {
             }
         };
         Ok(TransferId {
-            origin_chain: self.origin_chain,
+            origin_chain: self.chain,
             origin_nonce,
         })
     }
@@ -740,9 +741,9 @@ impl TryInto<TransferId> for &UnifiedTransferId {
 impl std::fmt::Display for UnifiedTransferId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match &self.kind {
-            TransferIdKind::Nonce(nonce) => write!(f, "{}:{}", self.origin_chain.as_ref(), nonce),
+            TransferIdKind::Nonce(nonce) => write!(f, "{}:{}", self.chain.as_ref(), nonce),
             TransferIdKind::Utxo(utxo_id) => {
-                write!(f, "{}:{}", self.origin_chain.as_ref(), utxo_id)
+                write!(f, "{}:{}", self.chain.as_ref(), utxo_id)
             }
         }
     }
@@ -774,7 +775,7 @@ impl FastTransfer {
     pub fn from_transfer(transfer: TransferMessage, token_id: AccountId) -> Self {
         Self {
             transfer_id: UnifiedTransferId {
-                origin_chain: transfer.get_origin_chain(),
+                chain: transfer.get_origin_chain(),
                 kind: TransferIdKind::Nonce(transfer.origin_nonce),
             },
             token_id,
@@ -793,7 +794,7 @@ impl FastTransfer {
     ) -> Self {
         Self {
             transfer_id: UnifiedTransferId {
-                origin_chain,
+                chain: origin_chain,
                 kind: TransferIdKind::Utxo(transfer.utxo_id),
             },
             token_id,

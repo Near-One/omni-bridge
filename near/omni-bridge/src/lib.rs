@@ -693,10 +693,7 @@ impl Contract {
         fast_fin_transfer_msg: FastFinTransferMsg,
     ) -> PromiseOrPromiseIndexOrValue<U128> {
         let origin_token = self
-            .get_token_address(
-                fast_fin_transfer_msg.transfer_id.origin_chain,
-                token_id.clone(),
-            )
+            .get_token_address(fast_fin_transfer_msg.transfer_id.chain, token_id.clone())
             .sdk_expect("ERR_TOKEN_NOT_FOUND");
 
         let decimals = self
@@ -2189,7 +2186,7 @@ impl Contract {
             destination_nonce: self
                 .get_next_destination_nonce(utxo_fin_transfer_msg.recipient.get_chain()),
             origin_transfer_id: Some(UnifiedTransferId {
-                origin_chain,
+                chain: origin_chain,
                 kind: TransferIdKind::Utxo(utxo_fin_transfer_msg.utxo_id.clone()),
             }),
         };
@@ -2248,7 +2245,7 @@ impl Contract {
         if message.fee.native_fee.0 != 0 {
             let origin_chain = message.origin_transfer_id.as_ref().map_or_else(
                 || message.get_origin_chain(),
-                |origin_transfer_id| origin_transfer_id.origin_chain,
+                |origin_transfer_id| origin_transfer_id.chain,
             );
 
             if origin_chain.is_utxo_chain() {

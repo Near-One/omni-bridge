@@ -96,7 +96,7 @@ impl TransferMessageStorage {
                     msg: m.message.msg,
                     destination_nonce: m.message.destination_nonce,
                     origin_transfer_id: m.message.origin_transfer_id.map(|m| UnifiedTransferId {
-                        origin_chain: m.origin_chain,
+                        chain: m.origin_chain,
                         kind: TransferIdKind::Nonce(m.origin_nonce),
                     }),
                 },
@@ -298,7 +298,7 @@ impl Contract {
             msg: msg.unwrap_or_default(),
             destination_nonce: 0,
             origin_transfer_id: Some(UnifiedTransferId {
-                origin_chain: ChainKind::Eth,
+                chain: ChainKind::Eth,
                 kind: TransferIdKind::Utxo({
                     omni_types::UtxoId {
                         tx_hash: "a".repeat(64),
