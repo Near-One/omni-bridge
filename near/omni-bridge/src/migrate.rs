@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use crate::{
     storage::{Decimals, FastTransferStatusStorage, TransferMessageStorage},
     Contract, ContractExt, StorageKey,
@@ -30,7 +28,7 @@ pub struct OldState {
     pub wnear_account_id: AccountId,
     pub provers: UnorderedMap<ChainKind, AccountId>,
     pub init_transfer_promises: LookupMap<AccountId, CryptoHash>,
-    pub utxo_chain_connectors: HashMap<ChainKind, UTXOChainConfig>,
+    pub utxo_chain_connectors: UnorderedMap<ChainKind, UTXOChainConfig>,
 }
 
 #[near]
@@ -57,7 +55,7 @@ impl Contract {
                 wnear_account_id: old_state.wnear_account_id,
                 provers: old_state.provers,
                 init_transfer_promises: old_state.init_transfer_promises,
-                utxo_chain_connectors: old_state.utxo_chain_connectors,
+                utxo_chain_connectors: old_state.utxo_chain_connectors.iter().collect(),
             }
         } else {
             env::panic_str("Old state not found. Migration is not needed.")
