@@ -244,7 +244,7 @@ impl Contract {
             BridgeOnTransferMsg::UtxoFinTransfer(utxo_fin_transfer_msg) => self.utxo_fin_transfer(
                 token_id,
                 amount,
-                signer_id,
+                &signer_id,
                 &sender_id,
                 utxo_fin_transfer_msg,
             ),
@@ -905,7 +905,7 @@ impl Contract {
         amount: U128,
         utxo_fin_transfer_msg: UtxoFinTransferMsg,
         origin_chain: ChainKind,
-        storage_owner: AccountId,
+        storage_owner: &AccountId,
     ) -> Promise {
         self.utxo_fin_transfer_to_near_callback_internal(
             token_id,
@@ -924,7 +924,7 @@ impl Contract {
         amount: U128,
         utxo_fin_transfer_msg: UtxoFinTransferMsg,
         origin_chain: ChainKind,
-        storage_owner: AccountId,
+        storage_owner: &AccountId,
     ) -> U128 {
         self.resolve_utxo_fin_transfer_internal(
             token_id,
@@ -1960,7 +1960,7 @@ impl Contract {
     fn remove_fin_utxo_transfer(
         &mut self,
         transfer_id: &UnifiedTransferId,
-        storage_owner: AccountId,
+        storage_owner: &AccountId,
     ) {
         let storage_usage = env::storage_usage();
         self.finalised_utxo_transfers.remove(transfer_id);
@@ -1968,9 +1968,9 @@ impl Contract {
         let refund =
             env::storage_byte_cost().saturating_mul((storage_usage - env::storage_usage()).into());
 
-        if let Some(mut storage) = self.accounts_balances.get(&storage_owner) {
+        if let Some(mut storage) = self.accounts_balances.get(storage_owner) {
             storage.available = storage.available.saturating_add(refund);
-            self.accounts_balances.insert(&storage_owner, &storage);
+            self.accounts_balances.insert(storage_owner, &storage);
         }
     }
 
@@ -2078,7 +2078,7 @@ impl Contract {
         &mut self,
         token_id: AccountId,
         amount: U128,
-        signer_id: AccountId,
+        signer_id: &AccountId,
         sender_id: &AccountId,
         utxo_fin_transfer_msg: UtxoFinTransferMsg,
     ) -> PromiseOrPromiseIndexOrValue<U128> {
@@ -2173,7 +2173,7 @@ impl Contract {
         amount: U128,
         utxo_fin_transfer_msg: UtxoFinTransferMsg,
         origin_chain: ChainKind,
-        storage_owner: AccountId,
+        storage_owner: &AccountId,
     ) -> Promise {
         let required_storage_balance = self.add_fin_utxo_transfer(&UnifiedTransferId {
             origin_chain,
@@ -2215,7 +2215,7 @@ impl Contract {
         amount: U128,
         utxo_fin_transfer_msg: UtxoFinTransferMsg,
         origin_chain: ChainKind,
-        storage_owner: AccountId,
+        storage_owner: &AccountId,
     ) -> Promise {
         if !Self::check_storage_balance_result(0) {
             self.remove_fin_utxo_transfer(
@@ -2253,7 +2253,7 @@ impl Contract {
         amount: U128,
         utxo_fin_transfer_msg: UtxoFinTransferMsg,
         origin_chain: ChainKind,
-        storage_owner: AccountId,
+        storage_owner: &AccountId,
     ) -> PromiseOrPromiseIndexOrValue<U128> {
         let origin_transfer_id = UnifiedTransferId {
             origin_chain,
@@ -2284,7 +2284,7 @@ impl Contract {
         );
 
         self.update_storage_balance(
-            storage_owner,
+            storage_owner.clone(),
             required_storage_balance,
             NearToken::from_yoctonear(0),
         );
@@ -2308,7 +2308,7 @@ impl Contract {
         amount: U128,
         utxo_fin_transfer_msg: UtxoFinTransferMsg,
         origin_chain: ChainKind,
-        storage_owner: AccountId,
+        storage_owner: &AccountId,
     ) -> U128 {
         let is_ft_transfer_call = !utxo_fin_transfer_msg.msg.is_empty();
         if Self::is_refund_required(is_ft_transfer_call) {
