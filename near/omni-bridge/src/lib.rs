@@ -1274,12 +1274,12 @@ impl Contract {
     }
 
     pub fn is_transfer_finalised(&self, transfer_id: &UnifiedTransferId) -> bool {
-        if let Ok(ref transfer_id) = transfer_id.try_into() {
-            self.finalised_transfers.contains(transfer_id)
-        } else if transfer_id.is_utxo() {
-            self.finalised_utxo_transfers.contains(transfer_id)
-        } else {
-            env::panic_str("ERR_INVALID_TRANSFER_ID");
+        match transfer_id.kind {
+            TransferIdKind::Nonce(nonce) => self.finalised_transfers.contains(&TransferId {
+                origin_chain: transfer_id.origin_chain,
+                origin_nonce: nonce,
+            }),
+            TransferIdKind::Utxo(_) => self.finalised_utxo_transfers.contains(transfer_id),
         }
     }
 
