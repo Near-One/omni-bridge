@@ -1960,7 +1960,7 @@ impl Contract {
     fn remove_fin_utxo_transfer(
         &mut self,
         transfer_id: &UnifiedTransferId,
-        storage_owner: &AccountId,
+        storage_owner: AccountId,
     ) {
         let storage_usage = env::storage_usage();
         self.finalised_utxo_transfers.remove(transfer_id);
@@ -1968,9 +1968,9 @@ impl Contract {
         let refund =
             env::storage_byte_cost().saturating_mul((storage_usage - env::storage_usage()).into());
 
-        if let Some(mut storage) = self.accounts_balances.get(storage_owner) {
+        if let Some(mut storage) = self.accounts_balances.get(&storage_owner) {
             storage.available = storage.available.saturating_add(refund);
-            self.accounts_balances.insert(storage_owner, &storage);
+            self.accounts_balances.insert(&storage_owner, &storage);
         }
     }
 
@@ -2223,7 +2223,7 @@ impl Contract {
                     origin_chain,
                     kind: TransferIdKind::Utxo(utxo_fin_transfer_msg.utxo_id.clone()),
                 },
-                &storage_owner,
+                storage_owner,
             );
             env::panic_str("STORAGE_ERR: The transfer recipient is omitted");
         }
@@ -2317,7 +2317,7 @@ impl Contract {
                     origin_chain,
                     kind: TransferIdKind::Utxo(utxo_fin_transfer_msg.utxo_id.clone()),
                 },
-                &storage_owner,
+                storage_owner,
             );
             amount
         } else {
