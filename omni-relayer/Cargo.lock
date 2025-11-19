@@ -2269,7 +2269,7 @@ dependencies = [
 [[package]]
 name = "bridge-indexer-types"
 version = "0.1.0"
-source = "git+ssh://git@github.com/near-one/bridge-indexer-rs.git?rev=93b7b74d0effbef7b8dc05d3f12b940d25ef1756#93b7b74d0effbef7b8dc05d3f12b940d25ef1756"
+source = "git+ssh://git@github.com/near-one/bridge-indexer-rs.git?rev=15a36c81e7ed34a0bd8eb270d11a0b57f98786dc#15a36c81e7ed34a0bd8eb270d11a0b57f98786dc"
 dependencies = [
  "borsh 1.5.7",
  "bson",
@@ -7383,7 +7383,7 @@ dependencies = [
 
 [[package]]
 name = "omni-relayer"
-version = "0.4.0"
+version = "0.4.4"
 dependencies = [
  "alloy",
  "anyhow",

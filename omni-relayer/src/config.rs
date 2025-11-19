@@ -130,7 +130,7 @@ impl Config {
             | ChainKind::Arb
             | ChainKind::Bnb
             | ChainKind::Sol => {
-                panic!("Verifying withdraw is not applicable for {chain:?}")
+                panic!("Sigining utxo transaction is not applicable for {chain:?}")
             }
         };
         config.is_some_and(|utxo| utxo.signing_enabled)

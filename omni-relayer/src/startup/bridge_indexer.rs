@@ -314,17 +314,26 @@ async fn handle_transaction_event(
             )
             .await;
         }
-        OmniTransferMessage::TransferNearToUtxo { utxo_count, .. } => {
-            if config.is_signing_utxo_transaction_enabled(event.transfer_id.origin_chain) {
-                let TransferIdKind::Utxo(utxo_id) = event.transfer_id.kind else {
-                    anyhow::bail!(
-                        "Expected Utxo ChainTransferId for TransferNearToUtxo: {event:?}"
-                    );
-                };
+        OmniTransferMessage::TransferNearToUtxo {
+            utxo_count,
+            ref new_transfer_id,
+            ..
+        } => {
+            let (chain, utxo_id) = if let TransferIdKind::Utxo(utxo_id) = event.transfer_id.kind {
+                (event.transfer_id.origin_chain, utxo_id)
+            } else if let Some((chain, TransferIdKind::Utxo(utxo_id))) = new_transfer_id
+                .clone()
+                .map(|transfer_id| (transfer_id.origin_chain, transfer_id.kind))
+            {
+                (chain, utxo_id)
+            } else {
+                anyhow::bail!("Expected Utxo ChainTransferId for TransferNearToUtxo: {event:?}");
+            };
 
+            if config.is_signing_utxo_transaction_enabled(chain) {
                 info!(
-                    "Received TransferNearToUtxo on {:?}: {origin_transaction_id}",
-                    event.transfer_id.origin_chain
+                    "Received TransferNearToUtxo from {:?} to {chain:?}: {origin_transaction_id}",
+                    utxo_id.tx_hash
                 );
 
                 for sign_index in 0..utxo_count {
@@ -337,9 +346,9 @@ async fn handle_transaction_event(
                         config,
                         redis_connection_manager,
                         utils::redis::EVENTS,
-                        format!("{origin_transaction_id}@{sign_index}"),
+                        utxo_id.to_string(),
                         RetryableEvent::new(workers::Transfer::NearToUtxo {
-                            chain: event.transfer_id.origin_chain,
+                            chain,
                             btc_pending_id: utxo_id.tx_hash.clone(),
                             sign_index,
                         }),

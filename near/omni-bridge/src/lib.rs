@@ -974,18 +974,21 @@ impl Contract {
 
         let message = self.remove_transfer_message(fin_transfer.transfer_id);
 
-        // If fast transfer is finalized, we know that transfer parameters are correct. This way malicious relayer can't exploit it, e.g. by setting a large fee.
         if let Some(origin_transfer_id) = message.origin_transfer_id.clone() {
             let mut fast_transfer =
                 FastTransfer::from_transfer(message.clone(), self.get_token_id(&message.token));
             fast_transfer.transfer_id = origin_transfer_id;
 
-            require!(
-                self.is_fast_transfer_finalised(&fast_transfer.id()),
-                "ERR_FAST_TRANSFER_NOT_FINALISED"
-            );
-
-            self.remove_fast_transfer(&fast_transfer.id());
+            if let Some(fast_transfer_status) = self.get_fast_transfer_status(&fast_transfer.id()) {
+                // For fast transfers we need to wait for finalization of the first leg (Origin chain -> Near) before allowing fee claim.
+                // This confirms that fast transfer was executed with correct parameters.
+                // Othewise malicious relayer can create a fast transfer with arbitrary high fee and claim it here.
+                if fast_transfer_status.finalised {
+                    self.remove_fast_transfer(&fast_transfer.id());
+                } else {
+                    env::panic_str("ERR_FAST_TRANSFER_NOT_FINALISED");
+                }
+            }
         }
 
         let token = self.get_token_id(&message.token);
