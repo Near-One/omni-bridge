@@ -60,6 +60,7 @@ pub async fn process_transfer_event(
                 warn!("Failed to build TransferId from: {new_transfer_id:?}");
                 return Ok(EventAction::Retry);
             };
+
             let Ok(transfer_message) = omni_connector
                 .near_get_transfer_message(new_transfer_id)
                 .await
@@ -484,10 +485,9 @@ pub async fn process_sign_transfer_event(
         Ok(tx_hash) => {
             info!("Finalized deposit: {tx_hash}");
 
-            // Store pending transaction for fee bumping
             if let Some(nonce) = evm_nonce {
-                if chain_kind == ChainKind::Eth {
-                    if let Err(err) = store_pending_evm_transaction(
+                if config.is_fee_bumping_enabled(chain_kind) {
+                    if let Err(err) = store_pending_transaction(
                         config,
                         redis_connection_manager,
                         chain_kind,
@@ -765,17 +765,14 @@ pub async fn initiate_fast_transfer(
     }
 }
 
-async fn store_pending_evm_transaction(
+#[allow(clippy::cast_precision_loss)]
+async fn store_pending_transaction(
     config: &config::Config,
     redis_connection_manager: &mut redis::aio::ConnectionManager,
     chain_kind: ChainKind,
     tx_hash: &str,
     nonce: u64,
 ) -> Result<()> {
-    if !config.is_fee_bumping_enabled(chain_kind) {
-        return Ok(());
-    }
-
     let pending_tx = PendingTransaction::new(tx_hash.to_string(), nonce, chain_kind);
 
     utils::redis::zadd(

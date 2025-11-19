@@ -209,6 +209,7 @@ fn should_bump(
     let min_max_fee = (original_fee.max_fee_per_gas * min_bump_multiplier) / 100;
     let min_priority_fee = (original_fee.max_priority_fee_per_gas * min_bump_multiplier) / 100;
 
+    // Nodes generally required minimum 10-15% fee bump
     let new_max_fee = min_max_fee.max(suggested_fee.max_fee_per_gas);
     let new_priority_fee = min_priority_fee.max(suggested_fee.max_priority_fee_per_gas);
 
@@ -267,7 +268,8 @@ async fn sleep(check_interval_seconds: u64) {
     tokio::time::sleep(tokio::time::Duration::from_secs(check_interval_seconds)).await;
 }
 
+#[allow(clippy::cast_precision_loss)]
 pub fn wei_to_gwei(wei: u128) -> f64 {
-    let wei: u64 = (wei / 1_000_000).try_into().unwrap_or(u64::MAX);
-    wei as f64 / 1_000.0
+    let gwei = wei / 1_000_000_000;
+    gwei as f64
 }
