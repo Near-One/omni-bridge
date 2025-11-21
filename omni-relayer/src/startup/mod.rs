@@ -20,6 +20,7 @@ use crate::{
 
 pub mod bridge_indexer;
 pub mod evm;
+pub mod evm_fee_bumping;
 pub mod near;
 pub mod solana;
 

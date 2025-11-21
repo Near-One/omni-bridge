@@ -151,6 +151,17 @@ impl Config {
         };
         config.is_some_and(|utxo| utxo.verifying_withdraw_enabled)
     }
+
+    pub fn is_fee_bumping_enabled(&self, chain_kind: ChainKind) -> bool {
+        match chain_kind {
+            ChainKind::Eth => self
+                .eth
+                .as_ref()
+                .and_then(|evm| evm.fee_bumping.as_ref())
+                .is_some(),
+            _ => false,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -235,6 +246,16 @@ pub struct Evm {
     pub safe_confirmations: u64,
     #[serde(default)]
     pub error_selectors_to_remove: Vec<String>,
+    pub fee_bumping: Option<FeeBumping>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct FeeBumping {
+    pub min_pending_time_seconds: i64,
+    pub min_since_last_bump_seconds: i64,
+    pub check_interval_seconds: u64,
+    pub min_fee_increase_percent: u64,
+    pub max_fee_in_wei: u128,
 }
 
 #[derive(Debug, Clone, Deserialize)]

@@ -144,3 +144,10 @@ verifying_withdraw_enabled = true
 [wormhole]
 api_url = "https://api.testnet.wormholescan.io/"
 solana_chain_id = 1
+
+# [eth.fee_bumping]
+# min_pending_time_seconds = 240
+# min_since_last_bump_seconds = 60
+# check_interval_seconds = 5
+# min_fee_increase_percent = 15
+# max_fee_in_wei = 20000000000
