@@ -12,7 +12,7 @@ use near_rpc_client::NearRpcError;
 use omni_types::ChainKind;
 use tracing::{info, warn};
 
-use omni_connector::{BtcDepositArgs, OmniConnector};
+use omni_connector::{BtcDepositArgs, FinTransferArgs, OmniConnector};
 
 use crate::{
     config, utils,
@@ -170,40 +170,39 @@ pub async fn process_utxo_to_near_init_transfer_event(
         }
     }
 
-    match omni_connector
-        .near_fin_transfer_btc(
-            chain,
-            btc_tx_hash.clone(),
-            usize::try_from(vout)?,
-            BtcDepositArgs::DepositMsg {
-                msg: DepositMsg {
-                    recipient_id: deposit_msg.recipient_id,
-                    post_actions: deposit_msg.post_actions.map(|optional_actions| {
-                        optional_actions
-                            .into_iter()
-                            .map(|action| PostAction {
-                                receiver_id: action.receiver_id,
-                                amount: action.amount.0,
-                                memo: action.memo,
-                                msg: action.msg,
-                                gas: action.gas.map(near_sdk::Gas::as_gas),
-                            })
-                            .collect()
-                    }),
-                    extra_msg: deposit_msg.extra_msg,
-                    safe_deposit: deposit_msg.safe_deposit.map(|safe_deposit| SafeDepositMsg {
-                        msg: safe_deposit.msg,
-                    }),
-                },
+    let fin_transfer_args = FinTransferArgs::NearFinTransferBTC {
+        chain_kind: chain,
+        btc_tx_hash: btc_tx_hash.clone(),
+        vout: usize::try_from(vout)?,
+        btc_deposit_args: BtcDepositArgs::DepositMsg {
+            msg: DepositMsg {
+                recipient_id: deposit_msg.recipient_id,
+                post_actions: deposit_msg.post_actions.map(|optional_actions| {
+                    optional_actions
+                        .into_iter()
+                        .map(|action| PostAction {
+                            receiver_id: action.receiver_id,
+                            amount: action.amount.0,
+                            memo: action.memo,
+                            msg: action.msg,
+                            gas: action.gas.map(near_sdk::Gas::as_gas),
+                        })
+                        .collect()
+                }),
+                extra_msg: deposit_msg.extra_msg,
+                safe_deposit: deposit_msg.safe_deposit.map(|safe_deposit| SafeDepositMsg {
+                    msg: safe_deposit.msg,
+                }),
             },
-            TransactionOptions {
-                nonce,
-                wait_until: near_primitives::views::TxExecutionStatus::Included,
-                wait_final_outcome_timeout_sec: None,
-            },
-        )
-        .await
-    {
+        },
+        transaction_options: TransactionOptions {
+            nonce,
+            wait_until: near_primitives::views::TxExecutionStatus::Included,
+            wait_final_outcome_timeout_sec: None,
+        },
+    };
+
+    match omni_connector.fin_transfer(fin_transfer_args).await {
         Ok(tx_hash) => {
             info!("Finalized {chain:?} transaction: {tx_hash:?}");
             Ok(EventAction::Remove)
