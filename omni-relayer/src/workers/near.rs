@@ -454,7 +454,7 @@ pub async fn process_sign_transfer_event(
             (
                 omni_connector::FinTransferArgs::EvmFinTransfer {
                     chain_kind,
-                    event: omni_bridge_event,
+                    event: omni_bridge_event.clone(),
                     tx_nonce: Some(nonce.into()),
                 },
                 Some(nonce),
@@ -470,7 +470,7 @@ pub async fn process_sign_transfer_event(
 
             (
                 omni_connector::FinTransferArgs::SolanaFinTransfer {
-                    event: omni_bridge_event,
+                    event: omni_bridge_event.clone(),
                     solana_token: Pubkey::new_from_array(token.0),
                 },
                 None,
@@ -493,6 +493,8 @@ pub async fn process_sign_transfer_event(
                         chain_kind,
                         &tx_hash,
                         nonce,
+                        message_payload.transfer_id.origin_nonce.to_string(),
+                        omni_bridge_event,
                     )
                     .await
                     {
@@ -772,8 +774,16 @@ async fn store_pending_transaction(
     chain_kind: ChainKind,
     tx_hash: &str,
     nonce: u64,
+    source_event_id: String,
+    omni_bridge_event: OmniBridgeEvent,
 ) -> Result<()> {
-    let pending_tx = PendingTransaction::new(tx_hash.to_string(), nonce, chain_kind);
+    let pending_tx = PendingTransaction::new(
+        tx_hash.to_string(),
+        nonce,
+        chain_kind,
+        source_event_id,
+        omni_bridge_event,
+    );
 
     utils::redis::zadd(
         config,

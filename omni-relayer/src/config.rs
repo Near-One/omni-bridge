@@ -252,6 +252,7 @@ pub struct Evm {
 #[derive(Debug, Clone, Deserialize)]
 pub struct FeeBumping {
     pub min_pending_time_seconds: i64,
+    pub min_since_last_bump_seconds: i64,
     pub check_interval_seconds: u64,
     pub min_fee_increase_percent: u64,
     pub max_fee_in_wei: u128,

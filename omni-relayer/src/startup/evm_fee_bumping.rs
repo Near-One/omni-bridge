@@ -12,8 +12,10 @@ use tracing::{info, warn};
 use crate::{
     config::{self, Evm},
     utils::{
-        self, pending_transactions::{self, PendingTransaction}
+        self,
+        pending_transactions::{self, PendingTransaction},
     },
+    workers::RetryableEvent,
 };
 
 enum ShouldBump {
@@ -85,6 +87,9 @@ pub async fn start_evm_fee_bumping(
         let current_timestamp = chrono::Utc::now().timestamp();
         if current_timestamp - pending_tx.sent_timestamp
             < fee_bumping_config.min_pending_time_seconds
+            || pending_tx.last_bump_timestamp.is_some_and(|last_bump| {
+                current_timestamp - last_bump < fee_bumping_config.min_since_last_bump_seconds
+            })
         {
             sleep(fee_bumping_config.check_interval_seconds).await;
             continue;
@@ -104,14 +109,25 @@ pub async fn start_evm_fee_bumping(
 
         match tx_status {
             TransactionStatus::Included(_) => {
-                let serialized_tx = serde_json::to_string(&pending_tx)?;
-                utils::redis::zrem(&config, redis_connection_manager, &redis_key, serialized_tx)
-                    .await;
+                utils::redis::zrem(&config, redis_connection_manager, &redis_key, pending_tx).await;
                 continue;
             }
             TransactionStatus::Missing => {
-                // TODO: Transaction not found in mempool, resend
-                sleep(fee_bumping_config.check_interval_seconds).await;
+                info!(
+                    "Resending source event of missing transaction {} (nonce: {}) on {chain_kind:?}",
+                    pending_tx.tx_hash, pending_tx.nonce
+                );
+
+                utils::redis::add_event(
+                    &config,
+                    redis_connection_manager,
+                    utils::redis::EVENTS,
+                    &pending_tx.source_event_id,
+                    RetryableEvent::new(&pending_tx.source_event),
+                )
+                .await;
+
+                utils::redis::zrem(&config, redis_connection_manager, &redis_key, pending_tx).await;
                 continue;
             }
             TransactionStatus::Pending(tx_data) => {
@@ -176,6 +192,7 @@ pub async fn start_evm_fee_bumping(
 
                 pending_tx.bump(new_tx_hash.to_string());
 
+                #[allow(clippy::cast_precision_loss)]
                 utils::redis::zadd(
                     &config,
                     redis_connection_manager,
