@@ -12,13 +12,9 @@ on:
       - 'near/**'
       - 'omni-relayer/**'
 
-env:
-  SCCACHE_GHA_ENABLED: "true"
-  RUSTC_WRAPPER: "sccache"
-
 jobs:
   lint:
-    runs-on: ubuntu-latest
+    runs-on: warp-ubuntu-2204-x64-16x
     strategy:
       matrix:
         component: [near]  # Will be expanded with more components later
@@ -40,8 +36,13 @@ jobs:
           components: clippy, rustfmt
           target: wasm32-unknown-unknown
 
-      - name: Run sccache-cache
-        uses: mozilla-actions/sccache-action@v0.0.9
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            near
+            omni-relayer
+          cache-on-failure: true
 
       - name: Install cargo-near
         run: |
@@ -54,7 +55,7 @@ jobs:
         run: make fmt-${{ matrix.component }}
 
   build-and-test:
-    runs-on: ubuntu-latest
+    runs-on: warp-ubuntu-2204-x64-16x
     steps:
       - name: Setup SSH
         uses: webfactory/ssh-agent@v0.7.0
@@ -72,8 +73,13 @@ jobs:
           toolchain: 1.86.0
           target: wasm32-unknown-unknown
 
-      - name: Run sccache-cache
-        uses: mozilla-actions/sccache-action@v0.0.9
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            near
+            omni-relayer
+          cache-on-failure: true
           
       - name: Install cargo-near
         run: |
