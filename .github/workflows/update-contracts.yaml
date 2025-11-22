@@ -39,6 +39,13 @@ jobs:
         run: |
           make solana-build-ci
         timeout-minutes: 60
+
+      - name: Upload Solana Anchor Types
+        uses: actions/upload-artifact@v4
+        with:
+          name: solana-anchor-types
+          path: solana/bridge_token_factory/target/idl/bridge_token_factory.json
+          if-no-files-found: error
  
       - name: Archive built WASM files
         env:
