@@ -197,7 +197,7 @@ pub async fn zadd<M>(
     config: &config::Config,
     redis_connection_manager: &mut ConnectionManager,
     key: &str,
-    score: f64,
+    score: u64,
     member: M,
 ) where
     M: serde::Serialize + std::fmt::Debug + Send,
@@ -209,7 +209,7 @@ pub async fn zadd<M>(
 
     for _ in 0..config.redis.query_retry_attempts {
         if redis_connection_manager
-            .zadd::<&str, f64, String, ()>(key, serialized_member.clone(), score)
+            .zadd::<&str, u64, String, ()>(key, serialized_member.clone(), score)
             .await
             .is_ok()
         {

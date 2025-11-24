@@ -767,7 +767,6 @@ pub async fn initiate_fast_transfer(
     }
 }
 
-#[allow(clippy::cast_precision_loss)]
 async fn store_pending_transaction(
     config: &config::Config,
     redis_connection_manager: &mut redis::aio::ConnectionManager,
@@ -789,7 +788,7 @@ async fn store_pending_transaction(
         config,
         redis_connection_manager,
         &utils::pending_transactions::get_pending_tx_key(chain_kind),
-        nonce as f64,
+        nonce,
         pending_tx,
     )
     .await;

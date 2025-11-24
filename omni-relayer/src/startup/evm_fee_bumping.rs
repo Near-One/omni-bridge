@@ -7,6 +7,7 @@ use alloy::{
 };
 use anyhow::Context;
 use omni_types::ChainKind;
+use tokio::time::{Duration, Sleep};
 use tracing::{info, warn};
 
 use crate::{
@@ -110,7 +111,6 @@ pub async fn start_evm_fee_bumping(
         match tx_status {
             TransactionStatus::Included(_) => {
                 utils::redis::zrem(&config, redis_connection_manager, &redis_key, pending_tx).await;
-                continue;
             }
             TransactionStatus::Missing => {
                 info!(
@@ -128,7 +128,6 @@ pub async fn start_evm_fee_bumping(
                 .await;
 
                 utils::redis::zrem(&config, redis_connection_manager, &redis_key, pending_tx).await;
-                continue;
             }
             TransactionStatus::Pending(tx_data) => {
                 let original_fee = Eip1559Estimation {
@@ -192,20 +191,18 @@ pub async fn start_evm_fee_bumping(
 
                 pending_tx.bump(new_tx_hash.to_string());
 
-                #[allow(clippy::cast_precision_loss)]
                 utils::redis::zadd(
                     &config,
                     redis_connection_manager,
                     &redis_key,
-                    pending_tx.nonce as f64,
+                    pending_tx.nonce,
                     pending_tx.clone(),
                 )
                 .await;
 
                 sleep(fee_bumping_config.check_interval_seconds).await;
-                continue;
             }
-        };
+        }
     }
 }
 
@@ -222,7 +219,7 @@ fn should_bump(
         ));
     }
 
-    let min_bump_multiplier = 100u128 + fee_bumping_config.min_fee_increase_percent as u128;
+    let min_bump_multiplier: u128 = (100 + fee_bumping_config.min_fee_increase_percent).into();
     let min_max_fee = (original_fee.max_fee_per_gas * min_bump_multiplier) / 100;
     let min_priority_fee = (original_fee.max_priority_fee_per_gas * min_bump_multiplier) / 100;
 
@@ -281,8 +278,8 @@ fn build_provider(
     Ok(provider)
 }
 
-async fn sleep(check_interval_seconds: u64) {
-    tokio::time::sleep(tokio::time::Duration::from_secs(check_interval_seconds)).await;
+fn sleep(check_interval_seconds: u64) -> Sleep {
+    tokio::time::sleep(Duration::from_secs(check_interval_seconds))
 }
 
 #[allow(clippy::cast_precision_loss)]
