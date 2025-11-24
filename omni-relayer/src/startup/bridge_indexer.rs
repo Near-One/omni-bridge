@@ -296,7 +296,10 @@ async fn handle_transaction_event(
             )
             .await;
         }
-        OmniTransferMessage::UtxoSignTransaction { relayer } => {
+        OmniTransferMessage::UtxoSignTransaction {
+            destination_chain,
+            relayer,
+        } => {
             info!(
                 "Received UtxoSignBtcTransaction on {:?}: {origin_transaction_id}",
                 event.transfer_id.origin_chain
@@ -307,7 +310,7 @@ async fn handle_transaction_event(
                 utils::redis::EVENTS,
                 origin_transaction_id.clone(),
                 RetryableEvent::new(workers::utxo::SignUtxoTransaction {
-                    chain: event.transfer_id.origin_chain,
+                    chain: destination_chain,
                     near_tx_hash: origin_transaction_id,
                     relayer,
                 }),
@@ -315,24 +318,24 @@ async fn handle_transaction_event(
             .await;
         }
         OmniTransferMessage::TransferNearToUtxo {
+            destination_chain,
             utxo_count,
             ref new_transfer_id,
             ..
         } => {
-            let (chain, utxo_id) = if let TransferIdKind::Utxo(utxo_id) = event.transfer_id.kind {
-                (event.transfer_id.origin_chain, utxo_id)
-            } else if let Some((chain, TransferIdKind::Utxo(utxo_id))) = new_transfer_id
-                .clone()
-                .map(|transfer_id| (transfer_id.origin_chain, transfer_id.kind))
+            let utxo_id = if let TransferIdKind::Utxo(utxo_id) = event.transfer_id.kind {
+                utxo_id
+            } else if let Some(TransferIdKind::Utxo(utxo_id)) =
+                new_transfer_id.clone().map(|transfer_id| transfer_id.kind)
             {
-                (chain, utxo_id)
+                utxo_id
             } else {
                 anyhow::bail!("Expected Utxo ChainTransferId for TransferNearToUtxo: {event:?}");
             };
 
-            if config.is_signing_utxo_transaction_enabled(chain) {
+            if config.is_signing_utxo_transaction_enabled(destination_chain) {
                 info!(
-                    "Received TransferNearToUtxo from {:?} to {chain:?}: {origin_transaction_id}",
+                    "Received TransferNearToUtxo from {:?} to {destination_chain:?}: {origin_transaction_id}",
                     utxo_id.tx_hash
                 );
 
@@ -348,7 +351,7 @@ async fn handle_transaction_event(
                         utils::redis::EVENTS,
                         utxo_id.to_string(),
                         RetryableEvent::new(workers::Transfer::NearToUtxo {
-                            chain,
+                            chain: destination_chain,
                             btc_pending_id: utxo_id.tx_hash.clone(),
                             sign_index,
                         }),
@@ -380,15 +383,15 @@ async fn handle_transaction_event(
             )
             .await;
         }
-        OmniTransferMessage::UtxoConfirmedTxHash => {
-            if config.is_verifying_utxo_withdraw_enabled(event.transfer_id.origin_chain) {
+        OmniTransferMessage::UtxoConfirmedTxHash { destination_chain } => {
+            if config.is_verifying_utxo_withdraw_enabled(destination_chain) {
                 let TransferIdKind::Utxo(utxo_id) = event.transfer_id.kind else {
                     anyhow::bail!("Expected Utxo ChainTransferId for ConfirmedTxHash: {event:?}");
                 };
 
                 info!(
                     "Received UtxoConfirmedTxHash on {:?}: {utxo_id}",
-                    event.transfer_id.origin_chain,
+                    destination_chain
                 );
                 utils::redis::add_event(
                     config,
@@ -396,7 +399,7 @@ async fn handle_transaction_event(
                     utils::redis::EVENTS,
                     utxo_id.to_string(),
                     RetryableEvent::new(workers::utxo::ConfirmedTxHash {
-                        chain: event.transfer_id.origin_chain,
+                        chain: destination_chain,
                         btc_tx_hash: utxo_id.tx_hash,
                     }),
                 )
