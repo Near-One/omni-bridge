@@ -2222,16 +2222,10 @@ impl Contract {
         origin_chain: ChainKind,
         storage_owner: &AccountId,
     ) -> Promise {
-        if !Self::check_storage_balance_result(0) {
-            self.remove_fin_utxo_transfer(
-                &UnifiedTransferId {
-                    origin_chain,
-                    kind: TransferIdKind::Utxo(utxo_fin_transfer_msg.utxo_id.clone()),
-                },
-                storage_owner,
-            );
-            env::panic_str("STORAGE_ERR: The transfer recipient is omitted");
-        }
+        require!(
+            Self::check_storage_balance_result(0),
+            "STORAGE_ERR: The transfer recipient is omitted"
+        );
 
         self.send_tokens(
             token_id.clone(),
