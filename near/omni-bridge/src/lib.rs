@@ -926,6 +926,17 @@ impl Contract {
         origin_chain: ChainKind,
         storage_owner: &AccountId,
     ) -> U128 {
+        let required_storage_balance = self.add_fin_utxo_transfer(&UnifiedTransferId {
+            origin_chain,
+            kind: TransferIdKind::Utxo(utxo_fin_transfer_msg.utxo_id.clone()),
+        });
+
+        self.update_storage_balance(
+            storage_owner.clone(),
+            required_storage_balance,
+            NearToken::from_yoctonear(0),
+        );
+
         self.resolve_utxo_fin_transfer_internal(
             token_id,
             amount,
@@ -2175,17 +2186,6 @@ impl Contract {
         origin_chain: ChainKind,
         storage_owner: &AccountId,
     ) -> Promise {
-        let required_storage_balance = self.add_fin_utxo_transfer(&UnifiedTransferId {
-            origin_chain,
-            kind: TransferIdKind::Utxo(utxo_fin_transfer_msg.utxo_id.clone()),
-        });
-
-        self.update_storage_balance(
-            storage_owner.clone(),
-            required_storage_balance,
-            NearToken::from_yoctonear(0),
-        );
-
         let deposit_action = StorageDepositAction {
             account_id: recipient.clone(),
             token_id: token_id.clone(),
@@ -2217,16 +2217,10 @@ impl Contract {
         origin_chain: ChainKind,
         storage_owner: &AccountId,
     ) -> Promise {
-        if !Self::check_storage_balance_result(0) {
-            self.remove_fin_utxo_transfer(
-                &UnifiedTransferId {
-                    origin_chain,
-                    kind: TransferIdKind::Utxo(utxo_fin_transfer_msg.utxo_id.clone()),
-                },
-                storage_owner,
-            );
-            env::panic_str("STORAGE_ERR: The transfer recipient is omitted");
-        }
+        require!(
+            Self::check_storage_balance_result(0),
+            "STORAGE_ERR: The transfer recipient is omitted"
+        );
 
         self.send_tokens(
             token_id.clone(),
