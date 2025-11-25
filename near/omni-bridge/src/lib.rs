@@ -84,7 +84,6 @@ enum StorageKey {
     PendingTransfers,
     Factories,
     FinalisedTransfers,
-    FinalisedUtxoTransfers,
     TokenIdToAddress,
     AccountsBalances,
     TokenAddressToId,
@@ -95,6 +94,7 @@ enum StorageKey {
     FastTransfers,
     RegisteredProvers,
     InitTransferPromises,
+    FinalisedUtxoTransfers,
 }
 
 #[derive(AccessControlRole, Deserialize, Serialize, Copy, Clone)]
