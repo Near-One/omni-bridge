@@ -715,7 +715,7 @@ impl Contract {
             "ERR_INVALID_FAST_TRANSFER_AMOUNT"
         );
 
-        if self.is_transfer_finalised(&fast_fin_transfer_msg.transfer_id) {
+        if self.is_unified_transfer_finalised(&fast_fin_transfer_msg.transfer_id) {
             env::panic_str("ERR_TRANSFER_ALREADY_FINALISED");
         }
 
@@ -1273,7 +1273,11 @@ impl Contract {
             .sdk_expect("The transfer does not exist")
     }
 
-    pub fn is_transfer_finalised(&self, transfer_id: &UnifiedTransferId) -> bool {
+    pub fn is_transfer_finalised(&self, transfer_id: TransferId) -> bool {
+        self.finalised_transfers.contains(&transfer_id)
+    }
+
+    pub fn is_unified_transfer_finalised(&self, transfer_id: &UnifiedTransferId) -> bool {
         match transfer_id.kind {
             TransferIdKind::Nonce(nonce) => self.finalised_transfers.contains(&TransferId {
                 origin_chain: transfer_id.origin_chain,

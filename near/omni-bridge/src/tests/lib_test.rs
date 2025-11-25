@@ -694,10 +694,10 @@ fn test_is_transfer_finalised() {
         origin_nonce: nonce,
     };
 
-    assert!(!contract.is_transfer_finalised(&(transfer_id.into())));
+    assert!(!contract.is_transfer_finalised(transfer_id));
 
     contract.finalised_transfers.insert(&transfer_id);
-    assert!(contract.is_transfer_finalised(&(transfer_id.into())));
+    assert!(contract.is_transfer_finalised(transfer_id));
 }
 
 #[test]
