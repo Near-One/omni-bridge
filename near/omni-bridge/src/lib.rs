@@ -926,17 +926,6 @@ impl Contract {
         origin_chain: ChainKind,
         storage_owner: &AccountId,
     ) -> U128 {
-        let required_storage_balance = self.add_fin_utxo_transfer(&UnifiedTransferId {
-            origin_chain,
-            kind: TransferIdKind::Utxo(utxo_fin_transfer_msg.utxo_id.clone()),
-        });
-
-        self.update_storage_balance(
-            storage_owner.clone(),
-            required_storage_balance,
-            NearToken::from_yoctonear(0),
-        );
-
         self.resolve_utxo_fin_transfer_internal(
             token_id,
             amount,
@@ -1968,23 +1957,6 @@ impl Contract {
         }
     }
 
-    fn remove_fin_utxo_transfer(
-        &mut self,
-        transfer_id: &UnifiedTransferId,
-        storage_owner: &AccountId,
-    ) {
-        let storage_usage = env::storage_usage();
-        self.finalised_utxo_transfers.remove(transfer_id);
-
-        let refund =
-            env::storage_byte_cost().saturating_mul((storage_usage - env::storage_usage()).into());
-
-        if let Some(mut storage) = self.accounts_balances.get(storage_owner) {
-            storage.available = storage.available.saturating_add(refund);
-            self.accounts_balances.insert(storage_owner, &storage);
-        }
-    }
-
     fn update_storage_balance(
         &mut self,
         account_id: AccountId,
@@ -2305,15 +2277,19 @@ impl Contract {
     ) -> U128 {
         let is_ft_transfer_call = !utxo_fin_transfer_msg.msg.is_empty();
         if Self::is_refund_required(is_ft_transfer_call) {
-            self.remove_fin_utxo_transfer(
-                &UnifiedTransferId {
-                    origin_chain,
-                    kind: TransferIdKind::Utxo(utxo_fin_transfer_msg.utxo_id.clone()),
-                },
-                storage_owner,
-            );
             amount
         } else {
+            let required_storage_balance = self.add_fin_utxo_transfer(&UnifiedTransferId {
+                origin_chain,
+                kind: TransferIdKind::Utxo(utxo_fin_transfer_msg.utxo_id.clone()),
+            });
+
+            self.update_storage_balance(
+                storage_owner.clone(),
+                required_storage_balance,
+                NearToken::from_yoctonear(0),
+            );
+
             env::log_str(
                 &OmniBridgeEvent::UtxoTransferEvent {
                     token_id,
