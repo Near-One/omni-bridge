@@ -283,6 +283,7 @@ fn sleep(check_interval_seconds: u64) -> Sleep {
 }
 
 #[allow(clippy::as_conversions)]
+#[allow(clippy::cast_precision_loss)]
 pub fn wei_to_gwei(wei: u128) -> f64 {
     let gwei = wei / 1_000_000_000;
     gwei as f64
