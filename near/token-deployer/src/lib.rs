@@ -2,16 +2,13 @@ use near_plugins::{
     access_control, access_control_any, AccessControlRole, AccessControllable, Pausable, Upgradable,
 };
 use near_sdk::borsh::BorshDeserialize;
-use near_sdk::json_types::Base58CryptoHash;
 use near_sdk::serde_json::json;
 use near_sdk::{env, near, require, AccountId, Gas, NearToken, PanicOnDefault, Promise};
 use omni_types::BasicMetadata;
 
-const BRIDGE_TOKEN_INIT_BALANCE: NearToken = NearToken::from_near(3);
+const BRIDGE_TOKEN_INIT_BALANCE: NearToken = NearToken::from_millinear(5);
 const NO_DEPOSIT: NearToken = NearToken::from_near(0);
 const OMNI_TOKEN_INIT_GAS: Gas = Gas::from_tgas(10);
-
-const BRIDGE_TOKEN_BINARY: &[u8] = include_bytes!(env!("BUILD_RS_SUB_BUILD_OMNI-TOKEN"));
 
 #[near(serializers = [json])]
 #[derive(AccessControlRole, Copy, Clone)]
@@ -35,13 +32,21 @@ pub enum Role {
     duration_update_stagers(Role::DAO),
     duration_update_appliers(Role::DAO),
 ))]
-pub struct TokenDeployer {}
+pub struct TokenDeployer {
+    omni_token_global_contract_id: AccountId,
+}
 
 #[near]
 impl TokenDeployer {
     #[init]
-    pub fn new(controller: AccountId, dao: AccountId) -> Self {
-        let mut contract = Self {};
+    pub fn new(
+        controller: AccountId,
+        dao: AccountId,
+        omni_token_global_contract_id: AccountId,
+    ) -> Self {
+        let mut contract = Self {
+            omni_token_global_contract_id,
+        };
 
         contract.acl_init_super_admin(near_sdk::env::predecessor_account_id());
         contract.acl_grant_role(Role::DAO.into(), dao.clone());
@@ -61,7 +66,7 @@ impl TokenDeployer {
         Promise::new(account_id)
             .create_account()
             .transfer(BRIDGE_TOKEN_INIT_BALANCE)
-            .deploy_contract(BRIDGE_TOKEN_BINARY.to_vec())
+            .use_global_contract_by_account_id(self.omni_token_global_contract_id.clone())
             .function_call(
                 "new".to_string(),
                 json!({"controller": env::predecessor_account_id(), "metadata": metadata})
@@ -72,12 +77,7 @@ impl TokenDeployer {
             )
     }
 
-    #[result_serializer(borsh)]
-    pub fn get_token_code() -> Vec<u8> {
-        BRIDGE_TOKEN_BINARY.to_vec()
-    }
-
-    pub fn get_token_code_hash() -> Base58CryptoHash {
-        near_sdk::env::sha256_array(BRIDGE_TOKEN_BINARY).into()
+    pub fn get_omni_token_global_contract_id(&self) -> AccountId {
+        self.omni_token_global_contract_id.clone()
     }
 }
