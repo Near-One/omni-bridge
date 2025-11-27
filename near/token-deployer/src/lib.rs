@@ -3,10 +3,9 @@ use near_plugins::{
 };
 use near_sdk::borsh::BorshDeserialize;
 use near_sdk::serde_json::json;
-use near_sdk::{env, near, require, AccountId, Gas, NearToken, PanicOnDefault, Promise};
+use near_sdk::{env, near, AccountId, Gas, NearToken, PanicOnDefault, Promise};
 use omni_types::BasicMetadata;
 
-const BRIDGE_TOKEN_INIT_BALANCE: NearToken = NearToken::from_millinear(5);
 const NO_DEPOSIT: NearToken = NearToken::from_near(0);
 const OMNI_TOKEN_INIT_GAS: Gas = Gas::from_tgas(10);
 
@@ -58,14 +57,8 @@ impl TokenDeployer {
     #[payable]
     #[access_control_any(roles(Role::Controller))]
     pub fn deploy_token(&mut self, account_id: AccountId, metadata: &BasicMetadata) -> Promise {
-        require!(
-            env::attached_deposit() >= BRIDGE_TOKEN_INIT_BALANCE,
-            "ERR_NOT_ENOUGH_ATTACHED_BALANCE"
-        );
-
         Promise::new(account_id)
             .create_account()
-            .transfer(BRIDGE_TOKEN_INIT_BALANCE)
             .use_global_contract_by_account_id(self.omni_token_global_contract_id.clone())
             .function_call(
                 "new".to_string(),
@@ -79,5 +72,10 @@ impl TokenDeployer {
 
     pub fn get_omni_token_global_contract_id(&self) -> AccountId {
         self.omni_token_global_contract_id.clone()
+    }
+
+    #[access_control_any(roles(Role::DAO))]
+    pub fn set_omni_token_global_contract_id(&mut self, omni_token_global_contract_id: AccountId) {
+        self.omni_token_global_contract_id = omni_token_global_contract_id;
     }
 }
