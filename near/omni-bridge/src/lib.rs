@@ -567,7 +567,7 @@ impl Contract {
         #[callback_result] response: Result<(), PromiseError>,
     ) -> U128 {
         self.remove_promise(&message_storage_account_id);
-        if !response.is_ok() {
+        if response.is_err() {
             env::log_str("Init transfer resume timeout");
         }
 
