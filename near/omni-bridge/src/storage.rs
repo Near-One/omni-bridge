@@ -173,7 +173,7 @@ impl Contract {
 
             if !result {
                 return Self::ext(env::current_account_id())
-                    .resume_promise(&account_id)
+                    .resume_promise(account_id)
                     .into();
             }
         }

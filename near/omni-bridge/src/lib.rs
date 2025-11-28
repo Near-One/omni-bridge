@@ -567,23 +567,21 @@ impl Contract {
         #[callback_result] response: Result<(), PromiseError>,
     ) -> U128 {
         self.remove_promise(&message_storage_account_id);
-
-        if response.is_ok() {
-            if let Err(err) = self.try_to_transfer_balance_from_message_account(
-                &message_storage_account_id,
-                NearToken::from_yoctonear(transfer_message.fee.native_fee.0),
-                &storage_owner,
-                self.required_balance_for_init_transfer(Some(transfer_message.msg.clone())),
-            ) {
-                env::log_str(&format!("Error paying native fee and storage: {err}"));
-                return transfer_message.amount;
-            }
-
-            self.init_transfer_internal(transfer_message, storage_owner)
-        } else {
+        if !response.is_ok() {
             env::log_str("Init transfer resume timeout");
-            transfer_message.amount
         }
+
+        if let Err(err) = self.try_to_transfer_balance_from_message_account(
+            &message_storage_account_id,
+            NearToken::from_yoctonear(transfer_message.fee.native_fee.0),
+            &storage_owner,
+            self.required_balance_for_init_transfer(Some(transfer_message.msg.clone())),
+        ) {
+            env::log_str(&format!("Error paying native fee and storage: {err}"));
+            return transfer_message.amount;
+        }
+
+        self.init_transfer_internal(transfer_message, storage_owner)
     }
 
     #[private]
