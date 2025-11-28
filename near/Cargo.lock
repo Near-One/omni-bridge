@@ -2054,7 +2054,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "mock-global-token-deployer"
+name = "mock-global-contract-deployer"
 version = "0.1.0"
 dependencies = [
  "near-contract-standards",
