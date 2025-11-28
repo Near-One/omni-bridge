@@ -8,7 +8,6 @@ use crate::{
     TransferMessage, U128,
 };
 
-pub const BRIDGE_TOKEN_INIT_BALANCE: NearToken = NearToken::from_near(3);
 pub const NEP141_DEPOSIT: NearToken = NearToken::from_yoctonear(1_250_000_000_000_000_000_000);
 
 #[near(serializers=[borsh, json])]
@@ -401,7 +400,6 @@ impl Contract {
 
         bind_token_required_balance
             .saturating_add(deployed_tokens_required_balance)
-            .saturating_add(BRIDGE_TOKEN_INIT_BALANCE)
             .saturating_add(NEP141_DEPOSIT)
     }
 

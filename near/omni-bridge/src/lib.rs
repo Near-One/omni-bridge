@@ -2006,7 +2006,6 @@ impl Contract {
         require!(self.deployed_tokens.insert(&token_id), "ERR_TOKEN_EXIST");
         let required_deposit = env::storage_byte_cost()
             .saturating_mul((env::storage_usage().saturating_sub(storage_usage)).into())
-            .saturating_add(storage::BRIDGE_TOKEN_INIT_BALANCE)
             .saturating_add(NEP141_DEPOSIT);
 
         require!(
@@ -2025,7 +2024,6 @@ impl Contract {
 
         ext_deployer::ext(deployer)
             .with_static_gas(DEPLOY_TOKEN_GAS)
-            .with_attached_deposit(storage::BRIDGE_TOKEN_INIT_BALANCE)
             .deploy_token(token_id.clone(), metadata)
             .then(
                 ext_token::ext(token_id)

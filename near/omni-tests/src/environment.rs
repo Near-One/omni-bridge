@@ -3,7 +3,7 @@ use std::{cell::RefCell, str::FromStr};
 use anyhow::Ok;
 use near_sdk::{
     borsh,
-    json_types::U128,
+    json_types::{Base64VecU8, U128},
     serde_json::{self, json},
     AccountId, NearToken,
 };
@@ -16,7 +16,7 @@ use omni_types::{
 
 use crate::helpers::tests::{
     account_n, eth_eoa_address, eth_factory_address, eth_token_address, get_bind_token_args,
-    get_test_deploy_token_args, BuildArtifacts, NEP141_DEPOSIT,
+    get_test_deploy_token_args, BuildArtifacts, GLOBAL_STORAGE_COST_PER_BYTE, NEP141_DEPOSIT,
 };
 
 const PREV_LOCKER_WASM_FILEPATH: &str = "src/data/omni_bridge-0_3_2.wasm";
@@ -76,6 +76,12 @@ impl TestEnvBuilder {
         )
         .await?;
 
+        self.worker
+            .root_account()?
+            .transfer_near(token_contract.id(), NearToken::from_near(1))
+            .await?
+            .into_result()?;
+
         storage_deposit(&token_contract, bridge_contract.id()).await?;
 
         Ok(TestEnvBuilderWithToken {
@@ -111,6 +117,12 @@ impl TestEnvBuilder {
         )
         .await?;
 
+        self.worker
+            .root_account()?
+            .transfer_near(token_contract.id(), NearToken::from_near(1))
+            .await?
+            .into_result()?;
+
         storage_deposit(&token_contract, bridge_contract.id()).await?;
 
         Ok(TestEnvBuilderWithToken {
@@ -129,8 +141,14 @@ impl TestEnvBuilder {
 
     pub async fn with_bridged_eth(self) -> anyhow::Result<TestEnvBuilderWithToken> {
         let bridge_contract = self.deploy_bridge(None).await?;
-        self.deploy_token_deployer(&bridge_contract, ChainKind::Eth)
-            .await?;
+        let omni_token_global_contract_id = self.deploy_global_omni_token().await?;
+
+        self.deploy_token_deployer(
+            &bridge_contract,
+            &omni_token_global_contract_id,
+            ChainKind::Eth,
+        )
+        .await?;
 
         add_factory(&bridge_contract, eth_factory_address()).await?;
 
@@ -164,6 +182,12 @@ impl TestEnvBuilder {
             .get_token_contract(&bridge_contract, &init_token_address)
             .await?;
 
+        self.worker
+            .root_account()?
+            .transfer_near(token_contract.id(), NearToken::from_near(1))
+            .await?
+            .into_result()?;
+
         storage_deposit(&token_contract, bridge_contract.id()).await?;
 
         Ok(TestEnvBuilderWithToken {
@@ -182,9 +206,14 @@ impl TestEnvBuilder {
 
     pub async fn with_bridged_token(self) -> anyhow::Result<TestEnvBuilderWithToken> {
         let bridge_contract = self.deploy_bridge(None).await?;
+        let omni_token_global_contract_id = self.deploy_global_omni_token().await?;
 
-        self.deploy_token_deployer(&bridge_contract, ChainKind::Eth)
-            .await?;
+        self.deploy_token_deployer(
+            &bridge_contract,
+            &omni_token_global_contract_id,
+            ChainKind::Eth,
+        )
+        .await?;
 
         add_factory(&bridge_contract, eth_factory_address()).await?;
 
@@ -222,6 +251,12 @@ impl TestEnvBuilder {
         let token_contract = self
             .get_token_contract(&bridge_contract, &eth_token_address())
             .await?;
+
+        self.worker
+            .root_account()?
+            .transfer_near(token_contract.id(), NearToken::from_near(1))
+            .await?
+            .into_result()?;
 
         storage_deposit(&token_contract, bridge_contract.id()).await?;
 
@@ -274,6 +309,12 @@ impl TestEnvBuilder {
             .await?
             .into_result()?;
 
+        self.worker
+            .root_account()?
+            .transfer_near(token_contract.id(), NearToken::from_near(1))
+            .await?
+            .into_result()?;
+
         storage_deposit(&token_contract, bridge_contract.id()).await?;
         storage_deposit(&token_contract, utxo_connector.id()).await?;
 
@@ -301,6 +342,7 @@ impl TestEnvBuilder {
     async fn deploy_token_deployer(
         &self,
         bridge_contract: &Contract,
+        omni_token_global_contract_id: &AccountId,
         chain: ChainKind,
     ) -> anyhow::Result<()> {
         let token_deployer = self
@@ -318,6 +360,7 @@ impl TestEnvBuilder {
             .args_json(json!({
                 "controller": bridge_contract.id(),
                 "dao": AccountId::from_str("dao.near").unwrap(),
+                "omni_token_global_contract_id": omni_token_global_contract_id,
             }))
             .max_gas()
             .transact()
@@ -379,6 +422,33 @@ impl TestEnvBuilder {
             .into_result()?;
 
         Ok(bridge_contract)
+    }
+
+    async fn deploy_global_omni_token(&self) -> anyhow::Result<AccountId> {
+        let mock_global_contract_deployer = self
+            .worker
+            .dev_deploy(&self.build_artifacts.mock_global_contract_deployer)
+            .await?;
+
+        let omni_token_global_contract_id =
+            format!("omni-token-global.{}", mock_global_contract_deployer.id()).parse()?;
+
+        mock_global_contract_deployer
+            .call("deploy_global_contract_by_account_id")
+            .args_json((
+                Base64VecU8::from(self.build_artifacts.omni_token.clone()),
+                &omni_token_global_contract_id,
+            ))
+            .max_gas()
+            .deposit(
+                GLOBAL_STORAGE_COST_PER_BYTE
+                    .saturating_mul(self.build_artifacts.omni_token.len().try_into().unwrap()),
+            )
+            .transact()
+            .await?
+            .into_result()?;
+
+        Ok(omni_token_global_contract_id)
     }
 
     async fn deploy_nep141_token(&self) -> anyhow::Result<Contract> {

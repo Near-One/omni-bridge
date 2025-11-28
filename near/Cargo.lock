@@ -2054,6 +2054,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "mock-global-token-deployer"
+version = "0.1.0"
+dependencies = [
+ "near-contract-standards",
+ "near-sdk",
+]
+
+[[package]]
 name = "mock-prover"
 version = "0.1.0"
 dependencies = [

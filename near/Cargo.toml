@@ -16,7 +16,8 @@ members = [
     "mock/mock-token",
     "mock/mock-prover",
     "mock/mock-token-receiver",
-    "mock/mock-utxo-connector"
+    "mock/mock-utxo-connector",
+    "mock/mock-global-contract-deployer"
 ]
 
 [profile.release]
