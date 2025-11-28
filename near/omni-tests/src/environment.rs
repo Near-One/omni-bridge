@@ -190,7 +190,10 @@ impl TestEnvBuilder {
 
         let token_deploy_initiator = self
             .worker
-            .create_tla(account_n(2), self.worker.dev_generate().await.1)
+            .create_tla(
+                account_n(2),
+                self.worker.generate_dev_account_credentials().1,
+            )
             .await?
             .unwrap();
 
@@ -304,7 +307,7 @@ impl TestEnvBuilder {
             .worker
             .create_tla_and_deploy(
                 account_n(9),
-                self.worker.dev_generate().await.1,
+                self.worker.generate_dev_account_credentials().1,
                 &self.build_artifacts.token_deployer,
             )
             .await?
@@ -512,7 +515,7 @@ impl TestEnvBuilderWithToken {
     pub async fn create_account(&self, id: AccountId) -> anyhow::Result<Account> {
         let account = self
             .worker
-            .create_tla(id.clone(), self.worker.dev_generate().await.1)
+            .create_tla(id.clone(), self.worker.generate_dev_account_credentials().1)
             .await?
             .unwrap();
         Ok(account)

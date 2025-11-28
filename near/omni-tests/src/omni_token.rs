@@ -75,7 +75,7 @@ mod tests {
             let token_deployer = worker
                 .create_tla_and_deploy(
                     account_n(1),
-                    worker.dev_generate().await.1,
+                    worker.generate_dev_account_credentials().1,
                     &token_deployer_wasm,
                 )
                 .await?
@@ -167,7 +167,7 @@ mod tests {
             token_metadata: &BasicMetadata,
         ) -> anyhow::Result<near_workspaces::Contract> {
             let token_deploy_initiator = worker
-                .create_tla(account_n(2), worker.dev_generate().await.1)
+                .create_tla(account_n(2), worker.generate_dev_account_credentials().1)
                 .await?
                 .unwrap();
 
@@ -229,7 +229,10 @@ mod tests {
         ) -> anyhow::Result<near_workspaces::Account> {
             let account = self
                 .worker
-                .create_tla(account_n(account_num), self.worker.dev_generate().await.1)
+                .create_tla(
+                    account_n(account_num),
+                    self.worker.generate_dev_account_credentials().1,
+                )
                 .await?
                 .unwrap();
 

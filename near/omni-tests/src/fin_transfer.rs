@@ -331,7 +331,7 @@ mod tests {
             .into_result()?;
 
         let recipient_account = worker
-            .create_tla(account_n(1), worker.dev_generate().await.1)
+            .create_tla(account_n(1), worker.generate_dev_account_credentials().1)
             .await?
             .into_result()?;
 

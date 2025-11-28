@@ -71,7 +71,7 @@ mod tests {
 
             // Create admin account (this will be our DAO account)
             let admin_account = worker
-                .create_tla(account_n(99), worker.dev_generate().await.1)
+                .create_tla(account_n(99), worker.generate_dev_account_credentials().1)
                 .await?
                 .unwrap();
 
@@ -89,7 +89,7 @@ mod tests {
 
             // Create sender account
             let sender_account = worker
-                .create_tla(account_n(1), worker.dev_generate().await.1)
+                .create_tla(account_n(1), worker.generate_dev_account_credentials().1)
                 .await?
                 .unwrap();
 
@@ -446,7 +446,10 @@ mod tests {
         // Create a new account without special permissions
         let unauthorized_account = env
             .worker
-            .create_tla(account_n(42), env.worker.dev_generate().await.1)
+            .create_tla(
+                account_n(42),
+                env.worker.generate_dev_account_credentials().1,
+            )
             .await?
             .unwrap();
 
