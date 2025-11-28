@@ -73,27 +73,13 @@ mod tests {
                     .into_result()?;
             }
 
-            let mock_global_contract_deployer = worker
-                .dev_deploy(&mock_global_contract_deployer_wasm)
-                .await?;
-
-            let omni_token_global_contract_id: AccountId =
-                format!("omni-token-global.{}", mock_global_contract_deployer.id()).parse()?;
-
-            mock_global_contract_deployer
-                .call("deploy_global_contract_by_account_id")
-                .args_json((
-                    Base64VecU8::from(omni_token_wasm.clone()),
-                    &omni_token_global_contract_id,
-                ))
-                .max_gas()
-                .deposit(
-                    GLOBAL_STORAGE_COST_PER_BYTE
-                        .saturating_mul(omni_token_wasm.len().try_into().unwrap()),
-                )
-                .transact()
-                .await?
-                .into_result()?;
+            // Deploy global omni token contract
+            let omni_token_global_contract_id = Self::deploy_global_omni_token(
+                &worker,
+                &omni_token_wasm,
+                &mock_global_contract_deployer_wasm,
+            )
+            .await?;
 
             // Setup token deployer
             let token_deployer = worker
@@ -186,6 +172,36 @@ mod tests {
                 mock_global_contract_deployer_wasm,
             )
             .await
+        }
+
+        async fn deploy_global_omni_token(
+            worker: &near_workspaces::Worker<near_workspaces::network::Sandbox>,
+            omni_token_wasm: &[u8],
+            mock_global_contract_deployer_wasm: &[u8],
+        ) -> anyhow::Result<AccountId> {
+            let mock_global_contract_deployer = worker
+                .dev_deploy(mock_global_contract_deployer_wasm)
+                .await?;
+
+            let omni_token_global_contract_id: AccountId =
+                format!("omni-token-global.{}", mock_global_contract_deployer.id()).parse()?;
+
+            mock_global_contract_deployer
+                .call("deploy_global_contract_by_account_id")
+                .args_json((
+                    Base64VecU8::from(omni_token_wasm.to_vec()),
+                    &omni_token_global_contract_id,
+                ))
+                .max_gas()
+                .deposit(
+                    GLOBAL_STORAGE_COST_PER_BYTE
+                        .saturating_mul(omni_token_wasm.len().try_into().unwrap()),
+                )
+                .transact()
+                .await?
+                .into_result()?;
+
+            Ok(omni_token_global_contract_id)
         }
 
         async fn deploy_token(

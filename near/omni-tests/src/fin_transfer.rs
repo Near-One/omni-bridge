@@ -233,8 +233,6 @@ mod tests {
             })
             .collect();
 
-        println!("Hey");
-
         // Fin transfer
         relayer_account
             .call(locker_contract.id(), "fin_transfer")
@@ -261,7 +259,6 @@ mod tests {
             .transact()
             .await?
             .into_result()?;
-        println!("Hai");
 
         // Check balances
         let recipient_balance: U128 = token_contract
