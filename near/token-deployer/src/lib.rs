@@ -6,6 +6,8 @@ use near_sdk::serde_json::json;
 use near_sdk::{env, near, AccountId, Gas, NearToken, PanicOnDefault, Promise};
 use omni_types::BasicMetadata;
 
+mod migrate;
+
 const NO_DEPOSIT: NearToken = NearToken::from_near(0);
 const OMNI_TOKEN_INIT_GAS: Gas = Gas::from_tgas(10);
 
