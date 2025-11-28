@@ -28,4 +28,3 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 near-sdk = { workspace = true, features = ["global-contracts"] }
-near-contract-standards.workspace = true
