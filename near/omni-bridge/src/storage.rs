@@ -336,22 +336,8 @@ impl Contract {
     }
 
     pub fn required_balance_for_fin_transfer(&self) -> NearToken {
-        let key_len: u64 = borsh::to_vec(&(ChainKind::Eth, 0_u64))
-            .sdk_expect("ERR_BORSH")
-            .len()
-            .try_into()
-            .sdk_expect("ERR_CAST");
-
-        let storage_cost =
-            env::storage_byte_cost().saturating_mul((Self::get_basic_storage() + key_len).into());
-        let ft_transfers_cost = NearToken::from_yoctonear(2);
-
-        storage_cost.saturating_add(ft_transfers_cost)
-    }
-
-    pub fn required_storage_for_fin_utxo_transfer(&self) -> NearToken {
         let key_len: u64 = borsh::to_vec(&(
-            ChainKind::Btc,
+            ChainKind::Eth,
             omni_types::UtxoId {
                 tx_hash: "a".repeat(64),
                 vout: 0,
@@ -364,7 +350,7 @@ impl Contract {
 
         let storage_cost =
             env::storage_byte_cost().saturating_mul((Self::get_basic_storage() + key_len).into());
-        let ft_transfers_cost = NearToken::from_yoctonear(1);
+        let ft_transfers_cost = NearToken::from_yoctonear(2);
 
         storage_cost.saturating_add(ft_transfers_cost)
     }
