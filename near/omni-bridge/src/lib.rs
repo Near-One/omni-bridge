@@ -312,7 +312,7 @@ impl Contract {
         };
 
         let payload = near_sdk::env::keccak256_array(
-            &borsh::to_vec(&metadata_payload).sdk_expect("ERR_BORSH"),
+            borsh::to_vec(&metadata_payload).sdk_expect("ERR_BORSH"),
         );
 
         ext_signer::ext(self.mpc_signer.clone())
@@ -442,7 +442,7 @@ impl Contract {
         };
 
         let payload = near_sdk::env::keccak256_array(
-            &borsh::to_vec(&transfer_payload).sdk_expect("ERR_BORSH"),
+            borsh::to_vec(&transfer_payload).sdk_expect("ERR_BORSH"),
         );
 
         ext_signer::ext(self.mpc_signer.clone())
@@ -1333,7 +1333,8 @@ impl Contract {
             ext_token::ext(token_info.token_id)
                 .with_static_gas(STORAGE_DEPOSIT_GAS)
                 .with_attached_deposit(NEP141_DEPOSIT)
-                .storage_deposit(&env::current_account_id(), Some(true));
+                .storage_deposit(&env::current_account_id(), Some(true))
+                .detach();
         }
     }
 
@@ -1388,7 +1389,8 @@ impl Contract {
     ) {
         ext_bridge_token_facory::ext(factory_account_id)
             .with_static_gas(UPDATE_CONTROLLER_GAS)
-            .set_controller_for_tokens(tokens_accounts_id);
+            .set_controller_for_tokens(tokens_accounts_id)
+            .detach();
     }
 
     #[private]
@@ -1415,16 +1417,16 @@ impl Contract {
             // Send fee to the fee recipient
             if transfer_message.fee.fee.0 > 0 {
                 if self.deployed_tokens.contains(&token) {
-                    ext_token::ext(token).with_static_gas(MINT_TOKEN_GAS).mint(
-                        fee_recipient.clone(),
-                        transfer_message.fee.fee,
-                        None,
-                    );
+                    ext_token::ext(token)
+                        .with_static_gas(MINT_TOKEN_GAS)
+                        .mint(fee_recipient.clone(), transfer_message.fee.fee, None)
+                        .detach();
                 } else {
                     ext_token::ext(token)
                         .with_attached_deposit(ONE_YOCTO)
                         .with_static_gas(FT_TRANSFER_GAS)
-                        .ft_transfer(fee_recipient.clone(), transfer_message.fee.fee, None);
+                        .ft_transfer(fee_recipient.clone(), transfer_message.fee.fee, None)
+                        .detach();
                 }
             }
 
@@ -1433,7 +1435,8 @@ impl Contract {
 
                 ext_token::ext(native_token_id)
                     .with_static_gas(MINT_TOKEN_GAS)
-                    .mint(fee_recipient.clone(), transfer_message.fee.native_fee, None);
+                    .mint(fee_recipient.clone(), transfer_message.fee.native_fee, None)
+                    .detach();
             }
 
             env::log_str(&OmniBridgeEvent::FinTransferEvent { transfer_message }.to_log_string());
@@ -1497,7 +1500,8 @@ impl Contract {
         if self.deployed_tokens.contains(&token) {
             ext_token::ext(token)
                 .with_static_gas(BURN_TOKEN_GAS)
-                .burn(amount);
+                .burn(amount)
+                .detach();
         }
     }
 
@@ -1672,7 +1676,8 @@ impl Contract {
                 relayer,
                 U128(transfer_message.amount.0 - transfer_message.fee.fee.0),
                 "",
-            );
+            )
+            .detach();
             self.mark_fast_transfer_as_finalised(&fast_transfer.id());
         } else {
             required_balance = self
@@ -2100,7 +2105,8 @@ impl Contract {
             fast_transfer_status.relayer,
             amount,
             "",
-        );
+        )
+        .detach();
 
         env::log_str(
             &OmniBridgeEvent::UtxoTransferEvent {
@@ -2255,11 +2261,13 @@ impl Contract {
                 env::panic_str("Can't have native fee for transfers from UTXO chains")
             } else if origin_chain == ChainKind::Near {
                 Promise::new(fee_recipient.clone())
-                    .transfer(NearToken::from_yoctonear(message.fee.native_fee.0));
+                    .transfer(NearToken::from_yoctonear(message.fee.native_fee.0))
+                    .detach();
             } else {
                 ext_token::ext(self.get_native_token_id(origin_chain))
                     .with_static_gas(MINT_TOKEN_GAS)
-                    .mint(fee_recipient.clone(), message.fee.native_fee, None);
+                    .mint(fee_recipient.clone(), message.fee.native_fee, None)
+                    .detach();
             }
         }
 
@@ -2338,7 +2346,7 @@ impl Contract {
 
     fn refund(account_id: AccountId, amount: NearToken) {
         if !amount.is_zero() {
-            Promise::new(account_id).transfer(amount);
+            Promise::new(account_id).transfer(amount).detach();
         }
     }
 

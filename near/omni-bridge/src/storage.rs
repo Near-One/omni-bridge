@@ -161,7 +161,7 @@ impl Contract {
         self.accounts_balances.insert(&account_id, &storage);
 
         if let Some(promise_id) = &self.init_transfer_promises.get(&account_id) {
-            let result = env::promise_yield_resume(promise_id, &[]);
+            let result = env::promise_yield_resume(promise_id, []);
             env::log_str(&format!("Init transfer resume. Result: {result}"));
         }
 
@@ -187,7 +187,7 @@ impl Contract {
 
         self.accounts_balances.insert(&account_id, &storage);
 
-        Promise::new(account_id).transfer(to_withdraw);
+        Promise::new(account_id).transfer(to_withdraw).detach();
 
         storage
     }
@@ -213,7 +213,7 @@ impl Contract {
         let refund = self
             .required_balance_for_account()
             .saturating_add(storage.available);
-        Promise::new(account_id).transfer(refund);
+        Promise::new(account_id).transfer(refund).detach();
         true
     }
 

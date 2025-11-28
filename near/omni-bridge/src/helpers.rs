@@ -34,13 +34,13 @@ where
     pub fn as_return(self) {
         match self {
             PromiseOrPromiseIndexOrValue::Promise(promise) => {
-                promise.as_return();
+                promise.as_return().detach();
             }
             PromiseOrPromiseIndexOrValue::PromiseIndex(promise_index) => {
                 env::promise_return(promise_index);
             }
             PromiseOrPromiseIndexOrValue::Value(value) => {
-                env::value_return(&serde_json::to_vec(&value).unwrap());
+                env::value_return(serde_json::to_vec(&value).unwrap());
             }
         }
     }

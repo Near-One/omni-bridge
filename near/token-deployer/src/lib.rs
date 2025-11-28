@@ -54,7 +54,6 @@ impl TokenDeployer {
         contract
     }
 
-    #[payable]
     #[access_control_any(roles(Role::Controller))]
     pub fn deploy_token(&mut self, account_id: AccountId, metadata: &BasicMetadata) -> Promise {
         Promise::new(account_id)
