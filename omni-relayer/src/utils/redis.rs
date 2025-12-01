@@ -279,18 +279,24 @@ pub async fn zrem<M>(
     };
 
     for _ in 0..config.redis.query_retry_attempts {
-        if redis_connection_manager
-            .zrem::<&str, String, ()>(key, serialized_member.clone())
+        match redis_connection_manager
+            .zrem::<&str, String, usize>(key, serialized_member.clone())
             .await
-            .is_ok()
         {
-            return;
+            Ok(0) => {
+                warn!("Member not found in redis sorted set");
+                return;
+            }
+            Ok(_) => {
+                return;
+            }
+            Err(_) => {
+                tokio::time::sleep(tokio::time::Duration::from_secs(
+                    config.redis.query_retry_sleep_secs,
+                ))
+                .await;
+            }
         }
-
-        tokio::time::sleep(tokio::time::Duration::from_secs(
-            config.redis.query_retry_sleep_secs,
-        ))
-        .await;
     }
 
     warn!("Failed to remove event from redis sorted set");

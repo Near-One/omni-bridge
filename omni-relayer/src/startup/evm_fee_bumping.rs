@@ -180,12 +180,11 @@ pub async fn start_evm_fee_bumping(
                     new_tx_hash, pending_tx.tx_hash
                 );
 
-                let old_serialized_tx = serde_json::to_string(&pending_tx)?;
                 utils::redis::zrem(
                     &config,
                     redis_connection_manager,
                     &redis_key,
-                    old_serialized_tx,
+                    pending_tx.clone(),
                 )
                 .await;
 
@@ -196,7 +195,7 @@ pub async fn start_evm_fee_bumping(
                     redis_connection_manager,
                     &redis_key,
                     pending_tx.nonce,
-                    pending_tx.clone(),
+                    pending_tx,
                 )
                 .await;
 
@@ -285,6 +284,5 @@ fn sleep(check_interval_seconds: u64) -> Sleep {
 #[allow(clippy::as_conversions)]
 #[allow(clippy::cast_precision_loss)]
 pub fn wei_to_gwei(wei: u128) -> f64 {
-    let gwei = wei / 1_000_000_000;
-    gwei as f64
+    (wei as f64) / 1_000_000_000.0
 }
