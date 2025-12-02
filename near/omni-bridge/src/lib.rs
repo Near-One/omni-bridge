@@ -1399,6 +1399,7 @@ impl Contract {
             .detach();
     }
 
+    #[allow(clippy::needless_pass_by_value)]
     #[access_control_any(roles(Role::DAO, Role::TokenUpgrader))]
     pub fn upgrade_token_contract(
         &self,
@@ -1420,6 +1421,7 @@ impl Contract {
             )
     }
 
+    #[allow(clippy::needless_pass_by_value)]
     #[private]
     pub fn upgrade_token_contract_callback(
         &self,
