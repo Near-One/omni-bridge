@@ -1442,6 +1442,7 @@ impl Contract {
             NO_DEPOSIT,
             UPGRADE_TOKEN_GAS,
         );
+        env::promise_return(promise_id);
     }
 
     #[private]
