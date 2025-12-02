@@ -16,9 +16,11 @@ use near_sdk::{
 };
 use omni_ft::{MetadataManagment, MintAndBurn, UpgradeAndMigrate};
 use omni_types::{BasicMetadata, OmniAddress};
+
 const OUTER_UPGRADE_GAS: Gas = Gas::from_tgas(15);
 const NO_DEPOSIT: NearToken = NearToken::from_yoctonear(0);
 const CURRENT_STATE_VERSION: u32 = 3;
+const IS_USING_GLOBAL_TOKEN_KEY: &[u8] = b"is_using_global_token";
 
 pub mod omni_ft;
 
@@ -45,7 +47,11 @@ pub trait ExtOmniTokenFactory {
 #[near]
 impl OmniToken {
     #[init]
-    pub fn new(controller: AccountId, metadata: BasicMetadata) -> Self {
+    pub fn new(
+        controller: AccountId,
+        is_using_global_token: bool,
+        metadata: BasicMetadata,
+    ) -> Self {
         let current_account_id = env::current_account_id();
         let deployer_account = current_account_id
             .get_parent_account_id()
@@ -54,6 +60,11 @@ impl OmniToken {
         require!(
             env::predecessor_account_id().as_str() == deployer_account,
             "Only the deployer account can init this contract"
+        );
+
+        env::storage_write(
+            IS_USING_GLOBAL_TOKEN_KEY,
+            if is_using_global_token { b"1" } else { b"0" },
         );
 
         Self {
@@ -89,6 +100,13 @@ impl OmniToken {
 
     pub fn version(&self) -> String {
         env!("CARGO_PKG_VERSION").to_owned()
+    }
+
+    pub fn is_using_global_token(&self) -> bool {
+        match env::storage_read(IS_USING_GLOBAL_TOKEN_KEY) {
+            Some(value) => value == b"1",
+            None => false,
+        }
     }
 
     fn assert_controller(&self) {
