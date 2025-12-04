@@ -33,6 +33,8 @@ pub enum Role {
     duration_update_stagers(Role::DAO),
     duration_update_appliers(Role::DAO),
 ))]
+// DO NOT USE "t" or "u" prefixes in the future
+// https://github.com/Near-One/rainbow-token-connector/blob/7d8ee3b086cee4d478e1e104c3d6ef5e5625aadd/bridge-token-factory/src/lib.rs#L214C27-L214C28
 pub struct TokenDeployer {
     omni_token_global_contract_id: AccountId,
 }
