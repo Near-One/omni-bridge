@@ -21,6 +21,8 @@ mod tests {
         sol_token_address, token_deployer_wasm, GLOBAL_STORAGE_COST_PER_BYTE, NEP141_DEPOSIT,
     };
 
+    const PREV_TOKEN_DEPLOYER_WASM_FILEPATH: &str = "src/data/legacy_token_deployer-0.2.4.wasm";
+
     struct TestEnv {
         worker: near_workspaces::Worker<near_workspaces::network::Sandbox>,
         locker_contract: near_workspaces::Contract,
@@ -580,6 +582,83 @@ mod tests {
         assert_eq!(
             total_supply, amount,
             "Total supply should be equal to the minted amount"
+        );
+
+        Ok(())
+    }
+
+    #[rstest]
+    #[tokio::test]
+    async fn test_token_deployer_migration(
+        token_deployer_wasm: Vec<u8>,
+        omni_token_wasm: Vec<u8>,
+        mock_global_contract_deployer_wasm: Vec<u8>,
+    ) -> anyhow::Result<()> {
+        let worker = near_workspaces::sandbox().await?;
+
+        let legacy_token_deployer = std::fs::read(PREV_TOKEN_DEPLOYER_WASM_FILEPATH).unwrap();
+        let deployer_account = worker.dev_deploy(&legacy_token_deployer).await?;
+
+        let legacy_init_res = deployer_account
+            .call("new")
+            .args_json(json!({
+                "prover_account": "prover.testnet",
+                "locker_address": "0000000000000000000000000000000000000000"
+            }))
+            .transact()
+            .await?;
+
+        assert!(
+            legacy_init_res.is_success(),
+            "Failed to initialize legacy contract"
+        );
+
+        let tokens: Vec<String> = deployer_account.view("get_tokens").await?.json()?;
+        assert!(tokens.is_empty());
+
+        let omni_token_global_id = TestEnv::deploy_global_omni_token(
+            &worker,
+            &omni_token_wasm,
+            &mock_global_contract_deployer_wasm,
+        )
+        .await?;
+
+        let upgrade_res = deployer_account
+            .as_account()
+            .deploy(&token_deployer_wasm)
+            .await?;
+
+        assert!(upgrade_res.is_success(), "Failed to upgrade contract code");
+
+        let migrate_res = deployer_account
+            .call("migrate")
+            .args_json(json!({
+                "omni_token_global_contract_id": omni_token_global_id
+            }))
+            .max_gas()
+            .transact()
+            .await?;
+
+        assert!(
+            migrate_res.is_success(),
+            "Migration failed: {:?}",
+            migrate_res.into_result()
+        );
+
+        let stored_global_id: AccountId = deployer_account
+            .view("get_omni_token_global_contract_id")
+            .await?
+            .json()?;
+
+        assert_eq!(
+            stored_global_id, omni_token_global_id,
+            "Migration did not correctly set the global token ID"
+        );
+
+        let legacy_call_attempt = deployer_account.view("get_tokens").await;
+        assert!(
+            legacy_call_attempt.is_err(),
+            "Legacy method should no longer exist"
         );
 
         Ok(())
