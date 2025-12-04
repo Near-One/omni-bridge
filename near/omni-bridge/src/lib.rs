@@ -75,9 +75,6 @@ const ONE_YOCTO: NearToken = NearToken::from_yoctonear(1);
 const SEND_TOKENS_CALLBACK_GAS: Gas = Gas::from_tgas(15);
 const VERIFY_PROOF_GAS: Gas = Gas::from_tgas(20);
 const INIT_TRANSFER_RESUME_GAS: Gas = Gas::from_tgas(10);
-const IS_USING_GLOBAL_TOKEN_GAS: Gas = Gas::from_tgas(5);
-const UPGRADE_TOKEN_CALLBACK_GAS: Gas = Gas::from_tgas(20);
-const UPGRADE_TOKEN_GAS: Gas = Gas::from_tgas(200);
 const SIGN_PATH: &str = "bridge-1";
 
 const PROMISE_REGISTER_ID: u64 = 0;
@@ -155,8 +152,6 @@ pub trait ExtToken {
         decimals: Option<u8>,
         icon: Option<String>,
     );
-
-    fn is_using_global_token(&self) -> bool;
 }
 
 #[near(serializers = [json])]
@@ -1397,52 +1392,6 @@ impl Contract {
             .with_static_gas(UPDATE_CONTROLLER_GAS)
             .set_controller_for_tokens(tokens_accounts_id)
             .detach();
-    }
-
-    #[allow(clippy::needless_pass_by_value)]
-    #[access_control_any(roles(Role::DAO, Role::TokenUpgrader))]
-    pub fn upgrade_token_contract(
-        &self,
-        token_account_id: AccountId,
-        code: Base64VecU8,
-    ) -> Promise {
-        require!(
-            self.deployed_tokens.contains(&token_account_id),
-            "ERR_TOKEN_NOT_FOUND"
-        );
-
-        ext_token::ext(token_account_id.clone())
-            .with_static_gas(IS_USING_GLOBAL_TOKEN_GAS)
-            .is_using_global_token()
-            .then(
-                Self::ext(env::current_account_id())
-                    .with_static_gas(UPGRADE_TOKEN_CALLBACK_GAS)
-                    .upgrade_token_contract_callback(token_account_id, code),
-            )
-    }
-
-    #[allow(clippy::needless_pass_by_value)]
-    #[private]
-    pub fn upgrade_token_contract_callback(
-        &self,
-        #[callback_result] call_result: Result<bool, PromiseError>,
-        token_account_id: AccountId,
-        code: Base64VecU8,
-    ) {
-        require!(
-            !call_result.unwrap_or_default(),
-            "ERR_CANNOT_UPGRADE_GLOBAL_TOKEN"
-        );
-
-        let promise_id = env::promise_batch_create(&token_account_id);
-        env::promise_batch_action_function_call(
-            promise_id,
-            "upgrade_and_migrate",
-            &code.0,
-            NO_DEPOSIT,
-            UPGRADE_TOKEN_GAS,
-        );
-        env::promise_return(promise_id);
     }
 
     #[private]
