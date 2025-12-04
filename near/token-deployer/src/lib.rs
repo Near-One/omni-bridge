@@ -14,12 +14,11 @@ const OMNI_TOKEN_INIT_GAS: Gas = Gas::from_tgas(10);
 #[near(serializers = [json])]
 #[derive(AccessControlRole, Copy, Clone)]
 pub enum Role {
-    DAO,
-    PauseManager,
-    UnrestrictedDeposit,
-    UpgradableCodeStager,
-    UpgradableCodeDeployer,
-    Controller,
+    DAO = 0,
+    PauseManager = 1,
+    UpgradableCodeStager = 3,
+    UpgradableCodeDeployer = 4,
+    Controller = 5,
 }
 
 #[near(contract_state)]
