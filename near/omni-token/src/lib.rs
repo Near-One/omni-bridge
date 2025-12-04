@@ -100,7 +100,7 @@ impl OmniToken {
     }
 
     pub fn is_using_global_token(&self) -> bool {
-        env::storage_read(IS_USING_GLOBAL_TOKEN_KEY).map_or(false, |v| v[0] == 1)
+        env::storage_read(IS_USING_GLOBAL_TOKEN_KEY).is_some_and(|v| v[0] == 1)
     }
 
     fn assert_controller(&self) {
