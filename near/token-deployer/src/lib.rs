@@ -19,6 +19,7 @@ pub enum Role {
     UpgradableCodeStager = 3,
     UpgradableCodeDeployer = 4,
     Controller = 5,
+    LegacyController = 10,
 }
 
 #[near(contract_state)]
