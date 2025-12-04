@@ -62,10 +62,7 @@ impl OmniToken {
             "Only the deployer account can init this contract"
         );
 
-        env::storage_write(
-            IS_USING_GLOBAL_TOKEN_KEY,
-            if is_using_global_token { b"1" } else { b"0" },
-        );
+        env::storage_write(IS_USING_GLOBAL_TOKEN_KEY, &[is_using_global_token.into()]);
 
         Self {
             controller,
