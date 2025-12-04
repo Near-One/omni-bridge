@@ -20,7 +20,7 @@ use omni_types::{BasicMetadata, OmniAddress};
 const OUTER_UPGRADE_GAS: Gas = Gas::from_tgas(15);
 const NO_DEPOSIT: NearToken = NearToken::from_yoctonear(0);
 const CURRENT_STATE_VERSION: u32 = 3;
-const IS_USING_GLOBAL_TOKEN_KEY: &[u8] = b"is_using_global_token";
+const IS_USING_GLOBAL_TOKEN_KEY: &[u8] = b"IS_USING_GLOBAL_TOKEN_KEY";
 
 pub mod omni_ft;
 
