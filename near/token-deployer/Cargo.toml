@@ -37,4 +37,4 @@ omni-types.workspace = true
 omni-token = { path = "../omni-token"}
 
 [build-dependencies]
-cargo-near-build = { workspace = true, features = ["build_script"] }
+cargo-near-build.workspace = true

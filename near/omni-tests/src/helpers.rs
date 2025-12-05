@@ -31,7 +31,7 @@ pub mod tests {
         let pwd = Path::new("./").canonicalize().expect("new path");
         let sub_target = pwd.join(format!("target/{target_dir}"));
 
-        let artifact = cargo_near_build::build(cargo_near_build::BuildOpts {
+        let artifact = cargo_near_build::build_with_cli(cargo_near_build::BuildOpts {
             manifest_path: Some(
                 cargo_near_build::camino::Utf8PathBuf::from_str(path)
                     .expect("camino PathBuf from str"),
@@ -41,7 +41,7 @@ pub mod tests {
         })
         .unwrap_or_else(|_| panic!("building contract from {path}"));
 
-        std::fs::read(&artifact.path).unwrap()
+        std::fs::read(&artifact).unwrap()
     }
 
     #[fixture]
