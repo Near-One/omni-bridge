@@ -150,7 +150,8 @@ impl Contract {
         ext_token::ext(utxo_chain_token_id)
             .with_static_gas(STORAGE_DEPOSIT_GAS)
             .with_attached_deposit(NEP141_DEPOSIT)
-            .storage_deposit(&env::current_account_id(), Some(true));
+            .storage_deposit(&env::current_account_id(), Some(true))
+            .detach();
     }
 
     #[access_control_any(roles(Role::DAO, Role::RbfOperator))]

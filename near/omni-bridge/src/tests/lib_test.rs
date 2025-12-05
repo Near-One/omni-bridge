@@ -656,7 +656,9 @@ fn test_fin_transfer_callback_invalid_proof() {
         vec![PromiseResult::Failed],
     );
 
-    contract.fin_transfer_callback(&storage_actions, predecessor);
+    contract
+        .fin_transfer_callback(&storage_actions, predecessor)
+        .detach();
 }
 
 #[test]
@@ -681,7 +683,9 @@ fn test_fin_transfer_callback_unknown_factory() {
         )],
     );
 
-    contract.fin_transfer_callback(&storage_actions, predecessor);
+    contract
+        .fin_transfer_callback(&storage_actions, predecessor)
+        .detach();
 }
 
 #[test]
