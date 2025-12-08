@@ -137,7 +137,7 @@ rule init_zcash_transfer_to_zcash:
     bridge-cli testnet  init-near-to-bitcoin-transfer\
         --chain zcash \
         --target-btc-address $ZCASH_ACCOUNT_ID \
-        --amount 10000 \
+        --amount 5000 \
         --zcash-connector {params.zcash_connector} \
         --zcash {params.zcash_token} \
         --near-signer {params.user_account_id} \
