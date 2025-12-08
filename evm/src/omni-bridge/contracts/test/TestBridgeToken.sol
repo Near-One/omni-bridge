@@ -27,11 +27,7 @@ contract TestBridgeToken is
         _disableInitializers();
     }
 
-    function initialize(
-        string memory name_,
-        string memory symbol_,
-        uint8 decimals_
-    ) external initializer {
+    function initialize(string memory name_, string memory symbol_, uint8 decimals_) external initializer {
         __ERC20_init(_name, _symbol);
         __AccessControl_init();
 
@@ -50,29 +46,21 @@ contract TestBridgeToken is
         _unpause();
     }
 
-    function setMetadata(
-        string memory name_,
-        string memory symbol_,
-        uint8 decimals_,
-        uint64 blockHeight_
-    ) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    function setMetadata(string memory name_, string memory symbol_, uint8 decimals_, uint64 blockHeight_)
+        external
+        onlyRole(DEFAULT_ADMIN_ROLE)
+    {
         _metadataLastUpdated = blockHeight_;
         _name = name_;
         _symbol = symbol_;
         _decimals = decimals_;
     }
 
-    function mint(
-        address beneficiary,
-        uint256 amount
-    ) external onlyRole(DEFAULT_ADMIN_ROLE) whenNotPaused {
+    function mint(address beneficiary, uint256 amount) external onlyRole(DEFAULT_ADMIN_ROLE) whenNotPaused {
         _mint(beneficiary, amount);
     }
 
-    function burn(
-        address act,
-        uint256 amount
-    ) external onlyRole(DEFAULT_ADMIN_ROLE) whenNotPaused {
+    function burn(address act, uint256 amount) external onlyRole(DEFAULT_ADMIN_ROLE) whenNotPaused {
         _burn(act, amount);
     }
 
@@ -96,7 +84,5 @@ contract TestBridgeToken is
         return "test";
     }
 
-    function _authorizeUpgrade(
-        address newImplementation
-    ) internal override onlyRole(DEFAULT_ADMIN_ROLE) {}
+    function _authorizeUpgrade(address newImplementation) internal override onlyRole(DEFAULT_ADMIN_ROLE) {}
 }

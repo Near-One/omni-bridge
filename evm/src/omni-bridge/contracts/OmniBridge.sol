@@ -15,12 +15,9 @@ import "./SelectivePausableUpgradable.sol";
 import "../../common/Borsh.sol";
 import "./BridgeTypes.sol";
 
-contract OmniBridge is
-    UUPSUpgradeable,
-    AccessControlUpgradeable,
-    SelectivePausableUpgradable
-{
+contract OmniBridge is UUPSUpgradeable, AccessControlUpgradeable, SelectivePausableUpgradable {
     using SafeERC20 for IERC20;
+
     mapping(address => string) public ethToNearToken;
     mapping(string => address) public nearToEthToken;
     mapping(address => bool) public isBridgeToken;
@@ -35,9 +32,9 @@ contract OmniBridge is
     mapping(address => address) public customMinters;
 
     bytes32 public constant PAUSABLE_ADMIN_ROLE = keccak256("PAUSABLE_ADMIN_ROLE");
-    uint constant UNPAUSED_ALL = 0;
-    uint constant PAUSED_INIT_TRANSFER = 1 << 0;
-    uint constant PAUSED_FIN_TRANSFER = 1 << 1;
+    uint256 constant UNPAUSED_ALL = 0;
+    uint256 constant PAUSED_INIT_TRANSFER = 1 << 0;
+    uint256 constant PAUSED_FIN_TRANSFER = 1 << 1;
 
     error InvalidSignature();
     error NonceAlreadyUsed(uint64 nonce);
@@ -66,7 +63,12 @@ contract OmniBridge is
         _grantRole(PAUSABLE_ADMIN_ROLE, _msgSender());
     }
 
-    function addCustomToken(string calldata nearTokenId, address tokenAddress, address customMinter, uint8 originDecimals) payable external onlyRole(DEFAULT_ADMIN_ROLE) {
+    function addCustomToken(
+        string calldata nearTokenId,
+        address tokenAddress,
+        address customMinter,
+        uint8 originDecimals
+    ) external payable onlyRole(DEFAULT_ADMIN_ROLE) {
         isBridgeToken[tokenAddress] = true;
         ethToNearToken[tokenAddress] = nearTokenId;
         nearToEthToken[nearTokenId] = tokenAddress;
@@ -78,14 +80,7 @@ contract OmniBridge is
 
         deployTokenExtension(nearTokenId, tokenAddress, decimals, originDecimals);
 
-        emit BridgeTypes.DeployToken(
-            tokenAddress,
-            nearTokenId,
-            name,
-            symbol,
-            decimals,
-            originDecimals
-        );
+        emit BridgeTypes.DeployToken(tokenAddress, nearTokenId, name, symbol, decimals, originDecimals);
     }
 
     function removeCustomToken(address tokenAddress) external onlyRole(DEFAULT_ADMIN_ROLE) {
@@ -99,7 +94,11 @@ contract OmniBridge is
         BridgeToken(tokenAddress).acceptOwnership();
     }
 
-    function deployToken(bytes calldata signatureData, BridgeTypes.MetadataPayload calldata metadata) payable external returns (address) {
+    function deployToken(bytes calldata signatureData, BridgeTypes.MetadataPayload calldata metadata)
+        external
+        payable
+        returns (address)
+    {
         bytes memory borshEncoded = bytes.concat(
             bytes1(uint8(BridgeTypes.PayloadType.Metadata)),
             Borsh.encodeString(metadata.token),
@@ -120,24 +119,14 @@ contract OmniBridge is
         address bridgeTokenProxy = address(
             new ERC1967Proxy(
                 tokenImplementationAddress,
-                abi.encodeWithSelector(
-                    BridgeToken.initialize.selector,
-                    metadata.name,
-                    metadata.symbol,
-                    decimals
-                )
+                abi.encodeWithSelector(BridgeToken.initialize.selector, metadata.name, metadata.symbol, decimals)
             )
         );
 
         deployTokenExtension(metadata.token, bridgeTokenProxy, decimals, metadata.decimals);
 
         emit BridgeTypes.DeployToken(
-            bridgeTokenProxy,
-            metadata.token,
-            metadata.name,
-            metadata.symbol,
-            decimals,
-            metadata.decimals
+            bridgeTokenProxy, metadata.token, metadata.name, metadata.symbol, decimals, metadata.decimals
         );
 
         isBridgeToken[address(bridgeTokenProxy)] = true;
@@ -147,56 +136,44 @@ contract OmniBridge is
         return bridgeTokenProxy;
     }
 
-    function deployTokenExtension(string memory token, address tokenAddress, uint8 decimals, uint8 originDecimals) internal virtual {}
+    function deployTokenExtension(string memory token, address tokenAddress, uint8 decimals, uint8 originDecimals)
+        internal
+        virtual
+    {}
 
-    function setMetadata(
-        string calldata token,
-        string calldata name,
-        string calldata symbol
-    ) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    function setMetadata(string calldata token, string calldata name, string calldata symbol)
+        external
+        onlyRole(DEFAULT_ADMIN_ROLE)
+    {
         require(isBridgeToken[nearToEthToken[token]], "ERR_NOT_BRIDGE_TOKEN");
 
         BridgeToken bridgeToken = BridgeToken(nearToEthToken[token]);
 
         bridgeToken.setMetadata(name, symbol, bridgeToken.decimals());
 
-        emit BridgeTypes.SetMetadata(
-            address(bridgeToken),
-            token,
-            name,
-            symbol,
-            bridgeToken.decimals()
-        );
+        emit BridgeTypes.SetMetadata(address(bridgeToken), token, name, symbol, bridgeToken.decimals());
     }
 
-    function logMetadata(
-        address tokenAddress
-    ) payable external {
+    function logMetadata(address tokenAddress) external payable {
         string memory name = IERC20Metadata(tokenAddress).name();
         string memory symbol = IERC20Metadata(tokenAddress).symbol();
         uint8 decimals = IERC20Metadata(tokenAddress).decimals();
 
         logMetadataExtension(tokenAddress, name, symbol, decimals);
 
-        emit BridgeTypes.LogMetadata(
-            tokenAddress,
-            name,
-            symbol,
-            decimals
-        );
+        emit BridgeTypes.LogMetadata(tokenAddress, name, symbol, decimals);
     }
 
-    function logMetadataExtension(
-        address tokenAddress,
-        string memory name,
-        string memory symbol,
-        uint8 decimals
-    ) internal virtual {}
+    function logMetadataExtension(address tokenAddress, string memory name, string memory symbol, uint8 decimals)
+        internal
+        virtual
+    {}
 
-    function finTransfer(
-        bytes calldata signatureData,
-        BridgeTypes.TransferMessagePayload calldata payload
-    ) payable external whenNotPaused(PAUSED_FIN_TRANSFER) {
+    function finTransfer(bytes calldata signatureData, BridgeTypes.TransferMessagePayload calldata payload)
+        external
+        payable
+        whenNotPaused(PAUSED_FIN_TRANSFER)
+    {
         if (completedTransfers[payload.destinationNonce]) {
             revert NonceAlreadyUsed(payload.destinationNonce);
         }
@@ -213,7 +190,7 @@ contract OmniBridge is
             Borsh.encodeUint128(payload.amount),
             bytes1(omniBridgeChainId),
             Borsh.encodeAddress(payload.recipient),
-            bytes(payload.feeRecipient).length == 0  // None or Some(String) in rust
+            bytes(payload.feeRecipient).length == 0 // None or Some(String) in rust
                 ? bytes("\x00")
                 : bytes.concat(bytes("\x01"), Borsh.encodeString(payload.feeRecipient))
         );
@@ -225,11 +202,12 @@ contract OmniBridge is
 
         if (payload.tokenAddress == address(0)) {
             // slither-disable-next-line arbitrary-send-eth
-            (bool success, ) = payload.recipient.call{value: payload.amount}("");
+            (bool success,) = payload.recipient.call{value: payload.amount}("");
             if (!success) revert FailedToSendEther();
-        }
-        else if (customMinters[payload.tokenAddress] != address(0)) {
-            ICustomMinter(customMinters[payload.tokenAddress]).mint(payload.tokenAddress, payload.recipient, payload.amount);
+        } else if (customMinters[payload.tokenAddress] != address(0)) {
+            ICustomMinter(customMinters[payload.tokenAddress]).mint(
+                payload.tokenAddress, payload.recipient, payload.amount
+            );
         } else if (isBridgeToken[payload.tokenAddress]) {
             BridgeToken(payload.tokenAddress).mint(payload.recipient, payload.amount);
         } else {
@@ -257,7 +235,7 @@ contract OmniBridge is
         uint128 nativeFee,
         string calldata recipient,
         string calldata message
-    ) payable external whenNotPaused(PAUSED_INIT_TRANSFER) {
+    ) external payable whenNotPaused(PAUSED_INIT_TRANSFER) {
         currentOriginNonce += 1;
         if (fee >= amount) {
             revert InvalidFee();
@@ -281,20 +259,24 @@ contract OmniBridge is
             }
         }
 
-        initTransferExtension(msg.sender, tokenAddress, currentOriginNonce, amount, fee, nativeFee, recipient, message, extensionValue);
+        initTransferExtension(
+            msg.sender, tokenAddress, currentOriginNonce, amount, fee, nativeFee, recipient, message, extensionValue
+        );
 
-        emit BridgeTypes.InitTransfer(msg.sender, tokenAddress, currentOriginNonce, amount, fee, nativeFee, recipient, message);
+        emit BridgeTypes.InitTransfer(
+            msg.sender, tokenAddress, currentOriginNonce, amount, fee, nativeFee, recipient, message
+        );
     }
 
     function initTransferExtension(
-        address /*sender*/,
-        address /*tokenAddress*/,
-        uint64 /*originNonce*/,
-        uint128 /*amount*/,
-        uint128 /*fee*/,
-        uint128 /*nativeFee*/,
-        string calldata /*recipient*/,
-        string calldata /*message*/,
+        address, /*sender*/
+        address, /*tokenAddress*/
+        uint64, /*originNonce*/
+        uint128, /*amount*/
+        uint128, /*fee*/
+        uint128, /*nativeFee*/
+        string calldata, /*recipient*/
+        string calldata, /*message*/
         uint256 value
     ) internal virtual {
         if (value != 0) {
@@ -302,35 +284,28 @@ contract OmniBridge is
         }
     }
 
-    function pause(uint flags) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    function pause(uint256 flags) external onlyRole(DEFAULT_ADMIN_ROLE) {
         _pause(flags);
     }
 
     function pauseAll() external onlyRole(PAUSABLE_ADMIN_ROLE) {
-        uint flags = PAUSED_FIN_TRANSFER | PAUSED_INIT_TRANSFER;
+        uint256 flags = PAUSED_FIN_TRANSFER | PAUSED_INIT_TRANSFER;
         _pause(flags);
     }
 
-    function upgradeToken(
-        address tokenAddress,
-        address implementation
-    ) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    function upgradeToken(address tokenAddress, address implementation) external onlyRole(DEFAULT_ADMIN_ROLE) {
         require(isBridgeToken[tokenAddress], "ERR_NOT_BRIDGE_TOKEN");
         BridgeToken proxy = BridgeToken(tokenAddress);
         proxy.upgradeToAndCall(implementation, bytes(""));
     }
 
-    function setNearBridgeDerivedAddress(
-        address nearBridgeDerivedAddress_
-    ) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    function setNearBridgeDerivedAddress(address nearBridgeDerivedAddress_) external onlyRole(DEFAULT_ADMIN_ROLE) {
         nearBridgeDerivedAddress = nearBridgeDerivedAddress_;
     }
 
     receive() external payable {}
 
-    function _normalizeDecimals(
-        uint8 decimals
-    ) internal pure returns (uint8) {
+    function _normalizeDecimals(uint8 decimals) internal pure returns (uint8) {
         uint8 maxAllowedDecimals = 18;
         if (decimals > maxAllowedDecimals) {
             return maxAllowedDecimals;
@@ -338,9 +313,7 @@ contract OmniBridge is
         return decimals;
     }
 
-    function _authorizeUpgrade(
-        address newImplementation
-    ) internal override onlyRole(DEFAULT_ADMIN_ROLE) {}
+    function _authorizeUpgrade(address newImplementation) internal override onlyRole(DEFAULT_ADMIN_ROLE) {}
 
     uint256[50] private __gap;
 }

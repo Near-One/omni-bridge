@@ -6,11 +6,10 @@ import "../../common/Borsh.sol";
 import "./BridgeTypes.sol";
 
 interface IWormhole {
-    function publishMessage(
-        uint32 nonce,
-        bytes memory payload,
-        uint8 consistencyLevel
-    ) external payable returns (uint64 sequence);
+    function publishMessage(uint32 nonce, bytes memory payload, uint8 consistencyLevel)
+        external
+        payable
+        returns (uint64 sequence);
 
     function messageFee() external view returns (uint256);
 }
@@ -41,7 +40,10 @@ contract OmniBridgeWormhole is OmniBridge {
         _consistencyLevel = consistencyLevel;
     }
 
-    function deployTokenExtension(string memory token, address tokenAddress, uint8 decimals, uint8 originDecimals) internal override {
+    function deployTokenExtension(string memory token, address tokenAddress, uint8 decimals, uint8 originDecimals)
+        internal
+        override
+    {
         bytes memory payload = bytes.concat(
             bytes1(uint8(MessageType.DeployToken)),
             Borsh.encodeString(token),
@@ -51,22 +53,15 @@ contract OmniBridgeWormhole is OmniBridge {
             bytes1(originDecimals)
         );
         // slither-disable-next-line reentrancy-eth
-        _wormhole.publishMessage{value: msg.value}(
-            wormholeNonce,
-            payload,
-            _consistencyLevel
-        );
+        _wormhole.publishMessage{value: msg.value}(wormholeNonce, payload, _consistencyLevel);
 
         wormholeNonce++;
     }
 
-
-    function logMetadataExtension(
-        address tokenAddress,
-        string memory name,
-        string memory symbol,
-        uint8 decimals
-    ) internal override {
+    function logMetadataExtension(address tokenAddress, string memory name, string memory symbol, uint8 decimals)
+        internal
+        override
+    {
         bytes memory payload = bytes.concat(
             bytes1(uint8(MessageType.LogMetadata)),
             bytes1(omniBridgeChainId),
@@ -76,11 +71,7 @@ contract OmniBridgeWormhole is OmniBridge {
             bytes1(decimals)
         );
         // slither-disable-next-line reentrancy-eth
-        _wormhole.publishMessage{value: msg.value}(
-            wormholeNonce,
-            payload,
-            _consistencyLevel
-        );
+        _wormhole.publishMessage{value: msg.value}(wormholeNonce, payload, _consistencyLevel);
 
         wormholeNonce++;
     }
@@ -96,11 +87,7 @@ contract OmniBridgeWormhole is OmniBridge {
             Borsh.encodeString(payload.feeRecipient)
         );
         // slither-disable-next-line reentrancy-eth
-        _wormhole.publishMessage{value: msg.value}(
-            wormholeNonce,
-            messagePayload,
-            _consistencyLevel
-        );
+        _wormhole.publishMessage{value: msg.value}(wormholeNonce, messagePayload, _consistencyLevel);
 
         wormholeNonce++;
     }
@@ -130,19 +117,15 @@ contract OmniBridgeWormhole is OmniBridge {
             Borsh.encodeString(message)
         );
         // slither-disable-next-line reentrancy-eth
-        _wormhole.publishMessage{value: value}(
-            wormholeNonce,
-            payload,
-            _consistencyLevel
-        );
+        _wormhole.publishMessage{value: value}(wormholeNonce, payload, _consistencyLevel);
 
         wormholeNonce++;
     }
 
-    function setWormholeAddress(
-        address wormholeAddress,
-        uint8 consistencyLevel
-    ) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    function setWormholeAddress(address wormholeAddress, uint8 consistencyLevel)
+        external
+        onlyRole(DEFAULT_ADMIN_ROLE)
+    {
         _wormhole = IWormhole(wormholeAddress);
         _consistencyLevel = consistencyLevel;
     }

@@ -6,12 +6,7 @@ import {Ownable2StepUpgradeable} from "@openzeppelin/contracts-upgradeable/acces
 import {Initializable} from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import {UUPSUpgradeable} from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 
-contract BridgeToken is
-    Initializable,
-    UUPSUpgradeable,
-    ERC20Upgradeable,
-    Ownable2StepUpgradeable
-{
+contract BridgeToken is Initializable, UUPSUpgradeable, ERC20Upgradeable, Ownable2StepUpgradeable {
     string private _name;
     string private _symbol;
     uint8 private _decimals;
@@ -21,11 +16,7 @@ contract BridgeToken is
         _disableInitializers();
     }
 
-    function initialize(
-        string memory name_,
-        string memory symbol_,
-        uint8 decimals_
-    ) external initializer {
+    function initialize(string memory name_, string memory symbol_, uint8 decimals_) external initializer {
         __ERC20_init(name_, symbol_);
         __UUPSUpgradeable_init();
         __Ownable_init(_msgSender());
@@ -35,11 +26,7 @@ contract BridgeToken is
         _decimals = decimals_;
     }
 
-    function setMetadata(
-        string memory name_,
-        string memory symbol_,
-        uint8 decimals_
-    ) external onlyOwner {
+    function setMetadata(string memory name_, string memory symbol_, uint8 decimals_) external onlyOwner {
         _name = name_;
         _symbol = symbol_;
         _decimals = decimals_;

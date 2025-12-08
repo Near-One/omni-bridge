@@ -40,28 +40,12 @@ library BridgeTypes {
     );
 
     event DeployToken(
-        address indexed tokenAddress,
-        string token,
-        string name,
-        string symbol,
-        uint8 decimals,
-        uint8 originDecimals
+        address indexed tokenAddress, string token, string name, string symbol, uint8 decimals, uint8 originDecimals
     );
 
-    event LogMetadata(
-        address indexed tokenAddress,
-        string name,
-        string symbol,
-        uint8 decimals
-    );
+    event LogMetadata(address indexed tokenAddress, string name, string symbol, uint8 decimals);
 
-    event SetMetadata(
-        address indexed tokenAddress,
-        string token,
-        string name,
-        string symbol,
-        uint8 decimals
-    );
+    event SetMetadata(address indexed tokenAddress, string token, string name, string symbol, uint8 decimals);
 
     enum PayloadType {
         TransferMessage,
