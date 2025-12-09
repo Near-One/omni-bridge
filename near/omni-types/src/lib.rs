@@ -155,6 +155,8 @@ pub enum ChainKind {
     Base,
     #[serde(alias = "bnb")]
     Bnb,
+    #[serde(alias = "pol")]
+    Pol,
     #[serde(alias = "btc")]
     Btc,
     #[serde(alias = "zcash")]
@@ -164,7 +166,7 @@ pub enum ChainKind {
 impl ChainKind {
     pub const fn is_evm_chain(&self) -> bool {
         match self {
-            Self::Eth | Self::Arb | Self::Base | Self::Bnb => true,
+            Self::Eth | Self::Arb | Self::Base | Self::Bnb | Self::Pol => true,
             Self::Btc | Self::Zcash | Self::Near | Self::Sol => false,
         }
     }
@@ -172,7 +174,9 @@ impl ChainKind {
     pub const fn is_utxo_chain(&self) -> bool {
         match self {
             Self::Btc | Self::Zcash => true,
-            Self::Eth | Self::Arb | Self::Base | Self::Bnb | Self::Near | Self::Sol => false,
+            Self::Eth | Self::Arb | Self::Base | Self::Bnb | Self::Pol | Self::Near | Self::Sol => {
+                false
+            }
         }
     }
 }
@@ -223,6 +227,7 @@ pub enum OmniAddress {
     Arb(EvmAddress),
     Base(EvmAddress),
     Bnb(EvmAddress),
+    Pol(EvmAddress),
     Btc(UTXOChainAddress),
     Zcash(UTXOChainAddress),
 }
@@ -237,6 +242,7 @@ impl OmniAddress {
             ChainKind::Arb => Ok(Self::Arb(H160::ZERO)),
             ChainKind::Base => Ok(Self::Base(H160::ZERO)),
             ChainKind::Bnb => Ok(Self::Bnb(H160::ZERO)),
+            ChainKind::Pol => Ok(Self::Pol(H160::ZERO)),
             ChainKind::Btc => Ok(Self::Btc(String::new())),
             ChainKind::Zcash => Ok(Self::Zcash(String::new())),
         }
@@ -258,7 +264,7 @@ impl OmniAddress {
     pub fn new_from_slice(chain_kind: ChainKind, address: &[u8]) -> Result<Self, String> {
         match chain_kind {
             ChainKind::Sol => Ok(Self::Sol(Self::to_sol_address(address)?)),
-            ChainKind::Eth | ChainKind::Arb | ChainKind::Base | ChainKind::Bnb => {
+            ChainKind::Eth | ChainKind::Arb | ChainKind::Base | ChainKind::Bnb | ChainKind::Pol => {
                 Self::new_from_evm_address(chain_kind, Self::to_evm_address(address)?)
             }
             ChainKind::Near => Ok(Self::Near(Self::to_near_account_id(address)?)),
@@ -281,6 +287,7 @@ impl OmniAddress {
             Self::Arb(_) => ChainKind::Arb,
             Self::Base(_) => ChainKind::Base,
             Self::Bnb(_) => ChainKind::Bnb,
+            Self::Pol(_) => ChainKind::Pol,
             Self::Btc(_) => ChainKind::Btc,
             Self::Zcash(_) => ChainKind::Zcash,
         }
@@ -294,6 +301,7 @@ impl OmniAddress {
             Self::Arb(address) => ("arb", address.to_string()),
             Self::Base(address) => ("base", address.to_string()),
             Self::Bnb(address) => ("bnb", address.to_string()),
+            Self::Pol(address) => ("pol", address.to_string()),
             Self::Btc(address) => ("btc", address.to_string()),
             Self::Zcash(address) => ("zcash", address.to_string()),
         };
@@ -307,9 +315,11 @@ impl OmniAddress {
 
     pub fn is_zero(&self) -> bool {
         match self {
-            Self::Eth(address) | Self::Arb(address) | Self::Base(address) | Self::Bnb(address) => {
-                address.is_zero()
-            }
+            Self::Eth(address)
+            | Self::Arb(address)
+            | Self::Base(address)
+            | Self::Bnb(address)
+            | Self::Pol(address) => address.is_zero(),
             Self::Near(address) => *address == ZERO_ACCOUNT_ID,
             Self::Sol(address) => address.is_zero(),
             Self::Btc(address) | Self::Zcash(address) => address.is_empty(),
