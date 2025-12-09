@@ -70,12 +70,12 @@ task("deploy-bridge-token-factory", "Deploys the OmniBridge contract")
       OmniBridgeContract,
       isWormholeContract
         ? [
-            taskArgs.bridgeTokenImpl,
-            nearBridgeDerivedAddress,
-            omniChainId,
-            wormholeAddress,
-            consistencyLevel,
-          ]
+          taskArgs.bridgeTokenImpl,
+          nearBridgeDerivedAddress,
+          omniChainId,
+          wormholeAddress,
+          consistencyLevel,
+        ]
         : [taskArgs.bridgeTokenImpl, nearBridgeDerivedAddress, omniChainId],
       {
         initializer: isWormholeContract ? "initializeWormhole" : "initialize",
@@ -294,6 +294,13 @@ const config: HardhatUserConfig = {
       url: `https://bsc-mainnet.infura.io/v3/${INFURA_API_KEY}`,
       accounts: [`${EVM_PRIVATE_KEY}`],
     },
+    polygonMainnet: {
+      wormholeAddress: "0x7A4B5a56256163F07b2C80A7cA55aBE66c4ec4d7",
+      omniChainId: 6,
+      chainId: 137,
+      url: `https://polygon-mainnet.infura.io/v3/${INFURA_API_KEY}`,
+      accounts: [`${EVM_PRIVATE_KEY}`],
+    },
     sepolia: {
       omniChainId: 0,
       chainId: 11155111,
@@ -321,6 +328,13 @@ const config: HardhatUserConfig = {
       url: `https://bsc-testnet.infura.io/v3/${INFURA_API_KEY}`,
       accounts: [`${EVM_PRIVATE_KEY}`],
     },
+    polygonAmoy: {
+      wormholeAddress: "0x6b9C8671cdDC8dEab9c719bB87cBd3e782bA6a35",
+      omniChainId: 6,
+      chainId: 80002,
+      url: `https://polygon-amoy.infura.io/v3/${INFURA_API_KEY}`,
+      accounts: [`${EVM_PRIVATE_KEY}`],
+    }
   },
   etherscan: {
     apiKey: ETHERSCAN_API_KEY,
