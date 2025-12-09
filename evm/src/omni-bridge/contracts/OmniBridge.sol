@@ -217,15 +217,15 @@ contract OmniBridge is UUPSUpgradeable, AccessControlUpgradeable, SelectivePausa
             revert InvalidSignature();
         }
 
-        MultiTokenInfo memory multi_token = multiTokens[payload.tokenAddress];
+        MultiTokenInfo memory multiToken = multiTokens[payload.tokenAddress];
 
         if (payload.tokenAddress == address(0)) {
             // slither-disable-next-line arbitrary-send-eth
             (bool success,) = payload.recipient.call{value: payload.amount}("");
             if (!success) revert FailedToSendEther();
-        } else if (multi_token.tokenAddress != address(0)) {
-            IERC1155(multi_token.tokenAddress).safeTransferFrom(
-                address(this), payload.recipient, multi_token.tokenId, payload.amount, ""
+        } else if (multiToken.tokenAddress != address(0)) {
+            IERC1155(multiToken.tokenAddress).safeTransferFrom(
+                address(this), payload.recipient, multiToken.tokenId, payload.amount, ""
             );
         } else if (customMinters[payload.tokenAddress] != address(0)) {
             ICustomMinter(customMinters[payload.tokenAddress]).mint(
@@ -412,15 +412,14 @@ contract OmniBridge is UUPSUpgradeable, AccessControlUpgradeable, SelectivePausa
     function _getOrCreateDeterministicAddress(address tokenAddress, uint256 tokenId) internal returns (address) {
         address deterministic = _deriveDeterministicAddress(tokenAddress, tokenId);
 
-        MultiTokenInfo storage multi_token = multiTokens[deterministic];
+        MultiTokenInfo storage multiToken = multiTokens[deterministic];
 
-        if (multi_token.tokenAddress == address(0)) {
-            multi_token.tokenAddress = tokenAddress;
-            multi_token.tokenId = tokenId;
+        if (multiToken.tokenAddress == address(0)) {
+            multiToken.tokenAddress = tokenAddress;
+            multiToken.tokenId = tokenId;
         } else {
             require(
-                multi_token.tokenAddress == tokenAddress && multi_token.tokenId == tokenId,
-                "ERR_ERC1155_MAPPING_MISMATCH"
+                multiToken.tokenAddress == tokenAddress && multiToken.tokenId == tokenId, "ERR_ERC1155_MAPPING_MISMATCH"
             );
         }
 
