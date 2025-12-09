@@ -29,4 +29,5 @@ crate-type = ["cdylib", "rlib"]
 [dependencies]
 near-sdk.workspace = true
 near-contract-standards.workspace = true
+borsh.workspace = true
 omni-types.workspace = true
