@@ -22,7 +22,7 @@ describe("OmniBridge ERC1155", () => {
   const secondaryTokenId = 8n
   const mintedAmount = 5n
 
-  let admin: HardhatEthersSigner
+  let _admin: HardhatEthersSigner
   let user: HardhatEthersSigner
   let recipient: HardhatEthersSigner
   let bridgeTokenImpl: BridgeToken
@@ -30,7 +30,7 @@ describe("OmniBridge ERC1155", () => {
   let erc1155: TestERC1155
 
   beforeEach(async () => {
-    ;[admin, user, recipient] = await ethers.getSigners()
+    ;[_admin, user, recipient] = await ethers.getSigners()
 
     const bridgeTokenFactory = await ethers.getContractFactory("BridgeToken")
     bridgeTokenImpl = (await bridgeTokenFactory.deploy()) as BridgeToken
@@ -115,20 +115,9 @@ describe("OmniBridge ERC1155", () => {
     )
     await bridge
       .connect(user)
-      .initTransfer1155(
-        await erc1155.getAddress(),
-        tokenId,
-        1,
-        0,
-        0,
-        "recipient.near",
-        "",
-      )
+      .initTransfer1155(await erc1155.getAddress(), tokenId, 1, 0, 0, "recipient.near", "")
 
-    const { signature, payload } = depositSignature(
-      deterministic,
-      await recipient.getAddress(),
-    )
+    const { signature, payload } = depositSignature(deterministic, await recipient.getAddress())
 
     await expect(bridge.finTransfer(signature, payload))
       .to.emit(bridge, "FinTransfer")
@@ -212,9 +201,7 @@ describe("OmniBridge ERC1155", () => {
     const deterministic = await bridge.deriveDeterministicAddress(tokenAddress, tokenId)
 
     await bridge.logMetadata1155(tokenAddress, tokenId)
-    await bridge
-      .connect(user)
-      .initTransfer1155(tokenAddress, tokenId, 1, 0, 0, "repeat.near", "")
+    await bridge.connect(user).initTransfer1155(tokenAddress, tokenId, 1, 0, 0, "repeat.near", "")
 
     const storedMapping = await bridge.multiTokens(deterministic)
     expect(storedMapping.tokenAddress).to.equal(tokenAddress)

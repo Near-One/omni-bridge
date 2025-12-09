@@ -4,10 +4,7 @@ pragma solidity ^0.8.24;
 import "../OmniBridge.sol";
 
 contract OmniBridge1155Harness is OmniBridge {
-    function exposedGetOrCreateDeterministicAddress(address tokenAddress, uint256 tokenId)
-        external
-        returns (address)
-    {
+    function exposedGetOrCreateDeterministicAddress(address tokenAddress, uint256 tokenId) external returns (address) {
         return _getOrCreateDeterministicAddress(tokenAddress, tokenId);
     }
 
