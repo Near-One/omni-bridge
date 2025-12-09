@@ -347,6 +347,8 @@ contract OmniBridge is UUPSUpgradeable, AccessControlUpgradeable, SelectivePausa
         }
     }
 
+    // We intentionally avoid advertising IERC1155Receiver support so tooling does not suggest direct ERC1155 sends.
+    // Only transfers initiated by this contract itself are accepted.
     function supportsInterface(bytes4 interfaceId)
         public
         view
@@ -354,7 +356,7 @@ contract OmniBridge is UUPSUpgradeable, AccessControlUpgradeable, SelectivePausa
         override(AccessControlUpgradeable, IERC165)
         returns (bool)
     {
-        return interfaceId == type(IERC1155Receiver).interfaceId || super.supportsInterface(interfaceId);
+        return super.supportsInterface(interfaceId);
     }
 
     function onERC1155Received(address operator, address, uint256, uint256, bytes calldata)
