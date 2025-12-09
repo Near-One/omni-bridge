@@ -50,6 +50,9 @@ contract OmniBridge is UUPSUpgradeable, AccessControlUpgradeable, SelectivePausa
     error InvalidFee();
     error InvalidValue();
     error FailedToSendEther();
+    error ERC1155MappingMismatch();
+    error ERC1155DirectSendNotAllowed();
+    error ERC1155BatchNotSupported();
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
@@ -361,7 +364,9 @@ contract OmniBridge is UUPSUpgradeable, AccessControlUpgradeable, SelectivePausa
         returns (bytes4)
     {
         // Only accept transfers that were initiated by this contract itself
-        require(operator == address(this), "ERR_ERC1155_DIRECT_SEND_NOT_ALLOWED");
+        if (operator != address(this)) {
+            revert ERC1155DirectSendNotAllowed();
+        }
 
         return this.onERC1155Received.selector;
     }
@@ -373,7 +378,7 @@ contract OmniBridge is UUPSUpgradeable, AccessControlUpgradeable, SelectivePausa
         returns (bytes4)
     {
         // Explicitly reject batched multi-token transfers
-        revert("ERR_ERC1155_BATCH_NOT_SUPPORTED");
+        revert ERC1155BatchNotSupported();
     }
 
     function pause(uint256 flags) external onlyRole(DEFAULT_ADMIN_ROLE) {
@@ -418,9 +423,9 @@ contract OmniBridge is UUPSUpgradeable, AccessControlUpgradeable, SelectivePausa
             multiToken.tokenAddress = tokenAddress;
             multiToken.tokenId = tokenId;
         } else {
-            require(
-                multiToken.tokenAddress == tokenAddress && multiToken.tokenId == tokenId, "ERR_ERC1155_MAPPING_MISMATCH"
-            );
+            if (multiToken.tokenAddress != tokenAddress || multiToken.tokenId != tokenId) {
+                revert ERC1155MappingMismatch();
+            }
         }
 
         return deterministic;
