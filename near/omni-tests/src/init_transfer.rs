@@ -64,53 +64,6 @@ mod tests {
         }
     }
 
-    async fn init_transfer_legacy(
-        env: &TestEnv,
-        transfer_amount: u128,
-        init_transfer_msg: InitTransferMsg,
-    ) -> anyhow::Result<TransferMessage> {
-        let storage_deposit_amount = get_balance_required_for_account(
-            &env.locker_contract,
-            &env.sender_account,
-            &init_transfer_msg,
-            None,
-        )
-        .await?;
-
-        // Storage deposit
-        env.sender_account
-            .call(env.locker_contract.id(), "storage_deposit")
-            .args_json(json!({
-                "account_id": env.sender_account.id(),
-            }))
-            .deposit(storage_deposit_amount)
-            .max_gas()
-            .transact()
-            .await?
-            .into_result()?;
-
-        // Initiate the transfer
-        let transfer_result = env
-            .sender_account
-            .call(env.token_contract.id(), "ft_transfer_call")
-            .args_json(json!({
-                "receiver_id": env.locker_contract.id(),
-                "amount": U128(transfer_amount),
-                "memo": None::<String>,
-                "msg": serde_json::to_string(&init_transfer_msg)?,
-            }))
-            .deposit(NearToken::from_yoctonear(1))
-            .max_gas()
-            .transact()
-            .await?
-            .into_result()?;
-
-        // Ensure the transfer event is emitted
-        let transfer_message = get_transfer_message_from_event(&transfer_result)?;
-
-        Ok(transfer_message)
-    }
-
     async fn init_transfer_flow_on_near(
         env: &TestEnv,
         transfer_amount: u128,
@@ -722,18 +675,7 @@ mod tests {
     #[tokio::test]
     async fn test_migrate(build_artifacts: &BuildArtifacts) -> anyhow::Result<()> {
         let sender_balance_token = 1_000_000;
-        let transfer_amount = 5000;
-        let init_transfer_msg = InitTransferMsg {
-            native_token_fee: U128(0),
-            fee: U128(0),
-            recipient: eth_eoa_address(),
-            msg: None,
-        };
-
         let env = TestEnv::new(sender_balance_token, true, build_artifacts).await?;
-
-        let transfer_message =
-            init_transfer_legacy(&env, transfer_amount, init_transfer_msg.clone()).await?;
 
         let res = env
             .locker_contract
@@ -755,31 +697,19 @@ mod tests {
 
         let transfer = env
             .locker_contract
-            .call("get_transfer_message")
+            .call("get_locked_tokens")
             .args_json(json!({
-                "transfer_id": TransferId {
-                    origin_chain: ChainKind::Near,
-                    origin_nonce: transfer_message.origin_nonce,
-                },
+                "chain_kind": ChainKind::Near,
+                "token_id": env.token_contract.id(),
             }))
             .max_gas()
             .transact()
             .await?;
 
-        let migrated_transfer = transfer.json::<TransferMessage>()?;
-        assert_eq!(migrated_transfer.origin_transfer_id, None);
         assert_eq!(
-            migrated_transfer.origin_nonce,
-            transfer_message.origin_nonce
-        );
-        assert_eq!(migrated_transfer.recipient, transfer_message.recipient);
-        assert_eq!(migrated_transfer.token, transfer_message.token);
-        assert_eq!(migrated_transfer.amount, transfer_message.amount);
-        assert_eq!(migrated_transfer.fee, transfer_message.fee);
-        assert_eq!(migrated_transfer.sender, transfer_message.sender);
-        assert_eq!(
-            migrated_transfer.destination_nonce,
-            transfer_message.destination_nonce
+            transfer.into_result()?.json::<U128>()?,
+            U128(0),
+            "Locked tokens not migrated correctly"
         );
 
         Ok(())

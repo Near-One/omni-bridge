@@ -94,6 +94,7 @@ enum StorageKey {
     FastTransfers,
     RegisteredProvers,
     InitTransferPromises,
+    LockedTokens,
 }
 
 #[derive(AccessControlRole, Deserialize, Serialize, Copy, Clone)]
@@ -219,6 +220,7 @@ pub struct Contract {
     pub provers: UnorderedMap<ChainKind, AccountId>,
     pub init_transfer_promises: LookupMap<AccountId, CryptoHash>,
     pub utxo_chain_connectors: HashMap<ChainKind, UTXOChainConfig>,
+    pub locked_tokens: LookupMap<(ChainKind, AccountId), u128>,
 }
 
 #[near]
@@ -271,6 +273,7 @@ impl Contract {
             provers: UnorderedMap::new(StorageKey::RegisteredProvers),
             init_transfer_promises: LookupMap::new(StorageKey::InitTransferPromises),
             utxo_chain_connectors: HashMap::new(),
+            locked_tokens: LookupMap::new(StorageKey::LockedTokens),
         };
 
         contract.acl_init_super_admin(near_sdk::env::predecessor_account_id());
@@ -1380,6 +1383,17 @@ impl Contract {
         self.token_decimals.get(address)
     }
 
+    #[must_use]
+    pub fn get_locked_tokens(&self, chain_kind: ChainKind, token_id: AccountId) -> U128 {
+        U128(self.locked_tokens.get(&(chain_kind, token_id)).unwrap_or(0))
+    }
+
+    #[access_control_any(roles(Role::DAO))]
+    pub fn set_locked_tokens(&mut self, chain_kind: ChainKind, token_id: AccountId, amount: U128) {
+        self.locked_tokens
+            .insert(&(chain_kind, token_id), &amount.0);
+    }
+
     #[access_control_any(roles(Role::DAO, Role::TokenControllerUpdater))]
     pub fn update_tokens_controller(
         &self,
@@ -1412,6 +1426,14 @@ impl Contract {
                 &OmniBridgeEvent::FailedFinTransferEvent { transfer_message }.to_log_string(),
             );
         } else {
+            if !self.deployed_tokens.contains(&token) {
+                self.decrease_locked_tokens(
+                    transfer_message.get_origin_chain(),
+                    &token,
+                    transfer_message.amount.0,
+                );
+            }
+
             // Send fee to the fee recipient
             if transfer_message.fee.fee.0 > 0 {
                 if self.deployed_tokens.contains(&token) {
@@ -1501,6 +1523,47 @@ impl Contract {
         }
     }
 
+    fn increase_locked_tokens(
+        &mut self,
+        chain_kind: ChainKind,
+        token_id: &AccountId,
+        amount: u128,
+    ) {
+        let key = (chain_kind, token_id.clone());
+        let current_amount = self.locked_tokens.get(&key).unwrap_or(0);
+        let new_amount = current_amount
+            .checked_add(amount)
+            .unwrap_or_else(|| env::panic_str("ERR_LOCKED_TOKENS_OVERFLOW"));
+
+        self.locked_tokens.insert(&key, &new_amount);
+    }
+
+    fn require_locked_tokens(&self, chain_kind: ChainKind, token_id: &AccountId, amount: u128) {
+        let available = self
+            .locked_tokens
+            .get(&(chain_kind, token_id.clone()))
+            .unwrap_or(0);
+        require!(available >= amount, "ERR_INSUFFICIENT_LOCKED_TOKENS");
+    }
+
+    fn decrease_locked_tokens(
+        &mut self,
+        chain_kind: ChainKind,
+        token_id: &AccountId,
+        amount: u128,
+    ) {
+        let key = (chain_kind, token_id.clone());
+        let available = self.locked_tokens.get(&key).unwrap_or(0);
+        require!(available >= amount, "ERR_INSUFFICIENT_LOCKED_TOKENS");
+
+        let remaining = available - amount;
+        if remaining == 0 {
+            self.locked_tokens.remove(&key);
+        } else {
+            self.locked_tokens.insert(&key, &remaining);
+        }
+    }
+
     fn get_next_destination_nonce(&mut self, chain_kind: ChainKind) -> Nonce {
         if chain_kind == ChainKind::Near {
             return 0;
@@ -1536,7 +1599,15 @@ impl Contract {
         }
 
         if let OmniAddress::Near(token_id) = transfer_message.token.clone() {
-            self.burn_tokens_if_needed(token_id, transfer_message.amount);
+            self.burn_tokens_if_needed(token_id.clone(), transfer_message.amount);
+
+            if !self.deployed_tokens.contains(&token_id) {
+                self.increase_locked_tokens(
+                    transfer_message.recipient.get_chain(),
+                    &token_id,
+                    transfer_message.amount.0,
+                );
+            }
         } else {
             return transfer_message.amount;
         }
@@ -1556,6 +1627,14 @@ impl Contract {
         let mut required_balance = self.add_fin_transfer(&transfer_message.get_transfer_id());
 
         let token = self.get_token_id(&transfer_message.token);
+
+        if !self.deployed_tokens.contains(&token) {
+            self.require_locked_tokens(
+                transfer_message.get_origin_chain(),
+                &token,
+                transfer_message.amount.0,
+            );
+        }
 
         // If fast transfer happened, change recipient and fee recipient to the relayer that executed fast transfer
         let fast_transfer = FastTransfer::from_transfer(transfer_message.clone(), token.clone());
