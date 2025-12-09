@@ -300,15 +300,14 @@ contract OmniBridge is UUPSUpgradeable, AccessControlUpgradeable, SelectivePausa
         string calldata recipient,
         string calldata message
     ) external payable whenNotPaused(PAUSED_INIT_TRANSFER) {
+        currentOriginNonce += 1;
         if (fee >= amount) {
             revert InvalidFee();
         }
 
-        IERC1155(tokenAddress).safeTransferFrom(msg.sender, address(this), tokenId, amount, "");
-
         address deterministicToken = _getOrCreateDeterministicAddress(tokenAddress, tokenId);
 
-        currentOriginNonce += 1;
+        IERC1155(tokenAddress).safeTransferFrom(msg.sender, address(this), tokenId, amount, "");
 
         uint256 extensionValue = msg.value - nativeFee;
 
