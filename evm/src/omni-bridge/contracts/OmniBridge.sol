@@ -179,9 +179,9 @@ contract OmniBridge is UUPSUpgradeable, AccessControlUpgradeable, SelectivePausa
     function logMetadata1155(address tokenAddress, uint256 tokenId) external payable {
         address deterministicToken = _getOrCreateDeterministicAddress(tokenAddress, tokenId);
 
-        logMetadataExtension(deterministicToken, "", "", 1);
+        logMetadataExtension(deterministicToken, "", "", 0);
 
-        emit BridgeTypes.LogMetadata(deterministicToken, "", "", 1);
+        emit BridgeTypes.LogMetadata(deterministicToken, "", "", 0);
     }
 
     function logMetadataExtension(address tokenAddress, string memory name, string memory symbol, uint8 decimals)
