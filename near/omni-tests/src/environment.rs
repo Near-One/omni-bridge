@@ -593,7 +593,10 @@ async fn storage_deposit(token_contract: &Contract, account_id: &AccountId) -> a
     Ok(())
 }
 
-async fn seed_locked_tokens(bridge_contract: &Contract, token_id: &AccountId) -> anyhow::Result<()> {
+async fn seed_locked_tokens(
+    bridge_contract: &Contract,
+    token_id: &AccountId,
+) -> anyhow::Result<()> {
     bridge_contract
         .call("set_locked_tokens")
         .args_json(json!({
