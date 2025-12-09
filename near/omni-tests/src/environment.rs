@@ -20,7 +20,7 @@ use crate::helpers::tests::{
 };
 
 const PREV_LOCKER_WASM_FILEPATH: &str = "src/data/omni_bridge-0_3_2.wasm";
-const DEFAULT_LOCKED_TOKENS: u128 = 1_000_000_000_000_000_000_000_000;
+const DEFAULT_LOCKED_TOKENS: u128 = 1_000_000_000_000_000_000_000_000_000_000;
 
 pub struct BridgeToken {
     pub is_deployed: bool,
