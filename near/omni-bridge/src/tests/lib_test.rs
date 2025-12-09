@@ -537,7 +537,10 @@ fn test_fin_transfer_callback_near_success() {
         &DEFAULT_FT_CONTRACT_ACCOUNT.parse().unwrap(),
     );
     contract.locked_tokens.insert(
-        &(ChainKind::Eth, AccountId::try_from(DEFAULT_FT_CONTRACT_ACCOUNT.to_string()).unwrap()),
+        &(
+            ChainKind::Eth,
+            AccountId::try_from(DEFAULT_FT_CONTRACT_ACCOUNT.to_string()).unwrap(),
+        ),
         &DEFAULT_TRANSFER_AMOUNT,
     );
     contract.token_decimals.insert(
@@ -633,7 +636,10 @@ fn test_fin_transfer_callback_near_fails_without_locked_tokens() {
 
     // Only 1 token locked while 100 are requested.
     contract.locked_tokens.insert(
-        &(ChainKind::Eth, AccountId::try_from(DEFAULT_FT_CONTRACT_ACCOUNT.to_string()).unwrap()),
+        &(
+            ChainKind::Eth,
+            AccountId::try_from(DEFAULT_FT_CONTRACT_ACCOUNT.to_string()).unwrap(),
+        ),
         &1,
     );
 
@@ -832,12 +838,7 @@ fn test_fin_transfer_callback_decreases_locked_tokens_on_success() {
         Some(vec![PromiseResult::Successful(vec![])]),
     );
 
-    contract.fin_transfer_send_tokens_callback(
-        transfer_message,
-        &fee_recipient,
-        false,
-        &recipient,
-    );
+    contract.fin_transfer_send_tokens_callback(transfer_message, &fee_recipient, false, &recipient);
 
     assert_eq!(
         contract.get_locked_tokens(ChainKind::Eth, token_id),
