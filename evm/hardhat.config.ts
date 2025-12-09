@@ -70,12 +70,12 @@ task("deploy-bridge-token-factory", "Deploys the OmniBridge contract")
       OmniBridgeContract,
       isWormholeContract
         ? [
-          taskArgs.bridgeTokenImpl,
-          nearBridgeDerivedAddress,
-          omniChainId,
-          wormholeAddress,
-          consistencyLevel,
-        ]
+            taskArgs.bridgeTokenImpl,
+            nearBridgeDerivedAddress,
+            omniChainId,
+            wormholeAddress,
+            consistencyLevel,
+          ]
         : [taskArgs.bridgeTokenImpl, nearBridgeDerivedAddress, omniChainId],
       {
         initializer: isWormholeContract ? "initializeWormhole" : "initialize",
@@ -334,7 +334,7 @@ const config: HardhatUserConfig = {
       chainId: 80002,
       url: `https://polygon-amoy.infura.io/v3/${INFURA_API_KEY}`,
       accounts: [`${EVM_PRIVATE_KEY}`],
-    }
+    },
   },
   etherscan: {
     apiKey: ETHERSCAN_API_KEY,
