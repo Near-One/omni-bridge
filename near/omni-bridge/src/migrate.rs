@@ -55,6 +55,7 @@ impl Contract {
                 provers: old_state.provers,
                 init_transfer_promises: old_state.init_transfer_promises,
                 utxo_chain_connectors: old_state.utxo_chain_connectors.iter().collect(),
+                locked_tokens: LookupMap::new(crate::StorageKey::LockedTokens),
             }
         } else {
             env::panic_str("Old state not found. Migration is not needed.")
