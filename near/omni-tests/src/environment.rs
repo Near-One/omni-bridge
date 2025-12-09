@@ -19,7 +19,7 @@ use crate::helpers::tests::{
     get_test_deploy_token_args, BuildArtifacts, NEP141_DEPOSIT,
 };
 
-const PREV_LOCKER_WASM_FILEPATH: &str = "src/data/omni_bridge-0_3_2.wasm";
+const PREV_LOCKER_WASM_FILEPATH: &str = "src/data/omni_bridge-0_4_1.wasm";
 const DEFAULT_LOCKED_TOKENS: u128 = 1_000_000_000_000_000_000_000_000_000_000;
 
 pub struct BridgeToken {
@@ -78,7 +78,10 @@ impl TestEnvBuilder {
         .await?;
 
         storage_deposit(&token_contract, bridge_contract.id()).await?;
-        seed_locked_tokens(&bridge_contract, token_contract.id()).await?;
+
+        if !self.deploy_old_version {
+            seed_locked_tokens(&bridge_contract, token_contract.id()).await?;
+        }
 
         Ok(TestEnvBuilderWithToken {
             worker: self.worker,
@@ -114,7 +117,10 @@ impl TestEnvBuilder {
         .await?;
 
         storage_deposit(&token_contract, bridge_contract.id()).await?;
-        seed_locked_tokens(&bridge_contract, token_contract.id()).await?;
+
+        if !self.deploy_old_version {
+            seed_locked_tokens(&bridge_contract, token_contract.id()).await?;
+        }
 
         Ok(TestEnvBuilderWithToken {
             worker: self.worker,
@@ -386,6 +392,7 @@ impl TestEnvBuilder {
             .worker
             .dev_deploy(&self.build_artifacts.mock_token)
             .await?;
+
         token_contract
             .call("new_default_meta")
             .args_json(json!({
