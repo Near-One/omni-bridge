@@ -402,7 +402,7 @@ contract OmniBridge is UUPSUpgradeable, AccessControlUpgradeable, SelectivePausa
 
     receive() external payable {}
 
-    function _deriveDeterministicAddress(address tokenAddress, uint256 tokenId) internal pure returns (address) {
+    function deriveDeterministicAddress(address tokenAddress, uint256 tokenId) public pure returns (address) {
         uint160 addr160 = uint160(tokenAddress);
         uint32 prefix = uint32(addr160 >> 128);
 
@@ -415,7 +415,7 @@ contract OmniBridge is UUPSUpgradeable, AccessControlUpgradeable, SelectivePausa
     }
 
     function _getOrCreateDeterministicAddress(address tokenAddress, uint256 tokenId) internal returns (address) {
-        address deterministic = _deriveDeterministicAddress(tokenAddress, tokenId);
+        address deterministic = deriveDeterministicAddress(tokenAddress, tokenId);
 
         MultiTokenInfo storage multiToken = multiTokens[deterministic];
 
