@@ -19,18 +19,17 @@ import "./SelectivePausableUpgradable.sol";
 import "../../common/Borsh.sol";
 import "./BridgeTypes.sol";
 
+struct MultiTokenInfo {
+    address tokenAddress;
+    uint256 tokenId;
+}
+
 contract OmniBridge is UUPSUpgradeable, AccessControlUpgradeable, SelectivePausableUpgradable, IERC1155Receiver {
     using SafeERC20 for IERC20;
-
-    struct MultiTokenInfo {
-        address tokenAddress;
-        uint256 tokenId;
-    }
 
     mapping(address => string) public ethToNearToken;
     mapping(string => address) public nearToEthToken;
     mapping(address => bool) public isBridgeToken;
-    mapping(address => MultiTokenInfo) public multiTokens;
 
     address public tokenImplementationAddress;
     address public nearBridgeDerivedAddress;
@@ -40,6 +39,7 @@ contract OmniBridge is UUPSUpgradeable, AccessControlUpgradeable, SelectivePausa
     uint64 public currentOriginNonce;
 
     mapping(address => address) public customMinters;
+    mapping(address => MultiTokenInfo) public multiTokens;
 
     bytes32 public constant PAUSABLE_ADMIN_ROLE = keccak256("PAUSABLE_ADMIN_ROLE");
     uint256 constant UNPAUSED_ALL = 0;
