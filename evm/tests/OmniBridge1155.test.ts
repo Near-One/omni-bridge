@@ -70,6 +70,8 @@ describe("OmniBridge ERC1155", () => {
     const recipientOnNear = "recipient.near"
     const memo = "erc1155-init"
 
+    await bridge.logMetadata1155(await erc1155.getAddress(), tokenId)
+
     await expect(
       bridge
         .connect(user)
@@ -110,6 +112,8 @@ describe("OmniBridge ERC1155", () => {
       await erc1155.getAddress(),
       tokenId,
     )
+    await bridge.logMetadata1155(await erc1155.getAddress(), tokenId)
+
     await bridge
       .connect(user)
       .initTransfer1155(await erc1155.getAddress(), tokenId, 1, 0, 0, "recipient.near", "")
