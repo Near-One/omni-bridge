@@ -86,8 +86,8 @@ mod tests {
 
             let code_storage_deposit = STORAGE_DEPOSIT_PER_BYTE
                 .saturating_mul(omni_token_wasm_len.try_into().unwrap_or_default());
-            let metadata_storage_deposit =
-                STORAGE_DEPOSIT_PER_BYTE.saturating_mul(metadata_delta as u128);
+            let metadata_storage_deposit = STORAGE_DEPOSIT_PER_BYTE
+                .saturating_mul(metadata_delta.try_into().unwrap_or_default());
 
             required_storage
                 .saturating_add(code_storage_deposit)
