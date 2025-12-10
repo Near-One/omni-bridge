@@ -6,6 +6,7 @@ import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.s
 import {UUPSUpgradeable} from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
+import {Strings} from "@openzeppelin/contracts/utils/Strings.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import {IERC1155} from "@openzeppelin/contracts/token/ERC1155/IERC1155.sol";
@@ -179,9 +180,9 @@ contract OmniBridge is UUPSUpgradeable, AccessControlUpgradeable, SelectivePausa
     function logMetadata1155(address tokenAddress, uint256 tokenId) external payable {
         address deterministicToken = _getOrCreateDeterministicAddress(tokenAddress, tokenId);
 
-        logMetadataExtension(deterministicToken, "", "", 0);
+        logMetadataExtension(deterministicToken, Strings.toHexString(tokenAddress), "", 0);
 
-        emit BridgeTypes.LogMetadata(deterministicToken, "", "", 0);
+        emit BridgeTypes.LogMetadata(deterministicToken, Strings.toHexString(tokenAddress), "", 0);
     }
 
     function logMetadataExtension(address tokenAddress, string memory name, string memory symbol, uint8 decimals)
@@ -405,15 +406,7 @@ contract OmniBridge is UUPSUpgradeable, AccessControlUpgradeable, SelectivePausa
     receive() external payable {}
 
     function deriveDeterministicAddress(address tokenAddress, uint256 tokenId) public pure returns (address) {
-        uint160 addr160 = uint160(tokenAddress);
-        uint32 prefix = uint32(addr160 >> 128);
-
-        uint256 h = uint256(keccak256(abi.encodePacked(tokenAddress, tokenId)));
-        uint128 suffix = uint128(h >> 128);
-
-        uint160 result = (uint160(prefix) << 128) | uint160(suffix);
-
-        return address(result);
+        return address(bytes20(keccak256(abi.encodePacked(tokenAddress, tokenId))));
     }
 
     function _getOrCreateDeterministicAddress(address tokenAddress, uint256 tokenId) internal returns (address) {

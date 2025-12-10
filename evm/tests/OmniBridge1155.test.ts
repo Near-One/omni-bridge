@@ -54,12 +54,9 @@ describe("OmniBridge ERC1155", () => {
   })
 
   function manualDeterministicAddress(tokenAddress: string, id: BigNumberish): string {
-    const addr = BigInt(tokenAddress)
-    const prefix = (addr >> 128n) & ((1n << 32n) - 1n)
     const hash = ethers.solidityPackedKeccak256(["address", "uint256"], [tokenAddress, id])
-    const suffix = (BigInt(hash) >> 128n) & ((1n << 128n) - 1n)
-    const combined = (prefix << 128n) | suffix
-    return ethers.getAddress(`0x${combined.toString(16).padStart(40, "0")}`)
+    const first20 = ethers.dataSlice(hash, 0, 20)
+    return ethers.getAddress(first20)
   }
 
   it("initiates ERC1155 transfer and records mapping", async () => {
@@ -140,7 +137,7 @@ describe("OmniBridge ERC1155", () => {
 
     await expect(bridge.logMetadata1155(tokenAddress, tokenId))
       .to.emit(bridge, "LogMetadata")
-      .withArgs(deterministic, "", "", 0)
+      .withArgs(deterministic, tokenAddress.toLowerCase(), "", 0)
 
     const storedMapping = await bridge.multiTokens(deterministic)
     expect(storedMapping.tokenAddress).to.equal(tokenAddress)
@@ -149,7 +146,7 @@ describe("OmniBridge ERC1155", () => {
     // Calling again should reuse mapping without reverting
     await expect(bridge.logMetadata1155(tokenAddress, tokenId))
       .to.emit(bridge, "LogMetadata")
-      .withArgs(deterministic, "", "", 0)
+      .withArgs(deterministic, tokenAddress.toLowerCase(), "", 0)
   })
 
   it("derives deterministic addresses consistently and rejects collisions", async () => {
