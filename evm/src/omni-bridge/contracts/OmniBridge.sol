@@ -309,7 +309,7 @@ contract OmniBridge is UUPSUpgradeable, AccessControlUpgradeable, SelectivePausa
             revert InvalidFee();
         }
 
-        address deterministicToken = _getOrCreateDeterministicAddress(tokenAddress, tokenId);
+        address deterministicToken = deriveDeterministicAddress(tokenAddress, tokenId);
 
         IERC1155(tokenAddress).safeTransferFrom(msg.sender, address(this), tokenId, amount, "");
 
