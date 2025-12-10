@@ -2025,6 +2025,7 @@ impl Contract {
 
         ext_deployer::ext(deployer)
             .with_static_gas(DEPLOY_TOKEN_GAS)
+            .with_attached_deposit(attached_deposit.saturating_sub(required_deposit))
             .deploy_token(token_id.clone(), metadata)
             .then(
                 ext_token::ext(token_id)
