@@ -2226,6 +2226,17 @@ impl Contract {
             NearToken::from_yoctonear(0),
         );
 
+        let fast_transfer = FastTransfer::from_utxo_transfer(
+            utxo_fin_transfer_msg.clone(),
+            token_id.clone(),
+            amount,
+            origin_chain,
+        );
+        require!(
+            self.get_fast_transfer_status(&fast_transfer.id()).is_none(),
+            "ERR_FAST_TRANSFER_SHOULD_NOT_EXIST"
+        );
+
         self.send_tokens(
             token_id.clone(),
             recipient,
