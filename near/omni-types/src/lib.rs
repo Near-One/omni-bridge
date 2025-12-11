@@ -155,12 +155,12 @@ pub enum ChainKind {
     Base,
     #[serde(alias = "bnb")]
     Bnb,
-    #[serde(alias = "pol")]
-    Pol,
     #[serde(alias = "btc")]
     Btc,
     #[serde(alias = "zcash")]
     Zcash,
+    #[serde(alias = "pol")]
+    Pol,
 }
 
 impl ChainKind {
@@ -207,6 +207,7 @@ impl TryFrom<u8> for ChainKind {
             5 => Ok(Self::Bnb),
             6 => Ok(Self::Btc),
             7 => Ok(Self::Zcash),
+            8 => Ok(Self::Pol),
             _ => Err(format!("{input:?} invalid chain kind")),
         }
     }
@@ -257,6 +258,7 @@ impl OmniAddress {
             ChainKind::Arb => Ok(Self::Arb(address)),
             ChainKind::Base => Ok(Self::Base(address)),
             ChainKind::Bnb => Ok(Self::Bnb(address)),
+            ChainKind::Pol => Ok(Self::Pol(address)),
             _ => Err(format!("{chain_kind:?} is not an EVM chain")),
         }
     }
@@ -405,6 +407,7 @@ impl FromStr for OmniAddress {
             "arb" => Ok(Self::Arb(recipient.parse().map_err(stringify)?)),
             "base" => Ok(Self::Base(recipient.parse().map_err(stringify)?)),
             "bnb" => Ok(Self::Bnb(recipient.parse().map_err(stringify)?)),
+            "pol" => Ok(Self::Pol(recipient.parse().map_err(stringify)?)),
             "btc" => Ok(Self::Btc(recipient.to_string())),
             "zcash" => Ok(Self::Zcash(recipient.to_string())),
             _ => Err(format!("Chain {chain} is not supported")),

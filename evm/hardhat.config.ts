@@ -296,7 +296,7 @@ const config: HardhatUserConfig = {
     },
     polygonMainnet: {
       wormholeAddress: "0x7A4B5a56256163F07b2C80A7cA55aBE66c4ec4d7",
-      omniChainId: 6,
+      omniChainId: 8,
       chainId: 137,
       url: `https://polygon-mainnet.infura.io/v3/${INFURA_API_KEY}`,
       accounts: [`${EVM_PRIVATE_KEY}`],
@@ -330,7 +330,7 @@ const config: HardhatUserConfig = {
     },
     polygonAmoy: {
       wormholeAddress: "0x6b9C8671cdDC8dEab9c719bB87cBd3e782bA6a35",
-      omniChainId: 6,
+      omniChainId: 8,
       chainId: 80002,
       url: `https://polygon-amoy.infura.io/v3/${INFURA_API_KEY}`,
       accounts: [`${EVM_PRIVATE_KEY}`],
