@@ -8,11 +8,17 @@ import {IENear, INearProver} from "./IENear.sol";
 import {ICustomMinter} from "../../common/ICustomMinter.sol";
 import "../../omni-bridge/contracts/SelectivePausableUpgradable.sol";
 
-contract ENearProxy is UUPSUpgradeable, AccessControlUpgradeable, ICustomMinter, SelectivePausableUpgradable {
+contract ENearProxy is
+    UUPSUpgradeable,
+    AccessControlUpgradeable,
+    ICustomMinter,
+    SelectivePausableUpgradable
+{
     IENear public eNear;
 
     bytes32 public constant MINTER_ROLE = keccak256("MINTER_ROLE");
-    bytes32 public constant PAUSABLE_ADMIN_ROLE = keccak256("PAUSABLE_ADMIN_ROLE");
+    bytes32 public constant PAUSABLE_ADMIN_ROLE =
+        keccak256("PAUSABLE_ADMIN_ROLE");
     bytes public nearConnector;
     uint256 public currentReceiptId;
     INearProver public prover;
@@ -42,7 +48,11 @@ contract ENearProxy is UUPSUpgradeable, AccessControlUpgradeable, ICustomMinter,
         _grantRole(PAUSABLE_ADMIN_ROLE, _msgSender());
     }
 
-    function mint(address token, address to, uint128 amount) public onlyRole(MINTER_ROLE) {
+    function mint(
+        address token,
+        address to,
+        uint128 amount
+    ) public onlyRole(MINTER_ROLE) {
         require(token == address(eNear), "ERR_INCORRECT_ENEAR_ADDRESS");
 
         bytes memory fakeProofData = bytes.concat(
@@ -67,11 +77,14 @@ contract ENearProxy is UUPSUpgradeable, AccessControlUpgradeable, ICustomMinter,
         eNear.transferToNear(amount, string(""));
     }
 
-    function finaliseNearToEthTransfer(bytes memory proofData, uint64 proofBlockHeight)
-        external
-        whenNotPaused(PAUSED_LEGACY_FIN_TRANSFER)
-    {
-        require(prover.proveOutcome(proofData, proofBlockHeight), "Proof should be valid");
+    function finaliseNearToEthTransfer(
+        bytes memory proofData,
+        uint64 proofBlockHeight
+    ) external whenNotPaused(PAUSED_LEGACY_FIN_TRANSFER) {
+        require(
+            prover.proveOutcome(proofData, proofBlockHeight),
+            "Proof should be valid"
+        );
 
         eNear.finaliseNearToEthTransfer(proofData, proofBlockHeight);
     }
@@ -84,5 +97,7 @@ contract ENearProxy is UUPSUpgradeable, AccessControlUpgradeable, ICustomMinter,
         _pause(flags);
     }
 
-    function _authorizeUpgrade(address newImplementation) internal override onlyRole(DEFAULT_ADMIN_ROLE) {}
+    function _authorizeUpgrade(
+        address newImplementation
+    ) internal override onlyRole(DEFAULT_ADMIN_ROLE) {}
 }

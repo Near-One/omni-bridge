@@ -24,7 +24,12 @@ struct MultiTokenInfo {
     uint256 tokenId;
 }
 
-contract OmniBridge is UUPSUpgradeable, AccessControlUpgradeable, SelectivePausableUpgradable, IERC1155Receiver {
+contract OmniBridge is
+    UUPSUpgradeable,
+    AccessControlUpgradeable,
+    SelectivePausableUpgradable,
+    IERC1155Receiver
+{
     using SafeERC20 for IERC20;
 
     mapping(address => string) public ethToNearToken;
@@ -41,7 +46,8 @@ contract OmniBridge is UUPSUpgradeable, AccessControlUpgradeable, SelectivePausa
     mapping(address => address) public customMinters;
     mapping(address => MultiTokenInfo) public multiTokens;
 
-    bytes32 public constant PAUSABLE_ADMIN_ROLE = keccak256("PAUSABLE_ADMIN_ROLE");
+    bytes32 public constant PAUSABLE_ADMIN_ROLE =
+        keccak256("PAUSABLE_ADMIN_ROLE");
     uint256 constant UNPAUSED_ALL = 0;
     uint256 constant PAUSED_INIT_TRANSFER = 1 << 0;
     uint256 constant PAUSED_FIN_TRANSFER = 1 << 1;
@@ -91,27 +97,42 @@ contract OmniBridge is UUPSUpgradeable, AccessControlUpgradeable, SelectivePausa
         string memory symbol = IERC20Metadata(tokenAddress).symbol();
         uint8 decimals = IERC20Metadata(tokenAddress).decimals();
 
-        deployTokenExtension(nearTokenId, tokenAddress, decimals, originDecimals);
+        deployTokenExtension(
+            nearTokenId,
+            tokenAddress,
+            decimals,
+            originDecimals
+        );
 
-        emit BridgeTypes.DeployToken(tokenAddress, nearTokenId, name, symbol, decimals, originDecimals);
+        emit BridgeTypes.DeployToken(
+            tokenAddress,
+            nearTokenId,
+            name,
+            symbol,
+            decimals,
+            originDecimals
+        );
     }
 
-    function removeCustomToken(address tokenAddress) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    function removeCustomToken(
+        address tokenAddress
+    ) external onlyRole(DEFAULT_ADMIN_ROLE) {
         delete isBridgeToken[tokenAddress];
         delete nearToEthToken[ethToNearToken[tokenAddress]];
         delete ethToNearToken[tokenAddress];
         delete customMinters[tokenAddress];
     }
 
-    function acceptTokenOwnership(address tokenAddress) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    function acceptTokenOwnership(
+        address tokenAddress
+    ) external onlyRole(DEFAULT_ADMIN_ROLE) {
         BridgeToken(tokenAddress).acceptOwnership();
     }
 
-    function deployToken(bytes calldata signatureData, BridgeTypes.MetadataPayload calldata metadata)
-        external
-        payable
-        returns (address)
-    {
+    function deployToken(
+        bytes calldata signatureData,
+        BridgeTypes.MetadataPayload calldata metadata
+    ) external payable returns (address) {
         bytes memory borshEncoded = bytes.concat(
             bytes1(uint8(BridgeTypes.PayloadType.Metadata)),
             Borsh.encodeString(metadata.token),
@@ -125,21 +146,39 @@ contract OmniBridge is UUPSUpgradeable, AccessControlUpgradeable, SelectivePausa
             revert InvalidSignature();
         }
 
-        require(!isBridgeToken[nearToEthToken[metadata.token]], "ERR_TOKEN_EXIST");
+        require(
+            !isBridgeToken[nearToEthToken[metadata.token]],
+            "ERR_TOKEN_EXIST"
+        );
         uint8 decimals = _normalizeDecimals(metadata.decimals);
 
         // slither-disable-next-line reentrancy-no-eth
         address bridgeTokenProxy = address(
             new ERC1967Proxy(
                 tokenImplementationAddress,
-                abi.encodeWithSelector(BridgeToken.initialize.selector, metadata.name, metadata.symbol, decimals)
+                abi.encodeWithSelector(
+                    BridgeToken.initialize.selector,
+                    metadata.name,
+                    metadata.symbol,
+                    decimals
+                )
             )
         );
 
-        deployTokenExtension(metadata.token, bridgeTokenProxy, decimals, metadata.decimals);
+        deployTokenExtension(
+            metadata.token,
+            bridgeTokenProxy,
+            decimals,
+            metadata.decimals
+        );
 
         emit BridgeTypes.DeployToken(
-            bridgeTokenProxy, metadata.token, metadata.name, metadata.symbol, decimals, metadata.decimals
+            bridgeTokenProxy,
+            metadata.token,
+            metadata.name,
+            metadata.symbol,
+            decimals,
+            metadata.decimals
         );
 
         isBridgeToken[address(bridgeTokenProxy)] = true;
@@ -149,22 +188,31 @@ contract OmniBridge is UUPSUpgradeable, AccessControlUpgradeable, SelectivePausa
         return bridgeTokenProxy;
     }
 
-    function deployTokenExtension(string memory token, address tokenAddress, uint8 decimals, uint8 originDecimals)
-        internal
-        virtual
-    {}
+    function deployTokenExtension(
+        string memory token,
+        address tokenAddress,
+        uint8 decimals,
+        uint8 originDecimals
+    ) internal virtual {}
 
-    function setMetadata(string calldata token, string calldata name, string calldata symbol)
-        external
-        onlyRole(DEFAULT_ADMIN_ROLE)
-    {
+    function setMetadata(
+        string calldata token,
+        string calldata name,
+        string calldata symbol
+    ) external onlyRole(DEFAULT_ADMIN_ROLE) {
         require(isBridgeToken[nearToEthToken[token]], "ERR_NOT_BRIDGE_TOKEN");
 
         BridgeToken bridgeToken = BridgeToken(nearToEthToken[token]);
 
         bridgeToken.setMetadata(name, symbol, bridgeToken.decimals());
 
-        emit BridgeTypes.SetMetadata(address(bridgeToken), token, name, symbol, bridgeToken.decimals());
+        emit BridgeTypes.SetMetadata(
+            address(bridgeToken),
+            token,
+            name,
+            symbol,
+            bridgeToken.decimals()
+        );
     }
 
     function logMetadata(address tokenAddress) external payable {
@@ -177,24 +225,41 @@ contract OmniBridge is UUPSUpgradeable, AccessControlUpgradeable, SelectivePausa
         emit BridgeTypes.LogMetadata(tokenAddress, name, symbol, decimals);
     }
 
-    function logMetadata1155(address tokenAddress, uint256 tokenId) external payable {
-        address deterministicToken = _getOrCreateDeterministicAddress(tokenAddress, tokenId);
+    function logMetadata1155(
+        address tokenAddress,
+        uint256 tokenId
+    ) external payable {
+        address deterministicToken = _getOrCreateDeterministicAddress(
+            tokenAddress,
+            tokenId
+        );
 
-        logMetadataExtension(deterministicToken, Strings.toHexString(tokenAddress), "", 0);
+        logMetadataExtension(
+            deterministicToken,
+            Strings.toHexString(tokenAddress),
+            "",
+            0
+        );
 
-        emit BridgeTypes.LogMetadata(deterministicToken, Strings.toHexString(tokenAddress), "", 0);
+        emit BridgeTypes.LogMetadata(
+            deterministicToken,
+            Strings.toHexString(tokenAddress),
+            "",
+            0
+        );
     }
 
-    function logMetadataExtension(address tokenAddress, string memory name, string memory symbol, uint8 decimals)
-        internal
-        virtual
-    {}
+    function logMetadataExtension(
+        address tokenAddress,
+        string memory name,
+        string memory symbol,
+        uint8 decimals
+    ) internal virtual {}
 
-    function finTransfer(bytes calldata signatureData, BridgeTypes.TransferMessagePayload calldata payload)
-        external
-        payable
-        whenNotPaused(PAUSED_FIN_TRANSFER)
-    {
+    function finTransfer(
+        bytes calldata signatureData,
+        BridgeTypes.TransferMessagePayload calldata payload
+    ) external payable whenNotPaused(PAUSED_FIN_TRANSFER) {
         if (completedTransfers[payload.destinationNonce]) {
             revert NonceAlreadyUsed(payload.destinationNonce);
         }
@@ -213,7 +278,10 @@ contract OmniBridge is UUPSUpgradeable, AccessControlUpgradeable, SelectivePausa
             Borsh.encodeAddress(payload.recipient),
             bytes(payload.feeRecipient).length == 0 // None or Some(String) in rust
                 ? bytes("\x00")
-                : bytes.concat(bytes("\x01"), Borsh.encodeString(payload.feeRecipient))
+                : bytes.concat(
+                    bytes("\x01"),
+                    Borsh.encodeString(payload.feeRecipient)
+                )
         );
         bytes32 hashed = keccak256(borshEncoded);
 
@@ -225,20 +293,34 @@ contract OmniBridge is UUPSUpgradeable, AccessControlUpgradeable, SelectivePausa
 
         if (payload.tokenAddress == address(0)) {
             // slither-disable-next-line arbitrary-send-eth
-            (bool success,) = payload.recipient.call{value: payload.amount}("");
+            (bool success, ) = payload.recipient.call{value: payload.amount}(
+                ""
+            );
             if (!success) revert FailedToSendEther();
         } else if (multiToken.tokenAddress != address(0)) {
             IERC1155(multiToken.tokenAddress).safeTransferFrom(
-                address(this), payload.recipient, multiToken.tokenId, payload.amount, ""
+                address(this),
+                payload.recipient,
+                multiToken.tokenId,
+                payload.amount,
+                ""
             );
         } else if (customMinters[payload.tokenAddress] != address(0)) {
             ICustomMinter(customMinters[payload.tokenAddress]).mint(
-                payload.tokenAddress, payload.recipient, payload.amount
+                payload.tokenAddress,
+                payload.recipient,
+                payload.amount
             );
         } else if (isBridgeToken[payload.tokenAddress]) {
-            BridgeToken(payload.tokenAddress).mint(payload.recipient, payload.amount);
+            BridgeToken(payload.tokenAddress).mint(
+                payload.recipient,
+                payload.amount
+            );
         } else {
-            IERC20(payload.tokenAddress).safeTransfer(payload.recipient, payload.amount);
+            IERC20(payload.tokenAddress).safeTransfer(
+                payload.recipient,
+                payload.amount
+            );
         }
 
         finTransferExtension(payload);
@@ -253,7 +335,9 @@ contract OmniBridge is UUPSUpgradeable, AccessControlUpgradeable, SelectivePausa
         );
     }
 
-    function finTransferExtension(BridgeTypes.TransferMessagePayload memory payload) internal virtual {}
+    function finTransferExtension(
+        BridgeTypes.TransferMessagePayload memory payload
+    ) internal virtual {}
 
     function initTransfer(
         address tokenAddress,
@@ -277,21 +361,47 @@ contract OmniBridge is UUPSUpgradeable, AccessControlUpgradeable, SelectivePausa
         } else {
             extensionValue = msg.value - nativeFee;
             if (customMinters[tokenAddress] != address(0)) {
-                IERC20(tokenAddress).safeTransferFrom(msg.sender, customMinters[tokenAddress], amount);
-                ICustomMinter(customMinters[tokenAddress]).burn(tokenAddress, amount);
+                IERC20(tokenAddress).safeTransferFrom(
+                    msg.sender,
+                    customMinters[tokenAddress],
+                    amount
+                );
+                ICustomMinter(customMinters[tokenAddress]).burn(
+                    tokenAddress,
+                    amount
+                );
             } else if (isBridgeToken[tokenAddress]) {
                 BridgeToken(tokenAddress).burn(msg.sender, amount);
             } else {
-                IERC20(tokenAddress).safeTransferFrom(msg.sender, address(this), amount);
+                IERC20(tokenAddress).safeTransferFrom(
+                    msg.sender,
+                    address(this),
+                    amount
+                );
             }
         }
 
         initTransferExtension(
-            msg.sender, tokenAddress, currentOriginNonce, amount, fee, nativeFee, recipient, message, extensionValue
+            msg.sender,
+            tokenAddress,
+            currentOriginNonce,
+            amount,
+            fee,
+            nativeFee,
+            recipient,
+            message,
+            extensionValue
         );
 
         emit BridgeTypes.InitTransfer(
-            msg.sender, tokenAddress, currentOriginNonce, amount, fee, nativeFee, recipient, message
+            msg.sender,
+            tokenAddress,
+            currentOriginNonce,
+            amount,
+            fee,
+            nativeFee,
+            recipient,
+            message
         );
     }
 
@@ -309,9 +419,18 @@ contract OmniBridge is UUPSUpgradeable, AccessControlUpgradeable, SelectivePausa
             revert InvalidFee();
         }
 
-        address deterministicToken = deriveDeterministicAddress(tokenAddress, tokenId);
+        address deterministicToken = deriveDeterministicAddress(
+            tokenAddress,
+            tokenId
+        );
 
-        IERC1155(tokenAddress).safeTransferFrom(msg.sender, address(this), tokenId, amount, "");
+        IERC1155(tokenAddress).safeTransferFrom(
+            msg.sender,
+            address(this),
+            tokenId,
+            amount,
+            ""
+        );
 
         uint256 extensionValue = msg.value - nativeFee;
 
@@ -328,19 +447,26 @@ contract OmniBridge is UUPSUpgradeable, AccessControlUpgradeable, SelectivePausa
         );
 
         emit BridgeTypes.InitTransfer(
-            msg.sender, deterministicToken, currentOriginNonce, amount, fee, nativeFee, recipient, message
+            msg.sender,
+            deterministicToken,
+            currentOriginNonce,
+            amount,
+            fee,
+            nativeFee,
+            recipient,
+            message
         );
     }
 
     function initTransferExtension(
-        address, /*sender*/
-        address, /*tokenAddress*/
-        uint64, /*originNonce*/
-        uint128, /*amount*/
-        uint128, /*fee*/
-        uint128, /*nativeFee*/
-        string calldata, /*recipient*/
-        string calldata, /*message*/
+        address /*sender*/,
+        address /*tokenAddress*/,
+        uint64 /*originNonce*/,
+        uint128 /*amount*/,
+        uint128 /*fee*/,
+        uint128 /*nativeFee*/,
+        string calldata /*recipient*/,
+        string calldata /*message*/,
         uint256 value
     ) internal virtual {
         if (value != 0) {
@@ -350,7 +476,9 @@ contract OmniBridge is UUPSUpgradeable, AccessControlUpgradeable, SelectivePausa
 
     // We intentionally avoid advertising IERC1155Receiver support so tooling does not suggest direct ERC1155 sends.
     // Only transfers initiated by this contract itself are accepted.
-    function supportsInterface(bytes4 interfaceId)
+    function supportsInterface(
+        bytes4 interfaceId
+    )
         public
         view
         virtual
@@ -360,12 +488,13 @@ contract OmniBridge is UUPSUpgradeable, AccessControlUpgradeable, SelectivePausa
         return super.supportsInterface(interfaceId);
     }
 
-    function onERC1155Received(address operator, address, uint256, uint256, bytes calldata)
-        external
-        view
-        override
-        returns (bytes4)
-    {
+    function onERC1155Received(
+        address operator,
+        address,
+        uint256,
+        uint256,
+        bytes calldata
+    ) external view override returns (bytes4) {
         // Only accept transfers that were initiated by this contract itself
         if (operator != address(this)) {
             revert ERC1155DirectSendNotAllowed();
@@ -374,12 +503,13 @@ contract OmniBridge is UUPSUpgradeable, AccessControlUpgradeable, SelectivePausa
         return this.onERC1155Received.selector;
     }
 
-    function onERC1155BatchReceived(address, address, uint256[] calldata, uint256[] calldata, bytes calldata)
-        external
-        pure
-        override
-        returns (bytes4)
-    {
+    function onERC1155BatchReceived(
+        address,
+        address,
+        uint256[] calldata,
+        uint256[] calldata,
+        bytes calldata
+    ) external pure override returns (bytes4) {
         // Explicitly reject batched multi-token transfers
         revert ERC1155BatchNotSupported();
     }
@@ -393,24 +523,41 @@ contract OmniBridge is UUPSUpgradeable, AccessControlUpgradeable, SelectivePausa
         _pause(flags);
     }
 
-    function upgradeToken(address tokenAddress, address implementation) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    function upgradeToken(
+        address tokenAddress,
+        address implementation
+    ) external onlyRole(DEFAULT_ADMIN_ROLE) {
         require(isBridgeToken[tokenAddress], "ERR_NOT_BRIDGE_TOKEN");
         BridgeToken proxy = BridgeToken(tokenAddress);
         proxy.upgradeToAndCall(implementation, bytes(""));
     }
 
-    function setNearBridgeDerivedAddress(address nearBridgeDerivedAddress_) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    function setNearBridgeDerivedAddress(
+        address nearBridgeDerivedAddress_
+    ) external onlyRole(DEFAULT_ADMIN_ROLE) {
         nearBridgeDerivedAddress = nearBridgeDerivedAddress_;
     }
 
     receive() external payable {}
 
-    function deriveDeterministicAddress(address tokenAddress, uint256 tokenId) public pure returns (address) {
-        return address(bytes20(keccak256(abi.encodePacked(tokenAddress, tokenId))));
+    function deriveDeterministicAddress(
+        address tokenAddress,
+        uint256 tokenId
+    ) public pure returns (address) {
+        return
+            address(
+                bytes20(keccak256(abi.encodePacked(tokenAddress, tokenId)))
+            );
     }
 
-    function _getOrCreateDeterministicAddress(address tokenAddress, uint256 tokenId) internal returns (address) {
-        address deterministic = deriveDeterministicAddress(tokenAddress, tokenId);
+    function _getOrCreateDeterministicAddress(
+        address tokenAddress,
+        uint256 tokenId
+    ) internal returns (address) {
+        address deterministic = deriveDeterministicAddress(
+            tokenAddress,
+            tokenId
+        );
 
         MultiTokenInfo storage multiToken = multiTokens[deterministic];
 
@@ -418,7 +565,10 @@ contract OmniBridge is UUPSUpgradeable, AccessControlUpgradeable, SelectivePausa
             multiToken.tokenAddress = tokenAddress;
             multiToken.tokenId = tokenId;
         } else {
-            if (multiToken.tokenAddress != tokenAddress || multiToken.tokenId != tokenId) {
+            if (
+                multiToken.tokenAddress != tokenAddress ||
+                multiToken.tokenId != tokenId
+            ) {
                 revert ERC1155MappingMismatch();
             }
         }
@@ -434,7 +584,9 @@ contract OmniBridge is UUPSUpgradeable, AccessControlUpgradeable, SelectivePausa
         return decimals;
     }
 
-    function _authorizeUpgrade(address newImplementation) internal override onlyRole(DEFAULT_ADMIN_ROLE) {}
+    function _authorizeUpgrade(
+        address newImplementation
+    ) internal override onlyRole(DEFAULT_ADMIN_ROLE) {}
 
     uint256[49] private __gap;
 }

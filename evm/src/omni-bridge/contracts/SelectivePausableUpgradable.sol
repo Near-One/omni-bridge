@@ -14,7 +14,10 @@ import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
  * the functions of your contract. Note that they will not be pausable by
  * simply including this module, only once the modifiers are put in place.
  */
-abstract contract SelectivePausableUpgradable is Initializable, ContextUpgradeable {
+abstract contract SelectivePausableUpgradable is
+    Initializable,
+    ContextUpgradeable
+{
     struct SelectivePausableStorage {
         uint256 _pausedFlags;
     }
@@ -23,7 +26,11 @@ abstract contract SelectivePausableUpgradable is Initializable, ContextUpgradeab
     bytes32 private constant SelectivePausableStorageLocation =
         0x3385e98de875c27690676838324244576ee92c4384629b3b7dd9c0a7c978e200;
 
-    function _getSelectivePausableStorage() private pure returns (SelectivePausableStorage storage $) {
+    function _getSelectivePausableStorage()
+        private
+        pure
+        returns (SelectivePausableStorage storage $)
+    {
         assembly {
             $.slot := SelectivePausableStorageLocation
         }
