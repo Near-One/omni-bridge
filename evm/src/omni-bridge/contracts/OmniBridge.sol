@@ -229,10 +229,24 @@ contract OmniBridge is
         address tokenAddress,
         uint256 tokenId
     ) external payable {
-        address deterministicToken = _getOrCreateDeterministicAddress(
+        address deterministicToken = deriveDeterministicAddress(
             tokenAddress,
             tokenId
         );
+
+        MultiTokenInfo storage multiToken = multiTokens[deterministicToken];
+
+        if (multiToken.tokenAddress == address(0)) {
+            multiToken.tokenAddress = tokenAddress;
+            multiToken.tokenId = tokenId;
+        } else {
+            if (
+                multiToken.tokenAddress != tokenAddress ||
+                multiToken.tokenId != tokenId
+            ) {
+                revert ERC1155MappingMismatch();
+            }
+        }
 
         logMetadataExtension(
             deterministicToken,
@@ -548,32 +562,6 @@ contract OmniBridge is
             address(
                 bytes20(keccak256(abi.encodePacked(tokenAddress, tokenId)))
             );
-    }
-
-    function _getOrCreateDeterministicAddress(
-        address tokenAddress,
-        uint256 tokenId
-    ) internal returns (address) {
-        address deterministic = deriveDeterministicAddress(
-            tokenAddress,
-            tokenId
-        );
-
-        MultiTokenInfo storage multiToken = multiTokens[deterministic];
-
-        if (multiToken.tokenAddress == address(0)) {
-            multiToken.tokenAddress = tokenAddress;
-            multiToken.tokenId = tokenId;
-        } else {
-            if (
-                multiToken.tokenAddress != tokenAddress ||
-                multiToken.tokenId != tokenId
-            ) {
-                revert ERC1155MappingMismatch();
-            }
-        }
-
-        return deterministic;
     }
 
     function _normalizeDecimals(uint8 decimals) internal pure returns (uint8) {

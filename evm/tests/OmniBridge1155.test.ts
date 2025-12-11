@@ -6,10 +6,6 @@ import type { BridgeToken, OmniBridge, TestERC1155 } from "../typechain-types"
 import { depositSignature, testWallet } from "./helpers/signatures"
 
 type OmniBridge1155 = OmniBridge & {
-  exposedGetOrCreateDeterministicAddress(
-    tokenAddress: string,
-    tokenId: BigNumberish,
-  ): Promise<string>
   forceSetMultiToken(
     deterministic: string,
     tokenAddress: string,
@@ -158,16 +154,17 @@ describe("OmniBridge ERC1155", () => {
     const derived = await bridge.deriveDeterministicAddress(tokenAddress, tokenId)
     expect(derived).to.equal(manualDeterministicAddress(tokenAddress, tokenId))
 
-    await bridge.exposedGetOrCreateDeterministicAddress(tokenAddress, tokenId)
+    await bridge.logMetadata1155(tokenAddress, tokenId)
     const mapping = await bridge.multiTokens(derived)
     expect(mapping.tokenAddress).to.equal(tokenAddress)
     expect(mapping.tokenId).to.equal(tokenId)
 
     const fakeToken = ethers.Wallet.createRandom().address
     await bridge.forceSetMultiToken(derived, fakeToken, tokenId + 1n)
-    await expect(
-      bridge.exposedGetOrCreateDeterministicAddress(tokenAddress, tokenId),
-    ).to.be.revertedWithCustomError(bridge, "ERC1155MappingMismatch")
+    await expect(bridge.logMetadata1155(tokenAddress, tokenId)).to.be.revertedWithCustomError(
+      bridge,
+      "ERC1155MappingMismatch",
+    )
   })
 
   it("validates ERC1155 receiver hooks", async () => {
