@@ -23,7 +23,7 @@ impl OmniToken {
     #[private]
     #[init(ignore_state)]
     #[allow(unused_variables)]
-    pub fn migrate(controller: AccountId, withdraw_relayer: Option<AccountId>) -> Self {
+    pub fn migrate(controller: Option<AccountId>, withdraw_relayer: Option<AccountId>) -> Self {
         if !env::state_exists() {
             env::panic_str("Old state not found. Migration is not needed.")
         }
@@ -37,12 +37,11 @@ impl OmniToken {
                 "Wrong token version for migration"
             );
 
-            if let Some(relayer) = withdraw_relayer {
-                env::storage_write(WITHDRAW_RELAYER_ADDRESS, &borsh::to_vec(&relayer).unwrap());
-            }
+            let relayer = withdraw_relayer.unwrap_or_else(|| env::panic_str("Withdraw relayer must be provided"));
+            env::storage_write(WITHDRAW_RELAYER_ADDRESS, &borsh::to_vec(&relayer).unwrap());
 
             Self {
-                controller,
+                controller: controller.unwrap_or_else(|| env::panic_str("Controller must be provided")),
                 token: state.token,
                 metadata: LazyOption::new(b"m".to_vec(), Some(&state.metadata.get())),
             }
@@ -68,7 +67,10 @@ impl UpgradeAndMigrate for OmniToken {
         env::promise_batch_action_function_call(
             promise_id,
             "migrate",
-            &json!({ "from_version": CURRENT_STATE_VERSION })
+            &json!({
+                "controller": None::<AccountId>,
+                "withdraw_relayer": None::<AccountId>,
+            })
                 .to_string()
                 .into_bytes(),
             NO_DEPOSIT,
