@@ -4,10 +4,8 @@
   "description": "OmniBridge contracts for the EVM",
   "license": "MIT",
   "dependencies": {
-    "@openzeppelin/contracts": "^5.1.0",
-    "@openzeppelin/contracts-upgradeable": "^5.1.0",
-    "prettier": "^3.3.3",
-    "prettier-plugin-solidity": "^1.4.1"
+    "@openzeppelin/contracts": "^5.4.0",
+    "@openzeppelin/contracts-upgradeable": "^5.4.0"
   },
   "devDependencies": {
     "@biomejs/biome": "^1.9.4",
@@ -32,7 +30,9 @@
     "ts-node": "^10.9.2",
     "typechain": "^8.3.2",
     "typescript": "^5.7.2",
-    "bs58": "^6.0.0"
+    "bs58": "^6.0.0",
+    "prettier": "^3.3.3",
+    "prettier-plugin-solidity": "^2.2.0"
   },
   "scripts": {
     "build": "yarn hardhat compile",
