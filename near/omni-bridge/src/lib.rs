@@ -2145,6 +2145,12 @@ impl Contract {
         let required_storage_balance =
             self.add_fin_utxo_transfer(&utxo_fin_transfer_msg.get_transfer_id(origin_chain));
 
+        self.update_storage_balance(
+            signer_id.clone(),
+            required_storage_balance,
+            NearToken::from_yoctonear(0),
+        );
+
         if let OmniAddress::Near(recipient) = utxo_fin_transfer_msg.recipient.clone() {
             self.utxo_fin_transfer_to_near(
                 recipient,
@@ -2153,7 +2159,6 @@ impl Contract {
                 utxo_fin_transfer_msg,
                 origin_chain,
                 signer_id,
-                required_storage_balance,
             )
             .into()
         } else {
@@ -2163,7 +2168,6 @@ impl Contract {
                 utxo_fin_transfer_msg,
                 origin_chain,
                 signer_id,
-                required_storage_balance,
             )
         }
     }
@@ -2216,14 +2220,7 @@ impl Contract {
         utxo_fin_transfer_msg: UtxoFinTransferMsg,
         origin_chain: ChainKind,
         storage_owner: &AccountId,
-        required_storage_balance: NearToken,
     ) -> Promise {
-        self.update_storage_balance(
-            storage_owner.clone(),
-            required_storage_balance,
-            NearToken::from_yoctonear(0),
-        );
-
         let deposit_action = StorageDepositAction {
             account_id: recipient.clone(),
             token_id: token_id.clone(),
@@ -2253,7 +2250,6 @@ impl Contract {
         utxo_fin_transfer_msg: UtxoFinTransferMsg,
         origin_chain: ChainKind,
         storage_owner: &AccountId,
-        mut required_storage_balance: NearToken,
     ) -> PromiseOrPromiseIndexOrValue<U128> {
         let origin_transfer_id = utxo_fin_transfer_msg.get_transfer_id(origin_chain);
 
@@ -2274,9 +2270,8 @@ impl Contract {
             origin_transfer_id: Some(origin_transfer_id),
         };
 
-        required_storage_balance = required_storage_balance.saturating_add(
-            self.add_transfer_message(transfer_message.clone(), storage_owner.clone()),
-        );
+        let required_storage_balance =
+            self.add_transfer_message(transfer_message.clone(), storage_owner.clone());
 
         self.update_storage_balance(
             storage_owner.clone(),
