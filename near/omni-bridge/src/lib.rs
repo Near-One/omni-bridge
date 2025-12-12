@@ -2152,7 +2152,7 @@ impl Contract {
         );
 
         if let OmniAddress::Near(recipient) = utxo_fin_transfer_msg.recipient.clone() {
-            self.utxo_fin_transfer_to_near(
+            Self::utxo_fin_transfer_to_near(
                 recipient,
                 token_id,
                 amount,
@@ -2213,7 +2213,6 @@ impl Contract {
     }
 
     fn utxo_fin_transfer_to_near(
-        &mut self,
         recipient: AccountId,
         token_id: AccountId,
         amount: U128,
