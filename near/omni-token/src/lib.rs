@@ -10,7 +10,8 @@ use near_contract_standards::storage_management::{
 use near_sdk::collections::LazyOption;
 use near_sdk::json_types::{Base64VecU8, U128};
 use near_sdk::{
-    AccountId, NearToken, PanicOnDefault, Promise, PromiseOrValue, PublicKey, borsh, env, ext_contract, near, require
+    borsh, env, ext_contract, near, require, AccountId, NearToken, PanicOnDefault, Promise,
+    PromiseOrValue, PublicKey,
 };
 use omni_ft::{MetadataManagment, MintAndBurn};
 use omni_types::{BasicMetadata, OmniAddress};
@@ -100,8 +101,13 @@ impl OmniToken {
     }
 
     fn read_withdraw_relayer_address(&self) -> Option<AccountId> {
-        env::storage_read(WITHDRAW_RELAYER_ADDRESS)
-            .and_then(|data| borsh::from_slice(&data).ok())
+        env::storage_read(WITHDRAW_RELAYER_ADDRESS).and_then(|data| borsh::from_slice(&data).ok())
+    }
+
+    pub fn set_withdraw_relayer_address(&mut self, relayer: AccountId) {
+        self.assert_controller();
+
+        env::storage_write(WITHDRAW_RELAYER_ADDRESS, &borsh::to_vec(&relayer).unwrap());
     }
 }
 
@@ -186,10 +192,10 @@ impl FungibleTokenCore for OmniToken {
                 .map_or(false, |memo| memo.starts_with(WITHDRAW_MEMO_PREFIX))
         {
             if let Some(withdraw_relayer) = self.read_withdraw_relayer_address() {
-                return self.token.ft_transfer(withdraw_relayer, amount, memo)
+                return self.token.ft_transfer(withdraw_relayer, amount, memo);
             }
         }
-        
+
         self.token.ft_transfer(receiver_id, amount, memo)
     }
 
