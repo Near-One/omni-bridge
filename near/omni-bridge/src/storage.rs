@@ -1,5 +1,5 @@
 use near_contract_standards::storage_management::{StorageBalance, StorageBalanceBounds};
-use near_sdk::{assert_one_yocto, borsh, near};
+use near_sdk::{assert_one_yocto, borsh, near, PromiseOrValue};
 use near_sdk::{env, near_bindgen, AccountId, NearToken};
 use omni_types::{FastTransferStatus, Nonce, TransferId, TransferIdKind, UnifiedTransferId};
 
@@ -159,12 +159,24 @@ impl Contract {
         );
         self.accounts_balances.insert(&account_id, &storage);
 
-        if let Some(promise_id) = &self.init_transfer_promises.get(&account_id) {
-            let result = env::promise_yield_resume(promise_id, []);
-            env::log_str(&format!("Init transfer resume. Result: {result}"));
-        }
+        self.resume_promise(&account_id).detach();
 
         storage
+    }
+
+    #[private]
+    pub fn resume_promise(&self, account_id: &AccountId) -> PromiseOrValue<()> {
+        if let Some(promise_id) = &self.init_transfer_promises.get(account_id) {
+            let result = env::promise_yield_resume(promise_id, []);
+            env::log_str(&format!("Resume promise. Result: {result}"));
+
+            if !result {
+                return Self::ext(env::current_account_id())
+                    .resume_promise(account_id)
+                    .into();
+            }
+        }
+        PromiseOrValue::Value(())
     }
 
     #[payable]
@@ -335,11 +347,17 @@ impl Contract {
     }
 
     pub fn required_balance_for_fin_transfer(&self) -> NearToken {
-        let key_len: u64 = borsh::to_vec(&(ChainKind::Eth, 0_u64))
-            .sdk_expect("ERR_BORSH")
-            .len()
-            .try_into()
-            .sdk_expect("ERR_CAST");
+        let key_len: u64 = borsh::to_vec(&(
+            ChainKind::Eth,
+            omni_types::UtxoId {
+                tx_hash: "a".repeat(64),
+                vout: 0,
+            },
+        ))
+        .sdk_expect("ERR_BORSH")
+        .len()
+        .try_into()
+        .sdk_expect("ERR_CAST");
 
         let storage_cost =
             env::storage_byte_cost().saturating_mul((Self::get_basic_storage() + key_len).into());
