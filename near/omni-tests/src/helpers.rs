@@ -12,6 +12,8 @@ pub mod tests {
     use rstest::fixture;
 
     pub const NEP141_DEPOSIT: NearToken = NearToken::from_yoctonear(1_250_000_000_000_000_000_000);
+    pub const STORAGE_DEPOSIT_PER_BYTE: NearToken = NearToken::from_near(1).saturating_div(100_000);
+    pub const GLOBAL_STORAGE_COST_PER_BYTE: NearToken = STORAGE_DEPOSIT_PER_BYTE.saturating_mul(10);
 
     #[derive(Clone)]
     pub struct BuildArtifacts {
@@ -19,6 +21,8 @@ pub mod tests {
         pub mock_prover: Vec<u8>,
         pub mock_token_receiver: Vec<u8>,
         pub mock_utxo_connector: Vec<u8>,
+        pub mock_global_contract_deployer: Vec<u8>,
+        pub omni_token: Vec<u8>,
         pub locker: Vec<u8>,
         pub token_deployer: Vec<u8>,
     }
@@ -27,7 +31,7 @@ pub mod tests {
         let pwd = Path::new("./").canonicalize().expect("new path");
         let sub_target = pwd.join(format!("target/{target_dir}"));
 
-        let artifact = cargo_near_build::build(cargo_near_build::BuildOpts {
+        let artifact = cargo_near_build::build_with_cli(cargo_near_build::BuildOpts {
             manifest_path: Some(
                 cargo_near_build::camino::Utf8PathBuf::from_str(path)
                     .expect("camino PathBuf from str"),
@@ -37,7 +41,7 @@ pub mod tests {
         })
         .unwrap_or_else(|_| panic!("building contract from {path}"));
 
-        std::fs::read(&artifact.path).unwrap()
+        std::fs::read(&artifact).unwrap()
     }
 
     #[fixture]
@@ -48,6 +52,8 @@ pub mod tests {
             mock_prover: mock_prover_wasm(),
             mock_token_receiver: mock_token_receiver_wasm(),
             mock_utxo_connector: mock_utxo_connector_wasm(),
+            mock_global_contract_deployer: mock_global_contract_deployer_wasm(),
+            omni_token: omni_token_wasm(),
             locker: locker_wasm(),
             token_deployer: token_deployer_wasm(),
         }
@@ -78,6 +84,11 @@ pub mod tests {
     }
 
     #[fixture]
+    pub fn omni_token_wasm() -> Vec<u8> {
+        build_wasm("../omni-token/Cargo.toml", "test-target-for-omni-token")
+    }
+
+    #[fixture]
     pub fn locker_wasm() -> Vec<u8> {
         build_wasm("../omni-bridge/Cargo.toml", "test-target-for-locker")
     }
@@ -95,6 +106,14 @@ pub mod tests {
         build_wasm(
             "../mock/mock-utxo-connector/Cargo.toml",
             "test-target-for-mock-utxo-connector",
+        )
+    }
+
+    #[fixture]
+    pub fn mock_global_contract_deployer_wasm() -> Vec<u8> {
+        build_wasm(
+            "../mock/mock-global-contract-deployer/Cargo.toml",
+            "test-target-for-mock-global-contract-deployer",
         )
     }
 

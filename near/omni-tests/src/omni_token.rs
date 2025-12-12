@@ -3,7 +3,7 @@ mod tests {
     use std::str::FromStr;
 
     use near_sdk::borsh;
-    use near_sdk::json_types::U128;
+    use near_sdk::json_types::{Base64VecU8, U128};
     use near_sdk::serde_json::json;
     use near_workspaces::{types::NearToken, AccountId};
     use omni_types::locker_args::{FinTransferArgs, StorageDepositAction};
@@ -17,9 +17,18 @@ mod tests {
         account_n, arb_factory_address, arb_token_address, base_factory_address,
         base_token_address, bnb_factory_address, bnb_token_address, eth_eoa_address,
         eth_factory_address, eth_token_address, get_test_deploy_token_args, locker_wasm,
-        mock_prover_wasm, pol_factory_address, sol_factory_address, sol_token_address,
-        token_deployer_wasm, NEP141_DEPOSIT,
+        mock_global_contract_deployer_wasm, mock_prover_wasm, omni_token_wasm, pol_factory_address,
+        sol_factory_address, sol_token_address, token_deployer_wasm, GLOBAL_STORAGE_COST_PER_BYTE,
+        NEP141_DEPOSIT, STORAGE_DEPOSIT_PER_BYTE,
     };
+
+    const PREV_TOKEN_DEPLOYER_WASM_FILEPATH: &str = "src/data/legacy_token_deployer-0.2.4.wasm";
+
+    #[derive(Clone, Copy)]
+    enum DepositStrategy {
+        MinimumRequired,
+        WithBuffer,
+    }
 
     struct TestEnv {
         worker: near_workspaces::Worker<near_workspaces::network::Sandbox>,
@@ -31,18 +40,117 @@ mod tests {
     }
 
     impl TestEnv {
+        fn default_token_metadata() -> BasicMetadata {
+            BasicMetadata {
+                name: "Test Token".to_string(),
+                symbol: "TEST".to_string(),
+                decimals: 18,
+            }
+        }
+
         async fn new(
             init_token_address: OmniAddress,
             mock_prover_wasm: Vec<u8>,
             locker_wasm: Vec<u8>,
+            omni_token_wasm: Vec<u8>,
             token_deployer_wasm: Vec<u8>,
+            mock_global_contract_deployer_wasm: Vec<u8>,
+        ) -> anyhow::Result<Self> {
+            Self::new_with_metadata(
+                init_token_address,
+                Self::default_token_metadata(),
+                mock_prover_wasm,
+                locker_wasm,
+                omni_token_wasm,
+                token_deployer_wasm,
+                mock_global_contract_deployer_wasm,
+            )
+            .await
+        }
+
+        fn deposit_with_metadata_buffer(
+            required_storage: NearToken,
+            token_metadata: &BasicMetadata,
+            omni_token_wasm_len: usize,
+        ) -> NearToken {
+            let base_metadata = Self::default_token_metadata();
+            let base_len = base_metadata
+                .name
+                .len()
+                .saturating_add(base_metadata.symbol.len());
+            let metadata_len = token_metadata
+                .name
+                .len()
+                .saturating_add(token_metadata.symbol.len());
+            let metadata_delta = metadata_len.saturating_sub(base_len);
+
+            let code_storage_deposit = STORAGE_DEPOSIT_PER_BYTE
+                .saturating_mul(omni_token_wasm_len.try_into().unwrap_or_default());
+            let metadata_storage_deposit = STORAGE_DEPOSIT_PER_BYTE
+                .saturating_mul(metadata_delta.try_into().unwrap_or_default());
+
+            required_storage
+                .saturating_add(code_storage_deposit)
+                .saturating_add(metadata_storage_deposit)
+                .saturating_add(NearToken::from_near(5))
+        }
+
+        async fn new_native(
+            chain_kind: ChainKind,
+            mock_prover_wasm: Vec<u8>,
+            locker_wasm: Vec<u8>,
+            omni_token_wasm: Vec<u8>,
+            token_deployer_wasm: Vec<u8>,
+            mock_global_contract_deployer_wasm: Vec<u8>,
+        ) -> anyhow::Result<Self> {
+            let init_token_address = OmniAddress::new_zero(chain_kind).unwrap();
+            Self::new_with_metadata_and_strategy(
+                init_token_address,
+                Self::default_token_metadata(),
+                mock_prover_wasm,
+                locker_wasm,
+                omni_token_wasm,
+                token_deployer_wasm,
+                mock_global_contract_deployer_wasm,
+                DepositStrategy::WithBuffer,
+            )
+            .await
+        }
+
+        async fn new_with_metadata(
+            init_token_address: OmniAddress,
+            token_metadata: BasicMetadata,
+            mock_prover_wasm: Vec<u8>,
+            locker_wasm: Vec<u8>,
+            omni_token_wasm: Vec<u8>,
+            token_deployer_wasm: Vec<u8>,
+            mock_global_contract_deployer_wasm: Vec<u8>,
+        ) -> anyhow::Result<Self> {
+            Self::new_with_metadata_and_strategy(
+                init_token_address,
+                token_metadata,
+                mock_prover_wasm,
+                locker_wasm,
+                omni_token_wasm,
+                token_deployer_wasm,
+                mock_global_contract_deployer_wasm,
+                DepositStrategy::WithBuffer,
+            )
+            .await
+        }
+
+        #[allow(clippy::too_many_arguments)]
+        async fn new_with_metadata_and_strategy(
+            init_token_address: OmniAddress,
+            token_metadata: BasicMetadata,
+            mock_prover_wasm: Vec<u8>,
+            locker_wasm: Vec<u8>,
+            omni_token_wasm: Vec<u8>,
+            token_deployer_wasm: Vec<u8>,
+            mock_global_contract_deployer_wasm: Vec<u8>,
+            deposit_strategy: DepositStrategy,
         ) -> anyhow::Result<Self> {
             let worker = near_workspaces::sandbox().await?;
-            let token_metadata = BasicMetadata {
-                name: "Test Token".to_string(),
-                symbol: "TEST".to_string(),
-                decimals: 18,
-            };
 
             // setup locker
             let locker_contract = worker.dev_deploy(&locker_wasm).await?;
@@ -71,11 +179,19 @@ mod tests {
                     .into_result()?;
             }
 
+            // Deploy global omni token contract
+            let omni_token_global_contract_id = Self::deploy_global_omni_token(
+                &worker,
+                &omni_token_wasm,
+                &mock_global_contract_deployer_wasm,
+            )
+            .await?;
+
             // Setup token deployer
             let token_deployer = worker
                 .create_tla_and_deploy(
                     account_n(1),
-                    worker.dev_generate().await.1,
+                    worker.generate_dev_account_credentials().1,
                     &token_deployer_wasm,
                 )
                 .await?
@@ -86,6 +202,7 @@ mod tests {
                 .args_json(json!({
                     "controller": locker_contract.id(),
                     "dao": AccountId::from_str("dao.near").unwrap(),
+                    "omni_token_global_contract_id": omni_token_global_contract_id,
                 }))
                 .max_gas()
                 .transact()
@@ -131,6 +248,8 @@ mod tests {
                 &init_token_address,
                 &factory_contract_address,
                 &token_metadata,
+                omni_token_wasm.len(),
+                deposit_strategy,
             )
             .await?;
 
@@ -144,20 +263,34 @@ mod tests {
             })
         }
 
-        async fn new_native(
-            chain_kind: ChainKind,
-            mock_prover_wasm: Vec<u8>,
-            locker_wasm: Vec<u8>,
-            token_deployer_wasm: Vec<u8>,
-        ) -> anyhow::Result<Self> {
-            let init_token_address = OmniAddress::new_zero(chain_kind).unwrap();
-            Self::new(
-                init_token_address,
-                mock_prover_wasm,
-                locker_wasm,
-                token_deployer_wasm,
-            )
-            .await
+        async fn deploy_global_omni_token(
+            worker: &near_workspaces::Worker<near_workspaces::network::Sandbox>,
+            omni_token_wasm: &[u8],
+            mock_global_contract_deployer_wasm: &[u8],
+        ) -> anyhow::Result<AccountId> {
+            let mock_global_contract_deployer = worker
+                .dev_deploy(mock_global_contract_deployer_wasm)
+                .await?;
+
+            let omni_token_global_contract_id: AccountId =
+                format!("omni-token-global.{}", mock_global_contract_deployer.id()).parse()?;
+
+            mock_global_contract_deployer
+                .call("deploy_global_contract_by_account_id")
+                .args_json((
+                    Base64VecU8::from(omni_token_wasm.to_vec()),
+                    &omni_token_global_contract_id,
+                ))
+                .max_gas()
+                .deposit(
+                    GLOBAL_STORAGE_COST_PER_BYTE
+                        .saturating_mul(omni_token_wasm.len().try_into().unwrap()),
+                )
+                .transact()
+                .await?
+                .into_result()?;
+
+            Ok(omni_token_global_contract_id)
         }
 
         async fn deploy_token(
@@ -166,9 +299,11 @@ mod tests {
             init_token_address: &OmniAddress,
             factoty_contract_address: &OmniAddress,
             token_metadata: &BasicMetadata,
+            omni_token_wasm_len: usize,
+            deposit_strategy: DepositStrategy,
         ) -> anyhow::Result<near_workspaces::Contract> {
             let token_deploy_initiator = worker
-                .create_tla(account_n(2), worker.dev_generate().await.1)
+                .create_tla(account_n(2), worker.generate_dev_account_credentials().1)
                 .await?
                 .unwrap();
 
@@ -176,6 +311,14 @@ mod tests {
                 .view("required_balance_for_deploy_token")
                 .await?
                 .json()?;
+            let deploy_deposit = match deposit_strategy {
+                DepositStrategy::WithBuffer => Self::deposit_with_metadata_buffer(
+                    required_storage,
+                    token_metadata,
+                    omni_token_wasm_len,
+                ),
+                DepositStrategy::MinimumRequired => required_storage,
+            };
 
             if init_token_address == &OmniAddress::new_zero(init_token_address.get_chain()).unwrap()
             {
@@ -187,7 +330,7 @@ mod tests {
                         "symbol": token_metadata.symbol,
                         "decimals": token_metadata.decimals,
                     }))
-                    .deposit(required_storage)
+                    .deposit(deploy_deposit)
                     .max_gas()
                     .transact()
                     .await?
@@ -200,7 +343,7 @@ mod tests {
                         factoty_contract_address,
                         token_metadata,
                     ))
-                    .deposit(required_storage)
+                    .deposit(deploy_deposit)
                     .max_gas()
                     .transact()
                     .await?
@@ -230,7 +373,10 @@ mod tests {
         ) -> anyhow::Result<near_workspaces::Account> {
             let account = self
                 .worker
-                .create_tla(account_n(account_num), self.worker.dev_generate().await.1)
+                .create_tla(
+                    account_n(account_num),
+                    self.worker.generate_dev_account_credentials().1,
+                )
                 .await?
                 .unwrap();
 
@@ -267,14 +413,18 @@ mod tests {
         #[case] is_native: bool,
         mock_prover_wasm: Vec<u8>,
         locker_wasm: Vec<u8>,
+        omni_token_wasm: Vec<u8>,
         token_deployer_wasm: Vec<u8>,
+        mock_global_contract_deployer_wasm: Vec<u8>,
     ) -> anyhow::Result<()> {
         let env = if is_native {
             TestEnv::new_native(
                 init_token_address.get_chain(),
                 mock_prover_wasm,
                 locker_wasm,
+                omni_token_wasm,
                 token_deployer_wasm,
+                mock_global_contract_deployer_wasm,
             )
             .await?
         } else {
@@ -282,7 +432,9 @@ mod tests {
                 init_token_address,
                 mock_prover_wasm,
                 locker_wasm,
+                omni_token_wasm,
                 token_deployer_wasm,
+                mock_global_contract_deployer_wasm,
             )
             .await?
         };
@@ -298,6 +450,86 @@ mod tests {
     }
 
     #[rstest]
+    #[tokio::test]
+    async fn test_deploy_token_with_huge_metadata(
+        mock_prover_wasm: Vec<u8>,
+        locker_wasm: Vec<u8>,
+        omni_token_wasm: Vec<u8>,
+        token_deployer_wasm: Vec<u8>,
+        mock_global_contract_deployer_wasm: Vec<u8>,
+    ) -> anyhow::Result<()> {
+        let huge_name = "TEST NAME".repeat(256);
+        let huge_symbol = "TEST".repeat(64);
+
+        let env = TestEnv::new_with_metadata(
+            eth_token_address(),
+            BasicMetadata {
+                name: huge_name.clone(),
+                symbol: huge_symbol.clone(),
+                decimals: 18,
+            },
+            mock_prover_wasm,
+            locker_wasm,
+            omni_token_wasm,
+            token_deployer_wasm,
+            mock_global_contract_deployer_wasm,
+        )
+        .await?;
+
+        let fetched_metadata: BasicMetadata =
+            env.token_contract.view("ft_metadata").await?.json()?;
+
+        assert_eq!(fetched_metadata.name, huge_name);
+        assert_eq!(fetched_metadata.symbol, huge_symbol);
+        assert_eq!(fetched_metadata.decimals, 18);
+
+        Ok(())
+    }
+
+    #[rstest]
+    #[tokio::test]
+    async fn test_deploy_token_with_huge_metadata_insufficient_deposit(
+        mock_prover_wasm: Vec<u8>,
+        locker_wasm: Vec<u8>,
+        omni_token_wasm: Vec<u8>,
+        token_deployer_wasm: Vec<u8>,
+        mock_global_contract_deployer_wasm: Vec<u8>,
+    ) -> anyhow::Result<()> {
+        let huge_name = "TEST NAME".repeat(256);
+        let huge_symbol = "TEST".repeat(64);
+
+        let err = match TestEnv::new_with_metadata_and_strategy(
+            eth_token_address(),
+            BasicMetadata {
+                name: huge_name,
+                symbol: huge_symbol,
+                decimals: 18,
+            },
+            mock_prover_wasm,
+            locker_wasm,
+            omni_token_wasm,
+            token_deployer_wasm,
+            mock_global_contract_deployer_wasm,
+            DepositStrategy::MinimumRequired,
+        )
+        .await
+        {
+            Ok(_) => panic!("deployment with minimal deposit should fail"),
+            Err(err) => err,
+        };
+
+        let err_string = err.to_string();
+        assert!(
+            err_string.contains("LackBalance")
+                || err_string.contains("AccountDoesNotExist")
+                || err_string.contains("doesn't exist"),
+            "unexpected error for insufficient deposit: {err_string}"
+        );
+
+        Ok(())
+    }
+
+    #[rstest]
     #[case(eth_token_address())]
     #[case(sol_token_address())]
     #[case(arb_token_address())]
@@ -308,13 +540,17 @@ mod tests {
         #[case] init_token_address: OmniAddress,
         mock_prover_wasm: Vec<u8>,
         locker_wasm: Vec<u8>,
+        omni_token_wasm: Vec<u8>,
         token_deployer_wasm: Vec<u8>,
+        mock_global_contract_deployer_wasm: Vec<u8>,
     ) -> anyhow::Result<()> {
         let env = TestEnv::new(
             init_token_address,
             mock_prover_wasm,
             locker_wasm,
+            omni_token_wasm,
             token_deployer_wasm,
+            mock_global_contract_deployer_wasm,
         )
         .await?;
 
@@ -364,14 +600,18 @@ mod tests {
         #[case] is_native: bool,
         mock_prover_wasm: Vec<u8>,
         locker_wasm: Vec<u8>,
+        omni_token_wasm: Vec<u8>,
         token_deployer_wasm: Vec<u8>,
+        mock_global_contract_deployer_wasm: Vec<u8>,
     ) -> anyhow::Result<()> {
         let env = if is_native {
             TestEnv::new_native(
                 init_token_address.get_chain(),
                 mock_prover_wasm,
                 locker_wasm,
+                omni_token_wasm,
                 token_deployer_wasm,
+                mock_global_contract_deployer_wasm,
             )
             .await?
         } else {
@@ -379,7 +619,9 @@ mod tests {
                 init_token_address,
                 mock_prover_wasm,
                 locker_wasm,
+                omni_token_wasm,
                 token_deployer_wasm,
+                mock_global_contract_deployer_wasm,
             )
             .await?
         };
@@ -435,14 +677,18 @@ mod tests {
         #[case] is_native: bool,
         mock_prover_wasm: Vec<u8>,
         locker_wasm: Vec<u8>,
+        omni_token_wasm: Vec<u8>,
         token_deployer_wasm: Vec<u8>,
+        mock_global_contract_deployer_wasm: Vec<u8>,
     ) -> anyhow::Result<()> {
         let env = if is_native {
             TestEnv::new_native(
                 init_token_address.get_chain(),
                 mock_prover_wasm,
                 locker_wasm,
+                omni_token_wasm,
                 token_deployer_wasm,
+                mock_global_contract_deployer_wasm,
             )
             .await?
         } else {
@@ -450,7 +696,9 @@ mod tests {
                 init_token_address,
                 mock_prover_wasm,
                 locker_wasm,
+                omni_token_wasm,
                 token_deployer_wasm,
+                mock_global_contract_deployer_wasm,
             )
             .await?
         };
@@ -511,6 +759,83 @@ mod tests {
         assert_eq!(
             total_supply, amount,
             "Total supply should be equal to the minted amount"
+        );
+
+        Ok(())
+    }
+
+    #[rstest]
+    #[tokio::test]
+    async fn test_token_deployer_migration(
+        token_deployer_wasm: Vec<u8>,
+        omni_token_wasm: Vec<u8>,
+        mock_global_contract_deployer_wasm: Vec<u8>,
+    ) -> anyhow::Result<()> {
+        let worker = near_workspaces::sandbox().await?;
+
+        let legacy_token_deployer = std::fs::read(PREV_TOKEN_DEPLOYER_WASM_FILEPATH).unwrap();
+        let deployer_account = worker.dev_deploy(&legacy_token_deployer).await?;
+
+        let legacy_init_res = deployer_account
+            .call("new")
+            .args_json(json!({
+                "prover_account": "prover.testnet",
+                "locker_address": "0000000000000000000000000000000000000000"
+            }))
+            .transact()
+            .await?;
+
+        assert!(
+            legacy_init_res.is_success(),
+            "Failed to initialize legacy contract"
+        );
+
+        let tokens: Vec<String> = deployer_account.view("get_tokens").await?.json()?;
+        assert!(tokens.is_empty());
+
+        let omni_token_global_id = TestEnv::deploy_global_omni_token(
+            &worker,
+            &omni_token_wasm,
+            &mock_global_contract_deployer_wasm,
+        )
+        .await?;
+
+        let upgrade_res = deployer_account
+            .as_account()
+            .deploy(&token_deployer_wasm)
+            .await?;
+
+        assert!(upgrade_res.is_success(), "Failed to upgrade contract code");
+
+        let migrate_res = deployer_account
+            .call("migrate")
+            .args_json(json!({
+                "omni_token_global_contract_id": omni_token_global_id
+            }))
+            .max_gas()
+            .transact()
+            .await?;
+
+        assert!(
+            migrate_res.is_success(),
+            "Migration failed: {:?}",
+            migrate_res.into_result()
+        );
+
+        let stored_global_id: AccountId = deployer_account
+            .view("get_omni_token_global_contract_id")
+            .await?
+            .json()?;
+
+        assert_eq!(
+            stored_global_id, omni_token_global_id,
+            "Migration did not correctly set the global token ID"
+        );
+
+        let legacy_call_attempt = deployer_account.view("get_tokens").await;
+        assert!(
+            legacy_call_attempt.is_err(),
+            "Legacy method should no longer exist"
         );
 
         Ok(())
