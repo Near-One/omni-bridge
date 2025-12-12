@@ -2549,6 +2549,7 @@ dependencies = [
 name = "omni-token"
 version = "0.4.2"
 dependencies = [
+ "borsh",
  "near-contract-standards",
  "near-sdk",
  "omni-types",
