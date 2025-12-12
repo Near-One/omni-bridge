@@ -32,6 +32,7 @@ fn get_evm_config(config: &config::Config, chain_kind: ChainKind) -> Result<&con
             .context("EVM config for Base is not set"),
         ChainKind::Arb => config.arb.as_ref().context("EVM config for Arb is not set"),
         ChainKind::Bnb => config.bnb.as_ref().context("EVM config for Bnb is not set"),
+        ChainKind::Pol => config.pol.as_ref().context("EVM config for Pol is not set"),
         ChainKind::Near | ChainKind::Sol | ChainKind::Btc | ChainKind::Zcash => {
             anyhow::bail!("Unsupported chain kind for EVM: {chain_kind:?}")
         }
@@ -312,7 +313,8 @@ async fn handle_transaction_event(
                 RetryableEvent::new(workers::utxo::SignUtxoTransaction {
                     chain: destination_chain,
                     near_tx_hash: origin_transaction_id,
-                    relayer,
+                    // TODO: remove after near-sdk update
+                    relayer: relayer.to_string().parse().unwrap(),
                 }),
             )
             .await;

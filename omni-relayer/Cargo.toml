@@ -34,8 +34,8 @@ solana-transaction-status = "2.1.9"
 solana-rpc-client-api = "2.1.9"
 
 ethereum-types = "0.14.1"
-omni-types = { git = "https://github.com/near-one/omni-bridge", package = "omni-types", rev = "f5e8edfeb41b2dba358ef4f3fb53f111dbbfb92e" }
-bridge-indexer-types = { git = "ssh://git@github.com/near-one/bridge-indexer-rs.git", package = "bridge-indexer-types", rev = "c9d3ab37776ac7996fcfdccbb092a5e61c518c8f" }
+omni-types = { git = "https://github.com/near-one/omni-bridge", package = "omni-types", rev = "d7cf54233c2d380e329da8e3f07f3e641b449ba4" }
+bridge-indexer-types = { git = "ssh://git@github.com/near-one/bridge-indexer-rs.git", package = "bridge-indexer-types", rev = "7d416947b213e25fdc900aafa4f82258b729ae2e" }
 
 near-lake-framework = "0.7.12"
 near-jsonrpc-client = "0.16.0"
@@ -51,18 +51,18 @@ mongodb = "3.2.2"
 redis = { version = "0.32.5", features = ["aio", "tokio-comp", "connection-manager", "json"] }
 reqwest = "0.12"
 
-bridge-connector-common = { git = "https://github.com/Near-One/bridge-sdk-rs", package = "bridge-connector-common", rev = "c4eda33a77ae619075cde07d1562cfd2f8d178fb" }
-near-rpc-client = { git = "https://github.com/Near-One/bridge-sdk-rs", package = "near-rpc-client", rev = "c4eda33a77ae619075cde07d1562cfd2f8d178fb" }
+bridge-connector-common = { git = "https://github.com/Near-One/bridge-sdk-rs", package = "bridge-connector-common", rev = "cb992a00697fd44db1afb0b8b13cab0473136d59" }
+near-rpc-client = { git = "https://github.com/Near-One/bridge-sdk-rs", package = "near-rpc-client", rev = "cb992a00697fd44db1afb0b8b13cab0473136d59" }
 
-near-bridge-client = { git = "https://github.com/Near-One/bridge-sdk-rs", package = "near-bridge-client", rev = "c4eda33a77ae619075cde07d1562cfd2f8d178fb" }
-evm-bridge-client = { git = "https://github.com/Near-One/bridge-sdk-rs", package = "evm-bridge-client", rev = "c4eda33a77ae619075cde07d1562cfd2f8d178fb" }
-solana-bridge-client = { git = "https://github.com/Near-One/bridge-sdk-rs", package = "solana-bridge-client", rev = "c4eda33a77ae619075cde07d1562cfd2f8d178fb" }
-utxo-bridge-client = { git = "https://github.com/Near-One/bridge-sdk-rs", package = "utxo-bridge-client", rev = "c4eda33a77ae619075cde07d1562cfd2f8d178fb" }
-utxo-utils = { git = "https://github.com/Near-One/bridge-sdk-rs", package = "utxo-utils", rev = "c4eda33a77ae619075cde07d1562cfd2f8d178fb" }
-wormhole-bridge-client = { git = "https://github.com/Near-One/bridge-sdk-rs", package = "wormhole-bridge-client", rev = "c4eda33a77ae619075cde07d1562cfd2f8d178fb" }
-light-client = { git = "https://github.com/Near-One/bridge-sdk-rs", package = "light-client", rev = "c4eda33a77ae619075cde07d1562cfd2f8d178fb" }
+near-bridge-client = { git = "https://github.com/Near-One/bridge-sdk-rs", package = "near-bridge-client", rev = "cb992a00697fd44db1afb0b8b13cab0473136d59" }
+evm-bridge-client = { git = "https://github.com/Near-One/bridge-sdk-rs", package = "evm-bridge-client", rev = "cb992a00697fd44db1afb0b8b13cab0473136d59" }
+solana-bridge-client = { git = "https://github.com/Near-One/bridge-sdk-rs", package = "solana-bridge-client", rev = "cb992a00697fd44db1afb0b8b13cab0473136d59" }
+utxo-bridge-client = { git = "https://github.com/Near-One/bridge-sdk-rs", package = "utxo-bridge-client", rev = "cb992a00697fd44db1afb0b8b13cab0473136d59" }
+utxo-utils = { git = "https://github.com/Near-One/bridge-sdk-rs", package = "utxo-utils", rev = "cb992a00697fd44db1afb0b8b13cab0473136d59" }
+wormhole-bridge-client = { git = "https://github.com/Near-One/bridge-sdk-rs", package = "wormhole-bridge-client", rev = "cb992a00697fd44db1afb0b8b13cab0473136d59" }
+light-client = { git = "https://github.com/Near-One/bridge-sdk-rs", package = "light-client", rev = "cb992a00697fd44db1afb0b8b13cab0473136d59" }
 
-omni-connector = { git = "https://github.com/Near-One/bridge-sdk-rs", package = "omni-connector", rev = "c4eda33a77ae619075cde07d1562cfd2f8d178fb" }
+omni-connector = { git = "https://github.com/Near-One/bridge-sdk-rs", package = "omni-connector", rev = "cb992a00697fd44db1afb0b8b13cab0473136d59" }
 
 # The profile that 'dist' will build with
 [profile.dist]

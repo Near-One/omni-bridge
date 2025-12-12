@@ -135,6 +135,7 @@ pub struct EvmNonceManagers {
     pub base: Option<NonceManager>,
     pub arb: Option<NonceManager>,
     pub bnb: Option<NonceManager>,
+    pub pol: Option<NonceManager>,
 }
 
 impl EvmNonceManagers {
@@ -174,6 +175,15 @@ impl EvmNonceManagers {
                             .connect_http(bnb_config.rpc_http_url.parse().unwrap()),
                     ),
                     address: config::get_relayer_evm_address(ChainKind::Bnb),
+                })
+            }),
+            pol: config.pol.as_ref().map(|pol_config| {
+                NonceManager::new(ChainClient::Evm {
+                    provider: DynProvider::new(
+                        ProviderBuilder::new()
+                            .connect_http(pol_config.rpc_http_url.parse().unwrap()),
+                    ),
+                    address: config::get_relayer_evm_address(ChainKind::Pol),
                 })
             }),
         }
@@ -223,6 +233,13 @@ impl EvmNonceManagers {
                 self.bnb
                     .as_ref()
                     .ok_or_else(|| anyhow::anyhow!("Bnb nonce manager is not initialized"))?
+                    .reserve_nonce()
+                    .await
+            }
+            ChainKind::Pol => {
+                self.pol
+                    .as_ref()
+                    .ok_or_else(|| anyhow::anyhow!("Pol nonce manager is not initialized"))?
                     .reserve_nonce()
                     .await
             }
