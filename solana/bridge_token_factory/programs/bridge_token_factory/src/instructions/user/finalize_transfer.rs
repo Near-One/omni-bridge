@@ -49,6 +49,7 @@ pub struct FinalizeTransfer<'info> {
     pub recipient: UncheckedAccount<'info>,
 
     #[account(
+        mut,
         mint::token_program = token_program,
     )]
     pub mint: Box<InterfaceAccount<'info, Mint>>,
