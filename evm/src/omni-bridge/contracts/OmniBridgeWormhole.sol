@@ -36,12 +36,21 @@ contract OmniBridgeWormhole is OmniBridge {
         address wormholeAddress,
         uint8 consistencyLevel
     ) external initializer {
-        initialize(tokenImplementationAddress, nearBridgeDerivedAddress, omniBridgeChainId);
+        initialize(
+            tokenImplementationAddress,
+            nearBridgeDerivedAddress,
+            omniBridgeChainId
+        );
         _wormhole = IWormhole(wormholeAddress);
         _consistencyLevel = consistencyLevel;
     }
 
-    function deployTokenExtension(string memory token, address tokenAddress, uint8 decimals, uint8 originDecimals) internal override {
+    function deployTokenExtension(
+        string memory token,
+        address tokenAddress,
+        uint8 decimals,
+        uint8 originDecimals
+    ) internal override {
         bytes memory payload = bytes.concat(
             bytes1(uint8(MessageType.DeployToken)),
             Borsh.encodeString(token),
@@ -59,7 +68,6 @@ contract OmniBridgeWormhole is OmniBridge {
 
         wormholeNonce++;
     }
-
 
     function logMetadataExtension(
         address tokenAddress,
@@ -85,7 +93,9 @@ contract OmniBridgeWormhole is OmniBridge {
         wormholeNonce++;
     }
 
-    function finTransferExtension(BridgeTypes.TransferMessagePayload memory payload) internal override {
+    function finTransferExtension(
+        BridgeTypes.TransferMessagePayload memory payload
+    ) internal override {
         bytes memory messagePayload = bytes.concat(
             bytes1(uint8(MessageType.FinTransfer)),
             bytes1(payload.originChain),
