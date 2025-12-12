@@ -492,6 +492,15 @@ pub struct UtxoFinTransferMsg {
     pub msg: String,
 }
 
+impl UtxoFinTransferMsg {
+    pub fn get_transfer_id(&self, origin_chain: ChainKind) -> UnifiedTransferId {
+        UnifiedTransferId {
+            origin_chain,
+            kind: TransferIdKind::Utxo(self.utxo_id.clone()),
+        }
+    }
+}
+
 #[near(serializers=[borsh, json])]
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct Fee {

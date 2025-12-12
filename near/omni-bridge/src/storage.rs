@@ -348,11 +348,17 @@ impl Contract {
     }
 
     pub fn required_balance_for_fin_transfer(&self) -> NearToken {
-        let key_len: u64 = borsh::to_vec(&(ChainKind::Eth, 0_u64))
-            .sdk_expect("ERR_BORSH")
-            .len()
-            .try_into()
-            .sdk_expect("ERR_CAST");
+        let key_len: u64 = borsh::to_vec(&(
+            ChainKind::Eth,
+            omni_types::UtxoId {
+                tx_hash: "a".repeat(64),
+                vout: 0,
+            },
+        ))
+        .sdk_expect("ERR_BORSH")
+        .len()
+        .try_into()
+        .sdk_expect("ERR_CAST");
 
         let storage_cost =
             env::storage_byte_cost().saturating_mul((Self::get_basic_storage() + key_len).into());
