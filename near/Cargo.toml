@@ -1,7 +1,7 @@
 [workspace.package]
 authors = ["Near One <info@nearone.org>"]
 repository = "https://github.com/Near-One/omni-bridge"
-version = "0.4.1"
+version = "0.4.2"
 
 [workspace]
 resolver = "2"
@@ -16,7 +16,8 @@ members = [
     "mock/mock-token",
     "mock/mock-prover",
     "mock/mock-token-receiver",
-    "mock/mock-utxo-connector"
+    "mock/mock-utxo-connector",
+    "mock/mock-global-contract-deployer"
 ]
 
 [profile.release]
@@ -29,16 +30,16 @@ panic = "abort"
 overflow-checks = true
 
 [workspace.dependencies]
-cargo-near-build = "0.4.3"
-near-sdk = "5.15.1"
-near-contract-standards = "=5.15.1"
+cargo-near-build = "0.9.0"
+near-sdk = "=5.22.0"
+near-contract-standards = "=5.22.0"
 hex = "0.4.2"
 borsh = "1.5.1"
 serde = { version = "1.0.200", features = ["derive"] }
 near-plugins = { git = "https://github.com/aurora-is-near/near-plugins", tag = "v0.4.1" }
 omni-types = { path = "omni-types" }
 strum_macros = "0.27.1"
-near-workspaces = "0.16.0"
+near-workspaces = "0.22.0"
 num_enum = "0.7.3"
 tokio = "1.40"
 anyhow = "1"
@@ -48,4 +49,4 @@ ethereum-types = { version = "0.15.1", default-features = false, features = ["rl
 rlp = "0.6"
 sha3 = "0.10.0"
 sha2 = "0.10.0"
-rstest = "0.25.0"
+rstest = "0.26.1"
