@@ -92,6 +92,7 @@ fn build_evm_bridge_client(
         ChainKind::Base => &config.base,
         ChainKind::Arb => &config.arb,
         ChainKind::Bnb => &config.bnb,
+        ChainKind::Pol => &config.pol,
         ChainKind::Near | ChainKind::Sol | ChainKind::Btc | ChainKind::Zcash => {
             unreachable!("Function `build_evm_bridge_client` supports only EVM chains")
         }
@@ -147,6 +148,7 @@ fn build_utxo_bridge_client<C: utxo_bridge_client::types::UTXOChain>(
         | ChainKind::Base
         | ChainKind::Arb
         | ChainKind::Bnb
+        | ChainKind::Pol
         | ChainKind::Sol => {
             anyhow::bail!("Chain {chain:?} is not supported for building UTXO bridge client")
         }
@@ -172,7 +174,12 @@ fn build_light_client(config: &config::Config, chain: ChainKind) -> Result<Optio
             .zcash
             .as_ref()
             .map(|zcash| zcash.light_client.clone()),
-        ChainKind::Near | ChainKind::Base | ChainKind::Arb | ChainKind::Bnb | ChainKind::Sol => {
+        ChainKind::Near
+        | ChainKind::Base
+        | ChainKind::Arb
+        | ChainKind::Bnb
+        | ChainKind::Pol
+        | ChainKind::Sol => {
             anyhow::bail!("Chain {chain:?} is not supported for building light client")
         }
     };

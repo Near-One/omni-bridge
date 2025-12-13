@@ -74,6 +74,9 @@ pub async fn start_indexer(
         ChainKind::Bnb => {
             extract_evm_config(config.bnb.clone().context("Failed to get Bnb config")?)?
         }
+        ChainKind::Pol => {
+            extract_evm_config(config.pol.clone().context("Failed to get Pol config")?)?
+        }
         ChainKind::Near | ChainKind::Sol | ChainKind::Btc | ChainKind::Zcash => {
             anyhow::bail!("Unsupported chain kind: {chain_kind:?}")
         }

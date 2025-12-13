@@ -97,6 +97,22 @@ error_selectors_to_remove = [
 	"696e76616c696420666565" # Wormhole's "invalid fee"
 ]
 
+[pol]
+rpc_http_url = "https://polygon-amoy.infura.io/v3/INFURA_API_KEY"
+rpc_ws_url = "wss://polygon-amoy.infura.io/ws/v3/INFURA_API_KEY"
+chain_id = 80002
+omni_bridge_address = "tbd"
+wormhole_address = "0x6b9C8671cdDC8dEab9c719bB87cBd3e782bA6a35"
+block_processing_batch_size = 10_000
+# https://wormhole.com/docs/build/reference/consistency-levels/
+expected_finalization_time = 6
+safe_confirmations = 5
+error_selectors_to_remove = [
+	"0x8baa579f", # InvalidSignature()
+	"0xdcf35db0", # FailedToSendEther()
+	"696e76616c696420666565" # Wormhole's "invalid fee"
+]
+
 [solana]
 rpc_http_url = "https://api.devnet.solana.com"
 rpc_ws_url = "wss://api.devnet.solana.com"

@@ -445,7 +445,7 @@ pub async fn process_sign_transfer_event(
         ChainKind::Near => {
             anyhow::bail!("Near to Near transfers are not supported yet");
         }
-        ChainKind::Eth | ChainKind::Base | ChainKind::Arb | ChainKind::Bnb => {
+        ChainKind::Eth | ChainKind::Base | ChainKind::Arb | ChainKind::Bnb | ChainKind::Pol => {
             let nonce = evm_nonces
                 .reserve_nonce(chain_kind)
                 .await
@@ -512,6 +512,7 @@ pub async fn process_sign_transfer_event(
                     ChainKind::Base => &config.base,
                     ChainKind::Arb => &config.arb,
                     ChainKind::Bnb => &config.bnb,
+                    ChainKind::Pol => &config.pol,
                     ChainKind::Near | ChainKind::Sol | ChainKind::Btc | ChainKind::Zcash => {
                         anyhow::bail!(
                             "Failed to finalize deposit (unexpected: failed to get evm config): {err}"
