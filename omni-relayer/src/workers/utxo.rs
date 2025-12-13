@@ -189,7 +189,9 @@ pub async fn process_utxo_to_near_init_transfer_event(
                             amount: action.amount.0,
                             memo: action.memo,
                             msg: action.msg,
-                            gas: action.gas.map(near_sdk::Gas::as_gas),
+                            gas: action
+                                .gas
+                                .map(|gas| near_primitives::gas::Gas::from_gas(gas.as_gas())),
                         })
                         .collect()
                 }),
