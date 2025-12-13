@@ -313,8 +313,7 @@ async fn handle_transaction_event(
                 RetryableEvent::new(workers::utxo::SignUtxoTransaction {
                     chain: destination_chain,
                     near_tx_hash: origin_transaction_id,
-                    // TODO: remove after near-sdk update
-                    relayer: relayer.to_string().parse().unwrap(),
+                    relayer,
                 }),
             )
             .await;

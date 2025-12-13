@@ -124,8 +124,7 @@ pub async fn process_utxo_to_near_init_transfer_event(
     match omni_connector
         .near_get_required_storage_deposit(
             near_bridge_client.utxo_chain_token(chain)?,
-            // TODO: remove after near-sdk update
-            deposit_msg.recipient_id.to_string().parse().unwrap(),
+            deposit_msg.recipient_id.clone(),
         )
         .await
     {
@@ -134,8 +133,7 @@ pub async fn process_utxo_to_near_init_transfer_event(
                 .near_storage_deposit_for_token(
                     near_bridge_client.utxo_chain_token(chain)?,
                     amount,
-                    // TODO: remove after near-sdk update
-                    deposit_msg.recipient_id.to_string().parse().unwrap(),
+                    deposit_msg.recipient_id.clone(),
                     TransactionOptions {
                         nonce,
                         wait_until: near_primitives::views::TxExecutionStatus::Final,
@@ -178,14 +176,12 @@ pub async fn process_utxo_to_near_init_transfer_event(
         vout: usize::try_from(vout)?,
         btc_deposit_args: BtcDepositArgs::DepositMsg {
             msg: DepositMsg {
-                // TODO: remove after near-sdk update
-                recipient_id: deposit_msg.recipient_id.to_string().parse().unwrap(),
+                recipient_id: deposit_msg.recipient_id.clone(),
                 post_actions: deposit_msg.post_actions.map(|optional_actions| {
                     optional_actions
                         .into_iter()
                         .map(|action| PostAction {
-                            // TODO: remove after near-sdk update
-                            receiver_id: action.receiver_id.to_string().parse().unwrap(),
+                            receiver_id: action.receiver_id,
                             amount: action.amount.0,
                             memo: action.memo,
                             msg: action.msg,
