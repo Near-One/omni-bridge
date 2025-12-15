@@ -78,9 +78,4 @@ impl TokenDeployer {
     pub fn get_omni_token_global_contract_id(&self) -> AccountId {
         self.omni_token_global_contract_id.clone()
     }
-
-    #[access_control_any(roles(Role::DAO))]
-    pub fn set_omni_token_global_contract_id(&mut self, omni_token_global_contract_id: AccountId) {
-        self.omni_token_global_contract_id = omni_token_global_contract_id;
-    }
 }

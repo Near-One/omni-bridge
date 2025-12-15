@@ -65,6 +65,7 @@ impl OmniToken {
 
         Self {
             controller,
+            // For tokens migrated from Near Intents, storage key is "1"
             token: FungibleToken::new(b"t".to_vec()),
             metadata: LazyOption::new(
                 b"m".to_vec(),
@@ -100,14 +101,17 @@ impl OmniToken {
         require!(caller == self.controller, "ERR_MISSING_PERMISSION");
     }
 
-    fn read_withdraw_relayer_address(&self) -> Option<AccountId> {
+    fn read_withdraw_relayer_address() -> Option<AccountId> {
         env::storage_read(WITHDRAW_RELAYER_ADDRESS).and_then(|data| borsh::from_slice(&data).ok())
     }
 
-    pub fn set_withdraw_relayer_address(&mut self, relayer: AccountId) {
+    /// # Panics
+    ///
+    /// This function will panic if serialization fails.
+    pub fn set_withdraw_relayer_address(&mut self, relayer: &AccountId) {
         self.assert_controller();
 
-        env::storage_write(WITHDRAW_RELAYER_ADDRESS, &borsh::to_vec(&relayer).unwrap());
+        env::storage_write(WITHDRAW_RELAYER_ADDRESS, &borsh::to_vec(relayer).unwrap());
     }
 }
 
@@ -187,16 +191,14 @@ impl FungibleTokenCore for OmniToken {
     fn ft_transfer(&mut self, receiver_id: AccountId, amount: U128, memo: Option<String>) {
         // Legacy bridging flow used by Near Intents
         if receiver_id == env::current_account_id()
-            && memo
-                .as_deref()
-                .map_or(false, |memo| memo.starts_with(WITHDRAW_MEMO_PREFIX))
+            && memo.as_ref().is_some_and(|m| m.starts_with(WITHDRAW_MEMO_PREFIX))
         {
-            if let Some(withdraw_relayer) = self.read_withdraw_relayer_address() {
+            if let Some(withdraw_relayer) = Self::read_withdraw_relayer_address() {
                 return self.token.ft_transfer(withdraw_relayer, amount, memo);
             }
         }
 
-        self.token.ft_transfer(receiver_id, amount, memo)
+        self.token.ft_transfer(receiver_id, amount, memo);
     }
 
     #[payable]

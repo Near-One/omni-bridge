@@ -19,6 +19,9 @@ pub struct NearIntentsState {
 
 #[near]
 impl OmniToken {
+    /// # Panics
+    ///
+    /// This function will panic if token is not in the expected state.
     #[private]
     #[init(ignore_state)]
     #[allow(unused_variables)]
