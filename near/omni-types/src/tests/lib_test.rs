@@ -3,7 +3,8 @@ use near_sdk::json_types::U128;
 use near_sdk::serde_json;
 
 use crate::{
-    stringify, ChainKind, Fee, OmniAddress, PayloadType, TransferId, TransferMessage, H160,
+    stringify, ChainKind, Fee, OmniAddress, PayloadType, TransferId, TransferMessage, TypesError,
+    H160,
 };
 use std::str::FromStr;
 
@@ -41,11 +42,11 @@ fn test_h160_from_str() {
 
     let invalid_hex = "0xnot_a_hex_string";
     let err = H160::from_str(invalid_hex).expect_err("Should fail with invalid hex");
-    assert!(err.contains("ERR_INVALIDE_HEX"), "Error was: {err}");
+    assert_eq!(err, TypesError::InvalidHex);
 
     let short_addr = "0x5a08";
     let err = H160::from_str(short_addr).expect_err("Should fail with invalid length");
-    assert!(err.contains("Invalid length:"), "Error was: {err}");
+    assert_eq!(err, TypesError::InvalidHexLength);
 }
 
 #[test]
@@ -106,8 +107,8 @@ fn test_h160_deserialization() {
     assert!(result.is_err(), "Should fail with invalid length");
     let err = result.unwrap_err().to_string();
     assert!(
-        err.contains("Invalid length"),
-        "Error was: {err} but expected Invalid length"
+        err.contains("ERR_INVALID_HEX_LENGTH"),
+        "Error was: {err} but expected ERR_INVALID_HEX_LENGTH"
     );
 
     let json = "123";

@@ -11,6 +11,7 @@ use serde::de::Visitor;
 use sol_address::SolAddress;
 
 pub mod btc;
+pub mod errors;
 pub mod evm;
 pub mod locker_args;
 pub mod mpc_types;
@@ -23,20 +24,25 @@ pub mod utils;
 #[cfg(test)]
 mod tests;
 
+pub use errors::{
+    BridgeError, ErrorCode, OmniError, ProverError, StorageBalanceError, StorageError, TokenError,
+    TypesError,
+};
+
 #[near(serializers = [borsh])]
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub struct H160(pub [u8; 20]);
 
 impl FromStr for H160 {
-    type Err = String;
+    type Err = TypesError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let result = Vec::from_hex(s.strip_prefix("0x").map_or(s, |stripped| stripped))
-            .map_err(|_| "ERR_INVALIDE_HEX")?;
+            .map_err(|_| TypesError::InvalidHex)?;
         Ok(Self(
             result
                 .try_into()
-                .map_err(|err| format!("Invalid length: {err:?}"))?,
+                .map_err(|_| TypesError::InvalidHexLength)?,
         ))
     }
 }
