@@ -3,13 +3,13 @@ use crate::{
     ext_token, ext_utxo_connector, Contract, ContractExt, Role, FT_TRANSFER_CALL_GAS, ONE_YOCTO,
     STORAGE_DEPOSIT_GAS,
 };
-use omni_types::errors::{BridgeError, ErrorCode};
 use near_plugins::{access_control_any, pause, AccessControllable, Pausable};
 use near_sdk::json_types::{U128, U64};
 use near_sdk::{
     env, near, require, serde_json, AccountId, Gas, Promise, PromiseError, PromiseOrValue,
 };
 use omni_types::btc::{TokenReceiverMessage, TxOut, UTXOChainConfig};
+use omni_types::errors::{BridgeError, ErrorCode};
 use omni_types::{ChainKind, Fee, OmniAddress, TransferId, TransferMessage};
 
 const SUBMIT_TRANSFER_TO_BTC_CONNECTOR_CALLBACK_GAS: Gas = Gas::from_tgas(5);
@@ -69,10 +69,7 @@ impl Contract {
         }
 
         if let Some(fee) = &fee {
-            require!(
-                &transfer.message.fee == fee,
-                BridgeError::InvalidFee.code()
-            );
+            require!(&transfer.message.fee == fee, BridgeError::InvalidFee.code());
         }
 
         let chain_kind = transfer.message.get_destination_chain();

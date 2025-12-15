@@ -298,7 +298,10 @@ impl Contract {
     }
 
     pub fn required_balance_for_init_transfer(&self, msg: Option<String>) -> NearToken {
-        let max_account_id: AccountId = "a".repeat(64).parse().sdk_expect(BridgeError::ParseAccountId.code());
+        let max_account_id: AccountId = "a"
+            .repeat(64)
+            .parse()
+            .sdk_expect(BridgeError::ParseAccountId.code());
 
         self.required_balance_for_init_transfer_message(TransferMessage {
             origin_nonce: 0,
@@ -325,7 +328,10 @@ impl Contract {
         &self,
         transfer_message: TransferMessage,
     ) -> NearToken {
-        let max_account_id: AccountId = "a".repeat(64).parse().sdk_expect(BridgeError::ParseAccountId.code());
+        let max_account_id: AccountId = "a"
+            .repeat(64)
+            .parse()
+            .sdk_expect(BridgeError::ParseAccountId.code());
 
         let key_len: u64 = borsh::to_vec(&transfer_message.get_transfer_id())
             .sdk_expect(BridgeError::Borsh.code())
@@ -374,7 +380,10 @@ impl Contract {
             .try_into()
             .sdk_expect(BridgeError::Cast.code());
 
-        let max_account_id: AccountId = "a".repeat(64).parse().sdk_expect(BridgeError::ParseAccountId.code());
+        let max_account_id: AccountId = "a"
+            .repeat(64)
+            .parse()
+            .sdk_expect(BridgeError::ParseAccountId.code());
         let value_len: u64 = borsh::to_vec(&FastTransferStatusStorage::V0(FastTransferStatus {
             relayer: max_account_id.clone(),
             finalised: false,
@@ -393,7 +402,10 @@ impl Contract {
     }
 
     pub fn required_balance_for_bind_token(&self) -> NearToken {
-        let max_token_id: AccountId = "a".repeat(64).parse().sdk_expect(BridgeError::ParseAccountId.code());
+        let max_token_id: AccountId = "a"
+            .repeat(64)
+            .parse()
+            .sdk_expect(BridgeError::ParseAccountId.code());
 
         let key_len: u64 = borsh::to_vec(&(ChainKind::Near, &max_token_id))
             .sdk_expect(BridgeError::Borsh.code())
@@ -429,7 +441,10 @@ impl Contract {
     }
 
     fn max_key_len_of_account_id() -> u64 {
-        let max_account_id: AccountId = "a".repeat(64).parse().sdk_expect(BridgeError::ParseAccountId.code());
+        let max_account_id: AccountId = "a"
+            .repeat(64)
+            .parse()
+            .sdk_expect(BridgeError::ParseAccountId.code());
 
         borsh::to_vec(&max_account_id)
             .sdk_expect(BridgeError::Borsh.code())

@@ -106,7 +106,10 @@ impl OmniToken {
 
     fn assert_controller(&self) {
         let caller = env::predecessor_account_id();
-        require!(caller == self.controller, TokenError::MissingPermission.code());
+        require!(
+            caller == self.controller,
+            TokenError::MissingPermission.code()
+        );
     }
 }
 
