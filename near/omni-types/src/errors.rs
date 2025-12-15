@@ -323,15 +323,14 @@ impl fmt::Display for StorageBalanceError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::AccountNotRegistered(account_id) => {
-                write!(f, "Account {} is not registered", account_id)
+                write!(f, "Account {account_id} is not registered")
             }
             Self::NotEnoughStorage {
                 required,
                 available,
             } => write!(
                 f,
-                "Not enough storage deposited, required: {}, available: {}",
-                required, available
+                "Not enough storage deposited, required: {required}, available: {available}"
             ),
         }
     }
