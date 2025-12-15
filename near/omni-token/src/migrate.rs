@@ -6,7 +6,6 @@ use near_sdk::{
     collections::LazyOption, env, near, require, store::Lazy, AccountId, Gas, NearToken,
 };
 
-const CURRENT_STATE_VERSION: u32 = 3;
 const OUTER_UPGRADE_GAS: Gas = Gas::from_tgas(15);
 const NO_DEPOSIT: NearToken = NearToken::from_yoctonear(0);
 const STATE_KEY: &[u8] = b"STATE";
@@ -34,17 +33,22 @@ impl OmniToken {
         if let Ok(state) = NearIntentsState::try_from_slice(&state) {
             require!(
                 env::storage_remove(OWNABLE_KEY),
-                "Wrong token version for migration"
+                "Wrong token version for migration: __OWNER__ key not found"
             );
 
             let relayer = withdraw_relayer.unwrap_or_else(|| env::panic_str("Withdraw relayer must be provided"));
             env::storage_write(WITHDRAW_RELAYER_ADDRESS, &borsh::to_vec(&relayer).unwrap());
 
-            Self {
+            let new_state = Self {
                 controller: controller.unwrap_or_else(|| env::panic_str("Controller must be provided")),
                 token: state.token,
-                metadata: LazyOption::new(b"m".to_vec(), Some(&state.metadata.get())),
-            }
+                metadata: LazyOption::new(b"m".to_vec(), Some(state.metadata.get())),
+            };
+
+            let mut old_metadata = state.metadata;
+            old_metadata.remove();
+
+            new_state
         } else {
             env::panic_str("Old state not found. Migration is not needed.")
         }
