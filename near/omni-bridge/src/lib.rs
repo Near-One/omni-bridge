@@ -2439,8 +2439,8 @@ impl Contract {
             .get(&old_token)
             .sdk_expect("ERR_TOKEN_NOT_MIGRATED");
 
-        let burn = ext_token::ext(old_token.clone()).burn(amount);
-        let mint = ext_token::ext(new_token.clone()).mint(sender_id, amount, None);
+        let burn = ext_token::ext(old_token).burn(amount);
+        let mint = ext_token::ext(new_token).mint(sender_id, amount, None);
 
         burn.and(mint)
     }

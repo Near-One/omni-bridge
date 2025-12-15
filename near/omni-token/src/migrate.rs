@@ -39,11 +39,13 @@ impl OmniToken {
                 "Wrong token version for migration: __OWNER__ key not found"
             );
 
-            let relayer = withdraw_relayer.unwrap_or_else(|| env::panic_str("Withdraw relayer must be provided"));
+            let relayer = withdraw_relayer
+                .unwrap_or_else(|| env::panic_str("Withdraw relayer must be provided"));
             env::storage_write(WITHDRAW_RELAYER_ADDRESS, &borsh::to_vec(&relayer).unwrap());
 
             let new_state = Self {
-                controller: controller.unwrap_or_else(|| env::panic_str("Controller must be provided")),
+                controller: controller
+                    .unwrap_or_else(|| env::panic_str("Controller must be provided")),
                 token: state.token,
                 metadata: LazyOption::new(b"m".to_vec(), Some(state.metadata.get())),
             };
@@ -78,8 +80,8 @@ impl UpgradeAndMigrate for OmniToken {
                 "controller": None::<AccountId>,
                 "withdraw_relayer": None::<AccountId>,
             })
-                .to_string()
-                .into_bytes(),
+            .to_string()
+            .into_bytes(),
             NO_DEPOSIT,
             env::prepaid_gas()
                 .saturating_sub(env::used_gas())

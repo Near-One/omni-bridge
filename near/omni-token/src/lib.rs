@@ -191,7 +191,9 @@ impl FungibleTokenCore for OmniToken {
     fn ft_transfer(&mut self, receiver_id: AccountId, amount: U128, memo: Option<String>) {
         // Legacy bridging flow used by Near Intents
         if receiver_id == env::current_account_id()
-            && memo.as_ref().is_some_and(|m| m.starts_with(WITHDRAW_MEMO_PREFIX))
+            && memo
+                .as_ref()
+                .is_some_and(|m| m.starts_with(WITHDRAW_MEMO_PREFIX))
         {
             if let Some(withdraw_relayer) = Self::read_withdraw_relayer_address() {
                 return self.token.ft_transfer(withdraw_relayer, amount, memo);
