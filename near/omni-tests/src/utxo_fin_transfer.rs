@@ -82,12 +82,14 @@ mod tests {
     }
 
     fn has_error_message(result: &ExecutionFinalResult, error_msg: &str) -> bool {
-        result.failures().into_iter().any(|outcome| {
+        let has_failure = result.failures().into_iter().any(|outcome| {
             outcome
                 .clone()
                 .into_result()
                 .is_err_and(|err| format!("{err:?}").contains(error_msg))
-        })
+        });
+
+        has_failure || result.logs().iter().any(|log| log.contains(error_msg))
     }
 
     fn default_utxo_id() -> omni_types::UtxoId {

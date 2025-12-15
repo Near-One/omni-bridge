@@ -19,6 +19,7 @@ use omni_types::{ChainKind, FastTransfer, OmniAddress, TransferId, near_events::
 
 use crate::{
     config, utils,
+    utils::pending_transactions::PendingTransaction,
     workers::{PAUSED_ERROR, RetryableEvent},
 };
 
@@ -440,7 +441,7 @@ pub async fn process_sign_transfer_event(
 
     let chain_kind = message_payload.recipient.get_chain();
 
-    let fin_transfer_args = match chain_kind {
+    let (fin_transfer_args, evm_nonce) = match chain_kind {
         ChainKind::Near => {
             anyhow::bail!("Near to Near transfers are not supported yet");
         }
@@ -450,11 +451,14 @@ pub async fn process_sign_transfer_event(
                 .await
                 .context("Failed to reserve nonce for evm transaction")?;
 
-            omni_connector::FinTransferArgs::EvmFinTransfer {
-                chain_kind,
-                event: omni_bridge_event,
-                tx_nonce: Some(nonce.into()),
-            }
+            (
+                omni_connector::FinTransferArgs::EvmFinTransfer {
+                    chain_kind,
+                    event: omni_bridge_event.clone(),
+                    tx_nonce: Some(nonce.into()),
+                },
+                Some(nonce),
+            )
         }
         ChainKind::Sol => {
             let OmniAddress::Sol(token) = message_payload.token_address.clone() else {
@@ -464,10 +468,13 @@ pub async fn process_sign_transfer_event(
                 );
             };
 
-            omni_connector::FinTransferArgs::SolanaFinTransfer {
-                event: omni_bridge_event,
-                solana_token: Pubkey::new_from_array(token.0),
-            }
+            (
+                omni_connector::FinTransferArgs::SolanaFinTransfer {
+                    event: omni_bridge_event.clone(),
+                    solana_token: Pubkey::new_from_array(token.0),
+                },
+                None,
+            )
         }
         ChainKind::Btc | ChainKind::Zcash => {
             anyhow::bail!("Finishing BTC/ZEC transfers is not supported");
@@ -477,6 +484,25 @@ pub async fn process_sign_transfer_event(
     match omni_connector.fin_transfer(fin_transfer_args).await {
         Ok(tx_hash) => {
             info!("Finalized deposit: {tx_hash}");
+
+            if let Some(nonce) = evm_nonce {
+                if config.is_fee_bumping_enabled(chain_kind) {
+                    if let Err(err) = store_pending_transaction(
+                        config,
+                        redis_connection_manager,
+                        chain_kind,
+                        &tx_hash,
+                        nonce,
+                        message_payload.transfer_id.origin_nonce.to_string(),
+                        omni_bridge_event,
+                    )
+                    .await
+                    {
+                        warn!("Failed to store pending transaction {tx_hash}: {err:?}");
+                    }
+                }
+            }
+
             Ok(EventAction::Remove)
         }
         Err(err) => {
@@ -739,4 +765,35 @@ pub async fn initiate_fast_transfer(
             anyhow::bail!("Failed to initiate fast transfer: {err:?}");
         }
     }
+}
+
+async fn store_pending_transaction(
+    config: &config::Config,
+    redis_connection_manager: &mut redis::aio::ConnectionManager,
+    chain_kind: ChainKind,
+    tx_hash: &str,
+    nonce: u64,
+    source_event_id: String,
+    omni_bridge_event: OmniBridgeEvent,
+) -> Result<()> {
+    let pending_tx = PendingTransaction::new(
+        tx_hash.to_string(),
+        nonce,
+        chain_kind,
+        source_event_id,
+        omni_bridge_event,
+    );
+
+    utils::redis::zadd(
+        config,
+        redis_connection_manager,
+        &utils::pending_transactions::get_pending_tx_key(chain_kind),
+        nonce,
+        pending_tx,
+    )
+    .await;
+
+    info!("Stored pending transaction {tx_hash} (nonce: {nonce}) for {chain_kind:?}");
+
+    Ok(())
 }

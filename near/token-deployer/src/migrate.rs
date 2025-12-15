@@ -14,10 +14,8 @@ pub struct OldLegacyState {
     pub locker_address: [u8; 20],
     pub tokens: UnorderedSet<String>,
     pub used_events: UnorderedSet<Vec<u8>>,
-    #[deprecated]
     pub owner_pk: PublicKey,
     pub bridge_token_storage_deposit_required: u128,
-    #[deprecated]
     paused: u128,
 }
 

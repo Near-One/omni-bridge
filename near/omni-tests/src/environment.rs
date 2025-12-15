@@ -19,7 +19,7 @@ use crate::helpers::tests::{
     get_test_deploy_token_args, BuildArtifacts, GLOBAL_STORAGE_COST_PER_BYTE, NEP141_DEPOSIT,
 };
 
-const PREV_LOCKER_WASM_FILEPATH: &str = "src/data/omni_bridge-0_3_2.wasm";
+const PREV_LOCKER_WASM_FILEPATH: &str = "src/data/omni_bridge-0_4_1.wasm";
 
 pub struct BridgeToken {
     pub is_deployed: bool,

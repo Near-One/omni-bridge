@@ -58,10 +58,12 @@ impl TokenDeployer {
         contract
     }
 
+    #[payable]
     #[access_control_any(roles(Role::Controller, Role::LegacyController))]
     pub fn deploy_token(&mut self, account_id: AccountId, metadata: &BasicMetadata) -> Promise {
         Promise::new(account_id)
             .create_account()
+            .transfer(env::attached_deposit())
             .use_global_contract_by_account_id(self.omni_token_global_contract_id.clone())
             .function_call(
                 "new".to_string(),

@@ -192,3 +192,112 @@ pub async fn remove_event<F>(
 
     warn!("Failed to remove event from redis db");
 }
+
+pub async fn zadd<M>(
+    config: &config::Config,
+    redis_connection_manager: &mut ConnectionManager,
+    key: &str,
+    score: u64,
+    member: M,
+) where
+    M: serde::Serialize + std::fmt::Debug + Send,
+{
+    let Ok(serialized_member) = serde_json::to_string(&member) else {
+        warn!("Failed to serialize event: {member:?}");
+        return;
+    };
+
+    for _ in 0..config.redis.query_retry_attempts {
+        if redis_connection_manager
+            .zadd::<&str, u64, String, ()>(key, serialized_member.clone(), score)
+            .await
+            .is_ok()
+        {
+            return;
+        }
+
+        tokio::time::sleep(tokio::time::Duration::from_secs(
+            config.redis.query_retry_sleep_secs,
+        ))
+        .await;
+    }
+
+    warn!("Failed to add event to redis sorted set");
+}
+
+pub async fn zrange<T>(
+    config: &config::Config,
+    redis_connection_manager: &mut ConnectionManager,
+    key: &str,
+    start: isize,
+    stop: isize,
+) -> Option<Vec<T>>
+where
+    T: serde::de::DeserializeOwned,
+{
+    for _ in 0..config.redis.query_retry_attempts {
+        if let Ok(members) = redis_connection_manager
+            .zrange::<&str, Vec<String>>(key, start, stop)
+            .await
+        {
+            let members: Vec<T> = members
+                .iter()
+                .filter_map(|serialized| {
+                    serde_json::from_str(serialized)
+                        .map_err(|err| {
+                            warn!("Failed to deserialize event from redis: {err:?}");
+                            err
+                        })
+                        .ok()
+                })
+                .collect();
+
+            return Some(members);
+        }
+
+        tokio::time::sleep(tokio::time::Duration::from_secs(
+            config.redis.query_retry_sleep_secs,
+        ))
+        .await;
+    }
+
+    warn!("Failed to get members from redis sorted set");
+    None
+}
+
+pub async fn zrem<M>(
+    config: &config::Config,
+    redis_connection_manager: &mut ConnectionManager,
+    key: &str,
+    member: M,
+) where
+    M: serde::Serialize + std::fmt::Debug + Send,
+{
+    let Ok(serialized_member) = serde_json::to_string(&member) else {
+        warn!("Failed to serialize event: {member:?}");
+        return;
+    };
+
+    for _ in 0..config.redis.query_retry_attempts {
+        match redis_connection_manager
+            .zrem::<&str, String, usize>(key, serialized_member.clone())
+            .await
+        {
+            Ok(0) => {
+                warn!("Member not found in redis sorted set");
+                return;
+            }
+            Ok(_) => {
+                return;
+            }
+            Err(_) => {
+                tokio::time::sleep(tokio::time::Duration::from_secs(
+                    config.redis.query_retry_sleep_secs,
+                ))
+                .await;
+            }
+        }
+    }
+
+    warn!("Failed to remove event from redis sorted set");
+}
