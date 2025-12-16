@@ -5,6 +5,7 @@ use crate::{
 use borsh::{BorshDeserialize, BorshSerialize};
 use near_contract_standards::fungible_token::{metadata::FungibleTokenMetadata, FungibleToken};
 use near_sdk::serde_json::json;
+use near_sdk::GasWeight;
 use near_sdk::{
     collections::LazyOption, env, near, require, store::Lazy, AccountId, Gas, NearToken,
 };
@@ -97,16 +98,15 @@ impl UpgradeAndMigrate for OmniToken {
         }
         // Call promise to migrate the state.
         // Batched together to fail upgrade if migration fails.
-        env::promise_batch_action_function_call(
+        env::promise_batch_action_function_call_weight(
             promise_id,
             "migrate",
             &json!({ "from_version": CURRENT_STATE_VERSION })
                 .to_string()
                 .into_bytes(),
             NO_DEPOSIT,
-            env::prepaid_gas()
-                .saturating_sub(env::used_gas())
-                .saturating_sub(OUTER_UPGRADE_GAS),
+            OUTER_UPGRADE_GAS,
+            GasWeight(1),
         );
         env::promise_return(promise_id);
     }
