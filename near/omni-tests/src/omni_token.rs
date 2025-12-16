@@ -866,12 +866,9 @@ mod tests {
 
         // Ensure the token account has enough NEAR balance for code upgrade
         let root = env.worker.root_account()?;
-        root.transfer_near(
-            env.token_contract.id(),
-            NearToken::from_near(20),
-        )
-        .await?
-        .into_result()?;
+        root.transfer_near(env.token_contract.id(), NearToken::from_near(20))
+            .await?
+            .into_result()?;
 
         fake_finalize_transfer(
             &env.locker_contract,
@@ -892,8 +889,11 @@ mod tests {
             .await?
             .json()?;
 
-        let is_using_global_before: bool =
-            env.token_contract.view("is_using_global_token").await?.json()?;
+        let is_using_global_before: bool = env
+            .token_contract
+            .view("is_using_global_token")
+            .await?
+            .json()?;
         assert!(is_using_global_before);
 
         env.token_contract
@@ -914,8 +914,11 @@ mod tests {
             .await?
             .json()?;
 
-        let is_using_global_token: bool =
-            env.token_contract.view("is_using_global_token").await?.json()?;
+        let is_using_global_token: bool = env
+            .token_contract
+            .view("is_using_global_token")
+            .await?
+            .json()?;
 
         assert_eq!(balance_after, balance_before);
         assert!(is_using_global_token);
@@ -1032,8 +1035,7 @@ mod tests {
             .await?
             .json()?;
 
-        let migrated_metadata: BasicMetadata =
-            token_contract.view("ft_metadata").await?.json()?;
+        let migrated_metadata: BasicMetadata = token_contract.view("ft_metadata").await?.json()?;
 
         let is_using_global_token: bool =
             token_contract.view("is_using_global_token").await?.json()?;

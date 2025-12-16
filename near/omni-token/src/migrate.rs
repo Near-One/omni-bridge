@@ -1,6 +1,6 @@
 use crate::{
-    omni_ft::UpgradeAndMigrate, OmniToken, OmniTokenExt, WITHDRAW_RELAYER_ADDRESS,
-    IS_USING_GLOBAL_TOKEN_KEY,
+    omni_ft::UpgradeAndMigrate, OmniToken, OmniTokenExt, IS_USING_GLOBAL_TOKEN_KEY,
+    WITHDRAW_RELAYER_ADDRESS,
 };
 use borsh::{BorshDeserialize, BorshSerialize};
 use near_contract_standards::fungible_token::{metadata::FungibleTokenMetadata, FungibleToken};
