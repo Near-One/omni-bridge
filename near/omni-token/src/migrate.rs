@@ -34,7 +34,7 @@ impl OmniToken {
     /// This function will panic if token is not in the expected state.
     #[private]
     #[init(ignore_state)]
-    pub fn migrate_from_poa(controller: AccountId, withdraw_relayer: AccountId) -> Self {
+    pub fn migrate_from_poa(controller: AccountId, withdraw_relayer: &AccountId) -> Self {
         if !env::state_exists() {
             env::panic_str("Old state not found. Migration is not needed.")
         }
@@ -48,7 +48,7 @@ impl OmniToken {
                 "Wrong token version for migration: __OWNER__ key not found"
             );
 
-            env::storage_write(WITHDRAW_RELAYER_ADDRESS, &borsh::to_vec(&withdraw_relayer).unwrap());
+            env::storage_write(WITHDRAW_RELAYER_ADDRESS, &borsh::to_vec(withdraw_relayer).unwrap());
 
             let new_state = Self {
                 controller,
