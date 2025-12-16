@@ -48,7 +48,10 @@ impl OmniToken {
                 "Wrong token version for migration: __OWNER__ key not found"
             );
 
-            env::storage_write(WITHDRAW_RELAYER_ADDRESS, &borsh::to_vec(withdraw_relayer).unwrap());
+            env::storage_write(
+                WITHDRAW_RELAYER_ADDRESS,
+                &borsh::to_vec(withdraw_relayer).unwrap(),
+            );
 
             let new_state = Self {
                 controller,
