@@ -144,12 +144,8 @@ impl TestEnvBuilder {
         let bridge_contract = self.deploy_bridge(None).await?;
         let omni_token_code_hash = self.deploy_global_omni_token().await?;
 
-        self.deploy_token_deployer(
-            &bridge_contract,
-            &omni_token_code_hash,
-            ChainKind::Eth,
-        )
-        .await?;
+        self.deploy_token_deployer(&bridge_contract, &omni_token_code_hash, ChainKind::Eth)
+            .await?;
 
         add_factory(&bridge_contract, eth_factory_address()).await?;
 
@@ -209,12 +205,8 @@ impl TestEnvBuilder {
         let bridge_contract = self.deploy_bridge(None).await?;
         let omni_token_code_hash = self.deploy_global_omni_token().await?;
 
-        self.deploy_token_deployer(
-            &bridge_contract,
-            &omni_token_code_hash,
-            ChainKind::Eth,
-        )
-        .await?;
+        self.deploy_token_deployer(&bridge_contract, &omni_token_code_hash, ChainKind::Eth)
+            .await?;
 
         add_factory(&bridge_contract, eth_factory_address()).await?;
 

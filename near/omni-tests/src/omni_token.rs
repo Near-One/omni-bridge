@@ -2,9 +2,9 @@
 mod tests {
     use std::str::FromStr;
 
-    use near_sdk::{borsh, CryptoHash};
     use near_sdk::json_types::{Base64VecU8, U128};
     use near_sdk::serde_json::json;
+    use near_sdk::{borsh, CryptoHash};
     use near_workspaces::{types::NearToken, AccountId};
     use omni_types::locker_args::{FinTransferArgs, StorageDepositAction};
     use omni_types::prover_result::InitTransferMessage;
