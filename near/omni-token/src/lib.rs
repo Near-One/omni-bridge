@@ -113,6 +113,10 @@ impl OmniToken {
 
         env::storage_write(WITHDRAW_RELAYER_ADDRESS, &borsh::to_vec(relayer).unwrap());
     }
+
+    pub fn get_token_storage_key(&self) -> String {
+        format!("{:?}", self.token.accounts)
+    }
 }
 
 #[near]
