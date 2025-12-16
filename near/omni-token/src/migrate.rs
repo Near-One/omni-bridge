@@ -6,6 +6,7 @@ use near_sdk::{
     collections::LazyOption, env, near, require, store::Lazy, AccountId, Gas, NearToken,
 };
 
+const CURRENT_STATE_VERSION: u32 = 3;
 const OUTER_UPGRADE_GAS: Gas = Gas::from_tgas(15);
 const NO_DEPOSIT: NearToken = NearToken::from_yoctonear(0);
 const STATE_KEY: &[u8] = b"STATE";
@@ -77,20 +78,26 @@ impl UpgradeAndMigrate for OmniToken {
         // Receive the code directly from the input to avoid the
         // GAS overhead of deserializing parameters
         let code = env::input().unwrap_or_else(|| env::panic_str("ERR_NO_INPUT"));
-        // Deploy the contract code.
         let promise_id = env::promise_batch_create(&env::current_account_id());
-        env::promise_batch_action_deploy_contract(promise_id, &code);
+        if self.is_using_global_token() {
+            // Use the global contract code.
+            let code_hash = code
+                .as_slice()
+                .try_into()
+                .unwrap_or_else(|_| env::panic_str("ERR_BAD_HASH_LEN"));
+            env::promise_batch_action_use_global_contract(promise_id, &code_hash);
+        } else {
+            // Deploy the contract code.
+            env::promise_batch_action_deploy_contract(promise_id, &code);
+        }
         // Call promise to migrate the state.
         // Batched together to fail upgrade if migration fails.
         env::promise_batch_action_function_call(
             promise_id,
             "migrate",
-            &json!({
-                "controller": None::<AccountId>,
-                "withdraw_relayer": None::<AccountId>,
-            })
-            .to_string()
-            .into_bytes(),
+            &json!({ "from_version": CURRENT_STATE_VERSION })
+                .to_string()
+                .into_bytes(),
             NO_DEPOSIT,
             env::prepaid_gas()
                 .saturating_sub(env::used_gas())
