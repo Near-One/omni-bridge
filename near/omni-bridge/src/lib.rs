@@ -15,7 +15,6 @@ use near_sdk::serde_json::json;
 use near_sdk::{
     env, ext_contract, near, require, serde_json, AccountId, BorshStorageKey, CryptoHash, Gas,
     GasWeight, NearToken, PanicOnDefault, Promise, PromiseError, PromiseOrValue, PromiseResult,
-    PublicKey,
 };
 use omni_types::btc::{TxOut, UTXOChainConfig};
 use omni_types::locker_args::{
@@ -67,7 +66,6 @@ const DEPLOY_TOKEN_GAS: Gas = Gas::from_tgas(50);
 const BURN_TOKEN_GAS: Gas = Gas::from_tgas(3);
 const MINT_TOKEN_GAS: Gas = Gas::from_tgas(5);
 const SET_METADATA_GAS: Gas = Gas::from_tgas(10);
-const ATTACH_FULL_ACCESS_KEY_GAS: Gas = Gas::from_tgas(5);
 const RESOLVE_FAST_TRANSFER_GAS: Gas = Gas::from_tgas(6);
 const UTXO_FIN_TRANSFER_CALLBACK_GAS: Gas = Gas::from_tgas(5);
 const RESOLVE_UTXO_FIN_TRANSFER_GAS: Gas = Gas::from_tgas(3);
@@ -156,8 +154,6 @@ pub trait ExtToken {
         decimals: Option<u8>,
         icon: Option<String>,
     );
-
-    fn attach_full_access_key(&mut self, public_key: PublicKey) -> Promise;
 }
 
 #[near(serializers = [json])]
@@ -1431,19 +1427,6 @@ impl Contract {
                 Some(decimals),
                 icon,
             )
-    }
-
-    #[access_control_any(roles(Role::DAO, Role::TokenUpgrader))]
-    pub fn attach_full_access_key_to_token(
-        &self,
-        token: AccountId,
-        public_key: PublicKey,
-    ) -> Promise {
-        require!(self.deployed_tokens.contains(&token));
-
-        ext_token::ext(token)
-            .with_static_gas(ATTACH_FULL_ACCESS_KEY_GAS)
-            .attach_full_access_key(public_key)
     }
 
     #[access_control_any(roles(Role::DAO))]
