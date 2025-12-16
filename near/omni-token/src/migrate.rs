@@ -80,12 +80,12 @@ impl UpgradeAndMigrate for OmniToken {
 
         // Receive the code directly from the input to avoid the
         // GAS overhead of deserializing parameters
-        let code = env::input().unwrap_or_else(|| env::panic_str("ERR_NO_INPUT"));
+        let input = env::input().unwrap_or_else(|| env::panic_str("ERR_NO_INPUT"));
         let promise_id = env::promise_batch_create(&env::current_account_id());
         // Allow switching to global contract code when a hash is provided.
-        let should_use_global_contract = self.is_using_global_token() || code.len() == 32;
+        let should_use_global_contract = self.is_using_global_token() || input.len() == 32;
         if should_use_global_contract {
-            let code_hash = code
+            let code_hash = input
                 .as_slice()
                 .try_into()
                 .unwrap_or_else(|_| env::panic_str("ERR_BAD_HASH_LEN"));
@@ -93,7 +93,7 @@ impl UpgradeAndMigrate for OmniToken {
             env::storage_write(IS_USING_GLOBAL_TOKEN_KEY, &[1]);
         } else {
             // Deploy the contract code.
-            env::promise_batch_action_deploy_contract(promise_id, &code);
+            env::promise_batch_action_deploy_contract(promise_id, &input);
         }
         // Call promise to migrate the state.
         // Batched together to fail upgrade if migration fails.
