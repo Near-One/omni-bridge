@@ -176,10 +176,7 @@ impl MetadataManagment for OmniToken {
             metadata.reference_hash = Some(reference_hash);
         }
         if let Some(decimals) = decimals {
-            // Decimals can't be changed if it's already set.
-            if decimals != 0 {
-                metadata.decimals = decimals;
-            }
+            metadata.decimals = decimals;
         }
         if let Some(icon) = icon {
             metadata.icon = Some(icon);

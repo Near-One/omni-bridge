@@ -25,7 +25,16 @@ impl OmniToken {
     #[private]
     #[init(ignore_state)]
     #[allow(unused_variables)]
-    pub fn migrate(controller: Option<AccountId>, withdraw_relayer: Option<AccountId>) -> Self {
+    pub fn migrate(from_version: u32) -> Self {
+        env::state_read().unwrap_or_else(|| env::panic_str("ERR_FAILED_TO_READ_STATE"))
+    }
+
+    /// # Panics
+    ///
+    /// This function will panic if token is not in the expected state.
+    #[private]
+    #[init(ignore_state)]
+    pub fn migrate_from_poa(controller: AccountId, withdraw_relayer: AccountId) -> Self {
         if !env::state_exists() {
             env::panic_str("Old state not found. Migration is not needed.")
         }
@@ -39,13 +48,10 @@ impl OmniToken {
                 "Wrong token version for migration: __OWNER__ key not found"
             );
 
-            let relayer = withdraw_relayer
-                .unwrap_or_else(|| env::panic_str("Withdraw relayer must be provided"));
-            env::storage_write(WITHDRAW_RELAYER_ADDRESS, &borsh::to_vec(&relayer).unwrap());
+            env::storage_write(WITHDRAW_RELAYER_ADDRESS, &borsh::to_vec(&withdraw_relayer).unwrap());
 
             let new_state = Self {
-                controller: controller
-                    .unwrap_or_else(|| env::panic_str("Controller must be provided")),
+                controller,
                 token: state.token,
                 metadata: LazyOption::new(b"m".to_vec(), Some(state.metadata.get())),
             };
