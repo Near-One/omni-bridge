@@ -3,7 +3,7 @@ use near_plugins::{
 };
 use near_sdk::borsh::BorshDeserialize;
 use near_sdk::serde_json::json;
-use near_sdk::{env, near, AccountId, Gas, NearToken, PanicOnDefault, Promise};
+use near_sdk::{env, near, AccountId, CryptoHash, Gas, NearToken, PanicOnDefault, Promise};
 use omni_types::BasicMetadata;
 
 mod migrate;
@@ -36,20 +36,14 @@ pub enum Role {
 // DO NOT USE "t" or "u" prefixes in the future
 // https://github.com/Near-One/rainbow-token-connector/blob/7d8ee3b086cee4d478e1e104c3d6ef5e5625aadd/bridge-token-factory/src/lib.rs#L214C27-L214C28
 pub struct TokenDeployer {
-    omni_token_global_contract_id: AccountId,
+    global_code_hash: CryptoHash,
 }
 
 #[near]
 impl TokenDeployer {
     #[init]
-    pub fn new(
-        controller: AccountId,
-        dao: AccountId,
-        omni_token_global_contract_id: AccountId,
-    ) -> Self {
-        let mut contract = Self {
-            omni_token_global_contract_id,
-        };
+    pub fn new(controller: AccountId, dao: AccountId, global_code_hash: CryptoHash) -> Self {
+        let mut contract = Self { global_code_hash };
 
         contract.acl_init_super_admin(near_sdk::env::predecessor_account_id());
         contract.acl_grant_role(Role::DAO.into(), dao.clone());
@@ -64,7 +58,7 @@ impl TokenDeployer {
         Promise::new(account_id)
             .create_account()
             .transfer(env::attached_deposit())
-            .use_global_contract_by_account_id(self.omni_token_global_contract_id.clone())
+            .use_global_contract(self.global_code_hash)
             .function_call(
                 "new".to_string(),
                 json!({"controller": env::predecessor_account_id(), "is_using_global_token": true, "metadata": metadata})
@@ -75,7 +69,12 @@ impl TokenDeployer {
             )
     }
 
-    pub fn get_omni_token_global_contract_id(&self) -> AccountId {
-        self.omni_token_global_contract_id.clone()
+    pub fn get_global_code_hash(&self) -> CryptoHash {
+        self.global_code_hash
+    }
+
+    #[access_control_any(roles(Role::DAO))]
+    pub fn set_global_code_hash(&mut self, global_code_hash: CryptoHash) {
+        self.global_code_hash = global_code_hash;
     }
 }

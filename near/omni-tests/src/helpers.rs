@@ -1,8 +1,8 @@
 #[cfg(test)]
 pub mod tests {
-    use std::{path::Path, str::FromStr};
+    use std::path::Path;
 
-    use near_sdk::{borsh, json_types::U128, serde_json, AccountId};
+    use near_sdk::{borsh, json_types::U128, serde_json, AccountId, CryptoHash};
     use near_workspaces::types::NearToken;
     use omni_types::{
         locker_args::{BindTokenArgs, ClaimFeeArgs, DeployTokenArgs},
@@ -10,6 +10,7 @@ pub mod tests {
         BasicMetadata, ChainKind, Nonce, OmniAddress, TransferId,
     };
     use rstest::fixture;
+    use sha2::{Digest, Sha256};
 
     pub const NEP141_DEPOSIT: NearToken = NearToken::from_yoctonear(1_250_000_000_000_000_000_000);
     pub const STORAGE_DEPOSIT_PER_BYTE: NearToken = NearToken::from_near(1).saturating_div(100_000);
@@ -28,18 +29,33 @@ pub mod tests {
     }
 
     fn build_wasm(path: &str, target_dir: &str) -> Vec<u8> {
-        let pwd = Path::new("./").canonicalize().expect("new path");
-        let sub_target = pwd.join(format!("target/{target_dir}"));
+        let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .canonicalize()
+            .expect("canonicalize manifest dir");
+        let manifest_path = manifest_dir.join(path);
+        let sub_target = manifest_dir.join(format!("target/{target_dir}"));
+        let config_home = manifest_dir.join("target/near-config");
+        let home_dir = manifest_dir.join("target/near-home");
+        let apple_config_dir = home_dir
+            .join("Library")
+            .join("Application Support")
+            .join("near-cli");
+
+        std::fs::create_dir_all(&config_home).expect("create config dir override");
+        std::fs::create_dir_all(&apple_config_dir).expect("create near-cli config dir override");
+        std::env::set_var("HOME", &home_dir);
+        std::env::set_var("XDG_CONFIG_HOME", &config_home);
+        std::env::set_var("NEAR_CONFIG_DIR", &config_home);
 
         let artifact = cargo_near_build::build_with_cli(cargo_near_build::BuildOpts {
             manifest_path: Some(
-                cargo_near_build::camino::Utf8PathBuf::from_str(path)
-                    .expect("camino PathBuf from str"),
+                cargo_near_build::camino::Utf8PathBuf::from_path_buf(manifest_path)
+                    .expect("camino PathBuf from path"),
             ),
             override_cargo_target_dir: Some(sub_target.to_string_lossy().to_string()),
             ..Default::default()
         })
-        .unwrap_or_else(|_| panic!("building contract from {path}"));
+        .unwrap_or_else(|err| panic!("building contract from {path}: {err:?}"));
 
         std::fs::read(&artifact).unwrap()
     }
@@ -285,5 +301,13 @@ pub mod tests {
             .find(|log| log.contains(event_name))
             .map(|log| serde_json::from_str(log).map_err(anyhow::Error::from))
             .transpose()
+    }
+
+    pub fn wasm_code_hash(wasm: &[u8]) -> CryptoHash {
+        let digest = Sha256::digest(wasm);
+        digest
+            .as_slice()
+            .try_into()
+            .expect("sha256 output should be 32 bytes")
     }
 }
