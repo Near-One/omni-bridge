@@ -27,7 +27,7 @@ container_build_command = ["cargo", "near", "build", "non-reproducible-wasm", "-
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-near-sdk.workspace = true
+near-sdk = { workspace = true, features = ["global-contracts"] }
 near-contract-standards.workspace = true
 borsh.workspace = true
 omni-types.workspace = true
