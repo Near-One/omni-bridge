@@ -94,6 +94,7 @@ enum StorageKey {
     FastTransfers,
     RegisteredProvers,
     InitTransferPromises,
+    MigratedTokens,
     FinalisedUtxoTransfers,
 }
 
@@ -222,6 +223,7 @@ pub struct Contract {
     pub provers: UnorderedMap<ChainKind, AccountId>,
     pub init_transfer_promises: LookupMap<AccountId, CryptoHash>,
     pub utxo_chain_connectors: HashMap<ChainKind, UTXOChainConfig>,
+    pub migrated_tokens: LookupMap<AccountId, AccountId>,
 }
 
 #[near]
@@ -249,6 +251,11 @@ impl Contract {
                 &sender_id,
                 utxo_fin_transfer_msg,
             ),
+            BridgeOnTransferMsg::SwapMigratedToken => {
+                self.swap_migrated_token(sender_id, token_id, amount)
+                    .detach();
+                PromiseOrPromiseIndexOrValue::Value(U128(0))
+            }
         };
 
         promise_or_promise_index_or_value.as_return();
@@ -275,6 +282,7 @@ impl Contract {
             provers: UnorderedMap::new(StorageKey::RegisteredProvers),
             init_transfer_promises: LookupMap::new(StorageKey::InitTransferPromises),
             utxo_chain_connectors: HashMap::new(),
+            migrated_tokens: LookupMap::new(StorageKey::MigratedTokens),
         };
 
         contract.acl_init_super_admin(near_sdk::env::predecessor_account_id());
@@ -1421,6 +1429,43 @@ impl Contract {
             )
     }
 
+    #[access_control_any(roles(Role::DAO))]
+    pub fn migrate_deployed_token(
+        &mut self,
+        origin_chain: ChainKind,
+        old_token: AccountId,
+        new_token: AccountId,
+    ) {
+        require!(
+            self.deployed_tokens.remove(&old_token),
+            "ERR_OLD_TOKEN_NOT_DEPLOYED"
+        );
+        require!(self.deployed_tokens.insert(&new_token), "ERR_TOKEN_EXIST");
+
+        let origin_address = self
+            .token_id_to_address
+            .remove(&(origin_chain, old_token.clone()))
+            .sdk_expect("ERR_FAILED_TO_GET_TOKEN_ADDRESS");
+
+        require!(
+            self.token_id_to_address
+                .insert(&(origin_chain, new_token.clone()), &origin_address)
+                .is_none(),
+            "ERR_TOKEN_EXIST"
+        );
+
+        self.token_address_to_id
+            .insert(&origin_address, &new_token)
+            .sdk_expect("ERR_EXPECTED_TO_OVERWRITE_TOKEN_ADDRESS");
+
+        require!(
+            self.migrated_tokens
+                .insert(&old_token, &new_token)
+                .is_none(),
+            "ERR_TOKEN_ALREADY_MIGRATED"
+        );
+    }
+
     pub fn get_current_destination_nonce(&self, chain_kind: ChainKind) -> Nonce {
         self.destination_nonces.get(&chain_kind).unwrap_or_default()
     }
@@ -2382,6 +2427,24 @@ impl Contract {
             "ERR_TOKEN_EXIST"
         );
     }
+
+    pub fn swap_migrated_token(
+        &mut self,
+        sender_id: AccountId,
+        old_token: AccountId,
+        amount: U128,
+    ) -> Promise {
+        let new_token = self
+            .migrated_tokens
+            .get(&old_token)
+            .sdk_expect("ERR_TOKEN_NOT_MIGRATED");
+
+        let burn = ext_token::ext(old_token).burn(amount);
+        let mint = ext_token::ext(new_token).mint(sender_id, amount, None);
+
+        burn.and(mint)
+    }
+
     fn verify_proof(&self, chain_kind: ChainKind, prover_args: Vec<u8>) -> Promise {
         let prover_account_id = self
             .provers

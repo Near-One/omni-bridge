@@ -475,6 +475,7 @@ pub enum BridgeOnTransferMsg {
     InitTransfer(InitTransferMsg),
     FastFinTransfer(FastFinTransferMsg),
     UtxoFinTransfer(UtxoFinTransferMsg),
+    SwapMigratedToken,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]

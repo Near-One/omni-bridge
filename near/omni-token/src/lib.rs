@@ -9,19 +9,18 @@ use near_contract_standards::storage_management::{
 };
 use near_sdk::collections::LazyOption;
 use near_sdk::json_types::{Base64VecU8, U128};
-use near_sdk::serde_json::json;
 use near_sdk::{
-    env, ext_contract, near, require, AccountId, Gas, NearToken, PanicOnDefault, Promise,
+    borsh, env, ext_contract, near, require, AccountId, NearToken, PanicOnDefault, Promise,
     PromiseOrValue, PublicKey,
 };
-use omni_ft::{MetadataManagment, MintAndBurn, UpgradeAndMigrate};
+use omni_ft::{MetadataManagment, MintAndBurn};
 use omni_types::{BasicMetadata, OmniAddress};
 
-const OUTER_UPGRADE_GAS: Gas = Gas::from_tgas(15);
-const NO_DEPOSIT: NearToken = NearToken::from_yoctonear(0);
-const CURRENT_STATE_VERSION: u32 = 3;
 const IS_USING_GLOBAL_TOKEN_KEY: &[u8] = b"IS_USING_GLOBAL_TOKEN_KEY";
+const WITHDRAW_RELAYER_ADDRESS: &[u8] = b"WITHDRAW_RELAYER_ADDRESS";
+const WITHDRAW_MEMO_PREFIX: &str = "WITHDRAW_TO:";
 
+mod migrate;
 pub mod omni_ft;
 
 #[near(contract_state)]
@@ -66,6 +65,7 @@ impl OmniToken {
 
         Self {
             controller,
+            // For tokens migrated from Near Intents, storage key is "1"
             token: FungibleToken::new(b"t".to_vec()),
             metadata: LazyOption::new(
                 b"m".to_vec(),
@@ -80,13 +80,6 @@ impl OmniToken {
                 }),
             ),
         }
-    }
-
-    #[private]
-    #[init(ignore_state)]
-    #[allow(unused_variables)]
-    pub fn migrate(from_version: u32) -> Self {
-        env::state_read().unwrap_or_else(|| env::panic_str("ERR_FAILED_TO_READ_STATE"))
     }
 
     /// Attach a new full access to the current contract.
@@ -106,6 +99,23 @@ impl OmniToken {
     fn assert_controller(&self) {
         let caller = env::predecessor_account_id();
         require!(caller == self.controller, "ERR_MISSING_PERMISSION");
+    }
+
+    fn read_withdraw_relayer_address() -> Option<AccountId> {
+        env::storage_read(WITHDRAW_RELAYER_ADDRESS).and_then(|data| borsh::from_slice(&data).ok())
+    }
+
+    /// # Panics
+    ///
+    /// This function will panic if serialization fails.
+    pub fn set_withdraw_relayer_address(&mut self, relayer: &AccountId) {
+        self.assert_controller();
+
+        env::storage_write(WITHDRAW_RELAYER_ADDRESS, &borsh::to_vec(relayer).unwrap());
+    }
+
+    pub fn get_token_storage_key(&self) -> String {
+        format!("{:?}", self.token.accounts)
     }
 }
 
@@ -166,10 +176,7 @@ impl MetadataManagment for OmniToken {
             metadata.reference_hash = Some(reference_hash);
         }
         if let Some(decimals) = decimals {
-            // Decimals can't be changed if it's already set.
-            if decimals != 0 {
-                metadata.decimals = decimals;
-            }
+            metadata.decimals = decimals;
         }
         if let Some(icon) = icon {
             metadata.icon = Some(icon);
@@ -180,37 +187,20 @@ impl MetadataManagment for OmniToken {
 }
 
 #[near]
-impl UpgradeAndMigrate for OmniToken {
-    fn upgrade_and_migrate(&self) {
-        self.assert_controller();
-
-        // Receive the code directly from the input to avoid the
-        // GAS overhead of deserializing parameters
-        let code = env::input().unwrap_or_else(|| env::panic_str("ERR_NO_INPUT"));
-        // Deploy the contract code.
-        let promise_id = env::promise_batch_create(&env::current_account_id());
-        env::promise_batch_action_deploy_contract(promise_id, &code);
-        // Call promise to migrate the state.
-        // Batched together to fail upgrade if migration fails.
-        env::promise_batch_action_function_call(
-            promise_id,
-            "migrate",
-            &json!({ "from_version": CURRENT_STATE_VERSION })
-                .to_string()
-                .into_bytes(),
-            NO_DEPOSIT,
-            env::prepaid_gas()
-                .saturating_sub(env::used_gas())
-                .saturating_sub(OUTER_UPGRADE_GAS),
-        );
-        env::promise_return(promise_id);
-    }
-}
-
-#[near]
 impl FungibleTokenCore for OmniToken {
     #[payable]
     fn ft_transfer(&mut self, receiver_id: AccountId, amount: U128, memo: Option<String>) {
+        // Legacy bridging flow used by Near Intents
+        if receiver_id == env::current_account_id()
+            && memo
+                .as_ref()
+                .is_some_and(|m| m.starts_with(WITHDRAW_MEMO_PREFIX))
+        {
+            if let Some(withdraw_relayer) = Self::read_withdraw_relayer_address() {
+                return self.token.ft_transfer(withdraw_relayer, amount, memo);
+            }
+        }
+
         self.token.ft_transfer(receiver_id, amount, memo);
     }
 
