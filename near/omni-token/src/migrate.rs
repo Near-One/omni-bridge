@@ -1,4 +1,7 @@
-use crate::{omni_ft::UpgradeAndMigrate, OmniToken, OmniTokenExt, WITHDRAW_RELAYER_ADDRESS};
+use crate::{
+    omni_ft::UpgradeAndMigrate, OmniToken, OmniTokenExt, WITHDRAW_RELAYER_ADDRESS,
+    IS_USING_GLOBAL_TOKEN_KEY,
+};
 use borsh::{BorshDeserialize, BorshSerialize};
 use near_contract_standards::fungible_token::{metadata::FungibleTokenMetadata, FungibleToken};
 use near_sdk::serde_json::json;
@@ -79,13 +82,15 @@ impl UpgradeAndMigrate for OmniToken {
         // GAS overhead of deserializing parameters
         let code = env::input().unwrap_or_else(|| env::panic_str("ERR_NO_INPUT"));
         let promise_id = env::promise_batch_create(&env::current_account_id());
-        if self.is_using_global_token() {
-            // Use the global contract code.
+        // Allow switching to global contract code when a hash is provided.
+        let should_use_global_contract = self.is_using_global_token() || code.len() == 32;
+        if should_use_global_contract {
             let code_hash = code
                 .as_slice()
                 .try_into()
                 .unwrap_or_else(|_| env::panic_str("ERR_BAD_HASH_LEN"));
             env::promise_batch_action_use_global_contract(promise_id, &code_hash);
+            env::storage_write(IS_USING_GLOBAL_TOKEN_KEY, &[1]);
         } else {
             // Deploy the contract code.
             env::promise_batch_action_deploy_contract(promise_id, &code);
