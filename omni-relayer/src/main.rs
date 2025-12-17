@@ -35,6 +35,9 @@ struct CliArgs {
     /// Start block for Bnb indexer
     #[clap(long)]
     bnb_start_block: Option<u64>,
+    /// Start block for Pol indexer
+    #[clap(long)]
+    pol_start_block: Option<u64>,
     /// Start signature for Solana indexer
     #[clap(long)]
     solana_start_signature: Option<Signature>,
@@ -227,6 +230,21 @@ async fn main() -> Result<()> {
                         &mut redis_connection_manager,
                         ChainKind::Bnb,
                         args.bnb_start_block,
+                    )
+                    .await
+                }
+            }));
+        }
+        if config.pol.is_some() {
+            handles.push(tokio::spawn({
+                let config = config.clone();
+                let mut redis_connection_manager = redis_connection_manager.clone();
+                async move {
+                    startup::evm::start_indexer(
+                        config,
+                        &mut redis_connection_manager,
+                        ChainKind::Pol,
+                        args.pol_start_block,
                     )
                     .await
                 }
