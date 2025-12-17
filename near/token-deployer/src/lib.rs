@@ -61,7 +61,7 @@ impl TokenDeployer {
             .use_global_contract(self.global_code_hash)
             .function_call(
                 "new".to_string(),
-                json!({"controller": env::predecessor_account_id(), "is_using_global_token": true, "metadata": metadata})
+                json!({"controller": env::predecessor_account_id(), "metadata": metadata})
                     .to_string()
                     .into_bytes(),
                 NO_DEPOSIT,
