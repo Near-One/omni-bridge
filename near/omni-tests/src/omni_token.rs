@@ -2,9 +2,9 @@
 mod tests {
     use std::str::FromStr;
 
-    use near_sdk::borsh;
     use near_sdk::json_types::{Base64VecU8, U128};
     use near_sdk::serde_json::json;
+    use near_sdk::{borsh, CryptoHash};
     use near_workspaces::{types::NearToken, AccountId};
     use omni_types::locker_args::{FinTransferArgs, StorageDepositAction};
     use omni_types::prover_result::InitTransferMessage;
@@ -18,8 +18,8 @@ mod tests {
         base_token_address, bnb_factory_address, bnb_token_address, eth_eoa_address,
         eth_factory_address, eth_token_address, get_test_deploy_token_args, locker_wasm,
         mock_global_contract_deployer_wasm, mock_prover_wasm, omni_token_wasm, pol_factory_address,
-        sol_factory_address, sol_token_address, token_deployer_wasm, GLOBAL_STORAGE_COST_PER_BYTE,
-        NEP141_DEPOSIT, STORAGE_DEPOSIT_PER_BYTE,
+        sol_factory_address, sol_token_address, token_deployer_wasm, wasm_code_hash,
+        GLOBAL_STORAGE_COST_PER_BYTE, NEP141_DEPOSIT, STORAGE_DEPOSIT_PER_BYTE,
     };
 
     const PREV_TOKEN_DEPLOYER_WASM_FILEPATH: &str = "src/data/legacy_token_deployer-0.2.4.wasm";
@@ -180,7 +180,7 @@ mod tests {
             }
 
             // Deploy global omni token contract
-            let omni_token_global_contract_id = Self::deploy_global_omni_token(
+            let omni_token_code_hash = Self::deploy_global_omni_token(
                 &worker,
                 &omni_token_wasm,
                 &mock_global_contract_deployer_wasm,
@@ -202,7 +202,7 @@ mod tests {
                 .args_json(json!({
                     "controller": locker_contract.id(),
                     "dao": AccountId::from_str("dao.near").unwrap(),
-                    "omni_token_global_contract_id": omni_token_global_contract_id,
+                    "global_code_hash": omni_token_code_hash,
                 }))
                 .max_gas()
                 .transact()
@@ -267,16 +267,17 @@ mod tests {
             worker: &near_workspaces::Worker<near_workspaces::network::Sandbox>,
             omni_token_wasm: &[u8],
             mock_global_contract_deployer_wasm: &[u8],
-        ) -> anyhow::Result<AccountId> {
+        ) -> anyhow::Result<CryptoHash> {
             let mock_global_contract_deployer = worker
                 .dev_deploy(mock_global_contract_deployer_wasm)
                 .await?;
 
             let omni_token_global_contract_id: AccountId =
                 format!("omni-token-global.{}", mock_global_contract_deployer.id()).parse()?;
+            let omni_token_code_hash = wasm_code_hash(omni_token_wasm);
 
             mock_global_contract_deployer
-                .call("deploy_global_contract_by_account_id")
+                .call("deploy_global_contract")
                 .args_json((
                     Base64VecU8::from(omni_token_wasm.to_vec()),
                     &omni_token_global_contract_id,
@@ -290,7 +291,7 @@ mod tests {
                 .await?
                 .into_result()?;
 
-            Ok(omni_token_global_contract_id)
+            Ok(omni_token_code_hash)
         }
 
         async fn deploy_token(
@@ -793,7 +794,7 @@ mod tests {
         let tokens: Vec<String> = deployer_account.view("get_tokens").await?.json()?;
         assert!(tokens.is_empty());
 
-        let omni_token_global_id = TestEnv::deploy_global_omni_token(
+        let omni_token_code_hash = TestEnv::deploy_global_omni_token(
             &worker,
             &omni_token_wasm,
             &mock_global_contract_deployer_wasm,
@@ -810,7 +811,7 @@ mod tests {
         let migrate_res = deployer_account
             .call("migrate")
             .args_json(json!({
-                "omni_token_global_contract_id": omni_token_global_id
+                "global_code_hash": omni_token_code_hash
             }))
             .max_gas()
             .transact()
@@ -822,14 +823,14 @@ mod tests {
             migrate_res.into_result()
         );
 
-        let stored_global_id: AccountId = deployer_account
-            .view("get_omni_token_global_contract_id")
+        let stored_global_code_hash: CryptoHash = deployer_account
+            .view("get_global_code_hash")
             .await?
             .json()?;
 
         assert_eq!(
-            stored_global_id, omni_token_global_id,
-            "Migration did not correctly set the global token ID"
+            stored_global_code_hash, omni_token_code_hash,
+            "Migration did not correctly set the global token code hash"
         );
 
         let legacy_call_attempt = deployer_account.view("get_tokens").await;
@@ -837,6 +838,213 @@ mod tests {
             legacy_call_attempt.is_err(),
             "Legacy method should no longer exist"
         );
+
+        Ok(())
+    }
+
+    #[rstest]
+    #[tokio::test]
+    async fn test_global_token_upgrade_and_migrate(
+        mock_prover_wasm: Vec<u8>,
+        locker_wasm: Vec<u8>,
+        omni_token_wasm: Vec<u8>,
+        token_deployer_wasm: Vec<u8>,
+        mock_global_contract_deployer_wasm: Vec<u8>,
+    ) -> anyhow::Result<()> {
+        let env = TestEnv::new(
+            eth_token_address(),
+            mock_prover_wasm,
+            locker_wasm,
+            omni_token_wasm.clone(),
+            token_deployer_wasm,
+            mock_global_contract_deployer_wasm,
+        )
+        .await?;
+
+        let recipient = env.create_registered_account(10).await?;
+        let mint_amount = U128(1_000_000_000_000_000_000);
+
+        // Ensure the token account has enough NEAR balance for code upgrade
+        let root = env.worker.root_account()?;
+        root.transfer_near(env.token_contract.id(), NearToken::from_near(20))
+            .await?
+            .into_result()?;
+
+        fake_finalize_transfer(
+            &env.locker_contract,
+            &env.token_contract,
+            &recipient,
+            env.init_token_address,
+            env.factory_contract_address,
+            mint_amount,
+        )
+        .await?;
+
+        let balance_before: U128 = env
+            .token_contract
+            .view("ft_balance_of")
+            .args_json(json!({
+                "account_id": recipient.id(),
+            }))
+            .await?
+            .json()?;
+
+        let is_using_global_before: bool = env
+            .token_contract
+            .view("is_using_global_token")
+            .await?
+            .json()?;
+        assert!(is_using_global_before);
+
+        env.token_contract
+            .as_account()
+            .call(env.token_contract.id(), "migrate")
+            .args_json(json!({ "from_version": 3u32 }))
+            .max_gas()
+            .transact()
+            .await?
+            .into_result()?;
+
+        let balance_after: U128 = env
+            .token_contract
+            .view("ft_balance_of")
+            .args_json(json!({
+                "account_id": recipient.id(),
+            }))
+            .await?
+            .json()?;
+
+        let is_using_global_token: bool = env
+            .token_contract
+            .view("is_using_global_token")
+            .await?
+            .json()?;
+
+        assert_eq!(balance_after, balance_before);
+        assert!(is_using_global_token);
+
+        Ok(())
+    }
+
+    #[rstest]
+    #[tokio::test]
+    async fn test_non_global_token_upgrade_and_migrate(
+        omni_token_wasm: Vec<u8>,
+        mock_global_contract_deployer_wasm: Vec<u8>,
+    ) -> anyhow::Result<()> {
+        let worker = near_workspaces::sandbox().await?;
+        let root = worker.root_account()?;
+
+        let token_account = root
+            .create_subaccount("non-global-token")
+            .initial_balance(NearToken::from_near(10))
+            .transact()
+            .await?
+            .into_result()?;
+
+        let token_contract = token_account
+            .deploy(&omni_token_wasm)
+            .await?
+            .into_result()?;
+
+        let metadata = BasicMetadata {
+            name: "Local Token".to_string(),
+            symbol: "LOC".to_string(),
+            decimals: 18,
+        };
+
+        root.call(token_contract.id(), "new")
+            .args_json(json!({
+                "controller": root.id(),
+                "is_using_global_token": false,
+                "metadata": metadata.clone(),
+            }))
+            .max_gas()
+            .transact()
+            .await?
+            .into_result()?;
+
+        root.call(token_contract.id(), "storage_deposit")
+            .args_json(json!({
+                "account_id": root.id(),
+                "registration_only": Some(true),
+            }))
+            .deposit(NEP141_DEPOSIT)
+            .max_gas()
+            .transact()
+            .await?
+            .into_result()?;
+
+        let mint_amount = U128(250);
+
+        root.call(token_contract.id(), "mint")
+            .args_json(json!({
+                "account_id": root.id(),
+                "amount": mint_amount,
+                "msg": Option::<String>::None,
+            }))
+            .max_gas()
+            .transact()
+            .await?
+            .into_result()?;
+
+        let balance_before: U128 = token_contract
+            .view("ft_balance_of")
+            .args_json(json!({
+                "account_id": root.id(),
+            }))
+            .await?
+            .json()?;
+
+        let omni_token_code_hash = wasm_code_hash(&omni_token_wasm);
+
+        let mock_global_contract_deployer = worker
+            .dev_deploy(&mock_global_contract_deployer_wasm)
+            .await?;
+
+        let omni_token_global_contract_id: AccountId =
+            format!("omni-token-global.{}", mock_global_contract_deployer.id()).parse()?;
+
+        mock_global_contract_deployer
+            .call("deploy_global_contract")
+            .args_json((
+                Base64VecU8::from(omni_token_wasm.clone()),
+                &omni_token_global_contract_id,
+            ))
+            .max_gas()
+            .deposit(
+                GLOBAL_STORAGE_COST_PER_BYTE
+                    .saturating_mul(omni_token_wasm.len().try_into().unwrap()),
+            )
+            .transact()
+            .await?
+            .into_result()?;
+
+        root.call(token_contract.id(), "upgrade_and_migrate")
+            .args(omni_token_code_hash.to_vec())
+            .max_gas()
+            .transact()
+            .await?
+            .into_result()?;
+
+        let balance_after: U128 = token_contract
+            .view("ft_balance_of")
+            .args_json(json!({
+                "account_id": root.id(),
+            }))
+            .await?
+            .json()?;
+
+        let migrated_metadata: BasicMetadata = token_contract.view("ft_metadata").await?.json()?;
+
+        let is_using_global_token: bool =
+            token_contract.view("is_using_global_token").await?.json()?;
+
+        assert_eq!(balance_after, balance_before);
+        assert_eq!(migrated_metadata.name, metadata.name);
+        assert_eq!(migrated_metadata.symbol, metadata.symbol);
+        assert_eq!(migrated_metadata.decimals, metadata.decimals);
+        assert!(is_using_global_token);
 
         Ok(())
     }

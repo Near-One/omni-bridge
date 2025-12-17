@@ -1,12 +1,15 @@
-use crate::{omni_ft::UpgradeAndMigrate, OmniToken, OmniTokenExt, WITHDRAW_RELAYER_ADDRESS};
+use crate::{
+    omni_ft::UpgradeAndMigrate, OmniToken, OmniTokenExt, IS_USING_GLOBAL_TOKEN_KEY,
+    WITHDRAW_RELAYER_ADDRESS,
+};
 use borsh::{BorshDeserialize, BorshSerialize};
 use near_contract_standards::fungible_token::{metadata::FungibleTokenMetadata, FungibleToken};
 use near_sdk::serde_json::json;
 use near_sdk::{
-    collections::LazyOption, env, near, require, store::Lazy, AccountId, Gas, NearToken,
+    collections::LazyOption, env, near, require, store::Lazy, AccountId, Gas, GasWeight, NearToken,
 };
 
-const OUTER_UPGRADE_GAS: Gas = Gas::from_tgas(15);
+const CURRENT_STATE_VERSION: u32 = 3;
 const NO_DEPOSIT: NearToken = NearToken::from_yoctonear(0);
 const STATE_KEY: &[u8] = b"STATE";
 const OWNABLE_KEY: &[u8] = b"__OWNER__";
@@ -76,25 +79,32 @@ impl UpgradeAndMigrate for OmniToken {
 
         // Receive the code directly from the input to avoid the
         // GAS overhead of deserializing parameters
-        let code = env::input().unwrap_or_else(|| env::panic_str("ERR_NO_INPUT"));
-        // Deploy the contract code.
+        let input = env::input().unwrap_or_else(|| env::panic_str("ERR_NO_INPUT"));
         let promise_id = env::promise_batch_create(&env::current_account_id());
-        env::promise_batch_action_deploy_contract(promise_id, &code);
+        // Allow switching to global contract code when a hash is provided.
+        let should_use_global_contract = self.is_using_global_token() || input.len() == 32;
+        if should_use_global_contract {
+            let code_hash = input
+                .as_slice()
+                .try_into()
+                .unwrap_or_else(|_| env::panic_str("ERR_BAD_HASH_LEN"));
+            env::promise_batch_action_use_global_contract(promise_id, &code_hash);
+            env::storage_write(IS_USING_GLOBAL_TOKEN_KEY, &[1]);
+        } else {
+            // Deploy the contract code.
+            env::promise_batch_action_deploy_contract(promise_id, &input);
+        }
         // Call promise to migrate the state.
         // Batched together to fail upgrade if migration fails.
-        env::promise_batch_action_function_call(
+        env::promise_batch_action_function_call_weight(
             promise_id,
             "migrate",
-            &json!({
-                "controller": None::<AccountId>,
-                "withdraw_relayer": None::<AccountId>,
-            })
-            .to_string()
-            .into_bytes(),
+            &json!({ "from_version": CURRENT_STATE_VERSION })
+                .to_string()
+                .into_bytes(),
             NO_DEPOSIT,
-            env::prepaid_gas()
-                .saturating_sub(env::used_gas())
-                .saturating_sub(OUTER_UPGRADE_GAS),
+            Gas::default(),
+            GasWeight::default(),
         );
         env::promise_return(promise_id);
     }
