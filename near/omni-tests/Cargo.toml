@@ -10,7 +10,7 @@ crate-type = ["cdylib", "rlib"]
 
 [dev-dependencies]
 cargo-near-build.workspace = true
-near-sdk = { workspace = true, features = ["non-contract-usage", "legacy"] }
+near-sdk = { workspace = true, features = ["non-contract-usage", "legacy", "deterministic-account-ids"] }
 near-workspaces.workspace = true
 tokio.workspace = true
 anyhow.workspace = true

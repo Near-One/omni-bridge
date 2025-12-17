@@ -10,13 +10,12 @@ use near_contract_standards::storage_management::{
 use near_sdk::collections::LazyOption;
 use near_sdk::json_types::{Base64VecU8, U128};
 use near_sdk::{
-    borsh, env, ext_contract, near, require, AccountId, NearToken, PanicOnDefault, Promise,
-    PromiseOrValue, PublicKey,
+    borsh, env, ext_contract, near, require, AccountContract, AccountId, NearToken, PanicOnDefault,
+    Promise, PromiseOrValue, PublicKey,
 };
 use omni_ft::{MetadataManagment, MintAndBurn};
 use omni_types::{BasicMetadata, OmniAddress};
 
-const IS_USING_GLOBAL_TOKEN_KEY: &[u8] = b"IS_USING_GLOBAL_TOKEN_KEY";
 const WITHDRAW_RELAYER_ADDRESS: &[u8] = b"WITHDRAW_RELAYER_ADDRESS";
 const WITHDRAW_MEMO_PREFIX: &str = "WITHDRAW_TO:";
 
@@ -46,11 +45,7 @@ pub trait ExtOmniTokenFactory {
 #[near]
 impl OmniToken {
     #[init]
-    pub fn new(
-        controller: AccountId,
-        is_using_global_token: bool,
-        metadata: BasicMetadata,
-    ) -> Self {
+    pub fn new(controller: AccountId, metadata: BasicMetadata) -> Self {
         let current_account_id = env::current_account_id();
         let deployer_account = current_account_id
             .get_parent_account_id()
@@ -60,8 +55,6 @@ impl OmniToken {
             env::predecessor_account_id().as_str() == deployer_account,
             "Only the deployer account can init this contract"
         );
-
-        env::storage_write(IS_USING_GLOBAL_TOKEN_KEY, &[is_using_global_token.into()]);
 
         Self {
             controller,
@@ -93,7 +86,10 @@ impl OmniToken {
     }
 
     pub fn is_using_global_token(&self) -> bool {
-        env::storage_read(IS_USING_GLOBAL_TOKEN_KEY).is_some_and(|v| v[0] == 1)
+        matches!(
+            env::current_contract_code(),
+            AccountContract::Global(_) | AccountContract::GlobalByAccount(_)
+        )
     }
 
     fn assert_controller(&self) {

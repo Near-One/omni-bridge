@@ -33,7 +33,7 @@ mod tests {
     struct TestEnv {
         worker: near_workspaces::Worker<near_workspaces::network::Sandbox>,
         locker_contract: near_workspaces::Contract,
-        token_contract: near_workspaces::Contract,
+        token_account_id: AccountId,
         init_token_address: OmniAddress,
         factory_contract_address: OmniAddress,
         token_metadata: BasicMetadata,
@@ -169,7 +169,7 @@ mod tests {
 
             let prover = worker.dev_deploy(&mock_prover_wasm).await?;
 
-            for chain in ["Eth", "Base", "Arb", "Bnb", "Sol"] {
+            for chain in ["Eth", "Base", "Arb", "Bnb", "Pol", "Sol"] {
                 locker_contract
                     .call("add_prover")
                     .args_json(json!({ "chain": chain, "account_id": prover.id() }))
@@ -242,7 +242,7 @@ mod tests {
                 .into_result()?;
 
             // Deploy token
-            let token_contract = Self::deploy_token(
+            let token_account_id = Self::deploy_token(
                 &worker,
                 &locker_contract,
                 &init_token_address,
@@ -256,7 +256,7 @@ mod tests {
             Ok(Self {
                 worker,
                 locker_contract,
-                token_contract,
+                token_account_id,
                 init_token_address,
                 factory_contract_address,
                 token_metadata,
@@ -302,7 +302,7 @@ mod tests {
             token_metadata: &BasicMetadata,
             omni_token_wasm_len: usize,
             deposit_strategy: DepositStrategy,
-        ) -> anyhow::Result<near_workspaces::Contract> {
+        ) -> anyhow::Result<AccountId> {
             let token_deploy_initiator = worker
                 .create_tla(account_n(2), worker.generate_dev_account_credentials().1)
                 .await?
@@ -359,12 +359,7 @@ mod tests {
                 .await?
                 .json()?;
 
-            let token_contract = worker
-                .import_contract(&token_account_id, worker)
-                .transact()
-                .await?;
-
-            Ok(token_contract)
+            Ok(token_account_id)
         }
 
         // Helper to create and register a new account
@@ -382,7 +377,7 @@ mod tests {
                 .unwrap();
 
             account
-                .call(self.token_contract.id(), "storage_deposit")
+                .call(&self.token_account_id, "storage_deposit")
                 .args_json(json!({
                     "account_id": Some(account.id()),
                     "registration_only": Some(true),
@@ -440,8 +435,11 @@ mod tests {
             .await?
         };
 
-        let fetched_metadata: BasicMetadata =
-            env.token_contract.view("ft_metadata").await?.json()?;
+        let fetched_metadata: BasicMetadata = env
+            .worker
+            .view(&env.token_account_id, "ft_metadata")
+            .await?
+            .json()?;
 
         assert_eq!(env.token_metadata.name, fetched_metadata.name);
         assert_eq!(env.token_metadata.symbol, fetched_metadata.symbol);
@@ -477,8 +475,11 @@ mod tests {
         )
         .await?;
 
-        let fetched_metadata: BasicMetadata =
-            env.token_contract.view("ft_metadata").await?.json()?;
+        let fetched_metadata: BasicMetadata = env
+            .worker
+            .view(&env.token_account_id, "ft_metadata")
+            .await?
+            .json()?;
 
         assert_eq!(fetched_metadata.name, huge_name);
         assert_eq!(fetched_metadata.symbol, huge_symbol);
@@ -555,8 +556,11 @@ mod tests {
         )
         .await?;
 
-        let fetched_metadata: BasicMetadata =
-            env.token_contract.view("ft_metadata").await?.json()?;
+        let fetched_metadata: BasicMetadata = env
+            .worker
+            .view(&env.token_account_id, "ft_metadata")
+            .await?
+            .json()?;
 
         assert_eq!(env.token_metadata.name, fetched_metadata.name);
         assert_eq!(env.token_metadata.symbol, fetched_metadata.symbol);
@@ -574,8 +578,11 @@ mod tests {
             .await?
             .into_result()?;
 
-        let updated_metadata: BasicMetadata =
-            env.token_contract.view("ft_metadata").await?.json()?;
+        let updated_metadata: BasicMetadata = env
+            .worker
+            .view(&env.token_account_id, "ft_metadata")
+            .await?
+            .json()?;
 
         assert_eq!(updated_metadata.name, "New Token Name");
         assert_eq!(updated_metadata.symbol, "NEW");
@@ -631,7 +638,7 @@ mod tests {
 
         fake_finalize_transfer(
             &env.locker_contract,
-            &env.token_contract,
+            &env.token_account_id,
             &recipient,
             env.init_token_address,
             env.factory_contract_address,
@@ -640,15 +647,19 @@ mod tests {
         .await?;
 
         let balance: U128 = env
-            .token_contract
-            .view("ft_balance_of")
+            .worker
+            .view(&env.token_account_id, "ft_balance_of")
             .args_json(json!({
                 "account_id": recipient.id(),
             }))
             .await?
             .json()?;
 
-        let total_supply: U128 = env.token_contract.view("ft_total_supply").await?.json()?;
+        let total_supply: U128 = env
+            .worker
+            .view(&env.token_account_id, "ft_total_supply")
+            .await?
+            .json()?;
 
         assert_eq!(
             balance, amount,
@@ -710,7 +721,7 @@ mod tests {
         // Mint tokens to sender
         fake_finalize_transfer(
             &env.locker_contract,
-            &env.token_contract,
+            &env.token_account_id,
             &sender,
             env.init_token_address,
             env.factory_contract_address,
@@ -720,7 +731,7 @@ mod tests {
 
         // Transfer tokens
         sender
-            .call(env.token_contract.id(), "ft_transfer")
+            .call(&env.token_account_id, "ft_transfer")
             .args_json(json!({
                 "receiver_id": receiver.id(),
                 "amount": amount,
@@ -733,8 +744,8 @@ mod tests {
 
         // Verify balances
         let sender_balance: U128 = env
-            .token_contract
-            .view("ft_balance_of")
+            .worker
+            .view(&env.token_account_id, "ft_balance_of")
             .args_json(json!({
                 "account_id": sender.id(),
             }))
@@ -742,15 +753,19 @@ mod tests {
             .json()?;
 
         let receiver_balance: U128 = env
-            .token_contract
-            .view("ft_balance_of")
+            .worker
+            .view(&env.token_account_id, "ft_balance_of")
             .args_json(json!({
                 "account_id": receiver.id(),
             }))
             .await?
             .json()?;
 
-        let total_supply: U128 = env.token_contract.view("ft_total_supply").await?.json()?;
+        let total_supply: U128 = env
+            .worker
+            .view(&env.token_account_id, "ft_total_supply")
+            .await?
+            .json()?;
 
         assert_eq!(sender_balance, U128(0), "Sender balance should be 0");
         assert_eq!(
@@ -866,13 +881,13 @@ mod tests {
 
         // Ensure the token account has enough NEAR balance for code upgrade
         let root = env.worker.root_account()?;
-        root.transfer_near(env.token_contract.id(), NearToken::from_near(20))
+        root.transfer_near(&env.token_account_id, NearToken::from_near(20))
             .await?
             .into_result()?;
 
         fake_finalize_transfer(
             &env.locker_contract,
-            &env.token_contract,
+            &env.token_account_id,
             &recipient,
             env.init_token_address,
             env.factory_contract_address,
@@ -881,24 +896,36 @@ mod tests {
         .await?;
 
         let balance_before: U128 = env
-            .token_contract
-            .view("ft_balance_of")
+            .worker
+            .view(&env.token_account_id, "ft_balance_of")
             .args_json(json!({
-                "account_id": recipient.id(),
+            "account_id": recipient.id(),
             }))
             .await?
             .json()?;
 
-        let is_using_global_before: bool = env
-            .token_contract
-            .view("is_using_global_token")
-            .await?
-            .json()?;
-        assert!(is_using_global_before);
+        let sk = near_workspaces::types::SecretKey::from_random(
+            near_workspaces::types::KeyType::ED25519,
+        );
+        let pk = sk.public_key();
 
-        env.token_contract
+        env.locker_contract
             .as_account()
-            .call(env.token_contract.id(), "migrate")
+            .call(&env.token_account_id, "attach_full_access_key")
+            .args_json(json!({ "public_key": pk }))
+            .max_gas()
+            .transact()
+            .await?
+            .into_result()?;
+
+        let token_account = near_workspaces::Account::from_secret_key(
+            env.token_account_id.clone(),
+            sk,
+            &env.worker,
+        );
+
+        token_account
+            .call(&env.token_account_id, "migrate")
             .args_json(json!({ "from_version": 3u32 }))
             .max_gas()
             .transact()
@@ -906,8 +933,8 @@ mod tests {
             .into_result()?;
 
         let balance_after: U128 = env
-            .token_contract
-            .view("ft_balance_of")
+            .worker
+            .view(&env.token_account_id, "ft_balance_of")
             .args_json(json!({
                 "account_id": recipient.id(),
             }))
@@ -915,8 +942,8 @@ mod tests {
             .json()?;
 
         let is_using_global_token: bool = env
-            .token_contract
-            .view("is_using_global_token")
+            .worker
+            .view(&env.token_account_id, "is_using_global_token")
             .await?
             .json()?;
 
@@ -956,13 +983,17 @@ mod tests {
         root.call(token_contract.id(), "new")
             .args_json(json!({
                 "controller": root.id(),
-                "is_using_global_token": false,
                 "metadata": metadata.clone(),
             }))
             .max_gas()
             .transact()
             .await?
             .into_result()?;
+
+        let is_using_global_token: bool =
+            token_contract.view("is_using_global_token").await?.json()?;
+
+        assert!(!is_using_global_token);
 
         root.call(token_contract.id(), "storage_deposit")
             .args_json(json!({
@@ -1051,14 +1082,14 @@ mod tests {
 
     async fn fake_finalize_transfer(
         locker_contract: &near_workspaces::Contract,
-        token_contract: &near_workspaces::Contract,
+        token_account_id: &AccountId,
         recipient: &near_workspaces::Account,
         token_address: OmniAddress,
         emitter_address: OmniAddress,
         amount: U128,
     ) -> anyhow::Result<()> {
         let storage_deposit_actions = vec![StorageDepositAction {
-            token_id: token_contract.id().clone(),
+            token_id: token_account_id.clone(),
             account_id: recipient.id().clone(),
             storage_deposit_amount: Some(NEP141_DEPOSIT.as_yoctonear()),
         }];
