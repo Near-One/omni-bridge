@@ -5,13 +5,11 @@ use crate::{
 use borsh::{BorshDeserialize, BorshSerialize};
 use near_contract_standards::fungible_token::{metadata::FungibleTokenMetadata, FungibleToken};
 use near_sdk::serde_json::json;
-use near_sdk::GasWeight;
 use near_sdk::{
-    collections::LazyOption, env, near, require, store::Lazy, AccountId, Gas, NearToken,
+    collections::LazyOption, env, near, require, store::Lazy, AccountId, Gas, GasWeight, NearToken,
 };
 
 const CURRENT_STATE_VERSION: u32 = 3;
-const OUTER_UPGRADE_GAS: Gas = Gas::from_tgas(15);
 const NO_DEPOSIT: NearToken = NearToken::from_yoctonear(0);
 const STATE_KEY: &[u8] = b"STATE";
 const OWNABLE_KEY: &[u8] = b"__OWNER__";
@@ -105,8 +103,8 @@ impl UpgradeAndMigrate for OmniToken {
                 .to_string()
                 .into_bytes(),
             NO_DEPOSIT,
-            OUTER_UPGRADE_GAS,
-            GasWeight(1),
+            Gas::default(),
+            GasWeight::default(),
         );
         env::promise_return(promise_id);
     }
