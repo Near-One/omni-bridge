@@ -22,6 +22,7 @@ pub fn get_private_key(chain_kind: ChainKind, near_signer_type: Option<NearSigne
         ChainKind::Base => "BASE_PRIVATE_KEY",
         ChainKind::Arb => "ARB_PRIVATE_KEY",
         ChainKind::Bnb => "BNB_PRIVATE_KEY",
+        ChainKind::Pol => "POL_PRIVATE_KEY",
         ChainKind::Sol => "SOLANA_PRIVATE_KEY",
         ChainKind::Btc | ChainKind::Zcash => unreachable!("No private key for UTXO chains"),
     };
@@ -101,6 +102,7 @@ pub struct Config {
     pub base: Option<Evm>,
     pub arb: Option<Evm>,
     pub bnb: Option<Evm>,
+    pub pol: Option<Evm>,
     pub solana: Option<Solana>,
     pub btc: Option<Utxo>,
     pub zcash: Option<Utxo>,
@@ -129,6 +131,7 @@ impl Config {
             | ChainKind::Base
             | ChainKind::Arb
             | ChainKind::Bnb
+            | ChainKind::Pol
             | ChainKind::Sol => {
                 panic!("Sigining utxo transaction is not applicable for {chain:?}")
             }
@@ -145,6 +148,7 @@ impl Config {
             | ChainKind::Base
             | ChainKind::Arb
             | ChainKind::Bnb
+            | ChainKind::Pol
             | ChainKind::Sol => {
                 panic!("Verifying withdraw is not applicable for {chain:?}")
             }
