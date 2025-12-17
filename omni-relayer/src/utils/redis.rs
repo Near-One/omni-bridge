@@ -15,6 +15,10 @@ pub const STUCK_EVENTS: &str = "stuck_events";
 
 pub const FEE_MAPPING: &str = "fee_mapping";
 
+pub fn composite_key(parts: &[&str]) -> String {
+    parts.join(":")
+}
+
 pub async fn get_fee(
     config: &config::Config,
     redis_connection_manager: &mut ConnectionManager,

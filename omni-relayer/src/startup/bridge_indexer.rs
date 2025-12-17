@@ -23,6 +23,24 @@ use crate::{
 
 const OMNI_EVENTS: &str = "omni_events";
 
+fn near_event_key(origin_transaction_id: &str, origin_nonce: u64) -> String {
+    utils::redis::composite_key(&[origin_transaction_id, &origin_nonce.to_string()])
+}
+
+fn evm_event_key(origin_transaction_id: &str, log_index: Option<u64>) -> String {
+    let log_index = log_index.unwrap_or_default().to_string();
+    utils::redis::composite_key(&[origin_transaction_id, &log_index])
+}
+
+fn solana_event_key(origin_transaction_id: &str, instruction_index: Option<usize>) -> String {
+    let instruction_index = instruction_index.unwrap_or_default().to_string();
+    utils::redis::composite_key(&[origin_transaction_id, &instruction_index])
+}
+
+fn near_to_utxo_event_key(origin_transaction_id: &str, utxo_id: &str, sign_index: u64) -> String {
+    utils::redis::composite_key(&[origin_transaction_id, utxo_id, &sign_index.to_string()])
+}
+
 fn get_evm_config(config: &config::Config, chain_kind: ChainKind) -> Result<&config::Evm> {
     match chain_kind {
         ChainKind::Eth => config.eth.as_ref().context("EVM config for Eth is not set"),
@@ -55,11 +73,13 @@ async fn handle_transaction_event(
             );
 
             if transfer_message.recipient.get_chain() != ChainKind::Near {
+                let key = near_event_key(&origin_transaction_id, transfer_message.origin_nonce);
+
                 utils::redis::add_event(
                     config,
                     redis_connection_manager,
                     utils::redis::EVENTS,
-                    transfer_message.origin_nonce.to_string(),
+                    key,
                     RetryableEvent::new(crate::workers::Transfer::Near { transfer_message }),
                 )
                 .await;
@@ -73,11 +93,16 @@ async fn handle_transaction_event(
             info!("Received NearUtxoTransferMessage: {:?}", event.transfer_id);
 
             if let Some(new_transfer_id) = new_transfer_id {
+                let utxo_key = utils::redis::composite_key(&[
+                    &origin_transaction_id,
+                    &utxo_transfer_message.utxo_id.to_string(),
+                ]);
+
                 utils::redis::add_event(
                     config,
                     redis_connection_manager,
                     utils::redis::EVENTS,
-                    utxo_transfer_message.utxo_id.to_string(),
+                    utxo_key,
                     RetryableEvent::new(crate::workers::Transfer::Utxo {
                         utxo_transfer_message,
                         new_transfer_id,
@@ -88,16 +113,14 @@ async fn handle_transaction_event(
         }
         OmniTransferMessage::NearSignTransferEvent(sign_event) => {
             info!("Received NearSignTransferEvent");
+            let origin_nonce = sign_event.message_payload.transfer_id.origin_nonce;
+            let key = near_event_key(&origin_transaction_id, origin_nonce);
 
             utils::redis::add_event(
                 config,
                 redis_connection_manager,
                 utils::redis::EVENTS,
-                sign_event
-                    .message_payload
-                    .transfer_id
-                    .origin_nonce
-                    .to_string(),
+                key,
                 RetryableEvent::new(OmniBridgeEvent::SignTransferEvent {
                     signature: sign_event.signature,
                     message_payload: sign_event.message_payload,
@@ -116,11 +139,15 @@ async fn handle_transaction_event(
                 block_number,
                 block_timestamp,
                 chain_kind,
+                log_index,
                 ..
             } = origin
             else {
                 anyhow::bail!("Expected EVMLog for EvmInitTransfer: {init_transfer:?}");
             };
+
+            let log_index_str = log_index.unwrap_or_default().to_string();
+            let redis_key = evm_event_key(&origin_transaction_id, log_index);
 
             let Ok(tx_hash) = H256::from_str(&origin_transaction_id) else {
                 anyhow::bail!("Failed to parse transaction_id as H256: {origin_transaction_id:?}");
@@ -167,7 +194,7 @@ async fn handle_transaction_event(
                 config,
                 redis_connection_manager,
                 utils::redis::EVENTS,
-                origin_transaction_id.clone(),
+                redis_key,
                 RetryableEvent::new(workers::Transfer::Evm {
                     chain_kind,
                     tx_hash,
@@ -179,11 +206,14 @@ async fn handle_transaction_event(
             .await;
 
             if config.is_fast_relayer_enabled() {
+                let fast_key =
+                    utils::redis::composite_key(&[&origin_transaction_id, &log_index_str, "fast"]);
+
                 utils::redis::add_event(
                     config,
                     redis_connection_manager,
                     utils::redis::EVENTS,
-                    format!("{origin_transaction_id}_fast"),
+                    fast_key,
                     RetryableEvent::new(crate::workers::Transfer::Fast {
                         block_number,
                         tx_hash: origin_transaction_id,
@@ -212,11 +242,14 @@ async fn handle_transaction_event(
             let OmniTransactionOrigin::EVMLog {
                 block_timestamp,
                 chain_kind,
+                log_index,
                 ..
             } = origin
             else {
                 anyhow::bail!("Expected EVMLog for EvmFinTransfer: {fin_transfer:?}");
             };
+
+            let redis_key = evm_event_key(&origin_transaction_id, log_index);
 
             let Ok(tx_hash) = H256::from_str(&origin_transaction_id) else {
                 anyhow::bail!("Failed to parse transaction_id as H256: {origin_transaction_id:?}");
@@ -233,7 +266,7 @@ async fn handle_transaction_event(
                 config,
                 redis_connection_manager,
                 utils::redis::EVENTS,
-                origin_transaction_id,
+                redis_key,
                 RetryableEvent::new(workers::FinTransfer::Evm {
                     chain_kind,
                     tx_hash,
@@ -249,6 +282,15 @@ async fn handle_transaction_event(
                 init_transfer.origin_nonce
             );
 
+            let OmniTransactionOrigin::SolanaTransaction {
+                instruction_index, ..
+            } = origin
+            else {
+                anyhow::bail!(
+                    "Expected SolanaTransaction for SolanaInitTransfer: {init_transfer:?}"
+                );
+            };
+
             let OmniAddress::Sol(ref token) = init_transfer.token else {
                 anyhow::bail!("Unexpected token address: {}", init_transfer.token);
             };
@@ -258,12 +300,13 @@ async fn handle_transaction_event(
             let Some(emitter) = init_transfer.emitter else {
                 anyhow::bail!("Emitter is not set for Solana transfer: {init_transfer:?}");
             };
+            let redis_key = solana_event_key(&origin_transaction_id, Some(instruction_index));
 
             utils::redis::add_event(
                 config,
                 redis_connection_manager,
                 utils::redis::EVENTS,
-                origin_transaction_id,
+                redis_key,
                 RetryableEvent::new(crate::workers::Transfer::Solana {
                     amount: init_transfer.amount.0.into(),
                     token: Pubkey::new_from_array(token.0),
@@ -281,18 +324,26 @@ async fn handle_transaction_event(
         OmniTransferMessage::SolanaFinTransfer(fin_transfer) => {
             info!("Received SolanaFinTransfer");
 
+            let OmniTransactionOrigin::SolanaTransaction {
+                instruction_index, ..
+            } = origin
+            else {
+                anyhow::bail!("Expected SolanaTransaction for SolanaFinTransfer: {fin_transfer:?}");
+            };
+
             let Some(emitter) = fin_transfer.emitter.clone() else {
                 anyhow::bail!("Emitter is not set for Solana transfer: {fin_transfer:?}");
             };
             let Some(sequence) = fin_transfer.sequence else {
                 anyhow::bail!("Sequence is not set for Solana transfer: {fin_transfer:?}");
             };
+            let redis_key = solana_event_key(&origin_transaction_id, Some(instruction_index));
 
             utils::redis::add_event(
                 config,
                 redis_connection_manager,
                 utils::redis::EVENTS,
-                origin_transaction_id,
+                redis_key,
                 RetryableEvent::new(crate::workers::FinTransfer::Solana { emitter, sequence }),
             )
             .await;
@@ -340,17 +391,22 @@ async fn handle_transaction_event(
                     utxo_id.tx_hash
                 );
 
+                let utxo_id_str = utxo_id.to_string();
+
                 for sign_index in 0..utxo_count {
                     info!(
                         "Received sign index {sign_index} for BTC pending ID: {}",
                         utxo_id.tx_hash
                     );
 
+                    let redis_key =
+                        near_to_utxo_event_key(&origin_transaction_id, &utxo_id_str, sign_index);
+
                     utils::redis::add_event(
                         config,
                         redis_connection_manager,
                         utils::redis::EVENTS,
-                        utxo_id.to_string(),
+                        redis_key,
                         RetryableEvent::new(workers::Transfer::NearToUtxo {
                             chain: destination_chain,
                             btc_pending_id: utxo_id.tx_hash.clone(),
@@ -438,11 +494,13 @@ async fn handle_meta_event(
             let OmniTransactionOrigin::EVMLog {
                 block_timestamp,
                 chain_kind,
+                log_index,
                 ..
             } = origin
             else {
                 anyhow::bail!("Expected EVMLog for EvmDeployToken: {deploy_token_event:?}");
             };
+            let redis_key = evm_event_key(&origin_transaction_id, log_index);
 
             let Ok(tx_hash) = H256::from_str(&origin_transaction_id) else {
                 anyhow::bail!("Failed to parse transaction_id as H256: {origin_transaction_id:?}");
@@ -459,7 +517,7 @@ async fn handle_meta_event(
                 config,
                 redis_connection_manager,
                 utils::redis::EVENTS,
-                origin_transaction_id,
+                redis_key,
                 RetryableEvent::new(workers::DeployToken::Evm {
                     chain_kind,
                     tx_hash,
@@ -473,11 +531,19 @@ async fn handle_meta_event(
             emitter, sequence, ..
         } => {
             info!("Received EVMDeployToken: {sequence}");
+            let OmniTransactionOrigin::SolanaTransaction {
+                instruction_index, ..
+            } = origin
+            else {
+                anyhow::bail!("Expected SolanaTransaction for SolanaDeployToken");
+            };
+            let redis_key = solana_event_key(&origin_transaction_id, Some(instruction_index));
+
             utils::redis::add_event(
                 config,
                 redis_connection_manager,
                 utils::redis::EVENTS,
-                origin_transaction_id,
+                redis_key,
                 RetryableEvent::new(workers::DeployToken::Solana { emitter, sequence }),
             )
             .await;
