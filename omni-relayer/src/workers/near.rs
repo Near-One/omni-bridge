@@ -493,7 +493,6 @@ pub async fn process_sign_transfer_event(
                         chain_kind,
                         &tx_hash,
                         nonce,
-                        message_payload.transfer_id.origin_nonce.to_string(),
                         omni_bridge_event,
                     )
                     .await
@@ -774,16 +773,10 @@ async fn store_pending_transaction(
     chain_kind: ChainKind,
     tx_hash: &str,
     nonce: u64,
-    source_event_id: String,
     omni_bridge_event: OmniBridgeEvent,
 ) -> Result<()> {
-    let pending_tx = PendingTransaction::new(
-        tx_hash.to_string(),
-        nonce,
-        chain_kind,
-        source_event_id,
-        omni_bridge_event,
-    );
+    let pending_tx =
+        PendingTransaction::new(tx_hash.to_string(), nonce, chain_kind, omni_bridge_event);
 
     utils::redis::zadd(
         config,
