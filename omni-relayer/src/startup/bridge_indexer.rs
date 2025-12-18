@@ -207,7 +207,7 @@ async fn handle_transaction_event(
 
             if config.is_fast_relayer_enabled() {
                 let fast_key =
-                    utils::redis::composite_key(&[&origin_transaction_id, &log_index_str, "fast"]);
+                    utils::redis::composite_key(&["fast", &origin_transaction_id, &log_index_str]);
 
                 utils::redis::add_event(
                     config,

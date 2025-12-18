@@ -307,7 +307,7 @@ async fn process_log(
         .await;
 
         if is_fast_relayer_enabled {
-            let fast_key = utils::redis::composite_key(&[&tx_hash_str, &log_index_str, "fast"]);
+            let fast_key = utils::redis::composite_key(&["fast", &tx_hash_str, &log_index_str]);
 
             utils::redis::add_event(
                 config,
