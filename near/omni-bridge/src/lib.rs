@@ -1098,6 +1098,30 @@ impl Contract {
         )
     }
 
+    #[private]
+    pub fn deploy_token_by_deployer_callback(
+        &mut self,
+        token_address: OmniAddress,
+        token_id: AccountId,
+    ) {
+        match env::promise_result(0) {
+            PromiseResult::Failed => {
+                self.deployed_tokens.remove(&token_id);
+                self.token_id_to_address
+                    .remove(&(token_address.get_chain(), token_id));
+                self.token_address_to_id.remove(&token_address);
+                self.token_decimals.remove(&token_address);
+            }
+            PromiseResult::Successful(_) => {
+                ext_token::ext(token_id)
+                    .with_static_gas(STORAGE_DEPOSIT_GAS)
+                    .with_attached_deposit(NEP141_DEPOSIT)
+                    .storage_deposit(&env::current_account_id(), Some(true))
+                    .detach();
+            }
+        }
+    }
+
     #[payable]
     #[access_control_any(roles(Role::DAO))]
     pub fn deploy_native_token(
@@ -2152,10 +2176,9 @@ impl Contract {
             .with_attached_deposit(attached_deposit.saturating_sub(required_deposit))
             .deploy_token(token_id.clone(), metadata)
             .then(
-                ext_token::ext(token_id)
+                Self::ext(env::current_account_id())
                     .with_static_gas(STORAGE_DEPOSIT_GAS)
-                    .with_attached_deposit(NEP141_DEPOSIT)
-                    .storage_deposit(&env::current_account_id(), Some(true)),
+                    .deploy_token_by_deployer_callback(token_address.clone(), token_id.clone()),
             )
     }
 
