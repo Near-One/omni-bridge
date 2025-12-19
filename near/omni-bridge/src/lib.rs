@@ -1113,12 +1113,11 @@ impl Contract {
                 self.token_decimals.remove(token_address);
                 PromiseOrValue::Value(())
             }
-            PromiseResult::Successful(_) => PromiseOrValue::Promise(
-                ext_token::ext(token_id)
-                    .with_static_gas(STORAGE_DEPOSIT_GAS)
-                    .with_attached_deposit(NEP141_DEPOSIT)
-                    .storage_deposit(&env::current_account_id(), Some(true)),
-            ),
+            PromiseResult::Successful(_) => ext_token::ext(token_id)
+                .with_static_gas(STORAGE_DEPOSIT_GAS)
+                .with_attached_deposit(NEP141_DEPOSIT)
+                .storage_deposit(&env::current_account_id(), Some(true))
+                .into(),
         }
     }
 
@@ -2398,18 +2397,16 @@ impl Contract {
 
         if token_fee > 0 {
             if self.deployed_tokens.contains(&token) {
-                PromiseOrValue::Promise(ext_token::ext(token).with_static_gas(MINT_TOKEN_GAS).mint(
-                    fee_recipient,
-                    U128(token_fee),
-                    None,
-                ))
+                ext_token::ext(token)
+                    .with_static_gas(MINT_TOKEN_GAS)
+                    .mint(fee_recipient, U128(token_fee), None)
+                    .into()
             } else {
-                PromiseOrValue::Promise(
-                    ext_token::ext(token)
-                        .with_static_gas(FT_TRANSFER_GAS)
-                        .with_attached_deposit(ONE_YOCTO)
-                        .ft_transfer(fee_recipient, U128(token_fee), None),
-                )
+                ext_token::ext(token)
+                    .with_static_gas(FT_TRANSFER_GAS)
+                    .with_attached_deposit(ONE_YOCTO)
+                    .ft_transfer(fee_recipient, U128(token_fee), None)
+                    .into()
             }
         } else {
             PromiseOrValue::Value(())
