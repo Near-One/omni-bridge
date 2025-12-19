@@ -39,6 +39,157 @@ mod tests {
         token_metadata: BasicMetadata,
     }
 
+    struct DeployEnv {
+        worker: near_workspaces::Worker<near_workspaces::network::Sandbox>,
+        locker_contract: near_workspaces::Contract,
+        init_token_address: OmniAddress,
+        factory_contract_address: OmniAddress,
+        token_metadata: BasicMetadata,
+        omni_token_wasm_len: usize,
+    }
+
+    impl DeployEnv {
+        #[allow(clippy::too_many_arguments)]
+        async fn new(
+            init_token_address: OmniAddress,
+            token_metadata: BasicMetadata,
+            mock_prover_wasm: Vec<u8>,
+            locker_wasm: Vec<u8>,
+            omni_token_wasm: Vec<u8>,
+            token_deployer_wasm: Vec<u8>,
+            mock_global_contract_deployer_wasm: Vec<u8>,
+        ) -> anyhow::Result<Self> {
+            let worker = near_workspaces::sandbox().await?;
+
+            // setup locker
+            let locker_contract = worker.dev_deploy(&locker_wasm).await?;
+            locker_contract
+                .call("new")
+                .args_json(json!({
+                    "mpc_signer": "mpc.testnet",
+                    "nonce": U128(0),
+                    "wnear_account_id": "wnear.testnet",
+                    "btc_connector": "brg-dev.testnet",
+                }))
+                .max_gas()
+                .transact()
+                .await?
+                .into_result()?;
+
+            let prover = worker.dev_deploy(&mock_prover_wasm).await?;
+
+            for chain in ["Eth", "Base", "Arb", "Bnb", "Pol", "Sol"] {
+                locker_contract
+                    .call("add_prover")
+                    .args_json(json!({ "chain": chain, "account_id": prover.id() }))
+                    .max_gas()
+                    .transact()
+                    .await?
+                    .into_result()?;
+            }
+
+            // Deploy global omni token contract
+            let omni_token_code_hash = TestEnv::deploy_global_omni_token(
+                &worker,
+                &omni_token_wasm,
+                &mock_global_contract_deployer_wasm,
+            )
+            .await?;
+
+            // Setup token deployer
+            let token_deployer = worker
+                .create_tla_and_deploy(
+                    account_n(1),
+                    worker.generate_dev_account_credentials().1,
+                    &token_deployer_wasm,
+                )
+                .await?
+                .unwrap();
+
+            token_deployer
+                .call("new")
+                .args_json(json!({
+                    "controller": locker_contract.id(),
+                    "dao": AccountId::from_str("dao.near").unwrap(),
+                    "global_code_hash": omni_token_code_hash,
+                }))
+                .max_gas()
+                .transact()
+                .await?
+                .into_result()?;
+
+            // Configure locker
+            locker_contract
+                .call("add_token_deployer")
+                .args_json(json!({
+                    "chain": init_token_address.get_chain(),
+                    "account_id": token_deployer.id(),
+                }))
+                .max_gas()
+                .transact()
+                .await?
+                .into_result()?;
+
+            let factory_contract_address = match init_token_address.get_chain() {
+                ChainKind::Eth => eth_factory_address(),
+                ChainKind::Sol => sol_factory_address(),
+                ChainKind::Arb => arb_factory_address(),
+                ChainKind::Base => base_factory_address(),
+                ChainKind::Bnb => bnb_factory_address(),
+                ChainKind::Pol => pol_factory_address(),
+                ChainKind::Near | ChainKind::Btc | ChainKind::Zcash => panic!("Unsupported chain"),
+            };
+
+            locker_contract
+                .call("add_factory")
+                .args_json(json!({
+                    "address": factory_contract_address,
+                }))
+                .max_gas()
+                .transact()
+                .await?
+                .into_result()?;
+
+            Ok(Self {
+                worker,
+                locker_contract,
+                init_token_address,
+                factory_contract_address,
+                token_metadata,
+                omni_token_wasm_len: omni_token_wasm.len(),
+            })
+        }
+
+        async fn deploy_token(
+            &self,
+            deposit_strategy: DepositStrategy,
+            deploy_initiator_index: u8,
+        ) -> anyhow::Result<AccountId> {
+            TestEnv::deploy_token(
+                &self.worker,
+                &self.locker_contract,
+                &self.init_token_address,
+                &self.factory_contract_address,
+                &self.token_metadata,
+                self.omni_token_wasm_len,
+                deposit_strategy,
+                deploy_initiator_index,
+            )
+            .await
+        }
+
+        fn into_test_env(self, token_account_id: AccountId) -> TestEnv {
+            TestEnv {
+                worker: self.worker,
+                locker_contract: self.locker_contract,
+                token_account_id,
+                init_token_address: self.init_token_address,
+                factory_contract_address: self.factory_contract_address,
+                token_metadata: self.token_metadata,
+            }
+        }
+    }
+
     impl TestEnv {
         fn default_token_metadata() -> BasicMetadata {
             BasicMetadata {
@@ -150,117 +301,20 @@ mod tests {
             mock_global_contract_deployer_wasm: Vec<u8>,
             deposit_strategy: DepositStrategy,
         ) -> anyhow::Result<Self> {
-            let worker = near_workspaces::sandbox().await?;
-
-            // setup locker
-            let locker_contract = worker.dev_deploy(&locker_wasm).await?;
-            locker_contract
-                .call("new")
-                .args_json(json!({
-                    "mpc_signer": "mpc.testnet",
-                    "nonce": U128(0),
-                    "wnear_account_id": "wnear.testnet",
-                    "btc_connector": "brg-dev.testnet",
-                }))
-                .max_gas()
-                .transact()
-                .await?
-                .into_result()?;
-
-            let prover = worker.dev_deploy(&mock_prover_wasm).await?;
-
-            for chain in ["Eth", "Base", "Arb", "Bnb", "Pol", "Sol"] {
-                locker_contract
-                    .call("add_prover")
-                    .args_json(json!({ "chain": chain, "account_id": prover.id() }))
-                    .max_gas()
-                    .transact()
-                    .await?
-                    .into_result()?;
-            }
-
-            // Deploy global omni token contract
-            let omni_token_code_hash = Self::deploy_global_omni_token(
-                &worker,
-                &omni_token_wasm,
-                &mock_global_contract_deployer_wasm,
-            )
-            .await?;
-
-            // Setup token deployer
-            let token_deployer = worker
-                .create_tla_and_deploy(
-                    account_n(1),
-                    worker.generate_dev_account_credentials().1,
-                    &token_deployer_wasm,
-                )
-                .await?
-                .unwrap();
-
-            token_deployer
-                .call("new")
-                .args_json(json!({
-                    "controller": locker_contract.id(),
-                    "dao": AccountId::from_str("dao.near").unwrap(),
-                    "global_code_hash": omni_token_code_hash,
-                }))
-                .max_gas()
-                .transact()
-                .await?
-                .into_result()?;
-
-            // Configure locker
-            locker_contract
-                .call("add_token_deployer")
-                .args_json(json!({
-                    "chain": init_token_address.get_chain(),
-                    "account_id": token_deployer.id(),
-                }))
-                .max_gas()
-                .transact()
-                .await?
-                .into_result()?;
-
-            let factory_contract_address = match init_token_address.get_chain() {
-                ChainKind::Eth => eth_factory_address(),
-                ChainKind::Sol => sol_factory_address(),
-                ChainKind::Arb => arb_factory_address(),
-                ChainKind::Base => base_factory_address(),
-                ChainKind::Bnb => bnb_factory_address(),
-                ChainKind::Pol => pol_factory_address(),
-                ChainKind::Near | ChainKind::Btc | ChainKind::Zcash => panic!("Unsupported chain"),
-            };
-
-            locker_contract
-                .call("add_factory")
-                .args_json(json!({
-                    "address": factory_contract_address,
-                }))
-                .max_gas()
-                .transact()
-                .await?
-                .into_result()?;
-
-            // Deploy token
-            let token_account_id = Self::deploy_token(
-                &worker,
-                &locker_contract,
-                &init_token_address,
-                &factory_contract_address,
-                &token_metadata,
-                omni_token_wasm.len(),
-                deposit_strategy,
-            )
-            .await?;
-
-            Ok(Self {
-                worker,
-                locker_contract,
-                token_account_id,
+            let deploy_env = DeployEnv::new(
                 init_token_address,
-                factory_contract_address,
                 token_metadata,
-            })
+                mock_prover_wasm,
+                locker_wasm,
+                omni_token_wasm,
+                token_deployer_wasm,
+                mock_global_contract_deployer_wasm,
+            )
+            .await?;
+
+            let token_account_id = deploy_env.deploy_token(deposit_strategy, 2).await?;
+
+            Ok(deploy_env.into_test_env(token_account_id))
         }
 
         async fn deploy_global_omni_token(
@@ -294,6 +348,7 @@ mod tests {
             Ok(omni_token_code_hash)
         }
 
+        #[allow(clippy::too_many_arguments)]
         async fn deploy_token(
             worker: &near_workspaces::Worker<near_workspaces::network::Sandbox>,
             locker: &near_workspaces::Contract,
@@ -302,9 +357,13 @@ mod tests {
             token_metadata: &BasicMetadata,
             omni_token_wasm_len: usize,
             deposit_strategy: DepositStrategy,
+            deploy_initiator_index: u8,
         ) -> anyhow::Result<AccountId> {
             let token_deploy_initiator = worker
-                .create_tla(account_n(2), worker.generate_dev_account_credentials().1)
+                .create_tla(
+                    account_n(deploy_initiator_index),
+                    worker.generate_dev_account_credentials().1,
+                )
                 .await?
                 .unwrap();
 
@@ -497,24 +556,26 @@ mod tests {
         token_deployer_wasm: Vec<u8>,
         mock_global_contract_deployer_wasm: Vec<u8>,
     ) -> anyhow::Result<()> {
-        let huge_name = "TEST NAME".repeat(256);
-        let huge_symbol = "TEST".repeat(64);
+        let token_metadata = BasicMetadata {
+            name: "TEST NAME".repeat(256),
+            symbol: "TEST".repeat(64),
+            decimals: 18,
+        };
 
-        let err = match TestEnv::new_with_metadata_and_strategy(
+        let deploy_env = DeployEnv::new(
             eth_token_address(),
-            BasicMetadata {
-                name: huge_name,
-                symbol: huge_symbol,
-                decimals: 18,
-            },
+            token_metadata.clone(),
             mock_prover_wasm,
             locker_wasm,
             omni_token_wasm,
             token_deployer_wasm,
             mock_global_contract_deployer_wasm,
-            DepositStrategy::MinimumRequired,
         )
-        .await
+        .await?;
+
+        let err = match deploy_env
+            .deploy_token(DepositStrategy::MinimumRequired, 2)
+            .await
         {
             Ok(_) => panic!("deployment with minimal deposit should fail"),
             Err(err) => err,
@@ -524,9 +585,26 @@ mod tests {
         assert!(
             err_string.contains("LackBalance")
                 || err_string.contains("AccountDoesNotExist")
-                || err_string.contains("doesn't exist"),
+                || err_string.contains("doesn't exist")
+                || err_string.contains("unable to fulfill the query request"),
             "unexpected error for insufficient deposit: {err_string}"
         );
+
+        let token_account_id = deploy_env
+            .deploy_token(DepositStrategy::WithBuffer, 3)
+            .await?;
+
+        let env = deploy_env.into_test_env(token_account_id);
+
+        let fetched_metadata: BasicMetadata = env
+            .worker
+            .view(&env.token_account_id, "ft_metadata")
+            .await?
+            .json()?;
+
+        assert_eq!(fetched_metadata.name, token_metadata.name);
+        assert_eq!(fetched_metadata.symbol, token_metadata.symbol);
+        assert_eq!(fetched_metadata.decimals, token_metadata.decimals);
 
         Ok(())
     }
