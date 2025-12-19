@@ -893,7 +893,7 @@ mod tests {
             &mock_global_contract_deployer_wasm,
         )
         .await?;
-        let global_code_hash: String = String::from(&Base58CryptoHash::from(omni_token_code_hash));
+        let global_code_hash = Base58CryptoHash::from(omni_token_code_hash);
 
         let upgrade_res = deployer_account
             .as_account()
