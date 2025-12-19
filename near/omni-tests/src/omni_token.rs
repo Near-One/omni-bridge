@@ -4,7 +4,7 @@ mod tests {
 
     use near_sdk::json_types::{Base64VecU8, U128};
     use near_sdk::serde_json::json;
-    use near_sdk::{borsh, CryptoHash};
+    use near_sdk::{borsh, json_types::Base58CryptoHash, CryptoHash};
     use near_workspaces::{types::NearToken, AccountId};
     use omni_types::locker_args::{FinTransferArgs, StorageDepositAction};
     use omni_types::prover_result::InitTransferMessage;
@@ -893,6 +893,7 @@ mod tests {
             &mock_global_contract_deployer_wasm,
         )
         .await?;
+        let global_code_hash = Base58CryptoHash::from(omni_token_code_hash);
 
         let upgrade_res = deployer_account
             .as_account()
@@ -904,7 +905,7 @@ mod tests {
         let migrate_res = deployer_account
             .call("migrate")
             .args_json(json!({
-                "global_code_hash": omni_token_code_hash
+                "global_code_hash": global_code_hash
             }))
             .max_gas()
             .transact()
