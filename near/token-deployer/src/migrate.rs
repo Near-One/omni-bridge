@@ -1,6 +1,7 @@
 use borsh::{BorshDeserialize, BorshSerialize};
 use near_sdk::{
-    collections::UnorderedSet, env, near, AccountId, CryptoHash, PanicOnDefault, PublicKey,
+    collections::UnorderedSet, env, json_types::Base58CryptoHash, near, AccountId, CryptoHash,
+    PanicOnDefault, PublicKey,
 };
 
 use crate::{TokenDeployer, TokenDeployerExt};
@@ -25,10 +26,14 @@ pub struct OldLegacyState {
 impl TokenDeployer {
     #[private]
     #[init(ignore_state)]
-    pub fn migrate(global_code_hash: CryptoHash) -> Self {
+    pub fn migrate(global_code_hash: String) -> Self {
         if !env::state_exists() {
             env::panic_str("Old state not found. Migration is not needed.")
         }
+
+        let global_code_hash: CryptoHash = Base58CryptoHash::try_from(global_code_hash.as_str())
+            .map(CryptoHash::from)
+            .unwrap_or_else(|_| env::panic_str("Invalid global code hash"));
 
         let state = env::storage_read(STATE_KEY)
             .unwrap_or_else(|| env::panic_str("Failed to read state key."));
