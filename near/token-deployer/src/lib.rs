@@ -2,6 +2,7 @@ use near_plugins::{
     access_control, access_control_any, AccessControlRole, AccessControllable, Pausable, Upgradable,
 };
 use near_sdk::borsh::BorshDeserialize;
+use near_sdk::json_types::Base58CryptoHash;
 use near_sdk::serde_json::json;
 use near_sdk::{env, near, AccountId, CryptoHash, Gas, NearToken, PanicOnDefault, Promise};
 use omni_types::BasicMetadata;
@@ -42,8 +43,10 @@ pub struct TokenDeployer {
 #[near]
 impl TokenDeployer {
     #[init]
-    pub fn new(controller: AccountId, dao: AccountId, global_code_hash: CryptoHash) -> Self {
-        let mut contract = Self { global_code_hash };
+    pub fn new(controller: AccountId, dao: AccountId, global_code_hash: Base58CryptoHash) -> Self {
+        let mut contract = Self {
+            global_code_hash: global_code_hash.into(),
+        };
 
         contract.acl_init_super_admin(near_sdk::env::predecessor_account_id());
         contract.acl_grant_role(Role::DAO.into(), dao.clone());
@@ -69,12 +72,12 @@ impl TokenDeployer {
             )
     }
 
-    pub fn get_global_code_hash(&self) -> CryptoHash {
-        self.global_code_hash
+    pub fn get_global_code_hash(&self) -> Base58CryptoHash {
+        self.global_code_hash.into()
     }
 
     #[access_control_any(roles(Role::DAO))]
-    pub fn set_global_code_hash(&mut self, global_code_hash: CryptoHash) {
-        self.global_code_hash = global_code_hash;
+    pub fn set_global_code_hash(&mut self, global_code_hash: Base58CryptoHash) {
+        self.global_code_hash = global_code_hash.into();
     }
 }
