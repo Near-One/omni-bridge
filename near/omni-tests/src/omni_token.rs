@@ -348,6 +348,7 @@ mod tests {
             Ok(omni_token_code_hash)
         }
 
+        #[allow(clippy::too_many_arguments)]
         async fn deploy_token(
             worker: &near_workspaces::Worker<near_workspaces::network::Sandbox>,
             locker: &near_workspaces::Contract,
