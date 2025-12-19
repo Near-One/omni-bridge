@@ -312,9 +312,7 @@ mod tests {
             )
             .await?;
 
-            let token_account_id = deploy_env
-                .deploy_token(deposit_strategy, 2)
-                .await?;
+            let token_account_id = deploy_env.deploy_token(deposit_strategy, 2).await?;
 
             Ok(deploy_env.into_test_env(token_account_id))
         }
