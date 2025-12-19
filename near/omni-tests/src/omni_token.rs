@@ -922,10 +922,10 @@ mod tests {
             .view("get_global_code_hash")
             .await?
             .json()?;
-        let stored_global_code_hash: CryptoHash = stored_global_code_hash.into();
 
         assert_eq!(
-            stored_global_code_hash, omni_token_code_hash,
+            CryptoHash::from(stored_global_code_hash),
+            omni_token_code_hash,
             "Migration did not correctly set the global token code hash"
         );
 
