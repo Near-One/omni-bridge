@@ -95,6 +95,7 @@ mod tests {
                 &mock_global_contract_deployer_wasm,
             )
             .await?;
+            let global_code_hash = Base58CryptoHash::from(omni_token_code_hash);
 
             // Setup token deployer
             let token_deployer = worker
@@ -111,7 +112,7 @@ mod tests {
                 .args_json(json!({
                     "controller": locker_contract.id(),
                     "dao": AccountId::from_str("dao.near").unwrap(),
-                    "global_code_hash": omni_token_code_hash,
+                    "global_code_hash": global_code_hash,
                 }))
                 .max_gas()
                 .transact()
@@ -917,13 +918,14 @@ mod tests {
             migrate_res.into_result()
         );
 
-        let stored_global_code_hash: CryptoHash = deployer_account
+        let stored_global_code_hash: Base58CryptoHash = deployer_account
             .view("get_global_code_hash")
             .await?
             .json()?;
 
         assert_eq!(
-            stored_global_code_hash, omni_token_code_hash,
+            CryptoHash::from(stored_global_code_hash),
+            omni_token_code_hash,
             "Migration did not correctly set the global token code hash"
         );
 

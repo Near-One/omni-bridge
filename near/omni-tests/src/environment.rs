@@ -3,7 +3,7 @@ use std::{cell::RefCell, str::FromStr};
 use anyhow::Ok;
 use near_sdk::{
     borsh,
-    json_types::{Base64VecU8, U128},
+    json_types::{Base58CryptoHash, Base64VecU8, U128},
     serde_json::{self, json},
     AccountId, CryptoHash, NearToken,
 };
@@ -338,6 +338,8 @@ impl TestEnvBuilder {
         omni_token_code_hash: &CryptoHash,
         chain: ChainKind,
     ) -> anyhow::Result<()> {
+        let global_code_hash = Base58CryptoHash::from(*omni_token_code_hash);
+
         let token_deployer = self
             .worker
             .create_tla_and_deploy(
@@ -353,7 +355,7 @@ impl TestEnvBuilder {
             .args_json(json!({
                 "controller": bridge_contract.id(),
                 "dao": AccountId::from_str("dao.near").unwrap(),
-                "global_code_hash": omni_token_code_hash,
+                "global_code_hash": global_code_hash,
             }))
             .max_gas()
             .transact()
