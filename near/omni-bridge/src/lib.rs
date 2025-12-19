@@ -1103,7 +1103,7 @@ impl Contract {
         &mut self,
         token_address: OmniAddress,
         token_id: AccountId,
-    ) {
+    ) -> PromiseOrValue<()> {
         match env::promise_result(0) {
             PromiseResult::Failed => {
                 self.deployed_tokens.remove(&token_id);
@@ -1111,14 +1111,14 @@ impl Contract {
                     .remove(&(token_address.get_chain(), token_id));
                 self.token_address_to_id.remove(&token_address);
                 self.token_decimals.remove(&token_address);
+                PromiseOrValue::Value(())
             }
-            PromiseResult::Successful(_) => {
+            PromiseResult::Successful(_) => PromiseOrValue::Promise(
                 ext_token::ext(token_id)
                     .with_static_gas(STORAGE_DEPOSIT_GAS)
                     .with_attached_deposit(NEP141_DEPOSIT)
-                    .storage_deposit(&env::current_account_id(), Some(true))
-                    .detach();
-            }
+                    .storage_deposit(&env::current_account_id(), Some(true)),
+            ),
         }
     }
 
@@ -2177,7 +2177,6 @@ impl Contract {
             .deploy_token(token_id.clone(), metadata)
             .then(
                 Self::ext(env::current_account_id())
-                    .with_static_gas(STORAGE_DEPOSIT_GAS)
                     .deploy_token_by_deployer_callback(token_address.clone(), token_id.clone()),
             )
     }
