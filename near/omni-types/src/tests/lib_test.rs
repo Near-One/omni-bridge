@@ -3,7 +3,8 @@ use near_sdk::json_types::U128;
 use near_sdk::serde_json;
 
 use crate::{
-    stringify, ChainKind, Fee, OmniAddress, PayloadType, TransferId, TransferMessage, H160,
+    stringify, ChainKind, Fee, OmniAddress, PayloadType, SolAddress, TransferId, TransferMessage,
+    H160,
 };
 use std::str::FromStr;
 
@@ -27,6 +28,58 @@ fn test_payload_prefix() {
     assert_eq!(hex::encode(res), "01");
     let res = borsh::to_vec(&PayloadType::ClaimNativeFee).unwrap();
     assert_eq!(hex::encode(res), "02");
+}
+
+#[test]
+fn test_chain_kind_borsh_discriminants_are_stable() {
+    let chains = [
+        ChainKind::Eth,
+        ChainKind::Near,
+        ChainKind::Sol,
+        ChainKind::Arb,
+        ChainKind::Base,
+        ChainKind::Bnb,
+        ChainKind::Btc,
+        ChainKind::Zcash,
+        ChainKind::Pol,
+    ];
+
+    for (discriminant, chain) in chains.iter().enumerate() {
+        let encoded = borsh::to_vec(&chain).unwrap();
+        assert_eq!(
+            encoded,
+            vec![discriminant as u8],
+            "Borsh discriminant for {chain:?} changed; this would break stored data"
+        );
+    }
+}
+
+#[test]
+fn test_omni_address_borsh_discriminants_are_stable() {
+    let addresses = vec![
+        OmniAddress::Eth(H160::ZERO),
+        OmniAddress::Near("borsh.near".parse().unwrap()),
+        OmniAddress::Sol(SolAddress::ZERO),
+        OmniAddress::Arb(H160::ZERO),
+        OmniAddress::Base(H160::ZERO),
+        OmniAddress::Bnb(H160::ZERO),
+        OmniAddress::Btc("btc_address".to_string()),
+        OmniAddress::Zcash("zcash_address".to_string()),
+        OmniAddress::Pol(H160::ZERO),
+    ];
+
+    for (discriminant, address) in addresses.iter().enumerate() {
+        let encoded = borsh::to_vec(&address).unwrap();
+        let encoded_discriminant = *encoded
+            .first()
+            .expect("Borsh enum encoding should start with discriminant byte");
+        assert_eq!(
+            encoded_discriminant,
+            discriminant as u8,
+            "Borsh discriminant for {:?} changed; this would break stored data",
+            address.get_chain()
+        );
+    }
 }
 
 #[test]
