@@ -228,9 +228,9 @@ pub enum OmniAddress {
     Arb(EvmAddress),
     Base(EvmAddress),
     Bnb(EvmAddress),
-    Pol(EvmAddress),
     Btc(UTXOChainAddress),
     Zcash(UTXOChainAddress),
+    Pol(EvmAddress),
 }
 
 impl OmniAddress {
