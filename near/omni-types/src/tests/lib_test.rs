@@ -48,7 +48,7 @@ fn test_chain_kind_borsh_discriminants_are_stable() {
         let encoded = borsh::to_vec(&chain).unwrap();
         assert_eq!(
             encoded,
-            vec![discriminant as u8],
+            vec![u8::try_from(discriminant).unwrap()],
             "Borsh discriminant for {chain:?} changed; this would break stored data"
         );
     }
@@ -75,7 +75,7 @@ fn test_omni_address_borsh_discriminants_are_stable() {
             .expect("Borsh enum encoding should start with discriminant byte");
         assert_eq!(
             encoded_discriminant,
-            discriminant as u8,
+            u8::try_from(discriminant).unwrap(),
             "Borsh discriminant for {:?} changed; this would break stored data",
             address.get_chain()
         );
