@@ -1,6 +1,6 @@
 {
     "near_rpc": "https://test.rpc.fastnear.com",
-    "near_token_locker_id": "omni-locker.testnet",
+    "near_token_locker_id": "omni.n-bridge.testnet",
     "near_light_client_eth_address": "0x202cdf10bfa45a3d2190901373edd864f071d707",
     "near_signer": "omni-sender.testnet",
     "near_private_key": "0x0000000000000000000000000000000000000000000000000000000000000000",
@@ -21,5 +21,6 @@
     "eth_rpc": "<ETH_RPC>",
     "eth_private_key": "<ETH_PRIVATE_KEY>",
     "base_private_key": "<ETH_PRIVATE_KEY>",
-    "arb_private_key": "<ETH_PRIVATE_KEY>"
+    "arb_private_key": "<ETH_PRIVATE_KEY>",
+    "btc": "nbtc.n-bridge.testnet"
 }
