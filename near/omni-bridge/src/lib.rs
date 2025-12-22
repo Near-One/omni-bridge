@@ -1591,6 +1591,10 @@ impl Contract {
         }
         None
     }
+
+    pub fn get_migrated_token(&self, old_token: &AccountId) -> Option<AccountId> {
+        self.migrated_tokens.get(old_token)
+    }
 }
 
 impl Contract {
@@ -2447,7 +2451,7 @@ impl Contract {
         );
     }
 
-    pub fn swap_migrated_token(
+    fn swap_migrated_token(
         &mut self,
         sender_id: AccountId,
         old_token: AccountId,
