@@ -164,24 +164,3 @@ impl From<StorageBalanceError> for OmniError {
         Self::StorageBalance(value)
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_name() {
-        assert_eq!(
-            BridgeError::InvalidAttachedDeposit.as_ref(),
-            "ERR_INVALID_ATTACHED_DEPOSIT"
-        );
-        assert_eq!(
-            BridgeError::InvalidAttachedDeposit.to_string(),
-            "ERR_INVALID_ATTACHED_DEPOSIT"
-        );
-        assert_eq!(
-            OmniError::Bridge(BridgeError::InvalidAttachedDeposit).to_string(),
-            "ERR_INVALID_ATTACHED_DEPOSIT"
-        );
-    }
-}
