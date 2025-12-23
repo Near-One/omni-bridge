@@ -15,7 +15,7 @@ use near_sdk::{
     PromiseOrValue, PublicKey,
 };
 use omni_ft::{MetadataManagment, MintAndBurn, UpgradeAndMigrate};
-use omni_types::errors::{ErrorCode, TokenError};
+use omni_types::errors::TokenError;
 use omni_types::{BasicMetadata, OmniAddress};
 
 const OUTER_UPGRADE_GAS: Gas = Gas::from_tgas(15);
@@ -56,7 +56,7 @@ impl OmniToken {
         let current_account_id = env::current_account_id();
         let deployer_account = current_account_id
             .get_parent_account_id()
-            .unwrap_or_else(|| env::panic_str(TokenError::InvalidParentAccount.code()));
+            .unwrap_or_else(|| env::panic_str(&TokenError::InvalidParentAccount.to_string()));
 
         require!(
             env::predecessor_account_id().as_str() == deployer_account,
@@ -87,7 +87,8 @@ impl OmniToken {
     #[init(ignore_state)]
     #[allow(unused_variables)]
     pub fn migrate(from_version: u32) -> Self {
-        env::state_read().unwrap_or_else(|| env::panic_str(TokenError::FailedToReadState.code()))
+        env::state_read()
+            .unwrap_or_else(|| env::panic_str(&TokenError::FailedToReadState.to_string()))
     }
 
     /// Attach a new full access to the current contract.
@@ -108,7 +109,7 @@ impl OmniToken {
         let caller = env::predecessor_account_id();
         require!(
             caller == self.controller,
-            TokenError::MissingPermission.code()
+            TokenError::MissingPermission.to_string()
         );
     }
 }
@@ -190,7 +191,7 @@ impl UpgradeAndMigrate for OmniToken {
 
         // Receive the code directly from the input to avoid the
         // GAS overhead of deserializing parameters
-        let code = env::input().unwrap_or_else(|| env::panic_str(TokenError::NoInput.code()));
+        let code = env::input().unwrap_or_else(|| env::panic_str(&TokenError::NoInput.to_string()));
         // Deploy the contract code.
         let promise_id = env::promise_batch_create(&env::current_account_id());
         env::promise_batch_action_deploy_contract(promise_id, &code);

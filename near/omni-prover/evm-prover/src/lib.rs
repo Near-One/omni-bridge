@@ -2,7 +2,7 @@ use borsh::BorshDeserialize;
 use near_sdk::{
     env, ext_contract, near, near_bindgen, require, AccountId, Gas, PanicOnDefault, Promise,
 };
-use omni_types::errors::{ErrorCode, ProverError};
+use omni_types::errors::ProverError;
 use omni_types::evm::events::parse_evm_event;
 use omni_types::evm::header::BlockHeader;
 use omni_types::evm::receipt::{LogEntry, Receipt};
@@ -57,7 +57,7 @@ impl EvmProver {
     #[handle_result]
     pub fn verify_proof(&self, #[serializer(borsh)] input: Vec<u8>) -> Result<Promise, String> {
         let args = EvmVerifyProofArgs::try_from_slice(&input)
-            .map_err(|_| ProverError::ParseArgs.code().to_string())?;
+            .map_err(|_| ProverError::ParseArgs.to_string())?;
 
         let evm_proof = args.proof;
         let header: BlockHeader = rlp::decode(&evm_proof.header_data).map_err(|e| e.to_string())?;
@@ -77,7 +77,7 @@ impl EvmProver {
         );
 
         if evm_proof.receipt_data != data {
-            return Err(ProverError::InvalidProof.code().to_owned());
+            return Err(ProverError::InvalidProof.to_string());
         }
 
         // Verify block header was in the bridge
@@ -92,7 +92,7 @@ impl EvmProver {
                         evm_proof.log_entry_data,
                         header
                             .hash
-                            .ok_or_else(|| ProverError::HashNotSet.code().to_string())?
+                            .ok_or_else(|| ProverError::HashNotSet.to_string())?
                             .0,
                     ),
             ))
@@ -115,7 +115,7 @@ impl EvmProver {
         block_hash: Option<H256>,
     ) -> Result<ProverResult, String> {
         if block_hash != Some(expected_block_hash) {
-            return Err(ProverError::InvalidBlockHash.code().to_owned());
+            return Err(ProverError::InvalidBlockHash.to_string());
         }
 
         match kind {

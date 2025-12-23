@@ -3,8 +3,8 @@ use near_sdk::json_types::U128;
 use near_sdk::serde_json;
 
 use crate::{
-    stringify, ChainKind, Fee, OmniAddress, PayloadType, TransferId, TransferMessage, TypesError,
-    H160,
+    stringify, BridgeError, ChainKind, Fee, OmniAddress, OmniError, PayloadType, TransferId,
+    TransferMessage, TypesError, H160,
 };
 use std::str::FromStr;
 
@@ -469,4 +469,20 @@ fn test_chain_kind_from_str() {
 
     let chain: ChainKind = "Base".parse().unwrap();
     assert_eq!(chain, ChainKind::Base);
+}
+
+#[test]
+fn test_errors_serialization() {
+    assert_eq!(
+        BridgeError::InvalidAttachedDeposit.as_ref(),
+        "ERR_INVALID_ATTACHED_DEPOSIT"
+    );
+    assert_eq!(
+        BridgeError::InvalidAttachedDeposit.to_string(),
+        "ERR_INVALID_ATTACHED_DEPOSIT"
+    );
+    assert_eq!(
+        OmniError::Bridge(BridgeError::InvalidAttachedDeposit).to_string(),
+        "ERR_INVALID_ATTACHED_DEPOSIT"
+    );
 }

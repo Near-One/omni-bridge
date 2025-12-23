@@ -1,7 +1,7 @@
 use near_contract_standards::storage_management::{StorageBalance, StorageBalanceBounds};
 use near_sdk::{assert_one_yocto, borsh, near, PromiseOrValue};
 use near_sdk::{env, near_bindgen, AccountId, NearToken};
-use omni_types::errors::{BridgeError, ErrorCode, StorageError};
+use omni_types::errors::{BridgeError, StorageError};
 use omni_types::{FastTransferStatus, Nonce, TransferId, TransferIdKind, UnifiedTransferId};
 
 use crate::{
@@ -216,7 +216,7 @@ impl Contract {
             require!(
                 storage.total.saturating_sub(storage.available)
                     == self.required_balance_for_account(),
-                BridgeError::StoragePendingTransfers.code()
+                BridgeError::StoragePendingTransfers.as_ref()
             );
         }
 
@@ -288,10 +288,10 @@ impl Contract {
             total: NearToken::from_yoctonear(0),
             available: NearToken::from_yoctonear(0),
         })
-        .sdk_expect(BridgeError::Borsh.code())
+        .sdk_expect(BridgeError::Borsh.as_ref())
         .len()
         .try_into()
-        .sdk_expect(BridgeError::Cast.code());
+        .sdk_expect(BridgeError::Cast.as_ref());
 
         env::storage_byte_cost()
             .saturating_mul((Self::get_basic_storage() + key_len + value_len).into())
@@ -301,7 +301,7 @@ impl Contract {
         let max_account_id: AccountId = "a"
             .repeat(64)
             .parse()
-            .sdk_expect(BridgeError::ParseAccountId.code());
+            .sdk_expect(BridgeError::ParseAccountId.as_ref());
 
         self.required_balance_for_init_transfer_message(TransferMessage {
             origin_nonce: 0,
@@ -331,23 +331,23 @@ impl Contract {
         let max_account_id: AccountId = "a"
             .repeat(64)
             .parse()
-            .sdk_expect(BridgeError::ParseAccountId.code());
+            .sdk_expect(BridgeError::ParseAccountId.as_ref());
 
         let key_len: u64 = borsh::to_vec(&transfer_message.get_transfer_id())
-            .sdk_expect(BridgeError::Borsh.code())
+            .sdk_expect(BridgeError::Borsh.as_ref())
             .len()
             .try_into()
-            .sdk_expect(BridgeError::Cast.code());
+            .sdk_expect(BridgeError::Cast.as_ref());
 
         let value_len: u64 =
             borsh::to_vec(&TransferMessageStorage::V2(TransferMessageStorageValue {
                 message: transfer_message,
                 owner: max_account_id,
             }))
-            .sdk_expect(BridgeError::Borsh.code())
+            .sdk_expect(BridgeError::Borsh.as_ref())
             .len()
             .try_into()
-            .sdk_expect(BridgeError::Cast.code());
+            .sdk_expect(BridgeError::Cast.as_ref());
 
         env::storage_byte_cost()
             .saturating_mul((Self::get_basic_storage() + key_len + value_len).into())
@@ -361,10 +361,10 @@ impl Contract {
                 vout: 0,
             },
         ))
-        .sdk_expect(BridgeError::Borsh.code())
+        .sdk_expect(BridgeError::Borsh.as_ref())
         .len()
         .try_into()
-        .sdk_expect(BridgeError::Cast.code());
+        .sdk_expect(BridgeError::Cast.as_ref());
 
         let storage_cost =
             env::storage_byte_cost().saturating_mul((Self::get_basic_storage() + key_len).into());
@@ -375,24 +375,24 @@ impl Contract {
 
     pub fn required_balance_for_fast_transfer(&self) -> NearToken {
         let key_len: u64 = borsh::to_vec(&[0u8; 32])
-            .sdk_expect(BridgeError::Borsh.code())
+            .sdk_expect(BridgeError::Borsh.as_ref())
             .len()
             .try_into()
-            .sdk_expect(BridgeError::Cast.code());
+            .sdk_expect(BridgeError::Cast.as_ref());
 
         let max_account_id: AccountId = "a"
             .repeat(64)
             .parse()
-            .sdk_expect(BridgeError::ParseAccountId.code());
+            .sdk_expect(BridgeError::ParseAccountId.as_ref());
         let value_len: u64 = borsh::to_vec(&FastTransferStatusStorage::V0(FastTransferStatus {
             relayer: max_account_id.clone(),
             finalised: false,
             storage_owner: max_account_id,
         }))
-        .sdk_expect(BridgeError::Borsh.code())
+        .sdk_expect(BridgeError::Borsh.as_ref())
         .len()
         .try_into()
-        .sdk_expect(BridgeError::Cast.code());
+        .sdk_expect(BridgeError::Cast.as_ref());
 
         let storage_cost = env::storage_byte_cost()
             .saturating_mul((Self::get_basic_storage() + key_len + value_len).into());
@@ -405,19 +405,19 @@ impl Contract {
         let max_token_id: AccountId = "a"
             .repeat(64)
             .parse()
-            .sdk_expect(BridgeError::ParseAccountId.code());
+            .sdk_expect(BridgeError::ParseAccountId.as_ref());
 
         let key_len: u64 = borsh::to_vec(&(ChainKind::Near, &max_token_id))
-            .sdk_expect(BridgeError::Borsh.code())
+            .sdk_expect(BridgeError::Borsh.as_ref())
             .len()
             .try_into()
-            .sdk_expect(BridgeError::Cast.code());
+            .sdk_expect(BridgeError::Cast.as_ref());
 
         let value_len: u64 = borsh::to_vec(&OmniAddress::Near(max_token_id))
-            .sdk_expect(BridgeError::Borsh.code())
+            .sdk_expect(BridgeError::Borsh.as_ref())
             .len()
             .try_into()
-            .sdk_expect(BridgeError::Cast.code());
+            .sdk_expect(BridgeError::Cast.as_ref());
 
         env::storage_byte_cost()
             .saturating_mul((3 * (Self::get_basic_storage() + key_len + value_len)).into())
@@ -444,12 +444,12 @@ impl Contract {
         let max_account_id: AccountId = "a"
             .repeat(64)
             .parse()
-            .sdk_expect(BridgeError::ParseAccountId.code());
+            .sdk_expect(BridgeError::ParseAccountId.as_ref());
 
         borsh::to_vec(&max_account_id)
-            .sdk_expect(BridgeError::Borsh.code())
+            .sdk_expect(BridgeError::Borsh.as_ref())
             .len()
             .try_into()
-            .sdk_expect(BridgeError::Cast.code())
+            .sdk_expect(BridgeError::Cast.as_ref())
     }
 }

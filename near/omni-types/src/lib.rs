@@ -1,3 +1,5 @@
+use std::string::ToString;
+
 use borsh::{BorshDeserialize, BorshSerialize};
 use core::fmt;
 use core::str::FromStr;
@@ -25,8 +27,7 @@ pub mod utils;
 mod tests;
 
 pub use errors::{
-    BridgeError, ErrorCode, OmniError, ProverError, StorageBalanceError, StorageError, TokenError,
-    TypesError,
+    BridgeError, OmniError, ProverError, StorageBalanceError, StorageError, TokenError, TypesError,
 };
 
 #[near(serializers = [borsh])]
