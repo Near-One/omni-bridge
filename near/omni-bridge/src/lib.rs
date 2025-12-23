@@ -95,6 +95,7 @@ enum StorageKey {
     FastTransfers,
     RegisteredProvers,
     InitTransferPromises,
+    MigratedTokens,
     FinalisedUtxoTransfers,
 }
 
@@ -223,6 +224,7 @@ pub struct Contract {
     pub provers: UnorderedMap<ChainKind, AccountId>,
     pub init_transfer_promises: LookupMap<AccountId, CryptoHash>,
     pub utxo_chain_connectors: HashMap<ChainKind, UTXOChainConfig>,
+    pub migrated_tokens: LookupMap<AccountId, AccountId>,
 }
 
 #[near]
@@ -250,6 +252,11 @@ impl Contract {
                 &sender_id,
                 utxo_fin_transfer_msg,
             ),
+            BridgeOnTransferMsg::SwapMigratedToken => {
+                self.swap_migrated_token(sender_id, token_id, amount)
+                    .detach();
+                PromiseOrPromiseIndexOrValue::Value(U128(0))
+            }
         };
 
         promise_or_promise_index_or_value.as_return();
@@ -276,6 +283,7 @@ impl Contract {
             provers: UnorderedMap::new(StorageKey::RegisteredProvers),
             init_transfer_promises: LookupMap::new(StorageKey::InitTransferPromises),
             utxo_chain_connectors: HashMap::new(),
+            migrated_tokens: LookupMap::new(StorageKey::MigratedTokens),
         };
 
         contract.acl_init_super_admin(near_sdk::env::predecessor_account_id());
@@ -1097,6 +1105,29 @@ impl Contract {
         )
     }
 
+    #[private]
+    pub fn deploy_token_by_deployer_callback(
+        &mut self,
+        token_address: &OmniAddress,
+        token_id: AccountId,
+    ) -> PromiseOrValue<()> {
+        match env::promise_result(0) {
+            PromiseResult::Failed => {
+                self.deployed_tokens.remove(&token_id);
+                self.token_id_to_address
+                    .remove(&(token_address.get_chain(), token_id));
+                self.token_address_to_id.remove(token_address);
+                self.token_decimals.remove(token_address);
+                PromiseOrValue::Value(())
+            }
+            PromiseResult::Successful(_) => ext_token::ext(token_id)
+                .with_static_gas(STORAGE_DEPOSIT_GAS)
+                .with_attached_deposit(NEP141_DEPOSIT)
+                .storage_deposit(&env::current_account_id(), Some(true))
+                .into(),
+        }
+    }
+
     #[payable]
     #[access_control_any(roles(Role::DAO))]
     pub fn deploy_native_token(
@@ -1431,6 +1462,43 @@ impl Contract {
                 Some(decimals),
                 icon,
             )
+    }
+
+    #[access_control_any(roles(Role::DAO))]
+    pub fn migrate_deployed_token(
+        &mut self,
+        origin_chain: ChainKind,
+        old_token: AccountId,
+        new_token: AccountId,
+    ) {
+        require!(
+            self.deployed_tokens.remove(&old_token),
+            "ERR_OLD_TOKEN_NOT_DEPLOYED"
+        );
+        require!(self.deployed_tokens.insert(&new_token), "ERR_TOKEN_EXIST");
+
+        let origin_address = self
+            .token_id_to_address
+            .remove(&(origin_chain, old_token.clone()))
+            .sdk_expect("ERR_FAILED_TO_GET_TOKEN_ADDRESS");
+
+        require!(
+            self.token_id_to_address
+                .insert(&(origin_chain, new_token.clone()), &origin_address)
+                .is_none(),
+            "ERR_TOKEN_EXIST"
+        );
+
+        self.token_address_to_id
+            .insert(&origin_address, &new_token)
+            .sdk_expect("ERR_EXPECTED_TO_OVERWRITE_TOKEN_ADDRESS");
+
+        require!(
+            self.migrated_tokens
+                .insert(&old_token, &new_token)
+                .is_none(),
+            "ERR_TOKEN_ALREADY_MIGRATED"
+        );
     }
 
     pub fn get_current_destination_nonce(&self, chain_kind: ChainKind) -> Nonce {
@@ -2129,10 +2197,8 @@ impl Contract {
             .with_attached_deposit(attached_deposit.saturating_sub(required_deposit))
             .deploy_token(token_id.clone(), metadata)
             .then(
-                ext_token::ext(token_id)
-                    .with_static_gas(STORAGE_DEPOSIT_GAS)
-                    .with_attached_deposit(NEP141_DEPOSIT)
-                    .storage_deposit(&env::current_account_id(), Some(true)),
+                Self::ext(env::current_account_id())
+                    .deploy_token_by_deployer_callback(token_address, token_id.clone()),
             )
     }
 
@@ -2353,18 +2419,16 @@ impl Contract {
 
         if token_fee > 0 {
             if self.deployed_tokens.contains(&token) {
-                PromiseOrValue::Promise(ext_token::ext(token).with_static_gas(MINT_TOKEN_GAS).mint(
-                    fee_recipient,
-                    U128(token_fee),
-                    None,
-                ))
+                ext_token::ext(token)
+                    .with_static_gas(MINT_TOKEN_GAS)
+                    .mint(fee_recipient, U128(token_fee), None)
+                    .into()
             } else {
-                PromiseOrValue::Promise(
-                    ext_token::ext(token)
-                        .with_static_gas(FT_TRANSFER_GAS)
-                        .with_attached_deposit(ONE_YOCTO)
-                        .ft_transfer(fee_recipient, U128(token_fee), None),
-                )
+                ext_token::ext(token)
+                    .with_static_gas(FT_TRANSFER_GAS)
+                    .with_attached_deposit(ONE_YOCTO)
+                    .ft_transfer(fee_recipient, U128(token_fee), None)
+                    .into()
             }
         } else {
             PromiseOrValue::Value(())
@@ -2404,6 +2468,24 @@ impl Contract {
             BridgeError::TokenExists.as_ref()
         );
     }
+
+    pub fn swap_migrated_token(
+        &mut self,
+        sender_id: AccountId,
+        old_token: AccountId,
+        amount: U128,
+    ) -> Promise {
+        let new_token = self
+            .migrated_tokens
+            .get(&old_token)
+            .sdk_expect("ERR_TOKEN_NOT_MIGRATED");
+
+        let burn = ext_token::ext(old_token).burn(amount);
+        let mint = ext_token::ext(new_token).mint(sender_id, amount, None);
+
+        burn.and(mint)
+    }
+
     fn verify_proof(&self, chain_kind: ChainKind, prover_args: Vec<u8>) -> Promise {
         let prover_account_id = self.provers.get(&chain_kind).unwrap_or_else(|| {
             env::panic_str(BridgeError::ProverForChainKindNotRegistered.as_ref())

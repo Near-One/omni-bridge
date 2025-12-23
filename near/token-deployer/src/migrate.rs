@@ -1,5 +1,8 @@
 use borsh::{BorshDeserialize, BorshSerialize};
-use near_sdk::{collections::UnorderedSet, env, near, AccountId, PanicOnDefault, PublicKey};
+use near_sdk::{
+    collections::UnorderedSet, env, json_types::Base58CryptoHash, near, AccountId, PanicOnDefault,
+    PublicKey,
+};
 
 use crate::{TokenDeployer, TokenDeployerExt};
 
@@ -23,7 +26,7 @@ pub struct OldLegacyState {
 impl TokenDeployer {
     #[private]
     #[init(ignore_state)]
-    pub fn migrate(omni_token_global_contract_id: AccountId) -> Self {
+    pub fn migrate(global_code_hash: Base58CryptoHash) -> Self {
         if !env::state_exists() {
             env::panic_str("Old state not found. Migration is not needed.")
         }
@@ -35,7 +38,7 @@ impl TokenDeployer {
             || OldLegacyState::try_from_slice(&state).is_ok()
         {
             Self {
-                omni_token_global_contract_id,
+                global_code_hash: global_code_hash.into(),
             }
         } else {
             env::panic_str("Old state not found. Migration is not needed.")

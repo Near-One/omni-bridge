@@ -235,9 +235,9 @@ pub enum OmniAddress {
     Arb(EvmAddress),
     Base(EvmAddress),
     Bnb(EvmAddress),
-    Pol(EvmAddress),
     Btc(UTXOChainAddress),
     Zcash(UTXOChainAddress),
+    Pol(EvmAddress),
 }
 
 impl OmniAddress {
@@ -482,6 +482,7 @@ pub enum BridgeOnTransferMsg {
     InitTransfer(InitTransferMsg),
     FastFinTransfer(FastFinTransferMsg),
     UtxoFinTransfer(UtxoFinTransferMsg),
+    SwapMigratedToken,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]

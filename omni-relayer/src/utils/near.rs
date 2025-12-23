@@ -98,77 +98,93 @@ pub async fn handle_streamer_message(
 ) {
     let nep_locker_event_outcomes = find_nep_locker_event_outcomes(config, streamer_message);
 
-    let nep_locker_event_logs = nep_locker_event_outcomes
-        .iter()
-        .flat_map(|outcome| outcome.execution_outcome.outcome.logs.clone())
-        .filter_map(|log| serde_json::from_str::<OmniBridgeEvent>(&log).ok())
-        .collect::<Vec<_>>();
+    for outcome in nep_locker_event_outcomes {
+        let receipt_id = outcome.receipt.receipt_id.to_string();
 
-    for log in nep_locker_event_logs {
-        info!("Received OmniBridgeEvent: {}", log.to_log_string());
+        for log in outcome.execution_outcome.outcome.logs {
+            let Ok(log) = serde_json::from_str::<OmniBridgeEvent>(&log) else {
+                continue;
+            };
 
-        match log {
-            OmniBridgeEvent::InitTransferEvent { transfer_message }
-            | OmniBridgeEvent::UpdateFeeEvent { transfer_message } => {
-                utils::redis::add_event(
-                    config,
-                    redis_connection_manager,
-                    utils::redis::EVENTS,
-                    transfer_message.origin_nonce.to_string(),
-                    RetryableEvent::new(crate::workers::Transfer::Near { transfer_message }),
-                )
-                .await;
-            }
-            OmniBridgeEvent::UtxoTransferEvent {
-                utxo_transfer_message,
-                new_transfer_id,
-                ..
-            } => {
-                if let Some(new_transfer_id) = new_transfer_id {
+            info!("Received OmniBridgeEvent: {}", log.to_log_string());
+
+            match log {
+                OmniBridgeEvent::InitTransferEvent { transfer_message }
+                | OmniBridgeEvent::UpdateFeeEvent { transfer_message } => {
+                    let origin_nonce = transfer_message.origin_nonce.to_string();
+                    let key = utils::redis::composite_key(&[&receipt_id, &origin_nonce]);
+
                     utils::redis::add_event(
                         config,
                         redis_connection_manager,
                         utils::redis::EVENTS,
-                        utxo_transfer_message.utxo_id.to_string(),
-                        RetryableEvent::new(crate::workers::Transfer::Utxo {
-                            utxo_transfer_message,
-                            new_transfer_id: new_transfer_id.into(),
-                        }),
-                    )
-                    .await;
-                }
-            }
-            OmniBridgeEvent::SignTransferEvent {
-                ref message_payload,
-                ..
-            } => {
-                utils::redis::add_event(
-                    config,
-                    redis_connection_manager,
-                    utils::redis::EVENTS,
-                    message_payload.transfer_id.origin_nonce.to_string(),
-                    RetryableEvent::new(log),
-                )
-                .await;
-            }
-            OmniBridgeEvent::FinTransferEvent { transfer_message } => {
-                if transfer_message.recipient.get_chain() != ChainKind::Near {
-                    utils::redis::add_event(
-                        config,
-                        redis_connection_manager,
-                        utils::redis::EVENTS,
-                        transfer_message.origin_nonce.to_string(),
+                        key,
                         RetryableEvent::new(crate::workers::Transfer::Near { transfer_message }),
                     )
                     .await;
                 }
+                OmniBridgeEvent::UtxoTransferEvent {
+                    utxo_transfer_message,
+                    new_transfer_id,
+                    ..
+                } => {
+                    if let Some(new_transfer_id) = new_transfer_id {
+                        let utxo_id = utxo_transfer_message.utxo_id.to_string();
+                        let key = utils::redis::composite_key(&[&receipt_id, &utxo_id]);
+
+                        utils::redis::add_event(
+                            config,
+                            redis_connection_manager,
+                            utils::redis::EVENTS,
+                            key,
+                            RetryableEvent::new(crate::workers::Transfer::Utxo {
+                                utxo_transfer_message,
+                                new_transfer_id: new_transfer_id.into(),
+                            }),
+                        )
+                        .await;
+                    }
+                }
+                OmniBridgeEvent::SignTransferEvent {
+                    ref message_payload,
+                    ..
+                } => {
+                    let origin_nonce = message_payload.transfer_id.origin_nonce.to_string();
+                    let key = utils::redis::composite_key(&[&receipt_id, &origin_nonce]);
+
+                    utils::redis::add_event(
+                        config,
+                        redis_connection_manager,
+                        utils::redis::EVENTS,
+                        key,
+                        RetryableEvent::new(log),
+                    )
+                    .await;
+                }
+                OmniBridgeEvent::FinTransferEvent { transfer_message } => {
+                    if transfer_message.recipient.get_chain() != ChainKind::Near {
+                        let origin_nonce = transfer_message.origin_nonce.to_string();
+                        let key = utils::redis::composite_key(&[&receipt_id, &origin_nonce]);
+
+                        utils::redis::add_event(
+                            config,
+                            redis_connection_manager,
+                            utils::redis::EVENTS,
+                            key,
+                            RetryableEvent::new(crate::workers::Transfer::Near {
+                                transfer_message,
+                            }),
+                        )
+                        .await;
+                    }
+                }
+                OmniBridgeEvent::FailedFinTransferEvent { .. }
+                | OmniBridgeEvent::FastTransferEvent { .. }
+                | OmniBridgeEvent::ClaimFeeEvent { .. }
+                | OmniBridgeEvent::LogMetadataEvent { .. }
+                | OmniBridgeEvent::DeployTokenEvent { .. }
+                | OmniBridgeEvent::BindTokenEvent { .. } => {}
             }
-            OmniBridgeEvent::FailedFinTransferEvent { .. }
-            | OmniBridgeEvent::FastTransferEvent { .. }
-            | OmniBridgeEvent::ClaimFeeEvent { .. }
-            | OmniBridgeEvent::LogMetadataEvent { .. }
-            | OmniBridgeEvent::DeployTokenEvent { .. }
-            | OmniBridgeEvent::BindTokenEvent { .. } => {}
         }
     }
 }

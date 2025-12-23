@@ -122,7 +122,7 @@ pub async fn start_evm_fee_bumping(
                     &config,
                     redis_connection_manager,
                     utils::redis::EVENTS,
-                    &pending_tx.source_event_id,
+                    format!("replay:{}", pending_tx.tx_hash),
                     RetryableEvent::new(&pending_tx.source_event),
                 )
                 .await;
