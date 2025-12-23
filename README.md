@@ -33,6 +33,7 @@ For more information on how it works, please see [Omni Bridge Documentation](htt
 **Helper Contracts:**
 - NEAR: 
   - [`vaa-prover-0_4_3.bridge.near`](https://nearblocks.io/address/vaa-prover-0_4_3.bridge.near)
+  - [`vaa-prover-0_4_1.bridge.near`](https://nearblocks.io/address/vaa-prover-0_4_1.bridge.near)
   - [`eth-prover-0_4_1.bridge.near`](https://nearblocks.io/address/eth-prover-0_4_1.bridge.near)
 </details>
 
