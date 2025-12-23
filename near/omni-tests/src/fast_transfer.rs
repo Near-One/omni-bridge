@@ -1058,7 +1058,7 @@ mod tests {
                         transfer_msg: transfer_msg.clone(),
                         fast_relayer_account: None,
                     },
-                    Some("The transfer is already finalised"),
+                    Some(ERR_TRANSFER_ALREADY_FINALISED),
                 )
                 .await
             }
@@ -1153,7 +1153,7 @@ mod tests {
                         transfer_msg,
                         fast_relayer_account: Some(&env.fast_relayer_account),
                     },
-                    Some("The transfer is already finalised"),
+                    Some("ERR_TRANSFER_ALREADY_FINALISED"),
                 )
                 .await
             }

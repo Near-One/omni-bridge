@@ -425,7 +425,7 @@ fn test_update_transfer_fee_invalid_deposit() {
 }
 
 #[test]
-#[should_panic(expected = "Only sender can update token fee")]
+#[should_panic(expected = "ERR_SENDER_CAN_UPDATE_TOKEN_FEE_ONLY")]
 fn test_update_transfer_fee_wrong_sender() {
     let mut contract = get_default_contract();
 
@@ -639,7 +639,7 @@ fn test_fin_transfer_callback_non_near_success() {
 }
 
 #[test]
-#[should_panic(expected = "Invalid proof message")]
+#[should_panic(expected = "ERR_INVALID_PROOF")]
 fn test_fin_transfer_callback_invalid_proof() {
     let mut contract = get_default_contract();
     let storage_actions = get_default_storage_deposit_actions();
@@ -662,7 +662,7 @@ fn test_fin_transfer_callback_invalid_proof() {
 }
 
 #[test]
-#[should_panic(expected = "Unknown factory")]
+#[should_panic(expected = "ERR_UKNOWN_FACTORY")]
 fn test_fin_transfer_callback_unknown_factory() {
     let mut contract = get_default_contract();
     let storage_actions = get_default_storage_deposit_actions();
