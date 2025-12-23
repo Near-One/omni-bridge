@@ -2155,7 +2155,7 @@ impl Contract {
         let prefix = token_address.get_token_prefix();
         let token_id: AccountId = format!("{prefix}.{deployer}")
             .parse()
-            .unwrap_or_else(|_| env::panic_str(BridgeError::ParseAccount.as_ref()));
+            .unwrap_or_else(|_| env::panic_str(BridgeError::ParseAccountId.as_ref()));
 
         let storage_usage = env::storage_usage();
         self.add_token(
