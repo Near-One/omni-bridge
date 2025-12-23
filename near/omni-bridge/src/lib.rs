@@ -1408,12 +1408,8 @@ impl Contract {
     pub fn add_deployed_tokens(&mut self, tokens: Vec<AddDeployedTokenArgs>) {
         require!(
             env::attached_deposit()
-                >= NEP141_DEPOSIT.saturating_mul(
-                    tokens
-                        .len()
-                        .try_into()
-                        .sdk_expect(BridgeError::Cast)
-                ),
+                >= NEP141_DEPOSIT
+                    .saturating_mul(tokens.len().try_into().sdk_expect(BridgeError::Cast)),
             BridgeError::NotEnoughAttachedDeposit.as_ref()
         );
 
@@ -1935,8 +1931,7 @@ impl Contract {
         message_owner: AccountId,
     ) -> Option<Vec<u8>> {
         self.pending_transfers.insert_raw(
-            &borsh::to_vec(&transfer_message.get_transfer_id())
-                .sdk_expect(BridgeError::Borsh),
+            &borsh::to_vec(&transfer_message.get_transfer_id()).sdk_expect(BridgeError::Borsh),
             &TransferMessageStorage::encode_borsh(transfer_message, message_owner)
                 .sdk_expect(BridgeError::Borsh),
         )
@@ -2013,7 +2008,7 @@ impl Contract {
                     }),
                 )
                 .is_none(),
-            BridgeError::FastTransferPerformed.as_ref()
+            BridgeError::FastTransferAlreadyPerformed.as_ref()
         );
         env::storage_byte_cost()
             .saturating_mul((env::storage_usage().saturating_sub(storage_usage)).into())

@@ -662,7 +662,7 @@ fn test_fin_transfer_callback_invalid_proof() {
 }
 
 #[test]
-#[should_panic(expected = "ERR_UKNOWN_FACTORY")]
+#[should_panic(expected = "ERR_UNKNOWN_FACTORY")]
 fn test_fin_transfer_callback_unknown_factory() {
     let mut contract = get_default_contract();
     let storage_actions = get_default_storage_deposit_actions();
