@@ -234,7 +234,7 @@ impl Contract {
         let token_id = env::predecessor_account_id();
         let parsed_msg: BridgeOnTransferMsg = serde_json::from_str(&msg)
             .or_else(|_| serde_json::from_str(&msg).map(BridgeOnTransferMsg::InitTransfer))
-            .sdk_expect(BridgeError::ParseMsg.as_ref());
+            .sdk_expect(BridgeError::ParseMsg);
 
         // We can't trust sender_id to pay for storage as it can be spoofed.
         let signer_id = env::signer_account_id();
@@ -325,7 +325,7 @@ impl Contract {
         };
 
         let payload = near_sdk::env::keccak256_array(
-            borsh::to_vec(&metadata_payload).sdk_expect(BridgeError::Borsh.as_ref()),
+            borsh::to_vec(&metadata_payload).sdk_expect(BridgeError::Borsh),
         );
 
         ext_signer::ext(self.mpc_signer.clone())
@@ -385,7 +385,7 @@ impl Contract {
                     .native_fee
                     .0
                     .checked_sub(current_fee.native_fee.0)
-                    .sdk_expect(BridgeError::LowerFee.as_ref());
+                    .sdk_expect(BridgeError::LowerFee);
 
                 require!(
                     NearToken::from_yoctonear(diff_native_fee) == env::attached_deposit(),
@@ -439,7 +439,7 @@ impl Contract {
         let decimals = self
             .token_decimals
             .get(&token_address)
-            .sdk_expect(BridgeError::TokenDecimalsNotFound.as_ref());
+            .sdk_expect(BridgeError::TokenDecimalsNotFound);
         let amount_to_transfer = Self::normalize_amount(
             transfer_message.amount.0 - transfer_message.fee.fee.0,
             decimals,
@@ -461,7 +461,7 @@ impl Contract {
         };
 
         let payload = near_sdk::env::keccak256_array(
-            borsh::to_vec(&transfer_payload).sdk_expect(BridgeError::Borsh.as_ref()),
+            borsh::to_vec(&transfer_payload).sdk_expect(BridgeError::Borsh),
         );
 
         ext_signer::ext(self.mpc_signer.clone())
@@ -556,9 +556,9 @@ impl Contract {
             );
 
             let yield_id: CryptoHash = env::read_register(PROMISE_REGISTER_ID)
-                .sdk_expect(BridgeError::ReadPromiseRegister.as_ref())
+                .sdk_expect(BridgeError::ReadPromiseRegister)
                 .try_into()
-                .sdk_expect(BridgeError::ReadPromiseYieldId.as_ref());
+                .sdk_expect(BridgeError::ReadPromiseYieldId);
 
             let required_storage_balance = self.add_promise(&message_storage_account_id, &yield_id);
 
@@ -672,7 +672,7 @@ impl Contract {
         let decimals = self
             .token_decimals
             .get(&init_transfer.token)
-            .sdk_expect(BridgeError::TokenDecimalsNotFound.as_ref());
+            .sdk_expect(BridgeError::TokenDecimalsNotFound);
 
         let destination_nonce =
             self.get_next_destination_nonce(init_transfer.recipient.get_chain());
@@ -714,12 +714,12 @@ impl Contract {
                 fast_fin_transfer_msg.transfer_id.origin_chain,
                 token_id.clone(),
             )
-            .sdk_expect(BridgeError::TokenNotFound.as_ref());
+            .sdk_expect(BridgeError::TokenNotFound);
 
         let decimals = self
             .token_decimals
             .get(&origin_token)
-            .sdk_expect(BridgeError::TokenDecimalsNotFound.as_ref());
+            .sdk_expect(BridgeError::TokenDecimalsNotFound);
 
         let denormalized_amount =
             Self::denormalize_amount(fast_fin_transfer_msg.amount.0, decimals);
@@ -1057,7 +1057,7 @@ impl Contract {
             fin_transfer.amount.0,
             self.token_decimals
                 .get(&token_address)
-                .sdk_expect(BridgeError::TokenDecimalsNotFound.as_ref()),
+                .sdk_expect(BridgeError::TokenDecimalsNotFound),
         );
         let fee = message.amount.0 - denormalized_amount;
 
@@ -1284,7 +1284,7 @@ impl Contract {
         } else {
             self.token_address_to_id
                 .get(address)
-                .sdk_expect(BridgeError::TokenNotRegistered.as_ref())
+                .sdk_expect(BridgeError::TokenNotRegistered)
         }
     }
 
@@ -1319,7 +1319,7 @@ impl Contract {
 
     pub fn get_native_token_id(&self, chain: ChainKind) -> AccountId {
         let native_token_address =
-            OmniAddress::new_zero(chain).sdk_expect(BridgeError::FailedToGetZeroAddress.as_ref());
+            OmniAddress::new_zero(chain).sdk_expect(BridgeError::FailedToGetZeroAddress);
 
         self.get_token_id(&native_token_address)
     }
@@ -1329,7 +1329,7 @@ impl Contract {
             .get(&transfer_id)
             .map(storage::TransferMessageStorage::into_main)
             .map(|m| m.message)
-            .sdk_expect(BridgeError::TransferNotExist.as_ref())
+            .sdk_expect(BridgeError::TransferNotExist)
     }
 
     pub fn get_transfer_message_storage(
@@ -1339,7 +1339,7 @@ impl Contract {
         self.pending_transfers
             .get(&transfer_id)
             .map(storage::TransferMessageStorage::into_main)
-            .sdk_expect(BridgeError::TransferNotExist.as_ref())
+            .sdk_expect(BridgeError::TransferNotExist)
     }
 
     pub fn is_transfer_finalised(&self, transfer_id: TransferId) -> bool {
@@ -1412,7 +1412,7 @@ impl Contract {
                     tokens
                         .len()
                         .try_into()
-                        .sdk_expect(BridgeError::Cast.as_ref())
+                        .sdk_expect(BridgeError::Cast)
                 ),
             BridgeError::NotEnoughAttachedDeposit.as_ref()
         );
@@ -1449,7 +1449,7 @@ impl Contract {
         let decimals = self
             .token_decimals
             .get(&address)
-            .sdk_expect(BridgeError::TokenDecimalsNotFound.as_ref())
+            .sdk_expect(BridgeError::TokenDecimalsNotFound)
             .decimals;
 
         ext_token::ext(token)
@@ -1717,7 +1717,7 @@ impl Contract {
             Self::check_storage_balance_result(
                 (storage_deposit_action_index + 1)
                     .try_into()
-                    .sdk_expect(BridgeError::Cast.as_ref())
+                    .sdk_expect(BridgeError::Cast)
             ) && storage_deposit_actions[storage_deposit_action_index].account_id == recipient
                 && storage_deposit_actions[storage_deposit_action_index].token_id == token,
             BridgeError::StorageRecipientOmitted.as_ref()
@@ -1732,7 +1732,7 @@ impl Contract {
                 Self::check_storage_balance_result(
                     (storage_deposit_action_index + 1)
                         .try_into()
-                        .sdk_expect(BridgeError::Cast.as_ref())
+                        .sdk_expect(BridgeError::Cast)
                 ) && storage_deposit_actions[storage_deposit_action_index].account_id
                     == fee_recipient
                     && storage_deposit_actions[storage_deposit_action_index].token_id == token,
@@ -1750,7 +1750,7 @@ impl Contract {
                 Self::check_storage_balance_result(
                     (storage_deposit_action_index + 1)
                         .try_into()
-                        .sdk_expect(BridgeError::Cast.as_ref())
+                        .sdk_expect(BridgeError::Cast)
                 ) && storage_deposit_actions[storage_deposit_action_index].account_id
                     == fee_recipient
                     && storage_deposit_actions[storage_deposit_action_index].token_id
@@ -1936,9 +1936,9 @@ impl Contract {
     ) -> Option<Vec<u8>> {
         self.pending_transfers.insert_raw(
             &borsh::to_vec(&transfer_message.get_transfer_id())
-                .sdk_expect(BridgeError::Borsh.as_ref()),
+                .sdk_expect(BridgeError::Borsh),
             &TransferMessageStorage::encode_borsh(transfer_message, message_owner)
-                .sdk_expect(BridgeError::Borsh.as_ref()),
+                .sdk_expect(BridgeError::Borsh),
         )
     }
 
@@ -1962,7 +1962,7 @@ impl Contract {
             .pending_transfers
             .remove(&transfer_id)
             .map(storage::TransferMessageStorage::into_main)
-            .sdk_expect(BridgeError::TransferNotExist.as_ref());
+            .sdk_expect(BridgeError::TransferNotExist);
 
         let refund =
             env::storage_byte_cost().saturating_mul((storage_usage - env::storage_usage()).into());
@@ -2022,7 +2022,7 @@ impl Contract {
     fn mark_fast_transfer_as_finalised(&mut self, fast_transfer_id: &FastTransferId) {
         let mut status = self
             .get_fast_transfer_status(fast_transfer_id)
-            .sdk_expect(BridgeError::FastTransferNotFound.as_ref());
+            .sdk_expect(BridgeError::FastTransferNotFound);
         status.finalised = true;
         self.fast_transfers
             .insert(fast_transfer_id, &FastTransferStatusStorage::V0(status));
@@ -2034,7 +2034,7 @@ impl Contract {
             .fast_transfers
             .remove(fast_transfer_id)
             .map(storage::FastTransferStatusStorage::into_main)
-            .sdk_expect(BridgeError::TransferNotExist.as_ref());
+            .sdk_expect(BridgeError::TransferNotExist);
 
         let refund =
             env::storage_byte_cost().saturating_mul((storage_usage - env::storage_usage()).into());
@@ -2212,11 +2212,11 @@ impl Contract {
     ) -> PromiseOrPromiseIndexOrValue<U128> {
         let origin_chain = self
             .get_utxo_chain_by_token(&token_id)
-            .sdk_expect(BridgeError::UtxoConfigMissing.as_ref());
+            .sdk_expect(BridgeError::UtxoConfigMissing);
         let config = self
             .utxo_chain_connectors
             .get(&origin_chain)
-            .sdk_expect(BridgeError::UtxoConfigMissing.as_ref());
+            .sdk_expect(BridgeError::UtxoConfigMissing);
         require!(
             sender_id == &config.connector,
             BridgeError::SenderIsNotConnector.as_ref()
