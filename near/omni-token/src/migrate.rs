@@ -5,6 +5,7 @@ use near_sdk::serde_json::json;
 use near_sdk::{
     collections::LazyOption, env, near, require, store::Lazy, AccountId, Gas, GasWeight, NearToken,
 };
+use omni_types::TokenError;
 
 const CURRENT_STATE_VERSION: u32 = 3;
 const NO_DEPOSIT: NearToken = NearToken::from_yoctonear(0);
@@ -26,7 +27,7 @@ impl OmniToken {
     #[init(ignore_state)]
     #[allow(unused_variables)]
     pub fn migrate(from_version: u32) -> Self {
-        env::state_read().unwrap_or_else(|| env::panic_str("ERR_FAILED_TO_READ_STATE"))
+        env::state_read().unwrap_or_else(|| env::panic_str(TokenError::NoStateToMigrate.as_ref()))
     }
 
     /// # Panics
@@ -76,15 +77,14 @@ impl UpgradeAndMigrate for OmniToken {
 
         // Receive the code directly from the input to avoid the
         // GAS overhead of deserializing parameters
-        let input = env::input().unwrap_or_else(|| env::panic_str("ERR_NO_INPUT"));
+        let input = env::input().unwrap_or_else(|| env::panic_str(TokenError::NoInput.as_ref()));
         let promise_id = env::promise_batch_create(&env::current_account_id());
-        // Allow switching to global contract code when a hash is provided.
-        let should_use_global_contract = self.is_using_global_token() || input.len() == 32;
-        if should_use_global_contract {
+        // Allow switching to global contract code when a hash is provided and vice versa.
+        if input.len() == 32 {
             let code_hash = input
                 .as_slice()
                 .try_into()
-                .unwrap_or_else(|_| env::panic_str("ERR_BAD_HASH_LEN"));
+                .unwrap_or_else(|_| env::panic_str(TokenError::InvalidCodeHash.as_ref()));
             env::promise_batch_action_use_global_contract(promise_id, &code_hash);
         } else {
             // Deploy the contract code.

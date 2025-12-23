@@ -70,9 +70,11 @@ pub enum StorageError {
 #[strum(serialize_all = "shouty_snake_case", prefix = "ERR_")]
 pub enum TokenError {
     FailedToReadState,
+    InvalidCodeHash,
     InvalidParentAccount,
     MissingPermission,
     NoInput,
+    NoStateToMigrate,
 }
 
 #[derive(Display, Debug, Clone, Copy, PartialEq, Eq, AsRefStr)]
