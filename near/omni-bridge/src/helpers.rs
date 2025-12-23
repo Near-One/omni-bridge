@@ -5,18 +5,18 @@ use near_sdk::{
 use serde::Serialize;
 
 pub trait SdkExpect<T> {
-    fn sdk_expect(self, msg: &str) -> T;
+    fn sdk_expect(self, msg: impl AsRef<str>) -> T;
 }
 
 impl<T> SdkExpect<T> for Option<T> {
-    fn sdk_expect(self, msg: &str) -> T {
-        self.unwrap_or_else(|| panic_str(msg))
+    fn sdk_expect(self, msg: impl AsRef<str>) -> T {
+        self.unwrap_or_else(|| panic_str(msg.as_ref()))
     }
 }
 
 impl<T, E> SdkExpect<T> for Result<T, E> {
-    fn sdk_expect(self, msg: &str) -> T {
-        self.unwrap_or_else(|_| panic_str(msg))
+    fn sdk_expect(self, msg: impl AsRef<str>) -> T {
+        self.unwrap_or_else(|_| panic_str(msg.as_ref()))
     }
 }
 
