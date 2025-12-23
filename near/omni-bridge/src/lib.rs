@@ -922,7 +922,7 @@ impl Contract {
         storage_owner: &AccountId,
     ) -> PromiseOrValue<U128> {
         if !Self::check_storage_balance_result(0) {
-            env::log_str("STORAGE_ERR: The transfer recipient is omitted");
+            env::log_str(BridgeError::StorageRecipientOmitted.as_ref());
             self.remove_fin_utxo_transfer(
                 &utxo_fin_transfer_msg.get_transfer_id(origin_chain),
                 storage_owner,

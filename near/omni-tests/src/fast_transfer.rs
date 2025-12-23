@@ -528,7 +528,7 @@ mod tests {
                     relayer: AccountId::from_str("fake.testnet").unwrap(),
                 },
             },
-            error: Some("Not enough storage deposited"),
+            error: Some("ERR_NOT_ENOUGH_STORAGE"),
         })]
         // Refund on ft_transfer_call failure
         #[case(FastTransferCase {

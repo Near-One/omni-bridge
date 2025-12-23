@@ -98,8 +98,8 @@ fn test_h160_deserialization() {
     assert!(result.is_err(), "Should fail with invalid hex");
     let err = result.unwrap_err().to_string();
     assert!(
-        err.contains("ERR_INVALIDE_HEX"),
-        "Error was: {err} but expected ERR_INVALIDE_HEX"
+        err.contains("ERR_INVALID_HEX"),
+        "Error was: {err} but expected ERR_INVALID_HEX"
     );
 
     let json = r#""0x5a08""#;
@@ -224,7 +224,7 @@ fn test_omni_address_from_str() {
         ),
         (
             "invalid_format".to_string(),
-            Err("ERR_INVALIDE_HEX".to_string()),
+            Err("ERR_INVALID_HEX".to_string()),
             "Should fail on missing chain prefix",
         ),
         (
