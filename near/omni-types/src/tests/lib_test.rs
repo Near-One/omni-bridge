@@ -1,10 +1,10 @@
-use near_sdk::borsh;
 use near_sdk::json_types::U128;
 use near_sdk::serde_json;
+use near_sdk::{borsh, NearToken};
 
 use crate::{
-    stringify, BridgeError, ChainKind, Fee, OmniAddress, OmniError, PayloadType, TransferId,
-    TransferMessage, TypesError, H160,
+    stringify, BridgeError, ChainKind, Fee, OmniAddress, OmniError, PayloadType,
+    StorageBalanceError, TransferId, TransferMessage, TypesError, H160,
 };
 use std::str::FromStr;
 
@@ -484,5 +484,17 @@ fn test_errors_serialization() {
     assert_eq!(
         OmniError::Bridge(BridgeError::InvalidAttachedDeposit).to_string(),
         "ERR_INVALID_ATTACHED_DEPOSIT"
+    );
+    assert_eq!(
+        StorageBalanceError::AccountNotRegistered("near".parse().unwrap()).to_string(),
+        "ERR_ACCOUNT_NOT_REGISTERED"
+    );
+    assert_eq!(
+        StorageBalanceError::NotEnoughStorage {
+            required: NearToken::from_yoctonear(100),
+            available: NearToken::from_yoctonear(50),
+        }
+        .to_string(),
+        "ERR_NOT_ENOUGH_STORAGE"
     );
 }
