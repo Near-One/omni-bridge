@@ -165,6 +165,7 @@ pub async fn process_transfer_event(
                     specific_errors: Some(vec![
                         "Signature request has already been submitted. Please try again later."
                             .to_string(),
+                        "Request has timed out.".to_string(),
                         "Signature request has timed out.".to_string(),
                         "Attached deposit is lower than required".to_string(),
                         "Exceeded the prepaid gas.".to_string(),
