@@ -26,14 +26,18 @@ For more information on how it works, please see [Omni Bridge Documentation](htt
 - Arbitrum: [`0xd025b38762B4A4E36F0Cde483b86CB13ea00D989`](https://arbiscan.io/address/0xd025b38762B4A4E36F0Cde483b86CB13ea00D989)
 - Base: [`0xd025b38762B4A4E36F0Cde483b86CB13ea00D989`](https://basescan.org/address/0xd025b38762B4A4E36F0Cde483b86CB13ea00D989)
 - Bnb: [`0x073C8a225c8Cf9d3f9157F5C1a1DbE02407f5720`](https://bscscan.com/address/0x073C8a225c8Cf9d3f9157F5C1a1DbE02407f5720)
+- Polygon: [`0xd025b38762B4A4E36F0Cde483b86CB13ea00D989`](https://polygonscan.com/address/0xd025b38762B4A4E36F0Cde483b86CB13ea00D989)
 - Ethereum: [`0xe00c629aFaCCb0510995A2B95560E446A24c85B9`](https://etherscan.io/address/0xe00c629aFaCCb0510995A2B95560E446A24c85B9)
 - NEAR: [`omni.bridge.near`](https://nearblocks.io/address/omni.bridge.near)
 - Solana: [`dahPEoZGXfyV58JqqH85okdHmpN8U2q8owgPUXSCPxe`](https://explorer.solana.com/address/dahPEoZGXfyV58JqqH85okdHmpN8U2q8owgPUXSCPxe)
 
 **Helper Contracts:**
 - NEAR: 
+  - [`vaa-prover-0_4_3.bridge.near`](https://nearblocks.io/address/vaa-prover-0_4_3.bridge.near)
   - [`vaa-prover-0_4_1.bridge.near`](https://nearblocks.io/address/vaa-prover-0_4_1.bridge.near)
   - [`eth-prover-0_4_1.bridge.near`](https://nearblocks.io/address/eth-prover-0_4_1.bridge.near)
+  - [`omdep.near`](https://nearblocks.io/address/omdep.near)
+  - [`factory.bridge.near`](https://nearblocks.io/address/factory.bridge.near)
 </details>
 
 <details>
@@ -43,6 +47,7 @@ For more information on how it works, please see [Omni Bridge Documentation](htt
 - Arbitrum: [`0x0C981337fFe39a555d3A40dbb32f21aD0eF33FFA`](https://sepolia.arbiscan.io/address/0x0C981337fFe39a555d3A40dbb32f21aD0eF33FFA)
 - Base: [`0xa56b860017152cD296ad723E8409Abd6e5D86d4d`](https://sepolia.basescan.org/address/0xa56b860017152cD296ad723E8409Abd6e5D86d4d)
 - Bnb: [`0xEC81aFc3485a425347Ac03316675e58a680b283A`](https://testnet.bscscan.com/address/0xEC81aFc3485a425347Ac03316675e58a680b283A)
+- Polygon: [`0xEC81aFc3485a425347Ac03316675e58a680b283A`](https://amoy.polygonscan.com/address/0xEC81aFc3485a425347Ac03316675e58a680b283A)
 - Ethereum: [`0x68a86e0Ea5B1d39F385c1326e4d493526dFe4401`](https://sepolia.etherscan.io/address/0x68a86e0Ea5B1d39F385c1326e4d493526dFe4401)
 - NEAR: [`omni.n-bridge.testnet`](https://testnet.nearblocks.io/address/omni.n-bridge.testnet)
 - Solana: [`Gy1XPwYZURfBzHiGAxnw3SYC33SfqsEpGSS5zeBge28p`](https://explorer.solana.com/address/Gy1XPwYZURfBzHiGAxnw3SYC33SfqsEpGSS5zeBge28p?cluster=devnet)
@@ -51,6 +56,7 @@ For more information on how it works, please see [Omni Bridge Documentation](htt
 - NEAR:
   - [`eth-prover.n-bridge.testnet`](https://testnet.nearblocks.io/address/eth-prover.n-bridge.testnet)
   - [`vaa-prover.n-bridge.testnet`](https://testnet.nearblocks.io/address/vaa-prover.n-bridge.testnet)
+  - [`omnidep.testnet`](https://testnet.nearblocks.io/address/omnidep.testnet)
 </details>
 
 <details>
@@ -67,6 +73,7 @@ For more information on how it works, please see [Omni Bridge Documentation](htt
 - NEAR:
   - [`eth-prover.testnet`](https://testnet.nearblocks.io/address/eth-prover.testnet)
   - [`wormhole-prover-test.testnet`](https://testnet.nearblocks.io/address/wormhole-prover-test.testnet)
+  - [`omdep.testnet`](https://testnet.nearblocks.io/address/omdep.testnet)
 </details>
 
 ## Transfer Times & Finality
