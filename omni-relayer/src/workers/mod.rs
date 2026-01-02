@@ -157,27 +157,6 @@ pub async fn process_events(
     let is_nonce_resync_needed = Arc::new(AtomicBool::new(true));
 
     loop {
-        if is_nonce_resync_needed.load(Ordering::Relaxed) {
-            if let Err(err) = near_omni_nonce.resync_nonce().await {
-                warn!("Failed to resync near nonce: {err:?}");
-                continue;
-            }
-
-            if let Some(near_fast_nonce) = near_fast_nonce.clone() {
-                if let Err(err) = near_fast_nonce.resync_nonce().await {
-                    warn!("Failed to resync near fast nonce: {err:?}");
-                    continue;
-                }
-            }
-
-            if let Err(err) = evm_nonces.resync_nonces().await {
-                warn!("Failed to resync evm nonces: {err:?}");
-                continue;
-            }
-
-            is_nonce_resync_needed.store(false, Ordering::Relaxed);
-        }
-
         let mut redis_connection_manager_clone = redis_connection_manager.clone();
 
         let Some(retryable_events) = utils::redis::get_events(
@@ -200,6 +179,27 @@ pub async fn process_events(
             ))
             .await;
             continue;
+        }
+
+        if is_nonce_resync_needed.load(Ordering::Relaxed) {
+            if let Err(err) = near_omni_nonce.resync_nonce().await {
+                warn!("Failed to resync near nonce: {err:?}");
+                continue;
+            }
+
+            if let Some(near_fast_nonce) = near_fast_nonce.clone() {
+                if let Err(err) = near_fast_nonce.resync_nonce().await {
+                    warn!("Failed to resync near fast nonce: {err:?}");
+                    continue;
+                }
+            }
+
+            if let Err(err) = evm_nonces.resync_nonces().await {
+                warn!("Failed to resync evm nonces: {err:?}");
+                continue;
+            }
+
+            is_nonce_resync_needed.store(false, Ordering::Relaxed);
         }
 
         let current_timestamp = chrono::Utc::now().timestamp();
