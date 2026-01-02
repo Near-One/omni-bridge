@@ -1,4 +1,7 @@
-use std::sync::Arc;
+use std::sync::{
+    Arc,
+    atomic::{AtomicBool, Ordering},
+};
 
 use anyhow::Result;
 use bridge_indexer_types::documents_types::DepositMsg;
@@ -151,7 +154,30 @@ pub async fn process_events(
         .near_bridge_client()
         .and_then(near_bridge_client::NearBridgeClient::account_id)?;
 
+    let is_nonce_resync_needed = Arc::new(AtomicBool::new(true));
+
     loop {
+        if is_nonce_resync_needed.load(Ordering::Relaxed) {
+            if let Err(err) = near_omni_nonce.resync_nonce().await {
+                warn!("Failed to resync near nonce: {err:?}");
+                continue;
+            }
+
+            if let Some(near_fast_nonce) = near_fast_nonce.clone() {
+                if let Err(err) = near_fast_nonce.resync_nonce().await {
+                    warn!("Failed to resync near fast nonce: {err:?}");
+                    continue;
+                }
+            }
+
+            if let Err(err) = evm_nonces.resync_nonces().await {
+                warn!("Failed to resync evm nonces: {err:?}");
+                continue;
+            }
+
+            is_nonce_resync_needed.store(false, Ordering::Relaxed);
+        }
+
         let mut redis_connection_manager_clone = redis_connection_manager.clone();
 
         let Some(retryable_events) = utils::redis::get_events(
@@ -174,20 +200,6 @@ pub async fn process_events(
             ))
             .await;
             continue;
-        }
-
-        if let Err(err) = near_omni_nonce.resync_nonce().await {
-            warn!("Failed to resync near nonce: {err:?}");
-        }
-
-        if let Some(near_fast_nonce) = near_fast_nonce.clone() {
-            if let Err(err) = near_fast_nonce.resync_nonce().await {
-                warn!("Failed to resync near fast nonce: {err:?}");
-            }
-        }
-
-        if let Err(err) = evm_nonces.resync_nonces().await {
-            warn!("Failed to resync evm nonces: {err:?}");
         }
 
         let current_timestamp = chrono::Utc::now().timestamp();
@@ -273,6 +285,7 @@ pub async fn process_events(
                         let omni_connector = omni_connector.clone();
                         let signer = signer.clone();
                         let near_nonce = near_omni_nonce.clone();
+                        let resync_needed = is_nonce_resync_needed.clone();
 
                         async move {
                             let (recipient, transfer_id) = match &transfer {
@@ -312,7 +325,9 @@ pub async fn process_events(
                             };
 
                             match process {
-                                Ok(EventAction::Retry) => {}
+                                Ok(EventAction::Retry) => {
+                                    resync_needed.store(true, Ordering::Relaxed);
+                                }
                                 Ok(EventAction::Remove) => {
                                     utils::redis::remove_event(
                                         &config,
@@ -323,6 +338,7 @@ pub async fn process_events(
                                     .await;
                                 }
                                 Err(err) => {
+                                    resync_needed.store(true, Ordering::Relaxed);
                                     warn!("{err:?}");
                                     utils::redis::remove_event(
                                         &config,
@@ -351,6 +367,7 @@ pub async fn process_events(
                         let mut redis_connection_manager = redis_connection_manager.clone();
                         let omni_connector = omni_connector.clone();
                         let near_omni_nonce = near_omni_nonce.clone();
+                        let resync_needed = is_nonce_resync_needed.clone();
 
                         async move {
                             match evm::process_init_transfer_event(
@@ -362,7 +379,9 @@ pub async fn process_events(
                             )
                             .await
                             {
-                                Ok(EventAction::Retry) => {}
+                                Ok(EventAction::Retry) => {
+                                    resync_needed.store(true, Ordering::Relaxed);
+                                }
                                 Ok(EventAction::Remove) => {
                                     utils::redis::remove_event(
                                         &config,
@@ -384,6 +403,7 @@ pub async fn process_events(
                                     .await;
                                 }
                                 Err(err) => {
+                                    resync_needed.store(true, Ordering::Relaxed);
                                     warn!("{err:?}");
                                     utils::redis::remove_event(
                                         &config,
@@ -414,6 +434,7 @@ pub async fn process_events(
                         let key = key.clone();
                         let omni_connector = omni_connector.clone();
                         let near_nonce = near_omni_nonce.clone();
+                        let resync_needed = is_nonce_resync_needed.clone();
 
                         async move {
                             match solana::process_init_transfer_event(
@@ -426,7 +447,9 @@ pub async fn process_events(
                             )
                             .await
                             {
-                                Ok(EventAction::Retry) => {}
+                                Ok(EventAction::Retry) => {
+                                    resync_needed.store(true, Ordering::Relaxed);
+                                }
                                 Ok(EventAction::Remove) => {
                                     utils::redis::remove_event(
                                         &config,
@@ -448,6 +471,7 @@ pub async fn process_events(
                                     .await;
                                 }
                                 Err(err) => {
+                                    resync_needed.store(true, Ordering::Relaxed);
                                     warn!("{err:?}");
                                     utils::redis::remove_event(
                                         &config,
@@ -477,6 +501,7 @@ pub async fn process_events(
                         let mut redis_connection_manager = redis_connection_manager.clone();
                         let omni_connector = omni_connector.clone();
                         let near_omni_nonce = near_omni_nonce.clone();
+                        let resync_needed = is_nonce_resync_needed.clone();
 
                         async move {
                             match utxo::process_near_to_utxo_init_transfer_event(
@@ -486,7 +511,9 @@ pub async fn process_events(
                             )
                             .await
                             {
-                                Ok(EventAction::Retry) => {}
+                                Ok(EventAction::Retry) => {
+                                    resync_needed.store(true, Ordering::Relaxed);
+                                }
                                 Ok(EventAction::Remove) => {
                                     utils::redis::remove_event(
                                         &config,
@@ -497,6 +524,7 @@ pub async fn process_events(
                                     .await;
                                 }
                                 Err(err) => {
+                                    resync_needed.store(true, Ordering::Relaxed);
                                     warn!("{err:?}");
                                     utils::redis::remove_event(
                                         &config,
@@ -515,6 +543,7 @@ pub async fn process_events(
                         let mut redis_connection_manager = redis_connection_manager.clone();
                         let omni_connector = omni_connector.clone();
                         let near_nonce = near_omni_nonce.clone();
+                        let resync_needed = is_nonce_resync_needed.clone();
 
                         async move {
                             match utxo::process_utxo_to_near_init_transfer_event(
@@ -524,7 +553,9 @@ pub async fn process_events(
                             )
                             .await
                             {
-                                Ok(EventAction::Retry) => {}
+                                Ok(EventAction::Retry) => {
+                                    resync_needed.store(true, Ordering::Relaxed);
+                                }
                                 Ok(EventAction::Remove) => {
                                     utils::redis::remove_event(
                                         &config,
@@ -535,6 +566,7 @@ pub async fn process_events(
                                     .await;
                                 }
                                 Err(err) => {
+                                    resync_needed.store(true, Ordering::Relaxed);
                                     warn!("{err:?}");
                                     utils::redis::remove_event(
                                         &config,
@@ -553,6 +585,7 @@ pub async fn process_events(
                         let mut redis_connection_manager = redis_connection_manager.clone();
                         let fast_connector = fast_connector.clone();
                         let near_omni_nonce = near_omni_nonce.clone();
+                        let resync_needed = is_nonce_resync_needed.clone();
 
                         async move {
                             match near::initiate_fast_transfer(
@@ -562,7 +595,9 @@ pub async fn process_events(
                             )
                             .await
                             {
-                                Ok(EventAction::Retry) => {}
+                                Ok(EventAction::Retry) => {
+                                    resync_needed.store(true, Ordering::Relaxed);
+                                }
                                 Ok(EventAction::Remove) => {
                                     utils::redis::remove_event(
                                         &config,
@@ -573,6 +608,7 @@ pub async fn process_events(
                                     .await;
                                 }
                                 Err(err) => {
+                                    resync_needed.store(true, Ordering::Relaxed);
                                     warn!("{err:?}");
                                     utils::redis::remove_event(
                                         &config,
@@ -599,6 +635,7 @@ pub async fn process_events(
                         let omni_connector = omni_connector.clone();
                         let signer = signer.clone();
                         let evm_nonces = evm_nonces.clone();
+                        let resync_needed = is_nonce_resync_needed.clone();
 
                         async move {
                             match near::process_sign_transfer_event(
@@ -611,7 +648,9 @@ pub async fn process_events(
                             )
                             .await
                             {
-                                Ok(EventAction::Retry) => {}
+                                Ok(EventAction::Retry) => {
+                                    resync_needed.store(true, Ordering::Relaxed);
+                                }
                                 Ok(EventAction::Remove) => {
                                     utils::redis::remove_event(
                                         &config,
@@ -630,6 +669,7 @@ pub async fn process_events(
                                     .await;
                                 }
                                 Err(err) => {
+                                    resync_needed.store(true, Ordering::Relaxed);
                                     warn!("{err:?}");
                                     utils::redis::remove_event(
                                         &config,
@@ -660,6 +700,7 @@ pub async fn process_events(
                         let mut redis_connection_manager = redis_connection_manager.clone();
                         let omni_connector = omni_connector.clone();
                         let near_nonce = near_omni_nonce.clone();
+                        let resync_needed = is_nonce_resync_needed.clone();
 
                         async move {
                             match evm::process_evm_transfer_event(
@@ -669,7 +710,9 @@ pub async fn process_events(
                             )
                             .await
                             {
-                                Ok(EventAction::Retry) => {}
+                                Ok(EventAction::Retry) => {
+                                    resync_needed.store(true, Ordering::Relaxed);
+                                }
                                 Ok(EventAction::Remove) => {
                                     utils::redis::remove_event(
                                         &config,
@@ -680,6 +723,7 @@ pub async fn process_events(
                                     .await;
                                 }
                                 Err(err) => {
+                                    resync_needed.store(true, Ordering::Relaxed);
                                     warn!("{err:?}");
                                     utils::redis::remove_event(
                                         &config,
@@ -698,6 +742,7 @@ pub async fn process_events(
                         let mut redis_connection_manager = redis_connection_manager.clone();
                         let omni_connector = omni_connector.clone();
                         let near_nonce = near_omni_nonce.clone();
+                        let resync_needed = is_nonce_resync_needed.clone();
 
                         async move {
                             match solana::process_fin_transfer_event(
@@ -708,7 +753,9 @@ pub async fn process_events(
                             )
                             .await
                             {
-                                Ok(EventAction::Retry) => {}
+                                Ok(EventAction::Retry) => {
+                                    resync_needed.store(true, Ordering::Relaxed);
+                                }
                                 Ok(EventAction::Remove) => {
                                     utils::redis::remove_event(
                                         &config,
@@ -719,6 +766,7 @@ pub async fn process_events(
                                     .await;
                                 }
                                 Err(err) => {
+                                    resync_needed.store(true, Ordering::Relaxed);
                                     warn!("{err:?}");
                                     utils::redis::remove_event(
                                         &config,
@@ -741,6 +789,7 @@ pub async fn process_events(
                         let mut redis_connection_manager = redis_connection_manager.clone();
                         let omni_connector = omni_connector.clone();
                         let near_nonce = near_omni_nonce.clone();
+                        let resync_needed = is_nonce_resync_needed.clone();
 
                         async move {
                             match evm::process_deploy_token_event(
@@ -750,7 +799,9 @@ pub async fn process_events(
                             )
                             .await
                             {
-                                Ok(EventAction::Retry) => {}
+                                Ok(EventAction::Retry) => {
+                                    resync_needed.store(true, Ordering::Relaxed);
+                                }
                                 Ok(EventAction::Remove) => {
                                     utils::redis::remove_event(
                                         &config,
@@ -761,6 +812,7 @@ pub async fn process_events(
                                     .await;
                                 }
                                 Err(err) => {
+                                    resync_needed.store(true, Ordering::Relaxed);
                                     warn!("{err:?}");
                                     utils::redis::remove_event(
                                         &config,
@@ -779,6 +831,7 @@ pub async fn process_events(
                         let mut redis_connection_manager = redis_connection_manager.clone();
                         let omni_connector = omni_connector.clone();
                         let near_nonce = near_omni_nonce.clone();
+                        let resync_needed = is_nonce_resync_needed.clone();
 
                         async move {
                             match solana::process_deploy_token_event(
@@ -789,7 +842,9 @@ pub async fn process_events(
                             )
                             .await
                             {
-                                Ok(EventAction::Retry) => {}
+                                Ok(EventAction::Retry) => {
+                                    resync_needed.store(true, Ordering::Relaxed);
+                                }
                                 Ok(EventAction::Remove) => {
                                     utils::redis::remove_event(
                                         &config,
@@ -800,6 +855,7 @@ pub async fn process_events(
                                     .await;
                                 }
                                 Err(err) => {
+                                    resync_needed.store(true, Ordering::Relaxed);
                                     warn!("{err:?}");
                                     utils::redis::remove_event(
                                         &config,
@@ -820,6 +876,7 @@ pub async fn process_events(
                     let config = config.clone();
                     let mut redis_connection_manager = redis_connection_manager.clone();
                     let omni_connector = omni_connector.clone();
+                    let resync_needed = is_nonce_resync_needed.clone();
 
                     async move {
                         match utxo::process_sign_transaction_event(
@@ -828,7 +885,9 @@ pub async fn process_events(
                         )
                         .await
                         {
-                            Ok(EventAction::Retry) => {}
+                            Ok(EventAction::Retry) => {
+                                resync_needed.store(true, Ordering::Relaxed);
+                            }
                             Ok(EventAction::Remove) => {
                                 utils::redis::remove_event(
                                     &config,
@@ -839,6 +898,7 @@ pub async fn process_events(
                                 .await;
                             }
                             Err(err) => {
+                                resync_needed.store(true, Ordering::Relaxed);
                                 warn!("{err:?}");
                                 utils::redis::remove_event(
                                     &config,
@@ -860,6 +920,7 @@ pub async fn process_events(
                     let omni_connector = omni_connector.clone();
                     let signer = signer.clone();
                     let near_nonce = near_omni_nonce.clone();
+                    let resync_needed = is_nonce_resync_needed.clone();
 
                     async move {
                         match utxo::process_confirmed_tx_hash(
@@ -873,7 +934,9 @@ pub async fn process_events(
                         )
                         .await
                         {
-                            Ok(EventAction::Retry) => {}
+                            Ok(EventAction::Retry) => {
+                                resync_needed.store(true, Ordering::Relaxed);
+                            }
                             Ok(EventAction::Remove) => {
                                 utils::redis::remove_event(
                                     &config,
@@ -884,6 +947,7 @@ pub async fn process_events(
                                 .await;
                             }
                             Err(err) => {
+                                resync_needed.store(true, Ordering::Relaxed);
                                 warn!("{err:?}");
                                 utils::redis::remove_event(
                                     &config,
