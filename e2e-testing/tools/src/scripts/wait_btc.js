@@ -28,8 +28,6 @@ async function getZcashConfirmations(txid) {
       }
   );
 
-  console.log(res);
-
   const tx = res.data?.result;
   if (!tx) return 0;
 

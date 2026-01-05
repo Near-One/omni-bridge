@@ -121,7 +121,7 @@ rule fin_zcash_transfer_on_near:
         --chain zcash \
         -b {params.zcash_tx_hash} \
         -v 0 \
-        -r {params.user_account_id} \
+        -r near:{params.user_account_id} \
         --zcash-connector {params.zcash_connector} \
         --near-signer {params.user_account_id} \
         --near-private-key {params.user_private_key} \
@@ -148,10 +148,10 @@ rule init_zcash_transfer_to_zcash:
     source "$PWD/tools/.env"
     set +a
     
-    bridge-cli testnet  init-near-to-bitcoin-transfer\
+    bridge-cli testnet internal init-near-to-bitcoin-transfer\
         --chain zcash \
         --target-btc-address $ZCASH_ACCOUNT_ID \
-        --amount 3000 \
+        --amount 15000 \
         --zcash-connector {params.zcash_connector} \
         --zcash {params.zcash_token} \
         --near-signer {params.user_account_id} \
