@@ -37,6 +37,7 @@ rule get_btc_user_deposit_address:
     {params.mkdir} && \
          bridge-cli testnet get-bitcoin-address \
          --chain btc \
+         --amount 0 \
          --btc-connector {params.btc_connector} \
          -r near:{params.user_account_id} \
          --near-signer {params.user_account_id} \
@@ -139,7 +140,7 @@ rule submit_transfer_to_btc_connector:
         near_tx_hash = lambda wc, input: get_json_field(input.step_7, "tx_hash"),
 
     shell: """
-    bridge-cli testnet near-sign-btc-transfer \
+    bridge-cli testnet near-submit-btc-transfer \
         --chain btc \
         -n {params.near_tx_hash} \
         -s {params.user_account_id} \

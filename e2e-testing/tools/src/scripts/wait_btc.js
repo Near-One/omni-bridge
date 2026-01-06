@@ -2,7 +2,7 @@
 const fs = require("fs");
 const axios = require("axios");
 
-const REQUIRED_CONFIRMATIONS = 3;
+const REQUIRED_CONFIRMATIONS = 4;
 const POLL_INTERVAL = 30_000; // 30 seconds
 
 async function getTipHeight() {
