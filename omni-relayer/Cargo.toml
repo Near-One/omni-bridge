@@ -33,7 +33,6 @@ solana-client = "2.1.9"
 solana-transaction-status = "2.1.9"
 solana-rpc-client-api = "2.1.9"
 
-ethereum-types = "0.14.1"
 omni-types = { git = "https://github.com/near-one/omni-bridge", package = "omni-types", rev = "57572b3fe5db1ab29857005703a3ea89fed97fa5" }
 bridge-indexer-types = { git = "ssh://git@github.com/near-one/bridge-indexer-rs.git", package = "bridge-indexer-types", rev = "d4e645ef0c16d9d8212eebd7978c3126081fbda1" }
 
