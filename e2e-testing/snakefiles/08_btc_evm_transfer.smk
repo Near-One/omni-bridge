@@ -71,10 +71,22 @@ rule send_btc_to_deposit_address:
         node {params.scripts_dir}/send_btc.js {params.btc_address} 7500 > {output}
     """
 
+rule wait_tx:
+    message: "Wait for BTC transaction"
+    input:
+        prev_step = call_dir / "02_send_btc_to_deposit_address",
+    output: call_dir / "02_1_wait_tx.json"
+    params:
+        scripts_dir = const.common_scripts_dir,
+        btc_tx_hash = lambda wc, input: get_last_value(input.prev_step),
+    shell: """
+    node {params.scripts_dir}/wait_btc.js btc {params.btc_tx_hash} {output}
+    """
 
 rule fin_btc_transfer_on_near:
     message: "Finalizing BTC transfer on Near"
     input:
+        prev_step = call_dir / "02_1_wait_tx.json",
         omni_bridge_whitelist = rules.add_omni_bridge_to_whitelist.output,
         add_utxo_chain_connector = rules.add_utxo_chain_connector.output,
         omni_bridge_storage_deposit = rules.omni_bridge_storage_deposit.output,

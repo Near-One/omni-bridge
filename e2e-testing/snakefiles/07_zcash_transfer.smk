@@ -70,7 +70,8 @@ rule get_zcash_user_deposit_address:
          bridge-cli testnet get-bitcoin-address \
          --chain zcash \
          --zcash-connector {params.zcash_connector} \
-         -r {params.user_account_id} \
+         -r near:{params.user_account_id} \
+         --amount 0\
          --near-signer {params.user_account_id} \
          --config {params.bridge_sdk_config_file} \
          > {output} \
@@ -88,9 +89,22 @@ rule send_zcash_to_deposit_address:
         {params.scripts_dir}/send_zcash.sh {params.zcash_address} > {output}
     """
 
+rule wait_tx:
+    message: "Wait for ZCash transaction"
+    input:
+        prev_step = call_dir / "03_send_zcash_to_deposit_address",
+    output: call_dir / "03_1_wait_tx.json"
+    params:
+        scripts_dir = const.common_scripts_dir,
+        btc_tx_hash = lambda wc, input: get_zcash_tx_hash(input.prev_step),
+    shell: """
+    node {params.scripts_dir}/wait_btc.js zcash {params.btc_tx_hash} {output}
+    """
+
 rule fin_zcash_transfer_on_near:
     message: "Finalizing Zcash transfer on Near"
     input:
+        prev_step = call_dir / "03_1_wait_tx.json",
         step_3 = rules.send_zcash_to_deposit_address.output,
         zcash_connector_file = zcash_connector_file,
         zcash_file = zcash_file,
@@ -107,7 +121,7 @@ rule fin_zcash_transfer_on_near:
         --chain zcash \
         -b {params.zcash_tx_hash} \
         -v 0 \
-        -r {params.user_account_id} \
+        -r near:{params.user_account_id} \
         --zcash-connector {params.zcash_connector} \
         --near-signer {params.user_account_id} \
         --near-private-key {params.user_private_key} \
@@ -134,10 +148,10 @@ rule init_zcash_transfer_to_zcash:
     source "$PWD/tools/.env"
     set +a
     
-    bridge-cli testnet  init-near-to-bitcoin-transfer\
+    bridge-cli testnet internal init-near-to-bitcoin-transfer\
         --chain zcash \
         --target-btc-address $ZCASH_ACCOUNT_ID \
-        --amount 3000 \
+        --amount 15000 \
         --zcash-connector {params.zcash_connector} \
         --zcash {params.zcash_token} \
         --near-signer {params.user_account_id} \
@@ -194,10 +208,23 @@ rule send_btc_transfer:
     > {output} \
     """
 
+rule wait_final_tx:
+    message: "Wait for Final ZCash transaction"
+    input:
+        prev_step = call_dir / "07_send_zcash_transfer",
+    output: call_dir / "wait_final_tx.json"
+    params:
+        scripts_dir = const.common_scripts_dir,
+        zcash_tx_hash = lambda wc, input: get_last_value(input.prev_step),
+    shell: """
+    node {params.scripts_dir}/wait_btc.js zcash {params.zcash_tx_hash} {output}
+    """
+
 rule verify_withdraw:
     message: "Verify withdraw"
     input:
         step_7 = rules.send_btc_transfer.output,
+        prev_step = call_dir / "wait_final_tx.json",
         zcash_connector_file = zcash_connector_file,
         zcash_file = zcash_file,
         user_account_file = user_account_file

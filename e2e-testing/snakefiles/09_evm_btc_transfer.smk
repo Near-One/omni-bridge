@@ -177,10 +177,23 @@ rule send_btc_transfer:
          > {output} \
     """
 
+rule wait_final_tx:
+    message: "Wait for Final BTC transaction"
+    input:
+        prev_step = call_dir / "05_send_btc_transfer",
+    output: call_dir / "wait_final_tx.json"
+    params:
+        scripts_dir = const.common_scripts_dir,
+        btc_tx_hash = lambda wc, input: get_last_value(input.prev_step),
+    shell: """
+    node {params.scripts_dir}/wait_btc.js btc {params.btc_tx_hash} {output}
+    """
+
 rule verify_withdraw:
     message: "Verify withdraw"
     input:
         step_5 = rules.send_btc_transfer.output,
+        prev_step = call_dir / "wait_final_tx.json",
         btc_connector_file = btc_connector_file,
         nbtc_file = nbtc_file,
         user_account_file = user_account_file
