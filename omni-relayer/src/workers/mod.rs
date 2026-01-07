@@ -3,7 +3,7 @@ use std::sync::{
     atomic::{AtomicBool, Ordering},
 };
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use bridge_indexer_types::documents_types::DepositMsg;
 use futures::future::join_all;
 use rust_decimal::MathematicalOps;
@@ -154,14 +154,16 @@ pub async fn process_events(
         .near_bridge_client()
         .and_then(near_bridge_client::NearBridgeClient::account_id)?;
 
-    if let Err(err) = near_omni_nonce.resync_nonce().await {
-        anyhow::bail!("Failed to resync near nonce: {err:?}");
-    }
+    near_omni_nonce
+        .resync_nonce()
+        .await
+        .context("Failed to resync near nonce")?;
 
     if let Some(near_fast_nonce) = near_fast_nonce.clone() {
-        if let Err(err) = near_fast_nonce.resync_nonce().await {
-            anyhow::bail!("Failed to resync near fast nonce: {err:?}");
-        }
+        near_fast_nonce
+            .resync_nonce()
+            .await
+            .context("Failed to resync near fast nonce")?;
     }
 
     let is_evm_nonce_resync_needed = Arc::new(AtomicBool::new(true));
@@ -283,6 +285,7 @@ pub async fn process_events(
                         let omni_connector = omni_connector.clone();
                         let signer = signer.clone();
                         let near_nonce = near_omni_nonce.clone();
+
                         async move {
                             let (recipient, transfer_id) = match &transfer {
                                 Transfer::Near { transfer_message } => (
@@ -360,6 +363,7 @@ pub async fn process_events(
                         let mut redis_connection_manager = redis_connection_manager.clone();
                         let omni_connector = omni_connector.clone();
                         let near_omni_nonce = near_omni_nonce.clone();
+
                         async move {
                             match evm::process_init_transfer_event(
                                 &config,
@@ -422,6 +426,7 @@ pub async fn process_events(
                         let key = key.clone();
                         let omni_connector = omni_connector.clone();
                         let near_nonce = near_omni_nonce.clone();
+
                         async move {
                             match solana::process_init_transfer_event(
                                 &config,
@@ -484,6 +489,7 @@ pub async fn process_events(
                         let mut redis_connection_manager = redis_connection_manager.clone();
                         let omni_connector = omni_connector.clone();
                         let near_omni_nonce = near_omni_nonce.clone();
+
                         async move {
                             match utxo::process_near_to_utxo_init_transfer_event(
                                 omni_connector,
@@ -521,6 +527,7 @@ pub async fn process_events(
                         let mut redis_connection_manager = redis_connection_manager.clone();
                         let omni_connector = omni_connector.clone();
                         let near_nonce = near_omni_nonce.clone();
+
                         async move {
                             match utxo::process_utxo_to_near_init_transfer_event(
                                 omni_connector,
@@ -558,6 +565,7 @@ pub async fn process_events(
                         let mut redis_connection_manager = redis_connection_manager.clone();
                         let fast_connector = fast_connector.clone();
                         let near_omni_nonce = near_omni_nonce.clone();
+
                         async move {
                             match near::initiate_fast_transfer(
                                 fast_connector,
@@ -680,6 +688,7 @@ pub async fn process_events(
                         let mut redis_connection_manager = redis_connection_manager.clone();
                         let omni_connector = omni_connector.clone();
                         let near_nonce = near_omni_nonce.clone();
+
                         async move {
                             match evm::process_evm_transfer_event(
                                 omni_connector,
@@ -717,6 +726,7 @@ pub async fn process_events(
                         let mut redis_connection_manager = redis_connection_manager.clone();
                         let omni_connector = omni_connector.clone();
                         let near_nonce = near_omni_nonce.clone();
+
                         async move {
                             match solana::process_fin_transfer_event(
                                 &config,
@@ -759,6 +769,7 @@ pub async fn process_events(
                         let mut redis_connection_manager = redis_connection_manager.clone();
                         let omni_connector = omni_connector.clone();
                         let near_nonce = near_omni_nonce.clone();
+
                         async move {
                             match evm::process_deploy_token_event(
                                 omni_connector,
@@ -796,6 +807,7 @@ pub async fn process_events(
                         let mut redis_connection_manager = redis_connection_manager.clone();
                         let omni_connector = omni_connector.clone();
                         let near_nonce = near_omni_nonce.clone();
+
                         async move {
                             match solana::process_deploy_token_event(
                                 &config,
@@ -836,6 +848,7 @@ pub async fn process_events(
                     let config = config.clone();
                     let mut redis_connection_manager = redis_connection_manager.clone();
                     let omni_connector = omni_connector.clone();
+
                     async move {
                         match utxo::process_sign_transaction_event(
                             omni_connector,
@@ -875,6 +888,7 @@ pub async fn process_events(
                     let omni_connector = omni_connector.clone();
                     let signer = signer.clone();
                     let near_nonce = near_omni_nonce.clone();
+
                     async move {
                         match utxo::process_confirmed_tx_hash(
                             &config,
