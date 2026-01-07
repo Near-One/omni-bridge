@@ -202,6 +202,9 @@ impl EvmNonceManagers {
         if let Some(bnb) = self.bnb.as_ref() {
             bnb.resync_nonce().await?;
         }
+        if let Some(pol) = self.pol.as_ref() {
+            pol.resync_nonce().await?;
+        }
 
         Ok(())
     }
