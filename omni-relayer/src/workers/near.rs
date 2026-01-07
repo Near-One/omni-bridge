@@ -456,7 +456,7 @@ pub async fn process_sign_transfer_event(
                 omni_connector::FinTransferArgs::EvmFinTransfer {
                     chain_kind,
                     event: omni_bridge_event.clone(),
-                    tx_nonce: Some(nonce.into()),
+                    tx_nonce: Some(alloy::primitives::U256::from(nonce)),
                 },
                 Some(nonce),
             )

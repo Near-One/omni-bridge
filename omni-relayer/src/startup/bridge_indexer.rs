@@ -1,12 +1,11 @@
 use std::str::FromStr;
 
-use alloy::primitives::Address;
+use alloy::primitives::{Address, TxHash};
 use anyhow::{Context, Result};
 use bridge_indexer_types::documents_types::{
     OmniEvent, OmniEventData, OmniMetaEvent, OmniMetaEventDetails, OmniTransactionEvent,
     OmniTransactionOrigin, OmniTransferMessage,
 };
-use ethereum_types::H256;
 use mongodb::{Client, Collection, change_stream::event::ResumeToken, options::ClientOptions};
 use omni_types::{
     ChainKind, Fee, OmniAddress, TransferId, TransferIdKind, near_events::OmniBridgeEvent,
@@ -149,7 +148,7 @@ async fn handle_transaction_event(
             let log_index_str = log_index.unwrap_or_default().to_string();
             let redis_key = evm_event_key(&origin_transaction_id, log_index);
 
-            let Ok(tx_hash) = H256::from_str(&origin_transaction_id) else {
+            let Ok(tx_hash) = TxHash::from_str(&origin_transaction_id) else {
                 anyhow::bail!("Failed to parse transaction_id as H256: {origin_transaction_id:?}");
             };
 
@@ -253,7 +252,7 @@ async fn handle_transaction_event(
 
             let redis_key = evm_event_key(&origin_transaction_id, log_index);
 
-            let Ok(tx_hash) = H256::from_str(&origin_transaction_id) else {
+            let Ok(tx_hash) = TxHash::from_str(&origin_transaction_id) else {
                 anyhow::bail!("Failed to parse transaction_id as H256: {origin_transaction_id:?}");
             };
 
@@ -504,7 +503,7 @@ async fn handle_meta_event(
             };
             let redis_key = evm_event_key(&origin_transaction_id, log_index);
 
-            let Ok(tx_hash) = H256::from_str(&origin_transaction_id) else {
+            let Ok(tx_hash) = TxHash::from_str(&origin_transaction_id) else {
                 anyhow::bail!("Failed to parse transaction_id as H256: {origin_transaction_id:?}");
             };
 

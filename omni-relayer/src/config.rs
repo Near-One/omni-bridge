@@ -240,7 +240,6 @@ pub struct Evm {
     pub rpc_http_url: String,
     #[serde(deserialize_with = "replace_rpc_api_key")]
     pub rpc_ws_url: String,
-    pub chain_id: u64,
     pub omni_bridge_address: Address,
     pub wormhole_address: Option<Address>,
     pub light_client: Option<AccountId>,
