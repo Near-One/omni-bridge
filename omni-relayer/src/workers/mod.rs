@@ -603,7 +603,7 @@ pub async fn process_events(
                         let omni_connector = omni_connector.clone();
                         let signer = signer.clone();
                         let evm_nonces = evm_nonces.clone();
-                        let resync_needed = is_evm_nonce_resync_needed.clone();
+                        let is_evm_nonce_resync_needed = is_evm_nonce_resync_needed.clone();
                         let should_resync_evm_nonce = matches!(
                             message_payload.recipient.get_chain(),
                             ChainKind::Eth
@@ -626,7 +626,7 @@ pub async fn process_events(
                             {
                                 Ok(EventAction::Retry) => {
                                     if should_resync_evm_nonce {
-                                        resync_needed.store(true, Ordering::Relaxed);
+                                        is_evm_nonce_resync_needed.store(true, Ordering::Relaxed);
                                     }
                                 }
                                 Ok(EventAction::Remove) => {
@@ -648,7 +648,7 @@ pub async fn process_events(
                                 }
                                 Err(err) => {
                                     if should_resync_evm_nonce {
-                                        resync_needed.store(true, Ordering::Relaxed);
+                                        is_evm_nonce_resync_needed.store(true, Ordering::Relaxed);
                                     }
                                     warn!("{err:?}");
                                     utils::redis::remove_event(
