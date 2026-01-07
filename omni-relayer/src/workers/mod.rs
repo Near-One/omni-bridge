@@ -3,13 +3,12 @@ use std::sync::{
     atomic::{AtomicBool, Ordering},
 };
 
+use alloy::primitives::TxHash;
 use anyhow::{Context, Result};
 use bridge_indexer_types::documents_types::DepositMsg;
 use futures::future::join_all;
 use rust_decimal::MathematicalOps;
 use tracing::warn;
-
-use ethereum_types::H256;
 
 use near_jsonrpc_client::JsonRpcClient;
 use near_sdk::json_types::U128;
@@ -64,7 +63,7 @@ pub enum Transfer {
     },
     Evm {
         chain_kind: ChainKind,
-        tx_hash: H256,
+        tx_hash: TxHash,
         log: utils::evm::InitTransferMessage,
         creation_timestamp: i64,
         expected_finalization_time: i64,
@@ -114,7 +113,7 @@ pub enum Transfer {
 pub enum FinTransfer {
     Evm {
         chain_kind: ChainKind,
-        tx_hash: H256,
+        tx_hash: TxHash,
         creation_timestamp: i64,
         expected_finalization_time: i64,
     },
@@ -129,7 +128,7 @@ pub enum FinTransfer {
 pub enum DeployToken {
     Evm {
         chain_kind: ChainKind,
-        tx_hash: H256,
+        tx_hash: TxHash,
         creation_timestamp: i64,
         expected_finalization_time: i64,
     },
