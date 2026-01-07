@@ -612,14 +612,6 @@ pub async fn process_events(
                         let signer = signer.clone();
                         let evm_nonces = evm_nonces.clone();
                         let is_evm_nonce_resync_needed = is_evm_nonce_resync_needed.clone();
-                        let should_resync_evm_nonce = matches!(
-                            message_payload.recipient.get_chain(),
-                            ChainKind::Eth
-                                | ChainKind::Base
-                                | ChainKind::Arb
-                                | ChainKind::Bnb
-                                | ChainKind::Pol
-                        );
 
                         async move {
                             match near::process_sign_transfer_event(
@@ -633,7 +625,7 @@ pub async fn process_events(
                             .await
                             {
                                 Ok(EventAction::Retry) => {
-                                    if should_resync_evm_nonce {
+                                    if message_payload.recipient.get_chain().is_evm_chain() {
                                         is_evm_nonce_resync_needed.store(true, Ordering::Relaxed);
                                     }
                                 }
@@ -655,7 +647,7 @@ pub async fn process_events(
                                     .await;
                                 }
                                 Err(err) => {
-                                    if should_resync_evm_nonce {
+                                    if message_payload.recipient.get_chain().is_evm_chain() {
                                         is_evm_nonce_resync_needed.store(true, Ordering::Relaxed);
                                     }
                                     warn!("{err:?}");
