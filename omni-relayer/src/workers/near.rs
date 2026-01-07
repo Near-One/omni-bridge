@@ -600,7 +600,7 @@ pub async fn process_unverified_transfer_event(
 pub async fn initiate_fast_transfer(
     fast_connector: Arc<OmniConnector>,
     transfer: Transfer,
-    near_omni_nonce: Arc<utils::nonce::NonceManager>,
+    near_fast_nonce: Arc<utils::nonce::NonceManager>,
 ) -> Result<EventAction> {
     let Ok(near_bridge_client) = fast_connector.near_bridge_client() else {
         anyhow::bail!("Near bridge client is not configured");
@@ -690,7 +690,7 @@ pub async fn initiate_fast_transfer(
     }
 
     let mut nonce = Some(
-        near_omni_nonce
+        near_fast_nonce
             .reserve_nonce()
             .await
             .context("Failed to reserve nonce for near transaction")?,
@@ -717,7 +717,7 @@ pub async fn initiate_fast_transfer(
     {
         Ok(true) => {
             nonce = Some(
-                near_omni_nonce
+                near_fast_nonce
                     .reserve_nonce()
                     .await
                     .context("Failed to reserve nonce for near transaction")?,

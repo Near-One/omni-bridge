@@ -564,13 +564,16 @@ pub async fn process_events(
                         let config = config.clone();
                         let mut redis_connection_manager = redis_connection_manager.clone();
                         let fast_connector = fast_connector.clone();
-                        let near_omni_nonce = near_omni_nonce.clone();
+                        let Some(near_fast_nonce) = near_fast_nonce.clone() else {
+                                warn!("Fast transfer event found but near fast nonce manager is not configured");
+                                continue;
+                        };
 
                         async move {
                             match near::initiate_fast_transfer(
                                 fast_connector,
                                 transfer,
-                                near_omni_nonce,
+                                near_fast_nonce,
                             )
                             .await
                             {
