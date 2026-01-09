@@ -115,10 +115,7 @@ fn test_omni_address_borsh_discriminants_are_stable() {
 #[test]
 fn test_omni_address_borsh_variants_are_covered() {
     let addresses = omni_addresses_for_borsh();
-    let mut covered_chains: Vec<ChainKind> = addresses
-        .iter()
-        .map(|address| address.get_chain())
-        .collect();
+    let mut covered_chains: Vec<ChainKind> = addresses.iter().map(OmniAddress::get_chain).collect();
 
     covered_chains.sort_unstable();
     covered_chains.dedup();
