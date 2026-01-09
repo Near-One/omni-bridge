@@ -872,7 +872,7 @@ impl Contract {
             let btc_account_id = self.get_utxo_chain_token(fast_transfer.recipient.get_chain());
             require!(
                 fast_transfer.token_id == btc_account_id,
-                BridgeError::OnlyBtcToBitcoin.as_ref()
+                BridgeError::NativeTokenRequiredForChain.as_ref()
             );
         }
 
@@ -1787,7 +1787,7 @@ impl Contract {
             let btc_account_id = self.get_utxo_chain_token(transfer_message.recipient.get_chain());
             require!(
                 token == btc_account_id,
-                BridgeError::OnlyBtcToBitcoin.as_ref()
+                BridgeError::NativeTokenRequiredForChain.as_ref()
             );
         }
 

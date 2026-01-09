@@ -33,7 +33,6 @@ pub enum BridgeError {
     NativeTokenRequiredForChain,
     NearWithdrawFailed,
     NotEnoughAttachedDeposit,
-    OnlyBtcToBitcoin,
     OnlyFeeRecipientCanClaim,
     ParseAccountId,
     ParseMsg,
