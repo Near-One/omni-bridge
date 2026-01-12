@@ -268,7 +268,7 @@ pub async fn process_transfer_to_utxo_event(
         Ok(tx_hash) => {
             info!(
                 "Submitted transfer ({:?}:{}): {tx_hash:?}",
-                transfer_message.recipient.get_chain(),
+                transfer_message.get_origin_chain(),
                 transfer_message.origin_nonce
             );
 
