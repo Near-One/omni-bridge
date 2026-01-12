@@ -1511,8 +1511,12 @@ impl Contract {
 
     #[access_control_any(roles(Role::DAO))]
     pub fn set_locked_tokens(&mut self, chain_kind: ChainKind, token_id: AccountId, amount: U128) {
-        self.locked_tokens
-            .insert(&(chain_kind, token_id), &amount.0);
+        if amount.0 == 0 {
+            self.locked_tokens.remove(&(chain_kind, token_id));
+        } else {
+            self.locked_tokens
+                .insert(&(chain_kind, token_id), &amount.0);
+        }
     }
 
     #[access_control_any(roles(Role::DAO, Role::TokenControllerUpdater))]
