@@ -1057,6 +1057,10 @@ impl Contract {
         );
         let fee = message.amount.0 - denormalized_amount;
 
+        if !self.deployed_tokens.contains(&token) {
+            self.decrease_locked_tokens(message.get_destination_chain(), &token, fee);
+        }
+
         self.send_fee_internal(&message, fee_recipient, fee)
     }
 

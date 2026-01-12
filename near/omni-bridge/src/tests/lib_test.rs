@@ -8,13 +8,13 @@ use near_sdk::{
 };
 use omni_types::{
     locker_args::StorageDepositAction,
-    prover_result::{InitTransferMessage, ProverResult},
+    prover_result::{FinTransferMessage, InitTransferMessage, ProverResult},
     sol_address::SolAddress,
     BridgeOnTransferMsg, ChainKind, EvmAddress, Fee, InitTransferMsg, Nonce, OmniAddress,
     TransferId, TransferMessage, UpdateFee,
 };
 
-use crate::storage::Decimals;
+use crate::storage::{Decimals, TransferMessageStorage, TransferMessageStorageValue};
 use crate::Contract;
 
 const DEFAULT_NONCE: Nonce = 0;
@@ -778,6 +778,80 @@ fn test_fin_transfer_callback_non_near_success() {
         }
         PromiseOrValue::Promise(_) => panic!("Expected Value variant, got Promise"),
     }
+}
+
+#[test]
+fn test_claim_fee_decreases_locked_tokens_for_non_deployed_token() {
+    let mut contract = get_default_contract();
+    let token_id = AccountId::try_from(DEFAULT_FT_CONTRACT_ACCOUNT.to_string()).unwrap();
+    let fee_recipient = AccountId::try_from("relayer.testnet".to_string()).unwrap();
+    let destination_chain = ChainKind::Sol;
+    let fee_amount: u128 = 10;
+
+    let solana_address: SolAddress = "2xNweLHLqbS9YpP3UyaPrxKqgqoC6yPBFyuLxA8qtgr4"
+        .parse()
+        .expect("Invalid Solana address");
+    let token_address = OmniAddress::Sol(solana_address.clone());
+
+    contract
+        .factories
+        .insert(&destination_chain, &token_address);
+    contract
+        .token_id_to_address
+        .insert(&(destination_chain, token_id.clone()), &token_address);
+    contract.token_decimals.insert(
+        &token_address,
+        &Decimals {
+            decimals: 24,
+            origin_decimals: 24,
+        },
+    );
+
+    let transfer_message = TransferMessage {
+        origin_nonce: DEFAULT_NONCE,
+        token: OmniAddress::Near(token_id.clone()),
+        amount: U128(DEFAULT_TRANSFER_AMOUNT),
+        recipient: token_address.clone(),
+        fee: Fee {
+            fee: U128(fee_amount),
+            native_fee: U128(0),
+        },
+        sender: OmniAddress::Near(DEFAULT_NEAR_USER_ACCOUNT.parse().unwrap()),
+        msg: String::new(),
+        destination_nonce: 1,
+        origin_transfer_id: None,
+    };
+    let transfer_id = transfer_message.get_transfer_id();
+
+    contract.pending_transfers.insert(
+        &transfer_id,
+        &TransferMessageStorage::V2(TransferMessageStorageValue {
+            message: transfer_message,
+            owner: DEFAULT_NEAR_USER_ACCOUNT.parse().unwrap(),
+        }),
+    );
+
+    contract.locked_tokens.insert(
+        &(destination_chain, token_id.clone()),
+        &DEFAULT_TRANSFER_AMOUNT,
+    );
+
+    setup_test_env(fee_recipient.clone(), NearToken::from_near(0), None);
+
+    let _ = contract.claim_fee_callback(
+        &fee_recipient.clone(),
+        Ok(ProverResult::FinTransfer(FinTransferMessage {
+            transfer_id,
+            fee_recipient: Some(fee_recipient),
+            amount: U128(DEFAULT_TRANSFER_AMOUNT - fee_amount),
+            emitter_address: token_address,
+        })),
+    );
+
+    assert_eq!(
+        contract.get_locked_tokens(destination_chain, token_id),
+        U128(DEFAULT_TRANSFER_AMOUNT - fee_amount)
+    );
 }
 
 #[test]
