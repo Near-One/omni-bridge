@@ -722,9 +722,18 @@ fn test_fin_transfer_callback_non_near_success() {
     let storage_actions = get_default_storage_deposit_actions();
     let predecessor = AccountId::try_from(DEFAULT_NEAR_USER_ACCOUNT.to_string()).unwrap();
 
-    // Create prover result with ETH recipient
-    let eth_recipient = OmniAddress::Eth(EvmAddress::from_str(DEFAULT_ETH_USER_ADDRESS).unwrap());
-    let prover_result = get_prover_result(Some(eth_recipient.clone()));
+    // Create prover result with Solana recipient
+    let solana_address: SolAddress = "2xNweLHLqbS9YpP3UyaPrxKqgqoC6yPBFyuLxA8qtgr4"
+        .parse()
+        .expect("Invalid Solana address");
+    let sol_recipient = OmniAddress::Sol(solana_address);
+    let prover_result = get_prover_result(Some(sol_recipient.clone()));
+
+    let token_id: AccountId = DEFAULT_FT_CONTRACT_ACCOUNT.parse().unwrap();
+    contract.locked_tokens.insert(
+        &(ChainKind::Eth, token_id.clone()),
+        &DEFAULT_TRANSFER_AMOUNT,
+    );
 
     contract.token_decimals.insert(
         &OmniAddress::Near(AccountId::try_from(DEFAULT_FT_CONTRACT_ACCOUNT.to_string()).unwrap()),
@@ -749,7 +758,7 @@ fn test_fin_transfer_callback_non_near_success() {
         PromiseOrValue::Value(nonce) => {
             assert_eq!(
                 nonce,
-                contract.get_current_destination_nonce(ChainKind::Eth)
+                contract.get_current_destination_nonce(ChainKind::Sol)
             );
 
             // Verify transfer was stored correctly
@@ -757,7 +766,15 @@ fn test_fin_transfer_callback_non_near_success() {
                 origin_chain: ChainKind::Eth,
                 origin_nonce: DEFAULT_NONCE,
             });
-            assert_eq!(stored_transfer.recipient, eth_recipient);
+            assert_eq!(stored_transfer.recipient, sol_recipient);
+            assert_eq!(
+                contract.get_locked_tokens(ChainKind::Eth, token_id.clone()),
+                U128(0)
+            );
+            assert_eq!(
+                contract.get_locked_tokens(ChainKind::Sol, token_id),
+                U128(DEFAULT_TRANSFER_AMOUNT)
+            );
         }
         PromiseOrValue::Promise(_) => panic!("Expected Value variant, got Promise"),
     }

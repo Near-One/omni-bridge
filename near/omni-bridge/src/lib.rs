@@ -1852,6 +1852,19 @@ impl Contract {
             );
         }
 
+        if !self.deployed_tokens.contains(&token) {
+            self.decrease_locked_tokens(
+                transfer_message.get_origin_chain(),
+                &token,
+                transfer_message.amount.0,
+            );
+            self.increase_locked_tokens(
+                transfer_message.get_destination_chain(),
+                &token,
+                transfer_message.amount.0,
+            );
+        }
+
         let fast_transfer = FastTransfer::from_transfer(transfer_message.clone(), token.clone());
         let recipient = match self.get_fast_transfer_status(&fast_transfer.id()) {
             Some(status) => {
