@@ -610,6 +610,13 @@ fn test_fin_transfer_callback_near_success() {
     let result = contract.fin_transfer_callback(&storage_actions, predecessor.clone());
 
     assert!(matches!(result, PromiseOrValue::Promise(_)));
+    assert_eq!(
+        contract.get_locked_tokens(
+            ChainKind::Eth,
+            AccountId::try_from(DEFAULT_FT_CONTRACT_ACCOUNT.to_string()).unwrap(),
+        ),
+        U128(0)
+    );
 }
 
 #[test]
@@ -807,7 +814,7 @@ fn test_fin_transfer_callback_unknown_factory() {
 }
 
 #[test]
-fn test_fin_transfer_callback_decreases_locked_tokens_on_success() {
+fn test_fin_transfer_callback_refund_restores_locked_tokens() {
     use std::str::FromStr;
 
     let mut contract = get_default_contract();
@@ -815,11 +822,6 @@ fn test_fin_transfer_callback_decreases_locked_tokens_on_success() {
     let recipient =
         AccountId::try_from(DEFAULT_NEAR_USER_ACCOUNT.to_string()).expect("Invalid account");
     let fee_recipient = recipient.clone();
-
-    contract.locked_tokens.insert(
-        &(ChainKind::Eth, token_id.clone()),
-        &DEFAULT_TRANSFER_AMOUNT,
-    );
 
     let transfer_message = TransferMessage {
         origin_nonce: DEFAULT_NONCE,
@@ -831,7 +833,7 @@ fn test_fin_transfer_callback_decreases_locked_tokens_on_success() {
             native_fee: U128(0),
         },
         sender: OmniAddress::Eth(EvmAddress::from_str(DEFAULT_ETH_USER_ADDRESS).unwrap()),
-        msg: String::new(),
+        msg: "refund".to_string(),
         destination_nonce: 1,
         origin_transfer_id: None,
     };
@@ -839,14 +841,16 @@ fn test_fin_transfer_callback_decreases_locked_tokens_on_success() {
     setup_test_env(
         recipient.clone(),
         NearToken::from_near(0),
-        Some(vec![PromiseResult::Successful(vec![])]),
+        Some(vec![PromiseResult::Successful(
+            serde_json::to_vec(&U128(0)).unwrap(),
+        )]),
     );
 
-    contract.fin_transfer_send_tokens_callback(transfer_message, &fee_recipient, false, &recipient);
+    contract.fin_transfer_send_tokens_callback(transfer_message, &fee_recipient, true, &recipient);
 
     assert_eq!(
         contract.get_locked_tokens(ChainKind::Eth, token_id),
-        U128(0)
+        U128(DEFAULT_TRANSFER_AMOUNT)
     );
 }
 

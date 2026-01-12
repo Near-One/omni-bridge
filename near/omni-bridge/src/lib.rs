@@ -1539,23 +1539,24 @@ impl Contract {
 
         if Self::is_refund_required(is_ft_transfer_call) {
             self.burn_tokens_if_needed(
-                token,
+                token.clone(),
                 U128(transfer_message.amount.0 - transfer_message.fee.fee.0),
             );
-            self.remove_fin_transfer(&transfer_message.get_transfer_id(), storage_owner);
 
-            env::log_str(
-                &OmniBridgeEvent::FailedFinTransferEvent { transfer_message }.to_log_string(),
-            );
-        } else {
             if !self.deployed_tokens.contains(&token) {
-                self.decrease_locked_tokens(
+                self.increase_locked_tokens(
                     transfer_message.get_origin_chain(),
                     &token,
                     transfer_message.amount.0,
                 );
             }
 
+            self.remove_fin_transfer(&transfer_message.get_transfer_id(), storage_owner);
+
+            env::log_str(
+                &OmniBridgeEvent::FailedFinTransferEvent { transfer_message }.to_log_string(),
+            );
+        } else {
             // Send fee to the fee recipient
             if transfer_message.fee.fee.0 > 0 {
                 if self.deployed_tokens.contains(&token) {
@@ -1662,14 +1663,6 @@ impl Contract {
         self.locked_tokens.insert(&key, &new_amount);
     }
 
-    fn require_locked_tokens(&self, chain_kind: ChainKind, token_id: &AccountId, amount: u128) {
-        let available = self
-            .locked_tokens
-            .get(&(chain_kind, token_id.clone()))
-            .unwrap_or(0);
-        require!(available >= amount, "ERR_INSUFFICIENT_LOCKED_TOKENS");
-    }
-
     fn decrease_locked_tokens(
         &mut self,
         chain_kind: ChainKind,
@@ -1753,7 +1746,7 @@ impl Contract {
         let token = self.get_token_id(&transfer_message.token);
 
         if !self.deployed_tokens.contains(&token) {
-            self.require_locked_tokens(
+            self.decrease_locked_tokens(
                 transfer_message.get_origin_chain(),
                 &token,
                 transfer_message.amount.0,
