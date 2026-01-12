@@ -46,6 +46,8 @@ contract OmniBridge is
     mapping(address => address) public customMinters;
     mapping(address => MultiTokenInfo) public multiTokens;
 
+    mapping(uint64 => bytes32) public initiatedTransfers;
+
     bytes32 public constant PAUSABLE_ADMIN_ROLE =
         keccak256("PAUSABLE_ADMIN_ROLE");
     uint256 constant UNPAUSED_ALL = 0;
@@ -362,6 +364,28 @@ contract OmniBridge is
         string calldata message
     ) external payable whenNotPaused(PAUSED_INIT_TRANSFER) {
         currentOriginNonce += 1;
+
+        bytes32 transferHash = keccak256(
+            abi.encode(
+                block.chainid,
+                address(this),
+                msg.sender,
+                tokenAddress,
+                currentOriginNonce,
+                amount,
+                fee,
+                nativeFee,
+                recipient,
+                message
+            )
+        );
+
+        require(
+            initiatedTransfers[currentOriginNonce] == bytes32(0),
+            "ERR_NONCE_ALREADY_USED"
+        );
+        initiatedTransfers[currentOriginNonce] = transferHash;
+
         if (fee >= amount) {
             revert InvalidFee();
         }
@@ -429,14 +453,36 @@ contract OmniBridge is
         string calldata message
     ) external payable whenNotPaused(PAUSED_INIT_TRANSFER) {
         currentOriginNonce += 1;
-        if (fee >= amount) {
-            revert InvalidFee();
-        }
 
         address deterministicToken = deriveDeterministicAddress(
             tokenAddress,
             tokenId
         );
+
+        bytes32 transferHash = keccak256(
+            abi.encode(
+                block.chainid,
+                address(this),
+                msg.sender,
+                deterministicToken,
+                currentOriginNonce,
+                amount,
+                fee,
+                nativeFee,
+                recipient,
+                message
+            )
+        );
+
+        require(
+            initiatedTransfers[currentOriginNonce] == bytes32(0),
+            "ERR_NONCE_ALREADY_USED"
+        );
+        initiatedTransfers[currentOriginNonce] = transferHash;
+
+        if (fee >= amount) {
+            revert InvalidFee();
+        }
 
         IERC1155(tokenAddress).safeTransferFrom(
             msg.sender,
@@ -528,6 +574,19 @@ contract OmniBridge is
         revert ERC1155BatchNotSupported();
     }
 
+    function hot_verify(
+        bytes32 msg_hash,
+        bytes memory /*_walletId*/,
+        bytes memory userPayload,
+        bytes memory /*_metadata*/
+    ) public view returns (bool) {
+        uint64 nonce = abi.decode(userPayload, (uint64));
+        if (nonce == 0) return false;
+        bytes32 stored = initiatedTransfers[nonce];
+        if (stored == bytes32(0)) return false;
+        return stored == msg_hash;
+    }
+
     function pause(uint256 flags) external onlyRole(DEFAULT_ADMIN_ROLE) {
         _pause(flags);
     }
@@ -576,5 +635,5 @@ contract OmniBridge is
         address newImplementation
     ) internal override onlyRole(DEFAULT_ADMIN_ROLE) {}
 
-    uint256[49] private __gap;
+    uint256[48] private __gap;
 }
