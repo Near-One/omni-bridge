@@ -709,7 +709,7 @@ mod tests {
         assert_eq!(
             transfer.into_result()?.json::<U128>()?,
             U128(0),
-            "Locked tokens not migrated correctly"
+            "Locked tokens should be empty after migration"
         );
 
         Ok(())
