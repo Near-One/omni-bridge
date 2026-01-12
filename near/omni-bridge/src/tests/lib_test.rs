@@ -835,6 +835,10 @@ fn test_claim_fee_decreases_locked_tokens_for_non_deployed_token() {
         &(destination_chain, token_id.clone()),
         &DEFAULT_TRANSFER_AMOUNT,
     );
+    assert_eq!(
+        contract.get_locked_tokens(destination_chain, token_id.clone()),
+        U128(DEFAULT_TRANSFER_AMOUNT)
+    );
 
     setup_test_env(fee_recipient.clone(), NearToken::from_near(0), None);
 
