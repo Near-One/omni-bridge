@@ -8,7 +8,7 @@ on:
 name: Update Contracts
 jobs:
   update-contracts:
-    runs-on: ubuntu-latest
+    runs-on: warp-ubuntu-2204-x64-16x
     name: Update Contracts
     permissions:
       contents: write

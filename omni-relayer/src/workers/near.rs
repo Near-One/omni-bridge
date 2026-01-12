@@ -165,6 +165,7 @@ pub async fn process_transfer_event(
                     specific_errors: Some(vec![
                         "Signature request has already been submitted. Please try again later."
                             .to_string(),
+                        "Request has timed out.".to_string(),
                         "Signature request has timed out.".to_string(),
                         "Attached deposit is lower than required".to_string(),
                         "Exceeded the prepaid gas.".to_string(),
@@ -445,7 +446,7 @@ pub async fn process_sign_transfer_event(
         ChainKind::Near => {
             anyhow::bail!("Near to Near transfers are not supported yet");
         }
-        ChainKind::Eth | ChainKind::Base | ChainKind::Arb | ChainKind::Bnb => {
+        ChainKind::Eth | ChainKind::Base | ChainKind::Arb | ChainKind::Bnb | ChainKind::Pol => {
             let nonce = evm_nonces
                 .reserve_nonce(chain_kind)
                 .await
@@ -455,7 +456,7 @@ pub async fn process_sign_transfer_event(
                 omni_connector::FinTransferArgs::EvmFinTransfer {
                     chain_kind,
                     event: omni_bridge_event.clone(),
-                    tx_nonce: Some(nonce.into()),
+                    tx_nonce: Some(alloy::primitives::U256::from(nonce)),
                 },
                 Some(nonce),
             )
@@ -493,7 +494,6 @@ pub async fn process_sign_transfer_event(
                         chain_kind,
                         &tx_hash,
                         nonce,
-                        message_payload.transfer_id.origin_nonce.to_string(),
                         omni_bridge_event,
                     )
                     .await
@@ -512,6 +512,7 @@ pub async fn process_sign_transfer_event(
                     ChainKind::Base => &config.base,
                     ChainKind::Arb => &config.arb,
                     ChainKind::Bnb => &config.bnb,
+                    ChainKind::Pol => &config.pol,
                     ChainKind::Near | ChainKind::Sol | ChainKind::Btc | ChainKind::Zcash => {
                         anyhow::bail!(
                             "Failed to finalize deposit (unexpected: failed to get evm config): {err}"
@@ -599,7 +600,7 @@ pub async fn process_unverified_transfer_event(
 pub async fn initiate_fast_transfer(
     fast_connector: Arc<OmniConnector>,
     transfer: Transfer,
-    near_omni_nonce: Arc<utils::nonce::NonceManager>,
+    near_fast_nonce: Arc<utils::nonce::NonceManager>,
 ) -> Result<EventAction> {
     let Ok(near_bridge_client) = fast_connector.near_bridge_client() else {
         anyhow::bail!("Near bridge client is not configured");
@@ -689,7 +690,7 @@ pub async fn initiate_fast_transfer(
     }
 
     let mut nonce = Some(
-        near_omni_nonce
+        near_fast_nonce
             .reserve_nonce()
             .await
             .context("Failed to reserve nonce for near transaction")?,
@@ -716,7 +717,7 @@ pub async fn initiate_fast_transfer(
     {
         Ok(true) => {
             nonce = Some(
-                near_omni_nonce
+                near_fast_nonce
                     .reserve_nonce()
                     .await
                     .context("Failed to reserve nonce for near transaction")?,
@@ -773,16 +774,10 @@ async fn store_pending_transaction(
     chain_kind: ChainKind,
     tx_hash: &str,
     nonce: u64,
-    source_event_id: String,
     omni_bridge_event: OmniBridgeEvent,
 ) -> Result<()> {
-    let pending_tx = PendingTransaction::new(
-        tx_hash.to_string(),
-        nonce,
-        chain_kind,
-        source_event_id,
-        omni_bridge_event,
-    );
+    let pending_tx =
+        PendingTransaction::new(tx_hash.to_string(), nonce, chain_kind, omni_bridge_event);
 
     utils::redis::zadd(
         config,

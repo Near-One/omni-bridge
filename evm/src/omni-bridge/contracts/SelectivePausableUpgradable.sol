@@ -14,9 +14,12 @@ import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
  * the functions of your contract. Note that they will not be pausable by
  * simply including this module, only once the modifiers are put in place.
  */
-abstract contract SelectivePausableUpgradable is Initializable, ContextUpgradeable {
+abstract contract SelectivePausableUpgradable is
+    Initializable,
+    ContextUpgradeable
+{
     struct SelectivePausableStorage {
-        uint _pausedFlags;
+        uint256 _pausedFlags;
     }
 
     // keccak256(abi.encode(uint256(keccak256("aurora.SelectivePausable")) - 1)) & ~bytes32(uint256(0xff))
@@ -36,7 +39,7 @@ abstract contract SelectivePausableUpgradable is Initializable, ContextUpgradeab
     /**
      * @dev Emitted when the pause is triggered by `account`.
      */
-    event Paused(address account, uint flags);
+    event Paused(address account, uint256 flags);
 
     /**
      * @dev Initializes the contract in unpaused state.
@@ -57,7 +60,7 @@ abstract contract SelectivePausableUpgradable is Initializable, ContextUpgradeab
      *
      * - The contract must not be paused.
      */
-    modifier whenNotPaused(uint flag) {
+    modifier whenNotPaused(uint256 flag) {
         _requireNotPaused(flag);
         _;
     }
@@ -69,7 +72,7 @@ abstract contract SelectivePausableUpgradable is Initializable, ContextUpgradeab
      *
      * - The contract must be paused.
      */
-    modifier whenPaused(uint flag) {
+    modifier whenPaused(uint256 flag) {
         _requirePaused(flag);
         _;
     }
@@ -77,7 +80,7 @@ abstract contract SelectivePausableUpgradable is Initializable, ContextUpgradeab
     /**
      * @dev Returns true if the contract is paused, and false otherwise.
      */
-    function paused(uint flag) public view virtual returns (bool) {
+    function paused(uint256 flag) public view virtual returns (bool) {
         SelectivePausableStorage storage $ = _getSelectivePausableStorage();
         return ($._pausedFlags & flag) != 0;
     }
@@ -85,7 +88,7 @@ abstract contract SelectivePausableUpgradable is Initializable, ContextUpgradeab
     /**
      * @dev Returns paused flags.
      */
-    function pausedFlags() public view virtual returns (uint) {
+    function pausedFlags() public view virtual returns (uint256) {
         SelectivePausableStorage storage $ = _getSelectivePausableStorage();
         return $._pausedFlags;
     }
@@ -93,21 +96,21 @@ abstract contract SelectivePausableUpgradable is Initializable, ContextUpgradeab
     /**
      * @dev Throws if the contract is paused.
      */
-    function _requireNotPaused(uint flag) internal view virtual {
+    function _requireNotPaused(uint256 flag) internal view virtual {
         require(!paused(flag), "Pausable: paused");
     }
 
     /**
      * @dev Throws if the contract is not paused.
      */
-    function _requirePaused(uint flag) internal view virtual {
+    function _requirePaused(uint256 flag) internal view virtual {
         require(paused(flag), "Pausable: not paused");
     }
 
     /**
      * @dev Triggers stopped state.
      */
-    function _pause(uint flags) internal virtual {
+    function _pause(uint256 flags) internal virtual {
         SelectivePausableStorage storage $ = _getSelectivePausableStorage();
         $._pausedFlags = flags;
         emit Paused(_msgSender(), $._pausedFlags);

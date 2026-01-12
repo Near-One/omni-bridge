@@ -37,7 +37,6 @@ sign_without_checking_fee = ["near:aurora"]
 [eth]
 rpc_http_url = "https://mainnet.infura.io/v3/INFURA_API_KEY"
 rpc_ws_url = "wss://mainnet.infura.io/ws/v3/INFURA_API_KEY"
-chain_id = 1
 omni_bridge_address = "0xe00c629aFaCCb0510995A2B95560E446A24c85B9"
 light_client = "client-eth2.bridge.near"
 block_processing_batch_size = 10_000
@@ -52,7 +51,6 @@ error_selectors_to_remove = [
 [base]
 rpc_http_url = "https://base-mainnet.infura.io/v3/INFURA_API_KEY"
 rpc_ws_url = "wss://base-mainnet.infura.io/ws/v3/INFURA_API_KEY"
-chain_id = 8453
 omni_bridge_address = "0xd025b38762B4A4E36F0Cde483b86CB13ea00D989"
 wormhole_address = "0xbebdb6C8ddC678FfA9f8748f85C815C556Dd8ac6"
 block_processing_batch_size = 10_000
@@ -68,7 +66,6 @@ error_selectors_to_remove = [
 [arb]
 rpc_http_url = "https://arbitrum-mainnet.infura.io/v3/INFURA_API_KEY"
 rpc_ws_url = "wss://arbitrum-mainnet.infura.io/ws/v3/INFURA_API_KEY"
-chain_id = 42_161
 omni_bridge_address = "0xd025b38762B4A4E36F0Cde483b86CB13ea00D989"
 wormhole_address = "0xa5f208e072434bC67592E4C49C1B991BA79BCA46"
 block_processing_batch_size = 10_000
@@ -84,13 +81,27 @@ error_selectors_to_remove = [
 [bnb]
 rpc_http_url = "https://x-api-key:TATUM_API_KEY@bsc-mainnet.gateway.tatum.io"
 rpc_ws_url = "wss://bsc-mainnet.infura.io/ws/v3/INFURA_API_KEY"
-chain_id = 56
 omni_bridge_address = "0x073C8a225c8Cf9d3f9157F5C1a1DbE02407f5720"
 wormhole_address = "0x98f3c9e6E3fAce36bAAd05FE09d375Ef1464288B"
 block_processing_batch_size = 10_000
 # https://wormhole.com/docs/build/reference/consistency-levels/
 expected_finalization_time = 48
 safe_confirmations = 25
+error_selectors_to_remove = [
+	"0x8baa579f", # InvalidSignature()
+	"0xdcf35db0", # FailedToSendEther()
+	"696e76616c696420666565" # Wormhole's "invalid fee"
+]
+
+[pol]
+rpc_http_url = "https://polygon-mainnet.infura.io/v3/INFURA_API_KEY"
+rpc_ws_url = "wss://polygon-mainnet.infura.io/ws/v3/INFURA_API_KEY"
+omni_bridge_address = "0xd025b38762B4A4E36F0Cde483b86CB13ea00D989"
+wormhole_address = "0x7A4B5a56256163F07b2C80A7cA55aBE66c4ec4d7"
+block_processing_batch_size = 10_000
+# https://wormhole.com/docs/build/reference/consistency-levels/
+expected_finalization_time = 6
+safe_confirmations = 5
 error_selectors_to_remove = [
 	"0x8baa579f", # InvalidSignature()
 	"0xdcf35db0", # FailedToSendEther()

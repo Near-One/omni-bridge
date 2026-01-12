@@ -1,8 +1,8 @@
 #[cfg(test)]
 pub mod tests {
-    use std::{path::Path, str::FromStr};
+    use std::path::Path;
 
-    use near_sdk::{borsh, json_types::U128, serde_json, AccountId};
+    use near_sdk::{borsh, json_types::U128, serde_json, AccountId, CryptoHash};
     use near_workspaces::types::NearToken;
     use omni_types::{
         locker_args::{BindTokenArgs, ClaimFeeArgs, DeployTokenArgs},
@@ -10,8 +10,11 @@ pub mod tests {
         BasicMetadata, ChainKind, Nonce, OmniAddress, TransferId,
     };
     use rstest::fixture;
+    use sha2::{Digest, Sha256};
 
     pub const NEP141_DEPOSIT: NearToken = NearToken::from_yoctonear(1_250_000_000_000_000_000_000);
+    pub const STORAGE_DEPOSIT_PER_BYTE: NearToken = NearToken::from_near(1).saturating_div(100_000);
+    pub const GLOBAL_STORAGE_COST_PER_BYTE: NearToken = STORAGE_DEPOSIT_PER_BYTE.saturating_mul(10);
 
     #[derive(Clone)]
     pub struct BuildArtifacts {
@@ -19,25 +22,42 @@ pub mod tests {
         pub mock_prover: Vec<u8>,
         pub mock_token_receiver: Vec<u8>,
         pub mock_utxo_connector: Vec<u8>,
+        pub mock_global_contract_deployer: Vec<u8>,
+        pub omni_token: Vec<u8>,
         pub locker: Vec<u8>,
         pub token_deployer: Vec<u8>,
     }
 
     fn build_wasm(path: &str, target_dir: &str) -> Vec<u8> {
-        let pwd = Path::new("./").canonicalize().expect("new path");
-        let sub_target = pwd.join(format!("target/{target_dir}"));
+        let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .canonicalize()
+            .expect("canonicalize manifest dir");
+        let manifest_path = manifest_dir.join(path);
+        let sub_target = manifest_dir.join(format!("target/{target_dir}"));
+        let config_home = manifest_dir.join("target/near-config");
+        let home_dir = manifest_dir.join("target/near-home");
+        let apple_config_dir = home_dir
+            .join("Library")
+            .join("Application Support")
+            .join("near-cli");
 
-        let artifact = cargo_near_build::build(cargo_near_build::BuildOpts {
+        std::fs::create_dir_all(&config_home).expect("create config dir override");
+        std::fs::create_dir_all(&apple_config_dir).expect("create near-cli config dir override");
+        std::env::set_var("HOME", &home_dir);
+        std::env::set_var("XDG_CONFIG_HOME", &config_home);
+        std::env::set_var("NEAR_CONFIG_DIR", &config_home);
+
+        let artifact = cargo_near_build::build_with_cli(cargo_near_build::BuildOpts {
             manifest_path: Some(
-                cargo_near_build::camino::Utf8PathBuf::from_str(path)
-                    .expect("camino PathBuf from str"),
+                cargo_near_build::camino::Utf8PathBuf::from_path_buf(manifest_path)
+                    .expect("camino PathBuf from path"),
             ),
             override_cargo_target_dir: Some(sub_target.to_string_lossy().to_string()),
             ..Default::default()
         })
-        .unwrap_or_else(|_| panic!("building contract from {path}"));
+        .unwrap_or_else(|err| panic!("building contract from {path}: {err:?}"));
 
-        std::fs::read(&artifact.path).unwrap()
+        std::fs::read(&artifact).unwrap()
     }
 
     #[fixture]
@@ -48,6 +68,8 @@ pub mod tests {
             mock_prover: mock_prover_wasm(),
             mock_token_receiver: mock_token_receiver_wasm(),
             mock_utxo_connector: mock_utxo_connector_wasm(),
+            mock_global_contract_deployer: mock_global_contract_deployer_wasm(),
+            omni_token: omni_token_wasm(),
             locker: locker_wasm(),
             token_deployer: token_deployer_wasm(),
         }
@@ -78,6 +100,11 @@ pub mod tests {
     }
 
     #[fixture]
+    pub fn omni_token_wasm() -> Vec<u8> {
+        build_wasm("../omni-token/Cargo.toml", "test-target-for-omni-token")
+    }
+
+    #[fixture]
     pub fn locker_wasm() -> Vec<u8> {
         build_wasm("../omni-bridge/Cargo.toml", "test-target-for-locker")
     }
@@ -95,6 +122,14 @@ pub mod tests {
         build_wasm(
             "../mock/mock-utxo-connector/Cargo.toml",
             "test-target-for-mock-utxo-connector",
+        )
+    }
+
+    #[fixture]
+    pub fn mock_global_contract_deployer_wasm() -> Vec<u8> {
+        build_wasm(
+            "../mock/mock-global-contract-deployer/Cargo.toml",
+            "test-target-for-mock-global-contract-deployer",
         )
     }
 
@@ -130,6 +165,12 @@ pub mod tests {
 
     pub fn bnb_factory_address() -> OmniAddress {
         "bnb:0x252e87862A3A720287E7fd527cE6e8d0738427A2"
+            .parse()
+            .unwrap()
+    }
+
+    pub fn pol_factory_address() -> OmniAddress {
+        "pol:0x252e87862A3A720287E7fd527cE6e8d0738427A2"
             .parse()
             .unwrap()
     }
@@ -260,5 +301,13 @@ pub mod tests {
             .find(|log| log.contains(event_name))
             .map(|log| serde_json::from_str(log).map_err(anyhow::Error::from))
             .transpose()
+    }
+
+    pub fn wasm_code_hash(wasm: &[u8]) -> CryptoHash {
+        let digest = Sha256::digest(wasm);
+        digest
+            .as_slice()
+            .try_into()
+            .expect("sha256 output should be 32 bytes")
     }
 }

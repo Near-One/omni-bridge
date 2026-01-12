@@ -14,7 +14,6 @@ pub struct PendingTransaction {
     pub sent_timestamp: i64,
     pub last_bump_timestamp: Option<i64>,
     pub chain_kind: ChainKind,
-    pub source_event_id: String,
     pub source_event: OmniBridgeEvent,
 }
 
@@ -23,7 +22,6 @@ impl PendingTransaction {
         tx_hash: String,
         nonce: u64,
         chain_kind: ChainKind,
-        source_event_id: String,
         source_event: OmniBridgeEvent,
     ) -> Self {
         Self {
@@ -32,7 +30,6 @@ impl PendingTransaction {
             sent_timestamp: chrono::Utc::now().timestamp(),
             last_bump_timestamp: None,
             chain_kind,
-            source_event_id,
             source_event,
         }
     }

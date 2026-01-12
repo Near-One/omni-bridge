@@ -92,6 +92,7 @@ fn build_evm_bridge_client(
         ChainKind::Base => &config.base,
         ChainKind::Arb => &config.arb,
         ChainKind::Bnb => &config.bnb,
+        ChainKind::Pol => &config.pol,
         ChainKind::Near | ChainKind::Sol | ChainKind::Btc | ChainKind::Zcash => {
             unreachable!("Function `build_evm_bridge_client` supports only EVM chains")
         }
@@ -101,7 +102,6 @@ fn build_evm_bridge_client(
         .map(|evm| {
             EvmBridgeClientBuilder::default()
                 .endpoint(Some(evm.rpc_http_url.clone()))
-                .chain_id(Some(evm.chain_id))
                 .private_key(Some(crate::config::get_private_key(chain_kind, None)))
                 .omni_bridge_address(Some(evm.omni_bridge_address.to_string()))
                 .wormhole_core_address(evm.wormhole_address.map(|address| address.to_string()))
@@ -147,6 +147,7 @@ fn build_utxo_bridge_client<C: utxo_bridge_client::types::UTXOChain>(
         | ChainKind::Base
         | ChainKind::Arb
         | ChainKind::Bnb
+        | ChainKind::Pol
         | ChainKind::Sol => {
             anyhow::bail!("Chain {chain:?} is not supported for building UTXO bridge client")
         }
@@ -172,7 +173,12 @@ fn build_light_client(config: &config::Config, chain: ChainKind) -> Result<Optio
             .zcash
             .as_ref()
             .map(|zcash| zcash.light_client.clone()),
-        ChainKind::Near | ChainKind::Base | ChainKind::Arb | ChainKind::Bnb | ChainKind::Sol => {
+        ChainKind::Near
+        | ChainKind::Base
+        | ChainKind::Arb
+        | ChainKind::Bnb
+        | ChainKind::Pol
+        | ChainKind::Sol => {
             anyhow::bail!("Chain {chain:?} is not supported for building light client")
         }
     };
@@ -201,6 +207,7 @@ pub fn build_omni_connector(
     let base_bridge_client = build_evm_bridge_client(config, ChainKind::Base)?;
     let arb_bridge_client = build_evm_bridge_client(config, ChainKind::Arb)?;
     let bnb_bridge_client = build_evm_bridge_client(config, ChainKind::Bnb)?;
+    let pol_bridge_client = build_evm_bridge_client(config, ChainKind::Pol)?;
     let solana_bridge_client = build_solana_bridge_client(config)?;
     let btc_bridge_client = build_utxo_bridge_client(config, ChainKind::Btc)?;
     let zcash_bridge_client = build_utxo_bridge_client(config, ChainKind::Zcash)?;
@@ -216,6 +223,7 @@ pub fn build_omni_connector(
         .base_bridge_client(base_bridge_client)
         .arb_bridge_client(arb_bridge_client)
         .bnb_bridge_client(bnb_bridge_client)
+        .pol_bridge_client(pol_bridge_client)
         .solana_bridge_client(solana_bridge_client)
         .wormhole_bridge_client(Some(wormhole_bridge_client))
         .btc_bridge_client(Some(btc_bridge_client))

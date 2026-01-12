@@ -1,6 +1,6 @@
 [package]
-name = "token-deployer"
-version.workspace = true
+name = "mock-global-contract-deployer"
+version = "0.1.0"
 authors = ["Near One <info@nearone.org>"]
 edition = "2021"
 publish = false
@@ -28,13 +28,3 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 near-sdk = { workspace = true, features = ["global-contracts"] }
-near-contract-standards.workspace = true
-hex.workspace = true
-borsh.workspace = true
-serde.workspace = true
-near-plugins.workspace = true
-omni-types.workspace = true
-omni-token = { path = "../omni-token"}
-
-[build-dependencies]
-cargo-near-build.workspace = true

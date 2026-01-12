@@ -4,24 +4,23 @@ use near_plugins::{
 use near_sdk::borsh::BorshDeserialize;
 use near_sdk::json_types::Base58CryptoHash;
 use near_sdk::serde_json::json;
-use near_sdk::{env, near, require, AccountId, Gas, NearToken, PanicOnDefault, Promise};
+use near_sdk::{env, near, AccountId, CryptoHash, Gas, NearToken, PanicOnDefault, Promise};
 use omni_types::BasicMetadata;
 
-const BRIDGE_TOKEN_INIT_BALANCE: NearToken = NearToken::from_near(3);
+mod migrate;
+
 const NO_DEPOSIT: NearToken = NearToken::from_near(0);
 const OMNI_TOKEN_INIT_GAS: Gas = Gas::from_tgas(10);
-
-const BRIDGE_TOKEN_BINARY: &[u8] = include_bytes!(env!("BUILD_RS_SUB_BUILD_OMNI-TOKEN"));
 
 #[near(serializers = [json])]
 #[derive(AccessControlRole, Copy, Clone)]
 pub enum Role {
-    DAO,
-    PauseManager,
-    UnrestrictedDeposit,
-    UpgradableCodeStager,
-    UpgradableCodeDeployer,
-    Controller,
+    DAO = 0,
+    PauseManager = 1,
+    UpgradableCodeStager = 3,
+    UpgradableCodeDeployer = 4,
+    Controller = 5,
+    LegacyController = 10,
 }
 
 #[near(contract_state)]
@@ -35,13 +34,19 @@ pub enum Role {
     duration_update_stagers(Role::DAO),
     duration_update_appliers(Role::DAO),
 ))]
-pub struct TokenDeployer {}
+// DO NOT USE "t" or "u" prefixes in the future
+// https://github.com/Near-One/rainbow-token-connector/blob/7d8ee3b086cee4d478e1e104c3d6ef5e5625aadd/bridge-token-factory/src/lib.rs#L214C27-L214C28
+pub struct TokenDeployer {
+    global_code_hash: CryptoHash,
+}
 
 #[near]
 impl TokenDeployer {
     #[init]
-    pub fn new(controller: AccountId, dao: AccountId) -> Self {
-        let mut contract = Self {};
+    pub fn new(controller: AccountId, dao: AccountId, global_code_hash: Base58CryptoHash) -> Self {
+        let mut contract = Self {
+            global_code_hash: global_code_hash.into(),
+        };
 
         contract.acl_init_super_admin(near_sdk::env::predecessor_account_id());
         contract.acl_grant_role(Role::DAO.into(), dao.clone());
@@ -51,17 +56,12 @@ impl TokenDeployer {
     }
 
     #[payable]
-    #[access_control_any(roles(Role::Controller))]
+    #[access_control_any(roles(Role::Controller, Role::LegacyController))]
     pub fn deploy_token(&mut self, account_id: AccountId, metadata: &BasicMetadata) -> Promise {
-        require!(
-            env::attached_deposit() >= BRIDGE_TOKEN_INIT_BALANCE,
-            "ERR_NOT_ENOUGH_ATTACHED_BALANCE"
-        );
-
         Promise::new(account_id)
             .create_account()
-            .transfer(BRIDGE_TOKEN_INIT_BALANCE)
-            .deploy_contract(BRIDGE_TOKEN_BINARY.to_vec())
+            .transfer(env::attached_deposit())
+            .use_global_contract(self.global_code_hash)
             .function_call(
                 "new".to_string(),
                 json!({"controller": env::predecessor_account_id(), "metadata": metadata})
@@ -72,12 +72,12 @@ impl TokenDeployer {
             )
     }
 
-    #[result_serializer(borsh)]
-    pub fn get_token_code() -> Vec<u8> {
-        BRIDGE_TOKEN_BINARY.to_vec()
+    pub fn get_global_code_hash(&self) -> Base58CryptoHash {
+        self.global_code_hash.into()
     }
 
-    pub fn get_token_code_hash() -> Base58CryptoHash {
-        near_sdk::env::sha256_array(BRIDGE_TOKEN_BINARY).into()
+    #[access_control_any(roles(Role::DAO))]
+    pub fn set_global_code_hash(&mut self, global_code_hash: Base58CryptoHash) {
+        self.global_code_hash = global_code_hash.into();
     }
 }

@@ -32,7 +32,7 @@ pub async fn process_init_transfer_event(
 ) -> Result<EventAction> {
     let Transfer::Evm {
         chain_kind,
-        tx_hash: transaction_hash,
+        tx_hash,
         ref log,
         creation_timestamp,
         expected_finalization_time,
@@ -120,7 +120,7 @@ pub async fn process_init_transfer_event(
     let vaa = if chain_kind == ChainKind::Eth {
         None
     } else if let Ok(vaa) = omni_connector
-        .wormhole_get_vaa_by_tx_hash(format!("{transaction_hash:?}"))
+        .wormhole_get_vaa_by_tx_hash(format!("{tx_hash:?}"))
         .await
     {
         Some(vaa)
@@ -210,7 +210,7 @@ pub async fn process_init_transfer_event(
         omni_connector::FinTransferArgs::NearFinTransferWithEvmProof {
             chain_kind,
             destination_chain: recipient.get_chain(),
-            tx_hash: transaction_hash,
+            tx_hash,
             storage_deposit_actions,
             transaction_options: TransactionOptions {
                 nonce: Some(nonce),
@@ -252,7 +252,7 @@ pub async fn process_init_transfer_event(
                     log.origin_nonce, block
                 );
                 return Ok(EventAction::Retry);
-            } else if let BridgeSdkError::EthRpcError(EthRpcError::EthClientError(err)) = err {
+            } else if let BridgeSdkError::EthRpcError(EthRpcError::RpcError(err)) = err {
                 warn!(
                     "Ethereum client error occurred while finalizing transfer ({}), retrying: {err:?}",
                     log.origin_nonce
