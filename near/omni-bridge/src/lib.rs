@@ -1903,27 +1903,24 @@ impl Contract {
         }
 
         let fast_transfer = FastTransfer::from_transfer(transfer_message.clone(), token.clone());
-        let recipient = match self.get_fast_transfer_status(&fast_transfer.id()) {
-            Some(status) => {
-                require!(!status.finalised, "ERR_FAST_TRANSFER_ALREADY_FINALISED");
-                Some(status.relayer)
+        let recipient = if let Some(status) = self.get_fast_transfer_status(&fast_transfer.id()) {
+            require!(!status.finalised, "ERR_FAST_TRANSFER_ALREADY_FINALISED");
+            Some(status.relayer)
+        } else {
+            if !self.deployed_tokens.contains(&token) {
+                self.decrease_locked_tokens(
+                    transfer_message.get_origin_chain(),
+                    &token,
+                    amount_without_fee,
+                );
+                self.increase_locked_tokens(
+                    transfer_message.get_destination_chain(),
+                    &token,
+                    amount_without_fee,
+                );
             }
-            None => {
-                if !self.deployed_tokens.contains(&token) {
-                    self.decrease_locked_tokens(
-                        transfer_message.get_origin_chain(),
-                        &token,
-                        amount_without_fee,
-                    );
-                    self.increase_locked_tokens(
-                        transfer_message.get_destination_chain(),
-                        &token,
-                        amount_without_fee,
-                    );
-                }
 
-                None
-            }
+            None
         };
 
         // If fast transfer happened, send tokens to the relayer that executed fast transfer
