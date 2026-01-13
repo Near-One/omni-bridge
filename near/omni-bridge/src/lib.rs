@@ -898,6 +898,13 @@ impl Contract {
 
         if !self.deployed_tokens.contains(&fast_transfer.token_id) {
             let locked_amount = fast_transfer.amount.0 - fast_transfer.fee.fee.0;
+            if !fast_transfer.transfer_id.origin_chain.is_utxo_chain() {
+                self.decrease_locked_tokens(
+                    fast_transfer.transfer_id.origin_chain,
+                    &fast_transfer.token_id,
+                    locked_amount,
+                );
+            }
             self.increase_locked_tokens(
                 fast_transfer.recipient.get_chain(),
                 &fast_transfer.token_id,
@@ -1886,8 +1893,6 @@ impl Contract {
         let mut required_balance = self.add_fin_transfer(&transfer_message.get_transfer_id());
         let token = self.get_token_id(&transfer_message.token);
         let amount_without_fee = Self::amount_without_fee(&transfer_message);
-        let fast_transfer = FastTransfer::from_transfer(transfer_message.clone(), token.clone());
-        let fast_transfer_status = self.get_fast_transfer_status(&fast_transfer.id());
 
         if transfer_message.recipient.is_utxo_chain() {
             let btc_account_id = self.get_utxo_chain_token(transfer_message.recipient.get_chain());
@@ -1897,27 +1902,28 @@ impl Contract {
             );
         }
 
-        if !self.deployed_tokens.contains(&token) {
-            self.decrease_locked_tokens(
-                transfer_message.get_origin_chain(),
-                &token,
-                amount_without_fee,
-            );
-            if fast_transfer_status.is_none() {
-                self.increase_locked_tokens(
-                    transfer_message.get_destination_chain(),
-                    &token,
-                    amount_without_fee,
-                );
-            }
-        }
-
-        let recipient = match fast_transfer_status {
+        let fast_transfer = FastTransfer::from_transfer(transfer_message.clone(), token.clone());
+        let recipient = match self.get_fast_transfer_status(&fast_transfer.id()) {
             Some(status) => {
                 require!(!status.finalised, "ERR_FAST_TRANSFER_ALREADY_FINALISED");
                 Some(status.relayer)
             }
-            None => None,
+            None => {
+                if !self.deployed_tokens.contains(&token) {
+                    self.decrease_locked_tokens(
+                        transfer_message.get_origin_chain(),
+                        &token,
+                        amount_without_fee,
+                    );
+                    self.increase_locked_tokens(
+                        transfer_message.get_destination_chain(),
+                        &token,
+                        amount_without_fee,
+                    );
+                }
+
+                None
+            }
         };
 
         // If fast transfer happened, send tokens to the relayer that executed fast transfer
