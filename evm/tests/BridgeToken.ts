@@ -57,7 +57,7 @@ describe("BridgeToken", () => {
   }
 
   async function createToken(tokenId: string) {
-    const { signature, payload } = await metadataSignature(tokenId)
+    const { signature, payload } = metadataSignature(tokenId)
     await OmniBridge.deployToken(signature, payload)
     const tokenProxyAddress = await OmniBridge.nearToEthToken(tokenId)
     const token = OmniBridgeInstance.attach(tokenProxyAddress) as BridgeToken
@@ -106,7 +106,7 @@ describe("BridgeToken", () => {
     const { token } = await createToken(wrappedNearId)
     const tokenProxyAddress = await OmniBridge.nearToEthToken(wrappedNearId)
 
-    const { signature, payload } = await depositSignature(tokenProxyAddress, user1.address)
+    const { signature, payload } = depositSignature(tokenProxyAddress, user1.address)
 
     await expect(OmniBridge.finTransfer(signature, payload))
       .to.emit(OmniBridge, "FinTransfer")
@@ -220,7 +220,7 @@ describe("BridgeToken", () => {
     const { token } = await createToken(wrappedNearId)
     const tokenProxyAddress = await token.getAddress()
 
-    const { signature, payload } = await depositSignature(tokenProxyAddress, user1.address)
+    const { signature, payload } = depositSignature(tokenProxyAddress, user1.address)
     await OmniBridge.finTransfer(signature, payload)
 
     const recipient = "testrecipient.near"
@@ -241,6 +241,73 @@ describe("BridgeToken", () => {
       .withArgs(user1.address, tokenProxyAddress, 1, payload.amount, fee, nativeFee, recipient, "")
 
     expect((await token.balanceOf(user1.address)).toString()).to.be.equal("0")
+  })
+
+  it("records initiatedTransfers hash and validates hot_verify", async () => {
+    const { token } = await createToken(wrappedNearId)
+    const tokenProxyAddress = await token.getAddress()
+
+    const { signature, payload } = depositSignature(tokenProxyAddress, user1.address)
+    await OmniBridge.finTransfer(signature, payload)
+
+    const recipient = "testrecipient.near"
+    const fee = 0n
+    const nativeFee = 0n
+    const message = "hot-verify"
+
+    await OmniBridge.connect(user1).initTransfer(
+      tokenProxyAddress,
+      payload.amount,
+      fee,
+      nativeFee,
+      recipient,
+      message,
+    )
+
+    const originNonce = await OmniBridge.currentOriginNonce()
+    const stored = await OmniBridge.initiatedTransfers(originNonce)
+    const chainId = (await ethers.provider.getNetwork()).chainId
+    const amount = BigInt(payload.amount)
+    const expectedHash = ethers.keccak256(
+      ethers.AbiCoder.defaultAbiCoder().encode(
+        [
+          "uint256",
+          "address",
+          "address",
+          "address",
+          "uint64",
+          "uint128",
+          "uint128",
+          "uint128",
+          "string",
+          "string",
+        ],
+        [
+          chainId,
+          await OmniBridge.getAddress(),
+          user1.address,
+          tokenProxyAddress,
+          originNonce,
+          amount,
+          fee,
+          nativeFee,
+          recipient,
+          message,
+        ],
+      ),
+    )
+
+    expect(stored).to.equal(expectedHash)
+
+    const userPayload = ethers.AbiCoder.defaultAbiCoder().encode(["uint64"], [originNonce])
+    expect(await OmniBridge.hot_verify(expectedHash, "0x", userPayload, "0x")).to.equal(true)
+    expect(await OmniBridge.hot_verify(ethers.ZeroHash, "0x", userPayload, "0x")).to.equal(false)
+
+    const wrongNoncePayload = ethers.AbiCoder.defaultAbiCoder().encode(
+      ["uint64"],
+      [originNonce + 1n],
+    )
+    expect(await OmniBridge.hot_verify(expectedHash, "0x", wrongNoncePayload, "0x")).to.equal(false)
   })
 
   it("can't init transfer token when paused", async () => {
