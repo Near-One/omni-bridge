@@ -6,7 +6,7 @@ use near_sdk::{env, near, near_bindgen, require, PanicOnDefault};
 use omni_types::prover_args::{HotInitTransfer, HotVerifyProofArgs};
 use omni_types::prover_result::{InitTransferMessage, ProofKind, ProverResult};
 use omni_types::utils::keccak256;
-use omni_types::{ChainKind, Fee, H160, OmniAddress};
+use omni_types::{ChainKind, Fee, OmniAddress, H160};
 
 type EcdsaPublicKey = [u8; 64];
 
@@ -50,7 +50,10 @@ impl HotProver {
     #[allow(clippy::needless_pass_by_value)]
     #[handle_result]
     #[result_serializer(borsh)]
-    pub fn verify_proof(&self, #[serializer(borsh)] input: Vec<u8>) -> Result<ProverResult, String> {
+    pub fn verify_proof(
+        &self,
+        #[serializer(borsh)] input: Vec<u8>,
+    ) -> Result<ProverResult, String> {
         let args = HotVerifyProofArgs::try_from_slice(&input).map_err(|_| "ERR_PARSE_ARGS")?;
         if args.proof_kind != ProofKind::InitTransfer {
             return Err("ERR_UNSUPPORTED_PROOF_KIND".to_owned());
@@ -70,16 +73,12 @@ impl HotProver {
             .recipient
             .parse()
             .map_err(|_| "ERR_INVALID_RECIPIENT")?;
-        let token = OmniAddress::new_from_evm_address(
-            self.chain_kind,
-            transfer.token_address.clone(),
-        )
+        let token = OmniAddress::new_from_evm_address(self.chain_kind, transfer.token_address)
             .map_err(|_| "ERR_INVALID_TOKEN_ADDRESS")?;
-        let sender =
-            OmniAddress::new_from_evm_address(self.chain_kind, transfer.sender.clone())
-                .map_err(|_| "ERR_INVALID_SENDER_ADDRESS")?;
+        let sender = OmniAddress::new_from_evm_address(self.chain_kind, transfer.sender)
+            .map_err(|_| "ERR_INVALID_SENDER_ADDRESS")?;
         let emitter_address =
-            OmniAddress::new_from_evm_address(self.chain_kind, self.omni_bridge_address.clone())
+            OmniAddress::new_from_evm_address(self.chain_kind, self.omni_bridge_address)
                 .map_err(|_| "ERR_INVALID_EMITTER_ADDRESS")?;
 
         Ok(ProverResult::InitTransfer(InitTransferMessage {
