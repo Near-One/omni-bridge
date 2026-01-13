@@ -47,7 +47,10 @@ pub async fn process_init_transfer_event(
         return Ok(EventAction::Retry);
     }
 
-    info!("Trying to process InitTransfer log on {chain_kind:?}");
+    info!(
+        "Processing InitTransfer ({chain_kind:?}:{}): {tx_hash:?}",
+        log.origin_nonce
+    );
 
     let transfer_id = TransferId {
         origin_chain: chain_kind,
@@ -125,7 +128,10 @@ pub async fn process_init_transfer_event(
     {
         Some(vaa)
     } else {
-        warn!("VAA is not ready yet");
+        warn!(
+            "VAA is not ready for {chain_kind:?}:{}: {tx_hash:?}",
+            log.origin_nonce
+        );
         return Ok(EventAction::Retry);
     };
 
@@ -222,7 +228,10 @@ pub async fn process_init_transfer_event(
 
     match omni_connector.fin_transfer(fin_transfer_args).await {
         Ok(tx_hash) => {
-            info!("Finalized InitTransfer: {tx_hash:?}");
+            info!(
+                "Finalized InitTransfer ({chain_kind:?}:{}): {tx_hash:?}",
+                log.origin_nonce
+            );
             Ok(EventAction::Remove)
         }
         Err(err) => {
@@ -234,34 +243,34 @@ pub async fn process_init_transfer_event(
                     | NearRpcError::RpcQueryError(JsonRpcError::TransportError(_))
                     | NearRpcError::RpcTransactionError(JsonRpcError::TransportError(_)) => {
                         warn!(
-                            "Failed to finalize transfer ({}), retrying: {near_rpc_error:?}",
+                            "Failed to finalize transfer ({chain_kind:?}:{}), retrying: {near_rpc_error:?}",
                             log.origin_nonce
                         );
                         return Ok(EventAction::Retry);
                     }
                     _ => {
                         anyhow::bail!(
-                            "Failed to finalize transfer ({}): {near_rpc_error:?}",
+                            "Failed to finalize transfer ({chain_kind:?}:{}): {near_rpc_error:?}",
                             log.origin_nonce
                         );
                     }
                 };
             } else if let BridgeSdkError::LightClientNotSynced(block) = err {
                 warn!(
-                    "Light client is not synced yet for transfer ({}), block: {}",
+                    "Light client is not synced yet for transfer ({chain_kind:?}:{}), block: {}",
                     log.origin_nonce, block
                 );
                 return Ok(EventAction::Retry);
             } else if let BridgeSdkError::EthRpcError(EthRpcError::RpcError(err)) = err {
                 warn!(
-                    "Ethereum client error occurred while finalizing transfer ({}), retrying: {err:?}",
+                    "Ethereum client error occurred while finalizing transfer ({chain_kind:?}:{}), retrying: {err:?}",
                     log.origin_nonce
                 );
                 return Ok(EventAction::Retry);
             }
 
             anyhow::bail!(
-                "Failed to finalize transfer ({}): {err:?}",
+                "Failed to finalize transfer ({chain_kind:?}:{}): {err:?}",
                 log.origin_nonce
             );
         }
@@ -289,7 +298,7 @@ pub async fn process_evm_transfer_event(
         return Ok(EventAction::Retry);
     }
 
-    info!("Trying to process FinTransfer log on {chain_kind:?}");
+    info!("Processing FinTransfer ({chain_kind:?}): {transaction_hash:?}");
 
     let vaa = if chain_kind == ChainKind::Eth {
         None
@@ -299,7 +308,7 @@ pub async fn process_evm_transfer_event(
     {
         Some(vaa)
     } else {
-        warn!("VAA is not ready yet");
+        warn!("VAA is not ready for {chain_kind:?}: {transaction_hash:?}");
         return Ok(EventAction::Retry);
     };
 
@@ -386,7 +395,7 @@ pub async fn process_deploy_token_event(
         return Ok(EventAction::Retry);
     }
 
-    info!("Trying to process DeployToken log on {chain_kind:?}");
+    info!("Processing DeployToken ({chain_kind:?}): {transaction_hash:?}");
 
     let vaa = if chain_kind == ChainKind::Eth {
         None
@@ -396,7 +405,7 @@ pub async fn process_deploy_token_event(
     {
         Some(vaa)
     } else {
-        warn!("VAA is not ready yet");
+        warn!("VAA is not ready for {chain_kind:?}: {transaction_hash:?}");
         return Ok(EventAction::Retry);
     };
 
