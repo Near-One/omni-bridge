@@ -29,6 +29,7 @@ const DEFAULT_NEAR_USER_ACCOUNT: &str = "user.testnet";
 const DEFAULT_FT_CONTRACT_ACCOUNT: &str = "ft_contract.testnet";
 const DEFAULT_ETH_USER_ADDRESS: &str = "0x1234567890123456789012345678901234567890";
 const DEFAULT_TRANSFER_AMOUNT: u128 = 100;
+const DEFAULT_TRANSFER_FEE: u128 = 10;
 const NEP141_DEPOSIT: NearToken = NearToken::from_yoctonear(1_250_000_000_000_000_000_000);
 
 fn setup_test_env(
@@ -303,6 +304,14 @@ fn run_update_transfer_fee(
         transfer_msg.clone(),
         AccountId::try_from(sender_id.clone()).unwrap(),
     );
+    if let OmniAddress::Near(token_id) = transfer_msg.token.clone() {
+        if !contract.deployed_tokens.contains(&token_id) {
+            let locked_amount = transfer_msg.amount.0 - init_fee.fee.0;
+            contract
+                .locked_tokens
+                .insert(&(transfer_msg.recipient.get_chain(), token_id), &locked_amount);
+        }
+    }
 
     let attached_deposit = attached_deposit.unwrap_or_else(|| match &new_fee {
         UpdateFee::Fee(new_fee) => {
@@ -514,7 +523,7 @@ fn get_prover_result(recipient: Option<OmniAddress>) -> ProverResult {
         amount: U128(DEFAULT_TRANSFER_AMOUNT),
         recipient,
         fee: Fee {
-            fee: U128(10),
+            fee: U128(DEFAULT_TRANSFER_FEE),
             native_fee: U128(5),
         },
         sender: OmniAddress::Eth(EvmAddress::from_str(DEFAULT_ETH_USER_ADDRESS).unwrap()),
@@ -536,12 +545,13 @@ fn test_fin_transfer_callback_near_success() {
         &native_token_address,
         &DEFAULT_FT_CONTRACT_ACCOUNT.parse().unwrap(),
     );
+    let locked_amount = DEFAULT_TRANSFER_AMOUNT - DEFAULT_TRANSFER_FEE;
     contract.locked_tokens.insert(
         &(
             ChainKind::Eth,
             AccountId::try_from(DEFAULT_FT_CONTRACT_ACCOUNT.to_string()).unwrap(),
         ),
-        &DEFAULT_TRANSFER_AMOUNT,
+        &locked_amount,
     );
     contract.token_decimals.insert(
         &OmniAddress::Near(AccountId::try_from(DEFAULT_FT_CONTRACT_ACCOUNT.to_string()).unwrap()),
@@ -641,7 +651,7 @@ fn test_fin_transfer_callback_near_fails_without_locked_tokens() {
         },
     );
 
-    // Only 1 token locked while 100 are requested.
+    // Only 1 token locked while the transfer requires more.
     contract.locked_tokens.insert(
         &(
             ChainKind::Eth,
@@ -730,9 +740,10 @@ fn test_fin_transfer_callback_non_near_success() {
     let prover_result = get_prover_result(Some(sol_recipient.clone()));
 
     let token_id: AccountId = DEFAULT_FT_CONTRACT_ACCOUNT.parse().unwrap();
+    let locked_amount = DEFAULT_TRANSFER_AMOUNT - DEFAULT_TRANSFER_FEE;
     contract.locked_tokens.insert(
         &(ChainKind::Eth, token_id.clone()),
-        &DEFAULT_TRANSFER_AMOUNT,
+        &locked_amount,
     );
 
     contract.token_decimals.insert(
@@ -773,7 +784,7 @@ fn test_fin_transfer_callback_non_near_success() {
             );
             assert_eq!(
                 contract.get_locked_tokens(ChainKind::Sol, token_id),
-                U128(DEFAULT_TRANSFER_AMOUNT)
+                U128(locked_amount)
             );
         }
         PromiseOrValue::Promise(_) => panic!("Expected Value variant, got Promise"),
@@ -781,12 +792,12 @@ fn test_fin_transfer_callback_non_near_success() {
 }
 
 #[test]
-fn test_claim_fee_decreases_locked_tokens_for_non_deployed_token() {
+fn test_claim_fee_does_not_change_locked_tokens_for_non_deployed_token() {
     let mut contract = get_default_contract();
     let token_id = AccountId::try_from(DEFAULT_FT_CONTRACT_ACCOUNT.to_string()).unwrap();
     let fee_recipient = AccountId::try_from("relayer.testnet".to_string()).unwrap();
     let destination_chain = ChainKind::Sol;
-    let fee_amount: u128 = 10;
+    let fee_amount: u128 = DEFAULT_TRANSFER_FEE;
 
     let solana_address: SolAddress = "2xNweLHLqbS9YpP3UyaPrxKqgqoC6yPBFyuLxA8qtgr4"
         .parse()
@@ -831,13 +842,14 @@ fn test_claim_fee_decreases_locked_tokens_for_non_deployed_token() {
         }),
     );
 
+    let locked_amount = DEFAULT_TRANSFER_AMOUNT - fee_amount;
     contract.locked_tokens.insert(
         &(destination_chain, token_id.clone()),
-        &DEFAULT_TRANSFER_AMOUNT,
+        &locked_amount,
     );
     assert_eq!(
         contract.get_locked_tokens(destination_chain, token_id.clone()),
-        U128(DEFAULT_TRANSFER_AMOUNT)
+        U128(locked_amount)
     );
 
     setup_test_env(fee_recipient.clone(), NearToken::from_near(0), None);
@@ -854,7 +866,7 @@ fn test_claim_fee_decreases_locked_tokens_for_non_deployed_token() {
 
     assert_eq!(
         contract.get_locked_tokens(destination_chain, token_id),
-        U128(DEFAULT_TRANSFER_AMOUNT - fee_amount)
+        U128(locked_amount)
     );
 }
 

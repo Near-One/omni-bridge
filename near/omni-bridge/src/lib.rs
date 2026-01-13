@@ -394,6 +394,16 @@ impl Contract {
                     "ERR_INVALID_ATTACHED_DEPOSIT"
                 );
 
+                if let OmniAddress::Near(token_id) = transfer.message.token.clone() {
+                    if !self.deployed_tokens.contains(&token_id) {
+                        self.decrease_locked_tokens(
+                            transfer.message.recipient.get_chain(),
+                            &token_id,
+                            fee.fee.0 - current_fee.fee.0,
+                        );
+                    }
+                }
+
                 transfer.message.fee = fee;
                 self.insert_raw_transfer(transfer.message.clone(), transfer.owner);
 
@@ -439,10 +449,8 @@ impl Contract {
             .token_decimals
             .get(&token_address)
             .sdk_expect("ERR_TOKEN_DECIMALS_NOT_FOUND");
-        let amount_to_transfer = Self::normalize_amount(
-            transfer_message.amount.0 - transfer_message.fee.fee.0,
-            decimals,
-        );
+        let amount_to_transfer =
+            Self::normalize_amount(Self::amount_without_fee(&transfer_message), decimals);
 
         require!(amount_to_transfer > 0, "Invalid amount to transfer");
 
@@ -1057,10 +1065,6 @@ impl Contract {
         );
         let fee = message.amount.0 - denormalized_amount;
 
-        if !self.deployed_tokens.contains(&token) {
-            self.decrease_locked_tokens(message.get_destination_chain(), &token, fee);
-        }
-
         self.send_fee_internal(&message, fee_recipient, fee)
     }
 
@@ -1546,16 +1550,14 @@ impl Contract {
         let token = self.get_token_id(&transfer_message.token);
 
         if Self::is_refund_required(is_ft_transfer_call) {
-            self.burn_tokens_if_needed(
-                token.clone(),
-                U128(transfer_message.amount.0 - transfer_message.fee.fee.0),
-            );
+            let amount_without_fee = Self::amount_without_fee(&transfer_message);
+            self.burn_tokens_if_needed(token.clone(), U128(amount_without_fee));
 
             if !self.deployed_tokens.contains(&token) {
                 self.increase_locked_tokens(
                     transfer_message.get_origin_chain(),
                     &token,
-                    transfer_message.amount.0,
+                    amount_without_fee,
                 );
             }
 
@@ -1647,6 +1649,13 @@ impl Contract {
         }
     }
 
+    fn amount_without_fee(transfer_message: &TransferMessage) -> u128 {
+        transfer_message
+            .amount
+            .0
+            .saturating_sub(transfer_message.fee.fee.0)
+    }
+
     fn burn_tokens_if_needed(&self, token: AccountId, amount: U128) {
         if self.deployed_tokens.contains(&token) {
             ext_token::ext(token)
@@ -1730,7 +1739,7 @@ impl Contract {
                 self.increase_locked_tokens(
                     transfer_message.recipient.get_chain(),
                     &token_id,
-                    transfer_message.amount.0,
+                    Self::amount_without_fee(&transfer_message),
                 );
             }
         } else {
@@ -1753,11 +1762,12 @@ impl Contract {
 
         let token = self.get_token_id(&transfer_message.token);
 
+        let amount_without_fee = Self::amount_without_fee(&transfer_message);
         if !self.deployed_tokens.contains(&token) {
             self.decrease_locked_tokens(
                 transfer_message.get_origin_chain(),
                 &token,
-                transfer_message.amount.0,
+                amount_without_fee,
             );
         }
 
@@ -1830,8 +1840,7 @@ impl Contract {
             env::attached_deposit(),
         );
 
-        let amount_to_transfer = U128(transfer_message.amount.0 - transfer_message.fee.fee.0);
-        self.send_tokens(token.clone(), recipient, amount_to_transfer, &msg)
+        self.send_tokens(token.clone(), recipient, U128(amount_without_fee), &msg)
             .then(
                 Self::ext(env::current_account_id())
                     .with_static_gas(SEND_TOKENS_CALLBACK_GAS)
@@ -1851,6 +1860,7 @@ impl Contract {
     ) {
         let mut required_balance = self.add_fin_transfer(&transfer_message.get_transfer_id());
         let token = self.get_token_id(&transfer_message.token);
+        let amount_without_fee = Self::amount_without_fee(&transfer_message);
 
         if transfer_message.recipient.is_utxo_chain() {
             let btc_account_id = self.get_utxo_chain_token(transfer_message.recipient.get_chain());
@@ -1864,12 +1874,12 @@ impl Contract {
             self.decrease_locked_tokens(
                 transfer_message.get_origin_chain(),
                 &token,
-                transfer_message.amount.0,
+                amount_without_fee,
             );
             self.increase_locked_tokens(
                 transfer_message.get_destination_chain(),
                 &token,
-                transfer_message.amount.0,
+                amount_without_fee,
             );
         }
 
@@ -1884,13 +1894,8 @@ impl Contract {
 
         // If fast transfer happened, send tokens to the relayer that executed fast transfer
         if let Some(relayer) = recipient {
-            self.send_tokens(
-                token,
-                relayer,
-                U128(transfer_message.amount.0 - transfer_message.fee.fee.0),
-                "",
-            )
-            .detach();
+            self.send_tokens(token, relayer, U128(amount_without_fee), "")
+                .detach();
             self.mark_fast_transfer_as_finalised(&fast_transfer.id());
         } else {
             required_balance = self
