@@ -241,7 +241,7 @@ pub async fn process_init_transfer_event(
                     | NearRpcError::FinalizationError
                     | NearRpcError::RpcBroadcastTxAsyncError(_)
                     | NearRpcError::RpcQueryError(JsonRpcError::TransportError(_))
-                    | NearRpcError::RpcTransactionError(JsonRpcError::TransportError(_)) => {
+                    | NearRpcError::RpcTransactionError(_) => {
                         warn!(
                             "Failed to finalize transfer ({chain_kind:?}:{}), retrying: {near_rpc_error:?}",
                             log.origin_nonce
