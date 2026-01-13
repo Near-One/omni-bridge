@@ -813,6 +813,17 @@ impl Contract {
         let required_balance = self
             .add_fast_transfer(fast_transfer, relayer_id, storage_payer.clone())
             .saturating_add(ONE_YOCTO);
+
+        let amount = U128(fast_transfer.amount.0 - fast_transfer.fee.fee.0);
+
+        if !self.deployed_tokens.contains(&fast_transfer.token_id) {
+            self.decrease_locked_tokens(
+                fast_transfer.transfer_id.origin_chain,
+                &fast_transfer.token_id,
+                amount.0,
+            );
+        }
+
         self.update_storage_balance(
             storage_payer,
             required_balance,
@@ -827,8 +838,6 @@ impl Contract {
             .to_log_string(),
         );
 
-        let amount = U128(fast_transfer.amount.0 - fast_transfer.fee.fee.0);
-
         self.send_tokens(
             fast_transfer.token_id.clone(),
             recipient,
@@ -840,6 +849,7 @@ impl Contract {
                 .with_static_gas(RESOLVE_FAST_TRANSFER_GAS)
                 .resolve_fast_transfer(
                     fast_transfer.token_id.clone(),
+                    fast_transfer.transfer_id.origin_chain,
                     &fast_transfer.id(),
                     amount,
                     !fast_transfer.msg.is_empty(),
@@ -851,14 +861,18 @@ impl Contract {
     pub fn resolve_fast_transfer(
         &mut self,
         token_id: AccountId,
+        origin_chain: ChainKind,
         fast_transfer_id: &FastTransferId,
         amount: U128,
         is_ft_transfer_call: bool,
     ) -> U128 {
         // Burn the tokens to ensure the locked tokens are not double-minted
-        self.burn_tokens_if_needed(token_id, amount);
+        self.burn_tokens_if_needed(token_id.clone(), amount);
 
         if Self::is_refund_required(is_ft_transfer_call) {
+            if !self.deployed_tokens.contains(&token_id) {
+                self.increase_locked_tokens(origin_chain, &token_id, amount.0);
+            }
             self.remove_fast_transfer(fast_transfer_id);
             amount
         } else {
@@ -877,6 +891,15 @@ impl Contract {
             require!(
                 fast_transfer.token_id == btc_account_id,
                 "Only BTC can be transferred to the Bitcoin network."
+            );
+        }
+
+        if !self.deployed_tokens.contains(&fast_transfer.token_id) {
+            let locked_amount = fast_transfer.amount.0 - fast_transfer.fee.fee.0;
+            self.increase_locked_tokens(
+                fast_transfer.recipient.get_chain(),
+                &fast_transfer.token_id,
+                locked_amount,
             );
         }
 
@@ -1761,9 +1784,11 @@ impl Contract {
         let mut required_balance = self.add_fin_transfer(&transfer_message.get_transfer_id());
 
         let token = self.get_token_id(&transfer_message.token);
-
         let amount_without_fee = Self::amount_without_fee(&transfer_message);
-        if !self.deployed_tokens.contains(&token) {
+        let fast_transfer = FastTransfer::from_transfer(transfer_message.clone(), token.clone());
+        let fast_transfer_status = self.get_fast_transfer_status(&fast_transfer.id());
+
+        if !self.deployed_tokens.contains(&token) && fast_transfer_status.is_none() {
             self.decrease_locked_tokens(
                 transfer_message.get_origin_chain(),
                 &token,
@@ -1772,20 +1797,18 @@ impl Contract {
         }
 
         // If fast transfer happened, change recipient and fee recipient to the relayer that executed fast transfer
-        let fast_transfer = FastTransfer::from_transfer(transfer_message.clone(), token.clone());
-        let (recipient, msg, fee_recipient) =
-            match self.get_fast_transfer_status(&fast_transfer.id()) {
-                Some(status) => {
-                    require!(!status.finalised, "ERR_FAST_TRANSFER_ALREADY_FINALISED");
-                    self.remove_fast_transfer(&fast_transfer.id());
-                    (status.relayer.clone(), String::new(), status.relayer)
-                }
-                None => (
-                    recipient,
-                    transfer_message.msg.clone(),
-                    predecessor_account_id.clone(),
-                ),
-            };
+        let (recipient, msg, fee_recipient) = match fast_transfer_status {
+            Some(status) => {
+                require!(!status.finalised, "ERR_FAST_TRANSFER_ALREADY_FINALISED");
+                self.remove_fast_transfer(&fast_transfer.id());
+                (status.relayer.clone(), String::new(), status.relayer)
+            }
+            None => (
+                recipient,
+                transfer_message.msg.clone(),
+                predecessor_account_id.clone(),
+            ),
+        };
 
         let mut storage_deposit_action_index: usize = 0;
         require!(
@@ -1861,6 +1884,8 @@ impl Contract {
         let mut required_balance = self.add_fin_transfer(&transfer_message.get_transfer_id());
         let token = self.get_token_id(&transfer_message.token);
         let amount_without_fee = Self::amount_without_fee(&transfer_message);
+        let fast_transfer = FastTransfer::from_transfer(transfer_message.clone(), token.clone());
+        let fast_transfer_status = self.get_fast_transfer_status(&fast_transfer.id());
 
         if transfer_message.recipient.is_utxo_chain() {
             let btc_account_id = self.get_utxo_chain_token(transfer_message.recipient.get_chain());
@@ -1876,15 +1901,16 @@ impl Contract {
                 &token,
                 amount_without_fee,
             );
-            self.increase_locked_tokens(
-                transfer_message.get_destination_chain(),
-                &token,
-                amount_without_fee,
-            );
+            if fast_transfer_status.is_none() {
+                self.increase_locked_tokens(
+                    transfer_message.get_destination_chain(),
+                    &token,
+                    amount_without_fee,
+                );
+            }
         }
 
-        let fast_transfer = FastTransfer::from_transfer(transfer_message.clone(), token.clone());
-        let recipient = match self.get_fast_transfer_status(&fast_transfer.id()) {
+        let recipient = match fast_transfer_status {
             Some(status) => {
                 require!(!status.finalised, "ERR_FAST_TRANSFER_ALREADY_FINALISED");
                 Some(status.relayer)
