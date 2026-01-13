@@ -848,7 +848,7 @@ impl Contract {
             Self::ext(env::current_account_id())
                 .with_static_gas(RESOLVE_FAST_TRANSFER_GAS)
                 .resolve_fast_transfer(
-                    fast_transfer.token_id.clone(),
+                    &fast_transfer.token_id,
                     fast_transfer.transfer_id.origin_chain,
                     &fast_transfer.id(),
                     amount,
@@ -860,7 +860,7 @@ impl Contract {
     #[private]
     pub fn resolve_fast_transfer(
         &mut self,
-        token_id: AccountId,
+        token_id: &AccountId,
         origin_chain: ChainKind,
         fast_transfer_id: &FastTransferId,
         amount: U128,
@@ -870,8 +870,8 @@ impl Contract {
         self.burn_tokens_if_needed(token_id.clone(), amount);
 
         if Self::is_refund_required(is_ft_transfer_call) {
-            if !self.deployed_tokens.contains(&token_id) {
-                self.increase_locked_tokens(origin_chain, &token_id, amount.0);
+            if !self.deployed_tokens.contains(token_id) {
+                self.increase_locked_tokens(origin_chain, token_id, amount.0);
             }
             self.remove_fast_transfer(fast_transfer_id);
             amount
