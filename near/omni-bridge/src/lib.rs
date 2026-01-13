@@ -816,7 +816,9 @@ impl Contract {
 
         let amount = U128(fast_transfer.amount.0 - fast_transfer.fee.fee.0);
 
-        if !self.deployed_tokens.contains(&fast_transfer.token_id) {
+        if !self.deployed_tokens.contains(&fast_transfer.token_id)
+            && !fast_transfer.transfer_id.origin_chain.is_utxo_chain()
+        {
             self.decrease_locked_tokens(
                 fast_transfer.transfer_id.origin_chain,
                 &fast_transfer.token_id,
@@ -870,7 +872,7 @@ impl Contract {
         self.burn_tokens_if_needed(token_id.clone(), amount);
 
         if Self::is_refund_required(is_ft_transfer_call) {
-            if !self.deployed_tokens.contains(token_id) {
+            if !self.deployed_tokens.contains(token_id) && !origin_chain.is_utxo_chain() {
                 self.increase_locked_tokens(origin_chain, token_id, amount.0);
             }
             self.remove_fast_transfer(fast_transfer_id);
