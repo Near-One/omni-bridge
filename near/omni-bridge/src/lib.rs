@@ -1575,6 +1575,7 @@ impl Contract {
     pub fn fin_transfer_send_tokens_callback(
         &mut self,
         #[serializer(borsh)] transfer_message: TransferMessage,
+        #[serializer(borsh)] lock_decrease_amount: Option<u128>,
         #[serializer(borsh)] fee_recipient: &AccountId,
         #[serializer(borsh)] is_ft_transfer_call: bool,
         #[serializer(borsh)] storage_owner: &AccountId,
@@ -1582,14 +1583,16 @@ impl Contract {
         let token = self.get_token_id(&transfer_message.token);
 
         if Self::is_refund_required(is_ft_transfer_call) {
-            let amount_without_fee = transfer_message.calculate_amount_without_fee();
-            self.burn_tokens_if_needed(token.clone(), U128(amount_without_fee));
+            self.burn_tokens_if_needed(
+                token.clone(),
+                U128(transfer_message.calculate_amount_without_fee()),
+            );
 
-            if !self.deployed_tokens.contains(&token) {
+            if let Some(lock_decrease_amount) = lock_decrease_amount {
                 self.increase_locked_tokens(
                     transfer_message.get_origin_chain(),
                     &token,
-                    amount_without_fee,
+                    lock_decrease_amount,
                 );
             }
 
@@ -1790,13 +1793,22 @@ impl Contract {
         let fast_transfer = FastTransfer::from_transfer(transfer_message.clone(), token.clone());
         let fast_transfer_status = self.get_fast_transfer_status(&fast_transfer.id());
 
-        if !self.deployed_tokens.contains(&token) && fast_transfer_status.is_none() {
+        let lock_decrease_amount = if !self.deployed_tokens.contains(&token) {
+            let lock_decrease_amount = if fast_transfer_status.is_some() {
+                transfer_message.fee.fee.0
+            } else {
+                transfer_message.amount.0
+            };
+
             self.decrease_locked_tokens(
                 transfer_message.get_origin_chain(),
                 &token,
-                amount_without_fee,
+                lock_decrease_amount,
             );
-        }
+            Some(lock_decrease_amount)
+        } else {
+            None
+        };
 
         // If fast transfer happened, change recipient and fee recipient to the relayer that executed fast transfer
         let (recipient, msg, fee_recipient) = match fast_transfer_status {
@@ -1871,6 +1883,7 @@ impl Contract {
                     .with_static_gas(SEND_TOKENS_CALLBACK_GAS)
                     .fin_transfer_send_tokens_callback(
                         transfer_message,
+                        lock_decrease_amount,
                         &fee_recipient,
                         !msg.is_empty(),
                         predecessor_account_id,

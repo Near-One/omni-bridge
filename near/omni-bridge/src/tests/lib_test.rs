@@ -546,7 +546,7 @@ fn test_fin_transfer_callback_near_success() {
         &native_token_address,
         &DEFAULT_FT_CONTRACT_ACCOUNT.parse().unwrap(),
     );
-    let locked_amount = DEFAULT_TRANSFER_AMOUNT - DEFAULT_TRANSFER_FEE;
+    let locked_amount = DEFAULT_TRANSFER_AMOUNT;
     contract.locked_tokens.insert(
         &(
             ChainKind::Eth,
@@ -952,7 +952,14 @@ fn test_fin_transfer_callback_refund_restores_locked_tokens() {
         )]),
     );
 
-    contract.fin_transfer_send_tokens_callback(transfer_message, &fee_recipient, true, &recipient);
+    let lock_decrease_amount = Some(transfer_message.amount.0);
+    contract.fin_transfer_send_tokens_callback(
+        transfer_message,
+        lock_decrease_amount,
+        &fee_recipient,
+        true,
+        &recipient,
+    );
 
     assert_eq!(
         contract.get_locked_tokens(ChainKind::Eth, token_id),
