@@ -306,7 +306,7 @@ fn run_update_transfer_fee(
     );
     if let OmniAddress::Near(token_id) = transfer_msg.token.clone() {
         if !contract.deployed_tokens.contains(&token_id) {
-            let locked_amount = transfer_msg.amount.0 - init_fee.fee.0;
+            let locked_amount = transfer_msg.amount.0;
             contract.locked_tokens.insert(
                 &(transfer_msg.recipient.get_chain(), token_id),
                 &locked_amount,
@@ -741,7 +741,7 @@ fn test_fin_transfer_callback_non_near_success() {
     let prover_result = get_prover_result(Some(sol_recipient.clone()));
 
     let token_id: AccountId = DEFAULT_FT_CONTRACT_ACCOUNT.parse().unwrap();
-    let locked_amount = DEFAULT_TRANSFER_AMOUNT - DEFAULT_TRANSFER_FEE;
+    let locked_amount = DEFAULT_TRANSFER_AMOUNT;
     contract
         .locked_tokens
         .insert(&(ChainKind::Eth, token_id.clone()), &locked_amount);
@@ -792,7 +792,7 @@ fn test_fin_transfer_callback_non_near_success() {
 }
 
 #[test]
-fn test_claim_fee_does_not_change_locked_tokens_for_non_deployed_token() {
+fn test_claim_fee_decreases_locked_tokens_for_non_deployed_token() {
     let mut contract = get_default_contract();
     let token_id = AccountId::try_from(DEFAULT_FT_CONTRACT_ACCOUNT.to_string()).unwrap();
     let fee_recipient = AccountId::try_from("relayer.testnet".to_string()).unwrap();
@@ -842,7 +842,7 @@ fn test_claim_fee_does_not_change_locked_tokens_for_non_deployed_token() {
         }),
     );
 
-    let locked_amount = DEFAULT_TRANSFER_AMOUNT - fee_amount;
+    let locked_amount = DEFAULT_TRANSFER_AMOUNT;
     contract
         .locked_tokens
         .insert(&(destination_chain, token_id.clone()), &locked_amount);
@@ -865,7 +865,7 @@ fn test_claim_fee_does_not_change_locked_tokens_for_non_deployed_token() {
 
     assert_eq!(
         contract.get_locked_tokens(destination_chain, token_id),
-        U128(locked_amount)
+        U128(locked_amount - fee_amount)
     );
 }
 

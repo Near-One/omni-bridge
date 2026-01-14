@@ -394,16 +394,6 @@ impl Contract {
                     "ERR_INVALID_ATTACHED_DEPOSIT"
                 );
 
-                if let OmniAddress::Near(token_id) = transfer.message.token.clone() {
-                    if !self.deployed_tokens.contains(&token_id) {
-                        self.decrease_locked_tokens(
-                            transfer.message.recipient.get_chain(),
-                            &token_id,
-                            fee.fee.0 - current_fee.fee.0,
-                        );
-                    }
-                }
-
                 transfer.message.fee = fee;
                 self.insert_raw_transfer(transfer.message.clone(), transfer.owner);
 
@@ -897,7 +887,7 @@ impl Contract {
         }
 
         if !self.deployed_tokens.contains(&fast_transfer.token_id) {
-            let locked_amount = fast_transfer.calculate_amount_without_fee();
+            let locked_amount = fast_transfer.amount.0;
             if !fast_transfer.transfer_id.origin_chain.is_utxo_chain() {
                 self.decrease_locked_tokens(
                     fast_transfer.transfer_id.origin_chain,
@@ -1096,6 +1086,10 @@ impl Contract {
                 .sdk_expect("ERR_TOKEN_DECIMALS_NOT_FOUND"),
         );
         let fee = message.amount.0 - denormalized_amount;
+
+        if !self.deployed_tokens.contains(&token) {
+            self.decrease_locked_tokens(message.get_destination_chain(), &token, fee);
+        }
 
         self.send_fee_internal(&message, fee_recipient, fee)
     }
@@ -1767,7 +1761,7 @@ impl Contract {
                 self.increase_locked_tokens(
                     transfer_message.recipient.get_chain(),
                     &token_id,
-                    transfer_message.calculate_amount_without_fee(),
+                    transfer_message.amount.0,
                 );
             }
         } else {
@@ -1917,12 +1911,12 @@ impl Contract {
                 self.decrease_locked_tokens(
                     transfer_message.get_origin_chain(),
                     &token,
-                    amount_without_fee,
+                    transfer_message.amount.0,
                 );
                 self.increase_locked_tokens(
                     transfer_message.get_destination_chain(),
                     &token,
-                    amount_without_fee,
+                    transfer_message.amount.0,
                 );
             }
 
