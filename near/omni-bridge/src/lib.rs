@@ -450,7 +450,7 @@ impl Contract {
             .get(&token_address)
             .sdk_expect("ERR_TOKEN_DECIMALS_NOT_FOUND");
         let amount_to_transfer =
-            Self::normalize_amount(Self::amount_without_fee(&transfer_message), decimals);
+            Self::normalize_amount(transfer_message.calculate_amount_without_fee(), decimals);
 
         require!(amount_to_transfer > 0, "Invalid amount to transfer");
 
@@ -814,7 +814,7 @@ impl Contract {
             .add_fast_transfer(fast_transfer, relayer_id, storage_payer.clone())
             .saturating_add(ONE_YOCTO);
 
-        let amount = U128(fast_transfer.amount.0 - fast_transfer.fee.fee.0);
+        let amount = U128(fast_transfer.calculate_amount_without_fee());
 
         if !self.deployed_tokens.contains(&fast_transfer.token_id)
             && !fast_transfer.transfer_id.origin_chain.is_utxo_chain()
@@ -897,7 +897,7 @@ impl Contract {
         }
 
         if !self.deployed_tokens.contains(&fast_transfer.token_id) {
-            let locked_amount = fast_transfer.amount.0 - fast_transfer.fee.fee.0;
+            let locked_amount = fast_transfer.calculate_amount_without_fee();
             if !fast_transfer.transfer_id.origin_chain.is_utxo_chain() {
                 self.decrease_locked_tokens(
                     fast_transfer.transfer_id.origin_chain,
@@ -1582,7 +1582,7 @@ impl Contract {
         let token = self.get_token_id(&transfer_message.token);
 
         if Self::is_refund_required(is_ft_transfer_call) {
-            let amount_without_fee = Self::amount_without_fee(&transfer_message);
+            let amount_without_fee = transfer_message.calculate_amount_without_fee();
             self.burn_tokens_if_needed(token.clone(), U128(amount_without_fee));
 
             if !self.deployed_tokens.contains(&token) {
@@ -1681,13 +1681,6 @@ impl Contract {
         }
     }
 
-    fn amount_without_fee(transfer_message: &TransferMessage) -> u128 {
-        transfer_message
-            .amount
-            .0
-            .saturating_sub(transfer_message.fee.fee.0)
-    }
-
     fn burn_tokens_if_needed(&self, token: AccountId, amount: U128) {
         if self.deployed_tokens.contains(&token) {
             ext_token::ext(token)
@@ -1771,7 +1764,7 @@ impl Contract {
                 self.increase_locked_tokens(
                     transfer_message.recipient.get_chain(),
                     &token_id,
-                    Self::amount_without_fee(&transfer_message),
+                    transfer_message.calculate_amount_without_fee(),
                 );
             }
         } else {
@@ -1793,7 +1786,7 @@ impl Contract {
         let mut required_balance = self.add_fin_transfer(&transfer_message.get_transfer_id());
 
         let token = self.get_token_id(&transfer_message.token);
-        let amount_without_fee = Self::amount_without_fee(&transfer_message);
+        let amount_without_fee = transfer_message.calculate_amount_without_fee();
         let fast_transfer = FastTransfer::from_transfer(transfer_message.clone(), token.clone());
         let fast_transfer_status = self.get_fast_transfer_status(&fast_transfer.id());
 
@@ -1892,7 +1885,7 @@ impl Contract {
     ) {
         let mut required_balance = self.add_fin_transfer(&transfer_message.get_transfer_id());
         let token = self.get_token_id(&transfer_message.token);
-        let amount_without_fee = Self::amount_without_fee(&transfer_message);
+        let amount_without_fee = transfer_message.calculate_amount_without_fee();
 
         if transfer_message.recipient.is_utxo_chain() {
             let btc_account_id = self.get_utxo_chain_token(transfer_message.recipient.get_chain());
@@ -2387,7 +2380,7 @@ impl Contract {
         } else {
             self.mark_fast_transfer_as_finalised(&fast_transfer.id());
             // With transfers to other chain the fee will be claimed after finalization on the destination chain
-            U128(fast_transfer.amount.0 - fast_transfer.fee.fee.0)
+            U128(fast_transfer.calculate_amount_without_fee())
         };
 
         self.send_tokens(

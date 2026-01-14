@@ -570,6 +570,10 @@ impl TransferMessage {
     pub fn calculate_storage_account_id(&self) -> AccountId {
         TransferMessageStorageAccount::from(self.clone()).id()
     }
+
+    pub fn calculate_amount_without_fee(&self) -> u128 {
+        self.amount.0.saturating_sub(self.fee.fee.0)
+    }
 }
 
 // Used to calculate virtual account ID that can be used to deposit storage required for the message
@@ -790,6 +794,10 @@ impl FastTransfer {
     #[allow(clippy::missing_panics_doc)]
     pub fn id(&self) -> FastTransferId {
         FastTransferId(utils::sha256(&borsh::to_vec(self).unwrap()))
+    }
+
+    pub fn calculate_amount_without_fee(&self) -> u128 {
+        self.amount.0.saturating_sub(self.fee.fee.0)
     }
 }
 
