@@ -806,15 +806,11 @@ impl Contract {
 
         let amount = U128(fast_transfer.calculate_amount_without_fee());
 
-        if !self.deployed_tokens.contains(&fast_transfer.token_id)
-            && !fast_transfer.transfer_id.origin_chain.is_utxo_chain()
-        {
-            self.decrease_locked_tokens(
-                fast_transfer.transfer_id.origin_chain,
-                &fast_transfer.token_id,
-                amount.0,
-            );
-        }
+        self.unlock_tokens_if_needed(
+            fast_transfer.transfer_id.origin_chain,
+            &fast_transfer.token_id,
+            amount.0,
+        );
 
         self.update_storage_balance(
             storage_payer,
@@ -862,9 +858,7 @@ impl Contract {
         self.burn_tokens_if_needed(token_id.clone(), amount);
 
         if Self::is_refund_required(is_ft_transfer_call) {
-            if !self.deployed_tokens.contains(token_id) && !origin_chain.is_utxo_chain() {
-                self.increase_locked_tokens(origin_chain, token_id, amount.0);
-            }
+            self.lock_tokens_if_needed(origin_chain, token_id, amount.0);
             self.remove_fast_transfer(fast_transfer_id);
             amount
         } else {
@@ -886,21 +880,16 @@ impl Contract {
             );
         }
 
-        if !self.deployed_tokens.contains(&fast_transfer.token_id) {
-            let locked_amount = fast_transfer.amount.0;
-            if !fast_transfer.transfer_id.origin_chain.is_utxo_chain() {
-                self.decrease_locked_tokens(
-                    fast_transfer.transfer_id.origin_chain,
-                    &fast_transfer.token_id,
-                    locked_amount,
-                );
-            }
-            self.increase_locked_tokens(
-                fast_transfer.recipient.get_chain(),
-                &fast_transfer.token_id,
-                locked_amount,
-            );
-        }
+        self.unlock_tokens_if_needed(
+            fast_transfer.transfer_id.origin_chain,
+            &fast_transfer.token_id,
+            fast_transfer.amount.0,
+        );
+        self.lock_tokens_if_needed(
+            fast_transfer.recipient.get_chain(),
+            &fast_transfer.token_id,
+            fast_transfer.amount.0,
+        );
 
         let mut required_balance =
             self.add_fast_transfer(fast_transfer, relayer_id.clone(), storage_payer.clone());
@@ -1055,11 +1044,13 @@ impl Contract {
             "ERR_UNKNOWN_FACTORY"
         );
 
-        let message = self.remove_transfer_message(fin_transfer.transfer_id);
+        let transfer_message = self.remove_transfer_message(fin_transfer.transfer_id);
 
-        if let Some(origin_transfer_id) = message.origin_transfer_id.clone() {
-            let mut fast_transfer =
-                FastTransfer::from_transfer(message.clone(), self.get_token_id(&message.token));
+        if let Some(origin_transfer_id) = transfer_message.origin_transfer_id.clone() {
+            let mut fast_transfer = FastTransfer::from_transfer(
+                transfer_message.clone(),
+                self.get_token_id(&transfer_message.token),
+            );
             fast_transfer.transfer_id = origin_transfer_id;
 
             if let Some(fast_transfer_status) = self.get_fast_transfer_status(&fast_transfer.id()) {
@@ -1074,9 +1065,9 @@ impl Contract {
             }
         }
 
-        let token = self.get_token_id(&message.token);
+        let token = self.get_token_id(&transfer_message.token);
         let token_address = self
-            .get_token_address(message.get_destination_chain(), token.clone())
+            .get_token_address(transfer_message.get_destination_chain(), token.clone())
             .unwrap_or_else(|| env::panic_str("ERR_FAILED_TO_GET_TOKEN_ADDRESS"));
 
         let denormalized_amount = Self::denormalize_amount(
@@ -1085,13 +1076,11 @@ impl Contract {
                 .get(&token_address)
                 .sdk_expect("ERR_TOKEN_DECIMALS_NOT_FOUND"),
         );
-        let fee = message.amount.0 - denormalized_amount;
+        let fee = transfer_message.amount.0 - denormalized_amount;
 
-        if !self.deployed_tokens.contains(&token) {
-            self.decrease_locked_tokens(message.get_destination_chain(), &token, fee);
-        }
+        self.unlock_tokens_if_needed(transfer_message.get_destination_chain(), &token, fee);
 
-        self.send_fee_internal(&message, fee_recipient, fee)
+        self.send_fee_internal(&transfer_message, fee_recipient, fee)
     }
 
     #[payable]
@@ -1583,7 +1572,7 @@ impl Contract {
             );
 
             if let Some(lock_decrease_amount) = lock_decrease_amount {
-                self.increase_locked_tokens(
+                self.lock_tokens_if_needed(
                     transfer_message.get_origin_chain(),
                     &token,
                     lock_decrease_amount,
@@ -1687,12 +1676,11 @@ impl Contract {
         }
     }
 
-    fn increase_locked_tokens(
-        &mut self,
-        chain_kind: ChainKind,
-        token_id: &AccountId,
-        amount: u128,
-    ) {
+    fn lock_tokens_if_needed(&mut self, chain_kind: ChainKind, token_id: &AccountId, amount: u128) {
+        if self.deployed_tokens.contains(token_id) || chain_kind.is_utxo_chain() || amount == 0 {
+            return;
+        }
+
         let key = (chain_kind, token_id.clone());
         let current_amount = self.locked_tokens.get(&key).unwrap_or(0);
         let new_amount = current_amount
@@ -1702,12 +1690,16 @@ impl Contract {
         self.locked_tokens.insert(&key, &new_amount);
     }
 
-    fn decrease_locked_tokens(
+    fn unlock_tokens_if_needed(
         &mut self,
         chain_kind: ChainKind,
         token_id: &AccountId,
         amount: u128,
     ) {
+        if self.deployed_tokens.contains(token_id) || chain_kind.is_utxo_chain() || amount == 0 {
+            return;
+        }
+
         let key = (chain_kind, token_id.clone());
         let available = self.locked_tokens.get(&key).unwrap_or(0);
         require!(available >= amount, "ERR_INSUFFICIENT_LOCKED_TOKENS");
@@ -1757,13 +1749,11 @@ impl Contract {
         if let OmniAddress::Near(token_id) = transfer_message.token.clone() {
             self.burn_tokens_if_needed(token_id.clone(), transfer_message.amount);
 
-            if !self.deployed_tokens.contains(&token_id) {
-                self.increase_locked_tokens(
-                    transfer_message.recipient.get_chain(),
-                    &token_id,
-                    transfer_message.amount.0,
-                );
-            }
+            self.lock_tokens_if_needed(
+                transfer_message.recipient.get_chain(),
+                &token_id,
+                transfer_message.amount.0,
+            );
         } else {
             return transfer_message.amount;
         }
@@ -1796,7 +1786,7 @@ impl Contract {
                 transfer_message.amount.0
             };
 
-            self.decrease_locked_tokens(
+            self.unlock_tokens_if_needed(
                 transfer_message.get_origin_chain(),
                 &token,
                 lock_decrease_amount,
@@ -1907,18 +1897,16 @@ impl Contract {
             require!(!status.finalised, "ERR_FAST_TRANSFER_ALREADY_FINALISED");
             Some(status.relayer)
         } else {
-            if !self.deployed_tokens.contains(&token) {
-                self.decrease_locked_tokens(
-                    transfer_message.get_origin_chain(),
-                    &token,
-                    transfer_message.amount.0,
-                );
-                self.increase_locked_tokens(
-                    transfer_message.get_destination_chain(),
-                    &token,
-                    transfer_message.amount.0,
-                );
-            }
+            self.unlock_tokens_if_needed(
+                transfer_message.get_origin_chain(),
+                &token,
+                transfer_message.amount.0,
+            );
+            self.lock_tokens_if_needed(
+                transfer_message.get_destination_chain(),
+                &token,
+                transfer_message.amount.0,
+            );
 
             None
         };
