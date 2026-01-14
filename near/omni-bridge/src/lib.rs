@@ -779,7 +779,6 @@ impl Contract {
                 storage_payer,
                 fast_fin_transfer_msg.relayer,
             );
-            self.burn_tokens_if_needed(token_id, amount);
             PromiseOrPromiseIndexOrValue::Value(U128(0))
         }
     }
@@ -869,6 +868,8 @@ impl Contract {
                 "Only BTC can be transferred to the Bitcoin network."
             );
         }
+
+        self.burn_tokens_if_needed(fast_transfer.token_id.clone(), fast_transfer.amount);
 
         self.lock_tokens_if_needed(
             fast_transfer.recipient.get_chain(),
@@ -1062,8 +1063,6 @@ impl Contract {
                 .sdk_expect("ERR_TOKEN_DECIMALS_NOT_FOUND"),
         );
         let fee = transfer_message.amount.0 - denormalized_amount;
-
-        self.unlock_tokens_if_needed(transfer_message.get_destination_chain(), &token, fee);
 
         self.send_fee_internal(&transfer_message, fee_recipient, fee)
     }
@@ -2456,13 +2455,13 @@ impl Contract {
 
     fn send_fee_internal(
         &mut self,
-        message: &TransferMessage,
+        transfer_message: &TransferMessage,
         fee_recipient: AccountId,
         token_fee: u128,
     ) -> PromiseOrValue<()> {
-        if message.fee.native_fee.0 != 0 {
-            let origin_chain = message.origin_transfer_id.as_ref().map_or_else(
-                || message.get_origin_chain(),
+        if transfer_message.fee.native_fee.0 != 0 {
+            let origin_chain = transfer_message.origin_transfer_id.as_ref().map_or_else(
+                || transfer_message.get_origin_chain(),
                 |origin_transfer_id| origin_transfer_id.origin_chain,
             );
 
@@ -2470,23 +2469,25 @@ impl Contract {
                 env::panic_str("Can't have native fee for transfers from UTXO chains")
             } else if origin_chain == ChainKind::Near {
                 Promise::new(fee_recipient.clone())
-                    .transfer(NearToken::from_yoctonear(message.fee.native_fee.0))
+                    .transfer(NearToken::from_yoctonear(transfer_message.fee.native_fee.0))
                     .detach();
             } else {
                 ext_token::ext(self.get_native_token_id(origin_chain))
                     .with_static_gas(MINT_TOKEN_GAS)
-                    .mint(fee_recipient.clone(), message.fee.native_fee, None)
+                    .mint(fee_recipient.clone(), transfer_message.fee.native_fee, None)
                     .detach();
             }
         }
 
-        let token = self.get_token_id(&message.token);
+        let token = self.get_token_id(&transfer_message.token);
         env::log_str(
             &OmniBridgeEvent::ClaimFeeEvent {
-                transfer_message: message.clone(),
+                transfer_message: transfer_message.clone(),
             }
             .to_log_string(),
         );
+
+        self.unlock_tokens_if_needed(transfer_message.get_destination_chain(), &token, token_fee);
 
         if token_fee > 0 {
             if self.deployed_tokens.contains(&token) {

@@ -372,12 +372,9 @@ mod tests {
             };
             let origin_chain = params.fast_transfer_msg.transfer_id.origin_chain;
 
-            let locked_before = get_locked_tokens(
-                &env.bridge_contract,
-                origin_chain,
-                env.token_contract.id(),
-            )
-            .await?;
+            let locked_before =
+                get_locked_tokens(&env.bridge_contract, origin_chain, env.token_contract.id())
+                    .await?;
             let recipient_balance_before = get_balance(&env.token_contract, &recipient).await?;
             let relayer_balance_before =
                 get_balance(&env.token_contract, env.relayer_account.id()).await?;
@@ -393,12 +390,9 @@ mod tests {
                 get_balance(&env.token_contract, env.relayer_account.id()).await?;
             let contract_balance_after =
                 get_balance(&env.token_contract, env.bridge_contract.id()).await?;
-            let locked_after = get_locked_tokens(
-                &env.bridge_contract,
-                origin_chain,
-                env.token_contract.id(),
-            )
-            .await?;
+            let locked_after =
+                get_locked_tokens(&env.bridge_contract, origin_chain, env.token_contract.id())
+                    .await?;
 
             if let Some(error_msg) = error {
                 assert!(
