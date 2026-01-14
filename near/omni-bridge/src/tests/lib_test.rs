@@ -304,15 +304,6 @@ fn run_update_transfer_fee(
         transfer_msg.clone(),
         AccountId::try_from(sender_id.clone()).unwrap(),
     );
-    if let OmniAddress::Near(token_id) = transfer_msg.token.clone() {
-        if !contract.deployed_tokens.contains(&token_id) {
-            let locked_amount = transfer_msg.amount.0;
-            contract.locked_tokens.insert(
-                &(transfer_msg.recipient.get_chain(), token_id),
-                &locked_amount,
-            );
-        }
-    }
 
     let attached_deposit = attached_deposit.unwrap_or_else(|| match &new_fee {
         UpdateFee::Fee(new_fee) => {
