@@ -440,7 +440,7 @@ impl Contract {
             .get(&token_address)
             .sdk_expect("ERR_TOKEN_DECIMALS_NOT_FOUND");
         let amount_to_transfer =
-            Self::normalize_amount(transfer_message.calculate_amount_without_fee(), decimals);
+            Self::normalize_amount(transfer_message.amount_without_fee(), decimals);
 
         require!(amount_to_transfer > 0, "Invalid amount to transfer");
 
@@ -818,7 +818,7 @@ impl Contract {
             .to_log_string(),
         );
 
-        let amount_without_fee = U128(fast_transfer.calculate_amount_without_fee());
+        let amount_without_fee = U128(fast_transfer.amount_without_fee());
         self.send_tokens(
             fast_transfer.token_id.clone(),
             recipient,
@@ -1550,10 +1550,7 @@ impl Contract {
         let token = self.get_token_id(&transfer_message.token);
 
         if Self::is_refund_required(is_ft_transfer_call) {
-            self.burn_tokens_if_needed(
-                token.clone(),
-                U128(transfer_message.calculate_amount_without_fee()),
-            );
+            self.burn_tokens_if_needed(token.clone(), U128(transfer_message.amount_without_fee()));
 
             self.lock_tokens_if_needed(
                 transfer_message.get_origin_chain(),
@@ -1834,7 +1831,7 @@ impl Contract {
         self.send_tokens(
             token.clone(),
             recipient,
-            U128(transfer_message.calculate_amount_without_fee()),
+            U128(transfer_message.amount_without_fee()),
             &msg,
         )
         .then(
@@ -1890,7 +1887,7 @@ impl Contract {
             self.send_tokens(
                 token,
                 relayer,
-                U128(transfer_message.calculate_amount_without_fee()),
+                U128(transfer_message.amount_without_fee()),
                 "",
             )
             .detach();
@@ -2354,7 +2351,7 @@ impl Contract {
         } else {
             self.mark_fast_transfer_as_finalised(&fast_transfer.id());
             // With transfers to other chain the fee will be claimed after finalization on the destination chain
-            U128(fast_transfer.calculate_amount_without_fee())
+            U128(fast_transfer.amount_without_fee())
         };
 
         self.send_tokens(

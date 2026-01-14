@@ -571,7 +571,7 @@ impl TransferMessage {
         TransferMessageStorageAccount::from(self.clone()).id()
     }
 
-    pub fn calculate_amount_without_fee(&self) -> u128 {
+    pub fn amount_without_fee(&self) -> u128 {
         self.amount.0.saturating_sub(self.fee.fee.0)
     }
 }
@@ -796,7 +796,7 @@ impl FastTransfer {
         FastTransferId(utils::sha256(&borsh::to_vec(self).unwrap()))
     }
 
-    pub fn calculate_amount_without_fee(&self) -> u128 {
+    pub fn amount_without_fee(&self) -> u128 {
         self.amount.0.saturating_sub(self.fee.fee.0)
     }
 }
