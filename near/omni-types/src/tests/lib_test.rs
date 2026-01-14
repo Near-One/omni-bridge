@@ -3,9 +3,48 @@ use near_sdk::json_types::U128;
 use near_sdk::serde_json;
 
 use crate::{
-    stringify, ChainKind, Fee, OmniAddress, PayloadType, TransferId, TransferMessage, H160,
+    stringify, ChainKind, Fee, OmniAddress, PayloadType, SolAddress, TransferId, TransferMessage,
+    H160,
 };
 use std::str::FromStr;
+
+fn chain_kinds_for_borsh() -> [ChainKind; 9] {
+    [
+        ChainKind::Eth,
+        ChainKind::Near,
+        ChainKind::Sol,
+        ChainKind::Arb,
+        ChainKind::Base,
+        ChainKind::Bnb,
+        ChainKind::Btc,
+        ChainKind::Zcash,
+        ChainKind::Pol,
+    ]
+}
+
+fn omni_addresses_for_borsh() -> Vec<OmniAddress> {
+    vec![
+        OmniAddress::Eth(H160::ZERO),
+        OmniAddress::Near("borsh.near".parse().unwrap()),
+        OmniAddress::Sol(SolAddress::ZERO),
+        OmniAddress::Arb(H160::ZERO),
+        OmniAddress::Base(H160::ZERO),
+        OmniAddress::Bnb(H160::ZERO),
+        OmniAddress::Btc("btc_address".to_string()),
+        OmniAddress::Zcash("zcash_address".to_string()),
+        OmniAddress::Pol(H160::ZERO),
+    ]
+}
+
+fn chain_kinds_from_borsh() -> Vec<ChainKind> {
+    let mut kinds = Vec::new();
+    for value in 0u8..=u8::MAX {
+        if let Ok(kind) = borsh::from_slice::<ChainKind>(&[value]) {
+            kinds.push(kind);
+        }
+    }
+    kinds
+}
 
 #[test]
 fn test_omni_address_serialization() {
@@ -27,6 +66,67 @@ fn test_payload_prefix() {
     assert_eq!(hex::encode(res), "01");
     let res = borsh::to_vec(&PayloadType::ClaimNativeFee).unwrap();
     assert_eq!(hex::encode(res), "02");
+}
+
+#[test]
+fn test_chain_kind_borsh_discriminants_are_stable() {
+    let chains = chain_kinds_for_borsh();
+
+    for (discriminant, chain) in chains.iter().enumerate() {
+        let encoded = borsh::to_vec(&chain).unwrap();
+        assert_eq!(
+            encoded,
+            vec![u8::try_from(discriminant).unwrap()],
+            "Borsh discriminant for {chain:?} changed; this would break stored data"
+        );
+    }
+}
+
+#[test]
+fn test_chain_kind_borsh_variants_are_covered() {
+    let expected = chain_kinds_from_borsh();
+    let chains = chain_kinds_for_borsh();
+
+    assert_eq!(
+        chains.len(),
+        expected.len(),
+        "ChainKind variants list is out of sync with enum size"
+    );
+}
+
+#[test]
+fn test_omni_address_borsh_discriminants_are_stable() {
+    let addresses = omni_addresses_for_borsh();
+
+    for (discriminant, address) in addresses.iter().enumerate() {
+        let encoded = borsh::to_vec(&address).unwrap();
+        let encoded_discriminant = *encoded
+            .first()
+            .expect("Borsh enum encoding should start with discriminant byte");
+        assert_eq!(
+            encoded_discriminant,
+            u8::try_from(discriminant).unwrap(),
+            "Borsh discriminant for {:?} changed; this would break stored data",
+            address.get_chain()
+        );
+    }
+}
+
+#[test]
+fn test_omni_address_borsh_variants_are_covered() {
+    let addresses = omni_addresses_for_borsh();
+    let mut covered_chains: Vec<ChainKind> = addresses.iter().map(OmniAddress::get_chain).collect();
+
+    covered_chains.sort_unstable();
+    covered_chains.dedup();
+
+    let mut expected_chains = chain_kinds_from_borsh();
+    expected_chains.sort_unstable();
+
+    assert_eq!(
+        covered_chains, expected_chains,
+        "OmniAddress variants list is out of sync with enum size"
+    );
 }
 
 #[test]
