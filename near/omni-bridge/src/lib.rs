@@ -804,14 +804,6 @@ impl Contract {
             .add_fast_transfer(fast_transfer, relayer_id, storage_payer.clone())
             .saturating_add(ONE_YOCTO);
 
-        let amount_without_fee = U128(fast_transfer.calculate_amount_without_fee());
-
-        self.unlock_tokens_if_needed(
-            fast_transfer.transfer_id.origin_chain,
-            &fast_transfer.token_id,
-            amount_without_fee.0,
-        );
-
         self.update_storage_balance(
             storage_payer,
             required_balance,
@@ -826,6 +818,7 @@ impl Contract {
             .to_log_string(),
         );
 
+        let amount_without_fee = U128(fast_transfer.calculate_amount_without_fee());
         self.send_tokens(
             fast_transfer.token_id.clone(),
             recipient,
@@ -880,11 +873,6 @@ impl Contract {
             );
         }
 
-        self.unlock_tokens_if_needed(
-            fast_transfer.transfer_id.origin_chain,
-            &fast_transfer.token_id,
-            fast_transfer.amount.0,
-        );
         self.lock_tokens_if_needed(
             fast_transfer.recipient.get_chain(),
             &fast_transfer.token_id,
@@ -1558,7 +1546,6 @@ impl Contract {
     pub fn fin_transfer_send_tokens_callback(
         &mut self,
         #[serializer(borsh)] transfer_message: TransferMessage,
-        #[serializer(borsh)] unlocked_amount: u128,
         #[serializer(borsh)] fee_recipient: &AccountId,
         #[serializer(borsh)] is_ft_transfer_call: bool,
         #[serializer(borsh)] storage_owner: &AccountId,
@@ -1574,7 +1561,7 @@ impl Contract {
             self.lock_tokens_if_needed(
                 transfer_message.get_origin_chain(),
                 &token,
-                unlocked_amount,
+                transfer_message.amount.0,
             );
 
             self.remove_fin_transfer(&transfer_message.get_transfer_id(), storage_owner);
@@ -1774,23 +1761,11 @@ impl Contract {
         let fast_transfer = FastTransfer::from_transfer(transfer_message.clone(), token.clone());
         let fast_transfer_status = self.get_fast_transfer_status(&fast_transfer.id());
 
-        let unlocked_amount = if self.deployed_tokens.contains(&token) {
-            0
-        } else {
-            let unlocked_amount = if fast_transfer_status.is_some() {
-                transfer_message.fee.fee.0
-            } else {
-                transfer_message.amount.0
-            };
-
-            self.unlock_tokens_if_needed(
-                transfer_message.get_origin_chain(),
-                &token,
-                unlocked_amount,
-            );
-
-            unlocked_amount
-        };
+        self.unlock_tokens_if_needed(
+            transfer_message.get_origin_chain(),
+            &token,
+            transfer_message.amount.0,
+        );
 
         // If fast transfer happened, change recipient and fee recipient to the relayer that executed fast transfer
         let (recipient, msg, fee_recipient) = match fast_transfer_status {
@@ -1870,7 +1845,6 @@ impl Contract {
                 .with_static_gas(SEND_TOKENS_CALLBACK_GAS)
                 .fin_transfer_send_tokens_callback(
                     transfer_message,
-                    unlocked_amount,
                     &fee_recipient,
                     !msg.is_empty(),
                     predecessor_account_id,
@@ -1894,16 +1868,17 @@ impl Contract {
             );
         }
 
+        self.unlock_tokens_if_needed(
+            transfer_message.get_origin_chain(),
+            &token,
+            transfer_message.amount.0,
+        );
+
         let fast_transfer = FastTransfer::from_transfer(transfer_message.clone(), token.clone());
         let recipient = if let Some(status) = self.get_fast_transfer_status(&fast_transfer.id()) {
             require!(!status.finalised, "ERR_FAST_TRANSFER_ALREADY_FINALISED");
             Some(status.relayer)
         } else {
-            self.unlock_tokens_if_needed(
-                transfer_message.get_origin_chain(),
-                &token,
-                transfer_message.amount.0,
-            );
             self.lock_tokens_if_needed(
                 transfer_message.get_destination_chain(),
                 &token,

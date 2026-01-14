@@ -952,14 +952,7 @@ fn test_fin_transfer_callback_refund_restores_locked_tokens() {
         )]),
     );
 
-    let unlocked_amount = transfer_message.amount.0;
-    contract.fin_transfer_send_tokens_callback(
-        transfer_message,
-        unlocked_amount,
-        &fee_recipient,
-        true,
-        &recipient,
-    );
+    contract.fin_transfer_send_tokens_callback(transfer_message, &fee_recipient, true, &recipient);
 
     assert_eq!(
         contract.get_locked_tokens(ChainKind::Eth, token_id),
