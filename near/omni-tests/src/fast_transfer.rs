@@ -412,8 +412,9 @@ mod tests {
 
             if is_bridged_token {
                 assert_eq!(0, locked_before.0);
+                assert_eq!(0, locked_after.0);
             } else {
-                assert!(locked_before.0 > 0);
+                assert_eq!(locked_before.0, locked_after.0);
             }
 
             assert_eq!(
@@ -645,6 +646,7 @@ mod tests {
 
         use super::*;
 
+        #[allow(clippy::too_many_lines)]
         async fn assert_transfer_to_other_chain(
             env: &TestEnv,
             params: FastTransferParams,
@@ -748,16 +750,15 @@ mod tests {
 
             if is_bridged_token {
                 assert_eq!(locked_destination_before, locked_destination_after);
+                assert_eq!(
+                    contract_balance_after,
+                    U128(contract_balance_before.0 - normalized_fee)
+                );
             } else {
                 assert_eq!(
                     locked_destination_after,
                     U128(locked_destination_before.0 + transfer_message.amount.0)
                 );
-            }
-
-            if is_bridged_token {
-                assert_eq!(contract_balance_after, contract_balance_before);
-            } else {
                 assert_eq!(
                     contract_balance_before,
                     U128(contract_balance_after.0 - params.amount_to_send)
