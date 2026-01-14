@@ -830,7 +830,6 @@ impl Contract {
                 .with_static_gas(RESOLVE_FAST_TRANSFER_GAS)
                 .resolve_fast_transfer(
                     &fast_transfer.token_id,
-                    fast_transfer.transfer_id.origin_chain,
                     &fast_transfer.id(),
                     amount_without_fee,
                     !fast_transfer.msg.is_empty(),
@@ -842,7 +841,6 @@ impl Contract {
     pub fn resolve_fast_transfer(
         &mut self,
         token_id: &AccountId,
-        origin_chain: ChainKind,
         fast_transfer_id: &FastTransferId,
         amount: U128,
         is_ft_transfer_call: bool,
@@ -851,7 +849,6 @@ impl Contract {
         self.burn_tokens_if_needed(token_id.clone(), amount);
 
         if Self::is_refund_required(is_ft_transfer_call) {
-            self.lock_tokens_if_needed(origin_chain, token_id, amount.0);
             self.remove_fast_transfer(fast_transfer_id);
             amount
         } else {
