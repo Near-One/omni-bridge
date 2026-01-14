@@ -928,7 +928,6 @@ impl Contract {
                 &utxo_fin_transfer_msg.get_transfer_id(origin_chain),
                 storage_owner,
             );
-            self.lock_tokens_if_needed(origin_chain, &token_id, amount.0);
             return PromiseOrValue::Value(amount);
         }
 
@@ -2390,8 +2389,6 @@ impl Contract {
             storage_deposit_amount: None,
         };
 
-        self.unlock_tokens_if_needed(origin_chain, &token_id, amount.0);
-
         Self::check_or_pay_ft_storage(&deposit_action, &mut NearToken::from_yoctonear(0)).then(
             Self::ext(env::current_account_id())
                 .with_static_gas(
@@ -2437,8 +2434,6 @@ impl Contract {
 
         let required_storage_balance =
             self.add_transfer_message(transfer_message.clone(), storage_owner.clone());
-
-        self.unlock_tokens_if_needed(origin_chain, &token_id, transfer_message.amount.0);
 
         let fast_transfer = FastTransfer::from_transfer(transfer_message.clone(), token_id.clone());
         if self.get_fast_transfer_status(&fast_transfer.id()).is_none() {
