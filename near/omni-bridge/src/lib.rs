@@ -804,12 +804,12 @@ impl Contract {
             .add_fast_transfer(fast_transfer, relayer_id, storage_payer.clone())
             .saturating_add(ONE_YOCTO);
 
-        let amount = U128(fast_transfer.calculate_amount_without_fee());
+        let amount_without_fee = U128(fast_transfer.calculate_amount_without_fee());
 
         self.unlock_tokens_if_needed(
             fast_transfer.transfer_id.origin_chain,
             &fast_transfer.token_id,
-            amount.0,
+            amount_without_fee.0,
         );
 
         self.update_storage_balance(
@@ -829,7 +829,7 @@ impl Contract {
         self.send_tokens(
             fast_transfer.token_id.clone(),
             recipient,
-            amount,
+            amount_without_fee,
             &fast_transfer.msg,
         )
         .then(
@@ -839,7 +839,7 @@ impl Contract {
                     &fast_transfer.token_id,
                     fast_transfer.transfer_id.origin_chain,
                     &fast_transfer.id(),
-                    amount,
+                    amount_without_fee,
                     !fast_transfer.msg.is_empty(),
                 ),
         )
@@ -1558,7 +1558,7 @@ impl Contract {
     pub fn fin_transfer_send_tokens_callback(
         &mut self,
         #[serializer(borsh)] transfer_message: TransferMessage,
-        #[serializer(borsh)] lock_decrease_amount: Option<u128>,
+        #[serializer(borsh)] unlocked_amount: u128,
         #[serializer(borsh)] fee_recipient: &AccountId,
         #[serializer(borsh)] is_ft_transfer_call: bool,
         #[serializer(borsh)] storage_owner: &AccountId,
@@ -1571,13 +1571,11 @@ impl Contract {
                 U128(transfer_message.calculate_amount_without_fee()),
             );
 
-            if let Some(lock_decrease_amount) = lock_decrease_amount {
-                self.lock_tokens_if_needed(
-                    transfer_message.get_origin_chain(),
-                    &token,
-                    lock_decrease_amount,
-                );
-            }
+            self.lock_tokens_if_needed(
+                transfer_message.get_origin_chain(),
+                &token,
+                unlocked_amount,
+            );
 
             self.remove_fin_transfer(&transfer_message.get_transfer_id(), storage_owner);
 
@@ -1773,14 +1771,13 @@ impl Contract {
         let mut required_balance = self.add_fin_transfer(&transfer_message.get_transfer_id());
 
         let token = self.get_token_id(&transfer_message.token);
-        let amount_without_fee = transfer_message.calculate_amount_without_fee();
         let fast_transfer = FastTransfer::from_transfer(transfer_message.clone(), token.clone());
         let fast_transfer_status = self.get_fast_transfer_status(&fast_transfer.id());
 
-        let lock_decrease_amount = if self.deployed_tokens.contains(&token) {
-            None
+        let unlocked_amount = if self.deployed_tokens.contains(&token) {
+            0
         } else {
-            let lock_decrease_amount = if fast_transfer_status.is_some() {
+            let unlocked_amount = if fast_transfer_status.is_some() {
                 transfer_message.fee.fee.0
             } else {
                 transfer_message.amount.0
@@ -1789,9 +1786,10 @@ impl Contract {
             self.unlock_tokens_if_needed(
                 transfer_message.get_origin_chain(),
                 &token,
-                lock_decrease_amount,
+                unlocked_amount,
             );
-            Some(lock_decrease_amount)
+
+            unlocked_amount
         };
 
         // If fast transfer happened, change recipient and fee recipient to the relayer that executed fast transfer
@@ -1861,18 +1859,23 @@ impl Contract {
             env::attached_deposit(),
         );
 
-        self.send_tokens(token.clone(), recipient, U128(amount_without_fee), &msg)
-            .then(
-                Self::ext(env::current_account_id())
-                    .with_static_gas(SEND_TOKENS_CALLBACK_GAS)
-                    .fin_transfer_send_tokens_callback(
-                        transfer_message,
-                        lock_decrease_amount,
-                        &fee_recipient,
-                        !msg.is_empty(),
-                        predecessor_account_id,
-                    ),
-            )
+        self.send_tokens(
+            token.clone(),
+            recipient,
+            U128(transfer_message.calculate_amount_without_fee()),
+            &msg,
+        )
+        .then(
+            Self::ext(env::current_account_id())
+                .with_static_gas(SEND_TOKENS_CALLBACK_GAS)
+                .fin_transfer_send_tokens_callback(
+                    transfer_message,
+                    unlocked_amount,
+                    &fee_recipient,
+                    !msg.is_empty(),
+                    predecessor_account_id,
+                ),
+        )
     }
 
     fn process_fin_transfer_to_other_chain(
@@ -1882,7 +1885,6 @@ impl Contract {
     ) {
         let mut required_balance = self.add_fin_transfer(&transfer_message.get_transfer_id());
         let token = self.get_token_id(&transfer_message.token);
-        let amount_without_fee = transfer_message.calculate_amount_without_fee();
 
         if transfer_message.recipient.is_utxo_chain() {
             let btc_account_id = self.get_utxo_chain_token(transfer_message.recipient.get_chain());
@@ -1913,8 +1915,13 @@ impl Contract {
 
         // If fast transfer happened, send tokens to the relayer that executed fast transfer
         if let Some(relayer) = recipient {
-            self.send_tokens(token, relayer, U128(amount_without_fee), "")
-                .detach();
+            self.send_tokens(
+                token,
+                relayer,
+                U128(transfer_message.calculate_amount_without_fee()),
+                "",
+            )
+            .detach();
             self.mark_fast_transfer_as_finalised(&fast_transfer.id());
         } else {
             required_balance = self

@@ -952,10 +952,10 @@ fn test_fin_transfer_callback_refund_restores_locked_tokens() {
         )]),
     );
 
-    let lock_decrease_amount = Some(transfer_message.amount.0);
+    let unlocked_amount = transfer_message.amount.0;
     contract.fin_transfer_send_tokens_callback(
         transfer_message,
-        lock_decrease_amount,
+        unlocked_amount,
         &fee_recipient,
         true,
         &recipient,
