@@ -1793,7 +1793,9 @@ impl Contract {
         let fast_transfer = FastTransfer::from_transfer(transfer_message.clone(), token.clone());
         let fast_transfer_status = self.get_fast_transfer_status(&fast_transfer.id());
 
-        let lock_decrease_amount = if !self.deployed_tokens.contains(&token) {
+        let lock_decrease_amount = if self.deployed_tokens.contains(&token) {
+            None
+        } else {
             let lock_decrease_amount = if fast_transfer_status.is_some() {
                 transfer_message.fee.fee.0
             } else {
@@ -1806,8 +1808,6 @@ impl Contract {
                 lock_decrease_amount,
             );
             Some(lock_decrease_amount)
-        } else {
-            None
         };
 
         // If fast transfer happened, change recipient and fee recipient to the relayer that executed fast transfer
