@@ -93,7 +93,7 @@ impl Contract {
             return LockAction::Unchanged;
         }
 
-        self.unlock_other_tokens(chain_kind, token_id, amount)
+        self.unlock_nep141_tokens(chain_kind, token_id, amount)
     }
 
     fn lock_other_tokens(
