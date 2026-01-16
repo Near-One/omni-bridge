@@ -42,6 +42,7 @@ impl Contract {
                 input: _,
                 output: _,
                 max_gas_fee,
+                chain_specific_data: _,
             } = message
             {
                 require!(
