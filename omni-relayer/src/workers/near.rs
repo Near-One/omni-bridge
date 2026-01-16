@@ -252,6 +252,7 @@ pub async fn process_transfer_to_utxo_event(
                 origin_chain: transfer_message.sender.get_chain(),
                 origin_nonce: transfer_message.origin_nonce,
             },
+            true,
             TransactionOptions {
                 nonce: Some(nonce),
                 wait_until: near_primitives::views::TxExecutionStatus::Included,
