@@ -1,13 +1,15 @@
-use near_sdk::{env, require, AccountId};
+use near_sdk::{env, near, require, AccountId};
 use omni_types::ChainKind;
 
 use crate::Contract;
 
+#[near(serializers=[borsh])]
 pub enum LockedToken {
     Nep141(AccountId),
     Other(AccountId),
 }
 
+#[near(serializers=[borsh])]
 pub enum LockAction {
     Locked {
         chain_kind: ChainKind,
@@ -121,15 +123,14 @@ impl Contract {
         token_id: &AccountId,
         amount: u128,
     ) -> LockAction {
-        if !self.deployed_tokens.contains(token_id) || amount == 0 {
+        if !self.deployed_tokens.contains(token_id)
+            || self.get_token_origin_chain(token_id) == chain_kind
+            || amount == 0
+        {
             return LockAction::Unchanged;
         }
 
-        if self.get_token_origin_chain(token_id) == chain_kind {
-            self.lock_other_tokens(chain_kind, token_id, amount)
-        } else {
-            LockAction::Unchanged
-        }
+        self.lock_other_tokens(chain_kind, token_id, amount)
     }
 
     fn unlock_other_tokens(
@@ -163,54 +164,45 @@ impl Contract {
         token_id: &AccountId,
         amount: u128,
     ) -> LockAction {
-        if !self.deployed_tokens.contains(token_id) || amount == 0 {
+        if !self.deployed_tokens.contains(token_id)
+            || self.get_token_origin_chain(token_id) == chain_kind
+            || amount == 0
+        {
             return LockAction::Unchanged;
         }
 
         self.unlock_other_tokens(chain_kind, token_id, amount)
     }
 
-    pub fn lock_or_unlock_other_tokens_if_needed(
-        &mut self,
-        origin_chain: ChainKind,
-        destination_chain: ChainKind,
-        token_id: &AccountId,
-        amount: u128,
-    ) -> LockAction {
-        if self.get_token_origin_chain(token_id) == origin_chain {
-            self.lock_other_tokens(destination_chain, token_id, amount)
-        } else {
-            self.unlock_other_tokens(origin_chain, token_id, amount)
-        }
-    }
-
-    pub fn revert_lock_action(&mut self, lock_action: LockAction) {
-        match lock_action {
-            LockAction::Locked {
-                chain_kind: chain,
-                token,
-                amount,
-            } => match token {
-                LockedToken::Nep141(token_id) => {
-                    self.unlock_nep141_tokens(chain, &token_id, amount);
-                }
-                LockedToken::Other(token_id) => {
-                    self.unlock_other_tokens(chain, &token_id, amount);
-                }
-            },
-            LockAction::Unlocked {
-                chain_kind: chain,
-                token,
-                amount,
-            } => match token {
-                LockedToken::Nep141(token_id) => {
-                    self.lock_nep141_tokens(chain, &token_id, amount);
-                }
-                LockedToken::Other(token_id) => {
-                    self.lock_other_tokens(chain, &token_id, amount);
-                }
-            },
-            LockAction::Unchanged => {}
+    pub fn revert_lock_actions(&mut self, lock_actions: &[LockAction]) {
+        for lock_action in lock_actions {
+            match lock_action {
+                LockAction::Locked {
+                    chain_kind,
+                    token,
+                    amount,
+                } => match token {
+                    LockedToken::Nep141(token_id) => {
+                        self.unlock_nep141_tokens(*chain_kind, token_id, *amount);
+                    }
+                    LockedToken::Other(token_id) => {
+                        self.unlock_other_tokens(*chain_kind, token_id, *amount);
+                    }
+                },
+                LockAction::Unlocked {
+                    chain_kind,
+                    token,
+                    amount,
+                } => match token {
+                    LockedToken::Nep141(token_id) => {
+                        self.lock_nep141_tokens(*chain_kind, token_id, *amount);
+                    }
+                    LockedToken::Other(token_id) => {
+                        self.lock_other_tokens(*chain_kind, token_id, *amount);
+                    }
+                },
+                LockAction::Unchanged => {}
+            }
         }
     }
 }

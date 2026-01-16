@@ -1,8 +1,7 @@
 use near_sdk::{
     env::{self, panic_str},
-    serde_json, AccountId, Promise, PromiseIndex,
+    serde_json, Promise, PromiseIndex,
 };
-use omni_types::ChainKind;
 use serde::Serialize;
 
 pub trait SdkExpect<T> {

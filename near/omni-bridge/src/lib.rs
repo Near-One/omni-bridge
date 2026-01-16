@@ -36,6 +36,7 @@ use storage::{
     Decimals, FastTransferStatusStorage, TransferMessageStorage, TransferMessageStorageValue,
     NEP141_DEPOSIT,
 };
+use token_lock::LockAction;
 
 mod btc;
 mod helpers;
@@ -880,6 +881,11 @@ impl Contract {
             &fast_transfer.token_id,
             fast_transfer.amount.0,
         );
+        self.lock_other_tokens_if_needed(
+            fast_transfer.get_destination_chain(),
+            &fast_transfer.token_id,
+            fast_transfer.amount.0,
+        );
 
         let mut required_balance =
             self.add_fast_transfer(fast_transfer, relayer_id.clone(), storage_payer.clone());
@@ -1575,17 +1581,14 @@ impl Contract {
         #[serializer(borsh)] fee_recipient: &AccountId,
         #[serializer(borsh)] is_ft_transfer_call: bool,
         #[serializer(borsh)] storage_owner: &AccountId,
+        #[serializer(borsh)] lock_actions: &[LockAction],
     ) {
         let token = self.get_token_id(&transfer_message.token);
 
         if Self::is_refund_required(is_ft_transfer_call) {
             self.burn_tokens_if_needed(token.clone(), U128(transfer_message.amount_without_fee()));
 
-            self.lock_nep141_tokens_if_needed(
-                transfer_message.get_origin_chain(),
-                &token,
-                transfer_message.amount.0,
-            );
+            self.revert_lock_actions(lock_actions);
 
             self.remove_fin_transfer(&transfer_message.get_transfer_id(), storage_owner);
 
@@ -1726,6 +1729,16 @@ impl Contract {
                 &token_id,
                 transfer_message.amount.0,
             );
+            self.unlock_other_tokens_if_needed(
+                transfer_message.get_origin_chain(),
+                &token_id,
+                transfer_message.amount.0,
+            );
+            self.lock_other_tokens_if_needed(
+                transfer_message.get_destination_chain(),
+                &token_id,
+                transfer_message.amount.0,
+            );
         } else {
             return transfer_message.amount;
         }
@@ -1748,11 +1761,23 @@ impl Contract {
         let fast_transfer = FastTransfer::from_transfer(transfer_message.clone(), token.clone());
         let fast_transfer_status = self.get_fast_transfer_status(&fast_transfer.id());
 
-        self.unlock_nep141_tokens_if_needed(
-            transfer_message.get_origin_chain(),
-            &token,
-            transfer_message.amount.0,
-        );
+        let lock_actions = [
+            self.unlock_nep141_tokens_if_needed(
+                transfer_message.get_origin_chain(),
+                &token,
+                transfer_message.amount.0,
+            ),
+            self.unlock_other_tokens_if_needed(
+                transfer_message.get_origin_chain(),
+                &token,
+                transfer_message.amount.0,
+            ),
+            self.lock_other_tokens_if_needed(
+                transfer_message.get_destination_chain(),
+                &token,
+                transfer_message.amount.0,
+            ),
+        ];
 
         // If fast transfer happened, change recipient and fee recipient to the relayer that executed fast transfer
         let (recipient, msg, fee_recipient) = match fast_transfer_status {
@@ -1835,6 +1860,7 @@ impl Contract {
                     &fee_recipient,
                     !msg.is_empty(),
                     predecessor_account_id,
+                    &lock_actions,
                 ),
         )
     }
@@ -1861,6 +1887,16 @@ impl Contract {
             &token,
             transfer_message.amount.0,
         );
+        self.unlock_other_tokens_if_needed(
+            transfer_message.get_origin_chain(),
+            &token,
+            transfer_message.amount.0,
+        );
+        self.lock_other_tokens_if_needed(
+            transfer_message.get_destination_chain(),
+            &token,
+            transfer_message.amount.0,
+        );
 
         let fast_transfer = FastTransfer::from_transfer(transfer_message.clone(), token.clone());
         let recipient = if let Some(status) = self.get_fast_transfer_status(&fast_transfer.id()) {
@@ -1868,6 +1904,11 @@ impl Contract {
             Some(status.relayer)
         } else {
             self.lock_nep141_tokens_if_needed(
+                transfer_message.get_destination_chain(),
+                &token,
+                transfer_message.amount.0,
+            );
+            self.lock_other_tokens_if_needed(
                 transfer_message.get_destination_chain(),
                 &token,
                 transfer_message.amount.0,
@@ -2431,7 +2472,12 @@ impl Contract {
 
         let fast_transfer = FastTransfer::from_transfer(transfer_message.clone(), token_id.clone());
         if self.get_fast_transfer_status(&fast_transfer.id()).is_none() {
-            self.lock_nep141_tokens_if_needed(
+            self.unlock_other_tokens_if_needed(
+                transfer_message.get_origin_chain(),
+                &token_id,
+                transfer_message.amount.0,
+            );
+            self.lock_other_tokens_if_needed(
                 transfer_message.get_destination_chain(),
                 &token_id,
                 transfer_message.amount.0,
@@ -2492,6 +2538,11 @@ impl Contract {
         );
 
         self.unlock_nep141_tokens_if_needed(
+            transfer_message.get_destination_chain(),
+            &token,
+            token_fee,
+        );
+        self.unlock_other_tokens_if_needed(
             transfer_message.get_destination_chain(),
             &token,
             token_fee,
