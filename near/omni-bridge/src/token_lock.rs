@@ -52,7 +52,11 @@ impl Contract {
         token_id: &AccountId,
         amount: u128,
     ) -> LockAction {
-        if self.deployed_tokens.contains(token_id) || chain_kind.is_utxo_chain() || amount == 0 {
+        if self.deployed_tokens_v2.contains_key(token_id)
+            || self.deployed_tokens.contains(token_id)
+            || chain_kind.is_utxo_chain()
+            || amount == 0
+        {
             return LockAction::Unchanged;
         }
 
@@ -89,7 +93,11 @@ impl Contract {
         token_id: &AccountId,
         amount: u128,
     ) -> LockAction {
-        if self.deployed_tokens.contains(token_id) || chain_kind.is_utxo_chain() || amount == 0 {
+        if self.deployed_tokens_v2.contains_key(token_id)
+            || self.deployed_tokens.contains(token_id)
+            || chain_kind.is_utxo_chain()
+            || amount == 0
+        {
             return LockAction::Unchanged;
         }
 
@@ -123,7 +131,8 @@ impl Contract {
         token_id: &AccountId,
         amount: u128,
     ) -> LockAction {
-        if !self.deployed_tokens.contains(token_id)
+        if !(self.deployed_tokens_v2.contains_key(token_id)
+            || self.deployed_tokens.contains(token_id))
             || self.get_token_origin_chain(token_id) == chain_kind
             || amount == 0
         {
@@ -164,7 +173,8 @@ impl Contract {
         token_id: &AccountId,
         amount: u128,
     ) -> LockAction {
-        if !self.deployed_tokens.contains(token_id)
+        if !(self.deployed_tokens_v2.contains_key(token_id)
+            || self.deployed_tokens.contains(token_id))
             || self.get_token_origin_chain(token_id) == chain_kind
             || amount == 0
         {

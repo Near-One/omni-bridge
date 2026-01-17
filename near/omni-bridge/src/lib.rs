@@ -1127,6 +1127,7 @@ impl Contract {
         match env::promise_result(0) {
             PromiseResult::Failed => {
                 self.deployed_tokens.remove(&token_id);
+                self.deployed_tokens_v2.remove(&token_id);
                 self.token_id_to_address
                     .remove(&(token_address.get_chain(), token_id));
                 self.token_address_to_id.remove(token_address);
@@ -1249,7 +1250,10 @@ impl Contract {
         #[serializer(borsh)] recipient: String,
     ) {
         let token_id = env::predecessor_account_id();
-        require!(self.deployed_tokens.contains(&token_id));
+        require!(
+            self.deployed_tokens_v2.contains_key(&token_id)
+                || self.deployed_tokens.contains(&token_id)
+        );
 
         self.current_origin_nonce += 1;
         let destination_nonce = self.get_next_destination_nonce(ChainKind::Eth);
@@ -1453,6 +1457,8 @@ impl Contract {
 
         for token_info in tokens {
             self.deployed_tokens.insert(&token_info.token_id);
+            self.deployed_tokens_v2
+                .insert(&token_info.token_id, &token_info.token_address.get_chain());
             self.add_token(
                 &token_info.token_id,
                 &token_info.token_address,
@@ -1478,7 +1484,9 @@ impl Contract {
         reference_hash: Option<Base64VecU8>,
     ) -> Promise {
         let token = self.get_token_id(&address);
-        require!(self.deployed_tokens.contains(&token));
+        require!(
+            self.deployed_tokens_v2.contains_key(&token) || self.deployed_tokens.contains(&token)
+        );
 
         let decimals = self
             .token_decimals
@@ -1509,7 +1517,9 @@ impl Contract {
             self.deployed_tokens.remove(&old_token),
             "ERR_OLD_TOKEN_NOT_DEPLOYED"
         );
+        self.deployed_tokens_v2.remove(&old_token);
         require!(self.deployed_tokens.insert(&new_token), "ERR_TOKEN_EXIST");
+        self.deployed_tokens_v2.insert(&new_token, &origin_chain);
 
         let origin_address = self
             .token_id_to_address
@@ -1598,7 +1608,9 @@ impl Contract {
         } else {
             // Send fee to the fee recipient
             if transfer_message.fee.fee.0 > 0 {
-                if self.deployed_tokens.contains(&token) {
+                if self.deployed_tokens_v2.contains_key(&token)
+                    || self.deployed_tokens.contains(&token)
+                {
                     ext_token::ext(token)
                         .with_static_gas(MINT_TOKEN_GAS)
                         .mint(fee_recipient.clone(), transfer_message.fee.fee, None)
@@ -1679,7 +1691,7 @@ impl Contract {
     }
 
     fn burn_tokens_if_needed(&self, token: AccountId, amount: U128) {
-        if self.deployed_tokens.contains(&token) {
+        if self.deployed_tokens_v2.contains_key(&token) || self.deployed_tokens.contains(&token) {
             ext_token::ext(token)
                 .with_static_gas(BURN_TOKEN_GAS)
                 .burn(amount)
@@ -1949,7 +1961,8 @@ impl Contract {
         amount: U128,
         msg: &str,
     ) -> Promise {
-        let is_deployed_token = self.deployed_tokens.contains(&token);
+        let is_deployed_token =
+            self.deployed_tokens_v2.contains_key(&token) || self.deployed_tokens.contains(&token);
 
         if token == self.wnear_account_id && msg.is_empty() {
             // Unwrap wNEAR and transfer NEAR tokens
@@ -2280,6 +2293,8 @@ impl Contract {
         );
 
         require!(self.deployed_tokens.insert(&token_id), "ERR_TOKEN_EXIST");
+        self.deployed_tokens_v2
+            .insert(&token_id, &token_address.get_chain());
         let required_deposit = env::storage_byte_cost()
             .saturating_mul((env::storage_usage().saturating_sub(storage_usage)).into())
             .saturating_add(NEP141_DEPOSIT);
@@ -2549,7 +2564,8 @@ impl Contract {
         );
 
         if token_fee > 0 {
-            if self.deployed_tokens.contains(&token) {
+            if self.deployed_tokens_v2.contains_key(&token) || self.deployed_tokens.contains(&token)
+            {
                 ext_token::ext(token)
                     .with_static_gas(MINT_TOKEN_GAS)
                     .mint(fee_recipient, U128(token_fee), None)
