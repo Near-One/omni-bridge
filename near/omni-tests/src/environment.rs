@@ -279,7 +279,10 @@ impl TestEnvBuilder {
     pub async fn with_utxo_token(self) -> anyhow::Result<TestEnvBuilderWithToken> {
         let bridge_contract = self.deploy_bridge(None).await?;
 
-        let token_contract = self.deploy_nep141_token().await?;
+        let token_account_id: AccountId = "btc-token".parse().unwrap();
+        let token_contract = self
+            .deploy_nep141_token_with_id(token_account_id)
+            .await?;
 
         let utxo_connector = self
             .worker
@@ -461,6 +464,34 @@ impl TestEnvBuilder {
             .worker
             .dev_deploy(&self.build_artifacts.mock_token)
             .await?;
+
+        token_contract
+            .call("new_default_meta")
+            .args_json(json!({
+                "owner_id": token_contract.id(),
+                "total_supply": U128(u128::MAX)
+            }))
+            .max_gas()
+            .transact()
+            .await?
+            .into_result()?;
+
+        Ok(token_contract)
+    }
+
+    async fn deploy_nep141_token_with_id(
+        &self,
+        id: AccountId,
+    ) -> anyhow::Result<Contract> {
+        let token_contract = self
+            .worker
+            .create_tla_and_deploy(
+                id,
+                self.worker.generate_dev_account_credentials().1,
+                &self.build_artifacts.mock_token,
+            )
+            .await?
+            .unwrap();
 
         token_contract
             .call("new_default_meta")
