@@ -964,6 +964,7 @@ impl Contract {
         .into()
     }
 
+    #[allow(clippy::needless_pass_by_value)]
     #[private]
     pub fn resolve_utxo_fin_transfer(
         &mut self,
