@@ -1030,7 +1030,7 @@ fn test_fin_transfer_callback_refund_restores_locked_tokens() {
         &fee_recipient,
         true,
         &recipient,
-        &[LockAction::Unlocked {
+        vec![LockAction::Unlocked {
             chain_kind: ChainKind::Eth,
             token: LockedToken::Nep141(token_id.clone()),
             amount: DEFAULT_TRANSFER_AMOUNT,

@@ -749,7 +749,10 @@ mod tests {
             assert_eq!(locked_origin_before, locked_origin_after);
 
             if is_bridged_token {
-                assert_eq!(locked_destination_before, locked_destination_after);
+                assert_eq!(
+                    locked_destination_after,
+                    U128(locked_destination_before.0 + transfer_message.amount.0)
+                );
                 assert_eq!(
                     contract_balance_after,
                     U128(contract_balance_before.0 - normalized_fee)

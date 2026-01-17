@@ -1591,14 +1591,14 @@ impl Contract {
         #[serializer(borsh)] fee_recipient: &AccountId,
         #[serializer(borsh)] is_ft_transfer_call: bool,
         #[serializer(borsh)] storage_owner: &AccountId,
-        #[serializer(borsh)] lock_actions: &[LockAction],
+        #[serializer(borsh)] lock_actions: Vec<LockAction>,
     ) {
         let token = self.get_token_id(&transfer_message.token);
 
         if Self::is_refund_required(is_ft_transfer_call) {
             self.burn_tokens_if_needed(token.clone(), U128(transfer_message.amount_without_fee()));
 
-            self.revert_lock_actions(lock_actions);
+            self.revert_lock_actions(&lock_actions);
 
             self.remove_fin_transfer(&transfer_message.get_transfer_id(), storage_owner);
 
@@ -1773,7 +1773,7 @@ impl Contract {
         let fast_transfer = FastTransfer::from_transfer(transfer_message.clone(), token.clone());
         let fast_transfer_status = self.get_fast_transfer_status(&fast_transfer.id());
 
-        let lock_actions = [
+        let lock_actions = vec![
             self.unlock_nep141_tokens_if_needed(
                 transfer_message.get_origin_chain(),
                 &token,
@@ -1872,7 +1872,7 @@ impl Contract {
                     &fee_recipient,
                     !msg.is_empty(),
                     predecessor_account_id,
-                    &lock_actions,
+                    lock_actions,
                 ),
         )
     }
