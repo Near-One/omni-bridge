@@ -1361,12 +1361,12 @@ impl Contract {
         }
 
         let origin_chain = match token.as_str() {
-            s if s.starts_with("eth-") || s.starts_with("factory-") => ChainKind::Eth,
-            s if s.starts_with("base-") => ChainKind::Base,
-            s if s.starts_with("arb-") => ChainKind::Arb,
-            s if s.starts_with("bnb-") => ChainKind::Bnb,
-            s if s.starts_with("pol-") => ChainKind::Pol,
-            s if s.starts_with("sol-") => ChainKind::Sol,
+            s if s.starts_with("eth") || s.starts_with("factory") => ChainKind::Eth,
+            s if s.starts_with("base") => ChainKind::Base,
+            s if s.starts_with("arb") => ChainKind::Arb,
+            s if s.starts_with("bnb") => ChainKind::Bnb,
+            s if s.starts_with("pol") => ChainKind::Pol,
+            s if s.starts_with("sol") => ChainKind::Sol,
             s if s.starts_with("btc") => ChainKind::Btc,
             s if s.starts_with("zcash") => ChainKind::Zcash,
             _ => env::panic_str("ERR_CANNOT_DETERMINE_ORIGIN_CHAIN"),
