@@ -280,9 +280,7 @@ impl TestEnvBuilder {
         let bridge_contract = self.deploy_bridge(None).await?;
 
         let token_account_id: AccountId = "btc-token".parse().unwrap();
-        let token_contract = self
-            .deploy_nep141_token_with_id(token_account_id)
-            .await?;
+        let token_contract = self.deploy_nep141_token_with_id(token_account_id).await?;
 
         let utxo_connector = self
             .worker
@@ -479,10 +477,7 @@ impl TestEnvBuilder {
         Ok(token_contract)
     }
 
-    async fn deploy_nep141_token_with_id(
-        &self,
-        id: AccountId,
-    ) -> anyhow::Result<Contract> {
+    async fn deploy_nep141_token_with_id(&self, id: AccountId) -> anyhow::Result<Contract> {
         let token_contract = self
             .worker
             .create_tla_and_deploy(
