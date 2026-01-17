@@ -1904,11 +1904,6 @@ impl Contract {
             &token,
             transfer_message.amount.0,
         );
-        self.lock_other_tokens_if_needed(
-            transfer_message.get_destination_chain(),
-            &token,
-            transfer_message.amount.0,
-        );
 
         let fast_transfer = FastTransfer::from_transfer(transfer_message.clone(), token.clone());
         let recipient = if let Some(status) = self.get_fast_transfer_status(&fast_transfer.id()) {
