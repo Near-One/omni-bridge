@@ -279,6 +279,85 @@ fn test_init_transfer_tracks_locked_tokens_per_chain() {
     assert_eq!(locked, U128(DEFAULT_TRANSFER_AMOUNT));
 }
 
+#[test]
+fn test_init_transfer_locks_other_tokens_for_deployed_token() {
+    let mut contract = get_default_contract();
+    let token_id: AccountId = "eth-token.testnet".parse().expect("Invalid token ID");
+    let locked_amount = DEFAULT_TRANSFER_AMOUNT;
+
+    contract.deployed_tokens.insert(&token_id);
+    contract
+        .deployed_tokens_v2
+        .insert(&token_id, &ChainKind::Eth);
+    contract
+        .locked_tokens
+        .insert(&(ChainKind::Near, token_id.clone()), &locked_amount);
+
+    let solana_address: SolAddress = "2xNweLHLqbS9YpP3UyaPrxKqgqoC6yPBFyuLxA8qtgr4"
+        .parse()
+        .expect("Invalid Solana address");
+
+    run_ft_on_transfer(
+        &mut contract,
+        DEFAULT_NEAR_USER_ACCOUNT.to_string(),
+        token_id.to_string(),
+        U128(locked_amount),
+        None,
+        &BridgeOnTransferMsg::InitTransfer(InitTransferMsg {
+            recipient: OmniAddress::Sol(solana_address),
+            fee: U128(0),
+            native_token_fee: U128(0),
+            msg: None,
+        }),
+    );
+
+    assert_eq!(
+        contract.get_locked_tokens(ChainKind::Near, token_id.clone()),
+        U128(0)
+    );
+    assert_eq!(
+        contract.get_locked_tokens(ChainKind::Sol, token_id),
+        U128(locked_amount)
+    );
+}
+
+#[test]
+fn test_init_transfer_skips_other_token_lock_for_origin_chain() {
+    let mut contract = get_default_contract();
+    let token_id: AccountId = "eth-token.testnet".parse().expect("Invalid token ID");
+    let locked_amount = DEFAULT_TRANSFER_AMOUNT;
+
+    contract.deployed_tokens.insert(&token_id);
+    contract
+        .deployed_tokens_v2
+        .insert(&token_id, &ChainKind::Eth);
+    contract
+        .locked_tokens
+        .insert(&(ChainKind::Near, token_id.clone()), &locked_amount);
+
+    run_ft_on_transfer(
+        &mut contract,
+        DEFAULT_NEAR_USER_ACCOUNT.to_string(),
+        token_id.to_string(),
+        U128(locked_amount),
+        None,
+        &BridgeOnTransferMsg::InitTransfer(get_init_transfer_msg(
+            DEFAULT_ETH_USER_ADDRESS,
+            0,
+            0,
+        )),
+    );
+
+    assert_eq!(
+        contract.get_locked_tokens(ChainKind::Near, token_id.clone()),
+        U128(0)
+    );
+    assert_eq!(
+        contract.get_locked_tokens(ChainKind::Eth, token_id),
+        U128(0)
+    );
+}
+
 fn run_update_transfer_fee(
     contract: &mut Contract,
     sender_id: String,
