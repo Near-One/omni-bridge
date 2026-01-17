@@ -876,6 +876,12 @@ impl Contract {
 
         self.burn_tokens_if_needed(fast_transfer.token_id.clone(), fast_transfer.amount);
 
+        self.unlock_other_tokens_if_needed(
+            ChainKind::Near,
+            &fast_transfer.token_id,
+            fast_transfer.amount.0,
+        );
+
         self.lock_nep141_tokens_if_needed(
             fast_transfer.get_destination_chain(),
             &fast_transfer.token_id,
