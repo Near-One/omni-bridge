@@ -341,11 +341,7 @@ fn test_init_transfer_skips_other_token_lock_for_origin_chain() {
         token_id.to_string(),
         U128(locked_amount),
         None,
-        &BridgeOnTransferMsg::InitTransfer(get_init_transfer_msg(
-            DEFAULT_ETH_USER_ADDRESS,
-            0,
-            0,
-        )),
+        &BridgeOnTransferMsg::InitTransfer(get_init_transfer_msg(DEFAULT_ETH_USER_ADDRESS, 0, 0)),
     );
 
     assert_eq!(
@@ -1025,16 +1021,17 @@ fn test_fin_transfer_callback_refund_restores_locked_tokens() {
         )]),
     );
 
+    let lock_actions = vec![LockAction::Unlocked {
+        chain_kind: ChainKind::Eth,
+        token: LockedToken::Nep141(token_id.clone()),
+        amount: DEFAULT_TRANSFER_AMOUNT,
+    }];
     contract.fin_transfer_send_tokens_callback(
         transfer_message,
         &fee_recipient,
         true,
         &recipient,
-        vec![LockAction::Unlocked {
-            chain_kind: ChainKind::Eth,
-            token: LockedToken::Nep141(token_id.clone()),
-            amount: DEFAULT_TRANSFER_AMOUNT,
-        }],
+        lock_actions,
     );
 
     assert_eq!(

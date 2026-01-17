@@ -1584,6 +1584,7 @@ impl Contract {
             .detach();
     }
 
+    #[allow(clippy::needless_pass_by_value)]
     #[private]
     pub fn fin_transfer_send_tokens_callback(
         &mut self,
