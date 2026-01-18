@@ -1916,11 +1916,6 @@ impl Contract {
             &token,
             transfer_message.amount.0,
         );
-        self.unlock_other_tokens_if_needed(
-            transfer_message.get_origin_chain(),
-            &token,
-            transfer_message.amount.0,
-        );
 
         let fast_transfer = FastTransfer::from_transfer(transfer_message.clone(), token.clone());
         let recipient = if let Some(status) = self.get_fast_transfer_status(&fast_transfer.id()) {
@@ -1929,6 +1924,11 @@ impl Contract {
         } else {
             self.lock_nep141_tokens_if_needed(
                 transfer_message.get_destination_chain(),
+                &token,
+                transfer_message.amount.0,
+            );
+            self.unlock_other_tokens_if_needed(
+                transfer_message.get_origin_chain(),
                 &token,
                 transfer_message.amount.0,
             );
@@ -2415,6 +2415,12 @@ impl Contract {
             // With transfers to other chain the fee will be claimed after finalization on the destination chain
             U128(fast_transfer.amount_without_fee())
         };
+
+        self.lock_other_tokens_if_needed(
+            fast_transfer.get_destination_chain(),
+            &fast_transfer.token_id,
+            fast_transfer.amount.0,
+        );
 
         self.send_tokens(
             fast_transfer.token_id.clone(),

@@ -45,6 +45,18 @@ mod tests {
             env_builder
                 .mint_tokens(relayer_account.id(), 1_000_000_000)
                 .await?;
+            env_builder
+                .bridge_contract
+                .call("set_locked_tokens")
+                .args_json(json!({
+                    "chain_kind": ChainKind::Near,
+                    "token_id": env_builder.token.contract.id(),
+                    "amount": U128(1_000_000_000),
+                }))
+                .max_gas()
+                .transact()
+                .await?
+                .into_result()?;
 
             let recipient_account = env_builder.create_account(account_n(1)).await?;
             env_builder.storage_deposit(recipient_account.id()).await?;
@@ -215,18 +227,11 @@ mod tests {
                 "Recipient balance is not correct"
             );
 
-            if is_fast_transfer {
-                assert_eq!(
-                    locked_before, locked_after,
-                    "Locked tokens should be unchanged for this transfer"
-                );
-            } else {
-                assert_eq!(
-                    locked_after,
-                    U128(locked_before.0 + amount),
-                    "Locked tokens should increase by the transfer amount"
-                );
-            }
+            assert_eq!(
+                locked_after,
+                U128(locked_before.0 + amount),
+                "Locked tokens should increase by the transfer amount"
+            );
         }
 
         if !is_fast_transfer && !is_transfer_to_near {
