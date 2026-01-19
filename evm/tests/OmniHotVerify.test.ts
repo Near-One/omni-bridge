@@ -112,9 +112,9 @@ describe("OmniHotVerify", () => {
     expect(await OmniHotVerifyInstance.hotVerify(expectedHash, "0x", userPayload, "0x")).to.equal(
       true,
     )
-    expect(await OmniHotVerifyInstance.hotVerify(ethers.ZeroHash, "0x", userPayload, "0x")).to.equal(
-      false,
-    )
+    expect(
+      await OmniHotVerifyInstance.hotVerify(ethers.ZeroHash, "0x", userPayload, "0x"),
+    ).to.equal(false)
 
     const wrongNoncePayload = ethers.AbiCoder.defaultAbiCoder().encode(
       ["uint64"],
