@@ -1,7 +1,5 @@
 use near_sdk::{AccountId, NearToken};
 
-use crate::OmniAddress;
-
 macro_rules! define_contract_errors {
     ($prefix:expr, $enum_name:ident {
         $(
@@ -95,9 +93,10 @@ define_contract_errors! {
         ReadPromiseYieldId,
         SenderCanUpdateTokenFeeOnly,
         SenderIsNotConnector,
+        StorageFeeRecipientOmitted,
         StorageNativeFeeRecipientOmitted,
         StoragePendingTransfers,
-        StorageOmitted { address: OmniAddress },
+        StorageRecipientOmitted,
         TokenDecimalsNotFound,
         TokenExists,
         TokenNotFound,

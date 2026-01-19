@@ -801,10 +801,7 @@ impl Contract {
     ) -> Promise {
         require!(
             Self::check_storage_balance_result(0),
-            BridgeError::StorageOmitted {
-                address: fast_transfer.recipient.clone()
-            }
-            .to_string()
+            BridgeError::StorageRecipientOmitted.to_string()
         );
 
         let OmniAddress::Near(recipient) = fast_transfer.recipient.clone() else {
@@ -927,13 +924,7 @@ impl Contract {
         storage_owner: &AccountId,
     ) -> PromiseOrValue<U128> {
         if !Self::check_storage_balance_result(0) {
-            env::log_str(
-                BridgeError::StorageOmitted {
-                    address: OmniAddress::Near(recipient.clone()),
-                }
-                .to_string()
-                .as_str(),
-            );
+            env::log_str(BridgeError::StorageRecipientOmitted.to_string().as_str());
             self.remove_fin_utxo_transfer(
                 &utxo_fin_transfer_msg.get_transfer_id(origin_chain),
                 storage_owner,
@@ -1731,10 +1722,7 @@ impl Contract {
                     .sdk_expect(BridgeError::Cast)
             ) && storage_deposit_actions[storage_deposit_action_index].account_id == recipient
                 && storage_deposit_actions[storage_deposit_action_index].token_id == token,
-            BridgeError::StorageOmitted {
-                address: OmniAddress::Near(recipient.clone()),
-            }
-            .to_string()
+            BridgeError::StorageRecipientOmitted.to_string()
         );
         storage_deposit_action_index += 1;
 
@@ -1750,10 +1738,7 @@ impl Contract {
                 ) && storage_deposit_actions[storage_deposit_action_index].account_id
                     == fee_recipient
                     && storage_deposit_actions[storage_deposit_action_index].token_id == token,
-                BridgeError::StorageOmitted {
-                    address: OmniAddress::Near(fee_recipient.clone()),
-                }
-                .to_string()
+                BridgeError::StorageFeeRecipientOmitted.to_string()
             );
             storage_deposit_action_index += 1;
 
