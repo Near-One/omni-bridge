@@ -50,7 +50,9 @@ impl OmniToken {
         let current_account_id = env::current_account_id();
         let deployer_account = current_account_id
             .get_parent_account_id()
-            .unwrap_or_else(|| env::panic_str(TokenError::InvalidParentAccount.as_ref()));
+            .unwrap_or_else(|| {
+                env::panic_str(TokenError::InvalidParentAccount.to_string().as_str())
+            });
 
         require!(
             env::predecessor_account_id().as_str() == deployer_account,
@@ -97,7 +99,7 @@ impl OmniToken {
         let caller = env::predecessor_account_id();
         require!(
             caller == self.controller,
-            TokenError::MissingPermission.as_ref()
+            TokenError::MissingPermission.to_string()
         );
     }
 

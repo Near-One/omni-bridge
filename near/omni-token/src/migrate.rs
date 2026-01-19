@@ -27,7 +27,8 @@ impl OmniToken {
     #[init(ignore_state)]
     #[allow(unused_variables)]
     pub fn migrate(from_version: u32) -> Self {
-        env::state_read().unwrap_or_else(|| env::panic_str(TokenError::NoStateToMigrate.as_ref()))
+        env::state_read()
+            .unwrap_or_else(|| env::panic_str(TokenError::NoStateToMigrate.to_string().as_str()))
     }
 
     /// # Panics
@@ -77,14 +78,14 @@ impl UpgradeAndMigrate for OmniToken {
 
         // Receive the code directly from the input to avoid the
         // GAS overhead of deserializing parameters
-        let input = env::input().unwrap_or_else(|| env::panic_str(TokenError::NoInput.as_ref()));
+        let input = env::input()
+            .unwrap_or_else(|| env::panic_str(TokenError::NoInput.to_string().as_str()));
         let promise_id = env::promise_batch_create(&env::current_account_id());
         // Allow switching to global contract code when a hash is provided and vice versa.
         if input.len() == 32 {
-            let code_hash = input
-                .as_slice()
-                .try_into()
-                .unwrap_or_else(|_| env::panic_str(TokenError::InvalidCodeHash.as_ref()));
+            let code_hash = input.as_slice().try_into().unwrap_or_else(|_| {
+                env::panic_str(TokenError::InvalidCodeHash.to_string().as_str())
+            });
             env::promise_batch_action_use_global_contract(promise_id, &code_hash);
         } else {
             // Deploy the contract code.

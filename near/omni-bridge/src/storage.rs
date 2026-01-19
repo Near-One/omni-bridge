@@ -216,7 +216,7 @@ impl Contract {
             require!(
                 storage.total.saturating_sub(storage.available)
                     == self.required_balance_for_account(),
-                BridgeError::StoragePendingTransfers.as_ref()
+                BridgeError::StoragePendingTransfers.to_string()
             );
         }
 

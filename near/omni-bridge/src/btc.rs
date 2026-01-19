@@ -47,7 +47,7 @@ impl Contract {
             {
                 require!(
                     btc_address == target_btc_address,
-                    BridgeError::IncorrectTargetUtxoAddress.as_ref()
+                    BridgeError::IncorrectTargetUtxoAddress.to_string()
                 );
 
                 if !transfer.message.msg.is_empty() {
@@ -58,7 +58,7 @@ impl Contract {
                     require!(
                         max_gas_fee.expect("max_gas_fee is missing").0
                             == max_gas_fee_from_msg.0.into(),
-                        BridgeError::InvalidMaxGasFee.as_ref()
+                        BridgeError::InvalidMaxGasFee.to_string()
                     );
                 }
             } else {
@@ -71,7 +71,7 @@ impl Contract {
         if let Some(fee) = &fee {
             require!(
                 &transfer.message.fee == fee,
-                BridgeError::InvalidFee.as_ref()
+                BridgeError::InvalidFee.to_string()
             );
         }
 
@@ -79,7 +79,7 @@ impl Contract {
         let btc_account_id = self.get_utxo_chain_token(chain_kind);
         require!(
             self.get_token_id(&transfer.message.token) == btc_account_id,
-            BridgeError::NativeTokenRequiredForChain.as_ref()
+            BridgeError::NativeTokenRequiredForChain.to_string()
         );
 
         self.remove_transfer_message(transfer_id);
@@ -128,8 +128,9 @@ impl Contract {
         decimals: u8,
     ) {
         let storage_usage = env::storage_usage();
-        let token_address = OmniAddress::new_zero(chain_kind)
-            .unwrap_or_else(|_| env::panic_str(BridgeError::FailedToGetZeroAddress.as_ref()));
+        let token_address = OmniAddress::new_zero(chain_kind).unwrap_or_else(|_| {
+            env::panic_str(BridgeError::FailedToGetZeroAddress.to_string().as_str())
+        });
 
         self.add_token(&utxo_chain_token_id, &token_address, decimals, decimals);
 
@@ -148,7 +149,7 @@ impl Contract {
 
         require!(
             env::attached_deposit() >= required_deposit,
-            BridgeError::InsufficientStorageDeposit.as_ref()
+            BridgeError::InsufficientStorageDeposit.to_string()
         );
 
         ext_token::ext(utxo_chain_token_id)
