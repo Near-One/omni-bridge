@@ -1367,18 +1367,20 @@ impl Contract {
         }
 
         let origin_chain = match token.as_str() {
-            s if s.starts_with("eth") || s.starts_with("factory") => ChainKind::Eth,
+            s if s.starts_with("eth") || s.contains("factory") => ChainKind::Eth,
             s if s.starts_with("base") => ChainKind::Base,
             s if s.starts_with("arb") => ChainKind::Arb,
             s if s.starts_with("bnb") => ChainKind::Bnb,
             s if s.starts_with("pol") => ChainKind::Pol,
             s if s.starts_with("sol") => ChainKind::Sol,
-            s if s.starts_with("btc") => ChainKind::Btc,
-            s if s.starts_with("zcash") => ChainKind::Zcash,
+            s if s.starts_with("nbtc") => ChainKind::Btc,
+            s if s.starts_with("nzcash") | s.starts_with("nzec") => ChainKind::Zcash,
             _ => env::panic_str("ERR_CANNOT_DETERMINE_ORIGIN_CHAIN"),
         };
 
-        self.deployed_tokens_v2.insert(token, &origin_chain);
+        if !origin_chain.is_utxo_chain() {
+            self.deployed_tokens_v2.insert(token, &origin_chain);
+        }
 
         origin_chain
     }
