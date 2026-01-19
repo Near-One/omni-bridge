@@ -3,6 +3,7 @@ use strum_macros::{AsRefStr, Display};
 
 #[derive(Display, Debug, Clone, Copy, PartialEq, Eq, AsRefStr)]
 #[strum(serialize_all = "shouty_snake_case", prefix = "ERR_")]
+#[non_exhaustive]
 pub enum BridgeError {
     Borsh,
     Cast,
@@ -58,6 +59,7 @@ pub enum BridgeError {
 
 #[derive(Display, Debug, Clone, Copy, PartialEq, Eq, AsRefStr)]
 #[strum(serialize_all = "shouty_snake_case", prefix = "ERR_")]
+#[non_exhaustive]
 pub enum StorageError {
     MessageAccountNotRegistered,
     NotEnoughBalanceForFee,
@@ -67,6 +69,7 @@ pub enum StorageError {
 
 #[derive(Display, Debug, Clone, Copy, PartialEq, Eq, AsRefStr)]
 #[strum(serialize_all = "shouty_snake_case", prefix = "ERR_")]
+#[non_exhaustive]
 pub enum TokenError {
     FailedToReadState,
     InvalidCodeHash,
@@ -78,6 +81,7 @@ pub enum TokenError {
 
 #[derive(Display, Debug, Clone, Copy, PartialEq, Eq, AsRefStr)]
 #[strum(serialize_all = "shouty_snake_case", prefix = "ERR_")]
+#[non_exhaustive]
 pub enum ProverError {
     HashNotSet,
     InvalidBlockHash,
@@ -87,6 +91,7 @@ pub enum ProverError {
 
 #[derive(Display, Debug, Clone, Copy, PartialEq, Eq, AsRefStr)]
 #[strum(serialize_all = "shouty_snake_case", prefix = "ERR_")]
+#[non_exhaustive]
 pub enum TypesError {
     InvalidHex,
     InvalidHexLength,
@@ -94,6 +99,7 @@ pub enum TypesError {
 
 #[derive(Display, Debug, Clone, PartialEq, Eq, AsRefStr)]
 #[strum(serialize_all = "shouty_snake_case", prefix = "ERR_")]
+#[non_exhaustive]
 pub enum StorageBalanceError {
     AccountNotRegistered(AccountId),
     NotEnoughStorage {
@@ -103,6 +109,7 @@ pub enum StorageBalanceError {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum OmniError {
     Bridge(BridgeError),
     Prover(ProverError),
