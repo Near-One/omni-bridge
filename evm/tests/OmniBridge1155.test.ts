@@ -103,59 +103,6 @@ describe("OmniBridge ERC1155", () => {
     expect(storedMapping.tokenId).to.equal(tokenId)
   })
 
-  it("stores initiatedTransfers for ERC1155 and supports hot_verify", async () => {
-    const tokenAddress = await erc1155.getAddress()
-    const deterministic = await bridge.deriveDeterministicAddress(tokenAddress, tokenId)
-    const amount = 3n
-    const fee = 0n
-    const nativeFee = 0n
-    const recipientOnNear = "recipient.near"
-    const memo = "erc1155-hot-verify"
-
-    await bridge.logMetadata1155(tokenAddress, tokenId)
-
-    await bridge
-      .connect(user)
-      .initTransfer1155(tokenAddress, tokenId, amount, fee, nativeFee, recipientOnNear, memo)
-
-    const originNonce = await bridge.currentOriginNonce()
-    const stored = await bridge.initiatedTransfers(originNonce)
-    const chainId = (await ethers.provider.getNetwork()).chainId
-    const expectedHash = ethers.keccak256(
-      ethers.AbiCoder.defaultAbiCoder().encode(
-        [
-          "uint256",
-          "address",
-          "address",
-          "address",
-          "uint64",
-          "uint128",
-          "uint128",
-          "uint128",
-          "string",
-          "string",
-        ],
-        [
-          chainId,
-          await bridge.getAddress(),
-          await user.getAddress(),
-          deterministic,
-          originNonce,
-          amount,
-          fee,
-          nativeFee,
-          recipientOnNear,
-          memo,
-        ],
-      ),
-    )
-
-    expect(stored).to.equal(expectedHash)
-
-    const userPayload = ethers.AbiCoder.defaultAbiCoder().encode(["uint64"], [originNonce])
-    expect(await bridge.hot_verify(expectedHash, "0x", userPayload, "0x")).to.equal(true)
-  })
-
   it("finalizes ERC1155 transfer using deterministic address", async () => {
     const deterministic = await bridge.deriveDeterministicAddress(
       await erc1155.getAddress(),

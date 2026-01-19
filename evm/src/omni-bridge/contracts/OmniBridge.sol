@@ -46,7 +46,7 @@ contract OmniBridge is
     mapping(address => address) public customMinters;
     mapping(address => MultiTokenInfo) public multiTokens;
 
-    mapping(uint64 => bytes32) public initiatedTransfers;
+    mapping(uint64 => bytes32) internal _initiatedTransfers;
 
     bytes32 public constant PAUSABLE_ADMIN_ROLE =
         keccak256("PAUSABLE_ADMIN_ROLE");
@@ -365,26 +365,16 @@ contract OmniBridge is
     ) external payable whenNotPaused(PAUSED_INIT_TRANSFER) {
         currentOriginNonce += 1;
 
-        bytes32 transferHash = keccak256(
-            abi.encode(
-                block.chainid,
-                address(this),
-                msg.sender,
-                tokenAddress,
-                currentOriginNonce,
-                amount,
-                fee,
-                nativeFee,
-                recipient,
-                message
-            )
+        recordInitiatedTransfer(
+            msg.sender,
+            tokenAddress,
+            currentOriginNonce,
+            amount,
+            fee,
+            nativeFee,
+            recipient,
+            message
         );
-
-        require(
-            initiatedTransfers[currentOriginNonce] == bytes32(0),
-            "ERR_NONCE_ALREADY_USED"
-        );
-        initiatedTransfers[currentOriginNonce] = transferHash;
 
         if (fee >= amount) {
             revert InvalidFee();
@@ -459,26 +449,16 @@ contract OmniBridge is
             tokenId
         );
 
-        bytes32 transferHash = keccak256(
-            abi.encode(
-                block.chainid,
-                address(this),
-                msg.sender,
-                deterministicToken,
-                currentOriginNonce,
-                amount,
-                fee,
-                nativeFee,
-                recipient,
-                message
-            )
+        recordInitiatedTransfer(
+            msg.sender,
+            deterministicToken,
+            currentOriginNonce,
+            amount,
+            fee,
+            nativeFee,
+            recipient,
+            message
         );
-
-        require(
-            initiatedTransfers[currentOriginNonce] == bytes32(0),
-            "ERR_NONCE_ALREADY_USED"
-        );
-        initiatedTransfers[currentOriginNonce] = transferHash;
 
         if (fee >= amount) {
             revert InvalidFee();
@@ -517,6 +497,17 @@ contract OmniBridge is
             message
         );
     }
+
+    function recordInitiatedTransfer(
+        address /*sender*/,
+        address /*tokenAddress*/,
+        uint64 /*originNonce*/,
+        uint128 /*amount*/,
+        uint128 /*fee*/,
+        uint128 /*nativeFee*/,
+        string calldata /*recipient*/,
+        string calldata /*message*/
+    ) internal virtual {}
 
     function initTransferExtension(
         address /*sender*/,
@@ -572,19 +563,6 @@ contract OmniBridge is
     ) external pure override returns (bytes4) {
         // Explicitly reject batched multi-token transfers
         revert ERC1155BatchNotSupported();
-    }
-
-    function hot_verify(
-        bytes32 msg_hash,
-        bytes memory /*_walletId*/,
-        bytes memory userPayload,
-        bytes memory /*_metadata*/
-    ) public view returns (bool) {
-        uint64 nonce = abi.decode(userPayload, (uint64));
-        if (nonce == 0) return false;
-        bytes32 stored = initiatedTransfers[nonce];
-        if (stored == bytes32(0)) return false;
-        return stored == msg_hash;
     }
 
     function pause(uint256 flags) external onlyRole(DEFAULT_ADMIN_ROLE) {
