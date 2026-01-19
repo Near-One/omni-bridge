@@ -700,11 +700,13 @@ async fn seed_locked_tokens(
     token_id: &AccountId,
 ) -> anyhow::Result<()> {
     bridge_contract
-        .call("set_locked_tokens")
+        .call("set_locked_token")
         .args_json(json!({
-            "chain_kind": ChainKind::Eth,
-            "token_id": token_id,
-            "amount": U128(DEFAULT_LOCKED_TOKENS),
+            "args": {
+                "chain_kind": ChainKind::Eth,
+                "token_id": token_id,
+                "amount": U128(DEFAULT_LOCKED_TOKENS),
+            }
         }))
         .max_gas()
         .transact()

@@ -47,11 +47,13 @@ mod tests {
                 .await?;
             env_builder
                 .bridge_contract
-                .call("set_locked_tokens")
+                .call("set_locked_token")
                 .args_json(json!({
-                    "chain_kind": ChainKind::Near,
-                    "token_id": env_builder.token.contract.id(),
-                    "amount": U128(1_000_000_000),
+                    "args": {
+                        "chain_kind": ChainKind::Near,
+                        "token_id": env_builder.token.contract.id(),
+                        "amount": U128(1_000_000_000),
+                    }
                 }))
                 .max_gas()
                 .transact()
