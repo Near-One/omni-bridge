@@ -1453,6 +1453,7 @@ impl Contract {
     }
 
     #[access_control_any(roles(Role::DAO))]
+    #[payable]
     pub fn migrate_deployed_token(
         &mut self,
         origin_chain: ChainKind,
@@ -1487,6 +1488,12 @@ impl Contract {
                 .is_none(),
             "ERR_TOKEN_ALREADY_MIGRATED"
         );
+
+        ext_token::ext(new_token)
+            .with_static_gas(STORAGE_DEPOSIT_GAS)
+            .with_attached_deposit(NEP141_DEPOSIT)
+            .storage_deposit(&env::current_account_id(), Some(true))
+            .detach();
     }
 
     pub fn get_current_destination_nonce(&self, chain_kind: ChainKind) -> Nonce {
