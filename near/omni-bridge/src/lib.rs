@@ -1573,21 +1573,6 @@ impl Contract {
         self.token_decimals.get(address)
     }
 
-    #[must_use]
-    pub fn get_locked_tokens(&self, chain_kind: ChainKind, token_id: AccountId) -> U128 {
-        U128(self.locked_tokens.get(&(chain_kind, token_id)).unwrap_or(0))
-    }
-
-    #[access_control_any(roles(Role::DAO))]
-    pub fn set_locked_tokens(&mut self, chain_kind: ChainKind, token_id: AccountId, amount: U128) {
-        if amount.0 == 0 {
-            self.locked_tokens.remove(&(chain_kind, token_id));
-        } else {
-            self.locked_tokens
-                .insert(&(chain_kind, token_id), &amount.0);
-        }
-    }
-
     #[access_control_any(roles(Role::DAO, Role::TokenControllerUpdater))]
     pub fn update_tokens_controller(
         &self,

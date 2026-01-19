@@ -1,7 +1,15 @@
-use near_sdk::{env, near, require, AccountId};
+use near_plugins::{access_control_any, AccessControllable};
+use near_sdk::{env, json_types::U128, near, require, AccountId};
 use omni_types::ChainKind;
 
-use crate::Contract;
+use crate::{Contract, ContractExt, Role};
+
+#[near(serializers=[json])]
+pub struct SetLockedTokenArgs {
+    chain_kind: ChainKind,
+    token_id: AccountId,
+    amount: U128,
+}
 
 #[near(serializers=[json, borsh])]
 pub enum LockedToken {
@@ -22,6 +30,27 @@ pub enum LockAction {
         amount: u128,
     },
     Unchanged,
+}
+
+#[near]
+impl Contract {
+    #[must_use]
+    pub fn get_locked_tokens(&self, chain_kind: ChainKind, token_id: AccountId) -> U128 {
+        U128(self.locked_tokens.get(&(chain_kind, token_id)).unwrap_or(0))
+    }
+
+    #[access_control_any(roles(Role::DAO))]
+    pub fn set_locked_token(&mut self, args: SetLockedTokenArgs) {
+        self.locked_tokens
+            .insert(&(args.chain_kind, args.token_id), &args.amount.0);
+    }
+
+    #[access_control_any(roles(Role::DAO))]
+    pub fn set_locked_tokens(&mut self, args: Vec<SetLockedTokenArgs>) {
+        for arg in args {
+            self.set_locked_token(arg);
+        }
+    }
 }
 
 impl Contract {
