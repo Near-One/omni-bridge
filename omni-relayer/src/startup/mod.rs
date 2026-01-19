@@ -102,7 +102,6 @@ fn build_evm_bridge_client(
         .map(|evm| {
             EvmBridgeClientBuilder::default()
                 .endpoint(Some(evm.rpc_http_url.clone()))
-                .chain_id(Some(evm.chain_id))
                 .private_key(Some(crate::config::get_private_key(chain_kind, None)))
                 .omni_bridge_address(Some(evm.omni_bridge_address.to_string()))
                 .wormhole_core_address(evm.wormhole_address.map(|address| address.to_string()))

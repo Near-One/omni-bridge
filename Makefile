@@ -62,18 +62,18 @@ solana-build: ENV = mainnet
 solana-build-dev solana-build:
 	cd solana/bridge_token_factory && \
 	PROGRAM_ID=$$(solana address -k target/deploy/bridge_token_factory-keypair.json) && \
-	RUSTUP_TOOLCHAIN="nightly-2024-11-19" anchor build --verifiable --env "PROGRAM_ID=$$PROGRAM_ID" -- --no-default-features --features $(ENV)
+	RUSTUP_TOOLCHAIN="nightly-2026-01-08" anchor build --verifiable --env "PROGRAM_ID=$$PROGRAM_ID" -- --no-default-features --features $(ENV)
 
 solana-build-ci:
 	cd solana/bridge_token_factory && \
 	export PROGRAM_ID=dahPEoZGXfyV58JqqH85okdHmpN8U2q8owgPUXSCPxe && \
-	RUSTUP_TOOLCHAIN="nightly-2024-11-19" anchor build --verifiable --env "PROGRAM_ID=$$PROGRAM_ID" -- --no-default-features --features mainnet
+	RUSTUP_TOOLCHAIN="nightly-2026-01-08" anchor build --verifiable --env "PROGRAM_ID=$$PROGRAM_ID" -- --no-default-features --features mainnet
 
 solana-deploy-dev: ENV = devnet
 solana-deploy: ENV = mainnet
 solana-deploy-dev solana-deploy:
 	cd solana/bridge_token_factory && \
-	RUSTUP_TOOLCHAIN="nightly-2024-11-19" \
+	RUSTUP_TOOLCHAIN="nightly-2026-01-08" \
 	anchor deploy --verifiable --program-name bridge_token_factory --provider.cluster $(ENV)
 
 rust-run-tests:

@@ -45,6 +45,6 @@ rule near_generate_zcash_connector_init_args:
         bridge_id = lambda wc, input: get_json_field(input.zcash_connector_account_file, "account_id")
     shell: """
     {params.mkdir} && \
-    near tokens {params.controller} send-near {params.bridge_id} '3 NEAR' network-config testnet sign-with-keychain send &&\
+    near tokens {params.controller} send-near {params.bridge_id} '3.5 NEAR' network-config testnet sign-with-keychain send &&\
     echo '{{\"config\": {{\"nbtc_account_id\": \"{params.zcash_id}\"}}}}' > {output}
     """

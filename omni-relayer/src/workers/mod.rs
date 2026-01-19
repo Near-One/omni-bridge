@@ -1,12 +1,14 @@
-use std::sync::Arc;
+use std::sync::{
+    Arc,
+    atomic::{AtomicBool, Ordering},
+};
 
-use anyhow::Result;
+use alloy::primitives::TxHash;
+use anyhow::{Context, Result};
 use bridge_indexer_types::documents_types::DepositMsg;
 use futures::future::join_all;
 use rust_decimal::MathematicalOps;
 use tracing::warn;
-
-use ethereum_types::H256;
 
 use near_jsonrpc_client::JsonRpcClient;
 use near_sdk::json_types::U128;
@@ -61,7 +63,7 @@ pub enum Transfer {
     },
     Evm {
         chain_kind: ChainKind,
-        tx_hash: H256,
+        tx_hash: TxHash,
         log: utils::evm::InitTransferMessage,
         creation_timestamp: i64,
         expected_finalization_time: i64,
@@ -111,7 +113,7 @@ pub enum Transfer {
 pub enum FinTransfer {
     Evm {
         chain_kind: ChainKind,
-        tx_hash: H256,
+        tx_hash: TxHash,
         creation_timestamp: i64,
         expected_finalization_time: i64,
     },
@@ -126,7 +128,7 @@ pub enum FinTransfer {
 pub enum DeployToken {
     Evm {
         chain_kind: ChainKind,
-        tx_hash: H256,
+        tx_hash: TxHash,
         creation_timestamp: i64,
         expected_finalization_time: i64,
     },
@@ -150,6 +152,20 @@ pub async fn process_events(
     let signer = omni_connector
         .near_bridge_client()
         .and_then(near_bridge_client::NearBridgeClient::account_id)?;
+
+    near_omni_nonce
+        .resync_nonce()
+        .await
+        .context("Failed to resync near nonce")?;
+
+    if let Some(near_fast_nonce) = near_fast_nonce.clone() {
+        near_fast_nonce
+            .resync_nonce()
+            .await
+            .context("Failed to resync near fast nonce")?;
+    }
+
+    let is_evm_nonce_resync_needed = Arc::new(AtomicBool::new(true));
 
     loop {
         let mut redis_connection_manager_clone = redis_connection_manager.clone();
@@ -176,18 +192,13 @@ pub async fn process_events(
             continue;
         }
 
-        if let Err(err) = near_omni_nonce.resync_nonce().await {
-            warn!("Failed to resync near nonce: {err:?}");
-        }
-
-        if let Some(near_fast_nonce) = near_fast_nonce.clone() {
-            if let Err(err) = near_fast_nonce.resync_nonce().await {
-                warn!("Failed to resync near fast nonce: {err:?}");
+        if is_evm_nonce_resync_needed.load(Ordering::Relaxed) {
+            if let Err(err) = evm_nonces.resync_nonces().await {
+                warn!("Failed to resync evm nonces: {err:?}");
+                continue;
             }
-        }
 
-        if let Err(err) = evm_nonces.resync_nonces().await {
-            warn!("Failed to resync evm nonces: {err:?}");
+            is_evm_nonce_resync_needed.store(false, Ordering::Relaxed);
         }
 
         let current_timestamp = chrono::Utc::now().timestamp();
@@ -552,13 +563,16 @@ pub async fn process_events(
                         let config = config.clone();
                         let mut redis_connection_manager = redis_connection_manager.clone();
                         let fast_connector = fast_connector.clone();
-                        let near_omni_nonce = near_omni_nonce.clone();
+                        let Some(near_fast_nonce) = near_fast_nonce.clone() else {
+                                warn!("Fast transfer event found but near fast nonce manager is not configured");
+                                continue;
+                        };
 
                         async move {
                             match near::initiate_fast_transfer(
                                 fast_connector,
                                 transfer,
-                                near_omni_nonce,
+                                near_fast_nonce,
                             )
                             .await
                             {
@@ -599,6 +613,7 @@ pub async fn process_events(
                         let omni_connector = omni_connector.clone();
                         let signer = signer.clone();
                         let evm_nonces = evm_nonces.clone();
+                        let is_evm_nonce_resync_needed = is_evm_nonce_resync_needed.clone();
 
                         async move {
                             match near::process_sign_transfer_event(
@@ -611,7 +626,11 @@ pub async fn process_events(
                             )
                             .await
                             {
-                                Ok(EventAction::Retry) => {}
+                                Ok(EventAction::Retry) => {
+                                    if message_payload.recipient.get_chain().is_evm_chain() {
+                                        is_evm_nonce_resync_needed.store(true, Ordering::Relaxed);
+                                    }
+                                }
                                 Ok(EventAction::Remove) => {
                                     utils::redis::remove_event(
                                         &config,
@@ -630,6 +649,9 @@ pub async fn process_events(
                                     .await;
                                 }
                                 Err(err) => {
+                                    if message_payload.recipient.get_chain().is_evm_chain() {
+                                        is_evm_nonce_resync_needed.store(true, Ordering::Relaxed);
+                                    }
                                     warn!("{err:?}");
                                     utils::redis::remove_event(
                                         &config,

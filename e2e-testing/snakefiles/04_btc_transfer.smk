@@ -37,6 +37,7 @@ rule get_btc_user_deposit_address:
     {params.mkdir} && \
          bridge-cli testnet get-bitcoin-address \
          --chain btc \
+         --amount 0 \
          --btc-connector {params.btc_connector} \
          -r near:{params.user_account_id} \
          --near-signer {params.user_account_id} \
@@ -56,9 +57,23 @@ rule send_btc_to_deposit_address:
     node {params.scripts_dir}/send_btc.js {params.btc_address} 7500 > {output}
     """
 
+rule wait_tx:
+    message: "Wait for BTC transaction"
+    input:
+        prev_step = call_dir / "02_send_btc_to_deposit_address.json",
+    output: call_dir / "02_1_wait_tx.json"
+    params:
+        scripts_dir = const.common_scripts_dir,
+        btc_tx_hash = lambda wc, input: get_last_value(input.prev_step),
+    shell: """
+    node {params.scripts_dir}/wait_btc.js btc {params.btc_tx_hash} {output}
+    """
+
+
 rule fin_btc_transfer_on_near:
     message: "Finalizing BTC transfer on Near"
     input:
+        prev_step = call_dir / "02_1_wait_tx.json",
         step_2 = rules.send_btc_to_deposit_address.output,
         nbtc_file = nbtc_file,
         btc_connector_file = btc_connector_file,
@@ -125,7 +140,7 @@ rule submit_transfer_to_btc_connector:
         near_tx_hash = lambda wc, input: get_json_field(input.step_7, "tx_hash"),
 
     shell: """
-    bridge-cli testnet near-sign-btc-transfer \
+    bridge-cli testnet near-submit-btc-transfer \
         --chain btc \
         -n {params.near_tx_hash} \
         -s {params.user_account_id} \

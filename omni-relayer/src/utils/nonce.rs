@@ -4,7 +4,7 @@ use alloy::{
     primitives::{Address, U64},
     providers::{DynProvider, Provider, ProviderBuilder},
 };
-use anyhow::Result;
+use anyhow::{Context, Result};
 use near_crypto::InMemorySigner;
 use near_jsonrpc_client::{JsonRpcClient, methods};
 use near_jsonrpc_primitives::types::query::QueryResponseKind;
@@ -191,16 +191,29 @@ impl EvmNonceManagers {
 
     pub async fn resync_nonces(&self) -> Result<()> {
         if let Some(eth) = self.eth.as_ref() {
-            eth.resync_nonce().await?;
+            eth.resync_nonce()
+                .await
+                .context("Failed to resync nonce for eth")?;
         }
         if let Some(base) = self.base.as_ref() {
-            base.resync_nonce().await?;
+            base.resync_nonce()
+                .await
+                .context("Failed to resync nonce for base")?;
         }
         if let Some(arb) = self.arb.as_ref() {
-            arb.resync_nonce().await?;
+            arb.resync_nonce()
+                .await
+                .context("Failed to resync nonce for arb")?;
         }
         if let Some(bnb) = self.bnb.as_ref() {
-            bnb.resync_nonce().await?;
+            bnb.resync_nonce()
+                .await
+                .context("Failed to resync nonce for bnb")?;
+        }
+        if let Some(pol) = self.pol.as_ref() {
+            pol.resync_nonce()
+                .await
+                .context("Failed to resync nonce for pol")?;
         }
 
         Ok(())

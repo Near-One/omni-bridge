@@ -1,11 +1,10 @@
 use alloy::{
-    primitives::Address,
+    primitives::{Address, TxHash},
     providers::{DynProvider, Provider, ProviderBuilder, WsConnect},
     rpc::types::{Filter, Log},
     sol_types::SolEvent,
 };
 use anyhow::{Context, Result};
-use ethereum_types::H256;
 use omni_types::{ChainKind, Fee, OmniAddress, TransferId};
 use reqwest::Url;
 use tokio_stream::StreamExt;
@@ -251,7 +250,7 @@ async fn process_log(
         return;
     };
 
-    let tx_hash = H256::from_slice(tx_hash.as_slice());
+    let tx_hash = TxHash::from_slice(tx_hash.as_slice());
 
     let Some(block_number) = log.block_number else {
         warn!("No block number in log: {log:?}");
