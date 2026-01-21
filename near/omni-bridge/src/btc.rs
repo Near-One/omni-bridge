@@ -47,7 +47,7 @@ impl Contract {
             {
                 require!(
                     btc_address == target_btc_address,
-                    BridgeError::IncorrectTargetUtxoAddress.to_string()
+                    BridgeError::IncorrectTargetUtxoAddress.as_ref()
                 );
 
                 if !transfer.message.msg.is_empty() {
@@ -58,7 +58,7 @@ impl Contract {
                     require!(
                         max_gas_fee.expect("max_gas_fee is missing").0
                             == max_gas_fee_from_msg.0.into(),
-                        BridgeError::InvalidMaxGasFee.to_string()
+                        BridgeError::InvalidMaxGasFee.as_ref()
                     );
                 }
             } else {
@@ -71,7 +71,7 @@ impl Contract {
         if let Some(fee) = &fee {
             require!(
                 &transfer.message.fee == fee,
-                BridgeError::InvalidFee.to_string()
+                BridgeError::InvalidFee.as_ref()
             );
         }
 
@@ -79,7 +79,7 @@ impl Contract {
         let btc_account_id = self.get_utxo_chain_token(chain_kind);
         require!(
             self.get_token_id(&transfer.message.token) == btc_account_id,
-            BridgeError::NativeTokenRequiredForChain.to_string()
+            BridgeError::NativeTokenRequiredForChain.as_ref()
         );
 
         self.remove_transfer_message(transfer_id);
@@ -149,7 +149,7 @@ impl Contract {
 
         require!(
             env::attached_deposit() >= required_deposit,
-            BridgeError::InsufficientStorageDeposit.to_string()
+            BridgeError::InsufficientStorageDeposit.as_ref()
         );
 
         ext_token::ext(utxo_chain_token_id)

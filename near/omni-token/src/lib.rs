@@ -99,7 +99,7 @@ impl OmniToken {
         let caller = env::predecessor_account_id();
         require!(
             caller == self.controller,
-            TokenError::MissingPermission.to_string()
+            TokenError::MissingPermission.as_ref()
         );
     }
 
