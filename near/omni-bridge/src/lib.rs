@@ -1476,31 +1476,34 @@ impl Contract {
     ) {
         require!(
             self.deployed_tokens.remove(&old_token),
-            "ERR_OLD_TOKEN_NOT_DEPLOYED"
+            BridgeError::OldTokenNotDeployed.as_ref(),
         );
-        require!(self.deployed_tokens.insert(&new_token), "ERR_TOKEN_EXIST");
+        require!(
+            self.deployed_tokens.insert(&new_token),
+            BridgeError::TokenExists.as_ref()
+        );
 
         let origin_address = self
             .token_id_to_address
             .remove(&(origin_chain, old_token.clone()))
-            .near_expect("ERR_FAILED_TO_GET_TOKEN_ADDRESS");
+            .near_expect(BridgeError::FailedToGetTokenAddress);
 
         require!(
             self.token_id_to_address
                 .insert(&(origin_chain, new_token.clone()), &origin_address)
                 .is_none(),
-            "ERR_TOKEN_EXIST"
+            BridgeError::TokenExists.as_ref()
         );
 
         self.token_address_to_id
             .insert(&origin_address, &new_token)
-            .near_expect("ERR_EXPECTED_TO_OVERWRITE_TOKEN_ADDRESS");
+            .near_expect(BridgeError::ExpectedToOverwriteTokenAddress);
 
         require!(
             self.migrated_tokens
                 .insert(&old_token, &new_token)
                 .is_none(),
-            "ERR_TOKEN_ALREADY_MIGRATED"
+            BridgeError::TokenAlreadyMigrated.as_ref()
         );
     }
 
@@ -2476,7 +2479,7 @@ impl Contract {
         let new_token = self
             .migrated_tokens
             .get(&old_token)
-            .near_expect("ERR_TOKEN_NOT_MIGRATED");
+            .near_expect(BridgeError::TokenNotMigrated);
 
         let burn = ext_token::ext(old_token).burn(amount);
         let mint = ext_token::ext(new_token).mint(sender_id, amount, None);
