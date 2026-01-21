@@ -25,7 +25,11 @@ jobs:
 
       - name: Install Anchor
         run: |
-          cargo install --git https://github.com/coral-xyz/anchor avm --force
+          sudo apt-get update
+          sudo apt-get install -y pkg-config libudev-dev
+          cargo install --git https://github.com/coral-xyz/anchor --tag v0.32.1 -p anchor-cli --locked
+          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+        shell: bash
         
       - name: Install cargo-near
         run: |
