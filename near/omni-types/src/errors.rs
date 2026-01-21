@@ -1,165 +1,112 @@
 use near_sdk::{AccountId, NearToken};
+use omni_utils::ErrorDisplay;
+use strum_macros::AsRefStr;
 
-macro_rules! define_contract_errors {
-    ($prefix:expr, $enum_name:ident {
-        $(
-            $variant:ident $( { $($arg:ident : $typ:ty),* $(,)? } )?
-        ),* $(,)?
-    }) => {
-        #[derive(near_sdk::serde::Serialize, Debug, Clone, PartialEq, Eq)]
-        #[serde(crate = "near_sdk::serde", rename_all = "SCREAMING_SNAKE_CASE")]
-        #[non_exhaustive]
-        pub enum $enum_name {
-            $(
-                $variant $( { $($arg: $typ),* } )?
-            ),*
-        }
-
-        impl std::fmt::Display for $enum_name {
-            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                match self {
-                    $(
-                        Self::$variant $( { $($arg),* } )? => {
-                            let mut shouty = String::new();
-                            for (i, c) in stringify!($variant).chars().enumerate() {
-                                if i > 0 && c.is_uppercase() {
-                                    shouty.push('_');
-                                }
-                                shouty.push(c.to_ascii_uppercase());
-                            }
-
-                            write!(f, "{}_{}", $prefix, shouty)?;
-
-                            $(
-                                let mut first = true;
-                                $(
-                                    if first {
-                                        write!(f, ": ")?;
-                                        first = false;
-                                    } else {
-                                        write!(f, ", ")?;
-                                    }
-                                    write!(f, "{}={}", stringify!($arg), $arg)?;
-                                )*
-                                let _ = first;
-                            )?
-
-                            Ok(())
-                        }
-                    ),*
-                }
-            }
-        }
-    };
+#[derive(Debug, Clone, Copy, PartialEq, Eq, AsRefStr, ErrorDisplay)]
+#[strum(serialize_all = "shouty_snake_case", prefix = "ERR_")]
+#[non_exhaustive]
+pub enum BridgeError {
+    Borsh,
+    Cast,
+    DeployerNotSet,
+    FailedToGetTokenAddress,
+    FailedToGetZeroAddress,
+    FastTransferAlreadyFinalised,
+    FastTransferAlreadyPerformed,
+    FastTransferNotFinalised,
+    FastTransferNotFound,
+    FeeRecipientNotSetOrEmpty,
+    IncorrectTargetUtxoAddress,
+    InsufficientStorageDeposit,
+    InvalidAmountToTransfer,
+    InvalidAttachedDeposit,
+    InvalidFastTransferAmount,
+    InvalidFee,
+    InvalidMaxGasFee,
+    InvalidMetadata,
+    InvalidProof,
+    InvalidProofMessage,
+    InvalidRecipientChain,
+    InvalidState,
+    InvalidStorageAccountsLen,
+    KeyExists,
+    LowerFee,
+    NativeFeeForUtxoChain,
+    NativeTokenRequiredForChain,
+    NearWithdrawFailed,
+    NotEnoughAttachedDeposit,
+    OnlyFeeRecipientCanClaim,
+    ParseAccountId,
+    ParseMsg,
+    ProverForChainKindNotRegistered,
+    ReadPromiseRegister,
+    ReadPromiseYieldId,
+    SenderCanUpdateTokenFeeOnly,
+    SenderIsNotConnector,
+    StorageFeeRecipientOmitted,
+    StorageNativeFeeRecipientOmitted,
+    StoragePendingTransfers,
+    StorageRecipientOmitted,
+    TokenDecimalsNotFound,
+    TokenExists,
+    TokenNotFound,
+    TokenNotRegistered,
+    TransferAlreadyFinalised,
+    TransferNotExist,
+    UnknownFactory,
+    UtxoConfigMissing,
+    UtxoTransferAlreadyFinalised,
 }
 
-define_contract_errors! {
-    "ERR",
-    BridgeError {
-        Borsh,
-        Cast,
-        DeployerNotSet,
-        FailedToGetTokenAddress,
-        FailedToGetZeroAddress,
-        FastTransferAlreadyFinalised,
-        FastTransferAlreadyPerformed,
-        FastTransferNotFinalised,
-        FastTransferNotFound,
-        FeeRecipientNotSetOrEmpty,
-        IncorrectTargetUtxoAddress,
-        InsufficientStorageDeposit,
-        InvalidAmountToTransfer,
-        InvalidAttachedDeposit,
-        InvalidFastTransferAmount,
-        InvalidFee,
-        InvalidMaxGasFee,
-        InvalidMetadata,
-        InvalidProof,
-        InvalidProofMessage,
-        InvalidRecipientChain,
-        InvalidState,
-        InvalidStorageAccountsLen,
-        KeyExists,
-        LowerFee,
-        NativeFeeForUtxoChain,
-        NativeTokenRequiredForChain,
-        NearWithdrawFailed,
-        NotEnoughAttachedDeposit,
-        OnlyFeeRecipientCanClaim,
-        ParseAccountId,
-        ParseMsg,
-        ProverForChainKindNotRegistered,
-        ReadPromiseRegister,
-        ReadPromiseYieldId,
-        SenderCanUpdateTokenFeeOnly,
-        SenderIsNotConnector,
-        StorageFeeRecipientOmitted,
-        StorageNativeFeeRecipientOmitted,
-        StoragePendingTransfers,
-        StorageRecipientOmitted,
-        TokenDecimalsNotFound,
-        TokenExists,
-        TokenNotFound,
-        TokenNotRegistered,
-        TransferAlreadyFinalised,
-        TransferNotExist,
-        UnknownFactory,
-        UtxoConfigMissing,
-        UtxoTransferAlreadyFinalised,
-    }
+#[derive(Debug, Clone, Copy, PartialEq, Eq, AsRefStr, ErrorDisplay)]
+#[strum(serialize_all = "shouty_snake_case", prefix = "ERR_")]
+#[non_exhaustive]
+pub enum StorageError {
+    MessageAccountNotRegistered,
+    NotEnoughBalanceForFee,
+    SignerNotEnoughBalance,
+    SignerNotRegistered,
 }
 
-define_contract_errors! {
-    "ERR",
-    StorageError {
-        MessageAccountNotRegistered,
-        NotEnoughBalanceForFee,
-        SignerNotEnoughBalance,
-        SignerNotRegistered,
-    }
+#[derive(Debug, Clone, Copy, PartialEq, Eq, AsRefStr, ErrorDisplay)]
+#[strum(serialize_all = "shouty_snake_case", prefix = "ERR_")]
+#[non_exhaustive]
+pub enum TokenError {
+    FailedToReadState,
+    InvalidCodeHash,
+    InvalidParentAccount,
+    MissingPermission,
+    NoInput,
+    NoStateToMigrate,
 }
 
-define_contract_errors! {
-    "ERR",
-    TokenError {
-        FailedToReadState,
-        InvalidCodeHash,
-        InvalidParentAccount,
-        MissingPermission,
-        NoInput,
-        NoStateToMigrate,
-    }
+#[derive(Debug, Clone, Copy, PartialEq, Eq, AsRefStr, ErrorDisplay)]
+#[strum(serialize_all = "shouty_snake_case", prefix = "ERR_")]
+#[non_exhaustive]
+pub enum ProverError {
+    HashNotSet,
+    InvalidBlockHash,
+    InvalidProof,
+    ParseArgs,
 }
 
-define_contract_errors! {
-    "ERR",
-    ProverError {
-        HashNotSet,
-        InvalidBlockHash,
-        InvalidProof,
-        ParseArgs,
-    }
+#[derive(Debug, Clone, Copy, PartialEq, Eq, AsRefStr, ErrorDisplay)]
+#[strum(serialize_all = "shouty_snake_case", prefix = "ERR_")]
+#[non_exhaustive]
+pub enum TypesError {
+    InvalidHex,
+    InvalidHexLength,
 }
 
-define_contract_errors! {
-    "ERR",
-    TypesError {
-        InvalidHex,
-        InvalidHexLength,
-    }
-}
-
-define_contract_errors! {
-    "ERR",
-    StorageBalanceError {
-        AccountNotRegistered {
-            account_id: AccountId,
-        },
-        NotEnoughStorage {
-            required: NearToken,
-            available: NearToken,
-        },
-    }
+#[derive(Debug, Clone, PartialEq, Eq, AsRefStr, ErrorDisplay)]
+#[strum(serialize_all = "shouty_snake_case", prefix = "ERR_")]
+#[non_exhaustive]
+pub enum StorageBalanceError {
+    AccountNotRegistered(AccountId),
+    NotEnoughStorage {
+        required: NearToken,
+        available: NearToken,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

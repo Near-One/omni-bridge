@@ -573,6 +573,10 @@ fn test_chain_kind_from_str() {
 #[test]
 fn test_errors_serialization() {
     assert_eq!(
+        BridgeError::InvalidAttachedDeposit.as_ref(),
+        "ERR_INVALID_ATTACHED_DEPOSIT"
+    );
+    assert_eq!(
         BridgeError::InvalidAttachedDeposit.to_string(),
         "ERR_INVALID_ATTACHED_DEPOSIT"
     );
@@ -581,11 +585,20 @@ fn test_errors_serialization() {
         "ERR_INVALID_ATTACHED_DEPOSIT"
     );
     assert_eq!(
-        StorageBalanceError::AccountNotRegistered {
-            account_id: "near".parse().unwrap()
+        StorageBalanceError::AccountNotRegistered("near".parse().unwrap()).as_ref(),
+        "ERR_ACCOUNT_NOT_REGISTERED: field1=near"
+    );
+    assert_eq!(
+        StorageBalanceError::AccountNotRegistered("near".parse().unwrap()).to_string(),
+        "ERR_ACCOUNT_NOT_REGISTERED: field1=near"
+    );
+    assert_eq!(
+        StorageBalanceError::NotEnoughStorage {
+            required: NearToken::from_near(100),
+            available: NearToken::from_near(50),
         }
-        .to_string(),
-        "ERR_ACCOUNT_NOT_REGISTERED: account_id=near"
+        .as_ref(),
+        "ERR_NOT_ENOUGH_STORAGE: required=100.00 NEAR, available=50.00 NEAR"
     );
     assert_eq!(
         StorageBalanceError::NotEnoughStorage {
