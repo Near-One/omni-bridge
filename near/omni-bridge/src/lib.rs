@@ -1461,6 +1461,12 @@ impl Contract {
         new_token: AccountId,
     ) {
         require!(
+            env::attached_deposit()
+                >= NEP141_DEPOSIT,
+            "ERR_NOT_ENOUGH_ATTACHED_DEPOSIT"
+        );
+
+        require!(
             self.deployed_tokens.remove(&old_token),
             "ERR_OLD_TOKEN_NOT_DEPLOYED"
         );
@@ -1489,11 +1495,20 @@ impl Contract {
             "ERR_TOKEN_ALREADY_MIGRATED"
         );
 
-        ext_token::ext(new_token)
+        ext_token::ext(new_token.clone())
             .with_static_gas(STORAGE_DEPOSIT_GAS)
             .with_attached_deposit(NEP141_DEPOSIT)
             .storage_deposit(&env::current_account_id(), Some(true))
             .detach();
+
+
+        env::log_str(
+            &OmniBridgeEvent::MigrateTokenEvent {
+                old_token_id: old_token,
+                new_token_id: new_token,
+            }
+            .to_log_string(),
+        );
     }
 
     pub fn get_current_destination_nonce(&self, chain_kind: ChainKind) -> Nonce {

@@ -55,6 +55,10 @@ pub enum OmniBridgeEvent {
         utxo_transfer_message: UtxoFinTransferMsg,
         new_transfer_id: Option<TransferId>,
     },
+    MigrateTokenEvent {
+        old_token_id: AccountId,
+        new_token_id: AccountId,
+    }
 }
 
 impl OmniBridgeEvent {
