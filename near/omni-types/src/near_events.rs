@@ -58,7 +58,7 @@ pub enum OmniBridgeEvent {
     MigrateTokenEvent {
         old_token_id: AccountId,
         new_token_id: AccountId,
-    }
+    },
 }
 
 impl OmniBridgeEvent {

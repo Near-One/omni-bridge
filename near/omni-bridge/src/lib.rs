@@ -1413,11 +1413,24 @@ impl Contract {
                 token_info.decimals,
                 token_info.decimals,
             );
-            ext_token::ext(token_info.token_id)
+            ext_token::ext(token_info.token_id.clone())
                 .with_static_gas(STORAGE_DEPOSIT_GAS)
                 .with_attached_deposit(NEP141_DEPOSIT)
                 .storage_deposit(&env::current_account_id(), Some(true))
                 .detach();
+
+            env::log_str(
+                &OmniBridgeEvent::DeployTokenEvent {
+                    token_id: token_info.token_id,
+                    token_address: token_info.token_address,
+                    metadata: BasicMetadata {
+                        name: String::new(),
+                        symbol: String::new(),
+                        decimals: token_info.decimals,
+                    },
+                }
+                .to_log_string(),
+            );
         }
     }
 
@@ -1461,8 +1474,7 @@ impl Contract {
         new_token: AccountId,
     ) {
         require!(
-            env::attached_deposit()
-                >= NEP141_DEPOSIT,
+            env::attached_deposit() >= NEP141_DEPOSIT,
             "ERR_NOT_ENOUGH_ATTACHED_DEPOSIT"
         );
 
@@ -1500,7 +1512,6 @@ impl Contract {
             .with_attached_deposit(NEP141_DEPOSIT)
             .storage_deposit(&env::current_account_id(), Some(true))
             .detach();
-
 
         env::log_str(
             &OmniBridgeEvent::MigrateTokenEvent {
