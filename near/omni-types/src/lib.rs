@@ -161,12 +161,14 @@ pub enum ChainKind {
     Zcash,
     #[serde(alias = "pol")]
     Pol,
+    #[serde(alias = "hype")]
+    Hype,
 }
 
 impl ChainKind {
     pub const fn is_evm_chain(&self) -> bool {
         match self {
-            Self::Eth | Self::Arb | Self::Base | Self::Bnb | Self::Pol => true,
+            Self::Eth | Self::Arb | Self::Base | Self::Bnb | Self::Pol | Self::Hype => true,
             Self::Btc | Self::Zcash | Self::Near | Self::Sol => false,
         }
     }
@@ -174,9 +176,14 @@ impl ChainKind {
     pub const fn is_utxo_chain(&self) -> bool {
         match self {
             Self::Btc | Self::Zcash => true,
-            Self::Eth | Self::Arb | Self::Base | Self::Bnb | Self::Pol | Self::Near | Self::Sol => {
-                false
-            }
+            Self::Eth
+            | Self::Arb
+            | Self::Base
+            | Self::Bnb
+            | Self::Pol
+            | Self::Near
+            | Self::Sol
+            | Self::Hype => false,
         }
     }
 }
@@ -208,6 +215,7 @@ impl TryFrom<u8> for ChainKind {
             6 => Ok(Self::Btc),
             7 => Ok(Self::Zcash),
             8 => Ok(Self::Pol),
+            9 => Ok(Self::Hype),
             _ => Err(format!("{input:?} invalid chain kind")),
         }
     }
@@ -231,6 +239,7 @@ pub enum OmniAddress {
     Btc(UTXOChainAddress),
     Zcash(UTXOChainAddress),
     Pol(EvmAddress),
+    Hype(EvmAddress),
 }
 
 impl OmniAddress {
@@ -244,6 +253,7 @@ impl OmniAddress {
             ChainKind::Base => Ok(Self::Base(H160::ZERO)),
             ChainKind::Bnb => Ok(Self::Bnb(H160::ZERO)),
             ChainKind::Pol => Ok(Self::Pol(H160::ZERO)),
+            ChainKind::Hype => Ok(Self::Hype(H160::ZERO)),
             ChainKind::Btc => Ok(Self::Btc(String::new())),
             ChainKind::Zcash => Ok(Self::Zcash(String::new())),
         }
@@ -259,6 +269,7 @@ impl OmniAddress {
             ChainKind::Base => Ok(Self::Base(address)),
             ChainKind::Bnb => Ok(Self::Bnb(address)),
             ChainKind::Pol => Ok(Self::Pol(address)),
+            ChainKind::Hype => Ok(Self::Hype(address)),
             _ => Err(format!("{chain_kind:?} is not an EVM chain")),
         }
     }
@@ -266,7 +277,12 @@ impl OmniAddress {
     pub fn new_from_slice(chain_kind: ChainKind, address: &[u8]) -> Result<Self, String> {
         match chain_kind {
             ChainKind::Sol => Ok(Self::Sol(Self::to_sol_address(address)?)),
-            ChainKind::Eth | ChainKind::Arb | ChainKind::Base | ChainKind::Bnb | ChainKind::Pol => {
+            ChainKind::Eth
+            | ChainKind::Arb
+            | ChainKind::Base
+            | ChainKind::Bnb
+            | ChainKind::Pol
+            | ChainKind::Hype => {
                 Self::new_from_evm_address(chain_kind, Self::to_evm_address(address)?)
             }
             ChainKind::Near => Ok(Self::Near(Self::to_near_account_id(address)?)),
@@ -290,6 +306,7 @@ impl OmniAddress {
             Self::Base(_) => ChainKind::Base,
             Self::Bnb(_) => ChainKind::Bnb,
             Self::Pol(_) => ChainKind::Pol,
+            Self::Hype(_) => ChainKind::Hype,
             Self::Btc(_) => ChainKind::Btc,
             Self::Zcash(_) => ChainKind::Zcash,
         }
@@ -304,6 +321,7 @@ impl OmniAddress {
             Self::Base(address) => ("base", address.to_string()),
             Self::Bnb(address) => ("bnb", address.to_string()),
             Self::Pol(address) => ("pol", address.to_string()),
+            Self::Hype(address) => ("hype", address.to_string()),
             Self::Btc(address) => ("btc", address.to_string()),
             Self::Zcash(address) => ("zcash", address.to_string()),
         };
@@ -321,7 +339,8 @@ impl OmniAddress {
             | Self::Arb(address)
             | Self::Base(address)
             | Self::Bnb(address)
-            | Self::Pol(address) => address.is_zero(),
+            | Self::Pol(address)
+            | Self::Hype(address) => address.is_zero(),
             Self::Near(address) => *address == ZERO_ACCOUNT_ID,
             Self::Sol(address) => address.is_zero(),
             Self::Btc(address) | Self::Zcash(address) => address.is_empty(),

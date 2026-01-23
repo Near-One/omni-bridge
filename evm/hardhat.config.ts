@@ -335,6 +335,13 @@ const config: HardhatUserConfig = {
       url: `https://polygon-amoy.infura.io/v3/${INFURA_API_KEY}`,
       accounts: [`${EVM_PRIVATE_KEY}`],
     },
+    hyperEvmTestnet: {
+      wormholeAddress: "0xBB73cB66C26740F31d1FabDC6b7A46a038A300dd",
+      omniChainId: 9,
+      chainId: 998,
+      url: `https://rpcs.chain.link/hyperevm/testnet`,
+      accounts: [`${EVM_PRIVATE_KEY}`],
+    },
   },
   etherscan: {
     apiKey: ETHERSCAN_API_KEY,
