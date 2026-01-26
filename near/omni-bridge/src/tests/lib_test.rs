@@ -60,6 +60,11 @@ fn setup_test_env(
 }
 
 fn setup_contract(mpc_signer_id: String, wnear_id: String) -> Contract {
+    setup_test_env(
+        AccountId::try_from(DEFAULT_NEAR_USER_ACCOUNT.to_string()).unwrap(),
+        NearToken::from_yoctonear(0),
+        None,
+    );
     Contract::new(
         AccountId::try_from(mpc_signer_id).expect("Invalid default mpc signer ID"),
         AccountId::try_from(wnear_id).expect("Invalid default wnear ID"),
@@ -71,6 +76,12 @@ fn get_default_contract() -> Contract {
         DEFAULT_MPC_SIGNER_ACCOUNT.to_string(),
         DEFAULT_WNEAR_ACCOUNT.to_string(),
     )
+}
+
+fn enable_locked_tokens_chains(contract: &mut Contract, chains: &[ChainKind]) {
+    for chain in chains {
+        contract.locked_tokens_enabled_chains.insert(chain);
+    }
 }
 
 fn run_storage_deposit(
@@ -262,6 +273,7 @@ fn test_init_transfer_balance_updated() {
 #[test]
 fn test_init_transfer_tracks_locked_tokens_per_chain() {
     let mut contract = get_default_contract();
+    enable_locked_tokens_chains(&mut contract, &[ChainKind::Eth]);
 
     run_ft_on_transfer(
         &mut contract,
@@ -282,6 +294,7 @@ fn test_init_transfer_tracks_locked_tokens_per_chain() {
 #[test]
 fn test_init_transfer_locks_other_tokens_for_deployed_token() {
     let mut contract = get_default_contract();
+    enable_locked_tokens_chains(&mut contract, &[ChainKind::Near, ChainKind::Sol]);
     let token_id: AccountId = "eth-token.testnet".parse().expect("Invalid token ID");
     let locked_amount = DEFAULT_TRANSFER_AMOUNT;
 
@@ -324,6 +337,7 @@ fn test_init_transfer_locks_other_tokens_for_deployed_token() {
 #[test]
 fn test_init_transfer_skips_other_token_lock_for_origin_chain() {
     let mut contract = get_default_contract();
+    enable_locked_tokens_chains(&mut contract, &[ChainKind::Near]);
     let token_id: AccountId = "eth-token.testnet".parse().expect("Invalid token ID");
     let locked_amount = DEFAULT_TRANSFER_AMOUNT;
 
@@ -605,6 +619,7 @@ fn get_prover_result(recipient: Option<OmniAddress>) -> ProverResult {
 #[test]
 fn test_fin_transfer_callback_near_success() {
     let mut contract = get_default_contract();
+    enable_locked_tokens_chains(&mut contract, &[ChainKind::Eth]);
     contract.factories.insert(
         &ChainKind::Eth,
         &OmniAddress::Eth(EvmAddress::from_str(DEFAULT_ETH_USER_ADDRESS).unwrap()),
@@ -703,6 +718,7 @@ fn test_fin_transfer_callback_near_success() {
 #[should_panic(expected = "ERR_INSUFFICIENT_LOCKED_TOKENS")]
 fn test_fin_transfer_callback_near_fails_without_locked_tokens() {
     let mut contract = get_default_contract();
+    enable_locked_tokens_chains(&mut contract, &[ChainKind::Eth]);
     contract.factories.insert(
         &ChainKind::Eth,
         &OmniAddress::Eth(EvmAddress::from_str(DEFAULT_ETH_USER_ADDRESS).unwrap()),
@@ -795,6 +811,7 @@ fn test_fin_transfer_callback_non_near_success() {
     use std::str::FromStr;
 
     let mut contract = get_default_contract();
+    enable_locked_tokens_chains(&mut contract, &[ChainKind::Eth, ChainKind::Sol]);
     contract.factories.insert(
         &ChainKind::Eth,
         &OmniAddress::Eth(EvmAddress::from_str(DEFAULT_ETH_USER_ADDRESS).unwrap()),
@@ -866,6 +883,7 @@ fn test_claim_fee_decreases_locked_tokens_for_non_deployed_token() {
     let token_id = AccountId::try_from(DEFAULT_FT_CONTRACT_ACCOUNT.to_string()).unwrap();
     let fee_recipient = AccountId::try_from("relayer.testnet".to_string()).unwrap();
     let destination_chain = ChainKind::Sol;
+    enable_locked_tokens_chains(&mut contract, &[destination_chain]);
     let fee_amount: u128 = DEFAULT_TRANSFER_FEE;
 
     let solana_address: SolAddress = "2xNweLHLqbS9YpP3UyaPrxKqgqoC6yPBFyuLxA8qtgr4"

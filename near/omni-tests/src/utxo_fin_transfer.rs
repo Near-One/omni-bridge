@@ -37,6 +37,12 @@ mod tests {
                 .with_utxo_token()
                 .await?;
 
+            enable_locked_tokens_chains(
+                &env_builder.bridge_contract,
+                &[ChainKind::Near, ChainKind::Btc, ChainKind::Base],
+            )
+            .await?;
+
             let relayer_account = env_builder.create_account(account_n(10)).await?;
             env_builder.storage_deposit(relayer_account.id()).await?;
             env_builder
