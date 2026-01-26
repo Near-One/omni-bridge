@@ -427,6 +427,7 @@ impl FromStr for OmniAddress {
             "base" => Ok(Self::Base(recipient.parse().map_err(stringify)?)),
             "bnb" => Ok(Self::Bnb(recipient.parse().map_err(stringify)?)),
             "pol" => Ok(Self::Pol(recipient.parse().map_err(stringify)?)),
+            "hyperevm" => Ok(Self::HyperEvm(recipient.parse().map_err(stringify)?)),
             "btc" => Ok(Self::Btc(recipient.to_string())),
             "zcash" => Ok(Self::Zcash(recipient.to_string())),
             _ => Err(format!("Chain {chain} is not supported")),
