@@ -346,7 +346,7 @@ const config: HardhatUserConfig = {
       wormholeAddress: "0xBB73cB66C26740F31d1FabDC6b7A46a038A300dd",
       omniChainId: 9,
       chainId: 998,
-      url: "https://rpcs.chain.link/hyperevm/testnet",
+      url: "https://rpc.hyperliquid-testnet.xyz/evm",
       accounts: [`${EVM_PRIVATE_KEY}`],
     },
   },
