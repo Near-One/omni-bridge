@@ -321,7 +321,7 @@ impl OmniAddress {
             Self::Base(address) => ("base", address.to_string()),
             Self::Bnb(address) => ("bnb", address.to_string()),
             Self::Pol(address) => ("pol", address.to_string()),
-            Self::HyperEvm(address) => ("hype", address.to_string()),
+            Self::HyperEvm(address) => ("hyperevm", address.to_string()),
             Self::Btc(address) => ("btc", address.to_string()),
             Self::Zcash(address) => ("zcash", address.to_string()),
         };
