@@ -8,7 +8,7 @@ use crate::{
 };
 use std::str::FromStr;
 
-fn chain_kinds_for_borsh() -> [ChainKind; 9] {
+fn chain_kinds_for_borsh() -> [ChainKind; 10] {
     [
         ChainKind::Eth,
         ChainKind::Near,
@@ -19,6 +19,7 @@ fn chain_kinds_for_borsh() -> [ChainKind; 9] {
         ChainKind::Btc,
         ChainKind::Zcash,
         ChainKind::Pol,
+        ChainKind::HyperEvm,
     ]
 }
 
@@ -33,6 +34,7 @@ fn omni_addresses_for_borsh() -> Vec<OmniAddress> {
         OmniAddress::Btc("btc_address".to_string()),
         OmniAddress::Zcash("zcash_address".to_string()),
         OmniAddress::Pol(H160::ZERO),
+        OmniAddress::HyperEvm(H160::ZERO),
     ]
 }
 
