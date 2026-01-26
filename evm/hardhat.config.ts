@@ -301,6 +301,13 @@ const config: HardhatUserConfig = {
       url: `https://polygon-mainnet.infura.io/v3/${INFURA_API_KEY}`,
       accounts: [`${EVM_PRIVATE_KEY}`],
     },
+    hyperEvmMainnet: {
+      wormholeAddress: "0x7C0faFc4384551f063e05aee704ab943b8B53aB3",
+      omniChainId: 9,
+      chainId: 999,
+      url: "https://rpc.hyperliquid.xyz/evm",
+      accounts: [`${EVM_PRIVATE_KEY}`],
+    },
     sepolia: {
       omniChainId: 0,
       chainId: 11155111,

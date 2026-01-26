@@ -175,8 +175,8 @@ pub mod tests {
             .unwrap()
     }
 
-    pub fn hype_factory_address() -> OmniAddress {
-        "hype:0x252e87862A3A720287E7fd527cE6e8d0738427A2"
+    pub fn hyperevm_factory_address() -> OmniAddress {
+        "hyperevm:0x252e87862A3A720287E7fd527cE6e8d0738427A2"
             .parse()
             .unwrap()
     }
