@@ -131,6 +131,39 @@ task("deploy-token-impl", "Deploys the BridgeToken implementation").setAction(as
   )
 })
 
+
+task("deploy-token-proxy", "Deploy BridgeToken behind a UUPS proxy")
+  .addParam("name", "Token name")
+  .addParam("symbol", "Token symbol")
+  .addOptionalParam("decimals", "Token decimals", "18")
+  .setAction(async (args, hre) => {
+    const { ethers, upgrades } = hre;
+
+    const name = String(args.name);
+    const symbol = String(args.symbol);
+    const decimals = Number(args.decimals);
+
+    const [deployer] = await ethers.getSigners();
+    console.log("Deployer:", deployer.address);
+    console.log("Params:", { name, symbol, decimals });
+
+    const BridgeToken = await ethers.getContractFactory("BridgeToken");
+
+    const proxy = await upgrades.deployProxy(
+      BridgeToken,
+      [name, symbol, decimals],
+      { initializer: "initialize" }
+    );
+
+    await proxy.waitForDeployment();
+    const proxyAddress = await proxy.getAddress();
+
+    const implAddress = await upgrades.erc1967.getImplementationAddress(proxyAddress);
+
+    console.log("Proxy deployed to:", proxyAddress);
+    console.log("Implementation:", implAddress);
+  });
+
 task("upgrade-bridge-token", "Upgrades a BridgeToken to a new implementation")
   .addParam("factory", "The address of the OmniBridge contract")
   .addParam("nearTokenAccount", "The NEAR token ID")
