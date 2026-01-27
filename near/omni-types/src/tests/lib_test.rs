@@ -1,6 +1,6 @@
-use near_sdk::borsh;
 use near_sdk::json_types::U128;
 use near_sdk::serde_json;
+use near_sdk::{borsh, AccountId};
 
 use crate::{
     stringify, ChainKind, Fee, OmniAddress, PayloadType, SolAddress, TransferId, TransferMessage,
@@ -25,16 +25,20 @@ fn chain_kinds_for_borsh() -> [ChainKind; 10] {
 
 fn omni_addresses_for_borsh() -> Vec<OmniAddress> {
     vec![
-        OmniAddress::Eth(H160::ZERO),
+        OmniAddress::Eth(H160::from_str("0x23ddd3e3692d1861ed57ede224608875809e127f").unwrap()),
         OmniAddress::Near("borsh.near".parse().unwrap()),
-        OmniAddress::Sol(SolAddress::ZERO),
-        OmniAddress::Arb(H160::ZERO),
-        OmniAddress::Base(H160::ZERO),
-        OmniAddress::Bnb(H160::ZERO),
+        OmniAddress::Sol(
+            SolAddress::from_str("BXss9YNCX2p6VPf2Em54pHXkXnC2FPBeZgbB9fY1cuBR").unwrap(),
+        ),
+        OmniAddress::Arb(H160::from_str("0x23ddd3e3692d1861ed57ede224608875809e127f").unwrap()),
+        OmniAddress::Base(H160::from_str("0x23ddd3e3692d1861ed57ede224608875809e127f").unwrap()),
+        OmniAddress::Bnb(H160::from_str("0x23ddd3e3692d1861ed57ede224608875809e127f").unwrap()),
         OmniAddress::Btc("btc_address".to_string()),
         OmniAddress::Zcash("zcash_address".to_string()),
-        OmniAddress::Pol(H160::ZERO),
-        OmniAddress::HyperEvm(H160::ZERO),
+        OmniAddress::Pol(H160::from_str("0x23ddd3e3692d1861ed57ede224608875809e127f").unwrap()),
+        OmniAddress::HyperEvm(
+            H160::from_str("0x23ddd3e3692d1861ed57ede224608875809e127f").unwrap(),
+        ),
     ]
 }
 
@@ -553,13 +557,30 @@ fn test_get_evm_token_prefix() {
     let prefix = eth_address.get_token_prefix();
     assert_eq!(prefix, "23ddd3e3692d1861ed57ede224608875809e127f");
 
-    for chain_kind in [ChainKind::Base, ChainKind::Arb] {
+    for chain_kind in chain_kinds_for_borsh() {
+        if chain_kind == ChainKind::Eth || !chain_kind.is_evm_chain() {
+            continue;
+        }
+
         let chain_kind_prefix: String = chain_kind.as_ref().to_lowercase();
         let chain_address: OmniAddress = format!("{chain_kind_prefix}:{address}").parse().unwrap();
         assert_eq!(
             chain_address.get_token_prefix(),
             format!("{chain_kind_prefix}-{address}"),
         );
+    }
+}
+
+#[test]
+fn test_token_id_validity() {
+    // Testnet token deployer has the longest account id
+    let token_deployer = "omnidep.testnet";
+
+    for omni_address in omni_addresses_for_borsh() {
+        let token_prefix: String = omni_address.get_token_prefix();
+        let token_id = format!("{token_prefix}.{token_deployer}");
+
+        assert!(AccountId::from_str(&token_id).is_ok());
     }
 }
 

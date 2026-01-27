@@ -383,8 +383,12 @@ impl OmniAddress {
         }
     }
 
+    pub fn is_evm_chain(&self) -> bool {
+        self.get_chain().is_evm_chain()
+    }
+
     pub fn is_utxo_chain(&self) -> bool {
-        matches!(self, Self::Btc(_) | Self::Zcash(_))
+        self.get_chain().is_utxo_chain()
     }
 
     fn to_evm_address(address: &[u8]) -> Result<EvmAddress, String> {
