@@ -161,7 +161,7 @@ pub enum ChainKind {
     Zcash,
     #[serde(alias = "pol")]
     Pol,
-    #[serde(alias = "hyperevm")]
+    #[serde(alias = "hlevm")]
     HyperEvm,
 }
 

@@ -176,7 +176,7 @@ pub mod tests {
     }
 
     pub fn hyperevm_factory_address() -> OmniAddress {
-        "hyperevm:0x252e87862A3A720287E7fd527cE6e8d0738427A2"
+        "hlevm:0x252e87862A3A720287E7fd527cE6e8d0738427A2"
             .parse()
             .unwrap()
     }
