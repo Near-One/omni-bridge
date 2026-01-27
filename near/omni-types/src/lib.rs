@@ -321,7 +321,7 @@ impl OmniAddress {
             Self::Base(address) => ("base", address.to_string()),
             Self::Bnb(address) => ("bnb", address.to_string()),
             Self::Pol(address) => ("pol", address.to_string()),
-            Self::HyperEvm(address) => ("hyperevm", address.to_string()),
+            Self::HyperEvm(address) => ("hlevm", address.to_string()),
             Self::Btc(address) => ("btc", address.to_string()),
             Self::Zcash(address) => ("zcash", address.to_string()),
         };
@@ -431,7 +431,7 @@ impl FromStr for OmniAddress {
             "base" => Ok(Self::Base(recipient.parse().map_err(stringify)?)),
             "bnb" => Ok(Self::Bnb(recipient.parse().map_err(stringify)?)),
             "pol" => Ok(Self::Pol(recipient.parse().map_err(stringify)?)),
-            "hyperevm" => Ok(Self::HyperEvm(recipient.parse().map_err(stringify)?)),
+            "hlevm" => Ok(Self::HyperEvm(recipient.parse().map_err(stringify)?)),
             "btc" => Ok(Self::Btc(recipient.to_string())),
             "zcash" => Ok(Self::Zcash(recipient.to_string())),
             _ => Err(format!("Chain {chain} is not supported")),
