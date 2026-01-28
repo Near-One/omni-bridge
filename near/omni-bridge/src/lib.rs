@@ -1413,11 +1413,24 @@ impl Contract {
                 token_info.decimals,
                 token_info.decimals,
             );
-            ext_token::ext(token_info.token_id)
+            ext_token::ext(token_info.token_id.clone())
                 .with_static_gas(STORAGE_DEPOSIT_GAS)
                 .with_attached_deposit(NEP141_DEPOSIT)
                 .storage_deposit(&env::current_account_id(), Some(true))
                 .detach();
+
+            env::log_str(
+                &OmniBridgeEvent::DeployTokenEvent {
+                    token_id: token_info.token_id,
+                    token_address: token_info.token_address,
+                    metadata: BasicMetadata {
+                        name: String::new(),
+                        symbol: String::new(),
+                        decimals: token_info.decimals,
+                    },
+                }
+                .to_log_string(),
+            );
         }
     }
 
@@ -1453,12 +1466,18 @@ impl Contract {
     }
 
     #[access_control_any(roles(Role::DAO))]
+    #[payable]
     pub fn migrate_deployed_token(
         &mut self,
         origin_chain: ChainKind,
         old_token: AccountId,
         new_token: AccountId,
     ) {
+        require!(
+            env::attached_deposit() >= NEP141_DEPOSIT,
+            "ERR_NOT_ENOUGH_ATTACHED_DEPOSIT"
+        );
+
         require!(
             self.deployed_tokens.remove(&old_token),
             "ERR_OLD_TOKEN_NOT_DEPLOYED"
@@ -1486,6 +1505,20 @@ impl Contract {
                 .insert(&old_token, &new_token)
                 .is_none(),
             "ERR_TOKEN_ALREADY_MIGRATED"
+        );
+
+        ext_token::ext(new_token.clone())
+            .with_static_gas(STORAGE_DEPOSIT_GAS)
+            .with_attached_deposit(NEP141_DEPOSIT)
+            .storage_deposit(&env::current_account_id(), Some(true))
+            .detach();
+
+        env::log_str(
+            &OmniBridgeEvent::MigrateTokenEvent {
+                old_token_id: old_token,
+                new_token_id: new_token,
+            }
+            .to_log_string(),
         );
     }
 
@@ -1590,6 +1623,10 @@ impl Contract {
             }
         }
         None
+    }
+
+    pub fn get_migrated_token(&self, old_token: &AccountId) -> Option<AccountId> {
+        self.migrated_tokens.get(old_token)
     }
 }
 
@@ -2447,7 +2484,7 @@ impl Contract {
         );
     }
 
-    pub fn swap_migrated_token(
+    fn swap_migrated_token(
         &mut self,
         sender_id: AccountId,
         old_token: AccountId,
