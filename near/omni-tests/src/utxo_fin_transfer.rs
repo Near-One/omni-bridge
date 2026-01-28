@@ -39,7 +39,7 @@ mod tests {
 
             enable_locked_tokens_chains(
                 &env_builder.bridge_contract,
-                &[ChainKind::Near, ChainKind::Btc, ChainKind::Base],
+                &[ChainKind::Near, ChainKind::Base],
             )
             .await?;
 
