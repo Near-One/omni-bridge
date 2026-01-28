@@ -1,6 +1,6 @@
 use near_sdk::near;
 
-use crate::prover_result::ProofKind;
+use crate::{prover_result::ProofKind, H160};
 
 #[near(serializers=[borsh])]
 #[derive(Debug, Clone)]
@@ -14,6 +14,27 @@ pub struct EvmVerifyProofArgs {
 pub struct WormholeVerifyProofArgs {
     pub proof_kind: ProofKind,
     pub vaa: String,
+}
+
+#[near(serializers=[borsh])]
+#[derive(Debug, Clone)]
+pub struct HotVerifyProofArgs {
+    pub proof_kind: ProofKind,
+    pub signature: [u8; 64],
+    pub transfer: HotInitTransfer,
+}
+
+#[near(serializers=[borsh])]
+#[derive(Debug, Clone)]
+pub struct HotInitTransfer {
+    pub sender: H160,
+    pub token_address: H160,
+    pub origin_nonce: u64,
+    pub amount: u128,
+    pub fee: u128,
+    pub native_fee: u128,
+    pub recipient: String,
+    pub message: String,
 }
 
 #[near(serializers=[borsh, json])]
