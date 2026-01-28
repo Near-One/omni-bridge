@@ -11,11 +11,11 @@ For more information on how it works, please see [Omni Bridge Documentation](htt
 
 ## Supported Networks
 
-- Ethereum (Light client + Chain Signatures)
-- Bitcoin (Light client + Chain Signatures)
-- Solana (Currently Wormhole, transitioning to Chain Signatures)
-- Base (Currently Wormhole, transitioning to Chain Signatures)
-- Arbitrum (Currently Wormhole, transitioning to Chain Signatures)
+**NEAR → Foreign Chain:** All outbound transfers use [Chain Signatures](https://docs.near.org/concepts/abstraction/chain-signatures) (MPC).
+
+**Foreign Chain → NEAR:** Inbound transfers are verified using:
+- Ethereum, Bitcoin, Zcash: Light clients
+- Solana and EVM L2s (Base, Arbitrum, BNB, Polygon): Wormhole
 
 ## Contract Addresses
 
