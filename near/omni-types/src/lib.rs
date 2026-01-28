@@ -1,8 +1,10 @@
 use core::fmt;
 use core::str::FromStr;
+use std::collections::BTreeMap;
 use std::io::{Read, Write};
 
-use borsh::{BorshDeserialize, BorshSerialize};
+use borsh::schema::{add_definition, Declaration, Definition, Fields};
+use borsh::{BorshDeserialize, BorshSchema, BorshSerialize};
 use hex::FromHex;
 use near_sdk::json_types::U128;
 use near_sdk::serde::{Deserialize, Serialize};
@@ -472,6 +474,7 @@ impl<'de> Deserialize<'de> for OmniAddress {
     }
 }
 
+
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum BridgeOnTransferMsg {
     InitTransfer(InitTransferMsg),
@@ -627,6 +630,169 @@ pub struct TransferMessagePayload {
     pub recipient: OmniAddress,
     pub fee_recipient: Option<AccountId>,
     pub sub_chain: Option<u8>,
+}
+
+struct OptionalTrailingU8Schema;
+
+impl BorshSchema for OptionalTrailingU8Schema {
+    fn declaration() -> Declaration {
+        "OptionalTrailing<u8>".to_string()
+    }
+
+    fn add_definitions_recursively(definitions: &mut BTreeMap<Declaration, Definition>) {
+        let definition = Definition::Sequence {
+            length_width: 0,
+            length_range: 0..=1,
+            elements: u8::declaration(),
+        };
+        add_definition(Self::declaration(), definition, definitions);
+        u8::add_definitions_recursively(definitions);
+    }
+}
+
+impl BorshSchema for TransferMessagePayload {
+    fn declaration() -> Declaration {
+        "TransferMessagePayload".to_string()
+    }
+
+    fn add_definitions_recursively(definitions: &mut BTreeMap<Declaration, Definition>) {
+        let payload_type_decl = "PayloadType".to_string();
+        let chain_kind_decl = "ChainKind".to_string();
+        let transfer_id_decl = "TransferId".to_string();
+        let omni_address_decl = "OmniAddress".to_string();
+        let h160_decl = "H160".to_string();
+        let sol_address_decl = "SolAddress".to_string();
+        let account_id_decl = "AccountId".to_string();
+        let u128_decl = "U128".to_string();
+        let option_account_id_decl = "Option<AccountId>".to_string();
+
+        let fields = Fields::NamedFields(vec![
+            ("prefix".to_string(), payload_type_decl.clone()),
+            ("destination_nonce".to_string(), u64::declaration()),
+            ("transfer_id".to_string(), transfer_id_decl.clone()),
+            ("token_address".to_string(), omni_address_decl.clone()),
+            ("amount".to_string(), u128_decl.clone()),
+            ("recipient".to_string(), omni_address_decl.clone()),
+            ("fee_recipient".to_string(), option_account_id_decl.clone()),
+            ("sub_chain".to_string(), OptionalTrailingU8Schema::declaration()),
+        ]);
+        add_definition(Self::declaration(), Definition::Struct { fields }, definitions);
+
+        add_definition(
+            payload_type_decl.clone(),
+            Definition::Enum {
+                tag_width: 1,
+                variants: vec![
+                    (0, "TransferMessage".to_string(), <()>::declaration()),
+                    (1, "Metadata".to_string(), <()>::declaration()),
+                    (2, "ClaimNativeFee".to_string(), <()>::declaration()),
+                ],
+            },
+            definitions,
+        );
+
+        add_definition(
+            chain_kind_decl.clone(),
+            Definition::Enum {
+                tag_width: 1,
+                variants: vec![
+                    (0, "Eth".to_string(), <()>::declaration()),
+                    (1, "Near".to_string(), <()>::declaration()),
+                    (2, "Sol".to_string(), <()>::declaration()),
+                    (3, "Arb".to_string(), <()>::declaration()),
+                    (4, "Base".to_string(), <()>::declaration()),
+                    (5, "Bnb".to_string(), <()>::declaration()),
+                    (6, "Btc".to_string(), <()>::declaration()),
+                    (7, "Zcash".to_string(), <()>::declaration()),
+                    (8, "Pol".to_string(), <()>::declaration()),
+                ],
+            },
+            definitions,
+        );
+
+        add_definition(
+            transfer_id_decl.clone(),
+            Definition::Struct {
+                fields: Fields::NamedFields(vec![
+                    ("origin_chain".to_string(), chain_kind_decl),
+                    ("origin_nonce".to_string(), u64::declaration()),
+                ]),
+            },
+            definitions,
+        );
+
+        add_definition(
+            h160_decl.clone(),
+            Definition::Struct {
+                fields: Fields::UnnamedFields(vec![<[u8; 20]>::declaration()]),
+            },
+            definitions,
+        );
+        <[u8; 20]>::add_definitions_recursively(definitions);
+
+        add_definition(
+            sol_address_decl.clone(),
+            Definition::Struct {
+                fields: Fields::UnnamedFields(vec![<[u8; 32]>::declaration()]),
+            },
+            definitions,
+        );
+        <[u8; 32]>::add_definitions_recursively(definitions);
+
+        add_definition(
+            account_id_decl.clone(),
+            Definition::Struct {
+                fields: Fields::UnnamedFields(vec![String::declaration()]),
+            },
+            definitions,
+        );
+        String::add_definitions_recursively(definitions);
+
+        add_definition(
+            u128_decl.clone(),
+            Definition::Struct {
+                fields: Fields::UnnamedFields(vec![u128::declaration()]),
+            },
+            definitions,
+        );
+        u128::add_definitions_recursively(definitions);
+
+        add_definition(
+            omni_address_decl,
+            Definition::Enum {
+                tag_width: 1,
+                variants: vec![
+                    (0, "Eth".to_string(), h160_decl.clone()),
+                    (1, "Near".to_string(), account_id_decl.clone()),
+                    (2, "Sol".to_string(), sol_address_decl.clone()),
+                    (3, "Arb".to_string(), h160_decl.clone()),
+                    (4, "Base".to_string(), h160_decl.clone()),
+                    (5, "Bnb".to_string(), h160_decl.clone()),
+                    (6, "Btc".to_string(), String::declaration()),
+                    (7, "Zcash".to_string(), String::declaration()),
+                    (8, "Pol".to_string(), h160_decl),
+                ],
+            },
+            definitions,
+        );
+
+        add_definition(
+            option_account_id_decl,
+            Definition::Enum {
+                tag_width: 1,
+                variants: vec![
+                    (0, "None".to_string(), <()>::declaration()),
+                    (1, "Some".to_string(), account_id_decl),
+                ],
+            },
+            definitions,
+        );
+
+        OptionalTrailingU8Schema::add_definitions_recursively(definitions);
+        u8::add_definitions_recursively(definitions);
+        u64::add_definitions_recursively(definitions);
+        <()>::add_definitions_recursively(definitions);
+    }
 }
 
 impl BorshSerialize for TransferMessagePayload {
