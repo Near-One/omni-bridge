@@ -783,6 +783,7 @@ impl Contract {
             .into()
         } else {
             self.fast_fin_transfer_to_other_chain(
+                amount,
                 &fast_transfer,
                 storage_payer,
                 fast_fin_transfer_msg.relayer,
@@ -865,6 +866,7 @@ impl Contract {
 
     fn fast_fin_transfer_to_other_chain(
         &mut self,
+        amount: U128,
         fast_transfer: &FastTransfer,
         storage_payer: AccountId,
         relayer_id: AccountId,
@@ -877,13 +879,9 @@ impl Contract {
             );
         }
 
-        self.burn_tokens_if_needed(fast_transfer.token_id.clone(), fast_transfer.amount);
+        self.burn_tokens_if_needed(fast_transfer.token_id.clone(), amount);
 
-        self.unlock_other_tokens_if_needed(
-            ChainKind::Near,
-            &fast_transfer.token_id,
-            fast_transfer.amount.0,
-        );
+        self.unlock_other_tokens_if_needed(ChainKind::Near, &fast_transfer.token_id, amount.0);
 
         self.lock_nep141_tokens_if_needed(
             fast_transfer.get_destination_chain(),
