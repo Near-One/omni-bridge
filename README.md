@@ -15,7 +15,7 @@ For more information on how it works, please see [Omni Bridge Documentation](htt
 
 **Foreign Chain → NEAR:** Inbound transfers are verified using:
 - Ethereum, Bitcoin, Zcash: Light clients
-- Solana and EVM L2s (Base, Arbitrum, BNB, Polygon): Wormhole
+- Solana, BNB and EVM L2s (Base, Arbitrum, Polygon): Wormhole
 
 ## Contract Addresses
 
