@@ -2408,12 +2408,6 @@ impl Contract {
             U128(fast_transfer.amount_without_fee())
         };
 
-        self.lock_other_tokens_if_needed(
-            fast_transfer.get_destination_chain(),
-            &fast_transfer.token_id,
-            fast_transfer.amount.0,
-        );
-
         self.send_tokens(
             fast_transfer.token_id.clone(),
             fast_transfer_status.relayer,
@@ -2500,14 +2494,11 @@ impl Contract {
         let required_storage_balance =
             self.add_transfer_message(transfer_message.clone(), storage_owner.clone());
 
-        let fast_transfer = FastTransfer::from_transfer(transfer_message.clone(), token_id.clone());
-        if self.get_fast_transfer_status(&fast_transfer.id()).is_none() {
-            self.lock_other_tokens_if_needed(
-                transfer_message.get_destination_chain(),
-                &token_id,
-                transfer_message.amount.0,
-            );
-        }
+        self.lock_other_tokens_if_needed(
+            transfer_message.get_destination_chain(),
+            &token_id,
+            transfer_message.amount.0,
+        );
 
         self.update_storage_balance(
             storage_owner.clone(),
