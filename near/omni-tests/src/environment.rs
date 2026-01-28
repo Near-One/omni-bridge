@@ -695,6 +695,25 @@ async fn storage_deposit(token_contract: &Contract, account_id: &AccountId) -> a
     Ok(())
 }
 
+pub async fn enable_locked_tokens_chains(
+    bridge_contract: &Contract,
+    chains: &[ChainKind],
+) -> anyhow::Result<()> {
+    for chain in chains {
+        bridge_contract
+            .call("add_locked_tokens_enabled_chain")
+            .args_json(json!({
+                "chain_kind": chain,
+            }))
+            .max_gas()
+            .transact()
+            .await?
+            .into_result()?;
+    }
+
+    Ok(())
+}
+
 async fn seed_locked_tokens(
     bridge_contract: &Contract,
     token_id: &AccountId,
