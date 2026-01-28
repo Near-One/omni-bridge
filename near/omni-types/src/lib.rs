@@ -162,7 +162,7 @@ pub enum ChainKind {
     #[serde(alias = "pol")]
     Pol,
     #[serde(alias = "hlevm")]
-    #[strum(serialize = "Hlevm")]
+    #[strum(serialize = "HlEvm")]
     HyperEvm,
 }
 
