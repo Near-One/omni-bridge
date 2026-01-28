@@ -22,6 +22,14 @@ jobs:
           
       - name: Clone the repository
         uses: actions/checkout@v3
+
+      - name: Install Anchor
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y pkg-config libudev-dev
+          cargo install --git https://github.com/coral-xyz/anchor --tag v0.32.1 -p anchor-cli --locked
+          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+        shell: bash
         
       - name: Install cargo-near
         run: |
@@ -31,9 +39,6 @@ jobs:
         run: |
           make rust-build-near
         timeout-minutes: 60
-
-      - name: Install Anchor
-        uses: metadaoproject/setup-anchor@v3
 
       - name: Build Solana contract
         run: |
