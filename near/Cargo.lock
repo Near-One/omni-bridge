@@ -970,7 +970,7 @@ dependencies = [
 
 [[package]]
 name = "evm-prover"
-version = "0.4.3"
+version = "0.4.4"
 dependencies = [
  "borsh",
  "near-sdk",
@@ -2026,9 +2026,9 @@ dependencies = [
 
 [[package]]
 name = "near-contract-standards"
-version = "5.22.0"
+version = "5.24.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "885e2c40ee7b0dbd4fa78855ba3601ac5a681f256e94cac4b6c9e8e2e7b05b08"
+checksum = "284205bef7d7140d9754897729c6d04e47b3dec4bd7de83dd818e3ac7f58418a"
 dependencies = [
  "near-sdk",
 ]
@@ -2268,9 +2268,9 @@ checksum = "79d63d022e686c6b92426c98f011908037730d557e815d6c813d5686030a6b53"
 
 [[package]]
 name = "near-sdk"
-version = "5.22.0"
+version = "5.24.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1895ec5b53085800ba9559aee09bd629eb40ee1c52bb9aa96e452f49551c1623"
+checksum = "b5188eba9ee0383c2a28afee994e65c21e98823d18a32b8b3a7c8d6cdedfb119"
 dependencies = [
  "base64 0.22.1",
  "borsh",
@@ -2295,9 +2295,9 @@ dependencies = [
 
 [[package]]
 name = "near-sdk-macros"
-version = "5.22.0"
+version = "5.24.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0d7b3c8d79e612150c0efb4d61a286b28995ef9bfa6090d338589b0422506af4"
+checksum = "e4339b75a514ca2e6b67379be62a441f7e99a2c3813278f1b23d233b300f9f4f"
 dependencies = [
  "Inflector",
  "darling 0.20.11",
@@ -2521,7 +2521,7 @@ dependencies = [
 
 [[package]]
 name = "omni-bridge"
-version = "0.4.3"
+version = "0.4.4"
 dependencies = [
  "borsh",
  "hex",
@@ -2529,6 +2529,7 @@ dependencies = [
  "near-plugins",
  "near-sdk",
  "omni-types",
+ "omni-utils",
  "serde",
 ]
 
@@ -2549,7 +2550,7 @@ dependencies = [
 
 [[package]]
 name = "omni-token"
-version = "0.4.3"
+version = "0.4.4"
 dependencies = [
  "borsh",
  "near-contract-standards",
@@ -2567,12 +2568,35 @@ dependencies = [
  "hex",
  "near-sdk",
  "num_enum",
+ "omni-utils",
  "rlp",
  "schemars 0.8.22",
  "serde",
  "sha2",
  "sha3",
+ "strum 0.27.2",
  "strum_macros 0.27.2",
+]
+
+[[package]]
+name = "omni-utils"
+version = "0.1.0"
+source = "git+https://github.com/near-one/omni-utils?rev=2b9b29f15b36d5922237f0e21d9f718816187b74#2b9b29f15b36d5922237f0e21d9f718816187b74"
+dependencies = [
+ "near-sdk",
+ "omni-utils-derive",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "omni-utils-derive"
+version = "0.1.0"
+source = "git+https://github.com/near-one/omni-utils?rev=2b9b29f15b36d5922237f0e21d9f718816187b74#2b9b29f15b36d5922237f0e21d9f718816187b74"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.106",
 ]
 
 [[package]]
@@ -3626,6 +3650,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8fec0f0aef304996cf250b31b5a10dee7980c85da9d759361292b8bca5a18f06"
 
 [[package]]
+name = "strum"
+version = "0.27.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "af23d6f6c1a224baef9d3f61e287d2761385a5b88fdab4eb4c6f11aeb54c4bcf"
+
+[[package]]
 name = "strum_macros"
 version = "0.24.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3889,7 +3919,7 @@ checksum = "1f3ccbac311fea05f86f61904b462b55fb3df8837a366dfc601a0161d0532f20"
 
 [[package]]
 name = "token-deployer"
-version = "0.4.3"
+version = "0.4.4"
 dependencies = [
  "borsh",
  "cargo-near-build",
@@ -4688,7 +4718,7 @@ checksum = "5c573471f125075647d03df72e026074b7203790d41351cd6edc96f46bcccd36"
 
 [[package]]
 name = "wormhole-omni-prover-proxy"
-version = "0.4.3"
+version = "0.4.4"
 dependencies = [
  "borsh",
  "hex",

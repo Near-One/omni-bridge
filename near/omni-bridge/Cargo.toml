@@ -32,6 +32,7 @@ near-contract-standards.workspace = true
 borsh.workspace = true
 serde.workspace = true
 near-plugins.workspace = true
+omni-utils.workspace = true
 omni-types.workspace = true
 hex.workspace = true
 
