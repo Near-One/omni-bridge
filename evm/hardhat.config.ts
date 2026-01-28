@@ -131,6 +131,39 @@ task("deploy-token-impl", "Deploys the BridgeToken implementation").setAction(as
   )
 })
 
+
+task("deploy-token-proxy", "Deploy BridgeToken behind a UUPS proxy")
+  .addParam("name", "Token name")
+  .addParam("symbol", "Token symbol")
+  .addOptionalParam("decimals", "Token decimals", "18")
+  .setAction(async (args, hre) => {
+    const { ethers, upgrades } = hre;
+
+    const name = String(args.name);
+    const symbol = String(args.symbol);
+    const decimals = Number(args.decimals);
+
+    const [deployer] = await ethers.getSigners();
+    console.log("Deployer:", deployer.address);
+    console.log("Params:", { name, symbol, decimals });
+
+    const BridgeToken = await ethers.getContractFactory("BridgeToken");
+
+    const proxy = await upgrades.deployProxy(
+      BridgeToken,
+      [name, symbol, decimals],
+      { initializer: "initialize" }
+    );
+
+    await proxy.waitForDeployment();
+    const proxyAddress = await proxy.getAddress();
+
+    const implAddress = await upgrades.erc1967.getImplementationAddress(proxyAddress);
+
+    console.log("Proxy deployed to:", proxyAddress);
+    console.log("Implementation:", implAddress);
+  });
+
 task("upgrade-bridge-token", "Upgrades a BridgeToken to a new implementation")
   .addParam("factory", "The address of the OmniBridge contract")
   .addParam("nearTokenAccount", "The NEAR token ID")
@@ -301,6 +334,13 @@ const config: HardhatUserConfig = {
       url: `https://polygon-mainnet.infura.io/v3/${INFURA_API_KEY}`,
       accounts: [`${EVM_PRIVATE_KEY}`],
     },
+    hyperEvmMainnet: {
+      wormholeAddress: "0x7C0faFc4384551f063e05aee704ab943b8B53aB3",
+      omniChainId: 9,
+      chainId: 999,
+      url: `https://rpc.hyperliquid.xyz/evm`,
+      accounts: [`${EVM_PRIVATE_KEY}`],
+    },
     sepolia: {
       omniChainId: 0,
       chainId: 11155111,
@@ -333,6 +373,13 @@ const config: HardhatUserConfig = {
       omniChainId: 8,
       chainId: 80002,
       url: `https://polygon-amoy.infura.io/v3/${INFURA_API_KEY}`,
+      accounts: [`${EVM_PRIVATE_KEY}`],
+    },
+    hyperEvmTestnet: {
+      wormholeAddress: "0xBB73cB66C26740F31d1FabDC6b7A46a038A300dd",
+      omniChainId: 9,
+      chainId: 998,
+      url: `https://rpc.hyperliquid-testnet.xyz/evm`,
       accounts: [`${EVM_PRIVATE_KEY}`],
     },
   },
