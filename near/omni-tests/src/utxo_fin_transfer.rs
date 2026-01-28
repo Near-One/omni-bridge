@@ -229,11 +229,18 @@ mod tests {
                 "Recipient balance is not correct"
             );
 
-            assert_eq!(
-                locked_after,
-                U128(locked_before.0 + amount),
-                "Locked tokens should increase by the transfer amount"
-            );
+            if is_fast_transfer {
+                assert_eq!(
+                    locked_before, locked_after,
+                    "Locked tokens should be unchanged after fast transfer finalization"
+                );
+            } else {
+                assert_eq!(
+                    locked_after,
+                    U128(locked_before.0 + amount),
+                    "Locked tokens should increase by the transfer amount"
+                );
+            }
         }
 
         if !is_fast_transfer && !is_transfer_to_near {
