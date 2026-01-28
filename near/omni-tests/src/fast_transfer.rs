@@ -753,10 +753,7 @@ mod tests {
                     locked_destination_after,
                     U128(locked_destination_before.0 + transfer_message.amount.0)
                 );
-                assert_eq!(
-                    contract_balance_after,
-                    U128(contract_balance_before.0 - normalized_fee)
-                );
+                assert_eq!(contract_balance_before, contract_balance_after);
             } else {
                 assert_eq!(
                     locked_destination_after,
