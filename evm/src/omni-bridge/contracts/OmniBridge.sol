@@ -295,7 +295,10 @@ contract OmniBridge is
                 : bytes.concat(
                     bytes("\x01"),
                     Borsh.encodeString(payload.feeRecipient)
-                )
+                ),
+            payload.subChain == 0
+                ? bytes("")
+                : bytes.concat(bytes1(payload.subChain))
         );
         bytes32 hashed = keccak256(borshEncoded);
 

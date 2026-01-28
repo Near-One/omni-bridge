@@ -1,6 +1,8 @@
-use borsh::{BorshDeserialize, BorshSerialize};
 use core::fmt;
 use core::str::FromStr;
+use std::io::{Read, Write};
+
+use borsh::{BorshDeserialize, BorshSerialize};
 use hex::FromHex;
 use near_sdk::json_types::U128;
 use near_sdk::serde::{Deserialize, Serialize};
@@ -614,7 +616,7 @@ pub enum PayloadType {
     ClaimNativeFee,
 }
 
-#[near(serializers=[borsh, json])]
+#[near(serializers=[json])]
 #[derive(Debug, Clone)]
 pub struct TransferMessagePayload {
     pub prefix: PayloadType,
@@ -624,6 +626,60 @@ pub struct TransferMessagePayload {
     pub amount: U128,
     pub recipient: OmniAddress,
     pub fee_recipient: Option<AccountId>,
+    pub sub_chain: Option<u8>,
+}
+
+impl BorshSerialize for TransferMessagePayload {
+    fn serialize<W: Write>(&self, writer: &mut W) -> std::io::Result<()> {
+        BorshSerialize::serialize(&self.prefix, writer)?;
+        BorshSerialize::serialize(&self.destination_nonce, writer)?;
+        BorshSerialize::serialize(&self.transfer_id, writer)?;
+        BorshSerialize::serialize(&self.token_address, writer)?;
+        BorshSerialize::serialize(&self.amount, writer)?;
+        BorshSerialize::serialize(&self.recipient, writer)?;
+        BorshSerialize::serialize(&self.fee_recipient, writer)?;
+        if let Some(sub_chain) = self.sub_chain {
+            BorshSerialize::serialize(&sub_chain, writer)?;
+        }
+        Ok(())
+    }
+}
+
+impl BorshDeserialize for TransferMessagePayload {
+    fn deserialize_reader<R: Read>(reader: &mut R) -> std::io::Result<Self> {
+        let prefix = BorshDeserialize::deserialize_reader(reader)?;
+        let destination_nonce = BorshDeserialize::deserialize_reader(reader)?;
+        let transfer_id = BorshDeserialize::deserialize_reader(reader)?;
+        let token_address = BorshDeserialize::deserialize_reader(reader)?;
+        let amount = BorshDeserialize::deserialize_reader(reader)?;
+        let recipient = BorshDeserialize::deserialize_reader(reader)?;
+        let fee_recipient = BorshDeserialize::deserialize_reader(reader)?;
+
+        let mut rest = Vec::new();
+        reader.read_to_end(&mut rest)?;
+
+        let sub_chain = match rest.len() {
+            0 => None,
+            1 => Some(rest[0]),
+            _ => {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    "unexpected trailing bytes in TransferMessagePayload",
+                ))
+            }
+        };
+
+        Ok(Self {
+            prefix,
+            destination_nonce,
+            transfer_id,
+            token_address,
+            amount,
+            recipient,
+            fee_recipient,
+            sub_chain,
+        })
+    }
 }
 
 #[near(serializers = [borsh, json])]

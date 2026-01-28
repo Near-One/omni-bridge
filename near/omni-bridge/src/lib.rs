@@ -451,6 +451,7 @@ impl Contract {
             amount: U128(amount_to_transfer),
             recipient: transfer_message.recipient,
             fee_recipient,
+            sub_chain: None,
         };
 
         let payload = near_sdk::env::keccak256_array(

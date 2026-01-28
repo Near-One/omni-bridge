@@ -117,6 +117,7 @@ export function depositSignature(
     feeRecipient: "",
     originChain: 1,
     originNonce: 1,
+    subChain: 0,
   }
 
   if (typeof payload.tokenAddress !== "string" || typeof payload.recipient !== "string") {
