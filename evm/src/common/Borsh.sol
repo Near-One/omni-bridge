@@ -17,8 +17,7 @@ library Borsh {
     function encodeString(
         string memory val
     ) internal pure returns (bytes memory) {
-        bytes memory b = bytes(val);
-        return bytes.concat(encodeUint32(uint32(b.length)), bytes(val));
+        return encodeBytes(bytes(val));
     }
 
     function encodeBytes(
