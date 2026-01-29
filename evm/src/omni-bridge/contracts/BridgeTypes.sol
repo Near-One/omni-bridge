@@ -10,7 +10,7 @@ library BridgeTypes {
         uint128 amount;
         address recipient;
         string feeRecipient;
-        string message;
+        bytes message;
     }
 
     struct MetadataPayload {
