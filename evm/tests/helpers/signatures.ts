@@ -50,6 +50,7 @@ class TransferMessage {
       recipientChainId: "u8",
       recipient: { array: { type: "u8", len: 20 } },
       feeRecipient: { option: "string" },
+      message: { array: { type: "u8" } },
     },
   }
 
@@ -64,6 +65,7 @@ class TransferMessage {
     public recipientChainId: number,
     public recipient: Uint8Array,
     public feeRecipient: string | null,
+    public message: Uint8Array,
   ) {}
 
   static serialize(msg: TransferMessage): Uint8Array {
@@ -135,6 +137,7 @@ export function depositSignature(
     0,
     ethers.getBytes(payload.recipient),
     null,
+    ethers.getBytes(payload.message),
   )
 
   const borshEncoded = TransferMessage.serialize(message)
