@@ -451,12 +451,10 @@ impl Contract {
             amount: U128(amount_to_transfer),
             recipient: transfer_message.recipient,
             fee_recipient,
-            sub_chain: None,
+            message: transfer_message.msg.into_bytes(),
         };
 
-        let payload = near_sdk::env::keccak256_array(
-            borsh::to_vec(&transfer_payload).sdk_expect("ERR_BORSH"),
-        );
+        let payload = near_sdk::env::keccak256_array(transfer_payload.encode_hashable());
 
         ext_signer::ext(self.mpc_signer.clone())
             .with_static_gas(MPC_SIGNING_GAS)
