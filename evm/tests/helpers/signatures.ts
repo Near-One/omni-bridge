@@ -30,7 +30,7 @@ class MetadataMessage {
     public name: string,
     public symbol: string,
     public decimals: BigNumberish,
-  ) {}
+  ) { }
 
   static serialize(msg: MetadataMessage): Uint8Array {
     return borsh.serialize(MetadataMessage.schema, msg)
@@ -64,7 +64,7 @@ class TransferMessage {
     public recipientChainId: number,
     public recipient: Uint8Array,
     public feeRecipient: string | null,
-  ) {}
+  ) { }
 
   static serialize(msg: TransferMessage): Uint8Array {
     return borsh.serialize(TransferMessage.schema, msg)
@@ -117,7 +117,7 @@ export function depositSignature(
     feeRecipient: "",
     originChain: 1,
     originNonce: 1,
-    message: "",
+    message: "0x",
   }
 
   if (typeof payload.tokenAddress !== "string" || typeof payload.recipient !== "string") {
