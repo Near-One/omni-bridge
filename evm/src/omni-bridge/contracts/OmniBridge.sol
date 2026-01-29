@@ -296,9 +296,12 @@ contract OmniBridge is
                     bytes("\x01"),
                     Borsh.encodeString(payload.feeRecipient)
                 ),
-            payload.subChain == 0
+            bytes(payload.message).length == 0 // None or Some(String) in rust
                 ? bytes("")
-                : bytes.concat(bytes1(payload.subChain))
+                : bytes.concat(
+                    bytes("\x01"),
+                    Borsh.encodeString(payload.message)
+                )
         );
         bytes32 hashed = keccak256(borshEncoded);
 
