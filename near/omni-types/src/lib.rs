@@ -656,11 +656,11 @@ pub struct TransferMessagePayload {
 }
 
 impl TransferMessagePayload {
-    pub fn encode_hashable(&self) -> Vec<u8> {
+    pub fn encode_hashable(&self) -> Result<Vec<u8>, String> {
         if self.message.is_empty() {
-            borsh::to_vec(&TransferMessagePayloadV1::from(self.clone())).unwrap()
+            borsh::to_vec(&TransferMessagePayloadV1::from(self.clone())).map_err(stringify)
         } else {
-            borsh::to_vec(self).unwrap()
+            borsh::to_vec(self).map_err(stringify)
         }
     }
 }

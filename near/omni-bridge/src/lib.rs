@@ -454,7 +454,9 @@ impl Contract {
             message: transfer_message.msg.into_bytes(),
         };
 
-        let payload = near_sdk::env::keccak256_array(transfer_payload.encode_hashable());
+        let payload = near_sdk::env::keccak256_array(
+            transfer_payload.encode_hashable().sdk_expect("ERR_BORSH"),
+        );
 
         ext_signer::ext(self.mpc_signer.clone())
             .with_static_gas(MPC_SIGNING_GAS)
