@@ -1169,6 +1169,8 @@ mod tests {
         emitter_address: OmniAddress,
         amount: U128,
     ) -> anyhow::Result<()> {
+        let sender =
+            OmniAddress::new_zero(token_address.get_chain()).unwrap_or_else(|_| eth_eoa_address());
         let storage_deposit_actions = vec![StorageDepositAction {
             token_id: token_account_id.clone(),
             account_id: recipient.id().clone(),
@@ -1196,7 +1198,7 @@ mod tests {
                         fee: U128(0),
                         native_fee: U128(0),
                     },
-                    sender: eth_eoa_address(),
+                    sender,
                     msg: String::default(),
                     emitter_address,
                 }))?,

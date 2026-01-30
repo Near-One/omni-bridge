@@ -54,6 +54,7 @@ impl Contract {
                 token_address_to_id: old_state.token_address_to_id,
                 token_decimals: old_state.token_decimals,
                 deployed_tokens: old_state.deployed_tokens,
+                deployed_tokens_v2: LookupMap::new(StorageKey::DeployedTokensV2),
                 token_deployer_accounts: old_state.token_deployer_accounts,
                 mpc_signer: old_state.mpc_signer,
                 current_origin_nonce: old_state.current_origin_nonce,
