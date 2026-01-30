@@ -883,7 +883,7 @@ pub struct FastTransferStatus {
 #[derive(Debug, PartialEq)]
 pub enum DestinationChainMsg {
     MaxGasFee(U64),
-    DestinationMsg(#[serde_as(as = "Hex")] Vec<u8>),
+    DestHexMsg(#[serde_as(as = "Hex")] Vec<u8>),
 }
 
 impl DestinationChainMsg {
@@ -896,7 +896,7 @@ impl DestinationChainMsg {
     }
 
     pub fn destination_msg(&self) -> Option<Vec<u8>> {
-        if let Self::DestinationMsg(msg) = self {
+        if let Self::DestHexMsg(msg) = self {
             Some(msg.clone())
         } else {
             None
