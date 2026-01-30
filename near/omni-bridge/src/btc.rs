@@ -48,7 +48,7 @@ impl Contract {
 
                 if let Some(max_gas_fee_msg) = max_gas_fee_msg {
                     require!(
-                        max_gas_fee.expect("max_gas_fee is missing").0 == max_gas_fee_msg.0.into(),
+                        max_gas_fee.expect("max_gas_fee is missing") == max_gas_fee_msg,
                         "Invalid max gas fee"
                     );
                 }
