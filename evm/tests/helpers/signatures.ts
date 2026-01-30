@@ -50,7 +50,6 @@ class TransferMessage {
       recipientChainId: "u8",
       recipient: { array: { type: "u8", len: 20 } },
       feeRecipient: { option: "string" },
-      message: { array: { type: "u8" } },
     },
   }
 
