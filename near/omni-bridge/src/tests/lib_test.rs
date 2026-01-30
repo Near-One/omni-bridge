@@ -14,11 +14,11 @@ use omni_types::{
     TransferId, TransferMessage, UpdateFee,
 };
 
+use crate::Contract;
 use crate::{
     storage::{Decimals, TransferMessageStorage, TransferMessageStorageValue},
     token_lock::LockAction,
 };
-use crate::{token_lock::LockedToken, Contract};
 
 const DEFAULT_NONCE: Nonce = 0;
 const DEFAULT_TRANSFER_ID: TransferId = TransferId {
@@ -1023,7 +1023,7 @@ fn test_fin_transfer_callback_refund_restores_locked_tokens() {
 
     let lock_actions = vec![LockAction::Unlocked {
         chain_kind: ChainKind::Eth,
-        token: LockedToken::Nep141(token_id.clone()),
+        token_id: token_id.clone(),
         amount: DEFAULT_TRANSFER_AMOUNT,
     }];
     contract.fin_transfer_send_tokens_callback(
