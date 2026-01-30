@@ -3,9 +3,10 @@ use core::str::FromStr;
 
 use borsh::{BorshDeserialize, BorshSerialize};
 use hex::FromHex;
-use near_sdk::json_types::U128;
+use near_sdk::json_types::{U128, U64};
 use near_sdk::serde::{Deserialize, Serialize};
-use near_sdk::{near, AccountId};
+use near_sdk::serde_with::hex::Hex;
+use near_sdk::{near, serde_json, AccountId};
 use num_enum::IntoPrimitive;
 use schemars::JsonSchema;
 use serde::de::Visitor;
@@ -876,4 +877,33 @@ pub struct FastTransferStatus {
     pub finalised: bool,
     pub relayer: AccountId,
     pub storage_owner: AccountId,
+}
+
+#[near(serializers=[json])]
+#[derive(Debug, PartialEq)]
+pub enum DestinationChainMsg {
+    MaxGasFee(U64),
+    DestinationMsg(#[serde_as(as = "Hex")] Vec<u8>),
+}
+
+impl DestinationChainMsg {
+    pub fn max_gas_fee(&self) -> Option<U128> {
+        if let Self::MaxGasFee(fee) = self {
+            Some(U128(fee.0.into()))
+        } else {
+            None
+        }
+    }
+
+    pub fn destination_msg(&self) -> Option<Vec<u8>> {
+        if let Self::DestinationMsg(msg) = self {
+            Some(msg.clone())
+        } else {
+            None
+        }
+    }
+
+    pub fn from_json(s: &str) -> Option<Self> {
+        serde_json::from_str(s).ok()
+    }
 }

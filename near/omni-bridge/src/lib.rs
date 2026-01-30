@@ -25,10 +25,10 @@ use omni_types::mpc_types::SignatureResponse;
 use omni_types::near_events::OmniBridgeEvent;
 use omni_types::prover_result::ProverResult;
 use omni_types::{
-    BasicMetadata, BridgeOnTransferMsg, ChainKind, FastFinTransferMsg, FastTransfer,
-    FastTransferId, FastTransferStatus, Fee, InitTransferMsg, MetadataPayload, Nonce, OmniAddress,
-    PayloadType, SignRequest, TransferId, TransferIdKind, TransferMessage, TransferMessagePayload,
-    UnifiedTransferId, UpdateFee, UtxoFinTransferMsg, H160,
+    BasicMetadata, BridgeOnTransferMsg, ChainKind, DestinationChainMsg, FastFinTransferMsg,
+    FastTransfer, FastTransferId, FastTransferStatus, Fee, InitTransferMsg, MetadataPayload, Nonce,
+    OmniAddress, PayloadType, SignRequest, TransferId, TransferIdKind, TransferMessage,
+    TransferMessagePayload, UnifiedTransferId, UpdateFee, UtxoFinTransferMsg, H160,
 };
 use std::collections::HashMap;
 use std::str::FromStr;
@@ -443,6 +443,10 @@ impl Contract {
 
         require!(amount_to_transfer > 0, "Invalid amount to transfer");
 
+        let message = DestinationChainMsg::from_json(&transfer_message.msg)
+            .and_then(|s| s.destination_msg())
+            .unwrap_or_default();
+
         let transfer_payload = TransferMessagePayload {
             prefix: PayloadType::TransferMessage,
             destination_nonce: transfer_message.destination_nonce,
@@ -451,7 +455,7 @@ impl Contract {
             amount: U128(amount_to_transfer),
             recipient: transfer_message.recipient,
             fee_recipient,
-            message: transfer_message.msg.into_bytes(),
+            message,
         };
 
         let payload = near_sdk::env::keccak256_array(

@@ -3,8 +3,7 @@ use near_sdk::json_types::U128;
 use near_sdk::serde_json;
 
 use crate::{
-    stringify, ChainKind, Fee, OmniAddress, PayloadType, SolAddress, TransferId, TransferMessage,
-    H160,
+    ChainKind, DestinationChainMsg, Fee, H160, OmniAddress, PayloadType, SolAddress, TransferId, TransferMessage, stringify
 };
 use std::str::FromStr;
 
@@ -568,4 +567,17 @@ fn test_chain_kind_from_str() {
 
     let chain: ChainKind = "Base".parse().unwrap();
     assert_eq!(chain, ChainKind::Base);
+}
+
+#[test]
+fn test_deserialize_destination_chain_msg() {
+    let serialized_msg = r#"{"MaxGasFee":"12345"}"#;
+    let deserialized: DestinationChainMsg = serde_json::from_str(serialized_msg).unwrap();
+    let original = DestinationChainMsg::MaxGasFee(12345.into());
+    assert_eq!(original, deserialized);
+
+    let serialized_msg = r#"{"DestinationMsg":"abff"}"#;
+    let deserialized: DestinationChainMsg = serde_json::from_str(serialized_msg).unwrap();
+    let original = DestinationChainMsg::DestinationMsg(hex::decode("abff").unwrap());
+    assert_eq!(original, deserialized);
 }
