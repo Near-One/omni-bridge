@@ -12,9 +12,9 @@ contract BridgeToken is
     ERC20Upgradeable,
     Ownable2StepUpgradeable
 {
-    string private _name;
-    string private _symbol;
-    uint8 private _decimals;
+    string internal _name;
+    string internal _symbol;
+    uint8 internal _decimals;
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
