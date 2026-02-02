@@ -26,7 +26,7 @@ contract HyperliquedBridgeToken is BridgeToken {
         address beneficiary,
         uint256 amount,
         bytes memory
-    ) external onlyOwner {
+    ) external override onlyOwner {
         _mint(beneficiary, amount);
         _update(beneficiary, _systemAddress, amount);
     }

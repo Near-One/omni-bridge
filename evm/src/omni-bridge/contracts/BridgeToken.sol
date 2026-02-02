@@ -5,12 +5,14 @@ import {ERC20Upgradeable} from "@openzeppelin/contracts-upgradeable/token/ERC20/
 import {Ownable2StepUpgradeable} from "@openzeppelin/contracts-upgradeable/access/Ownable2StepUpgradeable.sol";
 import {Initializable} from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import {UUPSUpgradeable} from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
+import {IBridgeToken} from "../../common/IBridgeToken.sol";
 
 contract BridgeToken is
     Initializable,
     UUPSUpgradeable,
     ERC20Upgradeable,
-    Ownable2StepUpgradeable
+    Ownable2StepUpgradeable,
+    IBridgeToken
 {
     string internal _name;
     string internal _symbol;
@@ -46,6 +48,14 @@ contract BridgeToken is
     }
 
     function mint(address beneficiary, uint256 amount) external onlyOwner {
+        _mint(beneficiary, amount);
+    }
+
+    function mintWithMsg(
+        address beneficiary,
+        uint256 amount,
+        bytes memory
+    ) external virtual onlyOwner {
         _mint(beneficiary, amount);
     }
 
