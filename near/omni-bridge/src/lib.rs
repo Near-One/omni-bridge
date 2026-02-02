@@ -887,7 +887,7 @@ impl Contract {
         self.lock_nep141_tokens_if_needed(
             fast_transfer.get_destination_chain(),
             &fast_transfer.token_id,
-            fast_transfer.amount.0,
+            fast_transfer.amount_without_fee(),
         );
         self.lock_other_tokens_if_needed(
             fast_transfer.get_destination_chain(),
@@ -1905,7 +1905,12 @@ impl Contract {
             &token,
             transfer_message.amount.0,
         );
-        self.lock_tokens_if_needed(
+        self.lock_nep141_tokens_if_needed(
+            transfer_message.get_destination_chain(),
+            &token,
+            transfer_message.fee.fee.into(),
+        );
+        self.lock_other_tokens_if_needed(
             transfer_message.get_destination_chain(),
             &token,
             transfer_message.fee.fee.into(),
@@ -1916,15 +1921,15 @@ impl Contract {
             require!(!status.finalised, "ERR_FAST_TRANSFER_ALREADY_FINALISED");
             Some(status.relayer)
         } else {
-            self.lock_nep141_tokens_if_needed(
-                transfer_message.get_destination_chain(),
-                &token,
-                transfer_message.amount.0,
-            );
             self.unlock_other_tokens_if_needed(
                 transfer_message.get_origin_chain(),
                 &token,
                 transfer_message.amount.0,
+            );
+            self.lock_nep141_tokens_if_needed(
+                transfer_message.get_destination_chain(),
+                &token,
+                transfer_message.amount_without_fee(),
             );
             self.lock_other_tokens_if_needed(
                 transfer_message.get_destination_chain(),
