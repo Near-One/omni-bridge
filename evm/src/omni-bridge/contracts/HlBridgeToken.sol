@@ -7,7 +7,6 @@ contract HyperliquedBridgeToken is BridgeToken {
     address internal _systemAddress;
 
     function initialize(
-        // todo:: verify if it is overridden correctly
         string memory name_,
         string memory symbol_,
         uint8 decimals_,
