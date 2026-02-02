@@ -877,7 +877,7 @@ impl Contract {
         self.lock_tokens_if_needed(
             fast_transfer.recipient.get_chain(),
             &fast_transfer.token_id,
-            fast_transfer.amount.0,
+            fast_transfer.amount_without_fee(),
         );
 
         let mut required_balance =
@@ -1869,6 +1869,11 @@ impl Contract {
             &token,
             transfer_message.amount.0,
         );
+        self.lock_tokens_if_needed(
+            transfer_message.get_destination_chain(),
+            &token,
+            transfer_message.fee.fee.into(),
+        );
 
         let fast_transfer = FastTransfer::from_transfer(transfer_message.clone(), token.clone());
         let recipient = if let Some(status) = self.get_fast_transfer_status(&fast_transfer.id()) {
@@ -1878,7 +1883,7 @@ impl Contract {
             self.lock_tokens_if_needed(
                 transfer_message.get_destination_chain(),
                 &token,
-                transfer_message.amount.0,
+                transfer_message.amount_without_fee(),
             );
 
             None
