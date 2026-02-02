@@ -22,7 +22,7 @@ jobs:
           
       - name: Clone the repository
         uses: actions/checkout@v3
-        
+
       - name: Install cargo-near
         run: |
           curl --proto '=https' --tlsv1.2 -LsSf https://github.com/near/cargo-near/releases/latest/download/cargo-near-installer.sh | sh
@@ -33,7 +33,12 @@ jobs:
         timeout-minutes: 60
 
       - name: Install Anchor
-        uses: metadaoproject/setup-anchor@v3
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y pkg-config libudev-dev
+          cargo install --git https://github.com/coral-xyz/anchor --tag v0.32.1 --locked anchor-cli
+          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+        shell: bash
 
       - name: Build Solana contract
         run: |
