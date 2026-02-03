@@ -6,7 +6,7 @@ use anyhow::{Context, Result};
 use clap::Parser;
 use omni_types::{ChainKind, OmniAddress};
 use serde_json::json;
-use tokio::time::{sleep, Duration};
+use tokio::time::{Duration, sleep};
 
 mod clients;
 mod config;

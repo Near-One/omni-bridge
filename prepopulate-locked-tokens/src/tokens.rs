@@ -10,7 +10,10 @@ pub fn get_token_origin_chain(token_id: &AccountId) -> ChainKind {
     match token_id.as_str() {
         s if s.starts_with("eth")
             || s.contains("factory.bridge.near")
-            || s.contains("factory.sepolia.testnet") => ChainKind::Eth,
+            || s.contains("factory.sepolia.testnet") =>
+        {
+            ChainKind::Eth
+        }
         s if s.starts_with("base") => ChainKind::Base,
         s if s.starts_with("arb") => ChainKind::Arb,
         s if s.starts_with("bnb") => ChainKind::Bnb,
@@ -54,7 +57,7 @@ impl Iterator for TokenReader {
             match OmniAddress::from_str(token) {
                 Ok(address) => return Some(address),
                 Err(err) => {
-                    log::warn!("Failed to parse token address '{}': {}", token, err);
+                    eprintln!("Failed to parse token address '{}': {}", token, err);
                     continue;
                 }
             }
