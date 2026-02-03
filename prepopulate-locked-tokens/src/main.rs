@@ -83,7 +83,10 @@ async fn main() -> Result<()> {
                     ChainKind::Bnb => &clients.bnb,
                     ChainKind::Pol => &clients.pol,
                     ChainKind::Sol => &clients.solana,
-                    _ => unreachable!("Unsupported chain"),
+                    other => {
+                        eprintln!("Unsupported chain encountered: {:?}", other);
+                        continue;
+                    }
                 };
 
                 let total_supply = match client.get_total_supply(token.clone()).await {
