@@ -31,5 +31,5 @@ impl Config {
 }
 
 fn env_required(key: &str) -> Result<String> {
-    std::env::var(key).context(format!("Missing `{key}` env variable"))
+    std::env::var(key).context(format!("Missing `{}` env variable", key))
 }
