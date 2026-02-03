@@ -338,6 +338,7 @@ fn test_init_transfer_locks_other_tokens_for_deployed_token() {
 fn test_init_transfer_skips_other_token_lock_for_origin_chain() {
     let mut contract = get_default_contract();
     enable_locked_tokens_chains(&mut contract, &[ChainKind::Near]);
+
     let token_id: AccountId = "eth-token.testnet".parse().expect("Invalid token ID");
     let locked_amount = DEFAULT_TRANSFER_AMOUNT;
 
@@ -620,6 +621,7 @@ fn get_prover_result(recipient: Option<OmniAddress>) -> ProverResult {
 fn test_fin_transfer_callback_near_success() {
     let mut contract = get_default_contract();
     enable_locked_tokens_chains(&mut contract, &[ChainKind::Eth]);
+
     contract.factories.insert(
         &ChainKind::Eth,
         &OmniAddress::Eth(EvmAddress::from_str(DEFAULT_ETH_USER_ADDRESS).unwrap()),

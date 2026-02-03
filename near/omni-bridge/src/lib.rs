@@ -1368,8 +1368,6 @@ impl Contract {
             s if s.starts_with("bnb") => ChainKind::Bnb,
             s if s.starts_with("pol") => ChainKind::Pol,
             s if s.starts_with("sol") => ChainKind::Sol,
-            s if s.starts_with("nbtc") => ChainKind::Btc,
-            s if s.starts_with("nzcash") | s.starts_with("nzec") => ChainKind::Zcash,
             _ => env::panic_str("ERR_CANNOT_DETERMINE_ORIGIN_CHAIN"),
         };
 

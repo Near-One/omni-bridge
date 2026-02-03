@@ -115,7 +115,7 @@ impl Contract {
         token_id: &AccountId,
         amount: u128,
     ) -> LockAction {
-        if self.is_deployed_token(token_id) || amount == 0 {
+        if self.is_deployed_token(token_id) || chain_kind.is_utxo_chain() || amount == 0 {
             return LockAction::Unchanged;
         }
 
@@ -128,7 +128,7 @@ impl Contract {
         token_id: &AccountId,
         amount: u128,
     ) -> LockAction {
-        if self.is_deployed_token(token_id) || amount == 0 {
+        if self.is_deployed_token(token_id) || chain_kind.is_utxo_chain() || amount == 0 {
             return LockAction::Unchanged;
         }
 
