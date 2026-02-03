@@ -1290,6 +1290,10 @@ impl Contract {
         env::log_str(&OmniBridgeEvent::InitTransferEvent { transfer_message }.to_log_string());
     }
 
+    pub fn is_deployed_token(&self, token: &AccountId) -> bool {
+        self.deployed_tokens.contains(token) || self.deployed_tokens_v2.contains_key(token)
+    }
+
     pub fn get_token_address(
         &self,
         chain_kind: ChainKind,
@@ -1924,8 +1928,7 @@ impl Contract {
         amount: U128,
         msg: &str,
     ) -> Promise {
-        let is_deployed_token =
-            self.deployed_tokens_v2.contains_key(&token) || self.deployed_tokens.contains(&token);
+        let is_deployed_token = self.is_deployed_token(&token);
 
         if token == self.wnear_account_id && msg.is_empty() {
             // Unwrap wNEAR and transfer NEAR tokens
