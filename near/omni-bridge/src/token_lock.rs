@@ -167,6 +167,18 @@ impl Contract {
         self.unlock_tokens(chain_kind, token_id, amount)
     }
 
+    pub fn lock_tokens_if_needed(
+        &mut self,
+        chain_kind: ChainKind,
+        token_id: &AccountId,
+        amount: u128,
+    ) -> [LockAction; 2] {
+        [
+            self.lock_nep141_tokens_if_needed(chain_kind, token_id, amount),
+            self.lock_other_tokens_if_needed(chain_kind, token_id, amount),
+        ]
+    }
+
     pub fn revert_lock_actions(&mut self, lock_actions: &[LockAction]) {
         for lock_action in lock_actions {
             match lock_action {
