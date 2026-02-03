@@ -40,7 +40,10 @@ impl Iterator for TokenReader {
         for line in self.lines.by_ref() {
             let line = match line {
                 Ok(line) => line,
-                Err(_) => continue,
+                Err(err) => {
+                    eprintln!("Failed to read line from tokens file: {err}");
+                    continue;
+                }
             };
 
             let token = line.trim();
