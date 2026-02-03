@@ -878,11 +878,6 @@ impl Contract {
 
         self.burn_tokens_if_needed(fast_transfer.token_id.clone(), amount_without_fee.into());
 
-        self.unlock_other_tokens_if_needed(
-            ChainKind::Near,
-            &fast_transfer.token_id,
-            amount_without_fee,
-        );
         self.lock_tokens_if_needed(
             fast_transfer.get_destination_chain(),
             &fast_transfer.token_id,
@@ -1741,11 +1736,6 @@ impl Contract {
                 &token_id,
                 transfer_message.amount.0,
             );
-            self.unlock_other_tokens_if_needed(
-                transfer_message.get_origin_chain(),
-                &token_id,
-                transfer_message.amount.0,
-            );
         } else {
             return transfer_message.amount;
         }
@@ -1768,23 +1758,11 @@ impl Contract {
         let fast_transfer = FastTransfer::from_transfer(transfer_message.clone(), token.clone());
         let fast_transfer_status = self.get_fast_transfer_status(&fast_transfer.id());
 
-        let lock_actions = vec![
-            self.unlock_nep141_tokens_if_needed(
-                transfer_message.get_origin_chain(),
-                &token,
-                transfer_message.amount.0,
-            ),
-            self.unlock_other_tokens_if_needed(
-                transfer_message.get_origin_chain(),
-                &token,
-                transfer_message.amount.0,
-            ),
-            self.lock_other_tokens_if_needed(
-                transfer_message.get_destination_chain(),
-                &token,
-                transfer_message.amount.0,
-            ),
-        ];
+        let lock_actions = self.unlock_tokens_if_needed(
+            transfer_message.get_origin_chain(),
+            &token,
+            transfer_message.amount.0,
+        );
 
         // If fast transfer happened, change recipient and fee recipient to the relayer that executed fast transfer
         let (recipient, msg, fee_recipient) = match fast_transfer_status {
@@ -1867,7 +1845,7 @@ impl Contract {
                     &fee_recipient,
                     !msg.is_empty(),
                     predecessor_account_id,
-                    lock_actions,
+                    lock_actions.to_vec(),
                 ),
         )
     }
@@ -1889,7 +1867,7 @@ impl Contract {
             );
         }
 
-        self.unlock_nep141_tokens_if_needed(
+        self.unlock_tokens_if_needed(
             transfer_message.get_origin_chain(),
             &token,
             transfer_message.amount.0,
@@ -1905,11 +1883,6 @@ impl Contract {
             require!(!status.finalised, "ERR_FAST_TRANSFER_ALREADY_FINALISED");
             Some(status.relayer)
         } else {
-            self.unlock_other_tokens_if_needed(
-                transfer_message.get_origin_chain(),
-                &token,
-                transfer_message.amount.0,
-            );
             self.lock_tokens_if_needed(
                 transfer_message.get_destination_chain(),
                 &token,
@@ -2539,16 +2512,7 @@ impl Contract {
             .to_log_string(),
         );
 
-        self.unlock_nep141_tokens_if_needed(
-            transfer_message.get_destination_chain(),
-            &token,
-            token_fee,
-        );
-        self.unlock_other_tokens_if_needed(
-            transfer_message.get_destination_chain(),
-            &token,
-            token_fee,
-        );
+        self.unlock_tokens_if_needed(transfer_message.get_destination_chain(), &token, token_fee);
 
         if token_fee > 0 {
             if self.deployed_tokens_v2.contains_key(&token) || self.deployed_tokens.contains(&token)

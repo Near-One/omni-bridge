@@ -12,6 +12,7 @@ pub struct SetLockedTokenArgs {
 }
 
 #[near(serializers=[json, borsh])]
+#[derive(Debug, Clone)]
 pub enum LockAction {
     Locked {
         chain_kind: ChainKind,
@@ -176,6 +177,18 @@ impl Contract {
         [
             self.lock_nep141_tokens_if_needed(chain_kind, token_id, amount),
             self.lock_other_tokens_if_needed(chain_kind, token_id, amount),
+        ]
+    }
+
+    pub fn unlock_tokens_if_needed(
+        &mut self,
+        chain_kind: ChainKind,
+        token_id: &AccountId,
+        amount: u128,
+    ) -> [LockAction; 2] {
+        [
+            self.unlock_nep141_tokens_if_needed(chain_kind, token_id, amount),
+            self.unlock_other_tokens_if_needed(chain_kind, token_id, amount),
         ]
     }
 
