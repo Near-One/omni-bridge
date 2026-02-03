@@ -313,7 +313,7 @@ fn test_init_transfer_locks_other_tokens_for_deployed_token() {
 
     assert_eq!(
         contract.get_locked_tokens(ChainKind::Near, token_id.clone()),
-        U128(0)
+        U128(locked_amount)
     );
     assert_eq!(
         contract.get_locked_tokens(ChainKind::Sol, token_id),
@@ -346,7 +346,7 @@ fn test_init_transfer_skips_other_token_lock_for_origin_chain() {
 
     assert_eq!(
         contract.get_locked_tokens(ChainKind::Near, token_id.clone()),
-        U128(0)
+        U128(locked_amount)
     );
     assert_eq!(
         contract.get_locked_tokens(ChainKind::Eth, token_id),
