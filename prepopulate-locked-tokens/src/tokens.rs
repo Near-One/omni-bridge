@@ -8,7 +8,9 @@ use omni_types::{ChainKind, OmniAddress};
 
 pub fn get_token_origin_chain(token_id: &AccountId) -> ChainKind {
     match token_id.as_str() {
-        s if s.starts_with("eth") || s.contains("factory") => ChainKind::Eth,
+        s if s.starts_with("eth")
+            || s.contains("factory.bridge.near")
+            || s.contains("factory.sepolia.testnet") => ChainKind::Eth,
         s if s.starts_with("base") => ChainKind::Base,
         s if s.starts_with("arb") => ChainKind::Arb,
         s if s.starts_with("bnb") => ChainKind::Bnb,
