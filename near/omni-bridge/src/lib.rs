@@ -1253,10 +1253,7 @@ impl Contract {
         #[serializer(borsh)] recipient: String,
     ) {
         let token_id = env::predecessor_account_id();
-        require!(
-            self.deployed_tokens_v2.contains_key(&token_id)
-                || self.deployed_tokens.contains(&token_id)
-        );
+        require!(self.is_deployed_token(&token_id),);
 
         self.current_origin_nonce += 1;
         let destination_nonce = self.get_next_destination_nonce(ChainKind::Eth);
@@ -1497,9 +1494,7 @@ impl Contract {
         reference_hash: Option<Base64VecU8>,
     ) -> Promise {
         let token = self.get_token_id(&address);
-        require!(
-            self.deployed_tokens_v2.contains_key(&token) || self.deployed_tokens.contains(&token)
-        );
+        require!(self.is_deployed_token(&token));
 
         let decimals = self
             .token_decimals
@@ -1607,9 +1602,7 @@ impl Contract {
         } else {
             // Send fee to the fee recipient
             if transfer_message.fee.fee.0 > 0 {
-                if self.deployed_tokens_v2.contains_key(&token)
-                    || self.deployed_tokens.contains(&token)
-                {
+                if self.is_deployed_token(&token) {
                     ext_token::ext(token)
                         .with_static_gas(MINT_TOKEN_GAS)
                         .mint(fee_recipient.clone(), transfer_message.fee.fee, None)
@@ -1690,7 +1683,7 @@ impl Contract {
     }
 
     fn burn_tokens_if_needed(&self, token: AccountId, amount: U128) {
-        if self.deployed_tokens_v2.contains_key(&token) || self.deployed_tokens.contains(&token) {
+        if self.is_deployed_token(&token) {
             ext_token::ext(token)
                 .with_static_gas(BURN_TOKEN_GAS)
                 .burn(amount)
@@ -2518,8 +2511,7 @@ impl Contract {
         self.unlock_tokens_if_needed(transfer_message.get_destination_chain(), &token, token_fee);
 
         if token_fee > 0 {
-            if self.deployed_tokens_v2.contains_key(&token) || self.deployed_tokens.contains(&token)
-            {
+            if self.is_deployed_token(&token) {
                 ext_token::ext(token)
                     .with_static_gas(MINT_TOKEN_GAS)
                     .mint(fee_recipient, U128(token_fee), None)
