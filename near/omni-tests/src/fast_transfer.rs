@@ -70,7 +70,7 @@ mod tests {
 
             enable_locked_tokens_chains(
                 &env_builder.bridge_contract,
-                &[ChainKind::Eth, ChainKind::Base, ChainKind::Near],
+                &[ChainKind::Eth, ChainKind::Base],
             )
             .await?;
 
