@@ -35,7 +35,7 @@ impl Contract {
     }
 
     #[must_use]
-    pub fn get_locked_tokens_enabled_chain(&self, chain_kind: ChainKind) -> bool {
+    pub fn is_locked_tokens_enabled_chain(&self, chain_kind: ChainKind) -> bool {
         self.locked_tokens_enabled_chains.contains(&chain_kind)
     }
 
@@ -115,7 +115,11 @@ impl Contract {
         token_id: &AccountId,
         amount: u128,
     ) -> LockAction {
-        if self.is_deployed_token(token_id) || chain_kind.is_utxo_chain() || amount == 0 {
+        if !self.is_locked_tokens_enabled_chain(chain_kind)
+            || self.is_deployed_token(token_id)
+            || chain_kind.is_utxo_chain()
+            || amount == 0
+        {
             return LockAction::Unchanged;
         }
 
@@ -128,7 +132,11 @@ impl Contract {
         token_id: &AccountId,
         amount: u128,
     ) -> LockAction {
-        if self.is_deployed_token(token_id) || chain_kind.is_utxo_chain() || amount == 0 {
+        if !self.is_locked_tokens_enabled_chain(chain_kind)
+            || self.is_deployed_token(token_id)
+            || chain_kind.is_utxo_chain()
+            || amount == 0
+        {
             return LockAction::Unchanged;
         }
 
@@ -141,7 +149,8 @@ impl Contract {
         token_id: &AccountId,
         amount: u128,
     ) -> LockAction {
-        if !self.is_deployed_token(token_id)
+        if !self.is_locked_tokens_enabled_chain(chain_kind)
+            || !self.is_deployed_token(token_id)
             || self.get_token_origin_chain(token_id) == chain_kind
             || amount == 0
         {
@@ -157,7 +166,8 @@ impl Contract {
         token_id: &AccountId,
         amount: u128,
     ) -> LockAction {
-        if !self.is_deployed_token(token_id)
+        if !self.is_locked_tokens_enabled_chain(chain_kind)
+            || !self.is_deployed_token(token_id)
             || self.get_token_origin_chain(token_id) == chain_kind
             || amount == 0
         {
