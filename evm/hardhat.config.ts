@@ -131,38 +131,35 @@ task("deploy-token-impl", "Deploys the BridgeToken implementation").setAction(as
   )
 })
 
-
 task("deploy-token-proxy", "Deploy BridgeToken behind a UUPS proxy")
   .addParam("name", "Token name")
   .addParam("symbol", "Token symbol")
   .addOptionalParam("decimals", "Token decimals", "18")
   .setAction(async (args, hre) => {
-    const { ethers, upgrades } = hre;
+    const { ethers, upgrades } = hre
 
-    const name = String(args.name);
-    const symbol = String(args.symbol);
-    const decimals = Number(args.decimals);
+    const name = String(args.name)
+    const symbol = String(args.symbol)
+    const decimals = Number(args.decimals)
 
-    const [deployer] = await ethers.getSigners();
-    console.log("Deployer:", deployer.address);
-    console.log("Params:", { name, symbol, decimals });
+    const [deployer] = await ethers.getSigners()
+    console.log("Deployer:", deployer.address)
+    console.log("Params:", { name, symbol, decimals })
 
-    const BridgeToken = await ethers.getContractFactory("BridgeToken");
+    const BridgeToken = await ethers.getContractFactory("BridgeToken")
 
-    const proxy = await upgrades.deployProxy(
-      BridgeToken,
-      [name, symbol, decimals],
-      { initializer: "initialize" }
-    );
+    const proxy = await upgrades.deployProxy(BridgeToken, [name, symbol, decimals], {
+      initializer: "initialize",
+    })
 
-    await proxy.waitForDeployment();
-    const proxyAddress = await proxy.getAddress();
+    await proxy.waitForDeployment()
+    const proxyAddress = await proxy.getAddress()
 
-    const implAddress = await upgrades.erc1967.getImplementationAddress(proxyAddress);
+    const implAddress = await upgrades.erc1967.getImplementationAddress(proxyAddress)
 
-    console.log("Proxy deployed to:", proxyAddress);
-    console.log("Implementation:", implAddress);
-  });
+    console.log("Proxy deployed to:", proxyAddress)
+    console.log("Implementation:", implAddress)
+  })
 
 task("upgrade-bridge-token", "Upgrades a BridgeToken to a new implementation")
   .addParam("factory", "The address of the OmniBridge contract")
@@ -338,7 +335,7 @@ const config: HardhatUserConfig = {
       wormholeAddress: "0x7C0faFc4384551f063e05aee704ab943b8B53aB3",
       omniChainId: 9,
       chainId: 999,
-      url: `https://rpc.hyperliquid.xyz/evm`,
+      url: "https://rpc.hyperliquid.xyz/evm",
       accounts: [`${EVM_PRIVATE_KEY}`],
     },
     sepolia: {
@@ -379,7 +376,7 @@ const config: HardhatUserConfig = {
       wormholeAddress: "0xBB73cB66C26740F31d1FabDC6b7A46a038A300dd",
       omniChainId: 9,
       chainId: 998,
-      url: `https://rpc.hyperliquid-testnet.xyz/evm`,
+      url: "https://rpc.hyperliquid-testnet.xyz/evm",
       accounts: [`${EVM_PRIVATE_KEY}`],
     },
   },
