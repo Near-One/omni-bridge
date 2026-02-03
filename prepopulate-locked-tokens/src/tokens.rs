@@ -48,8 +48,12 @@ impl Iterator for TokenReader {
                 continue;
             }
 
-            if let Ok(address) = OmniAddress::from_str(token) {
-                return Some(address);
+            match OmniAddress::from_str(token) {
+                Ok(address) => return Some(address),
+                Err(err) => {
+                    log::warn!("Failed to parse token address '{}': {}", token, err);
+                    continue;
+                }
             }
         }
 
