@@ -36,11 +36,13 @@ use storage::{
     Decimals, FastTransferStatusStorage, TransferMessageStorage, TransferMessageStorageValue,
     NEP141_DEPOSIT,
 };
+use token_lock::LockAction;
 
 mod btc;
 mod helpers;
 mod migrate;
 mod storage;
+mod token_lock;
 
 #[cfg(test)]
 mod tests;
@@ -97,6 +99,7 @@ enum StorageKey {
     MigratedTokens,
     FinalisedUtxoTransfers,
     LockedTokens,
+    DeployedTokensV2,
 }
 
 #[derive(AccessControlRole, Deserialize, Serialize, Copy, Clone)]
@@ -214,6 +217,7 @@ pub struct Contract {
     pub token_address_to_id: LookupMap<OmniAddress, AccountId>,
     pub token_decimals: LookupMap<OmniAddress, Decimals>,
     pub deployed_tokens: LookupSet<AccountId>,
+    pub deployed_tokens_v2: LookupMap<AccountId, ChainKind>,
     pub token_deployer_accounts: LookupMap<ChainKind, AccountId>,
     pub mpc_signer: AccountId,
     pub current_origin_nonce: Nonce,
@@ -275,6 +279,7 @@ impl Contract {
             token_address_to_id: LookupMap::new(StorageKey::TokenAddressToId),
             token_decimals: LookupMap::new(StorageKey::TokenDecimals),
             deployed_tokens: LookupSet::new(StorageKey::DeployedTokens),
+            deployed_tokens_v2: LookupMap::new(StorageKey::DeployedTokensV2),
             token_deployer_accounts: LookupMap::new(StorageKey::TokenDeployerAccounts),
             mpc_signer,
             current_origin_nonce: 0,
@@ -482,13 +487,13 @@ impl Contract {
         init_transfer_msg: InitTransferMsg,
     ) -> PromiseOrPromiseIndexOrValue<U128> {
         require!(
-            init_transfer_msg.recipient.get_chain() != ChainKind::Near,
+            init_transfer_msg.get_destination_chain() != ChainKind::Near,
             "ERR_INVALID_RECIPIENT_CHAIN"
         );
 
         self.current_origin_nonce += 1;
         let destination_nonce =
-            self.get_next_destination_nonce(init_transfer_msg.recipient.get_chain());
+            self.get_next_destination_nonce(init_transfer_msg.get_destination_chain());
 
         let transfer_message = TransferMessage {
             origin_nonce: self.current_origin_nonce,
@@ -862,29 +867,28 @@ impl Contract {
         relayer_id: AccountId,
     ) {
         if fast_transfer.recipient.is_utxo_chain() {
-            let btc_account_id = self.get_utxo_chain_token(fast_transfer.recipient.get_chain());
+            let btc_account_id = self.get_utxo_chain_token(fast_transfer.get_destination_chain());
             require!(
                 fast_transfer.token_id == btc_account_id,
                 "Only BTC can be transferred to the Bitcoin network."
             );
         }
 
-        self.burn_tokens_if_needed(
-            fast_transfer.token_id.clone(),
-            fast_transfer.amount_without_fee().into(),
-        );
+        let amount_without_fee = fast_transfer.amount_without_fee();
+
+        self.burn_tokens_if_needed(fast_transfer.token_id.clone(), amount_without_fee.into());
 
         self.lock_tokens_if_needed(
-            fast_transfer.recipient.get_chain(),
+            fast_transfer.get_destination_chain(),
             &fast_transfer.token_id,
-            fast_transfer.amount_without_fee(),
+            amount_without_fee,
         );
 
         let mut required_balance =
             self.add_fast_transfer(fast_transfer, relayer_id.clone(), storage_payer.clone());
 
         let destination_nonce =
-            self.get_next_destination_nonce(fast_transfer.recipient.get_chain());
+            self.get_next_destination_nonce(fast_transfer.get_destination_chain());
         self.current_origin_nonce += 1;
 
         let transfer_message = TransferMessage {
@@ -954,6 +958,7 @@ impl Contract {
         .into()
     }
 
+    #[allow(clippy::needless_pass_by_value)]
     #[private]
     pub fn resolve_utxo_fin_transfer(
         &mut self,
@@ -1120,6 +1125,7 @@ impl Contract {
         match env::promise_result(0) {
             PromiseResult::Failed => {
                 self.deployed_tokens.remove(&token_id);
+                self.deployed_tokens_v2.remove(&token_id);
                 self.token_id_to_address
                     .remove(&(token_address.get_chain(), token_id));
                 self.token_address_to_id.remove(token_address);
@@ -1242,7 +1248,7 @@ impl Contract {
         #[serializer(borsh)] recipient: String,
     ) {
         let token_id = env::predecessor_account_id();
-        require!(self.deployed_tokens.contains(&token_id));
+        require!(self.is_deployed_token(&token_id),);
 
         self.current_origin_nonce += 1;
         let destination_nonce = self.get_next_destination_nonce(ChainKind::Eth);
@@ -1274,6 +1280,10 @@ impl Contract {
         );
 
         env::log_str(&OmniBridgeEvent::InitTransferEvent { transfer_message }.to_log_string());
+    }
+
+    pub fn is_deployed_token(&self, token: &AccountId) -> bool {
+        self.deployed_tokens.contains(token) || self.deployed_tokens_v2.contains_key(token)
     }
 
     pub fn get_token_address(
@@ -1328,6 +1338,36 @@ impl Contract {
             OmniAddress::new_zero(chain).sdk_expect("ERR_FAILED_TO_GET_ZERO_ADDRESS");
 
         self.get_token_id(&native_token_address)
+    }
+
+    pub fn get_token_origin_chain(&mut self, token: &AccountId) -> ChainKind {
+        if let Some(origin_chain) = self.deployed_tokens_v2.get(token) {
+            return origin_chain;
+        }
+
+        if let Some(origin_chain) = self.get_utxo_chain_by_token(token) {
+            return origin_chain;
+        }
+
+        if !self.deployed_tokens.contains(token) {
+            return ChainKind::Near;
+        }
+
+        let origin_chain = match token.as_str() {
+            s if s.starts_with("eth") || s.contains("factory") => ChainKind::Eth,
+            s if s.starts_with("base") => ChainKind::Base,
+            s if s.starts_with("arb") => ChainKind::Arb,
+            s if s.starts_with("bnb") => ChainKind::Bnb,
+            s if s.starts_with("pol") => ChainKind::Pol,
+            s if s.starts_with("sol") => ChainKind::Sol,
+            _ => env::panic_str("ERR_CANNOT_DETERMINE_ORIGIN_CHAIN"),
+        };
+
+        if !origin_chain.is_utxo_chain() {
+            self.deployed_tokens_v2.insert(token, &origin_chain);
+        }
+
+        origin_chain
     }
 
     pub fn get_transfer_message(&self, transfer_id: TransferId) -> TransferMessage {
@@ -1420,6 +1460,8 @@ impl Contract {
 
         for token_info in tokens {
             self.deployed_tokens.insert(&token_info.token_id);
+            self.deployed_tokens_v2
+                .insert(&token_info.token_id, &token_info.token_address.get_chain());
             self.add_token(
                 &token_info.token_id,
                 &token_info.token_address,
@@ -1445,7 +1487,7 @@ impl Contract {
         reference_hash: Option<Base64VecU8>,
     ) -> Promise {
         let token = self.get_token_id(&address);
-        require!(self.deployed_tokens.contains(&token));
+        require!(self.is_deployed_token(&token));
 
         let decimals = self
             .token_decimals
@@ -1476,7 +1518,9 @@ impl Contract {
             self.deployed_tokens.remove(&old_token),
             "ERR_OLD_TOKEN_NOT_DEPLOYED"
         );
+        self.deployed_tokens_v2.remove(&old_token);
         require!(self.deployed_tokens.insert(&new_token), "ERR_TOKEN_EXIST");
+        self.deployed_tokens_v2.insert(&new_token, &origin_chain);
 
         let origin_address = self
             .token_id_to_address
@@ -1514,21 +1558,6 @@ impl Contract {
         self.token_decimals.get(address)
     }
 
-    #[must_use]
-    pub fn get_locked_tokens(&self, chain_kind: ChainKind, token_id: AccountId) -> U128 {
-        U128(self.locked_tokens.get(&(chain_kind, token_id)).unwrap_or(0))
-    }
-
-    #[access_control_any(roles(Role::DAO))]
-    pub fn set_locked_tokens(&mut self, chain_kind: ChainKind, token_id: AccountId, amount: U128) {
-        if amount.0 == 0 {
-            self.locked_tokens.remove(&(chain_kind, token_id));
-        } else {
-            self.locked_tokens
-                .insert(&(chain_kind, token_id), &amount.0);
-        }
-    }
-
     #[access_control_any(roles(Role::DAO, Role::TokenControllerUpdater))]
     pub fn update_tokens_controller(
         &self,
@@ -1541,6 +1570,7 @@ impl Contract {
             .detach();
     }
 
+    #[allow(clippy::needless_pass_by_value)]
     #[private]
     pub fn fin_transfer_send_tokens_callback(
         &mut self,
@@ -1548,17 +1578,14 @@ impl Contract {
         #[serializer(borsh)] fee_recipient: &AccountId,
         #[serializer(borsh)] is_ft_transfer_call: bool,
         #[serializer(borsh)] storage_owner: &AccountId,
+        #[serializer(borsh)] lock_actions: Vec<LockAction>,
     ) {
         let token = self.get_token_id(&transfer_message.token);
 
         if Self::is_refund_required(is_ft_transfer_call) {
             self.burn_tokens_if_needed(token.clone(), U128(transfer_message.amount_without_fee()));
 
-            self.lock_tokens_if_needed(
-                transfer_message.get_origin_chain(),
-                &token,
-                transfer_message.amount.0,
-            );
+            self.revert_lock_actions(&lock_actions);
 
             self.remove_fin_transfer(&transfer_message.get_transfer_id(), storage_owner);
 
@@ -1568,7 +1595,7 @@ impl Contract {
         } else {
             // Send fee to the fee recipient
             if transfer_message.fee.fee.0 > 0 {
-                if self.deployed_tokens.contains(&token) {
+                if self.is_deployed_token(&token) {
                     ext_token::ext(token)
                         .with_static_gas(MINT_TOKEN_GAS)
                         .mint(fee_recipient.clone(), transfer_message.fee.fee, None)
@@ -1649,47 +1676,11 @@ impl Contract {
     }
 
     fn burn_tokens_if_needed(&self, token: AccountId, amount: U128) {
-        if self.deployed_tokens.contains(&token) {
+        if self.is_deployed_token(&token) {
             ext_token::ext(token)
                 .with_static_gas(BURN_TOKEN_GAS)
                 .burn(amount)
                 .detach();
-        }
-    }
-
-    fn lock_tokens_if_needed(&mut self, chain_kind: ChainKind, token_id: &AccountId, amount: u128) {
-        if self.deployed_tokens.contains(token_id) || chain_kind.is_utxo_chain() || amount == 0 {
-            return;
-        }
-
-        let key = (chain_kind, token_id.clone());
-        let current_amount = self.locked_tokens.get(&key).unwrap_or(0);
-        let new_amount = current_amount
-            .checked_add(amount)
-            .unwrap_or_else(|| env::panic_str("ERR_LOCKED_TOKENS_OVERFLOW"));
-
-        self.locked_tokens.insert(&key, &new_amount);
-    }
-
-    fn unlock_tokens_if_needed(
-        &mut self,
-        chain_kind: ChainKind,
-        token_id: &AccountId,
-        amount: u128,
-    ) {
-        if self.deployed_tokens.contains(token_id) || chain_kind.is_utxo_chain() || amount == 0 {
-            return;
-        }
-
-        let key = (chain_kind, token_id.clone());
-        let available = self.locked_tokens.get(&key).unwrap_or(0);
-        require!(available >= amount, "ERR_INSUFFICIENT_LOCKED_TOKENS");
-
-        let remaining = available - amount;
-        if remaining == 0 {
-            self.locked_tokens.remove(&key);
-        } else {
-            self.locked_tokens.insert(&key, &remaining);
         }
     }
 
@@ -1731,7 +1722,7 @@ impl Contract {
             self.burn_tokens_if_needed(token_id.clone(), transfer_message.amount);
 
             self.lock_tokens_if_needed(
-                transfer_message.recipient.get_chain(),
+                transfer_message.get_destination_chain(),
                 &token_id,
                 transfer_message.amount.0,
             );
@@ -1757,7 +1748,7 @@ impl Contract {
         let fast_transfer = FastTransfer::from_transfer(transfer_message.clone(), token.clone());
         let fast_transfer_status = self.get_fast_transfer_status(&fast_transfer.id());
 
-        self.unlock_tokens_if_needed(
+        let lock_actions = self.unlock_tokens_if_needed(
             transfer_message.get_origin_chain(),
             &token,
             transfer_message.amount.0,
@@ -1844,6 +1835,7 @@ impl Contract {
                     &fee_recipient,
                     !msg.is_empty(),
                     predecessor_account_id,
+                    lock_actions.to_vec(),
                 ),
         )
     }
@@ -1857,7 +1849,8 @@ impl Contract {
         let token = self.get_token_id(&transfer_message.token);
 
         if transfer_message.recipient.is_utxo_chain() {
-            let btc_account_id = self.get_utxo_chain_token(transfer_message.recipient.get_chain());
+            let btc_account_id =
+                self.get_utxo_chain_token(transfer_message.get_destination_chain());
             require!(
                 token == btc_account_id,
                 "Only BTC can be transferred to the Bitcoin network."
@@ -1921,7 +1914,7 @@ impl Contract {
         amount: U128,
         msg: &str,
     ) -> Promise {
-        let is_deployed_token = self.deployed_tokens.contains(&token);
+        let is_deployed_token = self.is_deployed_token(&token);
 
         if token == self.wnear_account_id && msg.is_empty() {
             // Unwrap wNEAR and transfer NEAR tokens
@@ -2252,6 +2245,8 @@ impl Contract {
         );
 
         require!(self.deployed_tokens.insert(&token_id), "ERR_TOKEN_EXIST");
+        self.deployed_tokens_v2
+            .insert(&token_id, &token_address.get_chain());
         let required_deposit = env::storage_byte_cost()
             .saturating_mul((env::storage_usage().saturating_sub(storage_usage)).into())
             .saturating_add(NEP141_DEPOSIT);
@@ -2352,7 +2347,7 @@ impl Contract {
             "ERR_FAST_TRANSFER_ALREADY_FINALISED"
         );
 
-        let amount = if fast_transfer.recipient.get_chain() == ChainKind::Near {
+        let amount = if fast_transfer.get_destination_chain() == ChainKind::Near {
             self.remove_fast_transfer(&fast_transfer.id());
             fast_transfer.amount
         } else {
@@ -2435,14 +2430,14 @@ impl Contract {
             sender: OmniAddress::Near(env::predecessor_account_id()),
             msg: utxo_fin_transfer_msg.msg.clone(),
             destination_nonce: self
-                .get_next_destination_nonce(utxo_fin_transfer_msg.recipient.get_chain()),
+                .get_next_destination_nonce(utxo_fin_transfer_msg.get_destination_chain()),
             origin_transfer_id: Some(origin_transfer_id),
         };
 
         let required_storage_balance =
             self.add_transfer_message(transfer_message.clone(), storage_owner.clone());
 
-        self.lock_tokens_if_needed(
+        self.lock_other_tokens_if_needed(
             transfer_message.get_destination_chain(),
             &token_id,
             transfer_message.amount.0,
@@ -2504,7 +2499,7 @@ impl Contract {
         self.unlock_tokens_if_needed(transfer_message.get_destination_chain(), &token, token_fee);
 
         if token_fee > 0 {
-            if self.deployed_tokens.contains(&token) {
+            if self.is_deployed_token(&token) {
                 ext_token::ext(token)
                     .with_static_gas(MINT_TOKEN_GAS)
                     .mint(fee_recipient, U128(token_fee), None)

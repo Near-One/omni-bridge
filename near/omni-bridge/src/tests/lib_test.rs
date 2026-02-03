@@ -14,8 +14,11 @@ use omni_types::{
     TransferId, TransferMessage, UpdateFee,
 };
 
-use crate::storage::{Decimals, TransferMessageStorage, TransferMessageStorageValue};
 use crate::Contract;
+use crate::{
+    storage::{Decimals, TransferMessageStorage, TransferMessageStorageValue},
+    token_lock::LockAction,
+};
 
 const DEFAULT_NONCE: Nonce = 0;
 const DEFAULT_TRANSFER_ID: TransferId = TransferId {
@@ -274,6 +277,81 @@ fn test_init_transfer_tracks_locked_tokens_per_chain() {
         AccountId::try_from(DEFAULT_FT_CONTRACT_ACCOUNT.to_string()).unwrap(),
     );
     assert_eq!(locked, U128(DEFAULT_TRANSFER_AMOUNT));
+}
+
+#[test]
+fn test_init_transfer_locks_other_tokens_for_deployed_token() {
+    let mut contract = get_default_contract();
+    let token_id: AccountId = "eth-token.testnet".parse().expect("Invalid token ID");
+    let locked_amount = DEFAULT_TRANSFER_AMOUNT;
+
+    contract.deployed_tokens.insert(&token_id);
+    contract
+        .deployed_tokens_v2
+        .insert(&token_id, &ChainKind::Eth);
+    contract
+        .locked_tokens
+        .insert(&(ChainKind::Near, token_id.clone()), &locked_amount);
+
+    let solana_address: SolAddress = "2xNweLHLqbS9YpP3UyaPrxKqgqoC6yPBFyuLxA8qtgr4"
+        .parse()
+        .expect("Invalid Solana address");
+
+    run_ft_on_transfer(
+        &mut contract,
+        DEFAULT_NEAR_USER_ACCOUNT.to_string(),
+        token_id.to_string(),
+        U128(locked_amount),
+        None,
+        &BridgeOnTransferMsg::InitTransfer(InitTransferMsg {
+            recipient: OmniAddress::Sol(solana_address),
+            fee: U128(0),
+            native_token_fee: U128(0),
+            msg: None,
+        }),
+    );
+
+    assert_eq!(
+        contract.get_locked_tokens(ChainKind::Near, token_id.clone()),
+        U128(locked_amount)
+    );
+    assert_eq!(
+        contract.get_locked_tokens(ChainKind::Sol, token_id),
+        U128(locked_amount)
+    );
+}
+
+#[test]
+fn test_init_transfer_skips_other_token_lock_for_origin_chain() {
+    let mut contract = get_default_contract();
+    let token_id: AccountId = "eth-token.testnet".parse().expect("Invalid token ID");
+    let locked_amount = DEFAULT_TRANSFER_AMOUNT;
+
+    contract.deployed_tokens.insert(&token_id);
+    contract
+        .deployed_tokens_v2
+        .insert(&token_id, &ChainKind::Eth);
+    contract
+        .locked_tokens
+        .insert(&(ChainKind::Near, token_id.clone()), &locked_amount);
+
+    run_ft_on_transfer(
+        &mut contract,
+        DEFAULT_NEAR_USER_ACCOUNT.to_string(),
+        token_id.to_string(),
+        U128(locked_amount),
+        None,
+        &BridgeOnTransferMsg::InitTransfer(get_init_transfer_msg(DEFAULT_ETH_USER_ADDRESS, 0, 0)),
+    );
+
+    assert_eq!(
+        contract.get_locked_tokens(ChainKind::Near, token_id.clone()),
+        U128(locked_amount)
+    );
+    assert_eq!(
+        contract.get_locked_tokens(ChainKind::Eth, token_id),
+        U128(0)
+    );
 }
 
 fn run_update_transfer_fee(
@@ -943,7 +1021,18 @@ fn test_fin_transfer_callback_refund_restores_locked_tokens() {
         )]),
     );
 
-    contract.fin_transfer_send_tokens_callback(transfer_message, &fee_recipient, true, &recipient);
+    let lock_actions = vec![LockAction::Unlocked {
+        chain_kind: ChainKind::Eth,
+        token_id: token_id.clone(),
+        amount: DEFAULT_TRANSFER_AMOUNT,
+    }];
+    contract.fin_transfer_send_tokens_callback(
+        transfer_message,
+        &fee_recipient,
+        true,
+        &recipient,
+        lock_actions,
+    );
 
     assert_eq!(
         contract.get_locked_tokens(ChainKind::Eth, token_id),

@@ -45,6 +45,20 @@ mod tests {
             env_builder
                 .mint_tokens(relayer_account.id(), 1_000_000_000)
                 .await?;
+            env_builder
+                .bridge_contract
+                .call("set_locked_token")
+                .args_json(json!({
+                    "args": {
+                        "chain_kind": ChainKind::Near,
+                        "token_id": env_builder.token.contract.id(),
+                        "amount": U128(1_000_000_000),
+                    }
+                }))
+                .max_gas()
+                .transact()
+                .await?
+                .into_result()?;
 
             let recipient_account = env_builder.create_account(account_n(1)).await?;
             env_builder.storage_deposit(recipient_account.id()).await?;
@@ -125,11 +139,10 @@ mod tests {
         error: Option<&str>,
     ) -> anyhow::Result<ExecutionFinalResult> {
         let is_transfer_to_near = matches!(utxo_msg.recipient, OmniAddress::Near(_));
-        let destination_chain = utxo_msg.recipient.get_chain();
 
         let locked_before = get_locked_tokens(
             &env.bridge_contract,
-            destination_chain,
+            ChainKind::Near,
             env.token_contract.id(),
         )
         .await?;
@@ -159,7 +172,7 @@ mod tests {
             get_balance(&env.token_contract, env.relayer_account.id()).await?;
         let locked_after = get_locked_tokens(
             &env.bridge_contract,
-            destination_chain,
+            ChainKind::Near,
             env.token_contract.id(),
         )
         .await?;
@@ -178,11 +191,6 @@ mod tests {
             assert_eq!(
                 recipient_balance_before.0, recipient_balance_after.0,
                 "Recipient balance should be unchanged after failed transfer"
-            );
-
-            assert_eq!(
-                locked_before, locked_after,
-                "Locked tokens should be unchanged after failed transfer"
             );
         } else {
             assert!(
@@ -214,20 +222,12 @@ mod tests {
                 recipient_balance_after.0 - recipient_change,
                 "Recipient balance is not correct"
             );
-
-            if is_fast_transfer || is_transfer_to_near {
-                assert_eq!(
-                    locked_before, locked_after,
-                    "Locked tokens should be unchanged for this transfer"
-                );
-            } else {
-                assert_eq!(
-                    locked_after,
-                    U128(locked_before.0 + amount),
-                    "Locked tokens should increase by the transfer amount"
-                );
-            }
         }
+
+        assert_eq!(
+            locked_before, locked_after,
+            "Locked tokens should be unchanged on Near"
+        );
 
         if !is_fast_transfer && !is_transfer_to_near {
             let transfer_message: Option<omni_types::TransferMessage> = env
