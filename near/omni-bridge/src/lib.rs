@@ -931,11 +931,9 @@ impl Contract {
         utxo_fin_transfer_msg: UtxoFinTransferMsg,
         origin_chain: ChainKind,
         storage_owner: &AccountId,
-        lock_actions: Vec<LockAction>,
     ) -> PromiseOrValue<U128> {
         if !Self::check_storage_balance_result(0) {
             env::log_str("STORAGE_ERR: The transfer recipient is omitted");
-            self.revert_lock_actions(&lock_actions);
             self.remove_fin_utxo_transfer(
                 &utxo_fin_transfer_msg.get_transfer_id(origin_chain),
                 storage_owner,
@@ -958,7 +956,6 @@ impl Contract {
                     utxo_fin_transfer_msg,
                     origin_chain,
                     storage_owner,
-                    lock_actions,
                 ),
         )
         .into()
@@ -973,11 +970,9 @@ impl Contract {
         utxo_fin_transfer_msg: UtxoFinTransferMsg,
         origin_chain: ChainKind,
         storage_owner: &AccountId,
-        lock_actions: Vec<LockAction>,
     ) -> U128 {
         let is_ft_transfer_call = !utxo_fin_transfer_msg.msg.is_empty();
         if Self::is_refund_required(is_ft_transfer_call) {
-            self.revert_lock_actions(&lock_actions);
             self.remove_fin_utxo_transfer(
                 &utxo_fin_transfer_msg.get_transfer_id(origin_chain),
                 storage_owner,
@@ -2324,7 +2319,7 @@ impl Contract {
         );
 
         if let OmniAddress::Near(recipient) = utxo_fin_transfer_msg.recipient.clone() {
-            self.utxo_fin_transfer_to_near(
+            Self::utxo_fin_transfer_to_near(
                 recipient,
                 token_id,
                 amount,
@@ -2386,7 +2381,6 @@ impl Contract {
     }
 
     fn utxo_fin_transfer_to_near(
-        &mut self,
         recipient: AccountId,
         token_id: AccountId,
         amount: U128,
@@ -2400,9 +2394,6 @@ impl Contract {
             storage_deposit_amount: None,
         };
 
-        let lock_actions =
-            vec![self.lock_other_tokens_if_needed(ChainKind::Near, &token_id, amount.0)];
-
         Self::check_or_pay_ft_storage(&deposit_action, &mut NearToken::from_yoctonear(0)).then(
             Self::ext(env::current_account_id())
                 .with_static_gas(
@@ -2415,7 +2406,6 @@ impl Contract {
                     utxo_fin_transfer_msg,
                     origin_chain,
                     storage_owner,
-                    lock_actions,
                 ),
         )
     }
