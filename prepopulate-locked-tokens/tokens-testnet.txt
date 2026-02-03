@@ -33,7 +33,6 @@ near:1046aff01deebc9ad3ee81a052c2eab82a69126c.factory.sepolia.testnet
 near:27ba8b27bbc09703c89caad9dae16925a7d06bde.factory.sepolia.testnet
 near:309d16a788293e35baf4a779811fea4bb0a38fb3.factory.sepolia.testnet
 near:45c4417c072ffad033f5abb1bcc3eb2f65ee1143.factory.sepolia.testnet
-near:6cf00c73a8552a9069372d6136aad4afd3a16bbc.factory.sepolia.testnet
 near:8b73b67b5c8c6bc8d8aeb9e2b246adb391d8f4db.factory.sepolia.testnet
 near:arb-0x6048cf81ce9be22ff7fdcbd63a24507ef0a62965.omnidep.testnet
 near:arb-0x63bc3e5f068b54333c043e5d882deaea65c4c4f7.omnidep.testnet
