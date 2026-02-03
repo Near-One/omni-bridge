@@ -22,7 +22,7 @@ db.omni_events.distinct(
 
 ## Additional tokens
 
-Using nearblocks we can fetch manually added/migrated tokens by filtering out `migrate_deployed_token` and `add_token` methods, since they don't have an explicit logs and we don't index them
+Using nearblocks we can fetch manually added/migrated tokens by filtering out `migrate_deployed_token` and `add_token` methods, since they don't have explicit logs and we don't index them
 
 Also, these native tokens should be included:
 ```txt
