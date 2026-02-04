@@ -94,7 +94,7 @@ impl Contract {
         }
     }
 
-    pub fn lock_nep141_tokens_if_needed(
+    fn lock_nep141_tokens_if_needed(
         &mut self,
         chain_kind: ChainKind,
         token_id: &AccountId,
@@ -107,7 +107,7 @@ impl Contract {
         self.lock_tokens(chain_kind, token_id, amount)
     }
 
-    pub fn unlock_nep141_tokens_if_needed(
+    fn unlock_nep141_tokens_if_needed(
         &mut self,
         chain_kind: ChainKind,
         token_id: &AccountId,
@@ -120,7 +120,7 @@ impl Contract {
         self.unlock_tokens(chain_kind, token_id, amount)
     }
 
-    pub fn lock_other_tokens_if_needed(
+    fn lock_other_tokens_if_needed(
         &mut self,
         chain_kind: ChainKind,
         token_id: &AccountId,
@@ -136,7 +136,7 @@ impl Contract {
         self.lock_tokens(chain_kind, token_id, amount)
     }
 
-    pub fn unlock_other_tokens_if_needed(
+    fn unlock_other_tokens_if_needed(
         &mut self,
         chain_kind: ChainKind,
         token_id: &AccountId,
