@@ -1753,11 +1753,11 @@ impl Contract {
         let fast_transfer = FastTransfer::from_transfer(transfer_message.clone(), token.clone());
         let fast_transfer_status = self.get_fast_transfer_status(&fast_transfer.id());
 
-        let lock_actions = self.unlock_tokens_if_needed(
+        let lock_actions = vec![self.unlock_tokens_if_needed(
             transfer_message.get_origin_chain(),
             &token,
             transfer_message.amount.0,
-        );
+        )];
 
         // If fast transfer happened, change recipient and fee recipient to the relayer that executed fast transfer
         let (recipient, msg, fee_recipient) = match fast_transfer_status {
@@ -1840,7 +1840,7 @@ impl Contract {
                     &fee_recipient,
                     !msg.is_empty(),
                     predecessor_account_id,
-                    lock_actions.to_vec(),
+                    lock_actions,
                 ),
         )
     }

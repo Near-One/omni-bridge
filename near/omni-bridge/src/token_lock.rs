@@ -94,74 +94,17 @@ impl Contract {
         }
     }
 
-    fn lock_nep141_tokens_if_needed(
-        &mut self,
-        chain_kind: ChainKind,
-        token_id: &AccountId,
-        amount: u128,
-    ) -> LockAction {
-        if self.is_deployed_token(token_id) || chain_kind.is_utxo_chain() || amount == 0 {
-            return LockAction::Unchanged;
-        }
-
-        self.lock_tokens(chain_kind, token_id, amount)
-    }
-
-    fn unlock_nep141_tokens_if_needed(
-        &mut self,
-        chain_kind: ChainKind,
-        token_id: &AccountId,
-        amount: u128,
-    ) -> LockAction {
-        if self.is_deployed_token(token_id) || chain_kind.is_utxo_chain() || amount == 0 {
-            return LockAction::Unchanged;
-        }
-
-        self.unlock_tokens(chain_kind, token_id, amount)
-    }
-
-    fn lock_other_tokens_if_needed(
-        &mut self,
-        chain_kind: ChainKind,
-        token_id: &AccountId,
-        amount: u128,
-    ) -> LockAction {
-        if !self.is_deployed_token(token_id)
-            || self.get_token_origin_chain(token_id) == chain_kind
-            || amount == 0
-        {
-            return LockAction::Unchanged;
-        }
-
-        self.lock_tokens(chain_kind, token_id, amount)
-    }
-
-    fn unlock_other_tokens_if_needed(
-        &mut self,
-        chain_kind: ChainKind,
-        token_id: &AccountId,
-        amount: u128,
-    ) -> LockAction {
-        if !self.is_deployed_token(token_id)
-            || self.get_token_origin_chain(token_id) == chain_kind
-            || amount == 0
-        {
-            return LockAction::Unchanged;
-        }
-
-        self.unlock_tokens(chain_kind, token_id, amount)
-    }
-
     pub fn lock_tokens_if_needed(
         &mut self,
         chain_kind: ChainKind,
         token_id: &AccountId,
         amount: u128,
-    ) -> [LockAction; 2] {
-        [
-            self.lock_nep141_tokens_if_needed(chain_kind, token_id, amount),
-            self.lock_other_tokens_if_needed(chain_kind, token_id, amount),
-        ]
+    ) -> LockAction {
+        if self.get_token_origin_chain(token_id) == chain_kind || amount == 0 {
+            return LockAction::Unchanged;
+        }
+
+        self.lock_tokens(chain_kind, token_id, amount)
     }
 
     pub fn unlock_tokens_if_needed(
@@ -169,11 +112,12 @@ impl Contract {
         chain_kind: ChainKind,
         token_id: &AccountId,
         amount: u128,
-    ) -> [LockAction; 2] {
-        [
-            self.unlock_nep141_tokens_if_needed(chain_kind, token_id, amount),
-            self.unlock_other_tokens_if_needed(chain_kind, token_id, amount),
-        ]
+    ) -> LockAction {
+        if self.get_token_origin_chain(token_id) == chain_kind || amount == 0 {
+            return LockAction::Unchanged;
+        }
+
+        self.unlock_tokens(chain_kind, token_id, amount)
     }
 
     pub fn revert_lock_actions(&mut self, lock_actions: &[LockAction]) {
