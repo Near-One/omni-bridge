@@ -2442,7 +2442,7 @@ impl Contract {
         let required_storage_balance =
             self.add_transfer_message(transfer_message.clone(), storage_owner.clone());
 
-        self.lock_other_tokens_if_needed(
+        self.lock_tokens_if_needed(
             transfer_message.get_destination_chain(),
             &token_id,
             transfer_message.amount.0,
