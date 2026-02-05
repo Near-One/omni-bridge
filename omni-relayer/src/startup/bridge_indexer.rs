@@ -8,7 +8,8 @@ use bridge_indexer_types::documents_types::{
 };
 use mongodb::{Client, Collection, change_stream::event::ResumeToken, options::ClientOptions};
 use omni_types::{
-    ChainKind, Fee, OmniAddress, TransferId, TransferIdKind, near_events::OmniBridgeEvent,
+    ChainKind, Fee, OmniAddress, TransferId, TransferIdKind, UnifiedTransferId,
+    near_events::OmniBridgeEvent,
 };
 use solana_sdk::pubkey::Pubkey;
 use tokio_stream::StreamExt;
@@ -61,6 +62,7 @@ async fn handle_transaction_event(
     config: &config::Config,
     redis_connection_manager: &mut redis::aio::ConnectionManager,
     origin_transaction_id: String,
+    unified_transfer_id: UnifiedTransferId,
     origin: OmniTransactionOrigin,
     event: OmniTransactionEvent,
 ) -> Result<()> {
@@ -278,6 +280,7 @@ async fn handle_transaction_event(
                     tx_hash,
                     creation_timestamp,
                     expected_finalization_time,
+                    transfer_id: fin_transfer.transfer_id,
                 }),
             )
             .await;
@@ -354,7 +357,11 @@ async fn handle_transaction_event(
                 redis_connection_manager,
                 utils::redis::EVENTS,
                 redis_key,
-                RetryableEvent::new(crate::workers::FinTransfer::Solana { emitter, sequence }),
+                RetryableEvent::new(crate::workers::FinTransfer::Solana {
+                    emitter,
+                    sequence,
+                    transfer_id: (&unified_transfer_id).try_into().ok(),
+                }),
             )
             .await;
         }
@@ -568,6 +575,7 @@ async fn handle_meta_event(
         | OmniMetaEventDetails::NearLogMetadataEvent { .. }
         | OmniMetaEventDetails::NearDeployTokenEvent { .. }
         | OmniMetaEventDetails::NearBindTokenEvent { .. }
+        | OmniMetaEventDetails::NearMigrateTokenEvent { .. }
         | OmniMetaEventDetails::UtxoLogDepositAddress(_) => {}
     }
 
@@ -617,6 +625,7 @@ async fn watch_omni_events_collection(
                                         &config,
                                         &mut redis_connection_manager,
                                         event.transaction_id,
+                                        transaction_event.transfer_id.clone(),
                                         event.origin,
                                         transaction_event,
                                     )
