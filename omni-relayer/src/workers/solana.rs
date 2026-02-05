@@ -190,7 +190,12 @@ pub async fn process_fin_transfer_event(
     fin_transfer: FinTransfer,
     near_nonce: Arc<utils::nonce::NonceManager>,
 ) -> Result<EventAction> {
-    let FinTransfer::Solana { emitter, sequence } = fin_transfer else {
+    let FinTransfer::Solana {
+        emitter,
+        sequence,
+        transfer_id,
+    } = fin_transfer
+    else {
         anyhow::bail!("Expected Solana FinTransfer, got: {fin_transfer:?}");
     };
 
@@ -198,6 +203,20 @@ pub async fn process_fin_transfer_event(
         "Processing Solana FinTransfer ({:?}:{sequence})",
         ChainKind::Sol
     );
+
+    if let Some(transfer_id) = transfer_id {
+        match omni_connector.near_get_transfer_message(transfer_id).await {
+            Ok(transfer_message) if transfer_message.fee.is_zero() => {
+                info!("No fee to claim for FinTransfer ({transfer_id:?})");
+                return Ok(EventAction::Remove);
+            }
+            Ok(_) => {}
+            Err(err) => {
+                warn!("Failed to get transfer message for FinTransfer ({transfer_id:?}): {err:?}",);
+                return Ok(EventAction::Retry);
+            }
+        };
+    }
 
     let Ok(vaa) = omni_connector
         .wormhole_get_vaa(config.wormhole.solana_chain_id, emitter, sequence)
