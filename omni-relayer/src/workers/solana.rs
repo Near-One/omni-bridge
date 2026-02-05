@@ -215,7 +215,7 @@ pub async fn process_fin_transfer_event(
                 warn!("Failed to get transfer message for FinTransfer ({transfer_id:?}): {err:?}",);
                 return Ok(EventAction::Retry);
             }
-        };
+        }
     }
 
     let Ok(vaa) = omni_connector

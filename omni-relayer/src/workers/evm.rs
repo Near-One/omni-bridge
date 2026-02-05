@@ -311,7 +311,7 @@ pub async fn process_evm_transfer_event(
             warn!("Failed to get transfer message for FinTransfer ({transfer_id:?}): {err:?}",);
             return Ok(EventAction::Retry);
         }
-    };
+    }
 
     let vaa = if chain_kind == ChainKind::Eth {
         None
