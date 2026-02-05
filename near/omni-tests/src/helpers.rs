@@ -2,8 +2,9 @@
 pub mod tests {
     use std::path::Path;
 
-    use near_sdk::{borsh, json_types::U128, serde_json, AccountId, CryptoHash};
-    use near_workspaces::types::NearToken;
+    use near_sdk::{borsh, json_types::U128, serde_json, CryptoHash};
+    use near_api::AccountId;
+    use near_token::NearToken;
     use omni_types::{
         locker_args::{BindTokenArgs, ClaimFeeArgs, DeployTokenArgs},
         prover_result::{DeployTokenMessage, FinTransferMessage, LogMetadataMessage, ProverResult},

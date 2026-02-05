@@ -2,5 +2,6 @@
 **/target
 **/config.toml
 **/.env
+**/.claude
 .history
 node_modules

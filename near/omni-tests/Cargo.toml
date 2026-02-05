@@ -11,10 +11,14 @@ crate-type = ["cdylib", "rlib"]
 [dev-dependencies]
 cargo-near-build.workspace = true
 near-sdk = { workspace = true, features = ["non-contract-usage", "legacy", "deterministic-account-ids"] }
-near-workspaces.workspace = true
+near-api.workspace = true
+near-sandbox.workspace = true
+near-token.workspace = true
+testresult.workspace = true
 tokio.workspace = true
 anyhow.workspace = true
 omni-types.workspace = true
 rstest.workspace = true
 sha2.workspace = true
 rand = "0.9"
+url = "2"
