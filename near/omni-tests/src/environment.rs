@@ -1,15 +1,18 @@
-use std::{cell::RefCell, sync::atomic::{AtomicU64, Ordering}};
+use std::{
+    cell::RefCell,
+    sync::atomic::{AtomicU64, Ordering},
+};
 
 use anyhow::Ok;
 use near_api::{AccountId, Contract as ApiContract, NetworkConfig, Signer, Tokens};
 use near_sandbox::Sandbox;
+use near_sdk::serde::de::DeserializeOwned;
 use near_sdk::{
     borsh,
     json_types::{Base58CryptoHash, Base64VecU8, U128},
     serde_json::{self, json},
     CryptoHash, NearToken,
 };
-use near_sdk::serde::de::DeserializeOwned;
 
 /// Type alias for transaction execution result from near-api
 pub type TransactionResult = near_api::types::transaction::result::ExecutionFinalResult;
@@ -228,7 +231,8 @@ impl TestAccount {
         let sub_id: AccountId = format!("{}.{}", name, self.id).parse()?;
         let (secret_key, public_key) = near_sandbox::random_key_pair();
 
-        sandbox.create_account(sub_id.clone())
+        sandbox
+            .create_account(sub_id.clone())
             .initial_balance(initial_balance)
             .public_key(public_key)
             .send()
@@ -290,10 +294,16 @@ impl TestEnvBuilder {
 
     /// Deploy a contract to a new dev account
     async fn dev_deploy(&self, wasm: &[u8]) -> anyhow::Result<TestContract> {
-        let contract_id: AccountId = format!("dev-{}.{}", unique_id(), near_sandbox::config::DEFAULT_GENESIS_ACCOUNT).parse()?;
+        let contract_id: AccountId = format!(
+            "dev-{}.{}",
+            unique_id(),
+            near_sandbox::config::DEFAULT_GENESIS_ACCOUNT
+        )
+        .parse()?;
         let (secret_key, public_key) = near_sandbox::random_key_pair();
 
-        self.sandbox.create_account(contract_id.clone())
+        self.sandbox
+            .create_account(contract_id.clone())
             .initial_balance(NearToken::from_near(50))
             .public_key(public_key)
             .send()
@@ -308,28 +318,40 @@ impl TestEnvBuilder {
             .send_to(&self.network)
             .await?;
 
-        Ok(TestContract { id: contract_id, signer })
+        Ok(TestContract {
+            id: contract_id,
+            signer,
+        })
     }
 
     /// Create a top-level account
     async fn create_tla(&self, account_id: AccountId) -> anyhow::Result<TestAccount> {
         let (secret_key, public_key) = near_sandbox::random_key_pair();
 
-        self.sandbox.create_account(account_id.clone())
+        self.sandbox
+            .create_account(account_id.clone())
             .initial_balance(NearToken::from_near(100))
             .public_key(public_key)
             .send()
             .await?;
 
         let signer = Signer::from_secret_key(secret_key.parse()?)?;
-        Ok(TestAccount { id: account_id, signer })
+        Ok(TestAccount {
+            id: account_id,
+            signer,
+        })
     }
 
     /// Create a top-level account and deploy code to it
-    async fn create_tla_and_deploy(&self, account_id: AccountId, wasm: &[u8]) -> anyhow::Result<TestContract> {
+    async fn create_tla_and_deploy(
+        &self,
+        account_id: AccountId,
+        wasm: &[u8],
+    ) -> anyhow::Result<TestContract> {
         let (secret_key, public_key) = near_sandbox::random_key_pair();
 
-        self.sandbox.create_account(account_id.clone())
+        self.sandbox
+            .create_account(account_id.clone())
             .initial_balance(NearToken::from_near(100))
             .public_key(public_key)
             .send()
@@ -344,7 +366,10 @@ impl TestEnvBuilder {
             .send_to(&self.network)
             .await?;
 
-        Ok(TestContract { id: account_id, signer })
+        Ok(TestContract {
+            id: account_id,
+            signer,
+        })
     }
 
     /// Get the root account
@@ -370,9 +395,7 @@ impl TestEnvBuilder {
     pub async fn with_custom_wnear(self) -> anyhow::Result<TestEnvBuilderWithToken> {
         let token_contract = self.deploy_nep141_token().await?;
 
-        let bridge_contract = self
-            .deploy_bridge(Some(token_contract.id.clone()))
-            .await?;
+        let bridge_contract = self.deploy_bridge(Some(token_contract.id.clone())).await?;
 
         add_factory(&bridge_contract, eth_factory_address(), &self.network).await?;
 
@@ -386,10 +409,18 @@ impl TestEnvBuilder {
         )
         .await?;
 
-        self.transfer_near(&token_contract.id, NearToken::from_near(1)).await?;
+        self.transfer_near(&token_contract.id, NearToken::from_near(1))
+            .await?;
 
         let root_id: AccountId = near_sandbox::config::DEFAULT_GENESIS_ACCOUNT.to_owned();
-        storage_deposit(&token_contract, &bridge_contract.id, &root_id, &self.root_signer, &self.network).await?;
+        storage_deposit(
+            &token_contract,
+            &bridge_contract.id,
+            &root_id,
+            &self.root_signer,
+            &self.network,
+        )
+        .await?;
 
         Ok(TestEnvBuilderWithToken {
             sandbox: self.sandbox,
@@ -427,10 +458,18 @@ impl TestEnvBuilder {
         )
         .await?;
 
-        self.transfer_near(&token_contract.id, NearToken::from_near(1)).await?;
+        self.transfer_near(&token_contract.id, NearToken::from_near(1))
+            .await?;
 
         let root_id: AccountId = near_sandbox::config::DEFAULT_GENESIS_ACCOUNT.to_owned();
-        storage_deposit(&token_contract, &bridge_contract.id, &root_id, &self.root_signer, &self.network).await?;
+        storage_deposit(
+            &token_contract,
+            &bridge_contract.id,
+            &root_id,
+            &self.root_signer,
+            &self.network,
+        )
+        .await?;
 
         Ok(TestEnvBuilderWithToken {
             sandbox: self.sandbox,
@@ -486,10 +525,18 @@ impl TestEnvBuilder {
             .get_token_contract(&bridge_contract, &init_token_address)
             .await?;
 
-        self.transfer_near(&token_contract.id, NearToken::from_near(1)).await?;
+        self.transfer_near(&token_contract.id, NearToken::from_near(1))
+            .await?;
 
         let root_id: AccountId = near_sandbox::config::DEFAULT_GENESIS_ACCOUNT.to_owned();
-        storage_deposit(&token_contract, &bridge_contract.id, &root_id, &self.root_signer, &self.network).await?;
+        storage_deposit(
+            &token_contract,
+            &bridge_contract.id,
+            &root_id,
+            &self.root_signer,
+            &self.network,
+        )
+        .await?;
 
         Ok(TestEnvBuilderWithToken {
             sandbox: self.sandbox,
@@ -545,10 +592,18 @@ impl TestEnvBuilder {
             .get_token_contract(&bridge_contract, &eth_token_address())
             .await?;
 
-        self.transfer_near(&token_contract.id, NearToken::from_near(1)).await?;
+        self.transfer_near(&token_contract.id, NearToken::from_near(1))
+            .await?;
 
         let root_id: AccountId = near_sandbox::config::DEFAULT_GENESIS_ACCOUNT.to_owned();
-        storage_deposit(&token_contract, &bridge_contract.id, &root_id, &self.root_signer, &self.network).await?;
+        storage_deposit(
+            &token_contract,
+            &bridge_contract.id,
+            &root_id,
+            &self.root_signer,
+            &self.network,
+        )
+        .await?;
 
         Ok(TestEnvBuilderWithToken {
             sandbox: self.sandbox,
@@ -571,7 +626,9 @@ impl TestEnvBuilder {
 
         let token_contract = self.deploy_nep141_token().await?;
 
-        let utxo_connector = self.dev_deploy(&self.build_artifacts.mock_utxo_connector).await?;
+        let utxo_connector = self
+            .dev_deploy(&self.build_artifacts.mock_utxo_connector)
+            .await?;
 
         utxo_connector
             .call(
@@ -599,14 +656,30 @@ impl TestEnvBuilder {
             )
             .await?;
 
-        self.transfer_near(&token_contract.id, NearToken::from_near(1)).await?;
+        self.transfer_near(&token_contract.id, NearToken::from_near(1))
+            .await?;
 
         let root_id: AccountId = near_sandbox::config::DEFAULT_GENESIS_ACCOUNT.to_owned();
-        storage_deposit(&token_contract, &bridge_contract.id, &root_id, &self.root_signer, &self.network).await?;
-        storage_deposit(&token_contract, &utxo_connector.id, &root_id, &self.root_signer, &self.network).await?;
+        storage_deposit(
+            &token_contract,
+            &bridge_contract.id,
+            &root_id,
+            &self.root_signer,
+            &self.network,
+        )
+        .await?;
+        storage_deposit(
+            &token_contract,
+            &utxo_connector.id,
+            &root_id,
+            &self.root_signer,
+            &self.network,
+        )
+        .await?;
 
         // Transfer some NEAR to the connector for making cross-contract calls
-        self.transfer_near(&utxo_connector.id, NearToken::from_yoctonear(1000)).await?;
+        self.transfer_near(&utxo_connector.id, NearToken::from_yoctonear(1000))
+            .await?;
 
         Ok(TestEnvBuilderWithToken {
             sandbox: self.sandbox,
@@ -664,7 +737,10 @@ impl TestEnvBuilder {
         Ok(())
     }
 
-    async fn deploy_bridge(&self, wnear_account_id: Option<AccountId>) -> anyhow::Result<TestContract> {
+    async fn deploy_bridge(
+        &self,
+        wnear_account_id: Option<AccountId>,
+    ) -> anyhow::Result<TestContract> {
         let locker_wasm = if self.deploy_old_version {
             &std::fs::read(PREV_LOCKER_WASM_FILEPATH).unwrap()
         } else {
@@ -775,7 +851,14 @@ impl TestEnvBuilder {
 impl TestEnvBuilderWithToken {
     pub async fn storage_deposit(&self, account_id: &AccountId) -> anyhow::Result<()> {
         let root_id: AccountId = near_sandbox::config::DEFAULT_GENESIS_ACCOUNT.to_owned();
-        storage_deposit(&self.token.contract, account_id, &root_id, &self.root_signer, &self.network).await?;
+        storage_deposit(
+            &self.token.contract,
+            account_id,
+            &root_id,
+            &self.root_signer,
+            &self.network,
+        )
+        .await?;
         Ok(())
     }
 
@@ -818,22 +901,24 @@ impl TestEnvBuilderWithToken {
                     borsh::to_vec(&FinTransferArgs {
                         chain_kind: ChainKind::Eth,
                         storage_deposit_actions,
-                        prover_args: borsh::to_vec(&ProverResult::InitTransfer(InitTransferMessage {
-                            origin_nonce: {
-                                let current_nonce = *self.token_transfer_nonce.borrow();
-                                current_nonce
+                        prover_args: borsh::to_vec(&ProverResult::InitTransfer(
+                            InitTransferMessage {
+                                origin_nonce: {
+                                    let current_nonce = *self.token_transfer_nonce.borrow();
+                                    current_nonce
+                                },
+                                token: self.token.eth_address.clone(),
+                                recipient: OmniAddress::Near(recipient.clone()),
+                                amount: U128(amount),
+                                fee: Fee {
+                                    fee: U128(0),
+                                    native_fee: U128(0),
+                                },
+                                sender: eth_eoa_address(),
+                                msg: String::default(),
+                                emitter_address: eth_factory_address(),
                             },
-                            token: self.token.eth_address.clone(),
-                            recipient: OmniAddress::Near(recipient.clone()),
-                            amount: U128(amount),
-                            fee: Fee {
-                                fee: U128(0),
-                                native_fee: U128(0),
-                            },
-                            sender: eth_eoa_address(),
-                            msg: String::default(),
-                            emitter_address: eth_factory_address(),
-                        }))?,
+                        ))?,
                     })?,
                     required_deposit_for_fin_transfer,
                     &self.network,
@@ -863,7 +948,8 @@ impl TestEnvBuilderWithToken {
     pub async fn create_account(&self, id: AccountId) -> anyhow::Result<TestAccount> {
         let (secret_key, public_key) = near_sandbox::random_key_pair();
 
-        self.sandbox.create_account(id.clone())
+        self.sandbox
+            .create_account(id.clone())
             .initial_balance(NearToken::from_near(100))
             .public_key(public_key)
             .send()
@@ -874,10 +960,16 @@ impl TestEnvBuilderWithToken {
     }
 
     pub async fn deploy_mock_receiver(&self) -> anyhow::Result<TestContract> {
-        let contract_id: AccountId = format!("receiver-{}.{}", unique_id(), near_sandbox::config::DEFAULT_GENESIS_ACCOUNT).parse()?;
+        let contract_id: AccountId = format!(
+            "receiver-{}.{}",
+            unique_id(),
+            near_sandbox::config::DEFAULT_GENESIS_ACCOUNT
+        )
+        .parse()?;
         let (secret_key, public_key) = near_sandbox::random_key_pair();
 
-        self.sandbox.create_account(contract_id.clone())
+        self.sandbox
+            .create_account(contract_id.clone())
             .initial_balance(NearToken::from_near(50))
             .public_key(public_key)
             .send()
@@ -892,7 +984,10 @@ impl TestEnvBuilderWithToken {
             .send_to(&self.network)
             .await?;
 
-        Ok(TestContract { id: contract_id, signer })
+        Ok(TestContract {
+            id: contract_id,
+            signer,
+        })
     }
 
     /// View account details (balance, etc)

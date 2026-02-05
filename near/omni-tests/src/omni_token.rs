@@ -59,10 +59,16 @@ mod tests {
         omni_token_wasm_len: usize,
     }
 
-    async fn dev_deploy(sandbox: &Sandbox, network: &NetworkConfig, wasm: &[u8]) -> anyhow::Result<TestContract> {
-        let contract_id: AccountId = format!("dev-{}.test.near", COUNTER.fetch_add(1, Ordering::SeqCst)).parse()?;
+    async fn dev_deploy(
+        sandbox: &Sandbox,
+        network: &NetworkConfig,
+        wasm: &[u8],
+    ) -> anyhow::Result<TestContract> {
+        let contract_id: AccountId =
+            format!("dev-{}.test.near", COUNTER.fetch_add(1, Ordering::SeqCst)).parse()?;
         let (secret_key, public_key) = near_sandbox::random_key_pair();
-        sandbox.create_account(contract_id.clone())
+        sandbox
+            .create_account(contract_id.clone())
             .initial_balance(NearToken::from_near(50))
             .public_key(public_key)
             .send()
@@ -74,12 +80,21 @@ mod tests {
             .with_signer(signer.clone())
             .send_to(network)
             .await?;
-        Ok(TestContract { id: contract_id, signer })
+        Ok(TestContract {
+            id: contract_id,
+            signer,
+        })
     }
 
-    async fn create_tla(sandbox: &Sandbox, network: &NetworkConfig, account_id: AccountId, wasm: Option<&[u8]>) -> anyhow::Result<TestAccount> {
+    async fn create_tla(
+        sandbox: &Sandbox,
+        network: &NetworkConfig,
+        account_id: AccountId,
+        wasm: Option<&[u8]>,
+    ) -> anyhow::Result<TestAccount> {
         let (secret_key, public_key) = near_sandbox::random_key_pair();
-        sandbox.create_account(account_id.clone())
+        sandbox
+            .create_account(account_id.clone())
             .initial_balance(NearToken::from_near(100))
             .public_key(public_key)
             .send()
@@ -93,7 +108,10 @@ mod tests {
                 .send_to(network)
                 .await?;
         }
-        Ok(TestAccount { id: account_id, signer })
+        Ok(TestAccount {
+            id: account_id,
+            signer,
+        })
     }
 
     impl DeployEnv {
@@ -154,14 +172,18 @@ mod tests {
             let global_code_hash = Base58CryptoHash::from(omni_token_code_hash);
 
             // Setup token deployer
-            let token_deployer = create_tla(&sandbox, &network, account_n(1), Some(&token_deployer_wasm)).await?;
+            let token_deployer =
+                create_tla(&sandbox, &network, account_n(1), Some(&token_deployer_wasm)).await?;
 
             ApiContract(token_deployer.id.clone())
-                .call_function("new", json!({
-                    "controller": locker_contract.id,
-                    "dao": AccountId::from_str("dao.near").unwrap(),
-                    "global_code_hash": global_code_hash,
-                }))
+                .call_function(
+                    "new",
+                    json!({
+                        "controller": locker_contract.id,
+                        "dao": AccountId::from_str("dao.near").unwrap(),
+                        "global_code_hash": global_code_hash,
+                    }),
+                )
                 .transaction()
                 .max_gas()
                 .with_signer(token_deployer.id.clone(), token_deployer.signer.clone())
@@ -380,7 +402,8 @@ mod tests {
             omni_token_wasm: &[u8],
             mock_global_contract_deployer_wasm: &[u8],
         ) -> anyhow::Result<CryptoHash> {
-            let mock_global_contract_deployer = dev_deploy(sandbox, network, mock_global_contract_deployer_wasm).await?;
+            let mock_global_contract_deployer =
+                dev_deploy(sandbox, network, mock_global_contract_deployer_wasm).await?;
 
             let omni_token_global_contract_id: AccountId =
                 format!("omni-token-global.{}", mock_global_contract_deployer.id).parse()?;
@@ -414,7 +437,8 @@ mod tests {
             deposit_strategy: DepositStrategy,
             deploy_initiator_index: u8,
         ) -> anyhow::Result<AccountId> {
-            let token_deploy_initiator = create_tla(sandbox, network, account_n(deploy_initiator_index), None).await?;
+            let token_deploy_initiator =
+                create_tla(sandbox, network, account_n(deploy_initiator_index), None).await?;
 
             let required_storage: NearToken = locker
                 .view_no_args("required_balance_for_deploy_token", network)
@@ -474,11 +498,9 @@ mod tests {
         }
 
         // Helper to create and register a new account
-        async fn create_registered_account(
-            &self,
-            account_num: u8,
-        ) -> anyhow::Result<TestAccount> {
-            let account = create_tla(&self.sandbox, &self.network, account_n(account_num), None).await?;
+        async fn create_registered_account(&self, account_num: u8) -> anyhow::Result<TestAccount> {
+            let account =
+                create_tla(&self.sandbox, &self.network, account_n(account_num), None).await?;
 
             account
                 .call(
@@ -523,7 +545,11 @@ mod tests {
             Ok(result.data)
         }
 
-        async fn transfer_near(&self, recipient: &AccountId, amount: NearToken) -> anyhow::Result<()> {
+        async fn transfer_near(
+            &self,
+            recipient: &AccountId,
+            amount: NearToken,
+        ) -> anyhow::Result<()> {
             Tokens::account("test.near".parse()?)
                 .send_to(recipient.clone())
                 .near(amount)
@@ -577,7 +603,8 @@ mod tests {
             .await?
         };
 
-        let fetched_metadata: BasicMetadata = env.view(&env.token_account_id, "ft_metadata").await?;
+        let fetched_metadata: BasicMetadata =
+            env.view(&env.token_account_id, "ft_metadata").await?;
 
         assert_eq!(env.token_metadata.name, fetched_metadata.name);
         assert_eq!(env.token_metadata.symbol, fetched_metadata.symbol);
@@ -613,7 +640,8 @@ mod tests {
         )
         .await?;
 
-        let fetched_metadata: BasicMetadata = env.view(&env.token_account_id, "ft_metadata").await?;
+        let fetched_metadata: BasicMetadata =
+            env.view(&env.token_account_id, "ft_metadata").await?;
 
         assert_eq!(fetched_metadata.name, huge_name);
         assert_eq!(fetched_metadata.symbol, huge_symbol);
@@ -671,7 +699,8 @@ mod tests {
 
         let env = deploy_env.into_test_env(token_account_id);
 
-        let fetched_metadata: BasicMetadata = env.view(&env.token_account_id, "ft_metadata").await?;
+        let fetched_metadata: BasicMetadata =
+            env.view(&env.token_account_id, "ft_metadata").await?;
 
         assert_eq!(fetched_metadata.name, token_metadata.name);
         assert_eq!(fetched_metadata.symbol, token_metadata.symbol);
@@ -705,7 +734,8 @@ mod tests {
         )
         .await?;
 
-        let fetched_metadata: BasicMetadata = env.view(&env.token_account_id, "ft_metadata").await?;
+        let fetched_metadata: BasicMetadata =
+            env.view(&env.token_account_id, "ft_metadata").await?;
 
         assert_eq!(env.token_metadata.name, fetched_metadata.name);
         assert_eq!(env.token_metadata.symbol, fetched_metadata.symbol);
@@ -724,7 +754,8 @@ mod tests {
             )
             .await?;
 
-        let updated_metadata: BasicMetadata = env.view(&env.token_account_id, "ft_metadata").await?;
+        let updated_metadata: BasicMetadata =
+            env.view(&env.token_account_id, "ft_metadata").await?;
 
         assert_eq!(updated_metadata.name, "New Token Name");
         assert_eq!(updated_metadata.symbol, "NEW");
@@ -951,7 +982,9 @@ mod tests {
             "Failed to initialize legacy contract"
         );
 
-        let tokens: Vec<String> = deployer_account.view_no_args("get_tokens", &network).await?;
+        let tokens: Vec<String> = deployer_account
+            .view_no_args("get_tokens", &network)
+            .await?;
         assert!(tokens.is_empty());
 
         let omni_token_code_hash = TestEnv::deploy_global_omni_token(
@@ -998,7 +1031,8 @@ mod tests {
             "Migration did not correctly set the global token code hash"
         );
 
-        let legacy_call_attempt: Result<Vec<String>, _> = deployer_account.view_no_args("get_tokens", &network).await;
+        let legacy_call_attempt: Result<Vec<String>, _> =
+            deployer_account.view_no_args("get_tokens", &network).await;
         assert!(
             legacy_call_attempt.is_err(),
             "Legacy method should no longer exist"
@@ -1030,7 +1064,8 @@ mod tests {
         let mint_amount = U128(1_000_000_000_000_000_000);
 
         // Ensure the token account has enough NEAR balance for code upgrade
-        env.transfer_near(&env.token_account_id, NearToken::from_near(20)).await?;
+        env.transfer_near(&env.token_account_id, NearToken::from_near(20))
+            .await?;
 
         fake_finalize_transfer(
             &env.locker_contract,
@@ -1095,7 +1130,9 @@ mod tests {
             )
             .await?;
 
-        let is_using_global_token: bool = env.view(&env.token_account_id, "is_using_global_token").await?;
+        let is_using_global_token: bool = env
+            .view(&env.token_account_id, "is_using_global_token")
+            .await?;
 
         assert_eq!(balance_after, balance_before);
         assert!(is_using_global_token);
@@ -1123,7 +1160,8 @@ mod tests {
         // Create subaccount for token
         let token_account_id: AccountId = "non-global-token.test.near".parse()?;
         let (secret_key, public_key) = near_sandbox::random_key_pair();
-        sandbox.create_account(token_account_id.clone())
+        sandbox
+            .create_account(token_account_id.clone())
             .initial_balance(NearToken::from_near(10))
             .public_key(public_key)
             .send()
@@ -1162,7 +1200,9 @@ mod tests {
             )
             .await?;
 
-        let is_using_global_token: bool = token_contract.view_no_args("is_using_global_token", &network).await?;
+        let is_using_global_token: bool = token_contract
+            .view_no_args("is_using_global_token", &network)
+            .await?;
 
         assert!(!is_using_global_token);
 
@@ -1207,7 +1247,8 @@ mod tests {
 
         let omni_token_code_hash = wasm_code_hash(&omni_token_wasm);
 
-        let mock_global_contract_deployer = dev_deploy(&sandbox, &network, &mock_global_contract_deployer_wasm).await?;
+        let mock_global_contract_deployer =
+            dev_deploy(&sandbox, &network, &mock_global_contract_deployer_wasm).await?;
 
         let omni_token_global_contract_id: AccountId =
             format!("omni-token-global.{}", mock_global_contract_deployer.id).parse()?;
@@ -1245,9 +1286,12 @@ mod tests {
             )
             .await?;
 
-        let migrated_metadata: BasicMetadata = token_contract.view_no_args("ft_metadata", &network).await?;
+        let migrated_metadata: BasicMetadata =
+            token_contract.view_no_args("ft_metadata", &network).await?;
 
-        let is_using_global_token: bool = token_contract.view_no_args("is_using_global_token", &network).await?;
+        let is_using_global_token: bool = token_contract
+            .view_no_args("is_using_global_token", &network)
+            .await?;
 
         assert_eq!(balance_after, balance_before);
         assert_eq!(migrated_metadata.name, metadata.name);

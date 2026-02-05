@@ -166,10 +166,19 @@ mod tests {
 
         let storage_deposit_amount = match fast_transfer_msg.recipient {
             OmniAddress::Near(_) => {
-                get_balance_required_for_fast_transfer_to_near(&env.bridge_contract, true, &env.network).await?
+                get_balance_required_for_fast_transfer_to_near(
+                    &env.bridge_contract,
+                    true,
+                    &env.network,
+                )
+                .await?
             }
             _ => {
-                get_balance_required_for_fast_transfer_to_other_chain(&env.bridge_contract, &env.network).await?
+                get_balance_required_for_fast_transfer_to_other_chain(
+                    &env.bridge_contract,
+                    &env.network,
+                )
+                .await?
             }
         };
 
@@ -269,7 +278,11 @@ mod tests {
         network: &NetworkConfig,
     ) -> anyhow::Result<U128> {
         let balance: U128 = token_contract
-            .view("ft_balance_of", json!({ "account_id": account_id }), network)
+            .view(
+                "ft_balance_of",
+                json!({ "account_id": account_id }),
+                network,
+            )
             .await?;
 
         Ok(balance)
@@ -365,7 +378,8 @@ mod tests {
                 panic!("Recipient is not a Near address");
             };
 
-            let recipient_balance_before = get_balance(&env.token_contract, &recipient, &env.network).await?;
+            let recipient_balance_before =
+                get_balance(&env.token_contract, &recipient, &env.network).await?;
             let relayer_balance_before =
                 get_balance(&env.token_contract, &env.relayer_account.id, &env.network).await?;
             let contract_balance_before =
@@ -375,7 +389,8 @@ mod tests {
                 do_fast_transfer(env, params.amount_to_send, params.fast_transfer_msg, None)
                     .await?;
 
-            let recipient_balance_after = get_balance(&env.token_contract, &recipient, &env.network).await?;
+            let recipient_balance_after =
+                get_balance(&env.token_contract, &recipient, &env.network).await?;
             let relayer_balance_after =
                 get_balance(&env.token_contract, &env.relayer_account.id, &env.network).await?;
             let contract_balance_after =
@@ -911,16 +926,24 @@ mod tests {
 
             let relayer_balance_before =
                 get_balance(&env.token_contract, &env.relayer_account.id, &env.network).await?;
-            let fast_relayer_balance_before =
-                get_balance(&env.token_contract, &env.fast_relayer_account.id, &env.network).await?;
+            let fast_relayer_balance_before = get_balance(
+                &env.token_contract,
+                &env.fast_relayer_account.id,
+                &env.network,
+            )
+            .await?;
 
             let result =
                 do_fin_transfer(env, params.transfer_msg, params.fast_relayer_account).await?;
 
             let relayer_balance_after =
                 get_balance(&env.token_contract, &env.relayer_account.id, &env.network).await?;
-            let fast_relayer_balance_after =
-                get_balance(&env.token_contract, &env.fast_relayer_account.id, &env.network).await?;
+            let fast_relayer_balance_after = get_balance(
+                &env.token_contract,
+                &env.fast_relayer_account.id,
+                &env.network,
+            )
+            .await?;
 
             if let Some(error_msg) = error {
                 assert!(

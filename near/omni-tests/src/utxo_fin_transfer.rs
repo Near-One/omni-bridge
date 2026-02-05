@@ -80,7 +80,11 @@ mod tests {
         network: &NetworkConfig,
     ) -> anyhow::Result<U128> {
         let balance: U128 = token_contract
-            .view("ft_balance_of", json!({ "account_id": account_id }), network)
+            .view(
+                "ft_balance_of",
+                json!({ "account_id": account_id }),
+                network,
+            )
             .await?;
 
         Ok(balance)

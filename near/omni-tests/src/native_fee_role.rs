@@ -41,9 +41,11 @@ mod tests {
 
             // Deploy and initialize FT token
             let token_contract = {
-                let contract_id: AccountId = format!("dev-{}.test.near", COUNTER.fetch_add(1, Ordering::SeqCst)).parse()?;
+                let contract_id: AccountId =
+                    format!("dev-{}.test.near", COUNTER.fetch_add(1, Ordering::SeqCst)).parse()?;
                 let (secret_key, public_key) = near_sandbox::random_key_pair();
-                sandbox.create_account(contract_id.clone())
+                sandbox
+                    .create_account(contract_id.clone())
                     .initial_balance(NearToken::from_near(50))
                     .public_key(public_key)
                     .send()
@@ -55,7 +57,10 @@ mod tests {
                     .with_signer(signer.clone())
                     .send_to(&network)
                     .await?;
-                TestContract { id: contract_id, signer }
+                TestContract {
+                    id: contract_id,
+                    signer,
+                }
             };
             token_contract
                 .call(
@@ -71,9 +76,11 @@ mod tests {
 
             // Deploy and initialize locker
             let locker_contract = {
-                let contract_id: AccountId = format!("dev-{}.test.near", COUNTER.fetch_add(1, Ordering::SeqCst)).parse()?;
+                let contract_id: AccountId =
+                    format!("dev-{}.test.near", COUNTER.fetch_add(1, Ordering::SeqCst)).parse()?;
                 let (secret_key, public_key) = near_sandbox::random_key_pair();
-                sandbox.create_account(contract_id.clone())
+                sandbox
+                    .create_account(contract_id.clone())
                     .initial_balance(NearToken::from_near(50))
                     .public_key(public_key)
                     .send()
@@ -85,7 +92,10 @@ mod tests {
                     .with_signer(signer.clone())
                     .send_to(&network)
                     .await?;
-                TestContract { id: contract_id, signer }
+                TestContract {
+                    id: contract_id,
+                    signer,
+                }
             };
             locker_contract
                 .call(
@@ -102,9 +112,11 @@ mod tests {
                 .await?;
 
             let prover = {
-                let contract_id: AccountId = format!("dev-{}.test.near", COUNTER.fetch_add(1, Ordering::SeqCst)).parse()?;
+                let contract_id: AccountId =
+                    format!("dev-{}.test.near", COUNTER.fetch_add(1, Ordering::SeqCst)).parse()?;
                 let (secret_key, public_key) = near_sandbox::random_key_pair();
-                sandbox.create_account(contract_id.clone())
+                sandbox
+                    .create_account(contract_id.clone())
                     .initial_balance(NearToken::from_near(50))
                     .public_key(public_key)
                     .send()
@@ -116,7 +128,10 @@ mod tests {
                     .with_signer(signer.clone())
                     .send_to(&network)
                     .await?;
-                TestContract { id: contract_id, signer }
+                TestContract {
+                    id: contract_id,
+                    signer,
+                }
             };
             locker_contract
                 .call(
@@ -134,7 +149,8 @@ mod tests {
             let admin_account = {
                 let id = account_n(99);
                 let (secret_key, public_key) = near_sandbox::random_key_pair();
-                sandbox.create_account(id.clone())
+                sandbox
+                    .create_account(id.clone())
                     .initial_balance(NearToken::from_near(100))
                     .public_key(public_key)
                     .send()
@@ -160,7 +176,8 @@ mod tests {
             let sender_account = {
                 let id = account_n(1);
                 let (secret_key, public_key) = near_sandbox::random_key_pair();
-                sandbox.create_account(id.clone())
+                sandbox
+                    .create_account(id.clone())
                     .initial_balance(NearToken::from_near(100))
                     .public_key(public_key)
                     .send()
@@ -276,7 +293,8 @@ mod tests {
             should_succeed: bool,
         ) -> anyhow::Result<Option<TransferMessage>> {
             // Prepare storage deposit for the sender
-            let required_balance_account: NearToken = self.locker_contract
+            let required_balance_account: NearToken = self
+                .locker_contract
                 .view_no_args("required_balance_for_account", &self.network)
                 .await?;
 
@@ -287,7 +305,8 @@ mod tests {
                 msg: None,
             };
 
-            let required_balance_init_transfer: NearToken = self.locker_contract
+            let required_balance_init_transfer: NearToken = self
+                .locker_contract
                 .view(
                     "required_balance_for_init_transfer",
                     json!({
@@ -316,7 +335,8 @@ mod tests {
                 .await?;
 
             // Initiate the transfer
-            let transfer_result = self.sender_account
+            let transfer_result = self
+                .sender_account
                 .call(
                     &self.token_contract.id,
                     "ft_transfer_call",
@@ -363,7 +383,8 @@ mod tests {
 
         async fn create_account(&self, id: AccountId) -> anyhow::Result<TestAccount> {
             let (secret_key, public_key) = near_sandbox::random_key_pair();
-            self.sandbox.create_account(id.clone())
+            self.sandbox
+                .create_account(id.clone())
                 .initial_balance(NearToken::from_near(100))
                 .public_key(public_key)
                 .send()
@@ -470,7 +491,8 @@ mod tests {
         let env = TestEnv::new(mock_token_wasm, mock_prover_wasm, locker_wasm).await?;
 
         // 1. Check role is not granted initially
-        let has_role: bool = env.locker_contract
+        let has_role: bool = env
+            .locker_contract
             .view(
                 "acl_has_role",
                 json!({
@@ -491,7 +513,8 @@ mod tests {
             .await?;
 
         // 3. Verify role is granted
-        let has_role: bool = env.locker_contract
+        let has_role: bool = env
+            .locker_contract
             .view(
                 "acl_has_role",
                 json!({
@@ -512,7 +535,8 @@ mod tests {
             .await?;
 
         // 5. Verify role is revoked
-        let has_role: bool = env.locker_contract
+        let has_role: bool = env
+            .locker_contract
             .view(
                 "acl_has_role",
                 json!({
@@ -558,7 +582,8 @@ mod tests {
             .await;
 
         // Verify that the role was NOT granted, regardless of whether the call succeeded or failed
-        let role_granted: bool = env.locker_contract
+        let role_granted: bool = env
+            .locker_contract
             .view(
                 "acl_has_role",
                 json!({
@@ -579,7 +604,8 @@ mod tests {
             .await?;
 
         // Verify role was successfully granted
-        let has_role: bool = env.locker_contract
+        let has_role: bool = env
+            .locker_contract
             .view(
                 "acl_has_role",
                 json!({

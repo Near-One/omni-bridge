@@ -348,13 +348,17 @@ mod tests {
 
         let recipient_account = {
             let (secret_key, public_key) = near_sandbox::random_key_pair();
-            sandbox.create_account(account_n(1))
+            sandbox
+                .create_account(account_n(1))
                 .initial_balance(NearToken::from_near(100))
                 .public_key(public_key)
                 .send()
                 .await?;
             let signer = Signer::from_secret_key(secret_key.parse()?)?;
-            TestAccount { id: account_n(1), signer }
+            TestAccount {
+                id: account_n(1),
+                signer,
+            }
         };
 
         let storage_deposit_actions = vec![StorageDepositAction {

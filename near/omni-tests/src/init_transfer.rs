@@ -337,7 +337,11 @@ mod tests {
         network: &NetworkConfig,
     ) -> anyhow::Result<U128> {
         Ok(token_contract
-            .view("ft_balance_of", json!({ "account_id": account_id }), network)
+            .view(
+                "ft_balance_of",
+                json!({ "account_id": account_id }),
+                network,
+            )
             .await?)
     }
 
@@ -780,7 +784,12 @@ mod tests {
         // Call migrate
         let res = env
             .locker_contract
-            .call("migrate", json!({}), NearToken::from_yoctonear(0), &env.network)
+            .call(
+                "migrate",
+                json!({}),
+                NearToken::from_yoctonear(0),
+                &env.network,
+            )
             .await?;
 
         assert!(res.is_success(), "Migration didn't succeed");
