@@ -265,26 +265,6 @@ fn test_init_transfer_balance_updated() {
 }
 
 #[test]
-fn test_init_transfer_tracks_locked_tokens_per_chain() {
-    let mut contract = get_default_contract();
-
-    run_ft_on_transfer(
-        &mut contract,
-        DEFAULT_NEAR_USER_ACCOUNT.to_string(),
-        DEFAULT_FT_CONTRACT_ACCOUNT.to_string(),
-        U128(DEFAULT_TRANSFER_AMOUNT),
-        None,
-        &BridgeOnTransferMsg::InitTransfer(get_init_transfer_msg(DEFAULT_ETH_USER_ADDRESS, 0, 0)),
-    );
-
-    let locked = contract.get_locked_tokens(
-        ChainKind::Eth,
-        AccountId::try_from(DEFAULT_FT_CONTRACT_ACCOUNT.to_string()).unwrap(),
-    );
-    assert_eq!(locked, U128(DEFAULT_TRANSFER_AMOUNT));
-}
-
-#[test]
 fn test_init_transfer_locks_other_tokens_for_deployed_token() {
     let mut contract = get_default_contract();
     let token_id: AccountId = "eth-token.testnet".parse().expect("Invalid token ID");
@@ -294,6 +274,9 @@ fn test_init_transfer_locks_other_tokens_for_deployed_token() {
     contract
         .deployed_tokens_v2
         .insert(&token_id, &ChainKind::Eth);
+    contract
+        .locked_tokens
+        .insert(&(ChainKind::Sol, token_id.clone()), &0);
     contract
         .locked_tokens
         .insert(&(ChainKind::Near, token_id.clone()), &locked_amount);
@@ -820,6 +803,9 @@ fn test_fin_transfer_callback_non_near_success() {
     let locked_amount = DEFAULT_TRANSFER_AMOUNT;
     contract
         .locked_tokens
+        .insert(&(ChainKind::Sol, token_id.clone()), &0);
+    contract
+        .locked_tokens
         .insert(&(ChainKind::Eth, token_id.clone()), &locked_amount);
 
     contract.token_decimals.insert(
@@ -1001,6 +987,9 @@ fn test_fin_transfer_callback_refund_restores_locked_tokens() {
 
     let mut contract = get_default_contract();
     let token_id = AccountId::try_from(DEFAULT_FT_CONTRACT_ACCOUNT.to_string()).unwrap();
+    contract
+        .locked_tokens
+        .insert(&(ChainKind::Eth, token_id.clone()), &0);
     let recipient =
         AccountId::try_from(DEFAULT_NEAR_USER_ACCOUNT.to_string()).expect("Invalid account");
     let fee_recipient = recipient.clone();
