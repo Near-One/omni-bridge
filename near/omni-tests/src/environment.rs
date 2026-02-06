@@ -770,20 +770,6 @@ async fn set_locked_tokens(
                 })
             }).collect::<Vec<_>>()
         }))
-        // .args_json(json!({
-        //     "args": [
-        //         {
-        //             "chain_kind": ChainKind::Eth,
-        //             "token_id": token_id,
-        //             "amount": U128(DEFAULT_LOCKED_TOKENS),
-        //         },
-        //         {
-        //             "chain_kind": ChainKind::Base,
-        //             "token_id": token_id,
-        //             "amount": U128(0),
-        //         }
-        //     ]
-        // }))
         .max_gas()
         .transact()
         .await?
