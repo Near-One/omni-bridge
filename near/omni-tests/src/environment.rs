@@ -310,6 +310,18 @@ impl TestEnvBuilder {
 
         storage_deposit(&token_contract, bridge_contract.id()).await?;
 
+        if !self.deploy_old_version {
+            set_locked_tokens(
+                &bridge_contract,
+                vec![SetLockedTokenArgs {
+                    chain_kind: ChainKind::Base,
+                    token_id: token_contract.id().clone(),
+                    amount: U128(0),
+                }],
+            )
+            .await?;
+        }
+
         Ok(TestEnvBuilderWithToken {
             worker: self.worker,
             bridge_contract,
