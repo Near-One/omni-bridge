@@ -33,7 +33,7 @@ pub use errors::{
 };
 
 #[near(serializers = [borsh])]
-#[derive(Debug, Clone, Hash, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
 pub struct H160(pub [u8; 20]);
 
 impl FromStr for H160 {

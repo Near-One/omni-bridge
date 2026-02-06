@@ -47,6 +47,8 @@ contract OmniBridge is
     mapping(address => address) public customMinters;
     mapping(address => MultiTokenInfo) public multiTokens;
 
+    mapping(uint64 => bytes32) internal _initiatedTransfers;
+
     bytes32 public constant PAUSABLE_ADMIN_ROLE =
         keccak256("PAUSABLE_ADMIN_ROLE");
     uint256 constant UNPAUSED_ALL = 0;
@@ -374,6 +376,18 @@ contract OmniBridge is
         string calldata message
     ) external payable whenNotPaused(PAUSED_INIT_TRANSFER) {
         currentOriginNonce += 1;
+
+        recordInitiatedTransfer(
+            msg.sender,
+            tokenAddress,
+            currentOriginNonce,
+            amount,
+            fee,
+            nativeFee,
+            recipient,
+            message
+        );
+
         if (fee >= amount) {
             revert InvalidFee();
         }
@@ -441,14 +455,26 @@ contract OmniBridge is
         string calldata message
     ) external payable whenNotPaused(PAUSED_INIT_TRANSFER) {
         currentOriginNonce += 1;
-        if (fee >= amount) {
-            revert InvalidFee();
-        }
 
         address deterministicToken = deriveDeterministicAddress(
             tokenAddress,
             tokenId
         );
+
+        recordInitiatedTransfer(
+            msg.sender,
+            deterministicToken,
+            currentOriginNonce,
+            amount,
+            fee,
+            nativeFee,
+            recipient,
+            message
+        );
+
+        if (fee >= amount) {
+            revert InvalidFee();
+        }
 
         IERC1155(tokenAddress).safeTransferFrom(
             msg.sender,
@@ -483,6 +509,17 @@ contract OmniBridge is
             message
         );
     }
+
+    function recordInitiatedTransfer(
+        address /*sender*/,
+        address /*tokenAddress*/,
+        uint64 /*originNonce*/,
+        uint128 /*amount*/,
+        uint128 /*fee*/,
+        uint128 /*nativeFee*/,
+        string calldata /*recipient*/,
+        string calldata /*message*/
+    ) internal virtual {}
 
     function initTransferExtension(
         address /*sender*/,
@@ -588,5 +625,5 @@ contract OmniBridge is
         address newImplementation
     ) internal override onlyRole(DEFAULT_ADMIN_ROLE) {}
 
-    uint256[49] private __gap;
+    uint256[48] private __gap;
 }
