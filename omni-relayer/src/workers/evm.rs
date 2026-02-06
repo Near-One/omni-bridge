@@ -287,6 +287,7 @@ pub async fn process_evm_transfer_event(
         tx_hash: transaction_hash,
         creation_timestamp,
         expected_finalization_time,
+        transfer_id,
     } = fin_transfer
     else {
         anyhow::bail!("Expected Evm FinTransfer, got: {fin_transfer:?}");
@@ -299,6 +300,18 @@ pub async fn process_evm_transfer_event(
     }
 
     info!("Processing FinTransfer ({chain_kind:?}): {transaction_hash:?}");
+
+    match omni_connector.near_get_transfer_message(transfer_id).await {
+        Ok(transfer_message) if transfer_message.fee.is_zero() => {
+            info!("No fee to claim for FinTransfer ({transfer_id:?})");
+            return Ok(EventAction::Remove);
+        }
+        Ok(_) => {}
+        Err(err) => {
+            warn!("Failed to get transfer message for FinTransfer ({transfer_id:?}): {err:?}",);
+            return Ok(EventAction::Retry);
+        }
+    }
 
     let vaa = if chain_kind == ChainKind::Eth {
         None

@@ -1,3 +1,5 @@
+enable_orchard = true
+
 [redis]
 url = "redis://127.0.0.1/"
 sleep_time_after_events_process_secs = 1
@@ -151,6 +153,9 @@ light_client = "zcash-client.n-bridge.testnet"
 signing_enabled = true
 # If this is set to true, then omni relayer will call `verify_withdraw`
 verifying_withdraw_enabled = true
+
+[orchard]
+enabled = true
 
 [wormhole]
 api_url = "https://api.testnet.wormholescan.io/"

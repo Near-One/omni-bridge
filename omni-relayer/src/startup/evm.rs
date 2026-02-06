@@ -334,11 +334,19 @@ async fn process_log(
             )
             .await;
         }
-    } else if log.log_decode::<utils::evm::FinTransfer>().is_ok() {
+    } else if let Ok(event) = log.log_decode::<utils::evm::FinTransfer>() {
         info!("Received FinTransfer on {chain_kind:?} ({tx_hash:?})");
 
         let tx_hash_str = tx_hash.to_string();
         let key = utils::redis::composite_key(&[&tx_hash_str, &log_index_str]);
+
+        let origin_chain = match event.data().originChain.try_into() {
+            Ok(chain) => chain,
+            Err(err) => {
+                warn!("Failed to parse origin chain in FinTransfer log: {err:?}");
+                return;
+            }
+        };
 
         utils::redis::add_event(
             config,
@@ -350,6 +358,10 @@ async fn process_log(
                 tx_hash,
                 creation_timestamp: timestamp,
                 expected_finalization_time,
+                transfer_id: TransferId {
+                    origin_chain,
+                    origin_nonce: event.data().originNonce,
+                },
             }),
         )
         .await;

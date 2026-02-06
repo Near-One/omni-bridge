@@ -1,10 +1,10 @@
-use near_sdk::borsh;
 use near_sdk::json_types::U128;
 use near_sdk::serde_json;
+use near_sdk::{borsh, NearToken};
 
 use crate::{
-    stringify, ChainKind, DestinationChainMsg, Fee, OmniAddress, PayloadType, SolAddress,
-    TransferId, TransferMessage, H160,
+    stringify, BridgeError, ChainKind, DestinationChainMsg, Fee, OmniAddress, OmniError,
+    PayloadType, SolAddress, StorageBalanceError, TransferId, TransferMessage, TypesError, H160,
 };
 use std::str::FromStr;
 
@@ -141,11 +141,11 @@ fn test_h160_from_str() {
 
     let invalid_hex = "0xnot_a_hex_string";
     let err = H160::from_str(invalid_hex).expect_err("Should fail with invalid hex");
-    assert!(err.contains("ERR_INVALIDE_HEX"), "Error was: {err}");
+    assert_eq!(err, TypesError::InvalidHex);
 
     let short_addr = "0x5a08";
     let err = H160::from_str(short_addr).expect_err("Should fail with invalid length");
-    assert!(err.contains("Invalid length:"), "Error was: {err}");
+    assert_eq!(err, TypesError::InvalidHexLength);
 }
 
 #[test]
@@ -197,8 +197,8 @@ fn test_h160_deserialization() {
     assert!(result.is_err(), "Should fail with invalid hex");
     let err = result.unwrap_err().to_string();
     assert!(
-        err.contains("ERR_INVALIDE_HEX"),
-        "Error was: {err} but expected ERR_INVALIDE_HEX"
+        err.contains("ERR_INVALID_HEX"),
+        "Error was: {err} but expected ERR_INVALID_HEX"
     );
 
     let json = r#""0x5a08""#;
@@ -206,8 +206,8 @@ fn test_h160_deserialization() {
     assert!(result.is_err(), "Should fail with invalid length");
     let err = result.unwrap_err().to_string();
     assert!(
-        err.contains("Invalid length"),
-        "Error was: {err} but expected Invalid length"
+        err.contains("ERR_INVALID_HEX_LENGTH"),
+        "Error was: {err} but expected ERR_INVALID_HEX_LENGTH"
     );
 
     let json = "123";
@@ -323,7 +323,7 @@ fn test_omni_address_from_str() {
         ),
         (
             "invalid_format".to_string(),
-            Err("ERR_INVALIDE_HEX".to_string()),
+            Err("ERR_INVALID_HEX".to_string()),
             "Should fail on missing chain prefix",
         ),
         (
@@ -581,4 +581,44 @@ fn test_deserialize_destination_chain_msg() {
     let deserialized: DestinationChainMsg = serde_json::from_str(serialized_msg).unwrap();
     let original = DestinationChainMsg::DestHexMsg(hex::decode("abff").unwrap());
     assert_eq!(original, deserialized);
+}
+
+#[test]
+fn test_errors_serialization() {
+    assert_eq!(
+        BridgeError::InvalidAttachedDeposit.as_ref(),
+        "ERR_INVALID_ATTACHED_DEPOSIT"
+    );
+    assert_eq!(
+        BridgeError::InvalidAttachedDeposit.to_string(),
+        "ERR_INVALID_ATTACHED_DEPOSIT"
+    );
+    assert_eq!(
+        OmniError::Bridge(BridgeError::InvalidAttachedDeposit).to_string(),
+        "ERR_INVALID_ATTACHED_DEPOSIT"
+    );
+    assert_eq!(
+        StorageBalanceError::AccountNotRegistered("near".parse().unwrap()).as_ref(),
+        "ERR_ACCOUNT_NOT_REGISTERED: field1=near"
+    );
+    assert_eq!(
+        StorageBalanceError::AccountNotRegistered("near".parse().unwrap()).to_string(),
+        "ERR_ACCOUNT_NOT_REGISTERED: field1=near"
+    );
+    assert_eq!(
+        StorageBalanceError::NotEnoughStorage {
+            required: NearToken::from_near(100),
+            available: NearToken::from_near(50),
+        }
+        .as_ref(),
+        "ERR_NOT_ENOUGH_STORAGE: required=100.00 NEAR, available=50.00 NEAR"
+    );
+    assert_eq!(
+        StorageBalanceError::NotEnoughStorage {
+            required: NearToken::from_near(100),
+            available: NearToken::from_near(50),
+        }
+        .to_string(),
+        "ERR_NOT_ENOUGH_STORAGE: required=100.00 NEAR, available=50.00 NEAR"
+    );
 }
