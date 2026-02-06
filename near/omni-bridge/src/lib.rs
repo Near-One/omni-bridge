@@ -2325,8 +2325,6 @@ impl Contract {
         );
         self.deployed_tokens_v2
             .insert(&token_id, &token_address.get_chain());
-        self.locked_tokens
-            .insert(&(token_address.get_chain(), token_id.clone()), &0);
 
         let required_deposit = env::storage_byte_cost()
             .saturating_mul((env::storage_usage().saturating_sub(storage_usage)).into())
