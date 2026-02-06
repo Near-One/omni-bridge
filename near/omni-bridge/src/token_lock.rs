@@ -119,7 +119,10 @@ impl Contract {
         token_id: &AccountId,
         amount: u128,
     ) -> LockAction {
-        if self.get_token_origin_chain(token_id) == chain_kind || amount == 0 {
+        if !self.is_locked_tokens_enabled_chain(chain_kind)
+            || self.get_token_origin_chain(token_id) == chain_kind
+            || amount == 0
+        {
             return LockAction::Unchanged;
         }
 
@@ -132,7 +135,10 @@ impl Contract {
         token_id: &AccountId,
         amount: u128,
     ) -> LockAction {
-        if self.get_token_origin_chain(token_id) == chain_kind || amount == 0 {
+        if !self.is_locked_tokens_enabled_chain(chain_kind)
+            || self.get_token_origin_chain(token_id) == chain_kind
+            || amount == 0
+        {
             return LockAction::Unchanged;
         }
 
