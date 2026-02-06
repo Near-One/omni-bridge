@@ -2,7 +2,7 @@ use near_sdk::{AccountId, NearToken};
 use omni_utils::ErrorDisplay;
 use strum_macros::AsRefStr;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, AsRefStr, ErrorDisplay)]
+#[derive(Debug, Clone, PartialEq, Eq, AsRefStr, ErrorDisplay)]
 #[strum(serialize_all = "shouty_snake_case", prefix = "ERR_")]
 #[non_exhaustive]
 pub enum BridgeError {
@@ -64,7 +64,7 @@ pub enum BridgeError {
     UtxoTransferAlreadyFinalised,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, AsRefStr, ErrorDisplay)]
+#[derive(Debug, Clone, PartialEq, Eq, AsRefStr, ErrorDisplay)]
 #[strum(serialize_all = "shouty_snake_case", prefix = "ERR_")]
 #[non_exhaustive]
 pub enum TokenLockError {
@@ -72,7 +72,7 @@ pub enum TokenLockError {
     InsufficientLockedTokens,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, AsRefStr, ErrorDisplay)]
+#[derive(Debug, Clone, PartialEq, Eq, AsRefStr, ErrorDisplay)]
 #[strum(serialize_all = "shouty_snake_case", prefix = "ERR_")]
 #[non_exhaustive]
 pub enum StorageError {
@@ -91,7 +91,7 @@ pub enum StorageError {
     SignerNotRegistered,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, AsRefStr, ErrorDisplay)]
+#[derive(Debug, Clone, PartialEq, Eq, AsRefStr, ErrorDisplay)]
 #[strum(serialize_all = "shouty_snake_case", prefix = "ERR_")]
 #[non_exhaustive]
 pub enum TokenError {
@@ -103,7 +103,7 @@ pub enum TokenError {
     NoStateToMigrate,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, AsRefStr, ErrorDisplay)]
+#[derive(Debug, Clone, PartialEq, Eq, AsRefStr, ErrorDisplay)]
 #[strum(serialize_all = "shouty_snake_case", prefix = "ERR_")]
 #[non_exhaustive]
 pub enum ProverError {
@@ -113,7 +113,7 @@ pub enum ProverError {
     ParseArgs,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, AsRefStr, ErrorDisplay)]
+#[derive(Debug, Clone, PartialEq, Eq, AsRefStr, ErrorDisplay)]
 #[strum(serialize_all = "shouty_snake_case", prefix = "ERR_")]
 #[non_exhaustive]
 pub enum TypesError {
