@@ -9,6 +9,7 @@ use near_sdk::{
     env, near, require, serde_json, AccountId, Gas, Promise, PromiseError, PromiseOrValue,
 };
 use omni_types::btc::{TokenReceiverMessage, TxOut, UTXOChainConfig};
+use omni_types::errors::BridgeError;
 use omni_types::{ChainKind, Fee, OmniAddress, TransferId, TransferMessage};
 
 const SUBMIT_TRANSFER_TO_BTC_CONNECTOR_CALLBACK_GAS: Gas = Gas::from_tgas(5);
@@ -46,7 +47,7 @@ impl Contract {
             {
                 require!(
                     btc_address == target_btc_address,
-                    "Incorrect target address"
+                    BridgeError::IncorrectTargetUtxoAddress.as_ref()
                 );
 
                 if !transfer.message.msg.is_empty() {
@@ -57,7 +58,7 @@ impl Contract {
                     require!(
                         max_gas_fee.expect("max_gas_fee is missing").0
                             == max_gas_fee_from_msg.0.into(),
-                        "Invalid max gas fee"
+                        BridgeError::InvalidMaxGasFee.as_ref()
                     );
                 }
             } else {
@@ -68,14 +69,17 @@ impl Contract {
         }
 
         if let Some(fee) = &fee {
-            require!(&transfer.message.fee == fee, "Invalid fee");
+            require!(
+                &transfer.message.fee == fee,
+                BridgeError::InvalidFee.as_ref()
+            );
         }
 
         let chain_kind = transfer.message.get_destination_chain();
         let btc_account_id = self.get_utxo_chain_token(chain_kind);
         require!(
             self.get_token_id(&transfer.message.token) == btc_account_id,
-            "Only the native token of this UTXO chain can be transferred."
+            BridgeError::NativeTokenRequiredForChain.as_ref()
         );
 
         self.remove_transfer_message(transfer_id);
@@ -124,8 +128,9 @@ impl Contract {
         decimals: u8,
     ) {
         let storage_usage = env::storage_usage();
-        let token_address = OmniAddress::new_zero(chain_kind)
-            .unwrap_or_else(|_| env::panic_str("ERR_FAILED_TO_GET_ZERO_ADDRESS"));
+        let token_address = OmniAddress::new_zero(chain_kind).unwrap_or_else(|_| {
+            env::panic_str(BridgeError::FailedToGetZeroAddress.to_string().as_str())
+        });
 
         self.add_token(&utxo_chain_token_id, &token_address, decimals, decimals);
 
@@ -144,7 +149,7 @@ impl Contract {
 
         require!(
             env::attached_deposit() >= required_deposit,
-            "ERROR: The deposit is not sufficient to cover the storage."
+            BridgeError::InsufficientStorageDeposit.as_ref()
         );
 
         ext_token::ext(utxo_chain_token_id)
