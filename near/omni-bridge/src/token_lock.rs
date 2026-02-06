@@ -52,7 +52,9 @@ impl Contract {
         amount: u128,
     ) -> LockAction {
         let key = (chain_kind, token_id.clone());
-        let current_amount = self.locked_tokens.get(&key).unwrap_or(0);
+        let Some(current_amount) = self.locked_tokens.get(&key) else {
+            return LockAction::Unchanged;
+        };
         let new_amount = current_amount
             .checked_add(amount)
             .near_expect(TokenLockError::LockedTokensOverflow);
@@ -73,7 +75,9 @@ impl Contract {
         amount: u128,
     ) -> LockAction {
         let key = (chain_kind, token_id.clone());
-        let available = self.locked_tokens.get(&key).unwrap_or(0);
+        let Some(available) = self.locked_tokens.get(&key) else {
+            return LockAction::Unchanged;
+        };
         require!(
             available >= amount,
             TokenLockError::InsufficientLockedTokens.as_ref()

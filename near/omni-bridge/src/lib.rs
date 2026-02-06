@@ -1220,6 +1220,14 @@ impl Contract {
             deploy_token.origin_decimals,
         );
 
+        self.locked_tokens.insert(
+            &(
+                deploy_token.token_address.get_chain(),
+                deploy_token.token.clone(),
+            ),
+            &0,
+        );
+
         let required_deposit = env::storage_byte_cost()
             .saturating_mul((env::storage_usage().saturating_sub(storage_usage)).into());
 
@@ -2314,6 +2322,8 @@ impl Contract {
         );
         self.deployed_tokens_v2
             .insert(&token_id, &token_address.get_chain());
+        self.locked_tokens
+            .insert(&(token_address.get_chain(), token_id.clone()), &0);
 
         let required_deposit = env::storage_byte_cost()
             .saturating_mul((env::storage_usage().saturating_sub(storage_usage)).into())
@@ -2339,7 +2349,7 @@ impl Contract {
             .deploy_token(token_id.clone(), metadata)
             .then(
                 Self::ext(env::current_account_id())
-                    .deploy_token_by_deployer_callback(token_address, token_id.clone()),
+                    .deploy_token_by_deployer_callback(token_address, token_id),
             )
     }
 
