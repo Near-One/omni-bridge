@@ -5,7 +5,10 @@ use bridge_connector_common::result::{BridgeSdkError, EthRpcError};
 use tracing::{info, warn};
 
 use near_bridge_client::{NearBridgeClient, TransactionOptions};
-use near_jsonrpc_client::errors::JsonRpcError;
+use near_jsonrpc_client::{
+    errors::{JsonRpcError, JsonRpcServerError},
+    methods::query::RpcQueryError,
+};
 use near_primitives::views::TxExecutionStatus;
 use near_rpc_client::NearRpcError;
 
@@ -301,15 +304,16 @@ pub async fn process_evm_transfer_event(
 
     info!("Processing FinTransfer ({chain_kind:?}): {transaction_hash:?}");
 
-    match omni_connector.near_get_transfer_message(transfer_id).await {
-        Ok(transfer_message) if transfer_message.fee.is_zero() => {
+    if let Err(BridgeSdkError::NearRpcError(NearRpcError::RpcQueryError(
+        JsonRpcError::ServerError(JsonRpcServerError::HandlerError(
+            RpcQueryError::ContractExecutionError { vm_error, .. },
+        )),
+    ))) = omni_connector.near_get_transfer_message(transfer_id).await
+    {
+        // TODO: refactor when enum errors will become available on mainnet
+        if vm_error.contains("The transfer does not exist") {
             info!("No fee to claim for FinTransfer ({transfer_id:?})");
             return Ok(EventAction::Remove);
-        }
-        Ok(_) => {}
-        Err(err) => {
-            warn!("Failed to get transfer message for FinTransfer ({transfer_id:?}): {err:?}",);
-            return Ok(EventAction::Retry);
         }
     }
 
