@@ -38,10 +38,13 @@ jobs:
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@v2
         with:
+          cache-provider: warpbuild
+          shared-key: "rust-lint"
           workspaces: |
             near
             omni-relayer
           cache-on-failure: true
+          cache-all-crates: true
 
       - name: Install cargo-near
         run: |
@@ -75,11 +78,14 @@ jobs:
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@v2
         with:
+          cache-provider: warpbuild
+          shared-key: "rust-build-test"
           workspaces: |
             near
             omni-relayer
           cache-on-failure: true
-          
+          cache-all-crates: true
+
       - name: Install cargo-near
         run: |
           curl --proto '=https' --tlsv1.2 -LsSf https://github.com/near/cargo-near/releases/latest/download/cargo-near-installer.sh | sh

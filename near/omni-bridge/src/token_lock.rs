@@ -1,6 +1,7 @@
 use near_plugins::{access_control_any, AccessControllable};
-use near_sdk::{env, json_types::U128, near, require, AccountId};
-use omni_types::ChainKind;
+use near_sdk::{json_types::U128, near, require, AccountId};
+use omni_types::{errors::TokenLockError, ChainKind};
+use omni_utils::near_expect::NearExpect;
 
 use crate::{Contract, ContractExt, Role};
 
@@ -74,7 +75,7 @@ impl Contract {
         let current_amount = self.locked_tokens.get(&key).unwrap_or(0);
         let new_amount = current_amount
             .checked_add(amount)
-            .unwrap_or_else(|| env::panic_str("ERR_LOCKED_TOKENS_OVERFLOW"));
+            .near_expect(TokenLockError::LockedTokensOverflow);
 
         self.locked_tokens.insert(&key, &new_amount);
 
@@ -93,7 +94,10 @@ impl Contract {
     ) -> LockAction {
         let key = (chain_kind, token_id.clone());
         let available = self.locked_tokens.get(&key).unwrap_or(0);
-        require!(available >= amount, "ERR_INSUFFICIENT_LOCKED_TOKENS");
+        require!(
+            available >= amount,
+            TokenLockError::InsufficientLockedTokens.as_ref()
+        );
 
         let remaining = available - amount;
         if remaining == 0 {
@@ -109,84 +113,17 @@ impl Contract {
         }
     }
 
-    pub fn lock_nep141_tokens_if_needed(
-        &mut self,
-        chain_kind: ChainKind,
-        token_id: &AccountId,
-        amount: u128,
-    ) -> LockAction {
-        if !self.is_locked_tokens_enabled_chain(chain_kind)
-            || self.is_deployed_token(token_id)
-            || chain_kind.is_utxo_chain()
-            || amount == 0
-        {
-            return LockAction::Unchanged;
-        }
-
-        self.lock_tokens(chain_kind, token_id, amount)
-    }
-
-    pub fn unlock_nep141_tokens_if_needed(
-        &mut self,
-        chain_kind: ChainKind,
-        token_id: &AccountId,
-        amount: u128,
-    ) -> LockAction {
-        if !self.is_locked_tokens_enabled_chain(chain_kind)
-            || self.is_deployed_token(token_id)
-            || chain_kind.is_utxo_chain()
-            || amount == 0
-        {
-            return LockAction::Unchanged;
-        }
-
-        self.unlock_tokens(chain_kind, token_id, amount)
-    }
-
-    pub fn lock_other_tokens_if_needed(
-        &mut self,
-        chain_kind: ChainKind,
-        token_id: &AccountId,
-        amount: u128,
-    ) -> LockAction {
-        if !self.is_locked_tokens_enabled_chain(chain_kind)
-            || !self.is_deployed_token(token_id)
-            || self.get_token_origin_chain(token_id) == chain_kind
-            || amount == 0
-        {
-            return LockAction::Unchanged;
-        }
-
-        self.lock_tokens(chain_kind, token_id, amount)
-    }
-
-    pub fn unlock_other_tokens_if_needed(
-        &mut self,
-        chain_kind: ChainKind,
-        token_id: &AccountId,
-        amount: u128,
-    ) -> LockAction {
-        if !self.is_locked_tokens_enabled_chain(chain_kind)
-            || !self.is_deployed_token(token_id)
-            || self.get_token_origin_chain(token_id) == chain_kind
-            || amount == 0
-        {
-            return LockAction::Unchanged;
-        }
-
-        self.unlock_tokens(chain_kind, token_id, amount)
-    }
-
     pub fn lock_tokens_if_needed(
         &mut self,
         chain_kind: ChainKind,
         token_id: &AccountId,
         amount: u128,
-    ) -> [LockAction; 2] {
-        [
-            self.lock_nep141_tokens_if_needed(chain_kind, token_id, amount),
-            self.lock_other_tokens_if_needed(chain_kind, token_id, amount),
-        ]
+    ) -> LockAction {
+        if self.get_token_origin_chain(token_id) == chain_kind || amount == 0 {
+            return LockAction::Unchanged;
+        }
+
+        self.lock_tokens(chain_kind, token_id, amount)
     }
 
     pub fn unlock_tokens_if_needed(
@@ -194,11 +131,12 @@ impl Contract {
         chain_kind: ChainKind,
         token_id: &AccountId,
         amount: u128,
-    ) -> [LockAction; 2] {
-        [
-            self.unlock_nep141_tokens_if_needed(chain_kind, token_id, amount),
-            self.unlock_other_tokens_if_needed(chain_kind, token_id, amount),
-        ]
+    ) -> LockAction {
+        if self.get_token_origin_chain(token_id) == chain_kind || amount == 0 {
+            return LockAction::Unchanged;
+        }
+
+        self.unlock_tokens(chain_kind, token_id, amount)
     }
 
     pub fn revert_lock_actions(&mut self, lock_actions: &[LockAction]) {

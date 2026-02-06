@@ -401,7 +401,7 @@ mod tests {
                 msg: String::default(),
             },
             is_fast_transfer: false,
-            error: Some("recipient is omitted"),
+            error: Some("ERR_STORAGE_RECIPIENT_OMITTED"),
         }
     )]
     #[tokio::test]

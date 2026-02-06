@@ -9,7 +9,7 @@ use crate::state::message::{
     Payload,
 };
 use anchor_lang::prelude::*;
-use anchor_lang::solana_program::hash::hash;
+use solana_program::hash::hash;
 use anchor_spl::metadata::mpl_token_metadata::types::DataV2;
 use anchor_spl::metadata::{
     create_metadata_accounts_v3, CreateMetadataAccountsV3, Metadata as Metaplex, ID as MetaplexID,

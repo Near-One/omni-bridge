@@ -112,38 +112,38 @@ mod tests {
         ],
         1000,
         1,
-        Some("Invalid len of accounts for storage deposit")
+        Some("ERR_INVALID_STORAGE_ACCOUNTS_LEN")
     )]
     #[case(
         vec![(relayer_account_id(), true), (account_n(1), true)],
         1000,
         1,
-        Some("STORAGE_ERR: The transfer recipient is omitted")
+        Some("ERR_STORAGE_RECIPIENT_OMITTED")
     )]
     #[case(
         vec![(account_n(1), true)],
         1000,
         1,
-        Some("STORAGE_ERR: The fee recipient is omitted")
+        Some("ERR_STORAGE_FEE_RECIPIENT_OMITTED")
     )]
-    #[case(vec![], 1000, 1, Some("STORAGE_ERR: The transfer recipient is omitted"))]
+    #[case(vec![], 1000, 1, Some("ERR_STORAGE_RECIPIENT_OMITTED"))]
     #[case(
         vec![(account_n(1), false), (relayer_account_id(), false)],
         1000,
         1,
-        Some("STORAGE_ERR: The transfer recipient is omitted")
+        Some("ERR_STORAGE_RECIPIENT_OMITTED")
     )]
     #[case(
         vec![(account_n(1), true), (relayer_account_id(), false)],
         1000,
         1,
-        Some("STORAGE_ERR: The fee recipient is omitted")
+        Some("ERR_STORAGE_FEE_RECIPIENT_OMITTED")
     )]
     #[case(
         vec![(account_n(1), false), (relayer_account_id(), true)],
         1000,
         1,
-        Some("STORAGE_ERR: The transfer recipient is omitted")
+        Some("ERR_STORAGE_RECIPIENT_OMITTED")
     )]
     #[tokio::test]
     async fn test_storage_deposit_on_fin_transfer(
