@@ -84,11 +84,7 @@ impl Contract {
         );
 
         let remaining = available - amount;
-        if remaining == 0 {
-            self.locked_tokens.remove(&key);
-        } else {
-            self.locked_tokens.insert(&key, &remaining);
-        }
+        self.locked_tokens.insert(&key, &remaining);
 
         LockAction::Unlocked {
             chain_kind,
