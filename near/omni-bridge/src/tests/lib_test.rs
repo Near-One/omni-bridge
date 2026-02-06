@@ -861,7 +861,6 @@ fn test_fin_transfer_callback_non_near_success() {
 }
 
 #[test]
-<<<<<<< HEAD
 fn test_claim_fee_decreases_locked_tokens_for_non_deployed_token() {
     let mut contract = get_default_contract();
     let token_id = AccountId::try_from(DEFAULT_FT_CONTRACT_ACCOUNT.to_string()).unwrap();
@@ -940,10 +939,7 @@ fn test_claim_fee_decreases_locked_tokens_for_non_deployed_token() {
 }
 
 #[test]
-#[should_panic(expected = "Invalid proof message")]
-=======
 #[should_panic(expected = "ERR_INVALID_PROOF")]
->>>>>>> origin/main
 fn test_fin_transfer_callback_invalid_proof() {
     let mut contract = get_default_contract();
     let storage_actions = get_default_storage_deposit_actions();
