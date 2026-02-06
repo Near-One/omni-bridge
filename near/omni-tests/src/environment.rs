@@ -23,6 +23,12 @@ use crate::helpers::tests::{
 const PREV_LOCKER_WASM_FILEPATH: &str = "src/data/omni_bridge-0_4_3.wasm";
 const DEFAULT_LOCKED_TOKENS: u128 = 1_000_000_000_000_000_000_000_000_000_000;
 
+struct SetLockedTokenArgs {
+    chain_kind: ChainKind,
+    token_id: AccountId,
+    amount: U128,
+}
+
 pub struct BridgeToken {
     pub is_deployed: bool,
     pub contract: Contract,
@@ -87,7 +93,22 @@ impl TestEnvBuilder {
         storage_deposit(&token_contract, bridge_contract.id()).await?;
 
         if !self.deploy_old_version {
-            seed_locked_tokens(&bridge_contract, token_contract.id()).await?;
+            set_locked_tokens(
+                &bridge_contract,
+                vec![
+                    SetLockedTokenArgs {
+                        chain_kind: ChainKind::Eth,
+                        token_id: token_contract.id().clone(),
+                        amount: U128(DEFAULT_LOCKED_TOKENS),
+                    },
+                    SetLockedTokenArgs {
+                        chain_kind: ChainKind::Base,
+                        token_id: token_contract.id().clone(),
+                        amount: U128(0),
+                    },
+                ],
+            )
+            .await?;
         }
 
         Ok(TestEnvBuilderWithToken {
@@ -132,7 +153,22 @@ impl TestEnvBuilder {
         storage_deposit(&token_contract, bridge_contract.id()).await?;
 
         if !self.deploy_old_version {
-            seed_locked_tokens(&bridge_contract, token_contract.id()).await?;
+            set_locked_tokens(
+                &bridge_contract,
+                vec![
+                    SetLockedTokenArgs {
+                        chain_kind: ChainKind::Eth,
+                        token_id: token_contract.id().clone(),
+                        amount: U128(DEFAULT_LOCKED_TOKENS),
+                    },
+                    SetLockedTokenArgs {
+                        chain_kind: ChainKind::Base,
+                        token_id: token_contract.id().clone(),
+                        amount: U128(0),
+                    },
+                ],
+            )
+            .await?;
         }
 
         Ok(TestEnvBuilderWithToken {
@@ -195,6 +231,18 @@ impl TestEnvBuilder {
             .into_result()?;
 
         storage_deposit(&token_contract, bridge_contract.id()).await?;
+
+        if !self.deploy_old_version {
+            set_locked_tokens(
+                &bridge_contract,
+                vec![SetLockedTokenArgs {
+                    chain_kind: ChainKind::Base,
+                    token_id: token_contract.id().clone(),
+                    amount: U128(0),
+                }],
+            )
+            .await?;
+        }
 
         Ok(TestEnvBuilderWithToken {
             worker: self.worker,
@@ -695,19 +743,35 @@ async fn storage_deposit(token_contract: &Contract, account_id: &AccountId) -> a
     Ok(())
 }
 
-async fn seed_locked_tokens(
+async fn set_locked_tokens(
     bridge_contract: &Contract,
-    token_id: &AccountId,
+    args: Vec<SetLockedTokenArgs>,
 ) -> anyhow::Result<()> {
     bridge_contract
         .call("set_locked_tokens")
         .args_json(json!({
-            "args": [{
-                "chain_kind": ChainKind::Eth,
-                "token_id": token_id,
-                "amount": U128(DEFAULT_LOCKED_TOKENS),
-            }]
+            "args": args.into_iter().map(|arg| {
+                json!({
+                    "chain_kind": arg.chain_kind,
+                    "token_id": arg.token_id,
+                    "amount": arg.amount,
+                })
+            }).collect::<Vec<_>>()
         }))
+        // .args_json(json!({
+        //     "args": [
+        //         {
+        //             "chain_kind": ChainKind::Eth,
+        //             "token_id": token_id,
+        //             "amount": U128(DEFAULT_LOCKED_TOKENS),
+        //         },
+        //         {
+        //             "chain_kind": ChainKind::Base,
+        //             "token_id": token_id,
+        //             "amount": U128(0),
+        //         }
+        //     ]
+        // }))
         .max_gas()
         .transact()
         .await?
