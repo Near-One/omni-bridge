@@ -190,13 +190,13 @@ mod tests {
         build_artifacts: &BuildArtifacts,
     ) -> anyhow::Result<()> {
         let TestSetup {
+            sandbox: _sandbox,
             network,
             token_contract,
             locker_contract,
             relayer_account,
             token_receiver_contract,
             required_balance_for_fin_transfer,
-            ..
         } = setup_contracts(false, is_deployed_token, build_artifacts).await?;
 
         if !is_deployed_token {
