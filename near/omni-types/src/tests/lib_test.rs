@@ -3,8 +3,8 @@ use near_sdk::serde_json;
 use near_sdk::{borsh, NearToken};
 
 use crate::{
-    stringify, BridgeError, ChainKind, Fee, OmniAddress, OmniError, PayloadType, SolAddress,
-    StorageBalanceError, TransferId, TransferMessage, TypesError, H160,
+    stringify, BridgeError, ChainKind, DestinationChainMsg, Fee, OmniAddress, OmniError,
+    PayloadType, SolAddress, StorageBalanceError, TransferId, TransferMessage, TypesError, H160,
 };
 use std::str::FromStr;
 
@@ -568,6 +568,19 @@ fn test_chain_kind_from_str() {
 
     let chain: ChainKind = "Base".parse().unwrap();
     assert_eq!(chain, ChainKind::Base);
+}
+
+#[test]
+fn test_deserialize_destination_chain_msg() {
+    let serialized_msg = r#"{"MaxGasFee":"12345"}"#;
+    let deserialized: DestinationChainMsg = serde_json::from_str(serialized_msg).unwrap();
+    let original = DestinationChainMsg::MaxGasFee(12345.into());
+    assert_eq!(original, deserialized);
+
+    let serialized_msg = r#"{"DestHexMsg":"abff"}"#;
+    let deserialized: DestinationChainMsg = serde_json::from_str(serialized_msg).unwrap();
+    let original = DestinationChainMsg::DestHexMsg(hex::decode("abff").unwrap());
+    assert_eq!(original, deserialized);
 }
 
 #[test]

@@ -3,10 +3,12 @@ use std::string::ToString;
 use borsh::{BorshDeserialize, BorshSerialize};
 use core::fmt;
 use core::str::FromStr;
+
 use hex::FromHex;
-use near_sdk::json_types::U128;
+use near_sdk::json_types::{U128, U64};
 use near_sdk::serde::{Deserialize, Serialize};
-use near_sdk::{near, AccountId};
+use near_sdk::serde_with::hex::Hex;
+use near_sdk::{near, serde_json, AccountId};
 use num_enum::IntoPrimitive;
 use schemars::JsonSchema;
 use serde::de::Visitor;
@@ -623,6 +625,32 @@ pub enum PayloadType {
 
 #[near(serializers=[borsh, json])]
 #[derive(Debug, Clone)]
+pub struct TransferMessagePayloadV1 {
+    pub prefix: PayloadType,
+    pub destination_nonce: Nonce,
+    pub transfer_id: TransferId,
+    pub token_address: OmniAddress,
+    pub amount: U128,
+    pub recipient: OmniAddress,
+    pub fee_recipient: Option<AccountId>,
+}
+
+impl From<TransferMessagePayload> for TransferMessagePayloadV1 {
+    fn from(payload: TransferMessagePayload) -> Self {
+        Self {
+            prefix: payload.prefix,
+            destination_nonce: payload.destination_nonce,
+            transfer_id: payload.transfer_id,
+            token_address: payload.token_address,
+            amount: payload.amount,
+            recipient: payload.recipient,
+            fee_recipient: payload.fee_recipient,
+        }
+    }
+}
+
+#[near(serializers=[borsh, json])]
+#[derive(Debug, Clone)]
 pub struct TransferMessagePayload {
     pub prefix: PayloadType,
     pub destination_nonce: Nonce,
@@ -631,6 +659,18 @@ pub struct TransferMessagePayload {
     pub amount: U128,
     pub recipient: OmniAddress,
     pub fee_recipient: Option<AccountId>,
+    #[serde(default)]
+    pub message: Vec<u8>,
+}
+
+impl TransferMessagePayload {
+    pub fn encode_hashable(&self) -> Result<Vec<u8>, String> {
+        if self.message.is_empty() {
+            borsh::to_vec(&TransferMessagePayloadV1::from(self.clone())).map_err(stringify)
+        } else {
+            borsh::to_vec(self).map_err(stringify)
+        }
+    }
 }
 
 #[near(serializers = [borsh, json])]
@@ -844,4 +884,33 @@ pub struct FastTransferStatus {
     pub finalised: bool,
     pub relayer: AccountId,
     pub storage_owner: AccountId,
+}
+
+#[near(serializers=[json])]
+#[derive(Debug, PartialEq)]
+pub enum DestinationChainMsg {
+    MaxGasFee(U64),
+    DestHexMsg(#[serde_as(as = "Hex")] Vec<u8>),
+}
+
+impl DestinationChainMsg {
+    pub fn max_gas_fee(&self) -> Option<U128> {
+        if let Self::MaxGasFee(fee) = self {
+            Some(U128(fee.0.into()))
+        } else {
+            None
+        }
+    }
+
+    pub fn destination_msg(&self) -> Option<Vec<u8>> {
+        if let Self::DestHexMsg(msg) = self {
+            Some(msg.clone())
+        } else {
+            None
+        }
+    }
+
+    pub fn from_json(s: &str) -> Option<Self> {
+        serde_json::from_str(s).ok()
+    }
 }

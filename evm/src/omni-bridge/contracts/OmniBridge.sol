@@ -13,6 +13,7 @@ import {IERC1155} from "@openzeppelin/contracts/token/ERC1155/IERC1155.sol";
 import {IERC1155Receiver} from "@openzeppelin/contracts/token/ERC1155/IERC1155Receiver.sol";
 import {IERC165} from "@openzeppelin/contracts/utils/introspection/IERC165.sol";
 import {ICustomMinter} from "../../common/ICustomMinter.sol";
+import {IBridgeToken} from "../../common/IBridgeToken.sol";
 
 import "./BridgeToken.sol";
 import "./SelectivePausableUpgradable.sol";
@@ -295,7 +296,10 @@ contract OmniBridge is
                 : bytes.concat(
                     bytes("\x01"),
                     Borsh.encodeString(payload.feeRecipient)
-                )
+                ),
+            bytes(payload.message).length == 0
+                ? bytes("")
+                : Borsh.encodeBytes(payload.message)
         );
         bytes32 hashed = keccak256(borshEncoded);
 
@@ -326,10 +330,18 @@ contract OmniBridge is
                 payload.amount
             );
         } else if (isBridgeToken[payload.tokenAddress]) {
-            BridgeToken(payload.tokenAddress).mint(
-                payload.recipient,
-                payload.amount
-            );
+            if (payload.message.length == 0) {
+                IBridgeToken(payload.tokenAddress).mint(
+                    payload.recipient,
+                    payload.amount
+                );
+            } else {
+                IBridgeToken(payload.tokenAddress).mint(
+                    payload.recipient,
+                    payload.amount,
+                    payload.message
+                );
+            }
         } else {
             IERC20(payload.tokenAddress).safeTransfer(
                 payload.recipient,

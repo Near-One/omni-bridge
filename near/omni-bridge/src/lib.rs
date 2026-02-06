@@ -25,10 +25,10 @@ use omni_types::mpc_types::SignatureResponse;
 use omni_types::near_events::OmniBridgeEvent;
 use omni_types::prover_result::ProverResult;
 use omni_types::{
-    BasicMetadata, BridgeOnTransferMsg, ChainKind, FastFinTransferMsg, FastTransfer,
-    FastTransferId, FastTransferStatus, Fee, InitTransferMsg, MetadataPayload, Nonce, OmniAddress,
-    PayloadType, SignRequest, TransferId, TransferIdKind, TransferMessage, TransferMessagePayload,
-    UnifiedTransferId, UpdateFee, UtxoFinTransferMsg, H160,
+    BasicMetadata, BridgeOnTransferMsg, ChainKind, DestinationChainMsg, FastFinTransferMsg,
+    FastTransfer, FastTransferId, FastTransferStatus, Fee, InitTransferMsg, MetadataPayload, Nonce,
+    OmniAddress, PayloadType, SignRequest, TransferId, TransferIdKind, TransferMessage,
+    TransferMessagePayload, UnifiedTransferId, UpdateFee, UtxoFinTransferMsg, H160,
 };
 use omni_utils::near_expect::NearExpect;
 use omni_utils::promise::PromiseOrPromiseIndexOrValue;
@@ -455,6 +455,10 @@ impl Contract {
             BridgeError::InvalidAmountToTransfer.as_ref()
         );
 
+        let message = DestinationChainMsg::from_json(&transfer_message.msg)
+            .and_then(|s| s.destination_msg())
+            .unwrap_or_default();
+
         let transfer_payload = TransferMessagePayload {
             prefix: PayloadType::TransferMessage,
             destination_nonce: transfer_message.destination_nonce,
@@ -463,10 +467,13 @@ impl Contract {
             amount: U128(amount_to_transfer),
             recipient: transfer_message.recipient,
             fee_recipient,
+            message,
         };
 
         let payload = near_sdk::env::keccak256_array(
-            borsh::to_vec(&transfer_payload).near_expect(BridgeError::Borsh),
+            transfer_payload
+                .encode_hashable()
+                .near_expect(BridgeError::Borsh),
         );
 
         ext_signer::ext(self.mpc_signer.clone())
