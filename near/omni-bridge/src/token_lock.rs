@@ -35,31 +35,11 @@ impl Contract {
         U128(self.locked_tokens.get(&(chain_kind, token_id)).unwrap_or(0))
     }
 
-    #[must_use]
-    pub fn is_locked_tokens_enabled_chain(&self, chain_kind: ChainKind) -> bool {
-        self.locked_tokens_enabled_chains.contains(&chain_kind)
-    }
-
-    #[access_control_any(roles(Role::DAO))]
-    pub fn add_locked_tokens_enabled_chain(&mut self, chain_kind: ChainKind) {
-        self.locked_tokens_enabled_chains.insert(&chain_kind);
-    }
-
-    #[access_control_any(roles(Role::DAO))]
-    pub fn remove_locked_tokens_enabled_chain(&mut self, chain_kind: ChainKind) {
-        self.locked_tokens_enabled_chains.remove(&chain_kind);
-    }
-
-    #[access_control_any(roles(Role::DAO))]
-    pub fn set_locked_token(&mut self, args: SetLockedTokenArgs) {
-        self.locked_tokens
-            .insert(&(args.chain_kind, args.token_id), &args.amount.0);
-    }
-
     #[access_control_any(roles(Role::DAO))]
     pub fn set_locked_tokens(&mut self, args: Vec<SetLockedTokenArgs>) {
         for arg in args {
-            self.set_locked_token(arg);
+            self.locked_tokens
+                .insert(&(arg.chain_kind, arg.token_id), &arg.amount.0);
         }
     }
 }
@@ -119,10 +99,7 @@ impl Contract {
         token_id: &AccountId,
         amount: u128,
     ) -> LockAction {
-        if !self.is_locked_tokens_enabled_chain(chain_kind)
-            || self.get_token_origin_chain(token_id) == chain_kind
-            || amount == 0
-        {
+        if self.get_token_origin_chain(token_id) == chain_kind || amount == 0 {
             return LockAction::Unchanged;
         }
 
@@ -135,10 +112,7 @@ impl Contract {
         token_id: &AccountId,
         amount: u128,
     ) -> LockAction {
-        if !self.is_locked_tokens_enabled_chain(chain_kind)
-            || self.get_token_origin_chain(token_id) == chain_kind
-            || amount == 0
-        {
+        if self.get_token_origin_chain(token_id) == chain_kind || amount == 0 {
             return LockAction::Unchanged;
         }
 

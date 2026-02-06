@@ -104,7 +104,6 @@ enum StorageKey {
     FinalisedUtxoTransfers,
     LockedTokens,
     DeployedTokensV2,
-    LockedTokensEnabledChains,
 }
 
 #[derive(AccessControlRole, Deserialize, Serialize, Copy, Clone)]
@@ -235,7 +234,6 @@ pub struct Contract {
     pub utxo_chain_connectors: HashMap<ChainKind, UTXOChainConfig>,
     pub migrated_tokens: LookupMap<AccountId, AccountId>,
     pub locked_tokens: LookupMap<(ChainKind, AccountId), u128>,
-    pub locked_tokens_enabled_chains: LookupSet<ChainKind>,
 }
 
 #[near]
@@ -297,7 +295,6 @@ impl Contract {
             utxo_chain_connectors: HashMap::new(),
             migrated_tokens: LookupMap::new(StorageKey::MigratedTokens),
             locked_tokens: LookupMap::new(StorageKey::LockedTokens),
-            locked_tokens_enabled_chains: LookupSet::new(StorageKey::LockedTokensEnabledChains),
         };
 
         contract.acl_init_super_admin(near_sdk::env::predecessor_account_id());

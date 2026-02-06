@@ -66,7 +66,6 @@ impl Contract {
                 utxo_chain_connectors: old_state.utxo_chain_connectors,
                 migrated_tokens: old_state.migrated_tokens,
                 locked_tokens: LookupMap::new(StorageKey::LockedTokens),
-                locked_tokens_enabled_chains: LookupSet::new(StorageKey::LockedTokensEnabledChains),
             }
         } else {
             env::panic_str("Old state not found. Migration is not needed.")
