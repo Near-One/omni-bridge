@@ -68,8 +68,9 @@ pub enum BridgeError {
 #[strum(serialize_all = "shouty_snake_case", prefix = "ERR_")]
 #[non_exhaustive]
 pub enum TokenLockError {
-    LockedTokensOverflow,
     InsufficientLockedTokens,
+    LockedTokensOverflow,
+    TokenAlreadyLocked,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, AsRefStr, ErrorDisplay)]
