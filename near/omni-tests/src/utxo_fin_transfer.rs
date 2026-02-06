@@ -37,12 +37,6 @@ mod tests {
                 .with_utxo_token()
                 .await?;
 
-            enable_locked_tokens_chains(
-                &env_builder.bridge_contract,
-                &[ChainKind::Near, ChainKind::Base],
-            )
-            .await?;
-
             let relayer_account = env_builder.create_account(account_n(10)).await?;
             env_builder.storage_deposit(relayer_account.id()).await?;
             env_builder
@@ -53,14 +47,19 @@ mod tests {
                 .await?;
             env_builder
                 .bridge_contract
-                .call("set_locked_token")
-                .args_json(json!({
-                    "args": {
+                .call("set_locked_tokens")
+                .args_json(json!([
+                    {
+                        "chain_kind": ChainKind::Base,
+                        "token_id": env_builder.token.contract.id(),
+                        "amount": U128(0),
+                    },
+                    {
                         "chain_kind": ChainKind::Near,
                         "token_id": env_builder.token.contract.id(),
                         "amount": U128(1_000_000_000),
                     }
-                }))
+                ]))
                 .max_gas()
                 .transact()
                 .await?

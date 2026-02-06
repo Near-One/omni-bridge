@@ -68,12 +68,6 @@ mod tests {
                     .await?
             };
 
-            enable_locked_tokens_chains(
-                &env_builder.bridge_contract,
-                &[ChainKind::Eth, ChainKind::Base],
-            )
-            .await?;
-
             let relayer_account = env_builder.create_account(relayer_account_id()).await?;
             let fast_relayer_account = env_builder
                 .create_account(fast_relayer_account_id())

@@ -74,12 +74,6 @@ mod tests {
                 .await?
         };
 
-        crate::environment::enable_locked_tokens_chains(
-            &env_builder.bridge_contract,
-            &[ChainKind::Eth, ChainKind::Base],
-        )
-        .await?;
-
         let token_receiver_contract = env_builder.deploy_mock_receiver().await?;
 
         let relayer_account = env_builder.create_account(relayer_account_id()).await?;
