@@ -1,11 +1,13 @@
 #[cfg(test)]
 mod tests {
     use anyhow::Ok;
+    use near_api::{Contract as ApiContract, NetworkConfig};
+    use near_sandbox::Sandbox;
     use near_sdk::{
         json_types::U128,
         serde_json::{self, json},
     };
-    use near_workspaces::{result::ExecutionSuccess, types::NearToken, AccountId};
+    use near_token::NearToken;
     use omni_types::{
         near_events::OmniBridgeEvent, BridgeOnTransferMsg, ChainKind, Fee, InitTransferMsg,
         OmniAddress, TransferId, TransferMessage, UpdateFee,
@@ -13,7 +15,7 @@ mod tests {
     use rstest::rstest;
 
     use crate::{
-        environment::TestEnvBuilder,
+        environment::{TestAccount, TestContract, TransactionResult},
         helpers::tests::{
             account_n, build_artifacts, eth_eoa_address, eth_factory_address,
             get_claim_fee_args_near, get_event_data, relayer_account_id, BuildArtifacts,
@@ -24,13 +26,16 @@ mod tests {
     const EXPECTED_RELAYER_GAS_COST: NearToken =
         NearToken::from_yoctonear(1_500_000_000_000_000_000_000);
 
+    #[allow(dead_code)]
     struct TestEnv {
-        worker: near_workspaces::Worker<near_workspaces::network::Sandbox>,
-        token_contract: near_workspaces::Contract,
-        locker_contract: near_workspaces::Contract,
-        relayer_account: near_workspaces::Account,
-        sender_account: near_workspaces::Account,
+        sandbox: Sandbox,
+        network: NetworkConfig,
+        token_contract: TestContract,
+        locker_contract: TestContract,
+        relayer_account: TestAccount,
+        sender_account: TestAccount,
         eth_factory_address: OmniAddress,
+        build_artifacts: BuildArtifacts,
     }
 
     impl TestEnv {
@@ -40,26 +45,28 @@ mod tests {
             is_old_locker: bool,
             build_artifacts: &BuildArtifacts,
         ) -> anyhow::Result<Self> {
-            let env_builder = TestEnvBuilder::new(build_artifacts.clone())
+            let env_builder = crate::environment::TestEnvBuilder::new(build_artifacts.clone())
                 .await?
                 .deploy_old_version(is_old_locker)
                 .with_native_nep141_token(24)
                 .await?;
             let relayer_account = env_builder.create_account(relayer_account_id()).await?;
             let sender_account = env_builder.create_account(account_n(1)).await?;
-            env_builder.storage_deposit(relayer_account.id()).await?;
-            env_builder.storage_deposit(sender_account.id()).await?;
+            env_builder.storage_deposit(&relayer_account.id).await?;
+            env_builder.storage_deposit(&sender_account.id).await?;
             env_builder
-                .mint_tokens(sender_account.id(), sender_balance_token)
+                .mint_tokens(&sender_account.id, sender_balance_token)
                 .await?;
 
             Ok(Self {
-                worker: env_builder.worker,
+                sandbox: env_builder.sandbox,
+                network: env_builder.network,
                 token_contract: env_builder.token.contract,
                 locker_contract: env_builder.bridge_contract,
                 relayer_account,
                 sender_account,
                 eth_factory_address: eth_factory_address(),
+                build_artifacts: build_artifacts.clone(),
             })
         }
     }
@@ -74,36 +81,41 @@ mod tests {
             &env.sender_account,
             &init_transfer_msg,
             None,
+            &env.network,
         )
         .await?;
 
         // Storage deposit
-        env.sender_account
-            .call(env.locker_contract.id(), "storage_deposit")
-            .args_json(json!({
-                "account_id": env.sender_account.id(),
-            }))
-            .deposit(storage_deposit_amount)
-            .max_gas()
-            .transact()
-            .await?
-            .into_result()?;
+        env.locker_contract
+            .call_by(
+                &env.sender_account.id,
+                &env.sender_account.signer,
+                "storage_deposit",
+                json!({
+                    "account_id": env.sender_account.id,
+                }),
+                storage_deposit_amount,
+                &env.network,
+            )
+            .await?;
 
         // Initiate the transfer
         let transfer_result = env
-            .sender_account
-            .call(env.token_contract.id(), "ft_transfer_call")
-            .args_json(json!({
-                "receiver_id": env.locker_contract.id(),
-                "amount": U128(transfer_amount),
-                "memo": None::<String>,
-                "msg": serde_json::to_string(&init_transfer_msg)?,
-            }))
-            .deposit(NearToken::from_yoctonear(1))
-            .max_gas()
-            .transact()
-            .await?
-            .into_result()?;
+            .token_contract
+            .call_by(
+                &env.sender_account.id,
+                &env.sender_account.signer,
+                "ft_transfer_call",
+                json!({
+                    "receiver_id": env.locker_contract.id,
+                    "amount": U128(transfer_amount),
+                    "memo": None::<String>,
+                    "msg": serde_json::to_string(&init_transfer_msg)?,
+                }),
+                NearToken::from_yoctonear(1),
+                &env.network,
+            )
+            .await?;
 
         // Ensure the transfer event is emitted
         let transfer_message = get_transfer_message_from_event(&transfer_result)?;
@@ -124,36 +136,41 @@ mod tests {
             &env.sender_account,
             &init_transfer_msg,
             custom_deposit,
+            &env.network,
         )
         .await?;
 
         // Deposit to the storage
-        env.sender_account
-            .call(env.locker_contract.id(), "storage_deposit")
-            .args_json(json!({
-                "account_id": env.sender_account.id(),
-            }))
-            .deposit(storage_deposit_amount)
-            .max_gas()
-            .transact()
-            .await?
-            .into_result()?;
+        env.locker_contract
+            .call_by(
+                &env.sender_account.id,
+                &env.sender_account.signer,
+                "storage_deposit",
+                json!({
+                    "account_id": env.sender_account.id,
+                }),
+                storage_deposit_amount,
+                &env.network,
+            )
+            .await?;
 
         // Initiate the transfer
         let transfer_result = env
-            .sender_account
-            .call(env.token_contract.id(), "ft_transfer_call")
-            .args_json(json!({
-                "receiver_id": env.locker_contract.id(),
-                "amount": U128(transfer_amount),
-                "memo": None::<String>,
-                "msg": serde_json::to_string(&BridgeOnTransferMsg::InitTransfer(init_transfer_msg))?,
-            }))
-            .deposit(NearToken::from_yoctonear(1))
-            .max_gas()
-            .transact()
-            .await?
-            .into_result()?;
+            .token_contract
+            .call_by(
+                &env.sender_account.id,
+                &env.sender_account.signer,
+                "ft_transfer_call",
+                json!({
+                    "receiver_id": env.locker_contract.id,
+                    "amount": U128(transfer_amount),
+                    "memo": None::<String>,
+                    "msg": serde_json::to_string(&BridgeOnTransferMsg::InitTransfer(init_transfer_msg))?,
+                }),
+                NearToken::from_yoctonear(1),
+                &env.network,
+            )
+            .await?;
 
         // Ensure the transfer event is emitted
         let transfer_message = get_transfer_message_from_event(&transfer_result)?;
@@ -165,6 +182,7 @@ mod tests {
                 &transfer_message,
                 &env.locker_contract,
                 &env.sender_account,
+                &env.network,
             )
             .await?;
             match update_fee {
@@ -182,59 +200,67 @@ mod tests {
             &env.sender_account
         };
 
-        signer
-            .call(env.locker_contract.id(), "sign_transfer")
-            .args_json(json!({
-                "transfer_id": TransferId {
-                    origin_chain: ChainKind::Near,
-                    origin_nonce: transfer_message.origin_nonce,
-                },
-                "fee_recipient": env.relayer_account.id(),
-                "fee": &Some(signing_fee.clone()),
-            }))
-            .max_gas()
-            .transact()
-            .await?
-            .into_result()?;
+        env.locker_contract
+            .call_by(
+                &signer.id,
+                &signer.signer,
+                "sign_transfer",
+                json!({
+                    "transfer_id": TransferId {
+                        origin_chain: ChainKind::Near,
+                        origin_nonce: transfer_message.origin_nonce,
+                    },
+                    "fee_recipient": env.relayer_account.id,
+                    "fee": &Some(signing_fee.clone()),
+                }),
+                NearToken::from_yoctonear(0),
+                &env.network,
+            )
+            .await?;
 
         // Relayer claims the fee
         let claim_fee_args = get_claim_fee_args_near(
             ChainKind::Near,
             ChainKind::Eth,
             transfer_message.origin_nonce,
-            env.relayer_account.id(),
+            &env.relayer_account.id,
             transfer_amount - signing_fee.fee.0,
             env.eth_factory_address.clone(),
         );
-        env.relayer_account
-            .call(env.locker_contract.id(), "claim_fee")
-            .args_borsh(claim_fee_args)
-            .deposit(NearToken::from_yoctonear(1))
-            .max_gas()
-            .transact()
-            .await?
-            .into_result()?;
+        env.locker_contract
+            .call_borsh_by(
+                &env.relayer_account.id,
+                &env.relayer_account.signer,
+                "claim_fee",
+                near_sdk::borsh::to_vec(&claim_fee_args)?,
+                NearToken::from_yoctonear(1),
+                &env.network,
+            )
+            .await?;
         Ok(())
     }
+
     async fn get_balance_required_for_account(
-        locker_contract: &near_workspaces::Contract,
-        sender_account: &near_workspaces::Account,
+        locker_contract: &TestContract,
+        sender_account: &TestAccount,
         init_transfer_msg: &InitTransferMsg,
         custom_deposit: Option<NearToken>,
+        network: &NetworkConfig,
     ) -> anyhow::Result<NearToken> {
         let required_balance_account: NearToken = locker_contract
-            .view("required_balance_for_account")
-            .await?
-            .json()?;
+            .view_no_args("required_balance_for_account", network)
+            .await?;
 
         let required_balance_init_transfer: NearToken = locker_contract
-            .view("required_balance_for_init_transfer")
-            .args_json(json!({
-                "recipient": init_transfer_msg.recipient,
-                "sender": OmniAddress::Near(sender_account.id().clone()),
-            }))
-            .await?
-            .json()?;
+            .view(
+                "required_balance_for_init_transfer",
+                json!({
+                    "recipient": init_transfer_msg.recipient,
+                    "sender": OmniAddress::Near(sender_account.id.clone()),
+                }),
+                network,
+            )
+            .await?;
 
         let storage_deposit_amount = match custom_deposit {
             Some(deposit) => deposit,
@@ -249,16 +275,17 @@ mod tests {
     }
 
     fn get_transfer_message_from_event(
-        transfer_result: &ExecutionSuccess,
+        transfer_result: &TransactionResult,
     ) -> anyhow::Result<TransferMessage> {
         let logs = transfer_result
-            .receipt_outcomes()
+            .logs()
             .iter()
-            .flat_map(|outcome| &outcome.logs)
+            .map(|s| s.to_string())
             .collect::<Vec<_>>();
+        let logs_refs = logs.iter().collect::<Vec<_>>();
 
         let omni_bridge_event: OmniBridgeEvent = serde_json::from_value(
-            get_event_data("InitTransferEvent", &logs)?
+            get_event_data("InitTransferEvent", &logs_refs)?
                 .ok_or_else(|| anyhow::anyhow!("InitTransferEvent not found"))?,
         )?;
         let OmniBridgeEvent::InitTransferEvent { transfer_message } = omni_bridge_event else {
@@ -271,8 +298,9 @@ mod tests {
     async fn make_fee_update(
         update_fee: UpdateFee,
         transfer_message: &TransferMessage,
-        locker_contract: &near_workspaces::Contract,
-        sender_account: &near_workspaces::Account,
+        locker_contract: &TestContract,
+        sender_account: &TestAccount,
+        network: &NetworkConfig,
     ) -> anyhow::Result<()> {
         let deposit = match update_fee.clone() {
             UpdateFee::Fee(update_fee) => NearToken::from_yoctonear(
@@ -284,45 +312,52 @@ mod tests {
             // To be updated once the proof is implemented
             UpdateFee::Proof(_) => NearToken::from_yoctonear(0),
         };
-        sender_account
-            .call(locker_contract.id(), "update_transfer_fee")
-            .args_json(json!({
-                "transfer_id": TransferId {
-                    origin_chain: ChainKind::Near,
-                    origin_nonce: transfer_message.origin_nonce,
-                },
-                "fee": update_fee.clone(),
-            }))
-            .max_gas()
-            .deposit(deposit)
-            .transact()
-            .await?
-            .into_result()?;
+        locker_contract
+            .call_by(
+                &sender_account.id,
+                &sender_account.signer,
+                "update_transfer_fee",
+                json!({
+                    "transfer_id": TransferId {
+                        origin_chain: ChainKind::Near,
+                        origin_nonce: transfer_message.origin_nonce,
+                    },
+                    "fee": update_fee.clone(),
+                }),
+                deposit,
+                network,
+            )
+            .await?;
         Ok(())
     }
 
     async fn get_token_balance(
-        token_contract: &near_workspaces::Contract,
-        account_id: &AccountId,
+        token_contract: &TestContract,
+        account_id: &near_api::AccountId,
+        network: &NetworkConfig,
     ) -> anyhow::Result<U128> {
         Ok(token_contract
-            .view("ft_balance_of")
-            .args_json(json!({ "account_id": account_id }))
-            .await?
-            .json()?)
+            .view(
+                "ft_balance_of",
+                json!({ "account_id": account_id }),
+                network,
+            )
+            .await?)
     }
+
     async fn get_test_balances(env: &TestEnv) -> anyhow::Result<(U128, U128, U128, NearToken)> {
         let user_balance_token: U128 =
-            get_token_balance(&env.token_contract, env.sender_account.id()).await?;
+            get_token_balance(&env.token_contract, &env.sender_account.id, &env.network).await?;
         let locker_balance_token: U128 =
-            get_token_balance(&env.token_contract, env.locker_contract.id()).await?;
+            get_token_balance(&env.token_contract, &env.locker_contract.id, &env.network).await?;
         let relayer_balance_token: U128 =
-            get_token_balance(&env.token_contract, env.relayer_account.id()).await?;
-        let relayer_balance_near: NearToken = env
-            .worker
-            .view_account(env.relayer_account.id())
+            get_token_balance(&env.token_contract, &env.relayer_account.id, &env.network).await?;
+        let relayer_balance_near: NearToken = near_api::Account(env.relayer_account.id.clone())
+            .view()
+            .fetch_from(&env.network)
             .await?
-            .balance;
+            .data
+            .amount;
 
         Ok((
             user_balance_token,
@@ -735,38 +770,46 @@ mod tests {
         let transfer_message =
             init_transfer_legacy(&env, transfer_amount, init_transfer_msg.clone()).await?;
 
-        let res = env
-            .locker_contract
-            .as_account()
-            .deploy(&build_artifacts.locker)
-            .await
-            .unwrap();
+        // Deploy new locker code
+        let locker_account = TestAccount {
+            id: env.locker_contract.id.clone(),
+            signer: env.locker_contract.signer.clone(),
+        };
+        let res = locker_account
+            .deploy(&env.build_artifacts.locker, &env.network)
+            .await?;
 
         assert!(res.is_success(), "Failed to upgrade locker");
 
+        // Call migrate
         let res = env
             .locker_contract
-            .call("migrate")
-            .max_gas()
-            .transact()
+            .call(
+                "migrate",
+                json!({}),
+                NearToken::from_yoctonear(0),
+                &env.network,
+            )
             .await?;
 
         assert!(res.is_success(), "Migration didn't succeed");
 
-        let transfer = env
-            .locker_contract
-            .call("get_transfer_message")
-            .args_json(json!({
-                "transfer_id": TransferId {
-                    origin_chain: ChainKind::Near,
-                    origin_nonce: transfer_message.origin_nonce,
-                },
-            }))
-            .max_gas()
-            .transact()
-            .await?;
+        // Verify the migrated transfer
+        let migrated_transfer: TransferMessage = ApiContract(env.locker_contract.id.clone())
+            .call_function(
+                "get_transfer_message",
+                json!({
+                    "transfer_id": TransferId {
+                        origin_chain: ChainKind::Near,
+                        origin_nonce: transfer_message.origin_nonce,
+                    },
+                }),
+            )
+            .read_only()
+            .fetch_from(&env.network)
+            .await?
+            .data;
 
-        let migrated_transfer = transfer.json::<TransferMessage>()?;
         assert_eq!(migrated_transfer.origin_transfer_id, None);
         assert_eq!(
             migrated_transfer.origin_nonce,

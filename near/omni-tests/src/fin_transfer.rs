@@ -1,13 +1,14 @@
 #[cfg(test)]
 mod tests {
+    use near_api::{AccountId, NetworkConfig, Signer, Tokens};
+    use near_sandbox::Sandbox;
     use near_sdk::{
         borsh,
         json_types::U128,
         near,
         serde_json::{self, json},
-        AccountId,
     };
-    use near_workspaces::{network::Sandbox, types::NearToken, Contract, Worker};
+    use near_token::NearToken;
     use omni_types::{
         locker_args::{FinTransferArgs, StorageDepositAction},
         prover_result::{InitTransferMessage, ProverResult},
@@ -16,12 +17,10 @@ mod tests {
     use rand::RngCore;
     use rstest::rstest;
 
-    use crate::{
-        environment::TestEnvBuilder,
-        helpers::tests::{
-            account_n, build_artifacts, eth_eoa_address, eth_factory_address, eth_token_address,
-            relayer_account_id, BuildArtifacts, NEP141_DEPOSIT,
-        },
+    use crate::environment::{TestAccount, TestContract, TestEnvBuilder};
+    use crate::helpers::tests::{
+        account_n, build_artifacts, eth_eoa_address, eth_factory_address, eth_token_address,
+        relayer_account_id, BuildArtifacts, NEP141_DEPOSIT,
     };
 
     static HEX_STRING_2000: std::sync::LazyLock<String> = std::sync::LazyLock::new(|| {
@@ -43,11 +42,12 @@ mod tests {
     }
 
     struct TestSetup {
-        worker: Worker<Sandbox>,
-        token_contract: Contract,
-        locker_contract: Contract,
-        token_receiver_contract: Contract,
-        relayer_account: near_workspaces::Account,
+        sandbox: Sandbox,
+        network: NetworkConfig,
+        token_contract: TestContract,
+        locker_contract: TestContract,
+        token_receiver_contract: TestContract,
+        relayer_account: TestAccount,
         required_balance_for_fin_transfer: NearToken,
     }
 
@@ -80,12 +80,12 @@ mod tests {
 
         let required_balance_for_fin_transfer: NearToken = env_builder
             .bridge_contract
-            .view("required_balance_for_fin_transfer")
-            .await?
-            .json()?;
+            .view_no_args("required_balance_for_fin_transfer", &env_builder.network)
+            .await?;
 
         Ok(TestSetup {
-            worker: env_builder.worker,
+            sandbox: env_builder.sandbox,
+            network: env_builder.network,
             token_contract: env_builder.token.contract,
             locker_contract: env_builder.bridge_contract,
             token_receiver_contract,
@@ -190,32 +190,33 @@ mod tests {
         build_artifacts: &BuildArtifacts,
     ) -> anyhow::Result<()> {
         let TestSetup {
+            sandbox: _sandbox,
+            network,
             token_contract,
             locker_contract,
             relayer_account,
             token_receiver_contract,
             required_balance_for_fin_transfer,
-            ..
         } = setup_contracts(false, is_deployed_token, build_artifacts).await?;
 
         if !is_deployed_token {
             token_contract
-                .call("ft_transfer")
-                .args_json(json!({
-                    "receiver_id": locker_contract.id(),
-                    "amount": U128(amount),
-                }))
-                .deposit(NearToken::from_yoctonear(1))
-                .max_gas()
-                .transact()
-                .await?
-                .into_result()?;
+                .call(
+                    "ft_transfer",
+                    json!({
+                        "receiver_id": locker_contract.id,
+                        "amount": U128(amount),
+                    }),
+                    NearToken::from_yoctonear(1),
+                    &network,
+                )
+                .await?;
         }
 
         let recipient = if msg.is_empty() {
             account_n(1)
         } else {
-            let receiver_contract = token_receiver_contract.id().clone();
+            let receiver_contract = token_receiver_contract.id.clone();
             storage_deposit_accounts.insert(0, (receiver_contract.clone(), true));
             receiver_contract
         };
@@ -227,7 +228,7 @@ mod tests {
         let storage_deposit_actions = storage_deposit_accounts
             .iter()
             .map(|(account_id, is_deposit_needed)| StorageDepositAction {
-                token_id: token_contract.id().clone(),
+                token_id: token_contract.id.clone(),
                 account_id: account_id.clone(),
                 storage_deposit_amount: is_deposit_needed.then(|| NEP141_DEPOSIT.as_yoctonear()),
             })
@@ -235,57 +236,64 @@ mod tests {
 
         // Fin transfer
         relayer_account
-            .call(locker_contract.id(), "fin_transfer")
-            .args_borsh(FinTransferArgs {
-                chain_kind: omni_types::ChainKind::Eth,
-                storage_deposit_actions,
-                prover_args: borsh::to_vec(&ProverResult::InitTransfer(InitTransferMessage {
-                    origin_nonce: 1,
-                    token: eth_token_address(),
-                    recipient: OmniAddress::Near(recipient.clone()),
-                    amount: U128(amount),
-                    fee: Fee {
-                        fee: U128(fee),
-                        native_fee: U128(0),
-                    },
-                    sender: eth_eoa_address(),
-                    msg,
-                    emitter_address: eth_factory_address(),
-                }))
-                .unwrap(),
-            })
-            .deposit(required_deposit_for_fin_transfer)
-            .max_gas()
-            .transact()
-            .await?
-            .into_result()?;
+            .call_borsh(
+                &locker_contract.id,
+                "fin_transfer",
+                borsh::to_vec(&FinTransferArgs {
+                    chain_kind: omni_types::ChainKind::Eth,
+                    storage_deposit_actions,
+                    prover_args: borsh::to_vec(&ProverResult::InitTransfer(InitTransferMessage {
+                        origin_nonce: 1,
+                        token: eth_token_address(),
+                        recipient: OmniAddress::Near(recipient.clone()),
+                        amount: U128(amount),
+                        fee: Fee {
+                            fee: U128(fee),
+                            native_fee: U128(0),
+                        },
+                        sender: eth_eoa_address(),
+                        msg,
+                        emitter_address: eth_factory_address(),
+                    }))
+                    .unwrap(),
+                })?,
+                required_deposit_for_fin_transfer,
+                &network,
+            )
+            .await?;
 
         // Check balances
         let recipient_balance: U128 = token_contract
-            .view("ft_balance_of")
-            .args_json(json!({
-                "account_id": recipient,
-            }))
-            .await?
-            .json()?;
+            .view(
+                "ft_balance_of",
+                json!({
+                    "account_id": recipient,
+                }),
+                &network,
+            )
+            .await?;
         assert_eq!(expected_recipient_balance, recipient_balance.0);
 
         let relayer_balance: U128 = token_contract
-            .view("ft_balance_of")
-            .args_json(json!({
-                "account_id": relayer_account_id(),
-            }))
-            .await?
-            .json()?;
+            .view(
+                "ft_balance_of",
+                json!({
+                    "account_id": relayer_account_id(),
+                }),
+                &network,
+            )
+            .await?;
         assert_eq!(expected_relayer_balance, relayer_balance.0);
 
         let locker_balance: U128 = token_contract
-            .view("ft_balance_of")
-            .args_json(json!({
-                "account_id": locker_contract.id()
-            }))
-            .await?
-            .json()?;
+            .view(
+                "ft_balance_of",
+                json!({
+                    "account_id": locker_contract.id
+                }),
+                &network,
+            )
+            .await?;
         assert_eq!(expected_locker_balance, locker_balance.0);
 
         Ok(())
@@ -300,7 +308,8 @@ mod tests {
         #[case] near_amount: u128,
     ) -> anyhow::Result<()> {
         let TestSetup {
-            worker,
+            sandbox,
+            network,
             token_contract,
             locker_contract,
             relayer_account,
@@ -311,33 +320,50 @@ mod tests {
         // Provide locker contract with large wNEAR balance
         let wnear_amount = NearToken::from_near(near_amount);
 
+        // Get root signer
+        let root_signer = Signer::from_secret_key(
+            near_sandbox::config::DEFAULT_GENESIS_ACCOUNT_PRIVATE_KEY.parse()?,
+        )?;
+
         // top up wNEAR contract with NEAR
-        assert!(worker
-            .root_account()?
-            .transfer_near(token_contract.id(), wnear_amount)
-            .await?
-            .is_success());
+        let transfer_result = Tokens::account("test.near".parse()?)
+            .send_to(token_contract.id.clone())
+            .near(wnear_amount)
+            .with_signer(root_signer)
+            .send_to(&network)
+            .await?;
+        assert!(transfer_result.is_success());
 
         token_contract
-            .call("ft_transfer")
-            .args_json(json!({
-                "receiver_id": locker_contract.id(),
-                "amount": U128(wnear_amount.as_yoctonear()*2),
-            }))
-            .deposit(NearToken::from_yoctonear(1))
-            .max_gas()
-            .transact()
-            .await?
-            .into_result()?;
+            .call(
+                "ft_transfer",
+                json!({
+                    "receiver_id": locker_contract.id,
+                    "amount": U128(wnear_amount.as_yoctonear()*2),
+                }),
+                NearToken::from_yoctonear(1),
+                &network,
+            )
+            .await?;
 
-        let recipient_account = worker
-            .create_tla(account_n(1), worker.generate_dev_account_credentials().1)
-            .await?
-            .into_result()?;
+        let recipient_account = {
+            let (secret_key, public_key) = near_sandbox::random_key_pair();
+            sandbox
+                .create_account(account_n(1))
+                .initial_balance(NearToken::from_near(100))
+                .public_key(public_key)
+                .send()
+                .await?;
+            let signer = Signer::from_secret_key(secret_key.parse()?)?;
+            TestAccount {
+                id: account_n(1),
+                signer,
+            }
+        };
 
         let storage_deposit_actions = vec![StorageDepositAction {
-            token_id: token_contract.id().clone(),
-            account_id: recipient_account.id().clone(),
+            token_id: token_contract.id.clone(),
+            account_id: recipient_account.id.clone(),
             storage_deposit_amount: Some(NEP141_DEPOSIT.as_yoctonear()),
         }];
 
@@ -347,35 +373,40 @@ mod tests {
 
         // Try to finalize a large NEAR withdrawal
         let result = relayer_account
-            .call(locker_contract.id(), "fin_transfer")
-            .args_borsh(FinTransferArgs {
-                chain_kind: omni_types::ChainKind::Eth,
-                storage_deposit_actions,
-                prover_args: borsh::to_vec(&ProverResult::InitTransfer(InitTransferMessage {
-                    origin_nonce: 1,
-                    token: eth_token_address(),
-                    recipient: OmniAddress::Near(recipient_account.id().clone()),
-                    amount: U128(wnear_amount.as_yoctonear()),
-                    fee: Fee {
-                        fee: U128(0),
-                        native_fee: U128(0),
-                    },
-                    sender: eth_eoa_address(),
-                    msg: String::default(),
-                    emitter_address: eth_factory_address(),
-                }))
-                .unwrap(),
-            })
-            .deposit(required_deposit_for_fin_transfer)
-            .max_gas()
-            .transact()
+            .call_borsh(
+                &locker_contract.id,
+                "fin_transfer",
+                borsh::to_vec(&FinTransferArgs {
+                    chain_kind: omni_types::ChainKind::Eth,
+                    storage_deposit_actions,
+                    prover_args: borsh::to_vec(&ProverResult::InitTransfer(InitTransferMessage {
+                        origin_nonce: 1,
+                        token: eth_token_address(),
+                        recipient: OmniAddress::Near(recipient_account.id.clone()),
+                        amount: U128(wnear_amount.as_yoctonear()),
+                        fee: Fee {
+                            fee: U128(0),
+                            native_fee: U128(0),
+                        },
+                        sender: eth_eoa_address(),
+                        msg: String::default(),
+                        emitter_address: eth_factory_address(),
+                    }))
+                    .unwrap(),
+                })?,
+                required_deposit_for_fin_transfer,
+                &network,
+            )
             .await?;
 
         assert!(result.is_success(), "Fin transfer failed {result:?}");
 
-        // Check that the NEAR balance of the recipient is greater or equal to 1000 NEAR
-        let recipient_balance: NearToken =
-            worker.view_account(recipient_account.id()).await?.balance;
+        // Check that the NEAR balance of the recipient is greater or equal to the amount
+        let account_info = near_api::Account(recipient_account.id.clone())
+            .view()
+            .fetch_from(&network)
+            .await?;
+        let recipient_balance = account_info.data.amount;
         assert!(
             recipient_balance >= wnear_amount,
             "Recipient balance is {recipient_balance} while it should be at least {wnear_amount}"
