@@ -120,6 +120,7 @@ pub enum Role {
     NativeFeeRestricted,
     RbfOperator,
     TokenUpgrader,
+    TokenLockController,
 }
 
 #[ext_contract(ext_token)]

@@ -35,7 +35,7 @@ impl Contract {
         U128(self.locked_tokens.get(&(chain_kind, token_id)).unwrap_or(0))
     }
 
-    #[access_control_any(roles(Role::DAO))]
+    #[access_control_any(roles(Role::DAO, Role::TokenLockController))]
     pub fn set_locked_tokens(&mut self, args: Vec<SetLockedTokenArgs>) {
         for arg in args {
             self.locked_tokens
