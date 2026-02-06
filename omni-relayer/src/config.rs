@@ -106,6 +106,7 @@ pub struct Config {
     pub solana: Option<Solana>,
     pub btc: Option<Utxo>,
     pub zcash: Option<Utxo>,
+    pub orchard: Option<Orchard>,
     pub wormhole: Wormhole,
 }
 
@@ -294,6 +295,11 @@ pub struct Utxo {
     pub light_client: AccountId,
     pub signing_enabled: bool,
     pub verifying_withdraw_enabled: bool,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct Orchard {
+    pub enabled: bool,
 }
 
 #[derive(Debug, Clone, Deserialize)]

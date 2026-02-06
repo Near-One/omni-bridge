@@ -1,11 +1,50 @@
-use near_sdk::borsh;
 use near_sdk::json_types::U128;
 use near_sdk::serde_json;
+use near_sdk::{borsh, NearToken};
 
 use crate::{
-    stringify, ChainKind, Fee, OmniAddress, PayloadType, TransferId, TransferMessage, H160,
+    stringify, BridgeError, ChainKind, Fee, OmniAddress, OmniError, PayloadType, SolAddress,
+    StorageBalanceError, TransferId, TransferMessage, TypesError, H160,
 };
 use std::str::FromStr;
+
+fn chain_kinds_for_borsh() -> [ChainKind; 9] {
+    [
+        ChainKind::Eth,
+        ChainKind::Near,
+        ChainKind::Sol,
+        ChainKind::Arb,
+        ChainKind::Base,
+        ChainKind::Bnb,
+        ChainKind::Btc,
+        ChainKind::Zcash,
+        ChainKind::Pol,
+    ]
+}
+
+fn omni_addresses_for_borsh() -> Vec<OmniAddress> {
+    vec![
+        OmniAddress::Eth(H160::ZERO),
+        OmniAddress::Near("borsh.near".parse().unwrap()),
+        OmniAddress::Sol(SolAddress::ZERO),
+        OmniAddress::Arb(H160::ZERO),
+        OmniAddress::Base(H160::ZERO),
+        OmniAddress::Bnb(H160::ZERO),
+        OmniAddress::Btc("btc_address".to_string()),
+        OmniAddress::Zcash("zcash_address".to_string()),
+        OmniAddress::Pol(H160::ZERO),
+    ]
+}
+
+fn chain_kinds_from_borsh() -> Vec<ChainKind> {
+    let mut kinds = Vec::new();
+    for value in 0u8..=u8::MAX {
+        if let Ok(kind) = borsh::from_slice::<ChainKind>(&[value]) {
+            kinds.push(kind);
+        }
+    }
+    kinds
+}
 
 #[test]
 fn test_omni_address_serialization() {
@@ -30,6 +69,67 @@ fn test_payload_prefix() {
 }
 
 #[test]
+fn test_chain_kind_borsh_discriminants_are_stable() {
+    let chains = chain_kinds_for_borsh();
+
+    for (discriminant, chain) in chains.iter().enumerate() {
+        let encoded = borsh::to_vec(&chain).unwrap();
+        assert_eq!(
+            encoded,
+            vec![u8::try_from(discriminant).unwrap()],
+            "Borsh discriminant for {chain:?} changed; this would break stored data"
+        );
+    }
+}
+
+#[test]
+fn test_chain_kind_borsh_variants_are_covered() {
+    let expected = chain_kinds_from_borsh();
+    let chains = chain_kinds_for_borsh();
+
+    assert_eq!(
+        chains.len(),
+        expected.len(),
+        "ChainKind variants list is out of sync with enum size"
+    );
+}
+
+#[test]
+fn test_omni_address_borsh_discriminants_are_stable() {
+    let addresses = omni_addresses_for_borsh();
+
+    for (discriminant, address) in addresses.iter().enumerate() {
+        let encoded = borsh::to_vec(&address).unwrap();
+        let encoded_discriminant = *encoded
+            .first()
+            .expect("Borsh enum encoding should start with discriminant byte");
+        assert_eq!(
+            encoded_discriminant,
+            u8::try_from(discriminant).unwrap(),
+            "Borsh discriminant for {:?} changed; this would break stored data",
+            address.get_chain()
+        );
+    }
+}
+
+#[test]
+fn test_omni_address_borsh_variants_are_covered() {
+    let addresses = omni_addresses_for_borsh();
+    let mut covered_chains: Vec<ChainKind> = addresses.iter().map(OmniAddress::get_chain).collect();
+
+    covered_chains.sort_unstable();
+    covered_chains.dedup();
+
+    let mut expected_chains = chain_kinds_from_borsh();
+    expected_chains.sort_unstable();
+
+    assert_eq!(
+        covered_chains, expected_chains,
+        "OmniAddress variants list is out of sync with enum size"
+    );
+}
+
+#[test]
 fn test_h160_from_str() {
     let addr = "5a08feed678c056650b3eb4a5cb1b9bb6f0fe265";
     let h160 = H160::from_str(addr).expect("Should parse without 0x prefix");
@@ -41,11 +141,11 @@ fn test_h160_from_str() {
 
     let invalid_hex = "0xnot_a_hex_string";
     let err = H160::from_str(invalid_hex).expect_err("Should fail with invalid hex");
-    assert!(err.contains("ERR_INVALIDE_HEX"), "Error was: {err}");
+    assert_eq!(err, TypesError::InvalidHex);
 
     let short_addr = "0x5a08";
     let err = H160::from_str(short_addr).expect_err("Should fail with invalid length");
-    assert!(err.contains("Invalid length:"), "Error was: {err}");
+    assert_eq!(err, TypesError::InvalidHexLength);
 }
 
 #[test]
@@ -97,8 +197,8 @@ fn test_h160_deserialization() {
     assert!(result.is_err(), "Should fail with invalid hex");
     let err = result.unwrap_err().to_string();
     assert!(
-        err.contains("ERR_INVALIDE_HEX"),
-        "Error was: {err} but expected ERR_INVALIDE_HEX"
+        err.contains("ERR_INVALID_HEX"),
+        "Error was: {err} but expected ERR_INVALID_HEX"
     );
 
     let json = r#""0x5a08""#;
@@ -106,8 +206,8 @@ fn test_h160_deserialization() {
     assert!(result.is_err(), "Should fail with invalid length");
     let err = result.unwrap_err().to_string();
     assert!(
-        err.contains("Invalid length"),
-        "Error was: {err} but expected Invalid length"
+        err.contains("ERR_INVALID_HEX_LENGTH"),
+        "Error was: {err} but expected ERR_INVALID_HEX_LENGTH"
     );
 
     let json = "123";
@@ -223,7 +323,7 @@ fn test_omni_address_from_str() {
         ),
         (
             "invalid_format".to_string(),
-            Err("ERR_INVALIDE_HEX".to_string()),
+            Err("ERR_INVALID_HEX".to_string()),
             "Should fail on missing chain prefix",
         ),
         (
@@ -468,4 +568,44 @@ fn test_chain_kind_from_str() {
 
     let chain: ChainKind = "Base".parse().unwrap();
     assert_eq!(chain, ChainKind::Base);
+}
+
+#[test]
+fn test_errors_serialization() {
+    assert_eq!(
+        BridgeError::InvalidAttachedDeposit.as_ref(),
+        "ERR_INVALID_ATTACHED_DEPOSIT"
+    );
+    assert_eq!(
+        BridgeError::InvalidAttachedDeposit.to_string(),
+        "ERR_INVALID_ATTACHED_DEPOSIT"
+    );
+    assert_eq!(
+        OmniError::Bridge(BridgeError::InvalidAttachedDeposit).to_string(),
+        "ERR_INVALID_ATTACHED_DEPOSIT"
+    );
+    assert_eq!(
+        StorageBalanceError::AccountNotRegistered("near".parse().unwrap()).as_ref(),
+        "ERR_ACCOUNT_NOT_REGISTERED: field1=near"
+    );
+    assert_eq!(
+        StorageBalanceError::AccountNotRegistered("near".parse().unwrap()).to_string(),
+        "ERR_ACCOUNT_NOT_REGISTERED: field1=near"
+    );
+    assert_eq!(
+        StorageBalanceError::NotEnoughStorage {
+            required: NearToken::from_near(100),
+            available: NearToken::from_near(50),
+        }
+        .as_ref(),
+        "ERR_NOT_ENOUGH_STORAGE: required=100.00 NEAR, available=50.00 NEAR"
+    );
+    assert_eq!(
+        StorageBalanceError::NotEnoughStorage {
+            required: NearToken::from_near(100),
+            available: NearToken::from_near(50),
+        }
+        .to_string(),
+        "ERR_NOT_ENOUGH_STORAGE: required=100.00 NEAR, available=50.00 NEAR"
+    );
 }

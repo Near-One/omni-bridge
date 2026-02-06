@@ -183,6 +183,7 @@ pub async fn handle_streamer_message(
                 | OmniBridgeEvent::ClaimFeeEvent { .. }
                 | OmniBridgeEvent::LogMetadataEvent { .. }
                 | OmniBridgeEvent::DeployTokenEvent { .. }
+                | OmniBridgeEvent::MigrateTokenEvent { .. }
                 | OmniBridgeEvent::BindTokenEvent { .. } => {}
             }
         }

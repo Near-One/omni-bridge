@@ -228,6 +228,7 @@ pub fn build_omni_connector(
         .wormhole_bridge_client(Some(wormhole_bridge_client))
         .btc_bridge_client(Some(btc_bridge_client))
         .zcash_bridge_client(Some(zcash_bridge_client))
+        .enable_orchard(config.orchard.as_ref().map(|orchard| orchard.enabled))
         .eth_light_client(eth_light_client)
         .btc_light_client(btc_light_client)
         .zcash_light_client(zcash_light_client)

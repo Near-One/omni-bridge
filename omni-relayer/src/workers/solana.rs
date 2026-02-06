@@ -41,12 +41,15 @@ pub async fn process_init_transfer_event(
         anyhow::bail!("Expected SolanaInitTransferWithTimestamp, got: {transfer:?}");
     };
 
-    info!("Trying to process InitTransfer log on Solana");
-
     let transfer_id = TransferId {
         origin_chain: sender.get_chain(),
         origin_nonce: sequence,
     };
+
+    info!(
+        "Processing Solana InitTransfer ({:?}:{})",
+        transfer_id.origin_chain, transfer_id.origin_nonce
+    );
 
     match omni_connector
         .is_transfer_finalised(Some(sender.get_chain()), ChainKind::Near, sequence)
@@ -97,7 +100,10 @@ pub async fn process_init_transfer_event(
         .wormhole_get_vaa(config.wormhole.solana_chain_id, &emitter, sequence)
         .await
     else {
-        warn!("Failed to get VAA for sequence: {sequence}");
+        warn!(
+            "VAA is not ready for {:?}:{}",
+            transfer_id.origin_chain, transfer_id.origin_nonce
+        );
         return Ok(EventAction::Retry);
     };
 
@@ -150,7 +156,10 @@ pub async fn process_init_transfer_event(
 
     match omni_connector.fin_transfer(fin_transfer_args).await {
         Ok(tx_hash) => {
-            info!("Finalized InitTransfer: {tx_hash:?}");
+            info!(
+                "Finalized InitTransfer ({:?}:{}): {tx_hash:?}",
+                transfer_id.origin_chain, transfer_id.origin_nonce
+            );
             Ok(EventAction::Remove)
         }
         Err(err) => {
@@ -181,17 +190,39 @@ pub async fn process_fin_transfer_event(
     fin_transfer: FinTransfer,
     near_nonce: Arc<utils::nonce::NonceManager>,
 ) -> Result<EventAction> {
-    let FinTransfer::Solana { emitter, sequence } = fin_transfer else {
+    let FinTransfer::Solana {
+        emitter,
+        sequence,
+        transfer_id,
+    } = fin_transfer
+    else {
         anyhow::bail!("Expected Solana FinTransfer, got: {fin_transfer:?}");
     };
 
-    info!("Trying to process FinTransfer log on Solana");
+    info!(
+        "Processing Solana FinTransfer ({:?}:{sequence})",
+        ChainKind::Sol
+    );
+
+    if let Some(transfer_id) = transfer_id {
+        match omni_connector.near_get_transfer_message(transfer_id).await {
+            Ok(transfer_message) if transfer_message.fee.is_zero() => {
+                info!("No fee to claim for FinTransfer ({transfer_id:?})");
+                return Ok(EventAction::Remove);
+            }
+            Ok(_) => {}
+            Err(err) => {
+                warn!("Failed to get transfer message for FinTransfer ({transfer_id:?}): {err:?}",);
+                return Ok(EventAction::Retry);
+            }
+        }
+    }
 
     let Ok(vaa) = omni_connector
         .wormhole_get_vaa(config.wormhole.solana_chain_id, emitter, sequence)
         .await
     else {
-        warn!("Failed to get VAA for sequence: {sequence}");
+        warn!("VAA is not ready for {:?}:{sequence}", ChainKind::Sol);
         return Ok(EventAction::Retry);
     };
 
@@ -258,13 +289,16 @@ pub async fn process_deploy_token_event(
         anyhow::bail!("Expected Solana DeployToken, got: {deploy_token_event:?}");
     };
 
-    info!("Trying to process DeployToken log on Solana");
+    info!(
+        "Processing Solana DeployToken ({:?}:{sequence})",
+        ChainKind::Sol
+    );
 
     let Ok(vaa) = omni_connector
         .wormhole_get_vaa(config.wormhole.solana_chain_id, emitter, sequence)
         .await
     else {
-        warn!("Failed to get VAA for sequence: {sequence}");
+        warn!("VAA is not ready for {:?}:{sequence}", ChainKind::Sol);
         return Ok(EventAction::Retry);
     };
 

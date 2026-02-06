@@ -524,7 +524,7 @@ fn test_update_transfer_fee_invalid_deposit() {
 }
 
 #[test]
-#[should_panic(expected = "Only sender can update token fee")]
+#[should_panic(expected = "ERR_SENDER_CAN_UPDATE_TOKEN_FEE_ONLY")]
 fn test_update_transfer_fee_wrong_sender() {
     let mut contract = get_default_contract();
 
@@ -861,6 +861,7 @@ fn test_fin_transfer_callback_non_near_success() {
 }
 
 #[test]
+<<<<<<< HEAD
 fn test_claim_fee_decreases_locked_tokens_for_non_deployed_token() {
     let mut contract = get_default_contract();
     let token_id = AccountId::try_from(DEFAULT_FT_CONTRACT_ACCOUNT.to_string()).unwrap();
@@ -940,6 +941,9 @@ fn test_claim_fee_decreases_locked_tokens_for_non_deployed_token() {
 
 #[test]
 #[should_panic(expected = "Invalid proof message")]
+=======
+#[should_panic(expected = "ERR_INVALID_PROOF")]
+>>>>>>> origin/main
 fn test_fin_transfer_callback_invalid_proof() {
     let mut contract = get_default_contract();
     let storage_actions = get_default_storage_deposit_actions();
@@ -962,7 +966,7 @@ fn test_fin_transfer_callback_invalid_proof() {
 }
 
 #[test]
-#[should_panic(expected = "Unknown factory")]
+#[should_panic(expected = "ERR_UNKNOWN_FACTORY")]
 fn test_fin_transfer_callback_unknown_factory() {
     let mut contract = get_default_contract();
     let storage_actions = get_default_storage_deposit_actions();

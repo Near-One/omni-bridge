@@ -562,7 +562,7 @@ mod tests {
                     relayer: AccountId::from_str("fake.testnet").unwrap(),
                 },
             },
-            error: Some("Not enough storage deposited"),
+            error: Some("ERR_NOT_ENOUGH_STORAGE"),
         })]
         // Refund on ft_transfer_call failure
         #[case(FastTransferCase {
@@ -612,14 +612,14 @@ mod tests {
             is_bridged_token: false,
             first_transfer: default_fast_transfer_native(),
             second_transfer: default_fast_transfer_native(),
-            error: Some("Fast transfer is already performed"),
+            error: Some("ERR_FAST_TRANSFER_ALREADY_PERFORMED"),
         })]
         // Fails on duplicate fast transfer with bridged token
         #[case(FastTransferMultipleCase {
             is_bridged_token: true,
             first_transfer: default_fast_transfer_bridged(),
             second_transfer: default_fast_transfer_bridged(),
-            error: Some("Fast transfer is already performed"),
+            error: Some("ERR_FAST_TRANSFER_ALREADY_PERFORMED"),
         })]
         #[tokio::test]
         async fn multiple(
@@ -872,7 +872,7 @@ mod tests {
                     relayer: AccountId::from_str("fake.testnet").unwrap(),
                 }
             },
-            error: Some("Fast transfer is already performed"),
+            error: Some("ERR_FAST_TRANSFER_ALREADY_PERFORMED"),
         })]
         #[tokio::test]
         async fn test_transfer_to_other_chain_multiple(
@@ -1131,7 +1131,7 @@ mod tests {
                         transfer_msg: transfer_msg.clone(),
                         fast_relayer_account: None,
                     },
-                    Some("The transfer is already finalised"),
+                    Some("ERR_TRANSFER_ALREADY_FINALISED"),
                 )
                 .await
             }
@@ -1226,7 +1226,7 @@ mod tests {
                         transfer_msg,
                         fast_relayer_account: Some(&env.fast_relayer_account),
                     },
-                    Some("The transfer is already finalised"),
+                    Some("ERR_TRANSFER_ALREADY_FINALISED"),
                 )
                 .await
             }
