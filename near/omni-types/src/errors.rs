@@ -28,6 +28,7 @@ pub enum BridgeError {
     InvalidMetadata,
     InvalidProof,
     InvalidProofMessage,
+    InvalidRecipientAddress,
     InvalidRecipientChain,
     InvalidState,
     InvalidStorageAccountsLen,
@@ -75,8 +76,17 @@ pub enum TokenLockError {
 #[strum(serialize_all = "shouty_snake_case", prefix = "ERR_")]
 #[non_exhaustive]
 pub enum StorageError {
+    AccountNotRegistered(AccountId),
     MessageAccountNotRegistered,
     NotEnoughBalanceForFee,
+    NotEnoughStorageBalance {
+        requested: NearToken,
+        available: NearToken,
+    },
+    NotEnoughStorageBalanceAttached {
+        required: NearToken,
+        attached: NearToken,
+    },
     SignerNotEnoughBalance,
     SignerNotRegistered,
 }

@@ -1279,7 +1279,7 @@ impl Contract {
             token: OmniAddress::Near(token_id),
             amount: U128(amount),
             recipient: OmniAddress::Eth(
-                H160::from_str(&recipient).near_expect("Error on recipient parsing"),
+                H160::from_str(&recipient).near_expect(BridgeError::InvalidRecipientAddress),
             ),
             fee: Fee {
                 fee: U128(0),
@@ -2047,7 +2047,7 @@ impl Contract {
 
                 *attached_deposit = attached_deposit
                     .checked_sub(storage_deposit_amount)
-                    .near_expect("The attached deposit is less than required");
+                    .near_expect(BridgeError::InsufficientStorageDeposit.as_ref());
 
                 ext_token::ext(action.token_id.clone())
                     .with_static_gas(STORAGE_DEPOSIT_GAS)
@@ -2072,7 +2072,9 @@ impl Contract {
 
     fn decode_prover_result(result_idx: u64) -> Result<ProverResult, PromiseError> {
         match env::promise_result_checked(result_idx, usize::MAX) {
-            Ok(data) => Ok(ProverResult::try_from_slice(&data).near_expect("Invalid proof")),
+            Ok(data) => {
+                Ok(ProverResult::try_from_slice(&data).near_expect(BridgeError::InvalidProof))
+            }
             Err(_) => Err(PromiseError::Failed),
         }
     }
