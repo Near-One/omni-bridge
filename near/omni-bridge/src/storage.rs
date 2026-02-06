@@ -146,7 +146,10 @@ impl Contract {
                 let min_required_storage_balance = self.required_balance_for_account();
                 let available = amount
                     .checked_sub(min_required_storage_balance)
-                    .near_expect("The attached deposit is less than the minimum storage balance");
+                    .near_expect(StorageError::NotEnoughStorageBalanceAttached {
+                        required: min_required_storage_balance,
+                        attached: amount,
+                    });
                 StorageBalance {
                     total: amount,
                     available,
@@ -186,16 +189,20 @@ impl Contract {
         let account_id = env::predecessor_account_id();
         let mut storage = self
             .storage_balance_of(&account_id)
-            .near_expect("The account is not registered");
+            .near_expect(StorageError::AccountNotRegistered(account_id.clone()));
         let to_withdraw = amount.unwrap_or(storage.available);
-        storage.total = storage
-            .total
-            .checked_sub(to_withdraw)
-            .near_expect("The amount is greater than the total storage balance");
-        storage.available = storage
-            .available
-            .checked_sub(to_withdraw)
-            .near_expect("The amount is greater than the available storage balance");
+        storage.total = storage.total.checked_sub(to_withdraw).near_expect(
+            StorageError::NotEnoughStorageBalance {
+                requested: to_withdraw,
+                available: storage.total,
+            },
+        );
+        storage.available = storage.available.checked_sub(to_withdraw).near_expect(
+            StorageError::NotEnoughStorageBalance {
+                requested: to_withdraw,
+                available: storage.available,
+            },
+        );
 
         self.accounts_balances.insert(&account_id, &storage);
 
