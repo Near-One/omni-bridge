@@ -97,7 +97,7 @@ impl Contract {
         }
     }
 
-    pub fn lock_tokens_if_needed(
+    pub(crate) fn lock_tokens_if_needed(
         &mut self,
         chain_kind: ChainKind,
         token_id: &AccountId,
@@ -110,7 +110,7 @@ impl Contract {
         self.lock_tokens(chain_kind, token_id, amount)
     }
 
-    pub fn unlock_tokens_if_needed(
+    pub(crate) fn unlock_tokens_if_needed(
         &mut self,
         chain_kind: ChainKind,
         token_id: &AccountId,
