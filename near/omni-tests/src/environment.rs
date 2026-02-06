@@ -701,13 +701,13 @@ async fn seed_locked_tokens(
 ) -> anyhow::Result<()> {
     bridge_contract
         .call("set_locked_tokens")
-        .args_json(json!([
-            {
+        .args_json(json!({
+            "args": [{
                 "chain_kind": ChainKind::Eth,
                 "token_id": token_id,
                 "amount": U128(DEFAULT_LOCKED_TOKENS),
-            }
-        ]))
+            }]
+        }))
         .max_gas()
         .transact()
         .await?
