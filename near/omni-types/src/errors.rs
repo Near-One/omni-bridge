@@ -66,6 +66,14 @@ pub enum BridgeError {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, AsRefStr, ErrorDisplay)]
 #[strum(serialize_all = "shouty_snake_case", prefix = "ERR_")]
 #[non_exhaustive]
+pub enum TokenLockError {
+    LockedTokensOverflow,
+    InsufficientLockedTokens,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, AsRefStr, ErrorDisplay)]
+#[strum(serialize_all = "shouty_snake_case", prefix = "ERR_")]
+#[non_exhaustive]
 pub enum StorageError {
     MessageAccountNotRegistered,
     NotEnoughBalanceForFee,

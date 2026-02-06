@@ -1,6 +1,7 @@
 use near_plugins::{access_control_any, AccessControllable};
-use near_sdk::{env, json_types::U128, near, require, AccountId};
-use omni_types::ChainKind;
+use near_sdk::{json_types::U128, near, require, AccountId};
+use omni_types::{errors::TokenLockError, ChainKind};
+use omni_utils::near_expect::NearExpect;
 
 use crate::{Contract, ContractExt, Role};
 
@@ -59,7 +60,7 @@ impl Contract {
         let current_amount = self.locked_tokens.get(&key).unwrap_or(0);
         let new_amount = current_amount
             .checked_add(amount)
-            .unwrap_or_else(|| env::panic_str("ERR_LOCKED_TOKENS_OVERFLOW"));
+            .near_expect(TokenLockError::LockedTokensOverflow);
 
         self.locked_tokens.insert(&key, &new_amount);
 
@@ -78,7 +79,10 @@ impl Contract {
     ) -> LockAction {
         let key = (chain_kind, token_id.clone());
         let available = self.locked_tokens.get(&key).unwrap_or(0);
-        require!(available >= amount, "ERR_INSUFFICIENT_LOCKED_TOKENS");
+        require!(
+            available >= amount,
+            TokenLockError::InsufficientLockedTokens.as_ref()
+        );
 
         let remaining = available - amount;
         if remaining == 0 {
