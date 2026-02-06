@@ -227,6 +227,7 @@ async fn decode_instruction(
                         RetryableEvent::new(FinTransfer::Solana {
                             emitter: emitter.clone(),
                             sequence,
+                            transfer_id: None,
                         }),
                     )
                     .await;

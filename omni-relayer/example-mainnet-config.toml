@@ -152,6 +152,9 @@ signing_enabled = true
 # If this is set to true, then omni relayer will call `verify_withdraw`
 verifying_withdraw_enabled = true
 
+[orchard]
+enabled = false
+
 [wormhole]
 api_url = "https://api.wormholescan.io/"
 solana_chain_id = 1
