@@ -2,11 +2,13 @@
 pragma solidity 0.8.24;
 
 interface IBridgeToken {
-    function mint(address beneficiary, uint256 amount) external;
-    function mintWithMsg(
-        address beneficiary,
-        uint256 amount,
+    function mint(address account, uint256 value) external;
+
+    function mint(
+        address account,
+        uint256 value,
         bytes memory message
     ) external;
-    function burn(address act, uint256 amount) external;
+
+    function burn(address account, uint256 value) external;
 }

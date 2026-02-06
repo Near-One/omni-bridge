@@ -51,16 +51,16 @@ contract BridgeToken is
         _mint(beneficiary, amount);
     }
 
-    function mintWithMsg(
-        address beneficiary,
-        uint256 amount,
+    function mint(
+        address account,
+        uint256 value,
         bytes memory
     ) external virtual onlyOwner {
-        _mint(beneficiary, amount);
+        _mint(account, value);
     }
 
-    function burn(address act, uint256 amount) external onlyOwner {
-        _burn(act, amount);
+    function burn(address account, uint256 value) external onlyOwner {
+        _burn(account, value);
     }
 
     function name() public view virtual override returns (string memory) {

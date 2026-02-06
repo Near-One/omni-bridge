@@ -336,7 +336,7 @@ contract OmniBridge is
                     payload.amount
                 );
             } else {
-                IBridgeToken(payload.tokenAddress).mintWithMsg(
+                IBridgeToken(payload.tokenAddress).mint(
                     payload.recipient,
                     payload.amount,
                     payload.message

@@ -22,12 +22,12 @@ contract HyperliquedBridgeToken is BridgeToken {
         _systemAddress = systemAddress_;
     }
 
-    function mintWithMsg(
-        address beneficiary,
-        uint256 amount,
+    function mint(
+        address account,
+        uint256 value,
         bytes memory
     ) external override onlyOwner {
-        _mint(beneficiary, amount);
-        _update(beneficiary, _systemAddress, amount);
+        _mint(account, value);
+        _update(account, _systemAddress, value);
     }
 }
