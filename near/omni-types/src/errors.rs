@@ -8,6 +8,7 @@ use strum_macros::AsRefStr;
 pub enum BridgeError {
     Borsh,
     Cast,
+    CannotDetermineOriginChain,
     DeployerNotSet,
     ExpectedToOverwriteTokenAddress,
     FailedToGetTokenAddress,
@@ -60,6 +61,14 @@ pub enum BridgeError {
     UnknownFactory,
     UtxoConfigMissing,
     UtxoTransferAlreadyFinalised,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, AsRefStr, ErrorDisplay)]
+#[strum(serialize_all = "shouty_snake_case", prefix = "ERR_")]
+#[non_exhaustive]
+pub enum TokenLockError {
+    LockedTokensOverflow,
+    InsufficientLockedTokens,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, AsRefStr, ErrorDisplay)]

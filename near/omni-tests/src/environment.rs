@@ -20,7 +20,8 @@ use crate::helpers::tests::{
     NEP141_DEPOSIT,
 };
 
-const PREV_LOCKER_WASM_FILEPATH: &str = "src/data/omni_bridge-0_4_1.wasm";
+const PREV_LOCKER_WASM_FILEPATH: &str = "src/data/omni_bridge-0_4_3.wasm";
+const DEFAULT_LOCKED_TOKENS: u128 = 1_000_000_000_000_000_000_000_000_000_000;
 
 pub struct BridgeToken {
     pub is_deployed: bool,
@@ -85,6 +86,10 @@ impl TestEnvBuilder {
 
         storage_deposit(&token_contract, bridge_contract.id()).await?;
 
+        if !self.deploy_old_version {
+            seed_locked_tokens(&bridge_contract, token_contract.id()).await?;
+        }
+
         Ok(TestEnvBuilderWithToken {
             worker: self.worker,
             bridge_contract,
@@ -125,6 +130,10 @@ impl TestEnvBuilder {
             .into_result()?;
 
         storage_deposit(&token_contract, bridge_contract.id()).await?;
+
+        if !self.deploy_old_version {
+            seed_locked_tokens(&bridge_contract, token_contract.id()).await?;
+        }
 
         Ok(TestEnvBuilderWithToken {
             worker: self.worker,
@@ -270,7 +279,8 @@ impl TestEnvBuilder {
     pub async fn with_utxo_token(self) -> anyhow::Result<TestEnvBuilderWithToken> {
         let bridge_contract = self.deploy_bridge(None).await?;
 
-        let token_contract = self.deploy_nep141_token().await?;
+        let token_account_id: AccountId = "btc-token".parse().unwrap();
+        let token_contract = self.deploy_nep141_token_with_id(token_account_id).await?;
 
         let utxo_connector = self
             .worker
@@ -452,6 +462,32 @@ impl TestEnvBuilder {
             .worker
             .dev_deploy(&self.build_artifacts.mock_token)
             .await?;
+
+        token_contract
+            .call("new_default_meta")
+            .args_json(json!({
+                "owner_id": token_contract.id(),
+                "total_supply": U128(u128::MAX)
+            }))
+            .max_gas()
+            .transact()
+            .await?
+            .into_result()?;
+
+        Ok(token_contract)
+    }
+
+    async fn deploy_nep141_token_with_id(&self, id: AccountId) -> anyhow::Result<Contract> {
+        let token_contract = self
+            .worker
+            .create_tla_and_deploy(
+                id,
+                self.worker.generate_dev_account_credentials().1,
+                &self.build_artifacts.mock_token,
+            )
+            .await?
+            .unwrap();
+
         token_contract
             .call("new_default_meta")
             .args_json(json!({
@@ -651,6 +687,27 @@ async fn storage_deposit(token_contract: &Contract, account_id: &AccountId) -> a
             "registration_only": true,
         }))
         .deposit(NEP141_DEPOSIT)
+        .max_gas()
+        .transact()
+        .await?
+        .into_result()?;
+
+    Ok(())
+}
+
+async fn seed_locked_tokens(
+    bridge_contract: &Contract,
+    token_id: &AccountId,
+) -> anyhow::Result<()> {
+    bridge_contract
+        .call("set_locked_token")
+        .args_json(json!({
+            "args": {
+                "chain_kind": ChainKind::Eth,
+                "token_id": token_id,
+                "amount": U128(DEFAULT_LOCKED_TOKENS),
+            }
+        }))
         .max_gas()
         .transact()
         .await?
