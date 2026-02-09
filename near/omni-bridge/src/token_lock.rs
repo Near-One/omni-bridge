@@ -35,16 +35,11 @@ impl Contract {
         U128(self.locked_tokens.get(&(chain_kind, token_id)).unwrap_or(0))
     }
 
-    #[access_control_any(roles(Role::DAO))]
-    pub fn set_locked_token(&mut self, args: SetLockedTokenArgs) {
-        self.locked_tokens
-            .insert(&(args.chain_kind, args.token_id), &args.amount.0);
-    }
-
-    #[access_control_any(roles(Role::DAO))]
+    #[access_control_any(roles(Role::DAO, Role::TokenLockController))]
     pub fn set_locked_tokens(&mut self, args: Vec<SetLockedTokenArgs>) {
         for arg in args {
-            self.set_locked_token(arg);
+            self.locked_tokens
+                .insert(&(arg.chain_kind, arg.token_id), &arg.amount.0);
         }
     }
 }
@@ -57,7 +52,9 @@ impl Contract {
         amount: u128,
     ) -> LockAction {
         let key = (chain_kind, token_id.clone());
-        let current_amount = self.locked_tokens.get(&key).unwrap_or(0);
+        let Some(current_amount) = self.locked_tokens.get(&key) else {
+            return LockAction::Unchanged;
+        };
         let new_amount = current_amount
             .checked_add(amount)
             .near_expect(TokenLockError::LockedTokensOverflow);
@@ -78,18 +75,16 @@ impl Contract {
         amount: u128,
     ) -> LockAction {
         let key = (chain_kind, token_id.clone());
-        let available = self.locked_tokens.get(&key).unwrap_or(0);
+        let Some(available) = self.locked_tokens.get(&key) else {
+            return LockAction::Unchanged;
+        };
         require!(
             available >= amount,
             TokenLockError::InsufficientLockedTokens.as_ref()
         );
 
         let remaining = available - amount;
-        if remaining == 0 {
-            self.locked_tokens.remove(&key);
-        } else {
-            self.locked_tokens.insert(&key, &remaining);
-        }
+        self.locked_tokens.insert(&key, &remaining);
 
         LockAction::Unlocked {
             chain_kind,
@@ -98,7 +93,7 @@ impl Contract {
         }
     }
 
-    pub fn lock_tokens_if_needed(
+    pub(crate) fn lock_tokens_if_needed(
         &mut self,
         chain_kind: ChainKind,
         token_id: &AccountId,
@@ -111,7 +106,7 @@ impl Contract {
         self.lock_tokens(chain_kind, token_id, amount)
     }
 
-    pub fn unlock_tokens_if_needed(
+    pub(crate) fn unlock_tokens_if_needed(
         &mut self,
         chain_kind: ChainKind,
         token_id: &AccountId,
