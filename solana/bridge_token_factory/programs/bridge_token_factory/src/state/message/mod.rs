@@ -1,5 +1,5 @@
 use anchor_lang::prelude::*;
-use anchor_lang::solana_program::{keccak, secp256k1_recover::secp256k1_recover};
+use solana_program::{keccak, secp256k1_recover::secp256k1_recover};
 
 use crate::error::ErrorCode;
 

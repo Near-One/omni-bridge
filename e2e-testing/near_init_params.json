@@ -74,7 +74,7 @@
         "chain_signatures_account_id": "v1.signer-prod.testnet",
         "btc_light_client_account_id": "zcash-client.n-bridge.testnet",
         "confirmations_strategy": {
-          "100000000": 6
+          "100000000": 2
         },
         "confirmations_delta": 1,
         "withdraw_bridge_fee": {

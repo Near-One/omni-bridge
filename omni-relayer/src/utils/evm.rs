@@ -11,8 +11,10 @@ use omni_types::{
     prover_result::ProofKind,
 };
 
-use alloy::{primitives::Address, sol};
-use ethereum_types::H256;
+use alloy::{
+    primitives::{Address, TxHash},
+    sol,
+};
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct InitTransferMessage {
@@ -72,7 +74,7 @@ sol!(
 pub async fn construct_prover_args(
     omni_connector: Arc<OmniConnector>,
     vaa: Option<String>,
-    tx_hash: H256,
+    tx_hash: TxHash,
     proof_kind: ProofKind,
 ) -> Option<Vec<u8>> {
     if let Some(vaa) = vaa {

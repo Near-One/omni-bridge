@@ -37,7 +37,6 @@ sign_without_checking_fee = ["near:aurora"]
 [eth]
 rpc_http_url = "https://sepolia.infura.io/v3/INFURA_API_KEY"
 rpc_ws_url = "wss://sepolia.infura.io/ws/v3/INFURA_API_KEY"
-chain_id = 11_155_111
 omni_bridge_address = "0x68a86e0Ea5B1d39F385c1326e4d493526dFe4401"
 light_client = "client-eth2.sepolia.testnet"
 block_processing_batch_size = 10_000
@@ -52,7 +51,6 @@ error_selectors_to_remove = [
 [base]
 rpc_http_url = "https://base-sepolia.infura.io/v3/INFURA_API_KEY"
 rpc_ws_url = "wss://base-sepolia.infura.io/ws/v3/INFURA_API_KEY"
-chain_id = 84_532
 omni_bridge_address = "0xa56b860017152cD296ad723E8409Abd6e5D86d4d"
 wormhole_address = "0x79A1027a6A159502049F10906D333EC57E95F083"
 block_processing_batch_size = 10_000
@@ -68,7 +66,6 @@ error_selectors_to_remove = [
 [arb]
 rpc_http_url = "https://arbitrum-sepolia.infura.io/v3/INFURA_API_KEY"
 rpc_ws_url = "wss://arbitrum-sepolia.infura.io/ws/v3/INFURA_API_KEY"
-chain_id = 421_614
 omni_bridge_address = "0x0C981337fFe39a555d3A40dbb32f21aD0eF33FFA"
 wormhole_address = "0x6b9C8671cdDC8dEab9c719bB87cBd3e782bA6a35"
 block_processing_batch_size = 10_000
@@ -84,13 +81,27 @@ error_selectors_to_remove = [
 [bnb]
 rpc_http_url = "https://bsc-testnet.infura.io/v3/INFURA_API_KEY"
 rpc_ws_url = "wss://bsc-testnet-rpc.publicnode.com"
-chain_id = 97
 omni_bridge_address = "0xEC81aFc3485a425347Ac03316675e58a680b283A"
 wormhole_address = "0x68605AD7b15c732a30b1BbC62BE8F2A509D74b4D"
 block_processing_batch_size = 10_000
 # https://wormhole.com/docs/build/reference/consistency-levels/
 expected_finalization_time = 48
 safe_confirmations = 10
+error_selectors_to_remove = [
+	"0x8baa579f", # InvalidSignature()
+	"0xdcf35db0", # FailedToSendEther()
+	"696e76616c696420666565" # Wormhole's "invalid fee"
+]
+
+[pol]
+rpc_http_url = "https://polygon-amoy.infura.io/v3/INFURA_API_KEY"
+rpc_ws_url = "wss://polygon-amoy.infura.io/ws/v3/INFURA_API_KEY"
+omni_bridge_address = "0xEC81aFc3485a425347Ac03316675e58a680b283A"
+wormhole_address = "0x6b9C8671cdDC8dEab9c719bB87cBd3e782bA6a35"
+block_processing_batch_size = 10_000
+# https://wormhole.com/docs/build/reference/consistency-levels/
+expected_finalization_time = 6
+safe_confirmations = 5
 error_selectors_to_remove = [
 	"0x8baa579f", # InvalidSignature()
 	"0xdcf35db0", # FailedToSendEther()
@@ -140,6 +151,9 @@ light_client = "zcash-client.n-bridge.testnet"
 signing_enabled = true
 # If this is set to true, then omni relayer will call `verify_withdraw`
 verifying_withdraw_enabled = true
+
+[orchard]
+enabled = true
 
 [wormhole]
 api_url = "https://api.testnet.wormholescan.io/"

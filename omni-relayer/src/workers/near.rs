@@ -76,7 +76,10 @@ pub async fn process_transfer_event(
         }
     };
 
-    info!("Trying to process TransferMessage on NEAR");
+    let origin_chain = transfer_message.get_origin_chain();
+    let origin_nonce = transfer_message.origin_nonce;
+
+    info!("Processing transfer ({origin_chain:?}:{origin_nonce}) on NEAR");
 
     match omni_connector
         .is_transfer_finalised(
@@ -165,6 +168,7 @@ pub async fn process_transfer_event(
                     specific_errors: Some(vec![
                         "Signature request has already been submitted. Please try again later."
                             .to_string(),
+                        "Request has timed out.".to_string(),
                         "Signature request has timed out.".to_string(),
                         "Attached deposit is lower than required".to_string(),
                         "Exceeded the prepaid gas.".to_string(),
@@ -175,7 +179,7 @@ pub async fn process_transfer_event(
             )
             .await;
 
-            info!("Signed transfer: {tx_hash:?}");
+            info!("Signed transfer ({origin_chain:?}:{origin_nonce}): {tx_hash:?}");
 
             Ok(EventAction::Remove)
         }
@@ -188,23 +192,18 @@ pub async fn process_transfer_event(
                     | NearRpcError::RpcQueryError(JsonRpcError::TransportError(_))
                     | NearRpcError::RpcTransactionError(JsonRpcError::TransportError(_)) => {
                         warn!(
-                            "Failed to sign transfer ({}), retrying: {near_rpc_error:?}",
-                            transfer_message.origin_nonce
+                            "Failed to sign transfer ({origin_chain:?}:{origin_nonce}), retrying: {near_rpc_error:?}"
                         );
                         return Ok(EventAction::Retry);
                     }
                     _ => {
                         anyhow::bail!(
-                            "Failed to sign transfer ({}): {near_rpc_error:?}",
-                            transfer_message.origin_nonce
+                            "Failed to sign transfer ({origin_chain:?}:{origin_nonce}): {near_rpc_error:?}"
                         );
                     }
                 };
             }
-            anyhow::bail!(
-                "Failed to sign transfer ({}): {err:?}",
-                transfer_message.origin_nonce
-            );
+            anyhow::bail!("Failed to sign transfer ({origin_chain:?}:{origin_nonce}): {err:?}");
         }
     }
 }
@@ -225,7 +224,11 @@ pub async fn process_transfer_to_utxo_event(
         anyhow::bail!("Expected NearTransferWithTimestamp, got: {transfer:?}");
     };
 
-    info!("Trying to process UtxoTransferMessage on NEAR");
+    info!(
+        "Processing NEAR to UTXO transfer ({:?}:{})",
+        transfer_message.get_origin_chain(),
+        transfer_message.origin_nonce
+    );
 
     let Some(recipient) = transfer_message.recipient.get_utxo_address() else {
         anyhow::bail!(
@@ -249,6 +252,8 @@ pub async fn process_transfer_to_utxo_event(
                 origin_chain: transfer_message.sender.get_chain(),
                 origin_nonce: transfer_message.origin_nonce,
             },
+            // TODO: uncomment once orchard-related PR is merged in bridge-sdk-rs main branch
+            // true,
             TransactionOptions {
                 nonce: Some(nonce),
                 wait_until: near_primitives::views::TxExecutionStatus::Included,
@@ -264,8 +269,9 @@ pub async fn process_transfer_to_utxo_event(
     {
         Ok(tx_hash) => {
             info!(
-                "Submitted {:?} transfer: {tx_hash:?}",
-                transfer_message.recipient.get_chain()
+                "Submitted transfer ({:?}:{}): {tx_hash:?}",
+                transfer_message.get_origin_chain(),
+                transfer_message.origin_nonce
             );
 
             let Ok(serialized_event) = serde_json::to_value(&transfer) else {
@@ -365,7 +371,10 @@ pub async fn process_sign_transfer_event(
         anyhow::bail!("Expected SignTransferEvent, got: {omni_bridge_event:?}");
     };
 
-    info!("Trying to process SignTransferEvent log on NEAR");
+    info!(
+        "Processing SignTransferEvent ({:?}:{})",
+        message_payload.transfer_id.origin_chain, message_payload.transfer_id.origin_nonce
+    );
 
     if message_payload.fee_recipient != Some(signer) {
         anyhow::bail!("Fee recipient mismatch");
@@ -445,7 +454,7 @@ pub async fn process_sign_transfer_event(
         ChainKind::Near => {
             anyhow::bail!("Near to Near transfers are not supported yet");
         }
-        ChainKind::Eth | ChainKind::Base | ChainKind::Arb | ChainKind::Bnb => {
+        ChainKind::Eth | ChainKind::Base | ChainKind::Arb | ChainKind::Bnb | ChainKind::Pol => {
             let nonce = evm_nonces
                 .reserve_nonce(chain_kind)
                 .await
@@ -455,7 +464,7 @@ pub async fn process_sign_transfer_event(
                 omni_connector::FinTransferArgs::EvmFinTransfer {
                     chain_kind,
                     event: omni_bridge_event.clone(),
-                    tx_nonce: Some(nonce.into()),
+                    tx_nonce: Some(alloy::primitives::U256::from(nonce)),
                 },
                 Some(nonce),
             )
@@ -483,7 +492,10 @@ pub async fn process_sign_transfer_event(
 
     match omni_connector.fin_transfer(fin_transfer_args).await {
         Ok(tx_hash) => {
-            info!("Finalized deposit: {tx_hash}");
+            info!(
+                "Finalized deposit ({:?}:{}): {tx_hash}",
+                message_payload.transfer_id.origin_chain, message_payload.transfer_id.origin_nonce
+            );
 
             if let Some(nonce) = evm_nonce {
                 if config.is_fee_bumping_enabled(chain_kind) {
@@ -493,7 +505,6 @@ pub async fn process_sign_transfer_event(
                         chain_kind,
                         &tx_hash,
                         nonce,
-                        message_payload.transfer_id.origin_nonce.to_string(),
                         omni_bridge_event,
                     )
                     .await
@@ -512,6 +523,7 @@ pub async fn process_sign_transfer_event(
                     ChainKind::Base => &config.base,
                     ChainKind::Arb => &config.arb,
                     ChainKind::Bnb => &config.bnb,
+                    ChainKind::Pol => &config.pol,
                     ChainKind::Near | ChainKind::Sol | ChainKind::Btc | ChainKind::Zcash => {
                         anyhow::bail!(
                             "Failed to finalize deposit (unexpected: failed to get evm config): {err}"
@@ -599,7 +611,7 @@ pub async fn process_unverified_transfer_event(
 pub async fn initiate_fast_transfer(
     fast_connector: Arc<OmniConnector>,
     transfer: Transfer,
-    near_omni_nonce: Arc<utils::nonce::NonceManager>,
+    near_fast_nonce: Arc<utils::nonce::NonceManager>,
 ) -> Result<EventAction> {
     let Ok(near_bridge_client) = fast_connector.near_bridge_client() else {
         anyhow::bail!("Near bridge client is not configured");
@@ -689,7 +701,7 @@ pub async fn initiate_fast_transfer(
     }
 
     let mut nonce = Some(
-        near_omni_nonce
+        near_fast_nonce
             .reserve_nonce()
             .await
             .context("Failed to reserve nonce for near transaction")?,
@@ -716,7 +728,7 @@ pub async fn initiate_fast_transfer(
     {
         Ok(true) => {
             nonce = Some(
-                near_omni_nonce
+                near_fast_nonce
                     .reserve_nonce()
                     .await
                     .context("Failed to reserve nonce for near transaction")?,
@@ -773,16 +785,10 @@ async fn store_pending_transaction(
     chain_kind: ChainKind,
     tx_hash: &str,
     nonce: u64,
-    source_event_id: String,
     omni_bridge_event: OmniBridgeEvent,
 ) -> Result<()> {
-    let pending_tx = PendingTransaction::new(
-        tx_hash.to_string(),
-        nonce,
-        chain_kind,
-        source_event_id,
-        omni_bridge_event,
-    );
+    let pending_tx =
+        PendingTransaction::new(tx_hash.to_string(), nonce, chain_kind, omni_bridge_event);
 
     utils::redis::zadd(
         config,

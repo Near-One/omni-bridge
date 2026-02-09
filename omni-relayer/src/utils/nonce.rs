@@ -4,7 +4,7 @@ use alloy::{
     primitives::{Address, U64},
     providers::{DynProvider, Provider, ProviderBuilder},
 };
-use anyhow::Result;
+use anyhow::{Context, Result};
 use near_crypto::InMemorySigner;
 use near_jsonrpc_client::{JsonRpcClient, methods};
 use near_jsonrpc_primitives::types::query::QueryResponseKind;
@@ -135,6 +135,7 @@ pub struct EvmNonceManagers {
     pub base: Option<NonceManager>,
     pub arb: Option<NonceManager>,
     pub bnb: Option<NonceManager>,
+    pub pol: Option<NonceManager>,
 }
 
 impl EvmNonceManagers {
@@ -176,21 +177,43 @@ impl EvmNonceManagers {
                     address: config::get_relayer_evm_address(ChainKind::Bnb),
                 })
             }),
+            pol: config.pol.as_ref().map(|pol_config| {
+                NonceManager::new(ChainClient::Evm {
+                    provider: DynProvider::new(
+                        ProviderBuilder::new()
+                            .connect_http(pol_config.rpc_http_url.parse().unwrap()),
+                    ),
+                    address: config::get_relayer_evm_address(ChainKind::Pol),
+                })
+            }),
         }
     }
 
     pub async fn resync_nonces(&self) -> Result<()> {
         if let Some(eth) = self.eth.as_ref() {
-            eth.resync_nonce().await?;
+            eth.resync_nonce()
+                .await
+                .context("Failed to resync nonce for eth")?;
         }
         if let Some(base) = self.base.as_ref() {
-            base.resync_nonce().await?;
+            base.resync_nonce()
+                .await
+                .context("Failed to resync nonce for base")?;
         }
         if let Some(arb) = self.arb.as_ref() {
-            arb.resync_nonce().await?;
+            arb.resync_nonce()
+                .await
+                .context("Failed to resync nonce for arb")?;
         }
         if let Some(bnb) = self.bnb.as_ref() {
-            bnb.resync_nonce().await?;
+            bnb.resync_nonce()
+                .await
+                .context("Failed to resync nonce for bnb")?;
+        }
+        if let Some(pol) = self.pol.as_ref() {
+            pol.resync_nonce()
+                .await
+                .context("Failed to resync nonce for pol")?;
         }
 
         Ok(())
@@ -223,6 +246,13 @@ impl EvmNonceManagers {
                 self.bnb
                     .as_ref()
                     .ok_or_else(|| anyhow::anyhow!("Bnb nonce manager is not initialized"))?
+                    .reserve_nonce()
+                    .await
+            }
+            ChainKind::Pol => {
+                self.pol
+                    .as_ref()
+                    .ok_or_else(|| anyhow::anyhow!("Pol nonce manager is not initialized"))?
                     .reserve_nonce()
                     .await
             }

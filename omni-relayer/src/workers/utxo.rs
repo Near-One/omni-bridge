@@ -80,7 +80,7 @@ pub async fn process_near_to_utxo_init_transfer_event(
                     | NearRpcError::FinalizationError
                     | NearRpcError::RpcBroadcastTxAsyncError(_)
                     | NearRpcError::RpcQueryError(JsonRpcError::TransportError(_))
-                    | NearRpcError::RpcTransactionError(JsonRpcError::TransportError(_)) => {
+                    | NearRpcError::RpcTransactionError(_) => {
                         warn!("Failed to sign {chain:?} transaction, retrying: {near_rpc_error:?}");
                         return Ok(EventAction::Retry);
                     }
@@ -176,7 +176,7 @@ pub async fn process_utxo_to_near_init_transfer_event(
         vout: usize::try_from(vout)?,
         btc_deposit_args: BtcDepositArgs::DepositMsg {
             msg: DepositMsg {
-                recipient_id: deposit_msg.recipient_id,
+                recipient_id: deposit_msg.recipient_id.clone(),
                 post_actions: deposit_msg.post_actions.map(|optional_actions| {
                     optional_actions
                         .into_iter()
@@ -185,7 +185,9 @@ pub async fn process_utxo_to_near_init_transfer_event(
                             amount: action.amount.0,
                             memo: action.memo,
                             msg: action.msg,
-                            gas: action.gas.map(near_sdk::Gas::as_gas),
+                            gas: action
+                                .gas
+                                .map(|gas| near_primitives::gas::Gas::from_gas(gas.as_gas())),
                         })
                         .collect()
                 }),
@@ -214,7 +216,7 @@ pub async fn process_utxo_to_near_init_transfer_event(
                     | NearRpcError::FinalizationError
                     | NearRpcError::RpcBroadcastTxAsyncError(_)
                     | NearRpcError::RpcQueryError(JsonRpcError::TransportError(_))
-                    | NearRpcError::RpcTransactionError(JsonRpcError::TransportError(_)) => {
+                    | NearRpcError::RpcTransactionError(_) => {
                         warn!(
                             "Failed to finalize {chain:?} transaction, retrying: {near_rpc_error:?}"
                         );
@@ -275,7 +277,7 @@ pub async fn process_sign_transaction_event(
                     | NearRpcError::FinalizationError
                     | NearRpcError::RpcBroadcastTxAsyncError(_)
                     | NearRpcError::RpcQueryError(JsonRpcError::TransportError(_))
-                    | NearRpcError::RpcTransactionError(JsonRpcError::TransportError(_)) => {
+                    | NearRpcError::RpcTransactionError(_) => {
                         warn!(
                             "Failed to finalize {:?} transaction ({}), retrying: {near_rpc_error:?}",
                             sign_utxo_transaction_event.chain,
@@ -369,7 +371,7 @@ pub async fn process_confirmed_tx_hash(
                     | NearRpcError::FinalizationError
                     | NearRpcError::RpcBroadcastTxAsyncError(_)
                     | NearRpcError::RpcQueryError(JsonRpcError::TransportError(_))
-                    | NearRpcError::RpcTransactionError(JsonRpcError::TransportError(_)) => {
+                    | NearRpcError::RpcTransactionError(_) => {
                         warn!("Failed to verify withdraw, retrying: {near_rpc_error:?}");
                         return Ok(EventAction::Retry);
                     }

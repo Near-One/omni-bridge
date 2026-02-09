@@ -14,12 +14,16 @@ library Borsh {
         return bytes16(swapBytes16(val));
     }
 
-    function encodeString(string memory val) internal pure returns (bytes memory) {
-        bytes memory b = bytes(val);
-        return bytes.concat(
-            encodeUint32(uint32(b.length)),
-            bytes(val)
-        );
+    function encodeString(
+        string memory val
+    ) internal pure returns (bytes memory) {
+        return encodeBytes(bytes(val));
+    }
+
+    function encodeBytes(
+        bytes memory val
+    ) internal pure returns (bytes memory) {
+        return bytes.concat(encodeUint32(uint32(val.length)), val);
     }
 
     function encodeAddress(address val) internal pure returns (bytes20) {
@@ -38,9 +42,15 @@ library Borsh {
     }
 
     function swapBytes16(uint128 v) internal pure returns (uint128) {
-        v = ((v & 0x00ff00ff00ff00ff00ff00ff00ff00ff) << 8) | ((v & 0xff00ff00ff00ff00ff00ff00ff00ff00) >> 8);
-        v = ((v & 0x0000ffff0000ffff0000ffff0000ffff) << 16) | ((v & 0xffff0000ffff0000ffff0000ffff0000) >> 16);
-        v = ((v & 0x00000000ffffffff00000000ffffffff) << 32) | ((v & 0xffffffff00000000ffffffff00000000) >> 32);
+        v =
+            ((v & 0x00ff00ff00ff00ff00ff00ff00ff00ff) << 8) |
+            ((v & 0xff00ff00ff00ff00ff00ff00ff00ff00) >> 8);
+        v =
+            ((v & 0x0000ffff0000ffff0000ffff0000ffff) << 16) |
+            ((v & 0xffff0000ffff0000ffff0000ffff0000) >> 16);
+        v =
+            ((v & 0x00000000ffffffff00000000ffffffff) << 32) |
+            ((v & 0xffffffff00000000ffffffff00000000) >> 32);
         return (v << 64) | (v >> 64);
     }
 }

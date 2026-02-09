@@ -1,11 +1,10 @@
 use alloy::{
-    primitives::Address,
+    primitives::{Address, TxHash},
     providers::{DynProvider, Provider, ProviderBuilder, WsConnect},
     rpc::types::{Filter, Log},
     sol_types::SolEvent,
 };
 use anyhow::{Context, Result};
-use ethereum_types::H256;
 use omni_types::{ChainKind, Fee, OmniAddress, TransferId};
 use reqwest::Url;
 use tokio_stream::StreamExt;
@@ -73,6 +72,9 @@ pub async fn start_indexer(
         }
         ChainKind::Bnb => {
             extract_evm_config(config.bnb.clone().context("Failed to get Bnb config")?)?
+        }
+        ChainKind::Pol => {
+            extract_evm_config(config.pol.clone().context("Failed to get Pol config")?)?
         }
         ChainKind::Near | ChainKind::Sol | ChainKind::Btc | ChainKind::Zcash => {
             anyhow::bail!("Unsupported chain kind: {chain_kind:?}")
@@ -248,12 +250,13 @@ async fn process_log(
         return;
     };
 
-    let tx_hash = H256::from_slice(tx_hash.as_slice());
+    let tx_hash = TxHash::from_slice(tx_hash.as_slice());
 
     let Some(block_number) = log.block_number else {
         warn!("No block number in log: {log:?}");
         return;
     };
+    let log_index = log.log_index.unwrap_or_default();
 
     let timestamp = http_provider
         .get_block(alloy::eips::BlockId::Number(
@@ -264,6 +267,7 @@ async fn process_log(
         .flatten()
         .and_then(|block| i64::try_from(block.header.timestamp).ok())
         .unwrap_or_else(|| chrono::Utc::now().timestamp());
+    let log_index_str = log_index.to_string();
 
     if let Ok(init_log) = log.log_decode::<utils::evm::InitTransfer>() {
         info!("Received InitTransfer on {chain_kind:?} ({tx_hash:?})");
@@ -283,12 +287,14 @@ async fn process_log(
             recipient: recipient.clone(),
             message: init_log.inner.message.clone(),
         };
+        let tx_hash_str = tx_hash.to_string();
+        let key = utils::redis::composite_key(&[&tx_hash_str, &log_index_str]);
 
         utils::redis::add_event(
             config,
             redis_connection_manager,
             utils::redis::EVENTS,
-            tx_hash.to_string(),
+            key,
             RetryableEvent::new(crate::workers::Transfer::Evm {
                 chain_kind,
                 tx_hash,
@@ -300,11 +306,13 @@ async fn process_log(
         .await;
 
         if is_fast_relayer_enabled {
+            let fast_key = utils::redis::composite_key(&["fast", &tx_hash_str, &log_index_str]);
+
             utils::redis::add_event(
                 config,
                 redis_connection_manager,
                 utils::redis::EVENTS,
-                format!("{tx_hash}_fast"),
+                fast_key,
                 RetryableEvent::new(crate::workers::Transfer::Fast {
                     block_number,
                     tx_hash: format!("{tx_hash:?}"),
@@ -326,30 +334,48 @@ async fn process_log(
             )
             .await;
         }
-    } else if log.log_decode::<utils::evm::FinTransfer>().is_ok() {
+    } else if let Ok(event) = log.log_decode::<utils::evm::FinTransfer>() {
         info!("Received FinTransfer on {chain_kind:?} ({tx_hash:?})");
+
+        let tx_hash_str = tx_hash.to_string();
+        let key = utils::redis::composite_key(&[&tx_hash_str, &log_index_str]);
+
+        let origin_chain = match event.data().originChain.try_into() {
+            Ok(chain) => chain,
+            Err(err) => {
+                warn!("Failed to parse origin chain in FinTransfer log: {err:?}");
+                return;
+            }
+        };
 
         utils::redis::add_event(
             config,
             redis_connection_manager,
             utils::redis::EVENTS,
-            tx_hash.to_string(),
+            key,
             RetryableEvent::new(FinTransfer::Evm {
                 chain_kind,
                 tx_hash,
                 creation_timestamp: timestamp,
                 expected_finalization_time,
+                transfer_id: TransferId {
+                    origin_chain,
+                    origin_nonce: event.data().originNonce,
+                },
             }),
         )
         .await;
     } else if log.log_decode::<utils::evm::DeployToken>().is_ok() {
         info!("Received DeployToken on {chain_kind:?} ({tx_hash:?})");
 
+        let tx_hash_str = tx_hash.to_string();
+        let key = utils::redis::composite_key(&[&tx_hash_str, &log_index_str]);
+
         utils::redis::add_event(
             config,
             redis_connection_manager,
             utils::redis::EVENTS,
-            tx_hash.to_string(),
+            key,
             RetryableEvent::new(DeployToken::Evm {
                 chain_kind,
                 tx_hash,

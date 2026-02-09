@@ -5,16 +5,18 @@ import {ERC20Upgradeable} from "@openzeppelin/contracts-upgradeable/token/ERC20/
 import {Ownable2StepUpgradeable} from "@openzeppelin/contracts-upgradeable/access/Ownable2StepUpgradeable.sol";
 import {Initializable} from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import {UUPSUpgradeable} from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
+import {IBridgeToken} from "../../common/IBridgeToken.sol";
 
 contract BridgeToken is
     Initializable,
     UUPSUpgradeable,
     ERC20Upgradeable,
-    Ownable2StepUpgradeable
+    Ownable2StepUpgradeable,
+    IBridgeToken
 {
-    string private _name;
-    string private _symbol;
-    uint8 private _decimals;
+    string internal _name;
+    string internal _symbol;
+    uint8 internal _decimals;
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
@@ -49,8 +51,16 @@ contract BridgeToken is
         _mint(beneficiary, amount);
     }
 
-    function burn(address act, uint256 amount) external onlyOwner {
-        _burn(act, amount);
+    function mint(
+        address account,
+        uint256 value,
+        bytes memory
+    ) external virtual onlyOwner {
+        _mint(account, value);
+    }
+
+    function burn(address account, uint256 value) external onlyOwner {
+        _burn(account, value);
     }
 
     function name() public view virtual override returns (string memory) {
@@ -65,5 +75,7 @@ contract BridgeToken is
         return _decimals;
     }
 
-    function _authorizeUpgrade(address newImplementation) internal override onlyOwner {}
+    function _authorizeUpgrade(
+        address newImplementation
+    ) internal override onlyOwner {}
 }
