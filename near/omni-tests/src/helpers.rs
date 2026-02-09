@@ -181,6 +181,12 @@ pub mod tests {
             .unwrap()
     }
 
+    pub fn strk_factory_address() -> OmniAddress {
+        "strk:0x05558831a603eca8cd69a42d4251f08de3573039b69f23972265cac76639f1cf"
+            .parse()
+            .unwrap()
+    }
+
     pub fn sol_factory_address() -> OmniAddress {
         "sol:11111111111111111111111111111111".parse().unwrap()
     }
