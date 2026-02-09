@@ -5,6 +5,7 @@ use near_sdk::{borsh, AccountId, NearToken};
 use crate::{
     stringify, BridgeError, ChainKind, DestinationChainMsg, Fee, OmniAddress, OmniError,
     PayloadType, SolAddress, StorageBalanceError, TransferId, TransferMessage, TypesError, H160,
+    H256,
 };
 use std::str::FromStr;
 
@@ -38,6 +39,10 @@ fn omni_addresses_for_borsh() -> Vec<OmniAddress> {
         OmniAddress::Pol(H160::from_str("0x23ddd3e3692d1861ed57ede224608875809e127f").unwrap()),
         OmniAddress::HyperEvm(
             H160::from_str("0x23ddd3e3692d1861ed57ede224608875809e127f").unwrap(),
+        ),
+        OmniAddress::Strk(
+            H256::from_str("0x05558831a603eca8cd69a42d4251f08de3573039b69f23972265cac76639f1cf")
+                .unwrap(),
         ),
     ]
 }
