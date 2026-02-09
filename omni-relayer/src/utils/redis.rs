@@ -114,24 +114,47 @@ pub async fn get_events(
     redis_connection_manager: &mut ConnectionManager,
     key: String,
 ) -> Option<Vec<(String, String)>> {
+    let timeout = std::time::Duration::from_secs(config.redis.query_timeout_secs);
+
     for _ in 0..config.redis.query_retry_attempts {
-        if let Ok(mut iter) = redis_connection_manager
-            .hscan::<String, (String, String)>(key.clone())
-            .await
+        let mut iter = match tokio::time::timeout(
+            timeout,
+            redis_connection_manager.hscan::<String, (String, String)>(key.clone()),
+        )
+        .await
         {
-            let mut events = Vec::new();
-
-            while let Some(event) = iter.next_item().await {
-                events.push(event);
+            Ok(Ok(iter)) => iter,
+            Ok(Err(err)) => {
+                warn!("Redis hscan failed: {err:?}");
+                tokio::time::sleep(tokio::time::Duration::from_secs(
+                    config.redis.query_retry_sleep_secs,
+                ))
+                .await;
+                continue;
             }
+            Err(_) => {
+                warn!("Redis hscan timed out");
+                tokio::time::sleep(tokio::time::Duration::from_secs(
+                    config.redis.query_retry_sleep_secs,
+                ))
+                .await;
+                continue;
+            }
+        };
 
-            return Some(events);
+        let mut events = Vec::new();
+        loop {
+            match tokio::time::timeout(timeout, iter.next_item()).await {
+                Ok(Some(event)) => events.push(event),
+                Ok(None) => break,
+                Err(_) => {
+                    warn!("Redis hscan iteration timed out");
+                    break;
+                }
+            }
         }
 
-        tokio::time::sleep(tokio::time::Duration::from_secs(
-            config.redis.query_retry_sleep_secs,
-        ))
-        .await;
+        return Some(events);
     }
 
     warn!("Failed to get events from redis db");
