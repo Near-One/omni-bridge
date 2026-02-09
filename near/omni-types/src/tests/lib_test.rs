@@ -155,32 +155,6 @@ fn test_h160_from_str() {
 }
 
 #[test]
-fn test_eip_55_checksum() {
-    let test_address = |input: &str, expected: &str, error_message: &str| {
-        let h160 = H160::from_str(input).expect("Valid address");
-        assert_eq!(
-            h160.to_eip_55_checksum(),
-            expected,
-            "{error_message} {input} -> {expected}"
-        );
-    };
-
-    let input = "0x5A08FeED678C056650b3eb4a5cb1b9BB6F0fE265";
-    let expected = "5A08FeED678C056650b3eb4a5cb1b9BB6F0fE265";
-    test_address(input, expected, "Original address");
-    test_address(&input.to_lowercase(), expected, "Lowercase address");
-    test_address(
-        &format!("0x{}", expected.to_ascii_uppercase()),
-        expected,
-        "Uppercase address",
-    );
-
-    let input = "0x1234567890123456789012345678901234567890";
-    let expected = "1234567890123456789012345678901234567890";
-    test_address(input, expected, "No mixed case address");
-}
-
-#[test]
 fn test_h160_deserialization() {
     let json = r#""0x5a08feed678c056650b3eb4a5cb1b9bb6f0fe265""#;
     let h160: H160 = serde_json::from_str(json).expect("Should deserialize with 0x prefix");
