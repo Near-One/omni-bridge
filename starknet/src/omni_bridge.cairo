@@ -1,60 +1,58 @@
-pub use OmniBridge::{DeployToken, Event as OmniEvents, LogMetadata};
+pub use OmniBridge::Event as OmniEvents;
 use starknet::ContractAddress;
-
-#[derive(Drop, Serde)]
-pub struct MetadataPayload {
-    pub token: ByteArray,
-    pub name: ByteArray,
-    pub symbol: ByteArray,
-    pub decimals: u8,
-}
+pub use crate::bridge_types::{
+    DeployToken, FinTransfer, InitTransfer, LogMetadata, MetadataPayload, Signature,
+    TransferMessagePayload,
+};
 
 #[starknet::interface]
 pub trait IOmniBridge<TContractState> {
     fn log_metadata(ref self: TContractState, token: ContractAddress);
-    fn deploy_token(ref self: TContractState, r: u256, s: u256, v: u32, payload: MetadataPayload);
+    fn deploy_token(ref self: TContractState, signature: Signature, payload: MetadataPayload);
+    fn fin_transfer(
+        ref self: TContractState, signature: Signature, payload: TransferMessagePayload,
+    );
+    fn init_transfer(
+        ref self: TContractState,
+        token_address: ContractAddress,
+        amount: u128,
+        fee: u128,
+        native_fee: u128,
+        recipient: ByteArray,
+        message: ByteArray,
+    );
 }
 
 #[starknet::contract]
 mod OmniBridge {
     use core::keccak::compute_keccak_byte_array;
+    use openzeppelin::token::erc20::interface::{IERC20Dispatcher, IERC20DispatcherTrait};
     use starknet::eth_signature::verify_eth_signature;
     use starknet::event::EventEmitter;
     use starknet::secp256_trait::signature_from_vrs;
     use starknet::storage::{
-        Map, StorageMapWriteAccess, StoragePointerReadAccess, StoragePointerWriteAccess,
+        Map, StorageMapReadAccess, StorageMapWriteAccess, StoragePointerReadAccess,
+        StoragePointerWriteAccess,
     };
     use starknet::syscalls::deploy_syscall;
-    use starknet::{ClassHash, ContractAddress, EthAddress, SyscallResultTrait, syscalls};
+    use starknet::{
+        ClassHash, ContractAddress, EthAddress, SyscallResultTrait, get_caller_address,
+        get_contract_address, syscalls,
+    };
+    use crate::bridge_types::{
+        DeployToken, FinTransfer, InitTransfer, LogMetadata, MetadataPayload, Signature,
+        TransferMessagePayload,
+    };
     use crate::utils;
     use crate::utils::{borsh, reverse_u256_bytes};
-    use super::MetadataPayload;
-
-    #[derive(Drop, starknet::Event)]
-    pub struct LogMetadata {
-        #[key]
-        pub address: ContractAddress,
-        pub name: ByteArray,
-        pub symbol: ByteArray,
-        pub decimals: u8,
-    }
-
-    #[derive(Drop, starknet::Event)]
-    pub struct DeployToken {
-        #[key]
-        pub token_address: ContractAddress,
-        pub near_token_id: ByteArray,
-        pub name: ByteArray,
-        pub symbol: ByteArray,
-        pub decimals: u8,
-        pub origin_decimals: u8,
-    }
 
     #[event]
     #[derive(Drop, starknet::Event)]
     pub enum Event {
         LogMetadata: LogMetadata,
         DeployToken: DeployToken,
+        InitTransfer: InitTransfer,
+        FinTransfer: FinTransfer,
     }
 
     // Used nonces
@@ -63,6 +61,8 @@ mod OmniBridge {
     struct Storage {
         bridge_token_class_hash: ClassHash,
         current_origin_nonce: u64,
+        // Bitmap: slot = nonce / 251, bit = nonce % 251
+        completed_transfers: Map<u64, felt252>,
         deployed_tokens: Map<ContractAddress, bool>,
         starknet_to_near_token: Map<ContractAddress, ByteArray>,
         // Can't use ByteArray as a key. Using hash instead
@@ -144,9 +144,7 @@ mod OmniBridge {
             self.emit(Event::LogMetadata(LogMetadata { address: token, name, symbol, decimals }))
         }
 
-        fn deploy_token(
-            ref self: ContractState, r: u256, s: u256, v: u32, payload: MetadataPayload,
-        ) {
+        fn deploy_token(ref self: ContractState, signature: Signature, payload: MetadataPayload) {
             let mut borsh_bytes: ByteArray = "";
             borsh_bytes.append_byte(1); // Payload type
             borsh_bytes.append(@borsh::encode_byte_array(@payload.token));
@@ -157,8 +155,8 @@ mod OmniBridge {
             let message_hash_le = compute_keccak_byte_array(@borsh_bytes);
             let message_hash = reverse_u256_bytes(message_hash_le);
 
-            let signagure = signature_from_vrs(v, r, s);
-            verify_eth_signature(message_hash, signagure, self.omni_bridge_derived_address.read());
+            let sig = signature_from_vrs(signature.v, signature.r, signature.s);
+            verify_eth_signature(message_hash, sig, self.omni_bridge_derived_address.read());
 
             let decimals = _normalizeDecimals(payload.decimals);
 
@@ -192,6 +190,138 @@ mod OmniBridge {
                     ),
                 )
         }
+
+        fn fin_transfer(
+            ref self: ContractState, signature: Signature, payload: TransferMessagePayload,
+        ) {
+            assert(!_is_transfer_finalised(@self, payload.destination_nonce), 'NonceAlreadyUsed');
+            _set_transfer_finalised(ref self, payload.destination_nonce);
+
+            let chain_id = self.omni_bridge_chain_id.read();
+
+            let mut borsh_bytes: ByteArray = "";
+            borsh_bytes.append_byte(0); // PayloadType::TransferMessage
+            borsh_bytes.append(@borsh::encode_u64(payload.destination_nonce));
+            borsh_bytes.append_byte(payload.origin_chain);
+            borsh_bytes.append(@borsh::encode_u64(payload.origin_nonce));
+            borsh_bytes.append_byte(chain_id);
+            borsh_bytes.append(@borsh::encode_address(payload.token_address));
+            borsh_bytes.append(@borsh::encode_u128(payload.amount));
+            borsh_bytes.append_byte(chain_id);
+            borsh_bytes.append(@borsh::encode_address(payload.recipient));
+            if payload.fee_recipient.len() == 0 {
+                borsh_bytes.append_byte(0); // None
+            } else {
+                borsh_bytes.append_byte(1); // Some
+                borsh_bytes.append(@borsh::encode_byte_array(@payload.fee_recipient));
+            }
+
+            let message_hash_le = compute_keccak_byte_array(@borsh_bytes);
+            let message_hash = reverse_u256_bytes(message_hash_le);
+
+            let sig = signature_from_vrs(signature.v, signature.r, signature.s);
+            verify_eth_signature(message_hash, sig, self.omni_bridge_derived_address.read());
+
+            if self.deployed_tokens.read(payload.token_address) {
+                IBridgeTokenDispatcher { contract_address: payload.token_address }
+                    .mint(payload.recipient, payload.amount.into());
+            } else {
+                IERC20Dispatcher { contract_address: payload.token_address }
+                    .transfer(payload.recipient, payload.amount.into());
+            }
+
+            self
+                .emit(
+                    Event::FinTransfer(
+                        FinTransfer {
+                            origin_chain: payload.origin_chain,
+                            origin_nonce: payload.origin_nonce,
+                            token_address: payload.token_address,
+                            amount: payload.amount,
+                            recipient: payload.recipient,
+                            fee_recipient: payload.fee_recipient,
+                        },
+                    ),
+                )
+        }
+
+        fn init_transfer(
+            ref self: ContractState,
+            token_address: ContractAddress,
+            amount: u128,
+            fee: u128,
+            native_fee: u128,
+            recipient: ByteArray,
+            message: ByteArray,
+        ) {
+            assert(native_fee == 0, 'NativeFeeNotSupported');
+            assert(fee < amount, 'InvalidFee');
+
+            self.current_origin_nonce.write(self.current_origin_nonce.read() + 1);
+
+            let caller = get_caller_address();
+
+            if self.deployed_tokens.read(token_address) {
+                IBridgeTokenDispatcher { contract_address: token_address }
+                    .burn(caller, amount.into());
+            } else {
+                IERC20Dispatcher { contract_address: token_address }
+                    .transfer_from(caller, get_contract_address(), amount.into());
+            }
+
+            self
+                .emit(
+                    Event::InitTransfer(
+                        InitTransfer {
+                            sender: caller,
+                            token_address,
+                            origin_nonce: self.current_origin_nonce.read(),
+                            amount,
+                            fee,
+                            native_fee,
+                            recipient,
+                            message,
+                        },
+                    ),
+                )
+        }
+    }
+
+    #[starknet::interface]
+    trait IBridgeToken<TContractState> {
+        fn mint(ref self: TContractState, recipient: ContractAddress, amount: u256);
+        fn burn(ref self: TContractState, account: ContractAddress, amount: u256);
+    }
+
+    fn _nonce_slot_and_bit(nonce: u64) -> (u64, u256) {
+        let slot = nonce / 251;
+        let bit: u256 = _pow2_felt((nonce % 251).into()).into();
+        (slot, bit)
+    }
+
+    fn _is_transfer_finalised(self: @ContractState, nonce: u64) -> bool {
+        let (slot, bit) = _nonce_slot_and_bit(nonce);
+        let bitmap: u256 = self.completed_transfers.read(slot).into();
+        bitmap & bit != 0
+    }
+
+    fn _set_transfer_finalised(ref self: ContractState, nonce: u64) {
+        let (slot, bit) = _nonce_slot_and_bit(nonce);
+        let bitmap: u256 = self.completed_transfers.read(slot).into();
+        self.completed_transfers.write(slot, (bitmap | bit).try_into().unwrap());
+    }
+
+    fn _pow2_felt(mut exp: u128) -> felt252 {
+        let mut result: u256 = 1;
+        let mut base: u256 = 2;
+        while exp > 0 {
+            if exp % 2 == 1 {
+                result *= base;
+            }
+            base *= base;
+            exp /= 2;
+        }
+        result.try_into().unwrap()
     }
 
     fn _normalizeDecimals(decimals: u8) -> u8 {

@@ -31,6 +31,12 @@ pub fn encode_u256(val: u256) -> ByteArray {
     result
 }
 
+pub fn encode_address(val: starknet::ContractAddress) -> ByteArray {
+    let felt_val: felt252 = val.into();
+    let u256_val: u256 = felt_val.into();
+    encode_u256(u256_val)
+}
+
 pub fn encode_byte_array(val: @ByteArray) -> ByteArray {
     let mut result = encode_u32(val.len());
     result.append(val);
@@ -74,6 +80,41 @@ mod tests {
         let val: ByteArray = "hello";
         let encoded = encode_byte_array(@val);
         let expected: ByteArray = "\x05\x00\x00\x00hello";
+
+        assert_eq!(@encoded, @expected);
+    }
+
+    #[test]
+    fn test_encode_address() {
+        // Test with address 0x123 (291 in decimal)
+        // As u256: low = 291, high = 0
+        // As 32 bytes LE: [0x23, 0x01, 0x00, ..., 0x00] (16 bytes) + [0x00, ..., 0x00] (16 bytes)
+        let addr: starknet::ContractAddress = 0x123.try_into().unwrap();
+        let encoded = encode_address(addr);
+
+        // Expected: 32 bytes, first byte is 0x23, second is 0x01, rest are zeros
+        let mut expected: ByteArray = "\x23\x01";
+        let mut i: u32 = 0;
+        while i < 30 {
+            expected.append_byte(0);
+            i += 1;
+        }
+
+        assert_eq!(@encoded, @expected);
+    }
+
+    #[test]
+    fn test_encode_address_max() {
+        // Test with a full 32-byte address value (64 hex characters)
+        let addr: starknet::ContractAddress =
+            0x0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20
+            .try_into()
+            .unwrap();
+        let encoded = encode_address(addr);
+
+        // Expected: 32 bytes LE encoding of the full 256-bit address
+        let expected: ByteArray =
+            "\x20\x1f\x1e\x1d\x1c\x1b\x1a\x19\x18\x17\x16\x15\x14\x13\x12\x11\x10\x0f\x0e\x0d\x0c\x0b\x0a\x09\x08\x07\x06\x05\x04\x03\x02\x01";
 
         assert_eq!(@encoded, @expected);
     }
