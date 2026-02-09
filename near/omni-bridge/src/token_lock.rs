@@ -31,8 +31,8 @@ pub enum LockAction {
 #[near]
 impl Contract {
     #[must_use]
-    pub fn get_locked_tokens(&self, chain_kind: ChainKind, token_id: AccountId) -> U128 {
-        U128(self.locked_tokens.get(&(chain_kind, token_id)).unwrap_or(0))
+    pub fn get_locked_tokens(&self, chain_kind: ChainKind, token_id: AccountId) -> Option<U128> {
+        self.locked_tokens.get(&(chain_kind, token_id)).map(U128)
     }
 
     #[access_control_any(roles(Role::DAO, Role::TokenLockController))]
