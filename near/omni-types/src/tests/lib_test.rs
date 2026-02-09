@@ -1,6 +1,6 @@
 use near_sdk::json_types::U128;
 use near_sdk::serde_json;
-use near_sdk::{borsh, NearToken, AccountId};
+use near_sdk::{borsh, AccountId, NearToken};
 
 use crate::{
     stringify, BridgeError, ChainKind, DestinationChainMsg, Fee, OmniAddress, OmniError,
