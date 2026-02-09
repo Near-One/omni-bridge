@@ -5,7 +5,10 @@ use bridge_connector_common::result::BridgeSdkError;
 use tracing::{info, warn};
 
 use near_bridge_client::{NearBridgeClient, TransactionOptions};
-use near_jsonrpc_client::errors::JsonRpcError;
+use near_jsonrpc_client::{
+    errors::{JsonRpcError, JsonRpcServerError},
+    methods::query::RpcQueryError,
+};
 use near_primitives::views::TxExecutionStatus;
 use near_rpc_client::NearRpcError;
 
@@ -190,7 +193,12 @@ pub async fn process_fin_transfer_event(
     fin_transfer: FinTransfer,
     near_nonce: Arc<utils::nonce::NonceManager>,
 ) -> Result<EventAction> {
-    let FinTransfer::Solana { emitter, sequence } = fin_transfer else {
+    let FinTransfer::Solana {
+        emitter,
+        sequence,
+        transfer_id,
+    } = fin_transfer
+    else {
         anyhow::bail!("Expected Solana FinTransfer, got: {fin_transfer:?}");
     };
 
@@ -198,6 +206,21 @@ pub async fn process_fin_transfer_event(
         "Processing Solana FinTransfer ({:?}:{sequence})",
         ChainKind::Sol
     );
+
+    if let Some(transfer_id) = transfer_id {
+        if let Err(BridgeSdkError::NearRpcError(NearRpcError::RpcQueryError(
+            JsonRpcError::ServerError(JsonRpcServerError::HandlerError(
+                RpcQueryError::ContractExecutionError { vm_error, .. },
+            )),
+        ))) = omni_connector.near_get_transfer_message(transfer_id).await
+        {
+            // TODO: refactor when enum errors will become available on mainnet
+            if vm_error.contains("The transfer does not exist") {
+                info!("No fee to claim for FinTransfer ({transfer_id:?})");
+                return Ok(EventAction::Remove);
+            }
+        }
+    }
 
     let Ok(vaa) = omni_connector
         .wormhole_get_vaa(config.wormhole.solana_chain_id, emitter, sequence)

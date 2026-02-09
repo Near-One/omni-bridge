@@ -116,10 +116,12 @@ pub enum FinTransfer {
         tx_hash: TxHash,
         creation_timestamp: i64,
         expected_finalization_time: i64,
+        transfer_id: TransferId,
     },
     Solana {
         emitter: String,
         sequence: u64,
+        transfer_id: Option<TransferId>,
     },
 }
 

@@ -1,11 +1,12 @@
 use near_contract_standards::storage_management::{StorageBalance, StorageBalanceBounds};
 use near_sdk::{assert_one_yocto, borsh, near, PromiseOrValue};
 use near_sdk::{env, near_bindgen, AccountId, NearToken};
+use omni_types::errors::{BridgeError, StorageError};
 use omni_types::{FastTransferStatus, Nonce, TransferId, TransferIdKind, UnifiedTransferId};
+use omni_utils::near_expect::NearExpect;
 
 use crate::{
-    require, ChainKind, Contract, ContractExt, Fee, OmniAddress, Promise, SdkExpect,
-    TransferMessage, U128,
+    require, ChainKind, Contract, ContractExt, Fee, OmniAddress, Promise, TransferMessage, U128,
 };
 
 pub const NEP141_DEPOSIT: NearToken = NearToken::from_yoctonear(1_250_000_000_000_000_000_000);
@@ -145,7 +146,7 @@ impl Contract {
                 let min_required_storage_balance = self.required_balance_for_account();
                 let available = amount
                     .checked_sub(min_required_storage_balance)
-                    .sdk_expect("The attached deposit is less than the minimum storage balance");
+                    .near_expect("The attached deposit is less than the minimum storage balance");
                 StorageBalance {
                     total: amount,
                     available,
@@ -185,16 +186,16 @@ impl Contract {
         let account_id = env::predecessor_account_id();
         let mut storage = self
             .storage_balance_of(&account_id)
-            .sdk_expect("The account is not registered");
+            .near_expect("The account is not registered");
         let to_withdraw = amount.unwrap_or(storage.available);
         storage.total = storage
             .total
             .checked_sub(to_withdraw)
-            .sdk_expect("The amount is greater than the total storage balance");
+            .near_expect("The amount is greater than the total storage balance");
         storage.available = storage
             .available
             .checked_sub(to_withdraw)
-            .sdk_expect("The amount is greater than the available storage balance");
+            .near_expect("The amount is greater than the available storage balance");
 
         self.accounts_balances.insert(&account_id, &storage);
 
@@ -215,7 +216,7 @@ impl Contract {
             require!(
                 storage.total.saturating_sub(storage.available)
                     == self.required_balance_for_account(),
-                "This account owns some pending transfers, use `force=true` to ignore them."
+                BridgeError::StoragePendingTransfers.as_ref()
             );
         }
 
@@ -255,25 +256,25 @@ impl Contract {
         native_fee: NearToken,
         storage_payer: &AccountId,
         required_storage_payer_balance: NearToken,
-    ) -> Result<(), String> {
+    ) -> Result<(), StorageError> {
         let balance = self
             .accounts_balances
             .get(account_id)
-            .ok_or("ERR_MESSAGE_ACCOUNT_NOT_REGISTERED")?;
+            .ok_or(StorageError::MessageAccountNotRegistered)?;
 
         if balance.total < native_fee {
-            return Err("ERR_NOT_ENOUGH_BALANCE_FOR_FEE".to_string());
+            return Err(StorageError::NotEnoughBalanceForFee);
         }
 
         let mut storage = self
             .accounts_balances
             .get(storage_payer)
-            .ok_or("ERR_SIGNER_NOT_REGISTERED")?;
+            .ok_or(StorageError::SignerNotRegistered)?;
 
         storage.available = storage.available.saturating_add(balance.total);
 
         if storage.available < required_storage_payer_balance.saturating_add(native_fee) {
-            return Err("ERR_SIGNER_NOT_ENOUGH_BALANCE".to_string());
+            return Err(StorageError::SignerNotEnoughBalance);
         }
 
         self.accounts_balances.insert(storage_payer, &storage);
@@ -287,17 +288,20 @@ impl Contract {
             total: NearToken::from_yoctonear(0),
             available: NearToken::from_yoctonear(0),
         })
-        .sdk_expect("ERR_BORSH")
+        .near_expect(BridgeError::Borsh)
         .len()
         .try_into()
-        .sdk_expect("ERR_CAST");
+        .near_expect(BridgeError::Cast);
 
         env::storage_byte_cost()
             .saturating_mul((Self::get_basic_storage() + key_len + value_len).into())
     }
 
     pub fn required_balance_for_init_transfer(&self, msg: Option<String>) -> NearToken {
-        let max_account_id: AccountId = "a".repeat(64).parse().sdk_expect("ERR_PARSE_ACCOUNT_ID");
+        let max_account_id: AccountId = "a"
+            .repeat(64)
+            .parse()
+            .near_expect(BridgeError::ParseAccountId);
 
         self.required_balance_for_init_transfer_message(TransferMessage {
             origin_nonce: 0,
@@ -324,23 +328,26 @@ impl Contract {
         &self,
         transfer_message: TransferMessage,
     ) -> NearToken {
-        let max_account_id: AccountId = "a".repeat(64).parse().sdk_expect("ERR_PARSE_ACCOUNT_ID");
+        let max_account_id: AccountId = "a"
+            .repeat(64)
+            .parse()
+            .near_expect(BridgeError::ParseAccountId);
 
         let key_len: u64 = borsh::to_vec(&transfer_message.get_transfer_id())
-            .sdk_expect("ERR_BORSH")
+            .near_expect(BridgeError::Borsh)
             .len()
             .try_into()
-            .sdk_expect("ERR_CAST");
+            .near_expect(BridgeError::Cast);
 
         let value_len: u64 =
             borsh::to_vec(&TransferMessageStorage::V2(TransferMessageStorageValue {
                 message: transfer_message,
                 owner: max_account_id,
             }))
-            .sdk_expect("ERR_BORSH")
+            .near_expect(BridgeError::Borsh)
             .len()
             .try_into()
-            .sdk_expect("ERR_CAST");
+            .near_expect(BridgeError::Cast);
 
         env::storage_byte_cost()
             .saturating_mul((Self::get_basic_storage() + key_len + value_len).into())
@@ -354,10 +361,10 @@ impl Contract {
                 vout: 0,
             },
         ))
-        .sdk_expect("ERR_BORSH")
+        .near_expect(BridgeError::Borsh)
         .len()
         .try_into()
-        .sdk_expect("ERR_CAST");
+        .near_expect(BridgeError::Cast);
 
         let storage_cost =
             env::storage_byte_cost().saturating_mul((Self::get_basic_storage() + key_len).into());
@@ -368,21 +375,24 @@ impl Contract {
 
     pub fn required_balance_for_fast_transfer(&self) -> NearToken {
         let key_len: u64 = borsh::to_vec(&[0u8; 32])
-            .sdk_expect("ERR_BORSH")
+            .near_expect(BridgeError::Borsh)
             .len()
             .try_into()
-            .sdk_expect("ERR_CAST");
+            .near_expect(BridgeError::Cast);
 
-        let max_account_id: AccountId = "a".repeat(64).parse().sdk_expect("ERR_PARSE_ACCOUNT_ID");
+        let max_account_id: AccountId = "a"
+            .repeat(64)
+            .parse()
+            .near_expect(BridgeError::ParseAccountId);
         let value_len: u64 = borsh::to_vec(&FastTransferStatusStorage::V0(FastTransferStatus {
             relayer: max_account_id.clone(),
             finalised: false,
             storage_owner: max_account_id,
         }))
-        .sdk_expect("ERR_BORSH")
+        .near_expect(BridgeError::Borsh)
         .len()
         .try_into()
-        .sdk_expect("ERR_CAST");
+        .near_expect(BridgeError::Cast);
 
         let storage_cost = env::storage_byte_cost()
             .saturating_mul((Self::get_basic_storage() + key_len + value_len).into());
@@ -392,19 +402,22 @@ impl Contract {
     }
 
     pub fn required_balance_for_bind_token(&self) -> NearToken {
-        let max_token_id: AccountId = "a".repeat(64).parse().sdk_expect("ERR_PARSE_ACCOUNT_ID");
+        let max_token_id: AccountId = "a"
+            .repeat(64)
+            .parse()
+            .near_expect(BridgeError::ParseAccountId);
 
         let key_len: u64 = borsh::to_vec(&(ChainKind::Near, &max_token_id))
-            .sdk_expect("ERR_BORSH")
+            .near_expect(BridgeError::Borsh)
             .len()
             .try_into()
-            .sdk_expect("ERR_CAST");
+            .near_expect(BridgeError::Cast);
 
         let value_len: u64 = borsh::to_vec(&OmniAddress::Near(max_token_id))
-            .sdk_expect("ERR_BORSH")
+            .near_expect(BridgeError::Borsh)
             .len()
             .try_into()
-            .sdk_expect("ERR_CAST");
+            .near_expect(BridgeError::Cast);
 
         env::storage_byte_cost()
             .saturating_mul((3 * (Self::get_basic_storage() + key_len + value_len)).into())
@@ -428,12 +441,15 @@ impl Contract {
     }
 
     fn max_key_len_of_account_id() -> u64 {
-        let max_account_id: AccountId = "a".repeat(64).parse().sdk_expect("ERR_PARSE_ACCOUNT_ID");
+        let max_account_id: AccountId = "a"
+            .repeat(64)
+            .parse()
+            .near_expect(BridgeError::ParseAccountId);
 
         borsh::to_vec(&max_account_id)
-            .sdk_expect("ERR_BORSH")
+            .near_expect(BridgeError::Borsh)
             .len()
             .try_into()
-            .sdk_expect("ERR_CAST")
+            .near_expect(BridgeError::Cast)
     }
 }
