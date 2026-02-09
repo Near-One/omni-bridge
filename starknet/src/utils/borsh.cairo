@@ -1,87 +1,39 @@
-use core::option::OptionTrait;
-use core::traits::TryInto;
+fn append_le_bytes(ref result: ByteArray, mut val: u128, byte_count: u32) {
+    let mut i: u32 = 0;
+    while i < byte_count {
+        result.append_byte((val & 0xff).try_into().unwrap());
+        val /= 0x100;
+        i += 1;
+    };
+}
 
 pub fn encode_u32(val: u32) -> ByteArray {
     let mut result: ByteArray = "";
-    result.append_byte((val & 0xff).try_into().unwrap());
-    result.append_byte(((val / 0x100) & 0xff).try_into().unwrap());
-    result.append_byte(((val / 0x10000) & 0xff).try_into().unwrap());
-    result.append_byte(((val / 0x1000000) & 0xff).try_into().unwrap());
+    append_le_bytes(ref result, val.into(), 4);
     result
 }
 
 pub fn encode_u64(val: u64) -> ByteArray {
     let mut result: ByteArray = "";
-    result.append_byte((val & 0xff).try_into().unwrap());
-    result.append_byte(((val / 0x100) & 0xff).try_into().unwrap());
-    result.append_byte(((val / 0x10000) & 0xff).try_into().unwrap());
-    result.append_byte(((val / 0x1000000) & 0xff).try_into().unwrap());
-    result.append_byte(((val / 0x100000000) & 0xff).try_into().unwrap());
-    result.append_byte(((val / 0x10000000000) & 0xff).try_into().unwrap());
-    result.append_byte(((val / 0x1000000000000) & 0xff).try_into().unwrap());
-    result.append_byte(((val / 0x100000000000000) & 0xff).try_into().unwrap());
+    append_le_bytes(ref result, val.into(), 8);
     result
 }
 
 pub fn encode_u128(val: u128) -> ByteArray {
     let mut result: ByteArray = "";
-    result.append_byte((val & 0xff).try_into().unwrap());
-    result.append_byte(((val / 0x100) & 0xff).try_into().unwrap());
-    result.append_byte(((val / 0x10000) & 0xff).try_into().unwrap());
-    result.append_byte(((val / 0x1000000) & 0xff).try_into().unwrap());
-    result.append_byte(((val / 0x100000000) & 0xff).try_into().unwrap());
-    result.append_byte(((val / 0x10000000000) & 0xff).try_into().unwrap());
-    result.append_byte(((val / 0x1000000000000) & 0xff).try_into().unwrap());
-    result.append_byte(((val / 0x100000000000000) & 0xff).try_into().unwrap());
-    result.append_byte(((val / 0x10000000000000000) & 0xff).try_into().unwrap());
-    result.append_byte(((val / 0x1000000000000000000) & 0xff).try_into().unwrap());
-    result.append_byte(((val / 0x100000000000000000000) & 0xff).try_into().unwrap());
-    result.append_byte(((val / 0x10000000000000000000000) & 0xff).try_into().unwrap());
-    result.append_byte(((val / 0x1000000000000000000000000) & 0xff).try_into().unwrap());
-    result.append_byte(((val / 0x100000000000000000000000000) & 0xff).try_into().unwrap());
-    result.append_byte(((val / 0x10000000000000000000000000000) & 0xff).try_into().unwrap());
-    result.append_byte(((val / 0x1000000000000000000000000000000) & 0xff).try_into().unwrap());
+    append_le_bytes(ref result, val, 16);
     result
 }
 
 pub fn encode_u256(val: u256) -> ByteArray {
-    let mut result: ByteArray = "";
-
-    let low_bytes = encode_u128(val.low);
-    let mut i = 0;
-    while i < low_bytes.len() {
-        result.append_byte(low_bytes[i]);
-        i += 1;
-    }
-
-    let high_bytes = encode_u128(val.high);
-    let mut i = 0;
-    while i < high_bytes.len() {
-        result.append_byte(high_bytes[i]);
-        i += 1;
-    }
+    let mut result = encode_u128(val.low);
+    result.append(@encode_u128(val.high));
     result
 }
 
 pub fn encode_byte_array(val: @ByteArray) -> ByteArray {
-    let mut result: ByteArray = "";
-
-    // Encode length as u32 little-endian
-    let len: u32 = val.len();
-    let len_bytes = encode_u32(len);
-    let mut i = 0;
-    while i < len_bytes.len() {
-        result.append_byte(len_bytes[i]);
-        i += 1;
-    }
-
-    // Append string bytes
-    let mut i = 0;
-    while i < val.len() {
-        result.append_byte(val[i]);
-        i += 1;
-    }
-
+    let mut result = encode_u32(val.len());
+    result.append(val);
     result
 }
 
