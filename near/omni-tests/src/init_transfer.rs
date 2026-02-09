@@ -707,7 +707,10 @@ mod tests {
             .await?;
 
         assert_eq!(
-            transfer.into_result()?.json::<U128>()?,
+            transfer
+                .into_result()?
+                .json::<Option<U128>>()?
+                .unwrap_or(U128(0)),
             U128(0),
             "Locked tokens should be empty after migration"
         );

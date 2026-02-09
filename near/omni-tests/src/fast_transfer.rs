@@ -253,7 +253,7 @@ mod tests {
         chain_kind: ChainKind,
         token_id: &AccountId,
     ) -> anyhow::Result<U128> {
-        let locked_tokens: U128 = bridge_contract
+        let locked_tokens: Option<U128> = bridge_contract
             .view("get_locked_tokens")
             .args_json(json!({
                 "chain_kind": chain_kind,
@@ -262,7 +262,7 @@ mod tests {
             .await?
             .json()?;
 
-        Ok(locked_tokens)
+        Ok(locked_tokens.unwrap_or(U128(0)))
     }
 
     async fn get_balance(
