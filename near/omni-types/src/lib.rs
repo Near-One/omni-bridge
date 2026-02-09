@@ -588,8 +588,8 @@ impl TransferMessage {
         TransferMessageStorageAccount::from(self.clone()).id()
     }
 
-    pub fn amount_without_fee(&self) -> u128 {
-        self.amount.0.saturating_sub(self.fee.fee.0)
+    pub fn amount_without_fee(&self) -> Option<u128> {
+        self.amount.0.checked_sub(self.fee.fee.0)
     }
 }
 
@@ -817,8 +817,8 @@ impl FastTransfer {
         self.recipient.get_chain()
     }
 
-    pub fn amount_without_fee(&self) -> u128 {
-        self.amount.0.saturating_sub(self.fee.fee.0)
+    pub fn amount_without_fee(&self) -> Option<u128> {
+        self.amount.0.checked_sub(self.fee.fee.0)
     }
 }
 

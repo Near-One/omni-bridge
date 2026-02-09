@@ -454,8 +454,12 @@ impl Contract {
             .token_decimals
             .get(&token_address)
             .near_expect(BridgeError::TokenDecimalsNotFound);
-        let amount_to_transfer =
-            Self::normalize_amount(transfer_message.amount_without_fee(), decimals);
+        let amount_to_transfer = Self::normalize_amount(
+            transfer_message
+                .amount_without_fee()
+                .near_expect(BridgeError::InvalidFee),
+            decimals,
+        );
 
         require!(
             amount_to_transfer > 0,
@@ -835,7 +839,11 @@ impl Contract {
             .to_log_string(),
         );
 
-        let amount_without_fee = U128(fast_transfer.amount_without_fee());
+        let amount_without_fee = U128(
+            fast_transfer
+                .amount_without_fee()
+                .near_expect(BridgeError::InvalidFee),
+        );
         self.send_tokens(
             fast_transfer.token_id.clone(),
             recipient,
@@ -887,7 +895,9 @@ impl Contract {
             );
         }
 
-        let amount_without_fee = fast_transfer.amount_without_fee();
+        let amount_without_fee = fast_transfer
+            .amount_without_fee()
+            .near_expect(BridgeError::InvalidFee);
 
         self.burn_tokens_if_needed(fast_transfer.token_id.clone(), amount_without_fee.into());
 
@@ -1655,7 +1665,14 @@ impl Contract {
         let token = self.get_token_id(&transfer_message.token);
 
         if Self::is_refund_required(is_ft_transfer_call) {
-            self.burn_tokens_if_needed(token.clone(), U128(transfer_message.amount_without_fee()));
+            self.burn_tokens_if_needed(
+                token.clone(),
+                U128(
+                    transfer_message
+                        .amount_without_fee()
+                        .near_expect(BridgeError::InvalidFee),
+                ),
+            );
 
             self.revert_lock_actions(&lock_actions);
 
@@ -1903,7 +1920,11 @@ impl Contract {
         self.send_tokens(
             token.clone(),
             recipient,
-            U128(transfer_message.amount_without_fee()),
+            U128(
+                transfer_message
+                    .amount_without_fee()
+                    .near_expect(BridgeError::InvalidFee),
+            ),
             &msg,
         )
         .then(
@@ -1958,7 +1979,9 @@ impl Contract {
             self.lock_tokens_if_needed(
                 transfer_message.get_destination_chain(),
                 &token,
-                transfer_message.amount_without_fee(),
+                transfer_message
+                    .amount_without_fee()
+                    .near_expect(BridgeError::InvalidFee),
             );
 
             None
@@ -1969,7 +1992,11 @@ impl Contract {
             self.send_tokens(
                 token,
                 relayer,
-                U128(transfer_message.amount_without_fee()),
+                U128(
+                    transfer_message
+                        .amount_without_fee()
+                        .near_expect(BridgeError::InvalidFee),
+                ),
                 "",
             )
             .detach();
@@ -2437,7 +2464,11 @@ impl Contract {
         } else {
             self.mark_fast_transfer_as_finalised(&fast_transfer.id());
             // With transfers to other chain the fee will be claimed after finalization on the destination chain
-            U128(fast_transfer.amount_without_fee())
+            U128(
+                fast_transfer
+                    .amount_without_fee()
+                    .near_expect(BridgeError::InvalidFee),
+            )
         };
 
         self.send_tokens(

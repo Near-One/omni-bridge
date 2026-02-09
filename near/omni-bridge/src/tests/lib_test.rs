@@ -301,11 +301,11 @@ fn test_init_transfer_locks_other_tokens_for_deployed_token() {
 
     assert_eq!(
         contract.get_locked_tokens(ChainKind::Near, token_id.clone()),
-        U128(locked_amount)
+        Some(U128(locked_amount))
     );
     assert_eq!(
         contract.get_locked_tokens(ChainKind::Sol, token_id),
-        U128(locked_amount)
+        Some(U128(locked_amount))
     );
 }
 
@@ -335,12 +335,9 @@ fn test_init_transfer_skips_other_token_lock_for_origin_chain() {
 
     assert_eq!(
         contract.get_locked_tokens(ChainKind::Near, token_id.clone()),
-        U128(locked_amount)
+        Some(U128(locked_amount))
     );
-    assert_eq!(
-        contract.get_locked_tokens(ChainKind::Eth, token_id),
-        U128(0)
-    );
+    assert_eq!(contract.get_locked_tokens(ChainKind::Eth, token_id), None);
 }
 
 fn run_update_transfer_fee(
@@ -685,7 +682,7 @@ fn test_fin_transfer_callback_near_success() {
             ChainKind::Eth,
             AccountId::try_from(DEFAULT_FT_CONTRACT_ACCOUNT.to_string()).unwrap(),
         ),
-        U128(0)
+        Some(U128(0))
     );
 }
 
@@ -842,11 +839,11 @@ fn test_fin_transfer_callback_non_near_success() {
             assert_eq!(stored_transfer.recipient, sol_recipient);
             assert_eq!(
                 contract.get_locked_tokens(ChainKind::Eth, token_id.clone()),
-                U128(0)
+                Some(U128(0))
             );
             assert_eq!(
                 contract.get_locked_tokens(ChainKind::Sol, token_id),
-                U128(locked_amount)
+                Some(U128(locked_amount))
             );
         }
         PromiseOrValue::Promise(_) => panic!("Expected Value variant, got Promise"),
@@ -910,7 +907,7 @@ fn test_claim_fee_decreases_locked_tokens_for_non_deployed_token() {
         .insert(&(destination_chain, token_id.clone()), &locked_amount);
     assert_eq!(
         contract.get_locked_tokens(destination_chain, token_id.clone()),
-        U128(locked_amount)
+        Some(U128(locked_amount))
     );
 
     setup_test_env(fee_recipient.clone(), NearToken::from_near(0), None);
@@ -927,7 +924,7 @@ fn test_claim_fee_decreases_locked_tokens_for_non_deployed_token() {
 
     assert_eq!(
         contract.get_locked_tokens(destination_chain, token_id),
-        U128(locked_amount - fee_amount)
+        Some(U128(locked_amount - fee_amount))
     );
 }
 
@@ -1032,7 +1029,7 @@ fn test_fin_transfer_callback_refund_restores_locked_tokens() {
 
     assert_eq!(
         contract.get_locked_tokens(ChainKind::Eth, token_id),
-        U128(DEFAULT_TRANSFER_AMOUNT)
+        Some(U128(DEFAULT_TRANSFER_AMOUNT))
     );
 }
 

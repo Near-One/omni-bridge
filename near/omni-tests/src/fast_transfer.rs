@@ -751,13 +751,23 @@ mod tests {
             if is_bridged_token {
                 assert_eq!(
                     locked_destination_after,
-                    U128(locked_destination_before.0 + transfer_message.amount_without_fee())
+                    U128(
+                        locked_destination_before.0
+                            + transfer_message
+                                .amount_without_fee()
+                                .expect("amount_without_fee should be present"),
+                    )
                 );
                 assert_eq!(contract_balance_before, contract_balance_after);
             } else {
                 assert_eq!(
                     locked_destination_after,
-                    U128(locked_destination_before.0 + transfer_message.amount_without_fee())
+                    U128(
+                        locked_destination_before.0
+                            + transfer_message
+                                .amount_without_fee()
+                                .expect("amount_without_fee should be present"),
+                    )
                 );
                 assert_eq!(
                     contract_balance_before,
