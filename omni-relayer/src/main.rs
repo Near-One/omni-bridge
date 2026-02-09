@@ -94,6 +94,20 @@ fn init_logging(network: Network) -> Result<()> {
     Ok(())
 }
 
+async fn build_redis_connection_manager(
+    config: &config::Config,
+) -> Result<redis::aio::ConnectionManager> {
+    let redis_client = redis::Client::open(config.redis.url.clone())?;
+    let redis_connection_manager = redis::aio::ConnectionManager::new_with_config(
+        redis_client,
+        redis::aio::ConnectionManagerConfig::new().set_response_timeout(
+            tokio::time::Duration::from_secs(config.redis.query_timeout_secs),
+        ),
+    )
+    .await?;
+    Ok(redis_connection_manager)
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     dotenv::dotenv().ok();
@@ -111,8 +125,9 @@ async fn main() -> Result<()> {
 
     init_logging(config.near.network).context("Failed to initialize logging")?;
 
-    let redis_client = redis::Client::open(config.redis.url.clone())?;
-    let redis_connection_manager = redis::aio::ConnectionManager::new(redis_client.clone()).await?;
+    let redis_connection_manager = build_redis_connection_manager(&config)
+        .await
+        .context("Failed to create Redis connection manager")?;
     let jsonrpc_client = near_jsonrpc_client::JsonRpcClient::connect(config.near.rpc_url.clone());
 
     let near_omni_signer = startup::near::get_signer(&config, config::NearSignerType::Omni)?;

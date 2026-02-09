@@ -114,26 +114,14 @@ pub async fn get_events(
     redis_connection_manager: &mut ConnectionManager,
     key: String,
 ) -> Option<Vec<(String, String)>> {
-    let timeout = std::time::Duration::from_secs(config.redis.query_timeout_secs);
-
     for _ in 0..config.redis.query_retry_attempts {
-        let mut iter = match tokio::time::timeout(
-            timeout,
-            redis_connection_manager.hscan::<String, (String, String)>(key.clone()),
-        )
-        .await
+        let mut iter = match redis_connection_manager
+            .hscan::<String, (String, String)>(key.clone())
+            .await
         {
-            Ok(Ok(iter)) => iter,
-            Ok(Err(err)) => {
+            Ok(iter) => iter,
+            Err(err) => {
                 warn!("Redis hscan failed: {err:?}");
-                tokio::time::sleep(tokio::time::Duration::from_secs(
-                    config.redis.query_retry_sleep_secs,
-                ))
-                .await;
-                continue;
-            }
-            Err(_) => {
-                warn!("Redis hscan timed out");
                 tokio::time::sleep(tokio::time::Duration::from_secs(
                     config.redis.query_retry_sleep_secs,
                 ))
@@ -144,7 +132,12 @@ pub async fn get_events(
 
         let mut events = Vec::new();
         loop {
-            match tokio::time::timeout(timeout, iter.next_item()).await {
+            match tokio::time::timeout(
+                tokio::time::Duration::from_secs(config.redis.query_timeout_secs),
+                iter.next_item(),
+            )
+            .await
+            {
                 Ok(Some(event)) => events.push(event),
                 Ok(None) => break,
                 Err(_) => {
