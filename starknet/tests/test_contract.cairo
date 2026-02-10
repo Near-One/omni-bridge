@@ -288,7 +288,8 @@ fn test_fin_transfer_with_bridge_token() {
         token_address,
         amount: 1000,
         recipient,
-        fee_recipient: "",
+        fee_recipient: Option::None,
+        message: Option::None,
     };
 
     // TODO: Replace these with actual signature values
@@ -308,7 +309,7 @@ fn test_fin_transfer_with_bridge_token() {
             token_address,
             amount: 1000,
             recipient,
-            fee_recipient: "",
+            fee_recipient: Option::None,
         },
     );
     spy.assert_emitted(@array![(bridge_address, expected_event)]);

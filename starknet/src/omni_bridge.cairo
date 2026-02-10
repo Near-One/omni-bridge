@@ -26,6 +26,7 @@ pub trait IOmniBridge<TContractState> {
 #[starknet::contract]
 mod OmniBridge {
     use core::keccak::compute_keccak_byte_array;
+    use core::num::traits::Zero;
     use openzeppelin::token::erc20::interface::{IERC20Dispatcher, IERC20DispatcherTrait};
     use starknet::eth_signature::verify_eth_signature;
     use starknet::event::EventEmitter;
@@ -158,6 +159,11 @@ mod OmniBridge {
             let sig = signature_from_vrs(signature.v, signature.r, signature.s);
             verify_eth_signature(message_hash, sig, self.omni_bridge_derived_address.read());
 
+            // Verify token hasn't been deployed yet
+            let token_id_hash = compute_keccak_byte_array(@payload.token);
+            let existing_token = self.near_to_starknet_token.read(token_id_hash);
+            assert(existing_token.is_zero(), 'TokenAlreadyDeployed');
+
             let decimals = _normalizeDecimals(payload.decimals);
 
             let mut constructor_calldata: Array<felt252> = array![];
@@ -171,9 +177,6 @@ mod OmniBridge {
 
             self.deployed_tokens.write(contract_address, true);
             self.starknet_to_near_token.write(contract_address, payload.token.clone());
-
-            // Keccak would be quite expensive, but let's not optimize prematurely
-            let token_id_hash = compute_keccak_byte_array(@payload.token);
             self.near_to_starknet_token.write(token_id_hash, contract_address);
 
             self
@@ -209,11 +212,18 @@ mod OmniBridge {
             borsh_bytes.append(@borsh::encode_u128(payload.amount));
             borsh_bytes.append_byte(chain_id);
             borsh_bytes.append(@borsh::encode_address(payload.recipient));
-            if payload.fee_recipient.len() == 0 {
-                borsh_bytes.append_byte(0); // None
-            } else {
-                borsh_bytes.append_byte(1); // Some
-                borsh_bytes.append(@borsh::encode_byte_array(@payload.fee_recipient));
+            match @payload.fee_recipient {
+                Option::None => { borsh_bytes.append_byte(0); },
+                Option::Some(fee_recipient) => {
+                    borsh_bytes.append_byte(1);
+                    borsh_bytes.append(@borsh::encode_byte_array(fee_recipient));
+                },
+            }
+            match @payload.message {
+                Option::None => {},
+                Option::Some(message) => {
+                    borsh_bytes.append(@borsh::encode_byte_array(message));
+                },
             }
 
             let message_hash_le = compute_keccak_byte_array(@borsh_bytes);

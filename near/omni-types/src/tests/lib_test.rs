@@ -9,7 +9,7 @@ use crate::{
 };
 use std::str::FromStr;
 
-fn chain_kinds_for_borsh() -> [ChainKind; 10] {
+fn chain_kinds_for_borsh() -> [ChainKind; 11] {
     [
         ChainKind::Eth,
         ChainKind::Near,
@@ -21,6 +21,7 @@ fn chain_kinds_for_borsh() -> [ChainKind; 10] {
         ChainKind::Zcash,
         ChainKind::Pol,
         ChainKind::HyperEvm,
+        ChainKind::Strk,
     ]
 }
 

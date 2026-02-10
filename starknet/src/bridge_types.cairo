@@ -23,7 +23,8 @@ pub struct TransferMessagePayload {
     pub token_address: ContractAddress,
     pub amount: u128,
     pub recipient: ContractAddress,
-    pub fee_recipient: ByteArray,
+    pub fee_recipient: Option<ByteArray>,
+    pub message: Option<ByteArray>,
 }
 
 #[derive(Drop, starknet::Event)]
@@ -70,5 +71,5 @@ pub struct FinTransfer {
     pub token_address: ContractAddress,
     pub amount: u128,
     pub recipient: ContractAddress,
-    pub fee_recipient: ByteArray,
+    pub fee_recipient: Option<ByteArray>,
 }
