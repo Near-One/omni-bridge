@@ -1,5 +1,5 @@
 pub use OmniBridge::Event as OmniEvents;
-use starknet::ContractAddress;
+use starknet::{ClassHash, ContractAddress};
 pub use crate::bridge_types::{
     DeployToken, FinTransfer, InitTransfer, LogMetadata, MetadataPayload, Signature,
     TransferMessagePayload,
@@ -21,13 +21,21 @@ pub trait IOmniBridge<TContractState> {
         recipient: ByteArray,
         message: ByteArray,
     );
+    fn upgrade_token(
+        ref self: TContractState, token_address: ContractAddress, new_class_hash: ClassHash,
+    );
 }
 
 #[starknet::contract]
 mod OmniBridge {
     use core::keccak::compute_keccak_byte_array;
     use core::num::traits::Zero;
+    use openzeppelin::access::ownable::OwnableComponent;
     use openzeppelin::token::erc20::interface::{IERC20Dispatcher, IERC20DispatcherTrait};
+    use openzeppelin::upgrades::interface::{
+        IUpgradeable, IUpgradeableDispatcher, IUpgradeableDispatcherTrait,
+    };
+    use openzeppelin::upgrades::upgradeable::UpgradeableComponent;
     use starknet::eth_signature::verify_eth_signature;
     use starknet::event::EventEmitter;
     use starknet::secp256_trait::signature_from_vrs;
@@ -47,6 +55,13 @@ mod OmniBridge {
     use crate::utils;
     use crate::utils::{borsh, reverse_u256_bytes};
 
+    component!(path: OwnableComponent, storage: ownable, event: OwnableEvent);
+    component!(path: UpgradeableComponent, storage: upgradeable, event: UpgradeableEvent);
+
+    impl OwnableMixinImpl = OwnableComponent::OwnableMixinImpl<ContractState>;
+    impl OwnableInternalImpl = OwnableComponent::InternalImpl<ContractState>;
+    impl UpgradeableInternalImpl = UpgradeableComponent::InternalImpl<ContractState>;
+
     #[event]
     #[derive(Drop, starknet::Event)]
     pub enum Event {
@@ -54,12 +69,20 @@ mod OmniBridge {
         DeployToken: DeployToken,
         InitTransfer: InitTransfer,
         FinTransfer: FinTransfer,
+        #[flat]
+        OwnableEvent: OwnableComponent::Event,
+        #[flat]
+        UpgradeableEvent: UpgradeableComponent::Event,
     }
 
     // Used nonces
     // Admin?
     #[storage]
     struct Storage {
+        #[substorage(v0)]
+        ownable: OwnableComponent::Storage,
+        #[substorage(v0)]
+        upgradeable: UpgradeableComponent::Storage,
         bridge_token_class_hash: ClassHash,
         current_origin_nonce: u64,
         // Bitmap: slot = nonce / 251, bit = nonce % 251
@@ -78,10 +101,12 @@ mod OmniBridge {
         omni_bridge_derived_address: EthAddress,
         omni_bridge_chain_id: u8,
         token_class_hash: ClassHash,
+        owner: ContractAddress,
     ) {
         self.omni_bridge_derived_address.write(omni_bridge_derived_address);
         self.omni_bridge_chain_id.write(omni_bridge_chain_id);
         self.bridge_token_class_hash.write(token_class_hash);
+        self.ownable.initializer(owner);
     }
 
     #[abi(embed_v0)]
@@ -162,7 +187,7 @@ mod OmniBridge {
             // Verify token hasn't been deployed yet
             let token_id_hash = compute_keccak_byte_array(@payload.token);
             let existing_token = self.near_to_starknet_token.read(token_id_hash);
-            assert(existing_token.is_zero(), 'TokenAlreadyDeployed');
+            assert(existing_token.is_zero(), 'ERR_TOKEN_ALREADY_DEPLOYED');
 
             let decimals = _normalizeDecimals(payload.decimals);
 
@@ -197,7 +222,9 @@ mod OmniBridge {
         fn fin_transfer(
             ref self: ContractState, signature: Signature, payload: TransferMessagePayload,
         ) {
-            assert(!_is_transfer_finalised(@self, payload.destination_nonce), 'NonceAlreadyUsed');
+            assert(
+                !_is_transfer_finalised(@self, payload.destination_nonce), 'ERR_NONCE_ALREADY_USED',
+            );
             _set_transfer_finalised(ref self, payload.destination_nonce);
 
             let chain_id = self.omni_bridge_chain_id.read();
@@ -264,8 +291,8 @@ mod OmniBridge {
             recipient: ByteArray,
             message: ByteArray,
         ) {
-            assert(native_fee == 0, 'NativeFeeNotSupported');
-            assert(fee < amount, 'InvalidFee');
+            assert(native_fee == 0, 'ERR_NATIVE_FEE_NOT_SUPPORTED');
+            assert(fee < amount, 'ERR_INVALID_FEE');
 
             self.current_origin_nonce.write(self.current_origin_nonce.read() + 1);
 
@@ -294,6 +321,24 @@ mod OmniBridge {
                         },
                     ),
                 )
+        }
+
+        fn upgrade_token(
+            ref self: ContractState, token_address: ContractAddress, new_class_hash: ClassHash,
+        ) {
+            self.ownable.assert_only_owner();
+            assert(self.deployed_tokens.read(token_address), 'ERR_NOT_BRIDGE_TOKEN');
+
+            let upgradeable = IUpgradeableDispatcher { contract_address: token_address };
+            upgradeable.upgrade(new_class_hash);
+        }
+    }
+
+    #[abi(embed_v0)]
+    impl UpgradeableImpl of IUpgradeable<ContractState> {
+        fn upgrade(ref self: ContractState, new_class_hash: ClassHash) {
+            self.ownable.assert_only_owner();
+            self.upgradeable.upgrade(new_class_hash);
         }
     }
 

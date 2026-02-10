@@ -2,11 +2,13 @@
 mod BridgeToken {
     use openzeppelin::access::ownable::OwnableComponent;
     use openzeppelin::token::erc20::{ERC20Component, ERC20HooksEmptyImpl, interface as interface};
+    use openzeppelin::upgrades::upgradeable::UpgradeableComponent;
     use starknet::storage::{StoragePointerReadAccess, StoragePointerWriteAccess};
-    use starknet::{ContractAddress, get_caller_address};
+    use starknet::{ClassHash, ContractAddress, get_caller_address};
 
     component!(path: ERC20Component, storage: erc20, event: ERC20Event);
     component!(path: OwnableComponent, storage: ownable, event: OwnableEvent);
+    component!(path: UpgradeableComponent, storage: upgradeable, event: UpgradeableEvent);
 
     #[abi(embed_v0)]
     impl ERC20Impl = ERC20Component::ERC20Impl<ContractState>;
@@ -15,6 +17,7 @@ mod BridgeToken {
     impl ERC20InternalImpl = ERC20Component::InternalImpl<ContractState>;
     impl OwnableMixinImpl = OwnableComponent::OwnableMixinImpl<ContractState>;
     impl OwnableInternalImpl = OwnableComponent::InternalImpl<ContractState>;
+    impl UpgradeableInternalImpl = UpgradeableComponent::InternalImpl<ContractState>;
 
     #[storage]
     struct Storage {
@@ -22,6 +25,8 @@ mod BridgeToken {
         erc20: ERC20Component::Storage,
         #[substorage(v0)]
         ownable: OwnableComponent::Storage,
+        #[substorage(v0)]
+        upgradeable: UpgradeableComponent::Storage,
         decimals: u8,
     }
 
@@ -32,6 +37,8 @@ mod BridgeToken {
         ERC20Event: ERC20Component::Event,
         #[flat]
         OwnableEvent: OwnableComponent::Event,
+        #[flat]
+        UpgradeableEvent: UpgradeableComponent::Event,
     }
 
     #[constructor]
@@ -73,5 +80,11 @@ mod BridgeToken {
     fn burn(ref self: ContractState, account: ContractAddress, amount: u256) {
         self.ownable.assert_only_owner();
         self.erc20.burn(account, amount);
+    }
+
+    #[external(v0)]
+    fn upgrade(ref self: ContractState, new_class_hash: ClassHash) {
+        self.ownable.assert_only_owner();
+        self.upgradeable.upgrade(new_class_hash);
     }
 }
