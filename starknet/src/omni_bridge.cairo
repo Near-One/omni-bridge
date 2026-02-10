@@ -93,6 +93,7 @@ mod OmniBridge {
         near_to_starknet_token: Map<u256, ContractAddress>,
         omni_bridge_chain_id: u8,
         omni_bridge_derived_address: EthAddress,
+        native_token_address: ContractAddress,
     }
 
     #[constructor]
@@ -102,11 +103,13 @@ mod OmniBridge {
         omni_bridge_chain_id: u8,
         token_class_hash: ClassHash,
         owner: ContractAddress,
+        native_token_address: ContractAddress,
     ) {
         self.omni_bridge_derived_address.write(omni_bridge_derived_address);
         self.omni_bridge_chain_id.write(omni_bridge_chain_id);
         self.bridge_token_class_hash.write(token_class_hash);
         self.ownable.initializer(owner);
+        self.native_token_address.write(native_token_address);
     }
 
     #[abi(embed_v0)]
@@ -291,19 +294,26 @@ mod OmniBridge {
             recipient: ByteArray,
             message: ByteArray,
         ) {
-            assert(native_fee == 0, 'ERR_NATIVE_FEE_NOT_SUPPORTED');
             assert(fee < amount, 'ERR_INVALID_FEE');
 
             self.current_origin_nonce.write(self.current_origin_nonce.read() + 1);
 
             let caller = get_caller_address();
 
+            // Handle token transfer (burn or lock)
             if self.deployed_tokens.read(token_address) {
                 IBridgeTokenDispatcher { contract_address: token_address }
                     .burn(caller, amount.into());
             } else {
                 IERC20Dispatcher { contract_address: token_address }
                     .transfer_from(caller, get_contract_address(), amount.into());
+            }
+
+            // Handle native fee payment if specified
+            if native_fee > 0 {
+                let native_token = self.native_token_address.read();
+                IERC20Dispatcher { contract_address: native_token }
+                    .transfer_from(caller, get_contract_address(), native_fee.into());
             }
 
             self

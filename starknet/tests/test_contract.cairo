@@ -25,6 +25,11 @@ fn declare_bridge_token() -> ContractClass {
 fn deploy_bridge_contract() -> (IOmniBridgeDispatcher, ContractAddress) {
     let token_class_hash = declare_bridge_token().class_hash;
     let owner: ContractAddress = 0x123.try_into().unwrap();
+    // Starknet ETH token address
+    let native_token: ContractAddress =
+        0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7
+        .try_into()
+        .unwrap();
 
     let contract = declare("OmniBridge").unwrap_syscall().contract_class();
     let (contract_address, _) = contract
@@ -33,7 +38,8 @@ fn deploy_bridge_contract() -> (IOmniBridgeDispatcher, ContractAddress) {
                 0x22EB4d37677eD931d9dE2218cecE1A832a147490, // omni_bridge_derived_address
                 0x9, // omni_bridge_chain_id
                 token_class_hash.into(), // bridge_token_class_hash
-                owner.into() // owner
+                owner.into(), // owner
+                native_token.into() // native_token_address
             ],
         )
         .unwrap_syscall();
@@ -173,16 +179,6 @@ fn test_init_transfer_fee_exceeds_amount() {
 
     // fee >= amount should fail
     dispatcher.init_transfer(token_address, 100, 100, 0, "recipient.near", "");
-}
-
-#[test]
-#[should_panic(expected: ('ERR_NATIVE_FEE_NOT_SUPPORTED',))]
-fn test_init_transfer_native_fee_not_zero() {
-    let (dispatcher, _) = deploy_bridge_contract();
-    let token_address: ContractAddress = 0x456.try_into().unwrap();
-
-    // native_fee != 0 should fail
-    dispatcher.init_transfer(token_address, 100, 10, 1, "recipient.near", "");
 }
 
 #[test]
