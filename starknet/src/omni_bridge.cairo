@@ -24,13 +24,16 @@ pub trait IOmniBridge<TContractState> {
     fn upgrade_token(
         ref self: TContractState, token_address: ContractAddress, new_class_hash: ClassHash,
     );
+    fn set_pause_flags(ref self: TContractState, flags: u8);
+    fn pause_all(ref self: TContractState);
 }
 
 #[starknet::contract]
 mod OmniBridge {
     use core::keccak::compute_keccak_byte_array;
     use core::num::traits::Zero;
-    use openzeppelin::access::ownable::OwnableComponent;
+    use openzeppelin::access::accesscontrol::AccessControlComponent;
+    use openzeppelin::introspection::src5::SRC5Component;
     use openzeppelin::token::erc20::interface::{IERC20Dispatcher, IERC20DispatcherTrait};
     use openzeppelin::upgrades::interface::{
         IUpgradeable, IUpgradeableDispatcher, IUpgradeableDispatcherTrait,
@@ -55,11 +58,27 @@ mod OmniBridge {
     use crate::utils;
     use crate::utils::{borsh, reverse_u256_bytes};
 
-    component!(path: OwnableComponent, storage: ownable, event: OwnableEvent);
+    // Role constants
+    const DEFAULT_ADMIN_ROLE: felt252 = 0;
+    const PAUSER_ROLE: felt252 = selector!("PAUSER_ROLE");
+
+    // Pause flag constants
+    const PAUSE_INIT_TRANSFER: u8 = 0x01; // 0001
+    const PAUSE_FIN_TRANSFER: u8 = 0x02; // 0010
+    const PAUSE_DEPLOY_TOKEN: u8 = 0x04; // 0100
+    const PAUSE_ALL: u8 = 0xFF; // 1111
+
+    component!(path: AccessControlComponent, storage: accesscontrol, event: AccessControlEvent);
+    component!(path: SRC5Component, storage: src5, event: SRC5Event);
     component!(path: UpgradeableComponent, storage: upgradeable, event: UpgradeableEvent);
 
-    impl OwnableMixinImpl = OwnableComponent::OwnableMixinImpl<ContractState>;
-    impl OwnableInternalImpl = OwnableComponent::InternalImpl<ContractState>;
+    #[abi(embed_v0)]
+    impl AccessControlImpl =
+        AccessControlComponent::AccessControlImpl<ContractState>;
+    #[abi(embed_v0)]
+    impl AccessControlCamelImpl =
+        AccessControlComponent::AccessControlCamelImpl<ContractState>;
+    impl AccessControlInternalImpl = AccessControlComponent::InternalImpl<ContractState>;
     impl UpgradeableInternalImpl = UpgradeableComponent::InternalImpl<ContractState>;
 
     #[event]
@@ -70,19 +89,23 @@ mod OmniBridge {
         InitTransfer: InitTransfer,
         FinTransfer: FinTransfer,
         #[flat]
-        OwnableEvent: OwnableComponent::Event,
+        AccessControlEvent: AccessControlComponent::Event,
+        #[flat]
+        SRC5Event: SRC5Component::Event,
         #[flat]
         UpgradeableEvent: UpgradeableComponent::Event,
     }
 
     // Used nonces
-    // Admin?
     #[storage]
     struct Storage {
         #[substorage(v0)]
-        ownable: OwnableComponent::Storage,
+        accesscontrol: AccessControlComponent::Storage,
+        #[substorage(v0)]
+        src5: SRC5Component::Storage,
         #[substorage(v0)]
         upgradeable: UpgradeableComponent::Storage,
+        pause_flags: u8,
         bridge_token_class_hash: ClassHash,
         current_origin_nonce: u64,
         // Bitmap: slot = nonce / 251, bit = nonce % 251
@@ -102,14 +125,18 @@ mod OmniBridge {
         omni_bridge_derived_address: EthAddress,
         omni_bridge_chain_id: u8,
         token_class_hash: ClassHash,
-        owner: ContractAddress,
+        default_admin: ContractAddress,
         native_token_address: ContractAddress,
     ) {
         self.omni_bridge_derived_address.write(omni_bridge_derived_address);
         self.omni_bridge_chain_id.write(omni_bridge_chain_id);
         self.bridge_token_class_hash.write(token_class_hash);
-        self.ownable.initializer(owner);
         self.native_token_address.write(native_token_address);
+        self.pause_flags.write(0); // Not paused initially
+
+        // Initialize AccessControl with admin role
+        self.accesscontrol.initializer();
+        self.accesscontrol._grant_role(DEFAULT_ADMIN_ROLE, default_admin);
     }
 
     #[abi(embed_v0)]
@@ -174,6 +201,9 @@ mod OmniBridge {
         }
 
         fn deploy_token(ref self: ContractState, signature: Signature, payload: MetadataPayload) {
+            // Check if deploy_token is paused
+            assert(!_is_paused(@self, PAUSE_DEPLOY_TOKEN), 'ERR_DEPLOY_TOKEN_PAUSED');
+
             let mut borsh_bytes: ByteArray = "";
             borsh_bytes.append_byte(1); // Payload type
             borsh_bytes.append(@borsh::encode_byte_array(@payload.token));
@@ -225,6 +255,9 @@ mod OmniBridge {
         fn fin_transfer(
             ref self: ContractState, signature: Signature, payload: TransferMessagePayload,
         ) {
+            // Check if fin_transfer is paused
+            assert(!_is_paused(@self, PAUSE_FIN_TRANSFER), 'ERR_FIN_TRANSFER_PAUSED');
+
             assert(
                 !_is_transfer_finalised(@self, payload.destination_nonce), 'ERR_NONCE_ALREADY_USED',
             );
@@ -294,6 +327,9 @@ mod OmniBridge {
             recipient: ByteArray,
             message: ByteArray,
         ) {
+            // Check if init_transfer is paused
+            assert(!_is_paused(@self, PAUSE_INIT_TRANSFER), 'ERR_INIT_TRANSFER_PAUSED');
+
             assert(fee < amount, 'ERR_INVALID_FEE');
 
             self.current_origin_nonce.write(self.current_origin_nonce.read() + 1);
@@ -336,20 +372,36 @@ mod OmniBridge {
         fn upgrade_token(
             ref self: ContractState, token_address: ContractAddress, new_class_hash: ClassHash,
         ) {
-            self.ownable.assert_only_owner();
+            self.accesscontrol.assert_only_role(DEFAULT_ADMIN_ROLE);
             assert(self.deployed_tokens.read(token_address), 'ERR_NOT_BRIDGE_TOKEN');
 
             let upgradeable = IUpgradeableDispatcher { contract_address: token_address };
             upgradeable.upgrade(new_class_hash);
+        }
+
+        fn set_pause_flags(ref self: ContractState, flags: u8) {
+            self.accesscontrol.assert_only_role(DEFAULT_ADMIN_ROLE);
+            self.pause_flags.write(flags);
+        }
+
+        fn pause_all(ref self: ContractState) {
+            self.accesscontrol.assert_only_role(PAUSER_ROLE);
+            self.pause_flags.write(PAUSE_ALL);
         }
     }
 
     #[abi(embed_v0)]
     impl UpgradeableImpl of IUpgradeable<ContractState> {
         fn upgrade(ref self: ContractState, new_class_hash: ClassHash) {
-            self.ownable.assert_only_owner();
+            self.accesscontrol.assert_only_role(DEFAULT_ADMIN_ROLE);
             self.upgradeable.upgrade(new_class_hash);
         }
+    }
+
+    // Helper functions
+    fn _is_paused(self: @ContractState, flag: u8) -> bool {
+        let flags = self.pause_flags.read();
+        (flags & flag) != 0
     }
 
     #[starknet::interface]

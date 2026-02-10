@@ -331,7 +331,7 @@ fn test_omni_bridge_upgrade() {
 }
 
 #[test]
-#[should_panic(expected: ('Caller is not the owner',))]
+#[should_panic(expected: ('Caller is missing role',))]
 fn test_omni_bridge_upgrade_non_owner_fails() {
     let (_bridge, bridge_address) = deploy_bridge_contract();
     let non_owner: ContractAddress = 0x456.try_into().unwrap();
@@ -362,7 +362,7 @@ fn test_upgrade_deployed_token() {
 }
 
 #[test]
-#[should_panic(expected: ('Caller is not the owner',))]
+#[should_panic(expected: ('Caller is missing role',))]
 fn test_upgrade_token_non_owner_fails() {
     let (bridge, bridge_address) = deploy_bridge_contract();
     let token_address = deploy_test_token(bridge, bridge_address);
