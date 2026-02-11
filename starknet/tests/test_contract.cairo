@@ -61,11 +61,8 @@ fn deploy_test_token(
 
     dispatcher.deploy_token(signature, payload);
 
-    // The deterministic address calculation changed due to storage layout modifications
-    // For now, use a placeholder that will be calculated at deployment time
-    // This address is deterministic based on deploy_syscall with salt=0
-    // Will be updated after running test_deploy_token to get actual address
-    1906120681599811304664530312850632960342400776779045792033969472857183039830.try_into().unwrap()
+    // Query the deployed token address using the new getter function
+    dispatcher.get_token_address("omni-demo.cfi-pre.near")
 }
 
 #[test]
@@ -127,8 +124,6 @@ fn test_deploy_token() {
 
     // Verify deploy_token succeeds with valid signature
     dispatcher.deploy_token(signature, payload);
-    // Note: The deployed token address is deterministic but depends on bridge implementation
-// This test verifies the signature validation and deployment succeeds
 }
 
 #[test]
@@ -310,6 +305,7 @@ fn test_fin_transfer_with_bridge_token() {
             amount: 1000,
             recipient,
             fee_recipient: Option::None,
+            message: Option::None,
         },
     );
     spy.assert_emitted(@array![(bridge_address, expected_event)]);

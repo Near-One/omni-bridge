@@ -72,4 +72,13 @@ pub struct FinTransfer {
     pub amount: u128,
     pub recipient: ContractAddress,
     pub fee_recipient: Option<ByteArray>,
+    pub message: Option<ByteArray>,
+}
+
+#[derive(Drop, starknet::Event)]
+pub struct PauseStateChanged {
+    pub old_flags: u8,
+    pub new_flags: u8,
+    #[key]
+    pub admin: ContractAddress,
 }

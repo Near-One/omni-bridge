@@ -26,6 +26,7 @@ pub trait IOmniBridge<TContractState> {
     );
     fn set_pause_flags(ref self: TContractState, flags: u8);
     fn pause_all(ref self: TContractState);
+    fn get_token_address(self: @TContractState, token_id: ByteArray) -> ContractAddress;
 }
 
 #[starknet::contract]
@@ -52,8 +53,8 @@ mod OmniBridge {
         get_contract_address, syscalls,
     };
     use crate::bridge_types::{
-        DeployToken, FinTransfer, InitTransfer, LogMetadata, MetadataPayload, Signature,
-        TransferMessagePayload,
+        DeployToken, FinTransfer, InitTransfer, LogMetadata, MetadataPayload, PauseStateChanged,
+        Signature, TransferMessagePayload,
     };
     use crate::utils;
     use crate::utils::{borsh, reverse_u256_bytes};
@@ -88,6 +89,7 @@ mod OmniBridge {
         DeployToken: DeployToken,
         InitTransfer: InitTransfer,
         FinTransfer: FinTransfer,
+        PauseStateChanged: PauseStateChanged,
         #[flat]
         AccessControlEvent: AccessControlComponent::Event,
         #[flat]
@@ -228,8 +230,11 @@ mod OmniBridge {
             (payload.name.clone(), payload.symbol.clone(), decimals)
                 .serialize(ref constructor_calldata);
 
+            // Use token_id_hash as salt for deterministic deployment
+            // Use the low part of the u256 hash to ensure it fits in felt252
+            let salt: felt252 = token_id_hash.low.into();
             let (contract_address, _) = deploy_syscall(
-                self.bridge_token_class_hash.read(), 0, constructor_calldata.span(), false,
+                self.bridge_token_class_hash.read(), salt, constructor_calldata.span(), false,
             )
                 .unwrap_syscall();
 
@@ -299,8 +304,9 @@ mod OmniBridge {
                 IBridgeTokenDispatcher { contract_address: payload.token_address }
                     .mint(payload.recipient, payload.amount.into());
             } else {
-                IERC20Dispatcher { contract_address: payload.token_address }
+                let success = IERC20Dispatcher { contract_address: payload.token_address }
                     .transfer(payload.recipient, payload.amount.into());
+                assert(success, 'ERR_TRANSFER_FAILED');
             }
 
             self
@@ -313,6 +319,7 @@ mod OmniBridge {
                             amount: payload.amount,
                             recipient: payload.recipient,
                             fee_recipient: payload.fee_recipient,
+                            message: payload.message,
                         },
                     ),
                 )
@@ -330,6 +337,7 @@ mod OmniBridge {
             // Check if init_transfer is paused
             assert(!_is_paused(@self, PAUSE_INIT_TRANSFER), 'ERR_INIT_TRANSFER_PAUSED');
 
+            assert(amount > 0, 'ERR_ZERO_AMOUNT');
             assert(fee < amount, 'ERR_INVALID_FEE');
 
             self.current_origin_nonce.write(self.current_origin_nonce.read() + 1);
@@ -341,15 +349,17 @@ mod OmniBridge {
                 IBridgeTokenDispatcher { contract_address: token_address }
                     .burn(caller, amount.into());
             } else {
-                IERC20Dispatcher { contract_address: token_address }
+                let success = IERC20Dispatcher { contract_address: token_address }
                     .transfer_from(caller, get_contract_address(), amount.into());
+                assert(success, 'ERR_TRANSFER_FROM_FAILED');
             }
 
             // Handle native fee payment if specified
             if native_fee > 0 {
                 let native_token = self.native_token_address.read();
-                IERC20Dispatcher { contract_address: native_token }
+                let success = IERC20Dispatcher { contract_address: native_token }
                     .transfer_from(caller, get_contract_address(), native_fee.into());
+                assert(success, 'ERR_FEE_TRANSFER_FAILED');
             }
 
             self
@@ -381,12 +391,37 @@ mod OmniBridge {
 
         fn set_pause_flags(ref self: ContractState, flags: u8) {
             self.accesscontrol.assert_only_role(DEFAULT_ADMIN_ROLE);
+            let old_flags = self.pause_flags.read();
             self.pause_flags.write(flags);
+
+            self
+                .emit(
+                    Event::PauseStateChanged(
+                        PauseStateChanged {
+                            old_flags, new_flags: flags, admin: get_caller_address(),
+                        },
+                    ),
+                );
         }
 
         fn pause_all(ref self: ContractState) {
             self.accesscontrol.assert_only_role(PAUSER_ROLE);
+            let old_flags = self.pause_flags.read();
             self.pause_flags.write(PAUSE_ALL);
+
+            self
+                .emit(
+                    Event::PauseStateChanged(
+                        PauseStateChanged {
+                            old_flags, new_flags: PAUSE_ALL, admin: get_caller_address(),
+                        },
+                    ),
+                );
+        }
+
+        fn get_token_address(self: @ContractState, token_id: ByteArray) -> ContractAddress {
+            let token_id_hash = compute_keccak_byte_array(@token_id);
+            self.near_to_starknet_token.read(token_id_hash)
         }
     }
 
