@@ -115,23 +115,39 @@ pub async fn get_events(
     key: String,
 ) -> Option<Vec<(String, String)>> {
     for _ in 0..config.redis.query_retry_attempts {
-        if let Ok(mut iter) = redis_connection_manager
+        let mut iter = match redis_connection_manager
             .hscan::<String, (String, String)>(key.clone())
             .await
         {
-            let mut events = Vec::new();
-
-            while let Some(event) = iter.next_item().await {
-                events.push(event);
+            Ok(iter) => iter,
+            Err(err) => {
+                warn!("Redis hscan failed: {err:?}");
+                tokio::time::sleep(tokio::time::Duration::from_secs(
+                    config.redis.query_retry_sleep_secs,
+                ))
+                .await;
+                continue;
             }
+        };
 
-            return Some(events);
+        let mut events = Vec::new();
+        loop {
+            match tokio::time::timeout(
+                tokio::time::Duration::from_secs(config.redis.query_timeout_secs),
+                iter.next_item(),
+            )
+            .await
+            {
+                Ok(Some(event)) => events.push(event),
+                Ok(None) => break,
+                Err(_) => {
+                    warn!("Redis hscan iteration timed out");
+                    break;
+                }
+            }
         }
 
-        tokio::time::sleep(tokio::time::Duration::from_secs(
-            config.redis.query_retry_sleep_secs,
-        ))
-        .await;
+        return Some(events);
     }
 
     warn!("Failed to get events from redis db");
