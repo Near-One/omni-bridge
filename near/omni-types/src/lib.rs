@@ -73,12 +73,20 @@ pub enum ChainKind {
     HyperEvm,
     #[serde(alias = "strk")]
     Strk,
+    #[serde(alias = "abs")]
+    Abs,
 }
 
 impl ChainKind {
     pub const fn is_evm_chain(&self) -> bool {
         match self {
-            Self::Eth | Self::Arb | Self::Base | Self::Bnb | Self::Pol | Self::HyperEvm => true,
+            Self::Eth
+            | Self::Arb
+            | Self::Base
+            | Self::Bnb
+            | Self::Pol
+            | Self::HyperEvm
+            | Self::Abs => true,
             Self::Btc | Self::Zcash | Self::Near | Self::Sol | Self::Strk => false,
         }
     }
@@ -94,7 +102,8 @@ impl ChainKind {
             | Self::Near
             | Self::Sol
             | Self::HyperEvm
-            | Self::Strk => false,
+            | Self::Strk
+            | Self::Abs => false,
         }
     }
 }
@@ -128,6 +137,7 @@ impl TryFrom<u8> for ChainKind {
             8 => Ok(Self::Pol),
             9 => Ok(Self::HyperEvm),
             10 => Ok(Self::Strk),
+            11 => Ok(Self::Abs),
             _ => Err(format!("{input:?} invalid chain kind")),
         }
     }
@@ -154,6 +164,7 @@ pub enum OmniAddress {
     Pol(EvmAddress),
     HyperEvm(EvmAddress),
     Strk(StarknetAddress),
+    Abs(EvmAddress),
 }
 
 impl OmniAddress {
@@ -171,6 +182,7 @@ impl OmniAddress {
             ChainKind::Btc => Ok(Self::Btc(String::new())),
             ChainKind::Zcash => Ok(Self::Zcash(String::new())),
             ChainKind::Strk => Ok(Self::Strk(H256::ZERO)),
+            ChainKind::Abs => Ok(Self::Abs(H160::ZERO)),
         }
     }
 
@@ -185,6 +197,7 @@ impl OmniAddress {
             ChainKind::Bnb => Ok(Self::Bnb(address)),
             ChainKind::Pol => Ok(Self::Pol(address)),
             ChainKind::HyperEvm => Ok(Self::HyperEvm(address)),
+            ChainKind::Abs => Ok(Self::Abs(address)),
             _ => Err(format!("{chain_kind:?} is not an EVM chain")),
         }
     }
@@ -197,7 +210,8 @@ impl OmniAddress {
             | ChainKind::Base
             | ChainKind::Bnb
             | ChainKind::Pol
-            | ChainKind::HyperEvm => {
+            | ChainKind::HyperEvm
+            | ChainKind::Abs => {
                 Self::new_from_evm_address(chain_kind, Self::to_evm_address(address)?)
             }
             ChainKind::Near => Ok(Self::Near(Self::to_near_account_id(address)?)),
@@ -226,6 +240,7 @@ impl OmniAddress {
             Self::Btc(_) => ChainKind::Btc,
             Self::Zcash(_) => ChainKind::Zcash,
             Self::Strk(_) => ChainKind::Strk,
+            Self::Abs(_) => ChainKind::Abs,
         }
     }
 
@@ -242,6 +257,7 @@ impl OmniAddress {
             Self::Btc(address) => ("btc", address.to_string()),
             Self::Zcash(address) => ("zcash", address.to_string()),
             Self::Strk(address) => ("strk", address.to_string()),
+            Self::Abs(address) => ("abs", address.to_string()),
         };
 
         if skip_zero_address && self.is_zero() {
@@ -258,7 +274,8 @@ impl OmniAddress {
             | Self::Base(address)
             | Self::Bnb(address)
             | Self::Pol(address)
-            | Self::HyperEvm(address) => address.is_zero(),
+            | Self::HyperEvm(address)
+            | Self::Abs(address) => address.is_zero(),
             Self::Near(address) => *address == ZERO_ACCOUNT_ID,
             Self::Sol(address) => address.is_zero(),
             Self::Btc(address) | Self::Zcash(address) => address.is_empty(),
@@ -351,6 +368,7 @@ impl FromStr for OmniAddress {
             "bnb" => Ok(Self::Bnb(recipient.parse().map_err(stringify)?)),
             "pol" => Ok(Self::Pol(recipient.parse().map_err(stringify)?)),
             "hlevm" => Ok(Self::HyperEvm(recipient.parse().map_err(stringify)?)),
+            "abs" => Ok(Self::Abs(recipient.parse().map_err(stringify)?)),
             "btc" => Ok(Self::Btc(recipient.to_string())),
             "zcash" => Ok(Self::Zcash(recipient.to_string())),
             "strk" => Ok(Self::Strk(recipient.parse().map_err(stringify)?)),
