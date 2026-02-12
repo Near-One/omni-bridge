@@ -208,9 +208,10 @@ When auditing this codebase, these patterns are NOT vulnerabilities:
 - Workspace has `overflow-checks = true` in Cargo.toml
 - Misconfiguration causes panic (correct fail-safe), not silent corruption
 
-**3. Wormhole Emitter Chain Mismatch (NOT exploitable)**
-- Uses `token_address.get_chain()` instead of VAA's `emitter_chain`
-- Exploitation requires 2^-160 address collision (cryptographically impossible)
+**3. Wormhole Emitter Chain (Correct Design)**
+- Chain ID is explicitly encoded in the payload by source bridge (`OmniBridgeWormhole.sol:131-133`)
+- Using `token_address.get_chain()` is correct - it reads the chain from the signed payload
+- VAA's `emitter_chain` is a Wormhole-specific field; our protocol embeds chain in payload
 
 **4. Gas Griefing via Storage Actions (NOT a vulnerability)**
 - Caller provides their own `storage_deposit_actions`
