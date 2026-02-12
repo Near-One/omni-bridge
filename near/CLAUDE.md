@@ -190,3 +190,54 @@ Integration tests using `near-workspaces` sandbox.
 - `omni-utils` - Shared utilities (external repo)
 - `alloy` - EVM types and RLP encoding
 - `near-workspaces` - Integration testing
+
+## Security Audit Notes
+
+### Common False Positives to Avoid
+
+When auditing this codebase, these patterns are NOT vulnerabilities:
+
+**1. Fast Transfer Fee Manipulation (NOT a vulnerability)**
+- `FastTransferId` is computed from the entire struct including fee
+- If relayer specifies wrong fee, IDs won't match when proof arrives
+- Result: Relayer LOSES their fronted tokens, cannot profit
+- The design is self-protecting
+
+**2. Decimal Arithmetic Underflow (NOT a vulnerability)**
+- Design expects `origin_decimals >= decimals` (normalization to lower precision)
+- Workspace has `overflow-checks = true` in Cargo.toml
+- Misconfiguration causes panic (correct fail-safe), not silent corruption
+
+**3. Wormhole Emitter Chain Mismatch (NOT exploitable)**
+- Uses `token_address.get_chain()` instead of VAA's `emitter_chain`
+- Exploitation requires 2^-160 address collision (cryptographically impossible)
+
+**4. Gas Griefing via Storage Actions (NOT a vulnerability)**
+- Caller provides their own `storage_deposit_actions`
+- Bad inputs only harm the caller themselves (self-griefing)
+
+**5. Signer ID Storage Manipulation (NOT profitable)**
+- Attacker must spend their own tokens to create transfer
+- Storage is refunded when transfer completes
+- No profit mechanism for attacker
+
+**6. Missing Emitter Validation in Prover (Correct Architecture)**
+- Prover verifies cryptographic proof validity
+- Bridge callback validates emitter against registered factories
+- This separation of concerns is intentional and correct
+
+**7. finish_withdraw_v2 Arbitrary Calls (Requires DAO Compromise)**
+- Only callable by tokens in `deployed_tokens`
+- `omni-token` (what bridge deploys) doesn't call this function
+- Exploitation requires DAO to add malicious token (out of scope)
+
+### Security Analysis Checklist
+
+When reviewing changes to this codebase:
+
+1. **Check overflow-checks**: Verify `Cargo.toml` still has `overflow-checks = true`
+2. **Trace ID computations**: Changes to structs used in ID hashing affect matching logic
+3. **Verify callback validation**: Ensure bridge callbacks validate emitter addresses
+4. **Check .detach() usage**: Detached promises should only be used for non-critical operations
+5. **Trust boundaries**: DAO, RbfOperator, UTXO Connectors are semi-trusted roles
+6. **Storage refunds**: Ensure storage owners receive refunds on transfer completion
