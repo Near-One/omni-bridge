@@ -355,7 +355,7 @@ const config: HardhatUserConfig = {
       url: "https://rpc.hyperliquid-testnet.xyz/evm",
       accounts: [`${EVM_PRIVATE_KEY}`],
     },
-    absSepolia: {
+    absTestnet: {
       omniChainId: 11,
       chainId: 11124,
       url: "https://api.testnet.abs.xyz",
@@ -364,6 +364,24 @@ const config: HardhatUserConfig = {
   },
   etherscan: {
     apiKey: ETHERSCAN_API_KEY,
+    customChains: [
+      {
+        network: "abstractTestnet",
+        chainId: 11124,
+        urls: {
+          apiURL: "https://api.etherscan.io/v2/api?chainid=11124",
+          browserURL: "https://sepolia.abscan.org",
+        },
+      },
+      {
+        network: "abstractMainnet",
+        chainId: 2741,
+        urls: {
+          apiURL: "https://api.etherscan.io/v2/api?chainid=2741",
+          browserURL: "https://abscan.org",
+        },
+      },
+    ],
   },
 }
 
