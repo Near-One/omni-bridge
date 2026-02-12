@@ -39,3 +39,7 @@ Tokens with non-standard mint/burn (e.g. eNEAR) are supported via `ICustomMinter
 ### When modifying contracts
 - Verify Borsh encoding matches the NEAR side if changing payload structures
 - Consider whether changes affect the pause surface (PAUSED_INIT_TRANSFER / PAUSED_FIN_TRANSFER)
+
+### Security reference
+
+See [SECURITY.md](SECURITY.md) for documented design decisions and known low-severity issues. Consult this before reporting or re-investigating previously reviewed items.
