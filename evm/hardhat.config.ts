@@ -70,12 +70,12 @@ task("deploy-bridge-token-factory", "Deploys the OmniBridge contract")
       OmniBridgeContract,
       isWormholeContract
         ? [
-            taskArgs.bridgeTokenImpl,
-            nearBridgeDerivedAddress,
-            omniChainId,
-            wormholeAddress,
-            consistencyLevel,
-          ]
+          taskArgs.bridgeTokenImpl,
+          nearBridgeDerivedAddress,
+          omniChainId,
+          wormholeAddress,
+          consistencyLevel,
+        ]
         : [taskArgs.bridgeTokenImpl, nearBridgeDerivedAddress, omniChainId],
       {
         initializer: isWormholeContract ? "initializeWormhole" : "initialize",
@@ -308,6 +308,12 @@ const config: HardhatUserConfig = {
       url: "https://rpc.hyperliquid.xyz/evm",
       accounts: [`${EVM_PRIVATE_KEY}`],
     },
+    absMainnet: {
+      omniChainId: 11,
+      chainId: 2741,
+      url: "https://api.mainnet.abs.xyz",
+      accounts: [`${EVM_PRIVATE_KEY}`],
+    },
     sepolia: {
       omniChainId: 0,
       chainId: 11155111,
@@ -347,6 +353,12 @@ const config: HardhatUserConfig = {
       omniChainId: 9,
       chainId: 998,
       url: "https://rpc.hyperliquid-testnet.xyz/evm",
+      accounts: [`${EVM_PRIVATE_KEY}`],
+    },
+    absSepolia: {
+      omniChainId: 11,
+      chainId: 11124,
+      url: "https://api.testnet.abs.xyz",
       accounts: [`${EVM_PRIVATE_KEY}`],
     },
   },
