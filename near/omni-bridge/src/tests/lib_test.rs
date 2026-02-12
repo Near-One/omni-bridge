@@ -87,6 +87,29 @@ fn get_init_transfer_msg(recipient: &str, fee: u128, native_token_fee: u128) -> 
     }
 }
 
+fn ensure_destination_token_mapping(
+    contract: &mut Contract,
+    token_id: &AccountId,
+    destination_chain: ChainKind,
+) {
+    if destination_chain == ChainKind::Near {
+        return;
+    }
+    if contract
+        .get_token_address(destination_chain, token_id.clone())
+        .is_none()
+    {
+        let token_address =
+            OmniAddress::new_zero(destination_chain).expect("Failed to get zero address");
+        contract
+            .token_id_to_address
+            .insert(&(destination_chain, token_id.clone()), &token_address);
+        contract
+            .token_address_to_id
+            .insert(&token_address, token_id);
+    }
+}
+
 fn run_ft_on_transfer(
     contract: &mut Contract,
     sender_id: String,
@@ -97,6 +120,14 @@ fn run_ft_on_transfer(
 ) {
     let sender_id = AccountId::try_from(sender_id).expect("Invalid sender ID");
     let token_id = AccountId::try_from(token_id).expect("Invalid token ID");
+
+    if let BridgeOnTransferMsg::InitTransfer(init_transfer_msg) = msg {
+        ensure_destination_token_mapping(
+            contract,
+            &token_id,
+            init_transfer_msg.recipient.get_chain(),
+        );
+    }
 
     let attached_deposit = if let Some(deplosit) = attached_deposit {
         deplosit
@@ -124,6 +155,8 @@ fn run_ft_on_transfer_legacy(
 ) {
     let sender_id = AccountId::try_from(sender_id).expect("Invalid sender ID");
     let token_id = AccountId::try_from(token_id).expect("Invalid token ID");
+
+    ensure_destination_token_mapping(contract, &token_id, msg.recipient.get_chain());
 
     let attached_deposit = if let Some(deposit) = attached_deposit {
         deposit

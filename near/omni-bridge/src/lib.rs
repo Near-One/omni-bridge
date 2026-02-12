@@ -243,7 +243,19 @@ impl Contract {
         let signer_id = env::signer_account_id();
         let promise_or_promise_index_or_value = match parsed_msg {
             BridgeOnTransferMsg::InitTransfer(init_transfer_msg) => {
-                self.init_transfer(sender_id, signer_id, token_id, amount, init_transfer_msg)
+                let destination_chain = init_transfer_msg.get_destination_chain();
+
+                if self
+                    .get_token_address(destination_chain, token_id.clone())
+                    .is_none()
+                {
+                    env::log_str(&format!(
+                        "Token {token_id} is not registered on destination chain {destination_chain:?}. Refunding."
+                    ));
+                    PromiseOrPromiseIndexOrValue::Value(amount)
+                } else {
+                    self.init_transfer(sender_id, signer_id, token_id, amount, init_transfer_msg)
+                }
             }
             BridgeOnTransferMsg::FastFinTransfer(fast_fin_transfer_msg) => {
                 self.fast_fin_transfer(token_id, amount, signer_id, fast_fin_transfer_msg)
