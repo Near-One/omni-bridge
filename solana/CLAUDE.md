@@ -3,7 +3,7 @@
 ## Build / Test
 
 ```sh
-cd solana/bridge_token_factory
+cd solana
 anchor build          # build the program
 anchor test           # run tests (requires local validator)
 ```
