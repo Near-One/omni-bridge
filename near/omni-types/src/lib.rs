@@ -269,7 +269,7 @@ impl OmniAddress {
     pub fn get_token_prefix(&self) -> String {
         match self {
             Self::Sol(address) => Self::hashed_token_prefix("sol", &H256(address.0)),
-            Self::Strk(address) => Self::hashed_token_prefix("strk", &address),
+            Self::Strk(address) => Self::hashed_token_prefix("strk", address),
             Self::Eth(address) => {
                 if self.is_zero() {
                     "eth".to_string()
