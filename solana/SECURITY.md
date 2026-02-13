@@ -1,5 +1,22 @@
 # Security Notes — Solana Bridge Token Factory
 
+## Audit Methodology
+
+### Mutability audit — `#[account(mut)]` vs actual writes
+
+**Rule:** Anchor only persists `Account<T>` changes when the account is marked `#[account(mut)]`. A Rust `&mut self` method gives compile-time mutable access, but Anchor's serialization gate is the `mut` annotation. If an account is written to in Rust but NOT marked `mut`, the write compiles and runs but is **silently discarded** at transaction end.
+
+**Exception:** `AccountLoader<T>` (zero-copy) bypasses Anchor serialization — writes via `load_mut()` persist regardless of the `mut` annotation.
+
+**Checklist for every instruction:**
+
+1. For each account in the `#[derive(Accounts)]` struct, determine if it is marked `mut` (or `init`/`init_if_needed`, which imply `mut`).
+2. Trace through `process()` and any helpers it calls. For every field write (`account.field = value`), CPI that debits/credits the account, or `&mut` reference passed to a function that writes — verify the account is marked `mut`.
+3. **Watch for nested/embedded account structs.** If an instruction embeds a shared struct (e.g., `common: WormholeCPI`), the inner struct's `mut` annotations are independent. A `&mut self` method on the outer instruction gives Rust-level `&mut` to the inner accounts, but Anchor still checks the inner struct's annotations for persistence. Verify each nested account's `mut` status independently.
+4. Conversely, for each `mut` account, verify it is actually mutated. Unnecessary `mut` forces the runtime to mark the account as writable, which is wasteful and misleading.
+
+---
+
 ## Design Decisions (Non-Issues)
 
 Items reviewed and confirmed as intentional:
