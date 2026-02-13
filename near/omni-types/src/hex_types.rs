@@ -19,8 +19,12 @@ macro_rules! impl_h_type {
             type Err = TypesError;
 
             fn from_str(s: &str) -> Result<Self, Self::Err> {
-                let result = Vec::from_hex(s.strip_prefix("0x").map_or(s, |stripped| stripped))
-                    .map_err(|_| TypesError::InvalidHex)?;
+                let hex_str = s.strip_prefix("0x").unwrap_or(s);
+                if hex_str.len() > $size * 2 {
+                    return Err(TypesError::InvalidHexLength);
+                }
+                let padded = format!("{:0>width$}", hex_str, width = $size * 2);
+                let result = Vec::from_hex(&padded).map_err(|_| TypesError::InvalidHex)?;
                 Ok(Self(
                     result
                         .try_into()

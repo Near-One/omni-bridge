@@ -156,7 +156,15 @@ fn test_h160_from_str() {
     assert_eq!(err, TypesError::InvalidHex);
 
     let short_addr = "0x5a08";
-    let err = H160::from_str(short_addr).expect_err("Should fail with invalid length");
+    let h160_short =
+        H160::from_str(short_addr).expect("Should parse short hex with leading zero padding");
+    assert_eq!(
+        h160_short.to_string(),
+        "0x0000000000000000000000000000000000005a08"
+    );
+
+    let too_long = format!("0x{}", "ab".repeat(21));
+    let err = H160::from_str(&too_long).expect_err("Should fail with too-long hex");
     assert_eq!(err, TypesError::InvalidHexLength);
 }
 
@@ -188,12 +196,11 @@ fn test_h160_deserialization() {
     );
 
     let json = r#""0x5a08""#;
-    let result: Result<H160, _> = serde_json::from_str(json);
-    assert!(result.is_err(), "Should fail with invalid length");
-    let err = result.unwrap_err().to_string();
-    assert!(
-        err.contains("ERR_INVALID_HEX_LENGTH"),
-        "Error was: {err} but expected ERR_INVALID_HEX_LENGTH"
+    let h160: H160 = serde_json::from_str(json).expect("Should deserialize short hex with padding");
+    assert_eq!(
+        h160.to_string(),
+        "0x0000000000000000000000000000000000005a08",
+        "Should pad short hex with leading zeros"
     );
 
     let json = "123";
