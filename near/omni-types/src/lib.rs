@@ -268,21 +268,8 @@ impl OmniAddress {
 
     pub fn get_token_prefix(&self) -> String {
         match self {
-            Self::Sol(address) => {
-                if self.is_zero() {
-                    "sol".to_string()
-                } else {
-                    // The AccountId on Near can't be uppercased and has a 64 character limit,
-                    // so we encode the solana address into 20 bytes to bypass these restrictions
-                    let hashed_address = H160(
-                        utils::keccak256(&address.0)[12..]
-                            .try_into()
-                            .unwrap_or_default(),
-                    )
-                    .to_string();
-                    format!("sol-{hashed_address}")
-                }
-            }
+            Self::Sol(address) => Self::hashed_token_prefix("sol", &H256(address.0)),
+            Self::Strk(address) => Self::hashed_token_prefix("strk", &address),
             Self::Eth(address) => {
                 if self.is_zero() {
                     "eth".to_string()
@@ -308,6 +295,22 @@ impl OmniAddress {
 
     pub fn is_utxo_chain(&self) -> bool {
         self.get_chain().is_utxo_chain()
+    }
+
+    // The AccountId on Near can't be uppercased and has a 64 character limit,
+    // so we encode the address into 20 bytes to bypass these restrictions
+    fn hashed_token_prefix(prefix: &str, address: &H256) -> String {
+        if address.is_zero() {
+            prefix.to_string()
+        } else {
+            let hashed_address = H160(
+                utils::keccak256(&address.0)[12..]
+                    .try_into()
+                    .unwrap_or_default(),
+            )
+            .to_string();
+            format!("{prefix}-{hashed_address}")
+        }
     }
 
     fn to_evm_address(address: &[u8]) -> Result<EvmAddress, String> {

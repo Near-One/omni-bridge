@@ -69,6 +69,12 @@ macro_rules! impl_h_type {
             }
         }
 
+        impl From<[u8; $size]> for $name {
+            fn from(bytes: [u8; $size]) -> Self {
+                Self(bytes)
+            }
+        }
+
         impl Serialize for $name {
             fn serialize<S>(
                 &self,
