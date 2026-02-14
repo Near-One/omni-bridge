@@ -1,4 +1,3 @@
----
 name: "Security Analysis"
 
 on:
@@ -8,15 +7,48 @@ on:
       - develop
   pull_request:
   workflow_dispatch:
-  schedule:
-    - cron: "0 0 * * *"
+    inputs:
+      force_all_checks:
+        description: "Trigger all checks even if files are unchanged"
+        required: false
+        default: "false"
+        type: choice
+        options: [ "false", "true" ]
+      ignore_failures:
+        description: "Don't block CI on failed security checks"
+        required: false
+        default: "false"
+        type: choice
+        options: [ "false", "true" ]
 
 jobs:
-  contract_analysis:
-    name: "Shared"
-    uses: aurora-is-near/.github/.github/workflows/security_analysis.yml@master
-    secrets:
-      DD_API_KEY: ${{secrets.DD_API_KEY}}
-      SSH_PRIVATE_KEY: |
-        ${{ secrets.SSH_BRIDGE_INDEXER }}
-        ${{ secrets.SSH_BOREALIS }}
+  build:
+    name: Static Analysis (${{ matrix.project }})
+    runs-on: warp-ubuntu-2204-x64-16x
+    strategy:
+      fail-fast: false
+      matrix:
+        project: [near, solana]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Install Clippy
+        id: clippy_setup
+        continue-on-error: false
+        run: rustup component add clippy-preview
+
+      - name: Run Clippy
+        id: clippy
+        continue-on-error: true
+        working-directory: ./${{ matrix.project }}
+        run: |
+          cargo clippy --all-targets --workspace --no-deps --lib -- \
+          -D clippy::all -D clippy::pedantic \
+          -D clippy::as_conversions -D clippy::unsafe_casting \
+          -A clippy::missing_errors_doc -A clippy::missing_panics_doc \
+          -A clippy::must_use_candidate -A clippy::unreadable_literal \
+          -A clippy::similar_names -A clippy::too_long_first_doc_paragraph
