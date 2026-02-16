@@ -64,6 +64,24 @@ The main bridge contract handling cross-chain transfers. Key state in `Contract`
 - `submit_transfer_to_utxo_chain_connector()` - Send to Bitcoin/Zcash (called by relayer)
 - `rbf_increase_gas_fee()` - Replace-by-fee for stuck BTC transactions (DAO/RbfOperator only)
 
+## omni-types
+
+Shared types library - defines core types used across all contracts.
+
+**Main types (lib.rs):**
+- `ChainKind` - Supported chains enum
+- `OmniAddress` - Unified address for any chain
+- `TransferId`, `TransferMessage` - Transfer identification and data
+- `Fee` - Token fee + native fee structure
+- `FastTransfer`, `FastTransferId` - Fast transfer types
+
+**Modules:**
+- `errors.rs` - Error types
+- `evm/` - EVM-specific types (BlockHeader, Receipt, LogEntry)
+- `prover_result.rs` - Prover verification results
+- `btc.rs` - Bitcoin/UTXO types
+- `locker_args.rs` - Function argument structs
+
 ## omni-token
 
 NEP-141 fungible token contract for bridged tokens.
@@ -118,28 +136,6 @@ Proxy to Wormhole protocol for chains without light clients (Solana, BNB, EVM L2
 2. Call Wormhole prover's `verify_vaa()`
 3. Parse VAA payload in callback
 4. Return typed `ProverResult`
-
-## omni-tests
-
-Integration tests using `near-workspaces` sandbox.
-
-**Key Files:**
-- `environment.rs` - `TestEnvBuilder` for test setup, contract deployment, token minting
-- `helpers.rs` - Build artifacts, test addresses, gas constants
-- `init_transfer.rs` - Transfer initiation tests
-- `fin_transfer.rs` - Transfer finalization tests
-- `fast_transfer.rs` - Two-leg fast transfer tests
-- `utxo_fin_transfer.rs` - Bitcoin/Zcash tests
-- `omni_token.rs` - Token contract tests
-- `native_fee_role.rs` - Access control tests
-
-## mock/
-
-- **mock-prover** - Returns test proof results without verification
-- **mock-token** - Basic NEP-141 for testing
-- **mock-token-receiver** - Tests `ft_transfer_call` callbacks (can panic or return arbitrary values)
-- **mock-utxo-connector** - Simulates Bitcoin connector for testing
-- **mock-global-contract-deployer** - Tests global contract deployment
 
 ## Code Style
 
