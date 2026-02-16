@@ -66,8 +66,6 @@ The main bridge contract handling cross-chain transfers. Key state in `Contract`
 - `utxo_fin_transfer()` - Finalize UTXO incoming transfer
 - `rbf_increase_gas_fee()` - Replace-by-fee for stuck BTC transactions
 
-**Access Control Roles:** DAO, PauseManager, UnrestrictedDeposit, UnrestrictedFinalise, TokenControllerUpdater, NativeFeeReceiver
-
 ## omni-types
 
 Shared types library used across all crates.
