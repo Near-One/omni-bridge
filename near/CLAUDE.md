@@ -146,7 +146,7 @@ Proxy to Wormhole protocol for chains without light clients (Solana, BNB, EVM L2
 
 ## Key Dependencies
 
-- `near-sdk` v5.24.0, `near-contract-standards` v5.24.0
+- `near-sdk`, `near-contract-standards` - Core NEAR SDK (versions defined in workspace Cargo.toml)
 - `near-plugins` - Access control (roles) and upgradeable patterns
 - `omni-utils` - Shared utilities (external repo)
 - `alloy` - EVM types and RLP encoding
