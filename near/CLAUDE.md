@@ -12,12 +12,11 @@ cargo near build non-reproducible-wasm --manifest-path token-deployer/Cargo.toml
 cargo near build non-reproducible-wasm --manifest-path omni-prover/evm-prover/Cargo.toml
 cargo near build non-reproducible-wasm --manifest-path omni-prover/wormhole-omni-prover-proxy/Cargo.toml
 
-# Testing
-make rust-run-tests                          # Run all tests with cargo nextest
-cargo nextest run -p <crate> <test_name>     # Run single test
-cargo test -p omni-tests <test_name>         # Integration tests
+# Testing (run from near/ directory)
+cargo nextest run -p omni-tests test_native_fee     # Example: run specific test
+cargo nextest run -p <crate> <test_name>            # Template: run any test
 
-# Linting
+# Linting (run from project root)
 make clippy-near                             # Clippy with pedantic mode
 make fmt-near                                # Check formatting
 ```
