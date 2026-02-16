@@ -5,15 +5,12 @@ NEAR smart contracts for the Omni Bridge - a multi-chain asset bridge enabling t
 ## Build Commands
 
 ```bash
-# Build all NEAR contracts (reproducible WASM)
-make rust-build-near
-
-# Build individual contracts
-make rust-build-omni-bridge
-make rust-build-omni-token
-make rust-build-token-deployer
-make rust-build-evm-prover
-make rust-build-wormhole-omni-prover-proxy
+# Build contracts (run from near/ directory)
+cargo near build non-reproducible-wasm --manifest-path omni-bridge/Cargo.toml
+cargo near build non-reproducible-wasm --manifest-path omni-token/Cargo.toml
+cargo near build non-reproducible-wasm --manifest-path token-deployer/Cargo.toml
+cargo near build non-reproducible-wasm --manifest-path omni-prover/evm-prover/Cargo.toml
+cargo near build non-reproducible-wasm --manifest-path omni-prover/wormhole-omni-prover-proxy/Cargo.toml
 
 # Testing
 make rust-run-tests                          # Run all tests with cargo nextest
