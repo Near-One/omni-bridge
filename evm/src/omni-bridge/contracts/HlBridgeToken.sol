@@ -3,6 +3,9 @@ pragma solidity ^0.8.24;
 
 import {BridgeToken} from "./BridgeToken.sol";
 
+/// @notice Hyperliquid-specific BridgeToken with two mint paths:
+/// - 2-arg mint(address, uint256): mints on HyperEVM (tokens go directly to user)
+/// - 3-arg mint(address, uint256, bytes): mints on HyperCore (includes _update to system address for spot-balance tracking)
 contract HyperliquedBridgeToken is BridgeToken {
     address internal _systemAddress;
 
