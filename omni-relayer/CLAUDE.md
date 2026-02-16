@@ -1,6 +1,6 @@
 ## Overview
 
-Omni-Relayer is a Rust cross-chain bridge relayer that facilitates token transfers between NEAR, Ethereum, Base, Arbitrum, BNB Chain, Polygon, Solana, Bitcoin, and Zcash. It uses the OmniConnector SDK (from bridge-sdk-rs) to orchestrate transfers and Redis as its event queue and state store.
+Omni-Relayer is an off-chain component of Omni Bridge that relays transfers between NEAR and other networks (Ethereum, Solana, etc.; see `ChainKind` enum in omni-types for full list). It uses the OmniConnector SDK (from bridge-sdk-rs) to orchestrate transfers and Redis as its event queue and state store.
 
 ## Build & Development Commands
 

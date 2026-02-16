@@ -1,6 +1,6 @@
 ## Overview
 
-NEAR smart contracts for the Omni Bridge - a multi-chain asset bridge enabling trustless cross-chain token transfers. Uses Chain Signatures (MPC) for outbound transfers and light clients/Wormhole for inbound proof verification. Supports Ethereum, Arbitrum, Base, BNB, Polygon, Solana, Bitcoin, and Zcash.
+NEAR smart contracts for the Omni Bridge - a multi-chain asset bridge enabling trustless cross-chain token transfers. Uses Chain Signatures (MPC) for outbound transfers and light clients/Wormhole for inbound proof verification. Supports multiple blockchain networks including some EVM-compatible chains (such as Ethereum, Arbitrum, Base, etc.), Solana, and some UTXO chains (such as Bitcoin, Zcash, etc.). See `ChainKind` enum in omni-types for full list.
 
 ## Build Commands
 
