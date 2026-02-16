@@ -5,15 +5,11 @@ Omni-Relayer is an off-chain component of Omni Bridge that relays transfers betw
 ## Build & Development Commands
 
 ```bash
-cargo build                          # Debug build
-cargo build --profile dist           # Release build with thin LTO
-cargo test                           # Run all tests
-cargo test <test_name>               # Run a single test
-cargo test -- --nocapture            # Tests with tracing output
-cargo fmt                            # Format code
-cargo clippy -- -D warnings          # Lint (matches CI expectations)
 cargo run -- --config config.toml    # Run with config file
 cargo run -- --help                  # Show CLI flags
+cargo build                          # Debug build
+cargo fmt                            # Format code
+cargo clippy -- -D warnings          # Lint (matches CI expectations)
 ```
 
 ## Architecture
