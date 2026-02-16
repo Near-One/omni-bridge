@@ -48,7 +48,7 @@ jobs:
         run: |
           cargo clippy --all-targets --workspace --no-deps --lib -- \
           -D clippy::all -D clippy::pedantic \
-          -D clippy::as_conversions -D clippy::unsafe_casting \
+          -D clippy::as_conversions \
           -A clippy::missing_errors_doc -A clippy::missing_panics_doc \
           -A clippy::must_use_candidate -A clippy::unreadable_literal \
           -A clippy::similar_names -A clippy::too_long_first_doc_paragraph
