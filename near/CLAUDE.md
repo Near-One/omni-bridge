@@ -53,45 +53,16 @@ The main bridge contract handling cross-chain transfers. Key state in `Contract`
 - `current_origin_nonce` / `destination_nonces` - Transfer sequencing
 
 **Key Functions:**
-- `ft_on_transfer()` - Entry point for bridging (receives NEP-141 transfer)
-- `init_transfer()` - Create pending transfer, request MPC signature
-- `fin_transfer()` - Finalize incoming transfer (requires proof)
-- `sign_transfer()` / `sign_transfer_callback()` - MPC signature flow
-- `deploy_token()` - Deploy bridged token on NEAR
-- `bind_token()` - Register existing token as bridge-compatible
-- `claim_fee()` - Claim accumulated fees
+- `ft_on_transfer()` - Entry point for bridging (receives NEP-141 transfer from token contract)
+- `fin_transfer()` - Finalize incoming transfer (requires proof, called by relayer)
+- `sign_transfer()` - Request MPC signature for transfer (called by relayer)
+- `deploy_token()` - Deploy bridged token on NEAR (requires proof, called by relayer)
+- `bind_token()` - Register existing token as bridge-compatible (requires proof, called by relayer)
+- `claim_fee()` - Claim accumulated fees (requires proof, called by relayer)
 
 **UTXO Support (btc.rs):**
-- `submit_transfer_to_utxo_chain_connector()` - Send to Bitcoin/Zcash
-- `utxo_fin_transfer()` - Finalize UTXO incoming transfer
-- `rbf_increase_gas_fee()` - Replace-by-fee for stuck BTC transactions
-
-## omni-types
-
-Shared types library used across all crates.
-
-**Core Types:**
-- `ChainKind` - Enum: Eth, Near, Sol, Arb, Base, Bnb, Btc, Zcash, Pol, HyperEvm
-- `OmniAddress` - Unified address for any chain (enum with chain-specific variants)
-- `H160` - 20-byte Ethereum address with EIP-55 checksum
-- `TransferId` / `Nonce` - Transfer identification
-- `Fee` - Token fee + native fee structure
-
-**Transfer Types:**
-- `TransferMessage` - Full transfer data (token, amount, recipient, fee, sender, msg)
-- `TransferMessagePayload` - Hashed payload for MPC signing
-- `InitTransferMsg` - Parameters to initiate transfer
-- `FastFinTransferMsg` - Fast finalization message
-
-**Modules:**
-- `errors.rs` - `BridgeError`, `StorageError`, `TokenError`, `ProverError`
-- `evm/` - EVM types: `BlockHeader`, `Receipt`, `LogEntry`, event parsing
-- `prover_result.rs` - `ProverResult` enum (InitTransfer, FinTransfer, DeployToken, LogMetadata)
-- `near_events.rs` - `OmniBridgeEvent` for all bridge events
-- `btc.rs` - Bitcoin types: `TxOut`, `UTXOChainConfig`
-- `locker_args.rs` - Argument structs for bridge functions
-- `prover_args.rs` - `EvmVerifyProofArgs`, `WormholeVerifyProofArgs`
-- `mpc_types.rs` - MPC signer communication types
+- `submit_transfer_to_utxo_chain_connector()` - Send to Bitcoin/Zcash (called by relayer)
+- `rbf_increase_gas_fee()` - Replace-by-fee for stuck BTC transactions (DAO/RbfOperator only)
 
 ## omni-token
 
