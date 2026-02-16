@@ -20,28 +20,35 @@ The binary (`src/main.rs`) spawns a set of concurrent tokio tasks:
 2. **Event processor** (`src/workers/`) — pulls events from Redis, validates fees, builds proofs, and calls OmniConnector to finalize transfers
 3. **Fee bumping** (`src/startup/evm_fee_bumping.rs`) — monitors pending EVM transactions and resubmits with higher gas when needed
 
-### Module Layout
+### Event Flow
 
-- **`src/config.rs`** — All config structs, deserialized from TOML with env-var substitution (e.g., `INFURA_API_KEY`, `MONGODB_*`, `NEAR_OMNI_*`)
-- **`src/startup/`** — Chain indexer initialization and OmniConnector builder
-  - `mod.rs` — `build_omni_connector()` assembles all chain bridge clients
-  - `near.rs` — NEAR Lake Framework indexer, signer loading
-  - `evm.rs` — EVM log subscription (InitTransfer/FinTransfer/DeployToken events), batch processing
-  - `solana.rs` — Solana signature polling + Pubsub subscription
-  - `bridge_indexer.rs` — MongoDB change stream watcher (alternative to individual chain indexers)
-  - `evm_fee_bumping.rs` — Pending tx monitoring and gas price replacement
-- **`src/workers/`** — Event processing per chain
-  - `mod.rs` — Main `process_events()` loop, `Transfer` enum (Near/Evm/Solana/Utxo/NearToUtxo/UtxoToNear/Fast/FastNearToNear), retry logic with exponential backoff
-  - `near.rs`, `evm.rs`, `solana.rs`, `utxo.rs` — Chain-specific transfer finalization
-- **`src/utils/`** — Shared helpers
-  - `nonce.rs` — `NonceManager` for NEAR and EVM transaction ordering; `EvmNonceManagers` wraps per-chain managers
-  - `redis.rs` — Event queue operations (`EVENTS`, `SOLANA_EVENTS`, `STUCK_EVENTS`, `FEE_MAPPING` keys), checkpoint storage
-  - `bridge_api.rs` — Fee validation against bridge indexer API
-  - `evm.rs` — EVM event types (Solidity definitions via `alloy::sol!`), proof construction
-  - `near.rs` — NEAR block finality queries, streamer message handling
-  - `solana.rs` — Instruction decoding and Borsh deserialization
-  - `storage.rs` — NEAR storage deposit calculations
-  - `pending_transactions.rs` — Pending tx tracking struct
+1. **Indexers watch chains** (`src/startup/`)
+   - NEAR: Lake Framework streams blocks → detects bridge events
+   - EVM: Log subscription → catches InitTransfer/FinTransfer/DeployToken
+   - Solana: Signature polling + Pubsub
+   - Alternative: MongoDB change streams (bridge indexer API)
+
+2. **Events → Redis queues** (`src/utils/redis.rs`)
+   - Separate queues: `EVENTS`, `SOLANA_EVENTS`, `STUCK_EVENTS`
+   - Checkpoint storage for resuming
+
+3. **Event processor** (`src/workers/mod.rs`)
+   - Pulls events from Redis in `process_events()` loop
+   - Validates fees against bridge indexer API
+   - Builds proofs for destination chain
+   - Retry with exponential backoff on failure
+
+4. **Chain-specific finalization** (`src/workers/{near,evm,solana,utxo}.rs`)
+   - Calls OmniConnector SDK to submit proof + finalize transfer
+   - Uses `NonceManager` for transaction ordering
+
+5. **Fee bumping** (`src/startup/evm_fee_bumping.rs`)
+   - Monitors pending EVM transactions
+   - Resubmits with higher gas if stuck
+
+**Key modules:**
+- `src/config.rs` - Config with env-var substitution
+- `src/utils/` - Nonce management, proof construction, storage calculations
 
 ### Data Flow
 
@@ -53,7 +60,6 @@ All bridge SDK crates come from `github.com/Near-One/bridge-sdk-rs` (pinned to a
 
 ## Coding Conventions
 
-- Rust 2024 edition, toolchain 1.88.0
 - Max function/module length: 250 lines (`clippy.toml`)
 - Use `tracing` macros for logging, `anyhow::Result` for errors
 - Config structs go in `src/config.rs`
