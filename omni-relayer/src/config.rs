@@ -190,7 +190,7 @@ pub struct Redis {
 #[derive(Debug, Clone, Deserialize)]
 pub struct Nats {
     pub url: String,
-    pub work_subject: String,
+    pub relayer_subject: String,
     pub omni_consumer: NatsConsumer,
 }
 

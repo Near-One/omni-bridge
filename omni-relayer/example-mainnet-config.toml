@@ -11,7 +11,7 @@ keep_transfers_for_secs = 604800 # 60 * 60 * 24 * 7
 # Uncomment to enable NATS (replaces MongoDB change stream)
 # [nats]
 # url = "nats://nats-mainnet.nats-mainnet.svc.cluster.local:4222"
-# work_subject = "omni.work"
+# relayer_subject = "relayer.tasks"
 #
 # [nats.omni_consumer]
 # name = "omni-relayer"

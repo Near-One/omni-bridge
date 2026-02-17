@@ -64,12 +64,14 @@ async fn add_event<E: serde::Serialize + std::fmt::Debug + Sync>(
     redis_connection_manager: &mut redis::aio::ConnectionManager,
     nats: Option<&utils::nats::NatsClient>,
     key: &str,
+    target_chain: ChainKind,
     event: E,
 ) {
     if let Some(nats_client) = nats {
         if let (Some(nats_config), Ok(payload)) = (config.nats.as_ref(), serde_json::to_vec(&event))
         {
-            let subject = format!("{}.item", nats_config.work_subject);
+            let chain = target_chain.as_ref().to_ascii_lowercase();
+            let subject = format!("{}.{chain}", nats_config.relayer_subject);
             nats_client.publish(subject, key, &payload).await;
         }
     }
@@ -111,6 +113,7 @@ async fn handle_transaction_event(
                     redis_connection_manager,
                     nats,
                     &key,
+                    ChainKind::Near,
                     crate::workers::Transfer::Near { transfer_message },
                 )
                 .await;
@@ -134,6 +137,7 @@ async fn handle_transaction_event(
                     redis_connection_manager,
                     nats,
                     &utxo_key,
+                    ChainKind::Near,
                     crate::workers::Transfer::Utxo {
                         utxo_transfer_message,
                         new_transfer_id,
@@ -151,11 +155,13 @@ async fn handle_transaction_event(
             let origin_nonce = sign_event.message_payload.transfer_id.origin_nonce;
             let key = near_event_key(&origin_transaction_id, origin_nonce);
 
+            let target_chain = sign_event.message_payload.recipient.get_chain();
             add_event(
                 config,
                 redis_connection_manager,
                 nats,
                 &key,
+                target_chain,
                 OmniBridgeEvent::SignTransferEvent {
                     signature: sign_event.signature,
                     message_payload: sign_event.message_payload,
@@ -232,6 +238,7 @@ async fn handle_transaction_event(
                 redis_connection_manager,
                 nats,
                 &redis_key,
+                ChainKind::Near,
                 workers::Transfer::Evm {
                     chain_kind,
                     tx_hash,
@@ -251,6 +258,7 @@ async fn handle_transaction_event(
                     redis_connection_manager,
                     nats,
                     &fast_key,
+                    ChainKind::Near,
                     crate::workers::Transfer::Fast {
                         block_number,
                         tx_hash: origin_transaction_id,
@@ -304,6 +312,7 @@ async fn handle_transaction_event(
                 redis_connection_manager,
                 nats,
                 &redis_key,
+                ChainKind::Near,
                 workers::FinTransfer::Evm {
                     chain_kind,
                     tx_hash,
@@ -346,6 +355,7 @@ async fn handle_transaction_event(
                 redis_connection_manager,
                 nats,
                 &redis_key,
+                ChainKind::Near,
                 crate::workers::Transfer::Solana {
                     amount: init_transfer.amount.0.into(),
                     token: Pubkey::new_from_array(token.0),
@@ -386,6 +396,7 @@ async fn handle_transaction_event(
                 redis_connection_manager,
                 nats,
                 &redis_key,
+                ChainKind::Near,
                 crate::workers::FinTransfer::Solana {
                     emitter,
                     sequence,
@@ -407,6 +418,7 @@ async fn handle_transaction_event(
                 redis_connection_manager,
                 nats,
                 &origin_transaction_id,
+                ChainKind::Near,
                 workers::utxo::SignUtxoTransaction {
                     chain: destination_chain,
                     near_tx_hash: origin_transaction_id.clone(),
@@ -453,6 +465,7 @@ async fn handle_transaction_event(
                         redis_connection_manager,
                         nats,
                         &redis_key,
+                        ChainKind::Near,
                         workers::Transfer::NearToUtxo {
                             chain: destination_chain,
                             btc_pending_id: utxo_id.tx_hash.clone(),
@@ -478,6 +491,7 @@ async fn handle_transaction_event(
                 redis_connection_manager,
                 nats,
                 &key,
+                ChainKind::Near,
                 workers::Transfer::UtxoToNear {
                     chain: event.transfer_id.origin_chain,
                     btc_tx_hash: utxo_id.tx_hash,
@@ -503,6 +517,7 @@ async fn handle_transaction_event(
                     redis_connection_manager,
                     nats,
                     &key,
+                    ChainKind::Near,
                     workers::utxo::ConfirmedTxHash {
                         chain: destination_chain,
                         btc_tx_hash: utxo_id.tx_hash,
@@ -568,6 +583,7 @@ async fn handle_meta_event(
                 redis_connection_manager,
                 nats,
                 &redis_key,
+                ChainKind::Near,
                 workers::DeployToken::Evm {
                     chain_kind,
                     tx_hash,
@@ -596,6 +612,7 @@ async fn handle_meta_event(
                 redis_connection_manager,
                 nats,
                 &redis_key,
+                ChainKind::Near,
                 workers::DeployToken::Solana { emitter, sequence },
             )
             .await;
