@@ -858,13 +858,16 @@ pub async fn start_indexer_nats(
         let consumer = match nats_client.omni_consumer(nats_config).await {
             Ok(consumer) => consumer,
             Err(err) => {
-                warn!("Failed to create NATS consumer: {err:?}");
-                tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
-                continue;
-            }
-        };
-        if let Err(err) =
-            subscribe_to_omni_events(&consumer, &config, redis_connection_manager, nats).await
+    loop {
+        info!("Starting NATS subscription for OmniEvents");
+
+        if let Err(err) = subscribe_to_omni_events(
+            &consumer,
+            &config,
+            redis_connection_manager,
+            Some(nats_client.as_ref()),
+        )
+        .await
         {
             warn!("Error in NATS subscription: {err:?}");
         }
