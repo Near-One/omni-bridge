@@ -1,7 +1,9 @@
 use std::str::FromStr;
+use std::sync::Arc;
 
 use alloy::primitives::{Address, TxHash};
 use anyhow::{Context, Result};
+use async_nats::jetstream::consumer::PullConsumer;
 use bridge_indexer_types::documents_types::{
     OmniEvent, OmniEventData, OmniMetaEvent, OmniMetaEventDetails, OmniTransactionEvent,
     OmniTransactionOrigin, OmniTransferMessage,
@@ -57,10 +59,37 @@ fn get_evm_config(config: &config::Config, chain_kind: ChainKind) -> Result<&con
     }
 }
 
+async fn add_event<E: serde::Serialize + std::fmt::Debug + Sync>(
+    config: &config::Config,
+    redis_connection_manager: &mut redis::aio::ConnectionManager,
+    nats: Option<&utils::nats::NatsClient>,
+    key: &str,
+    event: E,
+) {
+    if let Some(nats_client) = nats {
+        if let (Some(nats_config), Ok(payload)) = (config.nats.as_ref(), serde_json::to_vec(&event))
+        {
+            let subject = format!("{}.item", nats_config.work_subject);
+            nats_client.publish(subject, key, &payload).await;
+        }
+    }
+
+    let retryable = RetryableEvent::new(event);
+    utils::redis::add_event(
+        config,
+        redis_connection_manager,
+        utils::redis::EVENTS,
+        key,
+        &retryable,
+    )
+    .await;
+}
+
 #[allow(clippy::too_many_lines)]
 async fn handle_transaction_event(
     config: &config::Config,
     redis_connection_manager: &mut redis::aio::ConnectionManager,
+    nats: Option<&utils::nats::NatsClient>,
     origin_transaction_id: String,
     unified_transfer_id: UnifiedTransferId,
     origin: OmniTransactionOrigin,
@@ -77,12 +106,12 @@ async fn handle_transaction_event(
             if transfer_message.recipient.get_chain() != ChainKind::Near {
                 let key = near_event_key(&origin_transaction_id, transfer_message.origin_nonce);
 
-                utils::redis::add_event(
+                add_event(
                     config,
                     redis_connection_manager,
-                    utils::redis::EVENTS,
-                    key,
-                    RetryableEvent::new(crate::workers::Transfer::Near { transfer_message }),
+                    nats,
+                    &key,
+                    crate::workers::Transfer::Near { transfer_message },
                 )
                 .await;
             }
@@ -100,15 +129,15 @@ async fn handle_transaction_event(
                     &utxo_transfer_message.utxo_id.to_string(),
                 ]);
 
-                utils::redis::add_event(
+                add_event(
                     config,
                     redis_connection_manager,
-                    utils::redis::EVENTS,
-                    utxo_key,
-                    RetryableEvent::new(crate::workers::Transfer::Utxo {
+                    nats,
+                    &utxo_key,
+                    crate::workers::Transfer::Utxo {
                         utxo_transfer_message,
                         new_transfer_id,
-                    }),
+                    },
                 )
                 .await;
             }
@@ -122,15 +151,15 @@ async fn handle_transaction_event(
             let origin_nonce = sign_event.message_payload.transfer_id.origin_nonce;
             let key = near_event_key(&origin_transaction_id, origin_nonce);
 
-            utils::redis::add_event(
+            add_event(
                 config,
                 redis_connection_manager,
-                utils::redis::EVENTS,
-                key,
-                RetryableEvent::new(OmniBridgeEvent::SignTransferEvent {
+                nats,
+                &key,
+                OmniBridgeEvent::SignTransferEvent {
                     signature: sign_event.signature,
                     message_payload: sign_event.message_payload,
-                }),
+                },
             )
             .await;
         }
@@ -198,18 +227,18 @@ async fn handle_transaction_event(
             let safe_confirmations = get_evm_config(config, chain_kind)
                 .map(|evm_config| evm_config.safe_confirmations)?;
 
-            utils::redis::add_event(
+            add_event(
                 config,
                 redis_connection_manager,
-                utils::redis::EVENTS,
-                redis_key,
-                RetryableEvent::new(workers::Transfer::Evm {
+                nats,
+                &redis_key,
+                workers::Transfer::Evm {
                     chain_kind,
                     tx_hash,
                     log: log.clone(),
                     creation_timestamp,
                     expected_finalization_time,
-                }),
+                },
             )
             .await;
 
@@ -217,12 +246,12 @@ async fn handle_transaction_event(
                 let fast_key =
                     utils::redis::composite_key(&["fast", &origin_transaction_id, &log_index_str]);
 
-                utils::redis::add_event(
+                add_event(
                     config,
                     redis_connection_manager,
-                    utils::redis::EVENTS,
-                    fast_key,
-                    RetryableEvent::new(crate::workers::Transfer::Fast {
+                    nats,
+                    &fast_key,
+                    crate::workers::Transfer::Fast {
                         block_number,
                         tx_hash: origin_transaction_id,
                         token: log.token_address.to_string(),
@@ -239,7 +268,7 @@ async fn handle_transaction_event(
                         msg: log.message,
                         storage_deposit_amount: None,
                         safe_confirmations,
-                    }),
+                    },
                 )
                 .await;
             }
@@ -270,18 +299,18 @@ async fn handle_transaction_event(
             let expected_finalization_time = get_evm_config(config, chain_kind)
                 .map(|evm_config| evm_config.expected_finalization_time)?;
 
-            utils::redis::add_event(
+            add_event(
                 config,
                 redis_connection_manager,
-                utils::redis::EVENTS,
-                redis_key,
-                RetryableEvent::new(workers::FinTransfer::Evm {
+                nats,
+                &redis_key,
+                workers::FinTransfer::Evm {
                     chain_kind,
                     tx_hash,
                     creation_timestamp,
                     expected_finalization_time,
                     transfer_id: fin_transfer.transfer_id,
-                }),
+                },
             )
             .await;
         }
@@ -312,12 +341,12 @@ async fn handle_transaction_event(
             };
             let redis_key = solana_event_key(&origin_transaction_id, Some(instruction_index));
 
-            utils::redis::add_event(
+            add_event(
                 config,
                 redis_connection_manager,
-                utils::redis::EVENTS,
-                redis_key,
-                RetryableEvent::new(crate::workers::Transfer::Solana {
+                nats,
+                &redis_key,
+                crate::workers::Transfer::Solana {
                     amount: init_transfer.amount.0.into(),
                     token: Pubkey::new_from_array(token.0),
                     sender: init_transfer.sender,
@@ -327,7 +356,7 @@ async fn handle_transaction_event(
                     message: init_transfer.message.unwrap_or_default(),
                     emitter: Pubkey::from_str(&emitter).context("Failed to parse emitter")?,
                     sequence: init_transfer.origin_nonce,
-                }),
+                },
             )
             .await;
         }
@@ -352,16 +381,16 @@ async fn handle_transaction_event(
             );
             let redis_key = solana_event_key(&origin_transaction_id, Some(instruction_index));
 
-            utils::redis::add_event(
+            add_event(
                 config,
                 redis_connection_manager,
-                utils::redis::EVENTS,
-                redis_key,
-                RetryableEvent::new(crate::workers::FinTransfer::Solana {
+                nats,
+                &redis_key,
+                crate::workers::FinTransfer::Solana {
                     emitter,
                     sequence,
                     transfer_id: (&unified_transfer_id).try_into().ok(),
-                }),
+                },
             )
             .await;
         }
@@ -373,16 +402,16 @@ async fn handle_transaction_event(
                 "Received UtxoSignBtcTransaction on {:?}: {origin_transaction_id}",
                 event.transfer_id.origin_chain
             );
-            utils::redis::add_event(
+            add_event(
                 config,
                 redis_connection_manager,
-                utils::redis::EVENTS,
-                origin_transaction_id.clone(),
-                RetryableEvent::new(workers::utxo::SignUtxoTransaction {
+                nats,
+                &origin_transaction_id,
+                workers::utxo::SignUtxoTransaction {
                     chain: destination_chain,
-                    near_tx_hash: origin_transaction_id,
+                    near_tx_hash: origin_transaction_id.clone(),
                     relayer,
-                }),
+                },
             )
             .await;
         }
@@ -419,16 +448,16 @@ async fn handle_transaction_event(
                     let redis_key =
                         near_to_utxo_event_key(&origin_transaction_id, &utxo_id_str, sign_index);
 
-                    utils::redis::add_event(
+                    add_event(
                         config,
                         redis_connection_manager,
-                        utils::redis::EVENTS,
-                        redis_key,
-                        RetryableEvent::new(workers::Transfer::NearToUtxo {
+                        nats,
+                        &redis_key,
+                        workers::Transfer::NearToUtxo {
                             chain: destination_chain,
                             btc_pending_id: utxo_id.tx_hash.clone(),
                             sign_index,
-                        }),
+                        },
                     )
                     .await;
                 }
@@ -443,17 +472,18 @@ async fn handle_transaction_event(
                 "Received TransferUtxoToNear on {:?}: {utxo_id}",
                 event.transfer_id.origin_chain
             );
-            utils::redis::add_event(
+            let key = utxo_id.to_string();
+            add_event(
                 config,
                 redis_connection_manager,
-                utils::redis::EVENTS,
-                utxo_id.to_string(),
-                RetryableEvent::new(workers::Transfer::UtxoToNear {
+                nats,
+                &key,
+                workers::Transfer::UtxoToNear {
                     chain: event.transfer_id.origin_chain,
                     btc_tx_hash: utxo_id.tx_hash,
                     vout: utxo_id.vout,
                     deposit_msg: deposit_msg.clone(),
-                }),
+                },
             )
             .await;
         }
@@ -467,15 +497,16 @@ async fn handle_transaction_event(
                     "Received UtxoConfirmedTxHash on {:?}: {utxo_id}",
                     destination_chain
                 );
-                utils::redis::add_event(
+                let key = utxo_id.to_string();
+                add_event(
                     config,
                     redis_connection_manager,
-                    utils::redis::EVENTS,
-                    utxo_id.to_string(),
-                    RetryableEvent::new(workers::utxo::ConfirmedTxHash {
+                    nats,
+                    &key,
+                    workers::utxo::ConfirmedTxHash {
                         chain: destination_chain,
                         btc_tx_hash: utxo_id.tx_hash,
-                    }),
+                    },
                 )
                 .await;
             }
@@ -500,6 +531,7 @@ async fn handle_transaction_event(
 async fn handle_meta_event(
     config: &config::Config,
     redis_connection_manager: &mut redis::aio::ConnectionManager,
+    nats: Option<&utils::nats::NatsClient>,
     origin_transaction_id: String,
     origin: OmniTransactionOrigin,
     event: OmniMetaEvent,
@@ -531,17 +563,17 @@ async fn handle_meta_event(
             let expected_finalization_time = get_evm_config(config, chain_kind)
                 .map(|evm_config| evm_config.expected_finalization_time)?;
 
-            utils::redis::add_event(
+            add_event(
                 config,
                 redis_connection_manager,
-                utils::redis::EVENTS,
-                redis_key,
-                RetryableEvent::new(workers::DeployToken::Evm {
+                nats,
+                &redis_key,
+                workers::DeployToken::Evm {
                     chain_kind,
                     tx_hash,
                     creation_timestamp,
                     expected_finalization_time,
-                }),
+                },
             )
             .await;
         }
@@ -559,12 +591,12 @@ async fn handle_meta_event(
 
             let redis_key = solana_event_key(&origin_transaction_id, Some(instruction_index));
 
-            utils::redis::add_event(
+            add_event(
                 config,
                 redis_connection_manager,
-                utils::redis::EVENTS,
-                redis_key,
-                RetryableEvent::new(workers::DeployToken::Solana { emitter, sequence }),
+                nats,
+                &redis_key,
+                workers::DeployToken::Solana { emitter, sequence },
             )
             .await;
         }
@@ -624,6 +656,7 @@ async fn watch_omni_events_collection(
                                     if let Err(err) = handle_transaction_event(
                                         &config,
                                         &mut redis_connection_manager,
+                                        None,
                                         event.transaction_id,
                                         transaction_event.transfer_id.clone(),
                                         event.origin,
@@ -645,6 +678,7 @@ async fn watch_omni_events_collection(
                                     if let Err(err) = handle_meta_event(
                                         &config,
                                         &mut redis_connection_manager,
+                                        None,
                                         event.transaction_id,
                                         event.origin,
                                         meta_event,
@@ -714,6 +748,107 @@ pub async fn start_indexer(
         }
 
         warn!("Mongodb stream was closed, restarting...");
+        tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+    }
+}
+
+async fn process_nats_message(
+    config: &config::Config,
+    redis_connection_manager: &mut redis::aio::ConnectionManager,
+    nats: Option<&utils::nats::NatsClient>,
+    event: OmniEvent,
+) {
+    match event.event {
+        OmniEventData::Transaction(transaction_event) => {
+            if let Err(err) = handle_transaction_event(
+                config,
+                redis_connection_manager,
+                nats,
+                event.transaction_id,
+                transaction_event.transfer_id.clone(),
+                event.origin,
+                transaction_event,
+            )
+            .await
+            {
+                warn!("Failed to handle transaction event: {err:?}");
+            }
+        }
+        OmniEventData::Meta(meta_event) => {
+            if let Err(err) = handle_meta_event(
+                config,
+                redis_connection_manager,
+                nats,
+                event.transaction_id,
+                event.origin,
+                meta_event,
+            )
+            .await
+            {
+                warn!("Failed to handle meta event: {err:?}");
+            }
+        }
+    }
+}
+
+async fn subscribe_to_omni_events(
+    consumer: &PullConsumer,
+    config: &config::Config,
+    redis_connection_manager: &mut redis::aio::ConnectionManager,
+    nats: Option<&utils::nats::NatsClient>,
+) -> Result<()> {
+    let mut messages = consumer
+        .messages()
+        .await
+        .context("Failed to start consuming NATS messages")?;
+
+    while let Some(msg) = messages.next().await {
+        let msg = msg.context("NATS message error")?;
+
+        let omni_event: OmniEvent = match serde_json::from_slice(&msg.payload) {
+            Ok(event) => event,
+            Err(err) => {
+                warn!("Failed to deserialize OmniEvent from NATS, terminating message: {err:?}");
+                msg.ack_with(async_nats::jetstream::AckKind::Term)
+                    .await
+                    .ok();
+                continue;
+            }
+        };
+
+        process_nats_message(config, redis_connection_manager, nats, omni_event).await;
+
+        if let Err(err) = msg.ack().await {
+            warn!("Failed to ack NATS message: {err:?}");
+        }
+    }
+
+    Ok(())
+}
+
+pub async fn start_indexer_nats(
+    config: config::Config,
+    redis_connection_manager: &mut redis::aio::ConnectionManager,
+    nats_client: Arc<utils::nats::NatsClient>,
+) -> Result<()> {
+    let nats_config = config.nats.as_ref().context("NATS config is not set")?;
+    let consumer = nats_client
+        .omni_consumer(nats_config)
+        .await
+        .context("Failed to create NATS consumer")?;
+
+    let nats: Option<&utils::nats::NatsClient> = Some(nats_client.as_ref());
+
+    loop {
+        info!("Starting NATS subscription for OmniEvents");
+
+        if let Err(err) =
+            subscribe_to_omni_events(&consumer, &config, redis_connection_manager, nats).await
+        {
+            warn!("Error in NATS subscription: {err:?}");
+        }
+
+        warn!("NATS subscription ended, restarting...");
         tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
     }
 }
