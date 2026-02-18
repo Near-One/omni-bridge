@@ -72,7 +72,9 @@ async fn add_event<E: serde::Serialize + std::fmt::Debug + Sync>(
         {
             let chain = target_chain.as_ref().to_ascii_lowercase();
             let subject = format!("{}.{chain}", nats_config.relayer_subject);
-            nats_client.publish(subject, key, &payload).await;
+            if let Err(err) = nats_client.publish(subject, key, &payload).await {
+                warn!("Failed to publish to NATS: {err:?}");
+            }
         }
     }
 
@@ -155,13 +157,13 @@ async fn handle_transaction_event(
             let origin_nonce = sign_event.message_payload.transfer_id.origin_nonce;
             let key = near_event_key(&origin_transaction_id, origin_nonce);
 
-            let target_chain = sign_event.message_payload.recipient.get_chain();
+            let destination_chain = sign_event.message_payload.recipient.get_chain();
             add_event(
                 config,
                 redis_connection_manager,
                 nats,
                 &key,
-                target_chain,
+                destination_chain,
                 OmniBridgeEvent::SignTransferEvent {
                     signature: sign_event.signature,
                     message_payload: sign_event.message_payload,
@@ -774,10 +776,10 @@ async fn process_nats_message(
     redis_connection_manager: &mut redis::aio::ConnectionManager,
     nats: Option<&utils::nats::NatsClient>,
     event: OmniEvent,
-) {
+) -> Result<()> {
     match event.event {
         OmniEventData::Transaction(transaction_event) => {
-            if let Err(err) = handle_transaction_event(
+            handle_transaction_event(
                 config,
                 redis_connection_manager,
                 nats,
@@ -786,13 +788,10 @@ async fn process_nats_message(
                 event.origin,
                 transaction_event,
             )
-            .await
-            {
-                warn!("Failed to handle transaction event: {err:?}");
-            }
+            .await?;
         }
         OmniEventData::Meta(meta_event) => {
-            if let Err(err) = handle_meta_event(
+            handle_meta_event(
                 config,
                 redis_connection_manager,
                 nats,
@@ -800,12 +799,11 @@ async fn process_nats_message(
                 event.origin,
                 meta_event,
             )
-            .await
-            {
-                warn!("Failed to handle meta event: {err:?}");
-            }
+            .await?;
         }
     }
+
+    Ok(())
 }
 
 async fn subscribe_to_omni_events(
@@ -833,7 +831,15 @@ async fn subscribe_to_omni_events(
             }
         };
 
-        process_nats_message(config, redis_connection_manager, nats, omni_event).await;
+        if let Err(err) =
+            process_nats_message(config, redis_connection_manager, nats, omni_event).await
+        {
+            warn!("Failed to process NATS message: {err:?}");
+            msg.ack_with(async_nats::jetstream::AckKind::Nak(None))
+                .await
+                .ok();
+            continue;
+        }
 
         if let Err(err) = msg.ack().await {
             warn!("Failed to ack NATS message: {err:?}");

@@ -2,7 +2,6 @@ use std::time::Duration;
 
 use anyhow::{Context, Result};
 use async_nats::jetstream::{self, consumer};
-use tracing::warn;
 
 use crate::config;
 
@@ -50,16 +49,15 @@ impl NatsClient {
             .context("Failed to create omni consumer")
     }
 
-    pub async fn publish(&self, subject: String, key: &str, payload: &[u8]) {
+    pub async fn publish(&self, subject: String, key: &str, payload: &[u8]) -> Result<()> {
         let mut headers = async_nats::HeaderMap::new();
         headers.insert("Nats-Msg-Id", key);
 
-        if let Err(err) = self
-            .jetstream
+        self.jetstream
             .publish_with_headers(subject, headers, payload.to_vec().into())
             .await
-        {
-            warn!("Failed to publish work item to NATS: {err:?}");
-        }
+            .context("Failed to publish work item to NATS")?;
+
+        Ok(())
     }
 }
