@@ -115,7 +115,7 @@ mod OmniBridge {
         near_to_starknet_token: Map<u256, ContractAddress>,
         omni_bridge_chain_id: u8,
         omni_bridge_derived_address: EthAddress,
-        native_token_address: ContractAddress,
+        strk_token_address: ContractAddress,
     }
 
     #[constructor]
@@ -125,12 +125,12 @@ mod OmniBridge {
         omni_bridge_chain_id: u8,
         token_class_hash: ClassHash,
         default_admin: ContractAddress,
-        native_token_address: ContractAddress,
+        strk_token_address: ContractAddress,
     ) {
         self.omni_bridge_derived_address.write(omni_bridge_derived_address);
         self.omni_bridge_chain_id.write(omni_bridge_chain_id);
         self.bridge_token_class_hash.write(token_class_hash);
-        self.native_token_address.write(native_token_address);
+        self.strk_token_address.write(strk_token_address);
         self.pause_flags.write(0); // Not paused initially
 
         // Initialize AccessControl with admin role
@@ -345,7 +345,7 @@ mod OmniBridge {
 
             // Handle native fee payment if specified
             if native_fee > 0 {
-                let native_token = self.native_token_address.read();
+                let native_token = self.strk_token_address.read();
                 let success = IERC20Dispatcher { contract_address: native_token }
                     .transfer_from(caller, get_contract_address(), native_fee.into());
                 assert(success, 'ERR_FEE_TRANSFER_FAILED');
