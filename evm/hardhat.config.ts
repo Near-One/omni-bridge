@@ -1,7 +1,5 @@
 import "@nomicfoundation/hardhat-chai-matchers"
 import "@nomicfoundation/hardhat-ethers"
-import "@nomicfoundation/hardhat-verify"
-import "@openzeppelin/hardhat-upgrades"
 import "@typechain/hardhat"
 import * as dotenv from "dotenv"
 import "hardhat-storage-layout"
@@ -18,21 +16,31 @@ import assert from "node:assert"
 import * as fs from "node:fs"
 
 import { getProxyImplementationAddress } from "./utils/zksync"
-import "@matterlabs/hardhat-zksync-solc"
-import "@matterlabs/hardhat-zksync-upgradable"
+import "@matterlabs/hardhat-zksync"
 
 declare module "hardhat/types/config" {
-  interface HardhatUserConfig {
-    zksolc?: {
-      version?: string
-      settings?: Record<string, unknown>
-    }
-  }
   interface HttpNetworkUserConfig {
     omniChainId: number
     wormholeAddress?: string
     zksync?: boolean
     ethNetwork?: string
+  }
+  interface HardhatUserConfig {
+    zksolc?: {
+      version?: string
+      settings?: Record<string, unknown>
+    }
+    etherscan?: {
+      apiKey?: string | Record<string, string>
+      customChains?: Array<{
+        network: string
+        chainId: number
+        urls: {
+          apiURL: string
+          browserURL: string
+        }
+      }>
+    }
   }
 }
 
@@ -82,12 +90,12 @@ task("deploy-bridge-token-factory", "Deploys the OmniBridge contract")
       OmniBridgeContract,
       isWormholeContract
         ? [
-            taskArgs.bridgeTokenImpl,
-            nearBridgeDerivedAddress,
-            omniChainId,
-            wormholeAddress,
-            consistencyLevel,
-          ]
+          taskArgs.bridgeTokenImpl,
+          nearBridgeDerivedAddress,
+          omniChainId,
+          wormholeAddress,
+          consistencyLevel,
+        ]
         : [taskArgs.bridgeTokenImpl, nearBridgeDerivedAddress, omniChainId],
       {
         initializer: isWormholeContract ? "initializeWormhole" : "initialize",
