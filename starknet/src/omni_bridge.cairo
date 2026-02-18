@@ -210,11 +210,7 @@ mod OmniBridge {
             borsh_bytes.append(@borsh::encode_byte_array(@payload.symbol));
             borsh_bytes.append_byte(payload.decimals);
 
-            let message_hash_le = compute_keccak_byte_array(@borsh_bytes);
-            let message_hash = reverse_u256_bytes(message_hash_le);
-
-            let sig = signature_from_vrs(signature.v, signature.r, signature.s);
-            verify_eth_signature(message_hash, sig, self.omni_bridge_derived_address.read());
+            _verify_borsh_signature(ref self, @borsh_bytes, signature);
 
             // Verify token hasn't been deployed yet
             let token_id_hash = compute_keccak_byte_array(@payload.token);
@@ -291,11 +287,7 @@ mod OmniBridge {
                 },
             }
 
-            let message_hash_le = compute_keccak_byte_array(@borsh_bytes);
-            let message_hash = reverse_u256_bytes(message_hash_le);
-
-            let sig = signature_from_vrs(signature.v, signature.r, signature.s);
-            verify_eth_signature(message_hash, sig, self.omni_bridge_derived_address.read());
+            _verify_borsh_signature(ref self, @borsh_bytes, signature);
 
             if self.deployed_tokens.read(payload.token_address) {
                 IBridgeTokenDispatcher { contract_address: payload.token_address }
@@ -431,6 +423,16 @@ mod OmniBridge {
     }
 
     // Helper functions
+    fn _verify_borsh_signature(
+        ref self: ContractState, borsh_bytes: @ByteArray, signature: Signature,
+    ) {
+        let message_hash_le = compute_keccak_byte_array(borsh_bytes);
+        let message_hash = reverse_u256_bytes(message_hash_le);
+
+        let sig = signature_from_vrs(signature.v, signature.r, signature.s);
+        verify_eth_signature(message_hash, sig, self.omni_bridge_derived_address.read());
+    }
+
     fn _is_paused(self: @ContractState, flag: u8) -> bool {
         let flags = self.pause_flags.read();
         (flags & flag) != 0
@@ -444,7 +446,7 @@ mod OmniBridge {
 
     fn _nonce_slot_and_bit(nonce: u64) -> (u64, u256) {
         let slot = nonce / 251;
-        let bit: u256 = _pow2_felt((nonce % 251).into()).into();
+        let bit: u256 = _pow2_felt((nonce % 251).into());
         (slot, bit)
     }
 
@@ -460,7 +462,7 @@ mod OmniBridge {
         self.completed_transfers.write(slot, (bitmap | bit).try_into().unwrap());
     }
 
-    fn _pow2_felt(mut exp: u128) -> felt252 {
+    fn _pow2_felt(mut exp: u128) -> u256 {
         let mut result: u256 = 1;
         let mut base: u256 = 2;
         while exp > 0 {
@@ -470,7 +472,7 @@ mod OmniBridge {
             base *= base;
             exp /= 2;
         }
-        result.try_into().unwrap()
+        result
     }
 
     fn _normalizeDecimals(decimals: u8) -> u8 {
