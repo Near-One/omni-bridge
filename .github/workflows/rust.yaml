@@ -73,7 +73,7 @@ jobs:
       - name: Setup Rust toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: 1.88.0
+          toolchain: 1.86.0
           target: wasm32-unknown-unknown
 
       - name: Cache Rust dependencies
@@ -83,7 +83,6 @@ jobs:
           shared-key: "rust-build-test"
           workspaces: |
             near
-            omni-relayer
           cache-on-failure: true
           cache-all-crates: true
 
