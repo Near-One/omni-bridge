@@ -54,7 +54,7 @@ mod OmniBridge {
     };
     use crate::bridge_types::{
         DeployToken, FinTransfer, InitTransfer, LogMetadata, MetadataPayload, PauseStateChanged,
-        Signature, TransferMessagePayload,
+        PayloadType, Signature, TransferMessagePayload,
     };
     use crate::utils;
     use crate::utils::{borsh, reverse_u256_bytes};
@@ -204,7 +204,7 @@ mod OmniBridge {
             assert(!_is_paused(@self, PAUSE_DEPLOY_TOKEN), 'ERR_DEPLOY_TOKEN_PAUSED');
 
             let mut borsh_bytes: ByteArray = "";
-            borsh_bytes.append_byte(1); // Payload type
+            borsh_bytes.append_byte(PayloadType::Metadata.into());
             borsh_bytes.append(@borsh::encode_byte_array(@payload.token));
             borsh_bytes.append(@borsh::encode_byte_array(@payload.name));
             borsh_bytes.append(@borsh::encode_byte_array(@payload.symbol));
@@ -264,7 +264,7 @@ mod OmniBridge {
             let chain_id = self.omni_bridge_chain_id.read();
 
             let mut borsh_bytes: ByteArray = "";
-            borsh_bytes.append_byte(0); // PayloadType::TransferMessage
+            borsh_bytes.append_byte(PayloadType::TransferMessage.into());
             borsh_bytes.append(@borsh::encode_u64(payload.destination_nonce));
             borsh_bytes.append_byte(payload.origin_chain);
             borsh_bytes.append(@borsh::encode_u64(payload.origin_nonce));

@@ -1,5 +1,20 @@
 use starknet::ContractAddress;
 
+#[derive(Drop, Copy)]
+pub enum PayloadType {
+    TransferMessage,
+    Metadata,
+}
+
+pub impl PayloadTypeIntoU8 of Into<PayloadType, u8> {
+    fn into(self: PayloadType) -> u8 {
+        match self {
+            PayloadType::TransferMessage => 0,
+            PayloadType::Metadata => 1,
+        }
+    }
+}
+
 #[derive(Drop, Serde)]
 pub struct Signature {
     pub r: u256,
