@@ -7,21 +7,6 @@ fn append_le_bytes(ref result: ByteArray, mut val: u128, byte_count: u32) {
     };
 }
 
-fn append_be_bytes(ref result: ByteArray, mut val: u128, byte_count: u32) {
-    let mut bytes: Array<u8> = array![];
-    let mut i: u32 = 0;
-    while i < byte_count {
-        bytes.append((val & 0xff).try_into().unwrap());
-        val /= 0x100;
-        i += 1;
-    }
-    let mut j: u32 = byte_count;
-    while j > 0 {
-        j -= 1;
-        result.append_byte(*bytes[j]);
-    };
-}
-
 pub fn encode_u32(val: u32) -> ByteArray {
     let mut result: ByteArray = "";
     append_le_bytes(ref result, val.into(), 4);
@@ -44,8 +29,8 @@ pub fn encode_address(val: starknet::ContractAddress) -> ByteArray {
     let felt_val: felt252 = val.into();
     let u256_val: u256 = felt_val.into();
     let mut result: ByteArray = "";
-    append_be_bytes(ref result, u256_val.high, 16);
-    append_be_bytes(ref result, u256_val.low, 16);
+    result.append_word(u256_val.high.into(), 16);
+    result.append_word(u256_val.low.into(), 16);
     result
 }
 
