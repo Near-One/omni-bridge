@@ -1,34 +1,51 @@
-fn append_le_bytes(ref result: ByteArray, mut val: u128, byte_count: u32) {
-    let mut i: u32 = 0;
-    while i < byte_count {
-        result.append_byte((val & 0xff).try_into().unwrap());
-        val /= 0x100;
-        i += 1;
-    };
-}
-
 pub fn encode_u32(val: u32) -> ByteArray {
-    let mut result: ByteArray = "";
-    append_le_bytes(ref result, val.into(), 4);
+    let mut result: ByteArray = Default::default();
+    let v: u128 = val.into();
+    result.append_byte((v & 0xff).try_into().unwrap());
+    result.append_byte(((v / 0x100) & 0xff).try_into().unwrap());
+    result.append_byte(((v / 0x10000) & 0xff).try_into().unwrap());
+    result.append_byte(((v / 0x1000000) & 0xff).try_into().unwrap());
     result
 }
 
 pub fn encode_u64(val: u64) -> ByteArray {
-    let mut result: ByteArray = "";
-    append_le_bytes(ref result, val.into(), 8);
+    let mut result: ByteArray = Default::default();
+    result.append_byte((val & 0xff).try_into().unwrap());
+    result.append_byte(((val / 0x100) & 0xff).try_into().unwrap());
+    result.append_byte(((val / 0x10000) & 0xff).try_into().unwrap());
+    result.append_byte(((val / 0x1000000) & 0xff).try_into().unwrap());
+    result.append_byte(((val / 0x100000000) & 0xff).try_into().unwrap());
+    result.append_byte(((val / 0x10000000000) & 0xff).try_into().unwrap());
+    result.append_byte(((val / 0x1000000000000) & 0xff).try_into().unwrap());
+    result.append_byte(((val / 0x100000000000000) & 0xff).try_into().unwrap());
     result
 }
 
 pub fn encode_u128(val: u128) -> ByteArray {
-    let mut result: ByteArray = "";
-    append_le_bytes(ref result, val, 16);
+    let mut result: ByteArray = Default::default();
+    result.append_byte((val & 0xff).try_into().unwrap());
+    result.append_byte(((val / 0x100) & 0xff).try_into().unwrap());
+    result.append_byte(((val / 0x10000) & 0xff).try_into().unwrap());
+    result.append_byte(((val / 0x1000000) & 0xff).try_into().unwrap());
+    result.append_byte(((val / 0x100000000) & 0xff).try_into().unwrap());
+    result.append_byte(((val / 0x10000000000) & 0xff).try_into().unwrap());
+    result.append_byte(((val / 0x1000000000000) & 0xff).try_into().unwrap());
+    result.append_byte(((val / 0x100000000000000) & 0xff).try_into().unwrap());
+    result.append_byte(((val / 0x10000000000000000) & 0xff).try_into().unwrap());
+    result.append_byte(((val / 0x1000000000000000000) & 0xff).try_into().unwrap());
+    result.append_byte(((val / 0x100000000000000000000) & 0xff).try_into().unwrap());
+    result.append_byte(((val / 0x10000000000000000000000) & 0xff).try_into().unwrap());
+    result.append_byte(((val / 0x1000000000000000000000000) & 0xff).try_into().unwrap());
+    result.append_byte(((val / 0x100000000000000000000000000) & 0xff).try_into().unwrap());
+    result.append_byte(((val / 0x10000000000000000000000000000) & 0xff).try_into().unwrap());
+    result.append_byte(((val / 0x1000000000000000000000000000000) & 0xff).try_into().unwrap());
     result
 }
 
 pub fn encode_address(val: starknet::ContractAddress) -> ByteArray {
     let felt_val: felt252 = val.into();
     let u256_val: u256 = felt_val.into();
-    let mut result: ByteArray = "";
+    let mut result: ByteArray = Default::default();
     result.append_word(u256_val.high.into(), 16);
     result.append_word(u256_val.low.into(), 16);
     result
