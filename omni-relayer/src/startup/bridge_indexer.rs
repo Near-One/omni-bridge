@@ -850,16 +850,17 @@ pub async fn start_indexer_nats(
 ) -> Result<()> {
     let nats_config = config.nats.as_ref().context("NATS config is not set")?;
 
-    let nats: Option<&utils::nats::NatsClient> = Some(nats_client.as_ref());
-
     loop {
         info!("Starting NATS subscription for OmniEvents");
 
         let consumer = match nats_client.omni_consumer(nats_config).await {
             Ok(consumer) => consumer,
             Err(err) => {
-    loop {
-        info!("Starting NATS subscription for OmniEvents");
+                warn!("Failed to create NATS consumer: {err:?}");
+                tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+                continue;
+            }
+        };
 
         if let Err(err) = subscribe_to_omni_events(
             &consumer,
