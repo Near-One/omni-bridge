@@ -1,44 +1,23 @@
+use core::integer::u128_byte_reverse;
+
 pub fn encode_u32(val: u32) -> ByteArray {
+    let reversed: u128 = u128_byte_reverse(val.into()) / 0x1000000000000000000000000;
     let mut result: ByteArray = Default::default();
-    let v: u128 = val.into();
-    result.append_byte((v & 0xff).try_into().unwrap());
-    result.append_byte(((v / 0x100) & 0xff).try_into().unwrap());
-    result.append_byte(((v / 0x10000) & 0xff).try_into().unwrap());
-    result.append_byte(((v / 0x1000000) & 0xff).try_into().unwrap());
+    result.append_word(reversed.into(), 4);
     result
 }
 
 pub fn encode_u64(val: u64) -> ByteArray {
+    let reversed: u128 = u128_byte_reverse(val.into()) / 0x10000000000000000;
     let mut result: ByteArray = Default::default();
-    result.append_byte((val & 0xff).try_into().unwrap());
-    result.append_byte(((val / 0x100) & 0xff).try_into().unwrap());
-    result.append_byte(((val / 0x10000) & 0xff).try_into().unwrap());
-    result.append_byte(((val / 0x1000000) & 0xff).try_into().unwrap());
-    result.append_byte(((val / 0x100000000) & 0xff).try_into().unwrap());
-    result.append_byte(((val / 0x10000000000) & 0xff).try_into().unwrap());
-    result.append_byte(((val / 0x1000000000000) & 0xff).try_into().unwrap());
-    result.append_byte(((val / 0x100000000000000) & 0xff).try_into().unwrap());
+    result.append_word(reversed.into(), 8);
     result
 }
 
 pub fn encode_u128(val: u128) -> ByteArray {
+    let reversed: u128 = u128_byte_reverse(val);
     let mut result: ByteArray = Default::default();
-    result.append_byte((val & 0xff).try_into().unwrap());
-    result.append_byte(((val / 0x100) & 0xff).try_into().unwrap());
-    result.append_byte(((val / 0x10000) & 0xff).try_into().unwrap());
-    result.append_byte(((val / 0x1000000) & 0xff).try_into().unwrap());
-    result.append_byte(((val / 0x100000000) & 0xff).try_into().unwrap());
-    result.append_byte(((val / 0x10000000000) & 0xff).try_into().unwrap());
-    result.append_byte(((val / 0x1000000000000) & 0xff).try_into().unwrap());
-    result.append_byte(((val / 0x100000000000000) & 0xff).try_into().unwrap());
-    result.append_byte(((val / 0x10000000000000000) & 0xff).try_into().unwrap());
-    result.append_byte(((val / 0x1000000000000000000) & 0xff).try_into().unwrap());
-    result.append_byte(((val / 0x100000000000000000000) & 0xff).try_into().unwrap());
-    result.append_byte(((val / 0x10000000000000000000000) & 0xff).try_into().unwrap());
-    result.append_byte(((val / 0x1000000000000000000000000) & 0xff).try_into().unwrap());
-    result.append_byte(((val / 0x100000000000000000000000000) & 0xff).try_into().unwrap());
-    result.append_byte(((val / 0x10000000000000000000000000000) & 0xff).try_into().unwrap());
-    result.append_byte(((val / 0x1000000000000000000000000000000) & 0xff).try_into().unwrap());
+    result.append_word(reversed.into(), 16);
     result
 }
 
