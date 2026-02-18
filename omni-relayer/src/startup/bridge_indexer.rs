@@ -72,7 +72,7 @@ async fn add_event<E: serde::Serialize + std::fmt::Debug + Sync>(
         {
             let chain = target_chain.as_ref().to_ascii_lowercase();
             let subject = format!("{}.{chain}", nats_config.relayer_subject);
-            if let Err(err) = nats_client.publish(subject, key, &payload).await {
+            if let Err(err) = nats_client.publish(subject, key, payload).await {
                 warn!("Failed to publish to NATS: {err:?}");
             }
         }

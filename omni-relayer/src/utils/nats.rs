@@ -49,12 +49,12 @@ impl NatsClient {
             .context("Failed to create omni consumer")
     }
 
-    pub async fn publish(&self, subject: String, key: &str, payload: &[u8]) -> Result<()> {
+    pub async fn publish(&self, subject: String, key: &str, payload: Vec<u8>) -> Result<()> {
         let mut headers = async_nats::HeaderMap::new();
         headers.insert("Nats-Msg-Id", key);
 
         self.jetstream
-            .publish_with_headers(subject, headers, payload.to_vec().into())
+            .publish_with_headers(subject, headers, payload.into())
             .await
             .context("Failed to publish work item to NATS")?;
 
