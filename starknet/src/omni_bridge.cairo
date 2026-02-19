@@ -474,4 +474,61 @@ mod OmniBridge {
         }
         return decimals;
     }
+
+    #[cfg(test)]
+    mod tests {
+        use super::{_is_transfer_finalised, _set_transfer_finalised};
+
+        fn setup() -> super::ContractState {
+            super::contract_state_for_testing()
+        }
+
+        #[test]
+        fn test_set_transfer_finalised_and_check_range() {
+            let mut state = setup();
+            let max_nonce: u64 = 0xFFFFFFFFFFFFFFFF;
+            let nonces = [
+                0, 1, 40, 42, 43, 44, 45, 125, 250, 251, 255, 256, 257, 502, 1000, max_nonce - 2,
+                max_nonce - 1, max_nonce,
+            ]
+                .span();
+
+            // Verify all nonces are initially unset
+            let mut i: usize = 0;
+            while i < nonces.len() {
+                assert!(!_is_transfer_finalised(@state, *nonces[i]));
+                i += 1;
+            }
+
+            // Set all nonces
+            let mut i: usize = 0;
+            while i < nonces.len() {
+                _set_transfer_finalised(ref state, *nonces[i]);
+                i += 1;
+            }
+
+            // Verify all nonces are now set
+            let mut i: usize = 0;
+            while i < nonces.len() {
+                assert!(_is_transfer_finalised(@state, *nonces[i]));
+                i += 1;
+            }
+
+            // Verify unset nonces remain unset
+            let unset = [2, 41, 124, 249, 252, 254, 999, max_nonce - 3].span();
+            let mut i: usize = 0;
+            while i < unset.len() {
+                assert!(!_is_transfer_finalised(@state, *unset[i]));
+                i += 1;
+            };
+        }
+
+        #[test]
+        fn test_set_transfer_finalised_idempotent() {
+            let mut state = setup();
+            _set_transfer_finalised(ref state, 42);
+            _set_transfer_finalised(ref state, 42);
+            assert!(_is_transfer_finalised(@state, 42));
+        }
+    }
 }
