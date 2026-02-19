@@ -1,0 +1,39 @@
+name: Starknet CI
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'starknet/**'
+  pull_request:
+    paths:
+      - 'starknet/**'
+
+jobs:
+  test:
+    name: Build and Test
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: starknet
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Scarb
+        uses: software-mansion/setup-scarb@v1
+        with:
+          scarb-version: "2.14.0"
+
+      - name: Install snforge
+        uses: foundry-rs/setup-snfoundry@v3
+        with:
+          starknet-foundry-version: "0.56.0"
+
+      - name: Build
+        run: scarb build
+
+      - name: Run tests
+        run: scarb test
