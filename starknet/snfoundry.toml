@@ -9,8 +9,3 @@
 # wait-params = { timeout = 300, retry-interval = 10 }     # Wait for submitted transaction parameters
 # block-explorer = "StarkScan"                             # Block explorer service used to display links to transaction details
 # show-explorer-links = true                               # Print links pointing to pages with transaction details in the chosen block explorer
-
-[sncast.devnet]
-account = "account-1"
-accounts-file = "/Users/nikita/.starknet_accounts/starknet_open_zeppelin_accounts.json"
-url = "http://127.0.0.1:5050"

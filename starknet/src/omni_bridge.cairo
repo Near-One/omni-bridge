@@ -131,9 +131,8 @@ mod OmniBridge {
         self.omni_bridge_chain_id.write(omni_bridge_chain_id);
         self.bridge_token_class_hash.write(token_class_hash);
         self.strk_token_address.write(strk_token_address);
-        self.pause_flags.write(0); // Not paused initially
+        self.pause_flags.write(0);
 
-        // Initialize AccessControl with admin role
         self.accesscontrol.initializer();
         self.accesscontrol._grant_role(DEFAULT_ADMIN_ROLE, default_admin);
     }
@@ -200,7 +199,6 @@ mod OmniBridge {
         }
 
         fn deploy_token(ref self: ContractState, signature: Signature, payload: MetadataPayload) {
-            // Check if deploy_token is paused
             assert(!_is_paused(@self, PAUSE_DEPLOY_TOKEN), 'ERR_DEPLOY_TOKEN_PAUSED');
 
             let mut borsh_bytes: ByteArray = "";
@@ -212,7 +210,6 @@ mod OmniBridge {
 
             _verify_borsh_signature(ref self, @borsh_bytes, signature);
 
-            // Verify token hasn't been deployed yet
             let token_id_hash = compute_keccak_byte_array(@payload.token);
             let existing_token = self.near_to_starknet_token.read(token_id_hash);
             assert(existing_token.is_zero(), 'ERR_TOKEN_ALREADY_DEPLOYED');
@@ -223,7 +220,6 @@ mod OmniBridge {
             (payload.name.clone(), payload.symbol.clone(), decimals)
                 .serialize(ref constructor_calldata);
 
-            // Use token_id_hash as salt for deterministic deployment
             // Use the low part of the u256 hash to ensure it fits in felt252
             let salt: felt252 = token_id_hash.low.into();
             let (contract_address, _) = deploy_syscall(
@@ -253,7 +249,6 @@ mod OmniBridge {
         fn fin_transfer(
             ref self: ContractState, signature: Signature, payload: TransferMessagePayload,
         ) {
-            // Check if fin_transfer is paused
             assert(!_is_paused(@self, PAUSE_FIN_TRANSFER), 'ERR_FIN_TRANSFER_PAUSED');
 
             assert(
@@ -323,7 +318,6 @@ mod OmniBridge {
             recipient: ByteArray,
             message: ByteArray,
         ) {
-            // Check if init_transfer is paused
             assert(!_is_paused(@self, PAUSE_INIT_TRANSFER), 'ERR_INIT_TRANSFER_PAUSED');
 
             assert(amount > 0, 'ERR_ZERO_AMOUNT');
@@ -333,7 +327,6 @@ mod OmniBridge {
 
             let caller = get_caller_address();
 
-            // Handle token transfer (burn or lock)
             if self.deployed_tokens.read(token_address) {
                 IBridgeTokenDispatcher { contract_address: token_address }
                     .burn(caller, amount.into());
@@ -343,7 +336,6 @@ mod OmniBridge {
                 assert(success, 'ERR_TRANSFER_FROM_FAILED');
             }
 
-            // Handle native fee payment if specified
             if native_fee > 0 {
                 let native_token = self.strk_token_address.read();
                 let success = IERC20Dispatcher { contract_address: native_token }
