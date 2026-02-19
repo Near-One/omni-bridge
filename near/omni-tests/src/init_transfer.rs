@@ -642,7 +642,7 @@ mod tests {
 
     #[rstest]
     #[tokio::test]
-    #[should_panic(expected = "TODO")]
+    #[should_panic(expected = "ERR_UNSUPPORTED_FEE_UPDATE_PROOF")]
     // Add a test once the Proof update fee is implemented
     async fn test_update_fee_proof(build_artifacts: &BuildArtifacts) {
         let sender_balance_token = 1_000_000;
