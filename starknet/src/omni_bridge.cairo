@@ -456,13 +456,9 @@ mod OmniBridge {
 
     fn _pow2_felt(mut exp: u128) -> u256 {
         let mut result: u256 = 1;
-        let mut base: u256 = 2;
         while exp > 0 {
-            if exp % 2 == 1 {
-                result *= base;
-            }
-            base *= base;
-            exp /= 2;
+            result *= 2;
+            exp -= 1;
         }
         result
     }
