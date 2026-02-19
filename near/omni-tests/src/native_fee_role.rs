@@ -9,8 +9,8 @@ mod tests {
     use rstest::rstest;
 
     use crate::helpers::tests::{
-        account_n, eth_eoa_address, eth_factory_address, get_event_data, locker_wasm,
-        mock_prover_wasm, mock_token_wasm, NEP141_DEPOSIT,
+        account_n, eth_eoa_address, eth_factory_address, eth_token_address, get_bind_token_args,
+        get_event_data, locker_wasm, mock_prover_wasm, mock_token_wasm, NEP141_DEPOSIT,
     };
 
     struct TestEnv {
@@ -139,6 +139,26 @@ mod tests {
                 .args_json(json!({
                     "address": eth_factory_address,
                 }))
+                .max_gas()
+                .transact()
+                .await?
+                .into_result()?;
+
+            // Bind the token so init_transfer passes destination-chain checks.
+            let required_deposit_for_bind_token: NearToken = locker_contract
+                .view("required_balance_for_bind_token")
+                .await?
+                .json()?;
+            locker_contract
+                .call("bind_token")
+                .args_borsh(get_bind_token_args(
+                    token_contract.id(),
+                    &eth_token_address(),
+                    &eth_factory_address,
+                    24,
+                    24,
+                ))
+                .deposit(required_deposit_for_bind_token)
                 .max_gas()
                 .transact()
                 .await?
