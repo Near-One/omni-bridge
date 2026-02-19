@@ -535,6 +535,26 @@ fn test_update_transfer_fee_wrong_sender() {
 }
 
 #[test]
+#[should_panic(expected = "ERR_UNSUPPORTED_FEE_UPDATE_PROOF")]
+fn test_update_transfer_fee_proof_rejected_with_typed_error() {
+    let mut contract = get_default_contract();
+
+    let init_fee = Fee {
+        fee: U128(DEFAULT_TRANSFER_AMOUNT - 2),
+        native_fee: U128(10),
+    };
+
+    run_update_transfer_fee(
+        &mut contract,
+        DEFAULT_NEAR_USER_ACCOUNT.to_string(),
+        &init_fee,
+        UpdateFee::Proof(vec![1, 2, 3]),
+        Some(NearToken::from_yoctonear(0)),
+        None,
+    );
+}
+
+#[test]
 fn test_update_transfer_native_fee_different_sender() {
     let mut contract = get_default_contract();
 
