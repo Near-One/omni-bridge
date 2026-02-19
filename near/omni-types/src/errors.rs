@@ -62,6 +62,7 @@ pub enum BridgeError {
     UnknownFactory,
     UtxoConfigMissing,
     UtxoTransferAlreadyFinalised,
+    UnsupportedFeeUpdateProof,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, AsRefStr, ErrorDisplay)]
