@@ -23,6 +23,7 @@ trait IBridgeToken<TContractState> {
 
 // Test secret key (arbitrary non-zero u256 < curve order)
 const TEST_SECRET_KEY: u256 = 0xDEADBEEF;
+const ROTATED_TEST_SECRET_KEY: u256 = 0xBEEFCAFE;
 
 fn declare_bridge_token() -> ContractClass {
     let declare_result = declare("BridgeToken").unwrap_syscall();
@@ -30,10 +31,41 @@ fn declare_bridge_token() -> ContractClass {
 }
 
 fn get_test_eth_address() -> felt252 {
-    let key_pair = Secp256k1CurveKeyPairImpl::from_secret_key(TEST_SECRET_KEY);
+    get_eth_address_for_secret(TEST_SECRET_KEY)
+}
+
+fn get_eth_address_for_secret(secret_key: u256) -> felt252 {
+    let key_pair = Secp256k1CurveKeyPairImpl::from_secret_key(secret_key);
     let eth_addr: EthAddress = public_key_point_to_eth_address(key_pair.public_key);
     let eth_addr_felt: felt252 = eth_addr.into();
     eth_addr_felt
+}
+
+fn get_rotated_test_eth_address() -> EthAddress {
+    let key_pair = Secp256k1CurveKeyPairImpl::from_secret_key(ROTATED_TEST_SECRET_KEY);
+    public_key_point_to_eth_address(key_pair.public_key)
+}
+
+// Sign a message hash using an arbitrary test key (secp256k1 ECDSA)
+// Determines the correct v (27 or 28) by verifying against the expected address
+fn sign_message_with_secret(message_hash: u256, secret_key: u256) -> Signature {
+    let key_pair = Secp256k1CurveKeyPairImpl::from_secret_key(secret_key);
+    let (r, s) = key_pair.sign(message_hash).unwrap();
+    let eth_addr: EthAddress = public_key_point_to_eth_address(key_pair.public_key);
+
+    // Try v=27 (y_parity=false), if invalid try v=28 (y_parity=true)
+    let sig_27 = starknet::secp256_trait::signature_from_vrs(27, r, s);
+    if starknet::eth_signature::is_eth_signature_valid(message_hash, sig_27, eth_addr).is_ok() {
+        Signature { r, s, v: 27 }
+    } else {
+        Signature { r, s, v: 28 }
+    }
+}
+
+// Sign a message hash using the default test key pair (secp256k1 ECDSA)
+// Determines the correct v (27 or 28) by verifying against the expected address
+fn sign_message(message_hash: u256) -> Signature {
+    sign_message_with_secret(message_hash, TEST_SECRET_KEY)
 }
 
 fn deploy_bridge_contract() -> (IOmniBridgeDispatcher, ContractAddress) {
@@ -61,21 +93,6 @@ fn deploy_bridge_contract() -> (IOmniBridgeDispatcher, ContractAddress) {
     (IOmniBridgeDispatcher { contract_address }, contract_address)
 }
 
-// Sign a message hash using the test key pair (secp256k1 ECDSA)
-// Determines the correct v (27 or 28) by verifying against the expected address
-fn sign_message(message_hash: u256) -> Signature {
-    let key_pair = Secp256k1CurveKeyPairImpl::from_secret_key(TEST_SECRET_KEY);
-    let (r, s) = key_pair.sign(message_hash).unwrap();
-    let eth_addr: EthAddress = public_key_point_to_eth_address(key_pair.public_key);
-
-    // Try v=27 (y_parity=false), if invalid try v=28 (y_parity=true)
-    let sig_27 = starknet::secp256_trait::signature_from_vrs(27, r, s);
-    if starknet::eth_signature::is_eth_signature_valid(message_hash, sig_27, eth_addr).is_ok() {
-        Signature { r, s, v: 27 }
-    } else {
-        Signature { r, s, v: 28 }
-    }
-}
 
 // Build borsh-encoded message for deploy_token (MetadataPayload)
 fn build_deploy_token_message(payload: @MetadataPayload) -> u256 {
@@ -360,6 +377,55 @@ fn test_fin_transfer_with_bridge_token() {
         },
     );
     spy.assert_emitted(@array![(bridge_address, expected_event)]);
+}
+
+#[test]
+fn test_set_omni_bridge_derived_address_accepts_signatures_from_new_signer() {
+    let (dispatcher, bridge_address) = deploy_bridge_contract();
+    let owner: ContractAddress = 0x123.try_into().unwrap();
+
+    let deploy_payload = MetadataPayload {
+        token: "rotated.token.near", name: "Rotated Token", symbol: "ROT", decimals: 18,
+    };
+    let deploy_sig = sign_deploy_token(@deploy_payload);
+    dispatcher.deploy_token(deploy_sig, deploy_payload);
+
+    let token_address = dispatcher.get_token_address("rotated.token.near");
+    let recipient: ContractAddress = 0xabc.try_into().unwrap();
+
+    start_cheat_caller_address(bridge_address, owner);
+    dispatcher.set_omni_bridge_derived_address(get_rotated_test_eth_address());
+    stop_cheat_caller_address(bridge_address);
+
+    let transfer_payload = TransferMessagePayload {
+        destination_nonce: 2,
+        origin_chain: 2,
+        origin_nonce: 101,
+        token_address,
+        amount: 777,
+        recipient,
+        fee_recipient: Option::None,
+        message: Option::None,
+    };
+
+    let message_hash = build_fin_transfer_message(@transfer_payload, 0x9);
+    let rotated_signature = sign_message_with_secret(message_hash, ROTATED_TEST_SECRET_KEY);
+
+    dispatcher.fin_transfer(rotated_signature, transfer_payload);
+
+    let balance = ERC20ABIDispatcher { contract_address: token_address }.balance_of(recipient);
+    assert_eq!(balance, 777);
+}
+
+#[test]
+#[should_panic(expected: ('Caller is missing role',))]
+fn test_set_omni_bridge_derived_address_non_owner_fails() {
+    let (dispatcher, bridge_address) = deploy_bridge_contract();
+    let non_owner: ContractAddress = 0x456.try_into().unwrap();
+
+    start_cheat_caller_address(bridge_address, non_owner);
+    dispatcher.set_omni_bridge_derived_address(get_rotated_test_eth_address());
+    stop_cheat_caller_address(bridge_address);
 }
 
 #[test]
