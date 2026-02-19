@@ -320,6 +320,46 @@ describe("BridgeToken", () => {
     ).to.be.revertedWithCustomError(OmniBridge, "InvalidValue")
   })
 
+  it("allows admin to rescue accidentally received ETH", async () => {
+    const bridgeAddress = await OmniBridge.getAddress()
+    const recipient = user2.address
+    const amount = ethers.parseEther("0.1")
+
+    await adminAccount.sendTransaction({
+      to: bridgeAddress,
+      value: amount,
+    })
+
+    const bridgeBalanceBefore = await ethers.provider.getBalance(bridgeAddress)
+    const recipientBalanceBefore = await ethers.provider.getBalance(recipient)
+    expect(bridgeBalanceBefore).to.be.equal(amount)
+
+    const tx = await OmniBridge.connect(adminAccount).rescueEther(recipient, amount)
+    const receipt = await tx.wait()
+    expect(receipt).to.not.be.undefined
+
+    const bridgeBalanceAfter = await ethers.provider.getBalance(bridgeAddress)
+    const recipientBalanceAfter = await ethers.provider.getBalance(recipient)
+
+    expect(bridgeBalanceAfter).to.be.equal(0n)
+    expect(recipientBalanceAfter - recipientBalanceBefore).to.be.equal(amount)
+  })
+
+  it("rejects ETH rescue from non-admin accounts", async () => {
+    const bridgeAddress = await OmniBridge.getAddress()
+    const amount = ethers.parseEther("0.1")
+
+    await adminAccount.sendTransaction({
+      to: bridgeAddress,
+      value: amount,
+    })
+
+    await expect(OmniBridge.connect(user1).rescueEther(user1.address, amount)).to.be.revertedWithCustomError(
+      OmniBridge,
+      "AccessControlUnauthorizedAccount",
+    )
+  })
+
   it("can fin and init transfer after unpausing", async () => {
     const { token } = await createToken(wrappedNearId)
     const tokenProxyAddress = await token.getAddress()

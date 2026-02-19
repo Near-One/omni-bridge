@@ -564,6 +564,15 @@ contract OmniBridge is
         nearBridgeDerivedAddress = nearBridgeDerivedAddress_;
     }
 
+    function rescueEther(
+        address payable recipient,
+        uint256 amount
+    ) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        // slither-disable-next-line arbitrary-send-eth
+        (bool success, ) = recipient.call{value: amount}("");
+        if (!success) revert FailedToSendEther();
+    }
+
     receive() external payable {}
 
     function deriveDeterministicAddress(
