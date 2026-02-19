@@ -2,12 +2,13 @@ use near_sdk::{AccountId, NearToken};
 use omni_utils::ErrorDisplay;
 use strum_macros::AsRefStr;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, AsRefStr, ErrorDisplay)]
+#[derive(Debug, Clone, PartialEq, Eq, AsRefStr, ErrorDisplay)]
 #[strum(serialize_all = "shouty_snake_case", prefix = "ERR_")]
 #[non_exhaustive]
 pub enum BridgeError {
     Borsh,
     Cast,
+    CannotDetermineOriginChain,
     DeployerNotSet,
     ExpectedToOverwriteTokenAddress,
     FailedToGetTokenAddress,
@@ -27,6 +28,7 @@ pub enum BridgeError {
     InvalidMetadata,
     InvalidProof,
     InvalidProofMessage,
+    InvalidRecipientAddress,
     InvalidRecipientChain,
     InvalidState,
     InvalidStorageAccountsLen,
@@ -62,17 +64,35 @@ pub enum BridgeError {
     UtxoTransferAlreadyFinalised,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, AsRefStr, ErrorDisplay)]
+#[derive(Debug, Clone, PartialEq, Eq, AsRefStr, ErrorDisplay)]
+#[strum(serialize_all = "shouty_snake_case", prefix = "ERR_")]
+#[non_exhaustive]
+pub enum TokenLockError {
+    InsufficientLockedTokens,
+    LockedTokensOverflow,
+    TokenAlreadyLocked,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, AsRefStr, ErrorDisplay)]
 #[strum(serialize_all = "shouty_snake_case", prefix = "ERR_")]
 #[non_exhaustive]
 pub enum StorageError {
+    AccountNotRegistered(AccountId),
     MessageAccountNotRegistered,
     NotEnoughBalanceForFee,
+    NotEnoughStorageBalance {
+        requested: NearToken,
+        available: NearToken,
+    },
+    NotEnoughStorageBalanceAttached {
+        required: NearToken,
+        attached: NearToken,
+    },
     SignerNotEnoughBalance,
     SignerNotRegistered,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, AsRefStr, ErrorDisplay)]
+#[derive(Debug, Clone, PartialEq, Eq, AsRefStr, ErrorDisplay)]
 #[strum(serialize_all = "shouty_snake_case", prefix = "ERR_")]
 #[non_exhaustive]
 pub enum TokenError {
@@ -84,7 +104,7 @@ pub enum TokenError {
     NoStateToMigrate,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, AsRefStr, ErrorDisplay)]
+#[derive(Debug, Clone, PartialEq, Eq, AsRefStr, ErrorDisplay)]
 #[strum(serialize_all = "shouty_snake_case", prefix = "ERR_")]
 #[non_exhaustive]
 pub enum ProverError {
@@ -94,7 +114,7 @@ pub enum ProverError {
     ParseArgs,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, AsRefStr, ErrorDisplay)]
+#[derive(Debug, Clone, PartialEq, Eq, AsRefStr, ErrorDisplay)]
 #[strum(serialize_all = "shouty_snake_case", prefix = "ERR_")]
 #[non_exhaustive]
 pub enum TypesError {
