@@ -379,6 +379,7 @@ contract OmniBridge is
         }
 
         uint256 extensionValue;
+        uint128 canonicalAmount = amount;
         if (tokenAddress == address(0)) {
             if (fee != 0) {
                 revert InvalidFee();
@@ -399,11 +400,21 @@ contract OmniBridge is
             } else if (isBridgeToken[tokenAddress]) {
                 BridgeToken(tokenAddress).burn(msg.sender, amount);
             } else {
+                uint256 balanceBefore = IERC20(tokenAddress).balanceOf(
+                    address(this)
+                );
                 IERC20(tokenAddress).safeTransferFrom(
                     msg.sender,
                     address(this),
                     amount
                 );
+                canonicalAmount = uint128(
+                    IERC20(tokenAddress).balanceOf(address(this)) -
+                        balanceBefore
+                );
+                if (fee >= canonicalAmount) {
+                    revert InvalidFee();
+                }
             }
         }
 
@@ -411,7 +422,7 @@ contract OmniBridge is
             msg.sender,
             tokenAddress,
             currentOriginNonce,
-            amount,
+            canonicalAmount,
             fee,
             nativeFee,
             recipient,
@@ -423,7 +434,7 @@ contract OmniBridge is
             msg.sender,
             tokenAddress,
             currentOriginNonce,
-            amount,
+            canonicalAmount,
             fee,
             nativeFee,
             recipient,

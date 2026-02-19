@@ -320,6 +320,85 @@ describe("BridgeToken", () => {
     ).to.be.revertedWithCustomError(OmniBridge, "InvalidValue")
   })
 
+  it("uses received token amount for fee-on-transfer assets", async () => {
+    const FeeTokenFactory = await ethers.getContractFactory("TestFeeOnTransferToken")
+    const requestedAmount = 1000n
+    const expectedReceived = 900n // 10% transfer fee
+    const feeBps = 1000n
+
+    const feeOnTransferToken = await FeeTokenFactory.deploy(
+      "Fee Token",
+      "FEE",
+      user1.address,
+      requestedAmount,
+      feeBps,
+    )
+    await feeOnTransferToken.waitForDeployment()
+
+    const tokenAddress = await feeOnTransferToken.getAddress()
+    await feeOnTransferToken.connect(user1).approve(await OmniBridge.getAddress(), requestedAmount)
+
+    const recipient = "testrecipient.near"
+    const bridgeFee = 0
+    const nativeFee = 0
+
+    await expect(
+      OmniBridge.connect(user1).initTransfer(
+        tokenAddress,
+        requestedAmount,
+        bridgeFee,
+        nativeFee,
+        recipient,
+        "",
+      ),
+    )
+      .to.emit(OmniBridge, "InitTransfer")
+      .withArgs(
+        user1.address,
+        tokenAddress,
+        1,
+        expectedReceived,
+        bridgeFee,
+        nativeFee,
+        recipient,
+        "",
+      )
+
+    expect(await feeOnTransferToken.balanceOf(await OmniBridge.getAddress())).to.equal(
+      expectedReceived,
+    )
+  })
+
+  it("reverts when bridge fee is >= received amount for fee-on-transfer assets", async () => {
+    const FeeTokenFactory = await ethers.getContractFactory("TestFeeOnTransferToken")
+    const requestedAmount = 1000n
+    const feeBps = 1000n // receive only 900
+    const bridgeFee = 950n // < requested amount, but >= received amount
+
+    const feeOnTransferToken = await FeeTokenFactory.deploy(
+      "Fee Token",
+      "FEE",
+      user1.address,
+      requestedAmount,
+      feeBps,
+    )
+    await feeOnTransferToken.waitForDeployment()
+
+    const tokenAddress = await feeOnTransferToken.getAddress()
+    await feeOnTransferToken.connect(user1).approve(await OmniBridge.getAddress(), requestedAmount)
+
+    await expect(
+      OmniBridge.connect(user1).initTransfer(
+        tokenAddress,
+        requestedAmount,
+        bridgeFee,
+        0,
+        "testrecipient.near",
+        "",
+      ),
+    ).to.be.revertedWithCustomError(OmniBridge, "InvalidFee")
+  })
+
   it("can fin and init transfer after unpausing", async () => {
     const { token } = await createToken(wrappedNearId)
     const tokenProxyAddress = await token.getAddress()
