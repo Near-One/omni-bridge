@@ -414,9 +414,9 @@ impl Contract {
                     .to_log_string(),
                 );
             }
-            UpdateFee::Proof(_) => env::panic_str(
-                BridgeError::UnsupportedFeeUpdateProof.to_string().as_str(),
-            ),
+            UpdateFee::Proof(_) => {
+                env::panic_str(BridgeError::UnsupportedFeeUpdateProof.to_string().as_str())
+            }
         }
     }
 
