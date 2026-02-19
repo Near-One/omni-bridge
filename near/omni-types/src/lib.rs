@@ -521,6 +521,12 @@ pub struct InitTransferMsg {
     pub msg: Option<String>,
 }
 
+impl InitTransferMsg {
+    pub const fn get_destination_chain(&self) -> ChainKind {
+        self.recipient.get_chain()
+    }
+}
+
 #[derive(Serialize, Deserialize, BorshSerialize, BorshDeserialize, Debug, Clone)]
 pub struct FastFinTransferMsg {
     pub transfer_id: UnifiedTransferId,
@@ -542,6 +548,10 @@ pub struct UtxoFinTransferMsg {
 }
 
 impl UtxoFinTransferMsg {
+    pub const fn get_destination_chain(&self) -> ChainKind {
+        self.recipient.get_chain()
+    }
+
     pub fn get_transfer_id(&self, origin_chain: ChainKind) -> UnifiedTransferId {
         UnifiedTransferId {
             origin_chain,
@@ -604,6 +614,10 @@ impl TransferMessage {
 
     pub fn calculate_storage_account_id(&self) -> AccountId {
         TransferMessageStorageAccount::from(self.clone()).id()
+    }
+
+    pub fn amount_without_fee(&self) -> Option<u128> {
+        self.amount.0.checked_sub(self.fee.fee.0)
     }
 }
 
@@ -863,6 +877,14 @@ impl FastTransfer {
     #[allow(clippy::missing_panics_doc)]
     pub fn id(&self) -> FastTransferId {
         FastTransferId(utils::sha256(&borsh::to_vec(self).unwrap()))
+    }
+
+    pub const fn get_destination_chain(&self) -> ChainKind {
+        self.recipient.get_chain()
+    }
+
+    pub fn amount_without_fee(&self) -> Option<u128> {
+        self.amount.0.checked_sub(self.fee.fee.0)
     }
 }
 
