@@ -48,6 +48,7 @@ alloy = { version = "1.1", features = ["node-bindings", "providers", "rpc-types"
 
 mongodb = "3.2.2"
 redis = { version = "0.32.5", features = ["aio", "tokio-comp", "connection-manager", "json"] }
+async-nats = "0.45"
 reqwest = "0.12"
 
 bridge-connector-common = { git = "https://github.com/Near-One/bridge-sdk-rs", package = "bridge-connector-common", rev = "ee388d7a165ca12a7f7a2d299b3dcf7e89e6f7ce" }

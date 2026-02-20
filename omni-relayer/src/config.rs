@@ -96,6 +96,7 @@ where
 #[derive(Debug, Clone, Deserialize)]
 pub struct Config {
     pub redis: Redis,
+    pub nats: Option<Nats>,
     pub bridge_indexer: BridgeIndexer,
     pub near: Near,
     pub eth: Option<Evm>,
@@ -113,6 +114,10 @@ pub struct Config {
 impl Config {
     pub const fn is_bridge_indexer_enabled(&self) -> bool {
         self.bridge_indexer.mongodb_uri.is_some() && self.bridge_indexer.db_name.is_some()
+    }
+
+    pub const fn is_nats_enabled(&self) -> bool {
+        self.nats.is_some()
     }
 
     pub const fn is_bridge_api_enabled(&self) -> bool {
@@ -180,6 +185,22 @@ pub struct Redis {
     pub fee_retry_base_secs: Decimal,
     pub fee_retry_max_sleep_secs: i64,
     pub keep_transfers_for_secs: i64,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct Nats {
+    pub url: String,
+    pub relayer_subject: String,
+    pub omni_consumer: NatsConsumer,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct NatsConsumer {
+    pub name: String,
+    pub stream: String,
+    pub subject: String,
+    pub max_deliver: i64,
+    pub backoff_secs: Vec<u64>,
 }
 
 #[derive(Debug, Clone, Deserialize)]

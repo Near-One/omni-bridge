@@ -28,7 +28,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        project: [near, solana]
+        project: [near, solana, omni-relayer]
 
     steps:
       - name: Checkout repository
