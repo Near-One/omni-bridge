@@ -67,7 +67,7 @@ impl UpdateMetadata<'_> {
             update_authority: self.authority.to_account_info(),
         };
         let cpi_ctx = CpiContext::new_with_signer(
-            self.token_program.to_account_info(),
+            self.token_metadata_program.to_account_info(),
             cpi_accounts,
             signer_seeds,
         );

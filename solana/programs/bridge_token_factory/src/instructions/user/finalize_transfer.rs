@@ -111,7 +111,7 @@ impl FinalizeTransfer<'_> {
                     },
                     &[&[AUTHORITY_SEED, &[self.config.bumps.authority]]],
                 ),
-                data.amount.try_into().unwrap(),
+                data.amount.try_into().map_err(|_| error!(ErrorCode::AmountOverflow))?,
                 self.mint.decimals,
             )?;
         } else {
@@ -131,7 +131,7 @@ impl FinalizeTransfer<'_> {
                     },
                     &[&[AUTHORITY_SEED, &[self.config.bumps.authority]]],
                 ),
-                data.amount.try_into().unwrap(),
+                data.amount.try_into().map_err(|_| error!(ErrorCode::AmountOverflow))?,
             )?;
         }
 
