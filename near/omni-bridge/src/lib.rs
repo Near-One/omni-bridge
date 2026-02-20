@@ -1163,6 +1163,7 @@ impl Contract {
                 .into()
         } else {
             self.deployed_tokens.remove(&token_id);
+            self.deployed_tokens_v2.remove(&token_id);
             self.token_id_to_address
                 .remove(&(token_address.get_chain(), token_id));
             self.token_address_to_id.remove(token_address);
@@ -1593,10 +1594,6 @@ impl Contract {
             BridgeError::TokenExists.as_ref()
         );
         self.deployed_tokens_v2.remove(&old_token);
-        require!(
-            self.deployed_tokens.insert(&new_token),
-            BridgeError::TokenExists.as_ref()
-        );
         self.deployed_tokens_v2.insert(&new_token, &origin_chain);
 
         let origin_address = self
