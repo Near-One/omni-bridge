@@ -262,7 +262,7 @@ fn test_chain_kind_from_omni_address() {
     let evm_address =
         H160::from_str("0x5a08feed678c056650b3eb4a5cb1b9bb6f0fe265").expect("Valid address");
 
-    test_chain_kind(OmniAddress::Eth(evm_address.clone()), ChainKind::Eth, "ETH");
+    test_chain_kind(OmniAddress::Eth(evm_address), ChainKind::Eth, "ETH");
     test_chain_kind(
         OmniAddress::Near("alice.near".parse().unwrap()),
         ChainKind::Near,
@@ -273,7 +273,7 @@ fn test_chain_kind_from_omni_address() {
         ChainKind::Sol,
         "SOL",
     );
-    test_chain_kind(OmniAddress::Arb(evm_address.clone()), ChainKind::Arb, "ARB");
+    test_chain_kind(OmniAddress::Arb(evm_address), ChainKind::Arb, "ARB");
     test_chain_kind(OmniAddress::Base(evm_address), ChainKind::Base, "BASE");
 }
 
@@ -283,14 +283,14 @@ fn test_omni_address_from_evm_address() {
         H160::from_str("0x5a08feed678c056650b3eb4a5cb1b9bb6f0fe265").expect("Valid address");
 
     assert_eq!(
-        OmniAddress::new_from_evm_address(ChainKind::Eth, evm_address.clone()),
-        Ok(OmniAddress::Eth(evm_address.clone()))
+        OmniAddress::new_from_evm_address(ChainKind::Eth, evm_address),
+        Ok(OmniAddress::Eth(evm_address))
     );
 
     for chain_kind in [ChainKind::Near, ChainKind::Sol] {
         let expected_error = format!("{chain_kind:?} is not an EVM chain");
         assert_eq!(
-            OmniAddress::new_from_evm_address(chain_kind, evm_address.clone()),
+            OmniAddress::new_from_evm_address(chain_kind, evm_address),
             Err(expected_error)
         );
     }
@@ -351,7 +351,7 @@ fn test_omni_address_display() {
         H160::from_str("0x5a08feed678c056650b3eb4a5cb1b9bb6f0fe265").expect("Valid EVM address");
     let test_cases = vec![
         (
-            OmniAddress::Eth(evm_addr.clone()),
+            OmniAddress::Eth(evm_addr),
             format!("eth:{evm_addr}"),
             "ETH address should format as eth:0x...",
         ),
@@ -366,12 +366,12 @@ fn test_omni_address_display() {
             "SOL address should format as sol:address",
         ),
         (
-            OmniAddress::Arb(evm_addr.clone()),
+            OmniAddress::Arb(evm_addr),
             format!("arb:{evm_addr}"),
             "ARB address should format as arb:0x...",
         ),
         (
-            OmniAddress::Base(evm_addr.clone()),
+            OmniAddress::Base(evm_addr),
             format!("base:{evm_addr}"),
             "BASE address should format as base:0x...",
         ),
@@ -449,7 +449,7 @@ fn test_transfer_message_getters() {
                 amount: U128(1000),
                 recipient: OmniAddress::Near("bob.near".parse().unwrap()),
                 fee: Fee::default(),
-                sender: OmniAddress::Eth(evm_addr.clone()),
+                sender: OmniAddress::Eth(evm_addr),
                 msg: String::new(),
                 origin_transfer_id: None,
             },

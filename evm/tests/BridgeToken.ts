@@ -57,7 +57,7 @@ describe("BridgeToken", () => {
   }
 
   async function createToken(tokenId: string) {
-    const { signature, payload } = await metadataSignature(tokenId)
+    const { signature, payload } = metadataSignature(tokenId)
     await OmniBridge.deployToken(signature, payload)
     const tokenProxyAddress = await OmniBridge.nearToEthToken(tokenId)
     const token = OmniBridgeInstance.attach(tokenProxyAddress) as BridgeToken
@@ -106,7 +106,7 @@ describe("BridgeToken", () => {
     const { token } = await createToken(wrappedNearId)
     const tokenProxyAddress = await OmniBridge.nearToEthToken(wrappedNearId)
 
-    const { signature, payload } = await depositSignature(tokenProxyAddress, user1.address)
+    const { signature, payload } = depositSignature(tokenProxyAddress, user1.address)
 
     await expect(OmniBridge.finTransfer(signature, payload))
       .to.emit(OmniBridge, "FinTransfer")
@@ -220,7 +220,7 @@ describe("BridgeToken", () => {
     const { token } = await createToken(wrappedNearId)
     const tokenProxyAddress = await token.getAddress()
 
-    const { signature, payload } = await depositSignature(tokenProxyAddress, user1.address)
+    const { signature, payload } = depositSignature(tokenProxyAddress, user1.address)
     await OmniBridge.finTransfer(signature, payload)
 
     const recipient = "testrecipient.near"

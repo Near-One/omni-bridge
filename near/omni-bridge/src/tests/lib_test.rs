@@ -1135,7 +1135,7 @@ fn test_get_bridged_token() {
     // First insert token addresses for each chain target (NEAR token -> chain addresses)
     contract.token_id_to_address.insert(
         &(ChainKind::Eth, near_token_id.clone()),
-        &OmniAddress::Eth(eth_address.clone()),
+        &OmniAddress::Eth(eth_address),
     );
     contract.token_id_to_address.insert(
         &(ChainKind::Sol, near_token_id.clone()),
@@ -1143,10 +1143,9 @@ fn test_get_bridged_token() {
     );
 
     // Then insert reverse mappings (chain addresses -> NEAR token)
-    contract.token_address_to_id.insert(
-        &OmniAddress::Eth(eth_address.clone()),
-        &near_token_id.clone(),
-    );
+    contract
+        .token_address_to_id
+        .insert(&OmniAddress::Eth(eth_address), &near_token_id.clone());
     contract.token_address_to_id.insert(
         &OmniAddress::Sol(solana_address.clone()),
         &near_token_id.clone(),
@@ -1157,7 +1156,7 @@ fn test_get_bridged_token() {
     let eth_result = contract.get_bridged_token(&near_source, ChainKind::Eth);
     assert_eq!(
         eth_result,
-        Some(OmniAddress::Eth(eth_address.clone())),
+        Some(OmniAddress::Eth(eth_address)),
         "Failed to resolve NEAR to ETH address"
     );
 
@@ -1170,7 +1169,7 @@ fn test_get_bridged_token() {
     );
 
     // Test Case 3: Ethereum to NEAR
-    let eth_source = OmniAddress::Eth(eth_address.clone());
+    let eth_source = OmniAddress::Eth(eth_address);
     let near_result = contract.get_bridged_token(&eth_source, ChainKind::Near);
     assert_eq!(
         near_result,
@@ -1200,7 +1199,7 @@ fn test_get_bridged_token() {
     let same_chain_result = contract.get_bridged_token(&eth_source, ChainKind::Eth);
     assert_eq!(
         same_chain_result,
-        Some(OmniAddress::Eth(eth_address.clone())),
+        Some(OmniAddress::Eth(eth_address)),
         "Failed to handle same chain resolution"
     );
 
