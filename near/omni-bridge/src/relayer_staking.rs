@@ -35,8 +35,7 @@ impl Contract {
         let excess = NearToken::from_yoctonear(
             attached
                 .as_yoctonear()
-                .checked_sub(stake_required.as_yoctonear())
-                .unwrap_or(0),
+                .saturating_sub(stake_required.as_yoctonear()),
         );
 
         self.relayer_applications.insert(
@@ -48,7 +47,7 @@ impl Contract {
         );
 
         if excess.as_yoctonear() > 0 {
-            Promise::new(account_id).transfer(excess);
+            Promise::new(account_id).transfer(excess).detach();
         }
     }
 
@@ -78,6 +77,7 @@ impl Contract {
             )
     }
 
+    #[allow(clippy::needless_pass_by_value)]
     #[private]
     pub fn claim_trusted_relayer_role_callback(
         &mut self,
@@ -88,7 +88,9 @@ impl Contract {
         if call_result.is_ok() {
             self.relayer_stakes.insert(&account_id, &stake);
         } else {
-            Promise::new(account_id).transfer(NearToken::from_yoctonear(stake));
+            Promise::new(account_id)
+                .transfer(NearToken::from_yoctonear(stake))
+                .detach();
         }
     }
 
@@ -113,6 +115,7 @@ impl Contract {
             )
     }
 
+    #[allow(clippy::needless_pass_by_value)]
     #[private]
     pub fn resign_trusted_relayer_callback(
         &mut self,
@@ -123,7 +126,9 @@ impl Contract {
         if call_result.is_ok() {
             self.relayer_stakes.remove(&account_id);
             if stake > 0 {
-                Promise::new(account_id).transfer(NearToken::from_yoctonear(stake));
+                Promise::new(account_id)
+                    .transfer(NearToken::from_yoctonear(stake))
+                    .detach();
             }
         }
     }
@@ -149,13 +154,13 @@ impl Contract {
     }
 
     #[must_use]
-    pub fn get_relayer_application(&self, account_id: AccountId) -> Option<RelayerApplication> {
-        self.relayer_applications.get(&account_id)
+    pub fn get_relayer_application(&self, account_id: &AccountId) -> Option<RelayerApplication> {
+        self.relayer_applications.get(account_id)
     }
 
     #[must_use]
-    pub fn get_relayer_stake(&self, account_id: AccountId) -> Option<U128> {
-        self.relayer_stakes.get(&account_id).map(U128)
+    pub fn get_relayer_stake(&self, account_id: &AccountId) -> Option<U128> {
+        self.relayer_stakes.get(account_id).map(U128)
     }
 
     #[must_use]
