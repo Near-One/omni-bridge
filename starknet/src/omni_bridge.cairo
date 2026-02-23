@@ -27,6 +27,7 @@ pub trait IOmniBridge<TContractState> {
     fn set_pause_flags(ref self: TContractState, flags: u8);
     fn pause_all(ref self: TContractState);
     fn get_token_address(self: @TContractState, token_id: ByteArray) -> ContractAddress;
+    fn is_bridge_token(self: @TContractState, token_address: ContractAddress) -> bool;
 }
 
 #[starknet::contract]
@@ -109,7 +110,6 @@ mod OmniBridge {
         current_origin_nonce: u64,
         // Bitmap: slot = nonce / 251, bit = nonce % 251
         completed_transfers: Map<u64, felt252>,
-        deployed_tokens: Map<ContractAddress, bool>,
         starknet_to_near_token: Map<ContractAddress, ByteArray>,
         // Can't use ByteArray as a key. Using hash instead
         near_to_starknet_token: Map<u256, ContractAddress>,
@@ -227,7 +227,6 @@ mod OmniBridge {
             )
                 .unwrap_syscall();
 
-            self.deployed_tokens.write(contract_address, true);
             self.starknet_to_near_token.write(contract_address, payload.token.clone());
             self.near_to_starknet_token.write(token_id_hash, contract_address);
 
@@ -284,7 +283,7 @@ mod OmniBridge {
 
             _verify_borsh_signature(ref self, @borsh_bytes, signature);
 
-            if self.deployed_tokens.read(payload.token_address) {
+            if self.is_bridge_token(payload.token_address) {
                 IBridgeTokenDispatcher { contract_address: payload.token_address }
                     .mint(payload.recipient, payload.amount.into());
             } else {
@@ -327,7 +326,7 @@ mod OmniBridge {
 
             let caller = get_caller_address();
 
-            if self.deployed_tokens.read(token_address) {
+            if self.is_bridge_token(token_address) {
                 IBridgeTokenDispatcher { contract_address: token_address }
                     .burn(caller, amount.into());
             } else {
@@ -364,7 +363,7 @@ mod OmniBridge {
             ref self: ContractState, token_address: ContractAddress, new_class_hash: ClassHash,
         ) {
             self.accesscontrol.assert_only_role(DEFAULT_ADMIN_ROLE);
-            assert(self.deployed_tokens.read(token_address), 'ERR_NOT_BRIDGE_TOKEN');
+            assert(self.is_bridge_token(token_address), 'ERR_NOT_BRIDGE_TOKEN');
 
             let upgradeable = IUpgradeableDispatcher { contract_address: token_address };
             upgradeable.upgrade(new_class_hash);
@@ -403,6 +402,10 @@ mod OmniBridge {
         fn get_token_address(self: @ContractState, token_id: ByteArray) -> ContractAddress {
             let token_id_hash = compute_keccak_byte_array(@token_id);
             self.near_to_starknet_token.read(token_id_hash)
+        }
+
+        fn is_bridge_token(self: @ContractState, token_address: ContractAddress) -> bool {
+            self.starknet_to_near_token.read(token_address).len() > 0
         }
     }
 
