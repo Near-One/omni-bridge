@@ -87,11 +87,17 @@ impl Contract {
         stake: NearToken,
         #[callback_result] call_result: Result<bool, PromiseError>,
     ) {
-        if call_result.is_ok() {
+        if call_result == Ok(true) {
             self.relayer_stakes
                 .insert(&account_id, &stake.as_yoctonear());
         } else {
-            Promise::new(account_id).transfer(stake).detach();
+            self.relayer_applications.insert(
+                &account_id,
+                &RelayerApplication {
+                    stake,
+                    applied_at: env::block_timestamp(),
+                },
+            );
         }
     }
 
