@@ -1,7 +1,7 @@
 pub use OmniBridge::Event as OmniEvents;
 use starknet::{ClassHash, ContractAddress};
 pub use crate::bridge_types::{
-    DeployToken, FinTransfer, InitTransfer, LogMetadata, MetadataPayload, Signature,
+    DeployToken, FinTransfer, InitTransfer, LogMetadata, MetadataPayload, Signature, SignerUpdated,
     TransferMessagePayload,
 };
 
@@ -23,6 +23,9 @@ pub trait IOmniBridge<TContractState> {
     );
     fn upgrade_token(
         ref self: TContractState, token_address: ContractAddress, new_class_hash: ClassHash,
+    );
+    fn set_omni_bridge_derived_address(
+        ref self: TContractState, omni_bridge_derived_address: starknet::EthAddress,
     );
     fn set_pause_flags(ref self: TContractState, flags: u8);
     fn pause_all(ref self: TContractState);
@@ -54,7 +57,7 @@ mod OmniBridge {
     };
     use crate::bridge_types::{
         DeployToken, FinTransfer, InitTransfer, LogMetadata, MetadataPayload, PauseStateChanged,
-        PayloadType, Signature, TransferMessagePayload,
+        PayloadType, Signature, SignerUpdated, TransferMessagePayload,
     };
     use crate::utils;
     use crate::utils::{borsh, reverse_u256_bytes};
@@ -87,6 +90,7 @@ mod OmniBridge {
         InitTransfer: InitTransfer,
         FinTransfer: FinTransfer,
         PauseStateChanged: PauseStateChanged,
+        SignerUpdated: SignerUpdated,
         #[flat]
         AccessControlEvent: AccessControlComponent::Event,
         #[flat]
@@ -380,6 +384,25 @@ mod OmniBridge {
                     Event::PauseStateChanged(
                         PauseStateChanged {
                             old_flags, new_flags: flags, admin: get_caller_address(),
+                        },
+                    ),
+                );
+        }
+
+        fn set_omni_bridge_derived_address(
+            ref self: ContractState, omni_bridge_derived_address: EthAddress,
+        ) {
+            self.accesscontrol.assert_only_role(DEFAULT_ADMIN_ROLE);
+            let old_signer = self.omni_bridge_derived_address.read();
+            self.omni_bridge_derived_address.write(omni_bridge_derived_address);
+
+            self
+                .emit(
+                    Event::SignerUpdated(
+                        SignerUpdated {
+                            old_signer: old_signer.into(),
+                            new_signer: omni_bridge_derived_address.into(),
+                            admin: get_caller_address(),
                         },
                     ),
                 );

@@ -97,3 +97,11 @@ pub struct PauseStateChanged {
     #[key]
     pub admin: ContractAddress,
 }
+
+#[derive(Drop, starknet::Event)]
+pub struct SignerUpdated {
+    pub old_signer: felt252,
+    pub new_signer: felt252,
+    #[key]
+    pub admin: ContractAddress,
+}
