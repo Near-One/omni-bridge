@@ -33,7 +33,7 @@ impl Contract {
         self.relayer_applications.insert(
             &account_id,
             &RelayerApplication {
-                stake: U128(attached.as_yoctonear()),
+                stake: attached,
                 applied_at: env::block_timestamp(),
             },
         );
@@ -55,7 +55,7 @@ impl Contract {
 
         self.relayer_applications.remove(&account_id);
         self.relayer_stakes
-            .insert(&account_id, &application.stake.0);
+            .insert(&account_id, &application.stake.as_yoctonear());
 
         Self::ext(env::current_account_id())
             .with_static_gas(ACL_CALL_GAS)
@@ -89,7 +89,7 @@ impl Contract {
 
         self.relayer_applications.remove(&account_id);
 
-        Promise::new(account_id).transfer(NearToken::from_yoctonear(application.stake.0))
+        Promise::new(account_id).transfer(application.stake)
     }
 
     #[access_control_any(roles(Role::DAO))]
