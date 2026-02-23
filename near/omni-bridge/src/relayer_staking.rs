@@ -133,7 +133,7 @@ impl Contract {
         }
     }
 
-    #[access_control_any(roles(Role::DAO))]
+    #[access_control_any(roles(Role::DAO, Role::RelayerManager))]
     pub fn reject_relayer_application(&mut self, account_id: AccountId) -> Promise {
         let application = self
             .relayer_applications

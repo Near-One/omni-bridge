@@ -125,6 +125,7 @@ pub enum Role {
     TokenUpgrader,
     TokenLockController,
     TrustedRelayer,
+    RelayerManager,
 }
 
 #[derive(Debug, Clone)]
