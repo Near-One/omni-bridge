@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod tests {
     use near_sdk::{
-        json_types::U128,
+        json_types::{U128, U64},
         serde_json::{self, json},
     };
     use near_workspaces::types::NearToken;
@@ -89,7 +89,7 @@ mod tests {
             .call("set_relayer_config")
             .args_json(json!({
                 "stake_required": U128(1_000 * 10u128.pow(24)),
-                "waiting_period_ns": 1_000_000_000u64,
+                "waiting_period_ns": U64(1_000_000_000),
             }))
             .max_gas()
             .transact()
@@ -277,7 +277,7 @@ mod tests {
             .call("set_relayer_config")
             .args_json(json!({
                 "stake_required": U128(1_000 * 10u128.pow(24)),
-                "waiting_period_ns": 1_000_000_000u64,
+                "waiting_period_ns": U64(1_000_000_000),
             }))
             .max_gas()
             .transact()
@@ -365,14 +365,14 @@ mod tests {
             .json()?;
         let default_stake = (1_000u128 * 10u128.pow(24)).to_string();
         assert_eq!(config["stake_required"], json!(default_stake));
-        assert_eq!(config["waiting_period_ns"], json!(604_800_000_000_000u64));
+        assert_eq!(config["waiting_period_ns"], json!(U64(604_800_000_000_000)));
 
         // DAO updates config
         env.bridge_contract
             .call("set_relayer_config")
             .args_json(json!({
                 "stake_required": U128(500 * 10u128.pow(24)),
-                "waiting_period_ns": 86_400_000_000_000u64,
+                "waiting_period_ns": U64(86_400_000_000_000),
             }))
             .max_gas()
             .transact()
@@ -387,7 +387,7 @@ mod tests {
             .json()?;
         let updated_stake = (500u128 * 10u128.pow(24)).to_string();
         assert_eq!(config["stake_required"], json!(updated_stake));
-        assert_eq!(config["waiting_period_ns"], json!(86_400_000_000_000u64));
+        assert_eq!(config["waiting_period_ns"], json!(U64(86_400_000_000_000)));
 
         Ok(())
     }
