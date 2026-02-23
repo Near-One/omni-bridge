@@ -1,8 +1,6 @@
 use near_plugins::{access_control_any, AccessControllable};
 use near_sdk::json_types::U128;
-use near_sdk::{
-    assert_one_yocto, env, near, require, AccountId, Gas, NearToken, Promise, PromiseError,
-};
+use near_sdk::{env, near, require, AccountId, Gas, NearToken, Promise, PromiseError};
 use omni_types::errors::BridgeError;
 use omni_utils::near_expect::NearExpect;
 
@@ -105,7 +103,6 @@ impl Contract {
 
     #[payable]
     pub fn resign_trusted_relayer(&mut self) -> Promise {
-        assert_one_yocto();
         let account_id = env::predecessor_account_id();
 
         require!(
