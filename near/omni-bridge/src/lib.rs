@@ -8,7 +8,7 @@ use near_plugins::{
 
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::collections::{LookupMap, LookupSet, UnorderedMap};
-use near_sdk::json_types::{Base64VecU8, U128};
+use near_sdk::json_types::{Base64VecU8, U128, U64};
 use near_sdk::serde::{Deserialize, Serialize};
 use near_sdk::serde_json::json;
 use near_sdk::{
@@ -131,21 +131,21 @@ pub enum Role {
 #[near(serializers = [borsh, json])]
 pub struct RelayerApplication {
     pub stake: NearToken,
-    pub applied_at: u64,
+    pub applied_at: U64,
 }
 
 #[derive(Debug, Clone)]
 #[near(serializers = [borsh, json])]
 pub struct RelayerConfig {
     pub stake_required: NearToken,
-    pub waiting_period_ns: u64,
+    pub waiting_period_ns: U64,
 }
 
 impl Default for RelayerConfig {
     fn default() -> Self {
         Self {
             stake_required: NearToken::from_near(1000),
-            waiting_period_ns: 604_800_000_000_000, // 7 days
+            waiting_period_ns: U64(7 * 24 * 60 * 60 * 1_000_000_000),
         }
     }
 }

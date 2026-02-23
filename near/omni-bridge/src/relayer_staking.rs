@@ -1,5 +1,5 @@
 use near_plugins::{access_control_any, AccessControllable};
-use near_sdk::json_types::U128;
+use near_sdk::json_types::{U128, U64};
 use near_sdk::{env, near, require, AccountId, Gas, NearToken, Promise, PromiseError};
 use omni_types::errors::BridgeError;
 use omni_utils::near_expect::NearExpect;
@@ -42,7 +42,7 @@ impl Contract {
             &account_id,
             &RelayerApplication {
                 stake: stake_required,
-                applied_at: env::block_timestamp(),
+                applied_at: env::block_timestamp().into(),
             },
         );
 
@@ -56,18 +56,17 @@ impl Contract {
 
         let application = self
             .relayer_applications
-            .get(&account_id)
+            .remove(&account_id)
             .near_expect(BridgeError::RelayerApplicationNotFound);
 
         require!(
             env::block_timestamp()
                 >= application
                     .applied_at
-                    .saturating_add(self.relayer_config.waiting_period_ns),
+                    .0
+                    .saturating_add(self.relayer_config.waiting_period_ns.0),
             BridgeError::RelayerWaitingPeriodNotElapsed.as_ref()
         );
-
-        self.relayer_applications.remove(&account_id);
 
         Self::ext(env::current_account_id())
             .with_static_gas(ACL_CALL_GAS)
@@ -75,7 +74,7 @@ impl Contract {
             .then(
                 Self::ext(env::current_account_id())
                     .with_static_gas(RELAYER_CALLBACK_GAS)
-                    .claim_trusted_relayer_role_callback(account_id, application.stake),
+                    .claim_trusted_relayer_role_callback(account_id, application),
             )
     }
 
@@ -84,24 +83,17 @@ impl Contract {
     pub fn claim_trusted_relayer_role_callback(
         &mut self,
         account_id: AccountId,
-        stake: NearToken,
+        application: RelayerApplication,
         #[callback_result] call_result: Result<bool, PromiseError>,
     ) {
         if call_result == Ok(true) {
             self.relayer_stakes
-                .insert(&account_id, &stake.as_yoctonear());
+                .insert(&account_id, &application.stake.as_yoctonear());
         } else {
-            self.relayer_applications.insert(
-                &account_id,
-                &RelayerApplication {
-                    stake,
-                    applied_at: env::block_timestamp(),
-                },
-            );
+            self.relayer_applications.insert(&account_id, &application);
         }
     }
 
-    #[payable]
     pub fn resign_trusted_relayer(&mut self) -> Promise {
         let account_id = env::predecessor_account_id();
 
@@ -154,7 +146,7 @@ impl Contract {
     }
 
     #[access_control_any(roles(Role::DAO))]
-    pub fn set_relayer_config(&mut self, stake_required: NearToken, waiting_period_ns: u64) {
+    pub fn set_relayer_config(&mut self, stake_required: NearToken, waiting_period_ns: U64) {
         self.relayer_config = RelayerConfig {
             stake_required,
             waiting_period_ns,
