@@ -130,7 +130,7 @@ pub enum Role {
 #[derive(Debug, Clone)]
 #[near(serializers = [borsh, json])]
 pub struct RelayerApplication {
-    pub stake: NearToken,
+    pub stake: U128,
     pub applied_at: u64,
 }
 
