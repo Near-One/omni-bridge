@@ -1,6 +1,8 @@
 use near_plugins::{access_control_any, AccessControllable};
 use near_sdk::json_types::U128;
-use near_sdk::{env, near, require, AccountId, Gas, NearToken, Promise, PromiseError};
+use near_sdk::{
+    assert_one_yocto, env, near, require, AccountId, Gas, NearToken, Promise, PromiseError,
+};
 use omni_types::errors::BridgeError;
 use omni_utils::near_expect::NearExpect;
 
@@ -41,7 +43,7 @@ impl Contract {
         self.relayer_applications.insert(
             &account_id,
             &RelayerApplication {
-                stake: U128(stake_required.as_yoctonear()),
+                stake: stake_required,
                 applied_at: env::block_timestamp(),
             },
         );
@@ -73,7 +75,7 @@ impl Contract {
             .then(
                 Self::ext(env::current_account_id())
                     .with_static_gas(RELAYER_CALLBACK_GAS)
-                    .claim_trusted_relayer_role_callback(account_id, application.stake.0),
+                    .claim_trusted_relayer_role_callback(account_id, application.stake),
             )
     }
 
@@ -82,20 +84,20 @@ impl Contract {
     pub fn claim_trusted_relayer_role_callback(
         &mut self,
         account_id: AccountId,
-        stake: u128,
+        stake: NearToken,
         #[callback_result] call_result: Result<bool, PromiseError>,
     ) {
         if call_result.is_ok() {
-            self.relayer_stakes.insert(&account_id, &stake);
+            self.relayer_stakes
+                .insert(&account_id, &stake.as_yoctonear());
         } else {
-            Promise::new(account_id)
-                .transfer(NearToken::from_yoctonear(stake))
-                .detach();
+            Promise::new(account_id).transfer(stake).detach();
         }
     }
 
     #[payable]
     pub fn resign_trusted_relayer(&mut self) -> Promise {
+        assert_one_yocto();
         let account_id = env::predecessor_account_id();
 
         require!(
@@ -103,7 +105,8 @@ impl Contract {
             BridgeError::RelayerNotActive.as_ref()
         );
 
-        let stake = self.relayer_stakes.get(&account_id).unwrap_or(0);
+        let stake = NearToken::from_yoctonear(self.relayer_stakes.get(&account_id).unwrap_or(0));
+        self.relayer_stakes.remove(&account_id);
 
         Self::ext(env::current_account_id())
             .with_static_gas(ACL_CALL_GAS)
@@ -120,15 +123,15 @@ impl Contract {
     pub fn resign_trusted_relayer_callback(
         &mut self,
         account_id: AccountId,
-        stake: u128,
+        stake: NearToken,
         #[callback_result] call_result: Result<bool, PromiseError>,
     ) {
-        if call_result.is_ok() {
-            self.relayer_stakes.remove(&account_id);
-            if stake > 0 {
-                Promise::new(account_id)
-                    .transfer(NearToken::from_yoctonear(stake))
-                    .detach();
+        if call_result == Ok(true) {
+            if stake.as_yoctonear() > 0 {
+                Promise::new(account_id).transfer(stake).detach();
+            } else {
+                self.relayer_stakes
+                    .insert(&account_id, &stake.as_yoctonear());
             }
         }
     }
@@ -142,7 +145,7 @@ impl Contract {
 
         self.relayer_applications.remove(&account_id);
 
-        Promise::new(account_id).transfer(NearToken::from_yoctonear(application.stake.0))
+        Promise::new(account_id).transfer(application.stake)
     }
 
     #[access_control_any(roles(Role::DAO))]
