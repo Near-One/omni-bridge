@@ -134,10 +134,10 @@ impl Contract {
         if call_result == Ok(true) {
             if stake.as_yoctonear() > 0 {
                 Promise::new(account_id).transfer(stake).detach();
-            } else {
-                self.relayer_stakes
-                    .insert(&account_id, &stake.as_yoctonear());
             }
+        } else {
+            self.relayer_stakes
+                .insert(&account_id, &stake.as_yoctonear());
         }
     }
 
