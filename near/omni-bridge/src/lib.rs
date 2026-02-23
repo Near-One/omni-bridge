@@ -461,7 +461,7 @@ impl Contract {
     /// - If a `fee` is provided and it doesn't match the fee in the stored transfer message.
     #[payable]
     #[pause(except(roles(Role::DAO, Role::UnrestrictedRelayer)))]
-    #[access_control_any(roles(Role::DAO, Role::TrustedRelayer))]
+    #[access_control_any(roles(Role::DAO, Role::UnrestrictedRelayer, Role::TrustedRelayer))]
     pub fn sign_transfer(
         &mut self,
         transfer_id: TransferId,
@@ -686,7 +686,7 @@ impl Contract {
 
     #[payable]
     #[pause(except(roles(Role::DAO, Role::UnrestrictedRelayer)))]
-    #[access_control_any(roles(Role::DAO, Role::TrustedRelayer))]
+    #[access_control_any(roles(Role::DAO, Role::UnrestrictedRelayer, Role::TrustedRelayer))]
     pub fn fin_transfer(&mut self, #[serializer(borsh)] args: FinTransferArgs) -> Promise {
         require!(
             args.storage_deposit_actions.len() <= 3,
