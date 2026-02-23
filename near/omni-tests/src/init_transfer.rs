@@ -47,6 +47,24 @@ mod tests {
                 .await?;
             let relayer_account = env_builder.create_account(relayer_account_id()).await?;
             let sender_account = env_builder.create_account(account_n(1)).await?;
+
+            env_builder
+                .bridge_contract
+                .call("acl_grant_role")
+                .args_json(json!({"role": "TrustedRelayer", "account_id": relayer_account.id()}))
+                .max_gas()
+                .transact()
+                .await?
+                .into_result()?;
+            env_builder
+                .bridge_contract
+                .call("acl_grant_role")
+                .args_json(json!({"role": "TrustedRelayer", "account_id": sender_account.id()}))
+                .max_gas()
+                .transact()
+                .await?
+                .into_result()?;
+
             env_builder.storage_deposit(relayer_account.id()).await?;
             env_builder.storage_deposit(sender_account.id()).await?;
             env_builder

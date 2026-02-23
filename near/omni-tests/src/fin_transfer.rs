@@ -78,6 +78,15 @@ mod tests {
 
         let relayer_account = env_builder.create_account(relayer_account_id()).await?;
 
+        env_builder
+            .bridge_contract
+            .call("acl_grant_role")
+            .args_json(json!({"role": "TrustedRelayer", "account_id": relayer_account.id()}))
+            .max_gas()
+            .transact()
+            .await?
+            .into_result()?;
+
         let required_balance_for_fin_transfer: NearToken = env_builder
             .bridge_contract
             .view("required_balance_for_fin_transfer")

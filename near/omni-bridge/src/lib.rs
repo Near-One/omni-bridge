@@ -42,6 +42,7 @@ use token_lock::LockAction;
 
 mod btc;
 mod migrate;
+mod relayer_staking;
 mod storage;
 mod token_lock;
 
@@ -104,6 +105,8 @@ enum StorageKey {
     FinalisedUtxoTransfers,
     LockedTokens,
     DeployedTokensV2,
+    RelayerApplications,
+    RelayerStakes,
 }
 
 #[derive(AccessControlRole, Deserialize, Serialize, Copy, Clone)]
@@ -121,6 +124,30 @@ pub enum Role {
     RbfOperator,
     TokenUpgrader,
     TokenLockController,
+    TrustedRelayer,
+}
+
+#[derive(Debug, Clone)]
+#[near(serializers = [borsh, json])]
+pub struct RelayerApplication {
+    pub stake: U128,
+    pub applied_at: u64,
+}
+
+#[derive(Debug, Clone)]
+#[near(serializers = [borsh, json])]
+pub struct RelayerConfig {
+    pub stake_required: NearToken,
+    pub waiting_period_ns: u64,
+}
+
+impl Default for RelayerConfig {
+    fn default() -> Self {
+        Self {
+            stake_required: NearToken::from_near(1000),
+            waiting_period_ns: 604_800_000_000_000, // 7 days
+        }
+    }
 }
 
 #[ext_contract(ext_token)]
@@ -235,6 +262,9 @@ pub struct Contract {
     pub utxo_chain_connectors: HashMap<ChainKind, UTXOChainConfig>,
     pub migrated_tokens: LookupMap<AccountId, AccountId>,
     pub locked_tokens: LookupMap<(ChainKind, AccountId), u128>,
+    pub relayer_applications: LookupMap<AccountId, RelayerApplication>,
+    pub relayer_stakes: LookupMap<AccountId, u128>,
+    pub relayer_config: RelayerConfig,
 }
 
 #[near]
@@ -296,6 +326,9 @@ impl Contract {
             utxo_chain_connectors: HashMap::new(),
             migrated_tokens: LookupMap::new(StorageKey::MigratedTokens),
             locked_tokens: LookupMap::new(StorageKey::LockedTokens),
+            relayer_applications: LookupMap::new(StorageKey::RelayerApplications),
+            relayer_stakes: LookupMap::new(StorageKey::RelayerStakes),
+            relayer_config: RelayerConfig::default(),
         };
 
         contract.acl_init_super_admin(near_sdk::env::predecessor_account_id());
@@ -428,6 +461,7 @@ impl Contract {
     /// - If a `fee` is provided and it doesn't match the fee in the stored transfer message.
     #[payable]
     #[pause(except(roles(Role::DAO, Role::UnrestrictedRelayer)))]
+    #[access_control_any(roles(Role::DAO, Role::TrustedRelayer))]
     pub fn sign_transfer(
         &mut self,
         transfer_id: TransferId,
@@ -652,6 +686,7 @@ impl Contract {
 
     #[payable]
     #[pause(except(roles(Role::DAO, Role::UnrestrictedRelayer)))]
+    #[access_control_any(roles(Role::DAO, Role::TrustedRelayer))]
     pub fn fin_transfer(&mut self, #[serializer(borsh)] args: FinTransferArgs) -> Promise {
         require!(
             args.storage_deposit_actions.len() <= 3,
