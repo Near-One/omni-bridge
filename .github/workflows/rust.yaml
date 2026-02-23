@@ -86,7 +86,6 @@ jobs:
           prefix-key: "v1-rust"
           workspaces: |
             near
-            omni-relayer
           cache-on-failure: true
           cache-all-crates: true
 
