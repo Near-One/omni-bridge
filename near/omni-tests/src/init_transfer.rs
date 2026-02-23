@@ -22,7 +22,7 @@ mod tests {
 
     const DEFAULT_NEAR_SANDBOX_BALANCE: NearToken = NearToken::from_near(100);
     const EXPECTED_RELAYER_GAS_COST: NearToken =
-        NearToken::from_yoctonear(1_500_000_000_000_000_000_000);
+        NearToken::from_yoctonear(5_000_000_000_000_000_000_000);
 
     struct TestEnv {
         worker: near_workspaces::Worker<near_workspaces::network::Sandbox>,
