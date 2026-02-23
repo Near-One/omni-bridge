@@ -63,7 +63,9 @@ impl Contract {
 
         require!(
             env::block_timestamp()
-                >= application.applied_at + self.relayer_config.waiting_period_ns,
+                >= application
+                    .applied_at
+                    .saturating_add(self.relayer_config.waiting_period_ns),
             BridgeError::RelayerWaitingPeriodNotElapsed.as_ref()
         );
 
