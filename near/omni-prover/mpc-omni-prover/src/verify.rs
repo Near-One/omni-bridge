@@ -1,5 +1,7 @@
-use k256::ecdsa::{Signature, VerifyingKey};
-use k256::EncodedPoint;
+use k256::{
+    ecdsa::{signature::hazmat::PrehashVerifier, Signature, VerifyingKey},
+    EncodedPoint,
+};
 use omni_types::errors::ProverError;
 
 pub fn verify_secp256k1_signature(
@@ -33,7 +35,6 @@ pub fn verify_secp256k1_signature(
     let signature = Signature::from_bytes((&sig_bytes).into())
         .map_err(|_| ProverError::InvalidSignature.to_string())?;
 
-    use k256::ecdsa::signature::hazmat::PrehashVerifier;
     verifying_key
         .verify_prehash(message_hash, &signature)
         .map_err(|_| ProverError::InvalidSignature.to_string())?;
