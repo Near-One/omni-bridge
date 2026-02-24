@@ -78,7 +78,7 @@ mod tests {
 
     #[rstest]
     #[tokio::test]
-    async fn test_apply_claim_relayer_role(
+    async fn test_apply_auto_promote_relayer(
         #[from(locker_wasm)] locker: Vec<u8>,
         #[from(mock_prover_wasm)] prover: Vec<u8>,
     ) -> anyhow::Result<()> {
@@ -116,27 +116,32 @@ mod tests {
             .json()?;
         assert!(application.is_some());
 
+        // Before waiting period, relayer should not be trusted
+        let is_trusted: bool = env
+            .bridge_contract
+            .call("is_trusted_relayer")
+            .args_json(json!({"account_id": applicant.id()}))
+            .max_gas()
+            .transact()
+            .await?
+            .json()?;
+        assert!(!is_trusted);
+
         // Fast forward past waiting period
         env.worker.fast_forward(100).await?;
 
-        // Claim
-        let result = applicant
-            .call(env.bridge_contract.id(), "claim_trusted_relayer_role")
+        // After waiting period, relayer should be auto-promoted
+        let is_trusted: bool = env
+            .bridge_contract
+            .call("is_trusted_relayer")
+            .args_json(json!({"account_id": applicant.id()}))
             .max_gas()
             .transact()
-            .await?;
-        result.into_result()?;
-
-        // Verify role is granted
-        let has_role: bool = env
-            .bridge_contract
-            .view("acl_has_role")
-            .args_json(json!({"role": "TrustedRelayer", "account_id": applicant.id()}))
             .await?
             .json()?;
-        assert!(has_role);
+        assert!(is_trusted);
 
-        // Verify stake is stored
+        // Verify stake is stored (auto-promotion sets Active)
         let stake: Option<U128> = env
             .bridge_contract
             .view("get_relayer_stake")
@@ -146,7 +151,7 @@ mod tests {
         assert!(stake.is_some());
         assert!(stake.unwrap().0 >= 1_000 * 10u128.pow(24));
 
-        // Verify application is removed
+        // Verify application is removed (now Active, not Pending)
         let application: Option<serde_json::Value> = env
             .bridge_contract
             .view("get_relayer_application")
@@ -183,7 +188,7 @@ mod tests {
 
     #[rstest]
     #[tokio::test]
-    async fn test_claim_before_waiting_period(
+    async fn test_not_trusted_before_waiting_period(
         #[from(locker_wasm)] locker: Vec<u8>,
         #[from(mock_prover_wasm)] prover: Vec<u8>,
     ) -> anyhow::Result<()> {
@@ -200,14 +205,16 @@ mod tests {
             .await?
             .into_result()?;
 
-        // Attempt to claim immediately (before waiting period)
-        let result = applicant
-            .call(env.bridge_contract.id(), "claim_trusted_relayer_role")
+        // Relayer should not be trusted before waiting period elapses
+        let is_trusted: bool = env
+            .bridge_contract
+            .call("is_trusted_relayer")
+            .args_json(json!({"account_id": applicant.id()}))
             .max_gas()
             .transact()
-            .await?;
-
-        assert!(result.into_result().is_err());
+            .await?
+            .json()?;
+        assert!(!is_trusted);
 
         Ok(())
     }
@@ -295,24 +302,19 @@ mod tests {
             .await?
             .into_result()?;
 
-        // Wait and claim
+        // Wait and auto-promote
         env.worker.fast_forward(100).await?;
 
-        applicant
-            .call(env.bridge_contract.id(), "claim_trusted_relayer_role")
+        // Trigger auto-promotion
+        let is_trusted: bool = env
+            .bridge_contract
+            .call("is_trusted_relayer")
+            .args_json(json!({"account_id": applicant.id()}))
             .max_gas()
             .transact()
             .await?
-            .into_result()?;
-
-        // Verify role
-        let has_role: bool = env
-            .bridge_contract
-            .view("acl_has_role")
-            .args_json(json!({"role": "TrustedRelayer", "account_id": applicant.id()}))
-            .await?
             .json()?;
-        assert!(has_role);
+        assert!(is_trusted);
 
         let balance_before_resign = applicant.view_account().await?.balance;
 
@@ -324,14 +326,16 @@ mod tests {
             .await?
             .into_result()?;
 
-        // Verify role is revoked
-        let has_role: bool = env
+        // Verify relayer is no longer trusted
+        let is_trusted: bool = env
             .bridge_contract
-            .view("acl_has_role")
-            .args_json(json!({"role": "TrustedRelayer", "account_id": applicant.id()}))
+            .call("is_trusted_relayer")
+            .args_json(json!({"account_id": applicant.id()}))
+            .max_gas()
+            .transact()
             .await?
             .json()?;
-        assert!(!has_role);
+        assert!(!is_trusted);
 
         // Verify NEAR was returned
         let balance_after_resign = applicant.view_account().await?.balance;

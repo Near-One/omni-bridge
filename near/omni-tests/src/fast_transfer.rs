@@ -76,18 +76,33 @@ mod tests {
 
             env_builder
                 .bridge_contract
-                .call("acl_grant_role")
-                .args_json(json!({"role": "TrustedRelayer", "account_id": relayer_account.id()}))
+                .call("set_relayer_config")
+                .args_json(json!({
+                    "stake_required": "10000000000000000000000000",
+                    "waiting_period_ns": "0",
+                }))
                 .max_gas()
                 .transact()
                 .await?
                 .into_result()?;
-            env_builder
-                .bridge_contract
-                .call("acl_grant_role")
-                .args_json(
-                    json!({"role": "TrustedRelayer", "account_id": fast_relayer_account.id()}),
+
+            relayer_account
+                .call(
+                    env_builder.bridge_contract.id(),
+                    "apply_for_trusted_relayer",
                 )
+                .deposit(NearToken::from_near(10))
+                .max_gas()
+                .transact()
+                .await?
+                .into_result()?;
+
+            fast_relayer_account
+                .call(
+                    env_builder.bridge_contract.id(),
+                    "apply_for_trusted_relayer",
+                )
+                .deposit(NearToken::from_near(10))
                 .max_gas()
                 .transact()
                 .await?

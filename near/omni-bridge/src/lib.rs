@@ -123,14 +123,13 @@ pub enum Role {
     RbfOperator,
     TokenUpgrader,
     TokenLockController,
-    TrustedRelayer,
     RelayerManager,
 }
 
 #[derive(Debug, Clone)]
 #[near(serializers = [borsh, json])]
 pub enum RelayerState {
-    Pending { stake: NearToken, applied_at: U64 },
+    Pending { stake: NearToken, activate_at: U64 },
     Active { stake: NearToken },
 }
 
@@ -459,13 +458,17 @@ impl Contract {
     /// - If a `fee` is provided and it doesn't match the fee in the stored transfer message.
     #[payable]
     #[pause(except(roles(Role::DAO, Role::UnrestrictedRelayer)))]
-    #[access_control_any(roles(Role::DAO, Role::UnrestrictedRelayer, Role::TrustedRelayer))]
     pub fn sign_transfer(
         &mut self,
         transfer_id: TransferId,
         fee_recipient: Option<AccountId>,
         fee: &Option<Fee>,
     ) -> Promise {
+        require!(
+            self.is_trusted_relayer(&env::predecessor_account_id()),
+            BridgeError::RelayerNotActive.as_ref()
+        );
+
         let transfer_message = self.get_transfer_message(transfer_id);
 
         if let Some(fee) = &fee {
@@ -684,8 +687,12 @@ impl Contract {
 
     #[payable]
     #[pause(except(roles(Role::DAO, Role::UnrestrictedRelayer)))]
-    #[access_control_any(roles(Role::DAO, Role::UnrestrictedRelayer, Role::TrustedRelayer))]
     pub fn fin_transfer(&mut self, #[serializer(borsh)] args: FinTransferArgs) -> Promise {
+        require!(
+            self.is_trusted_relayer(&env::predecessor_account_id()),
+            BridgeError::RelayerNotActive.as_ref()
+        );
+
         require!(
             args.storage_deposit_actions.len() <= 3,
             BridgeError::InvalidStorageAccountsLen.as_ref()

@@ -51,10 +51,22 @@ mod tests {
             if !is_old_locker {
                 env_builder
                     .bridge_contract
-                    .call("acl_grant_role")
-                    .args_json(
-                        json!({"role": "TrustedRelayer", "account_id": relayer_account.id()}),
+                    .call("set_relayer_config")
+                    .args_json(json!({
+                        "stake_required": "10000000000000000000000000",
+                        "waiting_period_ns": "0",
+                    }))
+                    .max_gas()
+                    .transact()
+                    .await?
+                    .into_result()?;
+
+                relayer_account
+                    .call(
+                        env_builder.bridge_contract.id(),
+                        "apply_for_trusted_relayer",
                     )
+                    .deposit(NearToken::from_near(10))
                     .max_gas()
                     .transact()
                     .await?
@@ -604,7 +616,7 @@ mod tests {
 
         let transfer_message = get_transfer_message_from_event(&transfer_result)?;
 
-        // sender_account does NOT have TrustedRelayer role, so sign_transfer should fail
+        // sender_account is not a trusted relayer, so sign_transfer should fail
         let result = env
             .sender_account
             .call(env.locker_contract.id(), "sign_transfer")
