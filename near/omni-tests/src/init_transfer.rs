@@ -53,7 +53,7 @@ mod tests {
                     .bridge_contract
                     .call("set_relayer_config")
                     .args_json(json!({
-                        "stake_required": "10000000000000000000000000",
+                        "stake_required": "1",
                         "waiting_period_ns": "0",
                     }))
                     .max_gas()
@@ -66,7 +66,7 @@ mod tests {
                         env_builder.bridge_contract.id(),
                         "apply_for_trusted_relayer",
                     )
-                    .deposit(NearToken::from_near(10))
+                    .deposit(NearToken::from_yoctonear(1))
                     .max_gas()
                     .transact()
                     .await?
