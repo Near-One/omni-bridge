@@ -64,6 +64,14 @@ pub enum OmniBridgeEvent {
         stake: NearToken,
         activate_at: U64,
     },
+    RelayerResignEvent {
+        account_id: AccountId,
+        stake: NearToken,
+    },
+    RelayerRejectEvent {
+        account_id: AccountId,
+        stake: NearToken,
+    },
 }
 
 impl OmniBridgeEvent {

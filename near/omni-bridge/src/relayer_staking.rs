@@ -77,6 +77,14 @@ impl Contract {
             .remove(&account_id)
             .near_expect(BridgeError::RelayerNotRegistered);
 
+        env::log_str(
+            &OmniBridgeEvent::RelayerResignEvent {
+                account_id: account_id.clone(),
+                stake: state.stake,
+            }
+            .to_log_string(),
+        );
+
         Promise::new(account_id).transfer(state.stake)
     }
 
@@ -93,6 +101,14 @@ impl Contract {
         );
 
         self.relayers.remove(&account_id);
+
+        env::log_str(
+            &OmniBridgeEvent::RelayerRejectEvent {
+                account_id: account_id.clone(),
+                stake: state.stake,
+            }
+            .to_log_string(),
+        );
 
         Promise::new(account_id).transfer(state.stake)
     }
