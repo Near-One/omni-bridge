@@ -2056,6 +2056,7 @@ dependencies = [
  "k256",
  "near-sdk",
  "omni-types",
+ "omni-utils",
  "sha2",
 ]
 

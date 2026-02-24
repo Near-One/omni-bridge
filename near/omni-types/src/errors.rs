@@ -109,10 +109,15 @@ pub enum TokenError {
 #[strum(serialize_all = "shouty_snake_case", prefix = "ERR_")]
 #[non_exhaustive]
 pub enum ProverError {
+    ChainMismatch,
     HashNotSet,
     InvalidBlockHash,
+    InvalidPayloadHash,
     InvalidProof,
+    InvalidPublicKey,
+    InvalidSignature,
     ParseArgs,
+    UnsupportedChain,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, AsRefStr, ErrorDisplay)]

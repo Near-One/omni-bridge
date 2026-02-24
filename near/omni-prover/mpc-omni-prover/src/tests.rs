@@ -7,8 +7,9 @@ use contract_interface::types::{
 
 use omni_types::prover_args::MpcVerifyProofArgs;
 use omni_types::prover_result::ProofKind;
+use omni_types::ChainKind;
 
-use crate::evm_log_to_rlp;
+use crate::{chain_kind_to_foreign_chain, evm_log_to_rlp};
 
 fn test_evm_log() -> EvmLog {
     EvmLog {
@@ -196,6 +197,10 @@ fn test_verify_signature_wrong_key_fails() {
     );
 
     assert!(result.is_err(), "Verification should fail with wrong key");
+    assert!(
+        result.unwrap_err().contains("ERR_INVALID_SIGNATURE"),
+        "Error should be ERR_INVALID_SIGNATURE"
+    );
 }
 
 #[test]
@@ -230,4 +235,104 @@ fn test_verify_signature_wrong_hash_fails() {
     );
 
     assert!(result.is_err(), "Verification should fail with wrong hash");
+    assert!(
+        result.unwrap_err().contains("ERR_INVALID_SIGNATURE"),
+        "Error should be ERR_INVALID_SIGNATURE"
+    );
+}
+
+#[test]
+fn test_chain_kind_to_foreign_chain_mapping() {
+    use contract_interface::types::ForeignChain;
+
+    assert_eq!(
+        chain_kind_to_foreign_chain(ChainKind::Abs),
+        Some(ForeignChain::Abstract)
+    );
+    assert_eq!(
+        chain_kind_to_foreign_chain(ChainKind::Eth),
+        Some(ForeignChain::Ethereum)
+    );
+    assert_eq!(
+        chain_kind_to_foreign_chain(ChainKind::Arb),
+        Some(ForeignChain::Arbitrum)
+    );
+    assert_eq!(
+        chain_kind_to_foreign_chain(ChainKind::Base),
+        Some(ForeignChain::Base)
+    );
+    assert_eq!(
+        chain_kind_to_foreign_chain(ChainKind::Bnb),
+        Some(ForeignChain::Bnb)
+    );
+    assert_eq!(
+        chain_kind_to_foreign_chain(ChainKind::Sol),
+        Some(ForeignChain::Solana)
+    );
+    assert_eq!(
+        chain_kind_to_foreign_chain(ChainKind::Btc),
+        Some(ForeignChain::Bitcoin)
+    );
+    assert_eq!(
+        chain_kind_to_foreign_chain(ChainKind::Strk),
+        Some(ForeignChain::Starknet)
+    );
+    assert_eq!(chain_kind_to_foreign_chain(ChainKind::Near), None);
+    assert_eq!(chain_kind_to_foreign_chain(ChainKind::Zcash), None);
+    assert_eq!(chain_kind_to_foreign_chain(ChainKind::Pol), None);
+    assert_eq!(chain_kind_to_foreign_chain(ChainKind::HyperEvm), None);
+}
+
+#[test]
+fn test_chain_kind_validation_matching() {
+    let payload = test_sign_payload();
+    let ForeignTxSignPayload::V1(ref v1) = payload;
+    let payload_chain = v1.request.chain();
+    let expected = chain_kind_to_foreign_chain(ChainKind::Abs).unwrap();
+    assert_eq!(payload_chain, expected);
+}
+
+#[test]
+fn test_chain_kind_validation_mismatch_detected() {
+    let payload = test_sign_payload();
+    let ForeignTxSignPayload::V1(ref v1) = payload;
+    let payload_chain = v1.request.chain();
+
+    let wrong_expected = chain_kind_to_foreign_chain(ChainKind::Eth).unwrap();
+    assert_ne!(
+        payload_chain, wrong_expected,
+        "Abstract payload should not match Ethereum chain"
+    );
+}
+
+fn make_ethereum_sign_payload() -> ForeignTxSignPayload {
+    ForeignTxSignPayload::V1(ForeignTxSignPayloadV1 {
+        request: ForeignChainRpcRequest::Ethereum(EvmRpcRequest {
+            tx_id: EvmTxId([0xee; 32]),
+            extractors: vec![EvmExtractor::Log { log_index: 0 }],
+            finality: EvmFinality::Finalized,
+        }),
+        values: vec![ExtractedValue::EvmExtractedValue(EvmExtractedValue::Log(
+            test_evm_log(),
+        ))],
+    })
+}
+
+#[test]
+fn test_chain_kind_validation_ethereum_payload_against_abs_prover() {
+    let payload = make_ethereum_sign_payload();
+    let ForeignTxSignPayload::V1(ref v1) = payload;
+    let payload_chain = v1.request.chain();
+
+    let abs_expected = chain_kind_to_foreign_chain(ChainKind::Abs).unwrap();
+    assert_ne!(
+        payload_chain, abs_expected,
+        "Ethereum payload must be rejected by Abstract prover"
+    );
+
+    let eth_expected = chain_kind_to_foreign_chain(ChainKind::Eth).unwrap();
+    assert_eq!(
+        payload_chain, eth_expected,
+        "Ethereum payload should match Ethereum chain"
+    );
 }

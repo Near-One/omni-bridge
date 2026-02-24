@@ -29,6 +29,7 @@ crate-type = ["cdylib", "rlib"]
 near-sdk.workspace = true
 borsh.workspace = true
 omni-types.workspace = true
+omni-utils.workspace = true
 alloy.workspace = true
 sha2.workspace = true
 hex.workspace = true
