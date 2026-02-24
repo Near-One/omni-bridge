@@ -1,6 +1,6 @@
 use borsh::BorshDeserialize;
 
-use contract_interface::types::{
+use near_mpc_sdk::contract_interface::types::{
     EvmExtractedValue, EvmExtractor, EvmFinality, EvmLog, EvmRpcRequest, EvmTxId, ExtractedValue,
     ForeignChainRpcRequest, ForeignTxSignPayload, ForeignTxSignPayloadV1, Hash160, Hash256,
 };
@@ -243,7 +243,7 @@ fn test_verify_signature_wrong_hash_fails() {
 
 #[test]
 fn test_chain_kind_to_foreign_chain_mapping() {
-    use contract_interface::types::ForeignChain;
+    use near_mpc_sdk::contract_interface::types::ForeignChain;
 
     assert_eq!(
         chain_kind_to_foreign_chain(ChainKind::Abs),

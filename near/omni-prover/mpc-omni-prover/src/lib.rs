@@ -1,7 +1,7 @@
 use borsh::BorshDeserialize;
 use near_sdk::{env, near, near_bindgen, require, PanicOnDefault};
 
-use contract_interface::types::{
+use near_mpc_sdk::contract_interface::types::{
     EvmExtractedValue, ExtractedValue, ForeignChain, ForeignTxSignPayload, ForeignTxSignPayloadV1,
 };
 
@@ -151,7 +151,9 @@ fn chain_kind_to_foreign_chain(chain_kind: ChainKind) -> Option<ForeignChain> {
     }
 }
 
-fn evm_log_to_rlp(evm_log: &contract_interface::types::EvmLog) -> Result<Vec<u8>, String> {
+fn evm_log_to_rlp(
+    evm_log: &near_mpc_sdk::contract_interface::types::EvmLog,
+) -> Result<Vec<u8>, String> {
     use alloy::primitives::{Address, Bytes, Log, B256};
     use alloy::rlp::Encodable;
 

@@ -220,6 +220,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "72b3254f16251a8381aa12e40e3c4d2f0199f8c6508fbecb9d91f575e0fbb8c6"
 
 [[package]]
+name = "base64ct"
+version = "1.8.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2af50177e190e07a26ab74f8b1efbfe2ef87da2116221318cb1c2e82baf7de06"
+
+[[package]]
 name = "binary-install"
 version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -951,6 +957,7 @@ dependencies = [
  "elliptic-curve",
  "rfc6979",
  "signature",
+ "spki",
 ]
 
 [[package]]
@@ -993,6 +1000,7 @@ dependencies = [
  "ff",
  "generic-array",
  "group",
+ "pkcs8",
  "rand_core 0.6.4",
  "sec1",
  "subtle",
@@ -1847,7 +1855,9 @@ dependencies = [
  "cfg-if 1.0.3",
  "ecdsa",
  "elliptic-curve",
+ "once_cell",
  "sha2",
+ "signature",
 ]
 
 [[package]]
@@ -2051,13 +2061,12 @@ version = "0.4.4"
 dependencies = [
  "alloy",
  "borsh",
- "contract-interface",
  "hex",
  "k256",
+ "near-mpc-sdk",
  "near-sdk",
  "omni-types",
  "omni-utils",
- "sha2",
 ]
 
 [[package]]
@@ -2178,9 +2187,9 @@ dependencies = [
 
 [[package]]
 name = "near-contract-standards"
-version = "5.24.0"
+version = "5.24.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "284205bef7d7140d9754897729c6d04e47b3dec4bd7de83dd818e3ac7f58418a"
+checksum = "d59d3d4fd5d6cb11907c69b57f1c15e30acd48d775be5b5c4ccc79ffd6a35ab5"
 dependencies = [
  "near-sdk",
 ]
@@ -2266,6 +2275,18 @@ dependencies = [
  "serde_json",
  "thiserror 2.0.18",
  "time",
+]
+
+[[package]]
+name = "near-mpc-sdk"
+version = "3.5.1"
+source = "git+https://github.com/near/mpc?rev=0abffce7047bba355a0d65b05440404773e0061b#0abffce7047bba355a0d65b05440404773e0061b"
+dependencies = [
+ "bounded-collections",
+ "contract-interface",
+ "derive_more",
+ "k256",
+ "near-sdk",
 ]
 
 [[package]]
@@ -2420,9 +2441,9 @@ checksum = "79d63d022e686c6b92426c98f011908037730d557e815d6c813d5686030a6b53"
 
 [[package]]
 name = "near-sdk"
-version = "5.24.0"
+version = "5.24.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b5188eba9ee0383c2a28afee994e65c21e98823d18a32b8b3a7c8d6cdedfb119"
+checksum = "0f3fa35758aba48e4f13528ba2f603e860dad03233d446e5c65ebd619296b607"
 dependencies = [
  "base64 0.22.1",
  "borsh",
@@ -2447,9 +2468,9 @@ dependencies = [
 
 [[package]]
 name = "near-sdk-macros"
-version = "5.24.0"
+version = "5.24.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e4339b75a514ca2e6b67379be62a441f7e99a2c3813278f1b23d233b300f9f4f"
+checksum = "bb141510850a842d010d706c00bcbf31beba188c706415cc9392ffd62a127e09"
 dependencies = [
  "Inflector",
  "darling 0.20.11",
@@ -2470,9 +2491,9 @@ checksum = "a501d5074c5c341725fe801ed191f45ef97e0a4d54d6ef5c3e87363930d4d0b1"
 
 [[package]]
 name = "near-sys"
-version = "0.2.6"
+version = "0.2.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b99e9ce0020190ea152f70d1849e54fc8fc123738e7447800ad818c78f5167cc"
+checksum = "f4ea77bb86969ff09c83faa517b2209c4876928381ed31e29c06cae2de0a216b"
 
 [[package]]
 name = "near-time"
@@ -2898,6 +2919,16 @@ name = "pin-utils"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8b870d8c151b6f2fb93e84a13146138f05d02ed11c7e7c54f8826aaaf7c9f184"
+
+[[package]]
+name = "pkcs8"
+version = "0.10.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f950b2377845cebe5cf8b5165cb3cc1a5e0fa5cfa3e1f7f55707d8fd82e0a7b7"
+dependencies = [
+ "der",
+ "spki",
+]
 
 [[package]]
 name = "pkg-config"
@@ -3514,6 +3545,7 @@ dependencies = [
  "base16ct",
  "der",
  "generic-array",
+ "pkcs8",
  "subtle",
  "zeroize",
 ]
@@ -3798,6 +3830,16 @@ name = "spin"
 version = "0.9.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6980e8d7511241f8acf4aebddbb1ff938df5eebe98691418c4468d0b72a96a67"
+
+[[package]]
+name = "spki"
+version = "0.7.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d91ed6c858b01f942cd56b37a94b3e0a1798290327d1236e4d9cf4eaca44d29d"
+dependencies = [
+ "base64ct",
+ "der",
+]
 
 [[package]]
 name = "stable_deref_trait"

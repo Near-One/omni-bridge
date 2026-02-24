@@ -31,8 +31,7 @@ borsh.workspace = true
 omni-types.workspace = true
 omni-utils.workspace = true
 alloy.workspace = true
-sha2.workspace = true
 hex.workspace = true
 k256.workspace = true
 
-contract-interface = { git = "https://github.com/near/mpc", rev = "0abffce7047bba355a0d65b05440404773e0061b" }
+near-mpc-sdk = { git = "https://github.com/near/mpc", rev = "0abffce7047bba355a0d65b05440404773e0061b" }
