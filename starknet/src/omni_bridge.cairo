@@ -26,6 +26,8 @@ pub trait IOmniBridge<TContractState> {
     );
     fn set_pause_flags(ref self: TContractState, flags: u8);
     fn pause_all(ref self: TContractState);
+    fn get_token_address(self: @TContractState, token_id: ByteArray) -> ContractAddress;
+    fn is_bridge_token(self: @TContractState, token_address: ContractAddress) -> bool;
 }
 
 #[starknet::contract]
@@ -52,8 +54,8 @@ mod OmniBridge {
         get_contract_address, syscalls,
     };
     use crate::bridge_types::{
-        DeployToken, FinTransfer, InitTransfer, LogMetadata, MetadataPayload, Signature,
-        TransferMessagePayload,
+        DeployToken, FinTransfer, InitTransfer, LogMetadata, MetadataPayload, PauseStateChanged,
+        PayloadType, Signature, TransferMessagePayload,
     };
     use crate::utils;
     use crate::utils::{borsh, reverse_u256_bytes};
@@ -73,11 +75,8 @@ mod OmniBridge {
     component!(path: UpgradeableComponent, storage: upgradeable, event: UpgradeableEvent);
 
     #[abi(embed_v0)]
-    impl AccessControlImpl =
-        AccessControlComponent::AccessControlImpl<ContractState>;
-    #[abi(embed_v0)]
-    impl AccessControlCamelImpl =
-        AccessControlComponent::AccessControlCamelImpl<ContractState>;
+    impl AccessControlMixinImpl =
+        AccessControlComponent::AccessControlMixinImpl<ContractState>;
     impl AccessControlInternalImpl = AccessControlComponent::InternalImpl<ContractState>;
     impl UpgradeableInternalImpl = UpgradeableComponent::InternalImpl<ContractState>;
 
@@ -88,6 +87,7 @@ mod OmniBridge {
         DeployToken: DeployToken,
         InitTransfer: InitTransfer,
         FinTransfer: FinTransfer,
+        PauseStateChanged: PauseStateChanged,
         #[flat]
         AccessControlEvent: AccessControlComponent::Event,
         #[flat]
@@ -110,13 +110,12 @@ mod OmniBridge {
         current_origin_nonce: u64,
         // Bitmap: slot = nonce / 251, bit = nonce % 251
         completed_transfers: Map<u64, felt252>,
-        deployed_tokens: Map<ContractAddress, bool>,
         starknet_to_near_token: Map<ContractAddress, ByteArray>,
         // Can't use ByteArray as a key. Using hash instead
         near_to_starknet_token: Map<u256, ContractAddress>,
         omni_bridge_chain_id: u8,
         omni_bridge_derived_address: EthAddress,
-        native_token_address: ContractAddress,
+        strk_token_address: ContractAddress,
     }
 
     #[constructor]
@@ -126,15 +125,14 @@ mod OmniBridge {
         omni_bridge_chain_id: u8,
         token_class_hash: ClassHash,
         default_admin: ContractAddress,
-        native_token_address: ContractAddress,
+        strk_token_address: ContractAddress,
     ) {
         self.omni_bridge_derived_address.write(omni_bridge_derived_address);
         self.omni_bridge_chain_id.write(omni_bridge_chain_id);
         self.bridge_token_class_hash.write(token_class_hash);
-        self.native_token_address.write(native_token_address);
-        self.pause_flags.write(0); // Not paused initially
+        self.strk_token_address.write(strk_token_address);
+        self.pause_flags.write(0);
 
-        // Initialize AccessControl with admin role
         self.accesscontrol.initializer();
         self.accesscontrol._grant_role(DEFAULT_ADMIN_ROLE, default_admin);
     }
@@ -201,23 +199,17 @@ mod OmniBridge {
         }
 
         fn deploy_token(ref self: ContractState, signature: Signature, payload: MetadataPayload) {
-            // Check if deploy_token is paused
             assert(!_is_paused(@self, PAUSE_DEPLOY_TOKEN), 'ERR_DEPLOY_TOKEN_PAUSED');
 
             let mut borsh_bytes: ByteArray = "";
-            borsh_bytes.append_byte(1); // Payload type
+            borsh_bytes.append_byte(PayloadType::Metadata.into());
             borsh_bytes.append(@borsh::encode_byte_array(@payload.token));
             borsh_bytes.append(@borsh::encode_byte_array(@payload.name));
             borsh_bytes.append(@borsh::encode_byte_array(@payload.symbol));
             borsh_bytes.append_byte(payload.decimals);
 
-            let message_hash_le = compute_keccak_byte_array(@borsh_bytes);
-            let message_hash = reverse_u256_bytes(message_hash_le);
+            _verify_borsh_signature(ref self, @borsh_bytes, signature);
 
-            let sig = signature_from_vrs(signature.v, signature.r, signature.s);
-            verify_eth_signature(message_hash, sig, self.omni_bridge_derived_address.read());
-
-            // Verify token hasn't been deployed yet
             let token_id_hash = compute_keccak_byte_array(@payload.token);
             let existing_token = self.near_to_starknet_token.read(token_id_hash);
             assert(existing_token.is_zero(), 'ERR_TOKEN_ALREADY_DEPLOYED');
@@ -228,12 +220,13 @@ mod OmniBridge {
             (payload.name.clone(), payload.symbol.clone(), decimals)
                 .serialize(ref constructor_calldata);
 
+            // Use the low part of the u256 hash to ensure it fits in felt252
+            let salt: felt252 = token_id_hash.low.into();
             let (contract_address, _) = deploy_syscall(
-                self.bridge_token_class_hash.read(), 0, constructor_calldata.span(), false,
+                self.bridge_token_class_hash.read(), salt, constructor_calldata.span(), false,
             )
                 .unwrap_syscall();
 
-            self.deployed_tokens.write(contract_address, true);
             self.starknet_to_near_token.write(contract_address, payload.token.clone());
             self.near_to_starknet_token.write(token_id_hash, contract_address);
 
@@ -255,7 +248,6 @@ mod OmniBridge {
         fn fin_transfer(
             ref self: ContractState, signature: Signature, payload: TransferMessagePayload,
         ) {
-            // Check if fin_transfer is paused
             assert(!_is_paused(@self, PAUSE_FIN_TRANSFER), 'ERR_FIN_TRANSFER_PAUSED');
 
             assert(
@@ -266,7 +258,7 @@ mod OmniBridge {
             let chain_id = self.omni_bridge_chain_id.read();
 
             let mut borsh_bytes: ByteArray = "";
-            borsh_bytes.append_byte(0); // PayloadType::TransferMessage
+            borsh_bytes.append_byte(PayloadType::TransferMessage.into());
             borsh_bytes.append(@borsh::encode_u64(payload.destination_nonce));
             borsh_bytes.append_byte(payload.origin_chain);
             borsh_bytes.append(@borsh::encode_u64(payload.origin_nonce));
@@ -289,18 +281,15 @@ mod OmniBridge {
                 },
             }
 
-            let message_hash_le = compute_keccak_byte_array(@borsh_bytes);
-            let message_hash = reverse_u256_bytes(message_hash_le);
+            _verify_borsh_signature(ref self, @borsh_bytes, signature);
 
-            let sig = signature_from_vrs(signature.v, signature.r, signature.s);
-            verify_eth_signature(message_hash, sig, self.omni_bridge_derived_address.read());
-
-            if self.deployed_tokens.read(payload.token_address) {
+            if self.is_bridge_token(payload.token_address) {
                 IBridgeTokenDispatcher { contract_address: payload.token_address }
                     .mint(payload.recipient, payload.amount.into());
             } else {
-                IERC20Dispatcher { contract_address: payload.token_address }
+                let success = IERC20Dispatcher { contract_address: payload.token_address }
                     .transfer(payload.recipient, payload.amount.into());
+                assert(success, 'ERR_TRANSFER_FAILED');
             }
 
             self
@@ -313,6 +302,7 @@ mod OmniBridge {
                             amount: payload.amount,
                             recipient: payload.recipient,
                             fee_recipient: payload.fee_recipient,
+                            message: payload.message,
                         },
                     ),
                 )
@@ -327,29 +317,29 @@ mod OmniBridge {
             recipient: ByteArray,
             message: ByteArray,
         ) {
-            // Check if init_transfer is paused
             assert(!_is_paused(@self, PAUSE_INIT_TRANSFER), 'ERR_INIT_TRANSFER_PAUSED');
 
+            assert(amount > 0, 'ERR_ZERO_AMOUNT');
             assert(fee < amount, 'ERR_INVALID_FEE');
 
             self.current_origin_nonce.write(self.current_origin_nonce.read() + 1);
 
             let caller = get_caller_address();
 
-            // Handle token transfer (burn or lock)
-            if self.deployed_tokens.read(token_address) {
+            if self.is_bridge_token(token_address) {
                 IBridgeTokenDispatcher { contract_address: token_address }
                     .burn(caller, amount.into());
             } else {
-                IERC20Dispatcher { contract_address: token_address }
+                let success = IERC20Dispatcher { contract_address: token_address }
                     .transfer_from(caller, get_contract_address(), amount.into());
+                assert(success, 'ERR_TRANSFER_FROM_FAILED');
             }
 
-            // Handle native fee payment if specified
             if native_fee > 0 {
-                let native_token = self.native_token_address.read();
-                IERC20Dispatcher { contract_address: native_token }
+                let native_token = self.strk_token_address.read();
+                let success = IERC20Dispatcher { contract_address: native_token }
                     .transfer_from(caller, get_contract_address(), native_fee.into());
+                assert(success, 'ERR_FEE_TRANSFER_FAILED');
             }
 
             self
@@ -373,7 +363,7 @@ mod OmniBridge {
             ref self: ContractState, token_address: ContractAddress, new_class_hash: ClassHash,
         ) {
             self.accesscontrol.assert_only_role(DEFAULT_ADMIN_ROLE);
-            assert(self.deployed_tokens.read(token_address), 'ERR_NOT_BRIDGE_TOKEN');
+            assert(self.is_bridge_token(token_address), 'ERR_NOT_BRIDGE_TOKEN');
 
             let upgradeable = IUpgradeableDispatcher { contract_address: token_address };
             upgradeable.upgrade(new_class_hash);
@@ -381,12 +371,41 @@ mod OmniBridge {
 
         fn set_pause_flags(ref self: ContractState, flags: u8) {
             self.accesscontrol.assert_only_role(DEFAULT_ADMIN_ROLE);
+            let old_flags = self.pause_flags.read();
             self.pause_flags.write(flags);
+
+            self
+                .emit(
+                    Event::PauseStateChanged(
+                        PauseStateChanged {
+                            old_flags, new_flags: flags, admin: get_caller_address(),
+                        },
+                    ),
+                );
         }
 
         fn pause_all(ref self: ContractState) {
             self.accesscontrol.assert_only_role(PAUSER_ROLE);
+            let old_flags = self.pause_flags.read();
             self.pause_flags.write(PAUSE_ALL);
+
+            self
+                .emit(
+                    Event::PauseStateChanged(
+                        PauseStateChanged {
+                            old_flags, new_flags: PAUSE_ALL, admin: get_caller_address(),
+                        },
+                    ),
+                );
+        }
+
+        fn get_token_address(self: @ContractState, token_id: ByteArray) -> ContractAddress {
+            let token_id_hash = compute_keccak_byte_array(@token_id);
+            self.near_to_starknet_token.read(token_id_hash)
+        }
+
+        fn is_bridge_token(self: @ContractState, token_address: ContractAddress) -> bool {
+            self.starknet_to_near_token.read(token_address).len() > 0
         }
     }
 
@@ -399,6 +418,16 @@ mod OmniBridge {
     }
 
     // Helper functions
+    fn _verify_borsh_signature(
+        ref self: ContractState, borsh_bytes: @ByteArray, signature: Signature,
+    ) {
+        let message_hash_le = compute_keccak_byte_array(borsh_bytes);
+        let message_hash = reverse_u256_bytes(message_hash_le);
+
+        let sig = signature_from_vrs(signature.v, signature.r, signature.s);
+        verify_eth_signature(message_hash, sig, self.omni_bridge_derived_address.read());
+    }
+
     fn _is_paused(self: @ContractState, flag: u8) -> bool {
         let flags = self.pause_flags.read();
         (flags & flag) != 0
@@ -412,7 +441,7 @@ mod OmniBridge {
 
     fn _nonce_slot_and_bit(nonce: u64) -> (u64, u256) {
         let slot = nonce / 251;
-        let bit: u256 = _pow2_felt((nonce % 251).into()).into();
+        let bit: u256 = _pow2_felt((nonce % 251).into());
         (slot, bit)
     }
 
@@ -428,17 +457,13 @@ mod OmniBridge {
         self.completed_transfers.write(slot, (bitmap | bit).try_into().unwrap());
     }
 
-    fn _pow2_felt(mut exp: u128) -> felt252 {
+    fn _pow2_felt(mut exp: u128) -> u256 {
         let mut result: u256 = 1;
-        let mut base: u256 = 2;
         while exp > 0 {
-            if exp % 2 == 1 {
-                result *= base;
-            }
-            base *= base;
-            exp /= 2;
+            result *= 2;
+            exp -= 1;
         }
-        result.try_into().unwrap()
+        result
     }
 
     fn _normalizeDecimals(decimals: u8) -> u8 {
@@ -447,5 +472,62 @@ mod OmniBridge {
             return maxAllowedDecimals;
         }
         return decimals;
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::{_is_transfer_finalised, _set_transfer_finalised};
+
+        fn setup() -> super::ContractState {
+            super::contract_state_for_testing()
+        }
+
+        #[test]
+        fn test_set_transfer_finalised_and_check_range() {
+            let mut state = setup();
+            let max_nonce: u64 = 0xFFFFFFFFFFFFFFFF;
+            let nonces = [
+                0, 1, 40, 42, 43, 44, 45, 125, 250, 251, 255, 256, 257, 502, 1000, max_nonce - 2,
+                max_nonce - 1, max_nonce,
+            ]
+                .span();
+
+            // Verify all nonces are initially unset
+            let mut i: usize = 0;
+            while i < nonces.len() {
+                assert!(!_is_transfer_finalised(@state, *nonces[i]));
+                i += 1;
+            }
+
+            // Set all nonces
+            let mut i: usize = 0;
+            while i < nonces.len() {
+                _set_transfer_finalised(ref state, *nonces[i]);
+                i += 1;
+            }
+
+            // Verify all nonces are now set
+            let mut i: usize = 0;
+            while i < nonces.len() {
+                assert!(_is_transfer_finalised(@state, *nonces[i]));
+                i += 1;
+            }
+
+            // Verify unset nonces remain unset
+            let unset = [2, 41, 124, 249, 252, 254, 999, max_nonce - 3].span();
+            let mut i: usize = 0;
+            while i < unset.len() {
+                assert!(!_is_transfer_finalised(@state, *unset[i]));
+                i += 1;
+            };
+        }
+
+        #[test]
+        fn test_set_transfer_finalised_idempotent() {
+            let mut state = setup();
+            _set_transfer_finalised(ref state, 42);
+            _set_transfer_finalised(ref state, 42);
+            assert!(_is_transfer_finalised(@state, 42));
+        }
     }
 }

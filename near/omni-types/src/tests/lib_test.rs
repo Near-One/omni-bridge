@@ -4,8 +4,7 @@ use near_sdk::{borsh, AccountId, NearToken};
 
 use crate::{
     stringify, BridgeError, ChainKind, DestinationChainMsg, Fee, OmniAddress, OmniError,
-    PayloadType, SolAddress, StorageBalanceError, TransferId, TransferMessage, TypesError, H160,
-    H256,
+    PayloadType, SolAddress, StorageBalanceError, TransferId, TransferMessage, H160, H256,
 };
 use std::str::FromStr;
 
@@ -144,94 +143,6 @@ fn test_omni_address_borsh_variants_are_covered() {
 }
 
 #[test]
-fn test_h160_from_str() {
-    let addr = "5a08feed678c056650b3eb4a5cb1b9bb6f0fe265";
-    let h160 = H160::from_str(addr).expect("Should parse without 0x prefix");
-    assert_eq!(h160.to_string(), format!("0x{addr}"));
-
-    let addr_with_prefix = format!("0x{addr}");
-    let h160_with_prefix = H160::from_str(&addr_with_prefix).expect("Should parse with 0x prefix");
-    assert_eq!(h160, h160_with_prefix);
-
-    let invalid_hex = "0xnot_a_hex_string";
-    let err = H160::from_str(invalid_hex).expect_err("Should fail with invalid hex");
-    assert_eq!(err, TypesError::InvalidHex);
-
-    let short_addr = "0x5a08";
-    let err = H160::from_str(short_addr).expect_err("Should fail with invalid length");
-    assert_eq!(err, TypesError::InvalidHexLength);
-}
-
-#[test]
-fn test_h160_deserialization() {
-    let json = r#""0x5a08feed678c056650b3eb4a5cb1b9bb6f0fe265""#;
-    let h160: H160 = serde_json::from_str(json).expect("Should deserialize with 0x prefix");
-    assert_eq!(
-        h160.to_string(),
-        "0x5a08feed678c056650b3eb4a5cb1b9bb6f0fe265",
-        "Should deserialize with 0x prefix"
-    );
-
-    let json = r#""5a08feed678c056650b3eb4a5cb1b9bb6f0fe265""#;
-    let h160: H160 = serde_json::from_str(json).expect("Should deserialize without 0x prefix");
-    assert_eq!(
-        h160.to_string(),
-        "0x5a08feed678c056650b3eb4a5cb1b9bb6f0fe265",
-        "Should deserialize without 0x prefix"
-    );
-
-    let json = r#""0xnot_a_hex_string""#;
-    let result: Result<H160, _> = serde_json::from_str(json);
-    assert!(result.is_err(), "Should fail with invalid hex");
-    let err = result.unwrap_err().to_string();
-    assert!(
-        err.contains("ERR_INVALID_HEX"),
-        "Error was: {err} but expected ERR_INVALID_HEX"
-    );
-
-    let json = r#""0x5a08""#;
-    let result: Result<H160, _> = serde_json::from_str(json);
-    assert!(result.is_err(), "Should fail with invalid length");
-    let err = result.unwrap_err().to_string();
-    assert!(
-        err.contains("ERR_INVALID_HEX_LENGTH"),
-        "Error was: {err} but expected ERR_INVALID_HEX_LENGTH"
-    );
-
-    let json = "123";
-    let result: Result<H160, _> = serde_json::from_str(json);
-    assert!(result.is_err(), "Should fail with non-string input");
-    let err = result.unwrap_err().to_string();
-    assert!(
-        err.contains("invalid type"),
-        "Error was: {err} but expected invalid type"
-    );
-}
-
-#[test]
-fn test_h160_serialization() {
-    let addr = "5a08feed678c056650b3eb4a5cb1b9bb6f0fe265";
-    let h160 = H160::from_str(addr).expect("Valid address");
-    let serialized = serde_json::to_string(&h160).expect("Should serialize");
-    assert_eq!(
-        serialized, r#""0x5a08feed678c056650b3eb4a5cb1b9bb6f0fe265""#,
-        "Invalid serialization."
-    );
-
-    let deserialized: H160 = serde_json::from_str(&serialized).expect("Should deserialize");
-    assert_eq!(
-        h160, deserialized,
-        "Deserialization is not equal to initial value."
-    );
-
-    assert_eq!(
-        format!(r#""{h160}""#),
-        serialized,
-        "Serialization does not preserve format from to_string()"
-    );
-}
-
-#[test]
 fn test_chain_kind_from_omni_address() {
     let test_chain_kind = |addr: OmniAddress, expected: ChainKind, chain_name: &str| {
         assert_eq!(
@@ -261,6 +172,14 @@ fn test_chain_kind_from_omni_address() {
         OmniAddress::Abs(H160::from_str("0x5a08feed678c056650b3eb4a5cb1b9bb6f0fe265").unwrap()),
         ChainKind::Abs,
         "ABS",
+    );
+    test_chain_kind(
+        OmniAddress::Strk(
+            H256::from_str("0x05558831a603eca8cd69a42d4251f08de3573039b69f23972265cac76639f1cf")
+                .unwrap(),
+        ),
+        ChainKind::Strk,
+        "STRK",
     );
 }
 
@@ -324,6 +243,16 @@ fn test_omni_address_from_str() {
             "Should parse ABS address",
         ),
         (
+            "strk:0x05558831a603eca8cd69a42d4251f08de3573039b69f23972265cac76639f1cf".to_string(),
+            Ok(OmniAddress::Strk(
+                H256::from_str(
+                    "0x05558831a603eca8cd69a42d4251f08de3573039b69f23972265cac76639f1cf",
+                )
+                .unwrap(),
+            )),
+            "Should parse STRK address",
+        ),
+        (
             "invalid_format".to_string(),
             Err("ERR_INVALID_HEX".to_string()),
             "Should fail on missing chain prefix",
@@ -375,6 +304,16 @@ fn test_omni_address_display() {
             OmniAddress::Abs(evm_addr.clone()),
             format!("abs:{evm_addr}"),
             "ABS address should format as abs:0x...",
+        ),
+        (
+            OmniAddress::Strk(
+                H256::from_str(
+                    "0x05558831a603eca8cd69a42d4251f08de3573039b69f23972265cac76639f1cf",
+                )
+                .unwrap(),
+            ),
+            "strk:0x05558831a603eca8cd69a42d4251f08de3573039b69f23972265cac76639f1cf".to_string(),
+            "STRK address should format as strk:0x...",
         ),
     ];
 

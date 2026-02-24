@@ -45,6 +45,27 @@ mod tests {
             env_builder
                 .mint_tokens(relayer_account.id(), 1_000_000_000)
                 .await?;
+            env_builder
+                .bridge_contract
+                .call("set_locked_tokens")
+                .args_json(json!({
+                    "args": [
+                        {
+                            "chain_kind": ChainKind::Base,
+                            "token_id": env_builder.token.contract.id(),
+                            "amount": U128(0),
+                        },
+                        {
+                            "chain_kind": ChainKind::Near,
+                            "token_id": env_builder.token.contract.id(),
+                            "amount": U128(1_000_000_000),
+                        }
+                    ]
+                }))
+                .max_gas()
+                .transact()
+                .await?
+                .into_result()?;
 
             let recipient_account = env_builder.create_account(account_n(1)).await?;
             env_builder.storage_deposit(recipient_account.id()).await?;
@@ -81,6 +102,23 @@ mod tests {
         Ok(balance)
     }
 
+    async fn get_locked_tokens(
+        bridge_contract: &near_workspaces::Contract,
+        chain_kind: ChainKind,
+        token_id: &AccountId,
+    ) -> anyhow::Result<U128> {
+        let locked_tokens: Option<U128> = bridge_contract
+            .view("get_locked_tokens")
+            .args_json(json!({
+                "chain_kind": chain_kind,
+                "token_id": token_id,
+            }))
+            .await?
+            .json()?;
+
+        Ok(locked_tokens.unwrap_or(U128(0)))
+    }
+
     fn has_error_message(result: &ExecutionFinalResult, error_msg: &str) -> bool {
         let has_failure = result.failures().into_iter().any(|outcome| {
             outcome
@@ -99,6 +137,7 @@ mod tests {
         }
     }
 
+    #[allow(clippy::too_many_lines)]
     async fn do_utxo_fin_transfer(
         env: &TestEnv,
         amount: u128,
@@ -108,6 +147,12 @@ mod tests {
     ) -> anyhow::Result<ExecutionFinalResult> {
         let is_transfer_to_near = matches!(utxo_msg.recipient, OmniAddress::Near(_));
 
+        let locked_before = get_locked_tokens(
+            &env.bridge_contract,
+            ChainKind::Near,
+            env.token_contract.id(),
+        )
+        .await?;
         let connector_balance_before =
             get_balance(&env.token_contract, env.utxo_connector.id()).await?;
         let recipient_balance_before =
@@ -132,6 +177,12 @@ mod tests {
             get_balance(&env.token_contract, env.recipient_account.id()).await?;
         let relayer_balance_after =
             get_balance(&env.token_contract, env.relayer_account.id()).await?;
+        let locked_after = get_locked_tokens(
+            &env.bridge_contract,
+            ChainKind::Near,
+            env.token_contract.id(),
+        )
+        .await?;
 
         if let Some(expected_error) = error {
             assert!(has_error_message(&result, expected_error));
@@ -149,7 +200,11 @@ mod tests {
                 "Recipient balance should be unchanged after failed transfer"
             );
         } else {
-            assert_eq!(0, result.failures().len());
+            assert!(
+                result.failures().is_empty(),
+                "Unexpected failures: {:?}",
+                result.failures()
+            );
 
             assert_eq!(
                 connector_balance_before.0,
@@ -175,6 +230,11 @@ mod tests {
                 "Recipient balance is not correct"
             );
         }
+
+        assert_eq!(
+            locked_before, locked_after,
+            "Locked tokens should be unchanged on Near"
+        );
 
         if !is_fast_transfer && !is_transfer_to_near {
             let transfer_message: Option<omni_types::TransferMessage> = env

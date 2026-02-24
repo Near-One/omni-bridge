@@ -285,21 +285,8 @@ impl OmniAddress {
 
     pub fn get_token_prefix(&self) -> String {
         match self {
-            Self::Sol(address) => {
-                if self.is_zero() {
-                    "sol".to_string()
-                } else {
-                    // The AccountId on Near can't be uppercased and has a 64 character limit,
-                    // so we encode the solana address into 20 bytes to bypass these restrictions
-                    let hashed_address = H160(
-                        utils::keccak256(&address.0)[12..]
-                            .try_into()
-                            .unwrap_or_default(),
-                    )
-                    .to_string();
-                    format!("sol-{hashed_address}")
-                }
-            }
+            Self::Sol(address) => Self::hashed_token_prefix("sol", &H256(address.0)),
+            Self::Strk(address) => Self::hashed_token_prefix("strk", address),
             Self::Eth(address) => {
                 if self.is_zero() {
                     "eth".to_string()
@@ -325,6 +312,22 @@ impl OmniAddress {
 
     pub fn is_utxo_chain(&self) -> bool {
         self.get_chain().is_utxo_chain()
+    }
+
+    // The AccountId on Near can't be uppercased and has a 64 character limit,
+    // so we encode the address into 20 bytes to bypass these restrictions
+    fn hashed_token_prefix(prefix: &str, address: &H256) -> String {
+        if address.is_zero() {
+            prefix.to_string()
+        } else {
+            let hashed_address = H160(
+                utils::keccak256(&address.0)[12..]
+                    .try_into()
+                    .unwrap_or_default(),
+            )
+            .to_string();
+            format!("{prefix}-{hashed_address}")
+        }
     }
 
     fn to_evm_address(address: &[u8]) -> Result<EvmAddress, String> {
@@ -448,6 +451,12 @@ pub struct InitTransferMsg {
     pub msg: Option<String>,
 }
 
+impl InitTransferMsg {
+    pub const fn get_destination_chain(&self) -> ChainKind {
+        self.recipient.get_chain()
+    }
+}
+
 #[derive(Serialize, Deserialize, BorshSerialize, BorshDeserialize, Debug, Clone)]
 pub struct FastFinTransferMsg {
     pub transfer_id: UnifiedTransferId,
@@ -469,6 +478,10 @@ pub struct UtxoFinTransferMsg {
 }
 
 impl UtxoFinTransferMsg {
+    pub const fn get_destination_chain(&self) -> ChainKind {
+        self.recipient.get_chain()
+    }
+
     pub fn get_transfer_id(&self, origin_chain: ChainKind) -> UnifiedTransferId {
         UnifiedTransferId {
             origin_chain,
@@ -531,6 +544,10 @@ impl TransferMessage {
 
     pub fn calculate_storage_account_id(&self) -> AccountId {
         TransferMessageStorageAccount::from(self.clone()).id()
+    }
+
+    pub fn amount_without_fee(&self) -> Option<u128> {
+        self.amount.0.checked_sub(self.fee.fee.0)
     }
 }
 
@@ -790,6 +807,14 @@ impl FastTransfer {
     #[allow(clippy::missing_panics_doc)]
     pub fn id(&self) -> FastTransferId {
         FastTransferId(utils::sha256(&borsh::to_vec(self).unwrap()))
+    }
+
+    pub const fn get_destination_chain(&self) -> ChainKind {
+        self.recipient.get_chain()
+    }
+
+    pub fn amount_without_fee(&self) -> Option<u128> {
+        self.amount.0.checked_sub(self.fee.fee.0)
     }
 }
 

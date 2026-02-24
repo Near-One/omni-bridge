@@ -94,6 +94,20 @@ fn init_logging(network: Network) -> Result<()> {
     Ok(())
 }
 
+async fn build_redis_connection_manager(
+    config: &config::Config,
+) -> Result<redis::aio::ConnectionManager> {
+    let redis_client = redis::Client::open(config.redis.url.clone())?;
+    let redis_connection_manager = redis::aio::ConnectionManager::new_with_config(
+        redis_client,
+        redis::aio::ConnectionManagerConfig::new().set_response_timeout(
+            tokio::time::Duration::from_secs(config.redis.query_timeout_secs),
+        ),
+    )
+    .await?;
+    Ok(redis_connection_manager)
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     dotenv::dotenv().ok();
@@ -111,8 +125,21 @@ async fn main() -> Result<()> {
 
     init_logging(config.near.network).context("Failed to initialize logging")?;
 
-    let redis_client = redis::Client::open(config.redis.url.clone())?;
-    let redis_connection_manager = redis::aio::ConnectionManager::new(redis_client.clone()).await?;
+    let redis_connection_manager = build_redis_connection_manager(&config)
+        .await
+        .context("Failed to create Redis connection manager")?;
+
+    let nats_client = if config.is_nats_enabled() {
+        let nats_config = config.nats.as_ref().unwrap();
+        let client = utils::nats::NatsClient::connect(&nats_config.url)
+            .await
+            .context("Failed to connect to NATS")?;
+        info!("Connected to NATS at {}", nats_config.url);
+        Some(Arc::new(client))
+    } else {
+        None
+    };
+
     let jsonrpc_client = near_jsonrpc_client::JsonRpcClient::connect(config.near.rpc_url.clone());
 
     let near_omni_signer = startup::near::get_signer(&config, config::NearSignerType::Omni)?;
@@ -147,7 +174,21 @@ async fn main() -> Result<()> {
 
     let mut handles = Vec::new();
 
-    if config.is_bridge_indexer_enabled() {
+    if config.is_nats_enabled() {
+        handles.push(tokio::spawn({
+            let config = config.clone();
+            let mut redis_connection_manager = redis_connection_manager.clone();
+            let nats_client = nats_client.clone().unwrap();
+            async move {
+                startup::bridge_indexer::start_indexer_nats(
+                    config,
+                    &mut redis_connection_manager,
+                    nats_client,
+                )
+                .await
+            }
+        }));
+    } else if config.is_bridge_indexer_enabled() {
         handles.push(tokio::spawn({
             let config = config.clone();
             let mut redis_connection_manager = redis_connection_manager.clone();
@@ -181,7 +222,7 @@ async fn main() -> Result<()> {
                 let mut redis_connection_manager = redis_connection_manager.clone();
                 async move {
                     startup::evm::start_indexer(
-                        config,
+                        &config,
                         &mut redis_connection_manager,
                         ChainKind::Eth,
                         args.eth_start_block,
@@ -196,7 +237,7 @@ async fn main() -> Result<()> {
                 let mut redis_connection_manager = redis_connection_manager.clone();
                 async move {
                     startup::evm::start_indexer(
-                        config,
+                        &config,
                         &mut redis_connection_manager,
                         ChainKind::Base,
                         args.base_start_block,
@@ -211,7 +252,7 @@ async fn main() -> Result<()> {
                 let mut redis_connection_manager = redis_connection_manager.clone();
                 async move {
                     startup::evm::start_indexer(
-                        config,
+                        &config,
                         &mut redis_connection_manager,
                         ChainKind::Arb,
                         args.arb_start_block,
@@ -226,7 +267,7 @@ async fn main() -> Result<()> {
                 let mut redis_connection_manager = redis_connection_manager.clone();
                 async move {
                     startup::evm::start_indexer(
-                        config,
+                        &config,
                         &mut redis_connection_manager,
                         ChainKind::Bnb,
                         args.bnb_start_block,
@@ -241,7 +282,7 @@ async fn main() -> Result<()> {
                 let mut redis_connection_manager = redis_connection_manager.clone();
                 async move {
                     startup::evm::start_indexer(
-                        config,
+                        &config,
                         &mut redis_connection_manager,
                         ChainKind::Pol,
                         args.pol_start_block,

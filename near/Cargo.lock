@@ -287,9 +287,9 @@ dependencies = [
 
 [[package]]
 name = "bon"
-version = "3.8.1"
+version = "3.8.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ebeb9aaf9329dff6ceb65c689ca3db33dbf15f324909c60e4e5eef5701ce31b1"
+checksum = "234655ec178edd82b891e262ea7cf71f6584bcd09eff94db786be23f1821825c"
 dependencies = [
  "bon-macros",
  "rustversion",
@@ -297,11 +297,11 @@ dependencies = [
 
 [[package]]
 name = "bon-macros"
-version = "3.8.1"
+version = "3.8.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "77e9d642a7e3a318e37c2c9427b5a6a48aa1ad55dcd986f3034ab2239045a645"
+checksum = "89ec27229c38ed0eb3c0feee3d2c1d6a4379ae44f418a29a658890e062d8f365"
 dependencies = [
- "darling 0.21.3",
+ "darling 0.20.11",
  "ident_case",
  "prettyplease 0.2.37",
  "proc-macro2",
@@ -708,6 +708,7 @@ dependencies = [
  "ident_case",
  "proc-macro2",
  "quote",
+ "strsim 0.11.1",
  "syn 2.0.106",
 ]
 
@@ -1978,9 +1979,9 @@ dependencies = [
 
 [[package]]
 name = "near-account-id"
-version = "2.3.0"
+version = "2.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "359c8ca02a3d0ef676a5baf9474b16a50b4137360664b15031977708989342ef"
+checksum = "91f75ff8eee73815c247d0e17f3c0b705f0e993922a5548acd2ad377aeb67fca"
 dependencies = [
  "borsh",
  "serde",
@@ -1988,9 +1989,9 @@ dependencies = [
 
 [[package]]
 name = "near-chain-configs"
-version = "0.34.1"
+version = "0.34.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3281a54d5bc02d88116eafe44fb76ff8f6c0257165a95c341e500309c9e5ba21"
+checksum = "a32782a43e0ce3ad5e34ae58557cfd0cd1938cf474cb79a387cd6d8c75309bf2"
 dependencies = [
  "anyhow",
  "bytesize",
@@ -2013,9 +2014,9 @@ dependencies = [
 
 [[package]]
 name = "near-config-utils"
-version = "0.34.1"
+version = "0.34.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5abe35e6d4b5e7575706ad607412e0f1e628e1786fcffc96c6e16aea10cebfe4"
+checksum = "2d501df6fa01064f325daaf19329183a4cd1ad54b7a1b5b8b0281b07f7e7c540"
 dependencies = [
  "anyhow",
  "json_comments",
@@ -2034,9 +2035,9 @@ dependencies = [
 
 [[package]]
 name = "near-crypto"
-version = "0.34.1"
+version = "0.34.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "705d23809bf4847ccb7d0fc2141a12b68e0d950cd425fb1cb1cffc547b73f08a"
+checksum = "1c8bfbd0f159e817402936e188bdd1d38167b0679c7693652f5199b5a36bc804"
 dependencies = [
  "blake2",
  "borsh",
@@ -2060,9 +2061,9 @@ dependencies = [
 
 [[package]]
 name = "near-fmt"
-version = "0.34.1"
+version = "0.34.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "84560d0ae50f85dbaca950bd9a8377061080f95ba04f095eb67a1d2e84a3b51c"
+checksum = "edb22e3081a4d0de5795cf0f44b1152ec70bb31a95d6f463e723d9a81e9aac50"
 dependencies = [
  "near-primitives-core",
 ]
@@ -2099,9 +2100,9 @@ dependencies = [
 
 [[package]]
 name = "near-jsonrpc-primitives"
-version = "0.34.1"
+version = "0.34.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9b92d4f7a02aac0f00a7dc06667a9218e481ce80cbdb88be72d2669570807cf6"
+checksum = "eb7e6277cb8b2808a424c775de2eec683c04dcef5909d8a6cc4fbe8b5ee1dc43"
 dependencies = [
  "arbitrary",
  "near-chain-configs",
@@ -2117,9 +2118,9 @@ dependencies = [
 
 [[package]]
 name = "near-parameters"
-version = "0.34.1"
+version = "0.34.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "99bf2f0e9bfaa5b7410feac9470d27661a9fcbedcda961f11efbb04d0b5ec068"
+checksum = "10010e4e9badbb7608bf7feddf99027a954dcdfc64439f0f86a014c6277bfe53"
 dependencies = [
  "borsh",
  "enum-map",
@@ -2159,9 +2160,9 @@ dependencies = [
 
 [[package]]
 name = "near-primitives"
-version = "0.34.1"
+version = "0.34.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "08bdbe402627f4df3471390c6c44e66a56999a533eedadc324f6f54301667f8b"
+checksum = "3ffba1d49adc30ec0808d1aef3cc2a3395ade82a99216ef3cf387355c7b46658"
 dependencies = [
  "arbitrary",
  "base64 0.21.7",
@@ -2201,9 +2202,9 @@ dependencies = [
 
 [[package]]
 name = "near-primitives-core"
-version = "0.34.1"
+version = "0.34.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "132139fea1933ee3d5050abb092ab7af022c374df26ad181dd0e22302c74ddc0"
+checksum = "becb94101c8b7883231a027a0aec85e4f92b4366a17a665d9b68a852937d2bdd"
 dependencies = [
  "arbitrary",
  "base64 0.21.7",
@@ -2225,9 +2226,9 @@ dependencies = [
 
 [[package]]
 name = "near-sandbox"
-version = "0.3.2"
+version = "0.3.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2da726a5ef6df27cc804719a5a011fe49560596520ec22f12916b2f31c597d5b"
+checksum = "478a37f1c52dae2c8ac63a92ab4258401b79d99a881efd243cacd08b748ea7cf"
 dependencies = [
  "binary-install",
  "fs4",
@@ -2245,15 +2246,15 @@ dependencies = [
 
 [[package]]
 name = "near-schema-checker-core"
-version = "0.34.1"
+version = "0.34.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d3652cdf9b13de96d9b23b4ad954652aaa84bdeec5168d8b8c7c229c7d36f41a"
+checksum = "6f5700f8f5b38507eb01769c3f761a481aa0ff5ab18fd98d8c3c9d14f231e04b"
 
 [[package]]
 name = "near-schema-checker-lib"
-version = "0.34.1"
+version = "0.34.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8de81b55e49e8a0bf679f87aee27c6521d5b9a4a73474f753b2a127529ecf78a"
+checksum = "dd90923ed5ef5e6ed2c18e2effeaa4bf53398f6dfd25493fc1494d6e44df6b57"
 dependencies = [
  "near-schema-checker-core",
  "near-schema-checker-macro",
@@ -2261,9 +2262,9 @@ dependencies = [
 
 [[package]]
 name = "near-schema-checker-macro"
-version = "0.34.1"
+version = "0.34.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "79d63d022e686c6b92426c98f011908037730d557e815d6c813d5686030a6b53"
+checksum = "42ff9a4b5c2a27926b14465dd7cc06a9f801f8892de9ee8576b421c7d00f6320"
 
 [[package]]
 name = "near-sdk"
@@ -2311,9 +2312,9 @@ dependencies = [
 
 [[package]]
 name = "near-stdx"
-version = "0.34.1"
+version = "0.34.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a501d5074c5c341725fe801ed191f45ef97e0a4d54d6ef5c3e87363930d4d0b1"
+checksum = "b28b47d44e10c45054bcc023dfda154f13f5b8e980ad25ee94cd32207d463b78"
 
 [[package]]
 name = "near-sys"
@@ -2323,9 +2324,9 @@ checksum = "b99e9ce0020190ea152f70d1849e54fc8fc123738e7447800ad818c78f5167cc"
 
 [[package]]
 name = "near-time"
-version = "0.34.1"
+version = "0.34.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5458c180f75aba82c50aca6411d46ca085a6e8535895fa1aa84bd15f560cbd43"
+checksum = "5974d008afcd280363411fc1bde76b2c3d36d6c707694bd93d68ceb2a25f2dfe"
 dependencies = [
  "parking_lot",
  "serde",
@@ -2344,9 +2345,9 @@ dependencies = [
 
 [[package]]
 name = "near-vm-runner"
-version = "0.34.1"
+version = "0.34.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9adf070bf3d12c6ab1799b382de13f23d5190963b293d2068d4842012430fb3a"
+checksum = "a806f05174cc99052ad974d054aa4416dc4c6b09be728ab0a02b07539643f8c9"
 dependencies = [
  "blst",
  "borsh",
@@ -3314,9 +3315,9 @@ dependencies = [
 
 [[package]]
 name = "schemars"
-version = "1.1.0"
+version = "1.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9558e172d4e8533736ba97870c4b2cd63f84b382a3d6eb063da41b91cce17289"
+checksum = "82d20c4491bc164fa2f6c5d44565947a52ad80b9505d8e36f8d54c27c739fcd0"
 dependencies = [
  "dyn-clone",
  "ref-cast",
@@ -3472,7 +3473,7 @@ dependencies = [
  "indexmap 1.9.3",
  "indexmap 2.11.0",
  "schemars 0.9.0",
- "schemars 1.1.0",
+ "schemars 1.0.4",
  "serde",
  "serde_derive",
  "serde_json",
@@ -3560,9 +3561,9 @@ checksum = "77549399552de45a898a580c1b41d445bf730df867cc44e6c0233bbc4b8329de"
 
 [[package]]
 name = "simd-adler32"
-version = "0.3.7"
+version = "0.3.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d66dc143e6b11c1eddc06d5c423cfc97062865baf299914ab64caa38182078fe"
+checksum = "e320a6c5ad31d271ad523dcf3ad13e2767ad8b1cb8f047f75a8aeaf8da139da2"
 
 [[package]]
 name = "siphasher"

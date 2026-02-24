@@ -11,7 +11,7 @@ mod tests {
     use omni_types::{
         locker_args::{FinTransferArgs, StorageDepositAction},
         prover_result::{InitTransferMessage, ProverResult},
-        Fee, OmniAddress,
+        ChainKind, Fee, OmniAddress,
     };
     use rand::RngCore;
     use rstest::rstest;
@@ -19,8 +19,8 @@ mod tests {
     use crate::{
         environment::TestEnvBuilder,
         helpers::tests::{
-            account_n, build_artifacts, eth_eoa_address, eth_factory_address, eth_token_address,
-            relayer_account_id, BuildArtifacts, NEP141_DEPOSIT,
+            account_n, base_eoa_address, build_artifacts, eth_eoa_address, eth_factory_address,
+            eth_token_address, relayer_account_id, BuildArtifacts, NEP141_DEPOSIT,
         },
     };
 
@@ -287,6 +287,100 @@ mod tests {
             .await?
             .json()?;
         assert_eq!(expected_locker_balance, locker_balance.0);
+
+        Ok(())
+    }
+
+    async fn get_locked_tokens(
+        locker_contract: &Contract,
+        chain_kind: ChainKind,
+        token_id: &AccountId,
+    ) -> anyhow::Result<U128> {
+        let locked_tokens: Option<U128> = locker_contract
+            .view("get_locked_tokens")
+            .args_json(json!({
+                "chain_kind": chain_kind,
+                "token_id": token_id,
+            }))
+            .await?
+            .json()?;
+
+        Ok(locked_tokens.unwrap_or(U128(0)))
+    }
+
+    #[rstest]
+    #[tokio::test]
+    async fn test_fin_transfer_other_chain_locks_once_for_deployed_token(
+        build_artifacts: &BuildArtifacts,
+    ) -> anyhow::Result<()> {
+        let TestSetup {
+            token_contract,
+            locker_contract,
+            relayer_account,
+            required_balance_for_fin_transfer,
+            ..
+        } = setup_contracts(false, true, build_artifacts).await?;
+
+        let required_balance_for_account: NearToken = locker_contract
+            .view("required_balance_for_account")
+            .await?
+            .json()?;
+        let required_balance_for_init_transfer: NearToken = locker_contract
+            .view("required_balance_for_init_transfer")
+            .args_json(json!({
+                "msg": None::<String>,
+            }))
+            .await?
+            .json()?;
+        relayer_account
+            .call(locker_contract.id(), "storage_deposit")
+            .args_json(json!({
+                "account_id": relayer_account.id(),
+            }))
+            .deposit(
+                required_balance_for_account.saturating_add(required_balance_for_init_transfer),
+            )
+            .max_gas()
+            .transact()
+            .await?
+            .into_result()?;
+
+        let recipient = base_eoa_address();
+        let destination_chain = recipient.get_chain();
+        let amount = 1_000;
+
+        let locked_before =
+            get_locked_tokens(&locker_contract, destination_chain, token_contract.id()).await?;
+
+        relayer_account
+            .call(locker_contract.id(), "fin_transfer")
+            .args_borsh(FinTransferArgs {
+                chain_kind: ChainKind::Eth,
+                storage_deposit_actions: Vec::new(),
+                prover_args: borsh::to_vec(&ProverResult::InitTransfer(InitTransferMessage {
+                    origin_nonce: 1,
+                    token: eth_token_address(),
+                    recipient: recipient.clone(),
+                    amount: U128(amount),
+                    fee: Fee {
+                        fee: U128(0),
+                        native_fee: U128(0),
+                    },
+                    sender: eth_eoa_address(),
+                    msg: String::new(),
+                    emitter_address: eth_factory_address(),
+                }))?,
+            })
+            .deposit(required_balance_for_fin_transfer)
+            .max_gas()
+            .transact()
+            .await?
+            .into_result()?;
+
+        let locked_after =
+            get_locked_tokens(&locker_contract, destination_chain, token_contract.id()).await?;
+
+        assert_eq!(locked_after.0, locked_before.0 + amount);
 
         Ok(())
     }

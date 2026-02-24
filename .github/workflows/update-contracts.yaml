@@ -49,7 +49,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: solana-anchor-types
-          path: solana/bridge_token_factory/target/idl/bridge_token_factory.json
+          path: solana/target/idl/bridge_token_factory.json
           if-no-files-found: error
  
       - name: Archive built WASM files
@@ -60,7 +60,7 @@ jobs:
           ZIP_NAME="${SAFE_TAG}.zip"
           mkdir -p artifacts
           find ./near/target/near -name "*.wasm" -exec cp {} artifacts/ \;
-          cp ./solana/bridge_token_factory/target/verifiable/bridge_token_factory.so artifacts
+          cp ./solana/target/verifiable/bridge_token_factory.so artifacts
           zip -j "$ZIP_NAME" artifacts/*
         shell: bash
 

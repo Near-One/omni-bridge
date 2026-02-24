@@ -3,9 +3,21 @@ url = "redis://127.0.0.1/"
 sleep_time_after_events_process_secs = 1
 query_retry_attempts = 10
 query_retry_sleep_secs = 1
+query_timeout_secs = 5
 fee_retry_base_secs = 1.2
 fee_retry_max_sleep_secs = 3600 # 60 * 60
 keep_transfers_for_secs = 604800 # 60 * 60 * 24 * 7
+
+[nats]
+url = "nats://nats-testnet.nats-testnet.svc.cluster.local:4222"
+relayer_subject = "relayer.tasks"
+
+[nats.omni_consumer]
+name = "omni-relayer"
+stream = "OMNI_EVENTS"
+subject = "omni-events.>"
+max_deliver = 4
+backoff_secs = [5, 30, 120]
 
 [bridge_indexer]
 # Used to check if provided fee is sufficient to complete the transfer

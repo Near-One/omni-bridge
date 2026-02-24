@@ -1,14 +1,18 @@
+use core::keccak::compute_keccak_byte_array;
 use omni_bridge::omni_bridge::{
     FinTransfer, IOmniBridgeDispatcher, IOmniBridgeDispatcherTrait, InitTransfer, LogMetadata,
     MetadataPayload, OmniEvents, Signature, TransferMessagePayload,
 };
+use omni_bridge::utils::{borsh, reverse_u256_bytes};
 use openzeppelin::token::erc20::{ERC20ABIDispatcher, ERC20ABIDispatcherTrait};
 use openzeppelin::upgrades::interface::{IUpgradeableDispatcher, IUpgradeableDispatcherTrait};
+use snforge_std::signature::secp256k1_curve::{Secp256k1CurveKeyPairImpl, Secp256k1CurveSignerImpl};
 use snforge_std::{
     ContractClass, ContractClassTrait, DeclareResultTrait, EventSpyAssertionsTrait, declare,
     spy_events, start_cheat_caller_address, stop_cheat_caller_address,
 };
-use starknet::{ClassHash, ContractAddress, SyscallResultTrait};
+use starknet::eth_signature::public_key_point_to_eth_address;
+use starknet::{ClassHash, ContractAddress, EthAddress, SyscallResultTrait};
 
 // BridgeToken interface for mint/burn
 #[starknet::interface]
@@ -17,25 +21,36 @@ trait IBridgeToken<TContractState> {
     fn burn(ref self: TContractState, account: ContractAddress, amount: u256);
 }
 
+// Test secret key (arbitrary non-zero u256 < curve order)
+const TEST_SECRET_KEY: u256 = 0xDEADBEEF;
+
 fn declare_bridge_token() -> ContractClass {
     let declare_result = declare("BridgeToken").unwrap_syscall();
     *declare_result.contract_class()
 }
 
+fn get_test_eth_address() -> felt252 {
+    let key_pair = Secp256k1CurveKeyPairImpl::from_secret_key(TEST_SECRET_KEY);
+    let eth_addr: EthAddress = public_key_point_to_eth_address(key_pair.public_key);
+    let eth_addr_felt: felt252 = eth_addr.into();
+    eth_addr_felt
+}
+
 fn deploy_bridge_contract() -> (IOmniBridgeDispatcher, ContractAddress) {
     let token_class_hash = declare_bridge_token().class_hash;
     let owner: ContractAddress = 0x123.try_into().unwrap();
-    // Starknet ETH token address
     let native_token: ContractAddress =
         0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7
         .try_into()
         .unwrap();
 
+    let derived_address = get_test_eth_address();
+
     let contract = declare("OmniBridge").unwrap_syscall().contract_class();
     let (contract_address, _) = contract
         .deploy(
             @array![
-                0x22EB4d37677eD931d9dE2218cecE1A832a147490, // omni_bridge_derived_address
+                derived_address, // omni_bridge_derived_address (from test key pair)
                 0x9, // omni_bridge_chain_id
                 token_class_hash.into(), // bridge_token_class_hash
                 owner.into(), // owner
@@ -46,26 +61,80 @@ fn deploy_bridge_contract() -> (IOmniBridgeDispatcher, ContractAddress) {
     (IOmniBridgeDispatcher { contract_address }, contract_address)
 }
 
+// Sign a message hash using the test key pair (secp256k1 ECDSA)
+// Determines the correct v (27 or 28) by verifying against the expected address
+fn sign_message(message_hash: u256) -> Signature {
+    let key_pair = Secp256k1CurveKeyPairImpl::from_secret_key(TEST_SECRET_KEY);
+    let (r, s) = key_pair.sign(message_hash).unwrap();
+    let eth_addr: EthAddress = public_key_point_to_eth_address(key_pair.public_key);
+
+    // Try v=27 (y_parity=false), if invalid try v=28 (y_parity=true)
+    let sig_27 = starknet::secp256_trait::signature_from_vrs(27, r, s);
+    if starknet::eth_signature::is_eth_signature_valid(message_hash, sig_27, eth_addr).is_ok() {
+        Signature { r, s, v: 27 }
+    } else {
+        Signature { r, s, v: 28 }
+    }
+}
+
+// Build borsh-encoded message for deploy_token (MetadataPayload)
+fn build_deploy_token_message(payload: @MetadataPayload) -> u256 {
+    let mut borsh_bytes: ByteArray = "";
+    borsh_bytes.append_byte(1); // PayloadType::MetadataPayload
+    borsh_bytes.append(@borsh::encode_byte_array(payload.token));
+    borsh_bytes.append(@borsh::encode_byte_array(payload.name));
+    borsh_bytes.append(@borsh::encode_byte_array(payload.symbol));
+    borsh_bytes.append_byte(*payload.decimals);
+
+    let hash_le = compute_keccak_byte_array(@borsh_bytes);
+    reverse_u256_bytes(hash_le)
+}
+
+// Build borsh-encoded message for fin_transfer (TransferMessagePayload)
+fn build_fin_transfer_message(payload: @TransferMessagePayload, chain_id: u8) -> u256 {
+    let mut borsh_bytes: ByteArray = "";
+    borsh_bytes.append_byte(0); // PayloadType::TransferMessage
+    borsh_bytes.append(@borsh::encode_u64(*payload.destination_nonce));
+    borsh_bytes.append_byte(*payload.origin_chain);
+    borsh_bytes.append(@borsh::encode_u64(*payload.origin_nonce));
+    borsh_bytes.append_byte(chain_id);
+    borsh_bytes.append(@borsh::encode_address(*payload.token_address));
+    borsh_bytes.append(@borsh::encode_u128(*payload.amount));
+    borsh_bytes.append_byte(chain_id);
+    borsh_bytes.append(@borsh::encode_address(*payload.recipient));
+    match payload.fee_recipient {
+        Option::None => { borsh_bytes.append_byte(0); },
+        Option::Some(fee_recipient) => {
+            borsh_bytes.append_byte(1);
+            borsh_bytes.append(@borsh::encode_byte_array(fee_recipient));
+        },
+    }
+    match payload.message {
+        Option::None => {},
+        Option::Some(message) => { borsh_bytes.append(@borsh::encode_byte_array(message)); },
+    }
+
+    let hash_le = compute_keccak_byte_array(@borsh_bytes);
+    reverse_u256_bytes(hash_le)
+}
+
+fn sign_deploy_token(payload: @MetadataPayload) -> Signature {
+    let message_hash = build_deploy_token_message(payload);
+    sign_message(message_hash)
+}
+
 fn deploy_test_token(
     dispatcher: IOmniBridgeDispatcher, _bridge_address: ContractAddress,
 ) -> ContractAddress {
-    // Use the same valid payload and signature as test_deploy_token
     let payload = MetadataPayload {
         token: "omni-demo.cfi-pre.near", name: "CFI Token", symbol: "CFI", decimals: 18,
     };
-    let signature = Signature {
-        r: 0xD4E6B9E5FBB3750D6C738D84EDECC0559415914591AB506AA801A0843251FE0B,
-        s: 0x07D29F740974576B2AA90BA836A6B9CA8E7CAB3B8894D42669317CE78822CCB5,
-        v: 28,
-    };
+
+    let signature = sign_deploy_token(@payload);
 
     dispatcher.deploy_token(signature, payload);
 
-    // The deterministic address calculation changed due to storage layout modifications
-    // For now, use a placeholder that will be calculated at deployment time
-    // This address is deterministic based on deploy_syscall with salt=0
-    // Will be updated after running test_deploy_token to get actual address
-    1906120681599811304664530312850632960342400776779045792033969472857183039830.try_into().unwrap()
+    dispatcher.get_token_address("omni-demo.cfi-pre.near")
 }
 
 #[test]
@@ -118,21 +187,13 @@ fn test_deploy_token() {
     let payload = MetadataPayload {
         token: "omni-demo.cfi-pre.near", name: "CFI Token", symbol: "CFI", decimals: 18,
     };
-
-    let signature = Signature {
-        r: 0xD4E6B9E5FBB3750D6C738D84EDECC0559415914591AB506AA801A0843251FE0B,
-        s: 0x07D29F740974576B2AA90BA836A6B9CA8E7CAB3B8894D42669317CE78822CCB5,
-        v: 28,
-    };
+    let signature = sign_deploy_token(@payload);
 
     // Verify deploy_token succeeds with valid signature
     dispatcher.deploy_token(signature, payload);
-    // Note: The deployed token address is deterministic but depends on bridge implementation
-// This test verifies the signature validation and deployment succeeds
 }
 
 #[test]
-#[ignore] // Requires correct token deployment address - run separately
 fn test_init_transfer_with_bridge_token() {
     let (dispatcher, bridge_address) = deploy_bridge_contract();
     let mut spy = spy_events();
@@ -182,7 +243,6 @@ fn test_init_transfer_fee_exceeds_amount() {
 }
 
 #[test]
-#[ignore] // Requires correct token deployment address - run separately
 fn test_init_transfer_nonce_increments() {
     let (dispatcher, bridge_address) = deploy_bridge_contract();
     let mut spy = spy_events();
@@ -249,38 +309,23 @@ fn test_init_transfer_nonce_increments() {
         );
 }
 
-// TODO: Compute valid signature for fin_transfer test
-// The signature must be for the borsh-encoded TransferMessagePayload with:
-// - PayloadType::TransferMessage (0)
-// - destination_nonce, origin_chain, origin_nonce
-// - chain_id (9), token_address (32 bytes LE), amount
-// - chain_id (9), recipient (32 bytes LE), fee_recipient (optional)
-// Signed with the private key for address 0x22EB4d37677eD931d9dE2218cecE1A832a147490
-
 #[test]
-#[ignore] // Remove #[ignore] after computing valid signature
 fn test_fin_transfer_with_bridge_token() {
     let (dispatcher, bridge_address) = deploy_bridge_contract();
     let mut spy = spy_events();
 
     // Deploy a bridge token first
-    let payload = MetadataPayload {
+    let deploy_payload = MetadataPayload {
         token: "test.token.near", name: "Test Token", symbol: "TT", decimals: 18,
     };
-    let deploy_signature = Signature {
-        r: 0xD4E6B9E5FBB3750D6C738D84EDECC0559415914591AB506AA801A0843251FE0B,
-        s: 0x07D29F740974576B2AA90BA836A6B9CA8E7CAB3B8894D42669317CE78822CCB5,
-        v: 28,
-    };
-    dispatcher.deploy_token(deploy_signature, payload);
+    let deploy_sig = sign_deploy_token(@deploy_payload);
+    dispatcher.deploy_token(deploy_sig, deploy_payload);
 
-    let token_address: ContractAddress =
-        2626693339582466100930242932923001456720103221254075542339713793819993762631
-        .try_into()
-        .unwrap();
+    // Get the deployed token address
+    let token_address = dispatcher.get_token_address("test.token.near");
     let recipient: ContractAddress = 0x999.try_into().unwrap();
 
-    // TODO: Replace with actual computed signature
+    // Build transfer payload
     let transfer_payload = TransferMessagePayload {
         destination_nonce: 1,
         origin_chain: 2,
@@ -292,8 +337,9 @@ fn test_fin_transfer_with_bridge_token() {
         message: Option::None,
     };
 
-    // TODO: Replace these with actual signature values
-    let fin_signature = Signature { r: 0x0, s: 0x0, v: 28 };
+    // Sign the transfer message (borsh encode + keccak + ECDSA)
+    let message_hash = build_fin_transfer_message(@transfer_payload, 0x9);
+    let fin_signature = sign_message(message_hash);
 
     dispatcher.fin_transfer(fin_signature, transfer_payload);
 
@@ -310,6 +356,7 @@ fn test_fin_transfer_with_bridge_token() {
             amount: 1000,
             recipient,
             fee_recipient: Option::None,
+            message: Option::None,
         },
     );
     spy.assert_emitted(@array![(bridge_address, expected_event)]);
@@ -346,7 +393,6 @@ fn test_omni_bridge_upgrade_non_owner_fails() {
 }
 
 #[test]
-#[ignore] // Requires correct token deployment address due to deterministic address calculation
 fn test_upgrade_deployed_token() {
     let (bridge, bridge_address) = deploy_bridge_contract();
     let token_address = deploy_test_token(bridge, bridge_address);

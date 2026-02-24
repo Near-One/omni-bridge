@@ -24,6 +24,10 @@ ETH_PRIVATE_KEY=
 BASE_PRIVATE_KEY=
 ARB_PRIVATE_KEY=
 BNB_PRIVATE_KEY=
+POL_PRIVATE_KEY=
 
 # Note that solana private key must be encoded to bs58 string in order to use it
 SOLANA_PRIVATE_KEY=
+
+BRIDGE_NATS_USERNAME=
+BRIDGE_NATS_PASSWORD=
