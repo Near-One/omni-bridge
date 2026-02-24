@@ -240,9 +240,23 @@ mod tests {
                 >= NearToken::from_near(1000).as_yoctonear()
         );
 
-        // DAO rejects (bridge_contract is the deployer which is super admin / DAO)
+        // Create a separate DAO account and grant it the DAO role
+        let dao_account = env.create_funded_account("dao-account", 10).await?;
         env.bridge_contract
-            .call("reject_relayer_application")
+            .call("acl_grant_role")
+            .args_json(json!({
+                "role": "DAO",
+                "account_id": dao_account.id(),
+            }))
+            .max_gas()
+            .transact()
+            .await?
+            .into_result()?;
+
+        // DAO rejects
+        let dao_balance_before_reject = dao_account.view_account().await?.balance;
+        dao_account
+            .call(env.bridge_contract.id(), "reject_relayer_application")
             .args_json(json!({"account_id": applicant.id()}))
             .max_gas()
             .transact()
@@ -258,9 +272,13 @@ mod tests {
             .json()?;
         assert!(application.is_none());
 
-        // Verify NEAR was returned (balance should have recovered)
+        // Verify stake was NOT returned to applicant (goes to DAO/relayer manager)
         let balance_after_reject = applicant.view_account().await?.balance;
-        assert!(balance_after_reject.as_yoctonear() > balance_after_apply.as_yoctonear());
+        assert!(balance_after_reject.as_yoctonear() <= balance_after_apply.as_yoctonear());
+
+        // Verify stake was transferred to DAO account
+        let dao_balance_after_reject = dao_account.view_account().await?.balance;
+        assert!(dao_balance_after_reject.as_yoctonear() > dao_balance_before_reject.as_yoctonear());
 
         Ok(())
     }

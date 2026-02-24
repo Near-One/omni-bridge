@@ -110,7 +110,7 @@ impl Contract {
             .to_log_string(),
         );
 
-        Promise::new(account_id).transfer(state.stake)
+        Promise::new(env::predecessor_account_id()).transfer(state.stake)
     }
 
     #[access_control_any(roles(Role::DAO))]
