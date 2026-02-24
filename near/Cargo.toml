@@ -10,6 +10,7 @@ members = [
     "token-deployer",
     "omni-prover/wormhole-omni-prover-proxy",
     "omni-prover/evm-prover",
+    "omni-prover/mpc-omni-prover",
     "omni-token",
     "omni-types",
     "omni-tests",
@@ -51,4 +52,5 @@ ethereum-types = { version = "0.15.1", default-features = false, features = ["rl
 rlp = "0.6"
 sha3 = "0.10.0"
 sha2 = "0.10.0"
+k256 = { version = "0.13", default-features = false, features = ["ecdsa"] }
 rstest = "0.26.1"

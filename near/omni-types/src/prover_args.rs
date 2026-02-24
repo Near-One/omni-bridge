@@ -16,6 +16,17 @@ pub struct WormholeVerifyProofArgs {
     pub vaa: String,
 }
 
+#[near(serializers=[borsh])]
+#[derive(Debug, Clone)]
+pub struct MpcVerifyProofArgs {
+    pub proof_kind: ProofKind,
+    pub sign_payload: Vec<u8>,
+    pub payload_hash: [u8; 32],
+    pub signature_big_r: String,
+    pub signature_s: String,
+    pub signature_recovery_id: u8,
+}
+
 #[near(serializers=[borsh, json])]
 #[derive(Default, Debug, Clone)]
 pub struct EvmProof {
