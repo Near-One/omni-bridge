@@ -2062,11 +2062,11 @@ dependencies = [
  "alloy",
  "borsh",
  "hex",
- "k256",
  "near-mpc-sdk",
  "near-sdk",
  "omni-types",
  "omni-utils",
+ "serde_json",
 ]
 
 [[package]]

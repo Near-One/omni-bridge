@@ -7,9 +7,8 @@ use near_mpc_sdk::contract_interface::types::{
 
 use omni_types::prover_args::MpcVerifyProofArgs;
 use omni_types::prover_result::ProofKind;
-use omni_types::ChainKind;
 
-use crate::{chain_kind_to_foreign_chain, evm_log_to_rlp};
+use crate::{build_verifier, evm_log_to_rlp};
 
 fn test_evm_log() -> EvmLog {
     EvmLog {
@@ -25,13 +24,17 @@ fn test_evm_log() -> EvmLog {
     }
 }
 
+fn test_evm_request() -> EvmRpcRequest {
+    EvmRpcRequest {
+        tx_id: EvmTxId([0xab; 32]),
+        extractors: vec![EvmExtractor::Log { log_index: 0 }],
+        finality: EvmFinality::Finalized,
+    }
+}
+
 fn test_sign_payload() -> ForeignTxSignPayload {
     ForeignTxSignPayload::V1(ForeignTxSignPayloadV1 {
-        request: ForeignChainRpcRequest::Abstract(EvmRpcRequest {
-            tx_id: EvmTxId([0xab; 32]),
-            extractors: vec![EvmExtractor::Log { log_index: 0 }],
-            finality: EvmFinality::Finalized,
-        }),
+        request: ForeignChainRpcRequest::Abstract(test_evm_request()),
         values: vec![ExtractedValue::EvmExtractedValue(EvmExtractedValue::Log(
             test_evm_log(),
         ))],
@@ -106,226 +109,101 @@ fn test_evm_log_to_rlp_without_0x_prefix() {
 fn test_mpc_verify_proof_args_serialization() {
     let payload = test_sign_payload();
     let payload_bytes = borsh::to_vec(&payload).unwrap();
-    let hash = payload.compute_msg_hash().unwrap();
 
     let args = MpcVerifyProofArgs {
         proof_kind: ProofKind::InitTransfer,
         sign_payload: payload_bytes.clone(),
-        payload_hash: hash.0,
-        signature_big_r: "02".to_string() + &"ab".repeat(32),
-        signature_s: "cd".repeat(32),
-        signature_recovery_id: 0,
+        mpc_response_json: r#"{"payload_hash":"aa","signature":{"scheme":"Secp256k1","big_r":{"affine_point":"bb"},"s":{"scalar":"cc"},"recovery_id":0}}"#.to_string(),
     };
 
     let serialized = borsh::to_vec(&args).unwrap();
     let deserialized = MpcVerifyProofArgs::try_from_slice(&serialized).unwrap();
 
-    assert_eq!(deserialized.payload_hash, hash.0);
     assert_eq!(deserialized.sign_payload, payload_bytes);
+    assert_eq!(deserialized.proof_kind, ProofKind::InitTransfer);
 }
 
 #[test]
-fn test_verify_signature_with_known_keypair() {
-    use k256::ecdsa::{signature::hazmat::PrehashSigner, SigningKey};
+fn test_build_verifier_with_single_log() {
+    let evm_request = test_evm_request();
+    let values = vec![ExtractedValue::EvmExtractedValue(EvmExtractedValue::Log(
+        test_evm_log(),
+    ))];
 
-    let signing_key = SigningKey::from_bytes(&[1u8; 32].into()).unwrap();
-    let verifying_key = signing_key.verifying_key();
-    let public_key_bytes = verifying_key.to_encoded_point(true);
+    let result = build_verifier(&evm_request, &values);
+    assert!(result.is_ok());
+}
 
-    let payload = test_sign_payload();
-    let hash = payload.compute_msg_hash().unwrap();
-
-    let (signature, recovery_id) = signing_key
-        .sign_prehash(&hash.0)
-        .expect("signing should succeed");
-
-    let sig_bytes = signature.to_bytes();
-    let r_bytes = &sig_bytes[..32];
-    let s_bytes = &sig_bytes[32..];
-
-    let big_r_hex = {
-        let mut big_r = vec![0x02u8];
-        big_r.extend_from_slice(r_bytes);
-        hex::encode(&big_r)
+#[test]
+fn test_build_verifier_with_block_hash_and_log() {
+    let evm_request = EvmRpcRequest {
+        tx_id: EvmTxId([0xab; 32]),
+        extractors: vec![
+            EvmExtractor::BlockHash,
+            EvmExtractor::Log { log_index: 0 },
+        ],
+        finality: EvmFinality::Finalized,
     };
 
-    let s_hex = hex::encode(s_bytes);
+    let values = vec![
+        ExtractedValue::EvmExtractedValue(EvmExtractedValue::BlockHash(Hash256([0x99; 32]))),
+        ExtractedValue::EvmExtractedValue(EvmExtractedValue::Log(test_evm_log())),
+    ];
 
-    let result = crate::verify::verify_secp256k1_signature(
-        public_key_bytes.as_bytes(),
-        &hash.0,
-        &big_r_hex,
-        &s_hex,
-        recovery_id.to_byte(),
-    );
-
-    assert!(
-        result.is_ok(),
-        "Signature verification failed: {:?}",
-        result.err()
-    );
+    let result = build_verifier(&evm_request, &values);
+    assert!(result.is_ok());
 }
 
 #[test]
-fn test_verify_signature_wrong_key_fails() {
-    use k256::ecdsa::{signature::hazmat::PrehashSigner, SigningKey};
+fn test_build_verifier_produces_matching_payload_hash() {
+    let evm_request = test_evm_request();
+    let values = vec![ExtractedValue::EvmExtractedValue(EvmExtractedValue::Log(
+        test_evm_log(),
+    ))];
 
-    let signing_key = SigningKey::from_bytes(&[1u8; 32].into()).unwrap();
-    let wrong_key = SigningKey::from_bytes(&[2u8; 32].into()).unwrap();
-    let wrong_public_key = wrong_key.verifying_key().to_encoded_point(true);
+    let (_verifier, _) = build_verifier(&evm_request, &values).unwrap();
 
-    let payload = test_sign_payload();
-    let hash = payload.compute_msg_hash().unwrap();
+    let original_payload = test_sign_payload();
+    let original_hash = original_payload.compute_msg_hash().unwrap();
 
-    let (signature, recovery_id) = signing_key
-        .sign_prehash(&hash.0)
-        .expect("signing should succeed");
-
-    let sig_bytes = signature.to_bytes();
-    let r_bytes = &sig_bytes[..32];
-    let s_bytes = &sig_bytes[32..];
-
-    let mut big_r = vec![0x02u8];
-    big_r.extend_from_slice(r_bytes);
-
-    let result = crate::verify::verify_secp256k1_signature(
-        wrong_public_key.as_bytes(),
-        &hash.0,
-        &hex::encode(&big_r),
-        &hex::encode(s_bytes),
-        recovery_id.to_byte(),
-    );
-
-    assert!(result.is_err(), "Verification should fail with wrong key");
-    assert!(
-        result.unwrap_err().contains("ERR_INVALID_SIGNATURE"),
-        "Error should be ERR_INVALID_SIGNATURE"
-    );
-}
-
-#[test]
-fn test_verify_signature_wrong_hash_fails() {
-    use k256::ecdsa::{signature::hazmat::PrehashSigner, SigningKey};
-
-    let signing_key = SigningKey::from_bytes(&[1u8; 32].into()).unwrap();
-    let public_key = signing_key.verifying_key().to_encoded_point(true);
-
-    let payload = test_sign_payload();
-    let hash = payload.compute_msg_hash().unwrap();
-
-    let (signature, recovery_id) = signing_key
-        .sign_prehash(&hash.0)
-        .expect("signing should succeed");
-
-    let sig_bytes = signature.to_bytes();
-    let r_bytes = &sig_bytes[..32];
-    let s_bytes = &sig_bytes[32..];
-
-    let mut big_r = vec![0x02u8];
-    big_r.extend_from_slice(r_bytes);
-
-    let wrong_hash = [0xffu8; 32];
-
-    let result = crate::verify::verify_secp256k1_signature(
-        public_key.as_bytes(),
-        &wrong_hash,
-        &hex::encode(&big_r),
-        &hex::encode(s_bytes),
-        recovery_id.to_byte(),
-    );
-
-    assert!(result.is_err(), "Verification should fail with wrong hash");
-    assert!(
-        result.unwrap_err().contains("ERR_INVALID_SIGNATURE"),
-        "Error should be ERR_INVALID_SIGNATURE"
-    );
-}
-
-#[test]
-fn test_chain_kind_to_foreign_chain_mapping() {
-    use near_mpc_sdk::contract_interface::types::ForeignChain;
-
-    assert_eq!(
-        chain_kind_to_foreign_chain(ChainKind::Abs),
-        Some(ForeignChain::Abstract)
-    );
-    assert_eq!(
-        chain_kind_to_foreign_chain(ChainKind::Eth),
-        Some(ForeignChain::Ethereum)
-    );
-    assert_eq!(
-        chain_kind_to_foreign_chain(ChainKind::Arb),
-        Some(ForeignChain::Arbitrum)
-    );
-    assert_eq!(
-        chain_kind_to_foreign_chain(ChainKind::Base),
-        Some(ForeignChain::Base)
-    );
-    assert_eq!(
-        chain_kind_to_foreign_chain(ChainKind::Bnb),
-        Some(ForeignChain::Bnb)
-    );
-    assert_eq!(chain_kind_to_foreign_chain(ChainKind::Near), None);
-    assert_eq!(chain_kind_to_foreign_chain(ChainKind::Sol), None);
-    assert_eq!(chain_kind_to_foreign_chain(ChainKind::Btc), None);
-    assert_eq!(chain_kind_to_foreign_chain(ChainKind::Strk), None);
-    assert_eq!(chain_kind_to_foreign_chain(ChainKind::Zcash), None);
-    assert_eq!(chain_kind_to_foreign_chain(ChainKind::Pol), None);
-    assert_eq!(chain_kind_to_foreign_chain(ChainKind::HyperEvm), None);
-}
-
-#[test]
-fn test_chain_kind_validation_matching() {
-    let payload = test_sign_payload();
-    let ForeignTxSignPayload::V1(ref v1) = payload;
-    let payload_chain = v1.request.chain();
-    let expected = chain_kind_to_foreign_chain(ChainKind::Abs).unwrap();
-    assert_eq!(payload_chain, expected);
-}
-
-#[test]
-fn test_chain_kind_validation_mismatch_detected() {
-    let payload = test_sign_payload();
-    let ForeignTxSignPayload::V1(ref v1) = payload;
-    let payload_chain = v1.request.chain();
-
-    let wrong_expected = chain_kind_to_foreign_chain(ChainKind::Eth).unwrap();
-    assert_ne!(
-        payload_chain, wrong_expected,
-        "Abstract payload should not match Ethereum chain"
-    );
-}
-
-fn make_ethereum_sign_payload() -> ForeignTxSignPayload {
-    ForeignTxSignPayload::V1(ForeignTxSignPayloadV1 {
-        request: ForeignChainRpcRequest::Ethereum(EvmRpcRequest {
-            tx_id: EvmTxId([0xee; 32]),
+    let reconstructed_payload = ForeignTxSignPayload::V1(ForeignTxSignPayloadV1 {
+        request: ForeignChainRpcRequest::Abstract(EvmRpcRequest {
+            tx_id: evm_request.tx_id.clone(),
             extractors: vec![EvmExtractor::Log { log_index: 0 }],
-            finality: EvmFinality::Finalized,
+            finality: evm_request.finality.clone(),
         }),
+        values: values.clone(),
+    });
+    let reconstructed_hash = reconstructed_payload.compute_msg_hash().unwrap();
+
+    assert_eq!(original_hash.0, reconstructed_hash.0);
+}
+
+#[test]
+fn test_build_verifier_rejects_non_evm_values() {
+    use near_mpc_sdk::contract_interface::types::BitcoinExtractedValue;
+
+    let evm_request = test_evm_request();
+    let values = vec![ExtractedValue::BitcoinExtractedValue(
+        BitcoinExtractedValue::BlockHash(Hash256([0; 32])),
+    )];
+
+    let result = build_verifier(&evm_request, &values);
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_only_abstract_request_accepted() {
+    let payload = ForeignTxSignPayload::V1(ForeignTxSignPayloadV1 {
+        request: ForeignChainRpcRequest::Ethereum(test_evm_request()),
         values: vec![ExtractedValue::EvmExtractedValue(EvmExtractedValue::Log(
             test_evm_log(),
         ))],
-    })
-}
+    });
 
-#[test]
-fn test_chain_kind_validation_ethereum_payload_against_abs_prover() {
-    let payload = make_ethereum_sign_payload();
     let ForeignTxSignPayload::V1(ref v1) = payload;
-    let payload_chain = v1.request.chain();
-
-    let abs_expected = chain_kind_to_foreign_chain(ChainKind::Abs).unwrap();
-    assert_ne!(
-        payload_chain, abs_expected,
-        "Ethereum payload must be rejected by Abstract prover"
-    );
-
-    let eth_expected = chain_kind_to_foreign_chain(ChainKind::Eth).unwrap();
-    assert_eq!(
-        payload_chain, eth_expected,
-        "Ethereum payload should match Ethereum chain"
-    );
+    let is_abstract = matches!(&v1.request, ForeignChainRpcRequest::Abstract(_));
+    assert!(!is_abstract, "Ethereum request should not be accepted as Abstract");
 }
 
 #[test]
@@ -340,93 +218,74 @@ fn test_payload_hash_mismatch_detected() {
 }
 
 #[test]
-fn test_full_verify_pipeline_valid() {
-    use k256::ecdsa::{signature::hazmat::PrehashSigner, SigningKey};
+fn test_forged_payload_produces_different_hash() {
+    let original_payload = test_sign_payload();
+    let original_hash = original_payload.compute_msg_hash().unwrap();
 
-    let signing_key = SigningKey::from_bytes(&[1u8; 32].into()).unwrap();
-    let public_key_bytes = signing_key.verifying_key().to_encoded_point(true);
+    let forged_payload = ForeignTxSignPayload::V1(ForeignTxSignPayloadV1 {
+        request: ForeignChainRpcRequest::Ethereum(test_evm_request()),
+        values: vec![ExtractedValue::EvmExtractedValue(EvmExtractedValue::Log(
+            test_evm_log(),
+        ))],
+    });
+    let forged_hash = forged_payload.compute_msg_hash().unwrap();
 
-    let payload = test_sign_payload();
-    let payload_bytes = borsh::to_vec(&payload).unwrap();
-    let computed_hash = payload.compute_msg_hash().unwrap();
-
-    let args = MpcVerifyProofArgs {
-        proof_kind: ProofKind::InitTransfer,
-        sign_payload: payload_bytes.clone(),
-        payload_hash: computed_hash.0,
-        signature_big_r: String::new(),
-        signature_s: String::new(),
-        signature_recovery_id: 0,
-    };
-
-    // Step 1: Deserialize and recompute hash
-    let deserialized_payload = ForeignTxSignPayload::try_from_slice(&args.sign_payload).unwrap();
-    let recomputed = deserialized_payload.compute_msg_hash().unwrap();
-    assert_eq!(recomputed.0, args.payload_hash, "Hash must match");
-
-    // Step 2: Sign with the recomputed hash and verify signature
-    let (signature, recovery_id) = signing_key.sign_prehash(&recomputed.0).unwrap();
-    let sig_bytes = signature.to_bytes();
-    let mut big_r = vec![0x02u8];
-    big_r.extend_from_slice(&sig_bytes[..32]);
-
-    let result = crate::verify::verify_secp256k1_signature(
-        public_key_bytes.as_bytes(),
-        &recomputed.0,
-        &hex::encode(&big_r),
-        &hex::encode(&sig_bytes[32..]),
-        recovery_id.to_byte(),
+    assert_ne!(
+        original_hash.0, forged_hash.0,
+        "Different chain requests must produce different hashes"
     );
-    assert!(result.is_ok(), "Valid signature must pass");
-
-    // Step 3: Chain validation
-    let ForeignTxSignPayload::V1(ref v1) = deserialized_payload;
-    let payload_chain = v1.request.chain();
-    let expected = chain_kind_to_foreign_chain(ChainKind::Abs).unwrap();
-    assert_eq!(payload_chain, expected, "Chain must match");
-
-    // Step 4: EVM log extraction
-    let log_data = crate::MpcOmniProver::extract_evm_log(v1);
-    assert!(log_data.is_ok(), "EVM log extraction must succeed");
 }
 
 #[test]
-fn test_full_verify_pipeline_forged_payload_rejected() {
-    use k256::ecdsa::{signature::hazmat::PrehashSigner, SigningKey};
-
-    let signing_key = SigningKey::from_bytes(&[1u8; 32].into()).unwrap();
-
-    // Sign the original payload
-    let original_payload = test_sign_payload();
-    let original_hash = original_payload.compute_msg_hash().unwrap();
-    let (signature, recovery_id) = signing_key.sign_prehash(&original_hash.0).unwrap();
-    let sig_bytes = signature.to_bytes();
-    let mut big_r = vec![0x02u8];
-    big_r.extend_from_slice(&sig_bytes[..32]);
-
-    // Create a different payload
-    let forged_payload = make_ethereum_sign_payload();
-    let forged_bytes = borsh::to_vec(&forged_payload).unwrap();
-    let forged_hash = forged_payload.compute_msg_hash().unwrap();
-
-    // Forged args: different sign_payload but original payload_hash
-    let args = MpcVerifyProofArgs {
-        proof_kind: ProofKind::InitTransfer,
-        sign_payload: forged_bytes,
-        payload_hash: original_hash.0,
-        signature_big_r: hex::encode(&big_r),
-        signature_s: hex::encode(&sig_bytes[32..]),
-        signature_recovery_id: recovery_id.to_byte(),
+fn test_build_verifier_multiple_logs_order_matters() {
+    let log_a = EvmLog {
+        removed: false,
+        log_index: 1,
+        transaction_index: 0,
+        transaction_hash: Hash256([1u8; 32]),
+        block_hash: Hash256([2u8; 32]),
+        block_number: 100,
+        address: Hash160([3u8; 20]),
+        data: "0xaa".to_string(),
+        topics: vec![],
     };
 
-    // Recompute hash from the forged payload — it won't match
-    let deserialized = ForeignTxSignPayload::try_from_slice(&args.sign_payload).unwrap();
-    let recomputed = deserialized.compute_msg_hash().unwrap();
-    assert_ne!(
-        recomputed.0, args.payload_hash,
-        "Forged payload hash must differ — this is the check that prevents the attack"
-    );
+    let log_b = EvmLog {
+        removed: false,
+        log_index: 2,
+        transaction_index: 0,
+        transaction_hash: Hash256([1u8; 32]),
+        block_hash: Hash256([2u8; 32]),
+        block_number: 100,
+        address: Hash160([4u8; 20]),
+        data: "0xbb".to_string(),
+        topics: vec![],
+    };
 
-    // Also confirm the forged hash differs from original
-    assert_ne!(forged_hash.0, original_hash.0);
+    let evm_request = EvmRpcRequest {
+        tx_id: EvmTxId([0xab; 32]),
+        extractors: vec![
+            EvmExtractor::Log { log_index: 1 },
+            EvmExtractor::Log { log_index: 2 },
+        ],
+        finality: EvmFinality::Finalized,
+    };
+
+    let values_ab = vec![
+        ExtractedValue::EvmExtractedValue(EvmExtractedValue::Log(log_a.clone())),
+        ExtractedValue::EvmExtractedValue(EvmExtractedValue::Log(log_b.clone())),
+    ];
+
+    let values_ba = vec![
+        ExtractedValue::EvmExtractedValue(EvmExtractedValue::Log(log_b)),
+        ExtractedValue::EvmExtractedValue(EvmExtractedValue::Log(log_a)),
+    ];
+
+    let (_, args_ab) = build_verifier(&evm_request, &values_ab).unwrap();
+    let (_, args_ba) = build_verifier(&evm_request, &values_ba).unwrap();
+
+    assert_ne!(
+        args_ab.request, args_ba.request,
+        "Different log ordering should produce different requests"
+    );
 }

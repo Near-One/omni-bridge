@@ -1,9 +1,11 @@
 use borsh::BorshDeserialize;
-use near_sdk::{env, near, near_bindgen, require, PanicOnDefault};
+use near_sdk::{near, require, PanicOnDefault};
 
 use near_mpc_sdk::contract_interface::types::{
-    EvmExtractedValue, ExtractedValue, ForeignChain, ForeignTxSignPayload, ForeignTxSignPayloadV1,
+    DomainId, EvmExtractedValue, EvmRpcRequest, ExtractedValue, ForeignChainRpcRequest,
+    ForeignTxSignPayload, ForeignTxSignPayloadV1, PublicKey, VerifyForeignTransactionResponse,
 };
+use near_mpc_sdk::foreign_chain::ForeignChainRequestBuilder;
 
 use omni_types::errors::ProverError;
 use omni_types::evm::events::parse_evm_event;
@@ -12,31 +14,28 @@ use omni_types::prover_result::{ProofKind, ProverResult};
 use omni_types::ChainKind;
 use omni_utils::near_expect::NearExpect;
 
-mod verify;
-
 #[cfg(test)]
 mod tests;
 
 #[near(contract_state)]
 #[derive(PanicOnDefault)]
 pub struct MpcOmniProver {
-    pub mpc_public_key: String,
+    pub mpc_public_key: Vec<u8>,
     pub chain_kind: ChainKind,
 }
 
-#[near_bindgen]
+#[near]
 impl MpcOmniProver {
     #[init]
     #[private]
     #[must_use]
-    pub fn init(mpc_public_key: String, chain_kind: ChainKind) -> Self {
+    pub fn init(mpc_public_key: Vec<u8>, chain_kind: ChainKind) -> Self {
         require!(
-            chain_kind_to_foreign_chain(chain_kind).is_some(),
+            chain_kind.is_evm_chain(),
             ProverError::UnsupportedChain.as_ref()
         );
 
-        let pk_bytes = hex::decode(&mpc_public_key).near_expect(ProverError::InvalidPublicKey);
-        require!(pk_bytes.len() == 33, ProverError::InvalidPublicKey.as_ref());
+        PublicKey::try_from_slice(&mpc_public_key).near_expect(ProverError::InvalidPublicKey);
 
         Self {
             mpc_public_key,
@@ -45,14 +44,8 @@ impl MpcOmniProver {
     }
 
     #[private]
-    pub fn update_mpc_public_key(&mut self, mpc_public_key: String) {
-        let pk_bytes = hex::decode(&mpc_public_key).near_expect(ProverError::InvalidPublicKey);
-        require!(pk_bytes.len() == 33, ProverError::InvalidPublicKey.as_ref());
-
-        env::log_str(&format!(
-            "MPC public key updated from {} to {}",
-            self.mpc_public_key, mpc_public_key
-        ));
+    pub fn update_mpc_public_key(&mut self, mpc_public_key: Vec<u8>) {
+        PublicKey::try_from_slice(&mpc_public_key).near_expect(ProverError::InvalidPublicKey);
 
         self.mpc_public_key = mpc_public_key;
     }
@@ -69,37 +62,26 @@ impl MpcOmniProver {
         let sign_payload = ForeignTxSignPayload::try_from_slice(&args.sign_payload)
             .near_expect(ProverError::ParseArgs);
 
-        let computed_hash = sign_payload
-            .compute_msg_hash()
-            .near_expect(ProverError::InvalidPayloadHash);
+        let mpc_response: VerifyForeignTransactionResponse =
+            serde_json::from_str(&args.mpc_response_json).near_expect(ProverError::ParseArgs);
 
-        require!(
-            computed_hash.0 == args.payload_hash,
-            ProverError::InvalidPayloadHash.as_ref()
-        );
+        let public_key = PublicKey::try_from_slice(&self.mpc_public_key)
+            .near_expect(ProverError::InvalidPublicKey);
 
-        let mpc_pk_bytes =
-            hex::decode(&self.mpc_public_key).near_expect(ProverError::InvalidPublicKey);
+        let ForeignTxSignPayload::V1(ref payload_v1) = sign_payload;
 
-        verify::verify_secp256k1_signature(
-            &mpc_pk_bytes,
-            &computed_hash.0,
-            &args.signature_big_r,
-            &args.signature_s,
-            args.signature_recovery_id,
-        )?;
+        let evm_request = match &payload_v1.request {
+            ForeignChainRpcRequest::Abstract(req) => req,
+            _ => return Err(ProverError::ChainMismatch.to_string()),
+        };
 
-        let ForeignTxSignPayload::V1(payload_v1) = sign_payload;
+        let (verifier, _request_args) = build_verifier(evm_request, &payload_v1.values)?;
 
-        let payload_chain = payload_v1.request.chain();
-        let expected_chain =
-            chain_kind_to_foreign_chain(self.chain_kind).near_expect(ProverError::UnsupportedChain);
-        require!(
-            payload_chain == expected_chain,
-            ProverError::ChainMismatch.as_ref()
-        );
+        verifier
+            .verify_signature(&mpc_response, &public_key)
+            .near_expect(ProverError::InvalidSignature);
 
-        let log_entry_data = Self::extract_evm_log(&payload_v1)?;
+        let log_entry_data = Self::extract_evm_log(payload_v1)?;
 
         Self::parse_proof_result(args.proof_kind, self.chain_kind, log_entry_data)
     }
@@ -140,15 +122,36 @@ impl MpcOmniProver {
     }
 }
 
-fn chain_kind_to_foreign_chain(chain_kind: ChainKind) -> Option<ForeignChain> {
-    match chain_kind {
-        ChainKind::Eth => Some(ForeignChain::Ethereum),
-        ChainKind::Base => Some(ForeignChain::Base),
-        ChainKind::Arb => Some(ForeignChain::Arbitrum),
-        ChainKind::Bnb => Some(ForeignChain::Bnb),
-        ChainKind::Abs => Some(ForeignChain::Abstract),
-        _ => None,
+fn build_verifier(
+    evm_request: &EvmRpcRequest,
+    values: &[ExtractedValue],
+) -> Result<
+    (
+        near_mpc_sdk::foreign_chain::ForeignChainSignatureVerifier,
+        near_mpc_sdk::contract_interface::types::VerifyForeignTransactionRequestArgs,
+    ),
+    String,
+> {
+    let mut builder = ForeignChainRequestBuilder::new()
+        .with_abstract_tx_id(evm_request.tx_id.clone())
+        .with_finality(evm_request.finality.clone());
+
+    for value in values {
+        match value {
+            ExtractedValue::EvmExtractedValue(EvmExtractedValue::Log(log)) => {
+                builder = builder.with_expected_log(log.log_index, log.clone());
+            }
+            ExtractedValue::EvmExtractedValue(EvmExtractedValue::BlockHash(hash)) => {
+                builder = builder.with_expected_block_hash(hash.0);
+            }
+            _ => return Err(ProverError::InvalidProof.to_string()),
+        }
     }
+
+    Ok(builder
+        .with_derivation_path(String::new())
+        .with_domain_id(DomainId::from(0u64))
+        .build())
 }
 
 fn evm_log_to_rlp(
