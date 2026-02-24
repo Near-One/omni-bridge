@@ -128,9 +128,9 @@ pub enum Role {
 
 #[derive(Debug, Clone)]
 #[near(serializers = [borsh, json])]
-pub enum RelayerState {
-    Pending { stake: NearToken, activate_at: U64 },
-    Active { stake: NearToken },
+pub struct RelayerState {
+    pub stake: NearToken,
+    pub activate_at: U64,
 }
 
 #[derive(Debug, Clone)]

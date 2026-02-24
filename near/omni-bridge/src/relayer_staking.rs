@@ -8,7 +8,7 @@ use crate::{Contract, ContractExt, RelayerConfig, RelayerState, Role};
 
 #[near]
 impl Contract {
-    pub fn is_trusted_relayer(&mut self, account_id: &AccountId) -> bool {
+    pub fn is_trusted_relayer(&self, account_id: &AccountId) -> bool {
         if self.acl_has_any_role(
             vec![Role::DAO.into(), Role::UnrestrictedRelayer.into()],
             account_id.clone(),
@@ -16,19 +16,9 @@ impl Contract {
             return true;
         }
 
-        match self.relayers.get(account_id) {
-            Some(RelayerState::Active { .. }) => true,
-            Some(RelayerState::Pending { stake, activate_at }) => {
-                if env::block_timestamp() >= activate_at.0 {
-                    self.relayers
-                        .insert(account_id, &RelayerState::Active { stake });
-                    true
-                } else {
-                    false
-                }
-            }
-            None => false,
-        }
+        self.relayers
+            .get(account_id)
+            .is_some_and(|state| env::block_timestamp() >= state.activate_at.0)
     }
 
     #[payable]
@@ -55,7 +45,7 @@ impl Contract {
 
         self.relayers.insert(
             &account_id,
-            &RelayerState::Pending {
+            &RelayerState {
                 stake: stake_required,
                 activate_at: U64(
                     env::block_timestamp().saturating_add(self.relayer_config.waiting_period_ns.0)
@@ -71,13 +61,12 @@ impl Contract {
     pub fn resign_trusted_relayer(&mut self) -> Promise {
         let account_id = env::predecessor_account_id();
 
-        let (Some(RelayerState::Active { stake }) | Some(RelayerState::Pending { stake, .. })) =
-            self.relayers.remove(&account_id)
-        else {
-            env::panic_str(BridgeError::RelayerNotRegistered.to_string().as_str())
-        };
+        let state = self
+            .relayers
+            .remove(&account_id)
+            .near_expect(BridgeError::RelayerNotRegistered);
 
-        Promise::new(account_id).transfer(stake)
+        Promise::new(account_id).transfer(state.stake)
     }
 
     #[access_control_any(roles(Role::DAO, Role::RelayerManager))]
@@ -87,13 +76,14 @@ impl Contract {
             .get(&account_id)
             .near_expect(BridgeError::RelayerApplicationNotFound);
 
-        let RelayerState::Pending { stake, .. } = state else {
-            env::panic_str(BridgeError::RelayerAlreadyActive.to_string().as_ref())
-        };
+        require!(
+            env::block_timestamp() < state.activate_at.0,
+            BridgeError::RelayerAlreadyActive.as_ref()
+        );
 
         self.relayers.remove(&account_id);
 
-        Promise::new(account_id).transfer(stake)
+        Promise::new(account_id).transfer(state.stake)
     }
 
     #[access_control_any(roles(Role::DAO))]
@@ -106,18 +96,17 @@ impl Contract {
 
     #[must_use]
     pub fn get_relayer_application(&self, account_id: &AccountId) -> Option<RelayerState> {
-        self.relayers.get(account_id).and_then(|state| match state {
-            RelayerState::Pending { .. } => Some(state),
-            RelayerState::Active { .. } => None,
-        })
+        self.relayers
+            .get(account_id)
+            .filter(|state| env::block_timestamp() < state.activate_at.0)
     }
 
     #[must_use]
     pub fn get_relayer_stake(&self, account_id: &AccountId) -> Option<U128> {
-        self.relayers.get(account_id).and_then(|state| match state {
-            RelayerState::Active { stake } => Some(U128(stake.as_yoctonear())),
-            RelayerState::Pending { .. } => None,
-        })
+        self.relayers
+            .get(account_id)
+            .filter(|state| env::block_timestamp() >= state.activate_at.0)
+            .map(|state| U128(state.stake.as_yoctonear()))
     }
 
     #[must_use]

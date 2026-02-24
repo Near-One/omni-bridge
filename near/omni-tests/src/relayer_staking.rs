@@ -119,10 +119,8 @@ mod tests {
         // Before waiting period, relayer should not be trusted
         let is_trusted: bool = env
             .bridge_contract
-            .call("is_trusted_relayer")
+            .view("is_trusted_relayer")
             .args_json(json!({"account_id": applicant.id()}))
-            .max_gas()
-            .transact()
             .await?
             .json()?;
         assert!(!is_trusted);
@@ -130,18 +128,16 @@ mod tests {
         // Fast forward past waiting period
         env.worker.fast_forward(100).await?;
 
-        // After waiting period, relayer should be auto-promoted
+        // After waiting period, relayer should be trusted
         let is_trusted: bool = env
             .bridge_contract
-            .call("is_trusted_relayer")
+            .view("is_trusted_relayer")
             .args_json(json!({"account_id": applicant.id()}))
-            .max_gas()
-            .transact()
             .await?
             .json()?;
         assert!(is_trusted);
 
-        // Verify stake is stored (auto-promotion sets Active)
+        // Verify stake is stored
         let stake: Option<U128> = env
             .bridge_contract
             .view("get_relayer_stake")
@@ -151,7 +147,7 @@ mod tests {
         assert!(stake.is_some());
         assert!(stake.unwrap().0 >= 1_000 * 10u128.pow(24));
 
-        // Verify application is removed (now Active, not Pending)
+        // Verify application is no longer pending
         let application: Option<serde_json::Value> = env
             .bridge_contract
             .view("get_relayer_application")
@@ -208,10 +204,8 @@ mod tests {
         // Relayer should not be trusted before waiting period elapses
         let is_trusted: bool = env
             .bridge_contract
-            .call("is_trusted_relayer")
+            .view("is_trusted_relayer")
             .args_json(json!({"account_id": applicant.id()}))
-            .max_gas()
-            .transact()
             .await?
             .json()?;
         assert!(!is_trusted);
@@ -302,16 +296,14 @@ mod tests {
             .await?
             .into_result()?;
 
-        // Wait and auto-promote
+        // Wait past activation period
         env.worker.fast_forward(100).await?;
 
-        // Trigger auto-promotion
+        // Verify relayer is now trusted
         let is_trusted: bool = env
             .bridge_contract
-            .call("is_trusted_relayer")
+            .view("is_trusted_relayer")
             .args_json(json!({"account_id": applicant.id()}))
-            .max_gas()
-            .transact()
             .await?
             .json()?;
         assert!(is_trusted);
@@ -329,10 +321,8 @@ mod tests {
         // Verify relayer is no longer trusted
         let is_trusted: bool = env
             .bridge_contract
-            .call("is_trusted_relayer")
+            .view("is_trusted_relayer")
             .args_json(json!({"account_id": applicant.id()}))
-            .max_gas()
-            .transact()
             .await?
             .json()?;
         assert!(!is_trusted);
