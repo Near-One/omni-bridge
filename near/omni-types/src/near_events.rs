@@ -1,6 +1,6 @@
-use near_sdk::json_types::U128;
+use near_sdk::json_types::{U128, U64};
 use near_sdk::serde_json::json;
-use near_sdk::{near, AccountId};
+use near_sdk::{near, AccountId, NearToken};
 
 use crate::mpc_types::SignatureResponse;
 use crate::{
@@ -58,6 +58,11 @@ pub enum OmniBridgeEvent {
     MigrateTokenEvent {
         old_token_id: AccountId,
         new_token_id: AccountId,
+    },
+    RelayerApplyEvent {
+        account_id: AccountId,
+        stake: NearToken,
+        activate_at: U64,
     },
 }
 

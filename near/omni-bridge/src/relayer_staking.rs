@@ -4,6 +4,8 @@ use near_sdk::{env, near, require, AccountId, NearToken, Promise};
 use omni_types::errors::BridgeError;
 use omni_utils::near_expect::NearExpect;
 
+use omni_types::near_events::OmniBridgeEvent;
+
 use crate::{Contract, ContractExt, RelayerConfig, RelayerState, Role};
 
 #[near]
@@ -37,6 +39,8 @@ impl Contract {
         );
 
         let stake_required = self.relayer_config.stake_required;
+        let activate_at =
+            U64(env::block_timestamp().saturating_add(self.relayer_config.waiting_period_ns.0));
         let excess = NearToken::from_yoctonear(
             attached
                 .as_yoctonear()
@@ -47,10 +51,17 @@ impl Contract {
             &account_id,
             &RelayerState {
                 stake: stake_required,
-                activate_at: U64(
-                    env::block_timestamp().saturating_add(self.relayer_config.waiting_period_ns.0)
-                ),
+                activate_at,
             },
+        );
+
+        env::log_str(
+            &OmniBridgeEvent::RelayerApplyEvent {
+                account_id: account_id.clone(),
+                stake: stake_required,
+                activate_at,
+            }
+            .to_log_string(),
         );
 
         if excess.as_yoctonear() > 0 {
