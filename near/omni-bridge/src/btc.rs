@@ -26,6 +26,11 @@ impl Contract {
         fee_recipient: Option<AccountId>,
         fee: &Option<Fee>,
     ) -> Promise {
+        require!(
+            self.is_trusted_relayer(&env::predecessor_account_id()),
+            BridgeError::RelayerNotActive.as_ref()
+        );
+
         let transfer = self.get_transfer_message_storage(transfer_id);
 
         let message = serde_json::from_str::<TokenReceiverMessage>(&msg).expect("INVALID MSG");
