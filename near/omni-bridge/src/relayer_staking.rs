@@ -4,7 +4,7 @@ use near_sdk::{env, near, require, AccountId, Gas, NearToken, Promise, PromiseEr
 use omni_types::errors::BridgeError;
 use omni_utils::near_expect::NearExpect;
 
-use crate::{Contract, ContractExt, RelayerApplication, RelayerConfig, Role};
+use crate::{Contract, ContractExt, RelayerConfig, RelayerState, Role};
 
 const ACL_CALL_GAS: Gas = Gas::from_tgas(10);
 const RELAYER_CALLBACK_GAS: Gas = Gas::from_tgas(10);
@@ -21,7 +21,7 @@ impl Contract {
         );
 
         require!(
-            self.relayer_applications.get(&account_id).is_none(),
+            self.relayers.get(&account_id).is_none(),
             BridgeError::RelayerApplicationExists.as_ref()
         );
 
@@ -38,9 +38,9 @@ impl Contract {
                 .saturating_sub(stake_required.as_yoctonear()),
         );
 
-        self.relayer_applications.insert(
+        self.relayers.insert(
             &account_id,
-            &RelayerApplication {
+            &RelayerState::Pending {
                 stake: stake_required,
                 applied_at: env::block_timestamp().into(),
             },
@@ -54,15 +54,18 @@ impl Contract {
     pub fn claim_trusted_relayer_role(&mut self) -> Promise {
         let account_id = env::predecessor_account_id();
 
-        let application = self
-            .relayer_applications
+        let state = self
+            .relayers
             .remove(&account_id)
             .near_expect(BridgeError::RelayerApplicationNotFound);
 
+        let RelayerState::Pending { stake, applied_at } = state else {
+            env::panic_str(BridgeError::RelayerAlreadyActive.to_string().as_str())
+        };
+
         require!(
             env::block_timestamp()
-                >= application
-                    .applied_at
+                >= applied_at
                     .0
                     .saturating_add(self.relayer_config.waiting_period_ns.0),
             BridgeError::RelayerWaitingPeriodNotElapsed.as_ref()
@@ -74,7 +77,7 @@ impl Contract {
             .then(
                 Self::ext(env::current_account_id())
                     .with_static_gas(RELAYER_CALLBACK_GAS)
-                    .claim_trusted_relayer_role_callback(account_id, application),
+                    .claim_trusted_relayer_role_callback(account_id, stake, applied_at),
             )
     }
 
@@ -83,14 +86,16 @@ impl Contract {
     pub fn claim_trusted_relayer_role_callback(
         &mut self,
         account_id: AccountId,
-        application: RelayerApplication,
+        stake: NearToken,
+        applied_at: U64,
         #[callback_result] call_result: Result<bool, PromiseError>,
     ) {
         if call_result == Ok(true) {
-            self.relayer_stakes
-                .insert(&account_id, &application.stake.as_yoctonear());
+            self.relayers
+                .insert(&account_id, &RelayerState::Active { stake });
         } else {
-            self.relayer_applications.insert(&account_id, &application);
+            self.relayers
+                .insert(&account_id, &RelayerState::Pending { stake, applied_at });
         }
     }
 
@@ -102,8 +107,15 @@ impl Contract {
             BridgeError::RelayerNotActive.as_ref()
         );
 
-        let stake = NearToken::from_yoctonear(self.relayer_stakes.get(&account_id).unwrap_or(0));
-        self.relayer_stakes.remove(&account_id);
+        let stake = match self.relayers.remove(&account_id) {
+            Some(RelayerState::Active { stake }) => stake,
+            other => {
+                if let Some(state) = other {
+                    self.relayers.insert(&account_id, &state);
+                }
+                NearToken::from_yoctonear(0)
+            }
+        };
 
         Self::ext(env::current_account_id())
             .with_static_gas(ACL_CALL_GAS)
@@ -128,21 +140,25 @@ impl Contract {
                 Promise::new(account_id).transfer(stake).detach();
             }
         } else {
-            self.relayer_stakes
-                .insert(&account_id, &stake.as_yoctonear());
+            self.relayers
+                .insert(&account_id, &RelayerState::Active { stake });
         }
     }
 
     #[access_control_any(roles(Role::DAO, Role::RelayerManager))]
     pub fn reject_relayer_application(&mut self, account_id: AccountId) -> Promise {
-        let application = self
-            .relayer_applications
+        let state = self
+            .relayers
             .get(&account_id)
             .near_expect(BridgeError::RelayerApplicationNotFound);
 
-        self.relayer_applications.remove(&account_id);
+        let RelayerState::Pending { stake, .. } = state else {
+            env::panic_str(BridgeError::RelayerAlreadyActive.to_string().as_ref())
+        };
 
-        Promise::new(account_id).transfer(application.stake)
+        self.relayers.remove(&account_id);
+
+        Promise::new(account_id).transfer(stake)
     }
 
     #[access_control_any(roles(Role::DAO))]
@@ -154,13 +170,19 @@ impl Contract {
     }
 
     #[must_use]
-    pub fn get_relayer_application(&self, account_id: &AccountId) -> Option<RelayerApplication> {
-        self.relayer_applications.get(account_id)
+    pub fn get_relayer_application(&self, account_id: &AccountId) -> Option<RelayerState> {
+        self.relayers.get(account_id).and_then(|state| match state {
+            RelayerState::Pending { .. } => Some(state),
+            RelayerState::Active { .. } => None,
+        })
     }
 
     #[must_use]
     pub fn get_relayer_stake(&self, account_id: &AccountId) -> Option<U128> {
-        self.relayer_stakes.get(account_id).map(U128)
+        self.relayers.get(account_id).and_then(|state| match state {
+            RelayerState::Active { stake } => Some(U128(stake.as_yoctonear())),
+            RelayerState::Pending { .. } => None,
+        })
     }
 
     #[must_use]

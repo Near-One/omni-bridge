@@ -105,8 +105,7 @@ enum StorageKey {
     FinalisedUtxoTransfers,
     LockedTokens,
     DeployedTokensV2,
-    RelayerApplications,
-    RelayerStakes,
+    Relayers,
 }
 
 #[derive(AccessControlRole, Deserialize, Serialize, Copy, Clone)]
@@ -130,9 +129,9 @@ pub enum Role {
 
 #[derive(Debug, Clone)]
 #[near(serializers = [borsh, json])]
-pub struct RelayerApplication {
-    pub stake: NearToken,
-    pub applied_at: U64,
+pub enum RelayerState {
+    Pending { stake: NearToken, applied_at: U64 },
+    Active { stake: NearToken },
 }
 
 #[derive(Debug, Clone)]
@@ -263,8 +262,7 @@ pub struct Contract {
     pub utxo_chain_connectors: HashMap<ChainKind, UTXOChainConfig>,
     pub migrated_tokens: LookupMap<AccountId, AccountId>,
     pub locked_tokens: LookupMap<(ChainKind, AccountId), u128>,
-    pub relayer_applications: LookupMap<AccountId, RelayerApplication>,
-    pub relayer_stakes: LookupMap<AccountId, u128>,
+    pub relayers: LookupMap<AccountId, RelayerState>,
     pub relayer_config: RelayerConfig,
 }
 
@@ -327,8 +325,7 @@ impl Contract {
             utxo_chain_connectors: HashMap::new(),
             migrated_tokens: LookupMap::new(StorageKey::MigratedTokens),
             locked_tokens: LookupMap::new(StorageKey::LockedTokens),
-            relayer_applications: LookupMap::new(StorageKey::RelayerApplications),
-            relayer_stakes: LookupMap::new(StorageKey::RelayerStakes),
+            relayers: LookupMap::new(StorageKey::Relayers),
             relayer_config: RelayerConfig::default(),
         };
 

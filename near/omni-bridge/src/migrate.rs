@@ -66,8 +66,7 @@ impl Contract {
                 utxo_chain_connectors: old_state.utxo_chain_connectors,
                 migrated_tokens: old_state.migrated_tokens,
                 locked_tokens: LookupMap::new(StorageKey::LockedTokens),
-                relayer_applications: LookupMap::new(StorageKey::RelayerApplications),
-                relayer_stakes: LookupMap::new(StorageKey::RelayerStakes),
+                relayers: LookupMap::new(StorageKey::Relayers),
                 relayer_config: RelayerConfig::default(),
             }
         } else {
