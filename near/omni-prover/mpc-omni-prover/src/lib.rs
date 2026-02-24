@@ -31,7 +31,7 @@ impl MpcOmniProver {
     #[must_use]
     pub fn init(mpc_public_key: String, chain_kind: ChainKind) -> Self {
         require!(
-            chain_kind.is_evm_chain() && chain_kind_to_foreign_chain(chain_kind).is_some(),
+            chain_kind_to_foreign_chain(chain_kind).is_some(),
             ProverError::UnsupportedChain.as_ref()
         );
 
@@ -74,7 +74,7 @@ impl MpcOmniProver {
             .near_expect(ProverError::InvalidPayloadHash);
 
         require!(
-            computed_hash.0.len() == 32,
+            computed_hash.0 == args.payload_hash,
             ProverError::InvalidPayloadHash.as_ref()
         );
 
@@ -83,7 +83,7 @@ impl MpcOmniProver {
 
         verify::verify_secp256k1_signature(
             &mpc_pk_bytes,
-            &args.payload_hash,
+            &computed_hash.0,
             &args.signature_big_r,
             &args.signature_s,
             args.signature_recovery_id,
@@ -142,15 +142,12 @@ impl MpcOmniProver {
 
 fn chain_kind_to_foreign_chain(chain_kind: ChainKind) -> Option<ForeignChain> {
     match chain_kind {
-        ChainKind::Abs => Some(ForeignChain::Abstract),
         ChainKind::Eth => Some(ForeignChain::Ethereum),
-        ChainKind::Arb => Some(ForeignChain::Arbitrum),
         ChainKind::Base => Some(ForeignChain::Base),
+        ChainKind::Arb => Some(ForeignChain::Arbitrum),
         ChainKind::Bnb => Some(ForeignChain::Bnb),
-        ChainKind::Sol => Some(ForeignChain::Solana),
-        ChainKind::Btc => Some(ForeignChain::Bitcoin),
-        ChainKind::Strk => Some(ForeignChain::Starknet),
-        ChainKind::Near | ChainKind::Pol | ChainKind::HyperEvm | ChainKind::Zcash => None,
+        ChainKind::Abs => Some(ForeignChain::Abstract),
+        _ => None,
     }
 }
 
@@ -167,7 +164,7 @@ fn evm_log_to_rlp(evm_log: &contract_interface::types::EvmLog) -> Result<Vec<u8>
         .collect();
 
     let data_str = evm_log.data.strip_prefix("0x").unwrap_or(&evm_log.data);
-    let data_bytes = hex::decode(data_str).near_expect(ProverError::InvalidProof);
+    let data_bytes = hex::decode(data_str).map_err(|_| ProverError::InvalidProof.to_string())?;
 
     let log = Log::new_unchecked(address, topics, Bytes::from(data_bytes));
 

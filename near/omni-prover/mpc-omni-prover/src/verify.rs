@@ -1,8 +1,6 @@
 use k256::ecdsa::{Signature, VerifyingKey};
 use k256::EncodedPoint;
-use near_sdk::require;
 use omni_types::errors::ProverError;
-use omni_utils::near_expect::NearExpect;
 
 pub fn verify_secp256k1_signature(
     public_key_bytes: &[u8],
@@ -11,33 +9,34 @@ pub fn verify_secp256k1_signature(
     s_hex: &str,
     _recovery_id: u8,
 ) -> Result<(), String> {
-    let encoded_point =
-        EncodedPoint::from_bytes(public_key_bytes).near_expect(ProverError::InvalidPublicKey);
-    let verifying_key =
-        VerifyingKey::from_encoded_point(&encoded_point).near_expect(ProverError::InvalidPublicKey);
+    let encoded_point = EncodedPoint::from_bytes(public_key_bytes)
+        .map_err(|_| ProverError::InvalidPublicKey.to_string())?;
+    let verifying_key = VerifyingKey::from_encoded_point(&encoded_point)
+        .map_err(|_| ProverError::InvalidPublicKey.to_string())?;
 
-    let big_r_bytes = hex::decode(big_r_hex).near_expect(ProverError::InvalidSignature);
-    require!(
-        big_r_bytes.len() == 33,
-        ProverError::InvalidSignature.as_ref()
-    );
-
+    let big_r_bytes =
+        hex::decode(big_r_hex).map_err(|_| ProverError::InvalidSignature.to_string())?;
+    if big_r_bytes.len() != 33 {
+        return Err(ProverError::InvalidSignature.to_string());
+    }
     let r_bytes = &big_r_bytes[1..];
 
-    let s_bytes = hex::decode(s_hex).near_expect(ProverError::InvalidSignature);
-    require!(s_bytes.len() == 32, ProverError::InvalidSignature.as_ref());
+    let s_bytes = hex::decode(s_hex).map_err(|_| ProverError::InvalidSignature.to_string())?;
+    if s_bytes.len() != 32 {
+        return Err(ProverError::InvalidSignature.to_string());
+    }
 
     let mut sig_bytes = [0u8; 64];
     sig_bytes[..32].copy_from_slice(r_bytes);
     sig_bytes[32..].copy_from_slice(&s_bytes);
 
-    let signature =
-        Signature::from_bytes((&sig_bytes).into()).near_expect(ProverError::InvalidSignature);
+    let signature = Signature::from_bytes((&sig_bytes).into())
+        .map_err(|_| ProverError::InvalidSignature.to_string())?;
 
     use k256::ecdsa::signature::hazmat::PrehashVerifier;
     verifying_key
         .verify_prehash(message_hash, &signature)
-        .near_expect(ProverError::InvalidSignature);
+        .map_err(|_| ProverError::InvalidSignature.to_string())?;
 
     Ok(())
 }
