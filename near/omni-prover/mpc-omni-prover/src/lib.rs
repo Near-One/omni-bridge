@@ -20,7 +20,7 @@ mod tests;
 #[near(contract_state)]
 #[derive(PanicOnDefault)]
 pub struct MpcOmniProver {
-    pub mpc_public_key: Vec<u8>,
+    pub mpc_public_key: String,
     pub chain_kind: ChainKind,
 }
 
@@ -29,13 +29,15 @@ impl MpcOmniProver {
     #[init]
     #[private]
     #[must_use]
-    pub fn init(mpc_public_key: Vec<u8>, chain_kind: ChainKind) -> Self {
+    pub fn init(mpc_public_key: String, chain_kind: ChainKind) -> Self {
         require!(
             chain_kind.is_evm_chain(),
             ProverError::UnsupportedChain.as_ref()
         );
 
-        PublicKey::try_from_slice(&mpc_public_key).near_expect(ProverError::InvalidPublicKey);
+        mpc_public_key
+            .parse::<PublicKey>()
+            .near_expect(ProverError::InvalidPublicKey);
 
         Self {
             mpc_public_key,
@@ -44,8 +46,10 @@ impl MpcOmniProver {
     }
 
     #[private]
-    pub fn update_mpc_public_key(&mut self, mpc_public_key: Vec<u8>) {
-        PublicKey::try_from_slice(&mpc_public_key).near_expect(ProverError::InvalidPublicKey);
+    pub fn update_mpc_public_key(&mut self, mpc_public_key: String) {
+        mpc_public_key
+            .parse::<PublicKey>()
+            .near_expect(ProverError::InvalidPublicKey);
 
         self.mpc_public_key = mpc_public_key;
     }
@@ -65,7 +69,9 @@ impl MpcOmniProver {
         let mpc_response: VerifyForeignTransactionResponse =
             serde_json::from_str(&args.mpc_response_json).near_expect(ProverError::ParseArgs);
 
-        let public_key = PublicKey::try_from_slice(&self.mpc_public_key)
+        let public_key: PublicKey = self
+            .mpc_public_key
+            .parse()
             .near_expect(ProverError::InvalidPublicKey);
 
         let ForeignTxSignPayload::V1(ref payload_v1) = sign_payload;
