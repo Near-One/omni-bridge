@@ -138,10 +138,7 @@ fn test_build_verifier_with_single_log() {
 fn test_build_verifier_with_block_hash_and_log() {
     let evm_request = EvmRpcRequest {
         tx_id: EvmTxId([0xab; 32]),
-        extractors: vec![
-            EvmExtractor::BlockHash,
-            EvmExtractor::Log { log_index: 0 },
-        ],
+        extractors: vec![EvmExtractor::BlockHash, EvmExtractor::Log { log_index: 0 }],
         finality: EvmFinality::Finalized,
     };
 
@@ -203,7 +200,10 @@ fn test_only_abstract_request_accepted() {
 
     let ForeignTxSignPayload::V1(ref v1) = payload;
     let is_abstract = matches!(&v1.request, ForeignChainRpcRequest::Abstract(_));
-    assert!(!is_abstract, "Ethereum request should not be accepted as Abstract");
+    assert!(
+        !is_abstract,
+        "Ethereum request should not be accepted as Abstract"
+    );
 }
 
 #[test]
