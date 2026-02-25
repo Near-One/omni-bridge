@@ -90,12 +90,12 @@ task("deploy-bridge-token-factory", "Deploys the OmniBridge contract")
       OmniBridgeContract,
       isWormholeContract
         ? [
-          taskArgs.bridgeTokenImpl,
-          nearBridgeDerivedAddress,
-          omniChainId,
-          wormholeAddress,
-          consistencyLevel,
-        ]
+            taskArgs.bridgeTokenImpl,
+            nearBridgeDerivedAddress,
+            omniChainId,
+            wormholeAddress,
+            consistencyLevel,
+          ]
         : [taskArgs.bridgeTokenImpl, nearBridgeDerivedAddress, omniChainId],
       {
         initializer: isWormholeContract ? "initializeWormhole" : "initialize",
