@@ -363,6 +363,128 @@ mod tests {
 
     #[rstest]
     #[tokio::test]
+    async fn test_resign_non_active_relayer_fails(
+        #[from(locker_wasm)] locker: Vec<u8>,
+        #[from(mock_prover_wasm)] prover: Vec<u8>,
+    ) -> anyhow::Result<()> {
+        let env = TestEnv::new(locker, prover).await?;
+
+        let applicant = env.create_funded_account("applicant", 2000).await?;
+
+        // Apply
+        applicant
+            .call(env.bridge_contract.id(), "apply_for_trusted_relayer")
+            .deposit(NearToken::from_near(1000))
+            .max_gas()
+            .transact()
+            .await?
+            .into_result()?;
+
+        // Try to resign before activation (should fail)
+        let result = applicant
+            .call(env.bridge_contract.id(), "resign_trusted_relayer")
+            .max_gas()
+            .transact()
+            .await?;
+
+        assert!(result.into_result().is_err());
+
+        // Verify the relayer application still exists
+        let application: Option<serde_json::Value> = env
+            .bridge_contract
+            .view("get_relayer_application")
+            .args_json(json!({"account_id": applicant.id()}))
+            .await?
+            .json()?;
+        assert!(application.is_some());
+
+        Ok(())
+    }
+
+    #[rstest]
+    #[tokio::test]
+    async fn test_dao_revoke_active_relayer(
+        #[from(locker_wasm)] locker: Vec<u8>,
+        #[from(mock_prover_wasm)] prover: Vec<u8>,
+    ) -> anyhow::Result<()> {
+        let env = TestEnv::new(locker, prover).await?;
+
+        // Set a short waiting period
+        env.bridge_contract
+            .call("set_relayer_config")
+            .args_json(json!({
+                "stake_required": U128(1_000 * 10u128.pow(24)),
+                "waiting_period_ns": U64(1_000_000_000),
+            }))
+            .max_gas()
+            .transact()
+            .await?
+            .into_result()?;
+
+        let applicant = env.create_funded_account("applicant", 2000).await?;
+
+        // Apply
+        applicant
+            .call(env.bridge_contract.id(), "apply_for_trusted_relayer")
+            .deposit(NearToken::from_near(1000))
+            .max_gas()
+            .transact()
+            .await?
+            .into_result()?;
+
+        // Wait past activation period
+        env.worker.fast_forward(100).await?;
+
+        // Verify relayer is now trusted
+        let is_trusted: bool = env
+            .bridge_contract
+            .view("is_trusted_relayer")
+            .args_json(json!({"account_id": applicant.id()}))
+            .await?
+            .json()?;
+        assert!(is_trusted);
+
+        // Create a DAO account and grant it the DAO role
+        let dao_account = env.create_funded_account("dao-account", 10).await?;
+        env.bridge_contract
+            .call("acl_grant_role")
+            .args_json(json!({
+                "role": "DAO",
+                "account_id": dao_account.id(),
+            }))
+            .max_gas()
+            .transact()
+            .await?
+            .into_result()?;
+
+        // DAO revokes active relayer
+        let dao_balance_before = dao_account.view_account().await?.balance;
+        dao_account
+            .call(env.bridge_contract.id(), "reject_relayer_application")
+            .args_json(json!({"account_id": applicant.id()}))
+            .max_gas()
+            .transact()
+            .await?
+            .into_result()?;
+
+        // Verify relayer is no longer trusted
+        let is_trusted: bool = env
+            .bridge_contract
+            .view("is_trusted_relayer")
+            .args_json(json!({"account_id": applicant.id()}))
+            .await?
+            .json()?;
+        assert!(!is_trusted);
+
+        // Verify stake was transferred to DAO account
+        let dao_balance_after = dao_account.view_account().await?.balance;
+        assert!(dao_balance_after.as_yoctonear() > dao_balance_before.as_yoctonear());
+
+        Ok(())
+    }
+
+    #[rstest]
+    #[tokio::test]
     async fn test_set_relayer_config(
         #[from(locker_wasm)] locker: Vec<u8>,
         #[from(mock_prover_wasm)] prover: Vec<u8>,

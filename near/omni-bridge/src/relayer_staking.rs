@@ -77,6 +77,11 @@ impl Contract {
             .remove(&account_id)
             .near_expect(BridgeError::RelayerNotRegistered);
 
+        require!(
+            env::block_timestamp() >= state.activate_at.0,
+            BridgeError::RelayerNotActive.as_ref()
+        );
+
         env::log_str(
             &OmniBridgeEvent::RelayerResignEvent {
                 account_id: account_id.clone(),
@@ -92,15 +97,8 @@ impl Contract {
     pub fn reject_relayer_application(&mut self, account_id: AccountId) -> Promise {
         let state = self
             .relayers
-            .get(&account_id)
+            .remove(&account_id)
             .near_expect(BridgeError::RelayerApplicationNotFound);
-
-        require!(
-            env::block_timestamp() < state.activate_at.0,
-            BridgeError::RelayerAlreadyActive.as_ref()
-        );
-
-        self.relayers.remove(&account_id);
 
         env::log_str(
             &OmniBridgeEvent::RelayerRejectEvent {
