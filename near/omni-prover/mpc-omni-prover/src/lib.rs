@@ -70,9 +70,10 @@ impl MpcOmniProver {
 
         let ForeignTxSignPayload::V1(ref payload_v1) = sign_payload;
 
-        let evm_request = match &payload_v1.request {
-            ForeignChainRpcRequest::Abstract(req) => req,
-            _ => return Err(ProverError::ChainMismatch.to_string()),
+        let (ForeignChainRpcRequest::Ethereum(evm_request)
+        | ForeignChainRpcRequest::Abstract(evm_request)) = &payload_v1.request
+        else {
+            return Err(ProverError::ChainMismatch.to_string());
         };
 
         let (verifier, _request_args) = build_verifier(evm_request, &payload_v1.values)?;
