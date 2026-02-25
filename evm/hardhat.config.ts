@@ -25,6 +25,23 @@ declare module "hardhat/types/config" {
     zksync?: boolean
     ethNetwork?: string
   }
+  interface HardhatUserConfig {
+    zksolc?: {
+      version?: string
+      settings?: Record<string, unknown>
+    }
+    etherscan?: {
+      apiKey?: string | Record<string, string>
+      customChains?: Array<{
+        network: string
+        chainId: number
+        urls: {
+          apiURL: string
+          browserURL: string
+        }
+      }>
+    }
+  }
 }
 
 dotenv.config()
