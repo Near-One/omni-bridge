@@ -4,7 +4,7 @@ import type { HardhatRuntimeEnvironment } from "hardhat/types"
  * Returns true if the current network is a ZKsync network.
  */
 export function isZkSyncNetwork(hre: HardhatRuntimeEnvironment): boolean {
-  return (hre.network.config as any).zksync === true
+  return "zksync" in hre.network.config && hre.network.config.zksync === true
 }
 
 // ERC-1967 implementation slot: bytes32(uint256(keccak256('eip1967.proxy.implementation')) - 1)
@@ -22,7 +22,7 @@ export async function getProxyImplementationAddress(
 ): Promise<string> {
   if (isZkSyncNetwork(hre)) {
     const storageValue = await hre.ethers.provider.getStorage(proxyAddress, IMPLEMENTATION_SLOT)
-    return hre.ethers.getAddress("0x" + storageValue.slice(26))
+    return hre.ethers.getAddress(`0x${storageValue.slice(26)}`)
   }
   return hre.upgrades.erc1967.getImplementationAddress(proxyAddress)
 }
