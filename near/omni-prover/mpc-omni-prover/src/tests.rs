@@ -8,7 +8,9 @@ use near_mpc_sdk::contract_interface::types::{
 use omni_types::prover_args::MpcVerifyProofArgs;
 use omni_types::prover_result::ProofKind;
 
-use crate::{build_verifier, evm_log_to_rlp};
+use omni_types::ChainKind;
+
+use crate::{evm_log_to_rlp, MpcOmniProver};
 
 fn test_evm_log() -> EvmLog {
     EvmLog {
@@ -113,7 +115,7 @@ fn test_mpc_verify_proof_args_serialization() {
     let args = MpcVerifyProofArgs {
         proof_kind: ProofKind::InitTransfer,
         sign_payload: payload_bytes.clone(),
-        mpc_response_json: r#"{"payload_hash":"aa","signature":{"scheme":"Secp256k1","big_r":{"affine_point":"bb"},"s":{"scalar":"cc"},"recovery_id":0}}"#.to_string(),
+        request_args_json: r#"{"request":{"Abstract":{"tx_id":"abababababababababababababababababababababababababababababababababab","extractors":[{"Log":{"log_index":0}}],"finality":"Finalized"}},"derivation_path":"","domain_id":0,"payload_version":1}"#.to_string(),
     };
 
     let serialized = borsh::to_vec(&args).unwrap();
@@ -121,89 +123,6 @@ fn test_mpc_verify_proof_args_serialization() {
 
     assert_eq!(deserialized.sign_payload, payload_bytes);
     assert_eq!(deserialized.proof_kind, ProofKind::InitTransfer);
-}
-
-#[test]
-fn test_build_verifier_with_single_log() {
-    let evm_request = test_evm_request();
-    let values = vec![ExtractedValue::EvmExtractedValue(EvmExtractedValue::Log(
-        test_evm_log(),
-    ))];
-
-    let result = build_verifier(&evm_request, &values);
-    assert!(result.is_ok());
-}
-
-#[test]
-fn test_build_verifier_with_block_hash_and_log() {
-    let evm_request = EvmRpcRequest {
-        tx_id: EvmTxId([0xab; 32]),
-        extractors: vec![EvmExtractor::BlockHash, EvmExtractor::Log { log_index: 0 }],
-        finality: EvmFinality::Finalized,
-    };
-
-    let values = vec![
-        ExtractedValue::EvmExtractedValue(EvmExtractedValue::BlockHash(Hash256([0x99; 32]))),
-        ExtractedValue::EvmExtractedValue(EvmExtractedValue::Log(test_evm_log())),
-    ];
-
-    let result = build_verifier(&evm_request, &values);
-    assert!(result.is_ok());
-}
-
-#[test]
-fn test_build_verifier_produces_matching_payload_hash() {
-    let evm_request = test_evm_request();
-    let values = vec![ExtractedValue::EvmExtractedValue(EvmExtractedValue::Log(
-        test_evm_log(),
-    ))];
-
-    let (_verifier, _) = build_verifier(&evm_request, &values).unwrap();
-
-    let original_payload = test_sign_payload();
-    let original_hash = original_payload.compute_msg_hash().unwrap();
-
-    let reconstructed_payload = ForeignTxSignPayload::V1(ForeignTxSignPayloadV1 {
-        request: ForeignChainRpcRequest::Abstract(EvmRpcRequest {
-            tx_id: evm_request.tx_id.clone(),
-            extractors: vec![EvmExtractor::Log { log_index: 0 }],
-            finality: evm_request.finality.clone(),
-        }),
-        values: values.clone(),
-    });
-    let reconstructed_hash = reconstructed_payload.compute_msg_hash().unwrap();
-
-    assert_eq!(original_hash.0, reconstructed_hash.0);
-}
-
-#[test]
-fn test_build_verifier_rejects_non_evm_values() {
-    use near_mpc_sdk::contract_interface::types::BitcoinExtractedValue;
-
-    let evm_request = test_evm_request();
-    let values = vec![ExtractedValue::BitcoinExtractedValue(
-        BitcoinExtractedValue::BlockHash(Hash256([0; 32])),
-    )];
-
-    let result = build_verifier(&evm_request, &values);
-    assert!(result.is_err());
-}
-
-#[test]
-fn test_only_abstract_request_accepted() {
-    let payload = ForeignTxSignPayload::V1(ForeignTxSignPayloadV1 {
-        request: ForeignChainRpcRequest::Ethereum(test_evm_request()),
-        values: vec![ExtractedValue::EvmExtractedValue(EvmExtractedValue::Log(
-            test_evm_log(),
-        ))],
-    });
-
-    let ForeignTxSignPayload::V1(ref v1) = payload;
-    let is_abstract = matches!(&v1.request, ForeignChainRpcRequest::Abstract(_));
-    assert!(
-        !is_abstract,
-        "Ethereum request should not be accepted as Abstract"
-    );
 }
 
 #[test]
@@ -237,55 +156,40 @@ fn test_forged_payload_produces_different_hash() {
 }
 
 #[test]
-fn test_build_verifier_multiple_logs_order_matters() {
-    let log_a = EvmLog {
-        removed: false,
-        log_index: 1,
-        transaction_index: 0,
-        transaction_hash: Hash256([1u8; 32]),
-        block_hash: Hash256([2u8; 32]),
-        block_number: 100,
-        address: Hash160([3u8; 20]),
-        data: "0xaa".to_string(),
-        topics: vec![],
-    };
+fn test_request_matches_chain_ethereum_variants() {
+    let eth_request = ForeignChainRpcRequest::Ethereum(test_evm_request());
 
-    let log_b = EvmLog {
-        removed: false,
-        log_index: 2,
-        transaction_index: 0,
-        transaction_hash: Hash256([1u8; 32]),
-        block_hash: Hash256([2u8; 32]),
-        block_number: 100,
-        address: Hash160([4u8; 20]),
-        data: "0xbb".to_string(),
-        topics: vec![],
-    };
+    assert!(MpcOmniProver::request_matches_chain(
+        &eth_request,
+        ChainKind::Eth
+    ));
+    assert!(!MpcOmniProver::request_matches_chain(
+        &eth_request,
+        ChainKind::Base
+    ));
+}
 
-    let evm_request = EvmRpcRequest {
-        tx_id: EvmTxId([0xab; 32]),
-        extractors: vec![
-            EvmExtractor::Log { log_index: 1 },
-            EvmExtractor::Log { log_index: 2 },
-        ],
-        finality: EvmFinality::Finalized,
-    };
+#[test]
+fn test_request_matches_chain_abstract() {
+    let abs_request = ForeignChainRpcRequest::Abstract(test_evm_request());
 
-    let values_ab = vec![
-        ExtractedValue::EvmExtractedValue(EvmExtractedValue::Log(log_a.clone())),
-        ExtractedValue::EvmExtractedValue(EvmExtractedValue::Log(log_b.clone())),
-    ];
+    // Abstract request only matches Abs
+    assert!(MpcOmniProver::request_matches_chain(
+        &abs_request,
+        ChainKind::Abs
+    ));
 
-    let values_ba = vec![
-        ExtractedValue::EvmExtractedValue(EvmExtractedValue::Log(log_b)),
-        ExtractedValue::EvmExtractedValue(EvmExtractedValue::Log(log_a)),
-    ];
-
-    let (_, args_ab) = build_verifier(&evm_request, &values_ab).unwrap();
-    let (_, args_ba) = build_verifier(&evm_request, &values_ba).unwrap();
-
-    assert_ne!(
-        args_ab.request, args_ba.request,
-        "Different log ordering should produce different requests"
-    );
+    // Abstract request does NOT match other EVM chains
+    assert!(!MpcOmniProver::request_matches_chain(
+        &abs_request,
+        ChainKind::Eth
+    ));
+    assert!(!MpcOmniProver::request_matches_chain(
+        &abs_request,
+        ChainKind::Base
+    ));
+    assert!(!MpcOmniProver::request_matches_chain(
+        &abs_request,
+        ChainKind::Arb
+    ));
 }

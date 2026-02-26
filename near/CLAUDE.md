@@ -141,20 +141,21 @@ Proxy to Wormhole protocol for chains without light clients (Solana, BNB, EVM L2
 4. Return typed `ProverResult`
 
 ### mpc-omni-prover
-Verifies EVM events using the NEAR MPC network's `verify_foreign_transaction` read-RPC API. Unlike the other provers, this one is fully synchronous (no cross-contract calls) — the relayer obtains the MPC signature off-chain and submits it directly to the prover for local verification.
+Verifies EVM events by calling the NEAR MPC network's `verify_foreign_transaction` API on-chain. The prover initiates the MPC verification as a cross-contract call and validates the response in a callback.
 
 **State:**
-- `mpc_public_key` — hex-encoded compressed secp256k1 public key (33 bytes) of the MPC network
+- `mpc_contract_id` — AccountId of the MPC signer contract (e.g. `v1.signer`)
 - `chain_kind` — the EVM chain this prover instance verifies (must be an EVM chain)
 
 **Flow:**
-1. Deserialize `MpcVerifyProofArgs` and `ForeignTxSignPayload` from input
-2. Recompute SHA-256 hash of the borsh-serialized payload, verify it matches the provided hash
-3. Verify the MPC secp256k1 signature (using `k256` crate's `PrehashVerifier`) over the payload hash
-4. Extract the EVM log from the payload's extracted values, convert to RLP
-5. Parse the EVM log via `parse_evm_event` and return typed `ProverResult`
+1. Deserialize `MpcVerifyProofArgs` containing `request_args_json`, `sign_payload`, and `proof_kind`
+2. Validate the `sign_payload` (must be EVM chain, must contain at least one log)
+3. Cross-contract call to `mpc_contract.verify_foreign_transaction(request_args)` with 1 yoctoNEAR deposit
+4. In callback: verify `SHA-256(borsh(sign_payload)) == response.payload_hash`
+5. Extract the EVM log from the payload's extracted values, convert to RLP
+6. Parse the EVM log via `parse_evm_event` and return typed `ProverResult`
 
-**Dependencies:** Uses `contract-interface` crate from the MPC repo (pinned git rev) for MPC types (`ForeignTxSignPayload`, `EvmLog`, etc.). Does NOT use `near-mpc-sdk` to avoid `near-sdk` version conflicts.
+**Dependencies:** Uses `near-mpc-sdk` crate from the MPC repo (pinned git rev) for MPC types (`ForeignTxSignPayload`, `VerifyForeignTransactionRequestArgs`, `VerifyForeignTransactionResponse`, `EvmLog`, etc.).
 
 ## Code Style
 
@@ -169,8 +170,8 @@ Verifies EVM events using the NEAR MPC network's `verify_foreign_transaction` re
 - `near-plugins` - Access control (roles) and upgradeable patterns
 - `omni-utils` - Shared utilities (external repo)
 - `alloy` - EVM types and RLP encoding
-- `k256` - secp256k1 ECDSA verification (used by mpc-omni-prover)
-- `contract-interface` - MPC network types from `github.com/near/mpc` (used by mpc-omni-prover)
+- `near-mpc-sdk` - MPC SDK for cross-contract calls to the MPC signer contract (used by mpc-omni-prover)
+- `contract-interface` - MPC network types from `github.com/near/mpc` (used by mpc-omni-prover via near-mpc-sdk)
 - `near-workspaces` - Integration testing
 
 ## Security Audit Notes

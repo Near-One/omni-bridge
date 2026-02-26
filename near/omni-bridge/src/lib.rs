@@ -76,7 +76,7 @@ const FAST_TRANSFER_CALLBACK_GAS: Gas = Gas::from_tgas(10);
 const NO_DEPOSIT: NearToken = NearToken::from_near(0);
 const ONE_YOCTO: NearToken = NearToken::from_yoctonear(1);
 const SEND_TOKENS_CALLBACK_GAS: Gas = Gas::from_tgas(15);
-const VERIFY_PROOF_GAS: Gas = Gas::from_tgas(20);
+const VERIFY_PROOF_GAS: Gas = Gas::from_tgas(30);
 const INIT_TRANSFER_RESUME_GAS: Gas = Gas::from_tgas(10);
 const SIGN_PATH: &str = "bridge-1";
 
