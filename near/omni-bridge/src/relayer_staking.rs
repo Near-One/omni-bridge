@@ -75,7 +75,7 @@ impl Contract {
         let state = self
             .relayers
             .remove(&account_id)
-            .near_expect(BridgeError::RelayerNotRegistered);
+            .near_expect(BridgeError::RelayerNotActive);
 
         require!(
             env::block_timestamp() >= state.activate_at.0,

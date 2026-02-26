@@ -50,7 +50,6 @@ pub enum BridgeError {
     RelayerApplicationNotFound,
     RelayerInsufficientStake,
     RelayerNotActive,
-    RelayerNotRegistered,
     SenderCanUpdateTokenFeeOnly,
     SenderIsNotConnector,
     StorageFeeRecipientOmitted,
