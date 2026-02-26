@@ -88,6 +88,7 @@ impl MpcOmniProver {
             )
     }
 
+    #[allow(clippy::needless_pass_by_value)]
     #[private]
     #[handle_result]
     #[result_serializer(borsh)]
