@@ -14,9 +14,9 @@ mod tests {
     use rstest::rstest;
 
     use crate::helpers::tests::{
-        account_n, arb_factory_address, arb_token_address, base_factory_address,
-        base_token_address, bnb_factory_address, bnb_token_address, eth_eoa_address,
-        eth_factory_address, eth_token_address, get_test_deploy_token_args,
+        abs_factory_address, account_n, arb_factory_address, arb_token_address,
+        base_factory_address, base_token_address, bnb_factory_address, bnb_token_address,
+        eth_eoa_address, eth_factory_address, eth_token_address, get_test_deploy_token_args,
         hyperevm_factory_address, locker_wasm, mock_global_contract_deployer_wasm,
         mock_prover_wasm, omni_token_wasm, pol_factory_address, sol_factory_address,
         sol_token_address, strk_factory_address, token_deployer_wasm, wasm_code_hash,
@@ -139,6 +139,7 @@ mod tests {
                 ChainKind::Base => base_factory_address(),
                 ChainKind::Bnb => bnb_factory_address(),
                 ChainKind::Pol => pol_factory_address(),
+                ChainKind::Abs => abs_factory_address(),
                 ChainKind::HyperEvm => hyperevm_factory_address(),
                 ChainKind::Strk => strk_factory_address(),
                 ChainKind::Near | ChainKind::Btc | ChainKind::Zcash => panic!("Unsupported chain"),
