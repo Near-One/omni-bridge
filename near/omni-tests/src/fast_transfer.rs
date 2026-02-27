@@ -68,9 +68,11 @@ mod tests {
                     .await?
             };
 
-            let relayer_account = env_builder.create_account(relayer_account_id()).await?;
+            let relayer_account = env_builder
+                .setup_trusted_relayer(relayer_account_id())
+                .await?;
             let fast_relayer_account = env_builder
-                .create_account(fast_relayer_account_id())
+                .setup_trusted_relayer(fast_relayer_account_id())
                 .await?;
             let _ = env_builder.create_account(account_n(1)).await?;
 

@@ -18,7 +18,7 @@ const WITHDRAW_RBF_GAS: Gas = Gas::from_tgas(100);
 #[near]
 impl Contract {
     #[payable]
-    #[pause(except(roles(Role::DAO, Role::UnrestrictedRelayer)))]
+    #[pause(except(roles(Role::DAO)))]
     pub fn submit_transfer_to_utxo_chain_connector(
         &mut self,
         transfer_id: TransferId,
@@ -26,6 +26,11 @@ impl Contract {
         fee_recipient: Option<AccountId>,
         fee: &Option<Fee>,
     ) -> Promise {
+        require!(
+            self.is_trusted_relayer(&env::predecessor_account_id()),
+            BridgeError::RelayerNotActive.as_ref()
+        );
+
         let transfer = self.get_transfer_message_storage(transfer_id);
 
         let message = serde_json::from_str::<TokenReceiverMessage>(&msg).expect("INVALID MSG");

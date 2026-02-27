@@ -22,7 +22,7 @@ mod tests {
 
     const DEFAULT_NEAR_SANDBOX_BALANCE: NearToken = NearToken::from_near(100);
     const EXPECTED_RELAYER_GAS_COST: NearToken =
-        NearToken::from_yoctonear(1_500_000_000_000_000_000_000);
+        NearToken::from_yoctonear(5_000_000_000_000_000_000_000);
 
     struct TestEnv {
         worker: near_workspaces::Worker<near_workspaces::network::Sandbox>,
@@ -45,8 +45,15 @@ mod tests {
                 .deploy_old_version(is_old_locker)
                 .with_native_nep141_token(24)
                 .await?;
-            let relayer_account = env_builder.create_account(relayer_account_id()).await?;
+            let relayer_account = if is_old_locker {
+                env_builder.create_account(relayer_account_id()).await?
+            } else {
+                env_builder
+                    .setup_trusted_relayer(relayer_account_id())
+                    .await?
+            };
             let sender_account = env_builder.create_account(account_n(1)).await?;
+
             env_builder.storage_deposit(relayer_account.id()).await?;
             env_builder.storage_deposit(sender_account.id()).await?;
             env_builder
@@ -305,7 +312,7 @@ mod tests {
             init_transfer_msg.clone(),
             None,
             None,
-            false,
+            true,
         )
         .await?;
 
@@ -352,7 +359,7 @@ mod tests {
             init_transfer_msg.clone(),
             None,
             None,
-            false,
+            true,
         )
         .await?;
 
@@ -397,7 +404,7 @@ mod tests {
             init_transfer_msg.clone(),
             None,
             None,
-            false,
+            true,
         )
         .await?;
 
@@ -456,7 +463,7 @@ mod tests {
             init_transfer_msg.clone(),
             None,
             Some(update_fee),
-            false,
+            true,
         )
         .await?;
 
@@ -535,6 +542,82 @@ mod tests {
                 < EXPECTED_RELAYER_GAS_COST.as_yoctonear(),
             "Relayer didn't receive native fee."
         );
+        Ok(())
+    }
+
+    #[rstest]
+    #[tokio::test]
+    async fn test_untrusted_sender_cannot_sign_transfer(
+        build_artifacts: &BuildArtifacts,
+    ) -> anyhow::Result<()> {
+        let sender_balance_token = 1_000_000;
+        let transfer_amount = 100;
+        let init_transfer_msg = InitTransferMsg {
+            native_token_fee: U128(0),
+            fee: U128(0),
+            recipient: eth_eoa_address(),
+            msg: None,
+        };
+
+        let env = TestEnv::new(sender_balance_token, false, build_artifacts).await?;
+
+        let storage_deposit_amount = get_balance_required_for_account(
+            &env.locker_contract,
+            &env.sender_account,
+            &init_transfer_msg,
+            None,
+        )
+        .await?;
+
+        env.sender_account
+            .call(env.locker_contract.id(), "storage_deposit")
+            .args_json(json!({
+                "account_id": env.sender_account.id(),
+            }))
+            .deposit(storage_deposit_amount)
+            .max_gas()
+            .transact()
+            .await?
+            .into_result()?;
+
+        let transfer_result = env
+            .sender_account
+            .call(env.token_contract.id(), "ft_transfer_call")
+            .args_json(json!({
+                "receiver_id": env.locker_contract.id(),
+                "amount": U128(transfer_amount),
+                "memo": None::<String>,
+                "msg": serde_json::to_string(&BridgeOnTransferMsg::InitTransfer(init_transfer_msg))?,
+            }))
+            .deposit(NearToken::from_yoctonear(1))
+            .max_gas()
+            .transact()
+            .await?
+            .into_result()?;
+
+        let transfer_message = get_transfer_message_from_event(&transfer_result)?;
+
+        // sender_account is not a trusted relayer, so sign_transfer should fail
+        let result = env
+            .sender_account
+            .call(env.locker_contract.id(), "sign_transfer")
+            .args_json(json!({
+                "transfer_id": TransferId {
+                    origin_chain: ChainKind::Near,
+                    origin_nonce: transfer_message.origin_nonce,
+                },
+                "fee_recipient": env.relayer_account.id(),
+                "fee": &Some(transfer_message.fee.clone()),
+            }))
+            .max_gas()
+            .transact()
+            .await?;
+
+        assert!(
+            result.into_result().is_err(),
+            "Unprivileged sender should not be able to call sign_transfer"
+        );
+
         Ok(())
     }
 
