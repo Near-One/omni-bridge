@@ -34,6 +34,7 @@ pub struct InitTransferSol<'info> {
 impl InitTransferSol<'_> {
     pub fn process(&self, payload: &InitTransferPayload) -> Result<()> {
         require!(payload.fee == 0, ErrorCode::InvalidFee);
+        require!(payload.amount > 0, ErrorCode::InvalidArgs);
 
         transfer(
             CpiContext::new(
@@ -45,8 +46,10 @@ impl InitTransferSol<'_> {
             ),
             payload
                 .native_fee
-                .checked_add(payload.amount.try_into().unwrap())
-                .unwrap(),
+                .checked_add(
+                    payload.amount.try_into().map_err(|_| error!(ErrorCode::InvalidArgs))?,
+                )
+                .ok_or_else(|| error!(ErrorCode::InvalidArgs))?,
         )?;
 
         self.common.post_message(payload.serialize_for_near((

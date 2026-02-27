@@ -7,26 +7,28 @@ use anchor_spl::{
 
 use crate::{
     constants::{
-        AUTHORITY_SEED, USED_NONCES_ACCOUNT_SIZE, USED_NONCES_PER_ACCOUNT, USED_NONCES_SEED,
-        VAULT_SEED,
+        AUTHORITY_SEED, CONFIG_SEED, USED_NONCES_ACCOUNT_SIZE, USED_NONCES_PER_ACCOUNT, USED_NONCES_SEED, VAULT_SEED
     },
     error::ErrorCode,
     instructions::wormhole_cpi::{
-        WormholeCPI, WormholeCPIBumps, __client_accounts_wormhole_cpi,
-        __cpi_client_accounts_wormhole_cpi,
+        __client_accounts_wormhole_cpi, __cpi_client_accounts_wormhole_cpi, WormholeCPI, WormholeCPIBumps
     },
     state::{
-        message::{
-            finalize_transfer::{FinalizeTransferPayload, FinalizeTransferResponse},
-            Payload, SignedPayload,
-        },
-        used_nonces::UsedNonces,
+        config::Config, message::{
+            Payload, SignedPayload, finalize_transfer::{FinalizeTransferPayload, FinalizeTransferResponse}
+        }, used_nonces::UsedNonces
     },
 };
 
 #[derive(Accounts)]
 #[instruction(data: SignedPayload<FinalizeTransferPayload>)]
 pub struct FinalizeTransfer<'info> {
+    #[account(
+        mut,
+        seeds = [CONFIG_SEED],
+        bump = config.bumps.config,
+    )]
+    pub config: Box<Account<'info, Config>>,
     #[account(
         init_if_needed,
         space = usize::try_from(USED_NONCES_ACCOUNT_SIZE).unwrap(),
@@ -41,7 +43,7 @@ pub struct FinalizeTransfer<'info> {
     #[account(
         mut,
         seeds = [AUTHORITY_SEED],
-        bump = common.config.bumps.authority,
+        bump = config.bumps.authority,
     )]
     pub authority: SystemAccount<'info>,
 
@@ -89,7 +91,7 @@ impl FinalizeTransfer<'_> {
         UsedNonces::use_nonce(
             data.destination_nonce,
             &self.used_nonces,
-            &mut self.common.config,
+            &mut self.config,
             self.authority.to_account_info(),
             self.common.payer.to_account_info(),
             &Rent::get()?,
@@ -107,9 +109,9 @@ impl FinalizeTransfer<'_> {
                         authority: self.authority.to_account_info(),
                         mint: self.mint.to_account_info(),
                     },
-                    &[&[AUTHORITY_SEED, &[self.common.config.bumps.authority]]],
+                    &[&[AUTHORITY_SEED, &[self.config.bumps.authority]]],
                 ),
-                data.amount.try_into().unwrap(),
+                data.amount.try_into().map_err(|_| error!(ErrorCode::AmountOverflow))?,
                 self.mint.decimals,
             )?;
         } else {
@@ -127,9 +129,9 @@ impl FinalizeTransfer<'_> {
                         to: self.token_account.to_account_info(),
                         authority: self.authority.to_account_info(),
                     },
-                    &[&[AUTHORITY_SEED, &[self.common.config.bumps.authority]]],
+                    &[&[AUTHORITY_SEED, &[self.config.bumps.authority]]],
                 ),
-                data.amount.try_into().unwrap(),
+                data.amount.try_into().map_err(|_| error!(ErrorCode::AmountOverflow))?,
             )?;
         }
 
