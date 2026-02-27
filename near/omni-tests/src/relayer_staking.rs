@@ -84,12 +84,13 @@ mod tests {
     ) -> anyhow::Result<()> {
         let env = TestEnv::new(locker, prover).await?;
 
-        // Set a short waiting period for testing (1 second in nanoseconds)
+        // Use a realistic 24-hour waiting period (in nanoseconds)
+        let twenty_four_hours_ns: u64 = 24 * 60 * 60 * 1_000_000_000;
         env.bridge_contract
             .call("set_relayer_config")
             .args_json(json!({
                 "stake_required": U128(1_000 * 10u128.pow(24)),
-                "waiting_period_ns": U64(1_000_000_000),
+                "waiting_period_ns": U64(twenty_four_hours_ns),
             }))
             .max_gas()
             .transact()
@@ -125,10 +126,22 @@ mod tests {
             .json()?;
         assert!(!is_trusted);
 
-        // Fast forward past waiting period
-        env.worker.fast_forward(100).await?;
+        // Fast forward ~20 hours (72_000 blocks at ~1s/block) — still within the 24hr period
+        env.worker.fast_forward(72_000).await?;
 
-        // After waiting period, relayer should be trusted
+        // After 20 hours, relayer should still NOT be trusted
+        let is_trusted: bool = env
+            .bridge_contract
+            .view("is_trusted_relayer")
+            .args_json(json!({"account_id": applicant.id()}))
+            .await?
+            .json()?;
+        assert!(!is_trusted);
+
+        // Fast forward past the remaining ~4 hours (14_500 blocks, slightly over to ensure we pass 24hr)
+        env.worker.fast_forward(14_500).await?;
+
+        // After 24+ hours, relayer should be trusted
         let is_trusted: bool = env
             .bridge_contract
             .view("is_trusted_relayer")

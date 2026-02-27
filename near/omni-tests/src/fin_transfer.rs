@@ -76,30 +76,9 @@ mod tests {
 
         let token_receiver_contract = env_builder.deploy_mock_receiver().await?;
 
-        let relayer_account = env_builder.create_account(relayer_account_id()).await?;
-
-        env_builder
-            .bridge_contract
-            .call("set_relayer_config")
-            .args_json(json!({
-                "stake_required": "1",
-                "waiting_period_ns": "0",
-            }))
-            .max_gas()
-            .transact()
-            .await?
-            .into_result()?;
-
-        relayer_account
-            .call(
-                env_builder.bridge_contract.id(),
-                "apply_for_trusted_relayer",
-            )
-            .deposit(NearToken::from_yoctonear(1))
-            .max_gas()
-            .transact()
-            .await?
-            .into_result()?;
+        let relayer_account = env_builder
+            .setup_trusted_relayer(relayer_account_id())
+            .await?;
 
         let required_balance_for_fin_transfer: NearToken = env_builder
             .bridge_contract

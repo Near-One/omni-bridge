@@ -45,33 +45,14 @@ mod tests {
                 .deploy_old_version(is_old_locker)
                 .with_native_nep141_token(24)
                 .await?;
-            let relayer_account = env_builder.create_account(relayer_account_id()).await?;
-            let sender_account = env_builder.create_account(account_n(1)).await?;
-
-            if !is_old_locker {
+            let relayer_account = if is_old_locker {
+                env_builder.create_account(relayer_account_id()).await?
+            } else {
                 env_builder
-                    .bridge_contract
-                    .call("set_relayer_config")
-                    .args_json(json!({
-                        "stake_required": "1",
-                        "waiting_period_ns": "0",
-                    }))
-                    .max_gas()
-                    .transact()
+                    .setup_trusted_relayer(relayer_account_id())
                     .await?
-                    .into_result()?;
-
-                relayer_account
-                    .call(
-                        env_builder.bridge_contract.id(),
-                        "apply_for_trusted_relayer",
-                    )
-                    .deposit(NearToken::from_yoctonear(1))
-                    .max_gas()
-                    .transact()
-                    .await?
-                    .into_result()?;
-            }
+            };
+            let sender_account = env_builder.create_account(account_n(1)).await?;
 
             env_builder.storage_deposit(relayer_account.id()).await?;
             env_builder.storage_deposit(sender_account.id()).await?;
