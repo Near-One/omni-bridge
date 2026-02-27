@@ -18,7 +18,7 @@ const WITHDRAW_RBF_GAS: Gas = Gas::from_tgas(100);
 #[near]
 impl Contract {
     #[payable]
-    #[pause(except(roles(Role::DAO, Role::UnrestrictedRelayer)))]
+    #[pause(except(roles(Role::DAO)))]
     pub fn submit_transfer_to_utxo_chain_connector(
         &mut self,
         transfer_id: TransferId,

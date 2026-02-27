@@ -333,7 +333,7 @@ impl Contract {
         contract
     }
 
-    #[pause(except(roles(Role::DAO, Role::UnrestrictedRelayer)))]
+    #[pause(except(roles(Role::DAO)))]
     pub fn log_metadata(&self, token_id: &AccountId) -> Promise {
         ext_token::ext(token_id.clone())
             .with_static_gas(LOG_METADATA_GAS)
@@ -457,7 +457,7 @@ impl Contract {
     /// - If the `borsh::to_vec` serialization of the `TransferMessagePayload` fails.
     /// - If a `fee` is provided and it doesn't match the fee in the stored transfer message.
     #[payable]
-    #[pause(except(roles(Role::DAO, Role::UnrestrictedRelayer)))]
+    #[pause(except(roles(Role::DAO)))]
     pub fn sign_transfer(
         &mut self,
         transfer_id: TransferId,
@@ -686,7 +686,7 @@ impl Contract {
     }
 
     #[payable]
-    #[pause(except(roles(Role::DAO, Role::UnrestrictedRelayer)))]
+    #[pause(except(roles(Role::DAO)))]
     pub fn fin_transfer(&mut self, #[serializer(borsh)] args: FinTransferArgs) -> Promise {
         require!(
             self.is_trusted_relayer(&env::predecessor_account_id()),
@@ -1071,7 +1071,7 @@ impl Contract {
     }
 
     #[payable]
-    #[pause(except(roles(Role::DAO, Role::UnrestrictedRelayer)))]
+    #[pause(except(roles(Role::DAO)))]
     pub fn claim_fee(&mut self, #[serializer(borsh)] args: ClaimFeeArgs) -> Promise {
         self.verify_proof(args.chain_kind, args.prover_args).then(
             Self::ext(env::current_account_id())
@@ -1149,7 +1149,7 @@ impl Contract {
     }
 
     #[payable]
-    #[pause(except(roles(Role::DAO, Role::UnrestrictedRelayer)))]
+    #[pause(except(roles(Role::DAO)))]
     pub fn deploy_token(&mut self, #[serializer(borsh)] args: DeployTokenArgs) -> Promise {
         self.verify_proof(args.chain_kind, args.prover_args).then(
             Self::ext(env::current_account_id())
@@ -1236,7 +1236,7 @@ impl Contract {
     }
 
     #[payable]
-    #[pause(except(roles(Role::DAO, Role::UnrestrictedRelayer)))]
+    #[pause(except(roles(Role::DAO)))]
     pub fn bind_token(&mut self, #[serializer(borsh)] args: BindTokenArgs) -> Promise {
         self.verify_proof(args.chain_kind, args.prover_args)
             .then(
