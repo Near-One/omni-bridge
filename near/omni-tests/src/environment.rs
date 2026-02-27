@@ -586,10 +586,7 @@ impl TestEnvBuilder {
 }
 
 impl TestEnvBuilderWithToken {
-    pub async fn setup_trusted_relayer(
-        &self,
-        relayer_id: AccountId,
-    ) -> anyhow::Result<Account> {
+    pub async fn setup_trusted_relayer(&self, relayer_id: AccountId) -> anyhow::Result<Account> {
         let relayer_account = self.create_account(relayer_id).await?;
 
         self.bridge_contract
