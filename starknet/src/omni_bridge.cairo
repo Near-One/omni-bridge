@@ -54,11 +54,11 @@ mod OmniBridge {
         get_contract_address, syscalls,
     };
     use crate::bridge_types::{
-        DeployToken, FinTransfer, InitTransfer, LogMetadata, MetadataPayload, PauseStateChanged,
-        PayloadType, Signature, TransferMessagePayload,
+        DeployToken, FinTransfer, InitTransfer, LogMetadata, MetadataPayload, MetadataPayloadTrait,
+        PauseStateChanged, Signature, TransferMessagePayload, TransferMessagePayloadTrait,
     };
     use crate::utils;
-    use crate::utils::{borsh, reverse_u256_bytes};
+    use crate::utils::reverse_u256_bytes;
 
     // Role constants
     const DEFAULT_ADMIN_ROLE: felt252 = 0;
@@ -201,14 +201,7 @@ mod OmniBridge {
         fn deploy_token(ref self: ContractState, signature: Signature, payload: MetadataPayload) {
             assert(!_is_paused(@self, PAUSE_DEPLOY_TOKEN), 'ERR_DEPLOY_TOKEN_PAUSED');
 
-            let mut borsh_bytes: ByteArray = "";
-            borsh_bytes.append_byte(PayloadType::Metadata.into());
-            borsh_bytes.append(@borsh::encode_byte_array(@payload.token));
-            borsh_bytes.append(@borsh::encode_byte_array(@payload.name));
-            borsh_bytes.append(@borsh::encode_byte_array(@payload.symbol));
-            borsh_bytes.append_byte(payload.decimals);
-
-            _verify_borsh_signature(ref self, @borsh_bytes, signature);
+            _verify_borsh_signature(ref self, @payload.to_borsh(), signature);
 
             let token_id_hash = compute_keccak_byte_array(@payload.token);
             let existing_token = self.near_to_starknet_token.read(token_id_hash);
@@ -255,33 +248,9 @@ mod OmniBridge {
             );
             _set_transfer_finalised(ref self, payload.destination_nonce);
 
-            let chain_id = self.omni_bridge_chain_id.read();
-
-            let mut borsh_bytes: ByteArray = "";
-            borsh_bytes.append_byte(PayloadType::TransferMessage.into());
-            borsh_bytes.append(@borsh::encode_u64(payload.destination_nonce));
-            borsh_bytes.append_byte(payload.origin_chain);
-            borsh_bytes.append(@borsh::encode_u64(payload.origin_nonce));
-            borsh_bytes.append_byte(chain_id);
-            borsh_bytes.append(@borsh::encode_address(payload.token_address));
-            borsh_bytes.append(@borsh::encode_u128(payload.amount));
-            borsh_bytes.append_byte(chain_id);
-            borsh_bytes.append(@borsh::encode_address(payload.recipient));
-            match @payload.fee_recipient {
-                Option::None => { borsh_bytes.append_byte(0); },
-                Option::Some(fee_recipient) => {
-                    borsh_bytes.append_byte(1);
-                    borsh_bytes.append(@borsh::encode_byte_array(fee_recipient));
-                },
-            }
-            match @payload.message {
-                Option::None => {},
-                Option::Some(message) => {
-                    borsh_bytes.append(@borsh::encode_byte_array(message));
-                },
-            }
-
-            _verify_borsh_signature(ref self, @borsh_bytes, signature);
+            _verify_borsh_signature(
+                ref self, @payload.to_borsh(self.omni_bridge_chain_id.read()), signature,
+            );
 
             if self.is_bridge_token(payload.token_address) {
                 IBridgeTokenDispatcher { contract_address: payload.token_address }
@@ -441,7 +410,7 @@ mod OmniBridge {
 
     fn _nonce_slot_and_bit(nonce: u64) -> (u64, u256) {
         let slot = nonce / 251;
-        let bit: u256 = _pow2_felt((nonce % 251).into());
+        let bit: u256 = _pow2((nonce % 251).into());
         (slot, bit)
     }
 
@@ -457,7 +426,7 @@ mod OmniBridge {
         self.completed_transfers.write(slot, (bitmap | bit).try_into().unwrap());
     }
 
-    fn _pow2_felt(mut exp: u128) -> u256 {
+    fn _pow2(mut exp: u128) -> u256 {
         let mut result: u256 = 1;
         while exp > 0 {
             result *= 2;

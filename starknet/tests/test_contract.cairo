@@ -23,6 +23,8 @@ trait IBridgeToken<TContractState> {
 
 // Test secret key (arbitrary non-zero u256 < curve order)
 const TEST_SECRET_KEY: u256 = 0xDEADBEEF;
+// Starknet chain id for the omni bridge
+const STARKNET_CHAIN_ID: u8 = 0x10;
 
 fn declare_bridge_token() -> ContractClass {
     let declare_result = declare("BridgeToken").unwrap_syscall();
@@ -51,7 +53,7 @@ fn deploy_bridge_contract() -> (IOmniBridgeDispatcher, ContractAddress) {
         .deploy(
             @array![
                 derived_address, // omni_bridge_derived_address (from test key pair)
-                0x9, // omni_bridge_chain_id
+                STARKNET_CHAIN_ID.into(), // omni_bridge_chain_id
                 token_class_hash.into(), // bridge_token_class_hash
                 owner.into(), // owner
                 native_token.into() // native_token_address
@@ -338,7 +340,7 @@ fn test_fin_transfer_with_bridge_token() {
     };
 
     // Sign the transfer message (borsh encode + keccak + ECDSA)
-    let message_hash = build_fin_transfer_message(@transfer_payload, 0x9);
+    let message_hash = build_fin_transfer_message(@transfer_payload, STARKNET_CHAIN_ID);
     let fin_signature = sign_message(message_hash);
 
     dispatcher.fin_transfer(fin_signature, transfer_payload);
