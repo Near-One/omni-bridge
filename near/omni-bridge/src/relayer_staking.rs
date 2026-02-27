@@ -11,18 +11,16 @@ use crate::{Contract, ContractExt, RelayerConfig, RelayerState, Role};
 #[near]
 impl Contract {
     pub fn is_trusted_relayer(&self, account_id: &AccountId) -> bool {
-        if self
-            .relayers
-            .get(account_id)
-            .is_some_and(|state| env::block_timestamp() >= state.activate_at.0)
-        {
+        if self.acl_has_any_role(
+            vec![Role::UnrestrictedRelayer.into(), Role::DAO.into()],
+            account_id.clone(),
+        ) {
             return true;
         }
 
-        self.acl_has_any_role(
-            vec![Role::UnrestrictedRelayer.into(), Role::DAO.into()],
-            account_id.clone(),
-        )
+        self.relayers
+            .get(account_id)
+            .is_some_and(|state| env::block_timestamp() >= state.activate_at.0)
     }
 
     #[payable]
