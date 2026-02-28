@@ -79,7 +79,9 @@ pub async fn process_near_to_utxo_init_transfer_event(
                     NearRpcError::NonceError
                     | NearRpcError::FinalizationError
                     | NearRpcError::RpcBroadcastTxAsyncError(_)
-                    | NearRpcError::RpcQueryError(JsonRpcError::TransportError(_))
+                    | NearRpcError::RpcQueryError(
+                        JsonRpcError::TransportError(_) | JsonRpcError::ServerError(_),
+                    )
                     | NearRpcError::RpcTransactionError(_) => {
                         warn!("Failed to sign {chain:?} transaction, retrying: {near_rpc_error:?}");
                         return Ok(EventAction::Retry);
@@ -215,7 +217,9 @@ pub async fn process_utxo_to_near_init_transfer_event(
                     NearRpcError::NonceError
                     | NearRpcError::FinalizationError
                     | NearRpcError::RpcBroadcastTxAsyncError(_)
-                    | NearRpcError::RpcQueryError(JsonRpcError::TransportError(_))
+                    | NearRpcError::RpcQueryError(
+                        JsonRpcError::TransportError(_) | JsonRpcError::ServerError(_),
+                    )
                     | NearRpcError::RpcTransactionError(_) => {
                         warn!(
                             "Failed to finalize {chain:?} transaction, retrying: {near_rpc_error:?}"
@@ -276,7 +280,9 @@ pub async fn process_sign_transaction_event(
                     NearRpcError::NonceError
                     | NearRpcError::FinalizationError
                     | NearRpcError::RpcBroadcastTxAsyncError(_)
-                    | NearRpcError::RpcQueryError(JsonRpcError::TransportError(_))
+                    | NearRpcError::RpcQueryError(
+                        JsonRpcError::TransportError(_) | JsonRpcError::ServerError(_),
+                    )
                     | NearRpcError::RpcTransactionError(_) => {
                         warn!(
                             "Failed to finalize {:?} transaction ({}), retrying: {near_rpc_error:?}",
@@ -370,7 +376,9 @@ pub async fn process_confirmed_tx_hash(
                     NearRpcError::NonceError
                     | NearRpcError::FinalizationError
                     | NearRpcError::RpcBroadcastTxAsyncError(_)
-                    | NearRpcError::RpcQueryError(JsonRpcError::TransportError(_))
+                    | NearRpcError::RpcQueryError(
+                        JsonRpcError::TransportError(_) | JsonRpcError::ServerError(_),
+                    )
                     | NearRpcError::RpcTransactionError(_) => {
                         warn!("Failed to verify withdraw, retrying: {near_rpc_error:?}");
                         return Ok(EventAction::Retry);
