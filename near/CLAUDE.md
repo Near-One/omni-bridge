@@ -11,6 +11,7 @@ cargo near build non-reproducible-wasm --manifest-path omni-token/Cargo.toml
 cargo near build non-reproducible-wasm --manifest-path token-deployer/Cargo.toml
 cargo near build non-reproducible-wasm --manifest-path omni-prover/evm-prover/Cargo.toml
 cargo near build non-reproducible-wasm --manifest-path omni-prover/wormhole-omni-prover-proxy/Cargo.toml
+cargo near build non-reproducible-wasm --manifest-path omni-prover/mpc-omni-prover/Cargo.toml
 
 # Testing (run from near/ directory)
 cargo nextest run -p omni-tests test_native_fee     # Example: run specific test
@@ -31,7 +32,8 @@ near/
 ├── token-deployer/    # Token deployment factory
 ├── omni-prover/
 │   ├── evm-prover/                    # EVM light client verification
-│   └── wormhole-omni-prover-proxy/    # Wormhole VAA verification
+│   ├── wormhole-omni-prover-proxy/    # Wormhole VAA verification
+│   └── mpc-omni-prover/               # MPC read-RPC signature verification
 ├── omni-tests/        # Integration tests (near-workspaces)
 └── mock/              # Test mocks
 ```
@@ -78,6 +80,7 @@ Shared types library - defines core types used across all contracts.
 **Modules:**
 - `errors.rs` - Error types
 - `evm/` - EVM-specific types (BlockHeader, Receipt, LogEntry)
+- `prover_args.rs` - Prover input structs (`EvmVerifyProofArgs`, `WormholeVerifyProofArgs`, `MpcVerifyProofArgs`)
 - `prover_result.rs` - Prover verification results
 - `btc.rs` - Bitcoin/UTXO types
 - `locker_args.rs` - Function argument structs
@@ -137,6 +140,23 @@ Proxy to Wormhole protocol for chains without light clients (Solana, BNB, EVM L2
 3. Parse VAA payload in callback
 4. Return typed `ProverResult`
 
+### mpc-omni-prover
+Verifies EVM events by calling the NEAR MPC network's `verify_foreign_transaction` API on-chain. The prover initiates the MPC verification as a cross-contract call and validates the response in a callback.
+
+**State:**
+- `mpc_contract_id` — AccountId of the MPC signer contract (e.g. `v1.signer`)
+- `chain_kind` — the EVM chain this prover instance verifies (must be an EVM chain)
+
+**Flow:**
+1. Deserialize `MpcVerifyProofArgs` containing `request_args_json`, `sign_payload`, and `proof_kind`
+2. Validate the `sign_payload` (must be EVM chain, must contain at least one log)
+3. Cross-contract call to `mpc_contract.verify_foreign_transaction(request_args)` with 1 yoctoNEAR deposit
+4. In callback: verify `SHA-256(borsh(sign_payload)) == response.payload_hash`
+5. Extract the EVM log from the payload's extracted values, convert to RLP
+6. Parse the EVM log via `parse_evm_event` and return typed `ProverResult`
+
+**Dependencies:** Uses `near-mpc-sdk` crate from the MPC repo (pinned git rev) for MPC types (`ForeignTxSignPayload`, `VerifyForeignTransactionRequestArgs`, `VerifyForeignTransactionResponse`, `EvmLog`, etc.).
+
 ## Code Style
 
 - Rust 2021 edition, 4-space indentation
@@ -150,6 +170,8 @@ Proxy to Wormhole protocol for chains without light clients (Solana, BNB, EVM L2
 - `near-plugins` - Access control (roles) and upgradeable patterns
 - `omni-utils` - Shared utilities (external repo)
 - `alloy` - EVM types and RLP encoding
+- `near-mpc-sdk` - MPC SDK for cross-contract calls to the MPC signer contract (used by mpc-omni-prover)
+- `contract-interface` - MPC network types from `github.com/near/mpc` (used by mpc-omni-prover via near-mpc-sdk)
 - `near-workspaces` - Integration testing
 
 ## Security Audit Notes

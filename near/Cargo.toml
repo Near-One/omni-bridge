@@ -10,6 +10,7 @@ members = [
     "token-deployer",
     "omni-prover/wormhole-omni-prover-proxy",
     "omni-prover/evm-prover",
+    "omni-prover/mpc-omni-prover",
     "omni-token",
     "omni-types",
     "omni-tests",
@@ -31,8 +32,8 @@ overflow-checks = true
 
 [workspace.dependencies]
 cargo-near-build = "0.9.0"
-near-sdk = "=5.24.0"
-near-contract-standards = "=5.24.0"
+near-sdk = "=5.24.1"
+near-contract-standards = "=5.24.1"
 hex = "0.4.2"
 borsh = "1.6.0"
 serde = { version = "1.0.200", features = ["derive"] }
@@ -51,4 +52,5 @@ ethereum-types = { version = "0.15.1", default-features = false, features = ["rl
 rlp = "0.6"
 sha3 = "0.10.0"
 sha2 = "0.10.0"
+k256 = { version = "0.13", default-features = false, features = ["ecdsa"] }
 rstest = "0.26.1"
