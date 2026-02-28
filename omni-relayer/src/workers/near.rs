@@ -189,7 +189,9 @@ pub async fn process_transfer_event(
                     NearRpcError::NonceError
                     | NearRpcError::FinalizationError
                     | NearRpcError::RpcBroadcastTxAsyncError(_)
-                    | NearRpcError::RpcQueryError(JsonRpcError::TransportError(_))
+                    | NearRpcError::RpcQueryError(
+                        JsonRpcError::TransportError(_) | JsonRpcError::ServerError(_),
+                    )
                     | NearRpcError::RpcTransactionError(JsonRpcError::TransportError(_)) => {
                         warn!(
                             "Failed to sign transfer ({origin_chain:?}:{origin_nonce}), retrying: {near_rpc_error:?}"
@@ -305,7 +307,9 @@ pub async fn process_transfer_to_utxo_event(
                     NearRpcError::NonceError
                     | NearRpcError::FinalizationError
                     | NearRpcError::RpcBroadcastTxAsyncError(_)
-                    | NearRpcError::RpcQueryError(JsonRpcError::TransportError(_))
+                    | NearRpcError::RpcQueryError(
+                        JsonRpcError::TransportError(_) | JsonRpcError::ServerError(_),
+                    )
                     | NearRpcError::RpcTransactionError(JsonRpcError::TransportError(_)) => {
                         warn!(
                             "Failed to submit {:?} transfer ({}), retrying: {near_rpc_error:?}",
@@ -764,7 +768,9 @@ pub async fn initiate_fast_transfer(
                     NearRpcError::NonceError
                     | NearRpcError::FinalizationError
                     | NearRpcError::RpcBroadcastTxAsyncError(_)
-                    | NearRpcError::RpcQueryError(JsonRpcError::TransportError(_))
+                    | NearRpcError::RpcQueryError(
+                        JsonRpcError::TransportError(_) | JsonRpcError::ServerError(_),
+                    )
                     | NearRpcError::RpcTransactionError(JsonRpcError::TransportError(_)) => {
                         warn!("Failed to initiate fast transfer, retrying: {near_rpc_error:?}");
                         return Ok(EventAction::Retry);
