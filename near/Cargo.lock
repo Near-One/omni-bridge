@@ -336,7 +336,7 @@ dependencies = [
 [[package]]
 name = "bounded-collections"
 version = "3.5.1"
-source = "git+https://github.com/near/mpc?rev=0b33905a2b6f4cd3c031bbc87b9d3878950eb091#0b33905a2b6f4cd3c031bbc87b9d3878950eb091"
+source = "git+https://github.com/near/mpc?rev=730db8efdd0b3bd6e872b47cc755ff4b79208e89#730db8efdd0b3bd6e872b47cc755ff4b79208e89"
 dependencies = [
  "borsh",
  "derive_more",
@@ -546,7 +546,7 @@ checksum = "7c74b8349d32d297c9134b8c88677813a227df8f779daa29bfc29c183fe3dca6"
 [[package]]
 name = "contract-interface"
 version = "3.5.1"
-source = "git+https://github.com/near/mpc?rev=0b33905a2b6f4cd3c031bbc87b9d3878950eb091#0b33905a2b6f4cd3c031bbc87b9d3878950eb091"
+source = "git+https://github.com/near/mpc?rev=730db8efdd0b3bd6e872b47cc755ff4b79208e89#730db8efdd0b3bd6e872b47cc755ff4b79208e89"
 dependencies = [
  "borsh",
  "bounded-collections",
@@ -2171,8 +2171,9 @@ dependencies = [
 [[package]]
 name = "near-mpc-sdk"
 version = "3.5.1"
-source = "git+https://github.com/near/mpc?rev=0b33905a2b6f4cd3c031bbc87b9d3878950eb091#0b33905a2b6f4cd3c031bbc87b9d3878950eb091"
+source = "git+https://github.com/near/mpc?rev=730db8efdd0b3bd6e872b47cc755ff4b79208e89#730db8efdd0b3bd6e872b47cc755ff4b79208e89"
 dependencies = [
+ "borsh",
  "bounded-collections",
  "contract-interface",
  "derive_more",
@@ -2628,6 +2629,7 @@ dependencies = [
  "borsh",
  "ethereum-types",
  "hex",
+ "near-mpc-sdk",
  "near-sdk",
  "num_enum",
  "omni-utils",

@@ -7,9 +7,7 @@ use near_mpc_sdk::contract_interface::types::{
     EvmExtractedValue, ExtractedValue, ForeignChainRpcRequest, ForeignTxSignPayload,
     ForeignTxSignPayloadV1, VerifyForeignTransactionRequestArgs, VerifyForeignTransactionResponse,
 };
-use near_sdk::{
-    ext_contract, near, require, serde_json, AccountId, Gas, NearToken, PanicOnDefault, Promise,
-};
+use near_sdk::{ext_contract, near, require, AccountId, Gas, NearToken, PanicOnDefault, Promise};
 use omni_types::{
     errors::ProverError,
     evm::events::parse_evm_event,
@@ -74,13 +72,10 @@ impl MpcOmniProver {
             ProverError::ChainMismatch.as_ref()
         );
 
-        let request_args: VerifyForeignTransactionRequestArgs =
-            serde_json::from_str(&args.request_args_json).near_expect(ProverError::ParseArgs);
-
         ext_mpc_contract::ext(self.mpc_contract_id.clone())
             .with_static_gas(VERIFY_FOREIGN_TX_GAS)
             .with_attached_deposit(ONE_YOCTO)
-            .verify_foreign_transaction(request_args)
+            .verify_foreign_transaction(args.request_args)
             .then(
                 Self::ext(near_sdk::env::current_account_id())
                     .with_static_gas(VERIFY_CALLBACK_GAS)

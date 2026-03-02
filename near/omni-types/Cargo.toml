@@ -17,6 +17,7 @@ schemars.workspace = true
 num_enum.workspace = true
 alloy.workspace = true
 omni-utils.workspace = true
+near-mpc-sdk.workspace = true
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 sha3.workspace = true

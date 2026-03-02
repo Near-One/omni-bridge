@@ -1,8 +1,13 @@
 use borsh::BorshDeserialize;
 
-use near_mpc_sdk::contract_interface::types::{
-    EvmExtractedValue, EvmExtractor, EvmFinality, EvmLog, EvmRpcRequest, EvmTxId, ExtractedValue,
-    ForeignChainRpcRequest, ForeignTxSignPayload, ForeignTxSignPayloadV1, Hash160, Hash256,
+use near_mpc_sdk::{
+    contract_interface::types::{
+        EvmExtractedValue, EvmExtractor, EvmFinality, EvmLog, EvmRpcRequest, EvmTxId,
+        ExtractedValue, ForeignChainRpcRequest, ForeignTxSignPayload, ForeignTxSignPayloadV1,
+        Hash160, Hash256,
+    },
+    foreign_chain::VerifyForeignTransactionRequestArgs,
+    sign::DomainId,
 };
 
 use omni_types::prover_args::MpcVerifyProofArgs;
@@ -115,7 +120,12 @@ fn test_mpc_verify_proof_args_serialization() {
     let args = MpcVerifyProofArgs {
         proof_kind: ProofKind::InitTransfer,
         sign_payload: payload_bytes.clone(),
-        request_args_json: r#"{"request":{"Abstract":{"tx_id":"abababababababababababababababababababababababababababababababababab","extractors":[{"Log":{"log_index":0}}],"finality":"Finalized"}},"derivation_path":"","domain_id":0,"payload_version":1}"#.to_string(),
+        request_args: VerifyForeignTransactionRequestArgs {
+            request: ForeignChainRpcRequest::Abstract(test_evm_request()),
+            derivation_path: "".to_string(),
+            domain_id: DomainId(3),
+            payload_version: 1,
+        },
     };
 
     let serialized = borsh::to_vec(&args).unwrap();
