@@ -17,7 +17,7 @@ const BLOCK_HASH_SAFE_GAS: Gas = Gas::from_tgas(5);
 
 type H256 = [u8; 32];
 
-/// Defines an interface to call EthClient contract to get the safe block hash for a given block
+/// Defines an interface to call `EthClient` contract to get the safe block hash for a given block
 /// number. It returns Some(hash) if the block hash is present in the safe canonical chain, or
 /// None if the block number is not part of the canonical chain yet.
 #[ext_contract(evm_client)]
@@ -141,16 +141,16 @@ impl EvmProver {
     /// Verify the proof recursively traversing through the key.
     /// Return the value at the end of the key, in case the proof is valid.
     ///
-    /// @param expected_root is the expected root of the current node.
+    /// @param `expected_root` is the expected root of the current node.
     /// @param key is the key for which we are proving the value.
     /// @param proof contains relevant information to verify data is valid
     ///
-    /// Patricia Trie: https://eth.wiki/en/fundamentals/patricia-tree
-    /// Patricia Img:  https://ethereum.stackexchange.com/questions/268/ethereum-block-architecture/6413#6413
+    /// Patricia Trie: <https://eth.wiki/en/fundamentals/patricia-tree>
+    /// Patricia Img:  <https://ethereum.stackexchange.com/questions/268/ethereum-block-architecture/6413#6413>
     ///
-    /// Verification:  https://github.com/slockit/in3/wiki/Ethereum-Verification-and-MerkleProof#receipt-proof
-    /// Article:       https://medium.com/@ouvrard.pierre.alain/merkle-proof-verification-for-ethereum-patricia-tree-48f29658eec
-    /// Python impl:   https://gist.github.com/mfornet/0ff283274c0162f1cca45966bccf69ee
+    /// Verification:  <https://github.com/slockit/in3/wiki/Ethereum-Verification-and-MerkleProof#receipt-proof>
+    /// Article:       <https://medium.com/@ouvrard.pierre.alain/merkle-proof-verification-for-ethereum-patricia-tree-48f29658eec>
+    /// Python impl:   <https://gist.github.com/mfornet/0ff283274c0162f1cca45966bccf69ee>
     ///
     fn verify_trie_proof(expected_root: H256, key: Vec<u8>, proof: &Vec<Vec<u8>>) -> Vec<u8> {
         let mut actual_key = vec![];

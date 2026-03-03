@@ -20,7 +20,7 @@ OMNI_RELAYER_MANIFEST := $(MAKEFILE_DIR)/omni-relayer/Cargo.toml
 clippy: clippy-near clippy-omni-relayer
 
 clippy-near:
-	cargo clippy --manifest-path $(NEAR_MANIFEST) -- $(LINT_OPTIONS)
+	cargo clippy --manifest-path $(NEAR_MANIFEST) --all-features -- $(LINT_OPTIONS)
 
 fmt-near:
 	cargo fmt --all --check --manifest-path $(NEAR_MANIFEST)
