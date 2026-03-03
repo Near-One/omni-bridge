@@ -22,10 +22,6 @@ passed_env = []
 # supported by respective version of binary inside the container besides `--no-locked` flag
 container_build_command = ["cargo", "near", "build", "non-reproducible-wasm", "--locked"]
 
-[features]
-abi = ["borsh/unstable__schema", "near-mpc-sdk/abi"]
-__abi-generate = ["near-sdk/__abi-generate"]
-
 [lib]
 crate-type = ["cdylib", "rlib"]
 
