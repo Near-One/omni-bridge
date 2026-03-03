@@ -23,7 +23,6 @@ passed_env = []
 container_build_command = ["cargo", "near", "build", "non-reproducible-wasm", "--locked"]
 
 [features]
-default = ["abi", "__abi-generate"]
 abi = ["borsh/unstable__schema", "near-mpc-sdk/abi"]
 __abi-generate = ["near-sdk/__abi-generate"]
 
