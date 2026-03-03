@@ -336,11 +336,12 @@ dependencies = [
 [[package]]
 name = "bounded-collections"
 version = "3.5.1"
-source = "git+https://github.com/near/mpc?rev=730db8efdd0b3bd6e872b47cc755ff4b79208e89#730db8efdd0b3bd6e872b47cc755ff4b79208e89"
+source = "git+https://github.com/near/mpc?rev=469112d3aab24218e023ef5cc9f7d2ed7127541b#469112d3aab24218e023ef5cc9f7d2ed7127541b"
 dependencies = [
  "borsh",
  "derive_more",
  "hex",
+ "schemars 0.8.22",
  "serde",
  "thiserror 2.0.18",
 ]
@@ -546,12 +547,13 @@ checksum = "7c74b8349d32d297c9134b8c88677813a227df8f779daa29bfc29c183fe3dca6"
 [[package]]
 name = "contract-interface"
 version = "3.5.1"
-source = "git+https://github.com/near/mpc?rev=730db8efdd0b3bd6e872b47cc755ff4b79208e89#730db8efdd0b3bd6e872b47cc755ff4b79208e89"
+source = "git+https://github.com/near/mpc?rev=469112d3aab24218e023ef5cc9f7d2ed7127541b#469112d3aab24218e023ef5cc9f7d2ed7127541b"
 dependencies = [
  "borsh",
  "bounded-collections",
  "bs58 0.5.1",
  "derive_more",
+ "schemars 0.8.22",
  "serde",
  "serde_with",
  "sha2",
@@ -2171,12 +2173,13 @@ dependencies = [
 [[package]]
 name = "near-mpc-sdk"
 version = "3.5.1"
-source = "git+https://github.com/near/mpc?rev=730db8efdd0b3bd6e872b47cc755ff4b79208e89#730db8efdd0b3bd6e872b47cc755ff4b79208e89"
+source = "git+https://github.com/near/mpc?rev=469112d3aab24218e023ef5cc9f7d2ed7127541b#469112d3aab24218e023ef5cc9f7d2ed7127541b"
 dependencies = [
  "borsh",
  "bounded-collections",
  "contract-interface",
  "derive_more",
+ "signature-verifier",
 ]
 
 [[package]]
@@ -3632,6 +3635,15 @@ name = "signature"
 version = "2.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "77549399552de45a898a580c1b41d445bf730df867cc44e6c0233bbc4b8329de"
+
+[[package]]
+name = "signature-verifier"
+version = "3.5.1"
+source = "git+https://github.com/near/mpc?rev=469112d3aab24218e023ef5cc9f7d2ed7127541b#469112d3aab24218e023ef5cc9f7d2ed7127541b"
+dependencies = [
+ "contract-interface",
+ "near-sdk",
+]
 
 [[package]]
 name = "simd-adler32"
