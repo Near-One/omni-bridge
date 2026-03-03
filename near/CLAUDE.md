@@ -11,7 +11,7 @@ cargo near build non-reproducible-wasm --manifest-path omni-token/Cargo.toml
 cargo near build non-reproducible-wasm --manifest-path token-deployer/Cargo.toml
 cargo near build non-reproducible-wasm --manifest-path omni-prover/evm-prover/Cargo.toml
 cargo near build non-reproducible-wasm --manifest-path omni-prover/wormhole-omni-prover-proxy/Cargo.toml
-cargo near build non-reproducible-wasm --manifest-path omni-prover/mpc-omni-prover/Cargo.toml
+cargo near build non-reproducible-wasm --manifest-path omni-prover/evm-mpc-prover/Cargo.toml
 
 # Testing (run from near/ directory)
 cargo nextest run -p omni-tests test_native_fee     # Example: run specific test
@@ -33,7 +33,7 @@ near/
 ├── omni-prover/
 │   ├── evm-prover/                    # EVM light client verification
 │   ├── wormhole-omni-prover-proxy/    # Wormhole VAA verification
-│   └── mpc-omni-prover/               # MPC read-RPC signature verification
+│   └── evm-mpc-prover/               # MPC read-RPC signature verification
 ├── omni-tests/        # Integration tests (near-workspaces)
 └── mock/              # Test mocks
 ```
@@ -140,7 +140,7 @@ Proxy to Wormhole protocol for chains without light clients (Solana, BNB, EVM L2
 3. Parse VAA payload in callback
 4. Return typed `ProverResult`
 
-### mpc-omni-prover
+### evm-mpc-prover
 Verifies EVM events by calling the NEAR MPC network's `verify_foreign_transaction` API on-chain. The prover initiates the MPC verification as a cross-contract call and validates the response in a callback.
 
 **State:**
@@ -170,8 +170,8 @@ Verifies EVM events by calling the NEAR MPC network's `verify_foreign_transactio
 - `near-plugins` - Access control (roles) and upgradeable patterns
 - `omni-utils` - Shared utilities (external repo)
 - `alloy` - EVM types and RLP encoding
-- `near-mpc-sdk` - MPC SDK for cross-contract calls to the MPC signer contract (used by mpc-omni-prover)
-- `contract-interface` - MPC network types from `github.com/near/mpc` (used by mpc-omni-prover via near-mpc-sdk)
+- `near-mpc-sdk` - MPC SDK for cross-contract calls to the MPC signer contract (used by evm-mpc-prover)
+- `contract-interface` - MPC network types from `github.com/near/mpc` (used by evm-mpc-prover via near-mpc-sdk)
 - `near-workspaces` - Integration testing
 
 ## Security Audit Notes
