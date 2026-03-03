@@ -114,6 +114,7 @@ pub enum ProverError {
     HashNotSet,
     InvalidBlockHash,
     InvalidPayloadHash,
+    InvalidPayloadValuesLength,
     InvalidProof,
     InvalidPublicKey,
     InvalidSignature,

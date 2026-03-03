@@ -137,10 +137,14 @@ impl MpcOmniProver {
     }
 
     fn extract_evm_log(payload: &ForeignTxSignPayloadV1) -> Result<Vec<u8>, String> {
-        for value in &payload.values {
-            if let ExtractedValue::EvmExtractedValue(EvmExtractedValue::Log(evm_log)) = value {
-                return evm_log_to_rlp(evm_log);
-            }
+        if payload.values.len() != 1 {
+            return Err(ProverError::InvalidPayloadValuesLength.to_string());
+        }
+
+        if let Some(ExtractedValue::EvmExtractedValue(EvmExtractedValue::Log(evm_log))) =
+            payload.values.first()
+        {
+            return evm_log_to_rlp(evm_log);
         }
 
         Err(ProverError::InvalidProof.to_string())
