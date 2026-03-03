@@ -102,7 +102,7 @@ impl MpcOmniProver {
         let mpc_response = call_result.map_err(|_| ProverError::InvalidProof.to_string())?;
 
         let sign_payload = ForeignTxSignPayload::try_from_slice(&sign_payload_bytes)
-            .near_expect(ProverError::ParseArgs);
+            .map_err(|_| ProverError::ParseArgs.to_string())?;
 
         let expected_hash = sign_payload
             .compute_msg_hash()
