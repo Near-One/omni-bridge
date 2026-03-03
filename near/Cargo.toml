@@ -10,7 +10,7 @@ members = [
     "token-deployer",
     "omni-prover/wormhole-omni-prover-proxy",
     "omni-prover/evm-prover",
-    "omni-prover/evm-mpc-prover",
+    "omni-prover/mpc-omni-prover",
     "omni-token",
     "omni-types",
     "omni-tests",

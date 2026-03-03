@@ -3,11 +3,12 @@ use near_sdk::{
     env, ext_contract, near, near_bindgen, require, AccountId, Gas, PanicOnDefault, Promise,
 };
 use omni_types::errors::ProverError;
-use omni_types::evm::events::parse_evm_event;
+use omni_types::evm::events::parse_evm_proof;
 use omni_types::evm::header::BlockHeader;
 use omni_types::evm::receipt::{LogEntry, Receipt};
 use omni_types::prover_args::EvmVerifyProofArgs;
-use omni_types::prover_result::{ProofKind, ProverResult};
+use omni_types::prover_result::ProofKind;
+use omni_types::prover_result::ProverResult;
 use omni_types::utils::keccak256;
 use omni_types::ChainKind;
 use rlp::Rlp;
@@ -118,24 +119,7 @@ impl EvmProver {
             return Err(ProverError::InvalidBlockHash.to_string());
         }
 
-        match kind {
-            ProofKind::InitTransfer => Ok(ProverResult::InitTransfer(parse_evm_event(
-                self.chain_kind,
-                log_entry_data,
-            )?)),
-            ProofKind::FinTransfer => Ok(ProverResult::FinTransfer(parse_evm_event(
-                self.chain_kind,
-                log_entry_data,
-            )?)),
-            ProofKind::DeployToken => Ok(ProverResult::DeployToken(parse_evm_event(
-                self.chain_kind,
-                log_entry_data,
-            )?)),
-            ProofKind::LogMetadata => Ok(ProverResult::LogMetadata(parse_evm_event(
-                self.chain_kind,
-                log_entry_data,
-            )?)),
-        }
+        parse_evm_proof(kind, self.chain_kind, log_entry_data)
     }
 
     /// Verify the proof recursively traversing through the key.
