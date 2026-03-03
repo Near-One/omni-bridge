@@ -10,12 +10,23 @@ use near_mpc_sdk::{
     sign::DomainId,
 };
 
+use near_sdk::base64::Engine;
 use omni_types::prover_args::MpcVerifyProofArgs;
 use omni_types::prover_result::ProofKind;
 
 use omni_types::ChainKind;
 
 use crate::{evm_log_to_rlp, MpcOmniProver};
+
+fn hex_to_hash256(hex_str: &str) -> Hash256 {
+    let bytes: [u8; 32] = hex::decode(hex_str).unwrap().try_into().unwrap();
+    Hash256(bytes)
+}
+
+fn hex_to_hash160(hex_str: &str) -> Hash160 {
+    let bytes: [u8; 20] = hex::decode(hex_str).unwrap().try_into().unwrap();
+    Hash160(bytes)
+}
 
 fn test_evm_log() -> EvmLog {
     EvmLog {
@@ -31,11 +42,64 @@ fn test_evm_log() -> EvmLog {
     }
 }
 
+/// Real InitTransfer log from Abstract testnet tx:
+/// https://sepolia.abscan.org/tx/0x8d286a01fa892903128228cdca896de68c7b774ccbd1b46b25867ef9499c6fc3
+/// Log index 3 — InitTransfer event from bridge contract 0x1a7Eba78B12F2A82D812f25155e6c7FC2aB1eD32
+/// initTransfer(tokenAddress=0x6641415a..., amount=1, fee=0, nativeFee=0, recipient="near:frolik.testnet")
+fn abs_testnet_evm_log() -> EvmLog {
+    EvmLog {
+        removed: false,
+        log_index: 3,
+        transaction_index: 0,
+        transaction_hash: hex_to_hash256(
+            "8d286a01fa892903128228cdca896de68c7b774ccbd1b46b25867ef9499c6fc3",
+        ),
+        block_hash: hex_to_hash256(
+            "45471ca1210369f7e2062ea93a4a173c4573460497f01303bc3b6c8b6a84dec1",
+        ),
+        block_number: 0xfee757,
+        address: hex_to_hash160("1a7eba78b12f2a82d812f25155e6c7fc2ab1ed32"),
+        data: "0x00000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000a000000000000000000000000000000000000000000000000000000000000000e000000000000000000000000000000000000000000000000000000000000000136e6561723a66726f6c696b2e746573746e6574000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+            .to_string(),
+        topics: vec![
+            hex_to_hash256(
+                "aa7e1f77d43faa300bc5ae8f012f0b7cf80174f4c0b1cffeab250cb4966bb88c",
+            ),
+            hex_to_hash256(
+                "000000000000000000000000cf6462b9fce5af3e6c660c83453eca18ff468773",
+            ),
+            hex_to_hash256(
+                "0000000000000000000000006641415a61bce80d97a715054d1334360ab833eb",
+            ),
+            hex_to_hash256(
+                "0000000000000000000000000000000000000000000000000000000000000001",
+            ),
+        ],
+    }
+}
+
+fn abs_testnet_tx_id() -> EvmTxId {
+    let bytes: [u8; 32] =
+        hex::decode("8d286a01fa892903128228cdca896de68c7b774ccbd1b46b25867ef9499c6fc3")
+            .unwrap()
+            .try_into()
+            .unwrap();
+    EvmTxId(bytes)
+}
+
 fn test_evm_request() -> EvmRpcRequest {
     EvmRpcRequest {
         tx_id: EvmTxId([0xab; 32]),
         extractors: vec![EvmExtractor::Log { log_index: 0 }],
         finality: EvmFinality::Finalized,
+    }
+}
+
+fn abs_testnet_evm_request() -> EvmRpcRequest {
+    EvmRpcRequest {
+        tx_id: abs_testnet_tx_id(),
+        extractors: vec![EvmExtractor::Log { log_index: 3 }],
+        finality: EvmFinality::Latest,
     }
 }
 
@@ -202,4 +266,50 @@ fn test_request_matches_chain_abstract() {
         &abs_request,
         ChainKind::Arb
     ));
+}
+
+#[test]
+fn test_abs_testnet_verify_proof_args() {
+    let request = abs_testnet_evm_request();
+
+    let sign_payload = ForeignTxSignPayload::V1(ForeignTxSignPayloadV1 {
+        request: ForeignChainRpcRequest::Abstract(request.clone()),
+        values: vec![ExtractedValue::EvmExtractedValue(EvmExtractedValue::Log(
+            abs_testnet_evm_log(),
+        ))],
+    });
+
+    let request_args = VerifyForeignTransactionRequestArgs {
+        request: ForeignChainRpcRequest::Abstract(request),
+        derivation_path: String::new(),
+        domain_id: DomainId(3),
+        payload_version: 1,
+    };
+
+    let args = MpcVerifyProofArgs {
+        proof_kind: ProofKind::InitTransfer,
+        sign_payload: borsh::to_vec(&sign_payload).unwrap(),
+        request_args,
+    };
+
+    // Verify serialization roundtrip
+    let inner_bytes = borsh::to_vec(&args).unwrap();
+    let deserialized = MpcVerifyProofArgs::try_from_slice(&inner_bytes).unwrap();
+    assert_eq!(deserialized.proof_kind, ProofKind::InitTransfer);
+
+    // Verify payload hash is deterministic
+    let payload_from_args =
+        ForeignTxSignPayload::try_from_slice(&deserialized.sign_payload).unwrap();
+    let hash1 = sign_payload.compute_msg_hash().unwrap();
+    let hash2 = payload_from_args.compute_msg_hash().unwrap();
+    assert_eq!(hash1.0, hash2.0);
+
+    // Generate base64 for near-cli call (wrapped as borsh Vec<u8> for verify_proof input)
+    let call_bytes = borsh::to_vec(&inner_bytes).unwrap();
+    let base64_encoded = near_sdk::base64::engine::general_purpose::STANDARD.encode(&call_bytes);
+
+    // Print for manual on-chain testing:
+    // near contract call-function as-transaction <prover> verify_proof \
+    //   base64-args '<base64_encoded>' prepaid-gas '100 Tgas' ...
+    assert!(!base64_encoded.is_empty());
 }
