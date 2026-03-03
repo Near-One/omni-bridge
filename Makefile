@@ -77,4 +77,4 @@ solana-deploy-dev solana-deploy:
 	anchor deploy --verifiable --program-name bridge_token_factory --provider.cluster $(ENV)
 
 rust-run-tests:
-	cargo nextest run --manifest-path $(NEAR_MANIFEST)
+	cargo nextest run --manifest-path $(NEAR_MANIFEST) --all-features
