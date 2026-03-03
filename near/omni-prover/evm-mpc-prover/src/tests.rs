@@ -2,12 +2,10 @@ use borsh::BorshDeserialize;
 
 use near_mpc_sdk::{
     contract_interface::types::{
-        EvmExtractedValue, EvmExtractor, EvmFinality, EvmLog, EvmRpcRequest, EvmTxId,
+        DomainId, EvmExtractedValue, EvmExtractor, EvmFinality, EvmLog, EvmRpcRequest, EvmTxId,
         ExtractedValue, ForeignChainRpcRequest, ForeignTxSignPayload, ForeignTxSignPayloadV1,
         Hash160, Hash256, SolanaFinality, SolanaRpcRequest, SolanaTxId,
     },
-    foreign_chain::VerifyForeignTransactionRequestArgs,
-    sign::DomainId,
 };
 
 use near_sdk::base64::Engine;
@@ -184,12 +182,9 @@ fn test_mpc_verify_proof_args_serialization() {
     let args = MpcVerifyProofArgs {
         proof_kind: ProofKind::InitTransfer,
         sign_payload: payload_bytes.clone(),
-        request_args: VerifyForeignTransactionRequestArgs {
-            request: ForeignChainRpcRequest::Abstract(test_evm_request()),
-            derivation_path: "".to_string(),
-            domain_id: DomainId(3),
-            payload_version: 1,
-        },
+        derivation_path: "".to_string(),
+        domain_id: DomainId(3),
+        payload_version: 1,
     };
 
     let serialized = borsh::to_vec(&args).unwrap();
@@ -273,23 +268,18 @@ fn test_abs_testnet_verify_proof_args() {
     let request = abs_testnet_evm_request();
 
     let sign_payload = ForeignTxSignPayload::V1(ForeignTxSignPayloadV1 {
-        request: ForeignChainRpcRequest::Abstract(request.clone()),
+        request: ForeignChainRpcRequest::Abstract(request),
         values: vec![ExtractedValue::EvmExtractedValue(EvmExtractedValue::Log(
             abs_testnet_evm_log(),
         ))],
     });
 
-    let request_args = VerifyForeignTransactionRequestArgs {
-        request: ForeignChainRpcRequest::Abstract(request),
-        derivation_path: String::new(),
-        domain_id: DomainId(3),
-        payload_version: 1,
-    };
-
     let args = MpcVerifyProofArgs {
         proof_kind: ProofKind::InitTransfer,
         sign_payload: borsh::to_vec(&sign_payload).unwrap(),
-        request_args,
+        derivation_path: String::new(),
+        domain_id: DomainId(3),
+        payload_version: 1,
     };
 
     // Verify serialization roundtrip

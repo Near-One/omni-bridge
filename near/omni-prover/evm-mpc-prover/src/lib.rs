@@ -74,10 +74,17 @@ impl EvmMpcProver {
             ProverError::FinalityMismatch.as_ref()
         );
 
+        let request_args = VerifyForeignTransactionRequestArgs {
+            request: payload_v1.request.clone(),
+            derivation_path: args.derivation_path,
+            domain_id: args.domain_id,
+            payload_version: args.payload_version,
+        };
+
         ext_mpc_contract::ext(self.mpc_contract_id.clone())
             .with_static_gas(VERIFY_FOREIGN_TX_GAS)
             .with_attached_deposit(ONE_YOCTO)
-            .verify_foreign_transaction(args.request_args)
+            .verify_foreign_transaction(request_args)
             .then(
                 Self::ext(near_sdk::env::current_account_id())
                     .with_static_gas(VERIFY_CALLBACK_GAS)

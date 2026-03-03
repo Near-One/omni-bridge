@@ -1,4 +1,4 @@
-use near_mpc_sdk::foreign_chain::VerifyForeignTransactionRequestArgs;
+use near_mpc_sdk::contract_interface::types::DomainId;
 use near_sdk::near;
 
 use crate::prover_result::ProofKind;
@@ -22,7 +22,9 @@ pub struct WormholeVerifyProofArgs {
 pub struct MpcVerifyProofArgs {
     pub proof_kind: ProofKind,
     pub sign_payload: Vec<u8>,
-    pub request_args: VerifyForeignTransactionRequestArgs,
+    pub derivation_path: String,
+    pub domain_id: DomainId,
+    pub payload_version: u8,
 }
 
 #[near(serializers=[borsh, json])]
