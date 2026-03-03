@@ -1,11 +1,9 @@
 use borsh::BorshDeserialize;
 
-use near_mpc_sdk::{
-    contract_interface::types::{
-        DomainId, EvmExtractedValue, EvmExtractor, EvmFinality, EvmLog, EvmRpcRequest, EvmTxId,
-        ExtractedValue, ForeignChainRpcRequest, ForeignTxSignPayload, ForeignTxSignPayloadV1,
-        Hash160, Hash256, SolanaFinality, SolanaRpcRequest, SolanaTxId,
-    },
+use near_mpc_sdk::contract_interface::types::{
+    DomainId, EvmExtractedValue, EvmExtractor, EvmFinality, EvmLog, EvmRpcRequest, EvmTxId,
+    ExtractedValue, ForeignChainRpcRequest, ForeignTxSignPayload, ForeignTxSignPayloadV1, Hash160,
+    Hash256, SolanaFinality, SolanaRpcRequest, SolanaTxId,
 };
 
 use near_sdk::base64::Engine;
