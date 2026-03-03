@@ -4,7 +4,7 @@ use near_mpc_sdk::{
     contract_interface::types::{
         EvmExtractedValue, EvmExtractor, EvmFinality, EvmLog, EvmRpcRequest, EvmTxId,
         ExtractedValue, ForeignChainRpcRequest, ForeignTxSignPayload, ForeignTxSignPayloadV1,
-        Hash160, Hash256,
+        Hash160, Hash256, SolanaFinality, SolanaRpcRequest, SolanaTxId,
     },
     foreign_chain::VerifyForeignTransactionRequestArgs,
     sign::DomainId,
@@ -312,4 +312,71 @@ fn test_abs_testnet_verify_proof_args() {
     // near contract call-function as-transaction <prover> verify_proof \
     //   base64-args '<base64_encoded>' prepaid-gas '100 Tgas' ...
     assert!(!base64_encoded.is_empty());
+}
+
+#[test]
+fn test_request_matches_finality_ethereum_match() {
+    let request = ForeignChainRpcRequest::Ethereum(test_evm_request()); // Finalized
+    assert!(MpcOmniProver::request_matches_finality(
+        &request,
+        &EvmFinality::Finalized
+    ));
+}
+
+#[test]
+fn test_request_matches_finality_abstract_match() {
+    let request = ForeignChainRpcRequest::Abstract(abs_testnet_evm_request()); // Latest
+    assert!(MpcOmniProver::request_matches_finality(
+        &request,
+        &EvmFinality::Latest
+    ));
+}
+
+#[test]
+fn test_request_matches_finality_ethereum_mismatch() {
+    let request = ForeignChainRpcRequest::Ethereum(test_evm_request()); // Finalized
+    assert!(!MpcOmniProver::request_matches_finality(
+        &request,
+        &EvmFinality::Latest
+    ));
+    assert!(!MpcOmniProver::request_matches_finality(
+        &request,
+        &EvmFinality::Safe
+    ));
+}
+
+#[test]
+fn test_request_matches_finality_abstract_mismatch() {
+    let request = ForeignChainRpcRequest::Abstract(abs_testnet_evm_request()); // Latest
+    assert!(!MpcOmniProver::request_matches_finality(
+        &request,
+        &EvmFinality::Finalized
+    ));
+    assert!(!MpcOmniProver::request_matches_finality(
+        &request,
+        &EvmFinality::Safe
+    ));
+}
+
+#[test]
+fn test_request_matches_finality_non_evm_returns_false() {
+    let solana_request = ForeignChainRpcRequest::Solana(SolanaRpcRequest {
+        tx_id: SolanaTxId([0u8; 64]),
+        finality: SolanaFinality::Confirmed,
+        extractors: vec![],
+    });
+
+    // Non-EVM requests should never match any EVM finality
+    assert!(!MpcOmniProver::request_matches_finality(
+        &solana_request,
+        &EvmFinality::Latest
+    ));
+    assert!(!MpcOmniProver::request_matches_finality(
+        &solana_request,
+        &EvmFinality::Safe
+    ));
+    assert!(!MpcOmniProver::request_matches_finality(
+        &solana_request,
+        &EvmFinality::Finalized
+    ));
 }
