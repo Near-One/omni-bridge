@@ -336,7 +336,7 @@ dependencies = [
 [[package]]
 name = "bounded-collections"
 version = "3.5.1"
-source = "git+https://github.com/near/mpc?rev=469112d3aab24218e023ef5cc9f7d2ed7127541b#469112d3aab24218e023ef5cc9f7d2ed7127541b"
+source = "git+https://github.com/near/mpc?rev=24634d774923986f6835a2ca196c2ebcacba0729#24634d774923986f6835a2ca196c2ebcacba0729"
 dependencies = [
  "borsh",
  "derive_more",
@@ -547,7 +547,7 @@ checksum = "7c74b8349d32d297c9134b8c88677813a227df8f779daa29bfc29c183fe3dca6"
 [[package]]
 name = "contract-interface"
 version = "3.5.1"
-source = "git+https://github.com/near/mpc?rev=469112d3aab24218e023ef5cc9f7d2ed7127541b#469112d3aab24218e023ef5cc9f7d2ed7127541b"
+source = "git+https://github.com/near/mpc?rev=24634d774923986f6835a2ca196c2ebcacba0729#24634d774923986f6835a2ca196c2ebcacba0729"
 dependencies = [
  "borsh",
  "bounded-collections",
@@ -2173,7 +2173,7 @@ dependencies = [
 [[package]]
 name = "near-mpc-sdk"
 version = "3.5.1"
-source = "git+https://github.com/near/mpc?rev=469112d3aab24218e023ef5cc9f7d2ed7127541b#469112d3aab24218e023ef5cc9f7d2ed7127541b"
+source = "git+https://github.com/near/mpc?rev=24634d774923986f6835a2ca196c2ebcacba0729#24634d774923986f6835a2ca196c2ebcacba0729"
 dependencies = [
  "borsh",
  "bounded-collections",
@@ -3639,7 +3639,7 @@ checksum = "77549399552de45a898a580c1b41d445bf730df867cc44e6c0233bbc4b8329de"
 [[package]]
 name = "signature-verifier"
 version = "3.5.1"
-source = "git+https://github.com/near/mpc?rev=469112d3aab24218e023ef5cc9f7d2ed7127541b#469112d3aab24218e023ef5cc9f7d2ed7127541b"
+source = "git+https://github.com/near/mpc?rev=24634d774923986f6835a2ca196c2ebcacba0729#24634d774923986f6835a2ca196c2ebcacba0729"
 dependencies = [
  "contract-interface",
  "near-sdk",
