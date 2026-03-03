@@ -110,6 +110,7 @@ pub enum TokenError {
 #[non_exhaustive]
 pub enum ProverError {
     ChainMismatch,
+    FinalityMismatch,
     HashNotSet,
     InvalidBlockHash,
     InvalidPayloadHash,

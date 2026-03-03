@@ -4,7 +4,7 @@ use alloy::{
 };
 use borsh::BorshDeserialize;
 use near_mpc_sdk::contract_interface::types::{
-    EvmExtractedValue, ExtractedValue, ForeignChainRpcRequest, ForeignTxSignPayload,
+    EvmExtractedValue, EvmFinality, ExtractedValue, ForeignChainRpcRequest, ForeignTxSignPayload,
     ForeignTxSignPayloadV1, VerifyForeignTransactionRequestArgs, VerifyForeignTransactionResponse,
 };
 use near_sdk::{ext_contract, near, require, AccountId, Gas, NearToken, PanicOnDefault, Promise};
@@ -33,6 +33,7 @@ pub trait MpcContract {
 #[derive(PanicOnDefault)]
 pub struct MpcOmniProver {
     pub mpc_contract_id: AccountId,
+    pub finality: EvmFinality,
     pub chain_kind: ChainKind,
 }
 
@@ -41,7 +42,7 @@ impl MpcOmniProver {
     #[init]
     #[private]
     #[must_use]
-    pub fn init(mpc_contract_id: AccountId, chain_kind: ChainKind) -> Self {
+    pub fn init(mpc_contract_id: AccountId, finality: EvmFinality, chain_kind: ChainKind) -> Self {
         require!(
             chain_kind.is_evm_chain(),
             ProverError::UnsupportedChain.as_ref()
@@ -49,13 +50,9 @@ impl MpcOmniProver {
 
         Self {
             mpc_contract_id,
+            finality,
             chain_kind,
         }
-    }
-
-    #[private]
-    pub fn update_mpc_contract_id(&mut self, mpc_contract_id: AccountId) {
-        self.mpc_contract_id = mpc_contract_id;
     }
 
     #[allow(clippy::needless_pass_by_value)]
@@ -70,6 +67,11 @@ impl MpcOmniProver {
         require!(
             Self::request_matches_chain(&payload_v1.request, self.chain_kind),
             ProverError::ChainMismatch.as_ref()
+        );
+
+        require!(
+            Self::request_matches_finality(&payload_v1.request, &self.finality),
+            ProverError::FinalityMismatch.as_ref()
         );
 
         ext_mpc_contract::ext(self.mpc_contract_id.clone())
@@ -122,6 +124,15 @@ impl MpcOmniProver {
             (request, chain_kind),
             (ForeignChainRpcRequest::Abstract(_), ChainKind::Abs)
                 | (ForeignChainRpcRequest::Ethereum(_), ChainKind::Eth)
+        )
+    }
+
+    fn request_matches_finality(request: &ForeignChainRpcRequest, finality: &EvmFinality) -> bool {
+        matches!(
+            request,
+            ForeignChainRpcRequest::Ethereum(args)
+            | ForeignChainRpcRequest::Abstract(args)
+            if args.finality == *finality
         )
     }
 
