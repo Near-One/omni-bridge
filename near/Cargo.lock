@@ -1008,6 +1008,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "evm-mpc-prover"
+version = "0.4.4"
+dependencies = [
+ "alloy",
+ "borsh",
+ "getrandom 0.2.16",
+ "hex",
+ "near-mpc-sdk",
+ "near-sdk",
+ "omni-types",
+ "omni-utils",
+ "serde_json",
+]
+
+[[package]]
 name = "evm-prover"
 version = "0.4.4"
 dependencies = [
@@ -1945,21 +1960,6 @@ version = "0.1.0"
 dependencies = [
  "near-sdk",
  "omni-types",
-]
-
-[[package]]
-name = "mpc-omni-prover"
-version = "0.4.4"
-dependencies = [
- "alloy",
- "borsh",
- "getrandom 0.2.16",
- "hex",
- "near-mpc-sdk",
- "near-sdk",
- "omni-types",
- "omni-utils",
- "serde_json",
 ]
 
 [[package]]

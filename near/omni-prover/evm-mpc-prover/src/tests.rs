@@ -16,7 +16,7 @@ use omni_types::prover_result::ProofKind;
 
 use omni_types::ChainKind;
 
-use crate::{evm_log_to_rlp, MpcOmniProver};
+use crate::{evm_log_to_rlp, EvmMpcProver};
 
 fn hex_to_hash256(hex_str: &str) -> Hash256 {
     let bytes: [u8; 32] = hex::decode(hex_str).unwrap().try_into().unwrap();
@@ -233,11 +233,11 @@ fn test_forged_payload_produces_different_hash() {
 fn test_request_matches_chain_ethereum_variants() {
     let eth_request = ForeignChainRpcRequest::Ethereum(test_evm_request());
 
-    assert!(MpcOmniProver::request_matches_chain(
+    assert!(EvmMpcProver::request_matches_chain(
         &eth_request,
         ChainKind::Eth
     ));
-    assert!(!MpcOmniProver::request_matches_chain(
+    assert!(!EvmMpcProver::request_matches_chain(
         &eth_request,
         ChainKind::Base
     ));
@@ -248,21 +248,21 @@ fn test_request_matches_chain_abstract() {
     let abs_request = ForeignChainRpcRequest::Abstract(test_evm_request());
 
     // Abstract request only matches Abs
-    assert!(MpcOmniProver::request_matches_chain(
+    assert!(EvmMpcProver::request_matches_chain(
         &abs_request,
         ChainKind::Abs
     ));
 
     // Abstract request does NOT match other EVM chains
-    assert!(!MpcOmniProver::request_matches_chain(
+    assert!(!EvmMpcProver::request_matches_chain(
         &abs_request,
         ChainKind::Eth
     ));
-    assert!(!MpcOmniProver::request_matches_chain(
+    assert!(!EvmMpcProver::request_matches_chain(
         &abs_request,
         ChainKind::Base
     ));
-    assert!(!MpcOmniProver::request_matches_chain(
+    assert!(!EvmMpcProver::request_matches_chain(
         &abs_request,
         ChainKind::Arb
     ));
@@ -317,7 +317,7 @@ fn test_abs_testnet_verify_proof_args() {
 #[test]
 fn test_request_matches_finality_ethereum_match() {
     let request = ForeignChainRpcRequest::Ethereum(test_evm_request()); // Finalized
-    assert!(MpcOmniProver::request_matches_finality(
+    assert!(EvmMpcProver::request_matches_finality(
         &request,
         &EvmFinality::Finalized
     ));
@@ -326,7 +326,7 @@ fn test_request_matches_finality_ethereum_match() {
 #[test]
 fn test_request_matches_finality_abstract_match() {
     let request = ForeignChainRpcRequest::Abstract(abs_testnet_evm_request()); // Latest
-    assert!(MpcOmniProver::request_matches_finality(
+    assert!(EvmMpcProver::request_matches_finality(
         &request,
         &EvmFinality::Latest
     ));
@@ -335,11 +335,11 @@ fn test_request_matches_finality_abstract_match() {
 #[test]
 fn test_request_matches_finality_ethereum_mismatch() {
     let request = ForeignChainRpcRequest::Ethereum(test_evm_request()); // Finalized
-    assert!(!MpcOmniProver::request_matches_finality(
+    assert!(!EvmMpcProver::request_matches_finality(
         &request,
         &EvmFinality::Latest
     ));
-    assert!(!MpcOmniProver::request_matches_finality(
+    assert!(!EvmMpcProver::request_matches_finality(
         &request,
         &EvmFinality::Safe
     ));
@@ -348,11 +348,11 @@ fn test_request_matches_finality_ethereum_mismatch() {
 #[test]
 fn test_request_matches_finality_abstract_mismatch() {
     let request = ForeignChainRpcRequest::Abstract(abs_testnet_evm_request()); // Latest
-    assert!(!MpcOmniProver::request_matches_finality(
+    assert!(!EvmMpcProver::request_matches_finality(
         &request,
         &EvmFinality::Finalized
     ));
-    assert!(!MpcOmniProver::request_matches_finality(
+    assert!(!EvmMpcProver::request_matches_finality(
         &request,
         &EvmFinality::Safe
     ));
@@ -367,15 +367,15 @@ fn test_request_matches_finality_non_evm_returns_false() {
     });
 
     // Non-EVM requests should never match any EVM finality
-    assert!(!MpcOmniProver::request_matches_finality(
+    assert!(!EvmMpcProver::request_matches_finality(
         &solana_request,
         &EvmFinality::Latest
     ));
-    assert!(!MpcOmniProver::request_matches_finality(
+    assert!(!EvmMpcProver::request_matches_finality(
         &solana_request,
         &EvmFinality::Safe
     ));
-    assert!(!MpcOmniProver::request_matches_finality(
+    assert!(!EvmMpcProver::request_matches_finality(
         &solana_request,
         &EvmFinality::Finalized
     ));

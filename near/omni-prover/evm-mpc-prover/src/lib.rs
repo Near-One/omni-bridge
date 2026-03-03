@@ -31,14 +31,14 @@ pub trait MpcContract {
 
 #[near(contract_state)]
 #[derive(PanicOnDefault)]
-pub struct MpcOmniProver {
+pub struct EvmMpcProver {
     pub mpc_contract_id: AccountId,
     pub finality: EvmFinality,
     pub chain_kind: ChainKind,
 }
 
 #[near]
-impl MpcOmniProver {
+impl EvmMpcProver {
     #[init]
     #[private]
     #[must_use]
