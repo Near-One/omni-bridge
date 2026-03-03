@@ -319,6 +319,7 @@ impl<'a> FeltCursor<'a> {
     /// felt[N]    = pending_word (felt with remaining bytes, right-aligned)
     /// felt[N+1]  = pending_word_len (number of valid bytes in pending_word)
     /// ```
+    #[allow(clippy::cast_possible_truncation)]
     fn read_byte_array(&mut self) -> Result<String, String> {
         let num_full_words = self.read_u64()? as usize;
         let mut bytes = Vec::with_capacity(num_full_words * 31 + 31);
@@ -333,8 +334,7 @@ impl<'a> FeltCursor<'a> {
 
         if pending_len > 31 {
             return Err(format!(
-                "ByteArray: pending_word_len {} exceeds 31",
-                pending_len
+                "ByteArray: pending_word_len {pending_len} exceeds 31"
             ));
         }
 
@@ -348,7 +348,7 @@ impl<'a> FeltCursor<'a> {
 
     /// Reads a Cairo `Option<ByteArray>`.
     ///
-    /// Serde layout: `0` for None, `1` followed by ByteArray for Some.
+    /// Serde layout: `0` for None, `1` followed by `ByteArray` for Some.
     fn read_option_byte_array(&mut self) -> Result<Option<String>, String> {
         let discriminant = self.read_u64()?;
         match discriminant {
@@ -369,7 +369,7 @@ fn felt_to_u64(felt: &[u8; 32]) -> Result<u64, String> {
 }
 
 /// Interprets a 32-byte big-endian felt as a u128.
-/// Fails if the value exceeds u128::MAX.
+/// Fails if the value exceeds `u128::MAX`.
 fn felt_to_u128(felt: &[u8; 32]) -> Result<u128, String> {
     if felt[..16] != [0u8; 16] {
         return Err(format!("Felt value too large for u128: {felt:?}"));
@@ -421,7 +421,10 @@ const fn const_keccak256(input: &[u8]) -> [u8; 32] {
     while j < 32 {
         let word = j / 8;
         let byte_pos = j % 8;
-        output[j] = (state[word] >> (8 * byte_pos)) as u8;
+        #[allow(clippy::cast_possible_truncation)]
+        {
+            output[j] = (state[word] >> (8 * byte_pos)) as u8;
+        }
         j += 1;
     }
     output
@@ -447,14 +450,28 @@ const fn xor_block(mut state: [u64; 25], data: &[u8], offset: usize, len: usize)
 
 const fn keccak_f1600(mut state: [u64; 25]) -> [u64; 25] {
     const RC: [u64; 24] = [
-        0x0000000000000001, 0x0000000000008082, 0x800000000000808A,
-        0x8000000080008000, 0x000000000000808B, 0x0000000080000001,
-        0x8000000080008081, 0x8000000000008009, 0x000000000000008A,
-        0x0000000000000088, 0x0000000080008009, 0x000000008000000A,
-        0x000000008000808B, 0x800000000000008B, 0x8000000000008089,
-        0x8000000000008003, 0x8000000000008002, 0x8000000000000080,
-        0x000000000000800A, 0x800000008000000A, 0x8000000080008081,
-        0x8000000000008080, 0x0000000080000001, 0x8000000080008008,
+        0x0000_0000_0000_0001, 0x0000_0000_0000_8082, 0x8000_0000_0000_808A,
+        0x8000_0000_8000_8000, 0x0000_0000_0000_808B, 0x0000_0000_8000_0001,
+        0x8000_0000_8000_8081, 0x8000_0000_0000_8009, 0x0000_0000_0000_008A,
+        0x0000_0000_0000_0088, 0x0000_0000_8000_8009, 0x0000_0000_8000_000A,
+        0x0000_0000_8000_808B, 0x8000_0000_0000_008B, 0x8000_0000_0000_8089,
+        0x8000_0000_0000_8003, 0x8000_0000_0000_8002, 0x8000_0000_0000_0080,
+        0x0000_0000_0000_800A, 0x8000_0000_8000_000A, 0x8000_0000_8000_8081,
+        0x8000_0000_0000_8080, 0x0000_0000_8000_0001, 0x8000_0000_8000_8008,
+    ];
+    const ROTATIONS: [u32; 25] = [
+        0, 1, 62, 28, 27,
+        36, 44, 6, 55, 20,
+        3, 10, 43, 25, 39,
+        41, 45, 15, 21, 8,
+        18, 2, 61, 56, 14,
+    ];
+    const PI: [usize; 25] = [
+        0, 10, 20, 5, 15,
+        16, 1, 11, 21, 6,
+        7, 17, 2, 12, 22,
+        23, 8, 18, 3, 13,
+        14, 24, 9, 19, 4,
     ];
 
     let mut round = 0;
@@ -479,20 +496,6 @@ const fn keccak_f1600(mut state: [u64; 25]) -> [u64; 25] {
         }
 
         // ρ and π steps
-        const ROTATIONS: [u32; 25] = [
-            0, 1, 62, 28, 27,
-            36, 44, 6, 55, 20,
-            3, 10, 43, 25, 39,
-            41, 45, 15, 21, 8,
-            18, 2, 61, 56, 14,
-        ];
-        const PI: [usize; 25] = [
-            0, 10, 20, 5, 15,
-            16, 1, 11, 21, 6,
-            7, 17, 2, 12, 22,
-            23, 8, 18, 3, 13,
-            14, 24, 9, 19, 4,
-        ];
         let mut temp = [0u64; 25];
         x = 0;
         while x < 25 {
