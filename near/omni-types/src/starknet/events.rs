@@ -764,12 +764,12 @@ mod tests {
             u64_felt(42),                    // origin_nonce
         ];
 
-        let mut data = Vec::new();
-        data.push(token_addr); // token_address
-        data.push(u128_felt(500)); // amount
-        data.push(recipient); // recipient
-                              // fee_recipient: Some("fee.testnet")
-        data.push(u64_felt(1)); // Some discriminant
+        let mut data = vec![
+            token_addr,     // token_address
+            u128_felt(500), // amount
+            recipient,      // recipient
+            u64_felt(1),    // fee_recipient:
+        ];
         data.extend(encode_byte_array("fee.testnet"));
         // message: None
         data.push(u64_felt(0)); // None discriminant

@@ -21,7 +21,6 @@ pub struct WormholeVerifyProofArgs {
 pub struct MpcVerifyProofArgs {
     pub proof_kind: ProofKind,
     pub sign_payload: Vec<u8>,
-    pub payload_version: u8,
 }
 
 #[near(serializers=[borsh, json])]

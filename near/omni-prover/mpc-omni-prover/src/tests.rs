@@ -1,11 +1,10 @@
 use borsh::BorshDeserialize;
 
 use near_mpc_sdk::contract_interface::types::{
-    DomainId, EvmExtractedValue, EvmExtractor, EvmFinality, EvmLog, EvmRpcRequest, EvmTxId,
-    ExtractedValue, ForeignChainRpcRequest, ForeignTxSignPayload, ForeignTxSignPayloadV1, Hash160,
-    Hash256, SolanaFinality, SolanaRpcRequest, SolanaTxId, StarknetExtractedValue,
-    StarknetExtractor, StarknetFelt, StarknetFinality, StarknetLog, StarknetRpcRequest,
-    StarknetTxId,
+    EvmExtractedValue, EvmExtractor, EvmFinality, EvmLog, EvmRpcRequest, EvmTxId, ExtractedValue,
+    ForeignChainRpcRequest, ForeignTxSignPayload, ForeignTxSignPayloadV1, Hash160, Hash256,
+    SolanaFinality, SolanaRpcRequest, SolanaTxId, StarknetExtractedValue, StarknetExtractor,
+    StarknetFelt, StarknetFinality, StarknetLog, StarknetRpcRequest, StarknetTxId,
 };
 
 use near_sdk::base64::Engine;
@@ -190,9 +189,6 @@ fn test_mpc_verify_proof_args_serialization() {
     let args = MpcVerifyProofArgs {
         proof_kind: ProofKind::InitTransfer,
         sign_payload: payload_bytes.clone(),
-        derivation_path: "".to_string(),
-        domain_id: DomainId(3),
-        payload_version: 1,
     };
 
     let serialized = borsh::to_vec(&args).unwrap();
@@ -233,59 +229,40 @@ fn test_forged_payload_produces_different_hash() {
 }
 
 #[test]
-fn test_request_matches_chain_ethereum_variants() {
-    let eth_request = ForeignChainRpcRequest::Ethereum(test_evm_request());
-
-    assert!(MpcOmniProver::request_matches_chain(
-        &eth_request,
-        ChainKind::Eth
-    ));
-    assert!(!MpcOmniProver::request_matches_chain(
-        &eth_request,
-        ChainKind::Base
-    ));
+fn test_request_to_chain_kind_ethereum() {
+    let request = ForeignChainRpcRequest::Ethereum(test_evm_request());
+    assert_eq!(
+        MpcOmniProver::request_to_chain_kind(&request),
+        Some(ChainKind::Eth)
+    );
 }
 
 #[test]
-fn test_request_matches_chain_abstract() {
-    let abs_request = ForeignChainRpcRequest::Abstract(test_evm_request());
-
-    assert!(MpcOmniProver::request_matches_chain(
-        &abs_request,
-        ChainKind::Abs
-    ));
-
-    assert!(!MpcOmniProver::request_matches_chain(
-        &abs_request,
-        ChainKind::Eth
-    ));
-    assert!(!MpcOmniProver::request_matches_chain(
-        &abs_request,
-        ChainKind::Base
-    ));
-    assert!(!MpcOmniProver::request_matches_chain(
-        &abs_request,
-        ChainKind::Arb
-    ));
+fn test_request_to_chain_kind_abstract() {
+    let request = ForeignChainRpcRequest::Abstract(test_evm_request());
+    assert_eq!(
+        MpcOmniProver::request_to_chain_kind(&request),
+        Some(ChainKind::Abs)
+    );
 }
 
 #[test]
-fn test_request_matches_chain_starknet() {
-    let strk_request = ForeignChainRpcRequest::Starknet(test_starknet_request());
+fn test_request_to_chain_kind_starknet() {
+    let request = ForeignChainRpcRequest::Starknet(test_starknet_request());
+    assert_eq!(
+        MpcOmniProver::request_to_chain_kind(&request),
+        Some(ChainKind::Strk)
+    );
+}
 
-    assert!(MpcOmniProver::request_matches_chain(
-        &strk_request,
-        ChainKind::Strk
-    ));
-
-    assert!(!MpcOmniProver::request_matches_chain(
-        &strk_request,
-        ChainKind::Eth
-    ));
-    assert!(!MpcOmniProver::request_matches_chain(
-        &strk_request,
-        ChainKind::Abs
-    ));
+#[test]
+fn test_request_to_chain_kind_unsupported() {
+    let solana_request = ForeignChainRpcRequest::Solana(SolanaRpcRequest {
+        tx_id: SolanaTxId([0u8; 64]),
+        finality: SolanaFinality::Confirmed,
+        extractors: vec![],
+    });
+    assert_eq!(MpcOmniProver::request_to_chain_kind(&solana_request), None);
 }
 
 #[test]
@@ -384,44 +361,6 @@ fn test_request_matches_finality_non_evm_returns_false() {
 }
 
 #[test]
-fn test_is_supported_chain() {
-    assert!(MpcOmniProver::is_supported_chain(ChainKind::Eth));
-    assert!(MpcOmniProver::is_supported_chain(ChainKind::Abs));
-    assert!(MpcOmniProver::is_supported_chain(ChainKind::Arb));
-    assert!(MpcOmniProver::is_supported_chain(ChainKind::Base));
-    assert!(MpcOmniProver::is_supported_chain(ChainKind::Strk));
-
-    assert!(!MpcOmniProver::is_supported_chain(ChainKind::Sol));
-    assert!(!MpcOmniProver::is_supported_chain(ChainKind::Near));
-    assert!(!MpcOmniProver::is_supported_chain(ChainKind::Btc));
-}
-
-#[test]
-fn test_finality_matches_chain() {
-    assert!(MpcOmniProver::finality_matches_chain(
-        &MpcFinality::Evm(EvmFinality::Finalized),
-        ChainKind::Eth
-    ));
-    assert!(MpcOmniProver::finality_matches_chain(
-        &MpcFinality::Evm(EvmFinality::Latest),
-        ChainKind::Abs
-    ));
-    assert!(MpcOmniProver::finality_matches_chain(
-        &MpcFinality::Starknet(StarknetFinality::AcceptedOnL1),
-        ChainKind::Strk
-    ));
-
-    assert!(!MpcOmniProver::finality_matches_chain(
-        &MpcFinality::Starknet(StarknetFinality::AcceptedOnL1),
-        ChainKind::Eth
-    ));
-    assert!(!MpcOmniProver::finality_matches_chain(
-        &MpcFinality::Evm(EvmFinality::Finalized),
-        ChainKind::Strk
-    ));
-}
-
-#[test]
 fn test_starknet_sign_payload_roundtrip() {
     let payload = ForeignTxSignPayload::V1(ForeignTxSignPayloadV1 {
         request: ForeignChainRpcRequest::Starknet(test_starknet_request()),
@@ -458,9 +397,6 @@ fn test_abs_testnet_verify_proof_args() {
     let args = MpcVerifyProofArgs {
         proof_kind: ProofKind::InitTransfer,
         sign_payload: borsh::to_vec(&sign_payload).unwrap(),
-        derivation_path: String::new(),
-        domain_id: DomainId(3),
-        payload_version: 1,
     };
 
     // Verify serialization roundtrip

@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use alloy::{
     primitives::{Address, Bytes, Log, B256},
     rlp::Encodable,
@@ -22,10 +24,11 @@ use omni_types::{
 };
 use omni_utils::near_expect::NearExpect;
 
-const FOREIGN_TX_DOMAIN_ID: u64 = 3;
-
 #[cfg(test)]
 mod tests;
+
+const FOREIGN_TX_DOMAIN_ID: u64 = 3;
+const PAYLOAD_VERSION: u8 = 1;
 
 const VERIFY_FOREIGN_TX_GAS: Gas = Gas::from_tgas(20);
 const VERIFY_CALLBACK_GAS: Gas = Gas::from_tgas(7);
@@ -48,8 +51,7 @@ pub enum MpcFinality {
 #[derive(PanicOnDefault)]
 pub struct MpcOmniProver {
     pub mpc_contract_id: AccountId,
-    pub finality: MpcFinality,
-    pub chain_kind: ChainKind,
+    pub finalities: HashMap<ChainKind, MpcFinality>,
 }
 
 #[near]
@@ -57,22 +59,31 @@ impl MpcOmniProver {
     #[init]
     #[private]
     #[must_use]
-    pub fn init(mpc_contract_id: AccountId, finality: MpcFinality, chain_kind: ChainKind) -> Self {
-        require!(
-            Self::is_supported_chain(chain_kind),
-            ProverError::UnsupportedChain.as_ref()
-        );
-
-        require!(
-            Self::finality_matches_chain(&finality, chain_kind),
-            "Finality variant does not match chain kind"
+    pub fn init(mpc_contract_id: AccountId) -> Self {
+        let mut finalities = HashMap::new();
+        finalities.insert(ChainKind::Abs, MpcFinality::Evm(EvmFinality::Safe));
+        finalities.insert(
+            ChainKind::Strk,
+            MpcFinality::Starknet(StarknetFinality::AcceptedOnL2),
         );
 
         Self {
             mpc_contract_id,
-            finality,
-            chain_kind,
+            finalities,
         }
+    }
+
+    pub fn get_finality(&self, chain_kind: ChainKind) -> Option<MpcFinality> {
+        self.finalities.get(&chain_kind).cloned()
+    }
+
+    pub fn get_finalities(&self) -> Vec<(&ChainKind, &MpcFinality)> {
+        self.finalities.iter().collect()
+    }
+
+    #[private]
+    pub fn set_finality(&mut self, chain_kind: ChainKind, finality: MpcFinality) {
+        self.finalities.insert(chain_kind, finality);
     }
 
     #[allow(clippy::needless_pass_by_value)]
@@ -84,13 +95,16 @@ impl MpcOmniProver {
 
         let ForeignTxSignPayload::V1(ref payload_v1) = sign_payload;
 
-        require!(
-            Self::request_matches_chain(&payload_v1.request, self.chain_kind),
-            ProverError::ChainMismatch.as_ref()
-        );
+        let chain_kind = Self::request_to_chain_kind(&payload_v1.request)
+            .near_expect(ProverError::UnsupportedChain);
+
+        let finality = self
+            .finalities
+            .get(&chain_kind)
+            .near_expect(ProverError::UnsupportedChain);
 
         require!(
-            Self::request_matches_finality(&payload_v1.request, &self.finality),
+            Self::request_matches_finality(&payload_v1.request, finality),
             ProverError::FinalityMismatch.as_ref()
         );
 
@@ -98,7 +112,7 @@ impl MpcOmniProver {
             request: payload_v1.request.clone(),
             derivation_path: String::new(),
             domain_id: DomainId(FOREIGN_TX_DOMAIN_ID),
-            payload_version: args.payload_version,
+            payload_version: PAYLOAD_VERSION,
         };
 
         ext_mpc_contract::ext(self.mpc_contract_id.clone())
@@ -108,7 +122,7 @@ impl MpcOmniProver {
             .then(
                 Self::ext(near_sdk::env::current_account_id())
                     .with_static_gas(VERIFY_CALLBACK_GAS)
-                    .verify_callback(args.proof_kind, args.sign_payload, self.chain_kind),
+                    .verify_callback(args.proof_kind, args.sign_payload, chain_kind),
             )
     }
 
@@ -149,24 +163,13 @@ impl MpcOmniProver {
         }
     }
 
-    fn is_supported_chain(chain_kind: ChainKind) -> bool {
-        chain_kind.is_evm_chain() || chain_kind == ChainKind::Strk
-    }
-
-    fn finality_matches_chain(finality: &MpcFinality, chain_kind: ChainKind) -> bool {
-        match finality {
-            MpcFinality::Evm(_) => chain_kind.is_evm_chain(),
-            MpcFinality::Starknet(_) => chain_kind == ChainKind::Strk,
+    fn request_to_chain_kind(request: &ForeignChainRpcRequest) -> Option<ChainKind> {
+        match request {
+            ForeignChainRpcRequest::Abstract(_) => Some(ChainKind::Abs),
+            ForeignChainRpcRequest::Ethereum(_) => Some(ChainKind::Eth),
+            ForeignChainRpcRequest::Starknet(_) => Some(ChainKind::Strk),
+            _ => None,
         }
-    }
-
-    fn request_matches_chain(request: &ForeignChainRpcRequest, chain_kind: ChainKind) -> bool {
-        matches!(
-            (request, chain_kind),
-            (ForeignChainRpcRequest::Abstract(_), ChainKind::Abs)
-                | (ForeignChainRpcRequest::Ethereum(_), ChainKind::Eth)
-                | (ForeignChainRpcRequest::Starknet(_), ChainKind::Strk)
-        )
     }
 
     fn request_matches_finality(request: &ForeignChainRpcRequest, finality: &MpcFinality) -> bool {
