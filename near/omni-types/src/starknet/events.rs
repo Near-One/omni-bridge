@@ -354,9 +354,7 @@ impl<'a> FeltCursor<'a> {
         match discriminant {
             0 => Ok(None),
             1 => self.read_byte_array().map(Some),
-            _ => Err(format!(
-                "Option: unexpected discriminant {discriminant}"
-            )),
+            _ => Err(format!("Option: unexpected discriminant {discriminant}")),
         }
     }
 }
@@ -450,28 +448,37 @@ const fn xor_block(mut state: [u64; 25], data: &[u8], offset: usize, len: usize)
 
 const fn keccak_f1600(mut state: [u64; 25]) -> [u64; 25] {
     const RC: [u64; 24] = [
-        0x0000_0000_0000_0001, 0x0000_0000_0000_8082, 0x8000_0000_0000_808A,
-        0x8000_0000_8000_8000, 0x0000_0000_0000_808B, 0x0000_0000_8000_0001,
-        0x8000_0000_8000_8081, 0x8000_0000_0000_8009, 0x0000_0000_0000_008A,
-        0x0000_0000_0000_0088, 0x0000_0000_8000_8009, 0x0000_0000_8000_000A,
-        0x0000_0000_8000_808B, 0x8000_0000_0000_008B, 0x8000_0000_0000_8089,
-        0x8000_0000_0000_8003, 0x8000_0000_0000_8002, 0x8000_0000_0000_0080,
-        0x0000_0000_0000_800A, 0x8000_0000_8000_000A, 0x8000_0000_8000_8081,
-        0x8000_0000_0000_8080, 0x0000_0000_8000_0001, 0x8000_0000_8000_8008,
+        0x0000_0000_0000_0001,
+        0x0000_0000_0000_8082,
+        0x8000_0000_0000_808A,
+        0x8000_0000_8000_8000,
+        0x0000_0000_0000_808B,
+        0x0000_0000_8000_0001,
+        0x8000_0000_8000_8081,
+        0x8000_0000_0000_8009,
+        0x0000_0000_0000_008A,
+        0x0000_0000_0000_0088,
+        0x0000_0000_8000_8009,
+        0x0000_0000_8000_000A,
+        0x0000_0000_8000_808B,
+        0x8000_0000_0000_008B,
+        0x8000_0000_0000_8089,
+        0x8000_0000_0000_8003,
+        0x8000_0000_0000_8002,
+        0x8000_0000_0000_0080,
+        0x0000_0000_0000_800A,
+        0x8000_0000_8000_000A,
+        0x8000_0000_8000_8081,
+        0x8000_0000_0000_8080,
+        0x0000_0000_8000_0001,
+        0x8000_0000_8000_8008,
     ];
     const ROTATIONS: [u32; 25] = [
-        0, 1, 62, 28, 27,
-        36, 44, 6, 55, 20,
-        3, 10, 43, 25, 39,
-        41, 45, 15, 21, 8,
-        18, 2, 61, 56, 14,
+        0, 1, 62, 28, 27, 36, 44, 6, 55, 20, 3, 10, 43, 25, 39, 41, 45, 15, 21, 8, 18, 2, 61, 56,
+        14,
     ];
     const PI: [usize; 25] = [
-        0, 10, 20, 5, 15,
-        16, 1, 11, 21, 6,
-        7, 17, 2, 12, 22,
-        23, 8, 18, 3, 13,
-        14, 24, 9, 19, 4,
+        0, 10, 20, 5, 15, 16, 1, 11, 21, 6, 7, 17, 2, 12, 22, 23, 8, 18, 3, 13, 14, 24, 9, 19, 4,
     ];
 
     let mut round = 0;
@@ -526,7 +533,9 @@ mod tests {
     fn test_const_keccak256_empty() {
         // keccak256("") = c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470
         let result = const_keccak256(b"");
-        let expected = hex::decode("c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470").unwrap();
+        let expected =
+            hex::decode("c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470")
+                .unwrap();
         assert_eq!(&result[..], &expected[..], "keccak256('') mismatch");
     }
 
@@ -534,7 +543,9 @@ mod tests {
     fn test_const_keccak256_hello() {
         // keccak256("hello") = 1c8aff950685c2ed4bc3174f3472287b56d9517b9c948127319a09a7a36deac8
         let result = const_keccak256(b"hello");
-        let expected = hex::decode("1c8aff950685c2ed4bc3174f3472287b56d9517b9c948127319a09a7a36deac8").unwrap();
+        let expected =
+            hex::decode("1c8aff950685c2ed4bc3174f3472287b56d9517b9c948127319a09a7a36deac8")
+                .unwrap();
         assert_eq!(&result[..], &expected[..], "keccak256('hello') mismatch");
     }
 
@@ -551,11 +562,7 @@ mod tests {
         ] {
             let mut hash = Keccak256::digest(name.as_bytes()).to_vec();
             hash[0] &= 0x03;
-            assert_eq!(
-                &hash[..],
-                &expected[..],
-                "sn_keccak({name}) mismatch"
-            );
+            assert_eq!(&hash[..], &expected[..], "sn_keccak({name}) mismatch");
         }
     }
 
@@ -671,7 +678,8 @@ mod tests {
     #[test]
     fn test_parse_init_transfer() {
         let sender = hex_felt("0000000000000000000000000000000000000000000000000000000000aa0001");
-        let token_addr = hex_felt("0000000000000000000000000000000000000000000000000000000000bb0002");
+        let token_addr =
+            hex_felt("0000000000000000000000000000000000000000000000000000000000bb0002");
         let emitter = hex_felt("0000000000000000000000000000000000000000000000000000000000cc0003");
 
         let keys = vec![
@@ -683,10 +691,10 @@ mod tests {
 
         let mut data = Vec::new();
         data.push(u128_felt(1000)); // amount
-        data.push(u128_felt(10));   // fee
-        data.push(u128_felt(5));    // native_fee
+        data.push(u128_felt(10)); // fee
+        data.push(u128_felt(5)); // native_fee
         data.extend(encode_byte_array("near:frolik.testnet")); // recipient
-        data.extend(encode_byte_array(""));                     // message
+        data.extend(encode_byte_array("")); // message
 
         let msg = parse_init_transfer(&emitter, &keys, &data).unwrap();
         assert_eq!(msg.origin_nonce, 7);
@@ -701,18 +709,16 @@ mod tests {
 
     #[test]
     fn test_parse_log_metadata() {
-        let token_addr = hex_felt("0000000000000000000000000000000000000000000000000000000000dd0001");
+        let token_addr =
+            hex_felt("0000000000000000000000000000000000000000000000000000000000dd0001");
         let emitter = hex_felt("0000000000000000000000000000000000000000000000000000000000ee0002");
 
-        let keys = vec![
-            LOG_METADATA_SELECTOR,
-            token_addr,
-        ];
+        let keys = vec![LOG_METADATA_SELECTOR, token_addr];
 
         let mut data = Vec::new();
         data.extend(encode_byte_array("Wrapped ETH")); // name
-        data.extend(encode_byte_array("WETH"));         // symbol
-        data.push(u64_felt(18));                         // decimals
+        data.extend(encode_byte_array("WETH")); // symbol
+        data.push(u64_felt(18)); // decimals
 
         let msg = parse_log_metadata(&emitter, &keys, &data).unwrap();
         assert_eq!(msg.name, "Wrapped ETH");
@@ -724,20 +730,18 @@ mod tests {
 
     #[test]
     fn test_parse_deploy_token() {
-        let token_addr = hex_felt("0000000000000000000000000000000000000000000000000000000000dd0001");
+        let token_addr =
+            hex_felt("0000000000000000000000000000000000000000000000000000000000dd0001");
         let emitter = hex_felt("0000000000000000000000000000000000000000000000000000000000ee0002");
 
-        let keys = vec![
-            DEPLOY_TOKEN_SELECTOR,
-            token_addr,
-        ];
+        let keys = vec![DEPLOY_TOKEN_SELECTOR, token_addr];
 
         let mut data = Vec::new();
-        data.extend(encode_byte_array("wrap.testnet"));  // near_token_id
-        data.extend(encode_byte_array("Wrapped ETH"));   // name
-        data.extend(encode_byte_array("WETH"));           // symbol
-        data.push(u64_felt(18));                           // decimals
-        data.push(u64_felt(18));                           // origin_decimals
+        data.extend(encode_byte_array("wrap.testnet")); // near_token_id
+        data.extend(encode_byte_array("Wrapped ETH")); // name
+        data.extend(encode_byte_array("WETH")); // symbol
+        data.push(u64_felt(18)); // decimals
+        data.push(u64_felt(18)); // origin_decimals
 
         let msg = parse_deploy_token(&emitter, &keys, &data).unwrap();
         assert_eq!(msg.token.to_string(), "wrap.testnet");
@@ -749,20 +753,22 @@ mod tests {
     #[test]
     fn test_parse_fin_transfer() {
         let emitter = hex_felt("0000000000000000000000000000000000000000000000000000000000ff0001");
-        let token_addr = hex_felt("0000000000000000000000000000000000000000000000000000000000aa0001");
-        let recipient = hex_felt("0000000000000000000000000000000000000000000000000000000000bb0001");
+        let token_addr =
+            hex_felt("0000000000000000000000000000000000000000000000000000000000aa0001");
+        let recipient =
+            hex_felt("0000000000000000000000000000000000000000000000000000000000bb0001");
 
         let keys = vec![
             FIN_TRANSFER_SELECTOR,
             u64_felt(ChainKind::Eth as u64), // origin_chain
-            u64_felt(42),                     // origin_nonce
+            u64_felt(42),                    // origin_nonce
         ];
 
         let mut data = Vec::new();
-        data.push(token_addr);         // token_address
-        data.push(u128_felt(500));     // amount
-        data.push(recipient);          // recipient
-        // fee_recipient: Some("fee.testnet")
+        data.push(token_addr); // token_address
+        data.push(u128_felt(500)); // amount
+        data.push(recipient); // recipient
+                              // fee_recipient: Some("fee.testnet")
         data.push(u64_felt(1)); // Some discriminant
         data.extend(encode_byte_array("fee.testnet"));
         // message: None
