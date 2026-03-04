@@ -3,10 +3,13 @@ use alloy::{
     rlp::Encodable,
 };
 use borsh::BorshDeserialize;
-use near_mpc_sdk::contract_interface::types::{
-    EvmExtractedValue, EvmFinality, ExtractedValue, ForeignChainRpcRequest, ForeignTxSignPayload,
-    ForeignTxSignPayloadV1, StarknetExtractedValue, StarknetFinality,
-    VerifyForeignTransactionRequestArgs, VerifyForeignTransactionResponse,
+use near_mpc_sdk::{
+    contract_interface::types::{
+        EvmExtractedValue, EvmFinality, ExtractedValue, ForeignChainRpcRequest,
+        ForeignTxSignPayload, ForeignTxSignPayloadV1, StarknetExtractedValue, StarknetFinality,
+        VerifyForeignTransactionRequestArgs, VerifyForeignTransactionResponse,
+    },
+    sign::DomainId,
 };
 use near_sdk::{ext_contract, near, require, AccountId, Gas, NearToken, PanicOnDefault, Promise};
 use omni_types::{
@@ -18,6 +21,8 @@ use omni_types::{
     ChainKind,
 };
 use omni_utils::near_expect::NearExpect;
+
+const FOREIGN_TX_DOMAIN_ID: u64 = 3;
 
 #[cfg(test)]
 mod tests;
@@ -92,7 +97,7 @@ impl MpcOmniProver {
         let request_args = VerifyForeignTransactionRequestArgs {
             request: payload_v1.request.clone(),
             derivation_path: String::new(),
-            domain_id: args.domain_id,
+            domain_id: DomainId(FOREIGN_TX_DOMAIN_ID),
             payload_version: args.payload_version,
         };
 
