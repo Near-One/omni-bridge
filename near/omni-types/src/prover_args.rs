@@ -22,7 +22,6 @@ pub struct WormholeVerifyProofArgs {
 pub struct MpcVerifyProofArgs {
     pub proof_kind: ProofKind,
     pub sign_payload: Vec<u8>,
-    pub derivation_path: String,
     pub domain_id: DomainId,
     pub payload_version: u8,
 }

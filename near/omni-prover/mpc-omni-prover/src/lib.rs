@@ -91,7 +91,7 @@ impl MpcOmniProver {
 
         let request_args = VerifyForeignTransactionRequestArgs {
             request: payload_v1.request.clone(),
-            derivation_path: args.derivation_path,
+            derivation_path: String::new(),
             domain_id: args.domain_id,
             payload_version: args.payload_version,
         };
