@@ -73,10 +73,6 @@ impl MpcOmniProver {
         }
     }
 
-    pub fn get_finality(&self, chain_kind: ChainKind) -> Option<MpcFinality> {
-        self.finalities.get(&chain_kind).cloned()
-    }
-
     pub fn get_finalities(&self) -> Vec<(&ChainKind, &MpcFinality)> {
         self.finalities.iter().collect()
     }
