@@ -2,13 +2,13 @@ use std::sync::Arc;
 
 use anyhow::{Context, Result};
 use bridge_connector_common::result::BridgeSdkError;
-use near_sdk::json_types::U64;
+use near_sdk::{AccountId, json_types::U64};
 use serde_json::Value;
 use tracing::{info, warn};
 
 use near_bridge_client::TransactionOptions;
 use near_jsonrpc_client::{JsonRpcClient, errors::JsonRpcError};
-use near_primitives::{hash::CryptoHash, types::AccountId};
+use near_primitives::hash::CryptoHash;
 use near_rpc_client::NearRpcError;
 use solana_client::rpc_request::RpcResponseErrorData;
 use solana_rpc_client_api::{client_error::ErrorKind, request::RpcError};
