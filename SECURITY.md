@@ -23,20 +23,56 @@ The goal will be to address issues in as short of a period as possible, but it's
 
 *Note:* If the Security Team identifies that an issue is mission-critical and requires a subset of network participants to update prior to newsletter announcement - this will be done in a manual way by communicating via direct channels.
 
+## In-scope vulnerabilities
+
+The list is not limited to the following submissions but it gives an overview of what issues we care about:
+
+* Stealing or loss of funds
+* Unauthorized transactions
+* Balance manipulation
+* Contract execution flow issues
+* Cryptographic flaws
+* Unauthorized access to MPC key shares or signing capability
+* Information disclosure of sensitive MPC state
+* Bypass of threshold signature requirements
+* Theft or permanent freezing of funds
+* Cross-chain replay attacks enabling double-spending
+* Light client verification bypass
+
+## Out-of-scope vulnerabilities
+
+* All vulnerabilities already discovered by audit reports
+* Unbounded gas or storage consumption
+* Griefing (e.g. no profit motive for an attacker, but damage to the users or the protocol)
+* Network-level DoS
+* Vulnerabilities in the protocol that are unrelated to smart contract execution
+* Wormhole guardian network (report to Wormhole)
+* Social engineering or physical attacks including physical attacks on TEE hardware
+* Attacks requiring >= threshold colluding nodes
+* NEAR chain attacks — validator collusion, chain reorgs, or finality failures
+* Test-only code paths (e.g. code gated behind `#[cfg(test)]` or test utilities not reachable in production)
+* Non-default feature-only paths (e.g. findings that depend on non-production feature gates)
+* Deployment / operational issues — misconfigured infrastructure, key management procedures, etc.
+
 ## Reward
 
-The discovery of security vulnerabilities that include but are not limited to the following categories will be rewarded proportionally to their severity:
-* Issues that allow unauthorized or incorrect cross-chain asset transfers;
-* Issues that allow theft or freezing of bridged funds;
-* Algorithmic, implementation, and economic issues that violate safety of the bridge contracts;
-* Issues in the MPC signature verification or proof validation logic;
-* Issues that expose the private data of the users or the validators;
-* Issues that stall the bridge or significantly throttle liveness;
+| Severity | Reward |
+|----------|--------|
+| Critical | $10,000 - $100,000 |
+| High     | $5,000 - $10,000 |
+| Medium   | $1,000 - $5,000 |
+| Low      | $100 - $1,000 |
+
+The total maximum reward for High and Critical severity bugs is capped at 10% of the funds that are practically affected by the discovered vulnerability.
 
 The following are the necessary conditions for the reward:
-* The vulnerability is disclosed to NEAR before it is disclosed publicly and NEAR is given sufficient time to fix it;
+* You must be the first reporter of the vulnerability;
+* The vulnerability must be reported no later than 24 hours after discovery and exclusively through [HackenProof](https://hackenproof.com/programs/near-intents-bridges);
 * The vulnerability is not disclosed to anyone else except the finder and NEAR before it is fixed;
-* The vulnerability is not exploited until it is fixed.
+* The vulnerability is not exploited until it is fixed;
+* You must provide a clear textual description of the report along with steps to reproduce the issue, including attachments such as screenshots or proof of concept code as necessary.
+
+*Note:* The company is entitled to make the payment in their native NEAR token vested over 1 year.
 
 ## Receive Security Updates
 
