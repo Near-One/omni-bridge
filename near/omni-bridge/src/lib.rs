@@ -774,6 +774,11 @@ impl Contract {
         storage_payer: AccountId,
         fast_fin_transfer_msg: FastFinTransferMsg,
     ) -> PromiseOrPromiseIndexOrValue<U128> {
+        require!(
+            self.is_trusted_relayer(&env::predecessor_account_id()),
+            BridgeError::RelayerNotActive.as_ref()
+        );
+
         let origin_token = self
             .get_token_address(
                 fast_fin_transfer_msg.transfer_id.origin_chain,
