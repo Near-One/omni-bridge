@@ -19,7 +19,7 @@ use omni_types::{
     prover_args::WormholeVerifyProofArgs, prover_result::ProofKind,
 };
 
-use crate::{config, utils, workers::RetryableEvent, workers::near::UnverifiedTrasfer};
+use crate::{config, utils, workers::RetryableEvent, workers::near::UnverifiedTransfer};
 
 use super::{DeployToken, EventAction, FinTransfer, Transfer};
 
@@ -179,7 +179,7 @@ pub async fn process_init_transfer_event(
                 redis_connection_manager,
                 utils::redis::EVENTS,
                 tx_hash.clone(),
-                RetryableEvent::new(UnverifiedTrasfer {
+                RetryableEvent::new(UnverifiedTransfer {
                     tx_hash: crypto_hash,
                     signer,
                     specific_errors: Some(vec!["Request has timed out.".to_string()]),

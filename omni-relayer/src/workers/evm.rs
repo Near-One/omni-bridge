@@ -21,7 +21,7 @@ use omni_types::{
 
 use crate::{
     config, utils,
-    workers::{DeployToken, FinTransfer, RetryableEvent, near::UnverifiedTrasfer},
+    workers::{DeployToken, FinTransfer, RetryableEvent, near::UnverifiedTransfer},
 };
 
 use super::{EventAction, Transfer};
@@ -252,7 +252,7 @@ pub async fn process_init_transfer_event(
                 redis_connection_manager,
                 utils::redis::EVENTS,
                 tx_hash.clone(),
-                RetryableEvent::new(UnverifiedTrasfer {
+                RetryableEvent::new(UnverifiedTransfer {
                     tx_hash: crypto_hash,
                     signer,
                     specific_errors: Some(vec!["Request has timed out.".to_string()]),

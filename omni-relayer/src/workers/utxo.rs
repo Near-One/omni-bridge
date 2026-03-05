@@ -16,7 +16,7 @@ use omni_connector::{BtcDepositArgs, FinTransferArgs, OmniConnector};
 
 use crate::{
     config, utils,
-    workers::{RetryableEvent, near::UnverifiedTrasfer},
+    workers::{RetryableEvent, near::UnverifiedTransfer},
 };
 
 use super::{EventAction, Transfer};
@@ -226,7 +226,7 @@ pub async fn process_utxo_to_near_init_transfer_event(
                 redis_connection_manager,
                 utils::redis::EVENTS,
                 tx_hash.clone(),
-                RetryableEvent::new(UnverifiedTrasfer {
+                RetryableEvent::new(UnverifiedTransfer {
                     tx_hash: crypto_hash,
                     signer,
                     specific_errors: Some(vec!["Request has timed out.".to_string()]),
@@ -387,7 +387,7 @@ pub async fn process_confirmed_tx_hash(
                 redis_connection_manager,
                 utils::redis::EVENTS,
                 tx_hash.to_string(),
-                RetryableEvent::new(UnverifiedTrasfer {
+                RetryableEvent::new(UnverifiedTransfer {
                     tx_hash,
                     signer,
                     specific_errors: Some(vec!["Not enough blocks confirmed".to_string()]),

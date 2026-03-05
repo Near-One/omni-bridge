@@ -931,7 +931,7 @@ pub async fn process_events(
                     }
                 }));
             } else if let Ok(unverified_event) =
-                serde_json::from_value::<near::UnverifiedTrasfer>(event.clone())
+                serde_json::from_value::<near::UnverifiedTransfer>(event.clone())
             {
                 tokio::spawn({
                     let config = config.clone();

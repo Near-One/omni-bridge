@@ -26,7 +26,7 @@ use crate::{
 use super::{EventAction, Transfer};
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
-pub struct UnverifiedTrasfer {
+pub struct UnverifiedTransfer {
     pub tx_hash: CryptoHash,
     pub signer: AccountId,
     pub specific_errors: Option<Vec<String>>,
@@ -162,7 +162,7 @@ pub async fn process_transfer_event(
                 redis_connection_manager,
                 utils::redis::EVENTS,
                 tx_hash.to_string(),
-                RetryableEvent::new(UnverifiedTrasfer {
+                RetryableEvent::new(UnverifiedTransfer {
                     tx_hash,
                     signer,
                     specific_errors: Some(vec!["Request has timed out.".to_string()]),
@@ -279,7 +279,7 @@ pub async fn process_transfer_to_utxo_event(
                 redis_connection_manager,
                 utils::redis::EVENTS,
                 tx_hash.to_string(),
-                RetryableEvent::new(UnverifiedTrasfer {
+                RetryableEvent::new(UnverifiedTransfer {
                     tx_hash,
                     signer,
                     specific_errors: Some(vec![
@@ -576,7 +576,7 @@ pub async fn process_unverified_transfer_event(
     config: &config::Config,
     redis_connection_manager: &mut redis::aio::ConnectionManager,
     jsonrpc_client: JsonRpcClient,
-    unverified_event: UnverifiedTrasfer,
+    unverified_event: UnverifiedTransfer,
 ) {
     utils::redis::remove_event(
         config,
