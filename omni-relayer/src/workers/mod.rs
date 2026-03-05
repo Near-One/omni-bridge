@@ -363,13 +363,16 @@ pub async fn process_events(
                         let config = config.clone();
                         let mut redis_connection_manager = redis_connection_manager.clone();
                         let omni_connector = omni_connector.clone();
+                        let signer = signer.clone();
                         let near_omni_nonce = near_omni_nonce.clone();
 
                         async move {
                             match evm::process_init_transfer_event(
                                 &config,
                                 &mut redis_connection_manager,
+                                key.clone(),
                                 omni_connector,
+                                signer,
                                 transfer,
                                 near_omni_nonce,
                             )
@@ -426,6 +429,7 @@ pub async fn process_events(
                         let mut redis_connection_manager = redis_connection_manager.clone();
                         let key = key.clone();
                         let omni_connector = omni_connector.clone();
+                        let signer = signer.clone();
                         let near_nonce = near_omni_nonce.clone();
 
                         async move {
@@ -434,6 +438,7 @@ pub async fn process_events(
                                 &mut redis_connection_manager,
                                 key.clone(),
                                 omni_connector,
+                                signer,
                                 transfer,
                                 near_nonce,
                             )
@@ -527,11 +532,16 @@ pub async fn process_events(
                         let config = config.clone();
                         let mut redis_connection_manager = redis_connection_manager.clone();
                         let omni_connector = omni_connector.clone();
+                        let signer = signer.clone();
                         let near_nonce = near_omni_nonce.clone();
 
                         async move {
                             match utxo::process_utxo_to_near_init_transfer_event(
+                                &config,
+                                &mut redis_connection_manager,
+                                key.clone(),
                                 omni_connector,
+                                signer,
                                 transfer,
                                 near_nonce,
                             )
