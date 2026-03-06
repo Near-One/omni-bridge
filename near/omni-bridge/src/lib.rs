@@ -1143,6 +1143,9 @@ impl Contract {
                 .get(&token_address)
                 .near_expect(BridgeError::TokenDecimalsNotFound),
         );
+        // Fee includes both the user-specified fee and any dust lost during decimal
+        // normalization (see `normalize_amount`). Since `denormalize(normalize(x)) <= x`
+        // due to floor division, the difference naturally captures the normalization remainder.
         let fee = transfer_message.amount.0 - denormalized_amount;
 
         self.send_fee_internal(&transfer_message, fee_recipient, fee)
@@ -2749,11 +2752,31 @@ impl Contract {
         }
     }
 
+    /// Converts a normalized amount back to the origin token's decimal precision by multiplying
+    /// by `10^(origin_decimals - decimals)`. This is a lossless operation.
     fn denormalize_amount(amount: u128, decimals: Decimals) -> u128 {
         let diff_decimals: u32 = (decimals.origin_decimals - decimals.decimals).into();
         amount * (10_u128.pow(diff_decimals))
     }
 
+    /// Converts an amount from the origin token's decimal precision to the bridge's normalized
+    /// precision by dividing by `10^(origin_decimals - decimals)`.
+    ///
+    /// This uses integer (floor) division, so any sub-unit remainder is truncated. The truncated
+    /// portion ("dust") is not transferred to the destination chain:
+    ///
+    /// - **When fee > 0**: the dust is absorbed into the fee collected by the fee recipient
+    ///   (typically the relayer) during `claim_fee` (see `claim_fee_callback`), since the fee is
+    ///   computed as `original_amount - denormalize(normalized_amount)`, which naturally includes
+    ///   both the user-specified fee and any normalization remainder.
+    /// - **When fee = 0**: `sign_transfer_callback` removes the transfer message immediately,
+    ///   making `claim_fee` unavailable. The dust remains locked in the bridge contract (for
+    ///   native tokens) or is effectively burned (for deployed/bridged tokens).
+    ///
+    /// This is by design: cross-chain decimal normalization inherently loses precision when the
+    /// destination chain supports fewer decimals (e.g. 18-decimal ERC-20 bridged to Solana's
+    /// 9-decimal SPL tokens). The dust amount is always less than one unit in the destination
+    /// token's smallest denomination and cannot be represented on the destination chain.
     fn normalize_amount(amount: u128, decimals: Decimals) -> u128 {
         let diff_decimals: u32 = (decimals.origin_decimals - decimals.decimals).into();
         amount / (10_u128.pow(diff_decimals))

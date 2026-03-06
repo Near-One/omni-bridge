@@ -169,6 +169,14 @@ When auditing this codebase, these patterns are NOT vulnerabilities:
 - Workspace has `overflow-checks = true` in Cargo.toml
 - Misconfiguration causes panic (correct fail-safe), not silent corruption
 
+**2a. Decimal Normalization Dust / Rounding Loss (NOT a vulnerability)**
+- `normalize_amount` uses integer (floor) division to reduce precision when bridging to chains with fewer decimals (e.g. 18-decimal ERC-20 to Solana's 9-decimal SPL tokens)
+- The truncated remainder ("dust") cannot be represented on the destination chain
+- **When fee > 0**: the dust is absorbed into the fee recipient's (typically relayer) payout during `claim_fee`: fee = `original_amount - denormalize(normalized_amount)`, which naturally includes both the user-specified fee and any normalization remainder
+- **When fee = 0**: `sign_transfer_callback` removes the transfer message immediately, so `claim_fee` cannot be called. The dust remains locked in the bridge contract (native tokens) or is effectively burned (deployed/bridged tokens)
+- The dust is always less than one unit in the destination token's smallest denomination (e.g. less than 1 lamport equivalent for Solana)
+- This is the standard approach for cross-chain bridges with heterogeneous decimal precision — the dust is an inherent consequence of representing amounts with fewer decimal places
+
 **3. Wormhole Emitter Chain (Correct Design)**
 - Chain ID is explicitly encoded in the payload by source bridge (`OmniBridgeWormhole.sol:131-133`)
 - Using `token_address.get_chain()` is correct - it reads the chain from the signed payload
