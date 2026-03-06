@@ -96,7 +96,7 @@ fn abs_testnet_evm_request() -> EvmRpcRequest {
     EvmRpcRequest {
         tx_id: abs_testnet_tx_id(),
         extractors: vec![EvmExtractor::Log { log_index: 3 }],
-        finality: EvmFinality::Safe,
+        finality: EvmFinality::Latest,
     }
 }
 
