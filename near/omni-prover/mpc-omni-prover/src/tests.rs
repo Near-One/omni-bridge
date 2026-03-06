@@ -96,7 +96,7 @@ fn abs_testnet_evm_request() -> EvmRpcRequest {
     EvmRpcRequest {
         tx_id: abs_testnet_tx_id(),
         extractors: vec![EvmExtractor::Log { log_index: 3 }],
-        finality: EvmFinality::Latest,
+        finality: EvmFinality::Safe,
     }
 }
 
@@ -411,12 +411,103 @@ fn test_abs_testnet_verify_proof_args() {
     let hash2 = payload_from_args.compute_msg_hash().unwrap();
     assert_eq!(hash1.0, hash2.0);
 
-    // Generate base64 for near-cli call (wrapped as borsh Vec<u8> for verify_proof input)
     let call_bytes = borsh::to_vec(&inner_bytes).unwrap();
     let base64_encoded = near_sdk::base64::engine::general_purpose::STANDARD.encode(&call_bytes);
 
-    // Print for manual on-chain testing:
-    // near contract call-function as-transaction <prover> verify_proof \
-    //   base64-args '<base64_encoded>' prepaid-gas '100 Tgas' ...
+    assert!(!base64_encoded.is_empty());
+}
+
+fn hex_to_starknet_felt(hex_str: &str) -> StarknetFelt {
+    let stripped = hex_str.strip_prefix("0x").unwrap_or(hex_str);
+    let padded = if stripped.len() % 2 == 1 {
+        format!("0{stripped}")
+    } else {
+        stripped.to_string()
+    };
+    let bytes = hex::decode(&padded).unwrap();
+    let mut felt = [0u8; 32];
+    felt[32 - bytes.len()..].copy_from_slice(&bytes);
+    StarknetFelt(felt)
+}
+
+/// Real InitTransfer event from Starknet sepolia tx:
+/// https://sepolia.starkscan.co/tx/0x0592d937f74565b8c42c5603083e5536fdcd8e585b5fef5cd5c2c04b65cd80e5
+/// Event index 3 from bridge contract `0x05a0ad01b...98bdc8f`
+/// `initTransfer`(token=STRK, sender=`0x01bc36c7a...`, amount=10, recipient="near:frolik.testnet")
+fn starknet_sepolia_log() -> StarknetLog {
+    StarknetLog {
+        block_hash: hex_to_starknet_felt(
+            "0x05eed39a16c3695b707b24ee75c43c0dc0ce94d07d73f39473d6871a60fd07a7",
+        ),
+        block_number: 6_389_548,
+        from_address: hex_to_starknet_felt(
+            "0x05a0ad01b18eba34432d22e4cb5c987560cae87a785b494ed58d9553a98bdc8f",
+        ),
+        keys: vec![
+            hex_to_starknet_felt(
+                "0xdf95b9d93d8073acda8a048cb25360af6f665c6dfd33d86af06c20b4573c75",
+            ),
+            hex_to_starknet_felt(
+                "0x1bc36c7a215b86ea1d8943d2addbfdd767d5d8ff1258cb03fc40f6d69e6008",
+            ),
+            hex_to_starknet_felt(
+                "0x4718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d",
+            ),
+            hex_to_starknet_felt("0x1"),
+        ],
+        data: vec![
+            hex_to_starknet_felt("0x0a"),
+            hex_to_starknet_felt("0x0"),
+            hex_to_starknet_felt("0x0"),
+            hex_to_starknet_felt("0x0"),
+            hex_to_starknet_felt("0x6e6561723a66726f6c696b2e746573746e6574"),
+            hex_to_starknet_felt("0x13"),
+            hex_to_starknet_felt("0x0"),
+            hex_to_starknet_felt("0x0"),
+            hex_to_starknet_felt("0x0"),
+        ],
+    }
+}
+
+fn starknet_sepolia_request() -> StarknetRpcRequest {
+    StarknetRpcRequest {
+        tx_id: StarknetTxId(hex_to_starknet_felt(
+            "0x0592d937f74565b8c42c5603083e5536fdcd8e585b5fef5cd5c2c04b65cd80e5",
+        )),
+        finality: StarknetFinality::AcceptedOnL2,
+        extractors: vec![StarknetExtractor::Log { log_index: 3 }],
+    }
+}
+
+#[test]
+fn test_starknet_sepolia_verify_proof_args() {
+    let request = starknet_sepolia_request();
+
+    let starknet_log = starknet_sepolia_log();
+    let sign_payload = ForeignTxSignPayload::V1(ForeignTxSignPayloadV1 {
+        request: ForeignChainRpcRequest::Starknet(request),
+        values: vec![ExtractedValue::StarknetExtractedValue(
+            StarknetExtractedValue::Log(starknet_log),
+        )],
+    });
+
+    let args = MpcVerifyProofArgs {
+        proof_kind: ProofKind::InitTransfer,
+        sign_payload: borsh::to_vec(&sign_payload).unwrap(),
+    };
+
+    let inner_bytes = borsh::to_vec(&args).unwrap();
+    let deserialized = MpcVerifyProofArgs::try_from_slice(&inner_bytes).unwrap();
+    assert_eq!(deserialized.proof_kind, ProofKind::InitTransfer);
+
+    let payload_from_args =
+        ForeignTxSignPayload::try_from_slice(&deserialized.sign_payload).unwrap();
+    let hash1 = sign_payload.compute_msg_hash().unwrap();
+    let hash2 = payload_from_args.compute_msg_hash().unwrap();
+    assert_eq!(hash1.0, hash2.0);
+
+    let call_bytes = borsh::to_vec(&inner_bytes).unwrap();
+    let base64_encoded = near_sdk::base64::engine::general_purpose::STANDARD.encode(&call_bytes);
+
     assert!(!base64_encoded.is_empty());
 }
