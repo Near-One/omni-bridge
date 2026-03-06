@@ -58,10 +58,10 @@ The list is not limited to the following submissions but it gives an overview of
 
 | Severity | Reward |
 |----------|--------|
-| Critical | $10,000 - $100,000 |
-| High     | $5,000 - $10,000 |
-| Medium   | $1,000 - $5,000 |
-| Low      | $100 - $1,000 |
+| Critical | up to $100,000 |
+| High     | up to $10,000 |
+| Medium   | up to $5,000 |
+| Low      | up to $1,000 |
 
 The total maximum reward for High and Critical severity bugs is capped at 10% of the funds that are practically affected by the discovered vulnerability.
 
