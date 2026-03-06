@@ -410,6 +410,11 @@ impl Contract {
             UpdateFee::Fee(fee) => {
                 let mut transfer = self.get_transfer_message_storage(transfer_id);
 
+                require!(
+                    transfer.message.origin_transfer_id.is_none(),
+                    BridgeError::UpdateFeeNotAllowedForTransfer.as_ref()
+                );
+
                 let current_fee = transfer.message.fee;
                 require!(
                     fee.fee >= current_fee.fee && fee.fee < transfer.message.amount,
@@ -957,7 +962,7 @@ impl Contract {
         );
 
         let mut required_balance =
-            self.add_fast_transfer(fast_transfer, relayer_id.clone(), storage_payer.clone());
+            self.add_fast_transfer(fast_transfer, relayer_id, storage_payer.clone());
 
         let destination_nonce =
             self.get_next_destination_nonce(fast_transfer.get_destination_chain());
@@ -969,7 +974,7 @@ impl Contract {
             amount: fast_transfer.amount,
             recipient: fast_transfer.recipient.clone(),
             fee: fast_transfer.fee.clone(),
-            sender: OmniAddress::Near(relayer_id),
+            sender: OmniAddress::Near(env::current_account_id()),
             msg: fast_transfer.msg.clone(),
             destination_nonce,
             origin_transfer_id: Some(fast_transfer.transfer_id.clone()),

@@ -65,6 +65,7 @@ pub enum BridgeError {
     TransferAlreadyFinalised,
     TransferNotExist,
     UnknownFactory,
+    UpdateFeeNotAllowedForTransfer,
     UtxoConfigMissing,
     UtxoTransferAlreadyFinalised,
     UnsupportedFeeUpdateProof,
