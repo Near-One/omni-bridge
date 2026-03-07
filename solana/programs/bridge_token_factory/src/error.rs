@@ -22,4 +22,6 @@ pub enum ErrorCode {
     Paused,
     #[msg("Unauthorized")]
     Unauthorized,
+    #[msg("Amount overflow (unexpected state)")]
+    AmountOverflow,
 }
