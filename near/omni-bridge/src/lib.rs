@@ -281,7 +281,13 @@ impl Contract {
                 self.init_transfer(sender_id, signer_id, token_id, amount, init_transfer_msg)
             }
             BridgeOnTransferMsg::FastFinTransfer(fast_fin_transfer_msg) => {
-                self.fast_fin_transfer(token_id, amount, signer_id, fast_fin_transfer_msg)
+                self.fast_fin_transfer(
+                    token_id,
+                    amount,
+                    signer_id,
+                    sender_id,
+                    fast_fin_transfer_msg,
+                )
             }
             BridgeOnTransferMsg::UtxoFinTransfer(utxo_fin_transfer_msg) => self.utxo_fin_transfer(
                 token_id,
@@ -772,10 +778,11 @@ impl Contract {
         token_id: AccountId,
         amount: U128,
         storage_payer: AccountId,
+        sender_id: AccountId,
         fast_fin_transfer_msg: FastFinTransferMsg,
     ) -> PromiseOrPromiseIndexOrValue<U128> {
         require!(
-            self.is_trusted_relayer(&env::predecessor_account_id()),
+            self.is_trusted_relayer(&sender_id),
             BridgeError::RelayerNotActive.as_ref()
         );
 
