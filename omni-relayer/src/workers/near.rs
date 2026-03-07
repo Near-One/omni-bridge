@@ -2,13 +2,13 @@ use std::sync::Arc;
 
 use anyhow::{Context, Result};
 use bridge_connector_common::result::BridgeSdkError;
-use near_sdk::json_types::U64;
+use near_sdk::{AccountId, json_types::U64};
 use serde_json::Value;
 use tracing::{info, warn};
 
 use near_bridge_client::TransactionOptions;
 use near_jsonrpc_client::{JsonRpcClient, errors::JsonRpcError};
-use near_primitives::{hash::CryptoHash, types::AccountId};
+use near_primitives::hash::CryptoHash;
 use near_rpc_client::NearRpcError;
 use solana_client::rpc_request::RpcResponseErrorData;
 use solana_rpc_client_api::{client_error::ErrorKind, request::RpcError};
@@ -26,7 +26,7 @@ use crate::{
 use super::{EventAction, Transfer};
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
-pub struct UnverifiedTrasfer {
+pub struct UnverifiedTransfer {
     pub tx_hash: CryptoHash,
     pub signer: AccountId,
     pub specific_errors: Option<Vec<String>>,
@@ -162,17 +162,10 @@ pub async fn process_transfer_event(
                 redis_connection_manager,
                 utils::redis::EVENTS,
                 tx_hash.to_string(),
-                RetryableEvent::new(UnverifiedTrasfer {
+                RetryableEvent::new(UnverifiedTransfer {
                     tx_hash,
                     signer,
-                    specific_errors: Some(vec![
-                        "Signature request has already been submitted. Please try again later."
-                            .to_string(),
-                        "Request has timed out.".to_string(),
-                        "Signature request has timed out.".to_string(),
-                        "Attached deposit is lower than required".to_string(),
-                        "Exceeded the prepaid gas.".to_string(),
-                    ]),
+                    specific_errors: Some(vec!["Request has timed out.".to_string()]),
                     original_key: key,
                     original_event: serialized_event,
                 }),
@@ -192,7 +185,7 @@ pub async fn process_transfer_event(
                     | NearRpcError::RpcQueryError(
                         JsonRpcError::TransportError(_) | JsonRpcError::ServerError(_),
                     )
-                    | NearRpcError::RpcTransactionError(JsonRpcError::TransportError(_)) => {
+                    | NearRpcError::RpcTransactionError(_) => {
                         warn!(
                             "Failed to sign transfer ({origin_chain:?}:{origin_nonce}), retrying: {near_rpc_error:?}"
                         );
@@ -286,7 +279,7 @@ pub async fn process_transfer_to_utxo_event(
                 redis_connection_manager,
                 utils::redis::EVENTS,
                 tx_hash.to_string(),
-                RetryableEvent::new(UnverifiedTrasfer {
+                RetryableEvent::new(UnverifiedTransfer {
                     tx_hash,
                     signer,
                     specific_errors: Some(vec![
@@ -310,7 +303,7 @@ pub async fn process_transfer_to_utxo_event(
                     | NearRpcError::RpcQueryError(
                         JsonRpcError::TransportError(_) | JsonRpcError::ServerError(_),
                     )
-                    | NearRpcError::RpcTransactionError(JsonRpcError::TransportError(_)) => {
+                    | NearRpcError::RpcTransactionError(_) => {
                         warn!(
                             "Failed to submit {:?} transfer ({}), retrying: {near_rpc_error:?}",
                             transfer_message.recipient.get_chain(),
@@ -583,7 +576,7 @@ pub async fn process_unverified_transfer_event(
     config: &config::Config,
     redis_connection_manager: &mut redis::aio::ConnectionManager,
     jsonrpc_client: JsonRpcClient,
-    unverified_event: UnverifiedTrasfer,
+    unverified_event: UnverifiedTransfer,
 ) {
     utils::redis::remove_event(
         config,
@@ -771,7 +764,7 @@ pub async fn initiate_fast_transfer(
                     | NearRpcError::RpcQueryError(
                         JsonRpcError::TransportError(_) | JsonRpcError::ServerError(_),
                     )
-                    | NearRpcError::RpcTransactionError(JsonRpcError::TransportError(_)) => {
+                    | NearRpcError::RpcTransactionError(_) => {
                         warn!("Failed to initiate fast transfer, retrying: {near_rpc_error:?}");
                         return Ok(EventAction::Retry);
                     }
