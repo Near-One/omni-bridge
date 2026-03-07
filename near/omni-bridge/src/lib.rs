@@ -771,6 +771,7 @@ impl Contract {
         }
     }
 
+    #[allow(clippy::needless_pass_by_value)]
     fn fast_fin_transfer(
         &mut self,
         token_id: AccountId,
