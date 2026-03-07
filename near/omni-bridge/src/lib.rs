@@ -280,15 +280,13 @@ impl Contract {
             BridgeOnTransferMsg::InitTransfer(init_transfer_msg) => {
                 self.init_transfer(sender_id, signer_id, token_id, amount, init_transfer_msg)
             }
-            BridgeOnTransferMsg::FastFinTransfer(fast_fin_transfer_msg) => {
-                self.fast_fin_transfer(
-                    token_id,
-                    amount,
-                    signer_id,
-                    sender_id,
-                    fast_fin_transfer_msg,
-                )
-            }
+            BridgeOnTransferMsg::FastFinTransfer(fast_fin_transfer_msg) => self.fast_fin_transfer(
+                token_id,
+                amount,
+                signer_id,
+                sender_id,
+                fast_fin_transfer_msg,
+            ),
             BridgeOnTransferMsg::UtxoFinTransfer(utxo_fin_transfer_msg) => self.utxo_fin_transfer(
                 token_id,
                 amount,
