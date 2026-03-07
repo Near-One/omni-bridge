@@ -37,7 +37,7 @@ mod tests {
                 .with_utxo_token()
                 .await?;
 
-            let relayer_account = env_builder.create_account(account_n(10)).await?;
+            let relayer_account = env_builder.setup_trusted_relayer(account_n(10)).await?;
             env_builder.storage_deposit(relayer_account.id()).await?;
             env_builder
                 .omni_storage_deposit(relayer_account.id(), 1_000_000_000_000_000_000_000_000)
