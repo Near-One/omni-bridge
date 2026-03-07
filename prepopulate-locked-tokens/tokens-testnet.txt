@@ -1,0 +1,80 @@
+# One token per line.
+# Format: <chain>:<address>
+
+# Native tokens
+eth:0x0000000000000000000000000000000000000000
+arb:0x0000000000000000000000000000000000000000
+base:0x0000000000000000000000000000000000000000
+bnb:0x0000000000000000000000000000000000000000
+pol:0x0000000000000000000000000000000000000000
+sol:11111111111111111111111111111111
+btc:
+zcash:
+
+# NEP141 tokens
+near:6cf00c73a8552a9069372d6136aad4afd3a16bbc.factory.sepolia.testnet
+near:dbc.tokens.potlock.testnet
+near:dev-1691018906717-43195991188217
+near:eth.sepolia.testnet
+near:jex1.testnet
+near:linear-protocol.testnet
+near:nbtc.n-bridge.testnet
+near:oats.testnet
+near:ref.fakes.testnet
+near:sol.omnidep.testnet
+near:token-bridge-test.testnet
+near:token3.publicai-dev.testnet
+near:usdt.fakes.testnet
+near:vmoon.tkn.primitives.testnet
+near:wrap.testnet
+
+# Other tokens
+near:1046aff01deebc9ad3ee81a052c2eab82a69126c.factory.sepolia.testnet
+near:27ba8b27bbc09703c89caad9dae16925a7d06bde.factory.sepolia.testnet
+near:309d16a788293e35baf4a779811fea4bb0a38fb3.factory.sepolia.testnet
+near:45c4417c072ffad033f5abb1bcc3eb2f65ee1143.factory.sepolia.testnet
+near:8b73b67b5c8c6bc8d8aeb9e2b246adb391d8f4db.factory.sepolia.testnet
+near:arb-0x6048cf81ce9be22ff7fdcbd63a24507ef0a62965.omnidep.testnet
+near:arb-0x63bc3e5f068b54333c043e5d882deaea65c4c4f7.omnidep.testnet
+near:arb-0x6642487bb51d1290811f8c1e3adb14c08484c87d.omnidep.testnet
+near:arb-0x7cd573ec2cec6028bafaf24ad92d97172c282366.omnidep.testnet
+near:arb-0xd5ac5a88fa0f68a5eabda7e954772c678f0d055d.omnidep.testnet
+near:arb-0xe6ebb08934a8b9d51c454d991541b0ae12a45094.omnidep.testnet
+near:arb.omnidep.testnet
+near:base.omnidep.testnet
+near:bnb.omnidep.testnet
+near:ed1b7de57918f6b7c8a7a7767557f09a80ec2a35.factory.sepolia.testnet
+near:pol.omnidep.testnet
+near:sol-0x0c0ca940c458d6d2d8f1c2aab55331ed5128738a.omnidep.testnet
+near:sol-0x0c127255ee65f3484d49ad3699413ec97c6f3954.omnidep.testnet
+near:sol-0x1a323a9a79594c79804bf392616daa20c4faa6ba.omnidep.testnet
+near:sol-0x2d4e5ee3ee5386de80d095f2eef896a94fd471dd.omnidep.testnet
+near:sol-0x30f344f7a7702ab1c5f8232e826cbcf097849110.omnidep.testnet
+near:sol-0x43dc95a2d0ce71722fa90d50efe1354b53b90641.omnidep.testnet
+near:sol-0x69bea48b4683bbf2ca4ff66daa6be1e3eaaa0873.omnidep.testnet
+near:sol-0x758512d6e58099351fe95106dd05c4b464a7ecbf.omnidep.testnet
+near:sol-0x84ab8747b99cd15bba48edcf094b334ba19ea2bd.omnidep.testnet
+near:sol-0x8c8b1d8796e80a7d4fcf6c0c1addd2b4501a6f26.omnidep.testnet
+near:sol-0x9e43a0b80b46f5a13f6c463f4c8ae91982c6ccfc.omnidep.testnet
+near:sol-0x9f188f79b1b2d810b1cd9fa63280cf648b44ea9c.omnidep.testnet
+near:sol-0xaa00e7aa30b4bf04d523a0fe9d7cedf8a0327635.omnidep.testnet
+near:sol-0xaad003a219f1e267b21ebc37584a922a9fafb728.omnidep.testnet
+# Old migrated token
+# sol.omnidep.testnet
+
+# Tokens added using `migrate_deployed_token`
+near:sol.poa-factory.testnet
+
+# Tokens added using `add_token`
+
+# Tokens in `factory.sepolia.testnet`
+near:1c7d4b196cb0c7b01d743fbc6116a902379c7238.factory.sepolia.testnet
+near:fff9976782d46cc05630d1f6ebab18b2324d6b14.factory.sepolia.testnet
+near:6410b45e541d11a4ddc421f6620f15b22d6e8b15.factory.sepolia.testnet
+near:c884aa85700fe39b503fba7acab1f1adbbdea535.factory.sepolia.testnet
+near:d2e8ae1abeb85ac4fb6e7136eab152361cc16e14.factory.sepolia.testnet
+near:3beb2cf5c2c050bc575350671aa5f06e589386e8.factory.sepolia.testnet
+near:aa8e23fb1079ea71e0a56f48a2aa51851d8433d0.factory.sepolia.testnet
+near:8eeb0897428de2cf1282602ed8bac2c9784a9909.factory.sepolia.testnet
+near:558ba2f3057abfb6d98ccf4358ea9a860b9c9b14.factory.sepolia.testnet
+near:37deddb98d442ed043f2b894b081f3617daf2670.factory.sepolia.testnet
