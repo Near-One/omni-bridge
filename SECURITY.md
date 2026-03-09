@@ -56,26 +56,6 @@ The list is not limited to the following submissions but it gives an overview of
 * Decimal normalization rounding dust — `normalize_amount` uses integer (floor) division when bridging to chains with fewer decimals (e.g. 18-decimal ERC-20 to Solana's 9-decimal SPL tokens). The truncated remainder ("dust") is always less than one unit in the destination token's smallest denomination. When fee > 0, dust is absorbed into the fee recipient's payout via `claim_fee`. When fee = 0, dust remains locked in the contract (native tokens) or is effectively burned (bridged tokens). This is inherent to cross-chain decimal normalization
 * Rejected relayer stake goes to DAO — In `reject_relayer_application` (`relayer_staking.rs`), the rejected applicant's staked NEAR is transferred to `env::predecessor_account_id()` (the DAO/RelayerManager caller), not back to the applicant. This is intentional: rejection is a punitive action for misbehaving or unqualified applicants, and the DAO retains the stake. Relayers who voluntarily leave use `resign_trusted_relayer`, which correctly returns the stake to the caller (who is the relayer themselves)
 
-## Reward
-
-| Severity | Reward |
-|----------|--------|
-| Critical | up to $100,000 |
-| High     | up to $10,000 |
-| Medium   | up to $5,000 |
-| Low      | up to $1,000 |
-
-The total maximum reward for High and Critical severity bugs is capped at 10% of the funds that are practically affected by the discovered vulnerability.
-
-The following are the necessary conditions for the reward:
-* You must be the first reporter of the vulnerability;
-* The vulnerability must be reported no later than 24 hours after discovery and exclusively through [HackenProof](https://hackenproof.com/programs/near-intents-bridges);
-* The vulnerability is not disclosed to anyone else except the finder and NEAR before it is fixed;
-* The vulnerability is not exploited until it is fixed;
-* You must provide a clear textual description of the report along with steps to reproduce the issue, including attachments such as screenshots or proof of concept code as necessary.
-
-*Note:* The company is entitled to make the payment in their native NEAR token vested over 1 year.
-
 ## Receive Security Updates
 
 If you want to be informed about security vulnerabilities, please subscribe to the [NEAR Security Update newsletter](https://groups.google.com/a/near.org/g/security-updates).
