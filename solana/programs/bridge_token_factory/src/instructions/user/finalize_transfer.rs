@@ -24,7 +24,7 @@ use crate::{
 #[instruction(data: SignedPayload<FinalizeTransferPayload>)]
 pub struct FinalizeTransfer<'info> {
     #[account(
-        // mut,
+        mut,
         seeds = [CONFIG_SEED],
         bump = config.bumps.config,
     )]
