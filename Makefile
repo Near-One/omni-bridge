@@ -78,3 +78,7 @@ solana-deploy-dev solana-deploy:
 
 rust-run-tests:
 	cargo nextest run --manifest-path $(NEAR_MANIFEST)
+
+solana-run-tests:
+	cd $(MAKEFILE_DIR)/solana && cargo build-sbf
+	cd $(MAKEFILE_DIR)/solana && cargo test --package bridge_token_factory --test mollusk
