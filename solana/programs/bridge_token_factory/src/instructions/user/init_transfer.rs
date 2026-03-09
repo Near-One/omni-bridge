@@ -97,7 +97,7 @@ impl InitTransfer<'_> {
                         mint: self.mint.to_account_info(),
                     },
                 ),
-                payload.amount.try_into().unwrap(),
+                payload.amount.try_into().map_err(|_| error!(ErrorCode::InvalidArgs))?,
                 self.mint.decimals,
             )?;
         } else {
@@ -116,7 +116,7 @@ impl InitTransfer<'_> {
                         authority: self.user.to_account_info(),
                     },
                 ),
-                payload.amount.try_into().unwrap(),
+                payload.amount.try_into().map_err(|_| error!(ErrorCode::InvalidArgs))?,
             )?;
         }
 

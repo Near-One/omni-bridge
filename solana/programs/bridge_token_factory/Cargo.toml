@@ -38,3 +38,13 @@ libsecp256k1 = "0.7.1"
 version = "1.0.1"
 default-features = false
 features = []
+
+[dev-dependencies]
+mollusk-svm = "0.3"
+solana-sdk = "2.3"
+sha2 = "0.10"
+sha3 = "0.10"
+libsecp256k1 = "0.7.1"
+mollusk-svm-programs-token = "0.3.0"
+stub_program = { path = "../stub_program" }
+solana-sdk-ids = "2.2"
