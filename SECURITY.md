@@ -54,26 +54,6 @@ The list is not limited to the following submissions but it gives an overview of
 * Non-default feature-only paths (e.g. findings that depend on non-production feature gates)
 * Deployment / operational issues — misconfigured infrastructure, key management procedures, etc.
 
-## Reward
-
-| Severity | Reward |
-|----------|--------|
-| Critical | up to $100,000 |
-| High     | up to $10,000 |
-| Medium   | up to $5,000 |
-| Low      | up to $1,000 |
-
-The total maximum reward for High and Critical severity bugs is capped at 10% of the funds that are practically affected by the discovered vulnerability.
-
-The following are the necessary conditions for the reward:
-* You must be the first reporter of the vulnerability;
-* The vulnerability must be reported no later than 24 hours after discovery and exclusively through [HackenProof](https://hackenproof.com/programs/near-intents-bridges);
-* The vulnerability is not disclosed to anyone else except the finder and NEAR before it is fixed;
-* The vulnerability is not exploited until it is fixed;
-* You must provide a clear textual description of the report along with steps to reproduce the issue, including attachments such as screenshots or proof of concept code as necessary.
-
-*Note:* The company is entitled to make the payment in their native NEAR token vested over 1 year.
-
 ## Receive Security Updates
 
 If you want to be informed about security vulnerabilities, please subscribe to the [NEAR Security Update newsletter](https://groups.google.com/a/near.org/g/security-updates).
