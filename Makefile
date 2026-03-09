@@ -81,4 +81,4 @@ rust-run-tests:
 
 solana-run-tests:
 	cd $(MAKEFILE_DIR)/solana && cargo build-sbf
-	cd $(MAKEFILE_DIR)/solana && cargo test --package bridge_token_factory --test mollusk
+	cd $(MAKEFILE_DIR)/solana && cargo test --package bridge_token_factory --test mollusk --features no-entrypoint
