@@ -53,6 +53,8 @@ The list is not limited to the following submissions but it gives an overview of
 * Test-only code paths (e.g. code gated behind `#[cfg(test)]` or test utilities not reachable in production)
 * Non-default feature-only paths (e.g. findings that depend on non-production feature gates)
 * Deployment / operational issues — misconfigured infrastructure, key management procedures, etc.
+* Decimal normalization rounding dust — `normalize_amount` uses integer (floor) division when bridging to chains with fewer decimals (e.g. 18-decimal ERC-20 to Solana's 9-decimal SPL tokens). The truncated remainder ("dust") is always less than one unit in the destination token's smallest denomination. When fee > 0, dust is absorbed into the fee recipient's payout via `claim_fee`. When fee = 0, dust remains locked in the contract (native tokens) or is effectively burned (bridged tokens). This is inherent to cross-chain decimal normalization
+* Rejected relayer stake goes to DAO — In `reject_relayer_application` (`relayer_staking.rs`), the rejected applicant's staked NEAR is transferred to `env::predecessor_account_id()` (the DAO/RelayerManager caller), not back to the applicant. This is intentional: rejection is a punitive action for misbehaving or unqualified applicants, and the DAO retains the stake. Relayers who voluntarily leave use `resign_trusted_relayer`, which correctly returns the stake to the caller (who is the relayer themselves)
 
 ## Receive Security Updates
 

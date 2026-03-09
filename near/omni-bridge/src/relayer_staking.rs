@@ -108,6 +108,8 @@ impl Contract {
             .to_log_string(),
         );
 
+        // Intentional: rejected applicant's stake goes to the DAO/RelayerManager, not back
+        // to the applicant. Rejection is punitive. See SECURITY.md.
         Promise::new(env::predecessor_account_id()).transfer(state.stake)
     }
 
