@@ -10,18 +10,6 @@ All security issues should be submitted through our bug bounty program on [Hacke
 
 **Please do not open GitHub issues for security vulnerabilities.**
 
-## Handling & disclosure process
-
-1. Security report is received and assigned to an owner. This person will coordinate the process of evaluating, fixing, releasing and disclosing the issue.
-2. After the initial report is received, the evaluation process is performed. It's identified if the issue exists, its severity and which version / components of the code is affected. Additional review to identify similar issues also happens.
-3. Fixes are implemented for all supported releases. These fixes are not publicly communicated but held in a private repo of the Security Team or locally.
-4. A suggested announcement date for this vulnerability is chosen. The notification is drafted and includes patches to all supported versions and affected components.
-
-This process may take time, especially when coordinating with network participants and maintainers of other components in the ecosystem.
-The goal will be to address issues in as short of a period as possible, but it's important that the process described above to ensure that disclosures are handled in a consistent manner.
-
-*Note:* If the Security Team identifies that an issue is mission-critical and requires a subset of network participants to update prior to newsletter announcement - this will be done in a manual way by communicating via direct channels.
-
 ## In-scope vulnerabilities
 
 The list is not limited to the following submissions but it gives an overview of what issues we care about:
