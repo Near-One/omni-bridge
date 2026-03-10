@@ -574,6 +574,7 @@ pub async fn process_sign_transfer_event(
                 }
             }
 
+            warn!("Failed to finalize deposit, retrying: {err}");
             Ok(EventAction::Retry)
         }
     }
