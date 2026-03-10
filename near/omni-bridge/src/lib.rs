@@ -1148,6 +1148,9 @@ impl Contract {
                 .get(&token_address)
                 .near_expect(BridgeError::TokenDecimalsNotFound),
         );
+        // Fee includes both the user-specified fee and any dust lost during decimal
+        // normalization (see `normalize_amount`). Since `denormalize(normalize(x)) <= x`
+        // due to floor division, the difference naturally captures the normalization remainder.
         let fee = transfer_message.amount.0 - denormalized_amount;
 
         self.send_fee_internal(&transfer_message, fee_recipient, fee)
@@ -2759,6 +2762,9 @@ impl Contract {
         amount * (10_u128.pow(diff_decimals))
     }
 
+    /// Uses floor division — any sub-unit remainder ("dust") is truncated and not transferred
+    /// to the destination chain. When fee > 0, dust is absorbed into the fee via `claim_fee`.
+    /// When fee = 0, dust stays locked/burned. See SECURITY.md for details.
     fn normalize_amount(amount: u128, decimals: Decimals) -> u128 {
         let diff_decimals: u32 = (decimals.origin_decimals - decimals.decimals).into();
         amount / (10_u128.pow(diff_decimals))

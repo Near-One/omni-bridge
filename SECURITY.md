@@ -1,0 +1,44 @@
+# Security Policy
+
+NEAR Omni Bridge is held to the highest security standard. This document defines the policy on how to report vulnerabilities and receive updates when security patches are released.
+
+If you have any suggestions or comments about the security policy, please email the [NEAR Security Team](mailto:security@near.org) at security@near.org
+
+## Reporting a vulnerability
+
+All security issues should be submitted through our bug bounty program on [HackenProof](https://hackenproof.com/programs/near-intents-bridges). The team will review the submissions and decide whether they are eligible for bounty payouts. For more details, please check out the program description on the HackenProof website.
+
+**Please do not open GitHub issues for security vulnerabilities.**
+
+## In-scope vulnerabilities
+
+The list is not limited to the following submissions but it gives an overview of what issues we care about:
+
+* Stealing or loss of funds
+* Unauthorized transactions
+* Balance manipulation
+* Contract execution flow issues
+* Cryptographic flaws
+* Unauthorized access to MPC key shares or signing capability
+* Information disclosure of sensitive MPC state
+* Bypass of threshold signature requirements
+* Theft or permanent freezing of funds
+* Cross-chain replay attacks enabling double-spending
+* Light client verification bypass
+
+## Out-of-scope vulnerabilities
+
+* All vulnerabilities already discovered by audit reports
+* Unbounded gas or storage consumption
+* Griefing (e.g. no profit motive for an attacker, but damage to the users or the protocol)
+* Network-level DoS
+* Vulnerabilities in the protocol that are unrelated to smart contract execution
+* Wormhole guardian network (report to Wormhole)
+* Social engineering or physical attacks including physical attacks on TEE hardware
+* Attacks requiring >= threshold colluding nodes
+* NEAR chain attacks — validator collusion, chain reorgs, or finality failures
+* Test-only code paths (e.g. code gated behind `#[cfg(test)]` or test utilities not reachable in production)
+* Non-default feature-only paths (e.g. findings that depend on non-production feature gates)
+* Deployment / operational issues — misconfigured infrastructure, key management procedures, etc.
+* Decimal normalization rounding dust — `normalize_amount` uses integer (floor) division when bridging to chains with fewer decimals (e.g. 18-decimal ERC-20 to Solana's 9-decimal SPL tokens). The truncated remainder ("dust") is always less than one unit in the destination token's smallest denomination. When fee > 0, dust is absorbed into the fee recipient's payout via `claim_fee`. When fee = 0, dust remains locked in the contract (native tokens) or is effectively burned (bridged tokens). This is inherent to cross-chain decimal normalization
+* Rejected relayer stake goes to DAO — In `reject_relayer_application` (`relayer_staking.rs`), the rejected applicant's staked NEAR is transferred to `env::predecessor_account_id()` (the DAO/RelayerManager caller), not back to the applicant. This is intentional: rejection is a punitive action for misbehaving or unqualified applicants, and the DAO retains the stake. Relayers who voluntarily leave use `resign_trusted_relayer`, which correctly returns the stake to the caller (who is the relayer themselves)
