@@ -12,6 +12,7 @@ OMNI_TOKEN_MANIFEST := $(MAKEFILE_DIR)/near/omni-token/Cargo.toml
 TOKEN_DEPLOYER := $(MAKEFILE_DIR)/near/token-deployer/Cargo.toml
 EVM_PROVER_MANIFEST := $(MAKEFILE_DIR)/near/omni-prover/evm-prover/Cargo.toml
 WORMHOLE_OMNI_PROVER_PROXY_MANIFEST := $(MAKEFILE_DIR)/near/omni-prover/wormhole-omni-prover-proxy/Cargo.toml
+MPC_OMNI_PROVER_MANIFEST := $(MAKEFILE_DIR)/near/omni-prover/mpc-omni-prover/Cargo.toml
 MOCK_PROVER_MANIFEST := $(MAKEFILE_DIR)/near/mock/mock-prover/Cargo.toml
 MOCK_TOKEN_MANIFEST := $(MAKEFILE_DIR)/near/mock/mock-token/Cargo.toml
 
@@ -46,13 +47,16 @@ rust-build-evm-prover:
 rust-build-wormhole-omni-prover-proxy:
 	cargo near build reproducible-wasm --manifest-path $(WORMHOLE_OMNI_PROVER_PROXY_MANIFEST) --out-dir $(OUT_DIR)
 
+rust-build-mpc-omni-prover:
+	cargo near build reproducible-wasm --manifest-path $(MPC_OMNI_PROVER_MANIFEST) --out-dir $(OUT_DIR)
+
 rust-build-mock-prover:
 	cargo near build reproducible-wasm --manifest-path $(MOCK_PROVER_MANIFEST) --out-dir $(OUT_DIR)
 
 rust-build-mock-token:
 	cargo near build reproducible-wasm --manifest-path $(MOCK_TOKEN_MANIFEST) --out-dir $(OUT_DIR)
 
-rust-build-near: rust-build-omni-bridge rust-build-omni-token rust-build-token-deployer rust-build-evm-prover rust-build-wormhole-omni-prover-proxy rust-build-mock-prover rust-build-mock-token
+rust-build-near: rust-build-omni-bridge rust-build-omni-token rust-build-token-deployer rust-build-evm-prover rust-build-wormhole-omni-prover-proxy rust-build-mpc-omni-prover rust-build-mock-prover rust-build-mock-token
 
 solana-generate-program-id:
 	solana-keygen new -o solana/target/deploy/bridge_token_factory-keypair.json --no-passphrase
