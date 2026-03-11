@@ -30,7 +30,7 @@ mod tests;
 const FOREIGN_TX_DOMAIN_ID: u64 = 3;
 const PAYLOAD_VERSION: u8 = 1;
 
-const VERIFY_FOREIGN_TX_GAS: Gas = Gas::from_tgas(20);
+const VERIFY_FOREIGN_TX_GAS: Gas = Gas::from_tgas(15);
 const VERIFY_CALLBACK_GAS: Gas = Gas::from_tgas(7);
 const ONE_YOCTO: NearToken = NearToken::from_yoctonear(1);
 
