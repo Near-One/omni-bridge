@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use anyhow::{Context, Result};
 use bridge_connector_common::result::BridgeSdkError;
+use near_sdk::AccountId;
 use tracing::{info, warn};
 
 use near_bridge_client::{NearBridgeClient, TransactionOptions};
@@ -18,7 +19,7 @@ use omni_types::{
     prover_args::WormholeVerifyProofArgs, prover_result::ProofKind,
 };
 
-use crate::{config, utils, workers::RetryableEvent};
+use crate::{config, utils, workers::RetryableEvent, workers::near::UnverifiedTransfer};
 
 use super::{DeployToken, EventAction, FinTransfer, Transfer};
 
@@ -27,6 +28,7 @@ pub async fn process_init_transfer_event(
     redis_connection_manager: &mut redis::aio::ConnectionManager,
     key: String,
     omni_connector: Arc<OmniConnector>,
+    signer: AccountId,
     transfer: Transfer,
     near_nonce: Arc<utils::nonce::NonceManager>,
 ) -> Result<EventAction> {
@@ -159,10 +161,39 @@ pub async fn process_init_transfer_event(
 
     match omni_connector.fin_transfer(fin_transfer_args).await {
         Ok(tx_hash) => {
+            let Ok(serialized_event) = serde_json::to_value(&transfer) else {
+                warn!("Failed to serialize transfer: {transfer:?}");
+                return Ok(EventAction::Remove);
+            };
+
+            let Ok(crypto_hash) = tx_hash.parse() else {
+                warn!(
+                    "Failed to parse tx_hash as CryptoHash ({:?}:{}): {tx_hash}",
+                    transfer_id.origin_chain, transfer_id.origin_nonce
+                );
+                return Ok(EventAction::Remove);
+            };
+
+            utils::redis::add_event(
+                config,
+                redis_connection_manager,
+                utils::redis::EVENTS,
+                tx_hash.clone(),
+                RetryableEvent::new(UnverifiedTransfer {
+                    tx_hash: crypto_hash,
+                    signer,
+                    specific_errors: Some(vec!["Request has timed out.".to_string()]),
+                    original_key: key,
+                    original_event: serialized_event,
+                }),
+            )
+            .await;
+
             info!(
                 "Finalized InitTransfer ({:?}:{}): {tx_hash:?}",
                 transfer_id.origin_chain, transfer_id.origin_nonce
             );
+
             Ok(EventAction::Remove)
         }
         Err(err) => {
@@ -174,7 +205,7 @@ pub async fn process_init_transfer_event(
                     | NearRpcError::RpcQueryError(
                         JsonRpcError::TransportError(_) | JsonRpcError::ServerError(_),
                     )
-                    | NearRpcError::RpcTransactionError(JsonRpcError::TransportError(_)) => {
+                    | NearRpcError::RpcTransactionError(_) => {
                         warn!("Failed to finalize transfer, retrying: {near_rpc_error:?}",);
                         return Ok(EventAction::Retry);
                     }
@@ -273,7 +304,7 @@ pub async fn process_fin_transfer_event(
                     | NearRpcError::RpcQueryError(
                         JsonRpcError::TransportError(_) | JsonRpcError::ServerError(_),
                     )
-                    | NearRpcError::RpcTransactionError(JsonRpcError::TransportError(_)) => {
+                    | NearRpcError::RpcTransactionError(_) => {
                         warn!("Failed to claim fee, retrying: {near_rpc_error:?}");
                         return Ok(EventAction::Retry);
                     }
@@ -349,7 +380,7 @@ pub async fn process_deploy_token_event(
                     | NearRpcError::RpcQueryError(
                         JsonRpcError::TransportError(_) | JsonRpcError::ServerError(_),
                     )
-                    | NearRpcError::RpcTransactionError(JsonRpcError::TransportError(_)) => {
+                    | NearRpcError::RpcTransactionError(_) => {
                         warn!("Failed to bind token, retrying: {near_rpc_error:?}");
                         return Ok(EventAction::Retry);
                     }

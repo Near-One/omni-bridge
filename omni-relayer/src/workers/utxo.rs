@@ -16,7 +16,7 @@ use omni_connector::{BtcDepositArgs, FinTransferArgs, OmniConnector};
 
 use crate::{
     config, utils,
-    workers::{RetryableEvent, near::UnverifiedTrasfer},
+    workers::{RetryableEvent, near::UnverifiedTransfer},
 };
 
 use super::{EventAction, Transfer};
@@ -97,12 +97,20 @@ pub async fn process_near_to_utxo_init_transfer_event(
 }
 
 pub async fn process_utxo_to_near_init_transfer_event(
+    config: &config::Config,
+    redis_connection_manager: &mut redis::aio::ConnectionManager,
+    key: String,
     omni_connector: Arc<OmniConnector>,
+    signer: AccountId,
     transfer: Transfer,
     near_nonce: Arc<utils::nonce::NonceManager>,
 ) -> Result<EventAction> {
     let Ok(near_bridge_client) = omni_connector.near_bridge_client() else {
         anyhow::bail!("Near bridge client is not configured");
+    };
+
+    let Ok(serialized_event) = serde_json::to_value(&transfer) else {
+        anyhow::bail!("Failed to serialize transfer: {transfer:?}");
     };
 
     let Transfer::UtxoToNear {
@@ -208,7 +216,28 @@ pub async fn process_utxo_to_near_init_transfer_event(
 
     match omni_connector.fin_transfer(fin_transfer_args).await {
         Ok(tx_hash) => {
-            info!("Finalized {chain:?} transaction: {tx_hash:?}");
+            let Ok(crypto_hash) = tx_hash.parse() else {
+                warn!("Failed to parse tx_hash as CryptoHash ({chain:?}:{btc_tx_hash}): {tx_hash}");
+                return Ok(EventAction::Remove);
+            };
+
+            utils::redis::add_event(
+                config,
+                redis_connection_manager,
+                utils::redis::EVENTS,
+                tx_hash.clone(),
+                RetryableEvent::new(UnverifiedTransfer {
+                    tx_hash: crypto_hash,
+                    signer,
+                    specific_errors: Some(vec!["Request has timed out.".to_string()]),
+                    original_key: key,
+                    original_event: serialized_event,
+                }),
+            )
+            .await;
+
+            info!("Finalized transaction ({chain:?}:{btc_tx_hash}): {tx_hash:?}");
+
             Ok(EventAction::Remove)
         }
         Err(err) => {
@@ -222,13 +251,13 @@ pub async fn process_utxo_to_near_init_transfer_event(
                     )
                     | NearRpcError::RpcTransactionError(_) => {
                         warn!(
-                            "Failed to finalize {chain:?} transaction, retrying: {near_rpc_error:?}"
+                            "Failed to finalize transaction, retrying ({chain:?}:{btc_tx_hash}): {near_rpc_error:?}"
                         );
                         return Ok(EventAction::Retry);
                     }
                     _ => {
                         anyhow::bail!(
-                            "Failed to finalize {chain:?} transaction: {near_rpc_error:?}"
+                            "Failed to finalize transaction ({chain:?}:{btc_tx_hash}): {near_rpc_error:?}"
                         );
                     }
                 };
@@ -241,7 +270,7 @@ pub async fn process_utxo_to_near_init_transfer_event(
                 return Ok(EventAction::Retry);
             }
 
-            anyhow::bail!("Failed to finalize {chain:?} transaction: {err:?}");
+            anyhow::bail!("Failed to finalize transaction ({chain:?}:{btc_tx_hash}): {err:?}");
         }
     }
 }
@@ -358,7 +387,7 @@ pub async fn process_confirmed_tx_hash(
                 redis_connection_manager,
                 utils::redis::EVENTS,
                 tx_hash.to_string(),
-                RetryableEvent::new(UnverifiedTrasfer {
+                RetryableEvent::new(UnverifiedTransfer {
                     tx_hash,
                     signer,
                     specific_errors: Some(vec!["Not enough blocks confirmed".to_string()]),
