@@ -21,16 +21,21 @@ pub async fn get_token_id(
             })?;
             Ok(OmniAddress::Near(token))
         }
-        ChainKind::Eth | ChainKind::Base | ChainKind::Arb | ChainKind::Bnb | ChainKind::Pol => {
-            utils::evm::string_to_evm_omniaddress(chain_kind, token_address)
-                .map_err(|err| err.to_string())
-        }
+        ChainKind::Eth
+        | ChainKind::Base
+        | ChainKind::Arb
+        | ChainKind::Bnb
+        | ChainKind::Pol
+        | ChainKind::HyperEvm
+        | ChainKind::Abs => utils::evm::string_to_evm_omniaddress(chain_kind, token_address)
+            .map_err(|err| err.to_string()),
         ChainKind::Sol => {
             let token = Pubkey::from_str(token_address).map_err(|_| {
                 format!("Failed to parse token address as Pubkey: {token_address:?}",)
             })?;
             OmniAddress::new_from_slice(ChainKind::Sol, &token.to_bytes())
         }
+        ChainKind::Strk => OmniAddress::from_str(&format!("strk:{token_address}")),
         ChainKind::Btc => Ok(OmniAddress::Btc(token_address.to_string())),
         ChainKind::Zcash => Ok(OmniAddress::Zcash(token_address.to_string())),
     }

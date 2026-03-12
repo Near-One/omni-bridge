@@ -1,4 +1,15 @@
+use near_mpc_sdk::{
+    contract_interface::types::EvmFinality, foreign_chain::starknet::StarknetFinality,
+};
 use near_sdk::near;
+
+/// Finality enum that supports both EVM and Starknet chains.
+#[near(serializers = [borsh, json])]
+#[derive(Debug, Clone, PartialEq)]
+pub enum MpcFinality {
+    Evm(EvmFinality),
+    Starknet(StarknetFinality),
+}
 
 #[near(serializers = [json])]
 #[derive(Clone, Debug)]

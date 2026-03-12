@@ -121,6 +121,29 @@ error_selectors_to_remove = [
 	"696e76616c696420666565" # Wormhole's "invalid fee"
 ]
 
+# [hyperevm]
+# rpc_http_url = ""
+# rpc_ws_url = ""
+# omni_bridge_address = ""
+# block_processing_batch_size = 10_000
+# expected_finalization_time = 6
+# safe_confirmations = 5
+# error_selectors_to_remove = [
+# 	"0x8baa579f", # InvalidSignature()
+# 	"0xdcf35db0", # FailedToSendEther()
+# ]
+
+# [abs]
+# rpc_http_url = "https://api.production.abs.xyz"
+# omni_bridge_address = ""
+# block_processing_batch_size = 10_000
+# expected_finalization_time = 6
+# safe_confirmations = 5
+# error_selectors_to_remove = [
+# 	"0x8baa579f", # InvalidSignature()
+# 	"0xdcf35db0", # FailedToSendEther()
+# ]
+
 [solana]
 rpc_http_url = "https://x-api-key:TATUM_API_KEY@solana-mainnet.gateway.tatum.io"
 rpc_ws_url = "wss://api.mainnet-beta.solana.com"
@@ -148,6 +171,11 @@ finalize_transfer_sol_discriminator = [104, 27, 121, 69, 3, 70, 217, 66]
 # Either provide a path to a keypair file or set it in the environment
 # Note: the path must be absolute
 # credentials_path = "/Users/username/my-solana-keypair.json"
+
+# [starknet]
+# rpc_http_url = "https://starknet-mainnet-rpc.publicnode.com"
+# chain_id = "SN_MAIN"
+# omni_bridge_address = ""
 
 [btc]
 rpc_http_url = "https://x-api-key:TATUM_API_KEY@bitcoin-mainnet.gateway.tatum.io"

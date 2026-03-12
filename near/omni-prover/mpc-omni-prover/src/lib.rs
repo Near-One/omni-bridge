@@ -17,6 +17,7 @@ use near_sdk::{ext_contract, near, require, AccountId, Gas, NearToken, PanicOnDe
 use omni_types::{
     errors::ProverError,
     evm::events::parse_evm_proof,
+    mpc_types::MpcFinality,
     prover_args::MpcVerifyProofArgs,
     prover_result::{ProofKind, ProverResult},
     starknet::events::parse_starknet_proof,
@@ -37,14 +38,6 @@ const ONE_YOCTO: NearToken = NearToken::from_yoctonear(1);
 #[ext_contract(ext_mpc_contract)]
 pub trait MpcContract {
     fn verify_foreign_transaction(&mut self, request: VerifyForeignTransactionRequestArgs);
-}
-
-/// Finality enum that supports both EVM and Starknet chains.
-#[near(serializers = [borsh, json])]
-#[derive(Debug, Clone, PartialEq)]
-pub enum MpcFinality {
-    Evm(EvmFinality),
-    Starknet(StarknetFinality),
 }
 
 #[near(contract_state)]

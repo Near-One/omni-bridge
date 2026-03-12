@@ -136,6 +136,8 @@ pub struct EvmNonceManagers {
     pub arb: Option<NonceManager>,
     pub bnb: Option<NonceManager>,
     pub pol: Option<NonceManager>,
+    pub hyperevm: Option<NonceManager>,
+    pub abs: Option<NonceManager>,
 }
 
 impl EvmNonceManagers {
@@ -186,6 +188,24 @@ impl EvmNonceManagers {
                     address: config::get_relayer_evm_address(ChainKind::Pol),
                 })
             }),
+            hyperevm: config.hyperevm.as_ref().map(|hyperevm_config| {
+                NonceManager::new(ChainClient::Evm {
+                    provider: DynProvider::new(
+                        ProviderBuilder::new()
+                            .connect_http(hyperevm_config.rpc_http_url.parse().unwrap()),
+                    ),
+                    address: config::get_relayer_evm_address(ChainKind::HyperEvm),
+                })
+            }),
+            abs: config.abs.as_ref().map(|abs_config| {
+                NonceManager::new(ChainClient::Evm {
+                    provider: DynProvider::new(
+                        ProviderBuilder::new()
+                            .connect_http(abs_config.rpc_http_url.parse().unwrap()),
+                    ),
+                    address: config::get_relayer_evm_address(ChainKind::Abs),
+                })
+            }),
         }
     }
 
@@ -214,6 +234,17 @@ impl EvmNonceManagers {
             pol.resync_nonce()
                 .await
                 .context("Failed to resync nonce for pol")?;
+        }
+        if let Some(hyperevm) = self.hyperevm.as_ref() {
+            hyperevm
+                .resync_nonce()
+                .await
+                .context("Failed to resync nonce for hyperevm")?;
+        }
+        if let Some(abs) = self.abs.as_ref() {
+            abs.resync_nonce()
+                .await
+                .context("Failed to resync nonce for abs")?;
         }
 
         Ok(())
@@ -256,7 +287,25 @@ impl EvmNonceManagers {
                     .reserve_nonce()
                     .await
             }
-            ChainKind::Near | ChainKind::Sol | ChainKind::Btc | ChainKind::Zcash => {
+            ChainKind::HyperEvm => {
+                self.hyperevm
+                    .as_ref()
+                    .ok_or_else(|| anyhow::anyhow!("HyperEvm nonce manager is not initialized"))?
+                    .reserve_nonce()
+                    .await
+            }
+            ChainKind::Abs => {
+                self.abs
+                    .as_ref()
+                    .ok_or_else(|| anyhow::anyhow!("Abs nonce manager is not initialized"))?
+                    .reserve_nonce()
+                    .await
+            }
+            ChainKind::Near
+            | ChainKind::Sol
+            | ChainKind::Strk
+            | ChainKind::Btc
+            | ChainKind::Zcash => {
                 anyhow::bail!("Unsupported chain kind: {chain_kind:?}")
             }
         }

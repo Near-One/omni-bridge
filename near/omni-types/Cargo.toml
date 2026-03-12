@@ -4,6 +4,10 @@ version = "3.3.3"
 authors = ["Near One <info@nearone.org>"]
 edition = "2021"
 
+[features]
+abi = ["borsh/unstable__schema", "near-mpc-sdk/abi"]
+__abi-generate = ["near-sdk/__abi-generate"]
+
 [dependencies]
 near-sdk = { workspace = true, features = ["non-contract-usage"] }
 hex.workspace = true

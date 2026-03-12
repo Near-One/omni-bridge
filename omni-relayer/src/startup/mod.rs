@@ -9,6 +9,7 @@ use omni_connector::{OmniConnector, OmniConnectorBuilder};
 use omni_types::ChainKind;
 use solana_bridge_client::{SolanaBridgeClient, SolanaBridgeClientBuilder};
 use solana_client::nonblocking::rpc_client::RpcClient;
+use starknet_bridge_client::{StarknetBridgeClient, StarknetBridgeClientBuilder};
 use tracing::info;
 use utxo_bridge_client::{AuthOptions, UTXOBridgeClient};
 use wormhole_bridge_client::{WormholeBridgeClient, WormholeBridgeClientBuilder};
@@ -93,7 +94,9 @@ fn build_evm_bridge_client(
         ChainKind::Arb => &config.arb,
         ChainKind::Bnb => &config.bnb,
         ChainKind::Pol => &config.pol,
-        ChainKind::Near | ChainKind::Sol | ChainKind::Btc | ChainKind::Zcash => {
+        ChainKind::HyperEvm => &config.hyperevm,
+        ChainKind::Abs => &config.abs,
+        ChainKind::Near | ChainKind::Sol | ChainKind::Strk | ChainKind::Btc | ChainKind::Zcash => {
             unreachable!("Function `build_evm_bridge_client` supports only EVM chains")
         }
     };
@@ -135,6 +138,23 @@ fn build_solana_bridge_client(config: &config::Config) -> Result<Option<SolanaBr
         .transpose()
 }
 
+fn build_starknet_bridge_client(config: &config::Config) -> Result<Option<StarknetBridgeClient>> {
+    config
+        .starknet
+        .as_ref()
+        .map(|starknet| {
+            StarknetBridgeClientBuilder::default()
+                .endpoint(Some(starknet.rpc_http_url.clone()))
+                .private_key(Some(crate::config::get_private_key(ChainKind::Strk, None)))
+                .account_address(Some(crate::config::get_relayer_starknet_address()))
+                .omni_bridge_address(Some(starknet.omni_bridge_address.clone()))
+                .chain_id(Some(starknet.chain_id.clone()))
+                .build()
+                .context("Failed to build StarknetBridgeClient")
+        })
+        .transpose()
+}
+
 fn build_utxo_bridge_client<C: utxo_bridge_client::types::UTXOChain>(
     config: &config::Config,
     chain: ChainKind,
@@ -148,7 +168,10 @@ fn build_utxo_bridge_client<C: utxo_bridge_client::types::UTXOChain>(
         | ChainKind::Arb
         | ChainKind::Bnb
         | ChainKind::Pol
-        | ChainKind::Sol => {
+        | ChainKind::HyperEvm
+        | ChainKind::Abs
+        | ChainKind::Sol
+        | ChainKind::Strk => {
             anyhow::bail!("Chain {chain:?} is not supported for building UTXO bridge client")
         }
     };
@@ -178,7 +201,10 @@ fn build_light_client(config: &config::Config, chain: ChainKind) -> Result<Optio
         | ChainKind::Arb
         | ChainKind::Bnb
         | ChainKind::Pol
-        | ChainKind::Sol => {
+        | ChainKind::HyperEvm
+        | ChainKind::Abs
+        | ChainKind::Sol
+        | ChainKind::Strk => {
             anyhow::bail!("Chain {chain:?} is not supported for building light client")
         }
     };
@@ -208,7 +234,11 @@ pub fn build_omni_connector(
     let arb_bridge_client = build_evm_bridge_client(config, ChainKind::Arb)?;
     let bnb_bridge_client = build_evm_bridge_client(config, ChainKind::Bnb)?;
     let pol_bridge_client = build_evm_bridge_client(config, ChainKind::Pol)?;
+    // TODO: enable once hyperevm contract is deployed
+    // let hyperevm_bridge_client = build_evm_bridge_client(config, ChainKind::HyperEvm)?;
+    let abs_bridge_client = build_evm_bridge_client(config, ChainKind::Abs)?;
     let solana_bridge_client = build_solana_bridge_client(config)?;
+    let starknet_bridge_client = build_starknet_bridge_client(config)?;
     let btc_bridge_client = build_utxo_bridge_client(config, ChainKind::Btc)?;
     let zcash_bridge_client = build_utxo_bridge_client(config, ChainKind::Zcash)?;
     let wormhole_bridge_client = build_wormhole_bridge_client(config)?;
@@ -224,7 +254,10 @@ pub fn build_omni_connector(
         .arb_bridge_client(arb_bridge_client)
         .bnb_bridge_client(bnb_bridge_client)
         .pol_bridge_client(pol_bridge_client)
+        .hyperevm_bridge_client(None)
+        .abs_bridge_client(abs_bridge_client)
         .solana_bridge_client(solana_bridge_client)
+        .starknet_bridge_client(starknet_bridge_client)
         .wormhole_bridge_client(Some(wormhole_bridge_client))
         .btc_bridge_client(Some(btc_bridge_client))
         .zcash_bridge_client(Some(zcash_bridge_client))
