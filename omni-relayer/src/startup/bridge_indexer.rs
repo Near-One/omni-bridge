@@ -205,16 +205,20 @@ async fn handle_transaction_event(
             | OmniAddress::Base(sender)
             | OmniAddress::Arb(sender)
             | OmniAddress::Bnb(sender)
-            | OmniAddress::Pol(sender)) = init_transfer.sender.clone()
+            | OmniAddress::Pol(sender)
+            | OmniAddress::HyperEvm(sender)
+            | OmniAddress::Abs(sender)) = init_transfer.sender.clone()
             else {
-                anyhow::bail!("Unexpected token address: {}", init_transfer.sender);
+                anyhow::bail!("Unexpected sender address: {}", init_transfer.sender);
             };
 
             let (OmniAddress::Eth(token)
             | OmniAddress::Base(token)
             | OmniAddress::Arb(token)
             | OmniAddress::Bnb(token)
-            | OmniAddress::Pol(token)) = init_transfer.token.clone()
+            | OmniAddress::Pol(token)
+            | OmniAddress::HyperEvm(token)
+            | OmniAddress::Abs(token)) = init_transfer.token.clone()
             else {
                 anyhow::bail!("Unexpected token address: {}", init_transfer.token);
             };

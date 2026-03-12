@@ -186,7 +186,10 @@ pub async fn process_fin_transfer_event(
         anyhow::bail!("Expected Starknet FinTransfer, got: {fin_transfer:?}");
     };
 
-    info!("Processing Starknet FinTransfer ({:?}): {tx_hash}", ChainKind::Strk);
+    info!(
+        "Processing Starknet FinTransfer ({:?}): {tx_hash}",
+        ChainKind::Strk
+    );
 
     if let Err(BridgeSdkError::NearRpcError(NearRpcError::RpcQueryError(
         JsonRpcError::ServerError(JsonRpcServerError::HandlerError(
@@ -254,7 +257,10 @@ pub async fn process_deploy_token_event(
         anyhow::bail!("Expected Starknet DeployToken, got: {deploy_token_event:?}");
     };
 
-    info!("Processing Starknet DeployToken ({:?}): {tx_hash}", ChainKind::Strk);
+    info!(
+        "Processing Starknet DeployToken ({:?}): {tx_hash}",
+        ChainKind::Strk
+    );
 
     let nonce = match near_nonce.reserve_nonce().await {
         Ok(nonce) => Some(nonce),
