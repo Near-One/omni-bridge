@@ -23,11 +23,19 @@ pub fn get_private_key(chain_kind: ChainKind, near_signer_type: Option<NearSigne
         ChainKind::Arb => "ARB_PRIVATE_KEY",
         ChainKind::Bnb => "BNB_PRIVATE_KEY",
         ChainKind::Pol => "POL_PRIVATE_KEY",
+        ChainKind::HyperEvm => "HLEVM_PRIVATE_KEY",
+        ChainKind::Abs => "ABS_PRIVATE_KEY",
         ChainKind::Sol => "SOLANA_PRIVATE_KEY",
+        ChainKind::Strk => "STARKNET_PRIVATE_KEY",
         ChainKind::Btc | ChainKind::Zcash => unreachable!("No private key for UTXO chains"),
     };
 
     std::env::var(env_var).unwrap_or_else(|_| panic!("Failed to get `{env_var}` env variable"))
+}
+
+pub fn get_relayer_starknet_address() -> String {
+    std::env::var("STARKNET_ACCOUNT_ADDRESS")
+        .unwrap_or_else(|_| panic!("Failed to get `STARKNET_ACCOUNT_ADDRESS` env variable"))
 }
 
 pub fn get_relayer_evm_address(chain_kind: ChainKind) -> Address {
@@ -104,7 +112,10 @@ pub struct Config {
     pub arb: Option<Evm>,
     pub bnb: Option<Evm>,
     pub pol: Option<Evm>,
+    pub hyperevm: Option<Evm>,
+    pub abs: Option<Evm>,
     pub solana: Option<Solana>,
+    pub starknet: Option<Starknet>,
     pub btc: Option<Utxo>,
     pub zcash: Option<Utxo>,
     pub orchard: Option<Orchard>,
@@ -138,7 +149,10 @@ impl Config {
             | ChainKind::Arb
             | ChainKind::Bnb
             | ChainKind::Pol
-            | ChainKind::Sol => {
+            | ChainKind::HyperEvm
+            | ChainKind::Abs
+            | ChainKind::Sol
+            | ChainKind::Strk => {
                 panic!("Sigining utxo transaction is not applicable for {chain:?}")
             }
         };
@@ -155,7 +169,10 @@ impl Config {
             | ChainKind::Arb
             | ChainKind::Bnb
             | ChainKind::Pol
-            | ChainKind::Sol => {
+            | ChainKind::HyperEvm
+            | ChainKind::Abs
+            | ChainKind::Sol
+            | ChainKind::Strk => {
                 panic!("Verifying withdraw is not applicable for {chain:?}")
             }
         };
@@ -308,6 +325,14 @@ pub struct Solana {
     pub finalize_transfer_discriminator: Vec<u8>,
     pub finalize_transfer_sol_discriminator: Vec<u8>,
     pub credentials_path: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct Starknet {
+    #[serde(deserialize_with = "replace_rpc_api_key")]
+    pub rpc_http_url: String,
+    pub chain_id: String,
+    pub omni_bridge_address: String,
 }
 
 #[derive(Debug, Clone, Deserialize)]

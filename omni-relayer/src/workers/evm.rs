@@ -123,7 +123,7 @@ pub async fn process_init_transfer_event(
         }
     }
 
-    let vaa = if chain_kind == ChainKind::Eth {
+    let vaa = if matches!(chain_kind, ChainKind::Eth | ChainKind::Abs) {
         None
     } else if let Ok(vaa) = omni_connector
         .wormhole_get_vaa_by_tx_hash(format!("{tx_hash:?}"))
@@ -209,6 +209,18 @@ pub async fn process_init_transfer_event(
             destination_chain: recipient.get_chain(),
             storage_deposit_actions,
             vaa,
+            transaction_options: TransactionOptions {
+                nonce: Some(nonce),
+                wait_until: TxExecutionStatus::Included,
+                wait_final_outcome_timeout_sec: None,
+            },
+        }
+    } else if chain_kind == ChainKind::Abs {
+        omni_connector::FinTransferArgs::NearFinTransferWithMpcProof {
+            chain_kind,
+            destination_chain: recipient.get_chain(),
+            storage_deposit_actions,
+            tx_hash: tx_hash.to_string(),
             transaction_options: TransactionOptions {
                 nonce: Some(nonce),
                 wait_until: TxExecutionStatus::Included,
@@ -319,51 +331,66 @@ pub async fn process_evm_transfer_event(
         }
     }
 
-    let vaa = if chain_kind == ChainKind::Eth {
-        None
-    } else if let Ok(vaa) = omni_connector
-        .wormhole_get_vaa_by_tx_hash(format!("{transaction_hash:?}"))
-        .await
-    {
-        Some(vaa)
-    } else {
-        warn!("VAA is not ready for {chain_kind:?}: {transaction_hash:?}");
-        return Ok(EventAction::Retry);
-    };
-
-    let Some(prover_args) = utils::evm::construct_prover_args(
-        omni_connector.clone(),
-        vaa,
-        transaction_hash,
-        ProofKind::FinTransfer,
-    )
-    .await
-    else {
-        warn!("Failed to get prover args for {transaction_hash:?}");
-        return Ok(EventAction::Retry);
-    };
-
-    let claim_fee_args = ClaimFeeArgs {
-        chain_kind,
-        prover_args,
-    };
-
     let nonce = near_nonce
         .reserve_nonce()
         .await
         .context("Failed to reserve nonce for near transaction")?;
 
-    match omni_connector
-        .near_claim_fee(
-            claim_fee_args,
-            TransactionOptions {
+    let result = if chain_kind == ChainKind::Abs {
+        let claim_fee_args = omni_connector::ClaimFeeArgs::ClaimFeeWithMpcProofTx {
+            chain_kind,
+            tx_hash: format!("{transaction_hash:?}"),
+            transaction_options: TransactionOptions {
                 nonce: Some(nonce),
                 wait_until: near_primitives::views::TxExecutionStatus::Included,
                 wait_final_outcome_timeout_sec: None,
             },
+        };
+        omni_connector.claim_fee(claim_fee_args).await
+    } else {
+        let vaa = if chain_kind == ChainKind::Eth {
+            None
+        } else if let Ok(vaa) = omni_connector
+            .wormhole_get_vaa_by_tx_hash(format!("{transaction_hash:?}"))
+            .await
+        {
+            Some(vaa)
+        } else {
+            warn!("VAA is not ready for {chain_kind:?}: {transaction_hash:?}");
+            return Ok(EventAction::Retry);
+        };
+
+        let Some(prover_args) = utils::evm::construct_prover_args(
+            omni_connector.clone(),
+            vaa,
+            transaction_hash,
+            ProofKind::FinTransfer,
         )
         .await
-    {
+        else {
+            warn!("Failed to get prover args for {transaction_hash:?}");
+            return Ok(EventAction::Retry);
+        };
+
+        let claim_fee_args = ClaimFeeArgs {
+            chain_kind,
+            prover_args,
+        };
+
+        omni_connector
+            .near_claim_fee(
+                claim_fee_args,
+                TransactionOptions {
+                    nonce: Some(nonce),
+                    wait_until: near_primitives::views::TxExecutionStatus::Included,
+                    wait_final_outcome_timeout_sec: None,
+                },
+            )
+            .await
+            .map(|hash| hash.to_string())
+    };
+
+    match result {
         Ok(tx_hash) => {
             info!("Claimed fee: {tx_hash:?}");
             Ok(EventAction::Remove)
@@ -418,43 +445,53 @@ pub async fn process_deploy_token_event(
 
     info!("Processing DeployToken ({chain_kind:?}): {transaction_hash:?}");
 
-    let vaa = if chain_kind == ChainKind::Eth {
-        None
-    } else if let Ok(vaa) = omni_connector
-        .wormhole_get_vaa_by_tx_hash(format!("{transaction_hash:?}"))
-        .await
-    {
-        Some(vaa)
-    } else {
-        warn!("VAA is not ready for {chain_kind:?}: {transaction_hash:?}");
-        return Ok(EventAction::Retry);
-    };
-
-    let Some(prover_args) = utils::evm::construct_prover_args(
-        omni_connector.clone(),
-        vaa,
-        transaction_hash,
-        ProofKind::DeployToken,
-    )
-    .await
-    else {
-        warn!("Failed to get prover args for {transaction_hash:?}");
-        return Ok(EventAction::Retry);
-    };
-
     let nonce = near_nonce
         .reserve_nonce()
         .await
         .context("Failed to reserve nonce for near transaction")?;
 
-    let bind_token_args = omni_connector::BindTokenArgs::BindTokenWithArgs {
-        chain_kind,
-        prover_args,
-        transaction_options: TransactionOptions {
-            nonce: Some(nonce),
-            wait_until: near_primitives::views::TxExecutionStatus::Included,
-            wait_final_outcome_timeout_sec: None,
-        },
+    let transaction_options = TransactionOptions {
+        nonce: Some(nonce),
+        wait_until: near_primitives::views::TxExecutionStatus::Included,
+        wait_final_outcome_timeout_sec: None,
+    };
+
+    let bind_token_args = if chain_kind == ChainKind::Abs {
+        omni_connector::BindTokenArgs::BindTokenWithMpcProofTx {
+            chain_kind,
+            tx_hash: format!("{transaction_hash:?}"),
+            transaction_options,
+        }
+    } else {
+        let vaa = if chain_kind == ChainKind::Eth {
+            None
+        } else if let Ok(vaa) = omni_connector
+            .wormhole_get_vaa_by_tx_hash(format!("{transaction_hash:?}"))
+            .await
+        {
+            Some(vaa)
+        } else {
+            warn!("VAA is not ready for {chain_kind:?}: {transaction_hash:?}");
+            return Ok(EventAction::Retry);
+        };
+
+        let Some(prover_args) = utils::evm::construct_prover_args(
+            omni_connector.clone(),
+            vaa,
+            transaction_hash,
+            ProofKind::DeployToken,
+        )
+        .await
+        else {
+            warn!("Failed to get prover args for {transaction_hash:?}");
+            return Ok(EventAction::Retry);
+        };
+
+        omni_connector::BindTokenArgs::BindTokenWithArgs {
+            chain_kind,
+            prover_args,
+            transaction_options,
+        }
     };
 
     match omni_connector.bind_token(bind_token_args).await {

@@ -76,7 +76,16 @@ pub async fn start_indexer(
         ChainKind::Pol => {
             extract_evm_config(config.pol.clone().context("Failed to get Pol config")?)?
         }
-        ChainKind::Near | ChainKind::Sol | ChainKind::Btc | ChainKind::Zcash => {
+        ChainKind::HyperEvm => extract_evm_config(
+            config
+                .hyperevm
+                .clone()
+                .context("Failed to get HyperEvm config")?,
+        )?,
+        ChainKind::Abs => {
+            extract_evm_config(config.abs.clone().context("Failed to get Abs config")?)?
+        }
+        ChainKind::Near | ChainKind::Sol | ChainKind::Strk | ChainKind::Btc | ChainKind::Zcash => {
             anyhow::bail!("Unsupported chain kind: {chain_kind:?}")
         }
     };

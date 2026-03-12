@@ -184,7 +184,10 @@ pub async fn handle_streamer_message(
                 | OmniBridgeEvent::LogMetadataEvent { .. }
                 | OmniBridgeEvent::DeployTokenEvent { .. }
                 | OmniBridgeEvent::MigrateTokenEvent { .. }
-                | OmniBridgeEvent::BindTokenEvent { .. } => {}
+                | OmniBridgeEvent::BindTokenEvent { .. }
+                | OmniBridgeEvent::RelayerApplyEvent { .. }
+                | OmniBridgeEvent::RelayerResignEvent { .. }
+                | OmniBridgeEvent::RelayerRejectEvent { .. } => {}
             }
         }
     }
