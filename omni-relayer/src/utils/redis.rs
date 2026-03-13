@@ -11,8 +11,6 @@ pub const MONGODB_OMNI_EVENTS_RT: &str = "mongodb_omni_events_rt";
 pub const EVENTS: &str = "events";
 pub const SOLANA_EVENTS: &str = "solana_events";
 
-pub const STUCK_EVENTS: &str = "stuck_events";
-
 pub const FEE_MAPPING: &str = "fee_mapping";
 
 pub fn composite_key(parts: &[&str]) -> String {

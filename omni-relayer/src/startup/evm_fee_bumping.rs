@@ -32,7 +32,7 @@ enum TransactionStatus {
 }
 
 pub async fn start_evm_fee_bumping(
-    config: config::Config,
+    config: &config::Config,
     chain_kind: ChainKind,
     redis_connection_manager: &mut redis::aio::ConnectionManager,
 ) -> anyhow::Result<()> {
