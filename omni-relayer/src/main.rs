@@ -118,10 +118,12 @@ async fn main() -> Result<()> {
 
     let args = CliArgs::parse();
 
-    let config = toml::from_str::<config::Config>(
-        &std::fs::read_to_string(args.config).context("Config file doesn't exist")?,
-    )
-    .context("Failed to parse config file")?;
+    let config = Arc::new(
+        toml::from_str::<config::Config>(
+            &std::fs::read_to_string(args.config).context("Config file doesn't exist")?,
+        )
+        .context("Failed to parse config file")?,
+    );
 
     init_logging(config.near.network).context("Failed to initialize logging")?;
 
@@ -181,7 +183,7 @@ async fn main() -> Result<()> {
             let nats_client = nats_client.clone().unwrap();
             async move {
                 startup::bridge_indexer::start_indexer_nats(
-                    config,
+                    &config,
                     &mut redis_connection_manager,
                     nats_client,
                 )
@@ -194,7 +196,7 @@ async fn main() -> Result<()> {
             let mut redis_connection_manager = redis_connection_manager.clone();
             async move {
                 startup::bridge_indexer::start_indexer(
-                    config,
+                    &config,
                     &mut redis_connection_manager,
                     args.start_timestamp,
                 )
@@ -208,7 +210,7 @@ async fn main() -> Result<()> {
             let jsonrpc_client = jsonrpc_client.clone();
             async move {
                 startup::near::start_indexer(
-                    config,
+                    &config,
                     &mut redis_connection_manager,
                     jsonrpc_client,
                     args.near_start_block,
@@ -314,9 +316,14 @@ async fn main() -> Result<()> {
         }
     }
 
+    let nats_client = nats_client
+        .clone()
+        .context("NATS is required for event processing")?;
+
     handles.push(tokio::spawn({
         let config = config.clone();
         let redis_connection_manager = redis_connection_manager.clone();
+        let nats_client = nats_client.clone();
         let omni_connector = omni_connector.clone();
         let fast_connector = fast_connector.clone();
         let jsonrpc_client = jsonrpc_client.clone();
@@ -328,6 +335,7 @@ async fn main() -> Result<()> {
             workers::process_events(
                 config,
                 redis_connection_manager,
+                nats_client,
                 omni_connector,
                 fast_connector,
                 jsonrpc_client,
@@ -345,7 +353,7 @@ async fn main() -> Result<()> {
             let mut redis_connection_manager = redis_connection_manager.clone();
             async move {
                 startup::evm_fee_bumping::start_evm_fee_bumping(
-                    config,
+                    &config,
                     ChainKind::Eth,
                     &mut redis_connection_manager,
                 )
