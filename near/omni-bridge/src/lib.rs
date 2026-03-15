@@ -30,6 +30,7 @@ use omni_types::{
     OmniAddress, PayloadType, SignRequest, TransferId, TransferIdKind, TransferMessage,
     TransferMessagePayload, UnifiedTransferId, UpdateFee, UtxoFinTransferMsg, H160,
 };
+use omni_utils::macros::trusted_relayer;
 use omni_utils::near_expect::NearExpect;
 use omni_utils::promise::PromiseOrPromiseIndexOrValue;
 use std::collections::HashMap;
@@ -42,7 +43,6 @@ use token_lock::LockAction;
 
 mod btc;
 mod migrate;
-mod relayer_staking;
 mod storage;
 mod token_lock;
 
@@ -265,6 +265,10 @@ pub struct Contract {
     pub relayer_config: RelayerConfig,
 }
 
+#[trusted_relayer(
+    bypass_roles(Role::DAO, Role::UnrestrictedRelayer),
+    manager_roles(Role::DAO, Role::RelayerManager)
+)]
 #[near]
 impl Contract {
     #[pause(except(roles(Role::DAO, Role::UnrestrictedDeposit)))]
@@ -462,6 +466,7 @@ impl Contract {
     /// - If the `borsh::to_vec` serialization of the `TransferMessagePayload` fails.
     /// - If a `fee` is provided and it doesn't match the fee in the stored transfer message.
     #[payable]
+    #[trusted_relayer]
     #[pause(except(roles(Role::DAO)))]
     pub fn sign_transfer(
         &mut self,
@@ -469,11 +474,6 @@ impl Contract {
         fee_recipient: Option<AccountId>,
         fee: &Option<Fee>,
     ) -> Promise {
-        require!(
-            self.is_trusted_relayer(&env::predecessor_account_id()),
-            BridgeError::RelayerNotActive.as_ref()
-        );
-
         let transfer_message = self.get_transfer_message(transfer_id);
 
         if let Some(fee) = &fee {
@@ -691,13 +691,9 @@ impl Contract {
     }
 
     #[payable]
+    #[trusted_relayer]
     #[pause(except(roles(Role::DAO)))]
     pub fn fin_transfer(&mut self, #[serializer(borsh)] args: FinTransferArgs) -> Promise {
-        require!(
-            self.is_trusted_relayer(&env::predecessor_account_id()),
-            BridgeError::RelayerNotActive.as_ref()
-        );
-
         require!(
             args.storage_deposit_actions.len() <= 3,
             BridgeError::InvalidStorageAccountsLen.as_ref()
