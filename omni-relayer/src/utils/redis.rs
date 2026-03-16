@@ -130,8 +130,13 @@ pub async fn get_events(
             }
         };
 
+        const MAX_EVENTS_PER_BATCH: usize = 30;
+
         let mut events = Vec::new();
         loop {
+            if events.len() >= MAX_EVENTS_PER_BATCH {
+                break;
+            }
             match tokio::time::timeout(
                 tokio::time::Duration::from_secs(config.redis.query_timeout_secs),
                 iter.next_item(),

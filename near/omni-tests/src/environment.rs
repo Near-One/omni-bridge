@@ -586,6 +586,31 @@ impl TestEnvBuilder {
 }
 
 impl TestEnvBuilderWithToken {
+    pub async fn setup_trusted_relayer(&self, relayer_id: AccountId) -> anyhow::Result<Account> {
+        let relayer_account = self.create_account(relayer_id).await?;
+
+        self.bridge_contract
+            .call("set_relayer_config")
+            .args_json(json!({
+                "stake_required": "1",
+                "waiting_period_ns": "0",
+            }))
+            .max_gas()
+            .transact()
+            .await?
+            .into_result()?;
+
+        relayer_account
+            .call(self.bridge_contract.id(), "apply_for_trusted_relayer")
+            .deposit(NearToken::from_yoctonear(1))
+            .max_gas()
+            .transact()
+            .await?
+            .into_result()?;
+
+        Ok(relayer_account)
+    }
+
     pub async fn storage_deposit(&self, account_id: &AccountId) -> anyhow::Result<()> {
         storage_deposit(&self.token.contract, account_id).await?;
 

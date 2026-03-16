@@ -175,8 +175,20 @@ pub mod tests {
             .unwrap()
     }
 
+    pub fn abs_factory_address() -> OmniAddress {
+        "abs:0x252e87862A3A720287E7fd527cE6e8d0738427A2"
+            .parse()
+            .unwrap()
+    }
+
     pub fn hyperevm_factory_address() -> OmniAddress {
         "hlevm:0x252e87862A3A720287E7fd527cE6e8d0738427A2"
+            .parse()
+            .unwrap()
+    }
+
+    pub fn strk_factory_address() -> OmniAddress {
+        "strk:0x05558831a603eca8cd69a42d4251f08de3573039b69f23972265cac76639f1cf"
             .parse()
             .unwrap()
     }

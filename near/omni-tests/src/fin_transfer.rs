@@ -76,7 +76,9 @@ mod tests {
 
         let token_receiver_contract = env_builder.deploy_mock_receiver().await?;
 
-        let relayer_account = env_builder.create_account(relayer_account_id()).await?;
+        let relayer_account = env_builder
+            .setup_trusted_relayer(relayer_account_id())
+            .await?;
 
         let required_balance_for_fin_transfer: NearToken = env_builder
             .bridge_contract

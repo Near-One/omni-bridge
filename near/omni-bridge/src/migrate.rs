@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use crate::{
     storage::{Decimals, FastTransferStatusStorage, TransferMessageStorage},
-    Contract, ContractExt, StorageKey,
+    Contract, ContractExt, RelayerConfig, StorageKey,
 };
 use borsh::{BorshDeserialize, BorshSerialize};
 use near_contract_standards::storage_management::StorageBalance;
@@ -66,6 +66,8 @@ impl Contract {
                 utxo_chain_connectors: old_state.utxo_chain_connectors,
                 migrated_tokens: old_state.migrated_tokens,
                 locked_tokens: LookupMap::new(StorageKey::LockedTokens),
+                relayers: LookupMap::new(StorageKey::Relayers),
+                relayer_config: RelayerConfig::default(),
             }
         } else {
             env::panic_str("Old state not found. Migration is not needed.")

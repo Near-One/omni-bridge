@@ -47,7 +47,7 @@ fn extract_evm_config(evm: config::Evm) -> Result<(Url, String, Address, u64, i6
 }
 
 pub async fn start_indexer(
-    config: config::Config,
+    config: &config::Config,
     redis_connection_manager: &mut redis::aio::ConnectionManager,
     chain_kind: ChainKind,
     mut start_block: Option<u64>,
@@ -109,7 +109,7 @@ pub async fn start_indexer(
         };
 
         crate::skip_fail!(
-            process_recent_blocks(&config, params)
+            process_recent_blocks(config, params)
                 .await
                 .map_err(|err| hide_api_key(&err)),
             format!("Failed to process recent blocks for {chain_kind:?} indexer"),
@@ -141,7 +141,7 @@ pub async fn start_indexer(
 
         while let Some(log) = stream.next().await {
             process_log(
-                &config,
+                config,
                 chain_kind,
                 redis_connection_manager,
                 &http_provider,

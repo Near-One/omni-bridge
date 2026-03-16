@@ -1,7 +1,5 @@
 import "@nomicfoundation/hardhat-chai-matchers"
 import "@nomicfoundation/hardhat-ethers"
-import "@nomicfoundation/hardhat-verify"
-import "@openzeppelin/hardhat-upgrades"
 import "@typechain/hardhat"
 import * as dotenv from "dotenv"
 import "hardhat-storage-layout"
@@ -17,10 +15,32 @@ import "hardhat/types/config"
 import assert from "node:assert"
 import * as fs from "node:fs"
 
+import { getProxyImplementationAddress } from "./utils/zksync"
+import "@matterlabs/hardhat-zksync"
+
 declare module "hardhat/types/config" {
   interface HttpNetworkUserConfig {
     omniChainId: number
     wormholeAddress?: string
+    zksync?: boolean
+    ethNetwork?: string
+  }
+  interface HardhatUserConfig {
+    zksolc?: {
+      version?: string
+      settings?: Record<string, unknown>
+    }
+    etherscan?: {
+      apiKey?: string | Record<string, string>
+      customChains?: Array<{
+        network: string
+        chainId: number
+        urls: {
+          apiURL: string
+          browserURL: string
+        }
+      }>
+    }
   }
 }
 
@@ -85,7 +105,7 @@ task("deploy-bridge-token-factory", "Deploys the OmniBridge contract")
 
     await OmniBridge.waitForDeployment()
     const bridgeAddress = await OmniBridge.getAddress()
-    const implementationAddress = await upgrades.erc1967.getImplementationAddress(bridgeAddress)
+    const implementationAddress = await getProxyImplementationAddress(hre, bridgeAddress)
 
     const wormholeAddressStorageValue = await hre.ethers.provider.getStorage(bridgeAddress, 58)
     const decodedWormholeAddress = ethers.AbiCoder.defaultAbiCoder().decode(
@@ -172,9 +192,9 @@ task("upgrade-factory", "Upgrades the OmniBridge contract")
 
     const OmniBridgeContract = await ethers.getContractFactory(contractName)
 
-    const currentImpl = await upgrades.erc1967.getImplementationAddress(taskArgs.factory)
+    const currentImpl = await getProxyImplementationAddress(hre, taskArgs.factory)
     await upgrades.upgradeProxy(taskArgs.factory, OmniBridgeContract)
-    const newImpl = await upgrades.erc1967.getImplementationAddress(taskArgs.factory)
+    const newImpl = await getProxyImplementationAddress(hre, taskArgs.factory)
 
     console.log(
       JSON.stringify({
@@ -234,6 +254,15 @@ task("deploy-bytecode", "Deploys a contract with a given bytecode")
   })
 
 const config: HardhatUserConfig = {
+  zksolc: {
+    version: "1.5.15",
+    settings: {
+      // Note: This must be true to call NonceHolder & ContractDeployer system contracts
+      enableEraVMExtensions: true,
+      // Use evmla codegen to match solc's default behavior and avoid unexpected differences
+      codegen: "evmla",
+    },
+  },
   paths: {
     sources: "./src",
     cache: "./cache",
@@ -308,6 +337,14 @@ const config: HardhatUserConfig = {
       url: "https://rpc.hyperliquid.xyz/evm",
       accounts: [`${EVM_PRIVATE_KEY}`],
     },
+    abstractMainnet: {
+      omniChainId: 11,
+      chainId: 2741,
+      url: "https://api.mainnet.abs.xyz",
+      ethNetwork: "mainnet",
+      zksync: true,
+      accounts: [`${EVM_PRIVATE_KEY}`],
+    },
     sepolia: {
       omniChainId: 0,
       chainId: 11155111,
@@ -349,9 +386,35 @@ const config: HardhatUserConfig = {
       url: "https://rpc.hyperliquid-testnet.xyz/evm",
       accounts: [`${EVM_PRIVATE_KEY}`],
     },
+    abstractTestnet: {
+      omniChainId: 11,
+      chainId: 11124,
+      url: "https://api.testnet.abs.xyz",
+      ethNetwork: "sepolia",
+      zksync: true,
+      accounts: [`${EVM_PRIVATE_KEY}`],
+    },
   },
   etherscan: {
     apiKey: ETHERSCAN_API_KEY,
+    customChains: [
+      {
+        network: "abstractTestnet",
+        chainId: 11124,
+        urls: {
+          apiURL: "https://api.etherscan.io/v2/api?chainid=11124",
+          browserURL: "https://sepolia.abscan.org",
+        },
+      },
+      {
+        network: "abstractMainnet",
+        chainId: 2741,
+        urls: {
+          apiURL: "https://api.etherscan.io/v2/api?chainid=2741",
+          browserURL: "https://abscan.org",
+        },
+      },
+    ],
   },
 }
 

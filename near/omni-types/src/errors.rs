@@ -45,6 +45,11 @@ pub enum BridgeError {
     ProverForChainKindNotRegistered,
     ReadPromiseRegister,
     ReadPromiseYieldId,
+    RelayerAlreadyActive,
+    RelayerApplicationExists,
+    RelayerApplicationNotFound,
+    RelayerInsufficientStake,
+    RelayerNotActive,
     SenderCanUpdateTokenFeeOnly,
     SenderIsNotConnector,
     StorageFeeRecipientOmitted,
@@ -60,6 +65,7 @@ pub enum BridgeError {
     TransferAlreadyFinalised,
     TransferNotExist,
     UnknownFactory,
+    UpdateFeeNotAllowedForTransfer,
     UtxoConfigMissing,
     UtxoTransferAlreadyFinalised,
     UnsupportedFeeUpdateProof,
@@ -109,10 +115,17 @@ pub enum TokenError {
 #[strum(serialize_all = "shouty_snake_case", prefix = "ERR_")]
 #[non_exhaustive]
 pub enum ProverError {
+    ChainMismatch,
+    FinalityMismatch,
     HashNotSet,
     InvalidBlockHash,
+    InvalidPayloadHash,
+    InvalidPayloadValuesLength,
     InvalidProof,
+    InvalidPublicKey,
+    InvalidSignature,
     ParseArgs,
+    UnsupportedChain,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, AsRefStr, ErrorDisplay)]
