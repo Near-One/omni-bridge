@@ -38,7 +38,7 @@ hex = "0.4.2"
 borsh = "1.6.0"
 serde = { version = "1.0.200", features = ["derive"] }
 near-plugins = { git = "https://github.com/aurora-is-near/near-plugins", tag = "v0.4.1" }
-omni-utils = { git = "https://github.com/near-one/omni-utils", rev = "9bc04ddefbc69c56d857651b50aa46695767d6c1" }
+omni-utils = { git = "https://github.com/near-one/omni-utils", rev = "2e14446c4123486fc78f0586e3ee09dc9c44a74f" }
 omni-types = { path = "omni-types" }
 strum = "0.27.2"
 strum_macros = "0.27.1"

@@ -8,7 +8,7 @@ use near_plugins::{
 
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::collections::{LookupMap, LookupSet, UnorderedMap};
-use near_sdk::json_types::{Base64VecU8, U128, U64};
+use near_sdk::json_types::{Base64VecU8, U128};
 use near_sdk::serde::{Deserialize, Serialize};
 use near_sdk::serde_json::json;
 use near_sdk::{
@@ -105,7 +105,7 @@ enum StorageKey {
     FinalisedUtxoTransfers,
     LockedTokens,
     DeployedTokensV2,
-    Relayers,
+    _Relayers,
 }
 
 #[derive(AccessControlRole, Deserialize, Serialize, Copy, Clone)]
@@ -124,29 +124,6 @@ pub enum Role {
     TokenUpgrader,
     TokenLockController,
     RelayerManager,
-}
-
-#[derive(Debug, Clone)]
-#[near(serializers = [borsh, json])]
-pub struct RelayerState {
-    pub stake: NearToken,
-    pub activate_at: U64,
-}
-
-#[derive(Debug, Clone)]
-#[near(serializers = [borsh, json])]
-pub struct RelayerConfig {
-    pub stake_required: NearToken,
-    pub waiting_period_ns: U64,
-}
-
-impl Default for RelayerConfig {
-    fn default() -> Self {
-        Self {
-            stake_required: NearToken::from_near(1000),
-            waiting_period_ns: U64(7 * 24 * 60 * 60 * 1_000_000_000),
-        }
-    }
 }
 
 #[ext_contract(ext_token)]
@@ -261,8 +238,6 @@ pub struct Contract {
     pub utxo_chain_connectors: HashMap<ChainKind, UTXOChainConfig>,
     pub migrated_tokens: LookupMap<AccountId, AccountId>,
     pub locked_tokens: LookupMap<(ChainKind, AccountId), u128>,
-    pub relayers: LookupMap<AccountId, RelayerState>,
-    pub relayer_config: RelayerConfig,
 }
 
 #[trusted_relayer(
@@ -328,8 +303,6 @@ impl Contract {
             utxo_chain_connectors: HashMap::new(),
             migrated_tokens: LookupMap::new(StorageKey::MigratedTokens),
             locked_tokens: LookupMap::new(StorageKey::LockedTokens),
-            relayers: LookupMap::new(StorageKey::Relayers),
-            relayer_config: RelayerConfig::default(),
         };
 
         contract.acl_init_super_admin(near_sdk::env::predecessor_account_id());
