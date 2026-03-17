@@ -6,7 +6,8 @@ use alloy::{
 };
 use borsh::BorshDeserialize;
 use near_mpc_sdk::{
-    contract_interface::types::{
+    foreign_chain::ForeignTxPayloadVersion,
+    near_mpc_contract_interface::types::{
         EvmExtractedValue, EvmFinality, ExtractedValue, ForeignChainRpcRequest,
         ForeignTxSignPayload, ForeignTxSignPayloadV1, StarknetExtractedValue, StarknetFinality,
         VerifyForeignTransactionRequestArgs, VerifyForeignTransactionResponse,
@@ -28,7 +29,6 @@ use omni_utils::near_expect::NearExpect;
 mod tests;
 
 const FOREIGN_TX_DOMAIN_ID: u64 = 3;
-const PAYLOAD_VERSION: u8 = 1;
 
 const VERIFY_FOREIGN_TX_GAS: Gas = Gas::from_tgas(15);
 const VERIFY_CALLBACK_GAS: Gas = Gas::from_tgas(7);
@@ -106,9 +106,8 @@ impl MpcOmniProver {
 
         let request_args = VerifyForeignTransactionRequestArgs {
             request: payload_v1.request.clone(),
-            derivation_path: String::new(),
             domain_id: DomainId(FOREIGN_TX_DOMAIN_ID),
-            payload_version: PAYLOAD_VERSION,
+            payload_version: ForeignTxPayloadVersion::V1,
         };
 
         ext_mpc_contract::ext(self.mpc_contract_id.clone())
@@ -218,7 +217,7 @@ impl MpcOmniProver {
 }
 
 fn evm_log_to_rlp(
-    evm_log: &near_mpc_sdk::contract_interface::types::EvmLog,
+    evm_log: &near_mpc_sdk::near_mpc_contract_interface::types::EvmLog,
 ) -> Result<Vec<u8>, String> {
     let address = Address::from_slice(&evm_log.address.0);
 
