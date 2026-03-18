@@ -242,7 +242,8 @@ pub struct Contract {
 
 #[trusted_relayer(
     bypass_roles(Role::DAO, Role::UnrestrictedRelayer),
-    manager_roles(Role::DAO, Role::RelayerManager)
+    manager_roles(Role::DAO, Role::RelayerManager),
+    config_roles(Role::DAO)
 )]
 #[near]
 impl Contract {
