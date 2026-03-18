@@ -50,6 +50,7 @@ btc-types = { path = "../btc-types" }
 bitcoin = "0.32.5"
 equihash = { version = "0.2.2", optional = true }
 cfg-if = "1.0.0"
+hex = "0.4.3"
 
 [dev-dependencies]
 near-sdk = { version = "5.14.0", features = ["unit-testing"] }

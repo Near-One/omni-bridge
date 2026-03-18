@@ -1,15 +1,18 @@
-use crate::utils::BlocksGetter;
+use crate::utils::{get_median_time_past, BlocksGetter};
 use crate::{BtcLightClient, BtcLightClientExt, Header, H256, U256};
 use bitcoin::hashes::Hash;
 use btc_types::aux::AuxData;
 use btc_types::header::ExtendedHeader;
-use btc_types::network::{Network, NetworkConfig};
+use btc_types::network::{DogecoinConfig, Network, MAX_FUTURE_BLOCK_TIME_LOCAL};
 use btc_types::utils::{target_from_bits, work_from_bits};
 use near_sdk::{env, near, require};
 
+//https://github.com/dogecoin/dogecoin/blob/2c513d0172e8bc86fe9a337693b26f2fdf68a013/src/auxpow.h#L24
+const MERGED_MINING_HEADER: &str = "fabe6d6d";
+
 #[near]
 impl BtcLightClient {
-    pub fn get_config(&self) -> btc_types::network::NetworkConfig {
+    pub fn get_config(&self) -> btc_types::network::DogecoinConfig {
         btc_types::network::get_dogecoin_config(self.network)
     }
 
@@ -28,13 +31,54 @@ impl BtcLightClient {
                 expected_bits, block_header.bits
             )
         );
+
+        // Check timestamp against median time past of the previous 11 blocks
+        require!(
+            block_header.time > get_median_time_past(prev_block_header.clone(), self),
+            "time-too-old: block's timestamp is too early"
+        );
+
+        // Reject blocks whose timestamp is more than 2 hours ahead of local time
+        let current_timestamp = u32::try_from(env::block_timestamp_ms() / 1000).unwrap();
+        require!(
+            block_header.time <= current_timestamp + MAX_FUTURE_BLOCK_TIME_LOCAL,
+            "time-too-new: block timestamp too far in the future"
+        );
     }
 
     pub(crate) fn check_aux(&mut self, block_header: &Header, aux_data: &AuxData) {
-        let parent_block_hash = aux_data.parent_block.block_hash();
+        // The Dogecoin block must have the AuxPoW flag set (bit 8) when AuxPoW data is present.
+        // https://github.com/dogecoin/dogecoin/blob/master/src/auxpow.h
+        const BLOCK_VERSION_AUXPOW: i32 = 0x100;
+
         require!(
-            self.used_aux_parent_blocks.insert(&parent_block_hash),
-            "parent block already used"
+            aux_data.chain_merkle_proof.len() <= 30,
+            "Aux POW chain merkle branch too long"
+        );
+        require!(
+            block_header.version & BLOCK_VERSION_AUXPOW != 0,
+            "Aux POW block does not have AuxPoW flag set in version"
+        );
+
+        let chain_id = self.get_config().aux_chain_id;
+
+        require!(
+            chain_id == block_header.get_chain_id(),
+            format!(
+                "block does not have our chain ID (got {}, expected {chain_id})",
+                block_header.get_chain_id()
+            )
+        );
+
+        require!(
+            chain_id != aux_data.parent_block.get_chain_id(),
+            "Aux POW parent has our chain ID"
+        );
+
+        let chain_root = merkle_tools::compute_root_from_merkle_proof(
+            block_header.block_hash(),
+            aux_data.chain_id,
+            &aux_data.chain_merkle_proof,
         );
 
         let coinbase_tx = aux_data.get_coinbase_tx();
@@ -48,23 +92,60 @@ impl BtcLightClient {
             ) == aux_data.parent_block.merkle_root
         );
 
-        let chain_root = merkle_tools::compute_root_from_merkle_proof(
-            block_header.block_hash(),
-            aux_data.chain_id,
-            &aux_data.chain_merkle_proof,
+        let script_sig = coinbase_tx
+            .input
+            .first()
+            .unwrap()
+            .script_sig
+            .to_hex_string();
+        let pos_merged_mining_header = script_sig.find(MERGED_MINING_HEADER);
+        let mut pos_chain_root = script_sig
+            .find(&chain_root.to_string())
+            .expect("Aux POW missing chain merkle root in parent coinbase");
+
+        match pos_merged_mining_header {
+            Some(pos_merged_mining_header) => {
+                if script_sig[pos_merged_mining_header + MERGED_MINING_HEADER.len()..]
+                    .contains(MERGED_MINING_HEADER)
+                {
+                    env::panic_str("Multiple merged mining headers in coinbase");
+                }
+
+                require!(
+                    pos_merged_mining_header + MERGED_MINING_HEADER.len() == pos_chain_root,
+                    "Merged mining header is not just before chain merkle root"
+                );
+            }
+            None => {
+                require!(pos_chain_root <= 40, "Aux POW chain merkle root must start in the first 20 bytes of the parent coinbase");
+            }
+        }
+
+        pos_chain_root += chain_root.to_string().len();
+        require!(
+            script_sig.len() - pos_chain_root >= 16,
+            "Aux POW missing chain merkle tree size and nonce in parent coinbase"
         );
+
+        let bytes = hex::decode(&script_sig[pos_chain_root..pos_chain_root + 8]).unwrap();
+        let n_size = u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]);
+        require!(
+            n_size == (1u32 << aux_data.chain_merkle_proof.len()),
+            "Aux POW merkle branch size does not match parent coinbase"
+        );
+
+        let bytes = hex::decode(&script_sig[pos_chain_root + 8..pos_chain_root + 16]).unwrap();
+        let n_nonce = u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]);
+
+        let chain_id = block_header.get_chain_id();
+
+        let expected_index =
+            Self::get_expected_index(n_nonce, chain_id, aux_data.chain_merkle_proof.len());
 
         require!(
-            coinbase_tx
-                .input
-                .first()
-                .unwrap()
-                .script_sig
-                .to_hex_string()
-                .contains(&chain_root.to_string()),
-            "coinbase_tx don't contain chain_root"
+            u32::try_from(aux_data.chain_id).ok() == Some(expected_index),
+            "Aux POW wrong index"
         );
-
         let pow_hash = aux_data.parent_block.block_hash_pow();
         require!(
             self.skip_pow_verification
@@ -73,20 +154,39 @@ impl BtcLightClient {
         );
     }
 
+    fn get_expected_index(nonce: u32, chain_id: i32, merkle_height: usize) -> u32 {
+        let mut rand = nonce;
+        rand = rand.wrapping_mul(1_103_515_245).wrapping_add(12345);
+        rand = rand.wrapping_add(u32::try_from(chain_id).unwrap());
+        rand = rand.wrapping_mul(1_103_515_245).wrapping_add(12345);
+
+        rand.wrapping_rem(1u32 << merkle_height)
+    }
+
     pub(crate) fn submit_block_header(
         &mut self,
         header: (Header, Option<AuxData>),
         skip_pow_verification: bool,
     ) {
         let (block_header, aux_data) = header;
-        let mut skip_pow_verification = skip_pow_verification;
-        if let Some(ref aux_data) = aux_data {
-            self.check_aux(&block_header, aux_data);
-            skip_pow_verification = true;
-        }
 
         let prev_block_header = self.get_prev_header(&block_header);
         let current_block_hash = block_header.block_hash();
+
+        if !skip_pow_verification {
+            self.check_target(&block_header, &prev_block_header);
+
+            if let Some(ref aux_data) = aux_data {
+                self.check_aux(&block_header, aux_data);
+            } else {
+                let pow_hash = block_header.block_hash_pow();
+                // Check if the block hash is less than or equal to the target
+                require!(
+                    U256::from_le_bytes(&pow_hash.0) <= target_from_bits(block_header.bits),
+                    format!("block should have correct pow")
+                );
+            }
+        }
 
         let (current_block_computed_chain_work, overflow) = prev_block_header
             .chain_work
@@ -98,21 +198,15 @@ impl BtcLightClient {
             block_hash: current_block_hash,
             chain_work: current_block_computed_chain_work,
             block_height: 1 + prev_block_header.block_height,
-            aux_parent_block: aux_data.map(|data| data.parent_block.block_hash()),
         };
 
-        self.submit_block_header_inner(
-            &block_header,
-            current_header,
-            &prev_block_header,
-            skip_pow_verification,
-        );
+        self.submit_block_header_inner(current_header, &prev_block_header);
     }
 }
 
 // source https://github.com/dogecoin/dogecoin/blob/2c513d0172e8bc86fe9a337693b26f2fdf68a013/src/pow.cpp#L17
 fn allow_min_difficulty_for_block(
-    config: &NetworkConfig,
+    config: &DogecoinConfig,
     block_header: &Header,
     prev_block_header: &ExtendedHeader,
 ) -> bool {
@@ -133,7 +227,7 @@ fn allow_min_difficulty_for_block(
 
 // source https://github.com/dogecoin/dogecoin/blob/2c513d0172e8bc86fe9a337693b26f2fdf68a013/src/pow.cpp#L17
 fn get_next_work_required(
-    config: &NetworkConfig,
+    config: &DogecoinConfig,
     block_header: &Header,
     prev_block_header: &ExtendedHeader,
     blocks_getter: &impl BlocksGetter,
@@ -205,7 +299,7 @@ fn get_next_work_required(
 
 // source https://github.com/dogecoin/dogecoin/blob/2c513d0172e8bc86fe9a337693b26f2fdf68a013/src/dogecoin.cpp#L41
 fn calculate_next_work_required(
-    config: &NetworkConfig,
+    config: &DogecoinConfig,
     prev_block_header: &ExtendedHeader,
     first_block_time: i64,
 ) -> u32 {

@@ -64,6 +64,10 @@ impl Header {
         block_header
     }
 
+    pub fn get_chain_id(&self) -> i32 {
+        self.version >> 16
+    }
+
     pub fn from_block_header_vec(block_header: &[u8]) -> Result<Self, Error> {
         if block_header.len() != Self::SIZE {
             return Err(Error::InvalidLength);

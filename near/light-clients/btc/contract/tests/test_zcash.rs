@@ -157,7 +157,7 @@ mod test_zcash {
         assert!(outcome.is_failure());
 
         assert!(format!("{:?}", outcome.failures()[0].clone().into_result())
-            .contains("Error: Incorrect target."));
+            .contains("bad-diffbits: incorrect proof of work"));
 
         Ok(())
     }

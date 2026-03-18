@@ -3,12 +3,14 @@ use btc_types::hash::H256;
 use btc_types::header::{BlockHeader, ExtendedHeader, Header, LightHeader};
 use btc_types::network::Network;
 use btc_types::u256::U256;
-use btc_types::utils::{target_from_bits, work_from_bits};
+#[cfg(not(feature = "dogecoin"))]
+use btc_types::utils::target_from_bits;
+use btc_types::utils::work_from_bits;
 use near_plugins::{
     access_control, pause, AccessControlRole, AccessControllable, Pausable, Upgradable,
 };
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
-use near_sdk::collections::{LookupMap, LookupSet};
+use near_sdk::collections::LookupMap;
 use near_sdk::serde::{Deserialize, Serialize};
 use near_sdk::{env, log, near, require, NearToken, PanicOnDefault, Promise, PromiseOrValue};
 
@@ -71,7 +73,6 @@ enum StorageKey {
     MainchainHeightToHeader,
     MainchainHeaderToHeight,
     HeadersPool,
-    AuxParentBlocks,
 }
 
 /// Contract implementing Bitcoin light client.
@@ -109,9 +110,6 @@ pub struct BtcLightClient {
     // GC threshold - how many blocks we would like to store in memory, and GC the older ones
     gc_threshold: u64,
 
-    // Used only for networks with AuxPoW (Dogecoin). These are the hashes of already used parent blocks (Litecoin blocks for Dogecoin)
-    used_aux_parent_blocks: LookupSet<H256>,
-
     // Network type Mainnet/Testnet
     network: Network,
 }
@@ -135,7 +133,6 @@ impl BtcLightClient {
             mainchain_tip_blockhash: H256::default(),
             skip_pow_verification: args.skip_pow_verification,
             gc_threshold: args.gc_threshold,
-            used_aux_parent_blocks: LookupSet::new(StorageKey::AuxParentBlocks),
             network: args.network,
         };
 
@@ -253,12 +250,12 @@ impl BtcLightClient {
 
     /// Verifies that a transaction is included in a block at a given block height
     ///
-    /// @param tx_id transaction identifier
-    /// @param tx_block_blockhash block hash at which transacton is supposedly included
-    /// @param tx_index index of transaction in the block's tx merkle tree
-    /// @param merkle_proof  merkle tree path (concatenated LE sha256 hashes) (does not contain initial transaction_hash and merkle_root)
+    /// @param `tx_id` transaction identifier
+    /// @param `tx_block_blockhash` block hash at which transacton is supposedly included
+    /// @param `tx_index` index of transaction in the block's tx merkle tree
+    /// @param `merkle_proof` merkle tree path (concatenated LE sha256 hashes) (does not contain initial `transaction_hash` and `merkle_root`)
     /// @param confirmations how many confirmed blocks we want to have before the transaction is valid
-    /// @return True if tx_id is at the claimed position in the block at the given blockhash, False otherwise
+    /// @return True if `tx_id` is at the claimed position in the block at the given blockhash, False otherwise
     ///
     /// # Warning
     /// This function may return `true` if the provided `tx_id` is a hash of an internal node in the Merkle tree rather than a valid transaction hash.
@@ -294,7 +291,7 @@ impl BtcLightClient {
             .get(&args.tx_block_blockhash)
             .unwrap_or_else(|| env::panic_str("cannot find requested transaction block"));
 
-        require!(args.merkle_proof.len() > 0, "Merkle proof is empty");
+        require!(!args.merkle_proof.is_empty(), "Merkle proof is empty");
 
         // compute merkle tree root and check if it matches block's original merkle tree root
         merkle_tools::compute_root_from_merkle_proof(
@@ -305,7 +302,7 @@ impl BtcLightClient {
     }
 
     /// Public call to run GC on a mainchain.
-    /// batch_size is how many block headers should be removed in the execution
+    /// `batch_size` is how many block headers should be removed in the execution
     ///
     /// # Panics
     /// If initial blockheader or tip blockheader are not in a header pool
@@ -375,9 +372,15 @@ impl BtcLightClient {
         #[cfg(any(feature = "litecoin", feature = "dogecoin"))]
         {
             require!((block_height + 1) % config.difficulty_adjustment_interval == 0, format!("Error: The initial block height  + 1 must be divisible by {} to ensure proper alignment with difficulty adjustment periods.", config.difficulty_adjustment_interval));
+        }
+        #[cfg(any(feature = "litecoin", feature = "dogecoin", feature = "bitcoin"))]
+        {
             require!(
-                submit_blocks.len() == 2,
-                format!("Exactly two initial blocks must be submitted")
+                submit_blocks.len() > btc_types::network::MEDIAN_TIME_SPAN,
+                format!(
+                    "At least {} initial blocks must be submitted to support MTP computation",
+                    btc_types::network::MEDIAN_TIME_SPAN + 1
+                )
             );
         }
         #[cfg(feature = "zcash")]
@@ -400,8 +403,6 @@ impl BtcLightClient {
             block_height,
             block_hash: current_block_hash.clone(),
             chain_work,
-            #[cfg(feature = "dogecoin")]
-            aux_parent_block: None,
         };
 
         self.store_block_header(&header);
@@ -446,31 +447,25 @@ impl BtcLightClient {
             block_height: 1 + prev_block_header.block_height,
         };
 
-        self.submit_block_header_inner(
-            &header,
-            current_header,
-            &prev_block_header,
-            skip_pow_verification,
-        );
-    }
-
-    fn submit_block_header_inner(
-        &mut self,
-        block_header: &Header,
-        current_header: ExtendedHeader,
-        prev_block_header: &ExtendedHeader,
-        skip_pow_verification: bool,
-    ) {
-        let pow_hash = block_header.block_hash_pow();
         if !skip_pow_verification {
-            self.check_target(block_header, prev_block_header);
+            self.check_target(&header, &prev_block_header);
+
+            let pow_hash = header.block_hash_pow();
             // Check if the block hash is less than or equal to the target
             require!(
-                U256::from_le_bytes(&pow_hash.0) <= target_from_bits(block_header.bits),
+                U256::from_le_bytes(&pow_hash.0) <= target_from_bits(header.bits),
                 format!("block should have correct pow")
             );
         }
 
+        self.submit_block_header_inner(current_header, &prev_block_header);
+    }
+
+    fn submit_block_header_inner(
+        &mut self,
+        current_header: ExtendedHeader,
+        prev_block_header: &ExtendedHeader,
+    ) {
         // Main chain submission
         if prev_block_header.block_hash == self.mainchain_tip_blockhash {
             // Probably we should check if it is not in a mainchain?
@@ -596,12 +591,7 @@ impl BtcLightClient {
     /// Remove block header and meta information
     fn remove_block_header(&mut self, header_block_hash: &H256) {
         self.mainchain_header_to_height.remove(header_block_hash);
-        if let Some(_header) = self.headers_pool.remove(header_block_hash) {
-            #[cfg(feature = "dogecoin")]
-            if let Some(aux_parent_blockhash) = _header.aux_parent_block {
-                self.used_aux_parent_blocks.remove(&aux_parent_blockhash);
-            }
-        }
+        self.headers_pool.remove(header_block_hash);
     }
 
     /// Stores and handles fork submissions
@@ -628,7 +618,7 @@ impl BlocksGetter for BtcLightClient {
 mod migrate {
     use crate::{
         borsh, env, near, BorshDeserialize, BorshSerialize, BtcLightClient, BtcLightClientExt,
-        ExtendedHeader, LookupMap, LookupSet, Network, PanicOnDefault, StorageKey, H256,
+        ExtendedHeader, LookupMap, Network, PanicOnDefault, H256,
     };
 
     #[derive(BorshDeserialize, BorshSerialize, PanicOnDefault)]
@@ -670,7 +660,6 @@ mod migrate {
                 headers_pool: old_state.headers_pool,
                 skip_pow_verification: old_state.skip_pow_verification,
                 gc_threshold: old_state.gc_threshold,
-                used_aux_parent_blocks: LookupSet::new(StorageKey::AuxParentBlocks),
                 network,
             }
         }
@@ -748,6 +737,161 @@ mod tests {
         serde_json::from_value(json_value).expect("value is invalid")
     }
 
+    // Returns 12 real mainnet block headers from heights 685440-685451.
+    // All have bits=386752379 and version >= 4; used to pre-populate the chain
+    // so that MTP (median time past) can be computed when submitting height 685452.
+    fn real_block_headers_685440_to_685451() -> Vec<Header> {
+        fn h(version: i32, prev: &str, merkle: &str, time: u32, nonce: u32) -> Header {
+            serde_json::from_value(serde_json::json!({
+                "version": version,
+                "prev_block_hash": prev,
+                "merkle_root": merkle,
+                "time": time,
+                "bits": 386752379u32,
+                "nonce": nonce,
+            }))
+            .unwrap()
+        }
+        vec![
+            h(
+                805298180,
+                "00000000000000000006248c28751a176336f5c070f901dc86df190c391d761d",
+                "534e13aa090e6615a2a6610f49b42ca9caa93f3ce2ca33735ca11444d6705424",
+                1622337521,
+                1876340370,
+            ),
+            h(
+                536928260,
+                "000000000000000000016f0484972d135afba541c837d0c07c1530ffeee293cd",
+                "1f3e2b319668356eba575e5e9aa4b742a7f79a1419e3cf58d81430aaf4a66458",
+                1622338991,
+                3480744496,
+            ),
+            h(
+                671080452,
+                "00000000000000000003fb78da0a99e751b6cf726723a99b9ca2dc6e8bb45544",
+                "a3adf4e20aa658bc7f74b9674ab190252b161a30d368ad90892876060b7c35a0",
+                1622339181,
+                1405379453,
+            ),
+            h(
+                536870916,
+                "00000000000000000009165c5600f52cb7436b40f3ad48e996de63d63e1a124e",
+                "f13831ddb7dab19aca9c95b9841bf7100752a86e192c6744692196c62b2bf906",
+                1622340913,
+                1822192411,
+            ),
+            h(
+                536870916,
+                "0000000000000000000172c10f510c380eb7f39f57dfee12ca4384a1d594e58b",
+                "76d7acbec78d65b40809d3159c5c9e6e5c690a19e60b17a60e050e9c27376905",
+                1622341014,
+                4080508367,
+            ),
+            h(
+                545259524,
+                "0000000000000000000692c97d64558f78f7868ed8f6bfeaeccdf3d1aa8bffef",
+                "7a547eb44976320a703e35afeafa1d8b2820ab90625ca51063e678dfcec713bc",
+                1622341455,
+                81234816,
+            ),
+            h(
+                551550980,
+                "00000000000000000007b9eefcda99e224435a7a9957dbea4ed980d6dae31947",
+                "f9c2771b05a32f57e3fa613a806640726bec49b9428341b378bf9172a8272668",
+                1622342223,
+                3439579250,
+            ),
+            h(
+                939515908,
+                "00000000000000000002b3e7277440332e1332e88e524ec68104df590842001e",
+                "28e1ee6ba3297e377ea84c9e7871e4e8b6428e64585ef99696ad9d239e478f08",
+                1622342446,
+                223964937,
+            ),
+            h(
+                805298180,
+                "0000000000000000000108586d66d4cedb85bb95c7ed7f225cbf035120b4e8e3",
+                "344d55da3a31e027ff633bbe2e67c1418a375d4a321f3a301a22c0d23d95fb1f",
+                1622342844,
+                624362111,
+            ),
+            h(
+                545259524,
+                "00000000000000000002c37de19d48c2d15dfd528d95c33ebb0dd81f8c6e30a8",
+                "eb294f1daf84a4ea942cb62606ab385f229e89703b8efe02714b4a62d8181ee9",
+                1622344117,
+                3908216100,
+            ),
+            h(
+                1073733636,
+                "00000000000000000004334c161711f1f213996cbeb53051a0759065ade81e8a",
+                "a7f923d2034b9a737e9e31c479e5d21769c956d6e583c2ad369e3609d20db23f",
+                1622344380,
+                392620416,
+            ),
+            h(
+                549453828,
+                "00000000000000000002f45558f6bc1e8bd97ce127fe8217d69f04d4938265b2",
+                "e5cddebf98270b2cc1b6fd931bf9dabd1c815b946d39ced94f066aca8429d419",
+                1622344394,
+                2990099038,
+            ),
+        ]
+    }
+
+    // Real mainnet block at height 685452.
+    fn block_685452_header() -> Header {
+        serde_json::from_value(serde_json::json!({
+            "version": 939515908i32,
+            "prev_block_hash": "000000000000000000041f7db3a18612b7439c91398f21bd816fb3c93c74099d",
+            "merkle_root": "6dc8856dc7b1c460f2ca355f9ef2a9f2ad84f882404436e51ec8c970e5e248f4",
+            "time": 1622344447u32,
+            "bits": 386752379u32,
+            "nonce": 820693939u32,
+        }))
+        .unwrap()
+    }
+
+    // Initializes with 12 real mainnet blocks (685440-685451), skip_pow=false.
+    // Height 685440 is a difficulty-adjustment boundary (685440 % 2016 == 0).
+    fn get_init_args_with_real_blocks() -> InitArgs {
+        let blocks = real_block_headers_685440_to_685451();
+        let genesis_hash = blocks[0].block_hash();
+        InitArgs {
+            network: Network::Mainnet,
+            genesis_block_hash: genesis_hash,
+            genesis_block_height: 685440,
+            skip_pow_verification: false,
+            gc_threshold: 1000,
+            submit_blocks: blocks,
+        }
+    }
+
+    // Builds 12-block init list: genesis + 11 fake blocks all branching from genesis.
+    // Fakes have bits=0x207FFFFF (near-zero work), so any normally-difficulty block
+    // submitted afterward (bits=486_604_799, work≈2^32) outweighs the fake mainchain
+    // tip and gets promoted. This satisfies the MEDIAN_TIME_SPAN+1 init requirement
+    // without disrupting tests that check block_height=1, chain_work=2W, etc.
+    fn make_default_submit_blocks() -> Vec<Header> {
+        let genesis = genesis_block_header();
+        let genesis_hash = genesis.block_hash().to_string();
+        let mut blocks = vec![genesis];
+        for i in 0u32..11 {
+            let fake: Header = serde_json::from_value(serde_json::json!({
+                "version": 1,
+                "prev_block_hash": genesis_hash,
+                "merkle_root": "0000000000000000000000000000000000000000000000000000000000000000",
+                "time": 1_231_006_506u32 + i,
+                "bits": 0x207fffffu32,
+                "nonce": i,
+            }))
+            .unwrap();
+            blocks.push(fake);
+        }
+        blocks
+    }
+
     fn get_default_init_args() -> InitArgs {
         let genesis_block = genesis_block_header();
         InitArgs {
@@ -756,7 +900,7 @@ mod tests {
             genesis_block_height: 0,
             skip_pow_verification: false,
             gc_threshold: 3,
-            submit_blocks: [genesis_block].to_vec(),
+            submit_blocks: make_default_submit_blocks(),
         }
     }
 
@@ -768,40 +912,49 @@ mod tests {
             genesis_block_height: 0,
             skip_pow_verification: true,
             gc_threshold: 3,
-            submit_blocks: [genesis_block].to_vec(),
+            submit_blocks: make_default_submit_blocks(),
         }
     }
 
     #[test]
     #[should_panic(expected = "block should have correct pow")]
     fn test_pow_validator_works_correctly_for_wrong_block() {
-        let header = block_header_example();
-
-        let mut contract = BtcLightClient::init(get_default_init_args());
+        near_sdk::testing_env!(near_sdk::test_utils::VMContextBuilder::new()
+            .block_timestamp(1_622_344_600_000_000_000u64)
+            .build());
+        let mut header = block_685452_header();
+        header.nonce += 1; // tampered nonce → hash won't satisfy PoW target
+        let mut contract = BtcLightClient::init(get_init_args_with_real_blocks());
         contract.submit_block_header(header, contract.skip_pow_verification);
     }
 
     #[test]
     fn test_pow_validator_works_correctly_for_correct_block() {
-        let header = fork_block_header_example();
-        let mut contract = BtcLightClient::init(get_default_init_args());
-
+        near_sdk::testing_env!(near_sdk::test_utils::VMContextBuilder::new()
+            .block_timestamp(1_622_344_600_000_000_000u64)
+            .build());
+        let header = block_685452_header();
+        let mut contract = BtcLightClient::init(get_init_args_with_real_blocks());
         contract.submit_block_header(header.clone(), contract.skip_pow_verification);
 
         let received_header = contract.get_last_block_header();
+
+        let w = work_from_bits(386752379);
+        let mut expected_chain_work = w;
+        for _ in 0..12 {
+            let (new_w, _) = expected_chain_work.overflowing_add(w);
+            expected_chain_work = new_w;
+        }
 
         assert_eq!(
             received_header,
             ExtendedHeader {
                 block_header: header,
                 block_hash: decode_hex(
-                    "00000000839a8e6886ab5951d76f411475428afc90947ee320161bbf18eb6048"
+                    "00000000000000000001c1b436262471ec926e6cff522ec048c912e26ebba6cc"
                 ),
-                chain_work: U256::from_be_bytes(&[
-                    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                    0, 2, 0, 2, 0, 2
-                ]),
-                block_height: 1,
+                chain_work: expected_chain_work,
+                block_height: 685452,
             }
         );
     }
@@ -924,7 +1077,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "Error: Incorrect target.")]
+    #[should_panic(expected = "bad-diffbits: incorrect proof of work")]
     fn test_submitting_block_with_incorrect_bits_same_period() {
         let mut contract = BtcLightClient::init(get_default_init_args());
         let mut next_header = block_header_example();

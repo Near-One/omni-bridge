@@ -370,6 +370,7 @@ dependencies = [
  "btc-types",
  "cfg-if 1.0.0",
  "equihash",
+ "hex",
  "merkle-tools",
  "more-asserts",
  "near-plugins",
