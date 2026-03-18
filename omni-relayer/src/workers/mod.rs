@@ -183,6 +183,11 @@ pub async fn process_events(
         .near_bridge_client()
         .and_then(near_bridge_client::NearBridgeClient::account_id)?;
 
+    near_omni_nonce
+        .resync_nonce()
+        .await
+        .context("Failed to resync near nonce")?;
+
     if let Some(near_fast_nonce) = near_fast_nonce.clone() {
         near_fast_nonce
             .resync_nonce()
