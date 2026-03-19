@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use crate::{
     storage::{Decimals, FastTransferStatusStorage, TransferMessageStorage},
-    Contract, ContractExt, RelayerConfig, StorageKey,
+    Contract, ContractExt, StorageKey,
 };
 use borsh::{BorshDeserialize, BorshSerialize};
 use near_contract_standards::storage_management::StorageBalance;
@@ -14,6 +14,7 @@ use omni_types::{
     btc::UTXOChainConfig, ChainKind, FastTransferId, Nonce, OmniAddress, TransferId,
     UnifiedTransferId,
 };
+use omni_utils::trusted_relayer::{RelayerConfig, RelayerState};
 
 #[derive(BorshDeserialize, BorshSerialize, PanicOnDefault)]
 pub struct OldState {
@@ -26,6 +27,7 @@ pub struct OldState {
     pub token_address_to_id: LookupMap<OmniAddress, AccountId>,
     pub token_decimals: LookupMap<OmniAddress, Decimals>,
     pub deployed_tokens: LookupSet<AccountId>,
+    pub deployed_tokens_v2: LookupMap<AccountId, ChainKind>,
     pub token_deployer_accounts: LookupMap<ChainKind, AccountId>,
     pub mpc_signer: AccountId,
     pub current_origin_nonce: Nonce,
@@ -36,6 +38,9 @@ pub struct OldState {
     pub init_transfer_promises: LookupMap<AccountId, CryptoHash>,
     pub utxo_chain_connectors: HashMap<ChainKind, UTXOChainConfig>,
     pub migrated_tokens: LookupMap<AccountId, AccountId>,
+    pub locked_tokens: LookupMap<(ChainKind, AccountId), u128>,
+    pub relayers: LookupMap<AccountId, RelayerState>,
+    pub relayer_config: RelayerConfig,
 }
 
 #[near]
@@ -65,9 +70,7 @@ impl Contract {
                 init_transfer_promises: old_state.init_transfer_promises,
                 utxo_chain_connectors: old_state.utxo_chain_connectors,
                 migrated_tokens: old_state.migrated_tokens,
-                locked_tokens: LookupMap::new(StorageKey::LockedTokens),
-                relayers: LookupMap::new(StorageKey::Relayers),
-                relayer_config: RelayerConfig::default(),
+                locked_tokens: old_state.locked_tokens,
             }
         } else {
             env::panic_str("Old state not found. Migration is not needed.")
