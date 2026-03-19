@@ -18,14 +18,13 @@ use omni_types::{
     prover_args::WormholeVerifyProofArgs, prover_result::ProofKind,
 };
 
-use crate::{config, utils, workers::RetryableEvent};
+use crate::{config, utils};
 
 use super::{DeployToken, EventAction, FinTransfer, Transfer};
 
 pub async fn process_init_transfer_event(
     config: &config::Config,
     redis_connection_manager: &mut redis::aio::ConnectionManager,
-    key: String,
     omni_connector: Arc<OmniConnector>,
     transfer: Transfer,
     near_nonce: Arc<utils::nonce::NonceManager>,
@@ -128,14 +127,6 @@ pub async fn process_init_transfer_event(
     {
         Ok(actions) => actions,
         Err(err) => {
-            utils::redis::add_event(
-                config,
-                redis_connection_manager,
-                utils::redis::STUCK_EVENTS,
-                &key,
-                RetryableEvent::new(transfer),
-            )
-            .await;
             anyhow::bail!("Failed to get storage deposit actions: {err}");
         }
     };

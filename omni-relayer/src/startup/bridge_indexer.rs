@@ -76,6 +76,7 @@ async fn add_event<E: serde::Serialize + std::fmt::Debug + Sync>(
                 warn!("Failed to publish to NATS: {err:?}");
             }
         }
+        return;
     }
 
     let retryable = RetryableEvent::new(event);
@@ -733,7 +734,7 @@ async fn watch_omni_events_collection(
 }
 
 pub async fn start_indexer(
-    config: config::Config,
+    config: &config::Config,
     redis_connection_manager: &mut redis::aio::ConnectionManager,
     start_timestamp: Option<u32>,
 ) -> Result<()> {
@@ -850,7 +851,7 @@ async fn subscribe_to_omni_events(
 }
 
 pub async fn start_indexer_nats(
-    config: config::Config,
+    config: &config::Config,
     redis_connection_manager: &mut redis::aio::ConnectionManager,
     nats_client: Arc<utils::nats::NatsClient>,
 ) -> Result<()> {

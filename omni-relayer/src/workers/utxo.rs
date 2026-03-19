@@ -6,7 +6,7 @@ use near_bridge_client::{
     TransactionOptions,
     btc::{DepositMsg, PostAction, SafeDepositMsg},
 };
-use near_jsonrpc_client::errors::JsonRpcError;
+use near_jsonrpc_client::{JsonRpcClient, errors::JsonRpcError};
 use near_primitives::{hash::CryptoHash, types::AccountId};
 use near_rpc_client::NearRpcError;
 use omni_types::ChainKind;
@@ -14,10 +14,7 @@ use tracing::{info, warn};
 
 use omni_connector::{BtcDepositArgs, FinTransferArgs, OmniConnector};
 
-use crate::{
-    config, utils,
-    workers::{RetryableEvent, near::UnverifiedTrasfer},
-};
+use crate::utils;
 
 use super::{EventAction, Transfer};
 
@@ -317,11 +314,8 @@ pub async fn process_sign_transaction_event(
 }
 
 pub async fn process_confirmed_tx_hash(
-    config: &config::Config,
-    redis_connection_manager: &mut redis::aio::ConnectionManager,
-    key: String,
+    jsonrpc_client: &JsonRpcClient,
     omni_connector: Arc<OmniConnector>,
-    signer: AccountId,
     confirmed_tx_hash: ConfirmedTxHash,
     near_nonce: Arc<utils::nonce::NonceManager>,
 ) -> Result<EventAction> {
@@ -339,7 +333,7 @@ pub async fn process_confirmed_tx_hash(
             confirmed_tx_hash.btc_tx_hash.clone(),
             TransactionOptions {
                 nonce,
-                wait_until: near_primitives::views::TxExecutionStatus::Included,
+                wait_until: near_primitives::views::TxExecutionStatus::Final,
                 wait_final_outcome_timeout_sec: None,
             },
         )
@@ -348,27 +342,17 @@ pub async fn process_confirmed_tx_hash(
         Ok(tx_hash) => {
             info!("Verified withdraw: {tx_hash:?}");
 
-            let Ok(serialized_event) = serde_json::to_value(&confirmed_tx_hash) else {
-                warn!("Failed to serialize confirmed tx: {confirmed_tx_hash:?}");
-                return Ok(EventAction::Remove);
-            };
+            let signer = omni_connector
+                .near_bridge_client()
+                .and_then(near_bridge_client::NearBridgeClient::account_id)?;
 
-            utils::redis::add_event(
-                config,
-                redis_connection_manager,
-                utils::redis::EVENTS,
-                tx_hash.to_string(),
-                RetryableEvent::new(UnverifiedTrasfer {
-                    tx_hash,
-                    signer,
-                    specific_errors: Some(vec!["Not enough blocks confirmed".to_string()]),
-                    original_key: key,
-                    original_event: serialized_event,
-                }),
+            Ok(utils::near::resolve_tx_action(
+                jsonrpc_client,
+                tx_hash,
+                signer,
+                &["Not enough blocks confirmed"],
             )
-            .await;
-
-            Ok(EventAction::Remove)
+            .await)
         }
         Err(err) => {
             if let BridgeSdkError::NearRpcError(near_rpc_error) = err {
