@@ -776,7 +776,6 @@ mod tests {
             .transact()
             .await?;
 
-        println!("{:?}", res);
         assert!(res.is_success(), "Migration didn't succeed");
 
         let transfer = env
