@@ -9,7 +9,10 @@ use near_lake_framework::near_indexer_primitives::{
 use near_primitives::{hash::CryptoHash, types::AccountId};
 use omni_types::{ChainKind, near_events::OmniBridgeEvent};
 
-use crate::{config, utils, workers::{EventAction, RetryableEvent}};
+use crate::{
+    config, utils,
+    workers::{EventAction, RetryableEvent},
+};
 
 pub async fn get_final_block(jsonrpc_client: &JsonRpcClient) -> Result<u64> {
     info!("Getting final block");
@@ -162,10 +165,7 @@ pub async fn handle_streamer_message(
                 | OmniBridgeEvent::LogMetadataEvent { .. }
                 | OmniBridgeEvent::DeployTokenEvent { .. }
                 | OmniBridgeEvent::MigrateTokenEvent { .. }
-                | OmniBridgeEvent::BindTokenEvent { .. }
-                | OmniBridgeEvent::RelayerApplyEvent { .. }
-                | OmniBridgeEvent::RelayerResignEvent { .. }
-                | OmniBridgeEvent::RelayerRejectEvent { .. } => {}
+                | OmniBridgeEvent::BindTokenEvent { .. } => {}
             }
         }
     }
