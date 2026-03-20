@@ -19,6 +19,14 @@ subject = "omni-events.>"
 max_deliver = 4
 backoff_secs = [5, 30, 120]
 
+[nats.relayer_consumer]
+name = "relayer-worker"
+stream = "RELAYER"
+subject = "relayer.tasks.>"
+max_deliver = -1
+backoff_secs = [5, 15, 60, 300, 900, 3600]
+worker_count = 20
+
 [bridge_indexer]
 # Used to check if provided fee is sufficient to complete the transfer
 api_url = "https://testnet.api.bridge.nearone.org/"

@@ -273,9 +273,15 @@ mod tests {
             .json()?;
         assert!(application.is_none());
 
-        // Verify stake was NOT returned to applicant (goes to DAO/relayer manager)
+        // Verify stake was NOT returned to applicant (goes to DAO/relayer manager).
+        // The applicant's balance may increase slightly due to protocol rewards,
+        // so we check that the bulk of the stake (1000 NEAR) was not refunded.
         let balance_after_reject = applicant.view_account().await?.balance;
-        assert!(balance_after_reject.as_yoctonear() <= balance_after_apply.as_yoctonear());
+        assert!(
+            balance_before.as_yoctonear() - balance_after_reject.as_yoctonear()
+                >= NearToken::from_near(999).as_yoctonear(),
+            "Applicant should not have received the stake back"
+        );
 
         // Verify stake was transferred to DAO account
         let dao_balance_after_reject = dao_account.view_account().await?.balance;

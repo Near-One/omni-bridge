@@ -6,11 +6,11 @@ use std::sync::{
 use alloy::primitives::TxHash;
 use anyhow::{Context, Result};
 use bridge_indexer_types::documents_types::DepositMsg;
-use futures::future::join_all;
-use rust_decimal::MathematicalOps;
-use tracing::warn;
-
 use near_jsonrpc_client::JsonRpcClient;
+use near_primitives::types::AccountId;
+use tokio_stream::StreamExt;
+use tracing::{info, warn};
+
 use near_sdk::json_types::U128;
 use solana_sdk::pubkey::Pubkey;
 
@@ -54,6 +54,12 @@ impl<E> RetryableEvent<E> {
 pub enum EventAction {
     Retry,
     Remove,
+}
+
+struct MessageResult {
+    action: Result<EventAction>,
+    needs_evm_nonce_resync: bool,
+    fee_key_to_remove: Option<String>,
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
@@ -158,10 +164,32 @@ pub enum DeployToken {
     },
 }
 
-#[allow(clippy::too_many_lines, clippy::too_many_arguments)]
+async fn handle_nats_ack(
+    msg: &async_nats::jetstream::message::Message,
+    result: &Result<EventAction>,
+) {
+    match result {
+        Ok(EventAction::Retry) => {
+            msg.ack_with(async_nats::jetstream::AckKind::Nak(None))
+                .await
+                .ok();
+        }
+        Ok(EventAction::Remove) => {
+            msg.ack().await.ok();
+        }
+        Err(_) => {
+            msg.ack_with(async_nats::jetstream::AckKind::Term)
+                .await
+                .ok();
+        }
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
 pub async fn process_events(
-    config: config::Config,
+    config: Arc<config::Config>,
     redis_connection_manager: redis::aio::ConnectionManager,
+    nats_client: Arc<utils::nats::NatsClient>,
     omni_connector: Arc<OmniConnector>,
     fast_connector: Arc<OmniConnector>,
     jsonrpc_client: JsonRpcClient,
@@ -187,921 +215,418 @@ pub async fn process_events(
 
     let is_evm_nonce_resync_needed = Arc::new(AtomicBool::new(true));
 
-    loop {
-        let mut redis_connection_manager_clone = redis_connection_manager.clone();
+    let nats_config = config
+        .nats
+        .as_ref()
+        .context("NATS config is required for event processing")?;
 
-        let Some(retryable_events) = utils::redis::get_events(
-            &config,
-            &mut redis_connection_manager_clone,
-            utils::redis::EVENTS.to_string(),
-        )
+    let semaphore = Arc::new(tokio::sync::Semaphore::new(
+        nats_config.relayer_consumer.worker_count,
+    ));
+
+    info!(
+        "Starting event processing with {} concurrent workers",
+        nats_config.relayer_consumer.worker_count
+    );
+
+    let consumer = nats_client.relayer_consumer(nats_config).await?;
+    let mut messages = consumer
+        .messages()
         .await
-        else {
-            tokio::time::sleep(tokio::time::Duration::from_secs(
-                config.redis.sleep_time_after_events_process_secs,
-            ))
-            .await;
-            continue;
-        };
+        .context("Failed to start consuming NATS messages")?;
 
-        if retryable_events.is_empty() {
-            tokio::time::sleep(tokio::time::Duration::from_secs(
-                config.redis.sleep_time_after_events_process_secs,
-            ))
-            .await;
-            continue;
-        }
+    while let Some(msg) = messages.next().await {
+        let msg = msg.context("NATS message error")?;
 
         if is_evm_nonce_resync_needed.load(Ordering::Relaxed) {
             if let Err(err) = evm_nonces.resync_nonces().await {
                 warn!("Failed to resync evm nonces: {err:?}");
+                msg.ack_with(async_nats::jetstream::AckKind::Nak(None))
+                    .await
+                    .ok();
                 continue;
             }
-
             is_evm_nonce_resync_needed.store(false, Ordering::Relaxed);
         }
 
-        let current_timestamp = chrono::Utc::now().timestamp();
-
-        let mut events = Vec::new();
-
-        for (key, payload) in retryable_events {
-            let mut retryable_event =
-                match serde_json::from_str::<RetryableEvent<serde_json::Value>>(&payload) {
-                    Ok(retryable_event) => retryable_event,
-                    Err(err) => {
-                        warn!("Failed to deserialize retryable event: {err:?}");
-                        utils::redis::remove_event(
-                            &config,
-                            &mut redis_connection_manager_clone,
-                            utils::redis::EVENTS,
-                            &key,
-                        )
-                        .await;
-                        continue;
-                    }
-                };
-
-            if current_timestamp - retryable_event.creation_timestamp
-                > config.redis.keep_transfers_for_secs
-            {
-                warn!(
-                    "Event ({payload}) with key {key} has exceeded the retention period, removing it"
-                );
-                utils::redis::remove_event(
-                    &config,
-                    &mut redis_connection_manager_clone,
-                    utils::redis::EVENTS,
-                    &key,
-                )
-                .await;
+        let event: serde_json::Value = match serde_json::from_slice(&msg.payload) {
+            Ok(e) => e,
+            Err(err) => {
+                warn!("Failed to deserialize event: {err:?}");
+                msg.ack_with(async_nats::jetstream::AckKind::Term)
+                    .await
+                    .ok();
                 continue;
             }
+        };
 
-            let delay = i64::try_from(
-                config
-                    .redis
-                    .sleep_time_after_events_process_secs
-                    .saturating_mul(
-                        config
-                            .redis
-                            .fee_retry_base_secs
-                            .powu(u64::from(retryable_event.retries))
-                            .try_into()
-                            .unwrap_or(u64::MAX),
-                    ),
-            )
-            .unwrap_or(i64::MAX)
-            .min(config.redis.fee_retry_max_sleep_secs);
+        let permit = semaphore.clone().acquire_owned().await?;
 
-            if current_timestamp < retryable_event.last_updated_timestamp + delay {
-                continue;
-            }
+        let config = config.clone();
+        let mut redis = redis_connection_manager.clone();
+        let jsonrpc_client = jsonrpc_client.clone();
+        let omni_connector = omni_connector.clone();
+        let fast_connector = fast_connector.clone();
+        let signer = signer.clone();
+        let near_omni_nonce = near_omni_nonce.clone();
+        let near_fast_nonce = near_fast_nonce.clone();
+        let evm_nonces = evm_nonces.clone();
+        let is_evm_nonce_resync_needed = is_evm_nonce_resync_needed.clone();
 
-            retryable_event.retries += 1;
-            retryable_event.last_updated_timestamp = current_timestamp;
-
-            utils::redis::add_event(
+        tokio::spawn(async move {
+            let message_result = process_message(
+                event,
                 &config,
-                &mut redis_connection_manager_clone,
-                utils::redis::EVENTS,
-                &key,
-                &retryable_event,
+                &mut redis,
+                &jsonrpc_client,
+                omni_connector,
+                fast_connector,
+                signer,
+                near_omni_nonce,
+                near_fast_nonce,
+                evm_nonces,
             )
             .await;
 
-            events.push((key, retryable_event.event));
-        }
+            if let Err(ref err) = message_result.action {
+                warn!("{err:?}");
+            }
 
-        let mut handlers = Vec::new();
+            if let Some(fee_key) = message_result.fee_key_to_remove {
+                utils::redis::remove_event(&config, &mut redis, utils::redis::FEE_MAPPING, fee_key)
+                    .await;
+            }
 
-        for (key, event) in events {
-            if let Ok(transfer) = serde_json::from_value::<Transfer>(event.clone()) {
-                if let Transfer::Near { .. } | Transfer::Utxo { .. } = transfer.clone() {
-                    handlers.push(tokio::spawn({
-                        let config = config.clone();
-                        let mut redis_connection_manager = redis_connection_manager.clone();
-                        let omni_connector = omni_connector.clone();
-                        let signer = signer.clone();
-                        let near_nonce = near_omni_nonce.clone();
+            if message_result.needs_evm_nonce_resync
+                && matches!(message_result.action, Ok(EventAction::Retry) | Err(_))
+            {
+                is_evm_nonce_resync_needed.store(true, Ordering::Relaxed);
+            }
 
-                        async move {
-                            let (recipient, transfer_id) = match &transfer {
-                                Transfer::Near { transfer_message } => (
-                                    &transfer_message.recipient,
-                                    &transfer_message.get_transfer_id().into(),
-                                ),
-                                Transfer::Utxo {
-                                    utxo_transfer_message,
-                                    new_transfer_id,
-                                } => (&utxo_transfer_message.recipient, new_transfer_id),
-                                _ => unreachable!(),
-                            };
+            handle_nats_ack(&msg, &message_result.action).await;
 
-                            let process = if recipient.is_utxo_chain() {
-                                near::process_transfer_to_utxo_event(
-                                    &config,
-                                    &mut redis_connection_manager,
-                                    key.clone(),
-                                    omni_connector,
-                                    signer,
-                                    transfer.clone(),
-                                    near_nonce,
-                                )
-                                .await
-                            } else {
-                                near::process_transfer_event(
-                                    &config,
-                                    &mut redis_connection_manager,
-                                    key.clone(),
-                                    omni_connector,
-                                    signer,
-                                    transfer.clone(),
-                                    near_nonce,
-                                )
-                                .await
-                            };
+            drop(permit);
+        });
+    }
 
-                            match process {
-                                Ok(EventAction::Retry) => {}
-                                Ok(EventAction::Remove) => {
-                                    utils::redis::remove_event(
-                                        &config,
-                                        &mut redis_connection_manager,
-                                        utils::redis::EVENTS,
-                                        &key,
-                                    )
-                                    .await;
-                                }
-                                Err(err) => {
-                                    warn!("{err:?}");
-                                    utils::redis::remove_event(
-                                        &config,
-                                        &mut redis_connection_manager,
-                                        utils::redis::EVENTS,
-                                        &key,
-                                    )
-                                    .await;
-                                    utils::redis::remove_event(
-                                        &config,
-                                        &mut redis_connection_manager,
-                                        utils::redis::FEE_MAPPING,
-                                        serde_json::to_string(&transfer_id).unwrap_or_default(),
-                                    )
-                                    .await;
-                                }
-                            }
-                        }
-                    }));
-                } else if let Transfer::Evm {
-                    log, chain_kind, ..
-                } = transfer.clone()
-                {
-                    handlers.push(tokio::spawn({
-                        let config = config.clone();
-                        let mut redis_connection_manager = redis_connection_manager.clone();
-                        let omni_connector = omni_connector.clone();
-                        let near_omni_nonce = near_omni_nonce.clone();
+    Ok(())
+}
 
-                        async move {
-                            match evm::process_init_transfer_event(
-                                &config,
-                                &mut redis_connection_manager,
-                                omni_connector,
-                                transfer,
-                                near_omni_nonce,
-                            )
-                            .await
-                            {
-                                Ok(EventAction::Retry) => {}
-                                Ok(EventAction::Remove) => {
-                                    utils::redis::remove_event(
-                                        &config,
-                                        &mut redis_connection_manager,
-                                        utils::redis::EVENTS,
-                                        &key,
-                                    )
-                                    .await;
-                                    utils::redis::remove_event(
-                                        &config,
-                                        &mut redis_connection_manager,
-                                        utils::redis::FEE_MAPPING,
-                                        serde_json::to_string(&TransferId {
-                                            origin_nonce: log.origin_nonce,
-                                            origin_chain: chain_kind,
-                                        })
-                                        .unwrap_or_default(),
-                                    )
-                                    .await;
-                                }
-                                Err(err) => {
-                                    warn!("{err:?}");
-                                    utils::redis::remove_event(
-                                        &config,
-                                        &mut redis_connection_manager,
-                                        utils::redis::EVENTS,
-                                        &key,
-                                    )
-                                    .await;
-                                    utils::redis::remove_event(
-                                        &config,
-                                        &mut redis_connection_manager,
-                                        utils::redis::FEE_MAPPING,
-                                        serde_json::to_string(&TransferId {
-                                            origin_nonce: log.origin_nonce,
-                                            origin_chain: chain_kind,
-                                        })
-                                        .unwrap_or_default(),
-                                    )
-                                    .await;
-                                }
-                            }
-                        }
-                    }));
-                } else if let Transfer::Solana { sequence, .. } = transfer {
-                    handlers.push(tokio::spawn({
-                        let config = config.clone();
-                        let mut redis_connection_manager = redis_connection_manager.clone();
-                        let key = key.clone();
-                        let omni_connector = omni_connector.clone();
-                        let near_nonce = near_omni_nonce.clone();
+#[allow(clippy::too_many_lines, clippy::too_many_arguments)]
+async fn process_message(
+    event: serde_json::Value,
+    config: &config::Config,
+    redis: &mut redis::aio::ConnectionManager,
+    jsonrpc_client: &JsonRpcClient,
+    omni_connector: Arc<OmniConnector>,
+    fast_connector: Arc<OmniConnector>,
+    signer: AccountId,
+    near_omni_nonce: Arc<utils::nonce::NonceManager>,
+    near_fast_nonce: Option<Arc<utils::nonce::NonceManager>>,
+    evm_nonces: Arc<utils::nonce::EvmNonceManagers>,
+) -> MessageResult {
+    if let Ok(transfer) = serde_json::from_value::<Transfer>(event.clone()) {
+        match transfer {
+            Transfer::Near { .. } | Transfer::Utxo { .. } => {
+                let (is_utxo, fee_key) = match &transfer {
+                    Transfer::Near { transfer_message } => (
+                        transfer_message.recipient.is_utxo_chain(),
+                        serde_json::to_string(&transfer_message.get_transfer_id())
+                            .unwrap_or_default(),
+                    ),
+                    Transfer::Utxo {
+                        utxo_transfer_message,
+                        new_transfer_id,
+                    } => (
+                        utxo_transfer_message.recipient.is_utxo_chain(),
+                        serde_json::to_string(new_transfer_id).unwrap_or_default(),
+                    ),
+                    _ => unreachable!(),
+                };
 
-                        async move {
-                            match solana::process_init_transfer_event(
-                                &config,
-                                &mut redis_connection_manager,
-                                key.clone(),
-                                omni_connector,
-                                transfer,
-                                near_nonce,
-                            )
-                            .await
-                            {
-                                Ok(EventAction::Retry) => {}
-                                Ok(EventAction::Remove) => {
-                                    utils::redis::remove_event(
-                                        &config,
-                                        &mut redis_connection_manager,
-                                        utils::redis::EVENTS,
-                                        &key,
-                                    )
-                                    .await;
-                                    utils::redis::remove_event(
-                                        &config,
-                                        &mut redis_connection_manager,
-                                        utils::redis::FEE_MAPPING,
-                                        serde_json::to_string(&TransferId {
-                                            origin_nonce: sequence,
-                                            origin_chain: ChainKind::Sol,
-                                        })
-                                        .unwrap_or_default(),
-                                    )
-                                    .await;
-                                }
-                                Err(err) => {
-                                    warn!("{err:?}");
-                                    utils::redis::remove_event(
-                                        &config,
-                                        &mut redis_connection_manager,
-                                        utils::redis::EVENTS,
-                                        &key,
-                                    )
-                                    .await;
-                                    utils::redis::remove_event(
-                                        &config,
-                                        &mut redis_connection_manager,
-                                        utils::redis::FEE_MAPPING,
-                                        serde_json::to_string(&TransferId {
-                                            origin_nonce: sequence,
-                                            origin_chain: ChainKind::Sol,
-                                        })
-                                        .unwrap_or_default(),
-                                    )
-                                    .await;
-                                }
-                            }
-                        }
-                    }));
-                } else if let Transfer::Starknet { origin_nonce, .. } = transfer {
-                    handlers.push(tokio::spawn({
-                        let config = config.clone();
-                        let mut redis_connection_manager = redis_connection_manager.clone();
-                        let omni_connector = omni_connector.clone();
-                        let near_nonce = near_omni_nonce.clone();
+                let result = if is_utxo {
+                    near::process_transfer_to_utxo_event(
+                        jsonrpc_client,
+                        omni_connector.clone(),
+                        transfer,
+                        near_omni_nonce.clone(),
+                    )
+                    .await
+                } else {
+                    near::process_transfer_event(
+                        config,
+                        redis,
+                        jsonrpc_client,
+                        omni_connector.clone(),
+                        signer.clone(),
+                        transfer,
+                        near_omni_nonce.clone(),
+                    )
+                    .await
+                };
 
-                        async move {
-                            match starknet::process_init_transfer_event(
-                                &config,
-                                &mut redis_connection_manager,
-                                omni_connector,
-                                transfer,
-                                near_nonce,
-                            )
-                            .await
-                            {
-                                Ok(EventAction::Retry) => {}
-                                Ok(EventAction::Remove) => {
-                                    utils::redis::remove_event(
-                                        &config,
-                                        &mut redis_connection_manager,
-                                        utils::redis::EVENTS,
-                                        &key,
-                                    )
-                                    .await;
-                                    utils::redis::remove_event(
-                                        &config,
-                                        &mut redis_connection_manager,
-                                        utils::redis::FEE_MAPPING,
-                                        serde_json::to_string(&TransferId {
-                                            origin_nonce,
-                                            origin_chain: ChainKind::Strk,
-                                        })
-                                        .unwrap_or_default(),
-                                    )
-                                    .await;
-                                }
-                                Err(err) => {
-                                    warn!("{err:?}");
-                                    utils::redis::remove_event(
-                                        &config,
-                                        &mut redis_connection_manager,
-                                        utils::redis::EVENTS,
-                                        &key,
-                                    )
-                                    .await;
-                                    utils::redis::remove_event(
-                                        &config,
-                                        &mut redis_connection_manager,
-                                        utils::redis::FEE_MAPPING,
-                                        serde_json::to_string(&TransferId {
-                                            origin_nonce,
-                                            origin_chain: ChainKind::Strk,
-                                        })
-                                        .unwrap_or_default(),
-                                    )
-                                    .await;
-                                }
-                            }
-                        }
-                    }));
-                } else if let Transfer::NearToUtxo { .. } = transfer {
-                    handlers.push(tokio::spawn({
-                        let config = config.clone();
-                        let mut redis_connection_manager = redis_connection_manager.clone();
-                        let omni_connector = omni_connector.clone();
-                        let near_omni_nonce = near_omni_nonce.clone();
-
-                        async move {
-                            match utxo::process_near_to_utxo_init_transfer_event(
-                                omni_connector,
-                                transfer,
-                                near_omni_nonce,
-                            )
-                            .await
-                            {
-                                Ok(EventAction::Retry) => {}
-                                Ok(EventAction::Remove) => {
-                                    utils::redis::remove_event(
-                                        &config,
-                                        &mut redis_connection_manager,
-                                        utils::redis::EVENTS,
-                                        &key,
-                                    )
-                                    .await;
-                                }
-                                Err(err) => {
-                                    warn!("{err:?}");
-                                    utils::redis::remove_event(
-                                        &config,
-                                        &mut redis_connection_manager,
-                                        utils::redis::EVENTS,
-                                        &key,
-                                    )
-                                    .await;
-                                }
-                            }
-                        }
-                    }));
-                } else if let Transfer::UtxoToNear { .. } = transfer {
-                    handlers.push(tokio::spawn({
-                        let config = config.clone();
-                        let mut redis_connection_manager = redis_connection_manager.clone();
-                        let omni_connector = omni_connector.clone();
-                        let near_nonce = near_omni_nonce.clone();
-
-                        async move {
-                            match utxo::process_utxo_to_near_init_transfer_event(
-                                omni_connector,
-                                transfer,
-                                near_nonce,
-                            )
-                            .await
-                            {
-                                Ok(EventAction::Retry) => {}
-                                Ok(EventAction::Remove) => {
-                                    utils::redis::remove_event(
-                                        &config,
-                                        &mut redis_connection_manager,
-                                        utils::redis::EVENTS,
-                                        &key,
-                                    )
-                                    .await;
-                                }
-                                Err(err) => {
-                                    warn!("{err:?}");
-                                    utils::redis::remove_event(
-                                        &config,
-                                        &mut redis_connection_manager,
-                                        utils::redis::EVENTS,
-                                        &key,
-                                    )
-                                    .await;
-                                }
-                            }
-                        }
-                    }));
-                } else if let Transfer::Fast { .. } = transfer {
-                    handlers.push(tokio::spawn({
-                        let config = config.clone();
-                        let mut redis_connection_manager = redis_connection_manager.clone();
-                        let fast_connector = fast_connector.clone();
-                        let Some(near_fast_nonce) = near_fast_nonce.clone() else {
-                                warn!("Fast transfer event found but near fast nonce manager is not configured");
-                                continue;
-                        };
-
-                        async move {
-                            match near::initiate_fast_transfer(
-                                fast_connector,
-                                transfer,
-                                near_fast_nonce,
-                            )
-                            .await
-                            {
-                                Ok(EventAction::Retry) => {}
-                                Ok(EventAction::Remove) => {
-                                    utils::redis::remove_event(
-                                        &config,
-                                        &mut redis_connection_manager,
-                                        utils::redis::EVENTS,
-                                        &key,
-                                    )
-                                    .await;
-                                }
-                                Err(err) => {
-                                    warn!("{err:?}");
-                                    utils::redis::remove_event(
-                                        &config,
-                                        &mut redis_connection_manager,
-                                        utils::redis::EVENTS,
-                                        &key,
-                                    )
-                                    .await;
-                                }
-                            }
-                        }
-                    }));
+                let fee_key_to_remove = result.is_err().then_some(fee_key);
+                MessageResult {
+                    action: result,
+                    needs_evm_nonce_resync: false,
+                    fee_key_to_remove,
                 }
-            } else if let Ok(omni_bridge_event) =
-                serde_json::from_value::<OmniBridgeEvent>(event.clone())
-            {
-                if let OmniBridgeEvent::SignTransferEvent {
-                    message_payload, ..
-                } = omni_bridge_event.clone()
-                {
-                    handlers.push(tokio::spawn({
-                        let config = config.clone();
-                        let mut redis_connection_manager = redis_connection_manager.clone();
-                        let omni_connector = omni_connector.clone();
-                        let signer = signer.clone();
-                        let evm_nonces = evm_nonces.clone();
-                        let is_evm_nonce_resync_needed = is_evm_nonce_resync_needed.clone();
+            }
+            Transfer::Evm {
+                ref log,
+                chain_kind,
+                ..
+            } => {
+                let fee_key = serde_json::to_string(&TransferId {
+                    origin_nonce: log.origin_nonce,
+                    origin_chain: chain_kind,
+                })
+                .unwrap_or_default();
 
-                        async move {
-                            match near::process_sign_transfer_event(
-                                &config,
-                                &mut redis_connection_manager,
-                                omni_connector,
-                                signer,
-                                omni_bridge_event,
-                                evm_nonces,
-                            )
-                            .await
-                            {
-                                Ok(EventAction::Retry) => {
-                                    if message_payload.recipient.get_chain().is_evm_chain() {
-                                        is_evm_nonce_resync_needed.store(true, Ordering::Relaxed);
-                                    }
-                                }
-                                Ok(EventAction::Remove) => {
-                                    utils::redis::remove_event(
-                                        &config,
-                                        &mut redis_connection_manager,
-                                        utils::redis::EVENTS,
-                                        &key,
-                                    )
-                                    .await;
-                                    utils::redis::remove_event(
-                                        &config,
-                                        &mut redis_connection_manager,
-                                        utils::redis::FEE_MAPPING,
-                                        serde_json::to_string(&message_payload.transfer_id)
-                                            .unwrap_or_default(),
-                                    )
-                                    .await;
-                                }
-                                Err(err) => {
-                                    if message_payload.recipient.get_chain().is_evm_chain() {
-                                        is_evm_nonce_resync_needed.store(true, Ordering::Relaxed);
-                                    }
-                                    warn!("{err:?}");
-                                    utils::redis::remove_event(
-                                        &config,
-                                        &mut redis_connection_manager,
-                                        utils::redis::EVENTS,
-                                        &key,
-                                    )
-                                    .await;
-                                    utils::redis::remove_event(
-                                        &config,
-                                        &mut redis_connection_manager,
-                                        utils::redis::FEE_MAPPING,
-                                        serde_json::to_string(&message_payload.transfer_id)
-                                            .unwrap_or_default(),
-                                    )
-                                    .await;
-                                }
-                            }
-                        }
-                    }));
+                let result = evm::process_init_transfer_event(
+                    config,
+                    redis,
+                    omni_connector.clone(),
+                    transfer,
+                    near_omni_nonce.clone(),
+                )
+                .await;
+
+                let fee_key_to_remove =
+                    matches!(&result, Ok(EventAction::Remove) | Err(_)).then_some(fee_key);
+                MessageResult {
+                    action: result,
+                    needs_evm_nonce_resync: false,
+                    fee_key_to_remove,
                 }
-            } else if let Ok(fin_transfer_event) =
-                serde_json::from_value::<FinTransfer>(event.clone())
-            {
-                if let FinTransfer::Evm { .. } = fin_transfer_event {
-                    handlers.push(tokio::spawn({
-                        let config = config.clone();
-                        let mut redis_connection_manager = redis_connection_manager.clone();
-                        let omni_connector = omni_connector.clone();
-                        let near_nonce = near_omni_nonce.clone();
+            }
+            Transfer::Solana { sequence, .. } => {
+                let result = solana::process_init_transfer_event(
+                    config,
+                    redis,
+                    omni_connector.clone(),
+                    transfer,
+                    near_omni_nonce.clone(),
+                )
+                .await;
 
-                        async move {
-                            match evm::process_evm_transfer_event(
-                                omni_connector,
-                                fin_transfer_event,
-                                near_nonce,
-                            )
-                            .await
-                            {
-                                Ok(EventAction::Retry) => {}
-                                Ok(EventAction::Remove) => {
-                                    utils::redis::remove_event(
-                                        &config,
-                                        &mut redis_connection_manager,
-                                        utils::redis::EVENTS,
-                                        &key,
-                                    )
-                                    .await;
-                                }
-                                Err(err) => {
-                                    warn!("{err:?}");
-                                    utils::redis::remove_event(
-                                        &config,
-                                        &mut redis_connection_manager,
-                                        utils::redis::EVENTS,
-                                        &key,
-                                    )
-                                    .await;
-                                }
-                            }
-                        }
-                    }));
-                } else if let FinTransfer::Solana { .. } = fin_transfer_event {
-                    handlers.push(tokio::spawn({
-                        let config = config.clone();
-                        let mut redis_connection_manager = redis_connection_manager.clone();
-                        let omni_connector = omni_connector.clone();
-                        let near_nonce = near_omni_nonce.clone();
+                let fee_key = serde_json::to_string(&TransferId {
+                    origin_nonce: sequence,
+                    origin_chain: ChainKind::Sol,
+                })
+                .unwrap_or_default();
 
-                        async move {
-                            match solana::process_fin_transfer_event(
-                                &config,
-                                omni_connector,
-                                fin_transfer_event,
-                                near_nonce,
-                            )
-                            .await
-                            {
-                                Ok(EventAction::Retry) => {}
-                                Ok(EventAction::Remove) => {
-                                    utils::redis::remove_event(
-                                        &config,
-                                        &mut redis_connection_manager,
-                                        utils::redis::EVENTS,
-                                        &key,
-                                    )
-                                    .await;
-                                }
-                                Err(err) => {
-                                    warn!("{err:?}");
-                                    utils::redis::remove_event(
-                                        &config,
-                                        &mut redis_connection_manager,
-                                        utils::redis::EVENTS,
-                                        &key,
-                                    )
-                                    .await;
-                                }
-                            }
-                        }
-                    }));
-                } else if let FinTransfer::Starknet { .. } = fin_transfer_event {
-                    handlers.push(tokio::spawn({
-                        let config = config.clone();
-                        let mut redis_connection_manager = redis_connection_manager.clone();
-                        let omni_connector = omni_connector.clone();
-                        let near_nonce = near_omni_nonce.clone();
-
-                        async move {
-                            match starknet::process_fin_transfer_event(
-                                omni_connector,
-                                fin_transfer_event,
-                                near_nonce,
-                            )
-                            .await
-                            {
-                                Ok(EventAction::Retry) => {}
-                                Ok(EventAction::Remove) => {
-                                    utils::redis::remove_event(
-                                        &config,
-                                        &mut redis_connection_manager,
-                                        utils::redis::EVENTS,
-                                        &key,
-                                    )
-                                    .await;
-                                }
-                                Err(err) => {
-                                    warn!("{err:?}");
-                                    utils::redis::remove_event(
-                                        &config,
-                                        &mut redis_connection_manager,
-                                        utils::redis::EVENTS,
-                                        &key,
-                                    )
-                                    .await;
-                                }
-                            }
-                        }
-                    }));
+                let fee_key_to_remove =
+                    matches!(&result, Ok(EventAction::Remove) | Err(_)).then_some(fee_key);
+                MessageResult {
+                    action: result,
+                    needs_evm_nonce_resync: false,
+                    fee_key_to_remove,
                 }
-            } else if let Ok(deploy_token_event) =
-                serde_json::from_value::<DeployToken>(event.clone())
-            {
-                if let DeployToken::Evm { .. } = deploy_token_event {
-                    handlers.push(tokio::spawn({
-                        let config = config.clone();
-                        let mut redis_connection_manager = redis_connection_manager.clone();
-                        let omni_connector = omni_connector.clone();
-                        let near_nonce = near_omni_nonce.clone();
-
-                        async move {
-                            match evm::process_deploy_token_event(
-                                omni_connector,
-                                deploy_token_event,
-                                near_nonce,
-                            )
-                            .await
-                            {
-                                Ok(EventAction::Retry) => {}
-                                Ok(EventAction::Remove) => {
-                                    utils::redis::remove_event(
-                                        &config,
-                                        &mut redis_connection_manager,
-                                        utils::redis::EVENTS,
-                                        &key,
-                                    )
-                                    .await;
-                                }
-                                Err(err) => {
-                                    warn!("{err:?}");
-                                    utils::redis::remove_event(
-                                        &config,
-                                        &mut redis_connection_manager,
-                                        utils::redis::EVENTS,
-                                        &key,
-                                    )
-                                    .await;
-                                }
-                            }
-                        }
-                    }));
-                } else if let DeployToken::Solana { .. } = deploy_token_event {
-                    handlers.push(tokio::spawn({
-                        let config = config.clone();
-                        let mut redis_connection_manager = redis_connection_manager.clone();
-                        let omni_connector = omni_connector.clone();
-                        let near_nonce = near_omni_nonce.clone();
-
-                        async move {
-                            match solana::process_deploy_token_event(
-                                &config,
-                                omni_connector,
-                                deploy_token_event,
-                                near_nonce,
-                            )
-                            .await
-                            {
-                                Ok(EventAction::Retry) => {}
-                                Ok(EventAction::Remove) => {
-                                    utils::redis::remove_event(
-                                        &config,
-                                        &mut redis_connection_manager,
-                                        utils::redis::EVENTS,
-                                        &key,
-                                    )
-                                    .await;
-                                }
-                                Err(err) => {
-                                    warn!("{err:?}");
-                                    utils::redis::remove_event(
-                                        &config,
-                                        &mut redis_connection_manager,
-                                        utils::redis::EVENTS,
-                                        &key,
-                                    )
-                                    .await;
-                                }
-                            }
-                        }
-                    }));
-                } else if let DeployToken::Starknet { .. } = deploy_token_event {
-                    handlers.push(tokio::spawn({
-                        let config = config.clone();
-                        let mut redis_connection_manager = redis_connection_manager.clone();
-                        let omni_connector = omni_connector.clone();
-                        let near_nonce = near_omni_nonce.clone();
-
-                        async move {
-                            match starknet::process_deploy_token_event(
-                                omni_connector,
-                                deploy_token_event,
-                                near_nonce,
-                            )
-                            .await
-                            {
-                                Ok(EventAction::Retry) => {}
-                                Ok(EventAction::Remove) => {
-                                    utils::redis::remove_event(
-                                        &config,
-                                        &mut redis_connection_manager,
-                                        utils::redis::EVENTS,
-                                        &key,
-                                    )
-                                    .await;
-                                }
-                                Err(err) => {
-                                    warn!("{err:?}");
-                                    utils::redis::remove_event(
-                                        &config,
-                                        &mut redis_connection_manager,
-                                        utils::redis::EVENTS,
-                                        &key,
-                                    )
-                                    .await;
-                                }
-                            }
-                        }
-                    }));
+            }
+            Transfer::NearToUtxo { .. } => {
+                let result = utxo::process_near_to_utxo_init_transfer_event(
+                    omni_connector.clone(),
+                    transfer,
+                    near_omni_nonce.clone(),
+                )
+                .await;
+                MessageResult {
+                    action: result,
+                    needs_evm_nonce_resync: false,
+                    fee_key_to_remove: None,
                 }
-            } else if let Ok(sign_btc_transaction_event) =
-                serde_json::from_value::<utxo::SignUtxoTransaction>(event.clone())
-            {
-                handlers.push(tokio::spawn({
-                    let config = config.clone();
-                    let mut redis_connection_manager = redis_connection_manager.clone();
-                    let omni_connector = omni_connector.clone();
+            }
+            Transfer::UtxoToNear { .. } => {
+                let result = utxo::process_utxo_to_near_init_transfer_event(
+                    omni_connector.clone(),
+                    transfer,
+                    near_omni_nonce.clone(),
+                )
+                .await;
+                MessageResult {
+                    action: result,
+                    needs_evm_nonce_resync: false,
+                    fee_key_to_remove: None,
+                }
+            }
+            Transfer::Starknet { origin_nonce, .. } => {
+                let result = starknet::process_init_transfer_event(
+                    config,
+                    redis,
+                    omni_connector,
+                    transfer,
+                    near_omni_nonce.clone(),
+                )
+                .await;
 
-                    async move {
-                        match utxo::process_sign_transaction_event(
-                            omni_connector,
-                            sign_btc_transaction_event,
-                        )
-                        .await
-                        {
-                            Ok(EventAction::Retry) => {}
-                            Ok(EventAction::Remove) => {
-                                utils::redis::remove_event(
-                                    &config,
-                                    &mut redis_connection_manager,
-                                    utils::redis::EVENTS,
-                                    &key,
-                                )
-                                .await;
-                            }
-                            Err(err) => {
-                                warn!("{err:?}");
-                                utils::redis::remove_event(
-                                    &config,
-                                    &mut redis_connection_manager,
-                                    utils::redis::EVENTS,
-                                    &key,
-                                )
-                                .await;
-                            }
-                        }
-                    }
-                }));
-            } else if let Ok(confirmed_tx_hash) =
-                serde_json::from_value::<utxo::ConfirmedTxHash>(event.clone())
-            {
-                handlers.push(tokio::spawn({
-                    let config = config.clone();
-                    let mut redis_connection_manager = redis_connection_manager.clone();
-                    let omni_connector = omni_connector.clone();
-                    let signer = signer.clone();
-                    let near_nonce = near_omni_nonce.clone();
+                let fee_key = serde_json::to_string(&TransferId {
+                    origin_nonce,
+                    origin_chain: ChainKind::Strk,
+                })
+                .unwrap_or_default();
 
-                    async move {
-                        match utxo::process_confirmed_tx_hash(
-                            &config,
-                            &mut redis_connection_manager,
-                            key.clone(),
-                            omni_connector,
-                            signer,
-                            confirmed_tx_hash,
-                            near_nonce,
-                        )
-                        .await
-                        {
-                            Ok(EventAction::Retry) => {}
-                            Ok(EventAction::Remove) => {
-                                utils::redis::remove_event(
-                                    &config,
-                                    &mut redis_connection_manager,
-                                    utils::redis::EVENTS,
-                                    &key,
-                                )
-                                .await;
-                            }
-                            Err(err) => {
-                                warn!("{err:?}");
-                                utils::redis::remove_event(
-                                    &config,
-                                    &mut redis_connection_manager,
-                                    utils::redis::EVENTS,
-                                    &key,
-                                )
-                                .await;
-                            }
-                        }
-                    }
-                }));
-            } else if let Ok(unverified_event) =
-                serde_json::from_value::<near::UnverifiedTrasfer>(event.clone())
-            {
-                tokio::spawn({
-                    let config = config.clone();
-                    let mut redis_connection_manager = redis_connection_manager.clone();
-                    let jsonrpc_client = jsonrpc_client.clone();
+                let fee_key_to_remove =
+                    matches!(&result, Ok(EventAction::Remove) | Err(_)).then_some(fee_key);
+                MessageResult {
+                    action: result,
+                    needs_evm_nonce_resync: false,
+                    fee_key_to_remove,
+                }
+            }
+            Transfer::Fast { .. } => {
+                let Some(near_fast_nonce) = near_fast_nonce.clone() else {
+                    return MessageResult {
+                        action: Err(anyhow::anyhow!(
+                            "Fast transfer event found but near fast nonce manager is not configured"
+                        )),
+                        needs_evm_nonce_resync: false,
+                        fee_key_to_remove: None,
+                    };
+                };
 
-                    async move {
-                        near::process_unverified_transfer_event(
-                            &config,
-                            &mut redis_connection_manager,
-                            jsonrpc_client,
-                            unverified_event,
-                        )
+                let result =
+                    near::initiate_fast_transfer(fast_connector.clone(), transfer, near_fast_nonce)
                         .await;
-                    }
-                });
+                MessageResult {
+                    action: result,
+                    needs_evm_nonce_resync: false,
+                    fee_key_to_remove: None,
+                }
             }
         }
+    } else if let Ok(omni_bridge_event) = serde_json::from_value::<OmniBridgeEvent>(event.clone()) {
+        if let OmniBridgeEvent::SignTransferEvent {
+            ref message_payload,
+            ..
+        } = omni_bridge_event
+        {
+            let is_evm = message_payload.recipient.get_chain().is_evm_chain();
+            let fee_key = serde_json::to_string(&message_payload.transfer_id).unwrap_or_default();
 
-        join_all(handlers).await;
+            let result = near::process_sign_transfer_event(
+                config,
+                redis,
+                omni_connector.clone(),
+                signer.clone(),
+                omni_bridge_event,
+                evm_nonces.clone(),
+            )
+            .await;
 
-        tokio::time::sleep(tokio::time::Duration::from_secs(
-            config.redis.sleep_time_after_events_process_secs,
-        ))
+            let fee_key_to_remove =
+                matches!(&result, Ok(EventAction::Remove) | Err(_)).then_some(fee_key);
+            MessageResult {
+                action: result,
+                needs_evm_nonce_resync: is_evm,
+                fee_key_to_remove,
+            }
+        } else {
+            MessageResult {
+                action: Err(anyhow::anyhow!("Unhandled OmniBridgeEvent: {event}")),
+                needs_evm_nonce_resync: false,
+                fee_key_to_remove: None,
+            }
+        }
+    } else if let Ok(fin_transfer_event) = serde_json::from_value::<FinTransfer>(event.clone()) {
+        let result = match fin_transfer_event {
+            FinTransfer::Evm { .. } => {
+                evm::process_evm_transfer_event(
+                    omni_connector.clone(),
+                    fin_transfer_event,
+                    near_omni_nonce.clone(),
+                )
+                .await
+            }
+            FinTransfer::Solana { .. } => {
+                solana::process_fin_transfer_event(
+                    config,
+                    omni_connector.clone(),
+                    fin_transfer_event,
+                    near_omni_nonce.clone(),
+                )
+                .await
+            }
+            FinTransfer::Starknet { .. } => {
+                starknet::process_fin_transfer_event(
+                    omni_connector.clone(),
+                    fin_transfer_event,
+                    near_omni_nonce,
+                )
+                .await
+            }
+        };
+        MessageResult {
+            action: result,
+            needs_evm_nonce_resync: false,
+            fee_key_to_remove: None,
+        }
+    } else if let Ok(deploy_token_event) = serde_json::from_value::<DeployToken>(event.clone()) {
+        let result = match deploy_token_event {
+            DeployToken::Evm { .. } => {
+                evm::process_deploy_token_event(
+                    omni_connector.clone(),
+                    deploy_token_event,
+                    near_omni_nonce.clone(),
+                )
+                .await
+            }
+            DeployToken::Solana { .. } => {
+                solana::process_deploy_token_event(
+                    config,
+                    omni_connector.clone(),
+                    deploy_token_event,
+                    near_omni_nonce.clone(),
+                )
+                .await
+            }
+            DeployToken::Starknet { .. } => {
+                starknet::process_deploy_token_event(
+                    omni_connector.clone(),
+                    deploy_token_event,
+                    near_omni_nonce.clone(),
+                )
+                .await
+            }
+        };
+        MessageResult {
+            action: result,
+            needs_evm_nonce_resync: false,
+            fee_key_to_remove: None,
+        }
+    } else if let Ok(sign_utxo_transaction_event) =
+        serde_json::from_value::<utxo::SignUtxoTransaction>(event.clone())
+    {
+        let result = utxo::process_sign_transaction_event(
+            omni_connector.clone(),
+            sign_utxo_transaction_event,
+        )
         .await;
+        MessageResult {
+            action: result,
+            needs_evm_nonce_resync: false,
+            fee_key_to_remove: None,
+        }
+    } else if let Ok(confirmed_tx_hash) =
+        serde_json::from_value::<utxo::ConfirmedTxHash>(event.clone())
+    {
+        let result = utxo::process_confirmed_tx_hash(
+            jsonrpc_client,
+            omni_connector.clone(),
+            confirmed_tx_hash,
+            near_omni_nonce.clone(),
+        )
+        .await;
+        MessageResult {
+            action: result,
+            needs_evm_nonce_resync: false,
+            fee_key_to_remove: None,
+        }
+    } else {
+        MessageResult {
+            action: Err(anyhow::anyhow!("Unknown event type: {event}")),
+            needs_evm_nonce_resync: false,
+            fee_key_to_remove: None,
+        }
     }
 }

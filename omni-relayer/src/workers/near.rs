@@ -3,12 +3,11 @@ use std::sync::Arc;
 use anyhow::{Context, Result};
 use bridge_connector_common::result::BridgeSdkError;
 use near_sdk::json_types::U64;
-use serde_json::Value;
 use tracing::{info, warn};
 
 use near_bridge_client::TransactionOptions;
 use near_jsonrpc_client::{JsonRpcClient, errors::JsonRpcError};
-use near_primitives::{hash::CryptoHash, types::AccountId};
+use near_primitives::types::AccountId;
 use near_rpc_client::NearRpcError;
 use solana_client::rpc_request::RpcResponseErrorData;
 use solana_rpc_client_api::{client_error::ErrorKind, request::RpcError};
@@ -18,21 +17,10 @@ use omni_connector::OmniConnector;
 use omni_types::{ChainKind, FastTransfer, OmniAddress, TransferId, near_events::OmniBridgeEvent};
 
 use crate::{
-    config, utils,
-    utils::pending_transactions::PendingTransaction,
-    workers::{PAUSED_ERROR, RetryableEvent},
+    config, utils, utils::pending_transactions::PendingTransaction, workers::PAUSED_ERROR,
 };
 
 use super::{EventAction, Transfer};
-
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
-pub struct UnverifiedTrasfer {
-    pub tx_hash: CryptoHash,
-    pub signer: AccountId,
-    pub specific_errors: Option<Vec<String>>,
-    pub original_key: String,
-    pub original_event: Value,
-}
 
 #[derive(Debug, serde::Deserialize)]
 enum UTXOChainMsg {
@@ -42,7 +30,7 @@ enum UTXOChainMsg {
 pub async fn process_transfer_event(
     config: &config::Config,
     redis_connection_manager: &mut redis::aio::ConnectionManager,
-    key: String,
+    jsonrpc_client: &JsonRpcClient,
     omni_connector: Arc<OmniConnector>,
     signer: AccountId,
     transfer: Transfer,
@@ -145,44 +133,25 @@ pub async fn process_transfer_event(
             Some(transfer_message.fee.clone()),
             TransactionOptions {
                 nonce: Some(nonce),
-                wait_until: near_primitives::views::TxExecutionStatus::Included,
+                wait_until: near_primitives::views::TxExecutionStatus::Final,
                 wait_final_outcome_timeout_sec: None,
             },
         )
         .await
     {
-        Ok(tx_hash) => {
-            let Ok(serialized_event) = serde_json::to_value(&transfer) else {
-                warn!("Failed to serialize transfer: {transfer:?}");
-                return Ok(EventAction::Remove);
-            };
-
-            utils::redis::add_event(
-                config,
-                redis_connection_manager,
-                utils::redis::EVENTS,
-                tx_hash.to_string(),
-                RetryableEvent::new(UnverifiedTrasfer {
-                    tx_hash,
-                    signer,
-                    specific_errors: Some(vec![
-                        "Signature request has already been submitted. Please try again later."
-                            .to_string(),
-                        "Request has timed out.".to_string(),
-                        "Signature request has timed out.".to_string(),
-                        "Attached deposit is lower than required".to_string(),
-                        "Exceeded the prepaid gas.".to_string(),
-                    ]),
-                    original_key: key,
-                    original_event: serialized_event,
-                }),
-            )
-            .await;
-
-            info!("Signed transfer ({origin_chain:?}:{origin_nonce}): {tx_hash:?}");
-
-            Ok(EventAction::Remove)
-        }
+        Ok(tx_hash) => Ok(utils::near::resolve_tx_action(
+            jsonrpc_client,
+            tx_hash,
+            signer,
+            &[
+                "Signature request has already been submitted. Please try again later.",
+                "Request has timed out.",
+                "Signature request has timed out.",
+                "Attached deposit is lower than required",
+                "Exceeded the prepaid gas.",
+            ],
+        )
+        .await),
         Err(err) => {
             if let BridgeSdkError::NearRpcError(near_rpc_error) = err {
                 match near_rpc_error {
@@ -211,11 +180,8 @@ pub async fn process_transfer_event(
 }
 
 pub async fn process_transfer_to_utxo_event(
-    config: &config::Config,
-    redis_connection_manager: &mut redis::aio::ConnectionManager,
-    key: String,
+    jsonrpc_client: &JsonRpcClient,
     omni_connector: Arc<OmniConnector>,
-    signer: AccountId,
     transfer: Transfer,
     near_nonce: Arc<utils::nonce::NonceManager>,
 ) -> Result<EventAction> {
@@ -258,7 +224,7 @@ pub async fn process_transfer_to_utxo_event(
             // true,
             TransactionOptions {
                 nonce: Some(nonce),
-                wait_until: near_primitives::views::TxExecutionStatus::Included,
+                wait_until: near_primitives::views::TxExecutionStatus::Final,
                 wait_final_outcome_timeout_sec: None,
             },
             serde_json::from_str::<UTXOChainMsg>(&transfer_message.msg)
@@ -276,30 +242,17 @@ pub async fn process_transfer_to_utxo_event(
                 transfer_message.origin_nonce
             );
 
-            let Ok(serialized_event) = serde_json::to_value(&transfer) else {
-                warn!("Failed to serialize transfer: {transfer:?}");
-                return Ok(EventAction::Remove);
-            };
+            let signer = omni_connector
+                .near_bridge_client()
+                .and_then(near_bridge_client::NearBridgeClient::account_id)?;
 
-            utils::redis::add_event(
-                config,
-                redis_connection_manager,
-                utils::redis::EVENTS,
-                tx_hash.to_string(),
-                RetryableEvent::new(UnverifiedTrasfer {
-                    tx_hash,
-                    signer,
-                    specific_errors: Some(vec![
-                        "not exist".to_string(),
-                        "Previous btc tx has not been signed".to_string(),
-                    ]),
-                    original_key: key,
-                    original_event: serialized_event,
-                }),
+            Ok(utils::near::resolve_tx_action(
+                jsonrpc_client,
+                tx_hash,
+                signer,
+                &["not exist", "Previous btc tx has not been signed"],
             )
-            .await;
-
-            Ok(EventAction::Remove)
+            .await)
         }
         Err(err) => {
             if let BridgeSdkError::NearRpcError(near_rpc_error) = err {
@@ -595,39 +548,6 @@ pub async fn process_sign_transfer_event(
             warn!("Failed to finalize deposit, retrying: {err}");
             Ok(EventAction::Retry)
         }
-    }
-}
-
-pub async fn process_unverified_transfer_event(
-    config: &config::Config,
-    redis_connection_manager: &mut redis::aio::ConnectionManager,
-    jsonrpc_client: JsonRpcClient,
-    unverified_event: UnverifiedTrasfer,
-) {
-    utils::redis::remove_event(
-        config,
-        redis_connection_manager,
-        utils::redis::EVENTS,
-        unverified_event.tx_hash.to_string(),
-    )
-    .await;
-
-    if !utils::near::is_tx_successful(
-        &jsonrpc_client,
-        unverified_event.tx_hash,
-        unverified_event.signer,
-        unverified_event.specific_errors,
-    )
-    .await
-    {
-        utils::redis::add_event(
-            config,
-            redis_connection_manager,
-            utils::redis::EVENTS,
-            unverified_event.original_key,
-            RetryableEvent::new(unverified_event.original_event),
-        )
-        .await;
     }
 }
 

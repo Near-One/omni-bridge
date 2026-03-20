@@ -199,8 +199,11 @@ pub struct Redis {
     pub query_retry_attempts: u64,
     pub query_retry_sleep_secs: u64,
     pub query_timeout_secs: u64,
+    #[allow(dead_code)]
     pub fee_retry_base_secs: Decimal,
+    #[allow(dead_code)]
     pub fee_retry_max_sleep_secs: i64,
+    #[allow(dead_code)]
     pub keep_transfers_for_secs: i64,
 }
 
@@ -209,6 +212,7 @@ pub struct Nats {
     pub url: String,
     pub relayer_subject: String,
     pub omni_consumer: NatsConsumer,
+    pub relayer_consumer: NatsConsumer,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -218,6 +222,12 @@ pub struct NatsConsumer {
     pub subject: String,
     pub max_deliver: i64,
     pub backoff_secs: Vec<u64>,
+    #[serde(default = "default_worker_count")]
+    pub worker_count: usize,
+}
+
+fn default_worker_count() -> usize {
+    1
 }
 
 #[derive(Debug, Clone, Deserialize)]

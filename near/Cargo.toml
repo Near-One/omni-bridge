@@ -38,7 +38,7 @@ hex = "0.4.2"
 borsh = "1.6.0"
 serde = { version = "1.0.200", features = ["derive"] }
 near-plugins = { git = "https://github.com/aurora-is-near/near-plugins", tag = "v0.4.1" }
-omni-utils = { git = "https://github.com/near-one/omni-utils", rev = "2b9b29f15b36d5922237f0e21d9f718816187b74" }
+omni-utils = { git = "https://github.com/near-one/omni-utils", rev = "077d09daf7a7b32ad237f0530033c7db804f2c67" }
 omni-types = { path = "omni-types" }
 strum = "0.27.2"
 strum_macros = "0.27.1"
@@ -54,4 +54,4 @@ sha3 = "0.10.0"
 sha2 = "0.10.0"
 k256 = { version = "0.13", default-features = false, features = ["ecdsa"] }
 rstest = "0.26.1"
-near-mpc-sdk = { git = "https://github.com/near/mpc", rev = "24634d774923986f6835a2ca196c2ebcacba0729" }
+near-mpc-sdk = "0.0.1"

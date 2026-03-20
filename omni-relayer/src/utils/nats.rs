@@ -49,6 +49,30 @@ impl NatsClient {
             .context("Failed to create omni consumer")
     }
 
+    pub async fn relayer_consumer(&self, config: &config::Nats) -> Result<consumer::PullConsumer> {
+        self.jetstream
+            .create_consumer_on_stream(
+                consumer::pull::Config {
+                    durable_name: Some(config.relayer_consumer.name.clone()),
+                    ack_policy: consumer::AckPolicy::Explicit,
+                    deliver_policy: consumer::DeliverPolicy::LastPerSubject,
+                    max_deliver: config.relayer_consumer.max_deliver,
+                    filter_subject: config.relayer_consumer.subject.clone(),
+                    ack_wait: Duration::from_secs(300),
+                    backoff: config
+                        .relayer_consumer
+                        .backoff_secs
+                        .iter()
+                        .map(|&s| Duration::from_secs(s))
+                        .collect(),
+                    ..Default::default()
+                },
+                &config.relayer_consumer.stream,
+            )
+            .await
+            .context("Failed to create relayer consumer")
+    }
+
     pub async fn publish(&self, subject: String, key: &str, payload: Vec<u8>) -> Result<()> {
         let mut headers = async_nats::HeaderMap::new();
         headers.insert("Nats-Msg-Id", key);
