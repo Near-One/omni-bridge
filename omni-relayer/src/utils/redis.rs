@@ -107,6 +107,8 @@ pub async fn update_last_processed<K, V>(
     warn!("Failed to update last processed block in redis db");
 }
 
+const MAX_EVENTS_PER_BATCH: usize = 30;
+
 pub async fn get_events(
     config: &config::Config,
     redis_connection_manager: &mut ConnectionManager,
@@ -127,8 +129,6 @@ pub async fn get_events(
                 continue;
             }
         };
-
-        const MAX_EVENTS_PER_BATCH: usize = 30;
 
         let mut events = Vec::new();
         loop {

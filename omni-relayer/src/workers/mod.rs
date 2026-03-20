@@ -151,11 +151,7 @@ async fn handle_nats_ack(
     result: &Result<EventAction>,
 ) {
     match result {
-        Ok(EventAction::Retry) => {
-            msg.ack_with(async_nats::jetstream::AckKind::Nak(None))
-                .await
-                .ok();
-        }
+        Ok(EventAction::Retry) => {}
         Ok(EventAction::Remove) => {
             msg.ack().await.ok();
         }
@@ -223,9 +219,6 @@ pub async fn process_events(
         if is_evm_nonce_resync_needed.load(Ordering::Relaxed) {
             if let Err(err) = evm_nonces.resync_nonces().await {
                 warn!("Failed to resync evm nonces: {err:?}");
-                msg.ack_with(async_nats::jetstream::AckKind::Nak(None))
-                    .await
-                    .ok();
                 continue;
             }
             is_evm_nonce_resync_needed.store(false, Ordering::Relaxed);
@@ -275,16 +268,13 @@ pub async fn process_events(
             }
 
             if let Some(fee_key) = message_result.fee_key_to_remove {
-                utils::redis::remove_event(
-                    &config,
-                    &mut redis,
-                    utils::redis::FEE_MAPPING,
-                    fee_key,
-                )
-                .await;
+                utils::redis::remove_event(&config, &mut redis, utils::redis::FEE_MAPPING, fee_key)
+                    .await;
             }
 
-            if message_result.needs_evm_nonce_resync && matches!(message_result.action, Ok(EventAction::Retry) | Err(_)) {
+            if message_result.needs_evm_nonce_resync
+                && matches!(message_result.action, Ok(EventAction::Retry) | Err(_))
+            {
                 is_evm_nonce_resync_needed.store(true, Ordering::Relaxed);
             }
 
@@ -296,8 +286,6 @@ pub async fn process_events(
 
     Ok(())
 }
-
-
 
 #[allow(clippy::too_many_lines, clippy::too_many_arguments)]
 async fn process_message(
@@ -353,7 +341,11 @@ async fn process_message(
                 };
 
                 let fee_key_to_remove = result.is_err().then_some(fee_key);
-                MessageResult { action: result, needs_evm_nonce_resync: false, fee_key_to_remove }
+                MessageResult {
+                    action: result,
+                    needs_evm_nonce_resync: false,
+                    fee_key_to_remove,
+                }
             }
             Transfer::Evm {
                 ref log,
@@ -375,9 +367,13 @@ async fn process_message(
                 )
                 .await;
 
-                let fee_key_to_remove = matches!(&result, Ok(EventAction::Remove) | Err(_))
-                    .then_some(fee_key);
-                MessageResult { action: result, needs_evm_nonce_resync: false, fee_key_to_remove }
+                let fee_key_to_remove =
+                    matches!(&result, Ok(EventAction::Remove) | Err(_)).then_some(fee_key);
+                MessageResult {
+                    action: result,
+                    needs_evm_nonce_resync: false,
+                    fee_key_to_remove,
+                }
             }
             Transfer::Solana { sequence, .. } => {
                 let result = solana::process_init_transfer_event(
@@ -395,9 +391,13 @@ async fn process_message(
                 })
                 .unwrap_or_default();
 
-                let fee_key_to_remove = matches!(&result, Ok(EventAction::Remove) | Err(_))
-                    .then_some(fee_key);
-                MessageResult { action: result, needs_evm_nonce_resync: false, fee_key_to_remove }
+                let fee_key_to_remove =
+                    matches!(&result, Ok(EventAction::Remove) | Err(_)).then_some(fee_key);
+                MessageResult {
+                    action: result,
+                    needs_evm_nonce_resync: false,
+                    fee_key_to_remove,
+                }
             }
             Transfer::NearToUtxo { .. } => {
                 let result = utxo::process_near_to_utxo_init_transfer_event(
@@ -406,7 +406,11 @@ async fn process_message(
                     near_omni_nonce.clone(),
                 )
                 .await;
-                MessageResult { action: result, needs_evm_nonce_resync: false, fee_key_to_remove: None }
+                MessageResult {
+                    action: result,
+                    needs_evm_nonce_resync: false,
+                    fee_key_to_remove: None,
+                }
             }
             Transfer::UtxoToNear { .. } => {
                 let result = utxo::process_utxo_to_near_init_transfer_event(
@@ -415,7 +419,11 @@ async fn process_message(
                     near_omni_nonce.clone(),
                 )
                 .await;
-                MessageResult { action: result, needs_evm_nonce_resync: false, fee_key_to_remove: None }
+                MessageResult {
+                    action: result,
+                    needs_evm_nonce_resync: false,
+                    fee_key_to_remove: None,
+                }
             }
             Transfer::Fast { .. } => {
                 let Some(near_fast_nonce) = near_fast_nonce.clone() else {
@@ -431,7 +439,11 @@ async fn process_message(
                 let result =
                     near::initiate_fast_transfer(fast_connector.clone(), transfer, near_fast_nonce)
                         .await;
-                MessageResult { action: result, needs_evm_nonce_resync: false, fee_key_to_remove: None }
+                MessageResult {
+                    action: result,
+                    needs_evm_nonce_resync: false,
+                    fee_key_to_remove: None,
+                }
             }
         }
     } else if let Ok(omni_bridge_event) = serde_json::from_value::<OmniBridgeEvent>(event.clone()) {
@@ -453,9 +465,13 @@ async fn process_message(
             )
             .await;
 
-            let fee_key_to_remove = matches!(&result, Ok(EventAction::Remove) | Err(_))
-                .then_some(fee_key);
-            MessageResult { action: result, needs_evm_nonce_resync: is_evm, fee_key_to_remove }
+            let fee_key_to_remove =
+                matches!(&result, Ok(EventAction::Remove) | Err(_)).then_some(fee_key);
+            MessageResult {
+                action: result,
+                needs_evm_nonce_resync: is_evm,
+                fee_key_to_remove,
+            }
         } else {
             MessageResult {
                 action: Err(anyhow::anyhow!("Unhandled OmniBridgeEvent: {event}")),
@@ -483,7 +499,11 @@ async fn process_message(
                 .await
             }
         };
-        MessageResult { action: result, needs_evm_nonce_resync: false, fee_key_to_remove: None }
+        MessageResult {
+            action: result,
+            needs_evm_nonce_resync: false,
+            fee_key_to_remove: None,
+        }
     } else if let Ok(deploy_token_event) = serde_json::from_value::<DeployToken>(event.clone()) {
         let result = match deploy_token_event {
             DeployToken::Evm { .. } => {
@@ -504,7 +524,11 @@ async fn process_message(
                 .await
             }
         };
-        MessageResult { action: result, needs_evm_nonce_resync: false, fee_key_to_remove: None }
+        MessageResult {
+            action: result,
+            needs_evm_nonce_resync: false,
+            fee_key_to_remove: None,
+        }
     } else if let Ok(sign_utxo_transaction_event) =
         serde_json::from_value::<utxo::SignUtxoTransaction>(event.clone())
     {
@@ -513,7 +537,11 @@ async fn process_message(
             sign_utxo_transaction_event,
         )
         .await;
-        MessageResult { action: result, needs_evm_nonce_resync: false, fee_key_to_remove: None }
+        MessageResult {
+            action: result,
+            needs_evm_nonce_resync: false,
+            fee_key_to_remove: None,
+        }
     } else if let Ok(confirmed_tx_hash) =
         serde_json::from_value::<utxo::ConfirmedTxHash>(event.clone())
     {
@@ -524,7 +552,11 @@ async fn process_message(
             near_omni_nonce.clone(),
         )
         .await;
-        MessageResult { action: result, needs_evm_nonce_resync: false, fee_key_to_remove: None }
+        MessageResult {
+            action: result,
+            needs_evm_nonce_resync: false,
+            fee_key_to_remove: None,
+        }
     } else {
         MessageResult {
             action: Err(anyhow::anyhow!("Unknown event type: {event}")),

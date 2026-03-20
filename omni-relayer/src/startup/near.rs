@@ -99,7 +99,7 @@ pub async fn start_indexer(
     info!("Starting NEAR indexer");
 
     let lake_config = create_lake_config(
-        &config,
+        config,
         redis_connection_manager,
         &jsonrpc_client,
         start_block,
