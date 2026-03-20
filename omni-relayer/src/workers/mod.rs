@@ -25,6 +25,7 @@ use crate::{config, utils};
 mod evm;
 mod near;
 mod solana;
+mod starknet;
 pub mod utxo;
 
 const PAUSED_ERROR: u32 = 6008;
@@ -85,6 +86,16 @@ pub enum Transfer {
         emitter: Pubkey,
         sequence: u64,
     },
+    Starknet {
+        tx_hash: String,
+        sender: OmniAddress,
+        token: OmniAddress,
+        origin_nonce: u64,
+        amount: U128,
+        fee: Fee,
+        recipient: OmniAddress,
+        message: String,
+    },
     Utxo {
         utxo_transfer_message: UtxoFinTransferMsg,
         new_transfer_id: UnifiedTransferId,
@@ -129,6 +140,10 @@ pub enum FinTransfer {
         sequence: u64,
         transfer_id: Option<TransferId>,
     },
+    Starknet {
+        tx_hash: String,
+        transfer_id: TransferId,
+    },
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
@@ -143,6 +158,9 @@ pub enum DeployToken {
     Solana {
         emitter: String,
         sequence: u64,
+    },
+    Starknet {
+        tx_hash: String,
     },
 }
 
@@ -361,7 +379,9 @@ async fn process_message(
                 let result = evm::process_init_transfer_event(
                     config,
                     redis,
+                    jsonrpc_client,
                     omni_connector.clone(),
+                    signer,
                     transfer,
                     near_omni_nonce.clone(),
                 )
@@ -379,7 +399,9 @@ async fn process_message(
                 let result = solana::process_init_transfer_event(
                     config,
                     redis,
+                    jsonrpc_client,
                     omni_connector.clone(),
+                    signer,
                     transfer,
                     near_omni_nonce.clone(),
                 )
@@ -423,6 +445,32 @@ async fn process_message(
                     action: result,
                     needs_evm_nonce_resync: false,
                     fee_key_to_remove: None,
+                }
+            }
+            Transfer::Starknet { origin_nonce, .. } => {
+                let result = starknet::process_init_transfer_event(
+                    config,
+                    redis,
+                    jsonrpc_client,
+                    omni_connector,
+                    signer,
+                    transfer,
+                    near_omni_nonce.clone(),
+                )
+                .await;
+
+                let fee_key = serde_json::to_string(&TransferId {
+                    origin_nonce,
+                    origin_chain: ChainKind::Strk,
+                })
+                .unwrap_or_default();
+
+                let fee_key_to_remove =
+                    matches!(&result, Ok(EventAction::Remove) | Err(_)).then_some(fee_key);
+                MessageResult {
+                    action: result,
+                    needs_evm_nonce_resync: false,
+                    fee_key_to_remove,
                 }
             }
             Transfer::Fast { .. } => {
@@ -498,6 +546,14 @@ async fn process_message(
                 )
                 .await
             }
+            FinTransfer::Starknet { .. } => {
+                starknet::process_fin_transfer_event(
+                    omni_connector.clone(),
+                    fin_transfer_event,
+                    near_omni_nonce,
+                )
+                .await
+            }
         };
         MessageResult {
             action: result,
@@ -517,6 +573,14 @@ async fn process_message(
             DeployToken::Solana { .. } => {
                 solana::process_deploy_token_event(
                     config,
+                    omni_connector.clone(),
+                    deploy_token_event,
+                    near_omni_nonce.clone(),
+                )
+                .await
+            }
+            DeployToken::Starknet { .. } => {
+                starknet::process_deploy_token_event(
                     omni_connector.clone(),
                     deploy_token_event,
                     near_omni_nonce.clone(),

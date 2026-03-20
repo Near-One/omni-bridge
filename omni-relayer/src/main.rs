@@ -145,14 +145,14 @@ async fn main() -> Result<()> {
     let jsonrpc_client = near_jsonrpc_client::JsonRpcClient::connect(config.near.rpc_url.clone());
 
     let near_omni_signer = startup::near::get_signer(&config, config::NearSignerType::Omni)?;
-    let omni_connector = Arc::new(startup::build_omni_connector(&config, &near_omni_signer)?);
+    let omni_connector = Arc::new(startup::build_omni_connector(&config, &near_omni_signer).await?);
 
     let (near_fast_signer, fast_connector) = if config.is_fast_relayer_enabled() {
         let near_fast_signer = startup::near::get_signer(&config, config::NearSignerType::Fast)?;
 
         (
             Some(near_fast_signer.clone()),
-            Arc::new(startup::build_omni_connector(&config, &near_fast_signer)?),
+            Arc::new(startup::build_omni_connector(&config, &near_fast_signer).await?),
         )
     } else {
         (None, Arc::default())

@@ -8,7 +8,7 @@ use near_plugins::{
 
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::collections::{LookupMap, LookupSet, UnorderedMap};
-use near_sdk::json_types::{Base64VecU8, U128, U64};
+use near_sdk::json_types::{Base64VecU8, U128};
 use near_sdk::serde::{Deserialize, Serialize};
 use near_sdk::serde_json::json;
 use near_sdk::{
@@ -30,6 +30,7 @@ use omni_types::{
     OmniAddress, PayloadType, SignRequest, TransferId, TransferIdKind, TransferMessage,
     TransferMessagePayload, UnifiedTransferId, UpdateFee, UtxoFinTransferMsg, H160,
 };
+use omni_utils::macros::trusted_relayer;
 use omni_utils::near_expect::NearExpect;
 use omni_utils::promise::PromiseOrPromiseIndexOrValue;
 use std::collections::HashMap;
@@ -42,7 +43,6 @@ use token_lock::LockAction;
 
 mod btc;
 mod migrate;
-mod relayer_staking;
 mod storage;
 mod token_lock;
 
@@ -105,7 +105,7 @@ enum StorageKey {
     FinalisedUtxoTransfers,
     LockedTokens,
     DeployedTokensV2,
-    Relayers,
+    _Relayers,
 }
 
 #[derive(AccessControlRole, Deserialize, Serialize, Copy, Clone)]
@@ -124,29 +124,6 @@ pub enum Role {
     TokenUpgrader,
     TokenLockController,
     RelayerManager,
-}
-
-#[derive(Debug, Clone)]
-#[near(serializers = [borsh, json])]
-pub struct RelayerState {
-    pub stake: NearToken,
-    pub activate_at: U64,
-}
-
-#[derive(Debug, Clone)]
-#[near(serializers = [borsh, json])]
-pub struct RelayerConfig {
-    pub stake_required: NearToken,
-    pub waiting_period_ns: U64,
-}
-
-impl Default for RelayerConfig {
-    fn default() -> Self {
-        Self {
-            stake_required: NearToken::from_near(1000),
-            waiting_period_ns: U64(7 * 24 * 60 * 60 * 1_000_000_000),
-        }
-    }
 }
 
 #[ext_contract(ext_token)]
@@ -261,10 +238,13 @@ pub struct Contract {
     pub utxo_chain_connectors: HashMap<ChainKind, UTXOChainConfig>,
     pub migrated_tokens: LookupMap<AccountId, AccountId>,
     pub locked_tokens: LookupMap<(ChainKind, AccountId), u128>,
-    pub relayers: LookupMap<AccountId, RelayerState>,
-    pub relayer_config: RelayerConfig,
 }
 
+#[trusted_relayer(
+    bypass_roles(Role::DAO, Role::UnrestrictedRelayer),
+    manager_roles(Role::DAO, Role::RelayerManager),
+    config_roles(Role::DAO)
+)]
 #[near]
 impl Contract {
     #[pause(except(roles(Role::DAO, Role::UnrestrictedDeposit)))]
@@ -324,8 +304,6 @@ impl Contract {
             utxo_chain_connectors: HashMap::new(),
             migrated_tokens: LookupMap::new(StorageKey::MigratedTokens),
             locked_tokens: LookupMap::new(StorageKey::LockedTokens),
-            relayers: LookupMap::new(StorageKey::Relayers),
-            relayer_config: RelayerConfig::default(),
         };
 
         contract.acl_init_super_admin(near_sdk::env::predecessor_account_id());
@@ -462,6 +440,7 @@ impl Contract {
     /// - If the `borsh::to_vec` serialization of the `TransferMessagePayload` fails.
     /// - If a `fee` is provided and it doesn't match the fee in the stored transfer message.
     #[payable]
+    #[trusted_relayer]
     #[pause(except(roles(Role::DAO)))]
     pub fn sign_transfer(
         &mut self,
@@ -469,11 +448,6 @@ impl Contract {
         fee_recipient: Option<AccountId>,
         fee: &Option<Fee>,
     ) -> Promise {
-        require!(
-            self.is_trusted_relayer(&env::predecessor_account_id()),
-            BridgeError::RelayerNotActive.as_ref()
-        );
-
         let transfer_message = self.get_transfer_message(transfer_id);
 
         if let Some(fee) = &fee {
@@ -691,13 +665,9 @@ impl Contract {
     }
 
     #[payable]
+    #[trusted_relayer]
     #[pause(except(roles(Role::DAO)))]
     pub fn fin_transfer(&mut self, #[serializer(borsh)] args: FinTransferArgs) -> Promise {
-        require!(
-            self.is_trusted_relayer(&env::predecessor_account_id()),
-            BridgeError::RelayerNotActive.as_ref()
-        );
-
         require!(
             args.storage_deposit_actions.len() <= 3,
             BridgeError::InvalidStorageAccountsLen.as_ref()
