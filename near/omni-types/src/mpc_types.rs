@@ -1,5 +1,5 @@
 use near_mpc_sdk::{
-    contract_interface::types::EvmFinality, foreign_chain::starknet::StarknetFinality,
+    foreign_chain::starknet::StarknetFinality, near_mpc_contract_interface::types::EvmFinality,
 };
 use near_sdk::near;
 
