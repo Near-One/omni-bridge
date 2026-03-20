@@ -386,7 +386,9 @@ async fn process_message(
                 let result = evm::process_init_transfer_event(
                     config,
                     redis,
+                    jsonrpc_client,
                     omni_connector.clone(),
+                    signer,
                     transfer,
                     near_omni_nonce.clone(),
                 )
@@ -404,7 +406,9 @@ async fn process_message(
                 let result = solana::process_init_transfer_event(
                     config,
                     redis,
+                    jsonrpc_client,
                     omni_connector.clone(),
+                    signer,
                     transfer,
                     near_omni_nonce.clone(),
                 )
@@ -454,7 +458,9 @@ async fn process_message(
                 let result = starknet::process_init_transfer_event(
                     config,
                     redis,
+                    jsonrpc_client,
                     omni_connector,
+                    signer,
                     transfer,
                     near_omni_nonce.clone(),
                 )
