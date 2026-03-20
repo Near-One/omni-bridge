@@ -53,7 +53,12 @@ fn get_evm_config(config: &config::Config, chain_kind: ChainKind) -> Result<&con
         ChainKind::Arb => config.arb.as_ref().context("EVM config for Arb is not set"),
         ChainKind::Bnb => config.bnb.as_ref().context("EVM config for Bnb is not set"),
         ChainKind::Pol => config.pol.as_ref().context("EVM config for Pol is not set"),
-        ChainKind::Near | ChainKind::Sol | ChainKind::Btc | ChainKind::Zcash => {
+        ChainKind::HyperEvm => config
+            .hyperevm
+            .as_ref()
+            .context("EVM config for HyperEvm is not set"),
+        ChainKind::Abs => config.abs.as_ref().context("EVM config for Abs is not set"),
+        ChainKind::Near | ChainKind::Sol | ChainKind::Strk | ChainKind::Btc | ChainKind::Zcash => {
             anyhow::bail!("Unsupported chain kind for EVM: {chain_kind:?}")
         }
     }
@@ -201,16 +206,20 @@ async fn handle_transaction_event(
             | OmniAddress::Base(sender)
             | OmniAddress::Arb(sender)
             | OmniAddress::Bnb(sender)
-            | OmniAddress::Pol(sender)) = init_transfer.sender.clone()
+            | OmniAddress::Pol(sender)
+            | OmniAddress::HyperEvm(sender)
+            | OmniAddress::Abs(sender)) = init_transfer.sender.clone()
             else {
-                anyhow::bail!("Unexpected token address: {}", init_transfer.sender);
+                anyhow::bail!("Unexpected sender address: {}", init_transfer.sender);
             };
 
             let (OmniAddress::Eth(token)
             | OmniAddress::Base(token)
             | OmniAddress::Arb(token)
             | OmniAddress::Bnb(token)
-            | OmniAddress::Pol(token)) = init_transfer.token.clone()
+            | OmniAddress::Pol(token)
+            | OmniAddress::HyperEvm(token)
+            | OmniAddress::Abs(token)) = init_transfer.token.clone()
             else {
                 anyhow::bail!("Unexpected token address: {}", init_transfer.token);
             };
@@ -404,6 +413,61 @@ async fn handle_transaction_event(
                     emitter,
                     sequence,
                     transfer_id: (&unified_transfer_id).try_into().ok(),
+                },
+            )
+            .await;
+        }
+        OmniTransferMessage::StarknetInitTransfer(init_transfer) => {
+            info!(
+                "Received StarknetInitTransfer ({:?}:{}): {origin_transaction_id}",
+                ChainKind::Strk,
+                init_transfer.origin_nonce
+            );
+
+            let redis_key = utils::redis::composite_key(&["strk", &origin_transaction_id]);
+
+            add_event(
+                config,
+                redis_connection_manager,
+                nats,
+                &redis_key,
+                ChainKind::Near,
+                crate::workers::Transfer::Starknet {
+                    tx_hash: origin_transaction_id,
+                    sender: init_transfer.sender,
+                    token: init_transfer.token,
+                    origin_nonce: init_transfer.origin_nonce,
+                    amount: init_transfer.amount.0.into(),
+                    fee: init_transfer.fee,
+                    recipient: init_transfer.recipient,
+                    message: init_transfer.message,
+                },
+            )
+            .await;
+        }
+        OmniTransferMessage::StarknetFinTransfer(_fin_transfer) => {
+            info!(
+                "Received StarknetFinTransfer ({:?}): {origin_transaction_id}",
+                ChainKind::Strk
+            );
+
+            let Some(transfer_id) = (&unified_transfer_id).try_into().ok() else {
+                anyhow::bail!(
+                    "Failed to convert unified_transfer_id to TransferId for StarknetFinTransfer: {unified_transfer_id:?}"
+                );
+            };
+
+            let redis_key = utils::redis::composite_key(&["strk", &origin_transaction_id]);
+
+            add_event(
+                config,
+                redis_connection_manager,
+                nats,
+                &redis_key,
+                ChainKind::Near,
+                crate::workers::FinTransfer::Starknet {
+                    tx_hash: origin_transaction_id,
+                    transfer_id,
                 },
             )
             .await;
@@ -620,6 +684,26 @@ async fn handle_meta_event(
             )
             .await;
         }
+        OmniMetaEventDetails::StarknetDeployToken { .. } => {
+            info!(
+                "Received StarknetDeployToken ({:?}): {origin_transaction_id}",
+                ChainKind::Strk
+            );
+
+            let redis_key = utils::redis::composite_key(&["strk_deploy", &origin_transaction_id]);
+
+            add_event(
+                config,
+                redis_connection_manager,
+                nats,
+                &redis_key,
+                ChainKind::Near,
+                crate::workers::DeployToken::Starknet {
+                    tx_hash: origin_transaction_id,
+                },
+            )
+            .await;
+        }
         OmniMetaEventDetails::EVMLogMetadata(_)
         | OmniMetaEventDetails::EVMOnNearEvent { .. }
         | OmniMetaEventDetails::EVMOnNearInternalTransaction { .. }
@@ -628,6 +712,10 @@ async fn handle_meta_event(
         | OmniMetaEventDetails::NearDeployTokenEvent { .. }
         | OmniMetaEventDetails::NearBindTokenEvent { .. }
         | OmniMetaEventDetails::NearMigrateTokenEvent { .. }
+        | OmniMetaEventDetails::StarknetLogMetadata { .. }
+        | OmniMetaEventDetails::NearRelayerApplyEvent { .. }
+        | OmniMetaEventDetails::NearRelayerResignEvent { .. }
+        | OmniMetaEventDetails::NearRelayerRejectEvent { .. }
         | OmniMetaEventDetails::UtxoLogDepositAddress(_) => {}
     }
 

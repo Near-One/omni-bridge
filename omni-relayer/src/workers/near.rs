@@ -409,9 +409,15 @@ pub async fn process_sign_transfer_event(
 
     let (fin_transfer_args, evm_nonce) = match chain_kind {
         ChainKind::Near => {
-            anyhow::bail!("Near to Near transfers are not supported yet");
+            anyhow::bail!("Near to Near transfers are not supported");
         }
-        ChainKind::Eth | ChainKind::Base | ChainKind::Arb | ChainKind::Bnb | ChainKind::Pol => {
+        ChainKind::Eth
+        | ChainKind::Base
+        | ChainKind::Arb
+        | ChainKind::Bnb
+        | ChainKind::Pol
+        | ChainKind::HyperEvm
+        | ChainKind::Abs => {
             let nonce = evm_nonces
                 .reserve_nonce(chain_kind)
                 .await
@@ -442,6 +448,12 @@ pub async fn process_sign_transfer_event(
                 None,
             )
         }
+        ChainKind::Strk => (
+            omni_connector::FinTransferArgs::StarknetFinTransfer {
+                event: omni_bridge_event.clone(),
+            },
+            None,
+        ),
         ChainKind::Btc | ChainKind::Zcash => {
             anyhow::bail!("Finishing BTC/ZEC transfers is not supported");
         }
@@ -481,7 +493,13 @@ pub async fn process_sign_transfer_event(
                     ChainKind::Arb => &config.arb,
                     ChainKind::Bnb => &config.bnb,
                     ChainKind::Pol => &config.pol,
-                    ChainKind::Near | ChainKind::Sol | ChainKind::Btc | ChainKind::Zcash => {
+                    ChainKind::HyperEvm => &config.hyperevm,
+                    ChainKind::Abs => &config.abs,
+                    ChainKind::Near
+                    | ChainKind::Sol
+                    | ChainKind::Strk
+                    | ChainKind::Btc
+                    | ChainKind::Zcash => {
                         anyhow::bail!(
                             "Failed to finalize deposit (unexpected: failed to get evm config): {err}"
                         );
