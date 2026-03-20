@@ -143,13 +143,7 @@ pub async fn process_transfer_event(
             jsonrpc_client,
             tx_hash,
             signer,
-            &[
-                "Signature request has already been submitted. Please try again later.",
-                "Request has timed out.",
-                "Signature request has timed out.",
-                "Attached deposit is lower than required",
-                "Exceeded the prepaid gas.",
-            ],
+            &["Request has timed out."],
         )
         .await),
         Err(err) => {

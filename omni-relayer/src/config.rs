@@ -273,6 +273,7 @@ pub struct Near {
     #[serde(deserialize_with = "replace_rpc_api_key")]
     pub rpc_url: String,
     pub omni_bridge_id: AccountId,
+    pub mpc_omni_prover_id: Option<AccountId>,
     pub btc_connector: Option<AccountId>,
     pub btc: Option<AccountId>,
     pub zcash_connector: Option<AccountId>,

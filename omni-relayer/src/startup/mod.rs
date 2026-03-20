@@ -10,7 +10,7 @@ use omni_types::ChainKind;
 use solana_bridge_client::{SolanaBridgeClient, SolanaBridgeClientBuilder};
 use solana_client::nonblocking::rpc_client::RpcClient;
 use starknet_bridge_client::{StarknetBridgeClient, StarknetBridgeClientBuilder};
-use tracing::info;
+use tracing::{info, warn};
 use utxo_bridge_client::{AuthOptions, UTXOBridgeClient};
 use wormhole_bridge_client::{WormholeBridgeClient, WormholeBridgeClientBuilder};
 
@@ -79,6 +79,7 @@ fn build_near_bridge_client(
         .private_key(Some(near_signer.secret_key.to_string()))
         .signer(Some(near_signer.account_id.clone()))
         .omni_bridge_id(Some(config.near.omni_bridge_id.clone()))
+        .mpc_omni_prover_id(config.near.mpc_omni_prover_id.clone())
         .utxo_bridges(build_utxo_bridges(config, near_signer))
         .build()
         .context("Failed to build NearBridgeClient")
@@ -222,7 +223,7 @@ fn build_light_client(config: &config::Config, chain: ChainKind) -> Result<Optio
         .transpose()
 }
 
-pub fn build_omni_connector(
+pub async fn build_omni_connector(
     config: &config::Config,
     near_signer: &InMemorySigner,
 ) -> Result<OmniConnector> {
@@ -246,6 +247,14 @@ pub fn build_omni_connector(
     let btc_light_client = build_light_client(config, ChainKind::Btc)?;
     let zcash_light_client = build_light_client(config, ChainKind::Zcash)?;
 
+    let mpc_finalities = match near_bridge_client.get_mpc_finalities().await {
+        Ok(mpc_finalities) => Some(mpc_finalities),
+        Err(err) => {
+            warn!("Failed to fetch mpc finalities: {err:?}");
+            None
+        }
+    };
+
     let omni_connector = OmniConnectorBuilder::default()
         .network(Some(config.near.network.into()))
         .near_bridge_client(Some(near_bridge_client))
@@ -265,6 +274,7 @@ pub fn build_omni_connector(
         .eth_light_client(eth_light_client)
         .btc_light_client(btc_light_client)
         .zcash_light_client(zcash_light_client)
+        .mpc_finalities(mpc_finalities)
         .build()
         .context("Failed to build OmniConnector")?;
 

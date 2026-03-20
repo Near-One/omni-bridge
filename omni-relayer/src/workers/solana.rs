@@ -2,10 +2,12 @@ use std::sync::Arc;
 
 use anyhow::{Context, Result};
 use bridge_connector_common::result::BridgeSdkError;
+use near_sdk::AccountId;
 use tracing::{info, warn};
 
 use near_bridge_client::{NearBridgeClient, TransactionOptions};
 use near_jsonrpc_client::{
+    JsonRpcClient,
     errors::{JsonRpcError, JsonRpcServerError},
     methods::query::RpcQueryError,
 };
@@ -25,7 +27,9 @@ use super::{DeployToken, EventAction, FinTransfer, Transfer};
 pub async fn process_init_transfer_event(
     config: &config::Config,
     redis_connection_manager: &mut redis::aio::ConnectionManager,
+    jsonrpc_client: &JsonRpcClient,
     omni_connector: Arc<OmniConnector>,
+    signer: AccountId,
     transfer: Transfer,
     near_nonce: Arc<utils::nonce::NonceManager>,
 ) -> Result<EventAction> {
@@ -150,11 +154,18 @@ pub async fn process_init_transfer_event(
 
     match omni_connector.fin_transfer(fin_transfer_args).await {
         Ok(tx_hash) => {
-            info!(
-                "Finalized InitTransfer ({:?}:{}): {tx_hash:?}",
-                transfer_id.origin_chain, transfer_id.origin_nonce
-            );
-            Ok(EventAction::Remove)
+            let Ok(crypto_hash) = tx_hash.parse() else {
+                warn!("Failed to parse {tx_hash} as CryptoHash");
+                return Ok(EventAction::Remove);
+            };
+
+            Ok(utils::near::resolve_tx_action(
+                jsonrpc_client,
+                crypto_hash,
+                signer,
+                &["Request has timed out."],
+            )
+            .await)
         }
         Err(err) => {
             if let BridgeSdkError::NearRpcError(near_rpc_error) = err {
