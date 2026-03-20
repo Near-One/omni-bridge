@@ -12,7 +12,7 @@ pub enum BridgeError {
     DeployerNotSet,
     ExpectedToOverwriteTokenAddress,
     FailedToGetTokenAddress,
-    FailedToGetZeroAddress,
+    FailedToGetNativeTokenAddress,
     FastTransferAlreadyFinalised,
     FastTransferAlreadyPerformed,
     FastTransferNotFinalised,
