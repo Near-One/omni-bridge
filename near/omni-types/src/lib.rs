@@ -893,3 +893,22 @@ impl DestinationChainMsg {
         serde_json::from_str(s).ok()
     }
 }
+
+pub fn get_native_token_address(chain_kind: ChainKind) -> Result<OmniAddress, String> {
+    match chain_kind {
+        ChainKind::Strk => OmniAddress::from_str(
+            "strk:0x04718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d",
+        ),
+        ChainKind::Eth
+        | ChainKind::Near
+        | ChainKind::Sol
+        | ChainKind::Arb
+        | ChainKind::Base
+        | ChainKind::Bnb
+        | ChainKind::Btc
+        | ChainKind::Zcash
+        | ChainKind::Pol
+        | ChainKind::HyperEvm
+        | ChainKind::Abs => OmniAddress::new_zero(chain_kind),
+    }
+}

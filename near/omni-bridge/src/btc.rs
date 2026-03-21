@@ -10,8 +10,11 @@ use near_sdk::{
 };
 use omni_types::btc::{TokenReceiverMessage, TxOut, UTXOChainConfig};
 use omni_types::errors::BridgeError;
-use omni_types::{ChainKind, DestinationChainMsg, Fee, OmniAddress, TransferId, TransferMessage};
+use omni_types::{
+    get_native_token_address, ChainKind, DestinationChainMsg, Fee, TransferId, TransferMessage,
+};
 use omni_utils::macros::trusted_relayer;
+use omni_utils::near_expect::NearExpect;
 
 const SUBMIT_TRANSFER_TO_BTC_CONNECTOR_CALLBACK_GAS: Gas = Gas::from_tgas(5);
 const WITHDRAW_RBF_GAS: Gas = Gas::from_tgas(100);
@@ -123,9 +126,8 @@ impl Contract {
         decimals: u8,
     ) {
         let storage_usage = env::storage_usage();
-        let token_address = OmniAddress::new_zero(chain_kind).unwrap_or_else(|_| {
-            env::panic_str(BridgeError::FailedToGetZeroAddress.to_string().as_str())
-        });
+        let token_address = get_native_token_address(chain_kind)
+            .near_expect(BridgeError::FailedToGetNativeTokenAddress);
 
         self.add_token(&utxo_chain_token_id, &token_address, decimals, decimals);
 

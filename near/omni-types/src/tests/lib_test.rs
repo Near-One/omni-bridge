@@ -3,8 +3,9 @@ use near_sdk::serde_json;
 use near_sdk::{borsh, AccountId, NearToken};
 
 use crate::{
-    stringify, BridgeError, ChainKind, DestinationChainMsg, Fee, OmniAddress, OmniError,
-    PayloadType, SolAddress, StorageBalanceError, TransferId, TransferMessage, H160, H256,
+    get_native_token_address, stringify, BridgeError, ChainKind, DestinationChainMsg, Fee,
+    OmniAddress, OmniError, PayloadType, SolAddress, StorageBalanceError, TransferId,
+    TransferMessage, H160, H256,
 };
 use std::str::FromStr;
 
@@ -548,6 +549,35 @@ fn test_deserialize_destination_chain_msg() {
     let deserialized: DestinationChainMsg = serde_json::from_str(serialized_msg).unwrap();
     let original = DestinationChainMsg::DestHexMsg(hex::decode("abff").unwrap());
     assert_eq!(original, deserialized);
+}
+
+#[test]
+fn test_get_native_token_address_returns_expected_addresses() {
+    // Starknet should return the hardcoded STRK token address
+    let strk_address = get_native_token_address(ChainKind::Strk).unwrap();
+    assert_eq!(
+        strk_address,
+        OmniAddress::Strk(H256([
+            0x04, 0x71, 0x8f, 0x5a, 0x0f, 0xc3, 0x4c, 0xc1, 0xaf, 0x16, 0xa1, 0xcd, 0xee, 0x98,
+            0xff, 0xb2, 0x0c, 0x31, 0xf5, 0xcd, 0x61, 0xd6, 0xab, 0x07, 0x20, 0x18, 0x58, 0xf4,
+            0x28, 0x7c, 0x93, 0x8d,
+        ])),
+        "Starknet native token should be the hardcoded STRK address"
+    );
+
+    // All other chains should return zero addresses
+    for chain_kind in chain_kinds_for_borsh() {
+        if chain_kind == ChainKind::Strk {
+            continue;
+        }
+        let address = get_native_token_address(chain_kind).unwrap();
+        assert_eq!(
+            address,
+            OmniAddress::new_zero(chain_kind).unwrap(),
+            "Native token for {:?} should be the zero address",
+            chain_kind
+        );
+    }
 }
 
 #[test]
