@@ -531,7 +531,9 @@ async fn process_message(
         let result = match fin_transfer_event {
             FinTransfer::Evm { .. } => {
                 evm::process_evm_transfer_event(
+                    jsonrpc_client,
                     omni_connector.clone(),
+                    signer,
                     fin_transfer_event,
                     near_omni_nonce.clone(),
                 )
@@ -540,7 +542,9 @@ async fn process_message(
             FinTransfer::Solana { .. } => {
                 solana::process_fin_transfer_event(
                     config,
+                    jsonrpc_client,
                     omni_connector.clone(),
+                    signer,
                     fin_transfer_event,
                     near_omni_nonce.clone(),
                 )
@@ -548,7 +552,9 @@ async fn process_message(
             }
             FinTransfer::Starknet { .. } => {
                 starknet::process_fin_transfer_event(
+                    jsonrpc_client,
                     omni_connector.clone(),
+                    signer,
                     fin_transfer_event,
                     near_omni_nonce,
                 )

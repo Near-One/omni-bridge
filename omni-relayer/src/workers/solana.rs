@@ -193,7 +193,9 @@ pub async fn process_init_transfer_event(
 
 pub async fn process_fin_transfer_event(
     config: &config::Config,
+    jsonrpc_client: &JsonRpcClient,
     omni_connector: Arc<OmniConnector>,
+    signer: AccountId,
     fin_transfer: FinTransfer,
     near_nonce: Arc<utils::nonce::NonceManager>,
 ) -> Result<EventAction> {
@@ -262,10 +264,13 @@ pub async fn process_fin_transfer_event(
         )
         .await
     {
-        Ok(tx_hash) => {
-            info!("Claimed fee: {tx_hash:?}");
-            Ok(EventAction::Remove)
-        }
+        Ok(tx_hash) => Ok(utils::near::resolve_tx_action(
+            jsonrpc_client,
+            tx_hash,
+            signer,
+            &["Request has timed out."],
+        )
+        .await),
         Err(err) => {
             if let BridgeSdkError::NearRpcError(ref near_rpc_error) = err {
                 match near_rpc_error {

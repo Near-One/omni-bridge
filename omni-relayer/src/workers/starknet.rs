@@ -185,7 +185,9 @@ pub async fn process_init_transfer_event(
 }
 
 pub async fn process_fin_transfer_event(
+    jsonrpc_client: &JsonRpcClient,
     omni_connector: Arc<OmniConnector>,
+    signer: AccountId,
     fin_transfer: FinTransfer,
     near_nonce: Arc<utils::nonce::NonceManager>,
 ) -> Result<EventAction> {
@@ -231,9 +233,19 @@ pub async fn process_fin_transfer_event(
     };
 
     match omni_connector.claim_fee(claim_fee_args).await {
-        Ok(near_tx_hash) => {
-            info!("Claimed Starknet fee: {near_tx_hash:?}");
-            Ok(EventAction::Remove)
+        Ok(tx_hash) => {
+            let Ok(crypto_hash) = tx_hash.parse() else {
+                warn!("Failed to parse {tx_hash} as CryptoHash");
+                return Ok(EventAction::Remove);
+            };
+
+            Ok(utils::near::resolve_tx_action(
+                jsonrpc_client,
+                crypto_hash,
+                signer,
+                &["Request has timed out."],
+            )
+            .await)
         }
         Err(err) => {
             if let BridgeSdkError::NearRpcError(near_rpc_error) = err {
