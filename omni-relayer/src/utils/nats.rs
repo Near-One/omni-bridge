@@ -51,14 +51,13 @@ impl NatsClient {
 
     pub async fn relayer_consumer(&self, config: &config::Nats) -> Result<consumer::PullConsumer> {
         self.jetstream
-            .create_consumer_on_stream(
+            .create_consumer_strict_on_stream(
                 consumer::pull::Config {
                     durable_name: Some(config.relayer_consumer.name.clone()),
                     ack_policy: consumer::AckPolicy::Explicit,
                     deliver_policy: consumer::DeliverPolicy::LastPerSubject,
                     max_deliver: config.relayer_consumer.max_deliver,
                     filter_subject: config.relayer_consumer.subject.clone(),
-                    ack_wait: Duration::from_secs(300),
                     backoff: config
                         .relayer_consumer
                         .backoff_secs

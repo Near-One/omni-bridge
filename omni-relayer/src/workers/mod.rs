@@ -169,11 +169,7 @@ async fn handle_nats_ack(
     result: &Result<EventAction>,
 ) {
     match result {
-        Ok(EventAction::Retry) => {
-            msg.ack_with(async_nats::jetstream::AckKind::Nak(None))
-                .await
-                .ok();
-        }
+        Ok(EventAction::Retry) => {}
         Ok(EventAction::Remove) => {
             msg.ack().await.ok();
         }
@@ -241,9 +237,6 @@ pub async fn process_events(
         if is_evm_nonce_resync_needed.load(Ordering::Relaxed) {
             if let Err(err) = evm_nonces.resync_nonces().await {
                 warn!("Failed to resync evm nonces: {err:?}");
-                msg.ack_with(async_nats::jetstream::AckKind::Nak(None))
-                    .await
-                    .ok();
                 continue;
             }
             is_evm_nonce_resync_needed.store(false, Ordering::Relaxed);

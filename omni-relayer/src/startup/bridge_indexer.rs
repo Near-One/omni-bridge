@@ -846,7 +846,7 @@ pub async fn start_indexer(
 
         if let Err(err) = watch_omni_events_collection(
             &omni_events_collection,
-            &config,
+            config,
             redis_connection_manager,
             start_timestamp,
         )
@@ -924,9 +924,6 @@ async fn subscribe_to_omni_events(
             process_nats_message(config, redis_connection_manager, nats, omni_event).await
         {
             warn!("Failed to process NATS message: {err:?}");
-            msg.ack_with(async_nats::jetstream::AckKind::Nak(None))
-                .await
-                .ok();
             continue;
         }
 
@@ -959,7 +956,7 @@ pub async fn start_indexer_nats(
 
         if let Err(err) = subscribe_to_omni_events(
             &consumer,
-            &config,
+            config,
             redis_connection_manager,
             Some(nats_client.as_ref()),
         )

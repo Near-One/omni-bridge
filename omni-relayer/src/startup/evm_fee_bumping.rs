@@ -66,7 +66,7 @@ pub async fn start_evm_fee_bumping(
         let redis_key = pending_transactions::get_pending_tx_key(chain_kind);
 
         let Some(pending_txs) = utils::redis::zrange::<PendingTransaction>(
-            &config,
+            config,
             redis_connection_manager,
             &redis_key,
             0,
@@ -110,7 +110,7 @@ pub async fn start_evm_fee_bumping(
 
         match tx_status {
             TransactionStatus::Included(_) => {
-                utils::redis::zrem(&config, redis_connection_manager, &redis_key, pending_tx).await;
+                utils::redis::zrem(config, redis_connection_manager, &redis_key, pending_tx).await;
             }
             TransactionStatus::Missing => {
                 info!(
@@ -119,7 +119,7 @@ pub async fn start_evm_fee_bumping(
                 );
 
                 utils::redis::add_event(
-                    &config,
+                    config,
                     redis_connection_manager,
                     utils::redis::EVENTS,
                     format!("replay:{}", pending_tx.tx_hash),
@@ -127,7 +127,7 @@ pub async fn start_evm_fee_bumping(
                 )
                 .await;
 
-                utils::redis::zrem(&config, redis_connection_manager, &redis_key, pending_tx).await;
+                utils::redis::zrem(config, redis_connection_manager, &redis_key, pending_tx).await;
             }
             TransactionStatus::Pending(tx_data) => {
                 let original_fee = Eip1559Estimation {
@@ -181,7 +181,7 @@ pub async fn start_evm_fee_bumping(
                 );
 
                 utils::redis::zrem(
-                    &config,
+                    config,
                     redis_connection_manager,
                     &redis_key,
                     pending_tx.clone(),
@@ -191,7 +191,7 @@ pub async fn start_evm_fee_bumping(
                 pending_tx.bump(new_tx_hash.to_string());
 
                 utils::redis::zadd(
-                    &config,
+                    config,
                     redis_connection_manager,
                     &redis_key,
                     pending_tx.nonce,
