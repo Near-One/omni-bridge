@@ -3,6 +3,7 @@ use crate::{
         AUTHORITY_SEED, CONFIG_SEED, SOL_VAULT_SEED, USED_NONCES_ACCOUNT_SIZE,
         USED_NONCES_PER_ACCOUNT, USED_NONCES_SEED,
     },
+    error::ErrorCode,
     instructions::wormhole_cpi::{
         WormholeCPI, WormholeCPIBumps, __client_accounts_wormhole_cpi,
         __cpi_client_accounts_wormhole_cpi,
@@ -83,7 +84,7 @@ impl FinalizeTransferSol<'_> {
                 },
                 &[&[SOL_VAULT_SEED, &[self.config.bumps.sol_vault]]],
             ),
-            data.amount.try_into().unwrap(),
+            data.amount.try_into().map_err(|_| error!(ErrorCode::AmountOverflow))?,
         )?;
 
         let payload = FinalizeTransferResponse {
