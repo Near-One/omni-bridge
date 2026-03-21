@@ -28,6 +28,7 @@ pub trait IOmniBridge<TContractState> {
     fn pause_all(ref self: TContractState);
     fn get_token_address(self: @TContractState, token_id: ByteArray) -> ContractAddress;
     fn is_bridge_token(self: @TContractState, token_address: ContractAddress) -> bool;
+    fn is_transfer_finalised(self: @TContractState, nonce: u64) -> bool;
 }
 
 #[starknet::contract]
@@ -244,7 +245,7 @@ mod OmniBridge {
             assert(!_is_paused(@self, PAUSE_FIN_TRANSFER), 'ERR_FIN_TRANSFER_PAUSED');
 
             assert(
-                !_is_transfer_finalised(@self, payload.destination_nonce), 'ERR_NONCE_ALREADY_USED',
+                !self.is_transfer_finalised(payload.destination_nonce), 'ERR_NONCE_ALREADY_USED',
             );
             _set_transfer_finalised(ref self, payload.destination_nonce);
 
@@ -376,6 +377,12 @@ mod OmniBridge {
         fn is_bridge_token(self: @ContractState, token_address: ContractAddress) -> bool {
             self.starknet_to_near_token.read(token_address).len() > 0
         }
+
+        fn is_transfer_finalised(self: @ContractState, nonce: u64) -> bool {
+            let (slot, bit) = _nonce_slot_and_bit(nonce);
+            let bitmap: u256 = self.completed_transfers.read(slot).into();
+            bitmap & bit != 0
+        }
     }
 
     #[abi(embed_v0)]
@@ -414,12 +421,6 @@ mod OmniBridge {
         (slot, bit)
     }
 
-    fn _is_transfer_finalised(self: @ContractState, nonce: u64) -> bool {
-        let (slot, bit) = _nonce_slot_and_bit(nonce);
-        let bitmap: u256 = self.completed_transfers.read(slot).into();
-        bitmap & bit != 0
-    }
-
     fn _set_transfer_finalised(ref self: ContractState, nonce: u64) {
         let (slot, bit) = _nonce_slot_and_bit(nonce);
         let bitmap: u256 = self.completed_transfers.read(slot).into();
@@ -445,7 +446,7 @@ mod OmniBridge {
 
     #[cfg(test)]
     mod tests {
-        use super::{_is_transfer_finalised, _set_transfer_finalised};
+        use super::{OmniBridgeImpl, _set_transfer_finalised};
 
         fn setup() -> super::ContractState {
             super::contract_state_for_testing()
@@ -464,7 +465,7 @@ mod OmniBridge {
             // Verify all nonces are initially unset
             let mut i: usize = 0;
             while i < nonces.len() {
-                assert!(!_is_transfer_finalised(@state, *nonces[i]));
+                assert!(!OmniBridgeImpl::is_transfer_finalised(@state, *nonces[i]));
                 i += 1;
             }
 
@@ -478,7 +479,7 @@ mod OmniBridge {
             // Verify all nonces are now set
             let mut i: usize = 0;
             while i < nonces.len() {
-                assert!(_is_transfer_finalised(@state, *nonces[i]));
+                assert!(OmniBridgeImpl::is_transfer_finalised(@state, *nonces[i]));
                 i += 1;
             }
 
@@ -486,7 +487,7 @@ mod OmniBridge {
             let unset = [2, 41, 124, 249, 252, 254, 999, max_nonce - 3].span();
             let mut i: usize = 0;
             while i < unset.len() {
-                assert!(!_is_transfer_finalised(@state, *unset[i]));
+                assert!(!OmniBridgeImpl::is_transfer_finalised(@state, *unset[i]));
                 i += 1;
             };
         }
@@ -496,7 +497,7 @@ mod OmniBridge {
             let mut state = setup();
             _set_transfer_finalised(ref state, 42);
             _set_transfer_finalised(ref state, 42);
-            assert!(_is_transfer_finalised(@state, 42));
+            assert!(OmniBridgeImpl::is_transfer_finalised(@state, 42));
         }
     }
 }
