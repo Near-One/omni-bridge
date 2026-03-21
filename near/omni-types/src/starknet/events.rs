@@ -348,12 +348,13 @@ impl<'a> FeltCursor<'a> {
 
     /// Reads a Cairo `Option<ByteArray>`.
     ///
-    /// Serde layout: `0` for None, `1` followed by `ByteArray` for Some.
+    /// Cairo Serde layout: `0` for Some (followed by `ByteArray`), `1` for None.
+    /// This matches Cairo's `enum Option<T> { Some: T, None }` variant ordering.
     fn read_option_byte_array(&mut self) -> Result<Option<String>, String> {
         let discriminant = self.read_u64()?;
         match discriminant {
-            0 => Ok(None),
-            1 => self.read_byte_array().map(Some),
+            0 => self.read_byte_array().map(Some),
+            1 => Ok(None),
             _ => Err(format!("Option: unexpected discriminant {discriminant}")),
         }
     }
@@ -768,11 +769,11 @@ mod tests {
             token_addr,     // token_address
             u128_felt(500), // amount
             recipient,      // recipient
-            u64_felt(1),    // fee_recipient:
+            u64_felt(0),    // fee_recipient: Some (Cairo Option variant 0)
         ];
         data.extend(encode_byte_array("fee.testnet"));
-        // message: None
-        data.push(u64_felt(0)); // None discriminant
+        // message: None (Cairo Option variant 1)
+        data.push(u64_felt(1));
 
         let msg = parse_fin_transfer(&emitter, &keys, &data).unwrap();
         assert_eq!(msg.transfer_id.origin_chain, ChainKind::Eth);
