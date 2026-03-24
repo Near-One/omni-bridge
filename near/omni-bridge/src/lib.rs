@@ -280,13 +280,9 @@ impl Contract {
             BridgeOnTransferMsg::InitTransfer(init_transfer_msg) => {
                 self.init_transfer(sender_id, signer_id, token_id, amount, init_transfer_msg)
             }
-            BridgeOnTransferMsg::FastFinTransfer(fast_fin_transfer_msg) => self.fast_fin_transfer(
-                token_id,
-                amount,
-                signer_id,
-                sender_id,
-                fast_fin_transfer_msg,
-            ),
+            BridgeOnTransferMsg::FastFinTransfer(fast_fin_transfer_msg) => {
+                self.fast_fin_transfer(token_id, amount, signer_id, fast_fin_transfer_msg)
+            }
             BridgeOnTransferMsg::UtxoFinTransfer(utxo_fin_transfer_msg) => self.utxo_fin_transfer(
                 token_id,
                 amount,
@@ -776,12 +772,11 @@ impl Contract {
         &mut self,
         token_id: AccountId,
         amount: U128,
-        storage_payer: AccountId,
-        sender_id: AccountId,
+        signer_id: AccountId,
         fast_fin_transfer_msg: FastFinTransferMsg,
     ) -> PromiseOrPromiseIndexOrValue<U128> {
         require!(
-            self.is_trusted_relayer(&sender_id),
+            self.is_trusted_relayer(&signer_id),
             BridgeError::RelayerNotActive.as_ref()
         );
 
@@ -825,7 +820,7 @@ impl Contract {
                 .unwrap_or_default();
             if storage_deposit_amount > 0 {
                 self.update_storage_balance(
-                    storage_payer.clone(),
+                    signer_id.clone(),
                     NearToken::from_yoctonear(storage_deposit_amount),
                     NearToken::from_yoctonear(0),
                 );
@@ -850,7 +845,7 @@ impl Contract {
                     )
                     .fast_fin_transfer_to_near_callback(
                         &fast_transfer,
-                        storage_payer,
+                        signer_id,
                         fast_fin_transfer_msg.relayer,
                     ),
             )
@@ -858,7 +853,7 @@ impl Contract {
         } else {
             self.fast_fin_transfer_to_other_chain(
                 &fast_transfer,
-                storage_payer,
+                signer_id,
                 fast_fin_transfer_msg.relayer,
             );
             PromiseOrPromiseIndexOrValue::Value(U128(0))
