@@ -25,10 +25,11 @@ use omni_types::mpc_types::SignatureResponse;
 use omni_types::near_events::OmniBridgeEvent;
 use omni_types::prover_result::ProverResult;
 use omni_types::{
-    BasicMetadata, BridgeOnTransferMsg, ChainKind, DestinationChainMsg, FastFinTransferMsg,
-    FastTransfer, FastTransferId, FastTransferStatus, Fee, InitTransferMsg, MetadataPayload, Nonce,
-    OmniAddress, PayloadType, SignRequest, TransferId, TransferIdKind, TransferMessage,
-    TransferMessagePayload, UnifiedTransferId, UpdateFee, UtxoFinTransferMsg, H160,
+    get_native_token_address, BasicMetadata, BridgeOnTransferMsg, ChainKind, DestinationChainMsg,
+    FastFinTransferMsg, FastTransfer, FastTransferId, FastTransferStatus, Fee, InitTransferMsg,
+    MetadataPayload, Nonce, OmniAddress, PayloadType, SignRequest, TransferId, TransferIdKind,
+    TransferMessage, TransferMessagePayload, UnifiedTransferId, UpdateFee, UtxoFinTransferMsg,
+    H160,
 };
 use omni_utils::macros::trusted_relayer;
 use omni_utils::near_expect::NearExpect;
@@ -1199,11 +1200,11 @@ impl Contract {
         symbol: String,
         decimals: u8,
     ) -> Promise {
+        let native_token_address = get_native_token_address(chain_kind)
+            .near_expect(BridgeError::FailedToGetNativeTokenAddress);
         self.deploy_token_internal(
             chain_kind,
-            &OmniAddress::new_zero(chain_kind).unwrap_or_else(|_| {
-                env::panic_str(BridgeError::FailedToGetZeroAddress.to_string().as_str())
-            }),
+            &native_token_address,
             BasicMetadata {
                 name,
                 symbol,
@@ -1399,7 +1400,7 @@ impl Contract {
 
     pub fn get_native_token_id(&self, chain: ChainKind) -> AccountId {
         let native_token_address =
-            OmniAddress::new_zero(chain).near_expect(BridgeError::FailedToGetZeroAddress);
+            get_native_token_address(chain).near_expect(BridgeError::FailedToGetNativeTokenAddress);
 
         self.get_token_id(&native_token_address)
     }
