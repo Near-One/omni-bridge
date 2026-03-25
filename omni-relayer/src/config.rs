@@ -240,6 +240,18 @@ pub struct BridgeIndexer {
 
     #[serde(default, deserialize_with = "validate_fee_discount")]
     pub fee_discount: u8,
+    #[serde(default)]
+    pub whitelisted_tokens: Vec<OmniAddress>,
+}
+
+impl BridgeIndexer {
+    pub fn is_whitelist_active(&self) -> bool {
+        !self.whitelisted_tokens.is_empty()
+    }
+
+    pub fn is_token_whitelisted(&self, token: &OmniAddress) -> bool {
+        self.whitelisted_tokens.contains(token)
+    }
 }
 
 #[derive(Debug, Clone, Copy, Deserialize)]

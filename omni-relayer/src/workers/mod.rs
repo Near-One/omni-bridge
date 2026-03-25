@@ -9,7 +9,7 @@ use bridge_indexer_types::documents_types::DepositMsg;
 use near_jsonrpc_client::JsonRpcClient;
 use near_primitives::types::AccountId;
 use tokio_stream::StreamExt;
-use tracing::{info, warn};
+use tracing::{debug, info, warn};
 
 use near_sdk::json_types::U128;
 use solana_sdk::pubkey::Pubkey;
@@ -123,6 +123,26 @@ pub enum Transfer {
         storage_deposit_amount: Option<U128>,
         safe_confirmations: u64,
     },
+}
+
+impl Transfer {
+    pub fn token(&self) -> Option<OmniAddress> {
+        match self {
+            Self::Near { transfer_message } => Some(transfer_message.token.clone()),
+            Self::Evm {
+                chain_kind, log, ..
+            } => utils::evm::string_to_evm_omniaddress(*chain_kind, &log.token_address.to_string())
+                .ok(),
+            Self::Solana { token, .. } => {
+                OmniAddress::new_from_slice(ChainKind::Sol, &token.to_bytes()).ok()
+            }
+            Self::Starknet { token, .. } => Some(token.clone()),
+            Self::Utxo { .. }
+            | Self::NearToUtxo { .. }
+            | Self::UtxoToNear { .. }
+            | Self::Fast { .. } => None,
+        }
+    }
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
@@ -305,6 +325,28 @@ pub async fn process_events(
     Ok(())
 }
 
+fn is_whitelisted_token_event(event: &serde_json::Value, config: &config::Config) -> bool {
+    if let Ok(transfer) = serde_json::from_value::<Transfer>(event.clone()) {
+        let Some(token) = transfer.token() else {
+            return false;
+        };
+
+        return config.bridge_indexer.is_token_whitelisted(&token);
+    }
+
+    if let Ok(OmniBridgeEvent::SignTransferEvent {
+        ref message_payload,
+        ..
+    }) = serde_json::from_value::<OmniBridgeEvent>(event.clone())
+    {
+        return config
+            .bridge_indexer
+            .is_token_whitelisted(&message_payload.token_address);
+    }
+
+    false
+}
+
 #[allow(clippy::too_many_lines, clippy::too_many_arguments)]
 async fn process_message(
     event: serde_json::Value,
@@ -318,6 +360,15 @@ async fn process_message(
     near_fast_nonce: Option<Arc<utils::nonce::NonceManager>>,
     evm_nonces: Arc<utils::nonce::EvmNonceManagers>,
 ) -> MessageResult {
+    if config.bridge_indexer.is_whitelist_active() && !is_whitelisted_token_event(&event, config) {
+        debug!("Event skipped due to whitelist: {event}");
+        return MessageResult {
+            action: Ok(EventAction::Remove),
+            needs_evm_nonce_resync: false,
+            fee_key_to_remove: None,
+        };
+    }
+
     if let Ok(transfer) = serde_json::from_value::<Transfer>(event.clone()) {
         match transfer {
             Transfer::Near { .. } | Transfer::Utxo { .. } => {

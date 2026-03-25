@@ -55,7 +55,7 @@ impl NatsClient {
                 consumer::pull::Config {
                     durable_name: Some(config.relayer_consumer.name.clone()),
                     ack_policy: consumer::AckPolicy::Explicit,
-                    deliver_policy: consumer::DeliverPolicy::LastPerSubject,
+                    deliver_policy: consumer::DeliverPolicy::Last,
                     max_deliver: config.relayer_consumer.max_deliver,
                     filter_subject: config.relayer_consumer.subject.clone(),
                     backoff: config
