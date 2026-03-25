@@ -15,7 +15,7 @@ use omni_types::{
 };
 use solana_sdk::pubkey::Pubkey;
 use tokio_stream::StreamExt;
-use tracing::{info, warn};
+use tracing::{debug, info, warn};
 
 use crate::{
     config::{self},
@@ -95,6 +95,67 @@ async fn add_event<E: serde::Serialize + std::fmt::Debug + Sync>(
     .await;
 }
 
+fn is_whitelisted_transaction_event(
+    config: &config::Config,
+    origin_chain: ChainKind,
+    transfer_message: &OmniTransferMessage,
+) -> bool {
+    match transfer_message {
+        OmniTransferMessage::NearTransferMessage(transfer_message) => {
+            config
+                .bridge_indexer
+                .is_token_whitelisted(&transfer_message.token)
+        }
+        OmniTransferMessage::NearSignTransferEvent(sign_event) => {
+            config
+                .bridge_indexer
+                .is_token_whitelisted(&sign_event.message_payload.token_address)
+        }
+        OmniTransferMessage::EvmInitTransferMessage(init_transfer) => {
+            config.bridge_indexer.is_token_whitelisted(&init_transfer.token)
+        }
+        OmniTransferMessage::SolanaInitTransfer(init_transfer) => {
+            config.bridge_indexer.is_token_whitelisted(&init_transfer.token)
+        }
+        OmniTransferMessage::StarknetInitTransfer(init_transfer) => {
+            config.bridge_indexer.is_token_whitelisted(&init_transfer.token)
+        }
+        OmniTransferMessage::NearUtxoTransferMessage { token_id, .. } => config
+            .bridge_indexer
+            .is_token_whitelisted(&OmniAddress::Near(token_id.clone())),
+        OmniTransferMessage::UtxoSignTransaction {
+            destination_chain, ..
+        }
+        | OmniTransferMessage::TransferNearToUtxo {
+            destination_chain, ..
+        }
+        | OmniTransferMessage::UtxoConfirmedTxHash { destination_chain } => {
+            get_utxo_chain_token(config, *destination_chain)
+                .is_some_and(|token| config.bridge_indexer.is_token_whitelisted(&token))
+        }
+        OmniTransferMessage::TransferUtxoToNear { .. } => {
+            get_utxo_chain_token(config, origin_chain)
+                .is_some_and(|token| config.bridge_indexer.is_token_whitelisted(&token))
+        }
+        OmniTransferMessage::NearClaimFeeEvent(_)
+        | OmniTransferMessage::EvmFinTransferMessage(_)
+        | OmniTransferMessage::SolanaFinTransfer(_)
+        | OmniTransferMessage::StarknetFinTransfer(_)
+        | OmniTransferMessage::NearFastTransferMessage { .. }
+        | OmniTransferMessage::NearFailedTransferMessage { .. }
+        | OmniTransferMessage::UtxoVerifyDeposit { .. }
+        | OmniTransferMessage::UtxoVerifyWithdraw { .. } => false,
+    }
+}
+
+fn get_utxo_chain_token(config: &config::Config, chain: ChainKind) -> Option<OmniAddress> {
+    match chain {
+        ChainKind::Btc => config.near.btc.clone().map(OmniAddress::Near),
+        ChainKind::Zcash => config.near.zcash.clone().map(OmniAddress::Near),
+        _ => None,
+    }
+}
+
 #[allow(clippy::too_many_lines)]
 async fn handle_transaction_event(
     config: &config::Config,
@@ -105,6 +166,16 @@ async fn handle_transaction_event(
     origin: OmniTransactionOrigin,
     event: OmniTransactionEvent,
 ) -> Result<()> {
+    if config.bridge_indexer.is_whitelist_active()
+        && !is_whitelisted_transaction_event(config, event.transfer_id.origin_chain, &event.transfer_message)
+    {
+        debug!(
+            "Whitelist mode active, skipping transaction event: {:?}",
+            event.transfer_id
+        );
+        return Ok(());
+    }
+
     match event.transfer_message {
         OmniTransferMessage::NearTransferMessage(transfer_message) => {
             info!(
@@ -778,6 +849,10 @@ async fn watch_omni_events_collection(
                             });
                         }
                         OmniEventData::Meta(meta_event) => {
+                            if config.bridge_indexer.is_whitelist_active() {
+                                continue;
+                            }
+
                             tokio::spawn({
                                 let mut redis_connection_manager = redis_connection_manager.clone();
                                 let config = config.clone();
