@@ -1050,6 +1050,7 @@ impl Contract {
     }
 
     #[payable]
+    #[trusted_relayer]
     #[pause(except(roles(Role::DAO)))]
     pub fn claim_fee(&mut self, #[serializer(borsh)] args: ClaimFeeArgs) -> Promise {
         self.verify_proof(args.chain_kind, args.prover_args).then(
