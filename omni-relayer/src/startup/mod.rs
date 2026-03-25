@@ -159,7 +159,7 @@ fn build_starknet_bridge_client(config: &config::Config) -> Result<Option<Starkn
 fn build_utxo_bridge_client<C: utxo_bridge_client::types::UTXOChain>(
     config: &config::Config,
     chain: ChainKind,
-) -> Result<UTXOBridgeClient<C>> {
+) -> Result<Option<UTXOBridgeClient<C>>> {
     let utxo = match chain {
         ChainKind::Btc => &config.btc,
         ChainKind::Zcash => &config.zcash,
@@ -177,9 +177,8 @@ fn build_utxo_bridge_client<C: utxo_bridge_client::types::UTXOChain>(
         }
     };
 
-    utxo.as_ref()
-        .map(|utxo| UTXOBridgeClient::new(utxo.rpc_http_url.clone(), AuthOptions::None))
-        .context("Failed to create UtxoBridgeClient")
+    Ok(utxo.as_ref()
+        .map(|utxo| UTXOBridgeClient::new(utxo.rpc_http_url.clone(), AuthOptions::None)))
 }
 
 fn build_wormhole_bridge_client(config: &config::Config) -> Result<WormholeBridgeClient> {
@@ -268,8 +267,8 @@ pub async fn build_omni_connector(
         .solana_bridge_client(solana_bridge_client)
         .starknet_bridge_client(starknet_bridge_client)
         .wormhole_bridge_client(Some(wormhole_bridge_client))
-        .btc_bridge_client(Some(btc_bridge_client))
-        .zcash_bridge_client(Some(zcash_bridge_client))
+        .btc_bridge_client(btc_bridge_client)
+        .zcash_bridge_client(zcash_bridge_client)
         .enable_orchard(config.orchard.as_ref().map(|orchard| orchard.enabled))
         .eth_light_client(eth_light_client)
         .btc_light_client(btc_light_client)
