@@ -22,6 +22,7 @@ pub mod near_events;
 pub mod prover_args;
 pub mod prover_result;
 pub mod sol_address;
+pub mod starknet;
 pub mod utils;
 
 #[cfg(test)]
@@ -254,8 +255,8 @@ impl OmniAddress {
             Self::Bnb(address) => ("bnb", address.to_string()),
             Self::Pol(address) => ("pol", address.to_string()),
             Self::HyperEvm(address) => ("hlevm", address.to_string()),
-            Self::Btc(address) => ("btc", address.to_string()),
-            Self::Zcash(address) => ("zcash", address.to_string()),
+            Self::Btc(address) => ("btc", address.clone()),
+            Self::Zcash(address) => ("zcash", address.clone()),
             Self::Strk(address) => ("strk", address.to_string()),
             Self::Abs(address) => ("abs", address.to_string()),
         };
@@ -890,5 +891,24 @@ impl DestinationChainMsg {
 
     pub fn from_json(s: &str) -> Option<Self> {
         serde_json::from_str(s).ok()
+    }
+}
+
+pub fn get_native_token_address(chain_kind: ChainKind) -> Result<OmniAddress, String> {
+    match chain_kind {
+        ChainKind::Strk => OmniAddress::from_str(
+            "strk:0x04718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d",
+        ),
+        ChainKind::Eth
+        | ChainKind::Near
+        | ChainKind::Sol
+        | ChainKind::Arb
+        | ChainKind::Base
+        | ChainKind::Bnb
+        | ChainKind::Btc
+        | ChainKind::Zcash
+        | ChainKind::Pol
+        | ChainKind::HyperEvm
+        | ChainKind::Abs => OmniAddress::new_zero(chain_kind),
     }
 }

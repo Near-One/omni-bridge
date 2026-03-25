@@ -10,14 +10,20 @@ use near_sdk::{
 };
 use omni_types::btc::{TokenReceiverMessage, TxOut, UTXOChainConfig};
 use omni_types::errors::BridgeError;
-use omni_types::{ChainKind, DestinationChainMsg, Fee, OmniAddress, TransferId, TransferMessage};
+use omni_types::{
+    get_native_token_address, ChainKind, DestinationChainMsg, Fee, TransferId, TransferMessage,
+};
+use omni_utils::macros::trusted_relayer;
+use omni_utils::near_expect::NearExpect;
 
 const SUBMIT_TRANSFER_TO_BTC_CONNECTOR_CALLBACK_GAS: Gas = Gas::from_tgas(5);
 const WITHDRAW_RBF_GAS: Gas = Gas::from_tgas(100);
 
+#[trusted_relayer]
 #[near]
 impl Contract {
     #[payable]
+    #[trusted_relayer]
     #[pause(except(roles(Role::DAO)))]
     pub fn submit_transfer_to_utxo_chain_connector(
         &mut self,
@@ -26,11 +32,6 @@ impl Contract {
         fee_recipient: Option<AccountId>,
         fee: &Option<Fee>,
     ) -> Promise {
-        require!(
-            self.is_trusted_relayer(&env::predecessor_account_id()),
-            BridgeError::RelayerNotActive.as_ref()
-        );
-
         let transfer = self.get_transfer_message_storage(transfer_id);
 
         let message = serde_json::from_str::<TokenReceiverMessage>(&msg).expect("INVALID MSG");
@@ -125,9 +126,8 @@ impl Contract {
         decimals: u8,
     ) {
         let storage_usage = env::storage_usage();
-        let token_address = OmniAddress::new_zero(chain_kind).unwrap_or_else(|_| {
-            env::panic_str(BridgeError::FailedToGetZeroAddress.to_string().as_str())
-        });
+        let token_address = get_native_token_address(chain_kind)
+            .near_expect(BridgeError::FailedToGetNativeTokenAddress);
 
         self.add_token(&utxo_chain_token_id, &token_address, decimals, decimals);
 

@@ -9,10 +9,10 @@ use near_lake_framework::near_indexer_primitives::{
 use near_primitives::{hash::CryptoHash, types::AccountId};
 use omni_types::{ChainKind, near_events::OmniBridgeEvent};
 
-use crate::{config, utils, workers::RetryableEvent};
-
-pub const RETRY_ATTEMPTS: u64 = 10;
-pub const RETRY_SLEEP_SECS: u64 = 5;
+use crate::{
+    config, utils,
+    workers::{EventAction, RetryableEvent},
+};
 
 pub async fn get_final_block(jsonrpc_client: &JsonRpcClient) -> Result<u64> {
     info!("Getting final block");
@@ -30,12 +30,12 @@ pub async fn get_final_block(jsonrpc_client: &JsonRpcClient) -> Result<u64> {
         .map_err(Into::into)
 }
 
-pub async fn is_tx_successful(
+pub async fn resolve_tx_action(
     jsonrpc_client: &JsonRpcClient,
     tx_hash: CryptoHash,
     sender_account_id: AccountId,
-    specific_errors: Option<Vec<String>>,
-) -> bool {
+    retryable_errors: &[&str],
+) -> EventAction {
     let request = near_jsonrpc_client::methods::tx::RpcTransactionStatusRequest {
         transaction_info: near_jsonrpc_client::methods::tx::TransactionInfo::TransactionId {
             tx_hash,
@@ -44,51 +44,32 @@ pub async fn is_tx_successful(
         wait_until: near_primitives::views::TxExecutionStatus::Final,
     };
 
-    let mut response = None;
-
-    for _ in 0..RETRY_ATTEMPTS {
-        if let Ok(res) = jsonrpc_client.call(&request).await {
-            response = Some(res);
-            break;
+    let response = match jsonrpc_client.call(request).await {
+        Ok(res) => res,
+        Err(err) => {
+            warn!("Failed to get transaction status for {tx_hash}: {err:?}");
+            return EventAction::Retry;
         }
-
-        tokio::time::sleep(tokio::time::Duration::from_secs(RETRY_SLEEP_SECS)).await;
-    }
-
-    let Some(response) = response else {
-        warn!("Failed to get transaction status");
-        return false;
     };
 
     if let Some(near_primitives::views::FinalExecutionOutcomeViewEnum::FinalExecutionOutcome(
-        final_execution_outcome,
+        outcome,
     )) = response.final_execution_outcome
     {
-        for receipt_outcome in final_execution_outcome.receipts_outcome {
-            if let near_primitives::views::ExecutionStatusView::Failure(tx_execution_error) =
+        for receipt_outcome in outcome.receipts_outcome {
+            if let near_primitives::views::ExecutionStatusView::Failure(ref err) =
                 receipt_outcome.outcome.status
             {
-                warn!(
-                    "Found failed receipt in the transaction ({tx_hash}): {tx_execution_error:?}"
-                );
-
-                if let Some(ref specific_errors) = specific_errors {
-                    if specific_errors.iter().any(|specific_error| {
-                        tx_execution_error.to_string().contains(specific_error)
-                    }) {
-                        info!(
-                            "Transaction ({tx_hash}) failed with specific error: {tx_execution_error:?}"
-                        );
-                        return false;
-                    }
-                } else {
-                    return false;
+                let err_str = err.to_string();
+                if retryable_errors.iter().any(|e| err_str.contains(e)) {
+                    warn!("Transaction {tx_hash} has retryable receipt failure: {err:?}");
+                    return EventAction::Retry;
                 }
             }
         }
     }
 
-    true
+    EventAction::Remove
 }
 
 pub async fn handle_streamer_message(

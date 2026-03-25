@@ -11,7 +11,7 @@ use omni_types::{
     prover_result::{FinTransferMessage, InitTransferMessage, ProverResult},
     sol_address::SolAddress,
     BridgeOnTransferMsg, ChainKind, EvmAddress, Fee, InitTransferMsg, Nonce, OmniAddress,
-    TransferId, TransferMessage, UpdateFee,
+    TransferId, TransferIdKind, TransferMessage, UnifiedTransferId, UpdateFee,
 };
 
 use crate::Contract;
@@ -347,6 +347,7 @@ fn run_update_transfer_fee(
     new_fee: UpdateFee,
     attached_deposit: Option<NearToken>,
     new_sender_id: Option<String>,
+    origin_transfer_id: Option<UnifiedTransferId>,
 ) {
     use std::str::FromStr;
 
@@ -361,7 +362,7 @@ fn run_update_transfer_fee(
         sender: OmniAddress::Near(sender_id.clone().parse().unwrap()),
         msg: String::new(),
         destination_nonce: 1,
-        origin_transfer_id: None,
+        origin_transfer_id,
     };
 
     contract.insert_raw_transfer(
@@ -400,6 +401,7 @@ fn test_update_transfer_fee_same_fee() {
         UpdateFee::Fee(fee.clone()),
         Some(NearToken::from_yoctonear(0)),
         None,
+        None,
     );
 
     let updated_transfer = contract.get_transfer_message(DEFAULT_TRANSFER_ID);
@@ -425,6 +427,7 @@ fn test_update_transfer_fee_valid() {
         DEFAULT_NEAR_USER_ACCOUNT.to_string(),
         &fee,
         UpdateFee::Fee(new_fee.clone()),
+        None,
         None,
         None,
     );
@@ -455,6 +458,7 @@ fn test_update_transfer_fee_exceeds_amount() {
         UpdateFee::Fee(new_fee),
         None,
         None,
+        None,
     );
 }
 
@@ -478,6 +482,7 @@ fn test_update_transfer_fee_lower_native_fee() {
         DEFAULT_NEAR_USER_ACCOUNT.to_string(),
         &init_fee,
         UpdateFee::Fee(new_fee),
+        None,
         None,
         None,
     );
@@ -506,6 +511,7 @@ fn test_update_transfer_fee_invalid_deposit() {
         UpdateFee::Fee(new_fee),
         Some(NearToken::from_yoctonear(2)), // Wrong deposit amount
         None,
+        None,
     );
 }
 
@@ -531,6 +537,7 @@ fn test_update_transfer_fee_wrong_sender() {
         UpdateFee::Fee(new_fee.clone()),
         None,
         Some("different_user.testnet".to_string()),
+        None,
     );
 }
 
@@ -555,6 +562,36 @@ fn test_update_transfer_native_fee_different_sender() {
         UpdateFee::Fee(new_fee.clone()),
         None,
         Some("different_user.testnet".to_string()),
+        None,
+    );
+}
+
+#[test]
+#[should_panic(expected = "ERR_UPDATE_FEE_NOT_ALLOWED_FOR_TRANSFER")]
+fn test_update_transfer_fee_origin_transfer() {
+    let mut contract = get_default_contract();
+
+    let init_fee = Fee {
+        fee: U128(DEFAULT_TRANSFER_AMOUNT - 2),
+        native_fee: U128(10),
+    };
+
+    let new_fee = Fee {
+        fee: U128(DEFAULT_TRANSFER_AMOUNT - 1),
+        native_fee: U128(10),
+    };
+
+    run_update_transfer_fee(
+        &mut contract,
+        DEFAULT_NEAR_USER_ACCOUNT.to_string(), // Original sender
+        &init_fee,
+        UpdateFee::Fee(new_fee.clone()),
+        None,
+        None,
+        Some(UnifiedTransferId {
+            origin_chain: ChainKind::Sol,
+            kind: TransferIdKind::Nonce(1),
+        }),
     );
 }
 

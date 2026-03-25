@@ -15,10 +15,7 @@ use near_primitives::views::TxExecutionStatus;
 use near_rpc_client::NearRpcError;
 
 use omni_connector::OmniConnector;
-use omni_types::{
-    ChainKind, Fee, OmniAddress, TransferId, locker_args::ClaimFeeArgs,
-    prover_args::WormholeVerifyProofArgs, prover_result::ProofKind,
-};
+use omni_types::{ChainKind, Fee, TransferId};
 
 use crate::{config, utils};
 
@@ -33,32 +30,32 @@ pub async fn process_init_transfer_event(
     transfer: Transfer,
     near_nonce: Arc<utils::nonce::NonceManager>,
 ) -> Result<EventAction> {
-    let Transfer::Solana {
+    let Transfer::Starknet {
+        ref tx_hash,
         ref sender,
-        ref token,
         ref recipient,
-        fee,
-        native_fee,
-        ref emitter,
-        sequence,
+        origin_nonce,
+        ref token,
+        amount: _,
+        ref fee,
         ..
     } = transfer
     else {
-        anyhow::bail!("Expected SolanaInitTransferWithTimestamp, got: {transfer:?}");
+        anyhow::bail!("Expected StarknetInitTransfer, got: {transfer:?}");
     };
 
     let transfer_id = TransferId {
-        origin_chain: sender.get_chain(),
-        origin_nonce: sequence,
+        origin_chain: ChainKind::Strk,
+        origin_nonce,
     };
 
     info!(
-        "Processing Solana InitTransfer ({:?}:{})",
+        "Processing Starknet InitTransfer ({:?}:{}): {tx_hash}",
         transfer_id.origin_chain, transfer_id.origin_nonce
     );
 
     match omni_connector
-        .is_transfer_finalised(Some(sender.get_chain()), ChainKind::Near, sequence)
+        .is_transfer_finalised(Some(ChainKind::Strk), ChainKind::Near, origin_nonce)
         .await
     {
         Ok(true) => anyhow::bail!("Transfer is already finalised: {transfer_id:?}"),
@@ -70,13 +67,8 @@ pub async fn process_init_transfer_event(
     }
 
     if config.is_bridge_api_enabled() {
-        let token =
-            OmniAddress::new_from_slice(ChainKind::Sol, &token.to_bytes()).map_err(|err| {
-                anyhow::anyhow!("Failed to parse \"{sender}\" as `OmniAddress`: {err:?}")
-            })?;
-
         let Ok(needed_fee) =
-            utils::bridge_api::TransferFee::get_transfer_fee(config, sender, recipient, &token)
+            utils::bridge_api::TransferFee::get_transfer_fee(config, sender, recipient, token)
                 .await
         else {
             warn!("Failed to get transfer fee for transfer: {transfer:?}");
@@ -84,8 +76,8 @@ pub async fn process_init_transfer_event(
         };
 
         let provided_fee = Fee {
-            fee,
-            native_fee: u128::from(native_fee).into(),
+            fee: fee.fee,
+            native_fee: fee.native_fee,
         };
 
         if let Some(event_action) = needed_fee
@@ -102,17 +94,6 @@ pub async fn process_init_transfer_event(
         }
     }
 
-    let Ok(vaa) = omni_connector
-        .wormhole_get_vaa(config.wormhole.solana_chain_id, &emitter, sequence)
-        .await
-    else {
-        warn!(
-            "VAA is not ready for {:?}:{}",
-            transfer_id.origin_chain, transfer_id.origin_nonce
-        );
-        return Ok(EventAction::Retry);
-    };
-
     let fee_recipient = omni_connector
         .near_bridge_client()
         .and_then(NearBridgeClient::account_id)
@@ -120,18 +101,19 @@ pub async fn process_init_transfer_event(
 
     let storage_deposit_actions = match utils::storage::get_storage_deposit_actions(
         &omni_connector,
-        ChainKind::Sol,
+        ChainKind::Strk,
         recipient,
         &fee_recipient,
         &token.to_string(),
-        fee.0,
-        u128::from(native_fee),
+        fee.fee.0,
+        fee.native_fee.0,
     )
     .await
     {
         Ok(actions) => actions,
         Err(err) => {
-            anyhow::bail!("Failed to get storage deposit actions: {err}");
+            warn!("Failed to get storage deposit actions: {err}");
+            return Ok(EventAction::Retry);
         }
     };
 
@@ -140,11 +122,11 @@ pub async fn process_init_transfer_event(
         .await
         .context("Failed to reserve nonce for near transaction")?;
 
-    let fin_transfer_args = omni_connector::FinTransferArgs::NearFinTransferWithVaa {
-        chain_kind: ChainKind::Sol,
+    let fin_transfer_args = omni_connector::FinTransferArgs::NearFinTransferWithMpcProof {
+        chain_kind: ChainKind::Strk,
         destination_chain: recipient.get_chain(),
         storage_deposit_actions,
-        vaa,
+        tx_hash: tx_hash.clone(),
         transaction_options: TransactionOptions {
             nonce: Some(nonce),
             wait_until: TxExecutionStatus::Included,
@@ -177,102 +159,96 @@ pub async fn process_init_transfer_event(
                         JsonRpcError::TransportError(_) | JsonRpcError::ServerError(_),
                     )
                     | NearRpcError::RpcTransactionError(JsonRpcError::TransportError(_)) => {
-                        warn!("Failed to finalize transfer, retrying: {near_rpc_error:?}",);
+                        warn!(
+                            "Failed to finalize Starknet transfer ({:?}:{}), retrying: {near_rpc_error:?}",
+                            transfer_id.origin_chain, transfer_id.origin_nonce
+                        );
                         return Ok(EventAction::Retry);
                     }
                     _ => {
-                        anyhow::bail!("Failed to finalize transfer: {near_rpc_error:?}");
+                        anyhow::bail!(
+                            "Failed to finalize Starknet transfer ({:?}:{}): {near_rpc_error:?}",
+                            transfer_id.origin_chain,
+                            transfer_id.origin_nonce
+                        );
                     }
                 };
             }
 
-            anyhow::bail!("Failed to finalize transfer: {err:?}");
+            anyhow::bail!(
+                "Failed to finalize Starknet transfer ({:?}:{}): {err:?}",
+                transfer_id.origin_chain,
+                transfer_id.origin_nonce
+            );
         }
     }
 }
 
 pub async fn process_fin_transfer_event(
-    config: &config::Config,
     jsonrpc_client: &JsonRpcClient,
     omni_connector: Arc<OmniConnector>,
     signer: AccountId,
     fin_transfer: FinTransfer,
     near_nonce: Arc<utils::nonce::NonceManager>,
 ) -> Result<EventAction> {
-    let FinTransfer::Solana {
-        emitter,
-        sequence,
+    let FinTransfer::Starknet {
+        tx_hash,
         transfer_id,
     } = fin_transfer
     else {
-        anyhow::bail!("Expected Solana FinTransfer, got: {fin_transfer:?}");
+        anyhow::bail!("Expected Starknet FinTransfer, got: {fin_transfer:?}");
     };
 
     info!(
-        "Processing Solana FinTransfer ({:?}:{sequence})",
-        ChainKind::Sol
+        "Processing Starknet FinTransfer ({:?}): {tx_hash}",
+        ChainKind::Strk
     );
 
-    if let Some(transfer_id) = transfer_id {
-        if let Err(BridgeSdkError::NearRpcError(NearRpcError::RpcQueryError(
-            JsonRpcError::ServerError(JsonRpcServerError::HandlerError(
-                RpcQueryError::ContractExecutionError { vm_error, .. },
-            )),
-        ))) = omni_connector.near_get_transfer_message(transfer_id).await
-        {
-            // TODO: refactor when enum errors will become available on mainnet
-            if vm_error.contains("The transfer does not exist") {
-                info!("No fee to claim for FinTransfer ({transfer_id:?})");
-                return Ok(EventAction::Remove);
-            }
+    if let Err(BridgeSdkError::NearRpcError(NearRpcError::RpcQueryError(
+        JsonRpcError::ServerError(JsonRpcServerError::HandlerError(
+            RpcQueryError::ContractExecutionError { vm_error, .. },
+        )),
+    ))) = omni_connector.near_get_transfer_message(transfer_id).await
+    {
+        // TODO: refactor when enum errors will become available on mainnet
+        if vm_error.contains("The transfer does not exist") {
+            info!("No fee to claim for Starknet FinTransfer ({transfer_id:?})");
+            return Ok(EventAction::Remove);
         }
     }
-
-    let Ok(vaa) = omni_connector
-        .wormhole_get_vaa(config.wormhole.solana_chain_id, emitter, sequence)
-        .await
-    else {
-        warn!("VAA is not ready for {:?}:{sequence}", ChainKind::Sol);
-        return Ok(EventAction::Retry);
-    };
-
-    let Ok(prover_args) = borsh::to_vec(&WormholeVerifyProofArgs {
-        proof_kind: ProofKind::FinTransfer,
-        vaa,
-    }) else {
-        anyhow::bail!("Failed to serialize prover args for {sequence}");
-    };
-
-    let claim_fee_args = ClaimFeeArgs {
-        chain_kind: ChainKind::Sol,
-        prover_args,
-    };
 
     let nonce = near_nonce
         .reserve_nonce()
         .await
         .context("Failed to reserve nonce for near transaction")?;
 
-    match omni_connector
-        .near_claim_fee(
-            claim_fee_args,
-            TransactionOptions {
-                nonce: Some(nonce),
-                wait_until: near_primitives::views::TxExecutionStatus::Included,
-                wait_final_outcome_timeout_sec: None,
-            },
-        )
-        .await
-    {
-        Ok(tx_hash) => Ok(utils::near::resolve_tx_action(
-            jsonrpc_client,
-            tx_hash,
-            signer,
-            &["Request has timed out."],
-        )
-        .await),
+    let claim_fee_args = omni_connector::ClaimFeeArgs::ClaimFeeWithMpcProofTx {
+        chain_kind: ChainKind::Strk,
+        tx_hash: tx_hash.clone(),
+        transaction_options: TransactionOptions {
+            nonce: Some(nonce),
+            wait_until: TxExecutionStatus::Included,
+            wait_final_outcome_timeout_sec: None,
+        },
+    };
+
+    match omni_connector.claim_fee(claim_fee_args).await {
+        Ok(tx_hash) => {
+            let Ok(crypto_hash) = tx_hash.parse() else {
+                warn!("Failed to parse {tx_hash} as CryptoHash");
+                return Ok(EventAction::Remove);
+            };
+
+            Ok(utils::near::resolve_tx_action(
+                jsonrpc_client,
+                crypto_hash,
+                signer,
+                &["Request has timed out."],
+            )
+            .await)
+        }
         Err(err) => {
-            if let BridgeSdkError::NearRpcError(ref near_rpc_error) = err {
+            if let BridgeSdkError::NearRpcError(near_rpc_error) = err {
                 match near_rpc_error {
                     NearRpcError::NonceError
                     | NearRpcError::FinalizationError
@@ -281,48 +257,33 @@ pub async fn process_fin_transfer_event(
                         JsonRpcError::TransportError(_) | JsonRpcError::ServerError(_),
                     )
                     | NearRpcError::RpcTransactionError(JsonRpcError::TransportError(_)) => {
-                        warn!("Failed to claim fee, retrying: {near_rpc_error:?}");
+                        warn!("Failed to claim Starknet fee, retrying: {near_rpc_error:?}");
                         return Ok(EventAction::Retry);
                     }
                     _ => {
-                        anyhow::bail!("Failed to claim fee: {err:?}");
+                        anyhow::bail!("Failed to claim Starknet fee: {near_rpc_error:?}");
                     }
                 };
             }
-            anyhow::bail!("Failed to claim fee: {err:?}");
+
+            anyhow::bail!("Failed to claim Starknet fee: {err:?}");
         }
     }
 }
 
 pub async fn process_deploy_token_event(
-    config: &config::Config,
     omni_connector: Arc<OmniConnector>,
     deploy_token_event: DeployToken,
     near_nonce: Arc<utils::nonce::NonceManager>,
 ) -> Result<EventAction> {
-    let DeployToken::Solana { emitter, sequence } = deploy_token_event else {
-        anyhow::bail!("Expected Solana DeployToken, got: {deploy_token_event:?}");
+    let DeployToken::Starknet { tx_hash } = deploy_token_event else {
+        anyhow::bail!("Expected Starknet DeployToken, got: {deploy_token_event:?}");
     };
 
     info!(
-        "Processing Solana DeployToken ({:?}:{sequence})",
-        ChainKind::Sol
+        "Processing Starknet DeployToken ({:?}): {tx_hash}",
+        ChainKind::Strk
     );
-
-    let Ok(vaa) = omni_connector
-        .wormhole_get_vaa(config.wormhole.solana_chain_id, emitter, sequence)
-        .await
-    else {
-        warn!("VAA is not ready for {:?}:{sequence}", ChainKind::Sol);
-        return Ok(EventAction::Retry);
-    };
-
-    let Ok(prover_args) = borsh::to_vec(&WormholeVerifyProofArgs {
-        proof_kind: ProofKind::DeployToken,
-        vaa,
-    }) else {
-        anyhow::bail!("Failed to serialize prover args for {sequence}");
-    };
 
     let nonce = match near_nonce.reserve_nonce().await {
         Ok(nonce) => Some(nonce),
@@ -332,9 +293,9 @@ pub async fn process_deploy_token_event(
         }
     };
 
-    let bind_token_args = omni_connector::BindTokenArgs::BindTokenWithArgs {
-        chain_kind: ChainKind::Sol,
-        prover_args,
+    let bind_token_args = omni_connector::BindTokenArgs::BindTokenWithMpcProofTx {
+        chain_kind: ChainKind::Strk,
+        tx_hash,
         transaction_options: TransactionOptions {
             nonce,
             wait_until: near_primitives::views::TxExecutionStatus::Included,
@@ -343,8 +304,8 @@ pub async fn process_deploy_token_event(
     };
 
     match omni_connector.bind_token(bind_token_args).await {
-        Ok(tx_hash) => {
-            info!("Bound token: {tx_hash:?}");
+        Ok(near_tx_hash) => {
+            info!("Bound Starknet token: {near_tx_hash:?}");
             Ok(EventAction::Remove)
         }
         Err(err) => {
@@ -357,16 +318,16 @@ pub async fn process_deploy_token_event(
                         JsonRpcError::TransportError(_) | JsonRpcError::ServerError(_),
                     )
                     | NearRpcError::RpcTransactionError(JsonRpcError::TransportError(_)) => {
-                        warn!("Failed to bind token, retrying: {near_rpc_error:?}");
+                        warn!("Failed to bind Starknet token, retrying: {near_rpc_error:?}");
                         return Ok(EventAction::Retry);
                     }
                     _ => {
-                        anyhow::bail!("Failed to bind token: {near_rpc_error:?}");
+                        anyhow::bail!("Failed to bind Starknet token: {near_rpc_error:?}");
                     }
                 };
             }
 
-            anyhow::bail!("Failed to bind token: {err:?}");
+            anyhow::bail!("Failed to bind Starknet token: {err:?}");
         }
     }
 }

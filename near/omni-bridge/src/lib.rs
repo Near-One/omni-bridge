@@ -8,7 +8,7 @@ use near_plugins::{
 
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::collections::{LookupMap, LookupSet, UnorderedMap};
-use near_sdk::json_types::{Base64VecU8, U128, U64};
+use near_sdk::json_types::{Base64VecU8, U128};
 use near_sdk::serde::{Deserialize, Serialize};
 use near_sdk::serde_json::json;
 use near_sdk::{
@@ -25,11 +25,13 @@ use omni_types::mpc_types::SignatureResponse;
 use omni_types::near_events::OmniBridgeEvent;
 use omni_types::prover_result::ProverResult;
 use omni_types::{
-    BasicMetadata, BridgeOnTransferMsg, ChainKind, DestinationChainMsg, FastFinTransferMsg,
-    FastTransfer, FastTransferId, FastTransferStatus, Fee, InitTransferMsg, MetadataPayload, Nonce,
-    OmniAddress, PayloadType, SignRequest, TransferId, TransferIdKind, TransferMessage,
-    TransferMessagePayload, UnifiedTransferId, UpdateFee, UtxoFinTransferMsg, H160,
+    get_native_token_address, BasicMetadata, BridgeOnTransferMsg, ChainKind, DestinationChainMsg,
+    FastFinTransferMsg, FastTransfer, FastTransferId, FastTransferStatus, Fee, InitTransferMsg,
+    MetadataPayload, Nonce, OmniAddress, PayloadType, SignRequest, TransferId, TransferIdKind,
+    TransferMessage, TransferMessagePayload, UnifiedTransferId, UpdateFee, UtxoFinTransferMsg,
+    H160,
 };
+use omni_utils::macros::trusted_relayer;
 use omni_utils::near_expect::NearExpect;
 use omni_utils::promise::PromiseOrPromiseIndexOrValue;
 use std::collections::HashMap;
@@ -42,7 +44,6 @@ use token_lock::LockAction;
 
 mod btc;
 mod migrate;
-mod relayer_staking;
 mod storage;
 mod token_lock;
 
@@ -77,7 +78,7 @@ const FAST_TRANSFER_CALLBACK_GAS: Gas = Gas::from_tgas(10);
 const NO_DEPOSIT: NearToken = NearToken::from_near(0);
 const ONE_YOCTO: NearToken = NearToken::from_yoctonear(1);
 const SEND_TOKENS_CALLBACK_GAS: Gas = Gas::from_tgas(15);
-const VERIFY_PROOF_GAS: Gas = Gas::from_tgas(20);
+const VERIFY_PROOF_GAS: Gas = Gas::from_tgas(30);
 const INIT_TRANSFER_RESUME_GAS: Gas = Gas::from_tgas(10);
 const SIGN_PATH: &str = "bridge-1";
 
@@ -105,7 +106,7 @@ enum StorageKey {
     FinalisedUtxoTransfers,
     LockedTokens,
     DeployedTokensV2,
-    Relayers,
+    _Relayers,
 }
 
 #[derive(AccessControlRole, Deserialize, Serialize, Copy, Clone)]
@@ -124,29 +125,6 @@ pub enum Role {
     TokenUpgrader,
     TokenLockController,
     RelayerManager,
-}
-
-#[derive(Debug, Clone)]
-#[near(serializers = [borsh, json])]
-pub struct RelayerState {
-    pub stake: NearToken,
-    pub activate_at: U64,
-}
-
-#[derive(Debug, Clone)]
-#[near(serializers = [borsh, json])]
-pub struct RelayerConfig {
-    pub stake_required: NearToken,
-    pub waiting_period_ns: U64,
-}
-
-impl Default for RelayerConfig {
-    fn default() -> Self {
-        Self {
-            stake_required: NearToken::from_near(1000),
-            waiting_period_ns: U64(7 * 24 * 60 * 60 * 1_000_000_000),
-        }
-    }
 }
 
 #[ext_contract(ext_token)]
@@ -261,10 +239,13 @@ pub struct Contract {
     pub utxo_chain_connectors: HashMap<ChainKind, UTXOChainConfig>,
     pub migrated_tokens: LookupMap<AccountId, AccountId>,
     pub locked_tokens: LookupMap<(ChainKind, AccountId), u128>,
-    pub relayers: LookupMap<AccountId, RelayerState>,
-    pub relayer_config: RelayerConfig,
 }
 
+#[trusted_relayer(
+    bypass_roles(Role::DAO, Role::UnrestrictedRelayer),
+    manager_roles(Role::DAO, Role::RelayerManager),
+    config_roles(Role::DAO)
+)]
 #[near]
 impl Contract {
     #[pause(except(roles(Role::DAO, Role::UnrestrictedDeposit)))]
@@ -324,8 +305,6 @@ impl Contract {
             utxo_chain_connectors: HashMap::new(),
             migrated_tokens: LookupMap::new(StorageKey::MigratedTokens),
             locked_tokens: LookupMap::new(StorageKey::LockedTokens),
-            relayers: LookupMap::new(StorageKey::Relayers),
-            relayer_config: RelayerConfig::default(),
         };
 
         contract.acl_init_super_admin(near_sdk::env::predecessor_account_id());
@@ -410,6 +389,11 @@ impl Contract {
             UpdateFee::Fee(fee) => {
                 let mut transfer = self.get_transfer_message_storage(transfer_id);
 
+                require!(
+                    transfer.message.origin_transfer_id.is_none(),
+                    BridgeError::UpdateFeeNotAllowedForTransfer.as_ref()
+                );
+
                 let current_fee = transfer.message.fee;
                 require!(
                     fee.fee >= current_fee.fee && fee.fee < transfer.message.amount,
@@ -457,6 +441,7 @@ impl Contract {
     /// - If the `borsh::to_vec` serialization of the `TransferMessagePayload` fails.
     /// - If a `fee` is provided and it doesn't match the fee in the stored transfer message.
     #[payable]
+    #[trusted_relayer]
     #[pause(except(roles(Role::DAO)))]
     pub fn sign_transfer(
         &mut self,
@@ -464,11 +449,6 @@ impl Contract {
         fee_recipient: Option<AccountId>,
         fee: &Option<Fee>,
     ) -> Promise {
-        require!(
-            self.is_trusted_relayer(&env::predecessor_account_id()),
-            BridgeError::RelayerNotActive.as_ref()
-        );
-
         let transfer_message = self.get_transfer_message(transfer_id);
 
         if let Some(fee) = &fee {
@@ -686,13 +666,9 @@ impl Contract {
     }
 
     #[payable]
+    #[trusted_relayer]
     #[pause(except(roles(Role::DAO)))]
     pub fn fin_transfer(&mut self, #[serializer(borsh)] args: FinTransferArgs) -> Promise {
-        require!(
-            self.is_trusted_relayer(&env::predecessor_account_id()),
-            BridgeError::RelayerNotActive.as_ref()
-        );
-
         require!(
             args.storage_deposit_actions.len() <= 3,
             BridgeError::InvalidStorageAccountsLen.as_ref()
@@ -963,7 +939,7 @@ impl Contract {
         );
 
         let mut required_balance =
-            self.add_fast_transfer(fast_transfer, relayer_id.clone(), storage_payer.clone());
+            self.add_fast_transfer(fast_transfer, relayer_id, storage_payer.clone());
 
         let destination_nonce =
             self.get_next_destination_nonce(fast_transfer.get_destination_chain());
@@ -975,7 +951,7 @@ impl Contract {
             amount: fast_transfer.amount,
             recipient: fast_transfer.recipient.clone(),
             fee: fast_transfer.fee.clone(),
-            sender: OmniAddress::Near(relayer_id),
+            sender: OmniAddress::Near(env::current_account_id()),
             msg: fast_transfer.msg.clone(),
             destination_nonce,
             origin_transfer_id: Some(fast_transfer.transfer_id.clone()),
@@ -1149,6 +1125,9 @@ impl Contract {
                 .get(&token_address)
                 .near_expect(BridgeError::TokenDecimalsNotFound),
         );
+        // Fee includes both the user-specified fee and any dust lost during decimal
+        // normalization (see `normalize_amount`). Since `denormalize(normalize(x)) <= x`
+        // due to floor division, the difference naturally captures the normalization remainder.
         let fee = transfer_message.amount.0 - denormalized_amount;
 
         self.send_fee_internal(&transfer_message, fee_recipient, fee)
@@ -1227,11 +1206,11 @@ impl Contract {
         symbol: String,
         decimals: u8,
     ) -> Promise {
+        let native_token_address = get_native_token_address(chain_kind)
+            .near_expect(BridgeError::FailedToGetNativeTokenAddress);
         self.deploy_token_internal(
             chain_kind,
-            &OmniAddress::new_zero(chain_kind).unwrap_or_else(|_| {
-                env::panic_str(BridgeError::FailedToGetZeroAddress.to_string().as_str())
-            }),
+            &native_token_address,
             BasicMetadata {
                 name,
                 symbol,
@@ -1427,7 +1406,7 @@ impl Contract {
 
     pub fn get_native_token_id(&self, chain: ChainKind) -> AccountId {
         let native_token_address =
-            OmniAddress::new_zero(chain).near_expect(BridgeError::FailedToGetZeroAddress);
+            get_native_token_address(chain).near_expect(BridgeError::FailedToGetNativeTokenAddress);
 
         self.get_token_id(&native_token_address)
     }
@@ -2760,6 +2739,9 @@ impl Contract {
         amount * (10_u128.pow(diff_decimals))
     }
 
+    /// Uses floor division — any sub-unit remainder ("dust") is truncated and not transferred
+    /// to the destination chain. When fee > 0, dust is absorbed into the fee via `claim_fee`.
+    /// When fee = 0, dust stays locked/burned. See SECURITY.md for details.
     fn normalize_amount(amount: u128, decimals: Decimals) -> u128 {
         let diff_decimals: u32 = (decimals.origin_decimals - decimals.decimals).into();
         amount / (10_u128.pow(diff_decimals))

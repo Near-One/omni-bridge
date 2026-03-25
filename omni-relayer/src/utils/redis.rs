@@ -11,8 +11,6 @@ pub const MONGODB_OMNI_EVENTS_RT: &str = "mongodb_omni_events_rt";
 pub const EVENTS: &str = "events";
 pub const SOLANA_EVENTS: &str = "solana_events";
 
-pub const STUCK_EVENTS: &str = "stuck_events";
-
 pub const FEE_MAPPING: &str = "fee_mapping";
 
 pub fn composite_key(parts: &[&str]) -> String {
@@ -109,6 +107,8 @@ pub async fn update_last_processed<K, V>(
     warn!("Failed to update last processed block in redis db");
 }
 
+const MAX_EVENTS_PER_BATCH: usize = 30;
+
 pub async fn get_events(
     config: &config::Config,
     redis_connection_manager: &mut ConnectionManager,
@@ -129,8 +129,6 @@ pub async fn get_events(
                 continue;
             }
         };
-
-        const MAX_EVENTS_PER_BATCH: usize = 30;
 
         let mut events = Vec::new();
         loop {

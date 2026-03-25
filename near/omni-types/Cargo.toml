@@ -4,6 +4,10 @@ version = "3.3.3"
 authors = ["Near One <info@nearone.org>"]
 edition = "2021"
 
+[features]
+abi = ["borsh/unstable__schema", "near-mpc-sdk/abi"]
+__abi-generate = ["near-sdk/__abi-generate"]
+
 [dependencies]
 near-sdk = { workspace = true, features = ["non-contract-usage"] }
 hex.workspace = true
@@ -17,6 +21,7 @@ schemars.workspace = true
 num_enum.workspace = true
 alloy.workspace = true
 omni-utils.workspace = true
+near-mpc-sdk = { workspace = true, features = ["abi"] }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 sha3.workspace = true
