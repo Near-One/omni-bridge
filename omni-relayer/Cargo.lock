@@ -6967,7 +6967,7 @@ dependencies = [
 
 [[package]]
 name = "omni-relayer"
-version = "0.5.17"
+version = "0.5.18"
 dependencies = [
  "alloy",
  "anyhow",
