@@ -24,7 +24,7 @@ name = "relayer-worker"
 stream = "RELAYER"
 subject = "relayer.tasks.>"
 max_deliver = -1
-backoff_secs = [5, 15, 60, 300, 900, 3600]
+backoff_secs = [60, 120, 300, 900, 3600]
 worker_count = 20
 
 [bridge_indexer]
@@ -36,6 +36,8 @@ db_name = "testnet_omni_bridge_db"
 
 # Discount that relayer can accept [default: 0]
 # fee_discount = 30
+# If set, only transfers with these tokens will be processed
+# whitelisted_tokens = ["eth:0x0000000000000000000000000000000000000000"]
 
 [near]
 network = "testnet"
