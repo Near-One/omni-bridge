@@ -751,10 +751,7 @@ impl Contract {
         signer_id: AccountId,
         fast_fin_transfer_msg: FastFinTransferMsg,
     ) -> PromiseOrPromiseIndexOrValue<U128> {
-        require!(
-            self.is_trusted_relayer(&signer_id),
-            BridgeError::RelayerNotActive.as_ref()
-        );
+        require!(self.is_trusted_relayer(&signer_id), "Relayer is not active");
 
         let origin_token = self
             .get_token_address(
