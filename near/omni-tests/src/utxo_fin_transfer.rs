@@ -513,7 +513,10 @@ mod tests {
             .args_json(json!({"account_id": random_account.id()}))
             .await?
             .json()?;
-        assert!(!is_trusted, "random account should not be a trusted relayer");
+        assert!(
+            !is_trusted,
+            "random account should not be a trusted relayer"
+        );
 
         // Attempt to call submit_transfer_to_utxo_chain_connector from the random account.
         // The #[trusted_relayer] guard should reject this before the method body runs,

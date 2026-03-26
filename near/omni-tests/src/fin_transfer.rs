@@ -644,7 +644,10 @@ mod tests {
             .args_json(json!({"account_id": random_account.id()}))
             .await?
             .json()?;
-        assert!(!is_trusted, "random account should not be a trusted relayer");
+        assert!(
+            !is_trusted,
+            "random account should not be a trusted relayer"
+        );
 
         // Attempt to call fin_transfer from the random account
         let result = random_account
@@ -670,9 +673,7 @@ mod tests {
                     emitter_address: eth_factory_address(),
                 }))?,
             })
-            .deposit(
-                NEP141_DEPOSIT.saturating_add(required_balance_for_fin_transfer),
-            )
+            .deposit(NEP141_DEPOSIT.saturating_add(required_balance_for_fin_transfer))
             .max_gas()
             .transact()
             .await?;
