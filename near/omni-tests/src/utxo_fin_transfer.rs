@@ -7,8 +7,8 @@ mod tests {
     };
     use near_workspaces::{result::ExecutionFinalResult, types::NearToken};
     use omni_types::{
-        BridgeOnTransferMsg, ChainKind, FastFinTransferMsg, Fee, OmniAddress, TransferIdKind,
-        UnifiedTransferId, UtxoFinTransferMsg,
+        BridgeOnTransferMsg, ChainKind, FastFinTransferMsg, Fee, OmniAddress, TransferId,
+        TransferIdKind, UnifiedTransferId, UtxoFinTransferMsg,
     };
     use rstest::rstest;
 
@@ -485,6 +485,62 @@ mod tests {
             Some("ERR_FAST_TRANSFER_ALREADY_FINALISED"),
         )
         .await?;
+
+        Ok(())
+    }
+
+    #[rstest]
+    #[tokio::test]
+    async fn test_untrusted_account_cannot_call_submit_transfer_to_utxo_chain_connector(
+        build_artifacts: &BuildArtifacts,
+    ) -> anyhow::Result<()> {
+        let env = TestEnv::new(build_artifacts).await?;
+
+        // Create a random account that has no roles
+        let random_account = env
+            .bridge_contract
+            .as_account()
+            .create_subaccount("random-user")
+            .initial_balance(NearToken::from_near(5))
+            .transact()
+            .await?
+            .into_result()?;
+
+        // Verify this account is not a trusted relayer
+        let is_trusted: bool = env
+            .bridge_contract
+            .view("is_trusted_relayer")
+            .args_json(json!({"account_id": random_account.id()}))
+            .await?
+            .json()?;
+        assert!(!is_trusted, "random account should not be a trusted relayer");
+
+        // Attempt to call submit_transfer_to_utxo_chain_connector from the random account.
+        // The #[trusted_relayer] guard should reject this before the method body runs,
+        // so a dummy transfer_id is sufficient.
+        let result = random_account
+            .call(
+                env.bridge_contract.id(),
+                "submit_transfer_to_utxo_chain_connector",
+            )
+            .args_json(json!({
+                "transfer_id": TransferId {
+                    origin_chain: ChainKind::Near,
+                    origin_nonce: 1,
+                },
+                "msg": "{}",
+                "fee_recipient": null,
+                "fee": null,
+            }))
+            .deposit(NearToken::from_yoctonear(1))
+            .max_gas()
+            .transact()
+            .await?;
+
+        assert!(
+            result.into_result().is_err(),
+            "Unprivileged account should not be able to call submit_transfer_to_utxo_chain_connector"
+        );
 
         Ok(())
     }
