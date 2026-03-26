@@ -604,6 +604,89 @@ mod tests {
     }
 
     #[rstest]
+    #[tokio::test]
+    async fn test_untrusted_account_cannot_call_fin_transfer(
+        build_artifacts: &BuildArtifacts,
+    ) -> anyhow::Result<()> {
+        let TestSetup {
+            worker,
+            token_contract,
+            locker_contract,
+            required_balance_for_fin_transfer,
+            ..
+        } = setup_contracts(false, false, build_artifacts).await?;
+
+        // Fund the locker with tokens so the call would succeed if authorization passed
+        token_contract
+            .call("ft_transfer")
+            .args_json(json!({
+                "receiver_id": locker_contract.id(),
+                "amount": U128(1000),
+            }))
+            .deposit(NearToken::from_yoctonear(1))
+            .max_gas()
+            .transact()
+            .await?
+            .into_result()?;
+
+        // Create a random account that has no roles
+        let random_account = worker
+            .create_tla(
+                "random-user".parse().unwrap(),
+                worker.generate_dev_account_credentials().1,
+            )
+            .await?
+            .unwrap();
+
+        // Verify this account is not a trusted relayer
+        let is_trusted: bool = locker_contract
+            .view("is_trusted_relayer")
+            .args_json(json!({"account_id": random_account.id()}))
+            .await?
+            .json()?;
+        assert!(
+            !is_trusted,
+            "random account should not be a trusted relayer"
+        );
+
+        // Attempt to call fin_transfer from the random account
+        let result = random_account
+            .call(locker_contract.id(), "fin_transfer")
+            .args_borsh(FinTransferArgs {
+                chain_kind: ChainKind::Eth,
+                storage_deposit_actions: vec![StorageDepositAction {
+                    token_id: token_contract.id().clone(),
+                    account_id: account_n(1),
+                    storage_deposit_amount: Some(NEP141_DEPOSIT.as_yoctonear()),
+                }],
+                prover_args: borsh::to_vec(&ProverResult::InitTransfer(InitTransferMessage {
+                    origin_nonce: 1,
+                    token: eth_token_address(),
+                    recipient: OmniAddress::Near(account_n(1)),
+                    amount: U128(1000),
+                    fee: Fee {
+                        fee: U128(0),
+                        native_fee: U128(0),
+                    },
+                    sender: eth_eoa_address(),
+                    msg: String::new(),
+                    emitter_address: eth_factory_address(),
+                }))?,
+            })
+            .deposit(NEP141_DEPOSIT.saturating_add(required_balance_for_fin_transfer))
+            .max_gas()
+            .transact()
+            .await?;
+
+        assert!(
+            result.into_result().is_err(),
+            "Unprivileged account should not be able to call fin_transfer"
+        );
+
+        Ok(())
+    }
+
+    #[rstest]
     #[case(FinTransferWithMsgCase {
         storage_deposit_accounts: vec![(relayer_account_id(), true)],
         amount: 1000,
