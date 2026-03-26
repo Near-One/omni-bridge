@@ -35,6 +35,29 @@ mod test_basics {
         blocks
     }
 
+    /// Grant the `UnrestrictedSubmitBlocks` role to an account so it passes the
+    /// `#[trusted_relayer]` guard on `submit_blocks`. The contract itself is the
+    /// super admin (set during `init`), so it can grant any role.
+    async fn grant_relayer_role(
+        contract: &Contract,
+        account: &Account,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let outcome = contract
+            .call("acl_grant_role")
+            .args_json(json!({
+                "role": "UnrestrictedSubmitBlocks",
+                "account_id": account.id(),
+            }))
+            .transact()
+            .await?;
+        assert!(
+            outcome.is_success(),
+            "Failed to grant role: {:?}",
+            outcome.failures()
+        );
+        Ok(())
+    }
+
     async fn init_contract() -> Result<(Contract, Account), Box<dyn std::error::Error>> {
         let sandbox = near_workspaces::sandbox().await?;
         let contract_wasm = near_workspaces::compile_project("./").await?;
@@ -61,6 +84,7 @@ mod test_basics {
         assert!(outcome.is_success());
 
         let user_account = sandbox.dev_create_account().await?;
+        grant_relayer_role(&contract, &user_account).await?;
 
         Ok((contract, user_account))
     }
@@ -104,6 +128,7 @@ mod test_basics {
         assert!(outcome.is_success());
 
         let user_account = sandbox.dev_create_account().await?;
+        grant_relayer_role(&contract, &user_account).await?;
 
         // Return blocks NOT yet submitted (batch[2][5..] onward).
         let remaining = remaining_after_init(&all_block_headers);
@@ -514,6 +539,69 @@ mod test_basics {
         assert!(
             failure_message.contains("PrevBlockNotFound"),
             "Expected failure message to contain 'PrevBlockNotFound', but got: {failure_message}",
+        );
+
+        Ok(())
+    }
+
+    /// A random account without any roles must be rejected by the
+    /// `#[trusted_relayer]` guard when calling `submit_blocks`.
+    #[tokio::test]
+    async fn test_unauthorized_account_cannot_submit_blocks(
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let sandbox = near_workspaces::sandbox().await?;
+        let contract_wasm = near_workspaces::compile_project("./").await?;
+        let contract = sandbox.dev_deploy(&contract_wasm).await?;
+
+        let submit_blocks = make_init_submit_blocks();
+        let args = InitArgs {
+            genesis_block_hash: submit_blocks[0].block_hash(),
+            genesis_block_height: 0,
+            skip_pow_verification: true,
+            gc_threshold: 20,
+            network: btc_types::network::Network::Mainnet,
+            submit_blocks,
+        };
+        let outcome = contract
+            .call("init")
+            .args_json(json!({
+                "args": serde_json::to_value(args).unwrap(),
+            }))
+            .transact()
+            .await?;
+        assert!(outcome.is_success());
+
+        // Create an account but do NOT grant any role.
+        let unauthorized_account = sandbox.dev_create_account().await?;
+
+        let init_blocks = make_init_submit_blocks();
+        let fake_0_hash = init_blocks[1].block_hash().to_string();
+        let block: Header = serde_json::from_value(json!({
+            "version": 1,
+            "prev_block_hash": fake_0_hash,
+            "merkle_root": "4a5e1e4baab89f3a32518a88c31bc87f618f76673e2cc77ab2127b7afdeda33b",
+            "time": 1_231_006_510,
+            "bits": 486_604_799,
+            "nonce": 2_083_236_893_u32,
+        }))
+        .unwrap();
+
+        let outcome = unauthorized_account
+            .call(contract.id(), "submit_blocks")
+            .args_borsh([block].to_vec())
+            .deposit(STORAGE_DEPOSIT_PER_BLOCK)
+            .transact()
+            .await?;
+
+        assert!(
+            !outcome.is_success(),
+            "Expected submit_blocks to fail for an account without roles, but it succeeded"
+        );
+
+        let failure_message = format!("{:?}", outcome.failures());
+        assert!(
+            failure_message.contains("Relayer is not active"),
+            "Expected failure message to contain 'Relayer is not active', but got: {failure_message}",
         );
 
         Ok(())

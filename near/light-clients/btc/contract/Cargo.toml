@@ -1,7 +1,7 @@
 [package]
 name = "btc-light-client-contract"
 description = "Bitcoin Light Client Contract"
-version = "0.4.0"
+version = "0.4.1"
 edition = "2021"
 repository = "https://github.com/Near-One/btc-light-client-contract"
 
@@ -40,8 +40,9 @@ doctest = false
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [dependencies]
-near-sdk = { version = "5.14.0", features = ["legacy"] }
+near-sdk = { version = "5.24.1", features = ["legacy"] }
 near-plugins = { git = "https://github.com/aurora-is-near/near-plugins", tag = "v0.4.1" }
+omni-utils = { git = "https://github.com/near-one/omni-utils", rev = "077d09daf7a7b32ad237f0530033c7db804f2c67" }
 borsh = "1.5.0"
 serde_json = "1"
 merkle-tools = { path = "../merkle-tools" }
@@ -53,7 +54,7 @@ cfg-if = "1.0.0"
 hex = "0.4.3"
 
 [dev-dependencies]
-near-sdk = { version = "5.14.0", features = ["unit-testing"] }
+near-sdk = { version = "5.24.1", features = ["unit-testing"] }
 near-workspaces = { version = "0.20.1", features = ["unstable"] }
 tokio = { version = "1.12.0", features = ["full"] }
 serde_json = "1"

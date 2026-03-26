@@ -70,6 +70,29 @@ mod test_dogecoin {
         blocks
     }
 
+    /// Grant the `UnrestrictedSubmitBlocks` role to an account so it passes the
+    /// `#[trusted_relayer]` guard on `submit_blocks`. The contract itself is the
+    /// super admin (set during `init`), so it can grant any role.
+    async fn grant_relayer_role(
+        contract: &Contract,
+        account: &Account,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let outcome = contract
+            .call("acl_grant_role")
+            .args_json(json!({
+                "role": "UnrestrictedSubmitBlocks",
+                "account_id": account.id(),
+            }))
+            .transact()
+            .await?;
+        assert!(
+            outcome.is_success(),
+            "Failed to grant role: {:?}",
+            outcome.failures()
+        );
+        Ok(())
+    }
+
     async fn init_dogecoin_contract() -> Result<(Contract, Account), Box<dyn std::error::Error>> {
         let sandbox = near_workspaces::sandbox().await?;
         let wasm = compile_dogecoin_wasm().await;
@@ -99,6 +122,7 @@ mod test_dogecoin {
         );
 
         let user_account = sandbox.dev_create_account().await?;
+        grant_relayer_role(&contract, &user_account).await?;
         Ok((contract, user_account))
     }
 
@@ -326,6 +350,7 @@ mod test_dogecoin {
         );
 
         let user_account = sandbox.dev_create_account().await?;
+        grant_relayer_role(&contract, &user_account).await?;
 
         // Submit block 5_800_013 with full PoW + AuxPoW verification.
         let aux_data = build_aux_data_5800013();
