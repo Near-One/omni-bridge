@@ -1,0 +1,228 @@
+{
+  "manifestVersion": "3.2",
+  "proxies": [
+    {
+      "address": "0xd2490A00bDB97C1EDE4fdf207CFE2664AFB9C20D",
+      "txHash": "0xaa96b1f3dab30a2de3fd16a25d79a70c5495bc1240e40638da514e03514ef777",
+      "kind": "uups"
+    }
+  ],
+  "impls": {
+    "22a5dfdcd86e641d8a477a2825cac4d4476f8fe4feabe96be44c575f2f5189c4": {
+      "address": "0xA94adAc4f2983C689880f1953b5F24BacBFbfc04",
+      "txHash": "0x368dbcb55f581b544b56504e6be2eb0a41ce1575d19246ed4f5022dc6933d55a",
+      "layout": {
+        "solcVersion": "0.8.24",
+        "storage": [
+          {
+            "label": "ethToNearToken",
+            "offset": 0,
+            "slot": "0",
+            "type": "t_mapping(t_address,t_string_storage)",
+            "contract": "OmniBridge",
+            "src": "src/omni-bridge/contracts/OmniBridge.sol:36"
+          },
+          {
+            "label": "nearToEthToken",
+            "offset": 0,
+            "slot": "1",
+            "type": "t_mapping(t_string_memory_ptr,t_address)",
+            "contract": "OmniBridge",
+            "src": "src/omni-bridge/contracts/OmniBridge.sol:37"
+          },
+          {
+            "label": "isBridgeToken",
+            "offset": 0,
+            "slot": "2",
+            "type": "t_mapping(t_address,t_bool)",
+            "contract": "OmniBridge",
+            "src": "src/omni-bridge/contracts/OmniBridge.sol:38"
+          },
+          {
+            "label": "tokenImplementationAddress",
+            "offset": 0,
+            "slot": "3",
+            "type": "t_address",
+            "contract": "OmniBridge",
+            "src": "src/omni-bridge/contracts/OmniBridge.sol:40"
+          },
+          {
+            "label": "nearBridgeDerivedAddress",
+            "offset": 0,
+            "slot": "4",
+            "type": "t_address",
+            "contract": "OmniBridge",
+            "src": "src/omni-bridge/contracts/OmniBridge.sol:41"
+          },
+          {
+            "label": "omniBridgeChainId",
+            "offset": 20,
+            "slot": "4",
+            "type": "t_uint8",
+            "contract": "OmniBridge",
+            "src": "src/omni-bridge/contracts/OmniBridge.sol:42"
+          },
+          {
+            "label": "completedTransfers",
+            "offset": 0,
+            "slot": "5",
+            "type": "t_mapping(t_uint64,t_bool)",
+            "contract": "OmniBridge",
+            "src": "src/omni-bridge/contracts/OmniBridge.sol:44"
+          },
+          {
+            "label": "currentOriginNonce",
+            "offset": 0,
+            "slot": "6",
+            "type": "t_uint64",
+            "contract": "OmniBridge",
+            "src": "src/omni-bridge/contracts/OmniBridge.sol:45"
+          },
+          {
+            "label": "customMinters",
+            "offset": 0,
+            "slot": "7",
+            "type": "t_mapping(t_address,t_address)",
+            "contract": "OmniBridge",
+            "src": "src/omni-bridge/contracts/OmniBridge.sol:47"
+          },
+          {
+            "label": "multiTokens",
+            "offset": 0,
+            "slot": "8",
+            "type": "t_mapping(t_address,t_struct(MultiTokenInfo)12574_storage)",
+            "contract": "OmniBridge",
+            "src": "src/omni-bridge/contracts/OmniBridge.sol:48"
+          },
+          {
+            "label": "__gap",
+            "offset": 0,
+            "slot": "9",
+            "type": "t_array(t_uint256)49_storage",
+            "contract": "OmniBridge",
+            "src": "src/omni-bridge/contracts/OmniBridge.sol:591"
+          }
+        ],
+        "types": {
+          "t_address": {
+            "label": "address",
+            "numberOfBytes": "20"
+          },
+          "t_array(t_uint256)49_storage": {
+            "label": "uint256[49]",
+            "numberOfBytes": "1568"
+          },
+          "t_bool": {
+            "label": "bool",
+            "numberOfBytes": "1"
+          },
+          "t_mapping(t_address,t_address)": {
+            "label": "mapping(address => address)",
+            "numberOfBytes": "32"
+          },
+          "t_mapping(t_address,t_bool)": {
+            "label": "mapping(address => bool)",
+            "numberOfBytes": "32"
+          },
+          "t_mapping(t_address,t_string_storage)": {
+            "label": "mapping(address => string)",
+            "numberOfBytes": "32"
+          },
+          "t_mapping(t_address,t_struct(MultiTokenInfo)12574_storage)": {
+            "label": "mapping(address => struct MultiTokenInfo)",
+            "numberOfBytes": "32"
+          },
+          "t_mapping(t_string_memory_ptr,t_address)": {
+            "label": "mapping(string => address)",
+            "numberOfBytes": "32"
+          },
+          "t_mapping(t_uint64,t_bool)": {
+            "label": "mapping(uint64 => bool)",
+            "numberOfBytes": "32"
+          },
+          "t_string_memory_ptr": {
+            "label": "string",
+            "numberOfBytes": "32"
+          },
+          "t_string_storage": {
+            "label": "string",
+            "numberOfBytes": "32"
+          },
+          "t_struct(MultiTokenInfo)12574_storage": {
+            "label": "struct MultiTokenInfo",
+            "members": [
+              {
+                "label": "tokenAddress",
+                "type": "t_address",
+                "offset": 0,
+                "slot": "0"
+              },
+              {
+                "label": "tokenId",
+                "type": "t_uint256",
+                "offset": 0,
+                "slot": "1"
+              }
+            ],
+            "numberOfBytes": "64"
+          },
+          "t_uint256": {
+            "label": "uint256",
+            "numberOfBytes": "32"
+          },
+          "t_uint64": {
+            "label": "uint64",
+            "numberOfBytes": "8"
+          },
+          "t_uint8": {
+            "label": "uint8",
+            "numberOfBytes": "1"
+          },
+          "t_mapping(t_bytes32,t_struct(RoleData)27_storage)": {
+            "label": "mapping(bytes32 => struct AccessControlUpgradeable.RoleData)"
+          },
+          "t_bytes32": {
+            "label": "bytes32"
+          },
+          "t_struct(RoleData)27_storage": {
+            "label": "struct AccessControlUpgradeable.RoleData",
+            "members": [
+              {
+                "label": "hasRole",
+                "type": "t_mapping(t_address,t_bool)"
+              },
+              {
+                "label": "adminRole",
+                "type": "t_bytes32"
+              }
+            ]
+          }
+        },
+        "namespaces": {
+          "erc7201:openzeppelin.storage.AccessControl": [
+            {
+              "contract": "AccessControlUpgradeable",
+              "label": "_roles",
+              "type": "t_mapping(t_bytes32,t_struct(RoleData)27_storage)",
+              "src": "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol:62"
+            }
+          ],
+          "erc7201:openzeppelin.storage.Initializable": [
+            {
+              "contract": "Initializable",
+              "label": "_initialized",
+              "type": "t_uint64",
+              "src": "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol:69"
+            },
+            {
+              "contract": "Initializable",
+              "label": "_initializing",
+              "type": "t_bool",
+              "src": "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol:73"
+            }
+          ]
+        }
+      }
+    }
+  }
+}
