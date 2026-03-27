@@ -1,7 +1,8 @@
 import { anyValue } from "@nomicfoundation/hardhat-chai-matchers/withArgs"
 import * as borsh from "borsh"
 import { expect } from "chai"
-import type { BigNumberish, Signer } from "ethers"
+import type { BigNumberish } from "ethers"
+import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers"
 import { ethers, upgrades } from "hardhat"
 import type { BridgeToken, OmniBridgeWormhole, TestWormhole } from "../typechain-types"
 import { depositSignature, metadataSignature, testWallet } from "./helpers/signatures"
@@ -76,8 +77,8 @@ describe("BridgeTokenWormhole", () => {
   const wrappedNearId = "wrap.testnet"
   const consistencyLevel = 3
 
-  let user1: Signer
-  let adminAccount: Signer
+  let user1: HardhatEthersSigner
+  let adminAccount: HardhatEthersSigner
   let OmniBridgeInstance: BridgeToken
   let OmniBridgeWormhole: OmniBridgeWormhole
   let TestWormhole: TestWormhole
