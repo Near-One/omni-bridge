@@ -743,13 +743,16 @@ impl Contract {
         }
     }
 
+    #[allow(clippy::needless_pass_by_value)]
     fn fast_fin_transfer(
         &mut self,
         token_id: AccountId,
         amount: U128,
-        storage_payer: AccountId,
+        signer_id: AccountId,
         fast_fin_transfer_msg: FastFinTransferMsg,
     ) -> PromiseOrPromiseIndexOrValue<U128> {
+        require!(self.is_trusted_relayer(&signer_id), "Relayer is not active");
+
         let origin_token = self
             .get_token_address(
                 fast_fin_transfer_msg.transfer_id.origin_chain,
@@ -790,7 +793,7 @@ impl Contract {
                 .unwrap_or_default();
             if storage_deposit_amount > 0 {
                 self.update_storage_balance(
-                    storage_payer.clone(),
+                    signer_id.clone(),
                     NearToken::from_yoctonear(storage_deposit_amount),
                     NearToken::from_yoctonear(0),
                 );
@@ -815,7 +818,7 @@ impl Contract {
                     )
                     .fast_fin_transfer_to_near_callback(
                         &fast_transfer,
-                        storage_payer,
+                        signer_id,
                         fast_fin_transfer_msg.relayer,
                     ),
             )
@@ -823,7 +826,7 @@ impl Contract {
         } else {
             self.fast_fin_transfer_to_other_chain(
                 &fast_transfer,
-                storage_payer,
+                signer_id,
                 fast_fin_transfer_msg.relayer,
             );
             PromiseOrPromiseIndexOrValue::Value(U128(0))
@@ -1047,6 +1050,7 @@ impl Contract {
     }
 
     #[payable]
+    #[trusted_relayer]
     #[pause(except(roles(Role::DAO)))]
     pub fn claim_fee(&mut self, #[serializer(borsh)] args: ClaimFeeArgs) -> Promise {
         self.verify_proof(args.chain_kind, args.prover_args).then(
