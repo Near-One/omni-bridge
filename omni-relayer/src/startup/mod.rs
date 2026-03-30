@@ -246,12 +246,15 @@ pub async fn build_omni_connector(
     let btc_light_client = build_light_client(config, ChainKind::Btc)?;
     let zcash_light_client = build_light_client(config, ChainKind::Zcash)?;
 
-    let mpc_finalities = match near_bridge_client.get_mpc_finalities().await {
-        Ok(mpc_finalities) => Some(mpc_finalities),
-        Err(err) => {
-            warn!("Failed to fetch mpc finalities: {err:?}");
-            None
-        }
+    let mpc_finalities = match near_bridge_client.mpc_omni_prover_id() {
+        Ok(_) => match near_bridge_client.get_mpc_finalities().await {
+            Ok(mpc_finalities) => Some(mpc_finalities),
+            Err(err) => {
+                warn!("Failed to fetch mpc finalities: {err:?}");
+                None
+            }
+        },
+        Err(_) => None,
     };
 
     let omni_connector = OmniConnectorBuilder::default()
