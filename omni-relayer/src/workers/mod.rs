@@ -227,26 +227,24 @@ pub async fn process_events(
 
     let consumer = nats_client.relayer_consumer(nats_config).await?;
     let mut messages = consumer
+        .stream()
+        .max_messages_per_batch((nats_config.relayer_consumer.worker_count + 1) / 2)
         .messages()
         .await
         .context("Failed to start consuming NATS messages")?;
 
-    loop {
-        let permit = semaphore.clone().acquire_owned().await?;
-
-        let Some(msg) = messages.next().await else {
-            break;
-        };
+    while let Some(msg) = messages.next().await {
         let msg = msg.context("NATS message error")?;
 
         if is_evm_nonce_resync_needed.load(Ordering::Relaxed) {
             if let Err(err) = evm_nonces.resync_nonces().await {
                 warn!("Failed to resync evm nonces: {err:?}");
-                drop(permit);
                 continue;
             }
             is_evm_nonce_resync_needed.store(false, Ordering::Relaxed);
         }
+
+        let permit = semaphore.clone().acquire_owned().await?;
 
         let event: serde_json::Value = match serde_json::from_slice(&msg.payload) {
             Ok(e) => e,
@@ -272,6 +270,10 @@ pub async fn process_events(
         let is_evm_nonce_resync_needed = is_evm_nonce_resync_needed.clone();
 
         tokio::spawn(async move {
+            msg.ack_with(async_nats::jetstream::AckKind::Progress)
+                .await
+                .ok();
+
             let message_result = process_message(
                 event,
                 &config,
