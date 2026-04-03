@@ -25,7 +25,9 @@ keep_transfers_for_secs = 604800 # 60 * 60 * 24 * 7
 # stream = "RELAYER"
 # subject = "relayer.tasks.>"
 # max_deliver = -1
-# backoff_secs = [60, 120, 300, 900, 3600]
+# ack_wait = 300
+# max_backoff_hours = 16
+# max_message_age_hours = 96
 # worker_count = 20
 
 [bridge_indexer]

@@ -1,6 +1,9 @@
-use std::sync::{
-    Arc,
-    atomic::{AtomicBool, Ordering},
+use std::{
+    sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+    },
+    time::Duration,
 };
 
 use alloy::primitives::TxHash;
@@ -167,9 +170,33 @@ pub enum DeployToken {
 async fn handle_nats_ack(
     msg: &async_nats::jetstream::message::Message,
     result: &Result<EventAction>,
+    config: &config::NatsConsumer,
 ) {
+    let max_backoff = Duration::from_secs(config.max_backoff_hours * 3600);
+    let max_message_age = Duration::from_secs(config.max_message_age_hours * 3600);
+
     match result {
-        Ok(EventAction::Retry) => {}
+        Ok(EventAction::Retry) => {
+            if let Ok(info) = msg.info() {
+                let now = chrono::Utc::now().timestamp();
+                let published_at = info.published.unix_timestamp();
+                let age = Duration::from_secs(now.saturating_sub(published_at) as u64);
+
+                if age > max_message_age {
+                    warn!("Message exceeded max age ({age:?}), terminating");
+                    msg.ack_with(async_nats::jetstream::AckKind::Term)
+                        .await
+                        .ok();
+                    return;
+                }
+
+                let backoff = Duration::from_secs(4u64.saturating_pow(info.delivered as u32))
+                    .min(max_backoff);
+                msg.ack_with(async_nats::jetstream::AckKind::Nak(Some(backoff)))
+                    .await
+                    .ok();
+            }
+        }
         Ok(EventAction::Remove) => {
             msg.ack().await.ok();
         }
@@ -258,6 +285,7 @@ pub async fn process_events(
             }
         };
 
+        let consumer_config = nats_config.relayer_consumer.clone();
         let config = config.clone();
         let mut redis = redis_connection_manager.clone();
         let jsonrpc_client = jsonrpc_client.clone();
@@ -303,7 +331,7 @@ pub async fn process_events(
                 is_evm_nonce_resync_needed.store(true, Ordering::Relaxed);
             }
 
-            handle_nats_ack(&msg, &message_result.action).await;
+            handle_nats_ack(&msg, &message_result.action, &consumer_config).await;
 
             drop(permit);
         });
