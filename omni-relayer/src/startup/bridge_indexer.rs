@@ -101,25 +101,21 @@ fn is_whitelisted_transaction_event(
     transfer_message: &OmniTransferMessage,
 ) -> bool {
     match transfer_message {
-        OmniTransferMessage::NearTransferMessage(transfer_message) => {
-            config
-                .bridge_indexer
-                .is_token_whitelisted(&transfer_message.token)
-        }
-        OmniTransferMessage::NearSignTransferEvent(sign_event) => {
-            config
-                .bridge_indexer
-                .is_token_whitelisted(&sign_event.message_payload.token_address)
-        }
-        OmniTransferMessage::EvmInitTransferMessage(init_transfer) => {
-            config.bridge_indexer.is_token_whitelisted(&init_transfer.token)
-        }
-        OmniTransferMessage::SolanaInitTransfer(init_transfer) => {
-            config.bridge_indexer.is_token_whitelisted(&init_transfer.token)
-        }
-        OmniTransferMessage::StarknetInitTransfer(init_transfer) => {
-            config.bridge_indexer.is_token_whitelisted(&init_transfer.token)
-        }
+        OmniTransferMessage::NearTransferMessage(transfer_message) => config
+            .bridge_indexer
+            .is_token_whitelisted(&transfer_message.token),
+        OmniTransferMessage::NearSignTransferEvent(sign_event) => config
+            .bridge_indexer
+            .is_token_whitelisted(&sign_event.message_payload.token_address),
+        OmniTransferMessage::EvmInitTransferMessage(init_transfer) => config
+            .bridge_indexer
+            .is_token_whitelisted(&init_transfer.token),
+        OmniTransferMessage::SolanaInitTransfer(init_transfer) => config
+            .bridge_indexer
+            .is_token_whitelisted(&init_transfer.token),
+        OmniTransferMessage::StarknetInitTransfer(init_transfer) => config
+            .bridge_indexer
+            .is_token_whitelisted(&init_transfer.token),
         OmniTransferMessage::NearUtxoTransferMessage { token_id, .. } => config
             .bridge_indexer
             .is_token_whitelisted(&OmniAddress::Near(token_id.clone())),
@@ -167,7 +163,11 @@ async fn handle_transaction_event(
     event: OmniTransactionEvent,
 ) -> Result<()> {
     if config.bridge_indexer.is_whitelist_active()
-        && !is_whitelisted_transaction_event(config, event.transfer_id.origin_chain, &event.transfer_message)
+        && !is_whitelisted_transaction_event(
+            config,
+            event.transfer_id.origin_chain,
+            &event.transfer_message,
+        )
     {
         debug!(
             "Whitelist mode active, skipping transaction event: {:?}",

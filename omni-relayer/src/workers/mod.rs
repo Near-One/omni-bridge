@@ -56,6 +56,7 @@ impl<E> RetryableEvent<E> {
 
 pub enum EventAction {
     Retry,
+    RetryAfter(Duration),
     Remove,
 }
 
@@ -176,7 +177,7 @@ async fn handle_nats_ack(
     let max_message_age = Duration::from_secs(config.max_message_age_hours * 3600);
 
     match result {
-        Ok(EventAction::Retry) => {
+        Ok(EventAction::Retry) | Ok(EventAction::RetryAfter(_)) => {
             if let Ok(info) = msg.info() {
                 let now = chrono::Utc::now().timestamp();
                 let published_at = info.published.unix_timestamp();
@@ -190,8 +191,11 @@ async fn handle_nats_ack(
                     return;
                 }
 
-                let backoff = Duration::from_secs(4u64.saturating_pow(info.delivered as u32))
-                    .min(max_backoff);
+                let backoff = if let Ok(EventAction::RetryAfter(delay)) = result {
+                    (*delay).min(max_backoff)
+                } else {
+                    Duration::from_secs(4u64.saturating_pow(info.delivered as u32)).min(max_backoff)
+                };
                 msg.ack_with(async_nats::jetstream::AckKind::Nak(Some(backoff)))
                     .await
                     .ok();
@@ -326,7 +330,10 @@ pub async fn process_events(
             }
 
             if message_result.needs_evm_nonce_resync
-                && matches!(message_result.action, Ok(EventAction::Retry) | Err(_))
+                && matches!(
+                    message_result.action,
+                    Ok(EventAction::Retry) | Ok(EventAction::RetryAfter(_)) | Err(_)
+                )
             {
                 is_evm_nonce_resync_needed.store(true, Ordering::Relaxed);
             }

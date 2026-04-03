@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 
 use anyhow::{Context, Result};
 use bridge_connector_common::result::{BridgeSdkError, EthRpcError};
@@ -51,7 +51,9 @@ pub async fn process_init_transfer_event(
     let current_timestamp = chrono::Utc::now().timestamp();
 
     if current_timestamp < creation_timestamp + expected_finalization_time {
-        return Ok(EventAction::Retry);
+        let remaining =
+            (creation_timestamp + expected_finalization_time - current_timestamp) as u64;
+        return Ok(EventAction::RetryAfter(Duration::from_secs(remaining)));
     }
 
     info!(
@@ -326,7 +328,9 @@ pub async fn process_evm_transfer_event(
     let current_timestamp = chrono::Utc::now().timestamp();
 
     if current_timestamp < creation_timestamp + expected_finalization_time {
-        return Ok(EventAction::Retry);
+        let remaining =
+            (creation_timestamp + expected_finalization_time - current_timestamp) as u64;
+        return Ok(EventAction::RetryAfter(Duration::from_secs(remaining)));
     }
 
     info!("Processing FinTransfer ({chain_kind:?}): {transaction_hash:?}");
@@ -463,7 +467,9 @@ pub async fn process_deploy_token_event(
     let current_timestamp = chrono::Utc::now().timestamp();
 
     if current_timestamp < creation_timestamp + expected_finalization_time {
-        return Ok(EventAction::Retry);
+        let remaining =
+            (creation_timestamp + expected_finalization_time - current_timestamp) as u64;
+        return Ok(EventAction::RetryAfter(Duration::from_secs(remaining)));
     }
 
     info!("Processing DeployToken ({chain_kind:?}): {transaction_hash:?}");

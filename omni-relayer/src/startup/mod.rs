@@ -177,7 +177,8 @@ fn build_utxo_bridge_client<C: utxo_bridge_client::types::UTXOChain>(
         }
     };
 
-    Ok(utxo.as_ref()
+    Ok(utxo
+        .as_ref()
         .map(|utxo| UTXOBridgeClient::new(utxo.rpc_http_url.clone(), AuthOptions::None)))
 }
 
