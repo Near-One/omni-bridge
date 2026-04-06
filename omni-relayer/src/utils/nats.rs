@@ -35,8 +35,7 @@ impl NatsClient {
                     deliver_policy: consumer::DeliverPolicy::Last,
                     max_deliver: config.omni_consumer.max_deliver,
                     filter_subject: config.omni_consumer.subject.clone(),
-                    backoff: config
-                        .omni_consumer
+                    backoff: config.omni_consumer
                         .backoff_secs
                         .iter()
                         .map(|&s| Duration::from_secs(s))

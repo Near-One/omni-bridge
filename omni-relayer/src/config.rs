@@ -211,23 +211,31 @@ pub struct Redis {
 pub struct Nats {
     pub url: String,
     pub relayer_subject: String,
-    pub omni_consumer: NatsConsumer,
-    pub relayer_consumer: NatsConsumer,
+    pub omni_consumer: OmniConsumer,
+    pub relayer_consumer: RelayerConsumer,
 }
 
 #[derive(Debug, Clone, Deserialize)]
-pub struct NatsConsumer {
+pub struct OmniConsumer {
     pub name: String,
     pub stream: String,
     pub subject: String,
     pub max_deliver: i64,
     #[serde(default)]
     pub backoff_secs: Vec<u64>,
-    #[serde(default = "default_worker_count")]
-    pub worker_count: usize,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct RelayerConsumer {
+    pub name: String,
+    pub stream: String,
+    pub subject: String,
+    pub max_deliver: i64,
     pub ack_wait: u64,
     pub max_backoff_hours: u64,
     pub max_message_age_hours: u64,
+    #[serde(default = "default_worker_count")]
+    pub worker_count: usize,
 }
 
 fn default_worker_count() -> usize {
