@@ -221,9 +221,13 @@ pub struct NatsConsumer {
     pub stream: String,
     pub subject: String,
     pub max_deliver: i64,
+    #[serde(default)]
     pub backoff_secs: Vec<u64>,
     #[serde(default = "default_worker_count")]
     pub worker_count: usize,
+    pub ack_wait: u64,
+    pub max_backoff_hours: u64,
+    pub max_message_age_hours: u64,
 }
 
 fn default_worker_count() -> usize {
