@@ -171,7 +171,7 @@ pub enum DeployToken {
 async fn handle_nats_ack(
     msg: &async_nats::jetstream::message::Message,
     result: &Result<EventAction>,
-    config: &config::NatsConsumer,
+    config: &config::RelayerConsumer,
 ) {
     let max_backoff = Duration::from_secs(config.max_backoff_hours * 3600);
     let max_message_age = Duration::from_secs(config.max_message_age_hours * 3600);
