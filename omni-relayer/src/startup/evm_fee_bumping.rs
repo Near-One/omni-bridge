@@ -5,6 +5,8 @@ use alloy::{
     providers::{Provider, ProviderBuilder, WalletProvider},
     rpc::types::Transaction,
 };
+use std::sync::Arc;
+
 use anyhow::Context;
 use omni_types::ChainKind;
 use tokio::time::{Duration, Sleep};
@@ -16,7 +18,6 @@ use crate::{
         self,
         pending_transactions::{self, PendingTransaction},
     },
-    workers::RetryableEvent,
 };
 
 enum ShouldBump {
@@ -35,7 +36,12 @@ pub async fn start_evm_fee_bumping(
     config: &config::Config,
     chain_kind: ChainKind,
     redis_connection_manager: &mut redis::aio::ConnectionManager,
+    nats_client: Arc<utils::nats::NatsClient>,
 ) -> anyhow::Result<()> {
+    let nats_config = config
+        .nats
+        .as_ref()
+        .context("NATS config is required for fee bumping")?;
     let evm_config = match chain_kind {
         ChainKind::Eth => &config.eth,
         ChainKind::Bnb => &config.bnb,
@@ -118,14 +124,14 @@ pub async fn start_evm_fee_bumping(
                     pending_tx.tx_hash, pending_tx.nonce
                 );
 
-                utils::redis::add_event(
-                    config,
-                    redis_connection_manager,
-                    utils::redis::EVENTS,
-                    format!("replay:{}", pending_tx.tx_hash),
-                    RetryableEvent::new(&pending_tx.source_event),
-                )
-                .await;
+                let chain = chain_kind.as_ref().to_ascii_lowercase();
+                let subject = format!("{}.{chain}", nats_config.relayer_subject);
+                let key = format!("replay:{}", pending_tx.tx_hash);
+                let payload = serde_json::to_vec(&pending_tx.source_event)
+                    .context("Failed to serialize source event")?;
+
+                nats_client.publish(subject, &key, payload).await
+                    .context("Failed to publish replay event to NATS")?;
 
                 utils::redis::zrem(config, redis_connection_manager, &redis_key, pending_tx).await;
             }

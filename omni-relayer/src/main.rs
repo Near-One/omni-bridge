@@ -348,6 +348,7 @@ async fn main() -> Result<()> {
     }));
 
     if config.is_fee_bumping_enabled(ChainKind::Eth) {
+        let nats_client = nats_client.clone();
         handles.push(tokio::spawn({
             let config = config.clone();
             let mut redis_connection_manager = redis_connection_manager.clone();
@@ -356,6 +357,7 @@ async fn main() -> Result<()> {
                     &config,
                     ChainKind::Eth,
                     &mut redis_connection_manager,
+                    nats_client,
                 )
                 .await
             }
