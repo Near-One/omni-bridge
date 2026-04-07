@@ -130,9 +130,8 @@ pub async fn start_evm_fee_bumping(
                 let payload = serde_json::to_vec(&pending_tx.source_event)
                     .context("Failed to serialize source event")?;
 
-                if let Err(err) = nats_client.publish(subject, &key, payload).await {
-                    warn!("Failed to publish replay event to NATS: {err:?}");
-                }
+                nats_client.publish(subject, &key, payload).await
+                    .context("Failed to publish replay event to NATS")?;
 
                 utils::redis::zrem(config, redis_connection_manager, &redis_key, pending_tx).await;
             }
