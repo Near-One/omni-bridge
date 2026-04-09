@@ -1429,7 +1429,10 @@ impl Contract {
             s if s.starts_with("arb") => ChainKind::Arb,
             s if s.starts_with("bnb") => ChainKind::Bnb,
             s if s.starts_with("pol") => ChainKind::Pol,
+            s if s.starts_with("hlevm") => ChainKind::HyperEvm,
+            s if s.starts_with("abs") => ChainKind::Abs,
             s if s.starts_with("sol") => ChainKind::Sol,
+            s if s.starts_with("strk") || s.starts_with("starknet") => ChainKind::Strk,
             _ => env::panic_str(&BridgeError::CannotDetermineOriginChain.as_ref()),
         };
 
