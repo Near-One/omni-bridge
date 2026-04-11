@@ -6,7 +6,9 @@ use tracing::{info, warn};
 
 use crate::{config, utils};
 
-use super::event_handlers::{OMNI_EVENTS, handle_meta_event, handle_transaction_event};
+use super::event_handlers::{handle_meta_event, handle_transaction_event};
+
+const OMNI_EVENTS: &str = "omni_events";
 
 async fn watch_omni_events_collection(
     collection: &Collection<OmniEvent>,

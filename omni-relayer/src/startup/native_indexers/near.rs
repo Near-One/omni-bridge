@@ -215,3 +215,19 @@ fn is_nep_locker_event(config: &config::Config, receipt: &ReceiptView) -> bool {
             })
         )
 }
+
+pub async fn get_final_block(jsonrpc_client: &JsonRpcClient) -> Result<u64> {
+    info!("Getting final block");
+
+    let block_response = RpcBlockRequest {
+        block_reference: near_primitives::types::BlockReference::Finality(
+            near_primitives::types::Finality::Final,
+        ),
+    };
+
+    jsonrpc_client
+        .call(block_response)
+        .await
+        .map(|block| block.header.height)
+        .map_err(Into::into)
+}

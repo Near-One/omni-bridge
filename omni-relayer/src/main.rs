@@ -9,6 +9,7 @@ use reqwest::Url;
 use tracing::{error, info, warn};
 use tracing_subscriber::{EnvFilter, fmt, layer::SubscriberExt, util::SubscriberInitExt};
 
+#[allow(dead_code)]
 mod config;
 mod startup;
 mod types;

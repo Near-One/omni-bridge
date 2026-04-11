@@ -19,8 +19,6 @@ use crate::{
     workers::{self, RetryableEvent},
 };
 
-pub(super) const OMNI_EVENTS: &str = "omni_events";
-
 fn near_event_key(origin_transaction_id: &str, origin_nonce: u64) -> String {
     utils::redis::composite_key(&[origin_transaction_id, &origin_nonce.to_string()])
 }

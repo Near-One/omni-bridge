@@ -4,7 +4,7 @@ use anyhow::{Context, Result};
 use tracing::{info, warn};
 
 use near_crypto::{InMemorySigner, Signer};
-use near_jsonrpc_client::{JsonRpcClient, methods::block::RpcBlockRequest};
+use near_jsonrpc_client::JsonRpcClient;
 use near_primitives::{hash::CryptoHash, types::AccountId};
 use omni_types::ChainKind;
 
@@ -51,22 +51,6 @@ pub fn get_signer(
     } else {
         anyhow::bail!("Failed to create NEAR signer")
     }
-}
-
-pub async fn get_final_block(jsonrpc_client: &JsonRpcClient) -> Result<u64> {
-    info!("Getting final block");
-
-    let block_response = RpcBlockRequest {
-        block_reference: near_primitives::types::BlockReference::Finality(
-            near_primitives::types::Finality::Final,
-        ),
-    };
-
-    jsonrpc_client
-        .call(block_response)
-        .await
-        .map(|block| block.header.height)
-        .map_err(Into::into)
 }
 
 pub async fn resolve_tx_action(
