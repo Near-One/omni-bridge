@@ -14,16 +14,17 @@ use tracing::{info, warn};
 use utxo_bridge_client::{AuthOptions, UTXOBridgeClient};
 use wormhole_bridge_client::{WormholeBridgeClient, WormholeBridgeClientBuilder};
 
-use crate::{
-    config::{self},
-    startup,
-};
+use crate::config::{self};
 
-pub mod bridge_indexer;
-pub mod evm;
+#[cfg(any(feature = "nats-ingestion", feature = "mongo-ingestion"))]
+mod event_handlers;
+#[cfg(feature = "mongo-ingestion")]
+pub mod mongo_ingestion;
+#[cfg(feature = "nats-ingestion")]
+pub mod nats_ingestion;
+#[cfg(feature = "native-indexers")]
+pub mod native_indexers;
 pub mod evm_fee_bumping;
-pub mod near;
-pub mod solana;
 
 #[macro_export]
 macro_rules! skip_fail {
@@ -130,7 +131,7 @@ fn build_solana_bridge_client(config: &config::Config) -> Result<Option<SolanaBr
                 .wormhole_post_message_shim_event_authority(Some(
                     solana.wormhole_post_message_shim_event_authority.parse()?,
                 ))
-                .keypair(Some(startup::solana::get_keypair(
+                .keypair(Some(crate::utils::solana::get_keypair(
                     solana.credentials_path.as_ref(),
                 )))
                 .build()
