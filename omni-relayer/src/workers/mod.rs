@@ -8,7 +8,7 @@ use std::{
 
 use alloy::primitives::TxHash;
 use anyhow::{Context, Result};
-use bridge_indexer_types::documents_types::DepositMsg;
+use crate::types::DepositMsg;
 use near_jsonrpc_client::JsonRpcClient;
 use near_primitives::types::AccountId;
 use tokio_stream::StreamExt;

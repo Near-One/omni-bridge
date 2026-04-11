@@ -6,12 +6,12 @@ use config::Network;
 use near_sdk::base64::{Engine, engine::general_purpose};
 use omni_types::ChainKind;
 use reqwest::Url;
-use solana_sdk::signature::Signature;
 use tracing::{error, info, warn};
 use tracing_subscriber::{EnvFilter, fmt, layer::SubscriberExt, util::SubscriberInitExt};
 
 mod config;
 mod startup;
+mod types;
 mod utils;
 mod workers;
 
@@ -21,27 +21,35 @@ struct CliArgs {
     #[clap(short, long, default_value = "config.toml")]
     config: String,
     /// Start block for Near indexer
+    #[cfg(feature = "native-indexers")]
     #[clap(long)]
     near_start_block: Option<u64>,
     /// Start block for Ethereum indexer
+    #[cfg(feature = "native-indexers")]
     #[clap(long)]
     eth_start_block: Option<u64>,
     /// Start block for Base indexer
+    #[cfg(feature = "native-indexers")]
     #[clap(long)]
     base_start_block: Option<u64>,
     /// Start block for Arbitrum indexer
+    #[cfg(feature = "native-indexers")]
     #[clap(long)]
     arb_start_block: Option<u64>,
     /// Start block for Bnb indexer
+    #[cfg(feature = "native-indexers")]
     #[clap(long)]
     bnb_start_block: Option<u64>,
     /// Start block for Pol indexer
+    #[cfg(feature = "native-indexers")]
     #[clap(long)]
     pol_start_block: Option<u64>,
     /// Start signature for Solana indexer
+    #[cfg(feature = "native-indexers")]
     #[clap(long)]
-    solana_start_signature: Option<Signature>,
+    solana_start_signature: Option<solana_sdk::signature::Signature>,
     /// Start timestamp for bridge indexer
+    #[cfg(feature = "mongo-ingestion")]
     #[clap(long)]
     start_timestamp: Option<u32>,
 }
@@ -144,11 +152,11 @@ async fn main() -> Result<()> {
 
     let jsonrpc_client = near_jsonrpc_client::JsonRpcClient::connect(config.near.rpc_url.clone());
 
-    let near_omni_signer = startup::near::get_signer(&config, config::NearSignerType::Omni)?;
+    let near_omni_signer = utils::near::get_signer(&config, config::NearSignerType::Omni)?;
     let omni_connector = Arc::new(startup::build_omni_connector(&config, &near_omni_signer).await?);
 
     let (near_fast_signer, fast_connector) = if config.is_fast_relayer_enabled() {
-        let near_fast_signer = startup::near::get_signer(&config, config::NearSignerType::Fast)?;
+        let near_fast_signer = utils::near::get_signer(&config, config::NearSignerType::Fast)?;
 
         (
             Some(near_fast_signer.clone()),
@@ -176,13 +184,14 @@ async fn main() -> Result<()> {
 
     let mut handles = Vec::new();
 
+    #[cfg(feature = "nats-ingestion")]
     if config.is_nats_enabled() {
         handles.push(tokio::spawn({
             let config = config.clone();
             let mut redis_connection_manager = redis_connection_manager.clone();
             let nats_client = nats_client.clone().unwrap();
             async move {
-                startup::bridge_indexer::start_indexer_nats(
+                startup::nats_ingestion::start_indexer_nats(
                     &config,
                     &mut redis_connection_manager,
                     nats_client,
@@ -190,12 +199,15 @@ async fn main() -> Result<()> {
                 .await
             }
         }));
-    } else if config.is_bridge_indexer_enabled() {
+    }
+
+    #[cfg(feature = "mongo-ingestion")]
+    if config.is_bridge_indexer_enabled() {
         handles.push(tokio::spawn({
             let config = config.clone();
             let mut redis_connection_manager = redis_connection_manager.clone();
             async move {
-                startup::bridge_indexer::start_indexer(
+                startup::mongo_ingestion::start_indexer(
                     &config,
                     &mut redis_connection_manager,
                     args.start_timestamp,
@@ -203,13 +215,16 @@ async fn main() -> Result<()> {
                 .await
             }
         }));
-    } else {
+    }
+
+    #[cfg(feature = "native-indexers")]
+    {
         handles.push(tokio::spawn({
             let config = config.clone();
             let mut redis_connection_manager = redis_connection_manager.clone();
             let jsonrpc_client = jsonrpc_client.clone();
             async move {
-                startup::near::start_indexer(
+                startup::native_indexers::near::start_indexer(
                     &config,
                     &mut redis_connection_manager,
                     jsonrpc_client,
@@ -223,7 +238,7 @@ async fn main() -> Result<()> {
                 let config = config.clone();
                 let mut redis_connection_manager = redis_connection_manager.clone();
                 async move {
-                    startup::evm::start_indexer(
+                    startup::native_indexers::evm::start_indexer(
                         &config,
                         &mut redis_connection_manager,
                         ChainKind::Eth,
@@ -238,7 +253,7 @@ async fn main() -> Result<()> {
                 let config = config.clone();
                 let mut redis_connection_manager = redis_connection_manager.clone();
                 async move {
-                    startup::evm::start_indexer(
+                    startup::native_indexers::evm::start_indexer(
                         &config,
                         &mut redis_connection_manager,
                         ChainKind::Base,
@@ -253,7 +268,7 @@ async fn main() -> Result<()> {
                 let config = config.clone();
                 let mut redis_connection_manager = redis_connection_manager.clone();
                 async move {
-                    startup::evm::start_indexer(
+                    startup::native_indexers::evm::start_indexer(
                         &config,
                         &mut redis_connection_manager,
                         ChainKind::Arb,
@@ -268,7 +283,7 @@ async fn main() -> Result<()> {
                 let config = config.clone();
                 let mut redis_connection_manager = redis_connection_manager.clone();
                 async move {
-                    startup::evm::start_indexer(
+                    startup::native_indexers::evm::start_indexer(
                         &config,
                         &mut redis_connection_manager,
                         ChainKind::Bnb,
@@ -283,7 +298,7 @@ async fn main() -> Result<()> {
                 let config = config.clone();
                 let mut redis_connection_manager = redis_connection_manager.clone();
                 async move {
-                    startup::evm::start_indexer(
+                    startup::native_indexers::evm::start_indexer(
                         &config,
                         &mut redis_connection_manager,
                         ChainKind::Pol,
@@ -298,7 +313,7 @@ async fn main() -> Result<()> {
                 let config = config.clone();
                 let mut redis_connection_manager = redis_connection_manager.clone();
                 async move {
-                    startup::solana::start_indexer(
+                    startup::native_indexers::solana::start_indexer(
                         &config,
                         &mut redis_connection_manager,
                         args.solana_start_signature,
@@ -310,7 +325,7 @@ async fn main() -> Result<()> {
                 let config = config.clone();
                 let mut redis_connection_manager = redis_connection_manager.clone();
                 async move {
-                    startup::solana::process_signature(&config, &mut redis_connection_manager).await
+                    startup::native_indexers::solana::process_signature(&config, &mut redis_connection_manager).await
                 }
             }));
         }
