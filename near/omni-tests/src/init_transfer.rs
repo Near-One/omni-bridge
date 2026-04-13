@@ -7,8 +7,8 @@ mod tests {
     };
     use near_workspaces::{result::ExecutionSuccess, types::NearToken, AccountId};
     use omni_types::{
-        near_events::OmniBridgeEvent, BridgeOnTransferMsg, ChainKind, Fee, InitTransferMsg,
-        OmniAddress, TransferId, TransferMessage, UpdateFee,
+        near_events::OmniBridgeEvent, BoundedString, BridgeOnTransferMsg, ChainKind, Fee,
+        InitTransferMsg, OmniAddress, TransferId, TransferMessage, UpdateFee,
     };
     use rstest::rstest;
 
@@ -302,6 +302,7 @@ mod tests {
             fee: U128(0),
             recipient: eth_eoa_address(),
             msg: None,
+            external_id: None,
         };
 
         let env = TestEnv::new(sender_balance_token, false, build_artifacts).await?;
@@ -349,6 +350,7 @@ mod tests {
             fee: U128(1000),
             recipient: eth_eoa_address(),
             msg: None,
+            external_id: None,
         };
 
         let env = TestEnv::new(sender_balance_token, false, build_artifacts).await?;
@@ -394,6 +396,7 @@ mod tests {
             fee: U128(1000),
             recipient: eth_eoa_address(),
             msg: None,
+            external_id: None,
         };
 
         let env = TestEnv::new(sender_balance_token, false, build_artifacts).await?;
@@ -448,6 +451,7 @@ mod tests {
             fee: U128(1000),
             recipient: eth_eoa_address(),
             msg: None,
+            external_id: None,
         };
         let update_fee_value = Fee {
             native_fee: U128(NearToken::from_near(2).as_yoctonear()),
@@ -507,6 +511,7 @@ mod tests {
             fee: U128(0),
             recipient: eth_eoa_address(),
             msg: None,
+            external_id: None,
         };
 
         let env = TestEnv::new(sender_balance_token, false, build_artifacts).await?;
@@ -547,6 +552,56 @@ mod tests {
 
     #[rstest]
     #[tokio::test]
+    async fn test_init_transfer_with_external_id(
+        build_artifacts: &BuildArtifacts,
+    ) -> anyhow::Result<()> {
+        let sender_balance_token = 1_000_000;
+        let transfer_amount = 5000;
+        let base_msg = InitTransferMsg {
+            native_token_fee: U128(NearToken::from_near(1).as_yoctonear()),
+            fee: U128(1000),
+            recipient: eth_eoa_address(),
+            msg: None,
+            external_id: Some(BoundedString::new("external-id-1").unwrap()),
+        };
+
+        let env = TestEnv::new(sender_balance_token, false, build_artifacts).await?;
+
+        // First transfer with an external_id — full flow must succeed end-to-end.
+        init_transfer_flow_on_near(&env, transfer_amount, base_msg.clone(), None, None, true)
+            .await?;
+
+        // Second transfer with an otherwise-identical message but a different external_id —
+        // this confirms external_id is threaded through and does not break the flow.
+        let second_msg = InitTransferMsg {
+            external_id: Some(BoundedString::new("external-id-2").unwrap()),
+            ..base_msg.clone()
+        };
+        init_transfer_flow_on_near(&env, transfer_amount, second_msg, None, None, true).await?;
+
+        let (user_balance_token, locker_balance_token, relayer_balance_token, _) =
+            get_test_balances(&env).await?;
+
+        assert_eq!(
+            user_balance_token,
+            U128(sender_balance_token - 2 * transfer_amount),
+            "User balance was not deducted for both transfers"
+        );
+        assert_eq!(
+            locker_balance_token,
+            U128(2 * (transfer_amount - base_msg.fee.0)),
+            "Locker balance was not increased for both transfers"
+        );
+        assert_eq!(
+            relayer_balance_token,
+            U128(2 * base_msg.fee.0),
+            "Relayer didn't receive transfer fee for both transfers."
+        );
+        Ok(())
+    }
+
+    #[rstest]
+    #[tokio::test]
     async fn test_untrusted_sender_cannot_sign_transfer(
         build_artifacts: &BuildArtifacts,
     ) -> anyhow::Result<()> {
@@ -557,6 +612,7 @@ mod tests {
             fee: U128(0),
             recipient: eth_eoa_address(),
             msg: None,
+            external_id: None,
         };
 
         let env = TestEnv::new(sender_balance_token, false, build_artifacts).await?;
@@ -632,6 +688,7 @@ mod tests {
             fee: U128(1000),
             recipient: eth_eoa_address(),
             msg: None,
+            external_id: None,
         };
         let update_fee_value = Fee {
             native_fee: U128(NearToken::from_near(0).as_yoctonear()),
@@ -666,6 +723,7 @@ mod tests {
             fee: U128(1000),
             recipient: eth_eoa_address(),
             msg: None,
+            external_id: None,
         };
         let update_fee_value = Fee {
             native_fee: U128(NearToken::from_near(1).as_yoctonear()),
@@ -700,6 +758,7 @@ mod tests {
             fee: U128(1000),
             recipient: eth_eoa_address(),
             msg: None,
+            external_id: None,
         };
         let update_fee_value = Fee {
             native_fee: U128(NearToken::from_near(1).as_yoctonear()),
@@ -735,6 +794,7 @@ mod tests {
             fee: U128(1000),
             recipient: eth_eoa_address(),
             msg: None,
+            external_id: None,
         };
         let update_fee = UpdateFee::Proof(vec![]);
 

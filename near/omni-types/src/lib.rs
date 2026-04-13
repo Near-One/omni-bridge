@@ -12,6 +12,7 @@ use num_enum::IntoPrimitive;
 use schemars::JsonSchema;
 use sol_address::SolAddress;
 
+pub mod bounded_string;
 pub mod btc;
 pub mod errors;
 pub mod evm;
@@ -28,6 +29,7 @@ pub mod utils;
 #[cfg(test)]
 mod tests;
 
+pub use bounded_string::BoundedString;
 pub use errors::{
     BridgeError, OmniError, ProverError, StorageBalanceError, StorageError, TokenError, TypesError,
 };
@@ -444,12 +446,25 @@ pub enum BridgeOnTransferMsg {
     SwapMigratedToken,
 }
 
+/// Maximum byte length for `InitTransferMsg::msg` — caps the user-supplied hook payload
+/// forwarded to the destination chain.
+pub const MAX_INIT_TRANSFER_MSG_LEN: usize = 2048;
+/// Maximum byte length for `InitTransferMsg::external_id` — large enough for UUIDs or
+/// hex-encoded 32-byte hashes, small enough to bound storage-account-hash inputs.
+pub const MAX_EXTERNAL_ID_LEN: usize = 64;
+
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct InitTransferMsg {
     pub recipient: OmniAddress,
     pub fee: U128,
     pub native_token_fee: U128,
-    pub msg: Option<String>,
+    /// Optional caller-supplied destination-chain hook payload. Length-capped to
+    /// [`MAX_INIT_TRANSFER_MSG_LEN`] bytes to prevent unbounded storage/gas inflation.
+    pub msg: Option<BoundedString<MAX_INIT_TRANSFER_MSG_LEN>>,
+    /// Optional caller-provided identifier mixed into the virtual storage account ID hash.
+    /// Lets otherwise-identical transfers derive distinct storage accounts so their
+    /// storage deposits do not collide. Length-capped to [`MAX_EXTERNAL_ID_LEN`] bytes.
+    pub external_id: Option<BoundedString<MAX_EXTERNAL_ID_LEN>>,
 }
 
 impl InitTransferMsg {
@@ -543,8 +558,8 @@ impl TransferMessage {
         self.recipient.get_chain()
     }
 
-    pub fn calculate_storage_account_id(&self) -> AccountId {
-        TransferMessageStorageAccount::from(self.clone()).id()
+    pub fn calculate_storage_account_id(&self, external_id: Option<String>) -> AccountId {
+        TransferMessageStorageAccount::from(self.clone()).id(external_id)
     }
 
     pub fn amount_without_fee(&self) -> Option<u128> {
@@ -566,8 +581,12 @@ pub struct TransferMessageStorageAccount {
 
 impl TransferMessageStorageAccount {
     #[allow(clippy::missing_panics_doc)]
-    pub fn id(&self) -> AccountId {
-        let hash = utils::sha256(&borsh::to_vec(self).unwrap());
+    pub fn id(&self, external_id: Option<String>) -> AccountId {
+        let mut bytes = borsh::to_vec(self).unwrap();
+        if let Some(external_id) = external_id {
+            bytes.extend_from_slice(external_id.as_bytes());
+        }
+        let hash = utils::sha256(&bytes);
         let implicit_account_id = hex::encode(hash);
         AccountId::try_from(implicit_account_id).unwrap()
     }

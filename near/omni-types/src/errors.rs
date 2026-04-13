@@ -129,6 +129,7 @@ pub enum ProverError {
 pub enum TypesError {
     InvalidHex,
     InvalidHexLength,
+    StringTooLong,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, AsRefStr, ErrorDisplay)]
