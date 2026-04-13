@@ -54,7 +54,7 @@ impl MpcOmniProver {
     #[must_use]
     pub fn init(mpc_contract_id: AccountId) -> Self {
         let mut finalities = HashMap::new();
-        finalities.insert(ChainKind::Abs, MpcFinality::Evm(EvmFinality::Safe));
+        finalities.insert(ChainKind::Abs, MpcFinality::Evm(EvmFinality::Latest));
         finalities.insert(
             ChainKind::Strk,
             MpcFinality::Starknet(StarknetFinality::AcceptedOnL2),
