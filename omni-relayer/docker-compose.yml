@@ -1,0 +1,93 @@
+services:
+  nats:
+    image: nats:2.11-alpine
+    command: ["--config", "/etc/nats/nats.conf"]
+    environment:
+      - NATS_USER=${BRIDGE_NATS_USERNAME}
+      - NATS_PASSWORD=${BRIDGE_NATS_PASSWORD}
+    volumes:
+      - ./nats.conf:/etc/nats/nats.conf:ro
+      - nats-data:/data
+    ports:
+      - "4222:4222"
+      - "8222:8222"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "nats-server", "--signal", "ldm"]
+      interval: 5s
+      timeout: 3s
+      retries: 3
+
+  nats-init:
+    image: natsio/nats-box
+    depends_on:
+      nats:
+        condition: service_healthy
+    env_file: .env
+    entrypoint: /bin/sh
+    command:
+      - -c
+      - |
+        NATS_SERVER="nats://$${BRIDGE_NATS_USERNAME}:$${BRIDGE_NATS_PASSWORD}@nats:4222"
+
+        nats -s "$$NATS_SERVER" stream add OMNI_EVENTS \
+          --subjects "omni-events.>" \
+          --retention limits \
+          --storage file \
+          --replicas 1 \
+          --discard new \
+          --max-age 14d \
+          --max-bytes 1GiB \
+          --dupe-window 1h \
+          --deny-delete \
+          --deny-purge \
+          --defaults \
+        || nats -s "$$NATS_SERVER" stream info OMNI_EVENTS
+
+        nats -s "$$NATS_SERVER" stream add RELAYER \
+          --subjects "relayer.>" \
+          --retention limits \
+          --storage file \
+          --replicas 1 \
+          --discard new \
+          --max-age 14d \
+          --max-bytes 1GiB \
+          --dupe-window 1h \
+          --deny-delete \
+          --deny-purge \
+          --defaults \
+        || nats -s "$$NATS_SERVER" stream info RELAYER
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 3
+
+  relayer:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      ssh:
+        - default
+    env_file: .env
+    volumes:
+      - ./config.toml:/app/config.toml:ro
+    command: ["omni-relayer", "--config", "/app/config.toml"]
+    restart: unless-stopped
+    depends_on:
+      nats-init:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+
+volumes:
+  nats-data:
+  redis-data:

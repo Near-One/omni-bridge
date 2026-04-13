@@ -1,0 +1,6 @@
+target/
+.env
+config.toml
+nats-data/
+redis-data/
+.git/
