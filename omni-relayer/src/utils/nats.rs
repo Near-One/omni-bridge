@@ -26,6 +26,7 @@ impl NatsClient {
         Ok(Self { jetstream })
     }
 
+    #[cfg(feature = "nats-ingestion")]
     pub async fn omni_consumer(&self, config: &config::Nats) -> Result<consumer::PullConsumer> {
         self.jetstream
             .create_consumer_strict_on_stream(

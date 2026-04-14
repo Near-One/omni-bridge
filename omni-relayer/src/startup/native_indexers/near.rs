@@ -9,6 +9,8 @@ use near_lake_framework::{LakeConfig, LakeConfigBuilder};
 use omni_types::{ChainKind, near_events::OmniBridgeEvent};
 use tracing::info;
 
+use near_jsonrpc_client::methods::block::RpcBlockRequest;
+
 use crate::{config, utils, workers::RetryableEvent};
 
 async fn create_lake_config(
@@ -26,7 +28,7 @@ async fn create_lake_config(
         )
         .await
         .map_or(
-            utils::near::get_final_block(jsonrpc_client).await?,
+            get_final_block(jsonrpc_client).await?,
             |block_height| block_height + 1,
         ),
     };
