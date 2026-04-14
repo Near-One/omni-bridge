@@ -1,4 +1,3 @@
-use omni_types::ChainKind;
 use redis::{AsyncCommands, aio::ConnectionManager};
 use tracing::warn;
 
@@ -6,10 +5,7 @@ use crate::config;
 
 use super::bridge_api::TransferFee;
 
-pub const MONGODB_OMNI_EVENTS_RT: &str = "mongodb_omni_events_rt";
-
 pub const EVENTS: &str = "events";
-pub const SOLANA_EVENTS: &str = "solana_events";
 
 pub const FEE_MAPPING: &str = "fee_mapping";
 
@@ -50,110 +46,6 @@ pub async fn get_fee(
         "Failed to get fee for transfer_id {transfer_id} from redis after {} attempts",
         config.redis.query_retry_attempts
     );
-    None
-}
-
-pub fn get_last_processed_key(chain_kind: ChainKind) -> String {
-    match chain_kind {
-        ChainKind::Sol => "SOLANA_LAST_PROCESSED_SIGNATURE".to_string(),
-        _ => format!("{chain_kind:?}_LAST_PROCESSED_BLOCK"),
-    }
-}
-
-pub async fn get_last_processed<K, V>(
-    config: &config::Config,
-    redis_connection_manager: &mut ConnectionManager,
-    key: K,
-) -> Option<V>
-where
-    K: redis::ToRedisArgs + Copy + Send + Sync,
-    V: redis::FromRedisValue + Send + Sync,
-{
-    for _ in 0..config.redis.query_retry_attempts {
-        if let Ok(res) = redis_connection_manager.get::<K, V>(key).await {
-            return Some(res);
-        }
-
-        tokio::time::sleep(tokio::time::Duration::from_secs(
-            config.redis.query_retry_sleep_secs,
-        ))
-        .await;
-    }
-
-    warn!("Failed to get last processed block from redis db");
-    None
-}
-
-pub async fn update_last_processed<K, V>(
-    config: &config::Config,
-    redis_connection: &mut ConnectionManager,
-    key: K,
-    value: V,
-) where
-    K: redis::ToRedisArgs + Copy + Send + Sync,
-    V: redis::ToRedisArgs + Copy + Send + Sync,
-{
-    for _ in 0..config.redis.query_retry_attempts {
-        if redis_connection.set::<K, V, ()>(key, value).await.is_ok() {
-            return;
-        }
-
-        tokio::time::sleep(tokio::time::Duration::from_secs(
-            config.redis.query_retry_sleep_secs,
-        ))
-        .await;
-    }
-
-    warn!("Failed to update last processed block in redis db");
-}
-
-const MAX_EVENTS_PER_BATCH: usize = 30;
-
-pub async fn get_events(
-    config: &config::Config,
-    redis_connection_manager: &mut ConnectionManager,
-    key: String,
-) -> Option<Vec<(String, String)>> {
-    for _ in 0..config.redis.query_retry_attempts {
-        let mut iter = match redis_connection_manager
-            .hscan::<String, (String, String)>(key.clone())
-            .await
-        {
-            Ok(iter) => iter,
-            Err(err) => {
-                warn!("Redis hscan failed: {err:?}");
-                tokio::time::sleep(tokio::time::Duration::from_secs(
-                    config.redis.query_retry_sleep_secs,
-                ))
-                .await;
-                continue;
-            }
-        };
-
-        let mut events = Vec::new();
-        loop {
-            if events.len() >= MAX_EVENTS_PER_BATCH {
-                break;
-            }
-            match tokio::time::timeout(
-                tokio::time::Duration::from_secs(config.redis.query_timeout_secs),
-                iter.next_item(),
-            )
-            .await
-            {
-                Ok(Some(event)) => events.push(event),
-                Ok(None) => break,
-                Err(_) => {
-                    warn!("Redis hscan iteration timed out");
-                    break;
-                }
-            }
-        }
-
-        return Some(events);
-    }
-
-    warn!("Failed to get events from redis db");
     None
 }
 
@@ -323,4 +215,124 @@ pub async fn zrem<M>(
     }
 
     warn!("Failed to remove event from redis sorted set");
+}
+
+// --- Feature-gated helpers for indexer checkpoint tracking ---
+
+#[cfg(feature = "mongo-ingestion")]
+pub const MONGODB_OMNI_EVENTS_RT: &str = "mongodb_omni_events_rt";
+
+#[cfg(any(feature = "native-indexers", feature = "mongo-ingestion"))]
+pub async fn get_last_processed<K, V>(
+    config: &config::Config,
+    redis_connection_manager: &mut ConnectionManager,
+    key: K,
+) -> Option<V>
+where
+    K: redis::ToRedisArgs + Copy + Send + Sync,
+    V: redis::FromRedisValue + Send + Sync,
+{
+    for _ in 0..config.redis.query_retry_attempts {
+        if let Ok(res) = redis_connection_manager.get::<K, V>(key).await {
+            return Some(res);
+        }
+
+        tokio::time::sleep(tokio::time::Duration::from_secs(
+            config.redis.query_retry_sleep_secs,
+        ))
+        .await;
+    }
+
+    warn!("Failed to get last processed block from redis db");
+    None
+}
+
+#[cfg(any(feature = "native-indexers", feature = "mongo-ingestion"))]
+pub async fn update_last_processed<K, V>(
+    config: &config::Config,
+    redis_connection: &mut ConnectionManager,
+    key: K,
+    value: V,
+) where
+    K: redis::ToRedisArgs + Copy + Send + Sync,
+    V: redis::ToRedisArgs + Copy + Send + Sync,
+{
+    for _ in 0..config.redis.query_retry_attempts {
+        if redis_connection.set::<K, V, ()>(key, value).await.is_ok() {
+            return;
+        }
+
+        tokio::time::sleep(tokio::time::Duration::from_secs(
+            config.redis.query_retry_sleep_secs,
+        ))
+        .await;
+    }
+
+    warn!("Failed to update last processed block in redis db");
+}
+
+// --- Native indexers only ---
+
+#[cfg(feature = "native-indexers")]
+pub const SOLANA_EVENTS: &str = "solana_events";
+
+#[cfg(feature = "native-indexers")]
+pub fn get_last_processed_key(chain_kind: omni_types::ChainKind) -> String {
+    use omni_types::ChainKind;
+    match chain_kind {
+        ChainKind::Sol => "SOLANA_LAST_PROCESSED_SIGNATURE".to_string(),
+        _ => format!("{chain_kind:?}_LAST_PROCESSED_BLOCK"),
+    }
+}
+
+#[cfg(feature = "native-indexers")]
+const MAX_EVENTS_PER_BATCH: usize = 30;
+
+#[cfg(feature = "native-indexers")]
+pub async fn get_events(
+    config: &config::Config,
+    redis_connection_manager: &mut ConnectionManager,
+    key: String,
+) -> Option<Vec<(String, String)>> {
+    for _ in 0..config.redis.query_retry_attempts {
+        let mut iter = match redis_connection_manager
+            .hscan::<String, (String, String)>(key.clone())
+            .await
+        {
+            Ok(iter) => iter,
+            Err(err) => {
+                warn!("Redis hscan failed: {err:?}");
+                tokio::time::sleep(tokio::time::Duration::from_secs(
+                    config.redis.query_retry_sleep_secs,
+                ))
+                .await;
+                continue;
+            }
+        };
+
+        let mut events = Vec::new();
+        loop {
+            if events.len() >= MAX_EVENTS_PER_BATCH {
+                break;
+            }
+            match tokio::time::timeout(
+                tokio::time::Duration::from_secs(config.redis.query_timeout_secs),
+                iter.next_item(),
+            )
+            .await
+            {
+                Ok(Some(event)) => events.push(event),
+                Ok(None) => break,
+                Err(_) => {
+                    warn!("Redis hscan iteration timed out");
+                    break;
+                }
+            }
+        }
+
+        return Some(events);
+    }
+
+    warn!("Failed to get events from redis db");
+    None
 }

@@ -1,6 +1,6 @@
 [package]
 name = "omni-relayer"
-version = "0.5.22"
+version = "0.6.0"
 edition = "2024"
 resolver = "2"
 repository = "https://github.com/Near-One/omni-bridge"
@@ -34,9 +34,9 @@ solana-transaction-status = "2.1.9"
 solana-rpc-client-api = "2.1.9"
 
 omni-types = { git = "https://github.com/near-one/omni-bridge", package = "omni-types", rev = "ffbdc544c0d7f670942e8bf532c7e023c1c6bfec", features = ["abi", "__abi-generate"] }
-bridge-indexer-types = { git = "ssh://git@github.com/near-one/bridge-indexer-rs.git", package = "bridge-indexer-types", rev = "7e99a29f783eb3a15e4f2296a0759773118c1c6d" }
+bridge-indexer-types = { git = "ssh://git@github.com/near-one/bridge-indexer-rs.git", package = "bridge-indexer-types", rev = "7e99a29f783eb3a15e4f2296a0759773118c1c6d", optional = true }
 
-near-lake-framework = "0.7.14"
+near-lake-framework = { version = "0.7.14", optional = true }
 near-jsonrpc-client = "0.20.0"
 near-jsonrpc-primitives = "0.34.2"
 near-primitives = "0.34.2"
@@ -46,7 +46,7 @@ near-sdk = { version = "5.24.1", features = ["unit-testing"] }
 hex = "0.4.3"
 alloy = { version = "1.1", features = ["node-bindings", "providers", "rpc-types", "sol-types", "provider-ws", "signers", "signer-local"] }
 
-mongodb = "3.2.2"
+mongodb = { version = "3.2.2", optional = true }
 redis = { version = "0.32.5", features = ["aio", "tokio-comp", "connection-manager", "json"] }
 async-nats = "0.45"
 reqwest = "0.12"
@@ -64,6 +64,12 @@ wormhole-bridge-client = { git = "https://github.com/Near-One/bridge-sdk-rs", pa
 light-client = { git = "https://github.com/Near-One/bridge-sdk-rs", package = "light-client", rev = "19f6cc07f1802497aabee9c943358a16c3a6d901" }
 
 omni-connector = { git = "https://github.com/Near-One/bridge-sdk-rs", package = "omni-connector", rev = "19f6cc07f1802497aabee9c943358a16c3a6d901" }
+
+[features]
+default = ["nats-ingestion"]
+nats-ingestion = ["dep:bridge-indexer-types"]
+mongo-ingestion = ["dep:mongodb", "dep:bridge-indexer-types"]
+native-indexers = ["dep:near-lake-framework"]
 
 # The profile that 'dist' will build with
 [profile.dist]

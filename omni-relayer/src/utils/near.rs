@@ -1,33 +1,56 @@
-use anyhow::Result;
+use std::path::Path;
+
+use anyhow::{Context, Result};
 use tracing::{info, warn};
 
-use near_jsonrpc_client::{JsonRpcClient, methods::block::RpcBlockRequest};
-use near_lake_framework::near_indexer_primitives::{
-    IndexerExecutionOutcomeWithReceipt, StreamerMessage,
-    views::{ActionView, ReceiptEnumView, ReceiptView},
-};
+use near_crypto::{InMemorySigner, Signer};
+use near_jsonrpc_client::JsonRpcClient;
 use near_primitives::{hash::CryptoHash, types::AccountId};
-use omni_types::{ChainKind, near_events::OmniBridgeEvent};
+use omni_types::ChainKind;
 
-use crate::{
-    config, utils,
-    workers::{EventAction, RetryableEvent},
-};
+use crate::{config, workers::EventAction};
 
-pub async fn get_final_block(jsonrpc_client: &JsonRpcClient) -> Result<u64> {
-    info!("Getting final block");
+pub fn get_signer(
+    config: &config::Config,
+    near_signer_type: config::NearSignerType,
+) -> Result<InMemorySigner> {
+    info!("Getting NEAR signer");
 
-    let block_response = RpcBlockRequest {
-        block_reference: near_primitives::types::BlockReference::Finality(
-            near_primitives::types::Finality::Final,
-        ),
+    let file = match near_signer_type {
+        config::NearSignerType::Omni => config.near.omni_credentials_path.as_deref(),
+        config::NearSignerType::Fast => config.near.fast_credentials_path.as_deref(),
     };
 
-    jsonrpc_client
-        .call(block_response)
-        .await
-        .map(|block| block.header.height)
-        .map_err(Into::into)
+    if let Some(file) = file {
+        info!("Using NEAR credentials file: {file}");
+        if let Ok(Signer::InMemory(signer)) = InMemorySigner::from_file(Path::new(file)) {
+            return Ok(signer);
+        }
+    }
+
+    info!("Retrieving NEAR credentials from env");
+
+    let account_id_env = match near_signer_type {
+        config::NearSignerType::Omni => "NEAR_OMNI_ACCOUNT_ID",
+        config::NearSignerType::Fast => "NEAR_FAST_ACCOUNT_ID",
+    };
+
+    let account_id = std::env::var(account_id_env)
+        .context(format!(
+            "Failed to get `{account_id_env}` environment variable"
+        ))?
+        .parse()
+        .context(format!("Failed to parse `{account_id_env}`"))?;
+
+    let private_key = config::get_private_key(ChainKind::Near, Some(near_signer_type))
+        .parse()
+        .context("Failed to parse private key")?;
+
+    if let Signer::InMemory(signer) = InMemorySigner::from_secret_key(account_id, private_key) {
+        Ok(signer)
+    } else {
+        anyhow::bail!("Failed to create NEAR signer")
+    }
 }
 
 pub async fn resolve_tx_action(
@@ -70,126 +93,4 @@ pub async fn resolve_tx_action(
     }
 
     EventAction::Remove
-}
-
-pub async fn handle_streamer_message(
-    config: &config::Config,
-    redis_connection_manager: &mut redis::aio::ConnectionManager,
-    streamer_message: &StreamerMessage,
-) {
-    let nep_locker_event_outcomes = find_nep_locker_event_outcomes(config, streamer_message);
-
-    for outcome in nep_locker_event_outcomes {
-        let receipt_id = outcome.receipt.receipt_id.to_string();
-
-        for log in outcome.execution_outcome.outcome.logs {
-            let Ok(log) = serde_json::from_str::<OmniBridgeEvent>(&log) else {
-                continue;
-            };
-
-            info!("Received OmniBridgeEvent: {}", log.to_log_string());
-
-            match log {
-                OmniBridgeEvent::InitTransferEvent { transfer_message }
-                | OmniBridgeEvent::UpdateFeeEvent { transfer_message } => {
-                    let origin_nonce = transfer_message.origin_nonce.to_string();
-                    let key = utils::redis::composite_key(&[&receipt_id, &origin_nonce]);
-
-                    utils::redis::add_event(
-                        config,
-                        redis_connection_manager,
-                        utils::redis::EVENTS,
-                        key,
-                        RetryableEvent::new(crate::workers::Transfer::Near { transfer_message }),
-                    )
-                    .await;
-                }
-                OmniBridgeEvent::UtxoTransferEvent {
-                    utxo_transfer_message,
-                    new_transfer_id,
-                    ..
-                } => {
-                    if let Some(new_transfer_id) = new_transfer_id {
-                        let utxo_id = utxo_transfer_message.utxo_id.to_string();
-                        let key = utils::redis::composite_key(&[&receipt_id, &utxo_id]);
-
-                        utils::redis::add_event(
-                            config,
-                            redis_connection_manager,
-                            utils::redis::EVENTS,
-                            key,
-                            RetryableEvent::new(crate::workers::Transfer::Utxo {
-                                utxo_transfer_message,
-                                new_transfer_id: new_transfer_id.into(),
-                            }),
-                        )
-                        .await;
-                    }
-                }
-                OmniBridgeEvent::SignTransferEvent {
-                    ref message_payload,
-                    ..
-                } => {
-                    let origin_nonce = message_payload.transfer_id.origin_nonce.to_string();
-                    let key = utils::redis::composite_key(&[&receipt_id, &origin_nonce]);
-
-                    utils::redis::add_event(
-                        config,
-                        redis_connection_manager,
-                        utils::redis::EVENTS,
-                        key,
-                        RetryableEvent::new(log),
-                    )
-                    .await;
-                }
-                OmniBridgeEvent::FinTransferEvent { transfer_message } => {
-                    if transfer_message.recipient.get_chain() != ChainKind::Near {
-                        let origin_nonce = transfer_message.origin_nonce.to_string();
-                        let key = utils::redis::composite_key(&[&receipt_id, &origin_nonce]);
-
-                        utils::redis::add_event(
-                            config,
-                            redis_connection_manager,
-                            utils::redis::EVENTS,
-                            key,
-                            RetryableEvent::new(crate::workers::Transfer::Near {
-                                transfer_message,
-                            }),
-                        )
-                        .await;
-                    }
-                }
-                OmniBridgeEvent::FailedFinTransferEvent { .. }
-                | OmniBridgeEvent::FastTransferEvent { .. }
-                | OmniBridgeEvent::ClaimFeeEvent { .. }
-                | OmniBridgeEvent::LogMetadataEvent { .. }
-                | OmniBridgeEvent::DeployTokenEvent { .. }
-                | OmniBridgeEvent::MigrateTokenEvent { .. }
-                | OmniBridgeEvent::BindTokenEvent { .. } => {}
-            }
-        }
-    }
-}
-
-fn find_nep_locker_event_outcomes(
-    config: &config::Config,
-    streamer_message: &StreamerMessage,
-) -> Vec<IndexerExecutionOutcomeWithReceipt> {
-    streamer_message
-        .shards
-        .iter()
-        .flat_map(|shard| shard.receipt_execution_outcomes.iter())
-        .filter(|outcome| is_nep_locker_event(config, &outcome.receipt))
-        .cloned()
-        .collect()
-}
-
-fn is_nep_locker_event(config: &config::Config, receipt: &ReceiptView) -> bool {
-    receipt.receiver_id == config.near.omni_bridge_id
-        && matches!(
-            receipt.receipt,
-            ReceiptEnumView::Action { ref actions, .. } if actions.iter().any(|action| {
-                matches!(action, ActionView::FunctionCall { .. })
-            })
-        )
 }
