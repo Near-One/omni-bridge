@@ -652,8 +652,8 @@ mod tests {
         let status_a = submit_ft_transfer_call(msg_a.clone()).await?;
         let status_b = submit_ft_transfer_call(msg_b.clone()).await?;
 
-        // Give the sandbox a few blocks to register both yielded promises before resuming.
-        tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+        // Fast-forward a few blocks so both yield/resume callbacks are processed.
+        env.worker.fast_forward(5);
 
         let required_balance_init_transfer: NearToken = env
             .locker_contract
