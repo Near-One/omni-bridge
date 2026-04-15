@@ -96,11 +96,11 @@ impl UsedNonces {
                 }
                 Err(e) => return Err(e.with_account_name("used_nonces")),
             };
-            let mut nonce_slot = unsafe {
+            let mut nonce_slot =
                 used_nonces
                     .used
-                    .get_unchecked_mut(usize::try_from(nonce % u64::from(USED_NONCES_PER_ACCOUNT))?)
-            };
+                    .get_mut(usize::try_from(nonce % u64::from(USED_NONCES_PER_ACCOUNT))?)
+                    .expect("nonce index out of bounds");
             require!(!nonce_slot.replace(true), ErrorCode::NonceAlreadyUsed);
         }
         #[cfg(feature = "idl-build")]
