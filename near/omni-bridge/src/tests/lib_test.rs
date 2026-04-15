@@ -93,6 +93,7 @@ fn get_init_transfer_msg(recipient: &str, fee: u128, native_token_fee: u128) -> 
         fee: U128(fee),
         native_token_fee: U128(native_token_fee),
         msg: None,
+        external_id: None,
     }
 }
 
@@ -296,6 +297,7 @@ fn test_init_transfer_locks_other_tokens_for_deployed_token() {
             fee: U128(0),
             native_token_fee: U128(0),
             msg: None,
+            external_id: None,
         }),
     );
 

@@ -7,8 +7,9 @@ mod tests {
     };
     use near_workspaces::{result::ExecutionSuccess, types::NearToken, AccountId};
     use omni_types::{
-        near_events::OmniBridgeEvent, BridgeOnTransferMsg, ChainKind, Fee, InitTransferMsg,
-        OmniAddress, TransferId, TransferMessage, UpdateFee,
+        near_events::OmniBridgeEvent, BoundedString, BridgeOnTransferMsg, ChainKind, Fee,
+        InitTransferMsg, OmniAddress, TransferId, TransferMessage, TransferMessageStorageAccount,
+        UpdateFee,
     };
     use rstest::rstest;
 
@@ -16,7 +17,8 @@ mod tests {
         environment::TestEnvBuilder,
         helpers::tests::{
             account_n, build_artifacts, eth_eoa_address, eth_factory_address,
-            get_claim_fee_args_near, get_event_data, relayer_account_id, BuildArtifacts,
+            execution_contains_log, get_claim_fee_args_near, get_event_data, relayer_account_id,
+            BuildArtifacts,
         },
     };
 
@@ -302,6 +304,7 @@ mod tests {
             fee: U128(0),
             recipient: eth_eoa_address(),
             msg: None,
+            external_id: None,
         };
 
         let env = TestEnv::new(sender_balance_token, false, build_artifacts).await?;
@@ -349,6 +352,7 @@ mod tests {
             fee: U128(1000),
             recipient: eth_eoa_address(),
             msg: None,
+            external_id: None,
         };
 
         let env = TestEnv::new(sender_balance_token, false, build_artifacts).await?;
@@ -394,6 +398,7 @@ mod tests {
             fee: U128(1000),
             recipient: eth_eoa_address(),
             msg: None,
+            external_id: None,
         };
 
         let env = TestEnv::new(sender_balance_token, false, build_artifacts).await?;
@@ -448,6 +453,7 @@ mod tests {
             fee: U128(1000),
             recipient: eth_eoa_address(),
             msg: None,
+            external_id: None,
         };
         let update_fee_value = Fee {
             native_fee: U128(NearToken::from_near(2).as_yoctonear()),
@@ -507,6 +513,7 @@ mod tests {
             fee: U128(0),
             recipient: eth_eoa_address(),
             msg: None,
+            external_id: None,
         };
 
         let env = TestEnv::new(sender_balance_token, false, build_artifacts).await?;
@@ -545,6 +552,198 @@ mod tests {
         Ok(())
     }
 
+    /// Exercises the yield/resume path of `init_transfer` and confirms that `external_id`
+    /// is threaded into the virtual storage account ID:
+    /// 1. Sender registers with the bridge at the bare minimum (no transfer-sized storage).
+    /// 2. Two `ft_transfer_call`s are submitted with otherwise-identical messages but
+    ///    different `external_id`s. Both yield because the signer lacks storage and the
+    ///    virtual accounts don't exist yet.
+    /// 3. Two `storage_deposit`s — one per predicted virtual account ID — resume each
+    ///    yielded transfer independently.
+    /// 4. Each resumed transfer is then signed and its fee claimed as usual.
+    #[rstest]
+    #[tokio::test]
+    async fn test_init_transfer_with_external_id(
+        build_artifacts: &BuildArtifacts,
+    ) -> anyhow::Result<()> {
+        let sender_balance_token = 1_000_000;
+        let transfer_amount = 5000;
+        let fee = U128(1000);
+
+        let env = TestEnv::new(sender_balance_token, false, build_artifacts).await?;
+
+        // Register the sender with the bare-minimum bridge storage. This is enough to
+        // identify the signer during resume, but not enough to fund the transfer — so
+        // `init_transfer` must take the yield branch.
+        let required_balance_for_account: NearToken = env
+            .locker_contract
+            .view("required_balance_for_account")
+            .await?
+            .json()?;
+        env.sender_account
+            .call(env.locker_contract.id(), "storage_deposit")
+            .args_json(json!({ "account_id": env.sender_account.id() }))
+            .deposit(required_balance_for_account)
+            .max_gas()
+            .transact()
+            .await?
+            .into_result()?;
+
+        // The yield branch charges the bridge contract's own storage balance (for the
+        // init_transfer_promises entry). Fund it so `init_transfer` can register the yield.
+        env.sender_account
+            .call(env.locker_contract.id(), "storage_deposit")
+            .args_json(json!({ "account_id": env.locker_contract.id() }))
+            .deposit(NearToken::from_millinear(100))
+            .max_gas()
+            .transact()
+            .await?
+            .into_result()?;
+
+        // Build two InitTransferMsgs that differ only by external_id.
+        let msg_a = InitTransferMsg {
+            native_token_fee: U128(0),
+            fee,
+            recipient: eth_eoa_address(),
+            msg: None,
+            external_id: Some(BoundedString::new("external-id-a").unwrap()),
+        };
+        let msg_b = InitTransferMsg {
+            external_id: Some(BoundedString::new("external-id-b").unwrap()),
+            ..msg_a.clone()
+        };
+
+        // Predict the virtual storage account each transfer will yield on. All the fields
+        // consumed by the hash are known in advance: the chain-side `TransferMessage` only
+        // adds nonces to this struct, and nonces are not part of the storage-account hash.
+        let storage_account = TransferMessageStorageAccount {
+            token: OmniAddress::Near(env.token_contract.id().clone()),
+            amount: U128(transfer_amount),
+            recipient: msg_a.recipient.clone(),
+            fee: Fee {
+                fee: msg_a.fee,
+                native_fee: msg_a.native_token_fee,
+            },
+            sender: OmniAddress::Near(env.sender_account.id().clone()),
+            msg: String::new(),
+        };
+        let virtual_a = storage_account.id(Some("external-id-a".to_string()));
+        let virtual_b = storage_account.id(Some("external-id-b".to_string()));
+        assert_ne!(
+            virtual_a, virtual_b,
+            "Different external_ids must yield different virtual storage accounts"
+        );
+
+        // Fire both ft_transfer_calls without awaiting final execution — each one yields
+        // inside ft_on_transfer, so the tx stays in "Started" state until resumed.
+        let submit_ft_transfer_call = |msg: InitTransferMsg| {
+            env.sender_account
+                .call(env.token_contract.id(), "ft_transfer_call")
+                .args_json(json!({
+                    "receiver_id": env.locker_contract.id(),
+                    "amount": U128(transfer_amount),
+                    "memo": None::<String>,
+                    "msg": serde_json::to_string(&BridgeOnTransferMsg::InitTransfer(msg))
+                        .unwrap(),
+                }))
+                .deposit(NearToken::from_yoctonear(1))
+                .max_gas()
+                .transact_async()
+        };
+        let status_a = submit_ft_transfer_call(msg_a.clone()).await?;
+        let status_b = submit_ft_transfer_call(msg_b.clone()).await?;
+
+        // Fast-forward a few blocks so both yield/resume callbacks are processed.
+        env.worker.fast_forward(5).await?;
+
+        let required_balance_init_transfer: NearToken = env
+            .locker_contract
+            .view("required_balance_for_init_transfer")
+            .args_json(json!({}))
+            .await?
+            .json()?;
+
+        // Depositing storage on each virtual account resumes its yielded transfer. The
+        // yield callback (`init_transfer_resume`) runs as part of the original
+        // ft_transfer_call's receipt chain, so the `InitTransferEvent` shows up there.
+        for virtual_id in [&virtual_a, &virtual_b] {
+            env.relayer_account
+                .call(env.locker_contract.id(), "storage_deposit")
+                .args_json(json!({ "account_id": virtual_id }))
+                .deposit(required_balance_init_transfer)
+                .max_gas()
+                .transact()
+                .await?
+                .into_result()?;
+        }
+
+        // Each ft_transfer_call should now unblock — resumed by its storage_deposit.
+        let result_a = status_a.await?.into_result()?;
+        let result_b = status_b.await?.into_result()?;
+
+        for result in [&result_a, &result_b] {
+            assert!(
+                execution_contains_log(result, "Yield init transfer until storage is available at"),
+                "Expected yield log not found in receipt outcomes"
+            );
+        }
+
+        // Sign + claim fee for each transfer.
+        for result in [&result_a, &result_b] {
+            let transfer_message = get_transfer_message_from_event(result)?;
+            env.relayer_account
+                .call(env.locker_contract.id(), "sign_transfer")
+                .args_json(json!({
+                    "transfer_id": TransferId {
+                        origin_chain: ChainKind::Near,
+                        origin_nonce: transfer_message.origin_nonce,
+                    },
+                    "fee_recipient": env.relayer_account.id(),
+                    "fee": &Some(transfer_message.fee.clone()),
+                }))
+                .max_gas()
+                .transact()
+                .await?
+                .into_result()?;
+
+            let claim_fee_args = get_claim_fee_args_near(
+                ChainKind::Near,
+                ChainKind::Eth,
+                transfer_message.origin_nonce,
+                env.relayer_account.id(),
+                transfer_amount - transfer_message.fee.fee.0,
+                env.eth_factory_address.clone(),
+            );
+            env.relayer_account
+                .call(env.locker_contract.id(), "claim_fee")
+                .args_borsh(claim_fee_args)
+                .deposit(NearToken::from_yoctonear(1))
+                .max_gas()
+                .transact()
+                .await?
+                .into_result()?;
+        }
+
+        let (user_balance_token, locker_balance_token, relayer_balance_token, _) =
+            get_test_balances(&env).await?;
+        assert_eq!(
+            user_balance_token,
+            U128(sender_balance_token - 2 * transfer_amount),
+            "User balance was not deducted for both resumed transfers"
+        );
+        assert_eq!(
+            locker_balance_token,
+            U128(2 * (transfer_amount - fee.0)),
+            "Locker balance was not increased for both resumed transfers"
+        );
+        assert_eq!(
+            relayer_balance_token,
+            U128(2 * fee.0),
+            "Relayer didn't receive transfer fee for both resumed transfers"
+        );
+        Ok(())
+    }
+
     #[rstest]
     #[tokio::test]
     async fn test_untrusted_sender_cannot_sign_transfer(
@@ -557,6 +756,7 @@ mod tests {
             fee: U128(0),
             recipient: eth_eoa_address(),
             msg: None,
+            external_id: None,
         };
 
         let env = TestEnv::new(sender_balance_token, false, build_artifacts).await?;
@@ -632,6 +832,7 @@ mod tests {
             fee: U128(1000),
             recipient: eth_eoa_address(),
             msg: None,
+            external_id: None,
         };
         let update_fee_value = Fee {
             native_fee: U128(NearToken::from_near(0).as_yoctonear()),
@@ -666,6 +867,7 @@ mod tests {
             fee: U128(1000),
             recipient: eth_eoa_address(),
             msg: None,
+            external_id: None,
         };
         let update_fee_value = Fee {
             native_fee: U128(NearToken::from_near(1).as_yoctonear()),
@@ -700,6 +902,7 @@ mod tests {
             fee: U128(1000),
             recipient: eth_eoa_address(),
             msg: None,
+            external_id: None,
         };
         let update_fee_value = Fee {
             native_fee: U128(NearToken::from_near(1).as_yoctonear()),
@@ -735,6 +938,7 @@ mod tests {
             fee: U128(1000),
             recipient: eth_eoa_address(),
             msg: None,
+            external_id: None,
         };
         let update_fee = UpdateFee::Proof(vec![]);
 

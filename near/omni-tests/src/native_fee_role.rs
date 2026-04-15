@@ -207,6 +207,7 @@ mod tests {
                 fee: U128(token_fee),
                 recipient: eth_eoa_address(),
                 msg: None,
+                external_id: None,
             };
 
             let required_balance_init_transfer: NearToken = self

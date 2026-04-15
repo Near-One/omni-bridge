@@ -546,7 +546,7 @@ impl Contract {
                 native_fee: init_transfer_msg.native_token_fee,
             },
             sender: OmniAddress::Near(sender_id),
-            msg: init_transfer_msg.msg.unwrap_or_default(),
+            msg: init_transfer_msg.msg.map(String::from).unwrap_or_default(),
             destination_nonce,
             origin_transfer_id: None,
         };
@@ -558,7 +558,8 @@ impl Contract {
         let required_storage_balance =
             self.required_balance_for_init_transfer_message(transfer_message.clone());
 
-        let message_storage_account_id = transfer_message.calculate_storage_account_id();
+        let message_storage_account_id = transfer_message
+            .calculate_storage_account_id(init_transfer_msg.external_id.map(String::from));
 
         // Choose storage payer or whether to yield execution until storage is available
         if self
