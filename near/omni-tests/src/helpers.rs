@@ -3,7 +3,7 @@ pub mod tests {
     use std::path::Path;
 
     use near_sdk::{borsh, json_types::U128, serde_json, AccountId, CryptoHash};
-    use near_workspaces::types::NearToken;
+    use near_workspaces::{result::ExecutionSuccess, types::NearToken};
     use omni_types::{
         locker_args::{BindTokenArgs, ClaimFeeArgs, DeployTokenArgs},
         prover_result::{DeployTokenMessage, FinTransferMessage, LogMetadataMessage, ProverResult},
@@ -319,6 +319,16 @@ pub mod tests {
             .find(|log| log.contains(event_name))
             .map(|log| serde_json::from_str(log).map_err(anyhow::Error::from))
             .transpose()
+    }
+
+    /// Returns `true` if any log emitted across all receipt outcomes of `result`
+    /// contains `expected_substring` as a substring.
+    pub fn execution_contains_log(result: &ExecutionSuccess, expected_substring: &str) -> bool {
+        result
+            .receipt_outcomes()
+            .iter()
+            .flat_map(|outcome| &outcome.logs)
+            .any(|log| log.contains(expected_substring))
     }
 
     pub fn wasm_code_hash(wasm: &[u8]) -> CryptoHash {

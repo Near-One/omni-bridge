@@ -17,7 +17,8 @@ mod tests {
         environment::TestEnvBuilder,
         helpers::tests::{
             account_n, build_artifacts, eth_eoa_address, eth_factory_address,
-            get_claim_fee_args_near, get_event_data, relayer_account_id, BuildArtifacts,
+            execution_contains_log, get_claim_fee_args_near, get_event_data, relayer_account_id,
+            BuildArtifacts,
         },
     };
 
@@ -653,7 +654,7 @@ mod tests {
         let status_b = submit_ft_transfer_call(msg_b.clone()).await?;
 
         // Fast-forward a few blocks so both yield/resume callbacks are processed.
-        env.worker.fast_forward(5);
+        env.worker.fast_forward(5).await?;
 
         let required_balance_init_transfer: NearToken = env
             .locker_contract
@@ -679,6 +680,13 @@ mod tests {
         // Each ft_transfer_call should now unblock — resumed by its storage_deposit.
         let result_a = status_a.await?.into_result()?;
         let result_b = status_b.await?.into_result()?;
+
+        for result in [&result_a, &result_b] {
+            assert!(
+                execution_contains_log(result, "Yield init transfer until storage is available at"),
+                "Expected yield log not found in receipt outcomes"
+            );
+        }
 
         // Sign + claim fee for each transfer.
         for result in [&result_a, &result_b] {
