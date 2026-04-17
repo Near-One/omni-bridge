@@ -473,6 +473,12 @@ impl InitTransferMsg {
     }
 }
 
+impl InitTransferMsg {
+    pub fn get_destination_chain(&self) -> ChainKind {
+        self.recipient.get_chain()
+    }
+}
+
 #[derive(Serialize, Deserialize, BorshSerialize, BorshDeserialize, Debug, Clone)]
 pub struct FastFinTransferMsg {
     pub transfer_id: UnifiedTransferId,
