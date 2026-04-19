@@ -5,6 +5,7 @@ on:
     branches:
       - master
       - main
+      - test-image
     paths:
       - 'omni-relayer/**'
   release:
