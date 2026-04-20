@@ -292,7 +292,8 @@ mod OmniBridge {
             assert(amount > 0, 'ERR_ZERO_AMOUNT');
             assert(fee < amount, 'ERR_INVALID_FEE');
 
-            self.current_origin_nonce.write(self.current_origin_nonce.read() + 1);
+            let origin_nonce = self.current_origin_nonce.read() + 1;
+            self.current_origin_nonce.write(origin_nonce);
 
             let caller = get_caller_address();
 
@@ -318,7 +319,7 @@ mod OmniBridge {
                         InitTransfer {
                             sender: caller,
                             token_address,
-                            origin_nonce: self.current_origin_nonce.read(),
+                            origin_nonce,
                             amount,
                             fee,
                             native_fee,
