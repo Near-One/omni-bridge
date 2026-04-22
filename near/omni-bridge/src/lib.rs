@@ -1434,6 +1434,7 @@ impl Contract {
             s if s.starts_with("abs") => ChainKind::Abs,
             s if s.starts_with("sol") => ChainKind::Sol,
             s if s.starts_with("strk") || s.starts_with("starknet") => ChainKind::Strk,
+            s if s.starts_with("ton") => ChainKind::Ton,
             _ => env::panic_str(&BridgeError::CannotDetermineOriginChain.as_ref()),
         };
 

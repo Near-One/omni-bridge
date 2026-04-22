@@ -1,0 +1,33 @@
+{
+  "name": "omni-bridge-ton",
+  "version": "0.0.1",
+  "private": true,
+  "description": "TON locker PoC for the omni-bridge (Tolk).",
+  "scripts": {
+    "test": "jest --verbose",
+    "build": "blueprint build --all",
+    "lint": "biome check .",
+    "lint:fix": "biome check --write .",
+    "fmt": "biome format --write .",
+    "fmt:check": "biome format .",
+    "typecheck": "tsc --noEmit",
+    "ci": "biome check . && tsc --noEmit && jest"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^1.9.4",
+    "@ton/blueprint": "^0.44.2",
+    "@ton/core": "^0.63.1",
+    "@ton/crypto": "^3.3.0",
+    "@ton/sandbox": "^0.41.0",
+    "@ton/test-utils": "^0.12.0",
+    "@ton/tolk-js": "^1.3.0",
+    "@ton/ton": "^16.2.4",
+    "@types/jest": "^29.5.12",
+    "@types/node": "^20.11.25",
+    "ethers": "^6.16.0",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.1.2",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.6.3"
+  }
+}
