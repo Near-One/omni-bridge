@@ -57,13 +57,15 @@ impl FromStr for TonAddress {
         let raw = decode_base64_36(s.as_bytes())
             .ok_or_else(|| "TON address: invalid base64 character".to_string())?;
 
+        // The tag byte is a display-level hint: bit 0x80 = testnet,
+        // bit 0x40 = non-bounceable, low 6 bits = 0x11. On-chain only the
+        // workchain + 32-byte hash matter, so accept any combination of the
+        // testnet / non-bounceable bits and validate the low bits only.
         let flags = raw[0];
-        if flags & TAG_TESTNET_BIT != 0 {
-            return Err("TON address: testnet flag set — only mainnet is supported".to_string());
-        }
-        if flags & !(TAG_TESTNET_BIT | TAG_NON_BOUNCEABLE_BIT) != TAG_LOW_BITS {
+        let low_bits = flags & !(TAG_TESTNET_BIT | TAG_NON_BOUNCEABLE_BIT);
+        if low_bits != TAG_LOW_BITS {
             return Err(format!(
-                "TON address: invalid flags byte {flags:#04x} (expected 0x11 EQ or 0x51 UQ)"
+                "TON address: invalid flags byte {flags:#04x} (low bits {low_bits:#04x}, expected {TAG_LOW_BITS:#04x})"
             ));
         }
 
@@ -150,8 +152,7 @@ fn b64_decode_char(c: u8) -> Option<u8> {
     }
 }
 
-const B64URL_ALPHA: &[u8; 64] =
-    b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+const B64URL_ALPHA: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
 
 fn encode_base64url_36(raw: &[u8; 36]) -> String {
     let mut out = String::with_capacity(48);
@@ -160,8 +161,12 @@ fn encode_base64url_36(raw: &[u8; 36]) -> String {
         let b1 = chunk[1];
         let b2 = chunk[2];
         out.push(char::from(B64URL_ALPHA[usize::from(b0 >> 2)]));
-        out.push(char::from(B64URL_ALPHA[usize::from(((b0 & 0x03) << 4) | (b1 >> 4))]));
-        out.push(char::from(B64URL_ALPHA[usize::from(((b1 & 0x0F) << 2) | (b2 >> 6))]));
+        out.push(char::from(
+            B64URL_ALPHA[usize::from(((b0 & 0x03) << 4) | (b1 >> 4))],
+        ));
+        out.push(char::from(
+            B64URL_ALPHA[usize::from(((b1 & 0x0F) << 2) | (b2 >> 6))],
+        ));
         out.push(char::from(B64URL_ALPHA[usize::from(b2 & 0x3F)]));
     }
     out
@@ -214,7 +219,10 @@ mod tests {
         raw[34] = crc[0];
         raw[35] = crc[1];
         let uq_form = encode_base64url_36(&raw);
-        assert!(uq_form.starts_with("UQ"), "expected UQ prefix, got {uq_form}");
+        assert!(
+            uq_form.starts_with("UQ"),
+            "expected UQ prefix, got {uq_form}"
+        );
 
         let parsed: TonAddress = uq_form.parse().unwrap();
         assert_eq!(parsed, addr);
@@ -278,7 +286,10 @@ mod tests {
     fn accepts_standard_base64_alphabet_on_decode() {
         let canonical = INTENTS_EXAMPLE.replace('-', "+").replace('_', "/");
         let parsed = canonical.parse::<TonAddress>();
-        assert!(parsed.is_ok(), "standard base64 alphabet should decode: {parsed:?}");
+        assert!(
+            parsed.is_ok(),
+            "standard base64 alphabet should decode: {parsed:?}"
+        );
     }
 
     #[test]
