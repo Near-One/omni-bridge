@@ -147,6 +147,12 @@ struct (0x6e910014) UpgradeCodeMsg {
     newCode: cell
 }
 
+struct (0x6e910015) SetJettonCodeMsg {
+    _queryId: uint64
+    newJettonMasterCode: cell
+    newJettonWalletCode: cell
+}
+
 struct (0x7362d09c) TransferNotificationMsg {
     queryId: uint64
     amount: coins
@@ -171,6 +177,7 @@ type InMsg =
     | SetAdminMsg
     | AcceptAdminMsg
     | UpgradeCodeMsg
+    | SetJettonCodeMsg
     | TransferNotificationMsg
 
 struct (0x99000001) InitTransferEvent {
@@ -336,6 +343,7 @@ fun onInternalMessage(in: InMessage) {
         SetAdminMsg => handleSetAdmin(sender, msg),
         AcceptAdminMsg => handleAcceptAdmin(sender),
         UpgradeCodeMsg => handleUpgradeCode(sender, msg),
+        SetJettonCodeMsg => handleSetJettonCode(sender, msg),
         TransferNotificationMsg => handleTransferNotification(sender, msg),
 
         else => {
@@ -757,6 +765,20 @@ fun handleUpgradeCode(sender: address, msg: UpgradeCodeMsg) {
     var st = lazy Storage.load();
     assert (sender == st.admin) throw ERR_NOT_ADMIN;
     contract.setCodePostponed(msg.newCode);
+}
+
+// Admin: replace the code cells used to deploy future bridge-jetton masters
+// and their wallets. Existing deployed masters/wallets are unaffected — their
+// code is immutable. Intended for iterating on the jetton contracts without
+// redeploying the locker.
+fun handleSetJettonCode(sender: address, msg: SetJettonCodeMsg) {
+    var st = lazy Storage.load();
+    assert (sender == st.admin) throw ERR_NOT_ADMIN;
+    var shelf = st.shelf.load();
+    shelf.jettonMasterCode = msg.newJettonMasterCode;
+    shelf.jettonWalletCode = msg.newJettonWalletCode;
+    st.shelf = shelf.toCell();
+    st.save();
 }
 
 fun handleTransferNotification(sender: address, msg: TransferNotificationMsg) {

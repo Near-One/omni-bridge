@@ -20,6 +20,7 @@ export const Opcodes = {
     SET_ADMIN: 0x6e910012,
     ACCEPT_ADMIN: 0x6e910013,
     UPGRADE_CODE: 0x6e910014,
+    SET_JETTON_CODE: 0x6e910015,
     INIT_TRANSFER_JETTON_FWD: 0x6e910020,
     TRANSFER_NOTIFICATION: 0x7362d09c,
     TEP74_TRANSFER: 0xf8a7ea5,
@@ -389,6 +390,24 @@ export class OmniBridge implements Contract {
             .storeUint(Opcodes.UPGRADE_CODE, 32)
             .storeUint(0, 64)
             .storeRef(opts.newCode)
+            .endCell();
+        await provider.internal(via, {
+            value: opts.value,
+            sendMode: SendMode.PAY_GAS_SEPARATELY,
+            body,
+        });
+    }
+
+    async sendSetJettonCode(
+        provider: ContractProvider,
+        via: Sender,
+        opts: { value: bigint; newJettonMasterCode: Cell; newJettonWalletCode: Cell },
+    ) {
+        const body = beginCell()
+            .storeUint(Opcodes.SET_JETTON_CODE, 32)
+            .storeUint(0, 64)
+            .storeRef(opts.newJettonMasterCode)
+            .storeRef(opts.newJettonWalletCode)
             .endCell();
         await provider.internal(via, {
             value: opts.value,

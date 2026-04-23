@@ -71,7 +71,7 @@ fun onInternalMessage(in: InMessage) {
         bounce: true,
         dest: AutoDeployAddress { workchain: 0, stateInit: walletStateInit },
         value: 0 as coins,
-        body: UnsafeBodyNoRef { forceInline: transferBody.beginParse() },
+        body: transferBody,
     })
         .send(SEND_MODE_CARRY_ALL_REMAINING_MESSAGE_VALUE);
 }
