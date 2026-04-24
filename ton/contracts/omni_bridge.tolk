@@ -180,7 +180,7 @@ struct (0x6e910030) BurnCompleteMsg {
 }
 
 struct (0x7362d09c) TransferNotificationMsg {
-    queryId: uint64
+    _queryId: uint64
     amount: coins
     fromAddr: address
     forwardPayload: cell

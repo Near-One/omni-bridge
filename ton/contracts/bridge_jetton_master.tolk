@@ -39,7 +39,7 @@ struct (0x7bdd97de) BurnNotificationMsg {
     queryId: uint64
     amount: coins
     sender: address // original burn initiator (= owner of the burning JW)
-    responseDst: address
+    _responseDst: address
 }
 
 struct WalletStorageInit {

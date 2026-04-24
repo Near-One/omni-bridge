@@ -7,7 +7,6 @@ tolk 1.3
 const OP_INTERNAL_TRANSFER = 0x178d4519
 const OP_TRANSFER = 0x0f8a7ea5
 const OP_TRANSFER_NOTIFICATION = 0x7362d09c
-const OP_EXCESSES = 0xd53276db
 const OP_BURN = 0x595f07bc
 const OP_BURN_NOTIFICATION = 0x7bdd97de
 
@@ -114,7 +113,7 @@ fun handleInternalTransfer(sender: address, body: slice) {
     val queryId = bs.loadUint(64) as uint64;
     val amount = bs.loadCoins();
     val fromAddr = bs.loadAddress();
-    val responseDst = bs.loadAddress();
+    bs.loadAddress(); // responseDst — consume but don't route excesses separately (single-send pattern)
     val forwardTon = bs.loadCoins();
     val hasFp = bs.loadUint(1);
     val fpCell = hasFp == 1 ? bs.loadRef() : beginCell().endCell();
