@@ -7,8 +7,20 @@ tolk 1.3
 const OP_INTERNAL_TRANSFER = 0x178d4519
 const OP_TRANSFER = 0x0f8a7ea5
 const OP_TRANSFER_NOTIFICATION = 0x7362d09c
+const OP_EXCESSES = 0xd53276db
 const OP_BURN = 0x595f07bc
 const OP_BURN_NOTIFICATION = 0x7bdd97de
+const OP_BURN_ABORTED = 0x6e910031
+
+// `SEND_MODE_PAY_FEES_SEPARATELY + SEND_MODE_IGNORE_ERRORS`. Forward fees
+// come from the contract's balance rather than the attached `value`, and any
+// action-phase failure (e.g. destination deploy short of rent) is dropped
+// silently instead of aborting the whole tx.
+const SEND_MODE_PAY_GAS_AND_IGNORE_ERRORS = 3
+// `SEND_MODE_CARRY_ALL_REMAINING_MESSAGE_VALUE + SEND_MODE_IGNORE_ERRORS`.
+// Used for excesses to reliably forward whatever is left after the
+// notification pays its own gas.
+const SEND_MODE_REMAINING_AND_IGNORE_ERRORS = 66
 
 const ERR_NOT_FROM_MASTER_OR_PEER = 401
 const ERR_NOT_FROM_OWNER = 402
@@ -113,7 +125,7 @@ fun handleInternalTransfer(sender: address, body: slice) {
     val queryId = bs.loadUint(64) as uint64;
     val amount = bs.loadCoins();
     val fromAddr = bs.loadAddress();
-    bs.loadAddress(); // responseDst — consume but don't route excesses separately (single-send pattern)
+    val responseDst = bs.loadAddress();
     val forwardTon = bs.loadCoins();
     val hasFp = bs.loadUint(1);
     val fpCell = hasFp == 1 ? bs.loadRef() : beginCell().endCell();
@@ -139,26 +151,39 @@ fun handleInternalTransfer(sender: address, body: slice) {
     st.balance = st.balance + amount;
     st.save();
 
+    // Standard TEP-74 two-send pattern, both sends use IGNORE_ERRORS so an
+    // action-phase failure on either one (e.g. tight value at first-receive)
+    // just drops the action instead of aborting the transaction and bouncing
+    // the jettons back through the chain.
     if (forwardTon > 0) {
-        // Single send: forward entire remaining incoming value to the owner as
-        // transfer_notification. Combines what a standard jetton-wallet would
-        // split into (notification @ forwardTon, excesses @ remaining). One
-        // action avoids the "not enough TON" action-phase race when the JW's
-        // balance is tight on first-receive (post-deploy, pre-topup).
-        val notifBody = beginCell().storeUint(OP_TRANSFER_NOTIFICATION, 32).storeUint(queryId, 64)
+        val notifBody = beginCell().storeUint(OP_TRANSFER_NOTIFICATION, 32)
+            .storeUint(queryId, 64)
             .storeCoins(amount)
             .storeAddress(fromAddr)
-            .storeUint(1, 1) // Maybe(ref): Some
+            .storeUint(1, 1) // Either = right$1 — forward_payload as ref
             .storeRef(fpCell)
             .endCell();
         createMessage({
             bounce: false,
             dest: st.ownerAddr,
-            value: 0 as coins,
+            value: forwardTon,
             body: notifBody,
         })
-            .send(SEND_MODE_CARRY_ALL_REMAINING_MESSAGE_VALUE);
+            .send(SEND_MODE_PAY_GAS_AND_IGNORE_ERRORS);
     }
+
+    // Excesses: return unused incoming value to responseDst. If the sender
+    // wrote addr_none (meaning "don't care"), IGNORE_ERRORS drops the send
+    // silently and the TON accrues to this wallet's rent buffer — safe
+    // fallback without the complexity of custom addr_none detection in Tolk.
+    val excessesBody = beginCell().storeUint(OP_EXCESSES, 32).storeUint(queryId, 64).endCell();
+    createMessage({
+        bounce: false,
+        dest: responseDst,
+        value: 0 as coins,
+        body: excessesBody,
+    })
+        .send(SEND_MODE_REMAINING_AND_IGNORE_ERRORS);
 }
 
 fun handleBurn(sender: address, body: slice) {
@@ -196,13 +221,27 @@ fun onBouncedMessage(in: InMessageBounced) {
         return;
     }
     val op = body.loadUint(32);
-    // Re-credit balance if our burn_notification to master bounced.
     if (op == OP_BURN_NOTIFICATION) {
-        body.loadUint(64); // queryId
+        val queryId = body.loadUint(64) as uint64;
         val amount = body.loadCoins();
         var st = lazy Storage.load();
         st.balance = st.balance + amount;
         st.save();
+        // Tell the owner (locker) the burn was aborted so it can clear the
+        // PendingBurn entry and refund the user. Fire-and-forget — if the
+        // locker is down, the wallet still has the re-credited balance and
+        // admin can trigger a manual refund.
+        val abortedBody = beginCell().storeUint(OP_BURN_ABORTED, 32)
+            .storeUint(queryId, 64)
+            .storeUint(amount as uint128, 128)
+            .endCell();
+        createMessage({
+            bounce: false,
+            dest: st.ownerAddr,
+            value: 0 as coins,
+            body: abortedBody,
+        })
+            .send(SEND_MODE_REMAINING_AND_IGNORE_ERRORS);
         return;
     }
     // Peer InternalTransfer bounced (peer JW compute failed). Re-credit ours so

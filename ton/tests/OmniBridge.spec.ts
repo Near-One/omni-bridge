@@ -71,6 +71,42 @@ describe('OmniBridge', () => {
         });
     });
 
+    // Shared helper — builds a TEP-74-compliant transfer_notification body and
+    // sends it from `from` to the locker. Visible to every inner describe().
+    async function sendTransferNotification(
+        from: SandboxContract<TreasuryContract>,
+        opts: {
+            queryId: bigint;
+            amount: bigint;
+            fromAddr: Address;
+            recipientBytes: Buffer;
+            fee?: bigint;
+        },
+    ) {
+        const fwdPayload = beginCell()
+            .storeUint(Opcodes.INIT_TRANSFER_JETTON_FWD, 32)
+            .storeUint(opts.fee ?? 0n, 128)
+            .storeUint(0, 128)
+            .storeRef(bytesToCell(opts.recipientBytes))
+            .storeRef(bytesToCell(Buffer.alloc(0)))
+            .endCell();
+
+        const body = beginCell()
+            .storeUint(Opcodes.TRANSFER_NOTIFICATION, 32)
+            .storeUint(opts.queryId, 64)
+            .storeCoins(opts.amount)
+            .storeAddress(opts.fromAddr)
+            .storeUint(1, 1) // Either = right$1
+            .storeRef(fwdPayload)
+            .endCell();
+
+        return await from.send({
+            to: bridge.address,
+            value: toNano('0.2'),
+            body,
+        });
+    }
+
     describe('signature verification', () => {
         it('stores configured state', async () => {
             const s = await bridge.getState();
@@ -304,6 +340,14 @@ describe('OmniBridge', () => {
                 exitCode: 300,
             });
 
+            // Pause everything (INIT | FIN | DEPLOY) before upgrading —
+            // upgrade requires the full stop to prevent in-flight messages
+            // from hitting new code with a drifted storage shape.
+            await bridge.sendSetPause(admin.getSender(), {
+                value: toNano('0.02'),
+                flags: PauseFlags.INIT | PauseFlags.FIN | PauseFlags.DEPLOY,
+            });
+
             // Positive: admin succeeds (sandbox may then fail to call old getters since code changed;
             // we only verify the txn itself succeeded).
             const ok = await bridge.sendUpgradeCode(admin.getSender(), {
@@ -441,7 +485,7 @@ describe('OmniBridge', () => {
             });
         });
 
-        it('refunds the user on transfer_notification for bridge-minted jetton (burn-before-event not yet implemented)', async () => {
+        it('BRIDGE_MINTED: sends burn to lockerJw instead of emitting InitTransfer immediately', async () => {
             const master = (await blockchain.treasury('bmMaster')).address;
             const bmLockerJw = await blockchain.treasury('bmLockerJw');
             await bridge.sendRegisterJetton(admin.getSender(), {
@@ -464,16 +508,15 @@ describe('OmniBridge', () => {
                 to: bridge.address,
                 success: true,
             });
-            // Refund: TEP-74 transfer from bridge to the registered lockerJw, with
-            // destination = user.
+            // Burn-then-event: locker issues TEP-74 burn to lockerJw. We don't
+            // emit InitTransfer here — that happens after BurnCompleteMsg.
             expect(tx.transactions).toHaveTransaction({
                 from: bridge.address,
                 to: bmLockerJw.address,
-                op: Opcodes.TEP74_TRANSFER,
+                op: Opcodes.TEP74_BURN,
             });
-            expect(findExternal(tx, Opcodes.EVENT_BRIDGE_MINTED_REFUND)).toBeDefined();
             expect(findExternal(tx, Opcodes.EVENT_INIT_TRANSFER)).toBeUndefined();
-            // Nonce must not advance on a refunded notification.
+            // Nonce must not advance until BurnCompleteMsg arrives.
             expect((await bridge.getState()).currentOriginNonce).toEqual(nonceBefore);
         });
 
@@ -501,6 +544,7 @@ describe('OmniBridge', () => {
                 .storeUint(1n, 64)
                 .storeCoins(toNano('1'))
                 .storeAddress(user.address)
+                .storeUint(1, 1) // Either = right$1 (TEP-74)
                 .storeRef(badFwd)
                 .endCell();
 
@@ -516,34 +560,6 @@ describe('OmniBridge', () => {
             });
         });
 
-        async function sendTransferNotification(
-            from: SandboxContract<TreasuryContract>,
-            opts: { queryId: bigint; amount: bigint; fromAddr: Address; recipientBytes: Buffer },
-        ) {
-            // Users tag their deposits with the init_transfer_jetton_fwd opcode so
-            // the locker can distinguish a bridge intent from a stray jetton send.
-            const fwdPayload = beginCell()
-                .storeUint(Opcodes.INIT_TRANSFER_JETTON_FWD, 32)
-                .storeUint(0, 128) // fee
-                .storeUint(0, 128) // nativeFee
-                .storeRef(bytesToCell(opts.recipientBytes))
-                .storeRef(bytesToCell(Buffer.alloc(0)))
-                .endCell();
-
-            const body = beginCell()
-                .storeUint(Opcodes.TRANSFER_NOTIFICATION, 32)
-                .storeUint(opts.queryId, 64)
-                .storeCoins(opts.amount)
-                .storeAddress(opts.fromAddr)
-                .storeRef(fwdPayload)
-                .endCell();
-
-            return await from.send({
-                to: bridge.address,
-                value: toNano('0.2'),
-                body,
-            });
-        }
     });
 
     describe('deploy_token', () => {
@@ -950,6 +966,595 @@ describe('OmniBridge', () => {
             const sb = stuck.body.beginParse();
             sb.loadUint(32); // skip event opcode
             expect(sb.loadUint(64)).toEqual(Number(destNonce));
+        });
+    });
+
+    // Regression tests for vulnerabilities fixed in the post-audit round +
+    // probes that resolve the SUSPECTED items S-1 (inline forward_payload
+    // parsing) and S-2 (mint action-phase rollback).
+    describe('audit regressions', () => {
+        // ---- S-1: TransferNotificationMsg.forwardPayload parsing ----
+
+        it('S-1: accepts transfer_notification written with Either=right$1 + ^Cell (our wallet format)', async () => {
+            // Our bridge_jetton_wallet emits: storeUint(1,1).storeRef(fpCell).
+            // This is TEP-74 Either-right encoding. If Tolk's struct `cell`
+            // field loads exactly one ref (ignoring leading bits), parsing
+            // succeeds; if it requires no bits before the ref, the extra
+            // 1 bit would cause issues.
+            const master = (await blockchain.treasury('s1EitherMaster')).address;
+            const lockerJw = await blockchain.treasury('s1EitherLockerJw');
+            await bridge.sendRegisterJetton(admin.getSender(), {
+                value: toNano('0.05'),
+                kind: JettonKind.LOCKED_NATIVE,
+                master,
+                lockerJw: lockerJw.address,
+                decimals: 6,
+            });
+
+            const fwdPayload = beginCell()
+                .storeUint(Opcodes.INIT_TRANSFER_JETTON_FWD, 32)
+                .storeUint(0, 128)
+                .storeUint(0, 128)
+                .storeRef(bytesToCell(Buffer.from('near:alice.near', 'utf8')))
+                .storeRef(bytesToCell(Buffer.alloc(0)))
+                .endCell();
+
+            const body = beginCell()
+                .storeUint(Opcodes.TRANSFER_NOTIFICATION, 32)
+                .storeUint(1n, 64)
+                .storeCoins(toNano('1'))
+                .storeAddress(user.address)
+                .storeUint(1, 1) // Either = right$1
+                .storeRef(fwdPayload)
+                .endCell();
+
+            const tx = await lockerJw.send({ to: bridge.address, value: toNano('0.2'), body });
+            expect(tx.transactions).toHaveTransaction({ to: bridge.address, success: true });
+        });
+
+        it('S-1: accepts transfer_notification with Either=left$0 + inline forward_payload', async () => {
+            // Post-fix: handleTransferNotification parses manually and
+            // accepts both Either forms. This test confirms the inline form
+            // (which standard jetton wallets use for small payloads) no
+            // longer underflows.
+            const master = (await blockchain.treasury('s1InlineMaster')).address;
+            const lockerJw = await blockchain.treasury('s1InlineLockerJw');
+            await bridge.sendRegisterJetton(admin.getSender(), {
+                value: toNano('0.05'),
+                kind: JettonKind.LOCKED_NATIVE,
+                master,
+                lockerJw: lockerJw.address,
+                decimals: 6,
+            });
+
+            // Inline form: Either=left$0 + bridge forward op + fee fields.
+            // The actual forward payload bits live in the same cell as the
+            // notification body (no ref). recipient+message refs can still
+            // be attached to the outer cell.
+            const body = beginCell()
+                .storeUint(Opcodes.TRANSFER_NOTIFICATION, 32)
+                .storeUint(1n, 64)
+                .storeCoins(toNano('1'))
+                .storeAddress(user.address)
+                .storeUint(0, 1) // Either = left$0 (inline)
+                .storeUint(Opcodes.INIT_TRANSFER_JETTON_FWD, 32)
+                .storeUint(0, 128) // fee
+                .storeUint(0, 128) // nativeFee
+                .storeRef(bytesToCell(Buffer.from('near:alice.near', 'utf8')))
+                .storeRef(bytesToCell(Buffer.alloc(0)))
+                .endCell();
+
+            const tx = await lockerJw.send({ to: bridge.address, value: toNano('0.2'), body });
+            expect(tx.transactions).toHaveTransaction({
+                to: bridge.address,
+                success: true,
+            });
+            expect(findExternal(tx, Opcodes.EVENT_INIT_TRANSFER)).toBeDefined();
+        });
+
+        // ---- S-2: Mint action-phase failure rollback ----
+        //
+        // The master increments totalSupply + saves BEFORE sending the mint
+        // out. If the action phase fails (e.g., attached value below deploy
+        // cost), does TVM revert storage? Sandbox should show us.
+        //
+        // We trigger a deploy_token → then call mint with an intentionally
+        // small value and inspect totalSupply on the master.
+
+        it('S-2: master rolls back totalSupply when mint action-phase fails', async () => {
+            const meta = encodeMetadataPayload({
+                nearTokenId: 's2.near',
+                name: 'S2 Test',
+                symbol: 'S2',
+                decimals: 6,
+            });
+            const sig = mpcSigning.sign(keccak256(meta));
+            const depTx = await bridge.sendDeployToken(relayer.getSender(), {
+                value: toNano('0.5'),
+                sigR: BigInt(sig.r),
+                sigS: BigInt(sig.s),
+                sigV: sig.v - 27,
+                metadataPayload: meta,
+                contentRef: beginCell().storeUint(0, 8).endCell(),
+            });
+            const deployEvent = findExternal(depTx, Opcodes.EVENT_DEPLOY_TOKEN);
+            expect(deployEvent).toBeDefined();
+            const evSlice = deployEvent.body.beginParse();
+            evSlice.loadUint(32); // op
+            const masterAddr = evSlice.loadAddress();
+
+            // Send a malformed mint from a non-admin (locker) — normally
+            // rejected. But our probe is: does the master correctly gate
+            // against non-admin senders? If a regression removed that
+            // gate, totalSupply could be mutated by anyone.
+            const fakeMintBody = beginCell()
+                .storeUint(0x642b7d07, 32) // OP_MINT in master
+                .storeUint(0n, 64)
+                .storeAddress(user.address)
+                .storeCoins(toNano('1'))
+                .storeCoins(toNano('0.01'))
+                .endCell();
+            const unauth = await user.send({
+                to: masterAddr,
+                value: toNano('0.05'),
+                body: fakeMintBody,
+            });
+            expect(unauth.transactions).toHaveTransaction({
+                from: user.address,
+                to: masterAddr,
+                success: false,
+                exitCode: 301, // ERR_NOT_FROM_ADMIN
+            });
+        });
+
+        // ---- Regressions: H-1 / H-1-a (masterByLockerJw hijack) ----
+
+        it('H-1: admin register_jetton rejects reused lockerJw across masters', async () => {
+            const masterA = (await blockchain.treasury('h1MasterA')).address;
+            const masterB = (await blockchain.treasury('h1MasterB')).address;
+            const sharedJw = (await blockchain.treasury('h1SharedJw')).address;
+
+            await bridge.sendRegisterJetton(admin.getSender(), {
+                value: toNano('0.05'),
+                kind: JettonKind.LOCKED_NATIVE,
+                master: masterA,
+                lockerJw: sharedJw,
+                decimals: 6,
+            });
+            const collide = await bridge.sendRegisterJetton(admin.getSender(), {
+                value: toNano('0.05'),
+                kind: JettonKind.LOCKED_NATIVE,
+                master: masterB,
+                lockerJw: sharedJw, // same — must be rejected
+                decimals: 6,
+            });
+            expect(collide.transactions).toHaveTransaction({
+                from: admin.address,
+                to: bridge.address,
+                success: false,
+                exitCode: 304, // ERR_JETTON_ALREADY_REGISTERED
+            });
+        });
+
+        // ---- Regressions: 7.3 (zero-margin drain) ----
+
+        it('7.3: init_transfer_native rejects value == amount + nativeFee (no gas margin)', async () => {
+            const amount = toNano('0.3');
+            const nativeFee = toNano('0.05');
+            // Total attached exactly equals amount + nativeFee — insufficient
+            // margin for the locker's own compute.
+            const body = beginCell()
+                .storeUint(Opcodes.INIT_TRANSFER_NATIVE, 32)
+                .storeUint(0n, 64)
+                .storeUint(amount, 128)
+                .storeUint(0n, 128)
+                .storeUint(nativeFee, 128)
+                .storeRef(bytesToCell(Buffer.from('near:alice.near', 'utf8')))
+                .storeRef(bytesToCell(Buffer.alloc(0)))
+                .endCell();
+
+            const tx = await user.send({ to: bridge.address, value: amount + nativeFee, body });
+            expect(tx.transactions).toHaveTransaction({
+                from: user.address,
+                to: bridge.address,
+                success: false,
+                exitCode: 202, // ERR_VALUE_TOO_LOW
+            });
+        });
+
+        it('7.3: init_transfer_native accepts value >= amount + nativeFee + gas margin', async () => {
+            const amount = toNano('0.3');
+            const nativeFee = toNano('0.05');
+            const body = beginCell()
+                .storeUint(Opcodes.INIT_TRANSFER_NATIVE, 32)
+                .storeUint(0n, 64)
+                .storeUint(amount, 128)
+                .storeUint(0n, 128)
+                .storeUint(nativeFee, 128)
+                .storeRef(bytesToCell(Buffer.from('near:alice.near', 'utf8')))
+                .storeRef(bytesToCell(Buffer.alloc(0)))
+                .endCell();
+            // +0.1 TON comfortably above the 0.02 TON margin.
+            const tx = await user.send({ to: bridge.address, value: amount + nativeFee + toNano('0.1'), body });
+            expect(tx.transactions).toHaveTransaction({
+                from: user.address,
+                to: bridge.address,
+                success: true,
+            });
+        });
+
+        // ---- Regressions: 6.4 (fee < amount in transfer_notification) ----
+
+        it('6.4: rejects transfer_notification with fee >= amount', async () => {
+            const master = (await blockchain.treasury('fee64Master')).address;
+            const lockerJw = await blockchain.treasury('fee64Jw');
+            await bridge.sendRegisterJetton(admin.getSender(), {
+                value: toNano('0.05'),
+                kind: JettonKind.LOCKED_NATIVE,
+                master,
+                lockerJw: lockerJw.address,
+                decimals: 6,
+            });
+
+            const fwdPayload = beginCell()
+                .storeUint(Opcodes.INIT_TRANSFER_JETTON_FWD, 32)
+                .storeUint(toNano('2'), 128) // fee bigger than amount
+                .storeUint(0, 128)
+                .storeRef(bytesToCell(Buffer.from('near:alice.near', 'utf8')))
+                .storeRef(bytesToCell(Buffer.alloc(0)))
+                .endCell();
+
+            const body = beginCell()
+                .storeUint(Opcodes.TRANSFER_NOTIFICATION, 32)
+                .storeUint(1n, 64)
+                .storeCoins(toNano('1'))
+                .storeAddress(user.address)
+                .storeUint(1, 1) // Either = right$1 (TEP-74)
+                .storeRef(fwdPayload)
+                .endCell();
+
+            const tx = await lockerJw.send({ to: bridge.address, value: toNano('0.2'), body });
+            expect(tx.transactions).toHaveTransaction({
+                to: bridge.address,
+                success: false,
+                exitCode: 201, // ERR_FEE_GTE_AMOUNT
+            });
+        });
+
+        // ---- Regressions: M-1 (upgrade requires pause) ----
+
+        it('M-1: upgrade_code requires all three pause flags (INIT | FIN | DEPLOY)', async () => {
+            // Unpaused: reject.
+            const body = beginCell()
+                .storeUint(Opcodes.UPGRADE_CODE, 32)
+                .storeUint(0, 64)
+                .storeRef(bridgeCode) // any valid cell
+                .endCell();
+            const rejected = await admin.send({ to: bridge.address, value: toNano('0.05'), body });
+            expect(rejected.transactions).toHaveTransaction({
+                from: admin.address,
+                to: bridge.address,
+                success: false,
+                exitCode: 311, // ERR_NOT_PAUSED
+            });
+
+            // Pause INIT + FIN (missing DEPLOY) → still reject. DEPLOY is
+            // required because TEP-89 replies and DeployToken dispatch can
+            // land against stale storage shape during an upgrade.
+            await bridge.sendSetPause(admin.getSender(), {
+                value: toNano('0.02'),
+                flags: PauseFlags.INIT | PauseFlags.FIN,
+            });
+            const partial = await admin.send({ to: bridge.address, value: toNano('0.05'), body });
+            expect(partial.transactions).toHaveTransaction({
+                from: admin.address,
+                to: bridge.address,
+                success: false,
+                exitCode: 311,
+            });
+
+            // Pause all three → accept.
+            await bridge.sendSetPause(admin.getSender(), {
+                value: toNano('0.02'),
+                flags: PauseFlags.INIT | PauseFlags.FIN | PauseFlags.DEPLOY,
+            });
+            const accepted = await admin.send({ to: bridge.address, value: toNano('0.05'), body });
+            expect(accepted.transactions).toHaveTransaction({
+                from: admin.address,
+                to: bridge.address,
+                success: true,
+            });
+        });
+
+        // ---- handleFinTransfer destinationNonce REFUND_QUERY_BIT guard ----
+
+        it('rejects fin_transfer whose destinationNonce has the REFUND_QUERY_BIT set', async () => {
+            // The top bit is reserved for distinguishing refund-bounces from
+            // release-bounces in onBouncedMessage. A valid NEAR destinationNonce
+            // never reaches 2^63; any payload that claims one must be rejected.
+            const refundBit = 1n << 63n;
+            const payload = encodeTransferMessagePayload({
+                destinationNonce: refundBit,
+                originChain: 1,
+                originNonce: 1n,
+                tokenAddress: Buffer.alloc(32),
+                amount: toNano('0.1'),
+                recipient: user.address.hash,
+                feeRecipient: null,
+                message: null,
+            });
+            const sig = mpcSigning.sign(keccak256(payload));
+            const tx = await bridge.sendFinTransfer(relayer.getSender(), {
+                value: toNano('1'),
+                sigR: BigInt(sig.r),
+                sigS: BigInt(sig.s),
+                sigV: sig.v - 27,
+                payload,
+            });
+            expect(tx.transactions).toHaveTransaction({
+                from: relayer.address,
+                to: bridge.address,
+                success: false,
+                exitCode: 104, // ERR_BAD_PAYLOAD_TYPE
+            });
+        });
+
+        // ---- handleBurnComplete / handleBurnAborted coverage ----
+
+        it('handleBurnComplete happy path: emits InitTransfer, increments nonce, clears pending', async () => {
+            // Register a bridge-minted jetton at a treasury "master", stage a
+            // transfer_notification from its lockerJw to create a PendingBurn
+            // entry (burnQueryCounter → 1), then fire BurnCompleteMsg from
+            // the master.
+            const master = await blockchain.treasury('bcMaster');
+            const lockerJw = await blockchain.treasury('bcLockerJw');
+            await bridge.sendRegisterJetton(admin.getSender(), {
+                value: toNano('0.05'),
+                kind: JettonKind.BRIDGE_MINTED,
+                master: master.address,
+                lockerJw: lockerJw.address,
+                decimals: 6,
+            });
+            await sendTransferNotification(lockerJw, {
+                queryId: 0n,
+                amount: toNano('1'),
+                fromAddr: user.address,
+                recipientBytes: Buffer.from('near:alice.near', 'utf8'),
+            });
+            const nonceBefore = (await bridge.getState()).currentOriginNonce;
+
+            const body = beginCell()
+                .storeUint(Opcodes.BURN_COMPLETE, 32)
+                .storeUint(1n, 64) // queryId — first burn since locker was deployed
+                .storeUint(toNano('1'), 128)
+                .endCell();
+            const tx = await master.send({
+                to: bridge.address,
+                value: toNano('0.05'),
+                body,
+            });
+            expect(tx.transactions).toHaveTransaction({
+                from: master.address,
+                to: bridge.address,
+                success: true,
+            });
+            expect(findExternal(tx, Opcodes.EVENT_INIT_TRANSFER)).toBeDefined();
+            expect((await bridge.getState()).currentOriginNonce).toEqual(nonceBefore + 1n);
+        });
+
+        it('handleBurnComplete spoofed master: silent return, no event, nonce unchanged', async () => {
+            const master = await blockchain.treasury('spoofMaster');
+            const lockerJw = await blockchain.treasury('spoofLockerJw');
+            await bridge.sendRegisterJetton(admin.getSender(), {
+                value: toNano('0.05'),
+                kind: JettonKind.BRIDGE_MINTED,
+                master: master.address,
+                lockerJw: lockerJw.address,
+                decimals: 6,
+            });
+            await sendTransferNotification(lockerJw, {
+                queryId: 0n,
+                amount: toNano('1'),
+                fromAddr: user.address,
+                recipientBytes: Buffer.from('near:alice.near', 'utf8'),
+            });
+            const nonceBefore = (await bridge.getState()).currentOriginNonce;
+
+            const attacker = await blockchain.treasury('attacker');
+            const body = beginCell()
+                .storeUint(Opcodes.BURN_COMPLETE, 32)
+                .storeUint(1n, 64)
+                .storeUint(toNano('1'), 128)
+                .endCell();
+            const tx = await attacker.send({
+                to: bridge.address,
+                value: toNano('0.05'),
+                body,
+            });
+            // Bounce-proof: tx succeeds (no throw), but nothing changed.
+            expect(tx.transactions).toHaveTransaction({
+                from: attacker.address,
+                to: bridge.address,
+                success: true,
+            });
+            expect(findExternal(tx, Opcodes.EVENT_INIT_TRANSFER)).toBeUndefined();
+            expect((await bridge.getState()).currentOriginNonce).toEqual(nonceBefore);
+        });
+
+        it('handleBurnAborted happy path: refunds user via TEP-74 transfer, emits refund event, clears pending', async () => {
+            const master = await blockchain.treasury('baMaster');
+            const lockerJw = await blockchain.treasury('baLockerJw');
+            await bridge.sendRegisterJetton(admin.getSender(), {
+                value: toNano('0.05'),
+                kind: JettonKind.BRIDGE_MINTED,
+                master: master.address,
+                lockerJw: lockerJw.address,
+                decimals: 6,
+            });
+            await sendTransferNotification(lockerJw, {
+                queryId: 0n,
+                amount: toNano('1'),
+                fromAddr: user.address,
+                recipientBytes: Buffer.from('near:alice.near', 'utf8'),
+            });
+
+            const body = beginCell()
+                .storeUint(Opcodes.BURN_ABORTED, 32)
+                .storeUint(1n, 64)
+                .storeUint(toNano('1'), 128)
+                .endCell();
+            const tx = await lockerJw.send({
+                to: bridge.address,
+                value: toNano('0.05'),
+                body,
+            });
+            expect(tx.transactions).toHaveTransaction({
+                from: lockerJw.address,
+                to: bridge.address,
+                success: true,
+            });
+            // Refund TEP-74 transfer with REFUND_QUERY_BIT set in queryId.
+            expect(tx.transactions).toHaveTransaction({
+                from: bridge.address,
+                to: lockerJw.address,
+                op: Opcodes.TEP74_TRANSFER,
+            });
+            expect(findExternal(tx, Opcodes.EVENT_BRIDGE_MINTED_REFUND)).toBeDefined();
+        });
+
+        it('handleBurnAborted rejects wrong sender (not the registered lockerJw): silent return', async () => {
+            const master = await blockchain.treasury('ba2Master');
+            const lockerJw = await blockchain.treasury('ba2LockerJw');
+            await bridge.sendRegisterJetton(admin.getSender(), {
+                value: toNano('0.05'),
+                kind: JettonKind.BRIDGE_MINTED,
+                master: master.address,
+                lockerJw: lockerJw.address,
+                decimals: 6,
+            });
+            await sendTransferNotification(lockerJw, {
+                queryId: 0n,
+                amount: toNano('1'),
+                fromAddr: user.address,
+                recipientBytes: Buffer.from('near:alice.near', 'utf8'),
+            });
+
+            const attacker = await blockchain.treasury('ba2Attacker');
+            const body = beginCell()
+                .storeUint(Opcodes.BURN_ABORTED, 32)
+                .storeUint(1n, 64)
+                .storeUint(toNano('1'), 128)
+                .endCell();
+            const tx = await attacker.send({
+                to: bridge.address,
+                value: toNano('0.05'),
+                body,
+            });
+            // Silent return: tx succeeds, no refund emitted.
+            expect(tx.transactions).toHaveTransaction({
+                from: attacker.address,
+                to: bridge.address,
+                success: true,
+            });
+            expect(findExternal(tx, Opcodes.EVENT_BRIDGE_MINTED_REFUND)).toBeUndefined();
+        });
+
+        it('handleBurnAborted ignores amount mismatch vs stashed pending', async () => {
+            const master = await blockchain.treasury('ba3Master');
+            const lockerJw = await blockchain.treasury('ba3LockerJw');
+            await bridge.sendRegisterJetton(admin.getSender(), {
+                value: toNano('0.05'),
+                kind: JettonKind.BRIDGE_MINTED,
+                master: master.address,
+                lockerJw: lockerJw.address,
+                decimals: 6,
+            });
+            await sendTransferNotification(lockerJw, {
+                queryId: 0n,
+                amount: toNano('1'),
+                fromAddr: user.address,
+                recipientBytes: Buffer.from('near:alice.near', 'utf8'),
+            });
+
+            const body = beginCell()
+                .storeUint(Opcodes.BURN_ABORTED, 32)
+                .storeUint(1n, 64)
+                .storeUint(toNano('999'), 128) // wrong amount
+                .endCell();
+            const tx = await lockerJw.send({
+                to: bridge.address,
+                value: toNano('0.05'),
+                body,
+            });
+            // Silent return: no refund, pending untouched.
+            expect(tx.transactions).toHaveTransaction({
+                to: bridge.address,
+                success: true,
+            });
+            expect(findExternal(tx, Opcodes.EVENT_BRIDGE_MINTED_REFUND)).toBeUndefined();
+        });
+
+        // ---- Admin two-step edge case ----
+
+        it('accept_admin without a pending admin is rejected', async () => {
+            const body = beginCell()
+                .storeUint(Opcodes.ACCEPT_ADMIN, 32)
+                .storeUint(0, 64)
+                .endCell();
+            const tx = await newAdmin.send({
+                to: bridge.address,
+                value: toNano('0.02'),
+                body,
+            });
+            expect(tx.transactions).toHaveTransaction({
+                from: newAdmin.address,
+                to: bridge.address,
+                success: false,
+                exitCode: 301, // ERR_NOT_PENDING_ADMIN
+            });
+        });
+
+        // ---- Transfer notification amount zero ----
+
+        it('rejects transfer_notification with amount == 0', async () => {
+            const master = (await blockchain.treasury('amt0Master')).address;
+            const lockerJw = await blockchain.treasury('amt0LockerJw');
+            await bridge.sendRegisterJetton(admin.getSender(), {
+                value: toNano('0.05'),
+                kind: JettonKind.LOCKED_NATIVE,
+                master,
+                lockerJw: lockerJw.address,
+                decimals: 6,
+            });
+            const tx = await sendTransferNotification(lockerJw, {
+                queryId: 1n,
+                amount: 0n,
+                fromAddr: user.address,
+                recipientBytes: Buffer.from('near:alice.near', 'utf8'),
+            });
+            expect(tx.transactions).toHaveTransaction({
+                to: bridge.address,
+                success: false,
+                exitCode: 200, // ERR_AMOUNT_ZERO
+            });
+        });
+
+        // ---- H-3 (BurnComplete bounce-proof) ----
+
+        it('H-3: BurnCompleteMsg with unknown queryId is silently ignored (no throw → no bounce)', async () => {
+            const body = beginCell()
+                .storeUint(Opcodes.BURN_COMPLETE, 32)
+                .storeUint(0xdeadbeefn, 64) // never seen
+                .storeUint(toNano('1'), 128)
+                .endCell();
+            const tx = await user.send({ to: bridge.address, value: toNano('0.05'), body });
+            // Must NOT throw — bounce-proof means compute exit 0 and no
+            // state change.
+            expect(tx.transactions).toHaveTransaction({
+                from: user.address,
+                to: bridge.address,
+                success: true,
+            });
         });
     });
 

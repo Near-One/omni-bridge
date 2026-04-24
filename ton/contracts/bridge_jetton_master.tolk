@@ -101,22 +101,35 @@ fun onInternalMessage(in: InMessage) {
 }
 
 fun onBouncedMessage(in: InMessageBounced) {
-    // Roll back the totalSupply increment from the failed mint.
+    // Two bounces we have to compensate for:
+    //   - internal_transfer (mint) bouncing → JW deploy failed, roll back the
+    //     totalSupply increment we did in handleMint.
+    //   - burn_complete (to locker) bouncing → locker's handleBurnComplete
+    //     threw, which shouldn't happen (it's been made bounce-proof), but if
+    //     it does: re-increment totalSupply so supply accounting stays honest.
+    //     The JW balance decrement can't be rolled back from here; operator
+    //     intervention required.
     var body = in.bouncedBody;
     body.skipBouncedPrefix();
     if (body.remainingBitsCount() < 32 + 64) {
         return;
     }
     val op = body.loadUint(32);
-    if (op != OP_INTERNAL_TRANSFER) {
+    if (op == OP_INTERNAL_TRANSFER) {
+        body.loadUint(64); // queryId
+        val amount = body.loadCoins();
+        var st = lazy Storage.load();
+        st.totalSupply = st.totalSupply > amount ? st.totalSupply - amount : 0 as coins;
+        st.save();
         return;
     }
-    body.loadUint(64); // queryId
-    val amount = body.loadCoins();
-
-    var st = lazy Storage.load();
-    st.totalSupply = st.totalSupply > amount ? st.totalSupply - amount : 0 as coins;
-    st.save();
+    if (op == OP_BURN_COMPLETE && body.remainingBitsCount() >= 128) {
+        body.loadUint(64); // queryId
+        val amount = body.loadUint(128) as coins;
+        var st = lazy Storage.load();
+        st.totalSupply = st.totalSupply + amount;
+        st.save();
+    }
 }
 
 // TEP-74 burn_notification handler. Validates the sender matches the

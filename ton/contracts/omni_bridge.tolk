@@ -28,6 +28,7 @@ const ERR_BAD_FORWARD_PAYLOAD = 307
 const ERR_BAD_FLAGS = 308
 const ERR_REGISTRATION_PENDING = 309
 const ERR_REGISTRATION_FEE_LOW = 310
+const ERR_NOT_PAUSED = 311
 
 const PAYLOAD_TYPE_TRANSFER_MESSAGE = 0
 const PAYLOAD_TYPE_METADATA = 1
@@ -47,9 +48,21 @@ const OP_PROVIDE_WALLET_ADDRESS = 0x2c76b973
 
 const MIN_LOG_METADATA_FEE = 200000000 // 0.2 TON in nanotons
 
+// Margin above `amount + nativeFee` that `handleInitTransferNative` requires,
+// so the locker retains enough to cover compute + event emission + storage.
+const INIT_TRANSFER_NATIVE_GAS_MARGIN = 20000000 // 0.02 TON
+
 // Tag required in jetton-transfer forward_payload for the locker to treat the
 // deposit as a bridge intent rather than a stray send.
 const OP_INIT_TRANSFER_JETTON_FWD = 0x6e910020
+
+// High bit marker on refund queryIds. Refunds (burn-refund from handleBurnBounce
+// or handleBurnAborted) use OP_TEP74_TRANSFER just like legitimate LOCKED_NATIVE
+// releases, so their bounces are indistinguishable by opcode alone. Namespacing
+// the queryId by setting the top bit lets `onBouncedMessage` avoid clearing a
+// destinationNonce bit when the bounce is actually a refund-of-refund, which
+// would otherwise reopen an already-finalised transfer for replay.
+const REFUND_QUERY_BIT: uint64 = 0x8000000000000000
 
 struct JettonRecord {
     kind: uint8
@@ -179,12 +192,18 @@ struct (0x6e910030) BurnCompleteMsg {
     amount: uint128
 }
 
-struct (0x7362d09c) TransferNotificationMsg {
-    _queryId: uint64
-    amount: coins
-    fromAddr: address
-    forwardPayload: cell
+// Sent by locker's own JW when burn_notification to master bounced and the
+// JW re-credited its balance. Triggers: clear pending entry + refund user
+// via TEP-74 transfer from the JW back to the original sender.
+struct (0x6e910031) BurnAbortedMsg {
+    queryId: uint64
+    amount: uint128
 }
+
+// transfer_notification (op 0x7362d09c) is parsed manually in
+// handleTransferNotification — see the comment there. Kept out of the
+// struct/InMsg machinery so we can accept both Either-inline and Either-ref
+// forward_payload variants per TEP-74.
 
 struct (0xd1735400) TakeWalletAddressMsg {
     _queryId: uint64
@@ -205,7 +224,7 @@ type InMsg =
     | UpgradeCodeMsg
     | SetJettonCodeMsg
     | BurnCompleteMsg
-    | TransferNotificationMsg
+    | BurnAbortedMsg
 
 struct (0x99000001) InitTransferEvent {
     sender: address
@@ -354,10 +373,45 @@ fun bitmapSetNonce(mutate m: map<uint64, uint256>, nonce: uint64): void {
     m.set(slot, existing | bit);
 }
 
+// Used to roll back a marked-finalised nonce when the downstream release
+// bounces — lets the relayer retry with the same signed payload.
+fun bitmapClearNonce(mutate m: map<uint64, uint256>, nonce: uint64): void {
+    val slot = nonce >> 8;
+    val bit = (1 as uint256) << (nonce & 0xff);
+    val r = m.get(slot);
+    if (!r.isFound) {
+        return;
+    }
+    val existing = r.loadValue();
+    // If bit is set in `existing`, subtracting it clears that bit without
+    // borrowing from higher positions. If bit isn't set, (existing & bit)
+    // is 0 and the subtraction is a no-op. Avoids Tolk's arbitrary-precision
+    // `~` semantics when operating on uint256.
+    val cleared = existing - (existing & bit);
+    if (cleared == 0) {
+        m.delete(slot);
+    } else {
+        m.set(slot, cleared);
+    }
+}
+
 fun onInternalMessage(in: InMessage) {
-    val msg = lazy InMsg.fromSlice(in.body);
     val sender: address = in.senderAddress;
     val value: coins = in.valueCoins;
+
+    // Peek the op before struct-matching. transfer_notification is handled
+    // outside the auto-dispatch because its forward_payload field uses TEP-74
+    // `Either Cell ^Cell` encoding. Tolk's struct `cell` field only loads a
+    // ref; a standard jetton wallet sending Either=left$0 + inline data
+    // would underflow the struct deserializer (exit 9) and the bounce would
+    // return jettons to a user who has already lost their NEAR-side
+    // allowance. Manual parsing here handles both inline and ref forms.
+    if (in.body.remainingBitsCount() >= 32 && in.body.preloadUint(32) == 0x7362d09c) {
+        handleTransferNotification(sender, in.body);
+        return;
+    }
+
+    val msg = lazy InMsg.fromSlice(in.body);
 
     match (msg) {
         FinTransferMsg => handleFinTransfer(msg),
@@ -372,7 +426,7 @@ fun onInternalMessage(in: InMessage) {
         UpgradeCodeMsg => handleUpgradeCode(sender, msg),
         SetJettonCodeMsg => handleSetJettonCode(sender, msg),
         BurnCompleteMsg => handleBurnComplete(sender, msg),
-        TransferNotificationMsg => handleTransferNotification(sender, msg),
+        BurnAbortedMsg => handleBurnAborted(sender, msg),
 
         else => {
             assert (in.body.isEmpty()) throw ERR_WRONG_OP;
@@ -392,6 +446,11 @@ fun handleFinTransfer(msg: FinTransferMsg) {
     assert (payloadType == PAYLOAD_TYPE_TRANSFER_MESSAGE) throw ERR_BAD_PAYLOAD_TYPE;
 
     val destinationNonce = loadBorshUint64LE(mutate ps);
+    // Reserve the top bit for refund-queryId namespacing (see REFUND_QUERY_BIT).
+    // A legitimate NEAR destinationNonce never approaches 2^63; this assertion
+    // both prevents a compromised signer from poisoning the bit semantics and
+    // guarantees that onBouncedMessage's refund-vs-release heuristic is sound.
+    assert ((destinationNonce & REFUND_QUERY_BIT) == 0) throw ERR_BAD_PAYLOAD_TYPE;
     val originChain = ps.loadUint(8);
     val originNonce = loadBorshUint64LE(mutate ps);
 
@@ -530,7 +589,13 @@ fun handleInitTransferNative(sender: address, value: coins, msg: InitTransferNat
     assert ((st.pauseFlags & PAUSE_INIT) == 0) throw ERR_PAUSED;
     assert (msg.amount > 0) throw ERR_AMOUNT_ZERO;
     assert (msg.fee < msg.amount) throw ERR_FEE_GTE_AMOUNT;
-    assert ((value as int) >= ((msg.amount + msg.nativeFee) as int)) throw ERR_VALUE_TOO_LOW;
+    // Require enough margin over (amount + nativeFee) for the locker to cover
+    // its own compute, event emission, and storage rent. Without this, a user
+    // can call with `value == amount + nativeFee` and drain the locker's TON
+    // by 1 gas fee per init_transfer until it freezes.
+    assert (
+        (value as int) >= ((msg.amount + msg.nativeFee + INIT_TRANSFER_NATIVE_GAS_MARGIN) as int)
+    ) throw ERR_VALUE_TOO_LOW;
 
     // Read/write once, use the local copy afterward.
     val nonce = st.currentOriginNonce + 1;
@@ -651,6 +716,11 @@ fun handleRegisterJetton(sender: address, msg: RegisterJettonMsg) {
     ) throw ERR_BAD_FLAGS;
     var shelf = st.shelf.load();
     assert (!shelf.jettons.exists(msg.master)) throw ERR_JETTON_ALREADY_REGISTERED;
+    // Anti-hijack: reject if the claimed lockerJw is already tied to a different
+    // master. Without this, an attacker could later run TEP-89 against a fake
+    // master and overwrite this reverse mapping, silently misrouting a legit
+    // jetton's transfer_notification to the attacker's master.
+    assert (!shelf.masterByLockerJw.exists(msg.lockerJw)) throw ERR_JETTON_ALREADY_REGISTERED;
 
     shelf.jettons.set(
         msg.master,
@@ -726,6 +796,26 @@ fun handleTakeWalletAddress(sender: address, msg: TakeWalletAddressMsg) {
         return;
     }
 
+    // Anti-hijack: an attacker's fake master can reply with any walletAddress
+    // including one that already backs a legitimate jetton. Reject if already
+    // mapped, refunding the caller so grief costs nothing above gas.
+    if (shelf.masterByLockerJw.exists(msg.walletAddress)) {
+        st.pendingRegistration.delete(sender);
+        st.save();
+        createExternalLogMessage({
+            dest: createAddressNone(),
+            body: LogMetadataFailedEvent { master: sender },
+        })
+            .send(SEND_MODE_REGULAR);
+        createMessage({
+            bounce: false,
+            dest: pending.caller,
+            value: 0 as coins,
+        })
+            .send(SEND_MODE_CARRY_ALL_REMAINING_MESSAGE_VALUE);
+        return;
+    }
+
     shelf.jettons.set(
         sender,
         JettonRecord {
@@ -789,19 +879,34 @@ fun handleAcceptAdmin(sender: address) {
         .send(SEND_MODE_REGULAR);
 }
 
+// Sensitive operation: swaps out the locker's own code. Must be preceded by
+// `set_pause` blocking both transfer directions so in-flight messages can't
+// hit an inconsistent mix of old+new logic mid-upgrade. For stronger
+// guarantees (timelock, propose+accept), admin should be a governance
+// contract that enforces them off-chain.
 fun handleUpgradeCode(sender: address, msg: UpgradeCodeMsg) {
     var st = lazy Storage.load();
     assert (sender == st.admin) throw ERR_NOT_ADMIN;
+    // Require full-contract pause — any of INIT/FIN/DEPLOY in flight could
+    // land post-setCodePostponed and hit new code with stale storage shape
+    // (e.g. `pendingRegistration` replies landing under a schema change).
+    assert (
+        (st.pauseFlags & (PAUSE_INIT | PAUSE_FIN | PAUSE_DEPLOY))
+            == (PAUSE_INIT | PAUSE_FIN | PAUSE_DEPLOY)
+    ) throw ERR_NOT_PAUSED;
     contract.setCodePostponed(msg.newCode);
 }
 
 // Admin: replace the code cells used to deploy future bridge-jetton masters
 // and their wallets. Existing deployed masters/wallets are unaffected — their
 // code is immutable. Intended for iterating on the jetton contracts without
-// redeploying the locker.
+// redeploying the locker. Pause-gated so it can't race with in-flight
+// deploy_token / fin_transfer dispatch that reads shelf.jettonMasterCode /
+// jettonWalletCode.
 fun handleSetJettonCode(sender: address, msg: SetJettonCodeMsg) {
     var st = lazy Storage.load();
     assert (sender == st.admin) throw ERR_NOT_ADMIN;
+    assert ((st.pauseFlags & PAUSE_DEPLOY) != 0) throw ERR_NOT_PAUSED;
     var shelf = st.shelf.load();
     shelf.jettonMasterCode = msg.newJettonMasterCode;
     shelf.jettonWalletCode = msg.newJettonWalletCode;
@@ -809,10 +914,22 @@ fun handleSetJettonCode(sender: address, msg: SetJettonCodeMsg) {
     st.save();
 }
 
-fun handleTransferNotification(sender: address, msg: TransferNotificationMsg) {
+// Manually parses the body to handle TEP-74's Either Cell ^Cell encoding for
+// forward_payload. Tolk's struct `cell` field only loads a ref; a standard
+// jetton wallet that sends forward_payload inline (Either=left$0) would
+// underflow the struct deserializer and the locker would bounce the jettons
+// back — losing them for the user (the NEAR-side allowance was already
+// committed). This handler accepts both forms.
+fun handleTransferNotification(sender: address, body: slice) {
     var st = lazy Storage.load();
     assert ((st.pauseFlags & PAUSE_INIT) == 0) throw ERR_PAUSED;
-    assert (msg.amount > 0) throw ERR_AMOUNT_ZERO;
+
+    var bs = body;
+    bs.loadUint(32); // op (already matched)
+    bs.loadUint(64); // queryId — unused
+    val amount = bs.loadCoins();
+    val fromAddr = bs.loadAddress();
+    assert (amount > 0) throw ERR_AMOUNT_ZERO;
 
     // Impersonation defense: sender must be the locker's own JW for a registered master.
     val shelf = st.shelf.load();
@@ -824,7 +941,13 @@ fun handleTransferNotification(sender: address, msg: TransferNotificationMsg) {
     assert (recordLookup.isFound) throw ERR_UNKNOWN_JETTON;
     val record = recordLookup.loadValue();
 
-    var fp = msg.forwardPayload.beginParse();
+    // TEP-74 forward_payload: (Either Cell ^Cell). Flag 1 = ref; 0 = inline.
+    assert (bs.remainingBitsCount() >= 1) throw ERR_BAD_FORWARD_PAYLOAD;
+    val eitherFlag = bs.loadUint(1);
+    var fp = eitherFlag == 1
+        ? bs.loadRef().beginParse()
+        : bs;
+
     assert (fp.remainingBitsCount() >= 32) throw ERR_BAD_FORWARD_PAYLOAD;
     val fwdOp = fp.loadUint(32);
     assert (fwdOp == OP_INIT_TRANSFER_JETTON_FWD) throw ERR_BAD_FORWARD_PAYLOAD;
@@ -833,6 +956,9 @@ fun handleTransferNotification(sender: address, msg: TransferNotificationMsg) {
     val nativeFee = fp.remainingBitsCount() >= 128 ? fp.loadUint(128) : 0;
     val recipientCell = fp.remainingRefsCount() > 0 ? fp.loadRef() : beginCell().endCell();
     val messageCell = fp.remainingRefsCount() > 0 ? fp.loadRef() : beginCell().endCell();
+    // Match handleInitTransferNative: fee must leave a positive release
+    // amount. Reject before we allocate nonces / emit events.
+    assert ((fee as int) < (amount as int)) throw ERR_FEE_GTE_AMOUNT;
 
     if (record.kind == JETTON_BRIDGE_MINTED) {
         // Stash state, send burn to our own JW. Emit InitTransferEvent only
@@ -841,9 +967,9 @@ fun handleTransferNotification(sender: address, msg: TransferNotificationMsg) {
         val burnQueryId = st.burnQueryCounter + 1;
         st.burnQueryCounter = burnQueryId;
         val pending = (PendingBurn {
-            user: msg.fromAddr,
+            user: fromAddr,
             master,
-            amount: msg.amount as uint128,
+            amount: amount as uint128,
             fee: fee as uint128,
             nativeFee: nativeFee as uint128,
             recipientRef: recipientCell,
@@ -854,7 +980,7 @@ fun handleTransferNotification(sender: address, msg: TransferNotificationMsg) {
         st.save();
 
         val burnBody = beginCell().storeUint(OP_TEP74_BURN, 32).storeUint(burnQueryId, 64)
-            .storeCoins(msg.amount)
+            .storeCoins(amount)
             .storeAddress(contract.getAddress()) // response_destination = locker
             .storeUint(0, 1) // custom_payload = null
             .endCell();
@@ -875,10 +1001,10 @@ fun handleTransferNotification(sender: address, msg: TransferNotificationMsg) {
     createExternalLogMessage({
         dest: createAddressNone(),
         body: InitTransferEvent {
-            sender: msg.fromAddr,
+            sender: fromAddr,
             tokenMaster: master,
             originNonce: nonce,
-            amount: msg.amount as uint128,
+            amount: amount as uint128,
             fee: fee as uint128,
             nativeFee: nativeFee as uint128,
             recipientRef: recipientCell,
@@ -892,14 +1018,21 @@ fun handleTransferNotification(sender: address, msg: TransferNotificationMsg) {
 // burn_notification and confirmed the burn. We emit InitTransferEvent now
 // (never before — emitting before burn is a double-spend vector).
 fun handleBurnComplete(sender: address, msg: BurnCompleteMsg) {
+    // Bounce-proof: if this handler throws, the message bounces back to the
+    // master which silently drops it. That would leave the user's tokens
+    // burned on both the JW and the master but with no InitTransferEvent on
+    // NEAR — permanent loss. Instead, fail-silent on unexpected inputs.
     var st = lazy Storage.load();
     val pendingLookup = st.pendingBurns.get(msg.queryId);
-    assert (pendingLookup.isFound) throw ERR_UNKNOWN_JETTON;
+    if (!pendingLookup.isFound) {
+        return;
+    }
     val pending = PendingBurn.fromCell(pendingLookup.loadValue());
-
-    // Anti-spoof: only the master of this burn can confirm it.
-    assert (sender == pending.master) throw ERR_NOT_ADMIN;
-    assert (msg.amount == pending.amount) throw ERR_AMOUNT_ZERO;
+    // Silently ignore spoofed completions and amount mismatches; do NOT emit
+    // or clear state.
+    if (sender != pending.master || msg.amount != pending.amount) {
+        return;
+    }
 
     val nonce = st.currentOriginNonce + 1;
     st.currentOriginNonce = nonce;
@@ -917,6 +1050,69 @@ fun handleBurnComplete(sender: address, msg: BurnCompleteMsg) {
             nativeFee: pending.nativeFee,
             recipientRef: pending.recipientRef,
             messageRef: pending.messageRef,
+        },
+    })
+        .send(SEND_MODE_REGULAR);
+}
+
+// Cleanup for BRIDGE_MINTED outbound that failed at the master hop. Wallet
+// has already re-credited its balance; we just need to refund the user via
+// TEP-74 transfer from the JW. Bounce-proof: silent return on unknown
+// queryId / wrong sender keeps the wallet's re-credit without throwing.
+fun handleBurnAborted(sender: address, msg: BurnAbortedMsg) {
+    var st = lazy Storage.load();
+    val pendingLookup = st.pendingBurns.get(msg.queryId);
+    if (!pendingLookup.isFound) {
+        return;
+    }
+    val pending = PendingBurn.fromCell(pendingLookup.loadValue());
+    val shelf = st.shelf.load();
+    val recordLookup = shelf.jettons.get(pending.master);
+    if (!recordLookup.isFound) {
+        return;
+    }
+    val record = recordLookup.loadValue();
+    // Only accept the abort signal from the master's own locker JW.
+    if (sender != record.lockerJw) {
+        return;
+    }
+    // Defense-in-depth: the JW should always echo the same amount it
+    // re-credited itself for. A mismatch implies a future wallet-code drift
+    // and we should leave the pending entry for manual resolution rather
+    // than double-refund on an inconsistent signal.
+    if (msg.amount != pending.amount) {
+        return;
+    }
+    st.pendingBurns.delete(msg.queryId);
+    st.save();
+
+    // Mark the refund queryId so onBouncedMessage can distinguish it from a
+    // release-bounce and skip the nonce-clear (which would otherwise reopen
+    // an unrelated finalised transfer for replay).
+    val refundQueryId = (msg.queryId as uint64) | REFUND_QUERY_BIT;
+    val refundBody = beginCell().storeUint(OP_TEP74_TRANSFER, 32).storeUint(refundQueryId, 64)
+        .storeCoins(pending.amount as coins)
+        .storeAddress(pending.user) // destination
+        .storeAddress(pending.user) // response_dst
+        .storeUint(0, 1) // custom_payload = null
+        .storeCoins(0 as coins) // forward_ton = 0
+        .storeUint(0, 1) // forward_payload = empty inline
+        .endCell();
+    createMessage({
+        bounce: BounceMode.Only256BitsOfBody,
+        dest: record.lockerJw,
+        value: ton("0.05"),
+        body: refundBody,
+    })
+        .send(SEND_MODE_REGULAR);
+
+    createExternalLogMessage({
+        dest: createAddressNone(),
+        body: BridgeMintedRefundedEvent {
+            user: pending.user,
+            master: pending.master,
+            amount: pending.amount,
+            queryId: msg.queryId,
         },
     })
         .send(SEND_MODE_REGULAR);
@@ -944,8 +1140,31 @@ fun onBouncedMessage(in: InMessageBounced) {
             return;
         }
 
+        // Releases we issued in fin_transfer (MintMsgOut = 0x642b7d07 for
+        // BRIDGE_MINTED, OP_TEP74_TRANSFER for LOCKED_NATIVE) use
+        // queryId == destinationNonce. If such a release bounces, we clear
+        // the nonce bit so the relayer can retry — without this the nonce
+        // is forever burned and the user loses funds on both chains.
+        val isReleaseBounce = (op == 0x642b7d07) || (op == OP_TEP74_TRANSFER);
         if (body.remainingBitsCount() >= 64) {
-            val destinationNonce = body.loadUint(64) as uint64;
+            val queryIdRaw = body.loadUint(64) as uint64;
+            // Burn refunds (handleBurnBounce / handleBurnAborted) also use
+            // OP_TEP74_TRANSFER but tag their queryId with REFUND_QUERY_BIT.
+            // A bounce of a refund must NOT clear a destinationNonce — that
+            // would reopen an unrelated finalised transfer for replay.
+            val isRefundBounce = (queryIdRaw & REFUND_QUERY_BIT) != 0;
+            // Explicit 63-bit mask (rather than `~REFUND_QUERY_BIT`) — Tolk's
+            // arbitrary-precision `~` would produce a negative-typed value
+            // whose AND semantics with uint64 depend on internal extension
+            // rules; literal mask avoids that ambiguity.
+            val destinationNonce = queryIdRaw & 0x7fffffffffffffff;
+            if (isReleaseBounce && !isRefundBounce) {
+                var st = lazy Storage.load();
+                if (bitmapHasNonce(st.completedTransfers, destinationNonce)) {
+                    bitmapClearNonce(mutate st.completedTransfers, destinationNonce);
+                    st.save();
+                }
+            }
             createExternalLogMessage({
                 dest: createAddressNone(),
                 body: FinTransferStuckEvent { destinationNonce, bouncedFrom: in.senderAddress },
@@ -997,7 +1216,10 @@ fun handleBurnBounce(from: address, mutate body: slice) {
     st.pendingBurns.delete(queryId);
     st.save();
 
-    val transferBody = beginCell().storeUint(OP_TEP74_TRANSFER, 32).storeUint(queryId, 64)
+    // See REFUND_QUERY_BIT: mark as refund so a bounce of this refund doesn't
+    // clear an unrelated finalised destinationNonce.
+    val refundQueryId = queryId | REFUND_QUERY_BIT;
+    val transferBody = beginCell().storeUint(OP_TEP74_TRANSFER, 32).storeUint(refundQueryId, 64)
         .storeCoins(pending.amount as coins)
         .storeAddress(pending.user) // destination
         .storeAddress(pending.user) // response_dst
