@@ -1,9 +1,14 @@
 tolk 1.3
 
-// Minimal bridge-minted jetton master: locker-only mint, no TEP-89 / burn_notification yet.
+// Minimal bridge-minted jetton master. Locker-only mint; burn_notification
+// from any wallet decrements totalSupply and forwards a BurnCompleteMsg to the
+// locker (adminAddr) so it can emit InitTransferEvent for the NEAR-bound leg.
 const OP_INTERNAL_TRANSFER = 0x178d4519
+const OP_BURN_NOTIFICATION = 0x7bdd97de
+const OP_BURN_COMPLETE = 0x6e910030
 
 const ERR_NOT_FROM_ADMIN = 301
+const ERR_UNKNOWN_OP = 0xFFFF
 
 struct Storage {
     totalSupply: coins
@@ -27,6 +32,16 @@ struct (0x642b7d07) MintMsg {
     forwardTonAmount: coins
 }
 
+// TEP-74 burn_notification from a jetton wallet. We trust the sender because
+// the wallet is deployed deterministically from our stored walletCode — a
+// spoofed master couldn't match a wallet that calls back to us.
+struct (0x7bdd97de) BurnNotificationMsg {
+    queryId: uint64
+    amount: coins
+    sender: address // original burn initiator (= owner of the burning JW)
+    responseDst: address
+}
+
 struct WalletStorageInit {
     balance: coins
     ownerAddr: address
@@ -40,6 +55,15 @@ fun onInternalMessage(in: InMessage) {
         return;
     }
 
+    var slice = in.body;
+    val op = slice.preloadUint(32);
+
+    if (op == OP_BURN_NOTIFICATION) {
+        handleBurnNotification(in.senderAddress, in.body);
+        return;
+    }
+
+    assert (op == 0x642b7d07) throw ERR_UNKNOWN_OP;
     val msg = lazy MintMsg.fromSlice(in.body);
     var st = lazy Storage.load();
 
@@ -93,6 +117,51 @@ fun onBouncedMessage(in: InMessageBounced) {
     var st = lazy Storage.load();
     st.totalSupply = st.totalSupply > amount ? st.totalSupply - amount : 0 as coins;
     st.save();
+}
+
+// TEP-74 burn_notification handler. Validates the sender matches the
+// deterministic wallet address for `msg.sender`, then decrements totalSupply
+// and forwards a BurnCompleteMsg to the locker (adminAddr) so it can emit
+// InitTransferEvent for the matched burn queryId.
+fun handleBurnNotification(from: address, bodySlice: slice) {
+    val msg = lazy BurnNotificationMsg.fromSlice(bodySlice);
+    var st = lazy Storage.load();
+
+    // Anti-spoof: `from` must equal the deterministic JW address for msg.sender.
+    // A fake wallet can't impersonate another (master, owner) wallet because
+    // its contract-address-hash wouldn't match.
+    val expectedJw = (AutoDeployAddress {
+        workchain: 0,
+        stateInit: ContractState {
+            code: st.walletCode,
+            data: (WalletStorageInit {
+                balance: 0 as coins,
+                ownerAddr: msg.sender,
+                masterAddr: contract.getAddress(),
+                walletCode: st.walletCode,
+            })
+                .toCell(),
+        },
+    })
+        .calculateAddress();
+    assert (from == expectedJw) throw ERR_NOT_FROM_ADMIN;
+
+    st.totalSupply = st.totalSupply > msg.amount ? st.totalSupply - msg.amount : 0 as coins;
+    st.save();
+
+    // Tell the locker the burn landed so it can emit InitTransferEvent.
+    val notifBody = beginCell().storeUint(OP_BURN_COMPLETE, 32).storeUint(msg.queryId, 64).storeUint(
+        msg.amount as uint128,
+        128
+    )
+        .endCell();
+    createMessage({
+        bounce: true,
+        dest: st.adminAddr,
+        value: 0 as coins,
+        body: notifBody,
+    })
+        .send(SEND_MODE_CARRY_ALL_REMAINING_MESSAGE_VALUE);
 }
 
 get fun getJettonData(): (coins, address, cell, cell) {

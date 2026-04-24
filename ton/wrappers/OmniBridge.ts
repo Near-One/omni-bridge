@@ -182,6 +182,8 @@ export function omniBridgeConfigToCell(c: OmniBridgeConfig): Cell {
         .storeDict(Dictionary.empty()) // completedTransfers
         .storeRef(shelf)
         .storeDict(Dictionary.empty()) // pendingRegistration: master → PendingRegistration cell
+        .storeDict(Dictionary.empty()) // pendingBurns: burn queryId → PendingBurn cell
+        .storeUint(0n, 64) // burnQueryCounter
         .endCell();
 }
 

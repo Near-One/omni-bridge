@@ -41,6 +41,7 @@ const JETTON_BRIDGE_MINTED = 0
 const JETTON_LOCKED_NATIVE = 1
 
 const OP_TEP74_TRANSFER = 0xf8a7ea5
+const OP_TEP74_BURN = 0x595f07bc
 
 const OP_PROVIDE_WALLET_ADDRESS = 0x2c76b973
 
@@ -78,6 +79,21 @@ struct Storage {
     completedTransfers: map<uint64, uint256>
     shelf: Cell<JettonShelf>
     pendingRegistration: map<address, cell> // master → PendingRegistration cell
+    pendingBurns: map<uint64, cell> // burn queryId → PendingBurn cell
+    burnQueryCounter: uint64
+}
+
+// Stashed while a BRIDGE_MINTED burn is in flight: on success (BurnCompleteMsg
+// from the master) we emit InitTransferEvent; on bounce of the burn op we
+// refund the user.
+struct PendingBurn {
+    user: address
+    master: address
+    amount: uint128
+    fee: uint128
+    nativeFee: uint128
+    recipientRef: cell
+    messageRef: cell
 }
 
 fun Storage.load() {
@@ -153,6 +169,16 @@ struct (0x6e910015) SetJettonCodeMsg {
     newJettonWalletCode: cell
 }
 
+// Sent by the bridge-jetton master to the locker after processing a
+// burn_notification from the locker's own JW. `queryId` is the burn queryId
+// we allocated in handleTransferNotification; `amount` is the actually-burned
+// amount (may differ from the stashed amount if master ever supports partial
+// burns — currently always equals the stashed amount).
+struct (0x6e910030) BurnCompleteMsg {
+    queryId: uint64
+    amount: uint128
+}
+
 struct (0x7362d09c) TransferNotificationMsg {
     queryId: uint64
     amount: coins
@@ -178,6 +204,7 @@ type InMsg =
     | AcceptAdminMsg
     | UpgradeCodeMsg
     | SetJettonCodeMsg
+    | BurnCompleteMsg
     | TransferNotificationMsg
 
 struct (0x99000001) InitTransferEvent {
@@ -344,6 +371,7 @@ fun onInternalMessage(in: InMessage) {
         AcceptAdminMsg => handleAcceptAdmin(sender),
         UpgradeCodeMsg => handleUpgradeCode(sender, msg),
         SetJettonCodeMsg => handleSetJettonCode(sender, msg),
+        BurnCompleteMsg => handleBurnComplete(sender, msg),
         TransferNotificationMsg => handleTransferNotification(sender, msg),
 
         else => {
@@ -796,50 +824,53 @@ fun handleTransferNotification(sender: address, msg: TransferNotificationMsg) {
     assert (recordLookup.isFound) throw ERR_UNKNOWN_JETTON;
     val record = recordLookup.loadValue();
 
-    // BRIDGE_MINTED outbound needs a burn-before-event flow (unimplemented). Refund
-    // the user instead of emitting InitTransfer without a matching burn.
-    if (record.kind == JETTON_BRIDGE_MINTED) {
-        val refundBody = beginCell().storeUint(OP_TEP74_TRANSFER, 32).storeUint(msg.queryId, 64)
-            .storeCoins(msg.amount)
-            .storeAddress(msg.fromAddr) // destination
-            .storeAddress(msg.fromAddr) // response_dst
-            .storeUint(0, 1) // custom_payload = null
-            .storeCoins(0 as coins) // forward_ton = 0
-            .storeUint(0, 1) // forward_payload = empty inline
-            .endCell();
-        createMessage({
-            bounce: BounceMode.Only256BitsOfBody,
-            dest: record.lockerJw,
-            value: ton("0.05"),
-            body: refundBody,
-        })
-            .send(SEND_MODE_REGULAR);
-        createExternalLogMessage({
-            dest: createAddressNone(),
-            body: BridgeMintedRefundedEvent {
-                user: msg.fromAddr,
-                master,
-                amount: msg.amount as uint128,
-                queryId: msg.queryId,
-            },
-        })
-            .send(SEND_MODE_REGULAR);
-        return;
-    }
-
     var fp = msg.forwardPayload.beginParse();
     assert (fp.remainingBitsCount() >= 32) throw ERR_BAD_FORWARD_PAYLOAD;
     val fwdOp = fp.loadUint(32);
     assert (fwdOp == OP_INIT_TRANSFER_JETTON_FWD) throw ERR_BAD_FORWARD_PAYLOAD;
 
-    val nonce = st.currentOriginNonce + 1;
-    st.currentOriginNonce = nonce;
-    st.save();
-
     val fee = fp.remainingBitsCount() >= 128 ? fp.loadUint(128) : 0;
     val nativeFee = fp.remainingBitsCount() >= 128 ? fp.loadUint(128) : 0;
     val recipientCell = fp.remainingRefsCount() > 0 ? fp.loadRef() : beginCell().endCell();
     val messageCell = fp.remainingRefsCount() > 0 ? fp.loadRef() : beginCell().endCell();
+
+    if (record.kind == JETTON_BRIDGE_MINTED) {
+        // Stash state, send burn to our own JW. Emit InitTransferEvent only
+        // once the master's burn_notification round-trip resolves (see
+        // handleBurnComplete). On bounce of the burn we refund the user.
+        val burnQueryId = st.burnQueryCounter + 1;
+        st.burnQueryCounter = burnQueryId;
+        val pending = (PendingBurn {
+            user: msg.fromAddr,
+            master,
+            amount: msg.amount as uint128,
+            fee: fee as uint128,
+            nativeFee: nativeFee as uint128,
+            recipientRef: recipientCell,
+            messageRef: messageCell,
+        })
+            .toCell();
+        st.pendingBurns.set(burnQueryId, pending);
+        st.save();
+
+        val burnBody = beginCell().storeUint(OP_TEP74_BURN, 32).storeUint(burnQueryId, 64)
+            .storeCoins(msg.amount)
+            .storeAddress(contract.getAddress()) // response_destination = locker
+            .storeUint(0, 1) // custom_payload = null
+            .endCell();
+        createMessage({
+            bounce: BounceMode.Only256BitsOfBody,
+            dest: record.lockerJw,
+            value: ton("0.05"),
+            body: burnBody,
+        })
+            .send(SEND_MODE_REGULAR);
+        return;
+    }
+
+    val nonce = st.currentOriginNonce + 1;
+    st.currentOriginNonce = nonce;
+    st.save();
 
     createExternalLogMessage({
         dest: createAddressNone(),
@@ -852,6 +883,40 @@ fun handleTransferNotification(sender: address, msg: TransferNotificationMsg) {
             nativeFee: nativeFee as uint128,
             recipientRef: recipientCell,
             messageRef: messageCell,
+        },
+    })
+        .send(SEND_MODE_REGULAR);
+}
+
+// Round-trip closer for BRIDGE_MINTED outbound: master has processed
+// burn_notification and confirmed the burn. We emit InitTransferEvent now
+// (never before — emitting before burn is a double-spend vector).
+fun handleBurnComplete(sender: address, msg: BurnCompleteMsg) {
+    var st = lazy Storage.load();
+    val pendingLookup = st.pendingBurns.get(msg.queryId);
+    assert (pendingLookup.isFound) throw ERR_UNKNOWN_JETTON;
+    val pending = PendingBurn.fromCell(pendingLookup.loadValue());
+
+    // Anti-spoof: only the master of this burn can confirm it.
+    assert (sender == pending.master) throw ERR_NOT_ADMIN;
+    assert (msg.amount == pending.amount) throw ERR_AMOUNT_ZERO;
+
+    val nonce = st.currentOriginNonce + 1;
+    st.currentOriginNonce = nonce;
+    st.pendingBurns.delete(msg.queryId);
+    st.save();
+
+    createExternalLogMessage({
+        dest: createAddressNone(),
+        body: InitTransferEvent {
+            sender: pending.user,
+            tokenMaster: pending.master,
+            originNonce: nonce,
+            amount: pending.amount,
+            fee: pending.fee,
+            nativeFee: pending.nativeFee,
+            recipientRef: pending.recipientRef,
+            messageRef: pending.messageRef,
         },
     })
         .send(SEND_MODE_REGULAR);
@@ -871,6 +936,11 @@ fun onBouncedMessage(in: InMessageBounced) {
 
         if (op == OP_PROVIDE_WALLET_ADDRESS) {
             handleProvideWalletAddressBounce(in.senderAddress);
+            return;
+        }
+
+        if (op == OP_TEP74_BURN) {
+            handleBurnBounce(in.senderAddress, mutate body);
             return;
         }
 
@@ -905,6 +975,52 @@ fun onBouncedMessage(in: InMessageBounced) {
     createExternalLogMessage({
         dest: createAddressNone(),
         body: FinTransferStuckEvent { destinationNonce: 0 as uint64, bouncedFrom: in.senderAddress },
+    })
+        .send(SEND_MODE_REGULAR);
+}
+
+// Burn op bounced back from locker's own JW (its compute threw → balance is
+// untouched). Refund the user by sending the jettons back out via TEP-74
+// transfer from the locker's JW, and clear the pending entry.
+fun handleBurnBounce(from: address, mutate body: slice) {
+    if (body.remainingBitsCount() < 64) {
+        return;
+    }
+    val queryId = body.loadUint(64) as uint64;
+
+    var st = lazy Storage.load();
+    val pendingLookup = st.pendingBurns.get(queryId);
+    if (!pendingLookup.isFound) {
+        return;
+    }
+    val pending = PendingBurn.fromCell(pendingLookup.loadValue());
+    st.pendingBurns.delete(queryId);
+    st.save();
+
+    val transferBody = beginCell().storeUint(OP_TEP74_TRANSFER, 32).storeUint(queryId, 64)
+        .storeCoins(pending.amount as coins)
+        .storeAddress(pending.user) // destination
+        .storeAddress(pending.user) // response_dst
+        .storeUint(0, 1) // custom_payload = null
+        .storeCoins(0 as coins) // forward_ton = 0
+        .storeUint(0, 1) // forward_payload = empty inline
+        .endCell();
+    createMessage({
+        bounce: BounceMode.Only256BitsOfBody,
+        dest: from,
+        value: ton("0.05"),
+        body: transferBody,
+    })
+        .send(SEND_MODE_REGULAR);
+
+    createExternalLogMessage({
+        dest: createAddressNone(),
+        body: BridgeMintedRefundedEvent {
+            user: pending.user,
+            master: pending.master,
+            amount: pending.amount,
+            queryId,
+        },
     })
         .send(SEND_MODE_REGULAR);
 }
