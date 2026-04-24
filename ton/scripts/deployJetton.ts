@@ -34,9 +34,7 @@ export async function run(provider: NetworkProvider, args: string[]) {
 
     if (sigV !== 0 && sigV !== 1) {
         throw new Error(
-            `sigV must be 0 or 1 (y-parity); got ${sigV}. ` +
-                `Use SignatureResponse.recovery_id directly (NOT big_r's SEC1 prefix, ` +
-                `NOT v-27 from an EVM adapter).`,
+            `sigV must be 0 or 1 (y-parity); got ${sigV}. Use SignatureResponse.recovery_id directly (NOT big_r's SEC1 prefix, NOT v-27 from an EVM adapter).`,
         );
     }
 
