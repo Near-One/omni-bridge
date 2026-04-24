@@ -20,7 +20,8 @@ import { mustArg, parseArgs } from './_argv';
 //                                   cover master deploy + JW compute)
 //       --queryId <uint64>          default 0
 //
-// Subtract 27 from NEAR MPC's sig_v byte.
+// sigV is `SignatureResponse.recovery_id` directly (0 or 1). NEAR's MPC emits
+// recovery_id separately from the EVM-packed `v` byte; no subtraction here.
 
 export async function run(provider: NetworkProvider, args: string[]) {
     const parsed = parseArgs(args);
@@ -32,7 +33,11 @@ export async function run(provider: NetworkProvider, args: string[]) {
     const queryId = parsed.queryId ? BigInt(parsed.queryId) : 0n;
 
     if (sigV !== 0 && sigV !== 1) {
-        throw new Error(`sigV must be 0 or 1; got ${sigV} (subtract 27 from NEAR MPC's v byte)`);
+        throw new Error(
+            `sigV must be 0 or 1 (y-parity); got ${sigV}. ` +
+                `Use SignatureResponse.recovery_id directly (NOT big_r's SEC1 prefix, ` +
+                `NOT v-27 from an EVM adapter).`,
+        );
     }
 
     const payload = Buffer.from(payloadHex, 'hex');

@@ -99,8 +99,11 @@ pub enum TonEvent {
 
 /// Emitted by the Tolk contract when a downstream outgoing send from
 /// `fin_transfer` bounced back. `destination_nonce` matches the original
-/// fin_transfer (or 0 for bodyless native-TON sends). The locker keeps the
-/// nonce marked `used` — recovery is manual, via an admin-retry path.
+/// fin_transfer (or 0 for bodyless native-TON sends). For release bounces
+/// (jetton release or native-TON dispatch), the locker clears the nonce's
+/// `used` bit so the relayer can retry with the same signed payload;
+/// for refund-of-refund bounces (marked with the reserved top-bit namespace),
+/// no nonce is touched.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FinTransferStuckMessage {
     pub destination_nonce: Nonce,

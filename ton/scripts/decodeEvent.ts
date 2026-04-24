@@ -151,6 +151,14 @@ function refToUtf8(s: Slice): string {
 }
 
 function formatOptionalAddr(s: Slice): string {
-    const addr = s.loadAddress();
-    return addr.toString({ testOnly: true });
+    // InitTransferEvent's tokenMaster is addr_none for native-TON transfers.
+    // loadAddress() throws on addr_none, so use loadAddressAny() and render
+    // None explicitly.
+    const addr = s.loadAddressAny();
+    if (addr === null) {
+        return '(none / native TON)';
+    }
+    // Only regular basechain/masterchain Address accepts the `testOnly` option;
+    // ExternalAddress has no such flag.
+    return 'workChain' in addr ? addr.toString({ testOnly: true }) : addr.toString();
 }

@@ -12,9 +12,11 @@
 //!   bytes 34-35: CRC-16/XMODEM over bytes 0..34
 //! ```
 //!
-//! On parse we accept both EQ and UQ (bounceability is a wallet hint; the bridge
-//! applies its own bounce semantics per outgoing message). Testnet and masterchain
-//! addresses are rejected.
+//! On parse we accept any combination of the testnet (0x80) and non-bounceable
+//! (0x40) flag bits as long as the low 6 bits are `0x11` — on-chain, only the
+//! workchain + 32-byte hash matter, so discriminating by display flags would
+//! reject otherwise-valid addresses. Masterchain (workchain != 0) is rejected
+//! because the locker is basechain-only.
 //!
 //! On encode we always emit mainnet-bounceable-basechain (`EQ`-prefixed) using
 //! base64url without padding.
@@ -231,7 +233,11 @@ mod tests {
     }
 
     #[test]
-    fn rejects_testnet_flag() {
+    fn accepts_testnet_flag_and_round_trips_to_mainnet_display() {
+        // The testnet bit (0x80) is a display hint only — on-chain only the
+        // workchain + hash matter. We parse kQ/0Q transparently and normalise
+        // Display output to EQ, so a testnet-tagged input round-trips to the
+        // equivalent mainnet-bounceable representation.
         let addr: TonAddress = INTENTS_EXAMPLE.parse().unwrap();
         let mut raw = [0u8; 36];
         raw[0] = 0x91; // kQ: testnet + bounceable
@@ -240,8 +246,9 @@ mod tests {
         raw[34] = crc[0];
         raw[35] = crc[1];
         let testnet = encode_base64url_36(&raw);
-        let err = testnet.parse::<TonAddress>().unwrap_err();
-        assert!(err.contains("testnet"), "got: {err}");
+        let parsed: TonAddress = testnet.parse().unwrap();
+        assert_eq!(parsed, addr);
+        assert_eq!(parsed.to_string(), INTENTS_EXAMPLE);
     }
 
     #[test]
