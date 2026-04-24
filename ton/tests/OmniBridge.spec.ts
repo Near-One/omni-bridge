@@ -559,7 +559,6 @@ describe('OmniBridge', () => {
                 exitCode: 307, // ERR_BAD_FORWARD_PAYLOAD
             });
         });
-
     });
 
     describe('deploy_token', () => {
@@ -1175,7 +1174,11 @@ describe('OmniBridge', () => {
                 .storeRef(bytesToCell(Buffer.alloc(0)))
                 .endCell();
             // +0.1 TON comfortably above the 0.02 TON margin.
-            const tx = await user.send({ to: bridge.address, value: amount + nativeFee + toNano('0.1'), body });
+            const tx = await user.send({
+                to: bridge.address,
+                value: amount + nativeFee + toNano('0.1'),
+                body,
+            });
             expect(tx.transactions).toHaveTransaction({
                 from: user.address,
                 to: bridge.address,
@@ -1497,10 +1500,7 @@ describe('OmniBridge', () => {
         // ---- Admin two-step edge case ----
 
         it('accept_admin without a pending admin is rejected', async () => {
-            const body = beginCell()
-                .storeUint(Opcodes.ACCEPT_ADMIN, 32)
-                .storeUint(0, 64)
-                .endCell();
+            const body = beginCell().storeUint(Opcodes.ACCEPT_ADMIN, 32).storeUint(0, 64).endCell();
             const tx = await newAdmin.send({
                 to: bridge.address,
                 value: toNano('0.02'),
