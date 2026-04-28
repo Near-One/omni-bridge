@@ -134,10 +134,11 @@ describe("OmniBridge ERC1155", () => {
   it("logs metadata for ERC1155 tokens and sets mapping", async () => {
     const tokenAddress = await erc1155.getAddress()
     const deterministic = await bridge.deriveDeterministicAddress(tokenAddress, tokenId)
+    const expectedName = `${tokenAddress.toLowerCase()}#${tokenId}`
 
     await expect(bridge.logMetadata1155(tokenAddress, tokenId))
       .to.emit(bridge, "LogMetadata")
-      .withArgs(deterministic, tokenAddress.toLowerCase(), "", 0)
+      .withArgs(deterministic, expectedName, "", 0)
 
     const storedMapping = await bridge.multiTokens(deterministic)
     expect(storedMapping.tokenAddress).to.equal(tokenAddress)
@@ -146,7 +147,7 @@ describe("OmniBridge ERC1155", () => {
     // Calling again should reuse mapping without reverting
     await expect(bridge.logMetadata1155(tokenAddress, tokenId))
       .to.emit(bridge, "LogMetadata")
-      .withArgs(deterministic, tokenAddress.toLowerCase(), "", 0)
+      .withArgs(deterministic, expectedName, "", 0)
   })
 
   it("derives deterministic addresses consistently and rejects collisions", async () => {
