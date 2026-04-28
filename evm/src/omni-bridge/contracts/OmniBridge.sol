@@ -251,7 +251,7 @@ contract OmniBridge is
 
         string memory name = string.concat(
             Strings.toHexString(tokenAddress),
-            ":",
+            "#",
             Strings.toString(tokenId)
         );
 
