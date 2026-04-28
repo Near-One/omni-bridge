@@ -1,4 +1,4 @@
-.PHONY: rust-lint rust-lint-near rust-lint-omni-relayer
+.PHONY: rust-lint rust-lint-near
 
 MAKEFILE_DIR :=  $(shell dirname $(realpath $(lastword $(MAKEFILE_LIST))))
 
@@ -16,21 +16,13 @@ MPC_OMNI_PROVER_MANIFEST := $(MAKEFILE_DIR)/near/omni-prover/mpc-omni-prover/Car
 MOCK_PROVER_MANIFEST := $(MAKEFILE_DIR)/near/mock/mock-prover/Cargo.toml
 MOCK_TOKEN_MANIFEST := $(MAKEFILE_DIR)/near/mock/mock-token/Cargo.toml
 
-OMNI_RELAYER_MANIFEST := $(MAKEFILE_DIR)/omni-relayer/Cargo.toml
-
-clippy: clippy-near clippy-omni-relayer
+clippy: clippy-near
 
 clippy-near:
 	cargo clippy --manifest-path $(NEAR_MANIFEST) --all-features -- $(LINT_OPTIONS)
 
 fmt-near:
 	cargo fmt --all --check --manifest-path $(NEAR_MANIFEST)
-
-fmt-omni-relayer:
-	cargo fmt --all --check --manifest-path $(OMNI_RELAYER_MANIFEST)
-
-clippy-omni-relayer:
-	cargo clippy --manifest-path $(OMNI_RELAYER_MANIFEST) -- $(LINT_OPTIONS)
 
 rust-build-omni-bridge:
 	cargo near build reproducible-wasm --manifest-path $(OMNI_BRIDGE_MANIFEST) --out-dir $(OUT_DIR)

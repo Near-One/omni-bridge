@@ -5,11 +5,9 @@ on:
     branches: [ main, develop ]
     paths:
       - 'near/**'
-      - 'omni-relayer/**'
   pull_request:
     paths:
       - 'near/**'
-      - 'omni-relayer/**'
 
 jobs:
   lint:
@@ -42,7 +40,6 @@ jobs:
           shared-key: "rust-lint"
           workspaces: |
             near
-            omni-relayer
           cache-on-failure: true
           cache-all-crates: true
 
