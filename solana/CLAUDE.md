@@ -4,8 +4,8 @@
 
 ```sh
 cd solana
-anchor build          # build bridge_token_factory.so + stub_program.so
-cargo test --package bridge_token_factory --test mollusk  # fast unit tests, no validator
+anchor build              # build bridge_token_factory.so + stub_program.so
+make -C .. solana-run-tests  # fast unit tests, no validator
 ```
 
 ## Key Architecture

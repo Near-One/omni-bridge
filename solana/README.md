@@ -12,5 +12,5 @@ anchor build
 
 ```sh
 # Unit tests (no validator needed, fast)
-cargo test --package bridge_token_factory --test mollusk
+make solana-run-tests
 ```
