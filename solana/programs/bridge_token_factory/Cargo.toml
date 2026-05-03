@@ -8,6 +8,11 @@ edition = "2021"
 crate-type = ["cdylib", "lib"]
 name = "bridge_token_factory"
 
+[[test]]
+name = "mollusk"
+path = "tests/mollusk.rs"
+required-features = ["no-entrypoint"]
+
 [features]
 default = ["mainnet"]
 cpi = ["no-entrypoint"]

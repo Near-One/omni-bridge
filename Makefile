@@ -58,12 +58,12 @@ solana-build: ENV = mainnet
 solana-build-dev solana-build:
 	cd solana && \
 	PROGRAM_ID=$$(solana address -k target/deploy/bridge_token_factory-keypair.json) && \
-	RUSTUP_TOOLCHAIN="nightly-2026-01-08" anchor build --verifiable --env "PROGRAM_ID=$$PROGRAM_ID" -- --no-default-features --features $(ENV)
+	RUSTUP_TOOLCHAIN="nightly-2026-01-08" anchor build --verifiable --program-name bridge_token_factory --env "PROGRAM_ID=$$PROGRAM_ID" -- --no-default-features --features $(ENV)
 
 solana-build-ci:
 	cd solana && \
 	export PROGRAM_ID=dahPEoZGXfyV58JqqH85okdHmpN8U2q8owgPUXSCPxe && \
-	RUSTUP_TOOLCHAIN="nightly-2026-01-08" anchor build --verifiable --env "PROGRAM_ID=$$PROGRAM_ID" -- --no-default-features --features mainnet
+	RUSTUP_TOOLCHAIN="nightly-2026-01-08" anchor build --verifiable --program-name bridge_token_factory --env "PROGRAM_ID=$$PROGRAM_ID" -- --no-default-features --features mainnet
 
 solana-deploy-dev: ENV = devnet
 solana-deploy: ENV = mainnet
