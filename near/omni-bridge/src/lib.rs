@@ -60,6 +60,7 @@ const CLAIM_FEE_CALLBACK_GAS: Gas = Gas::from_tgas(50);
 const BIND_TOKEN_CALLBACK_GAS: Gas = Gas::from_tgas(25);
 const BIND_TOKEN_REFUND_GAS: Gas = Gas::from_tgas(5);
 const FT_TRANSFER_CALL_GAS: Gas = Gas::from_tgas(210);
+const MIN_FT_TRANSFER_CALL_GAS: Gas = Gas::from_tgas(50);
 const FT_TRANSFER_GAS: Gas = Gas::from_tgas(5);
 const UPDATE_CONTROLLER_GAS: Gas = Gas::from_tgas(250);
 const WNEAR_WITHDRAW_GAS: Gas = Gas::from_tgas(5);
@@ -72,7 +73,7 @@ const BURN_TOKEN_GAS: Gas = Gas::from_tgas(3);
 const MINT_TOKEN_GAS: Gas = Gas::from_tgas(5);
 const SET_METADATA_GAS: Gas = Gas::from_tgas(10);
 const RESOLVE_FAST_TRANSFER_GAS: Gas = Gas::from_tgas(6);
-const UTXO_FIN_TRANSFER_CALLBACK_GAS: Gas = Gas::from_tgas(5);
+const UTXO_FIN_TRANSFER_CALLBACK_GAS: Gas = Gas::from_tgas(10);
 const RESOLVE_UTXO_FIN_TRANSFER_GAS: Gas = Gas::from_tgas(3);
 const FAST_TRANSFER_CALLBACK_GAS: Gas = Gas::from_tgas(10);
 const NO_DEPOSIT: NearToken = NearToken::from_near(0);
@@ -2056,6 +2057,12 @@ impl Contract {
         amount: U128,
         msg: &str,
     ) -> Promise {
+        let ft_transfer_call_gas = env::prepaid_gas()
+            .saturating_sub(env::used_gas())
+            .saturating_sub(SEND_TOKENS_CALLBACK_GAS) // TODO: not all send_tokens callbacks has the same gas.
+            .saturating_sub(MINT_TOKEN_GAS)
+            .min(FT_TRANSFER_CALL_GAS);
+
         let is_deployed_token = self.is_deployed_token(&token);
 
         if token == self.wnear_account_id && msg.is_empty() {
@@ -2075,9 +2082,15 @@ impl Contract {
             } else {
                 ONE_YOCTO
             };
+
+            require!(
+                ft_transfer_call_gas >= MIN_FT_TRANSFER_CALL_GAS,
+                BridgeError::NotEnoughGasForTokenTransfer(ft_transfer_call_gas).as_ref()
+            );
+
             ext_token::ext(token)
                 .with_attached_deposit(deposit)
-                .with_static_gas(MINT_TOKEN_GAS.saturating_add(FT_TRANSFER_CALL_GAS))
+                .with_static_gas(MINT_TOKEN_GAS.saturating_add(ft_transfer_call_gas))
                 .mint(
                     recipient,
                     amount,
@@ -2089,9 +2102,14 @@ impl Contract {
                 .with_static_gas(FT_TRANSFER_GAS)
                 .ft_transfer(recipient, amount, None)
         } else {
+            require!(
+                ft_transfer_call_gas >= MIN_FT_TRANSFER_CALL_GAS,
+                BridgeError::NotEnoughGasForTokenTransfer(ft_transfer_call_gas).as_ref()
+            );
+
             ext_token::ext(token)
                 .with_attached_deposit(ONE_YOCTO)
-                .with_static_gas(FT_TRANSFER_CALL_GAS)
+                .with_static_gas(ft_transfer_call_gas)
                 .ft_transfer_call(recipient, amount, None, msg.to_string())
         }
     }
@@ -2447,6 +2465,7 @@ impl Contract {
         );
 
         if let Some(status) = self.get_fast_transfer_status(&fast_transfer.id()) {
+            // TODO: check how to deal with failed send_tokens
             return self.utxo_fin_transfer_fast(fast_transfer, status, utxo_fin_transfer_msg);
         }
 
@@ -2542,7 +2561,9 @@ impl Contract {
         Self::check_or_pay_ft_storage(&deposit_action, &mut NearToken::from_yoctonear(0)).then(
             Self::ext(env::current_account_id())
                 .with_static_gas(
-                    UTXO_FIN_TRANSFER_CALLBACK_GAS.saturating_add(FT_TRANSFER_CALL_GAS),
+                    env::prepaid_gas()
+                        .saturating_sub(env::used_gas())
+                        .saturating_sub(UTXO_FIN_TRANSFER_CALLBACK_GAS),
                 )
                 .utxo_fin_transfer_to_near_callback(
                     token_id,

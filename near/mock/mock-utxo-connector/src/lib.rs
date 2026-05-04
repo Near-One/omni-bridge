@@ -1,9 +1,8 @@
 use near_sdk::json_types::U128;
 use near_sdk::serde_json;
-use near_sdk::{ext_contract, near, AccountId, Gas, NearToken, PanicOnDefault, Promise};
+use near_sdk::{ext_contract, near, AccountId, NearToken, PanicOnDefault, Promise};
 use omni_types::{BridgeOnTransferMsg, UtxoFinTransferMsg};
 
-const FT_TRANSFER_CALL_GAS: Gas = Gas::from_tgas(210);
 const ONE_YOCTO: NearToken = NearToken::from_yoctonear(1);
 
 #[ext_contract(ext_token)]
@@ -39,7 +38,6 @@ impl MockUtxoConnector {
     pub fn verify_deposit(&mut self, amount: U128, msg: UtxoFinTransferMsg) -> Promise {
         ext_token::ext(self.token_account.clone())
             .with_attached_deposit(ONE_YOCTO)
-            .with_static_gas(FT_TRANSFER_CALL_GAS)
             .ft_transfer_call(
                 self.bridge_account.clone(),
                 amount,

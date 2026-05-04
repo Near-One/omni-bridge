@@ -1,4 +1,4 @@
-use near_sdk::{AccountId, NearToken};
+use near_sdk::{AccountId, Gas, NearToken};
 use omni_utils::ErrorDisplay;
 use strum_macros::AsRefStr;
 
@@ -38,6 +38,7 @@ pub enum BridgeError {
     NativeTokenRequiredForChain,
     NearWithdrawFailed,
     NotEnoughAttachedDeposit,
+    NotEnoughGasForTokenTransfer(Gas),
     OldTokenNotDeployed,
     OnlyFeeRecipientCanClaim,
     ParseAccountId,
