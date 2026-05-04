@@ -504,7 +504,8 @@ mod tests {
         env_builder
             .omni_storage_deposit(relayer_account.id(), 1_000_000_000_000_000_000_000_000)
             .await?;
-        env_builder.bridge_contract
+        env_builder
+            .bridge_contract
             .call("set_locked_tokens")
             .args_json(json!({
                 "args": [{
@@ -545,12 +546,15 @@ mod tests {
             get_balance(&env_builder.token.contract, token_receiver.id()).await?;
 
         let result = relayer_account
-            .call(env_builder.utxo_connector.as_ref().unwrap().id(), "verify_deposit")
+            .call(
+                env_builder.utxo_connector.as_ref().unwrap().id(),
+                "verify_deposit",
+            )
             .args_json(json!({
                 "amount": U128(amount),
                 "msg": utxo_msg,
             }))
-            .max_gas()
+            .gas(near_workspaces::types::Gas::from_tgas(150))
             .transact()
             .await?;
 
