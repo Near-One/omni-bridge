@@ -491,6 +491,98 @@ mod tests {
 
     #[rstest]
     #[tokio::test]
+    async fn utxo_fin_transfer_with_msg_succeeds(
+        build_artifacts: &BuildArtifacts,
+    ) -> anyhow::Result<()> {
+        let env_builder = TestEnvBuilder::new(build_artifacts.clone())
+            .await?
+            .with_utxo_token()
+            .await?;
+
+        let relayer_account = env_builder.setup_trusted_relayer(account_n(10)).await?;
+        env_builder.storage_deposit(relayer_account.id()).await?;
+        env_builder
+            .omni_storage_deposit(relayer_account.id(), 1_000_000_000_000_000_000_000_000)
+            .await?;
+        env_builder.bridge_contract
+            .call("set_locked_tokens")
+            .args_json(json!({
+                "args": [{
+                    "chain_kind": ChainKind::Near,
+                    "token_id": env_builder.token.contract.id(),
+                    "amount": U128(1_000_000_000),
+                }]
+            }))
+            .max_gas()
+            .transact()
+            .await?
+            .into_result()?;
+        env_builder
+            .mint_tokens(
+                env_builder.utxo_connector.as_ref().unwrap().id(),
+                1_000_000_000_000,
+            )
+            .await?;
+
+        let token_receiver = env_builder.deploy_mock_receiver().await?;
+        env_builder.storage_deposit(token_receiver.id()).await?;
+
+        let amount: u128 = 100_000_000;
+        let inner_msg = serde_json::json!({
+            "return_value": U128(0),
+            "panic": false,
+            "extra_msg": "",
+        })
+        .to_string();
+        let utxo_msg = UtxoFinTransferMsg {
+            utxo_id: default_utxo_id(),
+            recipient: OmniAddress::Near(token_receiver.id().clone()),
+            relayer_fee: U128(1000),
+            msg: inner_msg,
+        };
+
+        let receiver_balance_before =
+            get_balance(&env_builder.token.contract, token_receiver.id()).await?;
+
+        let result = relayer_account
+            .call(env_builder.utxo_connector.as_ref().unwrap().id(), "verify_deposit")
+            .args_json(json!({
+                "amount": U128(amount),
+                "msg": utxo_msg,
+            }))
+            .max_gas()
+            .transact()
+            .await?;
+
+        assert!(
+            result.failures().is_empty(),
+            "verify_deposit had unexpected failures: {:?}",
+            result.failures()
+        );
+
+        let receiver_balance_after =
+            get_balance(&env_builder.token.contract, token_receiver.id()).await?;
+        assert_eq!(
+            receiver_balance_after.0,
+            receiver_balance_before.0 + amount,
+            "receiver should have received the full amount via ft_transfer_call"
+        );
+
+        let receiver_logged_ft_on_transfer = result
+            .receipt_outcomes()
+            .iter()
+            .flat_map(|o| &o.logs)
+            .any(|log| log.contains("ft_on_transfer called with sender_id"));
+        assert!(
+            receiver_logged_ft_on_transfer,
+            "recipient's ft_on_transfer was not invoked"
+        );
+
+        Ok(())
+    }
+
+    #[rstest]
+    #[tokio::test]
     async fn test_untrusted_account_cannot_call_submit_transfer_to_utxo_chain_connector(
         build_artifacts: &BuildArtifacts,
     ) -> anyhow::Result<()> {

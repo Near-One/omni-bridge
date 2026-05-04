@@ -2542,7 +2542,9 @@ impl Contract {
         Self::check_or_pay_ft_storage(&deposit_action, &mut NearToken::from_yoctonear(0)).then(
             Self::ext(env::current_account_id())
                 .with_static_gas(
-                    UTXO_FIN_TRANSFER_CALLBACK_GAS.saturating_add(FT_TRANSFER_CALL_GAS),
+                    UTXO_FIN_TRANSFER_CALLBACK_GAS
+                        .saturating_add(MINT_TOKEN_GAS)
+                        .saturating_add(FT_TRANSFER_CALL_GAS),
                 )
                 .utxo_fin_transfer_to_near_callback(
                     token_id,
