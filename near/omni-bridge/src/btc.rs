@@ -1,14 +1,14 @@
 use crate::storage::NEP141_DEPOSIT;
 use crate::{
-    ext_token, ext_utxo_connector, Contract, ContractExt, Role, FT_TRANSFER_CALL_GAS, ONE_YOCTO,
-    STORAGE_DEPOSIT_GAS,
+    ext_token, ext_utxo_connector, Contract, ContractExt, Role, MIN_FT_TRANSFER_CALL_GAS,
+    ONE_YOCTO, STORAGE_DEPOSIT_GAS,
 };
 use near_plugins::{access_control_any, pause, AccessControllable, Pausable};
 use near_sdk::json_types::U128;
 use near_sdk::{
     env, near, require, serde_json, AccountId, Gas, Promise, PromiseError, PromiseOrValue,
 };
-use omni_types::btc::{TokenReceiverMessage, TxOut, UTXOChainConfig};
+use omni_types::btc::{BtcPendingSignInfo, TokenReceiverMessage, TxOut, UTXOChainConfig};
 use omni_types::errors::BridgeError;
 use omni_types::{
     get_native_token_address, ChainKind, DestinationChainMsg, Fee, TransferId, TransferMessage,
@@ -16,7 +16,8 @@ use omni_types::{
 use omni_utils::macros::trusted_relayer;
 use omni_utils::near_expect::NearExpect;
 
-const SUBMIT_TRANSFER_TO_BTC_CONNECTOR_CALLBACK_GAS: Gas = Gas::from_tgas(5);
+const SUBMIT_TRANSFER_TO_BTC_CONNECTOR_CALLBACK_GAS: Gas = Gas::from_tgas(10);
+const SUBMIT_TRANSFER_TO_BTC_CONNECTOR_GAS: Gas = Gas::from_tgas(15);
 const WITHDRAW_RBF_GAS: Gas = Gas::from_tgas(100);
 
 #[trusted_relayer]
@@ -31,7 +32,9 @@ impl Contract {
         msg: String,
         fee_recipient: Option<AccountId>,
         fee: &Option<Fee>,
+        sign_requests: Option<Vec<BtcPendingSignInfo>>,
     ) -> Promise {
+        let sign_requests = sign_requests.unwrap_or_default();
         let transfer = self.get_transfer_message_storage(transfer_id);
 
         let message = serde_json::from_str::<TokenReceiverMessage>(&msg).expect("INVALID MSG");
@@ -83,11 +86,30 @@ impl Contract {
         self.remove_transfer_message(transfer_id);
 
         let fee_recipient = fee_recipient.unwrap_or(env::predecessor_account_id());
+        let connector_id = self.get_utxo_chain_connector(chain_kind);
+
+        let mut sign_gas = Gas::from_tgas(0);
+        let mut sign_promise = Promise::new(connector_id.clone());
+        for sign_request in sign_requests {
+            sign_promise = sign_promise.function_call(
+                "sign_btc_transaction",
+                serde_json::to_vec(&sign_request).unwrap(),
+                ONE_YOCTO,
+                sign_request.gas,
+            );
+            sign_gas = sign_gas.saturating_add(sign_request.gas);
+        }
+
+        let ft_transfer_call_gas = env::prepaid_gas()
+            .saturating_sub(SUBMIT_TRANSFER_TO_BTC_CONNECTOR_GAS)
+            .saturating_sub(SUBMIT_TRANSFER_TO_BTC_CONNECTOR_CALLBACK_GAS)
+            .saturating_sub(sign_gas)
+            .max(MIN_FT_TRANSFER_CALL_GAS);
 
         ext_token::ext(btc_account_id)
             .with_attached_deposit(ONE_YOCTO)
-            .with_static_gas(FT_TRANSFER_CALL_GAS)
-            .ft_transfer_call(self.get_utxo_chain_connector(chain_kind), amount, None, msg)
+            .with_static_gas(ft_transfer_call_gas)
+            .ft_transfer_call(connector_id.clone(), amount, None, msg)
             .then(
                 Self::ext(env::current_account_id())
                     .with_static_gas(SUBMIT_TRANSFER_TO_BTC_CONNECTOR_CALLBACK_GAS)
@@ -97,6 +119,7 @@ impl Contract {
                         fee_recipient,
                     ),
             )
+            .then(sign_promise)
     }
 
     #[private]
