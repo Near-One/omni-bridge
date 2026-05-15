@@ -6,7 +6,8 @@ use crate::{
 use near_plugins::{access_control_any, pause, AccessControllable, Pausable};
 use near_sdk::json_types::U128;
 use near_sdk::{
-    env, near, require, serde_json, AccountId, Gas, Promise, PromiseError, PromiseOrValue,
+    env, near, require, serde_json, AccountId, Gas, NearToken, Promise, PromiseError,
+    PromiseOrValue,
 };
 use omni_types::btc::{TokenReceiverMessage, TxOut, UTXOChainConfig};
 use omni_types::errors::BridgeError;
@@ -111,7 +112,15 @@ impl Contract {
             let token_fee = transfer_msg.fee.fee.0;
             self.send_fee_internal(&transfer_msg, fee_recipient, token_fee)
         } else {
-            self.insert_raw_transfer(transfer_msg, transfer_owner);
+            let required_storage_balance =
+                self.add_transfer_message(transfer_msg, transfer_owner.clone());
+
+            self.update_storage_balance(
+                transfer_owner,
+                required_storage_balance,
+                NearToken::from_yoctonear(0),
+            );
+
             PromiseOrValue::Value(())
         }
     }

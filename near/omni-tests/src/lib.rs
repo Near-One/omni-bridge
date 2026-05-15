@@ -1,3 +1,4 @@
+mod btc_storage_fix;
 #[cfg(test)]
 mod environment;
 mod fast_transfer;
