@@ -4,12 +4,12 @@ use near_sdk::{borsh, AccountId, NearToken};
 
 use crate::{
     get_native_token_address, stringify, BridgeError, ChainKind, DestinationChainMsg, Fee,
-    OmniAddress, OmniError, PayloadType, SolAddress, StorageBalanceError, TransferId,
+    OmniAddress, OmniError, PayloadType, SolAddress, StorageBalanceError, TonAddress, TransferId,
     TransferMessage, H160, H256,
 };
 use std::str::FromStr;
 
-fn chain_kinds_for_borsh() -> [ChainKind; 12] {
+fn chain_kinds_for_borsh() -> [ChainKind; 13] {
     [
         ChainKind::Eth,
         ChainKind::Near,
@@ -23,6 +23,7 @@ fn chain_kinds_for_borsh() -> [ChainKind; 12] {
         ChainKind::HyperEvm,
         ChainKind::Strk,
         ChainKind::Abs,
+        ChainKind::Ton,
     ]
 }
 
@@ -47,6 +48,11 @@ fn omni_addresses_for_borsh() -> Vec<OmniAddress> {
                 .unwrap(),
         ),
         OmniAddress::Abs(H160::from_str("0x23ddd3e3692d1861ed57ede224608875809e127f").unwrap()),
+        OmniAddress::Ton(TonAddress([
+            0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66,
+            0x77, 0x88, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x11, 0x22, 0x33, 0x44,
+            0x55, 0x66, 0x77, 0x88,
+        ])),
     ]
 }
 
@@ -182,6 +188,15 @@ fn test_chain_kind_from_omni_address() {
         ChainKind::Strk,
         "STRK",
     );
+    test_chain_kind(
+        OmniAddress::Ton(TonAddress([
+            0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66,
+            0x77, 0x88, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x11, 0x22, 0x33, 0x44,
+            0x55, 0x66, 0x77, 0x88,
+        ])),
+        ChainKind::Ton,
+        "TON",
+    );
 }
 
 #[test]
@@ -254,6 +269,24 @@ fn test_omni_address_from_str() {
             "Should parse STRK address",
         ),
         (
+            // Intents' canonical TON address example — mainnet-bounceable basechain.
+            // See https://docs.near-intents.org/near-intents/chain-address-support
+            "ton:EQAWzEKcdnykvXfUNouqdS62tvrp32bCxuKS6eQrS6ISgcLo".to_string(),
+            OmniAddress::from_str("ton:EQAWzEKcdnykvXfUNouqdS62tvrp32bCxuKS6eQrS6ISgcLo"),
+            "Should parse TON user-friendly address",
+        ),
+        (
+            // Raw TON form (workchain:hex) is NOT accepted — parity with Intents.
+            "ton:0:0x1122334455667788112233445566778811223344556677881122334455667788".to_string(),
+            Err("TON address: expected 48 base64 chars, got 68".to_string()),
+            "Should reject raw TON form",
+        ),
+        (
+            "ton:EQAWzEKcdnykvXfUNouqdS62tvrp32bCxuKS6eQrS6ISgcLX".to_string(), // CRC corrupted
+            Err("TON address: CRC-16 mismatch".to_string()),
+            "Should reject CRC-corrupted TON address",
+        ),
+        (
             "invalid_format".to_string(),
             Err("ERR_INVALID_HEX".to_string()),
             "Should fail on missing chain prefix",
@@ -315,6 +348,11 @@ fn test_omni_address_display() {
             ),
             "strk:0x05558831a603eca8cd69a42d4251f08de3573039b69f23972265cac76639f1cf".to_string(),
             "STRK address should format as strk:0x...",
+        ),
+        (
+            OmniAddress::from_str("ton:EQAWzEKcdnykvXfUNouqdS62tvrp32bCxuKS6eQrS6ISgcLo").unwrap(),
+            "ton:EQAWzEKcdnykvXfUNouqdS62tvrp32bCxuKS6eQrS6ISgcLo".to_string(),
+            "TON address should round-trip as ton:EQ… (user-friendly base64url)",
         ),
     ];
 

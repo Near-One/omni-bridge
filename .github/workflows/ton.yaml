@@ -1,0 +1,46 @@
+name: TON Checks
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'ton/**'
+      - '.github/workflows/ton.yaml'
+  pull_request:
+    paths:
+      - 'ton/**'
+      - '.github/workflows/ton.yaml'
+
+jobs:
+  check:
+    name: Lint, Typecheck, Build, Test
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: ton
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Lint (biome)
+        run: bun run lint
+
+      - name: Type check
+        run: bun run typecheck
+
+      - name: Build contracts (Tolk)
+        run: bun run build
+
+      - name: Run tests
+        run: bun run test

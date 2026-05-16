@@ -18,7 +18,7 @@ use near_sdk::{ext_contract, near, require, AccountId, Gas, NearToken, PanicOnDe
 use omni_types::{
     errors::ProverError,
     evm::events::parse_evm_proof,
-    mpc_types::MpcFinality,
+    mpc_types::{MpcFinality, TonFinality},
     prover_args::MpcVerifyProofArgs,
     prover_result::{ProofKind, ProverResult},
     starknet::events::parse_starknet_proof,
@@ -58,6 +58,10 @@ impl MpcOmniProver {
         finalities.insert(
             ChainKind::Strk,
             MpcFinality::Starknet(StarknetFinality::AcceptedOnL2),
+        );
+        finalities.insert(
+            ChainKind::Ton,
+            MpcFinality::Ton(TonFinality::MasterchainIncluded),
         );
 
         Self {
@@ -143,11 +147,13 @@ impl MpcOmniProver {
 
         let ForeignTxSignPayload::V1(ref payload_v1) = sign_payload;
 
-        if chain_kind == ChainKind::Strk {
-            Self::parse_starknet_result(proof_kind, chain_kind, payload_v1)
-        } else {
-            let log_entry_data = Self::extract_evm_log(payload_v1)?;
-            parse_evm_proof(proof_kind, chain_kind, log_entry_data)
+        match chain_kind {
+            ChainKind::Strk => Self::parse_starknet_result(proof_kind, chain_kind, payload_v1),
+            ChainKind::Ton => Self::parse_ton_result(proof_kind, chain_kind, payload_v1),
+            _ => {
+                let log_entry_data = Self::extract_evm_log(payload_v1)?;
+                parse_evm_proof(proof_kind, chain_kind, log_entry_data)
+            }
         }
     }
 
@@ -156,6 +162,7 @@ impl MpcOmniProver {
             ForeignChainRpcRequest::Abstract(_) => Some(ChainKind::Abs),
             ForeignChainRpcRequest::Ethereum(_) => Some(ChainKind::Eth),
             ForeignChainRpcRequest::Starknet(_) => Some(ChainKind::Strk),
+            // TODO(ton): add ForeignChainRpcRequest::Ton arm once near-mpc-sdk ships it.
             _ => None,
         }
     }
@@ -169,6 +176,7 @@ impl MpcOmniProver {
             (ForeignChainRpcRequest::Starknet(args), MpcFinality::Starknet(finality)) => {
                 args.finality == *finality
             }
+            // TODO(ton): add the Ton arm once near-mpc-sdk ships it.
             _ => false,
         }
     }
@@ -206,6 +214,14 @@ impl MpcOmniProver {
         let data: Vec<[u8; 32]> = starknet_log.data.iter().map(|d| d.0).collect();
 
         parse_starknet_proof(kind, chain_kind, &starknet_log.from_address.0, &keys, &data)
+    }
+
+    fn parse_ton_result(
+        _kind: ProofKind,
+        _chain_kind: ChainKind,
+        _payload: &ForeignTxSignPayloadV1,
+    ) -> Result<ProverResult, String> {
+        Err(format!("{}: TON not supported yet", ProverError::InvalidProof))
     }
 }
 
