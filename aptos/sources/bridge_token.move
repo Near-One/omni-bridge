@@ -84,12 +84,6 @@ module omni_bridge::bridge_token {
         exists<BridgeTokenRefs>(object::object_address(&metadata))
     }
 
-    /// Convenience view: deterministic FA metadata object address for `seed`
-    /// when created by `creator_addr`. Mirrors `object::create_object_address`.
-    public fun derive_token_address(creator_addr: address, seed: vector<u8>): address {
-        object::create_object_address(&creator_addr, seed)
-    }
-
     #[test_only]
     public fun test_create(
         creator: &signer,

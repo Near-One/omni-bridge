@@ -50,7 +50,7 @@ module omni_bridge::omni_bridge_tests {
     }
 
     #[test(deployer = @omni_bridge)]
-    #[expected_failure(abort_code = 2, location = omni_bridge::omni_bridge)]
+    #[expected_failure(abort_code = 1, location = omni_bridge::omni_bridge)]
     fun cannot_initialize_twice(deployer: signer) {
         let _ = setup(&deployer);
         let derived = vector[];
@@ -60,7 +60,7 @@ module omni_bridge::omni_bridge_tests {
     }
 
     #[test(deployer = @omni_bridge, attacker = @0xBEEF)]
-    #[expected_failure(abort_code = 3, location = omni_bridge::omni_bridge)]
+    #[expected_failure(abort_code = 2, location = omni_bridge::omni_bridge)]
     fun set_pause_flags_requires_admin(deployer: signer, attacker: signer) {
         let _ = setup(&deployer);
         account::create_account_for_test(signer::address_of(&attacker));
@@ -133,6 +133,32 @@ module omni_bridge::omni_bridge_tests {
         assert!(utils::test_normalize_decimals(6) == 6, 250);
         assert!(utils::test_normalize_decimals(18) == 18, 251);
         assert!(utils::test_normalize_decimals(24) == 18, 252);
+    }
+
+    // Recovering a public key from a non-signature byte blob will yield
+    // *some* eth address — just not one that matches the configured
+    // `near_bridge_derived_address`. The verifier must abort.
+    // E_INVALID_SIGNATURE = 3 in omni_bridge::utils.
+    #[test]
+    #[expected_failure(abort_code = 3, location = omni_bridge::utils)]
+    fun verify_eth_signature_rejects_invalid_sig() {
+        let sig_rs = vector[];
+        for (_i in 0..64) { sig_rs.push_back(0xAAu8); };
+        let expected = vector[];
+        for (_i in 0..20) { expected.push_back(0xBBu8); };
+        utils::test_verify_eth_signature(b"hello world", sig_rs, 27, expected);
+    }
+
+    // Signature byte length must be exactly 64.
+    // E_INVALID_SIGNATURE_LENGTH = 1 in omni_bridge::utils.
+    #[test]
+    #[expected_failure(abort_code = 1, location = omni_bridge::utils)]
+    fun verify_eth_signature_rejects_wrong_length() {
+        let sig_rs = vector[];
+        for (_i in 0..32) { sig_rs.push_back(0u8); }; // only 32 bytes
+        let expected = vector[];
+        for (_i in 0..20) { expected.push_back(0u8); };
+        utils::test_verify_eth_signature(b"x", sig_rs, 27, expected);
     }
 
     #[test(deployer = @omni_bridge)]

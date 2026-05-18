@@ -69,4 +69,14 @@ module omni_bridge::utils {
 
     #[test_only]
     public fun test_normalize_decimals(d: u8): u8 { normalize_decimals(d) }
+
+    #[test_only]
+    public fun test_verify_eth_signature(
+        message_bytes: vector<u8>,
+        signature_rs: vector<u8>,
+        v: u8,
+        expected_address: vector<u8>,
+    ) {
+        verify_eth_signature(message_bytes, signature_rs, v, expected_address);
+    }
 }
