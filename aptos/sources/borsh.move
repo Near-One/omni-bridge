@@ -2,58 +2,21 @@
 ///
 /// Bridge payloads must be byte-identical to the encoding produced by the
 /// NEAR side of the bridge so that the recovered signer matches
-/// `near_bridge_derived_address`. Aptos addresses are 32 bytes and are
-/// encoded big-endian (see `encode_address`).
+/// `near_bridge_derived_address`.
+///
+/// For fixed-width unsigned integers and `address`, Aptos's native BCS
+/// encoding is byte-identical to Borsh, so call sites use `bcs::to_bytes`
+/// directly — no wrapper. Sequences are the exception: Borsh uses a fixed
+/// 4-byte little-endian length prefix where BCS uses ULEB128, so the
+/// helpers below encode that prefix explicitly.
 module omni_bridge::borsh {
-    use std::string::String;
     use std::bcs;
-
-    public fun encode_u8(val: u8): vector<u8> {
-        let bytes = vector[];
-        bytes.push_back(val);
-        bytes
-    }
-
-    public fun encode_u32(val: u32): vector<u8> {
-        let bytes = vector[];
-        let v = val;
-        for (_i in 0..4) {
-            bytes.push_back(((v & 0xff) as u8));
-            v = v >> 8;
-        };
-        bytes
-    }
-
-    public fun encode_u64(val: u64): vector<u8> {
-        let bytes = vector[];
-        let v = val;
-        for (_i in 0..8) {
-            bytes.push_back(((v & 0xff) as u8));
-            v = v >> 8;
-        };
-        bytes
-    }
-
-    public fun encode_u128(val: u128): vector<u8> {
-        let bytes = vector[];
-        let v = val;
-        for (_i in 0..16) {
-            bytes.push_back(((v & 0xff) as u8));
-            v = v >> 8;
-        };
-        bytes
-    }
-
-    /// Encode an Aptos address as 32 bytes big-endian. BCS encodes
-    /// addresses as raw big-endian bytes already, matching the 32-byte
-    /// fixed-width encoding used by the Starknet variant of the bridge.
-    public fun encode_address(addr: address): vector<u8> {
-        bcs::to_bytes(&addr)
-    }
+    use std::string::String;
 
     /// Borsh-style byte vector: 4-byte little-endian length + bytes.
     public fun encode_byte_vec(val: &vector<u8>): vector<u8> {
-        let result = encode_u32((val.length() as u32));
+        let len = val.length() as u32;
+        let result = bcs::to_bytes(&len);
         result.append(*val);
         result
     }

@@ -4,6 +4,7 @@
 /// implementations of the Omni Bridge: see `starknet/src/bridge_types.cairo`
 /// and `evm/src/omni-bridge/contracts/OmniBridge.sol` for reference.
 module omni_bridge::bridge_types {
+    use std::bcs;
     use std::option::Option;
     use std::string::String;
     use omni_bridge::borsh;
@@ -120,16 +121,16 @@ module omni_bridge::bridge_types {
     ): vector<u8> {
         let buf = vector[];
         buf.push_back(PAYLOAD_TYPE_TRANSFER_MESSAGE);
-        buf.append(borsh::encode_u64(self.destination_nonce));
+        buf.append(bcs::to_bytes(&self.destination_nonce));
         buf.push_back(self.origin_chain);
-        buf.append(borsh::encode_u64(self.origin_nonce));
+        buf.append(bcs::to_bytes(&self.origin_nonce));
         // OmniAddress tag for token_address: this chain.
         buf.push_back(chain_id);
-        buf.append(borsh::encode_address(self.token_address));
-        buf.append(borsh::encode_u128(self.amount));
+        buf.append(bcs::to_bytes(&self.token_address));
+        buf.append(bcs::to_bytes(&self.amount));
         // OmniAddress tag for recipient: this chain.
         buf.push_back(chain_id);
-        buf.append(borsh::encode_address(self.recipient));
+        buf.append(bcs::to_bytes(&self.recipient));
 
         if (self.fee_recipient.is_some()) {
             buf.push_back(1);
