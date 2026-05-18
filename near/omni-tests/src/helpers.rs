@@ -197,6 +197,10 @@ pub mod tests {
         "sol:11111111111111111111111111111111".parse().unwrap()
     }
 
+    pub fn fogo_factory_address() -> OmniAddress {
+        "fogo:11111111111111111111111111111111".parse().unwrap()
+    }
+
     pub fn eth_eoa_address() -> OmniAddress {
         "eth:0xc5ed912ca6db7b41de4ef3632fa0a5641e42bf09"
             .parse()

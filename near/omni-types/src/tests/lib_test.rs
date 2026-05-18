@@ -9,7 +9,7 @@ use crate::{
 };
 use std::str::FromStr;
 
-fn chain_kinds_for_borsh() -> [ChainKind; 12] {
+fn chain_kinds_for_borsh() -> [ChainKind; 13] {
     [
         ChainKind::Eth,
         ChainKind::Near,
@@ -23,6 +23,7 @@ fn chain_kinds_for_borsh() -> [ChainKind; 12] {
         ChainKind::HyperEvm,
         ChainKind::Strk,
         ChainKind::Abs,
+        ChainKind::Fogo,
     ]
 }
 
@@ -47,6 +48,9 @@ fn omni_addresses_for_borsh() -> Vec<OmniAddress> {
                 .unwrap(),
         ),
         OmniAddress::Abs(H160::from_str("0x23ddd3e3692d1861ed57ede224608875809e127f").unwrap()),
+        OmniAddress::Fogo(
+            SolAddress::from_str("BXss9YNCX2p6VPf2Em54pHXkXnC2FPBeZgbB9fY1cuBR").unwrap(),
+        ),
     ]
 }
 
