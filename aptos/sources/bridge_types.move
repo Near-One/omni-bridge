@@ -19,7 +19,7 @@ module omni_bridge::bridge_types {
     /// Ethereum-style ECDSA signature: r || s (64 bytes) and recovery id v.
     struct Signature has copy, drop, store {
         rs: vector<u8>,
-        v: u8,
+        v: u8
     }
 
     /// `deploy_token` payload signed by the NEAR MPC.
@@ -28,7 +28,7 @@ module omni_bridge::bridge_types {
         token: String,
         name: String,
         symbol: String,
-        decimals: u8,
+        decimals: u8
     }
 
     /// `fin_transfer` payload signed by the NEAR MPC.
@@ -40,7 +40,7 @@ module omni_bridge::bridge_types {
         amount: u128,
         recipient: address,
         fee_recipient: Option<String>,
-        message: Option<vector<u8>>,
+        message: Option<vector<u8>>
     }
 
     // -------- Constructors --------
@@ -53,7 +53,7 @@ module omni_bridge::bridge_types {
         token: String,
         name: String,
         symbol: String,
-        decimals: u8,
+        decimals: u8
     ): MetadataPayload {
         MetadataPayload { token, name, symbol, decimals }
     }
@@ -66,7 +66,7 @@ module omni_bridge::bridge_types {
         amount: u128,
         recipient: address,
         fee_recipient: Option<String>,
-        message: Option<vector<u8>>,
+        message: Option<vector<u8>>
     ): TransferMessagePayload {
         TransferMessagePayload {
             destination_nonce,
@@ -76,22 +76,43 @@ module omni_bridge::bridge_types {
             amount,
             recipient,
             fee_recipient,
-            message,
+            message
         }
     }
 
     // -------- Accessors --------
 
-    public fun signature_rs(self: &Signature): vector<u8> { self.rs }
-    public fun signature_v(self: &Signature): u8 { self.v }
+    public fun signature_rs(self: &Signature): vector<u8> {
+        self.rs
+    }
+    public fun signature_v(self: &Signature): u8
+ {
+        self.v
+    }
 
-    public fun metadata_token(self: &MetadataPayload): String { self.token }
-    public fun metadata_name(self: &MetadataPayload): String { self.name }
-    public fun metadata_symbol(self: &MetadataPayload): String { self.symbol }
-    public fun metadata_decimals(self: &MetadataPayload): u8 { self.decimals }
+    public fun metadata_token(self: &MetadataPayload): String {
+        self.token
+    }
+    public fun metadata_name(self: &MetadataPayload): String
+ {
+        self.name
+    }
+    public fun metadata_symbol(self: &MetadataPayload): String
+ {
+        self.symbol
+    }
+    public fun metadata_decimals(self: &MetadataPayload): u8
+ {
+        self.decimals
+    }
 
-    public fun transfer_fee_recipient(self: &TransferMessagePayload): Option<String> { self.fee_recipient }
-    public fun transfer_message(self: &TransferMessagePayload): Option<vector<u8>> { self.message }
+    public fun transfer_fee_recipient(self: &TransferMessagePayload): Option<String> {
+        self.fee_recipient
+    }
+    public fun transfer_message(self: &TransferMessagePayload): Option<vector<u8>>
+ {
+        self.message
+    }
 
     // -------- Borsh encoding --------
 
@@ -111,8 +132,7 @@ module omni_bridge::bridge_types {
     /// before each of `token_address` and `recipient` and is bound into
     /// the signed hash (not the payload), preventing cross-chain replay.
     public fun transfer_message_to_borsh(
-        self: &TransferMessagePayload,
-        chain_id: u8,
+        self: &TransferMessagePayload, chain_id: u8
     ): vector<u8> {
         let buf = vector[];
         buf.push_back(PAYLOAD_TYPE_TRANSFER_MESSAGE);

@@ -17,7 +17,7 @@ module omni_bridge::bridge_token {
     struct BridgeTokenRefs has key {
         mint_ref: MintRef,
         burn_ref: BurnRef,
-        transfer_ref: TransferRef,
+        transfer_ref: TransferRef
     }
 
     /// Create a new bridge-controlled Fungible Asset and return its metadata
@@ -31,7 +31,7 @@ module omni_bridge::bridge_token {
         seed: vector<u8>,
         name: String,
         symbol: String,
-        decimals: u8,
+        decimals: u8
     ): Object<Metadata> {
         let constructor_ref = object::create_named_object(creator, seed);
         primary_fungible_store::create_primary_store_enabled_fungible_asset(
@@ -41,30 +41,30 @@ module omni_bridge::bridge_token {
             symbol,
             decimals,
             string::utf8(b""),
-            string::utf8(b""),
+            string::utf8(b"")
         );
 
         let mint_ref = fungible_asset::generate_mint_ref(&constructor_ref);
         let burn_ref = fungible_asset::generate_burn_ref(&constructor_ref);
         let transfer_ref = fungible_asset::generate_transfer_ref(&constructor_ref);
 
-        let object_signer = object::generate_signer(&constructor_ref);
+        let object_signer = constructor_ref.generate_signer();
         move_to(
             &object_signer,
-            BridgeTokenRefs { mint_ref, burn_ref, transfer_ref },
+            BridgeTokenRefs { mint_ref, burn_ref, transfer_ref }
         );
 
-        object::object_from_constructor_ref<Metadata>(&constructor_ref)
+        constructor_ref.object_from_constructor_ref<Metadata>()
     }
 
     /// Mint `amount` of `metadata` directly into the recipient's primary store.
     package fun mint(
         metadata: Object<Metadata>,
         recipient: address,
-        amount: u64,
-    ) acquires BridgeTokenRefs {
-        let refs = borrow_global<BridgeTokenRefs>(object::object_address(&metadata));
-        let fa = fungible_asset::mint(&refs.mint_ref, amount);
+        amount: u64
+    ) {
+        let refs = &BridgeTokenRefs[metadata.object_address()];
+        let fa = refs.mint_ref.mint(amount);
         primary_fungible_store::deposit(recipient, fa);
     }
 
@@ -72,16 +72,16 @@ module omni_bridge::bridge_token {
     package fun burn(
         metadata: Object<Metadata>,
         account: address,
-        amount: u64,
-    ) acquires BridgeTokenRefs {
-        let refs = borrow_global<BridgeTokenRefs>(object::object_address(&metadata));
+        amount: u64
+    ) {
+        let refs = &BridgeTokenRefs[metadata.object_address()];
         let store = primary_fungible_store::primary_store(account, metadata);
-        fungible_asset::burn_from(&refs.burn_ref, store, amount);
+        refs.burn_ref.burn_from(store, amount);
     }
 
     /// True if `metadata` was deployed by this bridge.
     public fun is_bridge_token(metadata: Object<Metadata>): bool {
-        exists<BridgeTokenRefs>(object::object_address(&metadata))
+        exists<BridgeTokenRefs>(metadata.object_address())
     }
 
     #[test_only]
@@ -90,7 +90,7 @@ module omni_bridge::bridge_token {
         seed: vector<u8>,
         name: String,
         symbol: String,
-        decimals: u8,
+        decimals: u8
     ): Object<Metadata> {
         create(creator, seed, name, symbol, decimals)
     }
@@ -99,8 +99,8 @@ module omni_bridge::bridge_token {
     public fun test_mint(
         metadata: Object<Metadata>,
         recipient: address,
-        amount: u64,
-    ) acquires BridgeTokenRefs {
+        amount: u64
+    ) {
         mint(metadata, recipient, amount)
     }
 
@@ -108,8 +108,8 @@ module omni_bridge::bridge_token {
     public fun test_burn(
         metadata: Object<Metadata>,
         account: address,
-        amount: u64,
-    ) acquires BridgeTokenRefs {
+        amount: u64
+    ) {
         burn(metadata, account, amount)
     }
 }

@@ -10,7 +10,6 @@
 /// [evm/src/omni-bridge/contracts/OmniBridge.sol] for the sibling
 /// implementations whose payload encodings this module mirrors.
 module omni_bridge::omni_bridge {
-    use std::signer;
     use std::string::String;
     use std::option::{Self, Option};
     use aptos_std::aptos_hash;
@@ -96,7 +95,7 @@ module omni_bridge::omni_bridge {
         /// on demand for:
         ///   - creating new FA objects in `deploy_token`
         ///   - moving locked tokens out in `fin_transfer` (non-bridge tokens)
-        extend_ref: ExtendRef,
+        extend_ref: ExtendRef
     }
 
     // -------- Events --------
@@ -109,7 +108,7 @@ module omni_bridge::omni_bridge {
         token_address: address,
         name: String,
         symbol: String,
-        decimals: u8,
+        decimals: u8
     }
 
     #[event]
@@ -119,7 +118,7 @@ module omni_bridge::omni_bridge {
         name: String,
         symbol: String,
         decimals: u8,
-        origin_decimals: u8,
+        origin_decimals: u8
     }
 
     #[event]
@@ -131,7 +130,7 @@ module omni_bridge::omni_bridge {
         fee: u128,
         native_fee: u128,
         recipient: String,
-        message: vector<u8>,
+        message: vector<u8>
     }
 
     #[event]
@@ -142,14 +141,14 @@ module omni_bridge::omni_bridge {
         amount: u128,
         recipient: address,
         fee_recipient: Option<String>,
-        message: Option<vector<u8>>,
+        message: Option<vector<u8>>
     }
 
     #[event]
     struct PauseStateChanged has drop, store {
         old_flags: u8,
         new_flags: u8,
-        admin: address,
+        admin: address
     }
 
     // -------- Initialization --------
@@ -164,19 +163,22 @@ module omni_bridge::omni_bridge {
         deployer: &signer,
         near_bridge_derived_address: vector<u8>,
         chain_id: u8,
-        native_token_metadata: Object<Metadata>,
+        native_token_metadata: Object<Metadata>
     ) {
-        let deployer_addr = signer::address_of(deployer);
+        let deployer_addr = deployer.address_of();
         assert!(deployer_addr == @omni_bridge, E_NOT_ADMIN);
-        assert!(!exists<BridgeState>(bridge_object_address()), E_ALREADY_INITIALIZED);
+        assert!(
+            !exists<BridgeState>(bridge_object_address()),
+            E_ALREADY_INITIALIZED
+        );
 
         let constructor_ref = object::create_named_object(deployer, BRIDGE_OBJECT_SEED);
-        let extend_ref = object::generate_extend_ref(&constructor_ref);
+        let extend_ref = constructor_ref.generate_extend_ref();
         // Permanently pin the bridge object at `bridge_object_address()` so a
         // compromise of the deployer key cannot move locked tokens elsewhere.
-        let transfer_ref = object::generate_transfer_ref(&constructor_ref);
-        object::disable_ungated_transfer(&transfer_ref);
-        let object_signer = object::generate_signer(&constructor_ref);
+        let transfer_ref = constructor_ref.generate_transfer_ref();
+        transfer_ref.disable_ungated_transfer();
+        let object_signer = constructor_ref.generate_signer();
 
         move_to(
             &object_signer,
@@ -190,8 +192,8 @@ module omni_bridge::omni_bridge {
                 completed_transfers: table::new<u64, u128>(),
                 native_token_metadata,
                 near_to_aptos_token: table::new<vector<u8>, address>(),
-                extend_ref,
-            },
+                extend_ref
+            }
         );
     }
 
@@ -204,41 +206,52 @@ module omni_bridge::omni_bridge {
 
     // -------- Admin --------
 
-    public entry fun set_admin(admin: &signer, new_admin: address) acquires BridgeState {
-        let state = borrow_global_mut<BridgeState>(bridge_object_address());
+    public entry fun set_admin(admin: &signer, new_admin: address) {
+        let state = &mut BridgeState[bridge_object_address()];
         assert_admin(state, admin);
         state.admin = new_admin;
     }
 
-    public entry fun set_pauser(admin: &signer, new_pauser: address) acquires BridgeState {
-        let state = borrow_global_mut<BridgeState>(bridge_object_address());
+    public entry fun set_pauser(admin: &signer, new_pauser: address) {
+        let state = &mut BridgeState[bridge_object_address()];
         assert_admin(state, admin);
         state.pauser = new_pauser;
     }
 
     public entry fun set_near_bridge_derived_address(
-        admin: &signer,
-        new_address: vector<u8>,
-    ) acquires BridgeState {
-        let state = borrow_global_mut<BridgeState>(bridge_object_address());
+        admin: &signer, new_address: vector<u8>
+    ) {
+        let state = &mut BridgeState[bridge_object_address()];
         assert_admin(state, admin);
         state.near_bridge_derived_address = new_address;
     }
 
-    public entry fun set_pause_flags(admin: &signer, flags: u8) acquires BridgeState {
-        let state = borrow_global_mut<BridgeState>(bridge_object_address());
+    public entry fun set_pause_flags(admin: &signer, flags: u8) {
+        let state = &mut BridgeState[bridge_object_address()];
         assert_admin(state, admin);
         let old = state.pause_flags;
         state.pause_flags = flags;
-        event::emit(PauseStateChanged { old_flags: old, new_flags: flags, admin: signer::address_of(admin) });
+        event::emit(
+            PauseStateChanged {
+                old_flags: old,
+                new_flags: flags,
+                admin: admin.address_of()
+            }
+        );
     }
 
-    public entry fun pause_all(pauser: &signer) acquires BridgeState {
-        let state = borrow_global_mut<BridgeState>(bridge_object_address());
-        assert!(signer::address_of(pauser) == state.pauser, E_NOT_PAUSER);
+    public entry fun pause_all(pauser: &signer) {
+        let state = &mut BridgeState[bridge_object_address()];
+        assert!(pauser.address_of() == state.pauser, E_NOT_PAUSER);
         let old = state.pause_flags;
         state.pause_flags = PAUSE_ALL;
-        event::emit(PauseStateChanged { old_flags: old, new_flags: PAUSE_ALL, admin: signer::address_of(pauser) });
+        event::emit(
+            PauseStateChanged {
+                old_flags: old,
+                new_flags: PAUSE_ALL,
+                admin: pauser.address_of()
+            }
+        );
     }
 
     // -------- Token discovery --------
@@ -250,12 +263,9 @@ module omni_bridge::omni_bridge {
         let name = fungible_asset::name(token);
         let symbol = fungible_asset::symbol(token);
         let decimals = fungible_asset::decimals(token);
-        event::emit(LogMetadata {
-            token_address: object::object_address(&token),
-            name,
-            symbol,
-            decimals,
-        });
+        event::emit(
+            LogMetadata { token_address: token.object_address(), name, symbol, decimals }
+        );
     }
 
     // -------- Bridge operations --------
@@ -269,10 +279,13 @@ module omni_bridge::omni_bridge {
         token: String,
         name: String,
         symbol: String,
-        decimals: u8,
-    ) acquires BridgeState {
-        let state = borrow_global_mut<BridgeState>(bridge_object_address());
-        assert!((state.pause_flags & PAUSE_DEPLOY_TOKEN) == 0, E_DEPLOY_TOKEN_PAUSED);
+        decimals: u8
+    ) {
+        let state = &mut BridgeState[bridge_object_address()];
+        assert!(
+            (state.pause_flags & PAUSE_DEPLOY_TOKEN) == 0,
+            E_DEPLOY_TOKEN_PAUSED
+        );
 
         let payload = bridge_types::new_metadata_payload(token, name, symbol, decimals);
         let encoded = payload.metadata_to_borsh();
@@ -280,33 +293,39 @@ module omni_bridge::omni_bridge {
         verify_signature(state, encoded, sig);
 
         let token_id_hash = aptos_hash::keccak256(*payload.metadata_token().bytes());
-        assert!(!state.near_to_aptos_token.contains(token_id_hash), E_TOKEN_ALREADY_DEPLOYED);
+        assert!(
+            !state.near_to_aptos_token.contains(token_id_hash),
+            E_TOKEN_ALREADY_DEPLOYED
+        );
 
         let normalized_decimals = utils::normalize_decimals(payload.metadata_decimals());
 
-        let resource_signer = object::generate_signer_for_extending(&state.extend_ref);
-        let metadata = bridge_token::create(
-            &resource_signer,
-            token_id_hash,
-            payload.metadata_name(),
-            payload.metadata_symbol(),
-            normalized_decimals,
-        );
+        let resource_signer = state.extend_ref.generate_signer_for_extending();
+        let metadata =
+            bridge_token::create(
+                &resource_signer,
+                token_id_hash,
+                payload.metadata_name(),
+                payload.metadata_symbol(),
+                normalized_decimals
+            );
 
-        let token_addr = object::object_address(&metadata);
+        let token_addr = metadata.object_address();
         state.near_to_aptos_token.add(token_id_hash, token_addr);
         // No reverse-direction table: bridge-token status is determined by
         // the presence of `BridgeTokenRefs` on the FA object itself (see
         // `bridge_token::is_bridge_token`). One source of truth.
 
-        event::emit(DeployToken {
-            token_address: token_addr,
-            near_token_id: payload.metadata_token(),
-            name: payload.metadata_name(),
-            symbol: payload.metadata_symbol(),
-            decimals: normalized_decimals,
-            origin_decimals: payload.metadata_decimals(),
-        });
+        event::emit(
+            DeployToken {
+                token_address: token_addr,
+                near_token_id: payload.metadata_token(),
+                name: payload.metadata_name(),
+                symbol: payload.metadata_symbol(),
+                decimals: normalized_decimals,
+                origin_decimals: payload.metadata_decimals()
+            }
+        );
     }
 
     /// Finalize an inbound transfer from another chain. Permissionless —
@@ -322,24 +341,31 @@ module omni_bridge::omni_bridge {
         amount: u128,
         recipient: address,
         fee_recipient: Option<String>,
-        message: Option<vector<u8>>,
-    ) acquires BridgeState {
-        let state = borrow_global_mut<BridgeState>(bridge_object_address());
-        assert!((state.pause_flags & PAUSE_FIN_TRANSFER) == 0, E_FIN_TRANSFER_PAUSED);
+        message: Option<vector<u8>>
+    ) {
+        let state = &mut BridgeState[bridge_object_address()];
+        assert!(
+            (state.pause_flags & PAUSE_FIN_TRANSFER) == 0,
+            E_FIN_TRANSFER_PAUSED
+        );
 
-        assert!(!is_nonce_used(&state.completed_transfers, destination_nonce), E_NONCE_ALREADY_USED);
+        assert!(
+            !is_nonce_used(&state.completed_transfers, destination_nonce),
+            E_NONCE_ALREADY_USED
+        );
         mark_nonce_used(&mut state.completed_transfers, destination_nonce);
 
-        let payload = bridge_types::new_transfer_message_payload(
-            destination_nonce,
-            origin_chain,
-            origin_nonce,
-            token_address,
-            amount,
-            recipient,
-            fee_recipient,
-            message,
-        );
+        let payload =
+            bridge_types::new_transfer_message_payload(
+                destination_nonce,
+                origin_chain,
+                origin_nonce,
+                token_address,
+                amount,
+                recipient,
+                fee_recipient,
+                message
+            );
         let encoded = payload.transfer_message_to_borsh(state.chain_id);
         let sig = bridge_types::new_signature(signature_rs, signature_v);
         verify_signature(state, encoded, sig);
@@ -353,19 +379,26 @@ module omni_bridge::omni_bridge {
             bridge_token::mint(metadata, recipient, amount_u64);
         } else {
             // Locked-token path: bridge resource account custodies the supply.
-            let resource_signer = object::generate_signer_for_extending(&state.extend_ref);
-            primary_fungible_store::transfer(&resource_signer, metadata, recipient, amount_u64);
+            let resource_signer = state.extend_ref.generate_signer_for_extending();
+            primary_fungible_store::transfer(
+                &resource_signer,
+                metadata,
+                recipient,
+                amount_u64
+            );
         };
 
-        event::emit(FinTransfer {
-            origin_chain,
-            origin_nonce,
-            token_address,
-            amount,
-            recipient,
-            fee_recipient: payload.transfer_fee_recipient(),
-            message: payload.transfer_message(),
-        });
+        event::emit(
+            FinTransfer {
+                origin_chain,
+                origin_nonce,
+                token_address,
+                amount,
+                recipient,
+                fee_recipient: payload.transfer_fee_recipient(),
+                message: payload.transfer_message()
+            }
+        );
     }
 
     /// Start an outbound transfer from Aptos to another chain.
@@ -379,21 +412,24 @@ module omni_bridge::omni_bridge {
         fee: u128,
         native_fee: u128,
         recipient: String,
-        message: vector<u8>,
-    ) acquires BridgeState {
-        let state = borrow_global_mut<BridgeState>(bridge_object_address());
-        assert!((state.pause_flags & PAUSE_INIT_TRANSFER) == 0, E_INIT_TRANSFER_PAUSED);
+        message: vector<u8>
+    ) {
+        let state = &mut BridgeState[bridge_object_address()];
+        assert!(
+            (state.pause_flags & PAUSE_INIT_TRANSFER) == 0,
+            E_INIT_TRANSFER_PAUSED
+        );
         assert!(amount > 0, E_ZERO_AMOUNT);
         assert!(fee < amount, E_INVALID_FEE);
 
         // Match the EVM/Starknet semantics: increment first, then use.
-        state.current_origin_nonce = state.current_origin_nonce + 1;
+        state.current_origin_nonce += 1;
         let origin_nonce = state.current_origin_nonce;
 
         assert!(amount <= MAX_U64_AS_U128, E_AMOUNT_OVERFLOW);
         let amount_u64 = (amount as u64);
 
-        let sender_addr = signer::address_of(sender);
+        let sender_addr = sender.address_of();
         let metadata = object::address_to_object<Metadata>(token_address);
 
         if (bridge_token::is_bridge_token(metadata)) {
@@ -410,33 +446,35 @@ module omni_bridge::omni_bridge {
                 sender,
                 state.native_token_metadata,
                 resource_addr,
-                (native_fee as u64),
+                (native_fee as u64)
             );
         };
 
-        event::emit(InitTransfer {
-            sender: sender_addr,
-            token_address,
-            origin_nonce,
-            amount,
-            fee,
-            native_fee,
-            recipient,
-            message,
-        });
+        event::emit(
+            InitTransfer {
+                sender: sender_addr,
+                token_address,
+                origin_nonce,
+                amount,
+                fee,
+                native_fee,
+                recipient,
+                message
+            }
+        );
     }
 
     // -------- Views --------
 
     #[view]
-    public fun is_transfer_finalised(nonce: u64): bool acquires BridgeState {
-        let state = borrow_global<BridgeState>(bridge_object_address());
+    public fun is_transfer_finalised(nonce: u64): bool {
+        let state = &BridgeState[bridge_object_address()];
         is_nonce_used(&state.completed_transfers, nonce)
     }
 
     #[view]
-    public fun get_token_address(near_token_id: String): Option<address> acquires BridgeState {
-        let state = borrow_global<BridgeState>(bridge_object_address());
+    public fun get_token_address(near_token_id: String): Option<address> {
+        let state = &BridgeState[bridge_object_address()];
         let token_id_hash = aptos_hash::keccak256(*near_token_id.bytes());
         if (state.near_to_aptos_token.contains(token_id_hash)) {
             option::some(*state.near_to_aptos_token.borrow(token_id_hash))
@@ -453,32 +491,34 @@ module omni_bridge::omni_bridge {
     }
 
     #[view]
-    public fun current_origin_nonce(): u64 acquires BridgeState {
-        borrow_global<BridgeState>(bridge_object_address()).current_origin_nonce
+    public fun current_origin_nonce(): u64 {
+        BridgeState[bridge_object_address()].current_origin_nonce
     }
 
     #[view]
-    public fun pause_flags(): u8 acquires BridgeState {
-        borrow_global<BridgeState>(bridge_object_address()).pause_flags
+    public fun pause_flags(): u8 {
+        BridgeState[bridge_object_address()].pause_flags
     }
 
     #[view]
-    public fun chain_id(): u8 acquires BridgeState {
-        borrow_global<BridgeState>(bridge_object_address()).chain_id
+    public fun chain_id(): u8 {
+        BridgeState[bridge_object_address()].chain_id
     }
 
     // -------- Internal --------
 
     fun assert_admin(state: &BridgeState, who: &signer) {
-        assert!(signer::address_of(who) == state.admin, E_NOT_ADMIN);
+        assert!(who.address_of() == state.admin, E_NOT_ADMIN);
     }
 
-    fun verify_signature(state: &BridgeState, message: vector<u8>, sig: Signature) {
+    fun verify_signature(
+        state: &BridgeState, message: vector<u8>, sig: Signature
+    ) {
         utils::verify_eth_signature(
             message,
             sig.signature_rs(),
             sig.signature_v(),
-            state.near_bridge_derived_address,
+            state.near_bridge_derived_address
         );
     }
 
@@ -502,7 +542,7 @@ module omni_bridge::omni_bridge {
         let (slot, bit) = nonce_slot_and_bit(nonce);
         if (bitmap.contains(slot)) {
             let word = bitmap.borrow_mut(slot);
-            *word = *word | bit;
+            *word |= bit;
         } else {
             bitmap.add(slot, bit);
         };
@@ -515,14 +555,19 @@ module omni_bridge::omni_bridge {
         deployer: &signer,
         near_bridge_derived_address: vector<u8>,
         chain_id: u8,
-        native_token_metadata: Object<Metadata>,
+        native_token_metadata: Object<Metadata>
     ) {
-        initialize(deployer, near_bridge_derived_address, chain_id, native_token_metadata);
+        initialize(
+            deployer,
+            near_bridge_derived_address,
+            chain_id,
+            native_token_metadata
+        );
     }
 
     #[test_only]
-    public fun test_mark_nonce_used(nonce: u64) acquires BridgeState {
-        let state = borrow_global_mut<BridgeState>(bridge_object_address());
+    public fun test_mark_nonce_used(nonce: u64) {
+        let state = &mut BridgeState[bridge_object_address()];
         mark_nonce_used(&mut state.completed_transfers, nonce);
     }
 

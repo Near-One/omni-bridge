@@ -1,7 +1,6 @@
 #[test_only]
 module omni_bridge::omni_bridge_tests {
     use std::option;
-    use std::signer;
     use std::string;
     use aptos_framework::account;
     use aptos_framework::fungible_asset::{Self, Metadata};
@@ -24,17 +23,19 @@ module omni_bridge::omni_bridge_tests {
             string::utf8(b"TT"),
             decimals,
             string::utf8(b""),
-            string::utf8(b""),
+            string::utf8(b"")
         );
         object::object_from_constructor_ref<Metadata>(&constructor_ref)
     }
 
     fun setup(deployer: &signer): Object<Metadata> {
-        account::create_account_for_test(signer::address_of(deployer));
+        account::create_account_for_test(deployer.address_of());
         let native_metadata = create_test_fa(deployer, b"NATIVE", 8);
         // 20-byte placeholder near_bridge_derived_address.
         let derived = vector[];
-        for (i in 0..20) { derived.push_back((i as u8)); };
+        for (i in 0..20) {
+            derived.push_back((i as u8));
+        };
         omni_bridge::test_initialize(deployer, derived, 13u8, native_metadata);
         native_metadata
     }
@@ -54,16 +55,20 @@ module omni_bridge::omni_bridge_tests {
     fun cannot_initialize_twice(deployer: signer) {
         let _ = setup(&deployer);
         let derived = vector[];
-        for (_i in 0..20) { derived.push_back(0u8); };
+        for (_i in 0..20) {
+            derived.push_back(0u8);
+        };
         let other = create_test_fa(&deployer, b"ANOTHER", 8);
         omni_bridge::test_initialize(&deployer, derived, 13u8, other);
     }
 
     #[test(deployer = @omni_bridge, attacker = @0xBEEF)]
     #[expected_failure(abort_code = 2, location = omni_bridge::omni_bridge)]
-    fun set_pause_flags_requires_admin(deployer: signer, attacker: signer) {
+    fun set_pause_flags_requires_admin(
+        deployer: signer, attacker: signer
+    ) {
         let _ = setup(&deployer);
-        account::create_account_for_test(signer::address_of(&attacker));
+        account::create_account_for_test(attacker.address_of());
         omni_bridge::set_pause_flags(&attacker, 0x01);
     }
 
@@ -143,9 +148,13 @@ module omni_bridge::omni_bridge_tests {
     #[expected_failure(abort_code = 3, location = omni_bridge::utils)]
     fun verify_eth_signature_rejects_invalid_sig() {
         let sig_rs = vector[];
-        for (_i in 0..64) { sig_rs.push_back(0xAAu8); };
+        for (_i in 0..64) {
+            sig_rs.push_back(0xAAu8);
+        };
         let expected = vector[];
-        for (_i in 0..20) { expected.push_back(0xBBu8); };
+        for (_i in 0..20) {
+            expected.push_back(0xBBu8);
+        };
         utils::test_verify_eth_signature(b"hello world", sig_rs, 27, expected);
     }
 
@@ -155,9 +164,13 @@ module omni_bridge::omni_bridge_tests {
     #[expected_failure(abort_code = 1, location = omni_bridge::utils)]
     fun verify_eth_signature_rejects_wrong_length() {
         let sig_rs = vector[];
-        for (_i in 0..32) { sig_rs.push_back(0u8); }; // only 32 bytes
+        for (_i in 0..32) {
+            sig_rs.push_back(0u8);
+        }; // only 32 bytes
         let expected = vector[];
-        for (_i in 0..20) { expected.push_back(0u8); };
+        for (_i in 0..20) {
+            expected.push_back(0u8);
+        };
         utils::test_verify_eth_signature(b"x", sig_rs, 27, expected);
     }
 
@@ -166,13 +179,14 @@ module omni_bridge::omni_bridge_tests {
         let _ = setup(&deployer);
         // Bridge token creation uses the resource account in production;
         // here we exercise the underlying module directly.
-        let metadata = bridge_token::test_create(
-            &deployer,
-            b"my_token",
-            string::utf8(b"My Token"),
-            string::utf8(b"MTK"),
-            8,
-        );
+        let metadata =
+            bridge_token::test_create(
+                &deployer,
+                b"my_token",
+                string::utf8(b"My Token"),
+                string::utf8(b"MTK"),
+                8
+            );
         assert!(bridge_token::is_bridge_token(metadata), 260);
 
         let recipient = @0xAAAA;
@@ -190,12 +204,13 @@ module omni_bridge::omni_bridge_tests {
     #[test]
     fun metadata_borsh_layout() {
         // type byte (1) + token (4+5) + name (4+8) + symbol (4+3) + decimals (1)
-        let payload = bridge_types::new_metadata_payload(
-            string::utf8(b"hello"),
-            string::utf8(b"My Token"),
-            string::utf8(b"MTK"),
-            18,
-        );
+        let payload =
+            bridge_types::new_metadata_payload(
+                string::utf8(b"hello"),
+                string::utf8(b"My Token"),
+                string::utf8(b"MTK"),
+                18
+            );
         let bytes = payload.metadata_to_borsh();
         // Total length sanity.
         let expected_len = 1 + 4 + 5 + 4 + 8 + 4 + 3 + 1;
@@ -212,18 +227,21 @@ module omni_bridge::omni_bridge_tests {
     fun transfer_message_borsh_includes_chain_id_twice() {
         // Two chain_id tags are interleaved between fields per OmniAddress
         // encoding — once before token_address, once before recipient.
-        let token_addr: address = @0x0000000000000000000000000000000000000000000000000000000000000001;
-        let recipient: address = @0x0000000000000000000000000000000000000000000000000000000000000002;
-        let payload = bridge_types::new_transfer_message_payload(
-            7u64,
-            5u8,
-            42u64,
-            token_addr,
-            1000u128,
-            recipient,
-            option::none<string::String>(),
-            option::none<vector<u8>>(),
-        );
+        let token_addr: address =
+            @0x0000000000000000000000000000000000000000000000000000000000000001;
+        let recipient: address =
+            @0x0000000000000000000000000000000000000000000000000000000000000002;
+        let payload =
+            bridge_types::new_transfer_message_payload(
+                7u64,
+                5u8,
+                42u64,
+                token_addr,
+                1000u128,
+                recipient,
+                option::none<string::String>(),
+                option::none<vector<u8>>()
+            );
         let bytes = payload.transfer_message_to_borsh(13u8);
         // Expect 1 type + 8 dest nonce + 1 origin chain + 8 origin nonce +
         //        1 chain + 32 token + 16 amount + 1 chain + 32 recipient + 1 option(None)
@@ -246,12 +264,17 @@ module omni_bridge::omni_bridge_tests {
         let recipient: address = @0x02;
         let fr = string::utf8(b"near:alice.near");
         let msg = b"hello";
-        let payload = bridge_types::new_transfer_message_payload(
-            1u64, 0u8, 1u64,
-            token_addr, 100u128, recipient,
-            option::some(fr),
-            option::some(msg),
-        );
+        let payload =
+            bridge_types::new_transfer_message_payload(
+                1u64,
+                0u8,
+                1u64,
+                token_addr,
+                100u128,
+                recipient,
+                option::some(fr),
+                option::some(msg)
+            );
         let bytes = payload.transfer_message_to_borsh(13u8);
         // The message field, per Starknet/EVM semantics, is not wrapped with
         // an Option tag — Some(bytes) contributes only the length-prefixed bytes.

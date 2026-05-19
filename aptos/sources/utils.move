@@ -35,14 +35,15 @@ module omni_bridge::utils {
         message_bytes: vector<u8>,
         signature_rs: vector<u8>,
         v: u8,
-        expected_address: vector<u8>,
+        expected_address: vector<u8>
     ) {
         assert!(signature_rs.length() == 64, E_INVALID_SIGNATURE_LENGTH);
         assert!(expected_address.length() == 20, E_INVALID_SIGNATURE);
 
         let message_hash = aptos_hash::keccak256(message_bytes);
 
-        let recovery_id = if (v >= 27) { v - 27 } else { v };
+        let recovery_id = if (v >= 27) { v - 27 }
+        else { v };
 
         let sig = secp256k1::ecdsa_signature_from_bytes(signature_rs);
         let recovered = secp256k1::ecdsa_recover(message_hash, recovery_id, &sig);
@@ -68,15 +69,22 @@ module omni_bridge::utils {
     }
 
     #[test_only]
-    public fun test_normalize_decimals(d: u8): u8 { normalize_decimals(d) }
+    public fun test_normalize_decimals(d: u8): u8 {
+        normalize_decimals(d)
+    }
 
     #[test_only]
     public fun test_verify_eth_signature(
         message_bytes: vector<u8>,
         signature_rs: vector<u8>,
         v: u8,
-        expected_address: vector<u8>,
+        expected_address: vector<u8>
     ) {
-        verify_eth_signature(message_bytes, signature_rs, v, expected_address);
+        verify_eth_signature(
+            message_bytes,
+            signature_rs,
+            v,
+            expected_address
+        );
     }
 }

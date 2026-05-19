@@ -59,7 +59,7 @@ module omni_bridge::borsh_tests {
         let i: u32 = 0;
         while (i < target_len) {
             v.push_back(((i & 0xff) as u8));
-            i = i + 1;
+            i += 1;
         };
         let bytes = borsh::encode_byte_vec(&v);
         // Length 0x00001234 little-endian = 34 12 00 00
