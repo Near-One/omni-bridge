@@ -275,12 +275,11 @@ module omni_bridge::omni_bridge {
         assert!((state.pause_flags & PAUSE_DEPLOY_TOKEN) == 0, E_DEPLOY_TOKEN_PAUSED);
 
         let payload = bridge_types::new_metadata_payload(token, name, symbol, decimals);
-        let encoded = bridge_types::metadata_to_borsh(&payload);
+        let encoded = payload.metadata_to_borsh();
         let sig = bridge_types::new_signature(signature_rs, signature_v);
         verify_signature(state, encoded, sig);
 
-        let token_id = payload.metadata_token();
-        let token_id_hash = aptos_hash::keccak256(*token_id.bytes());
+        let token_id_hash = aptos_hash::keccak256(*payload.metadata_token().bytes());
         assert!(!state.near_to_aptos_token.contains(token_id_hash), E_TOKEN_ALREADY_DEPLOYED);
 
         let normalized_decimals = utils::normalize_decimals(payload.metadata_decimals());
@@ -299,7 +298,6 @@ module omni_bridge::omni_bridge {
         // No reverse-direction table: bridge-token status is determined by
         // the presence of `BridgeTokenRefs` on the FA object itself (see
         // `bridge_token::is_bridge_token`). One source of truth.
-        let _ = token_id;
 
         event::emit(DeployToken {
             token_address: token_addr,
