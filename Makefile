@@ -16,6 +16,15 @@ MPC_OMNI_PROVER_MANIFEST := $(MAKEFILE_DIR)/near/omni-prover/mpc-omni-prover/Car
 MOCK_PROVER_MANIFEST := $(MAKEFILE_DIR)/near/mock/mock-prover/Cargo.toml
 MOCK_TOKEN_MANIFEST := $(MAKEFILE_DIR)/near/mock/mock-token/Cargo.toml
 
+# CHAIN_ID byte embedded in outgoing Wormhole payloads. Must match ChainKind on the NEAR side:
+# 2 = Sol, 12 = Fogo. See solana/programs/bridge_token_factory/build.rs.
+SOL_CHAIN_ID  := 2
+FOGO_CHAIN_ID := 12
+
+# Provided by the operator/CI for FOGO builds and deploys.
+FOGO_PROGRAM_ID ?=
+FOGO_RPC_URL ?=
+
 clippy: clippy-near
 
 clippy-near:
@@ -58,12 +67,33 @@ solana-build: ENV = mainnet
 solana-build-dev solana-build:
 	cd solana && \
 	PROGRAM_ID=$$(solana address -k target/deploy/bridge_token_factory-keypair.json) && \
-	RUSTUP_TOOLCHAIN="nightly-2026-01-08" anchor build --verifiable --program-name bridge_token_factory --env "PROGRAM_ID=$$PROGRAM_ID" -- --no-default-features --features $(ENV)
+	RUSTUP_TOOLCHAIN="nightly-2026-01-08" anchor build --verifiable --program-name bridge_token_factory --env "PROGRAM_ID=$$PROGRAM_ID" --env "CHAIN_ID=$(SOL_CHAIN_ID)" -- --no-default-features --features $(ENV)
+
+# FOGO is an SVM chain that runs the same Solana program but encodes a different
+# ChainKind byte in payloads. Uses the wormhole-anchor-sdk `mainnet` feature on the
+# assumption that the Wormhole core bridge and Post Message Shim are at the same
+# addresses on FOGO as on Solana mainnet. If FOGO uses a different Wormhole core
+# address, a `fogo` feature must be added in Near-One/wormhole-scaffolding.
+solana-build-fogo-dev: ENV = devnet
+solana-build-fogo:     ENV = mainnet
+solana-build-fogo-dev solana-build-fogo:
+	@test -n "$(FOGO_PROGRAM_ID)" || { echo "FOGO_PROGRAM_ID is required (e.g., make solana-build-fogo FOGO_PROGRAM_ID=<addr>)" >&2; exit 1; }
+	cd solana && \
+	RUSTUP_TOOLCHAIN="nightly-2026-01-08" anchor build --verifiable --program-name bridge_token_factory --env "PROGRAM_ID=$(FOGO_PROGRAM_ID)" --env "CHAIN_ID=$(FOGO_CHAIN_ID)" -- --no-default-features --features $(ENV) && \
+	mv target/verifiable/bridge_token_factory.so target/verifiable/bridge_token_factory_fogo.so && \
+	mv target/idl/bridge_token_factory.json target/idl/bridge_token_factory_fogo.json
 
 solana-build-ci:
 	cd solana && \
 	export PROGRAM_ID=dahPEoZGXfyV58JqqH85okdHmpN8U2q8owgPUXSCPxe && \
-	RUSTUP_TOOLCHAIN="nightly-2026-01-08" anchor build --verifiable --program-name bridge_token_factory --env "PROGRAM_ID=$$PROGRAM_ID" -- --no-default-features --features mainnet
+	RUSTUP_TOOLCHAIN="nightly-2026-01-08" anchor build --verifiable --program-name bridge_token_factory --env "PROGRAM_ID=$$PROGRAM_ID" --env "CHAIN_ID=$(SOL_CHAIN_ID)" -- --no-default-features --features mainnet
+
+solana-build-ci-fogo:
+	@test -n "$(FOGO_PROGRAM_ID)" || { echo "FOGO_PROGRAM_ID is required (set as a CI variable)" >&2; exit 1; }
+	cd solana && \
+	RUSTUP_TOOLCHAIN="nightly-2026-01-08" anchor build --verifiable --program-name bridge_token_factory --env "PROGRAM_ID=$(FOGO_PROGRAM_ID)" --env "CHAIN_ID=$(FOGO_CHAIN_ID)" -- --no-default-features --features mainnet && \
+	mv target/verifiable/bridge_token_factory.so target/verifiable/bridge_token_factory_fogo.so && \
+	mv target/idl/bridge_token_factory.json target/idl/bridge_token_factory_fogo.json
 
 solana-deploy-dev: ENV = devnet
 solana-deploy: ENV = mainnet
@@ -71,6 +101,14 @@ solana-deploy-dev solana-deploy:
 	cd solana && \
 	RUSTUP_TOOLCHAIN="nightly-2026-01-08" \
 	anchor deploy --verifiable --program-name bridge_token_factory --provider.cluster $(ENV)
+
+# Anchor's --provider.cluster shortcut names (mainnet/devnet/testnet/localnet) do not
+# resolve to FOGO; we pass an explicit RPC URL instead.
+solana-deploy-fogo:
+	@test -n "$(FOGO_RPC_URL)" || { echo "FOGO_RPC_URL is required (e.g., make solana-deploy-fogo FOGO_RPC_URL=https://...)" >&2; exit 1; }
+	cd solana && \
+	RUSTUP_TOOLCHAIN="nightly-2026-01-08" \
+	anchor deploy --verifiable --program-name bridge_token_factory --provider.cluster $(FOGO_RPC_URL)
 
 rust-run-tests:
 	cargo nextest run --manifest-path $(NEAR_MANIFEST) --all-features
