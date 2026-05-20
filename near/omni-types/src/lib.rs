@@ -112,6 +112,23 @@ impl ChainKind {
             | Self::Fogo => false,
         }
     }
+
+    pub const fn is_svm_chain(&self) -> bool {
+        match self {
+            Self::Sol | Self::Fogo => true,
+            Self::Eth
+            | Self::Arb
+            | Self::Base
+            | Self::Bnb
+            | Self::Pol
+            | Self::Near
+            | Self::HyperEvm
+            | Self::Strk
+            | Self::Abs
+            | Self::Btc
+            | Self::Zcash => false,
+        }
+    }
 }
 
 impl FromStr for ChainKind {
