@@ -24,6 +24,10 @@ FOGO_CHAIN_ID := 12
 # Provided by the operator/CI for FOGO builds and deploys.
 FOGO_PROGRAM_ID ?=
 FOGO_RPC_URL ?=
+# Path (relative to solana/) of the keypair whose address is the SVM program ID
+# (used for Solana and FOGO builds/deploys). For FOGO it must resolve to the same
+# address that was baked into the .so via FOGO_PROGRAM_ID at build time.
+SVM_PROGRAM_KEYPAIR ?= target/deploy/bridge_token_factory-keypair.json
 
 clippy: clippy-near
 
@@ -60,13 +64,13 @@ rust-build-mock-token:
 rust-build-near: rust-build-omni-bridge rust-build-omni-token rust-build-token-deployer rust-build-evm-prover rust-build-wormhole-omni-prover-proxy rust-build-mpc-omni-prover rust-build-mock-prover rust-build-mock-token
 
 solana-generate-program-id:
-	solana-keygen new -o solana/target/deploy/bridge_token_factory-keypair.json --no-passphrase
+	cd solana && solana-keygen new -o $(SVM_PROGRAM_KEYPAIR) --no-passphrase
 
 solana-build-dev: ENV = devnet
 solana-build: ENV = mainnet
 solana-build-dev solana-build:
 	cd solana && \
-	PROGRAM_ID=$$(solana address -k target/deploy/bridge_token_factory-keypair.json) && \
+	PROGRAM_ID=$$(solana address -k $(SVM_PROGRAM_KEYPAIR)) && \
 	RUSTUP_TOOLCHAIN="nightly-2026-01-08" anchor build --verifiable --program-name bridge_token_factory --env "PROGRAM_ID=$$PROGRAM_ID" --env "CHAIN_ID=$(SOL_CHAIN_ID)" -- --no-default-features --features $(ENV)
 
 # FOGO is an SVM chain that runs the same Solana program but encodes a different
@@ -104,11 +108,19 @@ solana-deploy-dev solana-deploy:
 
 # Anchor's --provider.cluster shortcut names (mainnet/devnet/testnet/localnet) do not
 # resolve to FOGO; we pass an explicit RPC URL instead.
+# `anchor deploy --verifiable` reads target/verifiable/bridge_token_factory.so, so we
+# restore the canonical name from the `_fogo` artifact produced by solana-build-fogo*.
 solana-deploy-fogo:
 	@test -n "$(FOGO_RPC_URL)" || { echo "FOGO_RPC_URL is required (e.g., make solana-deploy-fogo FOGO_RPC_URL=https://...)" >&2; exit 1; }
+	@test -f solana/target/verifiable/bridge_token_factory_fogo.so || { echo "solana/target/verifiable/bridge_token_factory_fogo.so not found — run \`make solana-build-fogo-dev\` first" >&2; exit 1; }
 	cd solana && \
+	cp target/verifiable/bridge_token_factory_fogo.so target/verifiable/bridge_token_factory.so && \
+	cp target/idl/bridge_token_factory_fogo.json target/idl/bridge_token_factory.json && \
 	RUSTUP_TOOLCHAIN="nightly-2026-01-08" \
-	anchor deploy --verifiable --program-name bridge_token_factory --provider.cluster $(FOGO_RPC_URL)
+	anchor deploy --verifiable \
+		--program-name bridge_token_factory \
+		--program-keypair $(SVM_PROGRAM_KEYPAIR) \
+		--provider.cluster $(FOGO_RPC_URL)
 
 rust-run-tests:
 	cargo nextest run --manifest-path $(NEAR_MANIFEST) --all-features
