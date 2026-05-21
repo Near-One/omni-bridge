@@ -33,7 +33,7 @@ FOGO_POST_MESSAGE_SHIM_PROGRAM_ID ?= EtZMZM22ViKMo4r5y4Anovs3wKQ2owUmDpjygnMMcdE
 FOGO_VERIFY_VAA_SHIM_PROGRAM_ID   ?= EFaNWErqAtVWufdNb7yofSHHfWFos843DFpu4JBw24at
 
 # Provided by the operator/CI for FOGO builds and deploys.
-FOGO_PROGRAM_ID ?=
+FOGO_PROGRAM_ID ?= dahPEoZGXfyV58JqqH85okdHmpN8U2q8owgPUXSCPxe
 FOGO_RPC_URL ?=
 # Path (relative to solana/) of the keypair whose address is the SVM program ID
 # (used for Solana and FOGO builds/deploys). For FOGO it must resolve to the same

@@ -43,18 +43,7 @@ jobs:
       # FOGO is built first: solana-build-ci-fogo renames its outputs to `_fogo`,
       # leaving the canonical `bridge_token_factory.{so,json}` paths free for the
       # subsequent Solana build to occupy.
-      #
-      # Wormhole-side FOGO addresses come from repo GitHub Actions variables when
-      # set; otherwise the Makefile defaults (FOGO mainnet) are used. To target
-      # FOGO testnet from CI, set FOGO_BRIDGE_ADDRESS=BhnQyKoQQgpuRTRo6D8Emz93PvXCYfVgHhnrR4T3qhw4
-      # and the matching shim/CHAIN_ID variables.
       - name: Build FOGO contract
-        env:
-          FOGO_PROGRAM_ID: ${{ vars.FOGO_PROGRAM_ID }}
-          FOGO_WORMHOLE_CHAIN_ID: ${{ vars.FOGO_WORMHOLE_CHAIN_ID }}
-          FOGO_BRIDGE_ADDRESS: ${{ vars.FOGO_BRIDGE_ADDRESS }}
-          FOGO_POST_MESSAGE_SHIM_PROGRAM_ID: ${{ vars.FOGO_POST_MESSAGE_SHIM_PROGRAM_ID }}
-          FOGO_VERIFY_VAA_SHIM_PROGRAM_ID: ${{ vars.FOGO_VERIFY_VAA_SHIM_PROGRAM_ID }}
         run: |
           make solana-build-ci-fogo
         timeout-minutes: 60
