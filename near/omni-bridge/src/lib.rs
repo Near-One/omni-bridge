@@ -1438,6 +1438,7 @@ impl Contract {
             s if s.starts_with("hlevm") => ChainKind::HyperEvm,
             s if s.starts_with("abs") => ChainKind::Abs,
             s if s.starts_with("sol") => ChainKind::Sol,
+            s if s.starts_with("fogo") => ChainKind::Fogo,
             s if s.starts_with("strk") || s.starts_with("starknet") => ChainKind::Strk,
             _ => env::panic_str(&BridgeError::CannotDetermineOriginChain.as_ref()),
         };
