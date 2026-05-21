@@ -30,6 +30,12 @@ idl-build = [
 ]
 devnet = ["wormhole-anchor-sdk/solana-devnet"]
 mainnet = ["wormhole-anchor-sdk/mainnet"]
+# `fogo` (and other non-Solana SVM chains) takes Wormhole program IDs and the
+# Wormhole CHAIN_ID from build-time environment variables instead of the
+# hardcoded Solana mainnet/devnet constants. Required env vars (read by
+# wormhole-svm-definitions/from-env): CHAIN_ID, BRIDGE_ADDRESS,
+# POST_MESSAGE_SHIM_PROGRAM_ID, VERIFY_VAA_SHIM_PROGRAM_ID.
+fogo = ["wormhole-anchor-sdk/from-env"]
 
 [dependencies]
 anchor-lang = { version = "0.32.1", features = ["init-if-needed"] }

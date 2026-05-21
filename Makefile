@@ -16,10 +16,21 @@ MPC_OMNI_PROVER_MANIFEST := $(MAKEFILE_DIR)/near/omni-prover/mpc-omni-prover/Car
 MOCK_PROVER_MANIFEST := $(MAKEFILE_DIR)/near/mock/mock-prover/Cargo.toml
 MOCK_TOKEN_MANIFEST := $(MAKEFILE_DIR)/near/mock/mock-token/Cargo.toml
 
-# CHAIN_ID byte embedded in outgoing Wormhole payloads. Must match ChainKind on the NEAR side:
-# 2 = Sol, 12 = Fogo. See solana/programs/bridge_token_factory/build.rs.
-SOL_CHAIN_ID  := 2
-FOGO_CHAIN_ID := 12
+# OMNI_CHAIN_ID is the omni-bridge ChainKind byte embedded in outgoing payloads.
+# Must match ChainKind on the NEAR side: 2 = Sol, 12 = Fogo.
+# See solana/programs/bridge_token_factory/build.rs.
+SOL_OMNI_CHAIN_ID  := 2
+FOGO_OMNI_CHAIN_ID := 12
+
+# Wormhole-side configuration for FOGO. Consumed by wormhole-svm-definitions/from-env
+# at compile time when building with --features fogo. Defaults target FOGO mainnet —
+# the core bridge program ID on FOGO is its OWN deployment (NOT the Solana mainnet
+# worm2... address). The Post Message / Verify VAA shims happen to share the same
+# program IDs across Solana mainnet and FOGO. Override per deployment as needed.
+FOGO_WORMHOLE_CHAIN_ID            ?= 51
+FOGO_BRIDGE_ADDRESS               ?= worm2mrQkG1B1KTz37erMfWN8anHkSK24nzca7UD8BB
+FOGO_POST_MESSAGE_SHIM_PROGRAM_ID ?= EtZMZM22ViKMo4r5y4Anovs3wKQ2owUmDpjygnMMcdEX
+FOGO_VERIFY_VAA_SHIM_PROGRAM_ID   ?= EFaNWErqAtVWufdNb7yofSHHfWFos843DFpu4JBw24at
 
 # Provided by the operator/CI for FOGO builds and deploys.
 FOGO_PROGRAM_ID ?=
@@ -28,6 +39,15 @@ FOGO_RPC_URL ?=
 # (used for Solana and FOGO builds/deploys). For FOGO it must resolve to the same
 # address that was baked into the .so via FOGO_PROGRAM_ID at build time.
 SVM_PROGRAM_KEYPAIR ?= target/deploy/bridge_token_factory-keypair.json
+
+# anchor build --env flags shared by both FOGO build targets.
+FOGO_ANCHOR_ENV = \
+	--env "PROGRAM_ID=$(FOGO_PROGRAM_ID)" \
+	--env "OMNI_CHAIN_ID=$(FOGO_OMNI_CHAIN_ID)" \
+	--env "CHAIN_ID=$(FOGO_WORMHOLE_CHAIN_ID)" \
+	--env "BRIDGE_ADDRESS=$(FOGO_BRIDGE_ADDRESS)" \
+	--env "POST_MESSAGE_SHIM_PROGRAM_ID=$(FOGO_POST_MESSAGE_SHIM_PROGRAM_ID)" \
+	--env "VERIFY_VAA_SHIM_PROGRAM_ID=$(FOGO_VERIFY_VAA_SHIM_PROGRAM_ID)"
 
 clippy: clippy-near
 
@@ -74,28 +94,27 @@ solana-build-dev solana-build:
 	RUSTUP_TOOLCHAIN="nightly-2026-01-08" anchor build --verifiable --program-name bridge_token_factory --env "PROGRAM_ID=$$PROGRAM_ID" --env "CHAIN_ID=$(SOL_CHAIN_ID)" -- --no-default-features --features $(ENV)
 
 # FOGO is an SVM chain that runs the same Solana program but encodes a different
-# ChainKind byte in payloads. Uses the wormhole-anchor-sdk `mainnet` feature on the
-# assumption that the Wormhole core bridge and Post Message Shim are at the same
-# addresses on FOGO as on Solana mainnet. If FOGO uses a different Wormhole core
-# address, a `fogo` feature must be added in Near-One/wormhole-scaffolding.
-solana-build-fogo-dev: ENV = devnet
-solana-build-fogo:     ENV = mainnet
-solana-build-fogo-dev solana-build-fogo:
+# omni-bridge ChainKind byte in payloads AND uses a different Wormhole chain ID.
+# We build with --features fogo, which forwards to wormhole-anchor-sdk/from-env
+# so the Wormhole core bridge address, both shim addresses, and the Wormhole
+# CHAIN_ID are read from build-time env vars (see FOGO_* variables above) rather
+# than the hardcoded Solana mainnet values.
+solana-build-fogo:
 	@test -n "$(FOGO_PROGRAM_ID)" || { echo "FOGO_PROGRAM_ID is required (e.g., make solana-build-fogo FOGO_PROGRAM_ID=<addr>)" >&2; exit 1; }
 	cd solana && \
-	RUSTUP_TOOLCHAIN="nightly-2026-01-08" anchor build --verifiable --program-name bridge_token_factory --env "PROGRAM_ID=$(FOGO_PROGRAM_ID)" --env "CHAIN_ID=$(FOGO_CHAIN_ID)" -- --no-default-features --features $(ENV) && \
+	RUSTUP_TOOLCHAIN="nightly-2026-01-08" anchor build --verifiable --program-name bridge_token_factory $(FOGO_ANCHOR_ENV) -- --no-default-features --features fogo && \
 	mv target/verifiable/bridge_token_factory.so target/verifiable/bridge_token_factory_fogo.so && \
 	mv target/idl/bridge_token_factory.json target/idl/bridge_token_factory_fogo.json
 
 solana-build-ci:
 	cd solana && \
 	export PROGRAM_ID=dahPEoZGXfyV58JqqH85okdHmpN8U2q8owgPUXSCPxe && \
-	RUSTUP_TOOLCHAIN="nightly-2026-01-08" anchor build --verifiable --program-name bridge_token_factory --env "PROGRAM_ID=$$PROGRAM_ID" --env "CHAIN_ID=$(SOL_CHAIN_ID)" -- --no-default-features --features mainnet
+	RUSTUP_TOOLCHAIN="nightly-2026-01-08" anchor build --verifiable --program-name bridge_token_factory --env "PROGRAM_ID=$$PROGRAM_ID" --env "OMNI_CHAIN_ID=$(SOL_OMNI_CHAIN_ID)" -- --no-default-features --features mainnet
 
 solana-build-ci-fogo:
 	@test -n "$(FOGO_PROGRAM_ID)" || { echo "FOGO_PROGRAM_ID is required (set as a CI variable)" >&2; exit 1; }
 	cd solana && \
-	RUSTUP_TOOLCHAIN="nightly-2026-01-08" anchor build --verifiable --program-name bridge_token_factory --env "PROGRAM_ID=$(FOGO_PROGRAM_ID)" --env "CHAIN_ID=$(FOGO_CHAIN_ID)" -- --no-default-features --features mainnet && \
+	RUSTUP_TOOLCHAIN="nightly-2026-01-08" anchor build --verifiable --program-name bridge_token_factory $(FOGO_ANCHOR_ENV) -- --no-default-features --features fogo && \
 	mv target/verifiable/bridge_token_factory.so target/verifiable/bridge_token_factory_fogo.so && \
 	mv target/idl/bridge_token_factory.json target/idl/bridge_token_factory_fogo.json
 

@@ -10,9 +10,10 @@ fn main() {
     let dest_path = Path::new(&out_dir).join("program_id.rs");
     fs::write(&dest_path, format!("declare_id!(\"{program_id}\");")).unwrap();
 
-    // CHAIN_ID selects the ChainKind variant embedded in outgoing Wormhole payloads.
-    // Solana = 2 (default), FOGO = 12.
-    let chain_id: u8 = env::var("CHAIN_ID")
+    // OMNI_CHAIN_ID selects the omni-bridge ChainKind variant embedded in outgoing payloads
+    // (NOT the Wormhole chain ID — that one is named `CHAIN_ID` upstream and is consumed by
+    // wormhole-svm-definitions/from-env). Solana = 2 (default), FOGO = 12.
+    let chain_id: u8 = env::var("OMNI_CHAIN_ID")
         .ok()
         .and_then(|s| s.parse().ok())
         .unwrap_or(2);
