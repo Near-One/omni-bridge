@@ -22,11 +22,15 @@ no-log-ix-name = []
 anchor-debug = []
 custom-heap = []
 custom-panic = []
+# NOTE: must be combined with exactly one of `mainnet`, `devnet`, or `fogo` at build
+# time — wormhole-svm-definitions rejects mixing its `solana` and `from-env` features,
+# so this `idl-build` feature does NOT preselect a network. `anchor build` adds
+# `idl-build` automatically on top of whatever network feature was passed via
+# `--features`, so the normal build paths still work.
 idl-build = [
     "anchor-lang/idl-build",
     "anchor-spl/idl-build",
     "wormhole-anchor-sdk/idl-build",
-    "wormhole-anchor-sdk/mainnet",
 ]
 devnet = ["wormhole-anchor-sdk/solana-devnet"]
 mainnet = ["wormhole-anchor-sdk/mainnet"]

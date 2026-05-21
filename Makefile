@@ -40,7 +40,8 @@ FOGO_RPC_URL ?=
 # address that was baked into the .so via FOGO_PROGRAM_ID at build time.
 SVM_PROGRAM_KEYPAIR ?= target/deploy/bridge_token_factory-keypair.json
 
-# anchor build --env flags shared by both FOGO build targets.
+# anchor build --env flags shared by both FOGO build targets. These propagate the
+# env vars into the verifiable Docker container that builds the .so.
 FOGO_ANCHOR_ENV = \
 	--env "PROGRAM_ID=$(FOGO_PROGRAM_ID)" \
 	--env "OMNI_CHAIN_ID=$(FOGO_OMNI_CHAIN_ID)" \
@@ -48,6 +49,18 @@ FOGO_ANCHOR_ENV = \
 	--env "BRIDGE_ADDRESS=$(FOGO_BRIDGE_ADDRESS)" \
 	--env "POST_MESSAGE_SHIM_PROGRAM_ID=$(FOGO_POST_MESSAGE_SHIM_PROGRAM_ID)" \
 	--env "VERIFY_VAA_SHIM_PROGRAM_ID=$(FOGO_VERIFY_VAA_SHIM_PROGRAM_ID)"
+
+# Shell exports for the SAME vars. anchor builds the IDL on the host (outside
+# Docker), so wormhole-svm-definitions' `env!()` macros need these in the shell
+# environment, not just on the anchor command line. Both --env flags above and
+# these exports are required.
+FOGO_SHELL_ENV = \
+	export PROGRAM_ID="$(FOGO_PROGRAM_ID)" && \
+	export OMNI_CHAIN_ID="$(FOGO_OMNI_CHAIN_ID)" && \
+	export CHAIN_ID="$(FOGO_WORMHOLE_CHAIN_ID)" && \
+	export BRIDGE_ADDRESS="$(FOGO_BRIDGE_ADDRESS)" && \
+	export POST_MESSAGE_SHIM_PROGRAM_ID="$(FOGO_POST_MESSAGE_SHIM_PROGRAM_ID)" && \
+	export VERIFY_VAA_SHIM_PROGRAM_ID="$(FOGO_VERIFY_VAA_SHIM_PROGRAM_ID)"
 
 clippy: clippy-near
 
@@ -91,7 +104,8 @@ solana-build: ENV = mainnet
 solana-build-dev solana-build:
 	cd solana && \
 	PROGRAM_ID=$$(solana address -k $(SVM_PROGRAM_KEYPAIR)) && \
-	RUSTUP_TOOLCHAIN="nightly-2026-01-08" anchor build --verifiable --program-name bridge_token_factory --env "PROGRAM_ID=$$PROGRAM_ID" --env "CHAIN_ID=$(SOL_CHAIN_ID)" -- --no-default-features --features $(ENV)
+	export OMNI_CHAIN_ID="$(SOL_OMNI_CHAIN_ID)" && \
+	RUSTUP_TOOLCHAIN="nightly-2026-01-08" anchor build --verifiable --program-name bridge_token_factory --env "PROGRAM_ID=$$PROGRAM_ID" --env "OMNI_CHAIN_ID=$(SOL_OMNI_CHAIN_ID)" -- --no-default-features --features $(ENV)
 
 # FOGO is an SVM chain that runs the same Solana program but encodes a different
 # omni-bridge ChainKind byte in payloads AND uses a different Wormhole chain ID.
@@ -102,6 +116,7 @@ solana-build-dev solana-build:
 solana-build-fogo:
 	@test -n "$(FOGO_PROGRAM_ID)" || { echo "FOGO_PROGRAM_ID is required (e.g., make solana-build-fogo FOGO_PROGRAM_ID=<addr>)" >&2; exit 1; }
 	cd solana && \
+	$(FOGO_SHELL_ENV) && \
 	RUSTUP_TOOLCHAIN="nightly-2026-01-08" anchor build --verifiable --program-name bridge_token_factory $(FOGO_ANCHOR_ENV) -- --no-default-features --features fogo && \
 	mv target/verifiable/bridge_token_factory.so target/verifiable/bridge_token_factory_fogo.so && \
 	mv target/idl/bridge_token_factory.json target/idl/bridge_token_factory_fogo.json
@@ -109,11 +124,13 @@ solana-build-fogo:
 solana-build-ci:
 	cd solana && \
 	export PROGRAM_ID=dahPEoZGXfyV58JqqH85okdHmpN8U2q8owgPUXSCPxe && \
+	export OMNI_CHAIN_ID="$(SOL_OMNI_CHAIN_ID)" && \
 	RUSTUP_TOOLCHAIN="nightly-2026-01-08" anchor build --verifiable --program-name bridge_token_factory --env "PROGRAM_ID=$$PROGRAM_ID" --env "OMNI_CHAIN_ID=$(SOL_OMNI_CHAIN_ID)" -- --no-default-features --features mainnet
 
 solana-build-ci-fogo:
 	@test -n "$(FOGO_PROGRAM_ID)" || { echo "FOGO_PROGRAM_ID is required (set as a CI variable)" >&2; exit 1; }
 	cd solana && \
+	$(FOGO_SHELL_ENV) && \
 	RUSTUP_TOOLCHAIN="nightly-2026-01-08" anchor build --verifiable --program-name bridge_token_factory $(FOGO_ANCHOR_ENV) -- --no-default-features --features fogo && \
 	mv target/verifiable/bridge_token_factory.so target/verifiable/bridge_token_factory_fogo.so && \
 	mv target/idl/bridge_token_factory.json target/idl/bridge_token_factory_fogo.json
@@ -131,7 +148,7 @@ solana-deploy-dev solana-deploy:
 # restore the canonical name from the `_fogo` artifact produced by solana-build-fogo*.
 solana-deploy-fogo:
 	@test -n "$(FOGO_RPC_URL)" || { echo "FOGO_RPC_URL is required (e.g., make solana-deploy-fogo FOGO_RPC_URL=https://...)" >&2; exit 1; }
-	@test -f solana/target/verifiable/bridge_token_factory_fogo.so || { echo "solana/target/verifiable/bridge_token_factory_fogo.so not found — run \`make solana-build-fogo-dev\` first" >&2; exit 1; }
+	@test -f solana/target/verifiable/bridge_token_factory_fogo.so || { echo "solana/target/verifiable/bridge_token_factory_fogo.so not found — run \`make solana-build-fogo\` first" >&2; exit 1; }
 	cd solana && \
 	cp target/verifiable/bridge_token_factory_fogo.so target/verifiable/bridge_token_factory.so && \
 	cp target/idl/bridge_token_factory_fogo.json target/idl/bridge_token_factory.json && \
