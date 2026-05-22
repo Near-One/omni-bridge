@@ -63,10 +63,7 @@ mod tests {
 
         // Deploy a second NEP-141 ("nzec") to act as the Zcash chain's native
         // wrapper. Same wasm as the BTC-side token.
-        let nzec_token = env
-            .worker
-            .dev_deploy(&build_artifacts.mock_token)
-            .await?;
+        let nzec_token = env.worker.dev_deploy(&build_artifacts.mock_token).await?;
         nzec_token
             .call("new_default_meta")
             .args_json(json!({
