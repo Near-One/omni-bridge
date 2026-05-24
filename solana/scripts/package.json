@@ -1,0 +1,20 @@
+{
+  "name": "omni-bridge-solana-scripts",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "create-fogo-multisig": "ts-node create-fogo-multisig.ts",
+    "upgrade-fogo": "ts-node submit-fogo-upgrade.ts",
+    "set-fogo-admins": "ts-node set-fogo-admins.ts"
+  },
+  "dependencies": {
+    "@coral-xyz/anchor": "^0.29.0",
+    "@solana/web3.js": "^1.95.0",
+    "@sqds/sdk": "^2.0.4"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.3.0"
+  }
+}

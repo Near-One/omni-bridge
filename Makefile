@@ -158,6 +158,10 @@ solana-deploy-fogo:
 		--program-keypair $(SVM_PROGRAM_KEYPAIR) \
 		--provider.cluster $(FOGO_RPC_URL)
 
+# FOGO upgrade targets live in solana/Makefile. Invoke with:
+#   make -C solana upgrade-fogo FOGO_RPC_URL=... FOGO_MULTISIG=...
+# See solana/Makefile for the per-step targets and full documentation.
+
 rust-run-tests:
 	cargo nextest run --manifest-path $(NEAR_MANIFEST) --all-features
 
