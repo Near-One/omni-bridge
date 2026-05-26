@@ -636,7 +636,7 @@ impl Contract {
             &message_storage_account_id,
             NearToken::from_yoctonear(transfer_message.fee.native_fee.0),
             &storage_owner,
-            self.required_balance_for_init_transfer(Some(transfer_message.msg.clone())),
+            self.required_balance_for_init_transfer_message(transfer_message.clone()),
         ) {
             env::log_str(&format!("Error paying native fee and storage: {err}"));
             return transfer_message.amount;
@@ -1843,6 +1843,7 @@ impl Contract {
             )
             .is_err()
         {
+            self.remove_transfer_message_without_refund(transfer_message.get_transfer_id());
             return transfer_message.amount;
         }
 
@@ -1855,6 +1856,7 @@ impl Contract {
                 transfer_message.amount.0,
             );
         } else {
+            self.remove_transfer_message_without_refund(transfer_message.get_transfer_id());
             return transfer_message.amount;
         }
 
@@ -2204,6 +2206,19 @@ impl Contract {
             storage.available = storage.available.saturating_add(refund);
             self.accounts_balances.insert(&transfer.owner, &storage);
         }
+
+        transfer.message
+    }
+
+    fn remove_transfer_message_without_refund(
+        &mut self,
+        transfer_id: TransferId,
+    ) -> TransferMessage {
+        let transfer = self
+            .pending_transfers
+            .remove(&transfer_id)
+            .map(storage::TransferMessageStorage::into_main)
+            .near_expect(BridgeError::TransferNotExist);
 
         transfer.message
     }
