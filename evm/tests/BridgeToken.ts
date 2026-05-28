@@ -9,8 +9,10 @@ const PauseMode = {
   UnpausedAll: 0,
   PausedInitTransfer: 1 << 0,
   PausedFinTransfer: 1 << 1,
+  PausedDeployToken: 1 << 2,
 }
-const PauseAll = PauseMode.PausedInitTransfer | PauseMode.PausedFinTransfer
+const PauseAll =
+  PauseMode.PausedInitTransfer | PauseMode.PausedFinTransfer | PauseMode.PausedDeployToken
 const PanicCodeArithmeticOperationOverflowed = "0x11"
 
 describe("BridgeToken", () => {
@@ -429,12 +431,20 @@ describe("BridgeToken", () => {
     // Pause all
     await expect(OmniBridge.pauseAll())
       .to.emit(OmniBridge, "Paused")
-      .withArgs(adminAccount.address, PauseMode.PausedFinTransfer | PauseMode.PausedInitTransfer)
-    expect(await OmniBridge.pausedFlags()).to.be.equal(
-      PauseMode.PausedFinTransfer | PauseMode.PausedInitTransfer,
-    )
+      .withArgs(adminAccount.address, PauseAll)
+    expect(await OmniBridge.pausedFlags()).to.be.equal(PauseAll)
     expect(await OmniBridge.paused(PauseMode.PausedFinTransfer)).to.be.equal(true)
     expect(await OmniBridge.paused(PauseMode.PausedInitTransfer)).to.be.equal(true)
+    expect(await OmniBridge.paused(PauseMode.PausedDeployToken)).to.be.equal(true)
+  })
+
+  it("can't deploy token when paused", async () => {
+    await expect(OmniBridge.pause(PauseMode.PausedDeployToken))
+      .to.emit(OmniBridge, "Paused")
+      .withArgs(adminAccount.address, PauseMode.PausedDeployToken)
+
+    const { signature, payload } = await metadataSignature(wrappedNearId)
+    await expect(OmniBridge.deployToken(signature, payload)).to.be.revertedWith("Pausable: paused")
   })
 
   it("Test grant admin role", async () => {

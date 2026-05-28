@@ -52,6 +52,7 @@ contract OmniBridge is
     uint256 constant UNPAUSED_ALL = 0;
     uint256 constant PAUSED_INIT_TRANSFER = 1 << 0;
     uint256 constant PAUSED_FIN_TRANSFER = 1 << 1;
+    uint256 constant PAUSED_DEPLOY_TOKEN = 1 << 2;
 
     error InvalidSignature();
     error NonceAlreadyUsed(uint64 nonce);
@@ -61,6 +62,7 @@ contract OmniBridge is
     error ERC1155MappingMismatch();
     error ERC1155DirectSendNotAllowed();
     error ERC1155BatchNotSupported();
+    error TokenImplementationNotSet();
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
@@ -133,7 +135,10 @@ contract OmniBridge is
     function deployToken(
         bytes calldata signatureData,
         BridgeTypes.MetadataPayload calldata metadata
-    ) external payable returns (address) {
+    ) external payable whenNotPaused(PAUSED_DEPLOY_TOKEN) returns (address) {
+        if (tokenImplementationAddress == address(0)) {
+            revert TokenImplementationNotSet();
+        }
         bytes memory borshEncoded = bytes.concat(
             bytes1(uint8(BridgeTypes.PayloadType.Metadata)),
             Borsh.encodeString(metadata.token),
@@ -545,7 +550,9 @@ contract OmniBridge is
     }
 
     function pauseAll() external onlyRole(PAUSABLE_ADMIN_ROLE) {
-        uint256 flags = PAUSED_FIN_TRANSFER | PAUSED_INIT_TRANSFER;
+        uint256 flags = PAUSED_FIN_TRANSFER |
+            PAUSED_INIT_TRANSFER |
+            PAUSED_DEPLOY_TOKEN;
         _pause(flags);
     }
 
