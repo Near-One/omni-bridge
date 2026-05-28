@@ -124,11 +124,11 @@ describe("HyperliquedBridgeToken", () => {
 
     beforeEach(async () => {
       ;({ token, address: tokenAddress } = await deployHlToken())
-      // Simulate the system address pre-transferring tokens to address(this).
-      await token.connect(adminAccount)["mint(address,uint256)"](tokenAddress, AMOUNT)
+      // Seed the system-address pool the way a prior 3-arg mint would.
+      await token.connect(adminAccount)["mint(address,uint256)"](SYSTEM_ADDRESS, AMOUNT)
     })
 
-    it("forwards tokens to recipient encoded in data", async () => {
+    it("releases tokens from the system-address pool to recipient", async () => {
       const data = ethers.concat([
         "0x00",
         ethers.AbiCoder.defaultAbiCoder().encode(["address"], [user2.address]),
@@ -143,10 +143,11 @@ describe("HyperliquedBridgeToken", () => {
         .withArgs(user1.address, ACTION_TRANSFER, AMOUNT, data)
 
       expect(await token.balanceOf(user2.address)).to.equal(AMOUNT)
+      expect(await token.balanceOf(SYSTEM_ADDRESS)).to.equal(0n)
       expect(await token.balanceOf(tokenAddress)).to.equal(0n)
     })
 
-    it("reverts if the contract balance is insufficient", async () => {
+    it("reverts if the system-address pool is insufficient", async () => {
       const data = ethers.concat([
         "0x00",
         ethers.AbiCoder.defaultAbiCoder().encode(["address"], [user2.address]),
@@ -169,9 +170,11 @@ describe("HyperliquedBridgeToken", () => {
 
     beforeEach(async () => {
       ;({ token, address: tokenAddress } = await deployHlToken())
-      // Mint to address(this) while we're still the owner.
-      await token.connect(adminAccount)["mint(address,uint256)"](tokenAddress, AMOUNT)
-      // Hand ownership to OmniBridge so it can burn from the token contract.
+      // Seed the standing pool at _systemAddress while we're still the owner.
+      await token.connect(adminAccount)["mint(address,uint256)"](SYSTEM_ADDRESS, AMOUNT)
+      // Hand ownership to OmniBridge so it can burn from the token contract once
+      // we've moved the bridged amount from the pool to address(this) inside
+      // coreReceiveWithData.
       await token.transferOwnership(omniBridgeAddress)
       await omniBridge.acceptTokenOwnership(tokenAddress)
       await registerHlOnBridge(tokenAddress)

@@ -74,16 +74,24 @@ contract HyperliquedBridgeToken is BridgeToken, ICoreReceiveWithData {
     }
 
     /// @notice HyperCore -> HyperEVM callback invoked by the system address when a
-    /// HyperCore user triggers `sendToEvmWithData` targeting this token. By the time
-    /// this fires, `amount` tokens have already been transferred to `address(this)`.
+    /// HyperCore user triggers `sendToEvmWithData` targeting this token.
     /// `destinationRecipient`, `destinationChainId`, and `coreNonce` are CCTP-shaped
     /// and not used here; all routing info comes from `data`.
-    /// @dev Dispatch:
-    /// - data == 0x00 || abi.encode(address recipient): forward `amount` to the
-    ///   HyperEVM `recipient`.
+    /// @dev Accounting model: the 3-arg `mint` parks HyperCore-bound tokens at
+    /// `_systemAddress`, so that account holds the standing pool that mirrors total
+    /// HyperCore-side balance. HyperLiquid does NOT pre-transfer tokens before this
+    /// call fires (the HL system address holds no real ERC20 balance — Circle's
+    /// CoreDepositWallet pattern shows the same, with its own pool at `address(this)`).
+    /// We pull from `_systemAddress` ourselves; an insufficient pool is a safe revert
+    /// that signals an accounting drift between HyperCore and HyperEVM.
+    ///
+    /// Dispatch:
+    /// - data == 0x00 || abi.encode(address recipient): release `amount` from the
+    ///   pool to the HyperEVM `recipient`.
     /// - data == 0x01 || abi.encode(uint128 fee, string recipient, string message):
-    ///   bridge via OmniBridge.initTransfer. `recipient` is an OmniAddress string
-    ///   (e.g. `near:alice.near`, `sol:<base58>`). nativeFee is forced to 0.
+    ///   move `amount` from the pool to this contract, then bridge via
+    ///   OmniBridge.initTransfer (which burns from `address(this)`). `recipient` is an
+    ///   OmniAddress string (e.g. `near:alice.near`, `sol:<base58>`). nativeFee = 0.
     /// The emitted InitTransfer event will carry `sender = address(this)`; the NEAR
     /// side cannot recover the originating HyperCore user (`from`) from this path.
     function coreReceiveWithData(
@@ -102,13 +110,15 @@ contract HyperliquedBridgeToken is BridgeToken, ICoreReceiveWithData {
 
         if (action == ACTION_TRANSFER) {
             address recipient = abi.decode(tail, (address));
-            _update(address(this), recipient, amount);
+            _update(_systemAddress, recipient, amount);
         } else if (action == ACTION_INIT_TRANSFER) {
             (uint128 fee, string memory recipient, string memory message) = abi
                 .decode(tail, (uint128, string, string));
+            uint128 amount128 = amount.toUint128();
+            _update(_systemAddress, address(this), amount);
             IOmniBridgeInitTransfer(owner()).initTransfer(
                 address(this),
-                amount.toUint128(),
+                amount128,
                 fee,
                 0,
                 recipient,
