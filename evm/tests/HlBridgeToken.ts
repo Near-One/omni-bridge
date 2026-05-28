@@ -1,8 +1,8 @@
 import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers"
 import { expect } from "chai"
 import { ethers, upgrades } from "hardhat"
-import { testWallet } from "./helpers/signatures"
 import type { HyperliquedBridgeToken, OmniBridge } from "../typechain-types"
+import { testWallet } from "./helpers/signatures"
 
 const ACTION_TRANSFER = 0
 const ACTION_INIT_TRANSFER = 1
@@ -94,9 +94,7 @@ describe("HyperliquedBridgeToken", () => {
 
     it("reverts when caller is not the system address", async () => {
       await expect(
-        token
-          .connect(user1)
-          .coreReceiveWithData(user1.address, ethers.ZeroHash, 0, 100, 0, "0x00"),
+        token.connect(user1).coreReceiveWithData(user1.address, ethers.ZeroHash, 0, 100, 0, "0x00"),
       ).to.be.revertedWithCustomError(token, "NotSystemAddress")
     })
 
@@ -156,14 +154,7 @@ describe("HyperliquedBridgeToken", () => {
       await expect(
         token
           .connect(systemSigner)
-          .coreReceiveWithData(
-            user1.address,
-            ethers.ZeroHash,
-            0,
-            AMOUNT + 1n,
-            0,
-            data,
-          ),
+          .coreReceiveWithData(user1.address, ethers.ZeroHash, 0, AMOUNT + 1n, 0, data),
       ).to.be.revertedWithCustomError(token, "ERC20InsufficientBalance")
     })
   })
