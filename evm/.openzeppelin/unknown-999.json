@@ -1,0 +1,260 @@
+{
+  "manifestVersion": "3.2",
+  "proxies": [
+    {
+      "address": "0xf353b40fC144d1c6c5BCdda712fa6De833016aF9",
+      "txHash": "0xd40a23d7db8e2d76401d52e08e4b3183805d392fe7e2b3898e7b1b18754b7066",
+      "kind": "uups"
+    }
+  ],
+  "impls": {
+    "577b5b3db8bb902b933ed367060230241c7a2fd97c32b186350df15bdaf9f32b": {
+      "address": "0xAfDa1b2ad1cFe85FdFD34cD87930Ff56f07CDbe3",
+      "txHash": "0x856c79ad54d2fbfc16516daef3b8fbf023ecc0e577343fa18dfb94407c37eb2c",
+      "layout": {
+        "solcVersion": "0.8.24",
+        "storage": [
+          {
+            "label": "ethToNearToken",
+            "offset": 0,
+            "slot": "0",
+            "type": "t_mapping(t_address,t_string_storage)",
+            "contract": "OmniBridge",
+            "src": "src/omni-bridge/contracts/OmniBridge.sol:36"
+          },
+          {
+            "label": "nearToEthToken",
+            "offset": 0,
+            "slot": "1",
+            "type": "t_mapping(t_string_memory_ptr,t_address)",
+            "contract": "OmniBridge",
+            "src": "src/omni-bridge/contracts/OmniBridge.sol:37"
+          },
+          {
+            "label": "isBridgeToken",
+            "offset": 0,
+            "slot": "2",
+            "type": "t_mapping(t_address,t_bool)",
+            "contract": "OmniBridge",
+            "src": "src/omni-bridge/contracts/OmniBridge.sol:38"
+          },
+          {
+            "label": "tokenImplementationAddress",
+            "offset": 0,
+            "slot": "3",
+            "type": "t_address",
+            "contract": "OmniBridge",
+            "src": "src/omni-bridge/contracts/OmniBridge.sol:40"
+          },
+          {
+            "label": "nearBridgeDerivedAddress",
+            "offset": 0,
+            "slot": "4",
+            "type": "t_address",
+            "contract": "OmniBridge",
+            "src": "src/omni-bridge/contracts/OmniBridge.sol:41"
+          },
+          {
+            "label": "omniBridgeChainId",
+            "offset": 20,
+            "slot": "4",
+            "type": "t_uint8",
+            "contract": "OmniBridge",
+            "src": "src/omni-bridge/contracts/OmniBridge.sol:42"
+          },
+          {
+            "label": "completedTransfers",
+            "offset": 0,
+            "slot": "5",
+            "type": "t_mapping(t_uint64,t_bool)",
+            "contract": "OmniBridge",
+            "src": "src/omni-bridge/contracts/OmniBridge.sol:44"
+          },
+          {
+            "label": "currentOriginNonce",
+            "offset": 0,
+            "slot": "6",
+            "type": "t_uint64",
+            "contract": "OmniBridge",
+            "src": "src/omni-bridge/contracts/OmniBridge.sol:45"
+          },
+          {
+            "label": "customMinters",
+            "offset": 0,
+            "slot": "7",
+            "type": "t_mapping(t_address,t_address)",
+            "contract": "OmniBridge",
+            "src": "src/omni-bridge/contracts/OmniBridge.sol:47"
+          },
+          {
+            "label": "multiTokens",
+            "offset": 0,
+            "slot": "8",
+            "type": "t_mapping(t_address,t_struct(MultiTokenInfo)9674_storage)",
+            "contract": "OmniBridge",
+            "src": "src/omni-bridge/contracts/OmniBridge.sol:48"
+          },
+          {
+            "label": "__gap",
+            "offset": 0,
+            "slot": "9",
+            "type": "t_array(t_uint256)49_storage",
+            "contract": "OmniBridge",
+            "src": "src/omni-bridge/contracts/OmniBridge.sol:598"
+          },
+          {
+            "label": "_wormhole",
+            "offset": 0,
+            "slot": "58",
+            "type": "t_contract(IWormhole)11143",
+            "contract": "OmniBridgeWormhole",
+            "src": "src/omni-bridge/contracts/OmniBridgeWormhole.sol:27"
+          },
+          {
+            "label": "_consistencyLevel",
+            "offset": 20,
+            "slot": "58",
+            "type": "t_uint8",
+            "contract": "OmniBridgeWormhole",
+            "src": "src/omni-bridge/contracts/OmniBridgeWormhole.sol:29"
+          },
+          {
+            "label": "wormholeNonce",
+            "offset": 21,
+            "slot": "58",
+            "type": "t_uint32",
+            "contract": "OmniBridgeWormhole",
+            "src": "src/omni-bridge/contracts/OmniBridgeWormhole.sol:30"
+          }
+        ],
+        "types": {
+          "t_address": {
+            "label": "address",
+            "numberOfBytes": "20"
+          },
+          "t_array(t_uint256)49_storage": {
+            "label": "uint256[49]",
+            "numberOfBytes": "1568"
+          },
+          "t_bool": {
+            "label": "bool",
+            "numberOfBytes": "1"
+          },
+          "t_contract(IWormhole)11143": {
+            "label": "contract IWormhole",
+            "numberOfBytes": "20"
+          },
+          "t_mapping(t_address,t_address)": {
+            "label": "mapping(address => address)",
+            "numberOfBytes": "32"
+          },
+          "t_mapping(t_address,t_bool)": {
+            "label": "mapping(address => bool)",
+            "numberOfBytes": "32"
+          },
+          "t_mapping(t_address,t_string_storage)": {
+            "label": "mapping(address => string)",
+            "numberOfBytes": "32"
+          },
+          "t_mapping(t_address,t_struct(MultiTokenInfo)9674_storage)": {
+            "label": "mapping(address => struct MultiTokenInfo)",
+            "numberOfBytes": "32"
+          },
+          "t_mapping(t_string_memory_ptr,t_address)": {
+            "label": "mapping(string => address)",
+            "numberOfBytes": "32"
+          },
+          "t_mapping(t_uint64,t_bool)": {
+            "label": "mapping(uint64 => bool)",
+            "numberOfBytes": "32"
+          },
+          "t_string_memory_ptr": {
+            "label": "string",
+            "numberOfBytes": "32"
+          },
+          "t_string_storage": {
+            "label": "string",
+            "numberOfBytes": "32"
+          },
+          "t_struct(MultiTokenInfo)9674_storage": {
+            "label": "struct MultiTokenInfo",
+            "members": [
+              {
+                "label": "tokenAddress",
+                "type": "t_address",
+                "offset": 0,
+                "slot": "0"
+              },
+              {
+                "label": "tokenId",
+                "type": "t_uint256",
+                "offset": 0,
+                "slot": "1"
+              }
+            ],
+            "numberOfBytes": "64"
+          },
+          "t_uint256": {
+            "label": "uint256",
+            "numberOfBytes": "32"
+          },
+          "t_uint32": {
+            "label": "uint32",
+            "numberOfBytes": "4"
+          },
+          "t_uint64": {
+            "label": "uint64",
+            "numberOfBytes": "8"
+          },
+          "t_uint8": {
+            "label": "uint8",
+            "numberOfBytes": "1"
+          },
+          "t_mapping(t_bytes32,t_struct(RoleData)27_storage)": {
+            "label": "mapping(bytes32 => struct AccessControlUpgradeable.RoleData)"
+          },
+          "t_bytes32": {
+            "label": "bytes32"
+          },
+          "t_struct(RoleData)27_storage": {
+            "label": "struct AccessControlUpgradeable.RoleData",
+            "members": [
+              {
+                "label": "hasRole",
+                "type": "t_mapping(t_address,t_bool)"
+              },
+              {
+                "label": "adminRole",
+                "type": "t_bytes32"
+              }
+            ]
+          }
+        },
+        "namespaces": {
+          "erc7201:openzeppelin.storage.AccessControl": [
+            {
+              "contract": "AccessControlUpgradeable",
+              "label": "_roles",
+              "type": "t_mapping(t_bytes32,t_struct(RoleData)27_storage)",
+              "src": "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol:62"
+            }
+          ],
+          "erc7201:openzeppelin.storage.Initializable": [
+            {
+              "contract": "Initializable",
+              "label": "_initialized",
+              "type": "t_uint64",
+              "src": "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol:69"
+            },
+            {
+              "contract": "Initializable",
+              "label": "_initializing",
+              "type": "t_bool",
+              "src": "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol:73"
+            }
+          ]
+        }
+      }
+    }
+  }
+}
