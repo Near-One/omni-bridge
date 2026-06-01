@@ -98,6 +98,12 @@ def step2(address, exchange, token, params):
     # Allocate the entire total_supply to a single user — the deployer address.
     # All tokens are minted here at genesis and end up on the deployer's HC balance;
     # later they can be bridged to HyperEVM as the ERC-20 mirror.
+    #
+    # total_supply is set to 2**64 - 1 (= 18446744073709551615) — the maximum value
+    # HyperCore can represent (balances are stored as uint64). HIP-1 docs explicitly
+    # call this out as the "max flexibility" choice. Bridged tokens mint into this
+    # pool only what is actually transferred in from the EVM/NEAR side, so a large
+    # cap doesn't inflate circulating supply — it just removes an artificial ceiling.
     user_genesis_result = exchange.spot_deploy_user_genesis(
         token,
         [
