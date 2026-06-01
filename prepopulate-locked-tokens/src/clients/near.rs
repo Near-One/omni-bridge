@@ -4,8 +4,14 @@ use near_api::{AccountId, Contract, Data, NetworkConfig, RPCEndpoint, Signer, ty
 use omni_types::{ChainKind, OmniAddress};
 use serde_json::json;
 use std::sync::Arc;
+use std::time::Duration;
 
 use crate::apply::SetLockedTokenArg;
+
+/// View calls are retried on transient transport errors. near_api classifies connection
+/// errors (`CommunicationError`) as "critical" and does NOT retry them itself, but under
+/// concurrent load they're usually just a dropped connection.
+const MAX_READ_ATTEMPTS: u32 = 4;
 
 #[derive(Clone)]
 pub struct Client {
@@ -42,23 +48,26 @@ impl Client {
         token_address: &OmniAddress,
         chain: ChainKind,
     ) -> Result<Option<OmniAddress>> {
-        let result: Data<Option<OmniAddress>> = self
-            .omni_bridge
-            .call_function(
-                "get_bridged_token",
-                json!({
-                    "address": token_address,
-                    "chain": chain
-                }),
-            )
-            .read_only()
-            .fetch_from(&self.network)
-            .await
-            .with_context(|| {
-                format!("Failed to fetch bridged token ({token_address}) on {chain:?}")
-            })?;
-
-        Ok(result.data)
+        with_retries(&format!("get_bridged_token({chain:?})"), || {
+            let contract = self.omni_bridge.clone();
+            let network = self.network.clone();
+            let token_address = token_address.clone();
+            async move {
+                let result: Data<Option<OmniAddress>> = contract
+                    .call_function(
+                        "get_bridged_token",
+                        json!({ "address": token_address, "chain": chain }),
+                    )
+                    .read_only()
+                    .fetch_from(&network)
+                    .await
+                    .with_context(|| {
+                        format!("Failed to fetch bridged token ({token_address}) on {chain:?}")
+                    })?;
+                Ok(result.data)
+            }
+        })
+        .await
     }
 
     /// Current on-chain locked amount for `(chain_kind, token_id)`, if any.
@@ -67,23 +76,26 @@ impl Client {
         chain_kind: ChainKind,
         token_id: &AccountId,
     ) -> Result<Option<u128>> {
-        let result: Data<Option<U128>> = self
-            .omni_bridge
-            .call_function(
-                "get_locked_tokens",
-                json!({
-                    "chain_kind": chain_kind,
-                    "token_id": token_id,
-                }),
-            )
-            .read_only()
-            .fetch_from(&self.network)
-            .await
-            .with_context(|| {
-                format!("Failed to fetch locked tokens for ({chain_kind:?}, {token_id})")
-            })?;
-
-        Ok(result.data.map(|amount| amount.0))
+        with_retries(&format!("get_locked_tokens({chain_kind:?})"), || {
+            let contract = self.omni_bridge.clone();
+            let network = self.network.clone();
+            let token_id = token_id.clone();
+            async move {
+                let result: Data<Option<U128>> = contract
+                    .call_function(
+                        "get_locked_tokens",
+                        json!({ "chain_kind": chain_kind, "token_id": token_id }),
+                    )
+                    .read_only()
+                    .fetch_from(&network)
+                    .await
+                    .with_context(|| {
+                        format!("Failed to fetch locked tokens for ({chain_kind:?}, {token_id})")
+                    })?;
+                Ok(result.data.map(|amount| amount.0))
+            }
+        })
+        .await
     }
 
     /// NEP-141 `ft_balance_of(account_id)` on `token_contract` (used to read the
@@ -93,18 +105,45 @@ impl Client {
         token_contract: &AccountId,
         account_id: &AccountId,
     ) -> Result<u128> {
-        let balance: Data<U128> = Contract(token_contract.clone())
-            .call_function("ft_balance_of", json!({ "account_id": account_id }))
-            .read_only()
-            .fetch_from(&self.network)
-            .await
-            .with_context(|| format!("Failed to fetch ft_balance_of({account_id}) on {token_contract}"))?;
+        with_retries("ft_balance_of", || {
+            let network = self.network.clone();
+            let token_contract = token_contract.clone();
+            let account_id = account_id.clone();
+            async move {
+                let balance: Data<U128> = Contract(token_contract.clone())
+                    .call_function("ft_balance_of", json!({ "account_id": account_id }))
+                    .read_only()
+                    .fetch_from(&network)
+                    .await
+                    .with_context(|| {
+                        format!("Failed to fetch ft_balance_of({account_id}) on {token_contract}")
+                    })?;
+                Ok(balance.data.0)
+            }
+        })
+        .await
+    }
 
-        Ok(balance.data.0)
+    async fn ft_total_supply(&self, token_id: &AccountId) -> Result<u128> {
+        with_retries("ft_total_supply", || {
+            let network = self.network.clone();
+            let token_id = token_id.clone();
+            async move {
+                let total: Data<U128> = Contract(token_id.clone())
+                    .call_function("ft_total_supply", ())
+                    .read_only()
+                    .fetch_from(&network)
+                    .await
+                    .with_context(|| format!("Failed to fetch ft_total_supply on {token_id}"))?;
+                Ok(total.data.0)
+            }
+        })
+        .await
     }
 
     /// Send a single `set_locked_tokens` transaction with the given batch of args.
     /// Returns an error (without panicking) if the transaction executes with failure.
+    /// Not auto-retried — re-running the tool is the safe way to retry a write.
     pub async fn set_locked_tokens(
         &self,
         signer_id: AccountId,
@@ -141,12 +180,53 @@ impl super::Client for Client {
             },
         };
 
-        let total_supply: Data<U128> = Contract(token_id)
-            .call_function("ft_total_supply", ())
-            .read_only()
-            .fetch_from(&self.network)
-            .await?;
-
-        Ok(Some(total_supply.data.0))
+        Ok(Some(self.ft_total_supply(&token_id).await?))
     }
+}
+
+/// Retry `op` on transient transport errors with exponential backoff (250ms, 500ms, 1s).
+/// Genuine errors (e.g. `UnknownAccount`) are returned immediately, not retried.
+async fn with_retries<T, F, Fut>(label: &str, mut op: F) -> Result<T>
+where
+    F: FnMut() -> Fut,
+    Fut: std::future::Future<Output = Result<T>>,
+{
+    let mut attempt = 0u32;
+    loop {
+        match op().await {
+            Ok(value) => return Ok(value),
+            Err(err) => {
+                attempt += 1;
+                if attempt >= MAX_READ_ATTEMPTS || !is_transient(&err) {
+                    return Err(err);
+                }
+                let backoff = Duration::from_millis(250 * u64::from(1u32 << (attempt - 1)));
+                eprintln!(
+                    "Retrying {label} after transient error (attempt {attempt}/{MAX_READ_ATTEMPTS}): {err:#}"
+                );
+                tokio::time::sleep(backoff).await;
+            }
+        }
+    }
+}
+
+/// near_api marks connection/transport errors as "critical" and won't retry them, but
+/// they're usually transient (a dropped connection under concurrent load). Match them by
+/// message so we retry only those — not genuine errors like `UnknownAccount`.
+fn is_transient(err: &anyhow::Error) -> bool {
+    let message = format!("{err:#}").to_lowercase();
+    [
+        "communication error",
+        "error sending request",
+        "timed out",
+        "timeout",
+        "connection reset",
+        "connection closed",
+        "connection refused",
+        "transporterror",
+        "dispatch task is gone",
+        "channel closed",
+    ]
+    .iter()
+    .any(|needle| message.contains(needle))
 }

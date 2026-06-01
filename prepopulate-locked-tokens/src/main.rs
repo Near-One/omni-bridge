@@ -19,8 +19,10 @@ use apply::Entry;
 use config::Network;
 use tokens::TokenInfo;
 
-/// How many per-token tasks to run before pausing, to be gentle on the RPCs.
-const BATCH_SIZE: usize = 50;
+/// How many per-token tasks to run concurrently before pausing. Kept modest so we don't
+/// burst a large number of simultaneous connections at one RPC host (which causes dropped
+/// connections / "communication error"); read calls also retry transient transport errors.
+const BATCH_SIZE: usize = 20;
 const BATCH_SLEEP: Duration = Duration::from_secs(2);
 
 /// Chains a bridged fungible token can be locked on and whose supply we can read.
