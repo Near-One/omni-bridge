@@ -1,40 +1,81 @@
-from typing import TypedDict, Literal, Union
+import json
+import os
+from typing import TypedDict, Literal
 
 import requests
+from dotenv import load_dotenv
 from eth_account import Account
 from eth_account.signers.local import LocalAccount
-from web3 import Web3
-from web3.middleware import SignAndSendRawMiddlewareBuilder
 from hyperliquid.utils import constants
 from hyperliquid.utils.signing import get_timestamp_ms, sign_l1_action
 
-CreateInputParams = TypedDict("CreateInputParams", {"nonce": int})
-CreateInput = TypedDict("CreateInput", {"create": CreateInputParams})
-FinalizeEvmContractInput = Union[Literal["firstStorageSlot"], CreateInput]
+# Load .env from the same directory as this script.
+load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
+
+LINK_PARAMS_PATH = os.path.join(os.path.dirname(__file__), "link_tokens_params.json")
+
+# Type def for the finalize action (we only support the firstStorageSlot mode).
 FinalizeEvmContractAction = TypedDict(
     "FinalizeEvmContractAction",
-    {"type": Literal["finalizeEvmContract"], "token": int, "input": FinalizeEvmContractInput},
+    {
+        "type": Literal["finalizeEvmContract"],
+        "token": int,
+        "input": Literal["firstStorageSlot"],
+    },
 )
 
-DEFAULT_CONTRACT_ADDRESS = Web3.to_checksum_address(
-    "0x2E98e98aB34b42b14FeC9d431F7B051B232Ba133"  # change this to your contract address if you are skipping deploying
-)
-TOKEN = 1562  # note that if changing this you likely should also change the abi to have a different name and perhaps also different decimals and initial supply
-PRIVATE_KEY = "0xPRIVATE_KEY"  # Change this to your private key
 
-# Connect to the JSON-RPC endpoint
-rpc_url = "https://rpc.hyperliquid-testnet.xyz/evm"
+def load_params():
+    with open(LINK_PARAMS_PATH) as f:
+        return json.load(f)
 
-contract_address = DEFAULT_CONTRACT_ADDRESS
 
-def requestEvmContract(account):
-    assert contract_address is not None
+def save_params(params):
+    with open(LINK_PARAMS_PATH, "w") as f:
+        json.dump(params, f, indent=2)
+        f.write("\n")
+
+
+def get_secret_key():
+    secret_key = os.environ.get("HL_SECRET_KEY")
+    if not secret_key:
+        raise RuntimeError(
+            "HL_SECRET_KEY is not set. Add it to evm/utils/hyperliquid/.env (see .env.example)."
+        )
+    return secret_key
+
+
+def get_base_url(network):
+    network = network.lower()
+    if network == "mainnet":
+        return constants.MAINNET_API_URL
+    if network == "testnet":
+        return constants.TESTNET_API_URL
+    raise RuntimeError(f"Invalid network={network!r}. Expected 'testnet' or 'mainnet'.")
+
+
+def confirm(prompt):
+    return input(f"\n{prompt} [y/N]: ").strip().lower() == "y"
+
+
+def show_state(base_url, user_address):
+    """Print spotDeployState for the user — useful to inspect pending requestEvmContract."""
+    response = requests.post(
+        base_url + "/info",
+        json={"type": "spotDeployState", "user": user_address},
+    )
+    print("\n=== spotDeployState ===")
+    print(json.dumps(response.json(), indent=2))
+
+
+def requestEvmContract(account, base_url, params):
+    """Step 1 of linking: declare which EVM contract should be linked to the HC token."""
     action = {
         "type": "spotDeploy",
         "requestEvmContract": {
-            "token": TOKEN,
-            "address": contract_address.lower(),
-            "evmExtraWeiDecimals": 10,
+            "token": params["token_id"],
+            "address": params["evm_contract_address"].lower(),
+            "evmExtraWeiDecimals": params["evm_extra_wei_decimals"],
         },
     }
     nonce = get_timestamp_ms()
@@ -45,22 +86,22 @@ def requestEvmContract(account):
         "signature": signature,
         "vaultAddress": None,
     }
-    response = requests.post(constants.TESTNET_API_URL + "/exchange", json=payload)
+    response = requests.post(base_url + "/exchange", json=payload)
     print(response.json())
 
-def finalizeEvmContract(account):
-    creation_nonce = 4
-    print(creation_nonce)
-    use_create_finalization = True
-    finalize_action: FinalizeEvmContractAction
-    if use_create_finalization:
-        finalize_action = {
-            "type": "finalizeEvmContract",
-            "token": TOKEN,
-            "input": {"create": {"nonce": creation_nonce}},
-        }
-    else:
-        finalize_action = {"type": "finalizeEvmContract", "token": TOKEN, "input": "firstStorageSlot"}
+
+def finalizeEvmContract(account, base_url, params):
+    """Step 2 of linking: prove ownership of the EVM contract so HL activates the link.
+
+    Uses the "firstStorageSlot" verification mode: HL queries storage slot 0 of the
+    EVM contract and expects it to contain the signer's address. The EVM contract
+    therefore must have the signer's address in slot 0 — verify this before running.
+    """
+    finalize_action: FinalizeEvmContractAction = {
+        "type": "finalizeEvmContract",
+        "token": params["token_id"],
+        "input": "firstStorageSlot",
+    }
     nonce = get_timestamp_ms()
     signature = sign_l1_action(account, finalize_action, None, nonce, None, False)
     payload = {
@@ -69,28 +110,41 @@ def finalizeEvmContract(account):
         "signature": signature,
         "vaultAddress": None,
     }
-    response = requests.post(constants.TESTNET_API_URL + "/exchange", json=payload)
+    response = requests.post(base_url + "/exchange", json=payload)
     print(response.json())
 
 
 def main():
-    w3 = Web3(Web3.HTTPProvider(rpc_url))
+    params = load_params()
 
-    # The account will be used both for deploying the ERC20 contract and linking it to your native spot asset
-    # You can also switch this to create an account a different way if you don't want to include a secret key in code
-    if PRIVATE_KEY == "0xPRIVATE_KEY":
-        raise Exception("must set private key or create account another way")
-    account: LocalAccount = Account.from_key(PRIVATE_KEY)
+    # Sanity checks — fail early with a clear message if config is incomplete.
+    if params.get("token_id") is None:
+        raise RuntimeError("token_id is not set in link_tokens_params.json")
+    if params.get("evm_contract_address") is None:
+        raise RuntimeError("evm_contract_address is not set in link_tokens_params.json")
+
+    base_url = get_base_url(params["network"])
+    account: LocalAccount = Account.from_key(get_secret_key())
     print(f"Running with address {account.address}")
-    w3.middleware_onion.add(SignAndSendRawMiddlewareBuilder.build(account))
-    w3.eth.default_account = account.address
-    # Verify connection
-    if not w3.is_connected():
-        raise Exception("Failed to connect to the Ethereum network")
+    print(
+        f"Linking HC token {params['token_id']} → EVM contract {params['evm_contract_address']} "
+        f"(network={params['network']}, mode=firstStorageSlot)"
+    )
 
-    print(TOKEN, contract_address.lower())
-    #requestEvmContract(account)
-    finalizeEvmContract(account)
+    # --- requestEvmContract: reversible, always run without confirm ---
+    requestEvmContract(account, base_url, params)
+
+    # --- finalizeEvmContract: IRREVERSIBLE, confirm + sanity-check pending state ---
+    # Show state so we can verify the pending request actually matches what
+    # we're about to finalize.
+    show_state(base_url, account.address)
+    if not confirm(
+        f"Run finalizeEvmContract? "
+        f"IRREVERSIBLE: locks token {params['token_id']} ↔ EVM contract {params['evm_contract_address']}"
+    ):
+        return
+    finalizeEvmContract(account, base_url, params)
+
 
 if __name__ == "__main__":
     main()

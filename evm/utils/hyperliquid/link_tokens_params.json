@@ -1,12 +1,9 @@
 {
-  "network": "testnet",
+  "network": "mainnet",
 
   "token_id": null,
   "evm_contract_address": null,
   "evm_extra_wei_decimals": 10,
-
-  "finalization_mode": "create",
-  "creation_nonce": null,
 
   "last_link_step": null
 }
