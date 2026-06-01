@@ -113,8 +113,10 @@ def step3(exchange, token, params):
 def step4(exchange, token):
     # Step 4: Register Spot
     #
-    # Register the spot pair (TEST0/USDC) given base and quote token indices. 0 represents USDC.
-    # The base token is the first token in the pair and the quote token is the second token.
+    # Register the initial spot pair <token>/USDC. The first arg is the base token
+    # index (our just-deployed HIP-1 token), the second is the quote token index —
+    # at initial deployment this must be 0 (USDC). Any other quote can only be
+    # added later via a separate permissionless Dutch auction.
     register_spot_result = exchange.spot_deploy_register_spot(token, 0)
     print(register_spot_result)
     # If registration is successful, a spot index will be returned. This spot index is required for
@@ -152,7 +154,7 @@ def main():
 
     step2(address, exchange, token, params)
     step3(exchange, token, params)
-    # spot = step4(exchange, token)
+    spot = step4(exchange, token)
     # print(spot)
     # spot = 1436
     # step5(exchange, spot)
