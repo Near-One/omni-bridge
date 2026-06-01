@@ -1,5 +1,8 @@
 build/
+build-zk/
 cache/
+cache-zk/
+artifacts-zk/
 coverage/
 coverage.json
 node_modules

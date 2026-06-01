@@ -13,7 +13,7 @@ mod tests {
         locker_args::{FinTransferArgs, StorageDepositAction},
         prover_result::{InitTransferMessage, ProverResult},
         BridgeOnTransferMsg, ChainKind, FastFinTransferMsg, Fee, OmniAddress, TransferId,
-        TransferIdKind, TransferMessage, UnifiedTransferId,
+        TransferIdKind, TransferMessage, UnifiedTransferId, UpdateFee,
     };
     use rstest::rstest;
 
@@ -68,9 +68,11 @@ mod tests {
                     .await?
             };
 
-            let relayer_account = env_builder.create_account(relayer_account_id()).await?;
+            let relayer_account = env_builder
+                .setup_trusted_relayer(relayer_account_id())
+                .await?;
             let fast_relayer_account = env_builder
-                .create_account(fast_relayer_account_id())
+                .setup_trusted_relayer(fast_relayer_account_id())
                 .await?;
             let _ = env_builder.create_account(account_n(1)).await?;
 
@@ -248,6 +250,44 @@ mod tests {
         Ok(result)
     }
 
+    async fn update_fee(env: &TestEnv) -> anyhow::Result<ExecutionFinalResult> {
+        let result = env
+            .relayer_account
+            .call(env.bridge_contract.id(), "update_transfer_fee")
+            .args_json(json!({
+                "transfer_id": TransferId {
+                    origin_chain: ChainKind::Near,
+                    origin_nonce: 1,
+                },
+                "fee": UpdateFee::Fee(Fee {
+                    fee: U128(1000),
+                    native_fee: U128(0),
+                }),
+            }))
+            .max_gas()
+            .transact()
+            .await?;
+
+        Ok(result)
+    }
+
+    async fn get_locked_tokens(
+        bridge_contract: &near_workspaces::Contract,
+        chain_kind: ChainKind,
+        token_id: &AccountId,
+    ) -> anyhow::Result<U128> {
+        let locked_tokens: Option<U128> = bridge_contract
+            .view("get_locked_tokens")
+            .args_json(json!({
+                "chain_kind": chain_kind,
+                "token_id": token_id,
+            }))
+            .await?
+            .json()?;
+
+        Ok(locked_tokens.unwrap_or(U128(0)))
+    }
+
     async fn get_balance(
         token_contract: &near_workspaces::Contract,
         account_id: &AccountId,
@@ -347,27 +387,39 @@ mod tests {
         async fn assert_transfer_to_near(
             env: &TestEnv,
             params: FastTransferParams,
+            is_bridged_token: bool,
             error: Option<&str>,
         ) -> anyhow::Result<()> {
             let OmniAddress::Near(recipient) = params.fast_transfer_msg.recipient.clone() else {
                 panic!("Recipient is not a Near address");
             };
+            let origin_chain = params.fast_transfer_msg.transfer_id.origin_chain;
 
+            let locked_before =
+                get_locked_tokens(&env.bridge_contract, origin_chain, env.token_contract.id())
+                    .await?;
             let recipient_balance_before = get_balance(&env.token_contract, &recipient).await?;
             let relayer_balance_before =
                 get_balance(&env.token_contract, env.relayer_account.id()).await?;
             let contract_balance_before =
                 get_balance(&env.token_contract, env.bridge_contract.id()).await?;
 
-            let result =
-                do_fast_transfer(env, params.amount_to_send, params.fast_transfer_msg, None)
-                    .await?;
+            let result = do_fast_transfer(
+                env,
+                params.amount_to_send,
+                params.fast_transfer_msg.clone(),
+                None,
+            )
+            .await?;
 
             let recipient_balance_after = get_balance(&env.token_contract, &recipient).await?;
             let relayer_balance_after =
                 get_balance(&env.token_contract, env.relayer_account.id()).await?;
             let contract_balance_after =
                 get_balance(&env.token_contract, env.bridge_contract.id()).await?;
+            let locked_after =
+                get_locked_tokens(&env.bridge_contract, origin_chain, env.token_contract.id())
+                    .await?;
 
             if let Some(error_msg) = error {
                 assert!(
@@ -378,11 +430,19 @@ mod tests {
                 assert_eq!(recipient_balance_before, recipient_balance_after);
                 assert_eq!(contract_balance_before, contract_balance_after);
                 assert_eq!(relayer_balance_before, relayer_balance_after);
+                assert_eq!(locked_before, locked_after);
 
                 return Ok(());
             }
 
             assert_eq!(0, result.failures().len());
+
+            if is_bridged_token {
+                assert_eq!(0, locked_before.0);
+                assert_eq!(0, locked_after.0);
+            } else {
+                assert_eq!(locked_before.0, locked_after.0);
+            }
 
             assert_eq!(
                 params.amount_to_send,
@@ -393,6 +453,7 @@ mod tests {
                 relayer_balance_before,
                 U128(relayer_balance_after.0 + params.amount_to_send)
             );
+            assert_eq!(locked_before, locked_after);
 
             Ok(())
         }
@@ -528,7 +589,7 @@ mod tests {
                     relayer: AccountId::from_str("fake.testnet").unwrap(),
                 },
             },
-            error: Some("Not enough storage deposited"),
+            error: Some("ERR_NOT_ENOUGH_STORAGE"),
         })]
         // Refund on ft_transfer_call failure
         #[case(FastTransferCase {
@@ -558,7 +619,7 @@ mod tests {
             let env = TestEnv::new(build_artifacts, case.is_bridged_token).await?;
             case.transfer.fast_transfer_msg.relayer = env.relayer_account.id().clone();
 
-            assert_transfer_to_near(&env, case.transfer, case.error).await
+            assert_transfer_to_near(&env, case.transfer, case.is_bridged_token, case.error).await
         }
 
         #[rstest]
@@ -578,14 +639,14 @@ mod tests {
             is_bridged_token: false,
             first_transfer: default_fast_transfer_native(),
             second_transfer: default_fast_transfer_native(),
-            error: Some("Fast transfer is already performed"),
+            error: Some("ERR_FAST_TRANSFER_ALREADY_PERFORMED"),
         })]
         // Fails on duplicate fast transfer with bridged token
         #[case(FastTransferMultipleCase {
             is_bridged_token: true,
             first_transfer: default_fast_transfer_bridged(),
             second_transfer: default_fast_transfer_bridged(),
-            error: Some("Fast transfer is already performed"),
+            error: Some("ERR_FAST_TRANSFER_ALREADY_PERFORMED"),
         })]
         #[tokio::test]
         async fn multiple(
@@ -596,8 +657,14 @@ mod tests {
             case.first_transfer.fast_transfer_msg.relayer = env.relayer_account.id().clone();
             case.second_transfer.fast_transfer_msg.relayer = env.relayer_account.id().clone();
 
-            assert_transfer_to_near(&env, case.first_transfer, None).await?;
-            assert_transfer_to_near(&env, case.second_transfer, case.error).await
+            assert_transfer_to_near(&env, case.first_transfer, case.is_bridged_token, None).await?;
+            assert_transfer_to_near(
+                &env,
+                case.second_transfer,
+                case.is_bridged_token,
+                case.error,
+            )
+            .await
         }
     }
 
@@ -606,6 +673,7 @@ mod tests {
 
         use super::*;
 
+        #[allow(clippy::too_many_lines)]
         async fn assert_transfer_to_other_chain(
             env: &TestEnv,
             params: FastTransferParams,
@@ -615,7 +683,18 @@ mod tests {
             let token_decimal_diff = params.amount_to_send
                 / (params.fast_transfer_msg.amount.0 - params.fast_transfer_msg.fee.fee.0);
             let normalized_fee = params.fast_transfer_msg.fee.fee.0 * token_decimal_diff;
+            let origin_chain = params.fast_transfer_msg.transfer_id.origin_chain;
+            let destination_chain = params.fast_transfer_msg.recipient.get_chain();
 
+            let locked_origin_before =
+                get_locked_tokens(&env.bridge_contract, origin_chain, env.token_contract.id())
+                    .await?;
+            let locked_destination_before = get_locked_tokens(
+                &env.bridge_contract,
+                destination_chain,
+                env.token_contract.id(),
+            )
+            .await?;
             let relayer_balance_before =
                 get_balance(&env.token_contract, env.relayer_account.id()).await?;
             let contract_balance_before =
@@ -633,6 +712,15 @@ mod tests {
                 get_balance(&env.token_contract, env.relayer_account.id()).await?;
             let contract_balance_after =
                 get_balance(&env.token_contract, env.bridge_contract.id()).await?;
+            let locked_origin_after =
+                get_locked_tokens(&env.bridge_contract, origin_chain, env.token_contract.id())
+                    .await?;
+            let locked_destination_after = get_locked_tokens(
+                &env.bridge_contract,
+                destination_chain,
+                env.token_contract.id(),
+            )
+            .await?;
 
             if let Some(error_msg) = error {
                 assert!(
@@ -642,6 +730,8 @@ mod tests {
 
                 assert!(relayer_balance_after == relayer_balance_before);
                 assert!(contract_balance_after == contract_balance_before);
+                assert_eq!(locked_origin_before, locked_origin_after);
+                assert_eq!(locked_destination_before, locked_destination_after);
 
                 return Ok(());
             }
@@ -679,13 +769,33 @@ mod tests {
             assert_eq!(normalized_fee, transfer_message.fee.fee.0);
             assert_eq!(params.fast_transfer_msg.msg, transfer_message.msg);
             assert_eq!(
-                OmniAddress::Near(env.relayer_account.id().clone()),
+                OmniAddress::Near(env.bridge_contract.id().clone()),
                 transfer_message.sender
             );
 
+            assert_eq!(locked_origin_before, locked_origin_after);
+
             if is_bridged_token {
-                assert_eq!(contract_balance_after, contract_balance_before);
+                assert_eq!(
+                    locked_destination_after,
+                    U128(
+                        locked_destination_before.0
+                            + transfer_message
+                                .amount_without_fee()
+                                .expect("amount_without_fee should be present"),
+                    )
+                );
+                assert_eq!(contract_balance_before, contract_balance_after);
             } else {
+                assert_eq!(
+                    locked_destination_after,
+                    U128(
+                        locked_destination_before.0
+                            + transfer_message
+                                .amount_without_fee()
+                                .expect("amount_without_fee should be present"),
+                    )
+                );
                 assert_eq!(
                     contract_balance_before,
                     U128(contract_balance_after.0 - params.amount_to_send)
@@ -695,6 +805,18 @@ mod tests {
             assert_eq!(
                 relayer_balance_before,
                 U128(relayer_balance_after.0 + params.amount_to_send)
+            );
+
+            Ok(())
+        }
+
+        async fn assert_update_fee(env: &TestEnv) -> anyhow::Result<()> {
+            let result = update_fee(env).await?;
+
+            let error_msg = "ERR_UPDATE_FEE_NOT_ALLOWED_FOR_TRANSFER";
+            assert!(
+                has_error_message(&result, error_msg),
+                "Expected error message: {error_msg}"
             );
 
             Ok(())
@@ -756,7 +878,9 @@ mod tests {
             case.transfer.fast_transfer_msg.relayer = env.relayer_account.id().clone();
 
             assert_transfer_to_other_chain(&env, case.transfer, case.is_bridged_token, case.error)
-                .await
+                .await?;
+
+            assert_update_fee(&env).await
         }
 
         #[rstest]
@@ -799,7 +923,7 @@ mod tests {
                     relayer: AccountId::from_str("fake.testnet").unwrap(),
                 }
             },
-            error: Some("Fast transfer is already performed"),
+            error: Some("ERR_FAST_TRANSFER_ALREADY_PERFORMED"),
         })]
         #[tokio::test]
         async fn test_transfer_to_other_chain_multiple(
@@ -1058,7 +1182,7 @@ mod tests {
                         transfer_msg: transfer_msg.clone(),
                         fast_relayer_account: None,
                     },
-                    Some("The transfer is already finalised"),
+                    Some("ERR_TRANSFER_ALREADY_FINALISED"),
                 )
                 .await
             }
@@ -1153,7 +1277,7 @@ mod tests {
                         transfer_msg,
                         fast_relayer_account: Some(&env.fast_relayer_account),
                     },
-                    Some("The transfer is already finalised"),
+                    Some("ERR_TRANSFER_ALREADY_FINALISED"),
                 )
                 .await
             }

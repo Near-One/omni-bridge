@@ -13,4 +13,4 @@ spec:
     - ./near/omni-token/.catalog-info.yaml
     - ./evm/.catalog-info.yaml
     - ./omni-relayer/.catalog-info.yaml
-    - ./solana/bridge_token_factory/.catalog-info.yaml
+    - ./solana/.catalog-info.yaml

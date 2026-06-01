@@ -17,7 +17,7 @@ solana_artifacts_dir = const.common_generated_dir / "solana_artifacts"
 solana_programs = ["bridge_token_factory"]
 
 def get_program_binary_path(program_name, solana_root):
-    return f"{solana_root}/{program_name}/target/verifiable/{program_name}.so"
+    return f"{solana_root}/target/verifiable/{program_name}.so"
 
 def get_mkdir_cmd(directory):
     return f"mkdir -p {directory}"

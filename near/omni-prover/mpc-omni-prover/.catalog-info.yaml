@@ -1,0 +1,23 @@
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: mpc-omni-prover
+  title: "MPC Omni Prover"
+  description: |-
+    Verifies MPC read-RPC signed attestations of foreign chain transaction events.
+    Uses the NEAR MPC network's verify_foreign_transaction API for proof verification.
+    Supports any chain supported by the MPC network.
+  tags:
+    - contract
+    - near
+  links: []
+  annotations:
+    aurora.dev/security-tier: "1"
+spec:
+  owner: nearone-team
+  type: contract
+  lifecycle: production
+  system: omnibridge-protocol
+  deployedAt: []
+  interactsWith: []

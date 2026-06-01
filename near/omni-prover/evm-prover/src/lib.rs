@@ -2,11 +2,13 @@ use borsh::BorshDeserialize;
 use near_sdk::{
     env, ext_contract, near, near_bindgen, require, AccountId, Gas, PanicOnDefault, Promise,
 };
-use omni_types::evm::events::parse_evm_event;
+use omni_types::errors::ProverError;
+use omni_types::evm::events::parse_evm_proof;
 use omni_types::evm::header::BlockHeader;
 use omni_types::evm::receipt::{LogEntry, Receipt};
 use omni_types::prover_args::EvmVerifyProofArgs;
-use omni_types::prover_result::{ProofKind, ProverResult};
+use omni_types::prover_result::ProofKind;
+use omni_types::prover_result::ProverResult;
 use omni_types::utils::keccak256;
 use omni_types::ChainKind;
 use rlp::Rlp;
@@ -16,7 +18,7 @@ const BLOCK_HASH_SAFE_GAS: Gas = Gas::from_tgas(5);
 
 type H256 = [u8; 32];
 
-/// Defines an interface to call EthClient contract to get the safe block hash for a given block
+/// Defines an interface to call `EthClient` contract to get the safe block hash for a given block
 /// number. It returns Some(hash) if the block hash is present in the safe canonical chain, or
 /// None if the block number is not part of the canonical chain yet.
 #[ext_contract(evm_client)]
@@ -55,7 +57,8 @@ impl EvmProver {
     #[allow(clippy::needless_pass_by_value)]
     #[handle_result]
     pub fn verify_proof(&self, #[serializer(borsh)] input: Vec<u8>) -> Result<Promise, String> {
-        let args = EvmVerifyProofArgs::try_from_slice(&input).map_err(|_| "ERR_PARSE_ARGS")?;
+        let args = EvmVerifyProofArgs::try_from_slice(&input)
+            .map_err(|_| ProverError::ParseArgs.to_string())?;
 
         let evm_proof = args.proof;
         let header: BlockHeader = rlp::decode(&evm_proof.header_data).map_err(|e| e.to_string())?;
@@ -75,7 +78,7 @@ impl EvmProver {
         );
 
         if evm_proof.receipt_data != data {
-            return Err("ERR_INVALID_PROOF".to_owned());
+            return Err(ProverError::InvalidProof.to_string());
         }
 
         // Verify block header was in the bridge
@@ -88,7 +91,10 @@ impl EvmProver {
                     .verify_proof_callback(
                         args.proof_kind,
                         evm_proof.log_entry_data,
-                        header.hash.ok_or("ERR_HASH_NOT_SET")?.0,
+                        header
+                            .hash
+                            .ok_or_else(|| ProverError::HashNotSet.to_string())?
+                            .0,
                     ),
             ))
     }
@@ -110,42 +116,25 @@ impl EvmProver {
         block_hash: Option<H256>,
     ) -> Result<ProverResult, String> {
         if block_hash != Some(expected_block_hash) {
-            return Err("ERR_INVALID_BLOCK_HASH".to_owned());
+            return Err(ProverError::InvalidBlockHash.to_string());
         }
 
-        match kind {
-            ProofKind::InitTransfer => Ok(ProverResult::InitTransfer(parse_evm_event(
-                self.chain_kind,
-                log_entry_data,
-            )?)),
-            ProofKind::FinTransfer => Ok(ProverResult::FinTransfer(parse_evm_event(
-                self.chain_kind,
-                log_entry_data,
-            )?)),
-            ProofKind::DeployToken => Ok(ProverResult::DeployToken(parse_evm_event(
-                self.chain_kind,
-                log_entry_data,
-            )?)),
-            ProofKind::LogMetadata => Ok(ProverResult::LogMetadata(parse_evm_event(
-                self.chain_kind,
-                log_entry_data,
-            )?)),
-        }
+        parse_evm_proof(kind, self.chain_kind, log_entry_data)
     }
 
     /// Verify the proof recursively traversing through the key.
     /// Return the value at the end of the key, in case the proof is valid.
     ///
-    /// @param expected_root is the expected root of the current node.
+    /// @param `expected_root` is the expected root of the current node.
     /// @param key is the key for which we are proving the value.
     /// @param proof contains relevant information to verify data is valid
     ///
-    /// Patricia Trie: https://eth.wiki/en/fundamentals/patricia-tree
-    /// Patricia Img:  https://ethereum.stackexchange.com/questions/268/ethereum-block-architecture/6413#6413
+    /// Patricia Trie: <https://eth.wiki/en/fundamentals/patricia-tree>
+    /// Patricia Img:  <https://ethereum.stackexchange.com/questions/268/ethereum-block-architecture/6413#6413>
     ///
-    /// Verification:  https://github.com/slockit/in3/wiki/Ethereum-Verification-and-MerkleProof#receipt-proof
-    /// Article:       https://medium.com/@ouvrard.pierre.alain/merkle-proof-verification-for-ethereum-patricia-tree-48f29658eec
-    /// Python impl:   https://gist.github.com/mfornet/0ff283274c0162f1cca45966bccf69ee
+    /// Verification:  <https://github.com/slockit/in3/wiki/Ethereum-Verification-and-MerkleProof#receipt-proof>
+    /// Article:       <https://medium.com/@ouvrard.pierre.alain/merkle-proof-verification-for-ethereum-patricia-tree-48f29658eec>
+    /// Python impl:   <https://gist.github.com/mfornet/0ff283274c0162f1cca45966bccf69ee>
     ///
     fn verify_trie_proof(expected_root: H256, key: Vec<u8>, proof: &Vec<Vec<u8>>) -> Vec<u8> {
         let mut actual_key = vec![];

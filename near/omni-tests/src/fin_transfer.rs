@@ -11,7 +11,7 @@ mod tests {
     use omni_types::{
         locker_args::{FinTransferArgs, StorageDepositAction},
         prover_result::{InitTransferMessage, ProverResult},
-        Fee, OmniAddress,
+        ChainKind, Fee, OmniAddress,
     };
     use rand::RngCore;
     use rstest::rstest;
@@ -19,8 +19,8 @@ mod tests {
     use crate::{
         environment::TestEnvBuilder,
         helpers::tests::{
-            account_n, build_artifacts, eth_eoa_address, eth_factory_address, eth_token_address,
-            relayer_account_id, BuildArtifacts, NEP141_DEPOSIT,
+            account_n, base_eoa_address, build_artifacts, eth_eoa_address, eth_factory_address,
+            eth_token_address, relayer_account_id, BuildArtifacts, NEP141_DEPOSIT,
         },
     };
 
@@ -76,7 +76,9 @@ mod tests {
 
         let token_receiver_contract = env_builder.deploy_mock_receiver().await?;
 
-        let relayer_account = env_builder.create_account(relayer_account_id()).await?;
+        let relayer_account = env_builder
+            .setup_trusted_relayer(relayer_account_id())
+            .await?;
 
         let required_balance_for_fin_transfer: NearToken = env_builder
             .bridge_contract
@@ -106,38 +108,38 @@ mod tests {
         ],
         1000,
         1,
-        Some("Invalid len of accounts for storage deposit")
+        Some("ERR_INVALID_STORAGE_ACCOUNTS_LEN")
     )]
     #[case(
         vec![(relayer_account_id(), true), (account_n(1), true)],
         1000,
         1,
-        Some("STORAGE_ERR: The transfer recipient is omitted")
+        Some("ERR_STORAGE_RECIPIENT_OMITTED")
     )]
     #[case(
         vec![(account_n(1), true)],
         1000,
         1,
-        Some("STORAGE_ERR: The fee recipient is omitted")
+        Some("ERR_STORAGE_FEE_RECIPIENT_OMITTED")
     )]
-    #[case(vec![], 1000, 1, Some("STORAGE_ERR: The transfer recipient is omitted"))]
+    #[case(vec![], 1000, 1, Some("ERR_STORAGE_RECIPIENT_OMITTED"))]
     #[case(
         vec![(account_n(1), false), (relayer_account_id(), false)],
         1000,
         1,
-        Some("STORAGE_ERR: The transfer recipient is omitted")
+        Some("ERR_STORAGE_RECIPIENT_OMITTED")
     )]
     #[case(
         vec![(account_n(1), true), (relayer_account_id(), false)],
         1000,
         1,
-        Some("STORAGE_ERR: The fee recipient is omitted")
+        Some("ERR_STORAGE_FEE_RECIPIENT_OMITTED")
     )]
     #[case(
         vec![(account_n(1), false), (relayer_account_id(), true)],
         1000,
         1,
-        Some("STORAGE_ERR: The transfer recipient is omitted")
+        Some("ERR_STORAGE_RECIPIENT_OMITTED")
     )]
     #[tokio::test]
     async fn test_storage_deposit_on_fin_transfer(
@@ -287,6 +289,100 @@ mod tests {
             .await?
             .json()?;
         assert_eq!(expected_locker_balance, locker_balance.0);
+
+        Ok(())
+    }
+
+    async fn get_locked_tokens(
+        locker_contract: &Contract,
+        chain_kind: ChainKind,
+        token_id: &AccountId,
+    ) -> anyhow::Result<U128> {
+        let locked_tokens: Option<U128> = locker_contract
+            .view("get_locked_tokens")
+            .args_json(json!({
+                "chain_kind": chain_kind,
+                "token_id": token_id,
+            }))
+            .await?
+            .json()?;
+
+        Ok(locked_tokens.unwrap_or(U128(0)))
+    }
+
+    #[rstest]
+    #[tokio::test]
+    async fn test_fin_transfer_other_chain_locks_once_for_deployed_token(
+        build_artifacts: &BuildArtifacts,
+    ) -> anyhow::Result<()> {
+        let TestSetup {
+            token_contract,
+            locker_contract,
+            relayer_account,
+            required_balance_for_fin_transfer,
+            ..
+        } = setup_contracts(false, true, build_artifacts).await?;
+
+        let required_balance_for_account: NearToken = locker_contract
+            .view("required_balance_for_account")
+            .await?
+            .json()?;
+        let required_balance_for_init_transfer: NearToken = locker_contract
+            .view("required_balance_for_init_transfer")
+            .args_json(json!({
+                "msg": None::<String>,
+            }))
+            .await?
+            .json()?;
+        relayer_account
+            .call(locker_contract.id(), "storage_deposit")
+            .args_json(json!({
+                "account_id": relayer_account.id(),
+            }))
+            .deposit(
+                required_balance_for_account.saturating_add(required_balance_for_init_transfer),
+            )
+            .max_gas()
+            .transact()
+            .await?
+            .into_result()?;
+
+        let recipient = base_eoa_address();
+        let destination_chain = recipient.get_chain();
+        let amount = 1_000;
+
+        let locked_before =
+            get_locked_tokens(&locker_contract, destination_chain, token_contract.id()).await?;
+
+        relayer_account
+            .call(locker_contract.id(), "fin_transfer")
+            .args_borsh(FinTransferArgs {
+                chain_kind: ChainKind::Eth,
+                storage_deposit_actions: Vec::new(),
+                prover_args: borsh::to_vec(&ProverResult::InitTransfer(InitTransferMessage {
+                    origin_nonce: 1,
+                    token: eth_token_address(),
+                    recipient: recipient.clone(),
+                    amount: U128(amount),
+                    fee: Fee {
+                        fee: U128(0),
+                        native_fee: U128(0),
+                    },
+                    sender: eth_eoa_address(),
+                    msg: String::new(),
+                    emitter_address: eth_factory_address(),
+                }))?,
+            })
+            .deposit(required_balance_for_fin_transfer)
+            .max_gas()
+            .transact()
+            .await?
+            .into_result()?;
+
+        let locked_after =
+            get_locked_tokens(&locker_contract, destination_chain, token_contract.id()).await?;
+
+        assert_eq!(locked_after.0, locked_before.0 + amount);
 
         Ok(())
     }
@@ -505,6 +601,89 @@ mod tests {
         )
         .await
         .unwrap();
+    }
+
+    #[rstest]
+    #[tokio::test]
+    async fn test_untrusted_account_cannot_call_fin_transfer(
+        build_artifacts: &BuildArtifacts,
+    ) -> anyhow::Result<()> {
+        let TestSetup {
+            worker,
+            token_contract,
+            locker_contract,
+            required_balance_for_fin_transfer,
+            ..
+        } = setup_contracts(false, false, build_artifacts).await?;
+
+        // Fund the locker with tokens so the call would succeed if authorization passed
+        token_contract
+            .call("ft_transfer")
+            .args_json(json!({
+                "receiver_id": locker_contract.id(),
+                "amount": U128(1000),
+            }))
+            .deposit(NearToken::from_yoctonear(1))
+            .max_gas()
+            .transact()
+            .await?
+            .into_result()?;
+
+        // Create a random account that has no roles
+        let random_account = worker
+            .create_tla(
+                "random-user".parse().unwrap(),
+                worker.generate_dev_account_credentials().1,
+            )
+            .await?
+            .unwrap();
+
+        // Verify this account is not a trusted relayer
+        let is_trusted: bool = locker_contract
+            .view("is_trusted_relayer")
+            .args_json(json!({"account_id": random_account.id()}))
+            .await?
+            .json()?;
+        assert!(
+            !is_trusted,
+            "random account should not be a trusted relayer"
+        );
+
+        // Attempt to call fin_transfer from the random account
+        let result = random_account
+            .call(locker_contract.id(), "fin_transfer")
+            .args_borsh(FinTransferArgs {
+                chain_kind: ChainKind::Eth,
+                storage_deposit_actions: vec![StorageDepositAction {
+                    token_id: token_contract.id().clone(),
+                    account_id: account_n(1),
+                    storage_deposit_amount: Some(NEP141_DEPOSIT.as_yoctonear()),
+                }],
+                prover_args: borsh::to_vec(&ProverResult::InitTransfer(InitTransferMessage {
+                    origin_nonce: 1,
+                    token: eth_token_address(),
+                    recipient: OmniAddress::Near(account_n(1)),
+                    amount: U128(1000),
+                    fee: Fee {
+                        fee: U128(0),
+                        native_fee: U128(0),
+                    },
+                    sender: eth_eoa_address(),
+                    msg: String::new(),
+                    emitter_address: eth_factory_address(),
+                }))?,
+            })
+            .deposit(NEP141_DEPOSIT.saturating_add(required_balance_for_fin_transfer))
+            .max_gas()
+            .transact()
+            .await?;
+
+        assert!(
+            result.into_result().is_err(),
+            "Unprivileged account should not be able to call fin_transfer"
+        );
+
+        Ok(())
     }
 
     #[rstest]

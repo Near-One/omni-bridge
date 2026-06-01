@@ -40,6 +40,21 @@ jobs:
           echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
         shell: bash
 
+      # FOGO is built first: solana-build-ci-fogo renames its outputs to `_fogo`,
+      # leaving the canonical `bridge_token_factory.{so,json}` paths free for the
+      # subsequent Solana build to occupy.
+      - name: Build FOGO contract
+        run: |
+          make solana-build-ci-fogo
+        timeout-minutes: 60
+
+      - name: Upload FOGO Anchor Types
+        uses: actions/upload-artifact@v4
+        with:
+          name: fogo-anchor-types
+          path: solana/target/idl/bridge_token_factory_fogo.json
+          if-no-files-found: error
+
       - name: Build Solana contract
         run: |
           make solana-build-ci
@@ -49,9 +64,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: solana-anchor-types
-          path: solana/bridge_token_factory/target/idl/bridge_token_factory.json
+          path: solana/target/idl/bridge_token_factory.json
           if-no-files-found: error
- 
+
       - name: Archive built WASM files
         env:
            RAW_TAG: ${{ github.ref_name }}
@@ -60,7 +75,8 @@ jobs:
           ZIP_NAME="${SAFE_TAG}.zip"
           mkdir -p artifacts
           find ./near/target/near -name "*.wasm" -exec cp {} artifacts/ \;
-          cp ./solana/bridge_token_factory/target/verifiable/bridge_token_factory.so artifacts
+          cp ./solana/target/verifiable/bridge_token_factory.so artifacts
+          cp ./solana/target/verifiable/bridge_token_factory_fogo.so artifacts
           zip -j "$ZIP_NAME" artifacts/*
         shell: bash
 

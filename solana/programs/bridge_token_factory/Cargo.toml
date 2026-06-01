@@ -1,0 +1,65 @@
+[package]
+name = "bridge_token_factory"
+version = "0.2.8"
+description = "Created with Anchor"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib", "lib"]
+name = "bridge_token_factory"
+
+[[test]]
+name = "mollusk"
+path = "tests/mollusk.rs"
+required-features = ["no-entrypoint"]
+
+[features]
+default = ["mainnet"]
+cpi = ["no-entrypoint"]
+no-entrypoint = []
+no-idl = []
+no-log-ix-name = []
+anchor-debug = []
+custom-heap = []
+custom-panic = []
+# NOTE: must be combined with exactly one of `mainnet`, `devnet`, or `fogo` at build
+# time — wormhole-svm-definitions rejects mixing its `solana` and `from-env` features,
+# so this `idl-build` feature does NOT preselect a network. `anchor build` adds
+# `idl-build` automatically on top of whatever network feature was passed via
+# `--features`, so the normal build paths still work.
+idl-build = [
+    "anchor-lang/idl-build",
+    "anchor-spl/idl-build",
+    "wormhole-anchor-sdk/idl-build",
+]
+devnet = ["wormhole-anchor-sdk/solana-devnet"]
+mainnet = ["wormhole-anchor-sdk/mainnet"]
+# `fogo` (and other non-Solana SVM chains) takes Wormhole program IDs and the
+# Wormhole CHAIN_ID from build-time environment variables instead of the
+# hardcoded Solana mainnet/devnet constants. Required env vars (read by
+# wormhole-svm-definitions/from-env): CHAIN_ID, BRIDGE_ADDRESS,
+# POST_MESSAGE_SHIM_PROGRAM_ID, VERIFY_VAA_SHIM_PROGRAM_ID.
+fogo = ["wormhole-anchor-sdk/from-env"]
+
+[dependencies]
+anchor-lang = { version = "0.32.1", features = ["init-if-needed"] }
+anchor-spl = { version = "0.32.1", features = ["metadata"] }
+solana-program = "2.3.0"
+cfg-if = "1.0.0"
+wormhole-anchor-sdk = { git = "https://github.com/Near-One/wormhole-scaffolding", branch = "main", default-features = false }
+libsecp256k1 = "0.7.1"
+
+[dependencies.bitvec]
+version = "1.0.1"
+default-features = false
+features = []
+
+[dev-dependencies]
+mollusk-svm = "0.3"
+solana-sdk = "2.3"
+sha2 = "0.10"
+sha3 = "0.10"
+libsecp256k1 = "0.7.1"
+mollusk-svm-programs-token = "0.3.0"
+stub_program = { path = "../stub_program" }
+solana-sdk-ids = "2.2"

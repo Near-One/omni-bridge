@@ -3,7 +3,7 @@ pub mod tests {
     use std::path::Path;
 
     use near_sdk::{borsh, json_types::U128, serde_json, AccountId, CryptoHash};
-    use near_workspaces::types::NearToken;
+    use near_workspaces::{result::ExecutionSuccess, types::NearToken};
     use omni_types::{
         locker_args::{BindTokenArgs, ClaimFeeArgs, DeployTokenArgs},
         prover_result::{DeployTokenMessage, FinTransferMessage, LogMetadataMessage, ProverResult},
@@ -175,8 +175,30 @@ pub mod tests {
             .unwrap()
     }
 
+    pub fn abs_factory_address() -> OmniAddress {
+        "abs:0x252e87862A3A720287E7fd527cE6e8d0738427A2"
+            .parse()
+            .unwrap()
+    }
+
+    pub fn hyperevm_factory_address() -> OmniAddress {
+        "hlevm:0x252e87862A3A720287E7fd527cE6e8d0738427A2"
+            .parse()
+            .unwrap()
+    }
+
+    pub fn strk_factory_address() -> OmniAddress {
+        "strk:0x05558831a603eca8cd69a42d4251f08de3573039b69f23972265cac76639f1cf"
+            .parse()
+            .unwrap()
+    }
+
     pub fn sol_factory_address() -> OmniAddress {
         "sol:11111111111111111111111111111111".parse().unwrap()
+    }
+
+    pub fn fogo_factory_address() -> OmniAddress {
+        "fogo:11111111111111111111111111111111".parse().unwrap()
     }
 
     pub fn eth_eoa_address() -> OmniAddress {
@@ -301,6 +323,16 @@ pub mod tests {
             .find(|log| log.contains(event_name))
             .map(|log| serde_json::from_str(log).map_err(anyhow::Error::from))
             .transpose()
+    }
+
+    /// Returns `true` if any log emitted across all receipt outcomes of `result`
+    /// contains `expected_substring` as a substring.
+    pub fn execution_contains_log(result: &ExecutionSuccess, expected_substring: &str) -> bool {
+        result
+            .receipt_outcomes()
+            .iter()
+            .flat_map(|outcome| &outcome.logs)
+            .any(|log| log.contains(expected_substring))
     }
 
     pub fn wasm_code_hash(wasm: &[u8]) -> CryptoHash {

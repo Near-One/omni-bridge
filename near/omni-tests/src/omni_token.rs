@@ -14,12 +14,13 @@ mod tests {
     use rstest::rstest;
 
     use crate::helpers::tests::{
-        account_n, arb_factory_address, arb_token_address, base_factory_address,
-        base_token_address, bnb_factory_address, bnb_token_address, eth_eoa_address,
-        eth_factory_address, eth_token_address, get_test_deploy_token_args, locker_wasm,
+        abs_factory_address, account_n, arb_factory_address, arb_token_address,
+        base_factory_address, base_token_address, bnb_factory_address, bnb_token_address,
+        eth_eoa_address, eth_factory_address, eth_token_address, fogo_factory_address,
+        get_test_deploy_token_args, hyperevm_factory_address, locker_wasm,
         mock_global_contract_deployer_wasm, mock_prover_wasm, omni_token_wasm, pol_factory_address,
-        sol_factory_address, sol_token_address, token_deployer_wasm, wasm_code_hash,
-        GLOBAL_STORAGE_COST_PER_BYTE, NEP141_DEPOSIT, STORAGE_DEPOSIT_PER_BYTE,
+        sol_factory_address, sol_token_address, strk_factory_address, token_deployer_wasm,
+        wasm_code_hash, GLOBAL_STORAGE_COST_PER_BYTE, NEP141_DEPOSIT, STORAGE_DEPOSIT_PER_BYTE,
     };
 
     const PREV_TOKEN_DEPLOYER_WASM_FILEPATH: &str = "src/data/legacy_token_deployer-0.2.4.wasm";
@@ -134,10 +135,14 @@ mod tests {
             let factory_contract_address = match init_token_address.get_chain() {
                 ChainKind::Eth => eth_factory_address(),
                 ChainKind::Sol => sol_factory_address(),
+                ChainKind::Fogo => fogo_factory_address(),
                 ChainKind::Arb => arb_factory_address(),
                 ChainKind::Base => base_factory_address(),
                 ChainKind::Bnb => bnb_factory_address(),
                 ChainKind::Pol => pol_factory_address(),
+                ChainKind::Abs => abs_factory_address(),
+                ChainKind::HyperEvm => hyperevm_factory_address(),
+                ChainKind::Strk => strk_factory_address(),
                 ChainKind::Near | ChainKind::Btc | ChainKind::Zcash => panic!("Unsupported chain"),
             };
 
@@ -1169,6 +1174,8 @@ mod tests {
         emitter_address: OmniAddress,
         amount: U128,
     ) -> anyhow::Result<()> {
+        let sender =
+            OmniAddress::new_zero(token_address.get_chain()).unwrap_or_else(|_| eth_eoa_address());
         let storage_deposit_actions = vec![StorageDepositAction {
             token_id: token_account_id.clone(),
             account_id: recipient.id().clone(),
@@ -1196,7 +1203,7 @@ mod tests {
                         fee: U128(0),
                         native_fee: U128(0),
                     },
-                    sender: eth_eoa_address(),
+                    sender,
                     msg: String::default(),
                     emitter_address,
                 }))?,

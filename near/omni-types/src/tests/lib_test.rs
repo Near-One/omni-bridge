@@ -1,14 +1,15 @@
-use near_sdk::borsh;
 use near_sdk::json_types::U128;
 use near_sdk::serde_json;
+use near_sdk::{borsh, AccountId, NearToken};
 
 use crate::{
-    stringify, ChainKind, Fee, OmniAddress, PayloadType, SolAddress, TransferId, TransferMessage,
-    H160,
+    get_native_token_address, stringify, BridgeError, ChainKind, DestinationChainMsg, Fee,
+    OmniAddress, OmniError, PayloadType, SolAddress, StorageBalanceError, TransferId,
+    TransferMessage, H160, H256,
 };
 use std::str::FromStr;
 
-fn chain_kinds_for_borsh() -> [ChainKind; 9] {
+fn chain_kinds_for_borsh() -> [ChainKind; 13] {
     [
         ChainKind::Eth,
         ChainKind::Near,
@@ -19,20 +20,37 @@ fn chain_kinds_for_borsh() -> [ChainKind; 9] {
         ChainKind::Btc,
         ChainKind::Zcash,
         ChainKind::Pol,
+        ChainKind::HyperEvm,
+        ChainKind::Strk,
+        ChainKind::Abs,
+        ChainKind::Fogo,
     ]
 }
 
 fn omni_addresses_for_borsh() -> Vec<OmniAddress> {
     vec![
-        OmniAddress::Eth(H160::ZERO),
+        OmniAddress::Eth(H160::from_str("0x23ddd3e3692d1861ed57ede224608875809e127f").unwrap()),
         OmniAddress::Near("borsh.near".parse().unwrap()),
-        OmniAddress::Sol(SolAddress::ZERO),
-        OmniAddress::Arb(H160::ZERO),
-        OmniAddress::Base(H160::ZERO),
-        OmniAddress::Bnb(H160::ZERO),
+        OmniAddress::Sol(
+            SolAddress::from_str("BXss9YNCX2p6VPf2Em54pHXkXnC2FPBeZgbB9fY1cuBR").unwrap(),
+        ),
+        OmniAddress::Arb(H160::from_str("0x23ddd3e3692d1861ed57ede224608875809e127f").unwrap()),
+        OmniAddress::Base(H160::from_str("0x23ddd3e3692d1861ed57ede224608875809e127f").unwrap()),
+        OmniAddress::Bnb(H160::from_str("0x23ddd3e3692d1861ed57ede224608875809e127f").unwrap()),
         OmniAddress::Btc("btc_address".to_string()),
         OmniAddress::Zcash("zcash_address".to_string()),
-        OmniAddress::Pol(H160::ZERO),
+        OmniAddress::Pol(H160::from_str("0x23ddd3e3692d1861ed57ede224608875809e127f").unwrap()),
+        OmniAddress::HyperEvm(
+            H160::from_str("0x23ddd3e3692d1861ed57ede224608875809e127f").unwrap(),
+        ),
+        OmniAddress::Strk(
+            H256::from_str("0x05558831a603eca8cd69a42d4251f08de3573039b69f23972265cac76639f1cf")
+                .unwrap(),
+        ),
+        OmniAddress::Abs(H160::from_str("0x23ddd3e3692d1861ed57ede224608875809e127f").unwrap()),
+        OmniAddress::Fogo(
+            SolAddress::from_str("BXss9YNCX2p6VPf2Em54pHXkXnC2FPBeZgbB9fY1cuBR").unwrap(),
+        ),
     ]
 }
 
@@ -130,120 +148,6 @@ fn test_omni_address_borsh_variants_are_covered() {
 }
 
 #[test]
-fn test_h160_from_str() {
-    let addr = "5a08feed678c056650b3eb4a5cb1b9bb6f0fe265";
-    let h160 = H160::from_str(addr).expect("Should parse without 0x prefix");
-    assert_eq!(h160.to_string(), format!("0x{addr}"));
-
-    let addr_with_prefix = format!("0x{addr}");
-    let h160_with_prefix = H160::from_str(&addr_with_prefix).expect("Should parse with 0x prefix");
-    assert_eq!(h160, h160_with_prefix);
-
-    let invalid_hex = "0xnot_a_hex_string";
-    let err = H160::from_str(invalid_hex).expect_err("Should fail with invalid hex");
-    assert!(err.contains("ERR_INVALIDE_HEX"), "Error was: {err}");
-
-    let short_addr = "0x5a08";
-    let err = H160::from_str(short_addr).expect_err("Should fail with invalid length");
-    assert!(err.contains("Invalid length:"), "Error was: {err}");
-}
-
-#[test]
-fn test_eip_55_checksum() {
-    let test_address = |input: &str, expected: &str, error_message: &str| {
-        let h160 = H160::from_str(input).expect("Valid address");
-        assert_eq!(
-            h160.to_eip_55_checksum(),
-            expected,
-            "{error_message} {input} -> {expected}"
-        );
-    };
-
-    let input = "0x5A08FeED678C056650b3eb4a5cb1b9BB6F0fE265";
-    let expected = "5A08FeED678C056650b3eb4a5cb1b9BB6F0fE265";
-    test_address(input, expected, "Original address");
-    test_address(&input.to_lowercase(), expected, "Lowercase address");
-    test_address(
-        &format!("0x{}", expected.to_ascii_uppercase()),
-        expected,
-        "Uppercase address",
-    );
-
-    let input = "0x1234567890123456789012345678901234567890";
-    let expected = "1234567890123456789012345678901234567890";
-    test_address(input, expected, "No mixed case address");
-}
-
-#[test]
-fn test_h160_deserialization() {
-    let json = r#""0x5a08feed678c056650b3eb4a5cb1b9bb6f0fe265""#;
-    let h160: H160 = serde_json::from_str(json).expect("Should deserialize with 0x prefix");
-    assert_eq!(
-        h160.to_string(),
-        "0x5a08feed678c056650b3eb4a5cb1b9bb6f0fe265",
-        "Should deserialize with 0x prefix"
-    );
-
-    let json = r#""5a08feed678c056650b3eb4a5cb1b9bb6f0fe265""#;
-    let h160: H160 = serde_json::from_str(json).expect("Should deserialize without 0x prefix");
-    assert_eq!(
-        h160.to_string(),
-        "0x5a08feed678c056650b3eb4a5cb1b9bb6f0fe265",
-        "Should deserialize without 0x prefix"
-    );
-
-    let json = r#""0xnot_a_hex_string""#;
-    let result: Result<H160, _> = serde_json::from_str(json);
-    assert!(result.is_err(), "Should fail with invalid hex");
-    let err = result.unwrap_err().to_string();
-    assert!(
-        err.contains("ERR_INVALIDE_HEX"),
-        "Error was: {err} but expected ERR_INVALIDE_HEX"
-    );
-
-    let json = r#""0x5a08""#;
-    let result: Result<H160, _> = serde_json::from_str(json);
-    assert!(result.is_err(), "Should fail with invalid length");
-    let err = result.unwrap_err().to_string();
-    assert!(
-        err.contains("Invalid length"),
-        "Error was: {err} but expected Invalid length"
-    );
-
-    let json = "123";
-    let result: Result<H160, _> = serde_json::from_str(json);
-    assert!(result.is_err(), "Should fail with non-string input");
-    let err = result.unwrap_err().to_string();
-    assert!(
-        err.contains("invalid type"),
-        "Error was: {err} but expected invalid type"
-    );
-}
-
-#[test]
-fn test_h160_serialization() {
-    let addr = "5a08feed678c056650b3eb4a5cb1b9bb6f0fe265";
-    let h160 = H160::from_str(addr).expect("Valid address");
-    let serialized = serde_json::to_string(&h160).expect("Should serialize");
-    assert_eq!(
-        serialized, r#""0x5a08feed678c056650b3eb4a5cb1b9bb6f0fe265""#,
-        "Invalid serialization."
-    );
-
-    let deserialized: H160 = serde_json::from_str(&serialized).expect("Should deserialize");
-    assert_eq!(
-        h160, deserialized,
-        "Deserialization is not equal to initial value."
-    );
-
-    assert_eq!(
-        format!(r#""{h160}""#),
-        serialized,
-        "Serialization does not preserve format from to_string()"
-    );
-}
-
-#[test]
 fn test_chain_kind_from_omni_address() {
     let test_chain_kind = |addr: OmniAddress, expected: ChainKind, chain_name: &str| {
         assert_eq!(
@@ -267,8 +171,26 @@ fn test_chain_kind_from_omni_address() {
         ChainKind::Sol,
         "SOL",
     );
+    test_chain_kind(
+        OmniAddress::Fogo("11111111111111111111111111111111".parse().unwrap()),
+        ChainKind::Fogo,
+        "FOGO",
+    );
     test_chain_kind(OmniAddress::Arb(evm_address.clone()), ChainKind::Arb, "ARB");
     test_chain_kind(OmniAddress::Base(evm_address), ChainKind::Base, "BASE");
+    test_chain_kind(
+        OmniAddress::Abs(H160::from_str("0x5a08feed678c056650b3eb4a5cb1b9bb6f0fe265").unwrap()),
+        ChainKind::Abs,
+        "ABS",
+    );
+    test_chain_kind(
+        OmniAddress::Strk(
+            H256::from_str("0x05558831a603eca8cd69a42d4251f08de3573039b69f23972265cac76639f1cf")
+                .unwrap(),
+        ),
+        ChainKind::Strk,
+        "STRK",
+    );
 }
 
 #[test]
@@ -279,6 +201,10 @@ fn test_omni_address_from_evm_address() {
     assert_eq!(
         OmniAddress::new_from_evm_address(ChainKind::Eth, evm_address.clone()),
         Ok(OmniAddress::Eth(evm_address.clone()))
+    );
+    assert_eq!(
+        OmniAddress::new_from_evm_address(ChainKind::Abs, evm_address.clone()),
+        Ok(OmniAddress::Abs(evm_address.clone()))
     );
 
     for chain_kind in [ChainKind::Near, ChainKind::Sol] {
@@ -312,6 +238,13 @@ fn test_omni_address_from_str() {
             "Should parse SOL address",
         ),
         (
+            "fogo:11111111111111111111111111111111".to_string(),
+            Ok(OmniAddress::Fogo(
+                "11111111111111111111111111111111".parse().unwrap(),
+            )),
+            "Should parse FOGO address",
+        ),
+        (
             format!("arb:{evm_addr}"),
             Ok(OmniAddress::Arb(H160::from_str(evm_addr).unwrap())),
             "Should parse ARB address",
@@ -322,8 +255,23 @@ fn test_omni_address_from_str() {
             "Should parse BASE address",
         ),
         (
+            format!("abs:{evm_addr}"),
+            Ok(OmniAddress::Abs(H160::from_str(evm_addr).unwrap())),
+            "Should parse ABS address",
+        ),
+        (
+            "strk:0x05558831a603eca8cd69a42d4251f08de3573039b69f23972265cac76639f1cf".to_string(),
+            Ok(OmniAddress::Strk(
+                H256::from_str(
+                    "0x05558831a603eca8cd69a42d4251f08de3573039b69f23972265cac76639f1cf",
+                )
+                .unwrap(),
+            )),
+            "Should parse STRK address",
+        ),
+        (
             "invalid_format".to_string(),
-            Err("ERR_INVALIDE_HEX".to_string()),
+            Err("ERR_INVALID_HEX".to_string()),
             "Should fail on missing chain prefix",
         ),
         (
@@ -360,6 +308,11 @@ fn test_omni_address_display() {
             "SOL address should format as sol:address",
         ),
         (
+            OmniAddress::Fogo("11111111111111111111111111111111".parse().unwrap()),
+            "fogo:11111111111111111111111111111111".to_string(),
+            "FOGO address should format as fogo:address",
+        ),
+        (
             OmniAddress::Arb(evm_addr.clone()),
             format!("arb:{evm_addr}"),
             "ARB address should format as arb:0x...",
@@ -368,6 +321,21 @@ fn test_omni_address_display() {
             OmniAddress::Base(evm_addr.clone()),
             format!("base:{evm_addr}"),
             "BASE address should format as base:0x...",
+        ),
+        (
+            OmniAddress::Abs(evm_addr.clone()),
+            format!("abs:{evm_addr}"),
+            "ABS address should format as abs:0x...",
+        ),
+        (
+            OmniAddress::Strk(
+                H256::from_str(
+                    "0x05558831a603eca8cd69a42d4251f08de3573039b69f23972265cac76639f1cf",
+                )
+                .unwrap(),
+            ),
+            "strk:0x05558831a603eca8cd69a42d4251f08de3573039b69f23972265cac76639f1cf".to_string(),
+            "STRK address should format as strk:0x...",
         ),
     ];
 
@@ -528,9 +496,11 @@ fn test_get_native_token_prefix() {
     for chain_kind in [
         ChainKind::Near,
         ChainKind::Sol,
+        ChainKind::Fogo,
         ChainKind::Base,
         ChainKind::Eth,
         ChainKind::Arb,
+        ChainKind::Abs,
     ] {
         let prefix = OmniAddress::new_zero(chain_kind)
             .unwrap()
@@ -551,7 +521,11 @@ fn test_get_evm_token_prefix() {
     let prefix = eth_address.get_token_prefix();
     assert_eq!(prefix, "23ddd3e3692d1861ed57ede224608875809e127f");
 
-    for chain_kind in [ChainKind::Base, ChainKind::Arb] {
+    for chain_kind in chain_kinds_for_borsh() {
+        if chain_kind == ChainKind::Eth || !chain_kind.is_evm_chain() {
+            continue;
+        }
+
         let chain_kind_prefix: String = chain_kind.as_ref().to_lowercase();
         let chain_address: OmniAddress = format!("{chain_kind_prefix}:{address}").parse().unwrap();
         assert_eq!(
@@ -562,10 +536,108 @@ fn test_get_evm_token_prefix() {
 }
 
 #[test]
+fn test_token_id_validity() {
+    // Testnet token deployer has the longest account id
+    let token_deployer = "omnidep.testnet";
+
+    for omni_address in omni_addresses_for_borsh() {
+        let token_prefix: String = omni_address.get_token_prefix();
+        let token_id = format!("{token_prefix}.{token_deployer}");
+
+        assert!(AccountId::from_str(&token_id).is_ok());
+    }
+}
+
+#[test]
 fn test_chain_kind_from_str() {
     let chain: ChainKind = "Eth".parse().unwrap();
     assert_eq!(chain, ChainKind::Eth);
 
     let chain: ChainKind = "Base".parse().unwrap();
     assert_eq!(chain, ChainKind::Base);
+
+    let chain: ChainKind = "Abs".parse().unwrap();
+    assert_eq!(chain, ChainKind::Abs);
+}
+
+#[test]
+fn test_deserialize_destination_chain_msg() {
+    let serialized_msg = r#"{"MaxGasFee":"12345"}"#;
+    let deserialized: DestinationChainMsg = serde_json::from_str(serialized_msg).unwrap();
+    let original = DestinationChainMsg::MaxGasFee(12345.into());
+    assert_eq!(original, deserialized);
+
+    let serialized_msg = r#"{"DestHexMsg":"abff"}"#;
+    let deserialized: DestinationChainMsg = serde_json::from_str(serialized_msg).unwrap();
+    let original = DestinationChainMsg::DestHexMsg(hex::decode("abff").unwrap());
+    assert_eq!(original, deserialized);
+}
+
+#[test]
+fn test_get_native_token_address_returns_expected_addresses() {
+    // Starknet should return the hardcoded STRK token address
+    let strk_address = get_native_token_address(ChainKind::Strk).unwrap();
+    assert_eq!(
+        strk_address,
+        OmniAddress::Strk(H256([
+            0x04, 0x71, 0x8f, 0x5a, 0x0f, 0xc3, 0x4c, 0xc1, 0xaf, 0x16, 0xa1, 0xcd, 0xee, 0x98,
+            0xff, 0xb2, 0x0c, 0x31, 0xf5, 0xcd, 0x61, 0xd6, 0xab, 0x07, 0x20, 0x18, 0x58, 0xf4,
+            0x28, 0x7c, 0x93, 0x8d,
+        ])),
+        "Starknet native token should be the hardcoded STRK address"
+    );
+
+    // All other chains should return zero addresses
+    for chain_kind in chain_kinds_for_borsh() {
+        if chain_kind == ChainKind::Strk {
+            continue;
+        }
+        let address = get_native_token_address(chain_kind).unwrap();
+        assert_eq!(
+            address,
+            OmniAddress::new_zero(chain_kind).unwrap(),
+            "Native token for {:?} should be the zero address",
+            chain_kind
+        );
+    }
+}
+
+#[test]
+fn test_errors_serialization() {
+    assert_eq!(
+        BridgeError::InvalidAttachedDeposit.as_ref(),
+        "ERR_INVALID_ATTACHED_DEPOSIT"
+    );
+    assert_eq!(
+        BridgeError::InvalidAttachedDeposit.to_string(),
+        "ERR_INVALID_ATTACHED_DEPOSIT"
+    );
+    assert_eq!(
+        OmniError::Bridge(BridgeError::InvalidAttachedDeposit).to_string(),
+        "ERR_INVALID_ATTACHED_DEPOSIT"
+    );
+    assert_eq!(
+        StorageBalanceError::AccountNotRegistered("near".parse().unwrap()).as_ref(),
+        "ERR_ACCOUNT_NOT_REGISTERED: field1=near"
+    );
+    assert_eq!(
+        StorageBalanceError::AccountNotRegistered("near".parse().unwrap()).to_string(),
+        "ERR_ACCOUNT_NOT_REGISTERED: field1=near"
+    );
+    assert_eq!(
+        StorageBalanceError::NotEnoughStorage {
+            required: NearToken::from_near(100),
+            available: NearToken::from_near(50),
+        }
+        .as_ref(),
+        "ERR_NOT_ENOUGH_STORAGE: required=100.00 NEAR, available=50.00 NEAR"
+    );
+    assert_eq!(
+        StorageBalanceError::NotEnoughStorage {
+            required: NearToken::from_near(100),
+            available: NearToken::from_near(50),
+        }
+        .to_string(),
+        "ERR_NOT_ENOUGH_STORAGE: required=100.00 NEAR, available=50.00 NEAR"
+    );
 }

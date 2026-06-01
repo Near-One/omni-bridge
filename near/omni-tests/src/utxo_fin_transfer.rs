@@ -5,10 +5,13 @@ mod tests {
         serde_json::{self, json},
         AccountId,
     };
-    use near_workspaces::{result::ExecutionFinalResult, types::NearToken};
+    use near_workspaces::{
+        result::ExecutionFinalResult,
+        types::{Gas, NearToken},
+    };
     use omni_types::{
-        BridgeOnTransferMsg, ChainKind, FastFinTransferMsg, Fee, OmniAddress, TransferIdKind,
-        UnifiedTransferId, UtxoFinTransferMsg,
+        BridgeOnTransferMsg, ChainKind, FastFinTransferMsg, Fee, OmniAddress, TransferId,
+        TransferIdKind, UnifiedTransferId, UtxoFinTransferMsg,
     };
     use rstest::rstest;
 
@@ -37,7 +40,7 @@ mod tests {
                 .with_utxo_token()
                 .await?;
 
-            let relayer_account = env_builder.create_account(account_n(10)).await?;
+            let relayer_account = env_builder.setup_trusted_relayer(account_n(10)).await?;
             env_builder.storage_deposit(relayer_account.id()).await?;
             env_builder
                 .omni_storage_deposit(relayer_account.id(), 1_000_000_000_000_000_000_000_000)
@@ -45,6 +48,27 @@ mod tests {
             env_builder
                 .mint_tokens(relayer_account.id(), 1_000_000_000)
                 .await?;
+            env_builder
+                .bridge_contract
+                .call("set_locked_tokens")
+                .args_json(json!({
+                    "args": [
+                        {
+                            "chain_kind": ChainKind::Base,
+                            "token_id": env_builder.token.contract.id(),
+                            "amount": U128(0),
+                        },
+                        {
+                            "chain_kind": ChainKind::Near,
+                            "token_id": env_builder.token.contract.id(),
+                            "amount": U128(1_000_000_000),
+                        }
+                    ]
+                }))
+                .max_gas()
+                .transact()
+                .await?
+                .into_result()?;
 
             let recipient_account = env_builder.create_account(account_n(1)).await?;
             env_builder.storage_deposit(recipient_account.id()).await?;
@@ -81,6 +105,23 @@ mod tests {
         Ok(balance)
     }
 
+    async fn get_locked_tokens(
+        bridge_contract: &near_workspaces::Contract,
+        chain_kind: ChainKind,
+        token_id: &AccountId,
+    ) -> anyhow::Result<U128> {
+        let locked_tokens: Option<U128> = bridge_contract
+            .view("get_locked_tokens")
+            .args_json(json!({
+                "chain_kind": chain_kind,
+                "token_id": token_id,
+            }))
+            .await?
+            .json()?;
+
+        Ok(locked_tokens.unwrap_or(U128(0)))
+    }
+
     fn has_error_message(result: &ExecutionFinalResult, error_msg: &str) -> bool {
         let has_failure = result.failures().into_iter().any(|outcome| {
             outcome
@@ -99,6 +140,7 @@ mod tests {
         }
     }
 
+    #[allow(clippy::too_many_lines)]
     async fn do_utxo_fin_transfer(
         env: &TestEnv,
         amount: u128,
@@ -108,6 +150,12 @@ mod tests {
     ) -> anyhow::Result<ExecutionFinalResult> {
         let is_transfer_to_near = matches!(utxo_msg.recipient, OmniAddress::Near(_));
 
+        let locked_before = get_locked_tokens(
+            &env.bridge_contract,
+            ChainKind::Near,
+            env.token_contract.id(),
+        )
+        .await?;
         let connector_balance_before =
             get_balance(&env.token_contract, env.utxo_connector.id()).await?;
         let recipient_balance_before =
@@ -132,6 +180,12 @@ mod tests {
             get_balance(&env.token_contract, env.recipient_account.id()).await?;
         let relayer_balance_after =
             get_balance(&env.token_contract, env.relayer_account.id()).await?;
+        let locked_after = get_locked_tokens(
+            &env.bridge_contract,
+            ChainKind::Near,
+            env.token_contract.id(),
+        )
+        .await?;
 
         if let Some(expected_error) = error {
             assert!(has_error_message(&result, expected_error));
@@ -149,7 +203,11 @@ mod tests {
                 "Recipient balance should be unchanged after failed transfer"
             );
         } else {
-            assert_eq!(0, result.failures().len());
+            assert!(
+                result.failures().is_empty(),
+                "Unexpected failures: {:?}",
+                result.failures()
+            );
 
             assert_eq!(
                 connector_balance_before.0,
@@ -175,6 +233,11 @@ mod tests {
                 "Recipient balance is not correct"
             );
         }
+
+        assert_eq!(
+            locked_before, locked_after,
+            "Locked tokens should be unchanged on Near"
+        );
 
         if !is_fast_transfer && !is_transfer_to_near {
             let transfer_message: Option<omni_types::TransferMessage> = env
@@ -342,7 +405,7 @@ mod tests {
                 msg: String::default(),
             },
             is_fast_transfer: false,
-            error: Some("recipient is omitted"),
+            error: Some("ERR_STORAGE_RECIPIENT_OMITTED"),
         }
     )]
     #[tokio::test]
@@ -425,6 +488,179 @@ mod tests {
             Some("ERR_FAST_TRANSFER_ALREADY_FINALISED"),
         )
         .await?;
+
+        Ok(())
+    }
+
+    #[rstest]
+    #[case::enough_gas_succeeds(Gas::from_tgas(150), None)]
+    #[case::insufficient_gas_fails(
+        Gas::from_tgas(50),
+        Some("ERR_NOT_ENOUGH_GAS_FOR_TOKEN_TRANSFER")
+    )]
+    #[tokio::test]
+    async fn utxo_fin_transfer_with_msg_gas_budget(
+        build_artifacts: &BuildArtifacts,
+        #[case] gas: Gas,
+        #[case] expected_error: Option<&str>,
+    ) -> anyhow::Result<()> {
+        let env_builder = TestEnvBuilder::new(build_artifacts.clone())
+            .await?
+            .with_utxo_token()
+            .await?;
+
+        let relayer_account = env_builder.setup_trusted_relayer(account_n(10)).await?;
+        env_builder.storage_deposit(relayer_account.id()).await?;
+        env_builder
+            .omni_storage_deposit(relayer_account.id(), 1_000_000_000_000_000_000_000_000)
+            .await?;
+        env_builder
+            .bridge_contract
+            .call("set_locked_tokens")
+            .args_json(json!({
+                "args": [{
+                    "chain_kind": ChainKind::Near,
+                    "token_id": env_builder.token.contract.id(),
+                    "amount": U128(1_000_000_000),
+                }]
+            }))
+            .max_gas()
+            .transact()
+            .await?
+            .into_result()?;
+        env_builder
+            .mint_tokens(
+                env_builder.utxo_connector.as_ref().unwrap().id(),
+                1_000_000_000_000,
+            )
+            .await?;
+
+        let token_receiver = env_builder.deploy_mock_receiver().await?;
+        env_builder.storage_deposit(token_receiver.id()).await?;
+
+        let amount: u128 = 100_000_000;
+        let inner_msg = serde_json::json!({
+            "return_value": U128(0),
+            "panic": false,
+            "extra_msg": "",
+        })
+        .to_string();
+        let utxo_msg = UtxoFinTransferMsg {
+            utxo_id: default_utxo_id(),
+            recipient: OmniAddress::Near(token_receiver.id().clone()),
+            relayer_fee: U128(1000),
+            msg: inner_msg,
+        };
+
+        let receiver_balance_before =
+            get_balance(&env_builder.token.contract, token_receiver.id()).await?;
+
+        let result = relayer_account
+            .call(
+                env_builder.utxo_connector.as_ref().unwrap().id(),
+                "verify_deposit",
+            )
+            .args_json(json!({
+                "amount": U128(amount),
+                "msg": utxo_msg,
+            }))
+            .gas(gas)
+            .transact()
+            .await?;
+
+        let receiver_balance_after =
+            get_balance(&env_builder.token.contract, token_receiver.id()).await?;
+
+        if let Some(expected) = expected_error {
+            assert!(
+                has_error_message(&result, expected),
+                "expected error {expected:?} not found; failures: {:?}",
+                result.failures(),
+            );
+            assert_eq!(
+                receiver_balance_before.0, receiver_balance_after.0,
+                "recipient balance should be unchanged on failure"
+            );
+        } else {
+            assert!(
+                result.failures().is_empty(),
+                "verify_deposit had unexpected failures: {:?}",
+                result.failures()
+            );
+            assert_eq!(
+                receiver_balance_after.0,
+                receiver_balance_before.0 + amount,
+                "recipient should have received the full amount via ft_transfer_call"
+            );
+            let receiver_logged_ft_on_transfer = result
+                .receipt_outcomes()
+                .iter()
+                .flat_map(|o| &o.logs)
+                .any(|log| log.contains("ft_on_transfer called with sender_id"));
+            assert!(
+                receiver_logged_ft_on_transfer,
+                "recipient's ft_on_transfer was not invoked"
+            );
+        }
+
+        Ok(())
+    }
+
+    #[rstest]
+    #[tokio::test]
+    async fn test_untrusted_account_cannot_call_submit_transfer_to_utxo_chain_connector(
+        build_artifacts: &BuildArtifacts,
+    ) -> anyhow::Result<()> {
+        let env = TestEnv::new(build_artifacts).await?;
+
+        // Create a random account that has no roles
+        let random_account = env
+            .bridge_contract
+            .as_account()
+            .create_subaccount("random-user")
+            .initial_balance(NearToken::from_near(5))
+            .transact()
+            .await?
+            .into_result()?;
+
+        // Verify this account is not a trusted relayer
+        let is_trusted: bool = env
+            .bridge_contract
+            .view("is_trusted_relayer")
+            .args_json(json!({"account_id": random_account.id()}))
+            .await?
+            .json()?;
+        assert!(
+            !is_trusted,
+            "random account should not be a trusted relayer"
+        );
+
+        // Attempt to call submit_transfer_to_utxo_chain_connector from the random account.
+        // The #[trusted_relayer] guard should reject this before the method body runs,
+        // so a dummy transfer_id is sufficient.
+        let result = random_account
+            .call(
+                env.bridge_contract.id(),
+                "submit_transfer_to_utxo_chain_connector",
+            )
+            .args_json(json!({
+                "transfer_id": TransferId {
+                    origin_chain: ChainKind::Near,
+                    origin_nonce: 1,
+                },
+                "msg": "{}",
+                "fee_recipient": null,
+                "fee": null,
+            }))
+            .deposit(NearToken::from_yoctonear(1))
+            .max_gas()
+            .transact()
+            .await?;
+
+        assert!(
+            result.into_result().is_err(),
+            "Unprivileged account should not be able to call submit_transfer_to_utxo_chain_connector"
+        );
 
         Ok(())
     }

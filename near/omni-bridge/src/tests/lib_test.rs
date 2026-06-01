@@ -8,14 +8,17 @@ use near_sdk::{
 };
 use omni_types::{
     locker_args::StorageDepositAction,
-    prover_result::{InitTransferMessage, ProverResult},
+    prover_result::{FinTransferMessage, InitTransferMessage, ProverResult},
     sol_address::SolAddress,
     BridgeOnTransferMsg, ChainKind, EvmAddress, Fee, InitTransferMsg, Nonce, OmniAddress,
-    TransferId, TransferMessage, UpdateFee,
+    TransferId, TransferIdKind, TransferMessage, UnifiedTransferId, UpdateFee,
 };
 
-use crate::storage::Decimals;
 use crate::Contract;
+use crate::{
+    storage::{Decimals, TransferMessageStorage, TransferMessageStorageValue},
+    token_lock::LockAction,
+};
 
 const DEFAULT_NONCE: Nonce = 0;
 const DEFAULT_TRANSFER_ID: TransferId = TransferId {
@@ -29,6 +32,7 @@ const DEFAULT_NEAR_USER_ACCOUNT: &str = "user.testnet";
 const DEFAULT_FT_CONTRACT_ACCOUNT: &str = "ft_contract.testnet";
 const DEFAULT_ETH_USER_ADDRESS: &str = "0x1234567890123456789012345678901234567890";
 const DEFAULT_TRANSFER_AMOUNT: u128 = 100;
+const DEFAULT_TRANSFER_FEE: u128 = 10;
 const NEP141_DEPOSIT: NearToken = NearToken::from_yoctonear(1_250_000_000_000_000_000_000);
 
 fn setup_test_env(
@@ -56,6 +60,11 @@ fn setup_test_env(
 }
 
 fn setup_contract(mpc_signer_id: String, wnear_id: String) -> Contract {
+    setup_test_env(
+        AccountId::try_from(DEFAULT_NEAR_USER_ACCOUNT.to_string()).unwrap(),
+        NearToken::from_yoctonear(0),
+        None,
+    );
     Contract::new(
         AccountId::try_from(mpc_signer_id).expect("Invalid default mpc signer ID"),
         AccountId::try_from(wnear_id).expect("Invalid default wnear ID"),
@@ -84,6 +93,7 @@ fn get_init_transfer_msg(recipient: &str, fee: u128, native_token_fee: u128) -> 
         fee: U128(fee),
         native_token_fee: U128(native_token_fee),
         msg: None,
+        external_id: None,
     }
 }
 
@@ -255,6 +265,83 @@ fn test_init_transfer_balance_updated() {
     );
 }
 
+#[test]
+fn test_init_transfer_locks_other_tokens_for_deployed_token() {
+    let mut contract = get_default_contract();
+    let token_id: AccountId = "eth-token.testnet".parse().expect("Invalid token ID");
+    let locked_amount = DEFAULT_TRANSFER_AMOUNT;
+
+    contract.deployed_tokens.insert(&token_id);
+    contract
+        .deployed_tokens_v2
+        .insert(&token_id, &ChainKind::Eth);
+    contract
+        .locked_tokens
+        .insert(&(ChainKind::Sol, token_id.clone()), &0);
+    contract
+        .locked_tokens
+        .insert(&(ChainKind::Near, token_id.clone()), &locked_amount);
+
+    let solana_address: SolAddress = "2xNweLHLqbS9YpP3UyaPrxKqgqoC6yPBFyuLxA8qtgr4"
+        .parse()
+        .expect("Invalid Solana address");
+
+    run_ft_on_transfer(
+        &mut contract,
+        DEFAULT_NEAR_USER_ACCOUNT.to_string(),
+        token_id.to_string(),
+        U128(locked_amount),
+        None,
+        &BridgeOnTransferMsg::InitTransfer(InitTransferMsg {
+            recipient: OmniAddress::Sol(solana_address),
+            fee: U128(0),
+            native_token_fee: U128(0),
+            msg: None,
+            external_id: None,
+        }),
+    );
+
+    assert_eq!(
+        contract.get_locked_tokens(ChainKind::Near, token_id.clone()),
+        Some(U128(locked_amount))
+    );
+    assert_eq!(
+        contract.get_locked_tokens(ChainKind::Sol, token_id),
+        Some(U128(locked_amount))
+    );
+}
+
+#[test]
+fn test_init_transfer_skips_other_token_lock_for_origin_chain() {
+    let mut contract = get_default_contract();
+
+    let token_id: AccountId = "eth-token.testnet".parse().expect("Invalid token ID");
+    let locked_amount = DEFAULT_TRANSFER_AMOUNT;
+
+    contract.deployed_tokens.insert(&token_id);
+    contract
+        .deployed_tokens_v2
+        .insert(&token_id, &ChainKind::Eth);
+    contract
+        .locked_tokens
+        .insert(&(ChainKind::Near, token_id.clone()), &locked_amount);
+
+    run_ft_on_transfer(
+        &mut contract,
+        DEFAULT_NEAR_USER_ACCOUNT.to_string(),
+        token_id.to_string(),
+        U128(locked_amount),
+        None,
+        &BridgeOnTransferMsg::InitTransfer(get_init_transfer_msg(DEFAULT_ETH_USER_ADDRESS, 0, 0)),
+    );
+
+    assert_eq!(
+        contract.get_locked_tokens(ChainKind::Near, token_id.clone()),
+        Some(U128(locked_amount))
+    );
+    assert_eq!(contract.get_locked_tokens(ChainKind::Eth, token_id), None);
+}
+
 fn run_update_transfer_fee(
     contract: &mut Contract,
     sender_id: String,
@@ -262,6 +349,7 @@ fn run_update_transfer_fee(
     new_fee: UpdateFee,
     attached_deposit: Option<NearToken>,
     new_sender_id: Option<String>,
+    origin_transfer_id: Option<UnifiedTransferId>,
 ) {
     use std::str::FromStr;
 
@@ -276,7 +364,7 @@ fn run_update_transfer_fee(
         sender: OmniAddress::Near(sender_id.clone().parse().unwrap()),
         msg: String::new(),
         destination_nonce: 1,
-        origin_transfer_id: None,
+        origin_transfer_id,
     };
 
     contract.insert_raw_transfer(
@@ -315,6 +403,7 @@ fn test_update_transfer_fee_same_fee() {
         UpdateFee::Fee(fee.clone()),
         Some(NearToken::from_yoctonear(0)),
         None,
+        None,
     );
 
     let updated_transfer = contract.get_transfer_message(DEFAULT_TRANSFER_ID);
@@ -340,6 +429,7 @@ fn test_update_transfer_fee_valid() {
         DEFAULT_NEAR_USER_ACCOUNT.to_string(),
         &fee,
         UpdateFee::Fee(new_fee.clone()),
+        None,
         None,
         None,
     );
@@ -370,6 +460,7 @@ fn test_update_transfer_fee_exceeds_amount() {
         UpdateFee::Fee(new_fee),
         None,
         None,
+        None,
     );
 }
 
@@ -393,6 +484,7 @@ fn test_update_transfer_fee_lower_native_fee() {
         DEFAULT_NEAR_USER_ACCOUNT.to_string(),
         &init_fee,
         UpdateFee::Fee(new_fee),
+        None,
         None,
         None,
     );
@@ -421,11 +513,12 @@ fn test_update_transfer_fee_invalid_deposit() {
         UpdateFee::Fee(new_fee),
         Some(NearToken::from_yoctonear(2)), // Wrong deposit amount
         None,
+        None,
     );
 }
 
 #[test]
-#[should_panic(expected = "Only sender can update token fee")]
+#[should_panic(expected = "ERR_SENDER_CAN_UPDATE_TOKEN_FEE_ONLY")]
 fn test_update_transfer_fee_wrong_sender() {
     let mut contract = get_default_contract();
 
@@ -446,6 +539,7 @@ fn test_update_transfer_fee_wrong_sender() {
         UpdateFee::Fee(new_fee.clone()),
         None,
         Some("different_user.testnet".to_string()),
+        None,
     );
 }
 
@@ -470,6 +564,36 @@ fn test_update_transfer_native_fee_different_sender() {
         UpdateFee::Fee(new_fee.clone()),
         None,
         Some("different_user.testnet".to_string()),
+        None,
+    );
+}
+
+#[test]
+#[should_panic(expected = "ERR_UPDATE_FEE_NOT_ALLOWED_FOR_TRANSFER")]
+fn test_update_transfer_fee_origin_transfer() {
+    let mut contract = get_default_contract();
+
+    let init_fee = Fee {
+        fee: U128(DEFAULT_TRANSFER_AMOUNT - 2),
+        native_fee: U128(10),
+    };
+
+    let new_fee = Fee {
+        fee: U128(DEFAULT_TRANSFER_AMOUNT - 1),
+        native_fee: U128(10),
+    };
+
+    run_update_transfer_fee(
+        &mut contract,
+        DEFAULT_NEAR_USER_ACCOUNT.to_string(), // Original sender
+        &init_fee,
+        UpdateFee::Fee(new_fee.clone()),
+        None,
+        None,
+        Some(UnifiedTransferId {
+            origin_chain: ChainKind::Sol,
+            kind: TransferIdKind::Nonce(1),
+        }),
     );
 }
 
@@ -494,7 +618,7 @@ fn get_prover_result(recipient: Option<OmniAddress>) -> ProverResult {
         amount: U128(DEFAULT_TRANSFER_AMOUNT),
         recipient,
         fee: Fee {
-            fee: U128(10),
+            fee: U128(DEFAULT_TRANSFER_FEE),
             native_fee: U128(5),
         },
         sender: OmniAddress::Eth(EvmAddress::from_str(DEFAULT_ETH_USER_ADDRESS).unwrap()),
@@ -506,6 +630,7 @@ fn get_prover_result(recipient: Option<OmniAddress>) -> ProverResult {
 #[test]
 fn test_fin_transfer_callback_near_success() {
     let mut contract = get_default_contract();
+
     contract.factories.insert(
         &ChainKind::Eth,
         &OmniAddress::Eth(EvmAddress::from_str(DEFAULT_ETH_USER_ADDRESS).unwrap()),
@@ -515,6 +640,14 @@ fn test_fin_transfer_callback_near_success() {
     contract.token_address_to_id.insert(
         &native_token_address,
         &DEFAULT_FT_CONTRACT_ACCOUNT.parse().unwrap(),
+    );
+    let locked_amount = DEFAULT_TRANSFER_AMOUNT;
+    contract.locked_tokens.insert(
+        &(
+            ChainKind::Eth,
+            AccountId::try_from(DEFAULT_FT_CONTRACT_ACCOUNT.to_string()).unwrap(),
+        ),
+        &locked_amount,
     );
     contract.token_decimals.insert(
         &OmniAddress::Near(AccountId::try_from(DEFAULT_FT_CONTRACT_ACCOUNT.to_string()).unwrap()),
@@ -583,6 +716,104 @@ fn test_fin_transfer_callback_near_success() {
     let result = contract.fin_transfer_callback(&storage_actions, predecessor.clone());
 
     assert!(matches!(result, PromiseOrValue::Promise(_)));
+    assert_eq!(
+        contract.get_locked_tokens(
+            ChainKind::Eth,
+            AccountId::try_from(DEFAULT_FT_CONTRACT_ACCOUNT.to_string()).unwrap(),
+        ),
+        Some(U128(0))
+    );
+}
+
+#[test]
+#[should_panic(expected = "ERR_INSUFFICIENT_LOCKED_TOKENS")]
+fn test_fin_transfer_callback_near_fails_without_locked_tokens() {
+    let mut contract = get_default_contract();
+    contract.factories.insert(
+        &ChainKind::Eth,
+        &OmniAddress::Eth(EvmAddress::from_str(DEFAULT_ETH_USER_ADDRESS).unwrap()),
+    );
+
+    let native_token_address = OmniAddress::new_zero(ChainKind::Eth).unwrap();
+    contract.token_address_to_id.insert(
+        &native_token_address,
+        &DEFAULT_FT_CONTRACT_ACCOUNT.parse().unwrap(),
+    );
+    contract.token_decimals.insert(
+        &OmniAddress::Near(AccountId::try_from(DEFAULT_FT_CONTRACT_ACCOUNT.to_string()).unwrap()),
+        &Decimals {
+            decimals: 24,
+            origin_decimals: 24,
+        },
+    );
+
+    // Only 1 token locked while the transfer requires more.
+    contract.locked_tokens.insert(
+        &(
+            ChainKind::Eth,
+            AccountId::try_from(DEFAULT_FT_CONTRACT_ACCOUNT.to_string()).unwrap(),
+        ),
+        &1,
+    );
+
+    let storage_actions = vec![
+        StorageDepositAction {
+            token_id: AccountId::try_from(DEFAULT_FT_CONTRACT_ACCOUNT.to_string()).unwrap(),
+            account_id: AccountId::try_from(DEFAULT_NEAR_USER_ACCOUNT.to_string()).unwrap(),
+            storage_deposit_amount: Some(NEP141_DEPOSIT.as_yoctonear()),
+        },
+        StorageDepositAction {
+            token_id: AccountId::try_from(DEFAULT_FT_CONTRACT_ACCOUNT.to_string()).unwrap(),
+            account_id: AccountId::try_from(DEFAULT_NEAR_USER_ACCOUNT.to_string()).unwrap(),
+            storage_deposit_amount: Some(NEP141_DEPOSIT.as_yoctonear()),
+        },
+        StorageDepositAction {
+            token_id: AccountId::try_from(DEFAULT_FT_CONTRACT_ACCOUNT.to_string()).unwrap(),
+            account_id: AccountId::try_from(DEFAULT_NEAR_USER_ACCOUNT.to_string()).unwrap(),
+            storage_deposit_amount: Some(NEP141_DEPOSIT.as_yoctonear()),
+        },
+    ];
+
+    let predecessor = AccountId::try_from(DEFAULT_NEAR_USER_ACCOUNT.to_string()).unwrap();
+
+    let prover_result = get_prover_result(Some(OmniAddress::Near(
+        DEFAULT_NEAR_USER_ACCOUNT.parse().unwrap(),
+    )));
+
+    setup_test_env(
+        predecessor.clone(),
+        NearToken::from_near(1),
+        Some(vec![
+            PromiseResult::Successful(borsh::to_vec(&prover_result).unwrap()),
+            // Storage balance result for transfer recipient
+            PromiseResult::Successful(
+                serde_json::to_vec(&Some(StorageBalance {
+                    total: NearToken::from_near(1),
+                    available: NearToken::from_near(1),
+                }))
+                .unwrap(),
+            ),
+            // Storage balance result for fee recipient
+            PromiseResult::Successful(
+                serde_json::to_vec(&Some(StorageBalance {
+                    total: NearToken::from_near(1),
+                    available: NearToken::from_near(1),
+                }))
+                .unwrap(),
+            ),
+            // Storage balance result for native fee recipient
+            PromiseResult::Successful(
+                serde_json::to_vec(&Some(StorageBalance {
+                    total: NearToken::from_near(1),
+                    available: NearToken::from_near(1),
+                }))
+                .unwrap(),
+            ),
+        ]),
+    );
+
+    // Should panic because locked balance is insufficient.
+    let _ = contract.fin_transfer_callback(&storage_actions, predecessor.clone());
 }
 
 #[test]
@@ -597,9 +828,21 @@ fn test_fin_transfer_callback_non_near_success() {
     let storage_actions = get_default_storage_deposit_actions();
     let predecessor = AccountId::try_from(DEFAULT_NEAR_USER_ACCOUNT.to_string()).unwrap();
 
-    // Create prover result with ETH recipient
-    let eth_recipient = OmniAddress::Eth(EvmAddress::from_str(DEFAULT_ETH_USER_ADDRESS).unwrap());
-    let prover_result = get_prover_result(Some(eth_recipient.clone()));
+    // Create prover result with Solana recipient
+    let solana_address: SolAddress = "2xNweLHLqbS9YpP3UyaPrxKqgqoC6yPBFyuLxA8qtgr4"
+        .parse()
+        .expect("Invalid Solana address");
+    let sol_recipient = OmniAddress::Sol(solana_address);
+    let prover_result = get_prover_result(Some(sol_recipient.clone()));
+
+    let token_id: AccountId = DEFAULT_FT_CONTRACT_ACCOUNT.parse().unwrap();
+    let locked_amount = DEFAULT_TRANSFER_AMOUNT;
+    contract
+        .locked_tokens
+        .insert(&(ChainKind::Sol, token_id.clone()), &0);
+    contract
+        .locked_tokens
+        .insert(&(ChainKind::Eth, token_id.clone()), &locked_amount);
 
     contract.token_decimals.insert(
         &OmniAddress::Near(AccountId::try_from(DEFAULT_FT_CONTRACT_ACCOUNT.to_string()).unwrap()),
@@ -624,7 +867,7 @@ fn test_fin_transfer_callback_non_near_success() {
         PromiseOrValue::Value(nonce) => {
             assert_eq!(
                 nonce,
-                contract.get_current_destination_nonce(ChainKind::Eth)
+                contract.get_current_destination_nonce(ChainKind::Sol)
             );
 
             // Verify transfer was stored correctly
@@ -632,14 +875,100 @@ fn test_fin_transfer_callback_non_near_success() {
                 origin_chain: ChainKind::Eth,
                 origin_nonce: DEFAULT_NONCE,
             });
-            assert_eq!(stored_transfer.recipient, eth_recipient);
+            assert_eq!(stored_transfer.recipient, sol_recipient);
+            assert_eq!(
+                contract.get_locked_tokens(ChainKind::Eth, token_id.clone()),
+                Some(U128(0))
+            );
+            assert_eq!(
+                contract.get_locked_tokens(ChainKind::Sol, token_id),
+                Some(U128(locked_amount))
+            );
         }
         PromiseOrValue::Promise(_) => panic!("Expected Value variant, got Promise"),
     }
 }
 
 #[test]
-#[should_panic(expected = "Invalid proof message")]
+fn test_claim_fee_decreases_locked_tokens_for_non_deployed_token() {
+    let mut contract = get_default_contract();
+    let token_id = AccountId::try_from(DEFAULT_FT_CONTRACT_ACCOUNT.to_string()).unwrap();
+    let fee_recipient = AccountId::try_from("relayer.testnet".to_string()).unwrap();
+    let destination_chain = ChainKind::Sol;
+    let fee_amount: u128 = DEFAULT_TRANSFER_FEE;
+
+    let solana_address: SolAddress = "2xNweLHLqbS9YpP3UyaPrxKqgqoC6yPBFyuLxA8qtgr4"
+        .parse()
+        .expect("Invalid Solana address");
+    let token_address = OmniAddress::Sol(solana_address.clone());
+
+    contract
+        .factories
+        .insert(&destination_chain, &token_address);
+    contract
+        .token_id_to_address
+        .insert(&(destination_chain, token_id.clone()), &token_address);
+    contract.token_decimals.insert(
+        &token_address,
+        &Decimals {
+            decimals: 24,
+            origin_decimals: 24,
+        },
+    );
+
+    let transfer_message = TransferMessage {
+        origin_nonce: DEFAULT_NONCE,
+        token: OmniAddress::Near(token_id.clone()),
+        amount: U128(DEFAULT_TRANSFER_AMOUNT),
+        recipient: token_address.clone(),
+        fee: Fee {
+            fee: U128(fee_amount),
+            native_fee: U128(0),
+        },
+        sender: OmniAddress::Near(DEFAULT_NEAR_USER_ACCOUNT.parse().unwrap()),
+        msg: String::new(),
+        destination_nonce: 1,
+        origin_transfer_id: None,
+    };
+    let transfer_id = transfer_message.get_transfer_id();
+
+    contract.pending_transfers.insert(
+        &transfer_id,
+        &TransferMessageStorage::V2(TransferMessageStorageValue {
+            message: transfer_message,
+            owner: DEFAULT_NEAR_USER_ACCOUNT.parse().unwrap(),
+        }),
+    );
+
+    let locked_amount = DEFAULT_TRANSFER_AMOUNT;
+    contract
+        .locked_tokens
+        .insert(&(destination_chain, token_id.clone()), &locked_amount);
+    assert_eq!(
+        contract.get_locked_tokens(destination_chain, token_id.clone()),
+        Some(U128(locked_amount))
+    );
+
+    setup_test_env(fee_recipient.clone(), NearToken::from_near(0), None);
+
+    let _ = contract.claim_fee_callback(
+        &fee_recipient.clone(),
+        Ok(ProverResult::FinTransfer(FinTransferMessage {
+            transfer_id,
+            fee_recipient: Some(fee_recipient),
+            amount: U128(DEFAULT_TRANSFER_AMOUNT - fee_amount),
+            emitter_address: token_address,
+        })),
+    );
+
+    assert_eq!(
+        contract.get_locked_tokens(destination_chain, token_id),
+        Some(U128(locked_amount - fee_amount))
+    );
+}
+
+#[test]
+#[should_panic(expected = "ERR_INVALID_PROOF")]
 fn test_fin_transfer_callback_invalid_proof() {
     let mut contract = get_default_contract();
     let storage_actions = get_default_storage_deposit_actions();
@@ -662,7 +991,7 @@ fn test_fin_transfer_callback_invalid_proof() {
 }
 
 #[test]
-#[should_panic(expected = "Unknown factory")]
+#[should_panic(expected = "ERR_UNKNOWN_FACTORY")]
 fn test_fin_transfer_callback_unknown_factory() {
     let mut contract = get_default_contract();
     let storage_actions = get_default_storage_deposit_actions();
@@ -686,6 +1015,61 @@ fn test_fin_transfer_callback_unknown_factory() {
     contract
         .fin_transfer_callback(&storage_actions, predecessor)
         .detach();
+}
+
+#[test]
+fn test_fin_transfer_callback_refund_restores_locked_tokens() {
+    use std::str::FromStr;
+
+    let mut contract = get_default_contract();
+    let token_id = AccountId::try_from(DEFAULT_FT_CONTRACT_ACCOUNT.to_string()).unwrap();
+    contract
+        .locked_tokens
+        .insert(&(ChainKind::Eth, token_id.clone()), &0);
+    let recipient =
+        AccountId::try_from(DEFAULT_NEAR_USER_ACCOUNT.to_string()).expect("Invalid account");
+    let fee_recipient = recipient.clone();
+
+    let transfer_message = TransferMessage {
+        origin_nonce: DEFAULT_NONCE,
+        token: OmniAddress::Near(token_id.clone()),
+        amount: U128(DEFAULT_TRANSFER_AMOUNT),
+        recipient: OmniAddress::Near(recipient.clone()),
+        fee: Fee {
+            fee: U128(0),
+            native_fee: U128(0),
+        },
+        sender: OmniAddress::Eth(EvmAddress::from_str(DEFAULT_ETH_USER_ADDRESS).unwrap()),
+        msg: "refund".to_string(),
+        destination_nonce: 1,
+        origin_transfer_id: None,
+    };
+
+    setup_test_env(
+        recipient.clone(),
+        NearToken::from_near(0),
+        Some(vec![PromiseResult::Successful(
+            serde_json::to_vec(&U128(0)).unwrap(),
+        )]),
+    );
+
+    let lock_actions = vec![LockAction::Unlocked {
+        chain_kind: ChainKind::Eth,
+        token_id: token_id.clone(),
+        amount: DEFAULT_TRANSFER_AMOUNT,
+    }];
+    contract.fin_transfer_send_tokens_callback(
+        transfer_message,
+        &fee_recipient,
+        true,
+        &recipient,
+        lock_actions,
+    );
+
+    assert_eq!(
+        contract.get_locked_tokens(ChainKind::Eth, token_id),
+        Some(U128(DEFAULT_TRANSFER_AMOUNT))
+    );
 }
 
 #[test]

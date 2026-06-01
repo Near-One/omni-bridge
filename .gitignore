@@ -4,3 +4,4 @@
 **/.env
 .history
 node_modules
+**/.claude

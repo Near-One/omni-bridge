@@ -4,26 +4,28 @@ use crate::{
     STORAGE_DEPOSIT_GAS,
 };
 use near_plugins::{access_control_any, pause, AccessControllable, Pausable};
-use near_sdk::json_types::{U128, U64};
+use near_sdk::json_types::U128;
 use near_sdk::{
-    env, near, require, serde_json, AccountId, Gas, Promise, PromiseError, PromiseOrValue,
+    env, near, require, serde_json, AccountId, Gas, NearToken, Promise, PromiseError,
+    PromiseOrValue,
 };
 use omni_types::btc::{TokenReceiverMessage, TxOut, UTXOChainConfig};
-use omni_types::{ChainKind, Fee, OmniAddress, TransferId, TransferMessage};
+use omni_types::errors::BridgeError;
+use omni_types::{
+    get_native_token_address, ChainKind, DestinationChainMsg, Fee, TransferId, TransferMessage,
+};
+use omni_utils::macros::trusted_relayer;
+use omni_utils::near_expect::NearExpect;
 
 const SUBMIT_TRANSFER_TO_BTC_CONNECTOR_CALLBACK_GAS: Gas = Gas::from_tgas(5);
 const WITHDRAW_RBF_GAS: Gas = Gas::from_tgas(100);
 
-#[near(serializers=[json])]
-#[derive(Debug, PartialEq)]
-enum UTXOChainMsg {
-    MaxGasFee(U64),
-}
-
+#[trusted_relayer]
 #[near]
 impl Contract {
     #[payable]
-    #[pause(except(roles(Role::DAO, Role::UnrestrictedRelayer)))]
+    #[trusted_relayer]
+    #[pause(except(roles(Role::DAO)))]
     pub fn submit_transfer_to_utxo_chain_connector(
         &mut self,
         transfer_id: TransferId,
@@ -46,17 +48,15 @@ impl Contract {
             {
                 require!(
                     btc_address == target_btc_address,
-                    "Incorrect target address"
+                    BridgeError::IncorrectTargetUtxoAddress.as_ref()
                 );
 
-                if !transfer.message.msg.is_empty() {
-                    let utxo_chain_extra_info: UTXOChainMsg =
-                        serde_json::from_str(&transfer.message.msg)
-                            .expect("Invalid Transfer MSG for UTXO chain");
-                    let UTXOChainMsg::MaxGasFee(max_gas_fee_from_msg) = utxo_chain_extra_info;
+                let max_gas_fee_msg = DestinationChainMsg::from_json(&transfer.message.msg)
+                    .and_then(|s| s.max_gas_fee());
+
+                if let Some(max_gas_fee_msg) = max_gas_fee_msg {
                     require!(
-                        max_gas_fee.expect("max_gas_fee is missing").0
-                            == max_gas_fee_from_msg.0.into(),
+                        max_gas_fee.expect("max_gas_fee is missing") == max_gas_fee_msg,
                         "Invalid max gas fee"
                     );
                 }
@@ -68,14 +68,17 @@ impl Contract {
         }
 
         if let Some(fee) = &fee {
-            require!(&transfer.message.fee == fee, "Invalid fee");
+            require!(
+                &transfer.message.fee == fee,
+                BridgeError::InvalidFee.as_ref()
+            );
         }
 
         let chain_kind = transfer.message.get_destination_chain();
         let btc_account_id = self.get_utxo_chain_token(chain_kind);
         require!(
             self.get_token_id(&transfer.message.token) == btc_account_id,
-            "Only the native token of this UTXO chain can be transferred."
+            BridgeError::NativeTokenRequiredForChain.as_ref()
         );
 
         self.remove_transfer_message(transfer_id);
@@ -109,7 +112,15 @@ impl Contract {
             let token_fee = transfer_msg.fee.fee.0;
             self.send_fee_internal(&transfer_msg, fee_recipient, token_fee)
         } else {
-            self.insert_raw_transfer(transfer_msg, transfer_owner);
+            let required_storage_balance =
+                self.add_transfer_message(transfer_msg, transfer_owner.clone());
+
+            self.update_storage_balance(
+                transfer_owner,
+                required_storage_balance,
+                NearToken::from_yoctonear(0),
+            );
+
             PromiseOrValue::Value(())
         }
     }
@@ -124,8 +135,8 @@ impl Contract {
         decimals: u8,
     ) {
         let storage_usage = env::storage_usage();
-        let token_address = OmniAddress::new_zero(chain_kind)
-            .unwrap_or_else(|_| env::panic_str("ERR_FAILED_TO_GET_ZERO_ADDRESS"));
+        let token_address = get_native_token_address(chain_kind)
+            .near_expect(BridgeError::FailedToGetNativeTokenAddress);
 
         self.add_token(&utxo_chain_token_id, &token_address, decimals, decimals);
 
@@ -144,7 +155,7 @@ impl Contract {
 
         require!(
             env::attached_deposit() >= required_deposit,
-            "ERROR: The deposit is not sufficient to cover the storage."
+            BridgeError::InsufficientStorageDeposit.as_ref()
         );
 
         ext_token::ext(utxo_chain_token_id)
@@ -190,18 +201,5 @@ impl Contract {
             .expect("UTXO Token has not been set up for this chain")
             .token_id
             .clone()
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_deserialize_utxo_chain_msg() {
-        let serialized_msg = r#"{"MaxGasFee":"12345"}"#;
-        let deserialized: UTXOChainMsg = serde_json::from_str(serialized_msg).unwrap();
-        let original = UTXOChainMsg::MaxGasFee(12345.into());
-        assert_eq!(original, deserialized);
     }
 }

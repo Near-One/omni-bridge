@@ -1,130 +1,39 @@
+use std::string::ToString;
+
 use borsh::{BorshDeserialize, BorshSerialize};
 use core::fmt;
 use core::str::FromStr;
-use hex::FromHex;
-use near_sdk::json_types::U128;
+
+use near_sdk::json_types::{U128, U64};
 use near_sdk::serde::{Deserialize, Serialize};
-use near_sdk::{near, AccountId};
+use near_sdk::serde_with::hex::Hex;
+use near_sdk::{near, serde_json, AccountId};
 use num_enum::IntoPrimitive;
 use schemars::JsonSchema;
-use serde::de::Visitor;
 use sol_address::SolAddress;
 
+pub mod bounded_string;
 pub mod btc;
+pub mod errors;
 pub mod evm;
+pub mod hex_types;
 pub mod locker_args;
 pub mod mpc_types;
 pub mod near_events;
 pub mod prover_args;
 pub mod prover_result;
 pub mod sol_address;
+pub mod starknet;
 pub mod utils;
 
 #[cfg(test)]
 mod tests;
 
-#[near(serializers = [borsh])]
-#[derive(Debug, Clone, Hash, PartialEq, Eq)]
-pub struct H160(pub [u8; 20]);
-
-impl FromStr for H160 {
-    type Err = String;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let result = Vec::from_hex(s.strip_prefix("0x").map_or(s, |stripped| stripped))
-            .map_err(|_| "ERR_INVALIDE_HEX")?;
-        Ok(Self(
-            result
-                .try_into()
-                .map_err(|err| format!("Invalid length: {err:?}"))?,
-        ))
-    }
-}
-
-impl fmt::Display for H160 {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "0x{}", hex::encode(self.0))
-    }
-}
-
-impl H160 {
-    pub const ZERO: Self = Self([0u8; 20]);
-
-    pub fn is_zero(&self) -> bool {
-        *self == Self::ZERO
-    }
-
-    pub fn to_eip_55_checksum(&self) -> String {
-        let hex_addr = hex::encode(self.0);
-
-        let hash = utils::keccak256(hex_addr.as_bytes());
-
-        let mut result = String::with_capacity(40);
-
-        for (i, c) in hex_addr.chars().enumerate() {
-            let hash_byte = hash[i / 2];
-
-            let hash_nibble = if i % 2 == 0 {
-                (hash_byte >> 4) & 0xF
-            } else {
-                hash_byte & 0xF
-            };
-
-            let c = match c {
-                'a'..='f' => {
-                    if hash_nibble >= 8 {
-                        c.to_ascii_uppercase()
-                    } else {
-                        c
-                    }
-                }
-                _ => c,
-            };
-
-            result.push(c);
-        }
-
-        result
-    }
-}
-
-impl<'de> Deserialize<'de> for H160 {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        struct HexVisitor;
-
-        impl Visitor<'_> for HexVisitor {
-            type Value = H160;
-
-            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-                formatter.write_str("a hex string")
-            }
-
-            fn visit_str<E>(self, s: &str) -> Result<Self::Value, E>
-            where
-                E: serde::de::Error,
-            {
-                s.parse().map_err(serde::de::Error::custom)
-            }
-        }
-
-        deserializer.deserialize_str(HexVisitor)
-    }
-}
-
-impl Serialize for H160 {
-    fn serialize<S>(
-        &self,
-        serializer: S,
-    ) -> Result<<S as serde::Serializer>::Ok, <S as serde::Serializer>::Error>
-    where
-        S: serde::Serializer,
-    {
-        serializer.serialize_str(&self.to_string())
-    }
-}
+pub use bounded_string::BoundedString;
+pub use errors::{
+    BridgeError, OmniError, ProverError, StorageBalanceError, StorageError, TokenError, TypesError,
+};
+pub use hex_types::{H160, H256};
 
 #[near(serializers = [borsh, json])]
 #[derive(
@@ -161,22 +70,63 @@ pub enum ChainKind {
     Zcash,
     #[serde(alias = "pol")]
     Pol,
+    #[serde(rename = "HlEvm")]
+    #[serde(alias = "hlevm")]
+    #[strum(serialize = "HlEvm")]
+    HyperEvm,
+    #[serde(alias = "strk")]
+    Strk,
+    #[serde(alias = "abs")]
+    Abs,
+    #[serde(alias = "fogo")]
+    Fogo,
 }
 
 impl ChainKind {
     pub const fn is_evm_chain(&self) -> bool {
         match self {
-            Self::Eth | Self::Arb | Self::Base | Self::Bnb | Self::Pol => true,
-            Self::Btc | Self::Zcash | Self::Near | Self::Sol => false,
+            Self::Eth
+            | Self::Arb
+            | Self::Base
+            | Self::Bnb
+            | Self::Pol
+            | Self::HyperEvm
+            | Self::Abs => true,
+            Self::Btc | Self::Zcash | Self::Near | Self::Sol | Self::Strk | Self::Fogo => false,
         }
     }
 
     pub const fn is_utxo_chain(&self) -> bool {
         match self {
             Self::Btc | Self::Zcash => true,
-            Self::Eth | Self::Arb | Self::Base | Self::Bnb | Self::Pol | Self::Near | Self::Sol => {
-                false
-            }
+            Self::Eth
+            | Self::Arb
+            | Self::Base
+            | Self::Bnb
+            | Self::Pol
+            | Self::Near
+            | Self::Sol
+            | Self::HyperEvm
+            | Self::Strk
+            | Self::Abs
+            | Self::Fogo => false,
+        }
+    }
+
+    pub const fn is_svm_chain(&self) -> bool {
+        match self {
+            Self::Sol | Self::Fogo => true,
+            Self::Eth
+            | Self::Arb
+            | Self::Base
+            | Self::Bnb
+            | Self::Pol
+            | Self::Near
+            | Self::HyperEvm
+            | Self::Strk
+            | Self::Abs
+            | Self::Btc
+            | Self::Zcash => false,
         }
     }
 }
@@ -208,6 +158,10 @@ impl TryFrom<u8> for ChainKind {
             6 => Ok(Self::Btc),
             7 => Ok(Self::Zcash),
             8 => Ok(Self::Pol),
+            9 => Ok(Self::HyperEvm),
+            10 => Ok(Self::Strk),
+            11 => Ok(Self::Abs),
+            12 => Ok(Self::Fogo),
             _ => Err(format!("{input:?} invalid chain kind")),
         }
     }
@@ -215,6 +169,7 @@ impl TryFrom<u8> for ChainKind {
 
 pub type EvmAddress = H160;
 pub type UTXOChainAddress = String;
+pub type StarknetAddress = H256;
 
 pub const ZERO_ACCOUNT_ID: &str =
     "0000000000000000000000000000000000000000000000000000000000000000";
@@ -231,6 +186,10 @@ pub enum OmniAddress {
     Btc(UTXOChainAddress),
     Zcash(UTXOChainAddress),
     Pol(EvmAddress),
+    HyperEvm(EvmAddress),
+    Strk(StarknetAddress),
+    Abs(EvmAddress),
+    Fogo(SolAddress),
 }
 
 impl OmniAddress {
@@ -244,8 +203,12 @@ impl OmniAddress {
             ChainKind::Base => Ok(Self::Base(H160::ZERO)),
             ChainKind::Bnb => Ok(Self::Bnb(H160::ZERO)),
             ChainKind::Pol => Ok(Self::Pol(H160::ZERO)),
+            ChainKind::HyperEvm => Ok(Self::HyperEvm(H160::ZERO)),
             ChainKind::Btc => Ok(Self::Btc(String::new())),
             ChainKind::Zcash => Ok(Self::Zcash(String::new())),
+            ChainKind::Strk => Ok(Self::Strk(H256::ZERO)),
+            ChainKind::Abs => Ok(Self::Abs(H160::ZERO)),
+            ChainKind::Fogo => Ok(Self::Fogo(SolAddress::ZERO)),
         }
     }
 
@@ -259,6 +222,8 @@ impl OmniAddress {
             ChainKind::Base => Ok(Self::Base(address)),
             ChainKind::Bnb => Ok(Self::Bnb(address)),
             ChainKind::Pol => Ok(Self::Pol(address)),
+            ChainKind::HyperEvm => Ok(Self::HyperEvm(address)),
+            ChainKind::Abs => Ok(Self::Abs(address)),
             _ => Err(format!("{chain_kind:?} is not an EVM chain")),
         }
     }
@@ -266,7 +231,14 @@ impl OmniAddress {
     pub fn new_from_slice(chain_kind: ChainKind, address: &[u8]) -> Result<Self, String> {
         match chain_kind {
             ChainKind::Sol => Ok(Self::Sol(Self::to_sol_address(address)?)),
-            ChainKind::Eth | ChainKind::Arb | ChainKind::Base | ChainKind::Bnb | ChainKind::Pol => {
+            ChainKind::Fogo => Ok(Self::Fogo(Self::to_sol_address(address)?)),
+            ChainKind::Eth
+            | ChainKind::Arb
+            | ChainKind::Base
+            | ChainKind::Bnb
+            | ChainKind::Pol
+            | ChainKind::HyperEvm
+            | ChainKind::Abs => {
                 Self::new_from_evm_address(chain_kind, Self::to_evm_address(address)?)
             }
             ChainKind::Near => Ok(Self::Near(Self::to_near_account_id(address)?)),
@@ -278,6 +250,7 @@ impl OmniAddress {
                 String::from_utf8(address.to_vec())
                     .map_err(|e| format!("Invalid ZCash address: {e}"))?,
             )),
+            ChainKind::Strk => Ok(Self::Strk(H256(address.try_into().map_err(stringify)?))),
         }
     }
 
@@ -290,8 +263,12 @@ impl OmniAddress {
             Self::Base(_) => ChainKind::Base,
             Self::Bnb(_) => ChainKind::Bnb,
             Self::Pol(_) => ChainKind::Pol,
+            Self::HyperEvm(_) => ChainKind::HyperEvm,
             Self::Btc(_) => ChainKind::Btc,
             Self::Zcash(_) => ChainKind::Zcash,
+            Self::Strk(_) => ChainKind::Strk,
+            Self::Abs(_) => ChainKind::Abs,
+            Self::Fogo(_) => ChainKind::Fogo,
         }
     }
 
@@ -304,8 +281,12 @@ impl OmniAddress {
             Self::Base(address) => ("base", address.to_string()),
             Self::Bnb(address) => ("bnb", address.to_string()),
             Self::Pol(address) => ("pol", address.to_string()),
-            Self::Btc(address) => ("btc", address.to_string()),
-            Self::Zcash(address) => ("zcash", address.to_string()),
+            Self::HyperEvm(address) => ("hlevm", address.to_string()),
+            Self::Btc(address) => ("btc", address.clone()),
+            Self::Zcash(address) => ("zcash", address.clone()),
+            Self::Strk(address) => ("strk", address.to_string()),
+            Self::Abs(address) => ("abs", address.to_string()),
+            Self::Fogo(address) => ("fogo", address.to_string()),
         };
 
         if skip_zero_address && self.is_zero() {
@@ -321,30 +302,21 @@ impl OmniAddress {
             | Self::Arb(address)
             | Self::Base(address)
             | Self::Bnb(address)
-            | Self::Pol(address) => address.is_zero(),
+            | Self::Pol(address)
+            | Self::HyperEvm(address)
+            | Self::Abs(address) => address.is_zero(),
             Self::Near(address) => *address == ZERO_ACCOUNT_ID,
-            Self::Sol(address) => address.is_zero(),
+            Self::Sol(address) | Self::Fogo(address) => address.is_zero(),
             Self::Btc(address) | Self::Zcash(address) => address.is_empty(),
+            Self::Strk(address) => address.is_zero(),
         }
     }
 
     pub fn get_token_prefix(&self) -> String {
         match self {
-            Self::Sol(address) => {
-                if self.is_zero() {
-                    "sol".to_string()
-                } else {
-                    // The AccountId on Near can't be uppercased and has a 64 character limit,
-                    // so we encode the solana address into 20 bytes to bypass these restrictions
-                    let hashed_address = H160(
-                        utils::keccak256(&address.0)[12..]
-                            .try_into()
-                            .unwrap_or_default(),
-                    )
-                    .to_string();
-                    format!("sol-{hashed_address}")
-                }
-            }
+            Self::Sol(address) => Self::hashed_token_prefix("sol", &H256(address.0)),
+            Self::Fogo(address) => Self::hashed_token_prefix("fogo", &H256(address.0)),
+            Self::Strk(address) => Self::hashed_token_prefix("strk", address),
             Self::Eth(address) => {
                 if self.is_zero() {
                     "eth".to_string()
@@ -364,8 +336,28 @@ impl OmniAddress {
         }
     }
 
+    pub fn is_evm_chain(&self) -> bool {
+        self.get_chain().is_evm_chain()
+    }
+
     pub fn is_utxo_chain(&self) -> bool {
-        matches!(self, Self::Btc(_) | Self::Zcash(_))
+        self.get_chain().is_utxo_chain()
+    }
+
+    // The AccountId on Near can't be uppercased and has a 64 character limit,
+    // so we encode the address into 20 bytes to bypass these restrictions
+    fn hashed_token_prefix(prefix: &str, address: &H256) -> String {
+        if address.is_zero() {
+            prefix.to_string()
+        } else {
+            let hashed_address = H160(
+                utils::keccak256(&address.0)[12..]
+                    .try_into()
+                    .unwrap_or_default(),
+            )
+            .to_string();
+            format!("{prefix}-{hashed_address}")
+        }
     }
 
     fn to_evm_address(address: &[u8]) -> Result<EvmAddress, String> {
@@ -408,8 +400,12 @@ impl FromStr for OmniAddress {
             "base" => Ok(Self::Base(recipient.parse().map_err(stringify)?)),
             "bnb" => Ok(Self::Bnb(recipient.parse().map_err(stringify)?)),
             "pol" => Ok(Self::Pol(recipient.parse().map_err(stringify)?)),
+            "hlevm" => Ok(Self::HyperEvm(recipient.parse().map_err(stringify)?)),
+            "abs" => Ok(Self::Abs(recipient.parse().map_err(stringify)?)),
             "btc" => Ok(Self::Btc(recipient.to_string())),
             "zcash" => Ok(Self::Zcash(recipient.to_string())),
+            "strk" => Ok(Self::Strk(recipient.parse().map_err(stringify)?)),
+            "fogo" => Ok(Self::Fogo(recipient.parse().map_err(stringify)?)),
             _ => Err(format!("Chain {chain} is not supported")),
         }
     }
@@ -478,12 +474,31 @@ pub enum BridgeOnTransferMsg {
     SwapMigratedToken,
 }
 
+/// Maximum byte length for `InitTransferMsg::msg` — caps the user-supplied hook payload
+/// forwarded to the destination chain.
+pub const MAX_INIT_TRANSFER_MSG_LEN: usize = 2048;
+/// Maximum byte length for `InitTransferMsg::external_id` — large enough for UUIDs or
+/// hex-encoded 32-byte hashes, small enough to bound storage-account-hash inputs.
+pub const MAX_EXTERNAL_ID_LEN: usize = 64;
+
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct InitTransferMsg {
     pub recipient: OmniAddress,
     pub fee: U128,
     pub native_token_fee: U128,
-    pub msg: Option<String>,
+    /// Optional caller-supplied destination-chain hook payload. Length-capped to
+    /// [`MAX_INIT_TRANSFER_MSG_LEN`] bytes to prevent unbounded storage/gas inflation.
+    pub msg: Option<BoundedString<MAX_INIT_TRANSFER_MSG_LEN>>,
+    /// Optional caller-provided identifier mixed into the virtual storage account ID hash.
+    /// Lets otherwise-identical transfers derive distinct storage accounts so their
+    /// storage deposits do not collide. Length-capped to [`MAX_EXTERNAL_ID_LEN`] bytes.
+    pub external_id: Option<BoundedString<MAX_EXTERNAL_ID_LEN>>,
+}
+
+impl InitTransferMsg {
+    pub const fn get_destination_chain(&self) -> ChainKind {
+        self.recipient.get_chain()
+    }
 }
 
 #[derive(Serialize, Deserialize, BorshSerialize, BorshDeserialize, Debug, Clone)]
@@ -507,6 +522,10 @@ pub struct UtxoFinTransferMsg {
 }
 
 impl UtxoFinTransferMsg {
+    pub const fn get_destination_chain(&self) -> ChainKind {
+        self.recipient.get_chain()
+    }
+
     pub fn get_transfer_id(&self, origin_chain: ChainKind) -> UnifiedTransferId {
         UnifiedTransferId {
             origin_chain,
@@ -567,8 +586,12 @@ impl TransferMessage {
         self.recipient.get_chain()
     }
 
-    pub fn calculate_storage_account_id(&self) -> AccountId {
-        TransferMessageStorageAccount::from(self.clone()).id()
+    pub fn calculate_storage_account_id(&self, external_id: Option<String>) -> AccountId {
+        TransferMessageStorageAccount::from(self.clone()).id(external_id)
+    }
+
+    pub fn amount_without_fee(&self) -> Option<u128> {
+        self.amount.0.checked_sub(self.fee.fee.0)
     }
 }
 
@@ -586,8 +609,12 @@ pub struct TransferMessageStorageAccount {
 
 impl TransferMessageStorageAccount {
     #[allow(clippy::missing_panics_doc)]
-    pub fn id(&self) -> AccountId {
-        let hash = utils::sha256(&borsh::to_vec(self).unwrap());
+    pub fn id(&self, external_id: Option<String>) -> AccountId {
+        let mut bytes = borsh::to_vec(self).unwrap();
+        if let Some(external_id) = external_id {
+            bytes.extend_from_slice(external_id.as_bytes());
+        }
+        let hash = utils::sha256(&bytes);
         let implicit_account_id = hex::encode(hash);
         AccountId::try_from(implicit_account_id).unwrap()
     }
@@ -616,6 +643,32 @@ pub enum PayloadType {
 
 #[near(serializers=[borsh, json])]
 #[derive(Debug, Clone)]
+pub struct TransferMessagePayloadV1 {
+    pub prefix: PayloadType,
+    pub destination_nonce: Nonce,
+    pub transfer_id: TransferId,
+    pub token_address: OmniAddress,
+    pub amount: U128,
+    pub recipient: OmniAddress,
+    pub fee_recipient: Option<AccountId>,
+}
+
+impl From<TransferMessagePayload> for TransferMessagePayloadV1 {
+    fn from(payload: TransferMessagePayload) -> Self {
+        Self {
+            prefix: payload.prefix,
+            destination_nonce: payload.destination_nonce,
+            transfer_id: payload.transfer_id,
+            token_address: payload.token_address,
+            amount: payload.amount,
+            recipient: payload.recipient,
+            fee_recipient: payload.fee_recipient,
+        }
+    }
+}
+
+#[near(serializers=[borsh, json])]
+#[derive(Debug, Clone)]
 pub struct TransferMessagePayload {
     pub prefix: PayloadType,
     pub destination_nonce: Nonce,
@@ -624,6 +677,18 @@ pub struct TransferMessagePayload {
     pub amount: U128,
     pub recipient: OmniAddress,
     pub fee_recipient: Option<AccountId>,
+    #[serde(default)]
+    pub message: Vec<u8>,
+}
+
+impl TransferMessagePayload {
+    pub fn encode_hashable(&self) -> Result<Vec<u8>, String> {
+        if self.message.is_empty() {
+            borsh::to_vec(&TransferMessagePayloadV1::from(self.clone())).map_err(stringify)
+        } else {
+            borsh::to_vec(self).map_err(stringify)
+        }
+    }
 }
 
 #[near(serializers = [borsh, json])]
@@ -791,6 +856,14 @@ impl FastTransfer {
     pub fn id(&self) -> FastTransferId {
         FastTransferId(utils::sha256(&borsh::to_vec(self).unwrap()))
     }
+
+    pub const fn get_destination_chain(&self) -> ChainKind {
+        self.recipient.get_chain()
+    }
+
+    pub fn amount_without_fee(&self) -> Option<u128> {
+        self.amount.0.checked_sub(self.fee.fee.0)
+    }
 }
 
 impl FastTransfer {
@@ -837,4 +910,53 @@ pub struct FastTransferStatus {
     pub finalised: bool,
     pub relayer: AccountId,
     pub storage_owner: AccountId,
+}
+
+#[near(serializers=[json])]
+#[derive(Debug, PartialEq)]
+pub enum DestinationChainMsg {
+    MaxGasFee(U64),
+    DestHexMsg(#[serde_as(as = "Hex")] Vec<u8>),
+}
+
+impl DestinationChainMsg {
+    pub fn max_gas_fee(&self) -> Option<U128> {
+        if let Self::MaxGasFee(fee) = self {
+            Some(U128(fee.0.into()))
+        } else {
+            None
+        }
+    }
+
+    pub fn destination_msg(&self) -> Option<Vec<u8>> {
+        if let Self::DestHexMsg(msg) = self {
+            Some(msg.clone())
+        } else {
+            None
+        }
+    }
+
+    pub fn from_json(s: &str) -> Option<Self> {
+        serde_json::from_str(s).ok()
+    }
+}
+
+pub fn get_native_token_address(chain_kind: ChainKind) -> Result<OmniAddress, String> {
+    match chain_kind {
+        ChainKind::Strk => OmniAddress::from_str(
+            "strk:0x04718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d",
+        ),
+        ChainKind::Eth
+        | ChainKind::Near
+        | ChainKind::Sol
+        | ChainKind::Arb
+        | ChainKind::Base
+        | ChainKind::Bnb
+        | ChainKind::Btc
+        | ChainKind::Zcash
+        | ChainKind::Pol
+        | ChainKind::HyperEvm
+        | ChainKind::Abs
+        | ChainKind::Fogo => OmniAddress::new_zero(chain_kind),
+    }
 }

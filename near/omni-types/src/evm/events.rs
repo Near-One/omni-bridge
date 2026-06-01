@@ -2,7 +2,8 @@ use alloy::{primitives::Log, rlp::Decodable, sol, sol_types::SolEvent};
 
 use crate::{
     prover_result::{
-        DeployTokenMessage, FinTransferMessage, InitTransferMessage, LogMetadataMessage,
+        DeployTokenMessage, FinTransferMessage, InitTransferMessage, LogMetadataMessage, ProofKind,
+        ProverResult,
     },
     stringify, ChainKind, Fee, OmniAddress, H160,
 };
@@ -59,6 +60,32 @@ where
         T::decode_log_validate(&rlp_decoded).map_err(stringify)?,
     )
     .map_err(stringify)
+}
+
+/// Dispatches EVM log parsing based on `ProofKind`, returning a typed `ProverResult`.
+pub fn parse_evm_proof(
+    kind: ProofKind,
+    chain_kind: ChainKind,
+    log_entry_data: Vec<u8>,
+) -> Result<ProverResult, String> {
+    match kind {
+        ProofKind::InitTransfer => Ok(ProverResult::InitTransfer(parse_evm_event(
+            chain_kind,
+            log_entry_data,
+        )?)),
+        ProofKind::FinTransfer => Ok(ProverResult::FinTransfer(parse_evm_event(
+            chain_kind,
+            log_entry_data,
+        )?)),
+        ProofKind::DeployToken => Ok(ProverResult::DeployToken(parse_evm_event(
+            chain_kind,
+            log_entry_data,
+        )?)),
+        ProofKind::LogMetadata => Ok(ProverResult::LogMetadata(parse_evm_event(
+            chain_kind,
+            log_entry_data,
+        )?)),
+    }
 }
 
 pub trait TryFromLog<T>: Sized {

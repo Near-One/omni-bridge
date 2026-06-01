@@ -238,6 +238,10 @@ Note: Custom relayers can process transfers with zero fees.
 - [Bridge SDK (Rust)](https://github.com/Near-One/bridge-sdk-rs)
 - [Bridge SDK (JavaScript)](https://github.com/Near-One/bridge-sdk-js)
 
+## Security
+
+Please refer to our [Security Policy](SECURITY.md) for information on reporting vulnerabilities. Security issues should be reported through our bug bounty program on [HackenProof](https://hackenproof.com/programs/near-intents-bridges) — please do not open public GitHub issues for security vulnerabilities.
+
 ## Get Involved
 
 We welcome contributions from the community! The code is open source and there are many ways to make meaningful contributions.
