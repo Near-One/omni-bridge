@@ -83,15 +83,16 @@ def step1(exchange, params):
         return
     return token
 
-def step2(address, exchange, token):
+def step2(address, exchange, token, params):
     # Step 2: User Genesis
     #
-    # User genesis can be called multiple times to associate balances to specific users and/or
-    # tokens for genesis.
+    # Allocate the entire total_supply to a single user — the deployer address.
+    # All tokens are minted here at genesis and end up on the deployer's HC balance;
+    # later they can be bridged to HyperEVM as the ERC-20 mirror.
     user_genesis_result = exchange.spot_deploy_user_genesis(
         token,
         [
-            (address, "100000000900000000"),
+            (address, params["total_supply"]),
         ],
         [],
     )
@@ -148,7 +149,7 @@ def main():
         token = step1(exchange, params)
         print(f"step1 done, registered token index: {token}")
 
-    # step2(address, exchange, token)
+    step2(address, exchange, token, params)
     # step3(exchange, token)
     # spot = step4(exchange, token)
     # print(spot)

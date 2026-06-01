@@ -7,5 +7,7 @@
   "token_description": "NEAR Protocol",
   "sz_decimals": 2,
   "wei_decimals": 8,
-  "max_gas": 50000000000
+  "max_gas": 50000000000,
+
+  "total_supply": "130000000000000000"
 }
