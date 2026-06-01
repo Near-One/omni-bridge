@@ -14,8 +14,12 @@ sol! {
     interface IERC20 {
         function totalSupply() external view returns (uint256 totalSupply);
         function balanceOf(address account) external view returns (uint256 balance);
+        function decimals() external view returns (uint8 decimals);
     }
 }
+
+/// Native coins (origin address `0x0`) have no ERC-20 to query; EVM native is 18 decimals.
+const NATIVE_DECIMALS: u8 = 18;
 
 pub struct Client {
     near_client: Arc<super::near::Client>,
@@ -43,6 +47,24 @@ impl Client {
             provider,
             chain,
         })
+    }
+
+    /// Resolve the token's address on this EVM chain, or `None` if not deployed here.
+    async fn resolve_address(&self, token_address: OmniAddress) -> Result<Option<H160>> {
+        let address = match token_address {
+            OmniAddress::Eth(address) if self.chain == ChainKind::Eth => address,
+            OmniAddress::Arb(address) if self.chain == ChainKind::Arb => address,
+            OmniAddress::Base(address) if self.chain == ChainKind::Base => address,
+            OmniAddress::Bnb(address) if self.chain == ChainKind::Bnb => address,
+            OmniAddress::Pol(address) if self.chain == ChainKind::Pol => address,
+            OmniAddress::HyperEvm(address) if self.chain == ChainKind::HyperEvm => address,
+            OmniAddress::Abs(address) if self.chain == ChainKind::Abs => address,
+            address => match self.near_client.get_bridged_token(&address, self.chain).await? {
+                Some(bridged) => self.match_evm_address(bridged)?,
+                None => return Ok(None),
+            },
+        };
+        Ok(Some(address))
     }
 
     fn match_evm_address(&self, address: OmniAddress) -> Result<H160> {
@@ -90,19 +112,9 @@ impl Client {
 
 #[async_trait]
 impl super::Client for Client {
-    async fn get_total_supply(&self, token_address: OmniAddress) -> Result<Option<u128>> {
-        let token_address = match token_address {
-            OmniAddress::Eth(address) if self.chain == ChainKind::Eth => address,
-            OmniAddress::Arb(address) if self.chain == ChainKind::Arb => address,
-            OmniAddress::Base(address) if self.chain == ChainKind::Base => address,
-            OmniAddress::Bnb(address) if self.chain == ChainKind::Bnb => address,
-            OmniAddress::Pol(address) if self.chain == ChainKind::Pol => address,
-            OmniAddress::HyperEvm(address) if self.chain == ChainKind::HyperEvm => address,
-            OmniAddress::Abs(address) if self.chain == ChainKind::Abs => address,
-            address => match self.near_client.get_bridged_token(&address, self.chain).await? {
-                Some(bridged) => self.match_evm_address(bridged)?,
-                None => return Ok(None),
-            },
+    async fn get_total_supply(&self, token_address: OmniAddress) -> Result<Option<super::TokenSupply>> {
+        let Some(token_address) = self.resolve_address(token_address).await? else {
+            return Ok(None);
         };
 
         let address = Address::from_slice(&token_address.0);
@@ -111,11 +123,33 @@ impl super::Client for Client {
             "Failed to fetch total supply for token {token_address} on {:?}",
             self.chain
         ))?;
-        let parsed_total_supply = total_supply.try_into().context(format!(
+        let amount = total_supply.try_into().context(format!(
             "Failed to parse total supply for token {token_address} on {:?}",
             self.chain
         ))?;
+        let decimals = erc20.decimals().call().await.context(format!(
+            "Failed to fetch decimals for token {token_address} on {:?}",
+            self.chain
+        ))?;
 
-        Ok(Some(parsed_total_supply))
+        Ok(Some(super::TokenSupply { amount, decimals }))
+    }
+
+    async fn get_decimals(&self, token_address: OmniAddress) -> Result<Option<u8>> {
+        let Some(token_address) = self.resolve_address(token_address).await? else {
+            return Ok(None);
+        };
+
+        // Native coin (zero address) has no ERC-20 to query.
+        if token_address.0 == [0u8; 20] {
+            return Ok(Some(NATIVE_DECIMALS));
+        }
+
+        let erc20 = IERC20::new(Address::from_slice(&token_address.0), &self.provider);
+        let decimals = erc20.decimals().call().await.context(format!(
+            "Failed to fetch decimals for token {token_address} on {:?}",
+            self.chain
+        ))?;
+        Ok(Some(decimals))
     }
 }

@@ -10,7 +10,16 @@ pub mod near;
 pub mod starknet;
 pub mod svm;
 
-/// Reads the total supply of a token's representation on a single chain.
+/// A token representation's total supply together with the decimals of that
+/// representation. Decimals differ per chain (EVM 18, Solana ~9, …), so we read them
+/// from each representation rather than assuming a single token-wide value.
+#[derive(Debug, Clone, Copy)]
+pub struct TokenSupply {
+    pub amount: u128,
+    pub decimals: u8,
+}
+
+/// Reads the total supply (and decimals) of a token's representation on a single chain.
 ///
 /// `token_address` may be the token on any chain; each client resolves the
 /// representation on its own chain via the NEAR contract's `get_bridged_token`.
@@ -19,7 +28,12 @@ pub mod svm;
 /// distinct from `Err`, which is a genuine RPC/decode failure).
 #[async_trait]
 pub trait Client: Send + Sync {
-    async fn get_total_supply(&self, token_address: OmniAddress) -> Result<Option<u128>>;
+    async fn get_total_supply(&self, token_address: OmniAddress) -> Result<Option<TokenSupply>>;
+
+    /// The decimals of the token's representation on this chain. Reads decimals only
+    /// (no supply, which can overflow `u128`) and returns the chain's native-coin
+    /// decimals for a zero/native origin address. Used to read a token's origin decimals.
+    async fn get_decimals(&self, token_address: OmniAddress) -> Result<Option<u8>>;
 }
 
 /// One client per supported destination chain.

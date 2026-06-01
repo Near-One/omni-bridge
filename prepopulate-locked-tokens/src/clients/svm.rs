@@ -5,6 +5,9 @@ use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_sdk::pubkey::Pubkey;
 use std::sync::Arc;
 
+/// Native SOL/Fogo (origin = system program, all-zero mint) is 9 decimals.
+const NATIVE_DECIMALS: u8 = 9;
+
 /// SPL-token supply / balance reader for SVM chains (Solana and Fogo).
 pub struct Client {
     near_client: Arc<super::near::Client>,
@@ -21,7 +24,19 @@ impl Client {
         }
     }
 
-    /// Extract the 32-byte SVM mint for `self.chain` from an address already on it.
+    /// Resolve the 32-byte SVM mint for this chain, or `None` if not deployed here.
+    async fn resolve_mint(&self, token_address: OmniAddress) -> Result<Option<[u8; 32]>> {
+        let mint = match token_address {
+            OmniAddress::Sol(addr) if self.chain == ChainKind::Sol => addr.0,
+            OmniAddress::Fogo(addr) if self.chain == ChainKind::Fogo => addr.0,
+            address => match self.near_client.get_bridged_token(&address, self.chain).await? {
+                Some(bridged) => self.match_svm_mint(bridged)?,
+                None => return Ok(None),
+            },
+        };
+        Ok(Some(mint))
+    }
+
     fn match_svm_mint(&self, address: OmniAddress) -> Result<[u8; 32]> {
         match (self.chain, address) {
             (ChainKind::Sol, OmniAddress::Sol(addr)) => Ok(addr.0),
@@ -69,14 +84,9 @@ pub fn derive_sol_vault(program: &Pubkey) -> Pubkey {
 
 #[async_trait]
 impl super::Client for Client {
-    async fn get_total_supply(&self, token_address: OmniAddress) -> Result<Option<u128>> {
-        let mint_bytes = match token_address {
-            OmniAddress::Sol(addr) if self.chain == ChainKind::Sol => addr.0,
-            OmniAddress::Fogo(addr) if self.chain == ChainKind::Fogo => addr.0,
-            address => match self.near_client.get_bridged_token(&address, self.chain).await? {
-                Some(bridged) => self.match_svm_mint(bridged)?,
-                None => return Ok(None),
-            },
+    async fn get_total_supply(&self, token_address: OmniAddress) -> Result<Option<super::TokenSupply>> {
+        let Some(mint_bytes) = self.resolve_mint(token_address).await? else {
+            return Ok(None);
         };
 
         let mint = Pubkey::new_from_array(mint_bytes);
@@ -85,11 +95,34 @@ impl super::Client for Client {
             .get_token_supply(&mint)
             .await
             .with_context(|| format!("Failed to get token supply on {:?}", self.chain))?;
-        let total_supply = supply
+        let amount = supply
             .amount
             .parse::<u128>()
             .with_context(|| format!("Failed to parse total supply on {:?}", self.chain))?;
 
-        Ok(Some(total_supply))
+        // The mint's own decimals come back with the supply — no extra call needed.
+        Ok(Some(super::TokenSupply {
+            amount,
+            decimals: supply.decimals,
+        }))
+    }
+
+    async fn get_decimals(&self, token_address: OmniAddress) -> Result<Option<u8>> {
+        let Some(mint_bytes) = self.resolve_mint(token_address).await? else {
+            return Ok(None);
+        };
+
+        // Native SOL/Fogo (all-zero mint = system program) has no SPL mint to query.
+        if mint_bytes == [0u8; 32] {
+            return Ok(Some(NATIVE_DECIMALS));
+        }
+
+        let mint = Pubkey::new_from_array(mint_bytes);
+        let supply = self
+            .rpc_client
+            .get_token_supply(&mint)
+            .await
+            .with_context(|| format!("Failed to get mint decimals on {:?}", self.chain))?;
+        Ok(Some(supply.decimals))
     }
 }

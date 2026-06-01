@@ -162,9 +162,34 @@ async fn compute_totals(
                 failures: 0,
             };
             let token_address = OmniAddress::Near(token.token_id.clone());
-            // locked_tokens is stored in origin-decimals units; a destination's
-            // total_supply is in the normalized `decimals`. null origin_decimals => no scaling.
-            let origin_decimals = token.origin_decimals.unwrap_or(token.decimals);
+
+            // locked_tokens is denominated in the token's ORIGIN-chain decimals. Read those
+            // once (decimals only — no supply, which can overflow; native origins return
+            // the chain's native-coin decimals). Without it we can't normalize any route,
+            // so a failure here skips the whole token.
+            let origin_decimals = match clients.client_for(token.origin_chain) {
+                Some(client) => match client.get_decimals(token_address.clone()).await {
+                    Ok(Some(decimals)) => decimals,
+                    Ok(None) => {
+                        task.failures += 1;
+                        eprintln!(
+                            "FAILURE token {}: not present on its origin chain {:?}",
+                            token.token_id, token.origin_chain
+                        );
+                        return task;
+                    }
+                    Err(err) => {
+                        task.failures += 1;
+                        eprintln!(
+                            "FAILURE token {}: reading origin decimals on {:?}: {:#}",
+                            token.token_id, token.origin_chain, err
+                        );
+                        return task;
+                    }
+                },
+                // Btc/Zcash origin: decimals not readable (and no such tokens exist).
+                None => return task,
+            };
 
             for chain in DESTINATION_CHAINS {
                 if chain == token.origin_chain {
@@ -175,27 +200,39 @@ async fn compute_totals(
                 };
 
                 match client.get_total_supply(token_address.clone()).await {
-                    // Token has a representation on this chain.
-                    // The NEAR representation of a foreign-origin token is minted in
-                    // origin-decimals already (its NEP-141 decimals == origin_decimals),
-                    // so it needs no scaling; every other representation is in normalized
-                    // `decimals` and must be denormalized to the origin-decimals unit.
-                    Ok(Some(supply)) => match locked_value(chain, supply, token.decimals, origin_decimals) {
-                        Ok(locked) => {
-                            println!(
-                                "Token: {}, Origin: {:?}, Chain: {:?}, Supply: {} -> locked: {}",
-                                token.token_id, token.origin_chain, chain, supply, locked
-                            );
-                            task.entries.push((token.token_id.clone(), chain, locked));
+                    Ok(Some(supply)) => {
+                        // The NEAR representation of a foreign-origin token is denominated
+                        // in the token's origin decimals (its `ft_metadata` decimals can be
+                        // unreliable for old factory tokens — sometimes 0); every other
+                        // representation carries its own decimals.
+                        let rep_decimals = if chain == ChainKind::Near {
+                            origin_decimals
+                        } else {
+                            supply.decimals
+                        };
+                        match normalize(supply.amount, rep_decimals, origin_decimals) {
+                            Ok(locked) => {
+                                println!(
+                                    "Token: {}, Origin: {:?}({}dp), Chain: {:?}, Supply: {} ({}dp) -> locked: {}",
+                                    token.token_id,
+                                    token.origin_chain,
+                                    origin_decimals,
+                                    chain,
+                                    supply.amount,
+                                    rep_decimals,
+                                    locked
+                                );
+                                task.entries.push((token.token_id.clone(), chain, locked));
+                            }
+                            Err(err) => {
+                                task.failures += 1;
+                                eprintln!(
+                                    "FAILURE token {} on {:?}: decimal normalization: {}",
+                                    token.token_id, chain, err
+                                );
+                            }
                         }
-                        Err(err) => {
-                            task.failures += 1;
-                            eprintln!(
-                                "FAILURE token {} on {:?}: decimal conversion: {}",
-                                token.token_id, chain, err
-                            );
-                        }
-                    },
+                    }
                     // No representation on this chain — the expected, common case.
                     Ok(None) => {}
                     // Genuine RPC/decode failure: distinct from "not deployed".
@@ -310,35 +347,22 @@ async fn build_entries(
     (entries, failures)
 }
 
-/// The `locked_tokens` value (origin-decimals) for a destination's `total_supply`.
+/// Normalize a representation's `supply` (in `rep_decimals`) into the origin-decimals unit
+/// that `locked_tokens` is stored in: `supply * 10^(origin_decimals - rep_decimals)`.
 ///
-/// The NEAR representation of a foreign-origin token is already in origin-decimals (its
-/// NEP-141 decimals equals the origin decimals, and the bridge mints `denormalize_amount`
-/// to it), so no scaling. Every other representation is in normalized `decimals` and is
-/// denormalized to origin-decimals.
-fn locked_value(chain: ChainKind, supply: u128, decimals: u8, origin_decimals: u8) -> Result<u128> {
-    if chain == ChainKind::Near {
-        Ok(supply)
-    } else {
-        denormalize(supply, decimals, origin_decimals)
-    }
-}
-
-/// Convert a normalized-`decimals` amount into the origin-decimals unit — mirroring the
-/// contract's `denormalize_amount`: `supply * 10^(origin_decimals - decimals)`.
-///
-/// The contract invariant is `origin_decimals >= decimals`; a violation (bad input
-/// data) is an error rather than a silently wrong value, as is a `u128` overflow.
-fn denormalize(supply: u128, decimals: u8, origin_decimals: u8) -> Result<u128> {
-    let diff = origin_decimals.checked_sub(decimals).with_context(|| {
-        format!("origin_decimals ({origin_decimals}) < decimals ({decimals})")
+/// Representations never carry MORE decimals than the origin (the bridge caps precision),
+/// so `origin_decimals >= rep_decimals`; a violation (bad data) or a `u128` overflow is an
+/// error rather than a silently wrong value.
+fn normalize(supply: u128, rep_decimals: u8, origin_decimals: u8) -> Result<u128> {
+    let diff = origin_decimals.checked_sub(rep_decimals).with_context(|| {
+        format!("representation decimals ({rep_decimals}) exceed origin decimals ({origin_decimals})")
     })?;
     let factor = 10u128
         .checked_pow(u32::from(diff))
         .context("decimal scaling factor overflows u128")?;
     supply
         .checked_mul(factor)
-        .context("denormalized locked amount overflows u128")
+        .context("normalized locked amount overflows u128")
 }
 
 fn write_artifact(path: &str, entries: &[Entry]) -> Result<()> {
@@ -414,45 +438,33 @@ fn print_report(report: &solvency::Report) {
 
 #[cfg(test)]
 mod tests {
-    use super::{denormalize, locked_value};
-    use omni_types::ChainKind;
+    use super::normalize;
 
     #[test]
-    fn locked_value_does_not_denormalize_near_route() {
-        // NEAR representation of a foreign-origin token is already in origin-decimals.
-        assert_eq!(locked_value(ChainKind::Near, 42, 9, 18).unwrap(), 42);
+    fn normalize_is_identity_when_decimals_match() {
+        // e.g. an Eth-decimals (18) representation of an 18-decimals-origin token.
+        assert_eq!(normalize(1_100_000_000_000_000_000, 18, 18).unwrap(), 1_100_000_000_000_000_000);
     }
 
     #[test]
-    fn locked_value_denormalizes_foreign_route() {
-        // EVM/SVM/Starknet representations are in normalized `decimals`.
-        assert_eq!(locked_value(ChainKind::Eth, 42, 9, 18).unwrap(), 42_000_000_000);
+    fn normalize_scales_solana_rep_up_to_origin() {
+        // Solana rep (9dp) of an 18dp-origin token => multiply by 10^9.
+        assert_eq!(normalize(42, 9, 18).unwrap(), 42_000_000_000);
     }
 
     #[test]
-    fn denormalize_is_identity_when_decimals_match() {
-        assert_eq!(denormalize(1_500_000, 6, 6).unwrap(), 1_500_000);
+    fn normalize_scales_strk_rep_for_24dp_origin() {
+        // wNEAR (24dp origin), Starknet rep (18dp) => x10^6 (matches on-chain value).
+        assert_eq!(normalize(1_999_999_999_999_999, 18, 24).unwrap(), 1_999_999_999_999_999_000_000);
     }
 
     #[test]
-    fn denormalize_scales_up_to_origin_decimals() {
-        // decimals=9, origin_decimals=18 => multiply by 10^9.
-        assert_eq!(denormalize(42, 9, 18).unwrap(), 42_000_000_000);
+    fn normalize_rejects_rep_decimals_above_origin() {
+        assert!(normalize(1, 18, 6).is_err());
     }
 
     #[test]
-    fn denormalize_treats_null_origin_as_no_scaling() {
-        // Caller passes origin_decimals = decimals when the API value is null.
-        assert_eq!(denormalize(7, 6, 6).unwrap(), 7);
-    }
-
-    #[test]
-    fn denormalize_rejects_origin_below_decimals() {
-        assert!(denormalize(1, 18, 6).is_err());
-    }
-
-    #[test]
-    fn denormalize_rejects_overflow() {
-        assert!(denormalize(u128::MAX, 0, 2).is_err());
+    fn normalize_rejects_overflow() {
+        assert!(normalize(u128::MAX, 0, 2).is_err());
     }
 }

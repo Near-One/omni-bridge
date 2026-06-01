@@ -32,20 +32,43 @@ impl Client {
         })
     }
 
+    /// Resolve the token's Starknet contract address, or `None` if not deployed here.
+    async fn resolve_address(&self, token_address: OmniAddress) -> Result<Option<H256>> {
+        let address = match token_address {
+            OmniAddress::Strk(addr) if self.chain == ChainKind::Strk => addr,
+            address => match self.near_client.get_bridged_token(&address, self.chain).await? {
+                Some(OmniAddress::Strk(addr)) => addr,
+                Some(other) => bail!("Unexpected address type ({other}) for {:?} chain", self.chain),
+                None => return Ok(None),
+            },
+        };
+        Ok(Some(address))
+    }
+
     /// Cairo ERC-20 `total_supply` of a contract.
     pub async fn total_supply(&self, contract: &H256) -> Result<u128> {
-        self.call_u256(contract, "total_supply", &[]).await
+        let felts = self.call(contract, "total_supply", &[]).await?;
+        decode_u256(&felts)
     }
 
     /// Cairo ERC-20 `balance_of(account)` (the bridge's custody balance of a
     /// Starknet-origin token).
     pub async fn balance_of(&self, contract: &H256, account: &H256) -> Result<u128> {
         let account_hex = felt_hex(account);
-        self.call_u256(contract, "balance_of", &[account_hex]).await
+        let felts = self.call(contract, "balance_of", &[account_hex]).await?;
+        decode_u256(&felts)
     }
 
-    /// Invoke a Cairo view returning a `u256` (low, high felts) via `starknet_call`.
-    async fn call_u256(&self, contract: &H256, entry_point: &str, calldata: &[String]) -> Result<u128> {
+    /// Cairo ERC-20 `decimals()` (a single felt).
+    pub async fn decimals(&self, contract: &H256) -> Result<u8> {
+        let felts = self.call(contract, "decimals", &[]).await?;
+        let first = felts.first().context("decimals() returned no felts")?;
+        let value = felt_to_u128(first)?;
+        u8::try_from(value).with_context(|| format!("decimals {value} does not fit u8"))
+    }
+
+    /// Invoke a Cairo view via `starknet_call`, returning the raw felt array.
+    async fn call(&self, contract: &H256, entry_point: &str, calldata: &[String]) -> Result<Vec<Value>> {
         let request = json!({
             "jsonrpc": "2.0",
             "id": 1,
@@ -77,28 +100,31 @@ impl Client {
             bail!("Starknet RPC error ({entry_point}): {error}");
         }
 
-        let result = response
+        response
             .get("result")
             .and_then(Value::as_array)
-            .context("Missing `result` array in Starknet response")?;
-
-        decode_u256(result)
+            .cloned()
+            .context("Missing `result` array in Starknet response")
     }
 }
 
 #[async_trait]
 impl super::Client for Client {
-    async fn get_total_supply(&self, token_address: OmniAddress) -> Result<Option<u128>> {
-        let address = match token_address {
-            OmniAddress::Strk(addr) if self.chain == ChainKind::Strk => addr,
-            address => match self.near_client.get_bridged_token(&address, self.chain).await? {
-                Some(OmniAddress::Strk(addr)) => addr,
-                Some(other) => bail!("Unexpected address type ({other}) for {:?} chain", self.chain),
-                None => return Ok(None),
-            },
+    async fn get_total_supply(&self, token_address: OmniAddress) -> Result<Option<super::TokenSupply>> {
+        let Some(address) = self.resolve_address(token_address).await? else {
+            return Ok(None);
         };
 
-        Ok(Some(self.total_supply(&address).await?))
+        let amount = self.total_supply(&address).await?;
+        let decimals = self.decimals(&address).await?;
+        Ok(Some(super::TokenSupply { amount, decimals }))
+    }
+
+    async fn get_decimals(&self, token_address: OmniAddress) -> Result<Option<u8>> {
+        let Some(address) = self.resolve_address(token_address).await? else {
+            return Ok(None);
+        };
+        Ok(Some(self.decimals(&address).await?))
     }
 }
 

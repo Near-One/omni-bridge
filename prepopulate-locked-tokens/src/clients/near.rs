@@ -124,6 +124,35 @@ impl Client {
         .await
     }
 
+    /// Resolve the token's NEAR account id, or `None` if it has no NEAR representation.
+    async fn resolve_near_account(&self, token_address: OmniAddress) -> Result<Option<AccountId>> {
+        match token_address {
+            OmniAddress::Near(token_id) => Ok(Some(token_id)),
+            address => match self.get_bridged_token(&address, ChainKind::Near).await? {
+                Some(OmniAddress::Near(token_id)) => Ok(Some(token_id)),
+                Some(other) => bail!("Unexpected address type ({other}) for Near chain"),
+                None => Ok(None),
+            },
+        }
+    }
+
+    async fn ft_decimals(&self, token_id: &AccountId) -> Result<u8> {
+        with_retries("ft_metadata", || {
+            let network = self.network.clone();
+            let token_id = token_id.clone();
+            async move {
+                let metadata: Data<FtMetadataDecimals> = Contract(token_id.clone())
+                    .call_function("ft_metadata", ())
+                    .read_only()
+                    .fetch_from(&network)
+                    .await
+                    .with_context(|| format!("Failed to fetch ft_metadata on {token_id}"))?;
+                Ok(metadata.data.decimals)
+            }
+        })
+        .await
+    }
+
     async fn ft_total_supply(&self, token_id: &AccountId) -> Result<u128> {
         with_retries("ft_total_supply", || {
             let network = self.network.clone();
@@ -170,18 +199,28 @@ impl Client {
 
 #[async_trait]
 impl super::Client for Client {
-    async fn get_total_supply(&self, token_address: OmniAddress) -> Result<Option<u128>> {
-        let token_id = match token_address {
-            OmniAddress::Near(token_id) => token_id,
-            address => match self.get_bridged_token(&address, ChainKind::Near).await? {
-                Some(OmniAddress::Near(token_id)) => token_id,
-                Some(other) => bail!("Unexpected address type ({other}) for Near chain"),
-                None => return Ok(None),
-            },
+    async fn get_total_supply(&self, token_address: OmniAddress) -> Result<Option<super::TokenSupply>> {
+        let Some(token_id) = self.resolve_near_account(token_address).await? else {
+            return Ok(None);
         };
 
-        Ok(Some(self.ft_total_supply(&token_id).await?))
+        let amount = self.ft_total_supply(&token_id).await?;
+        let decimals = self.ft_decimals(&token_id).await?;
+        Ok(Some(super::TokenSupply { amount, decimals }))
     }
+
+    async fn get_decimals(&self, token_address: OmniAddress) -> Result<Option<u8>> {
+        let Some(token_id) = self.resolve_near_account(token_address).await? else {
+            return Ok(None);
+        };
+        Ok(Some(self.ft_decimals(&token_id).await?))
+    }
+}
+
+/// Minimal view of NEP-148 `ft_metadata` — we only need `decimals` (extra fields ignored).
+#[derive(serde::Deserialize)]
+struct FtMetadataDecimals {
+    decimals: u8,
 }
 
 /// Retry `op` on transient transport errors with exponential backoff (250ms, 500ms, 1s).

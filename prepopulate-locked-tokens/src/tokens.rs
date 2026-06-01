@@ -6,21 +6,13 @@ use serde::Deserialize;
 /// A single token as reported by the bridge API (`/api/v3/tokens`).
 ///
 /// `origin_chain` is the authoritative origin, replacing the old account-id prefix
-/// heuristic. `decimals` / `origin_decimals` mirror the contract's `Decimals` and are
-/// needed to convert a destination's `total_supply` into the origin-decimals unit that
-/// `locked_tokens` is stored in (see the contract's `denormalize_amount`). The API
-/// returns more fields (`token_address`, `name`, `symbol`) which serde ignores.
+/// heuristic. Decimals are NOT taken from here — each representation's decimals are read
+/// on-chain per chain (they differ: EVM 18, Solana ~9, …). The API returns more fields
+/// (`token_address`, `name`, `symbol`, `decimals`, `origin_decimals`) which serde ignores.
 #[derive(Debug, Clone, Deserialize)]
 pub struct TokenInfo {
     pub token_id: AccountId,
     pub origin_chain: ChainKind,
-    /// Normalized decimals: the decimals of the cross-chain wire format and of the
-    /// EVM/SVM/Starknet representations. Note the NEAR representation of a foreign-origin
-    /// token instead uses `origin_decimals` (see `main::locked_value`).
-    pub decimals: u8,
-    /// Origin-chain decimals. `null`/absent means it equals `decimals` (no scaling).
-    #[serde(default)]
-    pub origin_decimals: Option<u8>,
 }
 
 #[derive(Debug, Deserialize)]
