@@ -39,6 +39,19 @@ def get_secret_key():
             "HL_SECRET_KEY is not set. Add it to evm/utils/hyperliquid/.env (see .env.example)."
         )
     return secret_key
+
+
+def get_base_url():
+    network = os.environ.get("HL_NETWORK", "testnet").lower()
+    if network == "mainnet":
+        return constants.MAINNET_API_URL
+    if network == "testnet":
+        return constants.TESTNET_API_URL
+    raise RuntimeError(
+        f"Invalid HL_NETWORK={network!r}. Expected 'testnet' or 'mainnet'."
+    )
+
+
 def step1(exchange):
     # Step 1: Registering the Token
     #
@@ -109,7 +122,7 @@ def step5(exchange, spot):
     print(register_hyperliquidity_result)
 
 def main():
-    address, info, exchange = setup(constants.TESTNET_API_URL, skip_ws=True)
+    address, info, exchange = setup(get_base_url(), skip_ws=True)
     print(address, info, exchange)
 
     # token = step1()
