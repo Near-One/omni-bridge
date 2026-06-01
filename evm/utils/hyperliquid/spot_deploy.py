@@ -13,11 +13,20 @@ from hyperliquid.utils import constants
 load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
 
 
+DEPLOY_PARAMS_PATH = os.path.join(os.path.dirname(__file__), "deploy_params.json")
+
+
 def load_params():
     """Read non-secret operational parameters from deploy_params.json."""
-    params_path = os.path.join(os.path.dirname(__file__), "deploy_params.json")
-    with open(params_path) as f:
+    with open(DEPLOY_PARAMS_PATH) as f:
         return json.load(f)
+
+
+def save_params(params):
+    """Persist updated parameters back to deploy_params.json (loses blank-line groups)."""
+    with open(DEPLOY_PARAMS_PATH, "w") as f:
+        json.dump(params, f, indent=2)
+        f.write("\n")
 
 
 def setup(base_url=None, skip_ws=False, perp_dexs=None):
@@ -128,16 +137,28 @@ def step4(exchange, token):
 
     return spot
 
-def step5(exchange, spot):
-
+def step5(exchange, spot, params):
     # Step 5: Register Hyperliquidity
     #
-    # Registers hyperliquidity for the spot pair. In this example, hyperliquidity is registered
-    # with a starting price of $2, an order size of 4, and 100 total orders.
+    # This step is mandatory in the deployment pipeline even when noHyperliquidity = True
+    # (which we set in step 3). In that case the call is essentially a formality:
+    # n_orders MUST be 0, and the other order-related args become unused.
     #
-    # This step is required even if "noHyperliquidity" was set to True.
-    # If "noHyperliquidity" was set to True during step 3 (genesis), then "n_orders" is required to be 0.
-    register_hyperliquidity_result = exchange.spot_deploy_register_hyperliquidity(spot, 2.0, 4.0, 0, None)
+    # Arguments to spot_deploy_register_hyperliquidity:
+    #   spot            — the spot index returned by step 4 (NOT the token index!).
+    #   start_px        — anchor price for the Hyperliquidity grid. Each adjacent
+    #                     level is +0.3% above and -0.3% below (geometric step).
+    #                     With noHyperliquidity = True, no orders are placed but
+    #                     this is still recorded as the reference price.
+    #   order_sz        — size of each individual order (in floating-form, not wei).
+    #                     Ignored when n_orders = 0; we pass 0.
+    #   n_orders        — total number of price levels the AMM seeds. MUST be 0
+    #                     because we disabled hyperliquidity at step 3.
+    #   n_seeded_levels — how many bid levels to pre-fund with USDC instead of the
+    #                     base token. None (or 0) means no USDC-funded levels.
+    register_hyperliquidity_result = exchange.spot_deploy_register_hyperliquidity(
+        spot, params["start_px"], 0.0, 0, None
+    )
     print(register_hyperliquidity_result)
 
 def main():
@@ -151,13 +172,22 @@ def main():
     else:
         token = step1(exchange, params)
         print(f"step1 done, registered token index: {token}")
+        params["token_id"] = token
+        save_params(params)
 
     step2(address, exchange, token, params)
     step3(exchange, token, params)
-    spot = step4(exchange, token)
-    # print(spot)
-    # spot = 1436
-    # step5(exchange, spot)
+
+    spot = params.get("spot_id")
+    if spot is not None:
+        print(f"Skipping step4 — using spot_id from deploy_params.json: {spot}")
+    else:
+        spot = step4(exchange, token)
+        print(f"step4 done, registered spot index: {spot}")
+        params["spot_id"] = spot
+        save_params(params)
+
+    step5(exchange, spot, params)
 
 if __name__ == "__main__":
     main()
