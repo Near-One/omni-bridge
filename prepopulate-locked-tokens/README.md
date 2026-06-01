@@ -1,39 +1,96 @@
-# Prepopulate tokens
+# Prepopulate locked tokens
 
-This is needed as a first step for the contract after migration to set initial values of `locked_tokens`
+Seeds the omni-bridge `locked_tokens` guard with its initial per-`(chain, token)`
+values, computed from the current bridged supply on each chain.
 
-## How to get a list of NEP141 tokens
+## Why this is needed
 
-```mongodb
-db.omni_events.distinct(
-  "Meta.NearBindTokenEvent.token_id",
-  { "Meta.NearBindTokenEvent": { $exists: true } }
-)
+The bridge's locking guard (`near/omni-bridge/src/token_lock.rs`) is **opt-in per
+`(destination_chain, token_id)`**: `lock`/`unlock` only enforce a limit once an entry
+exists. Until a pair is seeded via `set_locked_tokens`, unlocks on it are unguarded.
+After a contract migration this tool computes and (optionally) applies those initial
+values.
+
+For a destination chain, the locked amount is the current total supply of the token's
+bridged representation on that chain (the origin chain is skipped), **converted into
+origin-decimals units**. The contract locks `denormalize_amount(transfer.amount)`, so
+`locked_tokens` is denominated in the token's `origin_decimals`, while a destination's
+`total_supply` is in the normalized `decimals`. The tool applies the same conversion the
+contract does: `locked = total_supply * 10^(origin_decimals - decimals)`, using the
+per-token `decimals`/`origin_decimals` from the API.
+
+## Where the token list comes from
+
+The token list is fetched from the bridge API (no more MongoDB queries or static files):
+
+- testnet: `https://testnet.api.bridge.nearone.org/api/v3/tokens`
+- mainnet: `https://mainnet.api.bridge.nearone.org/api/v3/tokens`
+
+Each entry provides the NEAR `token_id` and the authoritative `origin_chain`. Override
+the URL with `TOKENS_API_URL` if needed; otherwise it is derived from `--network`.
+
+## Configuration
+
+All settings — RPC URLs, bridge custody addresses, the tokens API URL, and the locker
+account — have canonical public defaults baked in per `--network`, so the tool runs with
+**no env vars**. Set a variable (see `example.env`) only to override a default (e.g. a
+private, higher-rate-limit RPC). The only env vars normally needed are the signer for
+live mode (`--execute`). Supported destination chains: NEAR, Eth, Arb, Base, Bnb, Pol,
+HyperEvm (`hlevm`), Abs, Sol, Fogo, and Strk (Starknet). Btc/Zcash are not queried (no
+fungible bridged representation).
+
+## Usage
+
+Dry mode (default) — reads supplies, writes `locked-tokens-<network>.json`, and prints a
+preview of the computed values and how they differ from the current on-chain state. Sends
+nothing:
+
+```bash
+cargo run -- --network mainnet
 ```
 
-## How to get a list of other tokens
+Live mode — same computation, then prints the preview, asks for confirmation, and sends
+`set_locked_tokens` in batches:
 
-```mongodb
-db.omni_events.distinct(
-  "Meta.NearDeployTokenEvent.token_id",
-  { "Meta.NearDeployTokenEvent": { $exists: true } }
-)
+```bash
+cargo run -- --network mainnet --execute
 ```
 
-## Additional tokens
+Live mode additionally requires a signer in the environment:
 
-Using nearblocks we can fetch manually added/migrated tokens by filtering out `migrate_deployed_token` and `add_token` methods, since they don't have explicit logs and we don't index them
-
-Also, these native tokens should be included:
-```txt
-eth:0x0000000000000000000000000000000000000000
-arb:0x0000000000000000000000000000000000000000
-base:0x0000000000000000000000000000000000000000
-bnb:0x0000000000000000000000000000000000000000
-pol:0x0000000000000000000000000000000000000000
-sol:11111111111111111111111111111111
-btc:
-zcash:
+```env
+NEAR_SIGNER_ACCOUNT_ID=token-lock-controller.near
+NEAR_SIGNER_SECRET_KEY=ed25519:...
 ```
 
-And tokens deployed using old factory (`factory.bridge.near`/`factory.sepolia.testnet`) should be added as well (they can be retrieved by calling `get_tokens_accounts` method)
+The signer account must hold **`Role::TokenLockController`** (or `Role::DAO`) on the
+bridge contract — that is the role `set_locked_tokens` requires. `get_locked_tokens`
+(used for the dry-mode diff) is a public view and needs no role.
+
+Only entries that differ from the current on-chain value are sent; `set_locked_tokens` is
+an idempotent overwrite, so a run that aborts part-way can simply be re-run.
+
+## Solvency pre-check
+
+Before any write, the tool verifies for **every** token that the sum of its routes'
+minted supply does not exceed the bridge's backing on the token's origin chain
+(e.g. Σ wNEAR minted across all chains ≤ wNEAR the bridge holds on NEAR). The backing
+is read per origin:
+
+| Origin | Backing read |
+|---|---|
+| NEAR | `ft_balance_of(bridge)` on the token (uses `OMNI_BRIDGE_ACCOUNT_ID`) |
+| EVM (ERC-20) | `balanceOf(bridge)` on the origin token |
+| EVM (native, `0x0`) | the bridge's native balance |
+| Solana/Fogo (SPL) | the `[b"vault", mint]` token-vault PDA balance |
+| Solana/Fogo (native) | the `[b"sol_vault"]` PDA balance |
+| Starknet | `balance_of(bridge)` on the origin Cairo ERC-20 |
+
+Set the bridge custody address (EVM/Starknet) or program id (SVM) for each foreign origin
+chain that has tokens via `*_BRIDGE_ADDRESS` / `*_BRIDGE_PROGRAM` (see `example.env`). If
+any token fails the check — or any backing can't be read — the **whole run aborts** and
+nothing is written. In dry mode the violations are reported instead.
+
+A run also aborts before writing if any **genuine RPC/data read failure** occurred (as
+opposed to the routine "token not deployed on this chain" case, which is a clean skip), so
+a partially-failed read can never be mistaken for complete coverage.

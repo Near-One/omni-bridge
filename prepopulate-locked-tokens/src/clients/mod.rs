@@ -1,65 +1,108 @@
 use anyhow::Result;
 use async_trait::async_trait;
-use omni_types::OmniAddress;
+use omni_types::{ChainKind, OmniAddress};
 use std::sync::Arc;
+
+use crate::config::Config;
 
 pub mod evm;
 pub mod near;
-pub mod solana;
+pub mod starknet;
+pub mod svm;
 
+/// Reads the total supply of a token's representation on a single chain.
+///
+/// `token_address` may be the token on any chain; each client resolves the
+/// representation on its own chain via the NEAR contract's `get_bridged_token`.
+///
+/// `Ok(None)` means the token has no representation on this chain (a clean skip,
+/// distinct from `Err`, which is a genuine RPC/decode failure).
 #[async_trait]
-pub trait Client {
-    async fn get_total_supply(&self, token_address: OmniAddress) -> Result<u128>;
+pub trait Client: Send + Sync {
+    async fn get_total_supply(&self, token_address: OmniAddress) -> Result<Option<u128>>;
 }
 
+/// One client per supported destination chain.
 pub struct Clients {
     pub near: Arc<near::Client>,
     pub eth: evm::Client,
-    pub base: evm::Client,
     pub arb: evm::Client,
+    pub base: evm::Client,
     pub bnb: evm::Client,
     pub pol: evm::Client,
-    pub solana: solana::Client,
+    pub hlevm: evm::Client,
+    pub abs: evm::Client,
+    pub sol: svm::Client,
+    pub fogo: svm::Client,
+    pub strk: starknet::Client,
 }
 
 impl Clients {
-    pub fn new(
-        near_client: Arc<near::Client>,
-        eth_rpc_url: String,
-        base_rpc_url: String,
-        arb_rpc_url: String,
-        bnb_rpc_url: String,
-        pol_rpc_url: String,
-        solana_rpc_url: String,
-    ) -> Result<Self> {
+    pub fn new(near_client: Arc<near::Client>, config: &Config) -> Result<Self> {
+        let evm = |url: &str, chain| evm::Client::new(Arc::clone(&near_client), url.to_string(), chain);
+
         Ok(Self {
             near: Arc::clone(&near_client),
-            eth: evm::Client::new(
+            eth: evm(&config.eth_rpc_url, ChainKind::Eth)?,
+            arb: evm(&config.arb_rpc_url, ChainKind::Arb)?,
+            base: evm(&config.base_rpc_url, ChainKind::Base)?,
+            bnb: evm(&config.bnb_rpc_url, ChainKind::Bnb)?,
+            pol: evm(&config.pol_rpc_url, ChainKind::Pol)?,
+            hlevm: evm(&config.hlevm_rpc_url, ChainKind::HyperEvm)?,
+            abs: evm(&config.abs_rpc_url, ChainKind::Abs)?,
+            sol: svm::Client::new(
                 Arc::clone(&near_client),
-                eth_rpc_url,
-                omni_types::ChainKind::Eth,
-            )?,
-            base: evm::Client::new(
+                config.solana_rpc_url.clone(),
+                ChainKind::Sol,
+            ),
+            fogo: svm::Client::new(
                 Arc::clone(&near_client),
-                base_rpc_url,
-                omni_types::ChainKind::Base,
-            )?,
-            arb: evm::Client::new(
-                Arc::clone(&near_client),
-                arb_rpc_url,
-                omni_types::ChainKind::Arb,
-            )?,
-            bnb: evm::Client::new(
-                Arc::clone(&near_client),
-                bnb_rpc_url,
-                omni_types::ChainKind::Bnb,
-            )?,
-            pol: evm::Client::new(
-                Arc::clone(&near_client),
-                pol_rpc_url,
-                omni_types::ChainKind::Pol,
-            )?,
-            solana: solana::Client::new(Arc::clone(&near_client), solana_rpc_url),
+                config.fogo_rpc_url.clone(),
+                ChainKind::Fogo,
+            ),
+            strk: starknet::Client::new(Arc::clone(&near_client), &config.strk_rpc_url, ChainKind::Strk)?,
         })
+    }
+
+    /// The client that can read supply on `chain`, or `None` for chains with no
+    /// queryable fungible representation (Btc/Zcash).
+    pub fn client_for(&self, chain: ChainKind) -> Option<&dyn Client> {
+        match chain {
+            ChainKind::Near => Some(self.near.as_ref()),
+            ChainKind::Eth => Some(&self.eth),
+            ChainKind::Arb => Some(&self.arb),
+            ChainKind::Base => Some(&self.base),
+            ChainKind::Bnb => Some(&self.bnb),
+            ChainKind::Pol => Some(&self.pol),
+            ChainKind::HyperEvm => Some(&self.hlevm),
+            ChainKind::Abs => Some(&self.abs),
+            ChainKind::Sol => Some(&self.sol),
+            ChainKind::Fogo => Some(&self.fogo),
+            ChainKind::Strk => Some(&self.strk),
+            ChainKind::Btc | ChainKind::Zcash => None,
+        }
+    }
+
+    /// The concrete EVM client for an EVM chain (used by the solvency custody reader).
+    pub fn evm_client(&self, chain: ChainKind) -> Option<&evm::Client> {
+        match chain {
+            ChainKind::Eth => Some(&self.eth),
+            ChainKind::Arb => Some(&self.arb),
+            ChainKind::Base => Some(&self.base),
+            ChainKind::Bnb => Some(&self.bnb),
+            ChainKind::Pol => Some(&self.pol),
+            ChainKind::HyperEvm => Some(&self.hlevm),
+            ChainKind::Abs => Some(&self.abs),
+            _ => None,
+        }
+    }
+
+    /// The concrete SVM client for an SVM chain (used by the solvency custody reader).
+    pub fn svm_client(&self, chain: ChainKind) -> Option<&svm::Client> {
+        match chain {
+            ChainKind::Sol => Some(&self.sol),
+            ChainKind::Fogo => Some(&self.fogo),
+            _ => None,
+        }
     }
 }
