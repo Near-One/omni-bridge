@@ -167,33 +167,88 @@ def step5(exchange, spot, params):
     )
     print(register_hyperliquidity_result)
 
+def confirm(prompt):
+    return input(f"\n{prompt} [y/N]: ").strip().lower() == "y"
+
+
+def show_state(info, address):
+    """Print current spotDeployState from HL info endpoint."""
+    state = info.post("/info", {"type": "spotDeployState", "user": address})
+    print("\n=== spotDeployState ===")
+    print(json.dumps(state, indent=2))
+
+
 def main():
     params = load_params()
     address, info, exchange = setup(get_base_url(params["network"]), skip_ws=True)
     print(address, info, exchange)
 
+    last_step = params.get("last_step") or 0
     token = params.get("token_id")
-    if token is not None:
-        print(f"Skipping step1 — using token_id from deploy_params.json: {token}")
+    spot = params.get("spot_id")
+
+    # Step 1 — skip if last_step >= 1 OR token_id already set
+    if last_step >= 1 or token is not None:
+        print(f"\nSkipping step1 — last_step={last_step}, token_id={token}")
     else:
+        show_state(info, address)
+        if not confirm("Run step1 (register token — IRREVERSIBLE, costs HYPE)?"):
+            return
         token = step1(exchange, params)
         print(f"step1 done, registered token index: {token}")
         params["token_id"] = token
+        params["last_step"] = 1
         save_params(params)
 
-    step2(address, exchange, token, params)
-    step3(exchange, token, params)
-
-    spot = params.get("spot_id")
-    if spot is not None:
-        print(f"Skipping step4 — using spot_id from deploy_params.json: {spot}")
+    # Step 2 — also skip if spot_id is set (means step4 already passed)
+    if last_step >= 2 or spot is not None:
+        print(f"\nSkipping step2 — last_step={last_step}, spot_id={spot}")
     else:
+        show_state(info, address)
+        if not confirm("Run step2 (user genesis — can be re-run until step3)?"):
+            return
+        step2(address, exchange, token, params)
+        params["last_step"] = 2
+        save_params(params)
+
+    # Step 3 — also skip if spot_id is set (means step4 already passed)
+    if last_step >= 3 or spot is not None:
+        print(f"\nSkipping step3 — last_step={last_step}, spot_id={spot}")
+    else:
+        show_state(info, address)
+        if not confirm("Run step3 (genesis — IRREVERSIBLE, finalizes max_supply)?"):
+            return
+        step3(exchange, token, params)
+        params["last_step"] = 3
+        save_params(params)
+
+    # Step 4 — skip if last_step >= 4 OR spot_id already set
+    if last_step >= 4 or spot is not None:
+        print(f"\nSkipping step4 — last_step={last_step}, spot_id={spot}")
+    else:
+        show_state(info, address)
+        if not confirm("Run step4 (register <token>/USDC spot pair — IRREVERSIBLE)?"):
+            return
         spot = step4(exchange, token)
         print(f"step4 done, registered spot index: {spot}")
         params["spot_id"] = spot
+        params["last_step"] = 4
         save_params(params)
 
-    step5(exchange, spot, params)
+    # Step 5
+    if last_step >= 5:
+        print(f"\nSkipping step5 — last_step={last_step}")
+    else:
+        show_state(info, address)
+        if not confirm("Run step5 (register hyperliquidity — formal call, n_orders=0)?"):
+            return
+        step5(exchange, spot, params)
+        params["last_step"] = 5
+        save_params(params)
+
+    show_state(info, address)
+    print("\nDeployment complete.")
+
 
 if __name__ == "__main__":
     main()

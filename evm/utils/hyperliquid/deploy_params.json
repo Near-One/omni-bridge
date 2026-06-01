@@ -3,6 +3,7 @@
 
   "token_id": null,
   "spot_id": null,
+  "last_step": null,
 
   "token_name": "NEAR",
   "token_description": "NEAR Protocol",
