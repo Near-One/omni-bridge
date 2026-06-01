@@ -98,15 +98,16 @@ def step2(address, exchange, token, params):
     )
     print(user_genesis_result)
 
-def step3(exchange, token):
+def step3(exchange, token, params):
     # Step 3: Genesis
     #
-    # Finalize genesis. The max supply of 300000000000000 wei needs to match the total
-    # allocation above from user genesis.
+    # Finalize genesis. The max supply must match the total allocation from step 2
+    # (user genesis) — we use the same total_supply value from deploy_params.json.
     #
-    # "noHyperliquidity" can also be set to disable hyperliquidity. In that case, no balance
-    # should be associated with hyperliquidity from step 2 (user genesis).
-    genesis_result = exchange.spot_deploy_genesis(token, "100000000900000000", True)
+    # noHyperliquidity is hardcoded to True: this is a bridged token, all liquidity
+    # comes from the bridge, never from a protocol-level AMM. This also implies that
+    # step 5 (register_hyperliquidity) must use n_orders = 0.
+    genesis_result = exchange.spot_deploy_genesis(token, params["total_supply"], True)
     print(genesis_result)
 
 def step4(exchange, token):
@@ -150,7 +151,7 @@ def main():
         print(f"step1 done, registered token index: {token}")
 
     step2(address, exchange, token, params)
-    # step3(exchange, token)
+    step3(exchange, token, params)
     # spot = step4(exchange, token)
     # print(spot)
     # spot = 1436
