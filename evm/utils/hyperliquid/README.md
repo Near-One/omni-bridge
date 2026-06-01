@@ -117,28 +117,6 @@ Run:
 python links_tokens.py
 ```
 
-The script:
-
-1. Loads `.env` and `link_tokens_params.json`.
-2. Validates that `token_id` and `evm_contract_address` are set; fails fast otherwise.
-3. Calls `requestEvmContract` immediately (reversible — can be re-issued before finalize).
-4. Prints `spotDeployState` from HL so you can sanity-check the pending request.
-5. Asks for `[y/N]` confirmation — replying `n` exits cleanly without finalizing.
-6. On `y`, calls `finalizeEvmContract` (**IRREVERSIBLE** — locks the link permanently).
-
-#### Prerequisites for `firstStorageSlot` mode
-
-⚠️ The chosen `evm_contract_address` **must have the signer's address in storage slot 0**. HL queries slot 0 on EVM and compares it to the action signer. Standard `ERC1967Proxy` does **not** put the deployer there (slot 0 holds `_name` on our `BridgeToken`-derived contracts), so this mode requires either a custom contract or an explicit slot-0 owner field.
-
-If the contract doesn't satisfy this, `finalizeEvmContract` will fail with an HL-side validation error — no on-chain consequences, but you'll need to fix slot 0 (deploy a new contract) and re-run.
-
-#### Reversibility
-
-| Step | Reversible? | Notes |
-|---|---|---|
-| `requestEvmContract` | ✅ | Sets a pending entry; later requests likely overwrite it (HL docs don't formally specify, but that's the practical pattern). |
-| `finalizeEvmContract` | ❌ | Permanently links the HC token to the specified EVM contract address. Cannot re-link to a different EVM contract afterwards. |
-
 ## Notes
 
 ### Reversibility (read before running on mainnet)
