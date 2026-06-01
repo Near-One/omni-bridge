@@ -1,0 +1,11 @@
+{
+  "network": "mainnet",
+
+  "token_id": null,
+
+  "token_name": "NEAR",
+  "token_description": "NEAR Protocol",
+  "sz_decimals": 2,
+  "wei_decimals": 8,
+  "max_gas": 50000000000
+}

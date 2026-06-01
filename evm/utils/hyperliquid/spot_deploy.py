@@ -1,3 +1,4 @@
+import json
 import os
 
 import eth_account
@@ -10,6 +11,13 @@ from hyperliquid.utils import constants
 
 # Load .env from the same directory as this script (not the cwd).
 load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
+
+
+def load_params():
+    """Read non-secret operational parameters from deploy_params.json."""
+    params_path = os.path.join(os.path.dirname(__file__), "deploy_params.json")
+    with open(params_path) as f:
+        return json.load(f)
 
 
 def setup(base_url=None, skip_ws=False, perp_dexs=None):
@@ -41,24 +49,31 @@ def get_secret_key():
     return secret_key
 
 
-def get_base_url():
-    network = os.environ.get("HL_NETWORK", "testnet").lower()
+def get_base_url(network):
+    network = network.lower()
     if network == "mainnet":
         return constants.MAINNET_API_URL
     if network == "testnet":
         return constants.TESTNET_API_URL
     raise RuntimeError(
-        f"Invalid HL_NETWORK={network!r}. Expected 'testnet' or 'mainnet'."
+        f"Invalid network={network!r}. Expected 'testnet' or 'mainnet'."
     )
 
 
-def step1(exchange):
+def step1(exchange, params):
     # Step 1: Registering the Token
     #
-    # Takes part in the spot deploy auction and if successful, registers token "TEST0"
-    # with sz_decimals 2 and wei_decimals 8.
-    # The max gas is 10,000 HYPE and represents the max amount to be paid for the spot deploy auction.
-    register_token_result = exchange.spot_deploy_register_token("TEST0", 2, 8, 1000000000000, "Test token example")
+    # Takes part in the spot deploy auction and if successful, registers a HIP-1 token
+    # with the (name, sz_decimals, wei_decimals, description) defined in deploy_params.json.
+    # The max_gas argument is the maximum amount willing to be paid for the spot deploy
+    # auction, denominated in HYPE wei (1 HYPE = 10^8 wei).
+    register_token_result = exchange.spot_deploy_register_token(
+        params["token_name"],
+        params["sz_decimals"],
+        params["wei_decimals"],
+        params["max_gas"],
+        params["token_description"],
+    )
     print(register_token_result)
     # If registration is successful, a token index will be returned. This token index is required for
     # later steps in the spot deploy process.
@@ -122,11 +137,17 @@ def step5(exchange, spot):
     print(register_hyperliquidity_result)
 
 def main():
-    address, info, exchange = setup(get_base_url(), skip_ws=True)
+    params = load_params()
+    address, info, exchange = setup(get_base_url(params["network"]), skip_ws=True)
     print(address, info, exchange)
 
-    # token = step1()
-    # token = 1562
+    token = params.get("token_id")
+    if token is not None:
+        print(f"Skipping step1 — using token_id from deploy_params.json: {token}")
+    else:
+        token = step1(exchange, params)
+        print(f"step1 done, registered token index: {token}")
+
     # step2(address, exchange, token)
     # step3(exchange, token)
     # spot = step4(exchange, token)
