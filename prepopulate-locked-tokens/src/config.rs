@@ -36,6 +36,9 @@ pub struct Config {
     pub omni_bridge_account_id: AccountId,
     pub tokens_api_url: String,
     pub near_rpc_url: String,
+    /// Optional fastnear API key, sent as an `Authorization: Bearer` header (do NOT put
+    /// it in `near_rpc_url` — query-string keys break near_api's RPC client).
+    pub near_api_key: Option<String>,
     pub eth_rpc_url: String,
     pub arb_rpc_url: String,
     pub base_rpc_url: String,
@@ -68,6 +71,7 @@ impl Config {
                 .context("Invalid OMNI_BRIDGE_ACCOUNT_ID")?,
             tokens_api_url: env_or("TOKENS_API_URL", d.tokens_api_url),
             near_rpc_url: env_or("NEAR_RPC_URL", d.near_rpc),
+            near_api_key: env_opt_or("NEAR_API_KEY", None),
             eth_rpc_url: env_or("ETH_RPC_URL", d.eth_rpc),
             arb_rpc_url: env_or("ARB_RPC_URL", d.arb_rpc),
             base_rpc_url: env_or("BASE_RPC_URL", d.base_rpc),

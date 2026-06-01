@@ -33,11 +33,18 @@ the URL with `TOKENS_API_URL` if needed; otherwise it is derived from `--network
 
 All settings — RPC URLs, bridge custody addresses, the tokens API URL, and the locker
 account — have canonical public defaults baked in per `--network`, so the tool runs with
-**no env vars**. Set a variable (see `example.env`) only to override a default (e.g. a
-private, higher-rate-limit RPC). The only env vars normally needed are the signer for
-live mode (`--execute`). Supported destination chains: NEAR, Eth, Arb, Base, Bnb, Pol,
-HyperEvm (`hlevm`), Abs, Sol, Fogo, and Strk (Starknet). Btc/Zcash are not queried (no
-fungible bridged representation).
+**no env vars**. Set a variable (see `example.env`) only to override a default. The only
+env vars normally needed are a NEAR API key (to avoid rate limits) and the signer for
+live mode (`--execute`).
+
+The public NEAR RPC rate-limits (429) under a full run's call volume, so set a fastnear
+key via **`NEAR_API_KEY`** — it is sent as an `Authorization: Bearer` header. Do **not**
+put the key in `NEAR_RPC_URL`: a query-string key (`?apiKey=…`) is corrupted by near_api's
+RPC client (the JSON-RPC path is appended after the query) and fails with `401`.
+
+Supported destination chains: NEAR, Eth, Arb, Base, Bnb, Pol, HyperEvm (`hlevm`), Abs,
+Sol, Fogo, and Strk (Starknet). Btc/Zcash are not queried (no fungible bridged
+representation).
 
 ## Usage
 

@@ -71,6 +71,7 @@ async fn main() -> Result<()> {
     let near_client = Arc::new(clients::near::Client::new(
         config.omni_bridge_account_id.clone(),
         &config.near_rpc_url,
+        config.near_api_key.as_deref(),
     )?);
     let clients = Arc::new(clients::Clients::new(Arc::clone(&near_client), &config)?);
 

@@ -1,6 +1,6 @@
 use anyhow::{Context, Result, anyhow, bail};
 use async_trait::async_trait;
-use near_api::{AccountId, Contract, Data, NetworkConfig, Signer, types::json::U128};
+use near_api::{AccountId, Contract, Data, NetworkConfig, RPCEndpoint, Signer, types::json::U128};
 use omni_types::{ChainKind, OmniAddress};
 use serde_json::json;
 use std::sync::Arc;
@@ -14,9 +14,17 @@ pub struct Client {
 }
 
 impl Client {
-    pub fn new(omni_bridge_account_id: AccountId, rpc_url: &str) -> Result<Self> {
-        let network =
+    pub fn new(omni_bridge_account_id: AccountId, rpc_url: &str, api_key: Option<&str>) -> Result<Self> {
+        let mut network =
             NetworkConfig::from_rpc_url("client", rpc_url.parse().context("Invalid NEAR RPC URL")?);
+
+        // Pass any API key as an `Authorization: Bearer` header rather than in the URL.
+        // near_api's openapi client appends the RPC path after the full base URL, so a
+        // key in the query string (`?apiKey=KEY`) becomes `?apiKey=KEY/` and is rejected.
+        if let Some(key) = api_key.filter(|key| !key.is_empty()) {
+            let url = network.rpc_endpoints[0].url.clone();
+            network.rpc_endpoints = vec![RPCEndpoint::new(url).with_api_key(key.to_string())];
+        }
 
         Ok(Self {
             omni_bridge: Contract(omni_bridge_account_id),
