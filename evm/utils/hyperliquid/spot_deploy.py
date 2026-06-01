@@ -1,22 +1,21 @@
-import getpass
-import json
 import os
 
 import eth_account
+from dotenv import load_dotenv
 from eth_account.signers.local import LocalAccount
 
 from hyperliquid.exchange import Exchange
 from hyperliquid.info import Info
 from hyperliquid.utils import constants
 
+# Load .env from the same directory as this script (not the cwd).
+load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
+
+
 def setup(base_url=None, skip_ws=False, perp_dexs=None):
-    config_path = os.path.join(os.path.dirname(__file__), "config.json")
-    with open(config_path) as f:
-        config = json.load(f)
-    account: LocalAccount = eth_account.Account.from_key(get_secret_key(config))
-    address = config["account_address"]
-    if address == "":
-        address = account.address
+    secret_key = get_secret_key()
+    account: LocalAccount = eth_account.Account.from_key(secret_key)
+    address = os.environ.get("HL_ACCOUNT_ADDRESS", "") or account.address
     print("Running with account address:", address)
     if address != account.address:
         print("Running with agent address:", account.address)
@@ -27,14 +26,19 @@ def setup(base_url=None, skip_ws=False, perp_dexs=None):
     if float(margin_summary["accountValue"]) == 0 and len(spot_user_state["balances"]) == 0:
         print("Not running the example because the provided account has no equity.")
         url = info.base_url.split(".", 1)[1]
-        error_string = f"No accountValue:\nIf you think this is a mistake, make sure that {address} has a balance on {url}.\nIf address shown is your API wallet address, update the config to specify the address of your account, not the address of the API wallet."
+        error_string = f"No accountValue:\nIf you think this is a mistake, make sure that {address} has a balance on {url}.\nIf address shown is your API wallet address, set HL_ACCOUNT_ADDRESS in .env to the address of your main account (not the API wallet)."
         raise Exception(error_string)
     exchange = Exchange(account, base_url, account_address=address, perp_dexs=perp_dexs)
     return address, info, exchange
 
 
-def get_secret_key(config):
-    return config["secret_key"]
+def get_secret_key():
+    secret_key = os.environ.get("HL_SECRET_KEY")
+    if not secret_key:
+        raise RuntimeError(
+            "HL_SECRET_KEY is not set. Add it to evm/utils/hyperliquid/.env (see .env.example)."
+        )
+    return secret_key
 def step1(exchange):
     # Step 1: Registering the Token
     #
