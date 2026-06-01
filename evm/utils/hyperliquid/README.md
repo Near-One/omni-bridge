@@ -20,12 +20,13 @@ conda activate hl-utils
 Install all three via `pip` (the conda env is just for Python isolation):
 
 ```bash
-pip install hyperliquid-python-sdk python-dotenv eth-account
+pip install hyperliquid-python-sdk python-dotenv eth-account requests
 ```
 
 - `hyperliquid-python-sdk` — official Python client (gives `hyperliquid.exchange`, `hyperliquid.info`, `hyperliquid.utils`)
 - `python-dotenv` — loads secrets from `.env`
 - `eth-account` — Ethereum account / signing primitives (usually pulled in transitively, but we depend on it directly)
+- `requests` — HTTP client used by `links_tokens.py` to call `/exchange` and `/info` endpoints directly
 
 > Note: `python-dotenv` and `eth-account` are available on `conda-forge`, but `hyperliquid-python-sdk` is **only** on PyPI. Mixing conda + pip in one env can occasionally break dependency resolution — easier to install all three with pip inside the activated conda env.
 
@@ -63,6 +64,18 @@ This file is **not secret** and is meant to be committed. Edit it before running
 | `total_supply` | Genesis supply allocation, as a decimal string in atomic units. We use `2^64 - 1` to set the maximum HyperCore-representable cap (bridged tokens only ever circulate what is actually bridged in). |
 | `start_px` | Reference price for `register_hyperliquidity` (anchor price). With `noHyperliquidity = True` it's recorded but no orders are placed. |
 
+### 5. Configure link parameters — `link_tokens_params.json`
+
+Separate non-secret config consumed by `links_tokens.py`. Fields:
+
+| Field | Meaning |
+|---|---|
+| `network` | `"testnet"` or `"mainnet"` (independent of `deploy_params.json`'s `network`) |
+| `token_id` | HC token index to link (the same number `spot_deploy.py` writes into `deploy_params.json` after step 1) |
+| `evm_contract_address` | Address of the ERC-20 contract on HyperEVM that should be linked to `token_id` |
+| `evm_extra_wei_decimals` | Additional EVM-side decimals on top of `wei_decimals` (HC `wei_decimals` + `evm_extra_wei_decimals` = ERC-20 `decimals()`). Typical: `10` |
+| `last_link_step` | `null` initially. Reserved for future skip / resume logic (not yet enforced) |
+
 ## Scripts
 
 ### `spot_deploy.py`
@@ -93,6 +106,38 @@ Step skip-rules (so resume / partial runs are safe):
 | 5. register_hyperliquidity | `last_step >= 5` |
 
 Replying `n` to a confirm prompt exits cleanly — progress is preserved, you can re-run later.
+
+### `links_tokens.py`
+
+Links a HIP-1 HC token to an existing ERC-20 contract on HyperEVM. Uses the **`firstStorageSlot` verification mode**: HL reads storage slot 0 of the EVM contract and expects it to contain the signer's address.
+
+Run:
+
+```bash
+python links_tokens.py
+```
+
+The script:
+
+1. Loads `.env` and `link_tokens_params.json`.
+2. Validates that `token_id` and `evm_contract_address` are set; fails fast otherwise.
+3. Calls `requestEvmContract` immediately (reversible — can be re-issued before finalize).
+4. Prints `spotDeployState` from HL so you can sanity-check the pending request.
+5. Asks for `[y/N]` confirmation — replying `n` exits cleanly without finalizing.
+6. On `y`, calls `finalizeEvmContract` (**IRREVERSIBLE** — locks the link permanently).
+
+#### Prerequisites for `firstStorageSlot` mode
+
+⚠️ The chosen `evm_contract_address` **must have the signer's address in storage slot 0**. HL queries slot 0 on EVM and compares it to the action signer. Standard `ERC1967Proxy` does **not** put the deployer there (slot 0 holds `_name` on our `BridgeToken`-derived contracts), so this mode requires either a custom contract or an explicit slot-0 owner field.
+
+If the contract doesn't satisfy this, `finalizeEvmContract` will fail with an HL-side validation error — no on-chain consequences, but you'll need to fix slot 0 (deploy a new contract) and re-run.
+
+#### Reversibility
+
+| Step | Reversible? | Notes |
+|---|---|---|
+| `requestEvmContract` | ✅ | Sets a pending entry; later requests likely overwrite it (HL docs don't formally specify, but that's the practical pattern). |
+| `finalizeEvmContract` | ❌ | Permanently links the HC token to the specified EVM contract address. Cannot re-link to a different EVM contract afterwards. |
 
 ## Notes
 
