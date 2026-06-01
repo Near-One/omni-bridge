@@ -1,9 +1,9 @@
 {
   "network": "mainnet",
 
-  "token_id": null,
+  "token_id": 513,
   "spot_id": null,
-  "last_step": null,
+  "last_step": 1,
 
   "token_name": "NEAR",
   "token_description": "NEAR Protocol",
