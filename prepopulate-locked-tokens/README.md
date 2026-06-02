@@ -136,8 +136,13 @@ How the tool handles the awkward cases:
   violation (not an opaque read error), so the solvency result stays authoritative. Skip
   them — they're orphaned/unbacked supply (and can't be drained, since the origin contract
   is gone) — or investigate the orphaned supply.
-- **Genuine bridge mapping gaps** — a token whose `get_bridged_token(origin)` returns `null`
-  (no origin-chain address at all). These must be skip-listed to unblock `--execute`. Before
-  skipping one, check its supply: a defunct token with no minted supply is safe to skip, but
-  a token with **real bridged supply** (e.g. `starknet.omft.near`) left unseeded means its
-  guard stays off — fix the bridge's origin mapping and re-run instead of skipping.
+- **API origin with no bridge leg** — a token whose `get_bridged_token(origin)` returns
+  `null` for its API-declared `origin_chain` (no foreign address at all). The API's
+  `origin_chain` is metadata that can differ from where the bridge actually anchors the
+  token; if there's no foreign leg, the bridge can only **lock it on NEAR** and deploy it
+  outward (e.g. a NEAR Intents/defuse token like `starknet.omft.near` (STRK), locked on NEAR
+  and minted on Solana). The tool **re-anchors these to a NEAR origin automatically**: NEAR
+  is skipped as a destination, origin decimals come from `ft_metadata`, the outward routes
+  (e.g. Solana) are seeded, and solvency verifies them against NEAR custody
+  (`ft_balance_of(bridge)`). No skip-list entry is needed, and a genuinely under-backed one
+  would still surface as a solvency violation rather than being silently seeded.

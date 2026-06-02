@@ -109,6 +109,10 @@ async fn main() -> Result<()> {
         );
     }
 
+    // Re-anchor any token whose API origin has no bridge mapping to its true (NEAR) origin,
+    // so both the compute pass and the solvency check below see the corrected origin.
+    correct_origins(Arc::clone(&near_client), &mut tokens).await;
+
     let tokens_by_id: HashMap<AccountId, TokenInfo> = tokens
         .iter()
         .map(|token| (token.token_id.clone(), token.clone()))
@@ -172,6 +176,57 @@ async fn main() -> Result<()> {
 struct SupplyTask {
     entries: Vec<(AccountId, ChainKind, u128)>,
     failures: u32,
+}
+
+/// Re-anchor tokens to the origin the **bridge** actually uses, which can differ from the
+/// API's `origin_chain`. A foreign-origin token whose `get_bridged_token(origin)` is absent
+/// has no foreign leg on the bridge: it's anchored on NEAR (the bridge can only lock it
+/// there) and deployed outward — e.g. a NEAR Intents/defuse token like `starknet.omft.near`
+/// (STRK), which the API labels `Strk` but the bridge locks on NEAR and minted on Solana.
+///
+/// Treating NEAR as the origin makes compute skip NEAR as a destination, read origin decimals
+/// from `ft_metadata`, and solvency check NEAR custody (`ft_balance_of(bridge)`) — instead of
+/// failing on a non-existent foreign leg. Tokens whose foreign mapping *exists* (even if the
+/// foreign contract is gone, like defunct `pol-*`) are left as-is. A transient read error
+/// leaves the origin unchanged (compute will surface it).
+async fn correct_origins(near_client: Arc<clients::near::Client>, tokens: &mut [TokenInfo]) {
+    let foreign: Vec<usize> = tokens
+        .iter()
+        .enumerate()
+        .filter(|(_, token)| token.origin_chain != ChainKind::Near)
+        .map(|(idx, _)| idx)
+        .collect();
+
+    let mut to_reanchor = Vec::new();
+    for chunk in foreign.chunks(BATCH_SIZE) {
+        let mut handles = Vec::new();
+        for &idx in chunk {
+            let near_client = Arc::clone(&near_client);
+            let address = OmniAddress::Near(tokens[idx].token_id.clone());
+            let origin = tokens[idx].origin_chain;
+            handles.push(tokio::spawn(async move {
+                // `Ok(None)` = no foreign representation -> NEAR-anchored. `Ok(Some)` (has a
+                // leg) or `Err` (transient) -> leave the origin as the API reported it.
+                matches!(near_client.get_bridged_token(&address, origin).await, Ok(None)).then_some(idx)
+            }));
+        }
+        for handle in handles {
+            if let Ok(Some(idx)) = handle.await {
+                to_reanchor.push(idx);
+            }
+        }
+        sleep(BATCH_SLEEP).await;
+    }
+
+    for idx in to_reanchor {
+        let old = tokens[idx].origin_chain;
+        tokens[idx].origin_chain = ChainKind::Near;
+        eprintln!(
+            "Re-anchoring {} origin {old:?} -> Near: no bridge mapping on the API origin chain \
+             (the bridge anchors/locks it on NEAR and deployed it outward).",
+            tokens[idx].token_id
+        );
+    }
 }
 
 /// The token's origin decimals — the unit `locked_tokens` is denominated in.
