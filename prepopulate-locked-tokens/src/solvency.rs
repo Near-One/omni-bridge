@@ -125,7 +125,21 @@ async fn origin_custody(
             if token_h160.0 == [0u8; 20] {
                 Ok(Some(evm.native_balance(bridge).await?))
             } else {
-                Ok(Some(evm.balance_of(token_h160, bridge).await?))
+                match evm.balance_of(token_h160.clone(), bridge).await {
+                    Ok(balance) => Ok(Some(balance)),
+                    // `balanceOf` reverts (returns `0x`) when the token contract doesn't
+                    // exist. A non-existent contract holds nothing, so custody is a
+                    // definitive 0 — surfacing under-backed routes as a real violation
+                    // instead of an opaque read error. Only rescue when the address has no
+                    // code; a contract that exists but failed the call is a genuine error.
+                    Err(err) => {
+                        if evm.is_contract(token_h160).await? {
+                            Err(err)
+                        } else {
+                            Ok(Some(0))
+                        }
+                    }
+                }
             }
         }
         ChainKind::Sol | ChainKind::Fogo => {

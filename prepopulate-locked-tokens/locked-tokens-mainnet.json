@@ -176,7 +176,7 @@
   {
     "chain_kind": "Near",
     "token_id": "2260fac5e5542a773aa44fbcfedf7c193bc2c599.factory.bridge.near",
-    "amount": "1841609050",
+    "amount": "1842809050",
     "current_locked": null
   },
   {
@@ -452,7 +452,7 @@
   {
     "chain_kind": "Near",
     "token_id": "68749665ff8d2d112fa859aa293f07a622782f38.factory.bridge.near",
-    "amount": "874806",
+    "amount": "787745",
     "current_locked": null
   },
   {
@@ -1214,7 +1214,7 @@
   {
     "chain_kind": "Base",
     "token_id": "cfi.consumer-fi.near",
-    "amount": "923816092222807585678128813",
+    "amount": "923947705155115403259383835",
     "current_locked": null
   },
   {
@@ -1268,7 +1268,7 @@
   {
     "chain_kind": "Near",
     "token_id": "dac17f958d2ee523a2206206994597c13d831ec7.factory.bridge.near",
-    "amount": "4224317527360",
+    "amount": "4224417527360",
     "current_locked": null
   },
   {
@@ -1322,7 +1322,7 @@
   {
     "chain_kind": "Near",
     "token_id": "eth.bridge.near",
-    "amount": "2159253931056487226641",
+    "amount": "2160184362867606826631",
     "current_locked": null
   },
   {
@@ -1435,13 +1435,181 @@
   },
   {
     "chain_kind": "Near",
+    "token_id": "pol-0x228a00694b2ac8273c5498bc020df3c39720a135.omdep.near",
+    "amount": "0",
+    "current_locked": null
+  },
+  {
+    "chain_kind": "Near",
+    "token_id": "pol-0x3048e82da5805a5f0c170cac62e83495e0064b04.omdep.near",
+    "amount": "0",
+    "current_locked": null
+  },
+  {
+    "chain_kind": "Near",
+    "token_id": "pol-0x3309160affa5f4c3059fae39027a0685d5148e84.omdep.near",
+    "amount": "0",
+    "current_locked": null
+  },
+  {
+    "chain_kind": "Near",
+    "token_id": "pol-0x390a01c0911052c402c355def98e54d25f2e880b.omdep.near",
+    "amount": "0",
+    "current_locked": null
+  },
+  {
+    "chain_kind": "Near",
+    "token_id": "pol-0x3a919ba3d9ecf739c587daae8a845f4662e950d4.omdep.near",
+    "amount": "0",
+    "current_locked": null
+  },
+  {
+    "chain_kind": "Near",
+    "token_id": "pol-0x3af4749f56cf2390dab53e503179033ba99437cf.omdep.near",
+    "amount": "0",
+    "current_locked": null
+  },
+  {
+    "chain_kind": "Near",
     "token_id": "pol-0x3c499c542cef5e3811e1192ce70d8cc03d5c3359.omdep.near",
     "amount": "1",
     "current_locked": null
   },
   {
     "chain_kind": "Near",
+    "token_id": "pol-0x543fba4805210b0cd54fdf3fe9d4f9d3171c7e8c.omdep.near",
+    "amount": "48604",
+    "current_locked": null
+  },
+  {
+    "chain_kind": "Near",
+    "token_id": "pol-0x55259270726499d0fcad7accf75eea2b6a892f2f.omdep.near",
+    "amount": "0",
+    "current_locked": null
+  },
+  {
+    "chain_kind": "Near",
+    "token_id": "pol-0x64d6abf3c48db0a2a1ae6cca83af70ec39fe97b3.omdep.near",
+    "amount": "0",
+    "current_locked": null
+  },
+  {
+    "chain_kind": "Near",
+    "token_id": "pol-0x6753dd41281eda619ae3be1c779dc11efa1e9d5a.omdep.near",
+    "amount": "0",
+    "current_locked": null
+  },
+  {
+    "chain_kind": "Near",
+    "token_id": "pol-0x6ac6ba259602cc4b1a62356a1a75c5a11e8968c7.omdep.near",
+    "amount": "0",
+    "current_locked": null
+  },
+  {
+    "chain_kind": "Near",
     "token_id": "pol-0x7b12598e3616261df1c05ec28de0d2fb10c1f206.omdep.near",
+    "amount": "0",
+    "current_locked": null
+  },
+  {
+    "chain_kind": "Near",
+    "token_id": "pol-0x83f50a05943187f3a5be7e5e473a823bb20c6739.omdep.near",
+    "amount": "0",
+    "current_locked": null
+  },
+  {
+    "chain_kind": "Near",
+    "token_id": "pol-0x84c218b6d060348311da36dff1563757346173cc.omdep.near",
+    "amount": "0",
+    "current_locked": null
+  },
+  {
+    "chain_kind": "Near",
+    "token_id": "pol-0x8b40be624de60fc1f1b752f884f44db8dbee290d.omdep.near",
+    "amount": "0",
+    "current_locked": null
+  },
+  {
+    "chain_kind": "Near",
+    "token_id": "pol-0x95b5a3328c8bc956b833d0f12c0ae0d13ef87abc.omdep.near",
+    "amount": "0",
+    "current_locked": null
+  },
+  {
+    "chain_kind": "Near",
+    "token_id": "pol-0x9704ed22a3f218914b2c73c9ea5515947d4ba54e.omdep.near",
+    "amount": "0",
+    "current_locked": null
+  },
+  {
+    "chain_kind": "Near",
+    "token_id": "pol-0xa000b2dbbf51f869c4bf15ad969ff0610f9875b3.omdep.near",
+    "amount": "0",
+    "current_locked": null
+  },
+  {
+    "chain_kind": "Near",
+    "token_id": "pol-0xa313b67752061a042e361993fcf046cf86c4146c.omdep.near",
+    "amount": "3",
+    "current_locked": null
+  },
+  {
+    "chain_kind": "Near",
+    "token_id": "pol-0xaa4bc7d0175de82b67b5087d63f9cca7ef717161.omdep.near",
+    "amount": "0",
+    "current_locked": null
+  },
+  {
+    "chain_kind": "Near",
+    "token_id": "pol-0xaae6cfb774dbdcad2724c1ab95eb3effd3703b5c.omdep.near",
+    "amount": "0",
+    "current_locked": null
+  },
+  {
+    "chain_kind": "Near",
+    "token_id": "pol-0xb883c926cf077202403ac8fc656e8c1e43f07c56.omdep.near",
+    "amount": "0",
+    "current_locked": null
+  },
+  {
+    "chain_kind": "Near",
+    "token_id": "pol-0xc01fde2146649836d19a686a9cc9c510f531c43a.omdep.near",
+    "amount": "0",
+    "current_locked": null
+  },
+  {
+    "chain_kind": "Near",
+    "token_id": "pol-0xc445ae123e5d7b59aba897b831f6b09ecaea4e17.omdep.near",
+    "amount": "0",
+    "current_locked": null
+  },
+  {
+    "chain_kind": "Near",
+    "token_id": "pol-0xd773db5a2205fba3a69d660555263af671fe2734.omdep.near",
+    "amount": "0",
+    "current_locked": null
+  },
+  {
+    "chain_kind": "Near",
+    "token_id": "pol-0xde0337ea031932a752346ac31f6c63d1942cd9c7.omdep.near",
+    "amount": "0",
+    "current_locked": null
+  },
+  {
+    "chain_kind": "Near",
+    "token_id": "pol-0xee0c8a084abfddae6480590c7d29344d2e0bc627.omdep.near",
+    "amount": "0",
+    "current_locked": null
+  },
+  {
+    "chain_kind": "Near",
+    "token_id": "pol-0xee0e1e06b0cb598efa61a85516bc31fa5123c213.omdep.near",
+    "amount": "0",
+    "current_locked": null
+  },
+  {
+    "chain_kind": "Near",
+    "token_id": "pol-0xf243790724742db2dcd8b4c16fe45492d09b6151.omdep.near",
     "amount": "0",
     "current_locked": null
   },
@@ -1466,7 +1634,7 @@
   {
     "chain_kind": "Near",
     "token_id": "sol-0x936420c6ae310eb29511d139991654f922456fbe.omdep.near",
-    "amount": "10002169804",
+    "amount": "10004523055",
     "current_locked": null
   },
   {
@@ -1478,7 +1646,7 @@
   {
     "chain_kind": "Near",
     "token_id": "sol-0xaad74c68eecfc9f8c5bdcea614f6167048c795ef.omdep.near",
-    "amount": "8819986941773",
+    "amount": "8813128650556",
     "current_locked": null
   },
   {
@@ -1496,13 +1664,13 @@
   {
     "chain_kind": "Near",
     "token_id": "sol-c58e6539c2f2e097c251f8edf11f9c03e581f8d4.omft.near",
-    "amount": "813357997",
+    "amount": "819497997",
     "current_locked": null
   },
   {
     "chain_kind": "Near",
     "token_id": "sol.omdep.near",
-    "amount": "862953707",
+    "amount": "863622757",
     "current_locked": null
   },
   {
@@ -1550,7 +1718,7 @@
   {
     "chain_kind": "Sol",
     "token_id": "wrap.near",
-    "amount": "1019914910208800000000000000000",
+    "amount": "1019914907653197000000000000000",
     "current_locked": null
   },
   {
@@ -1610,7 +1778,7 @@
   {
     "chain_kind": "Sol",
     "token_id": "zec.omft.near",
-    "amount": "7524499941657",
+    "amount": "7524149619073",
     "current_locked": null
   },
   {

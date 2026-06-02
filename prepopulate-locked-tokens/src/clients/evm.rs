@@ -96,6 +96,19 @@ impl Client {
             .with_context(|| format!("balanceOf({holder}) exceeds u128 on {:?}", self.chain))
     }
 
+    /// Whether `address` has contract code on this chain. Used by the solvency reader: a
+    /// token contract that doesn't exist can hold no balance, so a non-contract origin
+    /// address means custody 0 rather than a read failure (`balanceOf` reverts with `0x`
+    /// on an address with no code).
+    pub async fn is_contract(&self, address: H160) -> Result<bool> {
+        let code = self
+            .provider
+            .get_code_at(Address::from_slice(&address.0))
+            .await
+            .with_context(|| format!("Failed to fetch code at {address} on {:?}", self.chain))?;
+        Ok(!code.is_empty())
+    }
+
     /// Native coin balance of `holder` (for a native EVM origin, where the token's
     /// origin address is the zero address).
     pub async fn native_balance(&self, holder: H160) -> Result<u128> {

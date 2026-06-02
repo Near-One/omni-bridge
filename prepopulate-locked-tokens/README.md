@@ -123,14 +123,21 @@ Some tokens can't be reconciled — broken/legacy ones with custody 0, or an
 known-bad set; add any token a dry run reports as a failure or an unexplained solvency
 violation. Excluded tokens are logged (never silently dropped).
 
-Two failure classes do **not** need the skip-list:
+How the tool handles the awkward cases:
 
-- **Defunct/non-contract origins** (e.g. many `pol-*.omdep.near` whose origin address has no
-  code) are handled automatically: origin decimals come from the bridge record, their
-  supply is 0, and the solvency check skips zero-route tokens. They compute to `0` cleanly.
+- **Defunct/non-contract origins with no supply** (most `pol-*.omdep.near` whose origin
+  address has no code) are handled automatically: origin decimals come from the bridge
+  record, supply is 0, and the solvency check skips zero-route tokens. They compute to `0`
+  cleanly — no skip needed.
+- **Defunct/non-contract origins *with* supply** (e.g. a `pol-*` whose Pol address has no
+  code but whose NEAR rep still has a small balance) are reported as a **solvency
+  violation**: a contract that doesn't exist holds nothing, so custody is a definitive `0`,
+  and `Σ(routes) > 0` means the NEAR supply is unbacked. This is surfaced as a real
+  violation (not an opaque read error), so the solvency result stays authoritative. Skip
+  them — they're orphaned/unbacked supply (and can't be drained, since the origin contract
+  is gone) — or investigate the orphaned supply.
 - **Genuine bridge mapping gaps** — a token whose `get_bridged_token(origin)` returns `null`
-  (no origin-chain address at all). These are the only remaining hard failures and must be
-  skip-listed to unblock `--execute`. Before skipping one, check its supply: a defunct token
-  with no minted supply is safe to skip, but a token with **real bridged supply**
-  (e.g. `starknet.omft.near`) left unseeded means its guard stays off — fix the bridge's
-  origin mapping and re-run instead of skipping.
+  (no origin-chain address at all). These must be skip-listed to unblock `--execute`. Before
+  skipping one, check its supply: a defunct token with no minted supply is safe to skip, but
+  a token with **real bridged supply** (e.g. `starknet.omft.near`) left unseeded means its
+  guard stays off — fix the bridge's origin mapping and re-run instead of skipping.
