@@ -39,6 +39,9 @@ pub struct Config {
     /// Optional fastnear API key, sent as an `Authorization: Bearer` header (do NOT put
     /// it in `near_rpc_url` — query-string keys break near_api's RPC client).
     pub near_api_key: Option<String>,
+    /// `token_id`s to skip entirely (compute, solvency, and write) — broken/legacy tokens
+    /// (e.g. custody 0, non-contract origin, `used_gas` in a view). From `SKIP_TOKENS`.
+    pub skip_tokens: Vec<String>,
     pub eth_rpc_url: String,
     pub arb_rpc_url: String,
     pub base_rpc_url: String,
@@ -72,6 +75,7 @@ impl Config {
             tokens_api_url: env_or("TOKENS_API_URL", d.tokens_api_url),
             near_rpc_url: env_or("NEAR_RPC_URL", d.near_rpc),
             near_api_key: env_opt_or("NEAR_API_KEY", None),
+            skip_tokens: env_list("SKIP_TOKENS"),
             eth_rpc_url: env_or("ETH_RPC_URL", d.eth_rpc),
             arb_rpc_url: env_or("ARB_RPC_URL", d.arb_rpc),
             base_rpc_url: env_or("BASE_RPC_URL", d.base_rpc),
@@ -206,4 +210,19 @@ fn env_opt_or(key: &str, default: Option<&str>) -> Option<String> {
         .ok()
         .filter(|value| !value.is_empty())
         .or_else(|| default.map(str::to_string))
+}
+
+/// Parse a comma-separated env var into a trimmed, non-empty list.
+fn env_list(key: &str) -> Vec<String> {
+    std::env::var(key)
+        .ok()
+        .map(|value| {
+            value
+                .split(',')
+                .map(str::trim)
+                .filter(|item| !item.is_empty())
+                .map(str::to_string)
+                .collect()
+        })
+        .unwrap_or_default()
 }

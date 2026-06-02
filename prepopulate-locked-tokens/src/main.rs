@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fs;
 use std::sync::Arc;
 
@@ -55,6 +55,9 @@ struct Args {
     /// Path for the JSON artifact (defaults to `locked-tokens-<network>.json`).
     #[arg(long)]
     output_file: Option<String>,
+    /// Additional `token_id`s to skip entirely (comma-separated); merged with SKIP_TOKENS.
+    #[arg(long, value_delimiter = ',')]
+    skip_tokens: Vec<String>,
 }
 
 #[tokio::main]
@@ -77,10 +80,35 @@ async fn main() -> Result<()> {
     )?);
     let clients = Arc::new(clients::Clients::new(Arc::clone(&near_client), &config)?);
 
-    let tokens = tokens::fetch_tokens(&tokens_api_url)
+    let mut tokens = tokens::fetch_tokens(&tokens_api_url)
         .await
         .with_context(|| format!("Failed to fetch tokens from {tokens_api_url}"))?;
     println!("Fetched {} tokens from {tokens_api_url}", tokens.len());
+
+    // Skip-list: known-broken / unverifiable tokens (custody 0, non-contract origin,
+    // `used_gas` in a view, …). Excluded from compute, solvency, and the write.
+    let skip: HashSet<String> = config
+        .skip_tokens
+        .iter()
+        .chain(args.skip_tokens.iter())
+        .cloned()
+        .collect();
+    if !skip.is_empty() {
+        let fetched: HashSet<&str> = tokens.iter().map(|token| token.token_id.as_str()).collect();
+        for id in &skip {
+            if !fetched.contains(id.as_str()) {
+                eprintln!("WARNING: skip-list entry not present in token list: {id}");
+            }
+        }
+        let before = tokens.len();
+        tokens.retain(|token| !skip.contains(token.token_id.as_str()));
+        println!(
+            "Skip-list: excluded {} token(s); processing {}.",
+            before - tokens.len(),
+            tokens.len()
+        );
+    }
+
     let tokens_by_id: HashMap<AccountId, TokenInfo> = tokens
         .iter()
         .map(|token| (token.token_id.clone(), token.clone()))

@@ -101,3 +101,12 @@ nothing is written. In dry mode the violations are reported instead.
 A run also aborts before writing if any **genuine RPC/data read failure** occurred (as
 opposed to the routine "token not deployed on this chain" case, which is a clean skip), so
 a partially-failed read can never be mistaken for complete coverage.
+
+## Skip-list
+
+Some tokens can't be reconciled — broken/legacy ones with custody 0, a non-contract origin
+address, or an `ft_metadata`/`ft_balance_of` that calls `used_gas` (forbidden in a view).
+List their `token_id`s in `SKIP_TOKENS` (comma-separated) or `--skip-tokens` to exclude
+them entirely (compute, solvency, and the write). `example.env` seeds it with the
+omni-bridge-monitor's known-bad set; add any token a dry run reports as a failure or an
+unexplained solvency violation. Excluded tokens are logged (never silently dropped).
