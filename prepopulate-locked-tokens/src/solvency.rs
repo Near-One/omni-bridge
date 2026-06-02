@@ -62,6 +62,13 @@ pub async fn check(
 
     let mut report = Report::default();
     for (token_id, routes) in routes_total {
+        // Nothing minted on any route => Σ(routes) = 0 <= custody trivially. Skip the
+        // custody read entirely: it adds no signal and would otherwise turn an unreadable
+        // origin (e.g. a defunct token whose origin address isn't a live contract) into a
+        // spurious read error, even though there's nothing to reconcile.
+        if routes == 0 {
+            continue;
+        }
         let Some(token) = tokens_by_id.get(&token_id) else {
             report
                 .read_errors

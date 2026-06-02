@@ -174,6 +174,47 @@ struct SupplyTask {
     failures: u32,
 }
 
+/// The token's origin decimals — the unit `locked_tokens` is denominated in.
+///
+/// Prefers the bridge's recorded value (`get_token_decimals`), which is exactly what the
+/// contract uses for `denormalize_amount` and needs no live origin-chain call, so it works
+/// for origins a live `decimals()` read can't: a non-contract address, a native coin, or a
+/// token whose `totalSupply` overflows. NEAR-origin tokens aren't keyed by their NEAR id in
+/// that map, so they read `ft_metadata`; a foreign origin with no bridge record (rare)
+/// falls back to a live read too.
+///
+/// `Ok(None)` means the token has no representation on its origin chain (a bridge mapping
+/// gap) — the caller treats that as a failure. The Btc/Zcash case is handled by the caller
+/// before this is reached.
+async fn resolve_origin_decimals(
+    clients: &clients::Clients,
+    token: &TokenInfo,
+) -> Result<Option<u8>> {
+    let origin = token.origin_chain;
+    let near_address = OmniAddress::Near(token.token_id.clone());
+
+    // Foreign origin: resolve the origin-chain address, then read the bridge's recorded
+    // decimals keyed by it. A `None` address is a genuine mapping gap (no representation).
+    if origin != ChainKind::Near {
+        match clients.near.get_bridged_token(&near_address, origin).await? {
+            Some(origin_address) => {
+                if let Some(decimals) = clients.near.get_token_decimals(&origin_address).await? {
+                    return Ok(Some(decimals.origin_decimals));
+                }
+                // No bridge record (unexpected for a registered token): fall through to a
+                // live decimals read below.
+            }
+            None => return Ok(None),
+        }
+    }
+
+    // NEAR origin (read `ft_metadata`), or a foreign origin the bridge didn't record.
+    match clients.client_for(origin) {
+        Some(client) => client.get_decimals(near_address).await,
+        None => Ok(None),
+    }
+}
+
 async fn compute_totals(
     clients: Arc<clients::Clients>,
     tokens: Vec<TokenInfo>,
@@ -191,32 +232,32 @@ async fn compute_totals(
             };
             let token_address = OmniAddress::Near(token.token_id.clone());
 
-            // locked_tokens is denominated in the token's ORIGIN-chain decimals. Read those
-            // once (decimals only — no supply, which can overflow; native origins return
-            // the chain's native-coin decimals). Without it we can't normalize any route,
-            // so a failure here skips the whole token.
-            let origin_decimals = match clients.client_for(token.origin_chain) {
-                Some(client) => match client.get_decimals(token_address.clone()).await {
-                    Ok(Some(decimals)) => decimals,
-                    Ok(None) => {
-                        task.failures += 1;
-                        eprintln!(
-                            "FAILURE token {}: not present on its origin chain {:?}",
-                            token.token_id, token.origin_chain
-                        );
-                        return task;
-                    }
-                    Err(err) => {
-                        task.failures += 1;
-                        eprintln!(
-                            "FAILURE token {}: reading origin decimals on {:?}: {:#}",
-                            token.token_id, token.origin_chain, err
-                        );
-                        return task;
-                    }
-                },
-                // Btc/Zcash origin: decimals not readable (and no such tokens exist).
-                None => return task,
+            // Btc/Zcash origin: no queryable fungible representation (and no such tokens
+            // exist) — a clean skip, not a failure.
+            if clients.client_for(token.origin_chain).is_none() {
+                return task;
+            }
+
+            // locked_tokens is denominated in the token's ORIGIN-chain decimals. Without
+            // them we can't normalize any route, so a failure here skips the whole token.
+            let origin_decimals = match resolve_origin_decimals(&clients, &token).await {
+                Ok(Some(decimals)) => decimals,
+                Ok(None) => {
+                    task.failures += 1;
+                    eprintln!(
+                        "FAILURE token {}: not present on its origin chain {:?}",
+                        token.token_id, token.origin_chain
+                    );
+                    return task;
+                }
+                Err(err) => {
+                    task.failures += 1;
+                    eprintln!(
+                        "FAILURE token {}: reading origin decimals on {:?}: {:#}",
+                        token.token_id, token.origin_chain, err
+                    );
+                    return task;
+                }
             };
 
             for chain in DESTINATION_CHAINS {
@@ -382,6 +423,12 @@ async fn build_entries(
 /// so `origin_decimals >= rep_decimals`; a violation (bad data) or a `u128` overflow is an
 /// error rather than a silently wrong value.
 fn normalize(supply: u128, rep_decimals: u8, origin_decimals: u8) -> Result<u128> {
+    // Nothing minted on this route => locked is 0 regardless of decimals. Short-circuit so
+    // a 0-supply representation never trips the decimals invariant below (e.g. a defunct
+    // token the bridge records as 0 origin-decimals but whose NEAR rep reports 18).
+    if supply == 0 {
+        return Ok(0);
+    }
     let diff = origin_decimals.checked_sub(rep_decimals).with_context(|| {
         format!("representation decimals ({rep_decimals}) exceed origin decimals ({origin_decimals})")
     })?;
@@ -489,6 +536,13 @@ mod tests {
     #[test]
     fn normalize_rejects_rep_decimals_above_origin() {
         assert!(normalize(1, 18, 6).is_err());
+    }
+
+    #[test]
+    fn normalize_zero_supply_is_zero_even_when_rep_exceeds_origin() {
+        // A defunct token recorded as 0 origin-decimals whose NEAR rep reports 18dp, with
+        // 0 supply: locked is 0, not a decimals-invariant error.
+        assert_eq!(normalize(0, 18, 0).unwrap(), 0);
     }
 
     #[test]

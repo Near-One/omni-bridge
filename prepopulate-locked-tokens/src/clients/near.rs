@@ -70,6 +70,33 @@ impl Client {
         .await
     }
 
+    /// The bridge's recorded `(decimals, origin_decimals)` for a token, keyed by its
+    /// address on its origin chain, or `None` if the bridge has no record.
+    ///
+    /// This is the authoritative source the contract itself uses for `denormalize_amount`,
+    /// so reading origin decimals from here (instead of a live origin-chain `decimals()`
+    /// call) both matches the contract exactly and works for origins a live read can't
+    /// handle: a non-contract address (returns `0x`), a native coin, or one whose
+    /// `totalSupply` overflows. NEAR-origin tokens are not keyed by their NEAR id (the
+    /// record is keyed by the foreign address), so this returns `None` for them.
+    pub async fn get_token_decimals(&self, address: &OmniAddress) -> Result<Option<Decimals>> {
+        with_retries("get_token_decimals", || {
+            let contract = self.omni_bridge.clone();
+            let network = self.network.clone();
+            let address = address.clone();
+            async move {
+                let result: Data<Option<Decimals>> = contract
+                    .call_function("get_token_decimals", json!({ "address": address }))
+                    .read_only()
+                    .fetch_from(&network)
+                    .await
+                    .with_context(|| format!("Failed to fetch token decimals for {address}"))?;
+                Ok(result.data)
+            }
+        })
+        .await
+    }
+
     /// Current on-chain locked amount for `(chain_kind, token_id)`, if any.
     pub async fn get_locked_tokens(
         &self,
@@ -221,6 +248,15 @@ impl super::Client for Client {
 #[derive(serde::Deserialize)]
 struct FtMetadataDecimals {
     decimals: u8,
+}
+
+/// The bridge's per-token decimals record (mirrors `omni-bridge`'s `storage::Decimals`).
+/// `origin_decimals` is the unit `locked_tokens` is denominated in.
+#[derive(serde::Deserialize, Debug, Clone, Copy)]
+pub struct Decimals {
+    #[allow(dead_code)]
+    pub decimals: u8,
+    pub origin_decimals: u8,
 }
 
 /// Retry `op` on transient transport errors with exponential backoff (250ms, 500ms, 1s).

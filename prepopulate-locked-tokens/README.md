@@ -15,9 +15,21 @@ For a destination chain, the locked amount is the current total supply of the to
 bridged representation on that chain (the origin chain is skipped), **converted into
 origin-decimals units**. The contract locks `denormalize_amount(transfer.amount)`, so
 `locked_tokens` is denominated in the token's `origin_decimals`, while a destination's
-`total_supply` is in the normalized `decimals`. The tool applies the same conversion the
-contract does: `locked = total_supply * 10^(origin_decimals - decimals)`, using the
-per-token `decimals`/`origin_decimals` from the API.
+`total_supply` is in that representation's own decimals. The tool applies the same
+conversion the contract does: `locked = total_supply * 10^(origin_decimals - rep_decimals)`.
+
+Both inputs are read from the chain, not the API:
+
+- **`rep_decimals`** — each representation's actual decimals, read per chain (EVM
+  `decimals()`, SPL mint decimals, Starknet `decimals()`, NEAR `ft_metadata`), since they
+  differ per chain (EVM 18, Solana ~9, …). A representation with **0 supply** contributes
+  `locked = 0` regardless of decimals.
+- **`origin_decimals`** — read from the bridge's own `get_token_decimals(origin_address)`
+  record rather than the live origin chain. That record is exactly what the contract uses
+  for `denormalize_amount`, so it matches on-chain math precisely, and it stays readable
+  for origins a live `decimals()` call can't handle (a non-contract/defunct address that
+  returns `0x`, a native coin, or a token whose `totalSupply` overflows). NEAR-origin
+  tokens aren't keyed in that map, so their origin decimals come from `ft_metadata`.
 
 ## Where the token list comes from
 
@@ -104,9 +116,21 @@ a partially-failed read can never be mistaken for complete coverage.
 
 ## Skip-list
 
-Some tokens can't be reconciled — broken/legacy ones with custody 0, a non-contract origin
-address, or an `ft_metadata`/`ft_balance_of` that calls `used_gas` (forbidden in a view).
-List their `token_id`s in `SKIP_TOKENS` (comma-separated) or `--skip-tokens` to exclude
-them entirely (compute, solvency, and the write). `example.env` seeds it with the
-omni-bridge-monitor's known-bad set; add any token a dry run reports as a failure or an
-unexplained solvency violation. Excluded tokens are logged (never silently dropped).
+Some tokens can't be reconciled — broken/legacy ones with custody 0, or an
+`ft_metadata`/`ft_balance_of` that calls `used_gas` (forbidden in a view). List their
+`token_id`s in `SKIP_TOKENS` (comma-separated) or `--skip-tokens` to exclude them entirely
+(compute, solvency, and the write). `example.env` seeds it with the omni-bridge-monitor's
+known-bad set; add any token a dry run reports as a failure or an unexplained solvency
+violation. Excluded tokens are logged (never silently dropped).
+
+Two failure classes do **not** need the skip-list:
+
+- **Defunct/non-contract origins** (e.g. many `pol-*.omdep.near` whose origin address has no
+  code) are handled automatically: origin decimals come from the bridge record, their
+  supply is 0, and the solvency check skips zero-route tokens. They compute to `0` cleanly.
+- **Genuine bridge mapping gaps** — a token whose `get_bridged_token(origin)` returns `null`
+  (no origin-chain address at all). These are the only remaining hard failures and must be
+  skip-listed to unblock `--execute`. Before skipping one, check its supply: a defunct token
+  with no minted supply is safe to skip, but a token with **real bridged supply**
+  (e.g. `starknet.omft.near`) left unseeded means its guard stays off — fix the bridge's
+  origin mapping and re-run instead of skipping.

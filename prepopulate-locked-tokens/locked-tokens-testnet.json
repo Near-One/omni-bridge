@@ -14,7 +14,7 @@
   {
     "chain_kind": "Near",
     "token_id": "1c7d4b196cb0c7b01d743fbc6116a902379c7238.factory.sepolia.testnet",
-    "amount": "166767550000000",
+    "amount": "166767550",
     "current_locked": null
   },
   {
@@ -139,6 +139,30 @@
   },
   {
     "chain_kind": "Near",
+    "token_id": "arb-0xe6ebb08934a8b9d51c454d991541b0ae12a45094.omnidep.testnet",
+    "amount": "10",
+    "current_locked": null
+  },
+  {
+    "chain_kind": "Near",
+    "token_id": "arb.omnidep.testnet",
+    "amount": "3445543469089964",
+    "current_locked": null
+  },
+  {
+    "chain_kind": "Near",
+    "token_id": "base.omnidep.testnet",
+    "amount": "0",
+    "current_locked": null
+  },
+  {
+    "chain_kind": "Near",
+    "token_id": "bnb.omnidep.testnet",
+    "amount": "0",
+    "current_locked": null
+  },
+  {
+    "chain_kind": "Near",
     "token_id": "c884aa85700fe39b503fba7acab1f1adbbdea535.factory.sepolia.testnet",
     "amount": "99999800000000000000012345",
     "current_locked": null
@@ -146,7 +170,7 @@
   {
     "chain_kind": "Near",
     "token_id": "d2e8ae1abeb85ac4fb6e7136eab152361cc16e14.factory.sepolia.testnet",
-    "amount": "500000000000000000000000000000000000",
+    "amount": "500000000000000000",
     "current_locked": null
   },
   {
@@ -170,7 +194,13 @@
   {
     "chain_kind": "Near",
     "token_id": "fff9976782d46cc05630d1f6ebab18b2324d6b14.factory.sepolia.testnet",
-    "amount": "31618900000000000000000000000000000",
+    "amount": "31618900000000000",
+    "current_locked": null
+  },
+  {
+    "chain_kind": "Near",
+    "token_id": "hlevm.omnidep.testnet",
+    "amount": "0",
     "current_locked": null
   },
   {
@@ -207,6 +237,12 @@
     "chain_kind": "Near",
     "token_id": "pol-0x670d9dd403322793f4c560c89889ede9f0973c34.omnidep.testnet",
     "amount": "0",
+    "current_locked": null
+  },
+  {
+    "chain_kind": "Near",
+    "token_id": "pol.omnidep.testnet",
+    "amount": "194070204304004376",
     "current_locked": null
   },
   {
@@ -338,7 +374,7 @@
   {
     "chain_kind": "Eth",
     "token_id": "wrap.testnet",
-    "amount": "207410480101399103961541583",
+    "amount": "207510480101399103961541583",
     "current_locked": null
   },
   {
