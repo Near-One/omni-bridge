@@ -12,7 +12,7 @@ from hyperliquid.utils.signing import get_timestamp_ms, sign_l1_action
 # Load .env from the same directory as this script.
 load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
 
-LINK_PARAMS_PATH = os.path.join(os.path.dirname(__file__), "link_tokens_params.json")
+LINK_PARAMS_PATH = os.path.join(os.path.dirname(__file__), "link_tokens_params_testnet.json")
 
 # Type def for the finalize action (we only support the customStorageSlot mode).
 FinalizeEvmContractAction = TypedDict(
@@ -58,14 +58,36 @@ def confirm(prompt):
     return input(f"\n{prompt} [y/N]: ").strip().lower() == "y"
 
 
-def show_state(base_url, user_address):
-    """Print spotDeployState for the user — useful to inspect pending requestEvmContract."""
-    response = requests.post(
-        base_url + "/info",
-        json={"type": "spotDeployState", "user": user_address},
+def show_state(base_url, token_index):
+    """Look up the hex tokenId for `token_index` via spotMeta and print tokenDetails.
+
+    Note: `tokenDetails` does NOT contain a "pending EVM contract" field. To see
+    the final link, we also fetch spotMeta and extract the `evmContract` entry
+    (populated only after finalizeEvmContract).
+    """
+    meta = requests.post(base_url + "/info", json={"type": "spotMeta"}).json()
+    token = next(
+        (t for t in meta.get("tokens", []) if t.get("index") == token_index),
+        None,
     )
-    print("\n=== spotDeployState ===")
-    print(json.dumps(response.json(), indent=2))
+    if token is None:
+        print(
+            f"\n[show_state] token index {token_index} not found in spotMeta "
+            f"— token may not be deployed yet on this network"
+        )
+        return
+
+    token_id_hex = token["tokenId"]
+
+    details = requests.post(
+        base_url + "/info",
+        json={"type": "tokenDetails", "tokenId": token_id_hex},
+    ).json()
+
+    print("\n=== spotMeta entry ===")
+    print(json.dumps(token, indent=2))
+    print("\n=== tokenDetails ===")
+    print(json.dumps(details, indent=2))
 
 
 def requestEvmContract(account, base_url, params):
@@ -135,10 +157,11 @@ def main():
     # --- requestEvmContract: reversible, always run without confirm ---
     requestEvmContract(account, base_url, params)
 
-    # --- finalizeEvmContract: IRREVERSIBLE, confirm + sanity-check pending state ---
-    # Show state so we can verify the pending request actually matches what
-    # we're about to finalize.
-    show_state(base_url, account.address)
+    # --- finalizeEvmContract: IRREVERSIBLE, confirm + sanity-check current state ---
+    # Show token state so we can sanity-check before finalizing. Note: HL info
+    # endpoints do NOT expose the pending requestEvmContract — we can only see
+    # the final `evmContract` field in spotMeta after finalize succeeds.
+    show_state(base_url, params["token_id"])
     if not confirm(
         f"Run finalizeEvmContract? "
         f"IRREVERSIBLE: locks token {params['token_id']} ↔ EVM contract {params['evm_contract_address']}"

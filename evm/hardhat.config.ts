@@ -151,6 +151,77 @@ task("deploy-token-impl", "Deploys the BridgeToken implementation").setAction(as
   )
 })
 
+task("deploy-hl-token-impl", "Deploys the HlBridgeToken (HyperliquedBridgeToken) implementation").setAction(
+  async (_, hre) => {
+    const { ethers } = hre
+    const HlBridgeTokenContractFactory = await ethers.getContractFactory("HyperliquedBridgeToken")
+    const HlBridgeTokenContract = await HlBridgeTokenContractFactory.deploy()
+    await HlBridgeTokenContract.waitForDeployment()
+    console.log(
+      JSON.stringify({
+        tokenImplAddress: await HlBridgeTokenContract.getAddress(),
+      }),
+    )
+  },
+)
+
+task(
+  "deploy-hl-bridge-token-proxy",
+  "Deploy an ERC1967Proxy over HyperliquedBridgeToken (5-arg initialize: name, symbol, decimals, systemAddress, hyperCoreDeployer)",
+)
+  .addParam("impl", "HyperliquedBridgeToken implementation address")
+  .addParam("name", "Token name (e.g. 'NEAR')")
+  .addParam("symbol", "Token symbol (e.g. 'NEAR')")
+  .addParam("decimals", "Token decimals (e.g. '18')")
+  .addParam("systemAddress", "HyperCore system address for this token (e.g. 0x20...0201)")
+  .addParam("hyperCoreDeployer", "Address of the HyperCore deployer (to be stored at keccak256('HyperCore deployer'))")
+  .setAction(async (taskArgs, hre) => {
+    const { ethers } = hre
+    const impl = ethers.getAddress(taskArgs.impl)
+    const systemAddress = ethers.getAddress(taskArgs.systemAddress)
+    const hyperCoreDeployer = ethers.getAddress(taskArgs.hyperCoreDeployer)
+
+    const HlBridgeToken = await ethers.getContractFactory("HyperliquedBridgeToken")
+    // `initialize` is overloaded (inherited 3-arg from BridgeToken + 5-arg from HyperliquedBridgeToken),
+    // so we must pass the full canonical signature to disambiguate.
+    const initData = HlBridgeToken.interface.encodeFunctionData(
+      "initialize(string,string,uint8,address,address)",
+      [
+        taskArgs.name,
+        taskArgs.symbol,
+        Number.parseInt(taskArgs.decimals, 10),
+        systemAddress,
+        hyperCoreDeployer,
+      ],
+    )
+
+    const Proxy = await ethers.getContractFactory("ERC1967Proxy")
+    const proxy = await Proxy.deploy(impl, initData)
+    await proxy.waitForDeployment()
+    const proxyAddress = await proxy.getAddress()
+
+    const EIP1967_IMPL_SLOT =
+      "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc"
+    const implSlot = await ethers.provider.getStorage(proxyAddress, EIP1967_IMPL_SLOT)
+    const implementation = ethers.getAddress("0x" + implSlot.slice(-40))
+
+    console.log(
+      JSON.stringify(
+        {
+          proxyAddress,
+          implementation,
+          name: taskArgs.name,
+          symbol: taskArgs.symbol,
+          decimals: Number.parseInt(taskArgs.decimals, 10),
+          systemAddress,
+          hyperCoreDeployer,
+        },
+        null,
+        2,
+      ),
+    )
+  })
+
 task("upgrade-bridge-token", "Upgrades a BridgeToken to a new implementation")
   .addParam("factory", "The address of the OmniBridge contract")
   .addParam("nearTokenAccount", "The NEAR token ID")
@@ -251,6 +322,90 @@ task("deploy-bytecode", "Deploys a contract with a given bytecode")
         contractAddress: await contract.getAddress(),
       }),
     )
+  })
+
+task(
+  "inspect-token",
+  "Inspect a token contract: detect proxy, read implementation, ERC-20 metadata, owner, and HL-specific fields",
+)
+  .addParam("token", "Contract address to inspect")
+  .setAction(async (taskArgs, hre) => {
+    const { ethers } = hre
+    const provider = ethers.provider
+    const addr = ethers.getAddress(taskArgs.token)
+
+    const result: Record<string, unknown> = { address: addr }
+
+    // 0. Is there code at all?
+    const code = await provider.getCode(addr)
+    result.isContract = code !== "0x"
+    result.codeSize = (code.length - 2) / 2 // bytes
+    if (!result.isContract) {
+      console.log(JSON.stringify(result, null, 2))
+      return
+    }
+
+    // 1. EIP-1967 proxy detection: implementation slot, admin slot, beacon slot
+    const EIP1967_IMPL_SLOT =
+      "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc"
+    const EIP1967_ADMIN_SLOT =
+      "0xb53127684a568b3173ae13b9f8a6016e243e63b6e8ee1178d6a717850b5d6103"
+    const EIP1967_BEACON_SLOT =
+      "0xa3f0ad74e5423aebfd80d3ef4346578335a9a72aeaee59ff6cb3582b35133d50"
+    const implSlot = await provider.getStorage(addr, EIP1967_IMPL_SLOT)
+    const adminSlot = await provider.getStorage(addr, EIP1967_ADMIN_SLOT)
+    const beaconSlot = await provider.getStorage(addr, EIP1967_BEACON_SLOT)
+    const implementation = ethers.getAddress("0x" + implSlot.slice(-40))
+    const admin = ethers.getAddress("0x" + adminSlot.slice(-40))
+    const beacon = ethers.getAddress("0x" + beaconSlot.slice(-40))
+    result.isProxy = implementation !== ethers.ZeroAddress
+    result.implementation = implementation
+    result.proxyAdmin = admin === ethers.ZeroAddress ? null : admin
+    result.beacon = beacon === ethers.ZeroAddress ? null : beacon
+
+    // 2. ERC-20 + Ownable2Step + UUPS reads, each wrapped in try/catch
+    const iface = new ethers.Interface([
+      "function name() view returns (string)",
+      "function symbol() view returns (string)",
+      "function decimals() view returns (uint8)",
+      "function totalSupply() view returns (uint256)",
+      "function owner() view returns (address)",
+      "function pendingOwner() view returns (address)",
+      "function UPGRADE_INTERFACE_VERSION() view returns (string)",
+      "function proxiableUUID() view returns (bytes32)",
+      "function systemAddress() view returns (address)",
+    ])
+    const c = new ethers.Contract(addr, iface, provider)
+
+    const calls: Array<[string, () => Promise<unknown>]> = [
+      ["name", () => c.name()],
+      ["symbol", () => c.symbol()],
+      ["decimals", () => c.decimals()],
+      ["totalSupply", () => c.totalSupply()],
+      ["owner", () => c.owner()],
+      ["pendingOwner", () => c.pendingOwner()],
+      ["UPGRADE_INTERFACE_VERSION", () => c.UPGRADE_INTERFACE_VERSION()],
+      ["proxiableUUID", () => c.proxiableUUID()],
+      ["systemAddress", () => c.systemAddress()],
+    ]
+    for (const [key, fn] of calls) {
+      try {
+        const v = await fn()
+        result[key] = typeof v === "bigint" ? v.toString() : v
+      } catch {
+        result[key] = null
+      }
+    }
+
+    // 3. HyperCore-deployer slot (keccak256("HyperCore deployer"))
+    const HYPER_CORE_DEPLOYER_SLOT = ethers.keccak256(
+      ethers.toUtf8Bytes("HyperCore deployer"),
+    )
+    const hcSlot = await provider.getStorage(addr, HYPER_CORE_DEPLOYER_SLOT)
+    const hcDeployer = ethers.getAddress("0x" + hcSlot.slice(-40))
+    result.hyperCoreDeployer = hcDeployer === ethers.ZeroAddress ? null : hcDeployer
+
+    console.log(JSON.stringify(result, null, 2))
   })
 
 const config: HardhatUserConfig = {
