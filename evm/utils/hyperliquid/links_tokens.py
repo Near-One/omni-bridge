@@ -14,13 +14,13 @@ load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
 
 LINK_PARAMS_PATH = os.path.join(os.path.dirname(__file__), "link_tokens_params.json")
 
-# Type def for the finalize action (we only support the firstStorageSlot mode).
+# Type def for the finalize action (we only support the customStorageSlot mode).
 FinalizeEvmContractAction = TypedDict(
     "FinalizeEvmContractAction",
     {
         "type": Literal["finalizeEvmContract"],
         "token": int,
-        "input": Literal["firstStorageSlot"],
+        "input": Literal["customStorageSlot"],
     },
 )
 
@@ -93,14 +93,15 @@ def requestEvmContract(account, base_url, params):
 def finalizeEvmContract(account, base_url, params):
     """Step 2 of linking: prove ownership of the EVM contract so HL activates the link.
 
-    Uses the "firstStorageSlot" verification mode: HL queries storage slot 0 of the
-    EVM contract and expects it to contain the signer's address. The EVM contract
-    therefore must have the signer's address in slot 0 — verify this before running.
+    Uses the "customStorageSlot" verification mode: HL queries the namespaced slot
+    `keccak256("HyperCore deployer")` on the EVM contract and expects it to contain
+    the signer's address. The EVM contract must therefore have stored the signer's
+    address at that slot (see `setHyperCoreDeployer` in `HlBridgeToken.sol`).
     """
     finalize_action: FinalizeEvmContractAction = {
         "type": "finalizeEvmContract",
         "token": params["token_id"],
-        "input": "firstStorageSlot",
+        "input": "customStorageSlot",
     }
     nonce = get_timestamp_ms()
     signature = sign_l1_action(account, finalize_action, None, nonce, None, False)
@@ -128,7 +129,7 @@ def main():
     print(f"Running with address {account.address}")
     print(
         f"Linking HC token {params['token_id']} → EVM contract {params['evm_contract_address']} "
-        f"(network={params['network']}, mode=firstStorageSlot)"
+        f"(network={params['network']}, mode=customStorageSlot)"
     )
 
     # --- requestEvmContract: reversible, always run without confirm ---
