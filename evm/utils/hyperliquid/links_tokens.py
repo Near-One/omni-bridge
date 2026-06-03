@@ -11,7 +11,7 @@ from hyperliquid.utils.signing import get_timestamp_ms, sign_l1_action
 
 load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
 
-LINK_PARAMS_PATH = os.path.join(os.path.dirname(__file__), "link_tokens_params_testnet.json")
+LINK_PARAMS_PATH = os.path.join(os.path.dirname(__file__), "link_tokens_params.json")
 
 FinalizeEvmContractAction = TypedDict(
     "FinalizeEvmContractAction",
