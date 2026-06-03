@@ -9,12 +9,10 @@ from eth_account.signers.local import LocalAccount
 from hyperliquid.utils import constants
 from hyperliquid.utils.signing import get_timestamp_ms, sign_l1_action
 
-# Load .env from the same directory as this script.
 load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
 
 LINK_PARAMS_PATH = os.path.join(os.path.dirname(__file__), "link_tokens_params_testnet.json")
 
-# Type def for the finalize action (we only support the customStorageSlot mode).
 FinalizeEvmContractAction = TypedDict(
     "FinalizeEvmContractAction",
     {
@@ -39,9 +37,14 @@ def save_params(params):
 def get_secret_key():
     secret_key = os.environ.get("HL_SECRET_KEY")
     if not secret_key:
-        raise RuntimeError(
-            "HL_SECRET_KEY is not set. Add it to evm/utils/hyperliquid/.env (see .env.example)."
-        )
+        raise RuntimeError("HL_SECRET_KEY is not set. See .env.example.")
+    return secret_key
+
+
+def get_evm_secret_key():
+    secret_key = os.environ.get("EVM_SECRET_KEY")
+    if not secret_key:
+        raise RuntimeError("EVM_SECRET_KEY is not set. See .env.example.")
     return secret_key
 
 
@@ -59,12 +62,7 @@ def confirm(prompt):
 
 
 def show_state(base_url, token_index):
-    """Look up the hex tokenId for `token_index` via spotMeta and print tokenDetails.
-
-    Note: `tokenDetails` does NOT contain a "pending EVM contract" field. To see
-    the final link, we also fetch spotMeta and extract the `evmContract` entry
-    (populated only after finalizeEvmContract).
-    """
+    """Print spotMeta entry + tokenDetails for the token."""
     meta = requests.post(base_url + "/info", json={"type": "spotMeta"}).json()
     token = next(
         (t for t in meta.get("tokens", []) if t.get("index") == token_index),
@@ -91,7 +89,7 @@ def show_state(base_url, token_index):
 
 
 def requestEvmContract(account, base_url, params):
-    """Step 1 of linking: declare which EVM contract should be linked to the HC token."""
+    """Step 1: declare which EVM contract should be linked to the HC token."""
     action = {
         "type": "spotDeploy",
         "requestEvmContract": {
@@ -101,7 +99,8 @@ def requestEvmContract(account, base_url, params):
         },
     }
     nonce = get_timestamp_ms()
-    signature = sign_l1_action(account, action, None, nonce, None, False)
+    is_mainnet = base_url == constants.MAINNET_API_URL
+    signature = sign_l1_action(account, action, None, nonce, None, is_mainnet)
     payload = {
         "action": action,
         "nonce": nonce,
@@ -113,12 +112,8 @@ def requestEvmContract(account, base_url, params):
 
 
 def finalizeEvmContract(account, base_url, params):
-    """Step 2 of linking: prove ownership of the EVM contract so HL activates the link.
-
-    Uses the "customStorageSlot" verification mode: HL queries the namespaced slot
-    `keccak256("HyperCore deployer")` on the EVM contract and expects it to contain
-    the signer's address. The EVM contract must therefore have stored the signer's
-    address at that slot (see `setHyperCoreDeployer` in `HlBridgeToken.sol`).
+    """Step 2: signer's address must match slot keccak256('HyperCore deployer')
+    in the EVM contract (see `setHyperCoreDeployer` in `HlBridgeToken.sol`).
     """
     finalize_action: FinalizeEvmContractAction = {
         "type": "finalizeEvmContract",
@@ -126,7 +121,8 @@ def finalizeEvmContract(account, base_url, params):
         "input": "customStorageSlot",
     }
     nonce = get_timestamp_ms()
-    signature = sign_l1_action(account, finalize_action, None, nonce, None, False)
+    is_mainnet = base_url == constants.MAINNET_API_URL
+    signature = sign_l1_action(account, finalize_action, None, nonce, None, is_mainnet)
     payload = {
         "action": finalize_action,
         "nonce": nonce,
@@ -140,34 +136,31 @@ def finalizeEvmContract(account, base_url, params):
 def main():
     params = load_params()
 
-    # Sanity checks — fail early with a clear message if config is incomplete.
     if params.get("token_id") is None:
         raise RuntimeError("token_id is not set in link_tokens_params.json")
     if params.get("evm_contract_address") is None:
         raise RuntimeError("evm_contract_address is not set in link_tokens_params.json")
 
     base_url = get_base_url(params["network"])
-    account: LocalAccount = Account.from_key(get_secret_key())
-    print(f"Running with address {account.address}")
+    hl_account: LocalAccount = Account.from_key(get_secret_key())
+    evm_account: LocalAccount = Account.from_key(get_evm_secret_key())
+
+    print(f"HL signer (step 1, requestEvmContract):  {hl_account.address}")
+    print(f"EVM signer (step 2, finalizeEvmContract): {evm_account.address}")
     print(
         f"Linking HC token {params['token_id']} → EVM contract {params['evm_contract_address']} "
         f"(network={params['network']}, mode=customStorageSlot)"
     )
 
-    # --- requestEvmContract: reversible, always run without confirm ---
-    requestEvmContract(account, base_url, params)
+    requestEvmContract(hl_account, base_url, params)
 
-    # --- finalizeEvmContract: IRREVERSIBLE, confirm + sanity-check current state ---
-    # Show token state so we can sanity-check before finalizing. Note: HL info
-    # endpoints do NOT expose the pending requestEvmContract — we can only see
-    # the final `evmContract` field in spotMeta after finalize succeeds.
     show_state(base_url, params["token_id"])
     if not confirm(
         f"Run finalizeEvmContract? "
         f"IRREVERSIBLE: locks token {params['token_id']} ↔ EVM contract {params['evm_contract_address']}"
     ):
         return
-    finalizeEvmContract(account, base_url, params)
+    finalizeEvmContract(evm_account, base_url, params)
 
 
 if __name__ == "__main__":

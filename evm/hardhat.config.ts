@@ -325,6 +325,62 @@ task("deploy-bytecode", "Deploys a contract with a given bytecode")
   })
 
 task(
+  "set-hyper-core-deployer",
+  "Set the HyperCore deployer address stored at slot keccak256('HyperCore deployer') (onlyOwner)",
+)
+  .addParam("token", "Token proxy address (HlBridgeToken / HyperliquedBridgeToken)")
+  .addParam("deployer", "HyperCore deployer address to write into the namespaced slot")
+  .setAction(async (taskArgs, hre) => {
+    const { ethers } = hre
+    const [signer] = await ethers.getSigners()
+    const proxy = ethers.getAddress(taskArgs.token)
+    const deployer = ethers.getAddress(taskArgs.deployer)
+
+    const HYPER_CORE_DEPLOYER_SLOT = ethers.keccak256(ethers.toUtf8Bytes("HyperCore deployer"))
+
+    // Read the current value via direct storage slot (works even if the contract
+    // doesn't expose a getter — slot is canonical).
+    const beforeRaw = await ethers.provider.getStorage(proxy, HYPER_CORE_DEPLOYER_SLOT)
+    const before = ethers.getAddress("0x" + beforeRaw.slice(-40))
+
+    const iface = new ethers.Interface([
+      "function setHyperCoreDeployer(address) external",
+      "function owner() external view returns (address)",
+    ])
+    const token = new ethers.Contract(proxy, iface, signer)
+
+    const owner: string = await token.owner()
+    const signerAddress = await signer.getAddress()
+    if (signerAddress.toLowerCase() !== owner.toLowerCase()) {
+      console.warn(
+        `WARNING: signer (${signerAddress}) is not the owner (${owner}) — tx will revert`,
+      )
+    }
+
+    const tx = await token.setHyperCoreDeployer(deployer)
+    const receipt = await tx.wait()
+
+    const afterRaw = await ethers.provider.getStorage(proxy, HYPER_CORE_DEPLOYER_SLOT)
+    const after = ethers.getAddress("0x" + afterRaw.slice(-40))
+
+    console.log(
+      JSON.stringify(
+        {
+          proxy,
+          signer: signerAddress,
+          owner,
+          slot: HYPER_CORE_DEPLOYER_SLOT,
+          hyperCoreDeployerBefore: before,
+          hyperCoreDeployerAfter: after,
+          txHash: receipt.hash,
+        },
+        null,
+        2,
+      ),
+    )
+  })
+
+task(
   "inspect-token",
   "Inspect a token contract: detect proxy, read implementation, ERC-20 metadata, owner, and HL-specific fields",
 )
