@@ -202,12 +202,26 @@ async fn correct_origins(near_client: Arc<clients::near::Client>, tokens: &mut [
         let mut handles = Vec::new();
         for &idx in chunk {
             let near_client = Arc::clone(&near_client);
-            let address = OmniAddress::Near(tokens[idx].token_id.clone());
+            let token_id = tokens[idx].token_id.clone();
+            let address = OmniAddress::Near(token_id.clone());
             let origin = tokens[idx].origin_chain;
             handles.push(tokio::spawn(async move {
-                // `Ok(None)` = no foreign representation -> NEAR-anchored. `Ok(Some)` (has a
-                // leg) or `Err` (transient) -> leave the origin as the API reported it.
-                matches!(near_client.get_bridged_token(&address, origin).await, Ok(None)).then_some(idx)
+                // Re-anchor to NEAR only when BOTH hold, so the tool's origin matches the
+                // contract's `get_token_origin_chain`:
+                //   1. the bridge has no foreign leg for the API origin (`Ok(None)`), and
+                //   2. the contract does not consider it a deployed token — `get_token_origin_chain`
+                //      returns Near iff the token is not in `deployed_tokens`; a deployed token
+                //      with a foreign-suggesting name would be inferred as foreign-origin.
+                // `Ok(Some)` (a foreign leg exists) or any read error leaves the origin as-is.
+                // A deployed token with no foreign mapping is left foreign on purpose: it then
+                // surfaces as a compute failure (blocking --execute) rather than being seeded on
+                // the wrong leg.
+                let no_foreign_leg =
+                    matches!(near_client.get_bridged_token(&address, origin).await, Ok(None));
+                if !no_foreign_leg {
+                    return None;
+                }
+                matches!(near_client.is_deployed_token(&token_id).await, Ok(false)).then_some(idx)
             }));
         }
         for handle in handles {

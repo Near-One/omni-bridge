@@ -26,7 +26,7 @@
   {
     "chain_kind": "Near",
     "token_id": "0316eb71485b0ab14103307bf65a021042c6d380.factory.bridge.near",
-    "amount": "1921589885493258401",
+    "amount": "1916027465783006138",
     "current_locked": null
   },
   {
@@ -176,7 +176,7 @@
   {
     "chain_kind": "Near",
     "token_id": "2260fac5e5542a773aa44fbcfedf7c193bc2c599.factory.bridge.near",
-    "amount": "1842809050",
+    "amount": "1850887720",
     "current_locked": null
   },
   {
@@ -290,7 +290,7 @@
   {
     "chain_kind": "Near",
     "token_id": "3ea8ea4237344c9931214796d9417af1a1180770.factory.bridge.near",
-    "amount": "2091527391485392524398712",
+    "amount": "2136377383675130400407445",
     "current_locked": null
   },
   {
@@ -314,7 +314,7 @@
   {
     "chain_kind": "Near",
     "token_id": "438e48ed4ce6beecf503d43b9dbd3c30d516e7fd.factory.bridge.near",
-    "amount": "9213750512786228748088177",
+    "amount": "9213959449706777864237937",
     "current_locked": null
   },
   {
@@ -332,7 +332,7 @@
   {
     "chain_kind": "Near",
     "token_id": "4691937a7508860f876c9c0a2a617e7d9e945d4b.factory.bridge.near",
-    "amount": "99977420687319119225594",
+    "amount": "100923434043502551203938",
     "current_locked": null
   },
   {
@@ -392,7 +392,7 @@
   {
     "chain_kind": "Near",
     "token_id": "509a38b7a1cc0dcd83aa9d06214663d9ec7c7f4a.factory.bridge.near",
-    "amount": "193101230193651191748946",
+    "amount": "200858744817064080875285",
     "current_locked": null
   },
   {
@@ -416,7 +416,7 @@
   {
     "chain_kind": "Near",
     "token_id": "52a047ee205701895ee06a375492490ec9c597ce.factory.bridge.near",
-    "amount": "95209721483409591960861123",
+    "amount": "95300635366390624947931125",
     "current_locked": null
   },
   {
@@ -476,7 +476,7 @@
   {
     "chain_kind": "Near",
     "token_id": "6b175474e89094c44da98b954eedeac495271d0f.factory.bridge.near",
-    "amount": "899276581876276819432545",
+    "amount": "899326581876276819432545",
     "current_locked": null
   },
   {
@@ -608,7 +608,7 @@
   {
     "chain_kind": "Near",
     "token_id": "853d955acef822db058eb8505911ed77f175b99e.factory.bridge.near",
-    "amount": "1131901392931698326864517",
+    "amount": "1203195902743675374067042",
     "current_locked": null
   },
   {
@@ -686,7 +686,7 @@
   {
     "chain_kind": "Near",
     "token_id": "a0b86991c6218b36c1d19d4a2e9eb0ce3606eb48.factory.bridge.near",
-    "amount": "14933021031556",
+    "amount": "14928981600716",
     "current_locked": null
   },
   {
@@ -734,7 +734,7 @@
   {
     "chain_kind": "Near",
     "token_id": "a4ef4b0b23c1fc81d3f9ecf93510e64f58a4a016.factory.bridge.near",
-    "amount": "460380110312077803755093",
+    "amount": "471012869903209067838072",
     "current_locked": null
   },
   {
@@ -794,7 +794,7 @@
   {
     "chain_kind": "Near",
     "token_id": "arb.omdep.near",
-    "amount": "344895979442422",
+    "amount": "350992576442422",
     "current_locked": null
   },
   {
@@ -974,7 +974,7 @@
   {
     "chain_kind": "Near",
     "token_id": "base.omdep.near",
-    "amount": "4521108099179089",
+    "amount": "4592725008179029",
     "current_locked": null
   },
   {
@@ -1214,7 +1214,7 @@
   {
     "chain_kind": "Base",
     "token_id": "cfi.consumer-fi.near",
-    "amount": "923947705155115403259383835",
+    "amount": "922508868981622596369086516",
     "current_locked": null
   },
   {
@@ -1262,13 +1262,13 @@
   {
     "chain_kind": "Near",
     "token_id": "d9c2d319cd7e6177336b0a9c93c21cb48d84fb54.factory.bridge.near",
-    "amount": "94286658031974980116645",
+    "amount": "94819900102981320502796",
     "current_locked": null
   },
   {
     "chain_kind": "Near",
     "token_id": "dac17f958d2ee523a2206206994597c13d831ec7.factory.bridge.near",
-    "amount": "4224417527360",
+    "amount": "4225467527360",
     "current_locked": null
   },
   {
@@ -1322,7 +1322,7 @@
   {
     "chain_kind": "Near",
     "token_id": "eth.bridge.near",
-    "amount": "2160184362867606826631",
+    "amount": "2184371987608844426469",
     "current_locked": null
   },
   {
@@ -1375,8 +1375,14 @@
   },
   {
     "chain_kind": "Near",
+    "token_id": "fogo.omdep.near",
+    "amount": "8799039947",
+    "current_locked": null
+  },
+  {
+    "chain_kind": "Near",
     "token_id": "hlevm.omdep.near",
-    "amount": "0",
+    "amount": "1286487042319154",
     "current_locked": null
   },
   {
@@ -1477,12 +1483,6 @@
   },
   {
     "chain_kind": "Near",
-    "token_id": "pol-0x543fba4805210b0cd54fdf3fe9d4f9d3171c7e8c.omdep.near",
-    "amount": "48604",
-    "current_locked": null
-  },
-  {
-    "chain_kind": "Near",
     "token_id": "pol-0x55259270726499d0fcad7accf75eea2b6a892f2f.omdep.near",
     "amount": "0",
     "current_locked": null
@@ -1545,12 +1545,6 @@
     "chain_kind": "Near",
     "token_id": "pol-0xa000b2dbbf51f869c4bf15ad969ff0610f9875b3.omdep.near",
     "amount": "0",
-    "current_locked": null
-  },
-  {
-    "chain_kind": "Near",
-    "token_id": "pol-0xa313b67752061a042e361993fcf046cf86c4146c.omdep.near",
-    "amount": "3",
     "current_locked": null
   },
   {
@@ -1634,25 +1628,25 @@
   {
     "chain_kind": "Near",
     "token_id": "sol-0x936420c6ae310eb29511d139991654f922456fbe.omdep.near",
-    "amount": "10004523055",
+    "amount": "10503291581",
     "current_locked": null
   },
   {
     "chain_kind": "Near",
     "token_id": "sol-0xa69aa1bcb03a369e338156a8718ad60271145803.omdep.near",
-    "amount": "0",
+    "amount": "4245766",
     "current_locked": null
   },
   {
     "chain_kind": "Near",
     "token_id": "sol-0xaad74c68eecfc9f8c5bdcea614f6167048c795ef.omdep.near",
-    "amount": "8813128650556",
+    "amount": "8601771869885",
     "current_locked": null
   },
   {
     "chain_kind": "Near",
     "token_id": "sol-57d087fd8c460f612f8701f5499ad8b2eec5ab68.omft.near",
-    "amount": "1205477394579",
+    "amount": "1216955253189",
     "current_locked": null
   },
   {
@@ -1664,13 +1658,25 @@
   {
     "chain_kind": "Near",
     "token_id": "sol-c58e6539c2f2e097c251f8edf11f9c03e581f8d4.omft.near",
-    "amount": "819497997",
+    "amount": "801825601",
     "current_locked": null
   },
   {
     "chain_kind": "Near",
     "token_id": "sol.omdep.near",
-    "amount": "863622757",
+    "amount": "867734105",
+    "current_locked": null
+  },
+  {
+    "chain_kind": "Sol",
+    "token_id": "starknet.omft.near",
+    "amount": "13664452359937623000000000",
+    "current_locked": null
+  },
+  {
+    "chain_kind": "Near",
+    "token_id": "strk-0x65a839eb3847105820d4a2eee84e137f33525e8f.omdep.near",
+    "amount": "10406154322158533966",
     "current_locked": null
   },
   {
@@ -1700,25 +1706,25 @@
   {
     "chain_kind": "Sol",
     "token_id": "token.publicailab.near",
-    "amount": "2380722873298132000000000",
+    "amount": "2380570969647132000000000",
     "current_locked": null
   },
   {
     "chain_kind": "Sol",
     "token_id": "token.rhealab.near",
-    "amount": "3724773170956649000000000",
+    "amount": "3411896509496350000000000",
     "current_locked": null
   },
   {
     "chain_kind": "Eth",
     "token_id": "wrap.near",
-    "amount": "3458078187723820390428099166652",
+    "amount": "3454312469670701141196368581949",
     "current_locked": null
   },
   {
     "chain_kind": "Sol",
     "token_id": "wrap.near",
-    "amount": "1019914907653197000000000000000",
+    "amount": "952592095589809000000000000000",
     "current_locked": null
   },
   {
@@ -1778,7 +1784,7 @@
   {
     "chain_kind": "Sol",
     "token_id": "zec.omft.near",
-    "amount": "7524149619073",
+    "amount": "7531610206806",
     "current_locked": null
   },
   {

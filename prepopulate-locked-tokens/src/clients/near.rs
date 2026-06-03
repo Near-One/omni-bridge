@@ -97,6 +97,30 @@ impl Client {
         .await
     }
 
+    /// Whether the bridge considers this a deployed token (in its `deployed_tokens` set).
+    ///
+    /// Used to keep re-anchoring consistent with the contract's `get_token_origin_chain`:
+    /// that function returns `Near` precisely when a token is NOT a deployed token (and not
+    /// a UTXO/v2 token), and otherwise infers a foreign origin from the token name. So a
+    /// token may only be safely re-anchored to NEAR when `is_deployed_token` is `false`.
+    pub async fn is_deployed_token(&self, token_id: &AccountId) -> Result<bool> {
+        with_retries("is_deployed_token", || {
+            let contract = self.omni_bridge.clone();
+            let network = self.network.clone();
+            let token_id = token_id.clone();
+            async move {
+                let result: Data<bool> = contract
+                    .call_function("is_deployed_token", json!({ "token": token_id }))
+                    .read_only()
+                    .fetch_from(&network)
+                    .await
+                    .with_context(|| format!("Failed to fetch is_deployed_token({token_id})"))?;
+                Ok(result.data)
+            }
+        })
+        .await
+    }
+
     /// Current on-chain locked amount for `(chain_kind, token_id)`, if any.
     pub async fn get_locked_tokens(
         &self,
