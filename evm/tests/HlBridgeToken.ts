@@ -51,8 +51,8 @@ describe("HyperliquedBridgeToken", () => {
     const HlFactory = await ethers.getContractFactory("HyperliquedBridgeToken")
     const deployed = await upgrades.deployProxy(
       HlFactory,
-      ["Wrapped HL", "wHL", 18, SYSTEM_ADDRESS],
-      { initializer: "initialize(string,string,uint8,address)", kind: "uups" },
+      ["Wrapped HL", "wHL", 18, SYSTEM_ADDRESS, adminAccount.address],
+      { initializer: "initialize(string,string,uint8,address,address)", kind: "uups" },
     )
     const token = (await deployed.waitForDeployment()) as unknown as HyperliquedBridgeToken
     return { token, address: await token.getAddress() }
