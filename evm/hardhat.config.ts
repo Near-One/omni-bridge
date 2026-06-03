@@ -384,6 +384,61 @@ task(
   })
 
 task(
+  "transfer-token-ownership",
+  "Step 1 of Ownable2Step: current owner initiates ownership transfer (sets pendingOwner = newOwner). The new owner must then call acceptOwnership themselves.",
+)
+  .addParam("token", "Proxy address of the token")
+  .addParam("newOwner", "Address that will become the new owner after they call acceptOwnership")
+  .setAction(async (taskArgs, hre) => {
+    const { ethers } = hre
+    const [signer] = await ethers.getSigners()
+    const proxy = ethers.getAddress(taskArgs.token)
+    const newOwner = ethers.getAddress(taskArgs.newOwner)
+
+    const token = new ethers.Contract(
+      proxy,
+      [
+        "function transferOwnership(address) external",
+        "function owner() external view returns (address)",
+        "function pendingOwner() external view returns (address)",
+      ],
+      signer,
+    )
+
+    const ownerBefore: string = await token.owner()
+    const pendingBefore: string = await token.pendingOwner()
+    const signerAddress = await signer.getAddress()
+
+    if (signerAddress.toLowerCase() !== ownerBefore.toLowerCase()) {
+      console.warn(
+        `WARNING: signer (${signerAddress}) is not the current owner (${ownerBefore}) — tx will revert`,
+      )
+    }
+
+    const tx = await token.transferOwnership(newOwner)
+    const receipt = await tx.wait()
+    const ownerAfter: string = await token.owner()
+    const pendingAfter: string = await token.pendingOwner()
+
+    console.log(
+      JSON.stringify(
+        {
+          proxy,
+          signer: signerAddress,
+          ownerBefore,
+          pendingOwnerBefore: pendingBefore,
+          ownerAfter,
+          pendingOwnerAfter: pendingAfter,
+          txHash: receipt.hash,
+          nextStep: `New owner (${newOwner}) must call acceptOwnership() on ${proxy} to complete the transfer.`,
+        },
+        null,
+        2,
+      ),
+    )
+  })
+
+task(
   "inspect-token",
   "Inspect a token contract: detect proxy, read implementation, ERC-20 metadata, owner, and HL-specific fields",
 )
