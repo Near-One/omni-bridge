@@ -86,7 +86,9 @@ contract HyperliquedBridgeToken is BridgeToken, ICoreReceiveWithData {
     /// Used by Hyperliquid's `finalizeEvmContract` action to authorize the linking of this
     /// EVM contract to the HC token — HL reads this slot and the signer of `finalizeEvmContract`
     /// must match its value.
-    function setHyperCoreDeployer(address hyperCoreDeployer_) external onlyOwner {
+    function setHyperCoreDeployer(
+        address hyperCoreDeployer_
+    ) external onlyOwner {
         bytes32 slot = HYPER_CORE_DEPLOYER_SLOT;
         assembly {
             sstore(slot, hyperCoreDeployer_)
