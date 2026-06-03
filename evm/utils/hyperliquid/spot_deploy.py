@@ -69,6 +69,16 @@ def get_base_url(network):
     )
 
 
+def system_address_for_token(token_id: int) -> str:
+    """Compute the HyperCore system address for a given token index.
+
+    Format (from HL docs): an EVM address whose first byte is 0x20 and the
+    remaining 19 bytes are the token index in big-endian. So for token index 513
+    the system address is 0x2000000000000000000000000000000000000201.
+    """
+    return "0x" + f"{(0x20 << 152) | token_id:040x}"
+
+
 def step1(exchange, params):
     # Step 1: Registering the Token
     #
@@ -92,22 +102,26 @@ def step1(exchange, params):
         return
     return token
 
-def step2(address, exchange, token, params):
+def step2(exchange, token, params):
     # Step 2: User Genesis
     #
-    # Allocate the entire total_supply to a single user — the deployer address.
-    # All tokens are minted here at genesis and end up on the deployer's HC balance;
-    # later they can be bridged to HyperEVM as the ERC-20 mirror.
+    # Allocate the entire total_supply directly to the token's system address
+    # (the per-token HC address derived as 0x20...<token_id_BE>). HC↔EVM transfers
+    # debit/credit this pool: putting genesis supply there means there is liquidity
+    # for bridge-in operations immediately, with no extra transfer step from the
+    # deployer.
     #
     # total_supply is set to 2**64 - 1 (= 18446744073709551615) — the maximum value
     # HyperCore can represent (balances are stored as uint64). HIP-1 docs explicitly
     # call this out as the "max flexibility" choice. Bridged tokens mint into this
     # pool only what is actually transferred in from the EVM/NEAR side, so a large
     # cap doesn't inflate circulating supply — it just removes an artificial ceiling.
+    system_address = system_address_for_token(token)
+    print(f"step2 will allocate total_supply to system address {system_address}")
     user_genesis_result = exchange.spot_deploy_user_genesis(
         token,
         [
-            (address, params["total_supply"]),
+            (system_address, params["total_supply"]),
         ],
         [],
     )
@@ -207,7 +221,7 @@ def main():
         show_state(info, address)
         if not confirm("Run step2 (user genesis — can be re-run until step3)?"):
             return
-        step2(address, exchange, token, params)
+        step2(exchange, token, params)
         params["last_step"] = 2
         save_params(params)
 
