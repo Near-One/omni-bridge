@@ -42,4 +42,13 @@ impl ChangeConfig<'_> {
 
         Ok(())
     }
+
+    pub fn set_derived_near_bridge_address(
+        &mut self,
+        derived_near_bridge_address: [u8; 64],
+    ) -> Result<()> {
+        self.config.derived_near_bridge_address = derived_near_bridge_address;
+
+        Ok(())
+    }
 }

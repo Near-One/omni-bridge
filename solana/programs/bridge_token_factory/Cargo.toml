@@ -1,6 +1,6 @@
 [package]
 name = "bridge_token_factory"
-version = "0.2.6"
+version = "0.2.8"
 description = "Created with Anchor"
 edition = "2021"
 
@@ -22,14 +22,24 @@ no-log-ix-name = []
 anchor-debug = []
 custom-heap = []
 custom-panic = []
+# NOTE: must be combined with exactly one of `mainnet`, `devnet`, or `fogo` at build
+# time — wormhole-svm-definitions rejects mixing its `solana` and `from-env` features,
+# so this `idl-build` feature does NOT preselect a network. `anchor build` adds
+# `idl-build` automatically on top of whatever network feature was passed via
+# `--features`, so the normal build paths still work.
 idl-build = [
     "anchor-lang/idl-build",
     "anchor-spl/idl-build",
     "wormhole-anchor-sdk/idl-build",
-    "wormhole-anchor-sdk/mainnet",
 ]
 devnet = ["wormhole-anchor-sdk/solana-devnet"]
 mainnet = ["wormhole-anchor-sdk/mainnet"]
+# `fogo` (and other non-Solana SVM chains) takes Wormhole program IDs and the
+# Wormhole CHAIN_ID from build-time environment variables instead of the
+# hardcoded Solana mainnet/devnet constants. Required env vars (read by
+# wormhole-svm-definitions/from-env): CHAIN_ID, BRIDGE_ADDRESS,
+# POST_MESSAGE_SHIM_PROGRAM_ID, VERIFY_VAA_SHIM_PROGRAM_ID.
+fogo = ["wormhole-anchor-sdk/from-env"]
 
 [dependencies]
 anchor-lang = { version = "0.32.1", features = ["init-if-needed"] }

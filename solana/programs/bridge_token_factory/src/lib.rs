@@ -188,6 +188,18 @@ pub mod bridge_token_factory {
         Ok(())
     }
 
+    pub fn set_derived_near_bridge_address(
+        ctx: Context<ChangeConfig>,
+        derived_near_bridge_address: [u8; 64],
+    ) -> Result<()> {
+        msg!("Setting derived NEAR bridge address");
+
+        ctx.accounts
+            .set_derived_near_bridge_address(derived_near_bridge_address)?;
+
+        Ok(())
+    }
+
     pub fn update_metadata(
         ctx: Context<UpdateMetadata>,
         name: Option<String>,

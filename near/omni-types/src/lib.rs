@@ -78,6 +78,8 @@ pub enum ChainKind {
     Strk,
     #[serde(alias = "abs")]
     Abs,
+    #[serde(alias = "fogo")]
+    Fogo,
     #[serde(alias = "aptos")]
     Aptos,
 }
@@ -92,7 +94,7 @@ impl ChainKind {
             | Self::Pol
             | Self::HyperEvm
             | Self::Abs => true,
-            Self::Btc | Self::Zcash | Self::Near | Self::Sol | Self::Strk | Self::Aptos => false,
+            Self::Btc | Self::Zcash | Self::Near | Self::Sol | Self::Strk | Self::Fogo | Self::Aptos => false,
         }
     }
 
@@ -109,6 +111,25 @@ impl ChainKind {
             | Self::HyperEvm
             | Self::Strk
             | Self::Abs
+            | Self::Fogo
+            | Self::Aptos => false,
+        }
+    }
+
+    pub const fn is_svm_chain(&self) -> bool {
+        match self {
+            Self::Sol | Self::Fogo => true,
+            Self::Eth
+            | Self::Arb
+            | Self::Base
+            | Self::Bnb
+            | Self::Pol
+            | Self::Near
+            | Self::HyperEvm
+            | Self::Strk
+            | Self::Abs
+            | Self::Btc
+            | Self::Zcash
             | Self::Aptos => false,
         }
     }
@@ -144,7 +165,8 @@ impl TryFrom<u8> for ChainKind {
             9 => Ok(Self::HyperEvm),
             10 => Ok(Self::Strk),
             11 => Ok(Self::Abs),
-            12 => Ok(Self::Aptos),
+            12 => Ok(Self::Fogo),
+            13 => Ok(Self::Aptos),
             _ => Err(format!("{input:?} invalid chain kind")),
         }
     }
@@ -173,6 +195,7 @@ pub enum OmniAddress {
     HyperEvm(EvmAddress),
     Strk(StarknetAddress),
     Abs(EvmAddress),
+    Fogo(SolAddress),
     Aptos(AptosAddress),
 }
 
@@ -192,6 +215,7 @@ impl OmniAddress {
             ChainKind::Zcash => Ok(Self::Zcash(String::new())),
             ChainKind::Strk => Ok(Self::Strk(H256::ZERO)),
             ChainKind::Abs => Ok(Self::Abs(H160::ZERO)),
+            ChainKind::Fogo => Ok(Self::Fogo(SolAddress::ZERO)),
             ChainKind::Aptos => Ok(Self::Aptos(H256::ZERO)),
         }
     }
@@ -215,6 +239,7 @@ impl OmniAddress {
     pub fn new_from_slice(chain_kind: ChainKind, address: &[u8]) -> Result<Self, String> {
         match chain_kind {
             ChainKind::Sol => Ok(Self::Sol(Self::to_sol_address(address)?)),
+            ChainKind::Fogo => Ok(Self::Fogo(Self::to_sol_address(address)?)),
             ChainKind::Eth
             | ChainKind::Arb
             | ChainKind::Base
@@ -252,6 +277,7 @@ impl OmniAddress {
             Self::Zcash(_) => ChainKind::Zcash,
             Self::Strk(_) => ChainKind::Strk,
             Self::Abs(_) => ChainKind::Abs,
+            Self::Fogo(_) => ChainKind::Fogo,
             Self::Aptos(_) => ChainKind::Aptos,
         }
     }
@@ -270,6 +296,7 @@ impl OmniAddress {
             Self::Zcash(address) => ("zcash", address.clone()),
             Self::Strk(address) => ("strk", address.to_string()),
             Self::Abs(address) => ("abs", address.to_string()),
+            Self::Fogo(address) => ("fogo", address.to_string()),
             Self::Aptos(address) => ("aptos", address.to_string()),
         };
 
@@ -290,7 +317,7 @@ impl OmniAddress {
             | Self::HyperEvm(address)
             | Self::Abs(address) => address.is_zero(),
             Self::Near(address) => *address == ZERO_ACCOUNT_ID,
-            Self::Sol(address) => address.is_zero(),
+            Self::Sol(address) | Self::Fogo(address) => address.is_zero(),
             Self::Btc(address) | Self::Zcash(address) => address.is_empty(),
             Self::Strk(address) | Self::Aptos(address) => address.is_zero(),
         }
@@ -299,6 +326,7 @@ impl OmniAddress {
     pub fn get_token_prefix(&self) -> String {
         match self {
             Self::Sol(address) => Self::hashed_token_prefix("sol", &H256(address.0)),
+            Self::Fogo(address) => Self::hashed_token_prefix("fogo", &H256(address.0)),
             Self::Strk(address) => Self::hashed_token_prefix("strk", address),
             Self::Aptos(address) => Self::hashed_token_prefix("aptos", address),
             Self::Eth(address) => {
@@ -389,6 +417,7 @@ impl FromStr for OmniAddress {
             "btc" => Ok(Self::Btc(recipient.to_string())),
             "zcash" => Ok(Self::Zcash(recipient.to_string())),
             "strk" => Ok(Self::Strk(recipient.parse().map_err(stringify)?)),
+            "fogo" => Ok(Self::Fogo(recipient.parse().map_err(stringify)?)),
             "aptos" => Ok(Self::Aptos(recipient.parse().map_err(stringify)?)),
             _ => Err(format!("Chain {chain} is not supported")),
         }
@@ -945,6 +974,7 @@ pub fn get_native_token_address(chain_kind: ChainKind) -> Result<OmniAddress, St
         | ChainKind::Zcash
         | ChainKind::Pol
         | ChainKind::HyperEvm
-        | ChainKind::Abs => OmniAddress::new_zero(chain_kind),
+        | ChainKind::Abs
+        | ChainKind::Fogo => OmniAddress::new_zero(chain_kind),
     }
 }

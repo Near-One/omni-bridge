@@ -9,7 +9,7 @@ use crate::{
 };
 use std::str::FromStr;
 
-fn chain_kinds_for_borsh() -> [ChainKind; 13] {
+fn chain_kinds_for_borsh() -> [ChainKind; 14] {
     [
         ChainKind::Eth,
         ChainKind::Near,
@@ -23,6 +23,7 @@ fn chain_kinds_for_borsh() -> [ChainKind; 13] {
         ChainKind::HyperEvm,
         ChainKind::Strk,
         ChainKind::Abs,
+        ChainKind::Fogo,
         ChainKind::Aptos,
     ]
 }
@@ -48,6 +49,9 @@ fn omni_addresses_for_borsh() -> Vec<OmniAddress> {
                 .unwrap(),
         ),
         OmniAddress::Abs(H160::from_str("0x23ddd3e3692d1861ed57ede224608875809e127f").unwrap()),
+        OmniAddress::Fogo(
+            SolAddress::from_str("BXss9YNCX2p6VPf2Em54pHXkXnC2FPBeZgbB9fY1cuBR").unwrap(),
+        ),
         OmniAddress::Aptos(
             H256::from_str("0x05558831a603eca8cd69a42d4251f08de3573039b69f23972265cac76639f1cf")
                 .unwrap(),
@@ -172,6 +176,11 @@ fn test_chain_kind_from_omni_address() {
         ChainKind::Sol,
         "SOL",
     );
+    test_chain_kind(
+        OmniAddress::Fogo("11111111111111111111111111111111".parse().unwrap()),
+        ChainKind::Fogo,
+        "FOGO",
+    );
     test_chain_kind(OmniAddress::Arb(evm_address.clone()), ChainKind::Arb, "ARB");
     test_chain_kind(OmniAddress::Base(evm_address), ChainKind::Base, "BASE");
     test_chain_kind(
@@ -240,6 +249,13 @@ fn test_omni_address_from_str() {
                 "11111111111111111111111111111111".parse().unwrap(),
             )),
             "Should parse SOL address",
+        ),
+        (
+            "fogo:11111111111111111111111111111111".to_string(),
+            Ok(OmniAddress::Fogo(
+                "11111111111111111111111111111111".parse().unwrap(),
+            )),
+            "Should parse FOGO address",
         ),
         (
             format!("arb:{evm_addr}"),
@@ -313,6 +329,11 @@ fn test_omni_address_display() {
             OmniAddress::Sol("11111111111111111111111111111111".parse().unwrap()),
             "sol:11111111111111111111111111111111".to_string(),
             "SOL address should format as sol:address",
+        ),
+        (
+            OmniAddress::Fogo("11111111111111111111111111111111".parse().unwrap()),
+            "fogo:11111111111111111111111111111111".to_string(),
+            "FOGO address should format as fogo:address",
         ),
         (
             OmniAddress::Arb(evm_addr.clone()),
@@ -508,6 +529,7 @@ fn test_get_native_token_prefix() {
     for chain_kind in [
         ChainKind::Near,
         ChainKind::Sol,
+        ChainKind::Fogo,
         ChainKind::Base,
         ChainKind::Eth,
         ChainKind::Arb,

@@ -980,7 +980,7 @@ dependencies = [
 
 [[package]]
 name = "evm-prover"
-version = "0.4.9"
+version = "0.4.11"
 dependencies = [
  "borsh",
  "near-sdk",
@@ -1920,7 +1920,7 @@ dependencies = [
 
 [[package]]
 name = "mpc-omni-prover"
-version = "0.4.9"
+version = "0.4.11"
 dependencies = [
  "alloy",
  "borsh",
@@ -2620,7 +2620,7 @@ dependencies = [
 
 [[package]]
 name = "omni-bridge"
-version = "0.4.9"
+version = "0.4.11"
 dependencies = [
  "borsh",
  "hex",
@@ -2649,7 +2649,7 @@ dependencies = [
 
 [[package]]
 name = "omni-token"
-version = "0.4.9"
+version = "0.4.11"
 dependencies = [
  "borsh",
  "near-contract-standards",
@@ -2672,6 +2672,7 @@ dependencies = [
  "rlp",
  "schemars 0.8.22",
  "serde",
+ "serde_with",
  "sha2",
  "sha3",
  "strum 0.27.2",
@@ -4030,7 +4031,7 @@ checksum = "1f3ccbac311fea05f86f61904b462b55fb3df8837a366dfc601a0161d0532f20"
 
 [[package]]
 name = "token-deployer"
-version = "0.4.9"
+version = "0.4.11"
 dependencies = [
  "borsh",
  "cargo-near-build",
@@ -4835,7 +4836,7 @@ checksum = "5c573471f125075647d03df72e026074b7203790d41351cd6edc96f46bcccd36"
 
 [[package]]
 name = "wormhole-omni-prover-proxy"
-version = "0.4.9"
+version = "0.4.11"
 dependencies = [
  "borsh",
  "hex",

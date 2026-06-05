@@ -17,6 +17,7 @@ mod tests {
         abs_factory_address, account_n, aptos_factory_address, arb_factory_address,
         arb_token_address, base_factory_address, base_token_address, bnb_factory_address,
         bnb_token_address, eth_eoa_address, eth_factory_address, eth_token_address,
+        fogo_factory_address,
         get_test_deploy_token_args, hyperevm_factory_address, locker_wasm,
         mock_global_contract_deployer_wasm, mock_prover_wasm, omni_token_wasm, pol_factory_address,
         sol_factory_address, sol_token_address, strk_factory_address, token_deployer_wasm,
@@ -135,6 +136,7 @@ mod tests {
             let factory_contract_address = match init_token_address.get_chain() {
                 ChainKind::Eth => eth_factory_address(),
                 ChainKind::Sol => sol_factory_address(),
+                ChainKind::Fogo => fogo_factory_address(),
                 ChainKind::Arb => arb_factory_address(),
                 ChainKind::Base => base_factory_address(),
                 ChainKind::Bnb => bnb_factory_address(),
