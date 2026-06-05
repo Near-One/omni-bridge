@@ -3,7 +3,7 @@ module omni_bridge::omni_bridge_tests {
     use std::option;
     use std::string;
     use aptos_framework::account;
-    use aptos_framework::fungible_asset::{Self, Metadata};
+    use aptos_framework::fungible_asset::{Self, Metadata, MintRef};
     use aptos_framework::object::{Self, Object};
     use aptos_framework::primary_fungible_store;
 
@@ -13,7 +13,8 @@ module omni_bridge::omni_bridge_tests {
     use omni_bridge::utils;
 
     /// Create a stand-alone FA (not bridge-deployed) usable as `native_token_metadata`
-    /// or as the "locked token" path in tests.
+    /// or as the "locked token" path in tests. The `MintRef` is not exposed —
+    /// use `create_test_fa_with_mint` if the test needs to mint.
     fun create_test_fa(creator: &signer, seed: vector<u8>, decimals: u8): Object<Metadata> {
         let constructor_ref = object::create_named_object(creator, seed);
         primary_fungible_store::create_primary_store_enabled_fungible_asset(
@@ -25,7 +26,46 @@ module omni_bridge::omni_bridge_tests {
             string::utf8(b""),
             string::utf8(b"")
         );
-        object::object_from_constructor_ref<Metadata>(&constructor_ref)
+        constructor_ref.object_from_constructor_ref<Metadata>()
+    }
+
+    /// Same as `create_test_fa` but also returns a `MintRef` so the test
+    /// can mint tokens to user accounts. Used by `init_transfer` tests.
+    fun create_test_fa_with_mint(
+        creator: &signer, seed: vector<u8>, decimals: u8
+    ): (Object<Metadata>, MintRef) {
+        let constructor_ref = object::create_named_object(creator, seed);
+        primary_fungible_store::create_primary_store_enabled_fungible_asset(
+            &constructor_ref,
+            option::none(),
+            string::utf8(b"TestToken"),
+            string::utf8(b"TT"),
+            decimals,
+            string::utf8(b""),
+            string::utf8(b"")
+        );
+        let mint_ref = fungible_asset::generate_mint_ref(&constructor_ref);
+        let metadata = constructor_ref.object_from_constructor_ref<Metadata>();
+        (metadata, mint_ref)
+    }
+
+    /// Stash the mint ref on a throwaway object so it can be "dropped"
+    /// after a test mints what it needs (`MintRef` has no `drop` ability).
+    struct MintRefHolder has key {
+        mint_ref: MintRef
+    }
+
+    fun stash_mint_ref(
+        creator: &signer, seed: vector<u8>, mint_ref: MintRef
+    ) {
+        let ref_obj = object::create_named_object(creator, seed);
+        let obj_signer = ref_obj.generate_signer();
+        move_to(&obj_signer, MintRefHolder { mint_ref });
+    }
+
+    fun mint_to(mint_ref: &MintRef, recipient: address, amount: u64) {
+        let fa = fungible_asset::mint(mint_ref, amount);
+        primary_fungible_store::deposit(recipient, fa);
     }
 
     fun setup(deployer: &signer): Object<Metadata> {
@@ -203,7 +243,7 @@ module omni_bridge::omni_bridge_tests {
                 string::utf8(b"MTOK"),
                 8
             );
-        let token_addr = object::object_address(&metadata);
+        let token_addr = metadata.object_address();
 
         // Admin updates both URIs.
         omni_bridge::set_token_metadata(
@@ -263,7 +303,7 @@ module omni_bridge::omni_bridge_tests {
         account::create_account_for_test(attacker.address_of());
         omni_bridge::set_token_metadata(
             &attacker,
-            object::object_address(&metadata),
+            metadata.object_address(),
             option::some(
                 string::utf8(b"https://attacker.example/icon.png")
             ),
@@ -272,7 +312,9 @@ module omni_bridge::omni_bridge_tests {
     }
 
     #[test(deployer = @omni_bridge, meta = @0xBEEF)]
-    fun admin_can_grant_and_revoke_metadata_admin(deployer: signer, meta: signer) {
+    fun admin_can_grant_and_revoke_metadata_admin(
+        deployer: signer, meta: signer
+    ) {
         let _ = setup(&deployer);
         let role = role_id(b"MetadataAdmin");
         assert!(omni_bridge::has_role(role, deployer.address_of()), 310);
@@ -286,19 +328,33 @@ module omni_bridge::omni_bridge_tests {
         assert!(omni_bridge::role_holders(role).length() == 2, 314);
 
         // Both holders can call set_token_metadata.
-        let m1 = bridge_token::test_create(
-            &deployer, b"meta_g1", string::utf8(b"Meta G1"), string::utf8(b"MG1"), 8
-        );
+        let m1 =
+            bridge_token::test_create(
+                &deployer,
+                b"meta_g1",
+                string::utf8(b"Meta G1"),
+                string::utf8(b"MG1"),
+                8
+            );
         omni_bridge::set_token_metadata(
-            &meta, object::object_address(&m1),
-            option::some(string::utf8(b"https://m.example/icon.png")), option::none()
+            &meta,
+            m1.object_address(),
+            option::some(string::utf8(b"https://m.example/icon.png")),
+            option::none()
         );
-        let m2 = bridge_token::test_create(
-            &deployer, b"meta_g2", string::utf8(b"Meta G2"), string::utf8(b"MG2"), 8
-        );
+        let m2 =
+            bridge_token::test_create(
+                &deployer,
+                b"meta_g2",
+                string::utf8(b"Meta G2"),
+                string::utf8(b"MG2"),
+                8
+            );
         omni_bridge::set_token_metadata(
-            &deployer, object::object_address(&m2),
-            option::some(string::utf8(b"https://d.example/icon.png")), option::none()
+            &deployer,
+            m2.object_address(),
+            option::some(string::utf8(b"https://d.example/icon.png")),
+            option::none()
         );
 
         // Revoke deployer, leaving only `meta`.
@@ -320,12 +376,21 @@ module omni_bridge::omni_bridge_tests {
         omni_bridge::revoke_role(&deployer, role, deployer.address_of());
 
         // Deployer was the initial metadata_admin but was revoked.
-        let metadata = bridge_token::test_create(
-            &deployer, b"meta_revoked", string::utf8(b"Meta R"), string::utf8(b"MR"), 8
-        );
+        let metadata =
+            bridge_token::test_create(
+                &deployer,
+                b"meta_revoked",
+                string::utf8(b"Meta R"),
+                string::utf8(b"MR"),
+                8
+            );
         omni_bridge::set_token_metadata(
-            &deployer, object::object_address(&metadata),
-            option::some(string::utf8(b"https://stale.example/icon.png")), option::none()
+            &deployer,
+            metadata.object_address(),
+            option::some(
+                string::utf8(b"https://stale.example/icon.png")
+            ),
+            option::none()
         );
     }
 
@@ -355,9 +420,7 @@ module omni_bridge::omni_bridge_tests {
         let _ = setup(&deployer);
         // Deployer is the sole initial Admin; removing them would brick
         // the bridge.
-        omni_bridge::revoke_role(
-            &deployer, role_id(b"Admin"), deployer.address_of()
-        );
+        omni_bridge::revoke_role(&deployer, role_id(b"Admin"), deployer.address_of());
     }
 
     #[test(deployer = @omni_bridge, co_admin = @0xCAFE2)]
@@ -392,7 +455,7 @@ module omni_bridge::omni_bridge_tests {
         // `native_fa` is a plain test FA, not bridge-deployed.
         omni_bridge::set_token_metadata(
             &deployer,
-            object::object_address(&native_fa),
+            native_fa.object_address(),
             option::some(
                 string::utf8(b"https://attacker.example/icon.png")
             ),
@@ -511,6 +574,242 @@ module omni_bridge::omni_bridge_tests {
         assert!(bytes.length() == head_len + fr_len + msg_len, 290);
         // Some-tag (1) for fee_recipient at head_len.
         assert!(bytes[head_len] == 1u8, 291);
+    }
+
+    // -------- init_transfer tests --------
+
+    #[test(deployer = @omni_bridge, user = @0xA11CE)]
+    fun init_transfer_burns_bridge_token(deployer: signer, user: signer) {
+        let _ = setup(&deployer);
+        let user_addr = user.address_of();
+        account::create_account_for_test(user_addr);
+
+        // Create a bridge-deployed FA and mint to the user.
+        let metadata =
+            bridge_token::test_create(
+                &deployer,
+                b"it_burn",
+                string::utf8(b"IT Burn"),
+                string::utf8(b"ITB"),
+                8
+            );
+        bridge_token::test_mint(metadata, user_addr, 1_000);
+        assert!(primary_fungible_store::balance(user_addr, metadata) == 1_000, 400);
+
+        let nonce_before = omni_bridge::current_origin_nonce();
+        omni_bridge::init_transfer(
+            &user,
+            metadata.object_address(),
+            500u128, // amount
+            10u128, // fee
+            0u128, // native_fee
+            string::utf8(b"near:alice.near"),
+            b""
+        );
+
+        // Burned, not transferred to bridge.
+        assert!(primary_fungible_store::balance(user_addr, metadata) == 500, 401);
+        assert!(
+            omni_bridge::current_origin_nonce() == nonce_before + 1,
+            402
+        );
+    }
+
+    #[test(deployer = @omni_bridge, user = @0xA11CE)]
+    fun init_transfer_locks_non_bridge_token(
+        deployer: signer, user: signer
+    ) {
+        let _ = setup(&deployer);
+        let user_addr = user.address_of();
+        account::create_account_for_test(user_addr);
+
+        // Plain FA, not bridge-deployed → bridge takes the lock path.
+        let (metadata, mint_ref) = create_test_fa_with_mint(&deployer, b"it_lock", 8);
+        mint_to(&mint_ref, user_addr, 2_000);
+        stash_mint_ref(&deployer, b"it_lock_stash", mint_ref);
+
+        let bridge_addr = omni_bridge::bridge_object_address();
+        let bridge_before = primary_fungible_store::balance(bridge_addr, metadata);
+
+        omni_bridge::init_transfer(
+            &user,
+            metadata.object_address(),
+            750u128,
+            0u128,
+            0u128,
+            string::utf8(b"near:bob.near"),
+            b""
+        );
+
+        // Tokens moved from user → bridge object (not burned).
+        assert!(primary_fungible_store::balance(user_addr, metadata) == 1_250, 410);
+        assert!(
+            primary_fungible_store::balance(bridge_addr, metadata)
+                == bridge_before + 750,
+            411
+        );
+    }
+
+    #[test(deployer = @omni_bridge, user = @0xA11CE)]
+    fun init_transfer_increments_origin_nonce(
+        deployer: signer, user: signer
+    ) {
+        let _ = setup(&deployer);
+        let user_addr = user.address_of();
+        account::create_account_for_test(user_addr);
+
+        let metadata =
+            bridge_token::test_create(
+                &deployer,
+                b"it_nonce",
+                string::utf8(b"IT N"),
+                string::utf8(b"ITN"),
+                8
+            );
+        bridge_token::test_mint(metadata, user_addr, 1_000);
+
+        assert!(omni_bridge::current_origin_nonce() == 0, 420);
+        omni_bridge::init_transfer(
+            &user,
+            metadata.object_address(),
+            100u128,
+            0u128,
+            0u128,
+            string::utf8(b"near:x"),
+            b""
+        );
+        assert!(omni_bridge::current_origin_nonce() == 1, 421);
+        omni_bridge::init_transfer(
+            &user,
+            metadata.object_address(),
+            100u128,
+            0u128,
+            0u128,
+            string::utf8(b"near:x"),
+            b""
+        );
+        assert!(omni_bridge::current_origin_nonce() == 2, 422);
+    }
+
+    // Pause flag blocks init_transfer.
+    // PAUSE_INIT_TRANSFER = 0x01. E_INIT_TRANSFER_PAUSED = 3.
+    #[test(deployer = @omni_bridge, user = @0xA11CE)]
+    #[expected_failure(abort_code = 3, location = omni_bridge::omni_bridge)]
+    fun init_transfer_aborts_when_paused(deployer: signer, user: signer) {
+        let _ = setup(&deployer);
+        let user_addr = user.address_of();
+        account::create_account_for_test(user_addr);
+
+        let metadata =
+            bridge_token::test_create(
+                &deployer,
+                b"it_paused",
+                string::utf8(b"IT P"),
+                string::utf8(b"ITP"),
+                8
+            );
+        bridge_token::test_mint(metadata, user_addr, 1_000);
+
+        omni_bridge::set_pause_flags(&deployer, 0x01);
+        omni_bridge::init_transfer(
+            &user,
+            metadata.object_address(),
+            100u128,
+            0u128,
+            0u128,
+            string::utf8(b"near:x"),
+            b""
+        );
+    }
+
+    // amount == 0 → E_ZERO_AMOUNT = 8.
+    #[test(deployer = @omni_bridge, user = @0xA11CE)]
+    #[expected_failure(abort_code = 8, location = omni_bridge::omni_bridge)]
+    fun init_transfer_rejects_zero_amount(
+        deployer: signer, user: signer
+    ) {
+        let _ = setup(&deployer);
+        let user_addr = user.address_of();
+        account::create_account_for_test(user_addr);
+
+        let metadata =
+            bridge_token::test_create(
+                &deployer,
+                b"it_zero",
+                string::utf8(b"IT Z"),
+                string::utf8(b"ITZ"),
+                8
+            );
+        omni_bridge::init_transfer(
+            &user,
+            metadata.object_address(),
+            0u128,
+            0u128,
+            0u128,
+            string::utf8(b"near:x"),
+            b""
+        );
+    }
+
+    // fee >= amount → E_INVALID_FEE = 9.
+    #[test(deployer = @omni_bridge, user = @0xA11CE)]
+    #[expected_failure(abort_code = 9, location = omni_bridge::omni_bridge)]
+    fun init_transfer_rejects_fee_equal_amount(
+        deployer: signer, user: signer
+    ) {
+        let _ = setup(&deployer);
+        let user_addr = user.address_of();
+        account::create_account_for_test(user_addr);
+
+        let metadata =
+            bridge_token::test_create(
+                &deployer,
+                b"it_fee_eq",
+                string::utf8(b"IT FE"),
+                string::utf8(b"ITFE"),
+                8
+            );
+        bridge_token::test_mint(metadata, user_addr, 1_000);
+        omni_bridge::init_transfer(
+            &user,
+            metadata.object_address(),
+            100u128,
+            100u128,
+            0u128,
+            string::utf8(b"near:x"),
+            b""
+        );
+    }
+
+    // amount > u64::MAX → E_AMOUNT_OVERFLOW = 10.
+    #[test(deployer = @omni_bridge, user = @0xA11CE)]
+    #[expected_failure(abort_code = 10, location = omni_bridge::omni_bridge)]
+    fun init_transfer_rejects_amount_overflow(
+        deployer: signer, user: signer
+    ) {
+        let _ = setup(&deployer);
+        let user_addr = user.address_of();
+        account::create_account_for_test(user_addr);
+
+        let metadata =
+            bridge_token::test_create(
+                &deployer,
+                b"it_ovf",
+                string::utf8(b"IT O"),
+                string::utf8(b"ITO"),
+                8
+            );
+        bridge_token::test_mint(metadata, user_addr, 1_000);
+        // u128 value > u64::MAX, fee < amount.
+        omni_bridge::init_transfer(
+            &user,
+            metadata.object_address(),
+            0x1_0000_0000_0000_0000u128, // u64::MAX + 1
+            0u128,
+            0u128,
+            string::utf8(b"near:x"),
+            b""
+        );
     }
 }
 
