@@ -2672,6 +2672,7 @@ dependencies = [
  "rlp",
  "schemars 0.8.22",
  "serde",
+ "serde_with",
  "sha2",
  "sha3",
  "strum 0.27.2",

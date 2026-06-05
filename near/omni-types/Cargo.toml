@@ -26,3 +26,9 @@ near-mpc-sdk = { workspace = true, features = ["abi"] }
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 sha3.workspace = true
 sha2.workspace = true
+# Work around upstream bug in near-mpc-crypto-types 0.0.1: its `abi` feature
+# derives `JsonSchema` on types with `#[serde_as(as = "Hex")]` fields, but its
+# `serde_with` dep is declared without the `schemars_0_8` feature. Enabling it
+# here (only off-wasm, where schemars is actually available) makes
+# `As<Hex>: JsonSchema` resolve via cargo feature unification.
+serde_with = { version = "3", features = ["schemars_0_8"] }
