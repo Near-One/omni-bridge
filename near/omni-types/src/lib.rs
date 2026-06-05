@@ -94,7 +94,13 @@ impl ChainKind {
             | Self::Pol
             | Self::HyperEvm
             | Self::Abs => true,
-            Self::Btc | Self::Zcash | Self::Near | Self::Sol | Self::Strk | Self::Fogo | Self::Aptos => false,
+            Self::Btc
+            | Self::Zcash
+            | Self::Near
+            | Self::Sol
+            | Self::Strk
+            | Self::Fogo
+            | Self::Aptos => false,
         }
     }
 
