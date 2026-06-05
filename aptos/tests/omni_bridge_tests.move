@@ -272,83 +272,117 @@ module omni_bridge::omni_bridge_tests {
     }
 
     #[test(deployer = @omni_bridge, meta = @0xBEEF)]
-    fun admin_can_rotate_metadata_admin(deployer: signer, meta: signer) {
+    fun admin_can_grant_and_revoke_metadata_admin(deployer: signer, meta: signer) {
         let _ = setup(&deployer);
-        assert!(
-            omni_bridge::role_holder(role_id(b"MetadataAdmin"))
-                == deployer.address_of(),
-            310
-        );
+        let role = role_id(b"MetadataAdmin");
+        assert!(omni_bridge::has_role(role, deployer.address_of()), 310);
+        assert!(omni_bridge::role_holders(role).length() == 1, 311);
 
+        // Grant adds, doesn't replace.
         account::create_account_for_test(meta.address_of());
-        omni_bridge::set_role(&deployer, role_id(b"MetadataAdmin"), meta.address_of());
-        assert!(
-            omni_bridge::role_holder(role_id(b"MetadataAdmin")) == meta.address_of(),
-            311
+        omni_bridge::grant_role(&deployer, role, meta.address_of());
+        assert!(omni_bridge::has_role(role, meta.address_of()), 312);
+        assert!(omni_bridge::has_role(role, deployer.address_of()), 313);
+        assert!(omni_bridge::role_holders(role).length() == 2, 314);
+
+        // Both holders can call set_token_metadata.
+        let m1 = bridge_token::test_create(
+            &deployer, b"meta_g1", string::utf8(b"Meta G1"), string::utf8(b"MG1"), 8
+        );
+        omni_bridge::set_token_metadata(
+            &meta, object::object_address(&m1),
+            option::some(string::utf8(b"https://m.example/icon.png")), option::none()
+        );
+        let m2 = bridge_token::test_create(
+            &deployer, b"meta_g2", string::utf8(b"Meta G2"), string::utf8(b"MG2"), 8
+        );
+        omni_bridge::set_token_metadata(
+            &deployer, object::object_address(&m2),
+            option::some(string::utf8(b"https://d.example/icon.png")), option::none()
         );
 
-        // After rotation the new metadata_admin can update; the deployer no longer can.
-        let metadata =
-            bridge_token::test_create(
-                &deployer,
-                b"meta_token3",
-                string::utf8(b"Meta Token 3"),
-                string::utf8(b"MTOK3"),
-                8
-            );
-        omni_bridge::set_token_metadata(
-            &meta,
-            object::object_address(&metadata),
-            option::some(
-                string::utf8(b"https://rotated.example/icon.png")
-            ),
-            option::none()
-        );
-        assert!(
-            fungible_asset::icon_uri(metadata)
-                == string::utf8(b"https://rotated.example/icon.png"),
-            312
-        );
+        // Revoke deployer, leaving only `meta`.
+        omni_bridge::revoke_role(&deployer, role, deployer.address_of());
+        assert!(!omni_bridge::has_role(role, deployer.address_of()), 315);
+        assert!(omni_bridge::has_role(role, meta.address_of()), 316);
+        assert!(omni_bridge::role_holders(role).length() == 1, 317);
     }
 
     #[test(deployer = @omni_bridge, meta = @0xBEEF)]
     #[expected_failure(abort_code = 2, location = omni_bridge::omni_bridge)]
-    fun previous_metadata_admin_loses_access_after_rotation(
+    fun revoked_metadata_admin_loses_access(
         deployer: signer, meta: signer
     ) {
         let _ = setup(&deployer);
+        let role = role_id(b"MetadataAdmin");
         account::create_account_for_test(meta.address_of());
-        omni_bridge::set_role(&deployer, role_id(b"MetadataAdmin"), meta.address_of());
+        omni_bridge::grant_role(&deployer, role, meta.address_of());
+        omni_bridge::revoke_role(&deployer, role, deployer.address_of());
 
-        // The deployer was the initial metadata_admin but is no longer.
-        let metadata =
-            bridge_token::test_create(
-                &deployer,
-                b"meta_token4",
-                string::utf8(b"Meta Token 4"),
-                string::utf8(b"MTOK4"),
-                8
-            );
+        // Deployer was the initial metadata_admin but was revoked.
+        let metadata = bridge_token::test_create(
+            &deployer, b"meta_revoked", string::utf8(b"Meta R"), string::utf8(b"MR"), 8
+        );
         omni_bridge::set_token_metadata(
-            &deployer,
-            object::object_address(&metadata),
-            option::some(
-                string::utf8(b"https://stale.example/icon.png")
-            ),
-            option::none()
+            &deployer, object::object_address(&metadata),
+            option::some(string::utf8(b"https://stale.example/icon.png")), option::none()
         );
     }
 
     #[test(deployer = @omni_bridge, attacker = @0xBEEF)]
     #[expected_failure(abort_code = 2, location = omni_bridge::omni_bridge)]
-    fun non_admin_cannot_rotate_metadata_admin(
-        deployer: signer, attacker: signer
-    ) {
+    fun non_admin_cannot_grant_role(deployer: signer, attacker: signer) {
         let _ = setup(&deployer);
         account::create_account_for_test(attacker.address_of());
-        omni_bridge::set_role(
+        omni_bridge::grant_role(
             &attacker, role_id(b"MetadataAdmin"), attacker.address_of()
         );
+    }
+
+    #[test(deployer = @omni_bridge, attacker = @0xBEEF)]
+    #[expected_failure(abort_code = 2, location = omni_bridge::omni_bridge)]
+    fun non_admin_cannot_revoke_role(deployer: signer, attacker: signer) {
+        let _ = setup(&deployer);
+        account::create_account_for_test(attacker.address_of());
+        omni_bridge::revoke_role(
+            &attacker, role_id(b"MetadataAdmin"), deployer.address_of()
+        );
+    }
+
+    #[test(deployer = @omni_bridge)]
+    #[expected_failure(abort_code = 12, location = omni_bridge::omni_bridge)]
+    fun cannot_remove_last_admin(deployer: signer) {
+        let _ = setup(&deployer);
+        // Deployer is the sole initial Admin; removing them would brick
+        // the bridge.
+        omni_bridge::revoke_role(
+            &deployer, role_id(b"Admin"), deployer.address_of()
+        );
+    }
+
+    #[test(deployer = @omni_bridge, co_admin = @0xCAFE2)]
+    fun admin_can_step_down_when_another_admin_exists(
+        deployer: signer, co_admin: signer
+    ) {
+        let _ = setup(&deployer);
+        let admin_role = role_id(b"Admin");
+        account::create_account_for_test(co_admin.address_of());
+        omni_bridge::grant_role(&deployer, admin_role, co_admin.address_of());
+
+        // Now there are 2 admins — deployer can step down.
+        omni_bridge::revoke_role(&deployer, admin_role, deployer.address_of());
+        assert!(!omni_bridge::has_role(admin_role, deployer.address_of()), 320);
+        assert!(omni_bridge::has_role(admin_role, co_admin.address_of()), 321);
+    }
+
+    #[test(deployer = @omni_bridge)]
+    fun grant_is_idempotent(deployer: signer) {
+        let _ = setup(&deployer);
+        let role = role_id(b"Pauser");
+        let len_before = omni_bridge::role_holders(role).length();
+        // Granting the existing holder again is a no-op.
+        omni_bridge::grant_role(&deployer, role, deployer.address_of());
+        assert!(omni_bridge::role_holders(role).length() == len_before, 330);
     }
 
     #[test(deployer = @omni_bridge)]

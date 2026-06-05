@@ -51,6 +51,11 @@ module omni_bridge::omni_bridge {
     // Metadata
     const E_NOT_BRIDGE_TOKEN: u64 = 11;
 
+    // Role management
+    /// Revoking would leave the `Admin` role with zero holders — would
+    /// brick the bridge (no one could grant/revoke roles again).
+    const E_CANNOT_REMOVE_LAST_ADMIN: u64 = 12;
+
     /// Largest amount that fits in `u64`, used to bound `u128` payload
     /// amounts before they're handed to the Aptos Fungible Asset APIs.
     const MAX_U64_AS_U128: u128 = 0xFFFFFFFFFFFFFFFF;
@@ -87,8 +92,10 @@ module omni_bridge::omni_bridge {
     /// Top-level bridge state. Stored as a resource on the bridge object
     /// (a named Object owned by `@omni_bridge`).
     struct BridgeState has key {
-        /// Role discriminant → holder address. See the `ROLE_*` constants.
-        roles: Table<u8, address>,
+        /// Role discriminant → list of holder addresses. Each role can
+        /// have any number of holders; all of them are equally privileged.
+        /// See the `ROLE_*` constants for the discriminant values.
+        roles: Table<u8, vector<address>>,
         /// Bitfield of paused operations. See `PAUSE_*` constants.
         pause_flags: u8,
         /// 20-byte recovered address of the NEAR MPC-derived Ethereum signer.
@@ -204,10 +211,11 @@ module omni_bridge::omni_bridge {
         transfer_ref.disable_ungated_transfer();
         let object_signer = constructor_ref.generate_signer();
 
-        let roles = table::new<u8, address>();
-        roles.add(ROLE_ADMIN, deployer_addr);
-        roles.add(ROLE_PAUSER, deployer_addr);
-        roles.add(ROLE_METADATA_ADMIN, deployer_addr);
+        // Seed each role with the deployer as the sole initial holder.
+        let roles = table::new<u8, vector<address>>();
+        roles.add(ROLE_ADMIN, vector[deployer_addr]);
+        roles.add(ROLE_PAUSER, vector[deployer_addr]);
+        roles.add(ROLE_METADATA_ADMIN, vector[deployer_addr]);
 
         move_to(
             &object_signer,
@@ -234,15 +242,27 @@ module omni_bridge::omni_bridge {
 
     // -------- Admin --------
 
-    /// Assign `role` to `new_holder`, replacing the prior holder if any.
-    /// Caller must hold `ROLE_ADMIN`. Works for every `Role` variant,
-    /// including `Admin` itself (use that to rotate the admin key).
-    public entry fun set_role(
+    /// Add `new_holder` to the set of `role` holders. No-op if the
+    /// address already holds the role. Caller must hold `ROLE_ADMIN`.
+    /// Works for every role, including `ROLE_ADMIN` itself.
+    public entry fun grant_role(
         admin: &signer, role: u8, new_holder: address
     ) {
         let state = &mut BridgeState[bridge_object_address()];
         assert_role(state, ROLE_ADMIN, admin, E_UNAUTHORIZED);
-        grant_role(state, role, new_holder);
+        add_role_holder(state, role, new_holder);
+    }
+
+    /// Remove `holder` from the set of `role` holders. No-op if the
+    /// address does not hold the role. Caller must hold `ROLE_ADMIN`.
+    /// Refuses to remove the last `ROLE_ADMIN` holder, which would brick
+    /// the bridge's role management.
+    public entry fun revoke_role(
+        admin: &signer, role: u8, holder: address
+    ) {
+        let state = &mut BridgeState[bridge_object_address()];
+        assert_role(state, ROLE_ADMIN, admin, E_UNAUTHORIZED);
+        remove_role_holder(state, role, holder);
     }
 
     public entry fun set_near_bridge_derived_address(
@@ -564,12 +584,18 @@ module omni_bridge::omni_bridge {
         BridgeState[bridge_object_address()].chain_id
     }
 
-    // Return the address currently holding `role`. Aborts if the role
-    // has never been granted (won't happen for roles populated in
+    // Return all addresses currently holding `role`. Empty vector if the
+    // role has never been populated (won't happen for roles seeded in
     // `initialize`).
     #[view]
-    public fun role_holder(role: u8): address {
+    public fun role_holders(role: u8): vector<address> {
         read_role(&BridgeState[bridge_object_address()], role)
+    }
+
+    // True if `addr` is one of the holders of `role`.
+    #[view]
+    public fun has_role(role: u8, addr: address): bool {
+        is_role_holder(&BridgeState[bridge_object_address()], role, addr)
     }
 
     // -------- Role registry --------
@@ -600,30 +626,95 @@ module omni_bridge::omni_bridge {
 
     // -------- Internal --------
 
-    fun read_role(state: &BridgeState, role: u8): address {
-        *state.roles.borrow(role)
-    }
-
-    /// Assign `role` to `addr`. Replaces the prior holder if any. Caller
-    /// MUST have already authorized the change.
-    fun grant_role(state: &mut BridgeState, role: u8, addr: address) {
+    /// Read the list of addresses currently holding `role`. Returns an
+    /// empty vector if the role has never been populated.
+    fun read_role(state: &BridgeState, role: u8): vector<address> {
         if (state.roles.contains(role)) {
-            let entry = state.roles.borrow_mut(role);
-            *entry = addr;
+            *state.roles.borrow(role)
         } else {
-            state.roles.add(role, addr);
+            vector[]
         }
     }
 
-    /// Assert that `who` is the current holder of `role`, aborting with
-    /// `err` otherwise.
+    /// True if `addr` is one of the holders of `role`.
+    fun is_role_holder(state: &BridgeState, role: u8, addr: address): bool {
+        if (!state.roles.contains(role)) {
+            return false
+        };
+        let holders = state.roles.borrow(role);
+        let i = 0;
+        let len = holders.length();
+        while (i < len) {
+            if (holders[i] == addr) {
+                return true
+            };
+            i += 1;
+        };
+        false
+    }
+
+    /// Add `addr` to `role`. No-op if already present. Caller MUST have
+    /// already authorized the change.
+    fun add_role_holder(state: &mut BridgeState, role: u8, addr: address) {
+        if (!state.roles.contains(role)) {
+            state.roles.add(role, vector[addr]);
+            return
+        };
+        let holders = state.roles.borrow_mut(role);
+        if (!contains_address(holders, addr)) {
+            holders.push_back(addr);
+        };
+    }
+
+    /// Remove `addr` from `role`. No-op if not present. Refuses to remove
+    /// the last `Admin` holder to keep the bridge governable.
+    fun remove_role_holder(state: &mut BridgeState, role: u8, addr: address) {
+        if (!state.roles.contains(role)) {
+            return
+        };
+        let holders = state.roles.borrow_mut(role);
+        let (found, idx) = find_address(holders, addr);
+        if (!found) {
+            return
+        };
+        if (role == ROLE_ADMIN) {
+            assert!(holders.length() > 1, E_CANNOT_REMOVE_LAST_ADMIN);
+        };
+        holders.remove(idx);
+    }
+
+    fun contains_address(v: &vector<address>, addr: address): bool {
+        let i = 0;
+        let len = v.length();
+        while (i < len) {
+            if (v[i] == addr) {
+                return true
+            };
+            i += 1;
+        };
+        false
+    }
+
+    fun find_address(v: &vector<address>, addr: address): (bool, u64) {
+        let i = 0;
+        let len = v.length();
+        while (i < len) {
+            if (v[i] == addr) {
+                return (true, i)
+            };
+            i += 1;
+        };
+        (false, 0)
+    }
+
+    /// Assert that `who` holds `role`, aborting with `err` otherwise.
     fun assert_role(
         state: &BridgeState,
         role: u8,
         who: &signer,
         err: u64
     ) {
-        assert!(read_role(state, role) == who.address_of(), err);
+        assert!(is_role_holder(state, role, who.address_of()), err);
     }
 
     fun verify_signature(
