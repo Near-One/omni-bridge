@@ -78,6 +78,8 @@ pub enum ChainKind {
     Strk,
     #[serde(alias = "abs")]
     Abs,
+    #[serde(alias = "aptos")]
+    Aptos,
 }
 
 impl ChainKind {
@@ -90,7 +92,7 @@ impl ChainKind {
             | Self::Pol
             | Self::HyperEvm
             | Self::Abs => true,
-            Self::Btc | Self::Zcash | Self::Near | Self::Sol | Self::Strk => false,
+            Self::Btc | Self::Zcash | Self::Near | Self::Sol | Self::Strk | Self::Aptos => false,
         }
     }
 
@@ -106,7 +108,8 @@ impl ChainKind {
             | Self::Sol
             | Self::HyperEvm
             | Self::Strk
-            | Self::Abs => false,
+            | Self::Abs
+            | Self::Aptos => false,
         }
     }
 }
@@ -141,6 +144,7 @@ impl TryFrom<u8> for ChainKind {
             9 => Ok(Self::HyperEvm),
             10 => Ok(Self::Strk),
             11 => Ok(Self::Abs),
+            12 => Ok(Self::Aptos),
             _ => Err(format!("{input:?} invalid chain kind")),
         }
     }
@@ -149,6 +153,7 @@ impl TryFrom<u8> for ChainKind {
 pub type EvmAddress = H160;
 pub type UTXOChainAddress = String;
 pub type StarknetAddress = H256;
+pub type AptosAddress = H256;
 
 pub const ZERO_ACCOUNT_ID: &str =
     "0000000000000000000000000000000000000000000000000000000000000000";
@@ -168,6 +173,7 @@ pub enum OmniAddress {
     HyperEvm(EvmAddress),
     Strk(StarknetAddress),
     Abs(EvmAddress),
+    Aptos(AptosAddress),
 }
 
 impl OmniAddress {
@@ -186,6 +192,7 @@ impl OmniAddress {
             ChainKind::Zcash => Ok(Self::Zcash(String::new())),
             ChainKind::Strk => Ok(Self::Strk(H256::ZERO)),
             ChainKind::Abs => Ok(Self::Abs(H160::ZERO)),
+            ChainKind::Aptos => Ok(Self::Aptos(H256::ZERO)),
         }
     }
 
@@ -227,6 +234,7 @@ impl OmniAddress {
                     .map_err(|e| format!("Invalid ZCash address: {e}"))?,
             )),
             ChainKind::Strk => Ok(Self::Strk(H256(address.try_into().map_err(stringify)?))),
+            ChainKind::Aptos => Ok(Self::Aptos(H256(address.try_into().map_err(stringify)?))),
         }
     }
 
@@ -244,6 +252,7 @@ impl OmniAddress {
             Self::Zcash(_) => ChainKind::Zcash,
             Self::Strk(_) => ChainKind::Strk,
             Self::Abs(_) => ChainKind::Abs,
+            Self::Aptos(_) => ChainKind::Aptos,
         }
     }
 
@@ -261,6 +270,7 @@ impl OmniAddress {
             Self::Zcash(address) => ("zcash", address.clone()),
             Self::Strk(address) => ("strk", address.to_string()),
             Self::Abs(address) => ("abs", address.to_string()),
+            Self::Aptos(address) => ("aptos", address.to_string()),
         };
 
         if skip_zero_address && self.is_zero() {
@@ -282,7 +292,7 @@ impl OmniAddress {
             Self::Near(address) => *address == ZERO_ACCOUNT_ID,
             Self::Sol(address) => address.is_zero(),
             Self::Btc(address) | Self::Zcash(address) => address.is_empty(),
-            Self::Strk(address) => address.is_zero(),
+            Self::Strk(address) | Self::Aptos(address) => address.is_zero(),
         }
     }
 
@@ -290,6 +300,7 @@ impl OmniAddress {
         match self {
             Self::Sol(address) => Self::hashed_token_prefix("sol", &H256(address.0)),
             Self::Strk(address) => Self::hashed_token_prefix("strk", address),
+            Self::Aptos(address) => Self::hashed_token_prefix("aptos", address),
             Self::Eth(address) => {
                 if self.is_zero() {
                     "eth".to_string()
@@ -378,6 +389,7 @@ impl FromStr for OmniAddress {
             "btc" => Ok(Self::Btc(recipient.to_string())),
             "zcash" => Ok(Self::Zcash(recipient.to_string())),
             "strk" => Ok(Self::Strk(recipient.parse().map_err(stringify)?)),
+            "aptos" => Ok(Self::Aptos(recipient.parse().map_err(stringify)?)),
             _ => Err(format!("Chain {chain} is not supported")),
         }
     }
@@ -917,6 +929,11 @@ pub fn get_native_token_address(chain_kind: ChainKind) -> Result<OmniAddress, St
     match chain_kind {
         ChainKind::Strk => OmniAddress::from_str(
             "strk:0x04718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d",
+        ),
+        // APT is itself a Fungible Asset with a well-known canonical metadata
+        // object address (`0xa`) — identical on mainnet/testnet/devnet.
+        ChainKind::Aptos => OmniAddress::from_str(
+            "aptos:0x000000000000000000000000000000000000000000000000000000000000000a",
         ),
         ChainKind::Eth
         | ChainKind::Near

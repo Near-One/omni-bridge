@@ -81,16 +81,27 @@ deterministic (`keccak256(near_token_id)` is used as the
 
 ## Chain id
 
-This contract takes its `chain_id` as a parameter to `initialize`, exactly
-like the Starknet implementation. To integrate end-to-end with the NEAR
-side you will also need to:
+The Aptos chain id is **`12`** in [near/omni-types/src/lib.rs](../near/omni-types/src/lib.rs)
+(`ChainKind::Aptos`, the 13th variant). Pass `u8:12` to `initialize` as
+`chain_id`. NEAR-side support is already wired:
 
-1. Add an `Aptos` variant (with the next free u8 tag) to `ChainKind` in
-   [near/omni-types/src/lib.rs](../near/omni-types/src/lib.rs).
-2. Add an `OmniAddress::Aptos(AptosAddress)` variant with 32-byte
-   big-endian encoding (analogous to `OmniAddress::Strk`).
-3. Register an Aptos factory with the bridge contract on NEAR.
+- `ChainKind::Aptos` — tag 12, after `Abs`
+- `OmniAddress::Aptos(AptosAddress)` — `AptosAddress = H256`, 32-byte
+  big-endian encoding (analogous to `OmniAddress::Strk`)
+- `"aptos:0x..."` parses to `OmniAddress::Aptos` in `OmniAddress::FromStr`
+  and in the bridge's `get_chain_from_token` mapping
 
-These NEAR-side changes are deliberately out of scope for this PR; the
-Aptos contract is self-contained and ready to integrate once the chain
-id is allocated.
+The remaining integration step is operational, not code:
+
+**Register the Aptos factory with the bridge contract on NEAR.** After
+deploying the Aptos package, call the bridge's `add_factory` admin function
+with the bridge object's address:
+
+```bash
+near call omni.bridge.near add_factory \
+  '{"address": "aptos:0x<BRIDGE_OBJECT_ADDRESS>"}' \
+  --accountId <dao-admin>
+```
+
+`<BRIDGE_OBJECT_ADDRESS>` is the value returned by the
+`bridge_object_address()` view on the deployed Aptos package.
