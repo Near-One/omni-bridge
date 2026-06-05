@@ -20,7 +20,7 @@ module omni_bridge::omni_bridge {
     use aptos_framework::primary_fungible_store;
 
     use omni_bridge::bridge_token;
-    use omni_bridge::bridge_types::{Self, Signature};
+    use omni_bridge::bridge_types;
     use omni_bridge::utils;
 
     // -------- Errors --------
@@ -289,8 +289,7 @@ module omni_bridge::omni_bridge {
 
         let payload = bridge_types::new_metadata_payload(token, name, symbol, decimals);
         let encoded = payload.metadata_to_borsh();
-        let sig = bridge_types::new_signature(signature_rs, signature_v);
-        verify_signature(state, encoded, sig);
+        verify_signature(state, encoded, signature_rs, signature_v);
 
         let token_id_hash = aptos_hash::keccak256(*payload.metadata_token().bytes());
         assert!(
@@ -367,8 +366,7 @@ module omni_bridge::omni_bridge {
                 message
             );
         let encoded = payload.transfer_message_to_borsh(state.chain_id);
-        let sig = bridge_types::new_signature(signature_rs, signature_v);
-        verify_signature(state, encoded, sig);
+        verify_signature(state, encoded, signature_rs, signature_v);
 
         // Cap to u64 — Aptos FA amounts are u64.
         assert!(amount <= MAX_U64_AS_U128, E_AMOUNT_OVERFLOW);
@@ -512,12 +510,15 @@ module omni_bridge::omni_bridge {
     }
 
     fun verify_signature(
-        state: &BridgeState, message: vector<u8>, sig: Signature
+        state: &BridgeState,
+        message: vector<u8>,
+        signature_rs: vector<u8>,
+        signature_v: u8
     ) {
         utils::verify_eth_signature(
             message,
-            sig.signature_rs(),
-            sig.signature_v(),
+            signature_rs,
+            signature_v,
             state.near_bridge_derived_address
         );
     }
@@ -576,3 +577,4 @@ module omni_bridge::omni_bridge {
         nonce_slot_and_bit(nonce)
     }
 }
+

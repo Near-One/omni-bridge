@@ -1,11 +1,14 @@
 /// Cross-chain payload structs and their Borsh encodings.
 ///
-/// The Borsh layout in each `to_borsh` is byte-compatible with the
+/// The Borsh layout in each `*_to_borsh` is byte-compatible with the
 /// Starknet / EVM siblings: see `starknet/src/bridge_types.cairo` and
 /// `evm/src/omni-bridge/contracts/OmniBridge.sol`. Move doesn't allow
 /// overloading function names by receiver type within a module, so the
 /// two `*_to_borsh` helpers carry the payload-type prefix; both are still
 /// callable via receiver syntax (`payload.metadata_to_borsh()`).
+///
+/// Signatures (`r || s`, `v`) are passed around as plain `(vector<u8>, u8)`
+/// rather than a wrapper struct — the struct added no invariant.
 module omni_bridge::bridge_types {
     use std::bcs;
     use std::option::Option;
@@ -15,12 +18,6 @@ module omni_bridge::bridge_types {
     // Payload type tags — must match the rust `PayloadType` enum on NEAR.
     const PAYLOAD_TYPE_TRANSFER_MESSAGE: u8 = 0;
     const PAYLOAD_TYPE_METADATA: u8 = 1;
-
-    /// Ethereum-style ECDSA signature: r || s (64 bytes) and recovery id v.
-    struct Signature has copy, drop, store {
-        rs: vector<u8>,
-        v: u8
-    }
 
     /// `deploy_token` payload signed by the NEAR MPC.
     struct MetadataPayload has copy, drop, store {
@@ -44,10 +41,6 @@ module omni_bridge::bridge_types {
     }
 
     // -------- Constructors --------
-
-    public fun new_signature(rs: vector<u8>, v: u8): Signature {
-        Signature { rs, v }
-    }
 
     public fun new_metadata_payload(
         token: String,
@@ -81,14 +74,6 @@ module omni_bridge::bridge_types {
     }
 
     // -------- Accessors --------
-
-    public fun signature_rs(self: &Signature): vector<u8> {
-        self.rs
-    }
-    public fun signature_v(self: &Signature): u8
- {
-        self.v
-    }
 
     public fun metadata_token(self: &MetadataPayload): String {
         self.token
@@ -164,3 +149,4 @@ module omni_bridge::bridge_types {
         buf
     }
 }
+
