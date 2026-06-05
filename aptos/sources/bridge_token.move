@@ -1,15 +1,22 @@
 /// Bridged Fungible Asset wrapper.
 ///
 /// A "bridge token" is an Aptos Fungible Asset (FA) whose `MintRef`,
-/// `BurnRef`, and `TransferRef` are stored inside the FA's own object
-/// address as a private `BridgeTokenRefs` resource. Only this module can
-/// borrow those refs, and the create/mint/burn entry points are
-/// `package`-visible, so the resource is effectively the bridge's
-/// exclusive minting capability for that token.
+/// `BurnRef`, `TransferRef`, and `MutateMetadataRef` are stored inside the
+/// FA's own object address as a private `BridgeTokenRefs` resource. Only
+/// this module can borrow those refs, and the create/mint/burn/metadata
+/// entry points are `package`-visible, so the resource is effectively the
+/// bridge's exclusive minting and metadata capability for that token.
 module omni_bridge::bridge_token {
     use std::option;
     use std::string::{Self, String};
-    use aptos_framework::fungible_asset::{Self, Metadata, MintRef, BurnRef, TransferRef};
+    use aptos_framework::fungible_asset::{
+        Self,
+        Metadata,
+        MintRef,
+        BurnRef,
+        TransferRef,
+        MutateMetadataRef
+    };
     use aptos_framework::object::{Self, Object};
     use aptos_framework::primary_fungible_store;
 
@@ -17,7 +24,11 @@ module omni_bridge::bridge_token {
     struct BridgeTokenRefs has key {
         mint_ref: MintRef,
         burn_ref: BurnRef,
-        transfer_ref: TransferRef
+        transfer_ref: TransferRef,
+        /// Used to update mutable metadata (icon URI, project URI) after
+        /// creation. Held by the bridge module so only `package`-visible
+        /// functions can mutate.
+        mutate_metadata_ref: MutateMetadataRef
     }
 
     /// Create a new bridge-controlled Fungible Asset and return its metadata
@@ -47,11 +58,13 @@ module omni_bridge::bridge_token {
         let mint_ref = fungible_asset::generate_mint_ref(&constructor_ref);
         let burn_ref = fungible_asset::generate_burn_ref(&constructor_ref);
         let transfer_ref = fungible_asset::generate_transfer_ref(&constructor_ref);
+        let mutate_metadata_ref =
+            fungible_asset::generate_mutate_metadata_ref(&constructor_ref);
 
         let object_signer = constructor_ref.generate_signer();
         move_to(
             &object_signer,
-            BridgeTokenRefs { mint_ref, burn_ref, transfer_ref }
+            BridgeTokenRefs { mint_ref, burn_ref, transfer_ref, mutate_metadata_ref }
         );
 
         constructor_ref.object_from_constructor_ref<Metadata>()
@@ -59,9 +72,7 @@ module omni_bridge::bridge_token {
 
     /// Mint `amount` of `metadata` directly into the recipient's primary store.
     package fun mint(
-        metadata: Object<Metadata>,
-        recipient: address,
-        amount: u64
+        metadata: Object<Metadata>, recipient: address, amount: u64
     ) {
         let refs = &BridgeTokenRefs[metadata.object_address()];
         let fa = refs.mint_ref.mint(amount);
@@ -70,9 +81,7 @@ module omni_bridge::bridge_token {
 
     /// Burn `amount` of `metadata` from `account`'s primary store.
     package fun burn(
-        metadata: Object<Metadata>,
-        account: address,
-        amount: u64
+        metadata: Object<Metadata>, account: address, amount: u64
     ) {
         let refs = &BridgeTokenRefs[metadata.object_address()];
         let store = primary_fungible_store::primary_store(account, metadata);
@@ -82,6 +91,24 @@ module omni_bridge::bridge_token {
     /// True if `metadata` was deployed by this bridge.
     public fun is_bridge_token(metadata: Object<Metadata>): bool {
         exists<BridgeTokenRefs>(metadata.object_address())
+    }
+
+    /// Update the FA's mutable metadata. Any `Option::None` argument is
+    /// left unchanged. Bridge-only.
+    package fun mutate_metadata(
+        metadata: Object<Metadata>,
+        icon_uri: option::Option<String>,
+        project_uri: option::Option<String>
+    ) {
+        let refs = &BridgeTokenRefs[metadata.object_address()];
+        fungible_asset::mutate_metadata(
+            &refs.mutate_metadata_ref,
+            option::none(), // name
+            option::none(), // symbol
+            option::none(), // decimals
+            icon_uri,
+            project_uri
+        );
     }
 
     #[test_only]
@@ -97,19 +124,16 @@ module omni_bridge::bridge_token {
 
     #[test_only]
     public fun test_mint(
-        metadata: Object<Metadata>,
-        recipient: address,
-        amount: u64
+        metadata: Object<Metadata>, recipient: address, amount: u64
     ) {
         mint(metadata, recipient, amount)
     }
 
     #[test_only]
     public fun test_burn(
-        metadata: Object<Metadata>,
-        account: address,
-        amount: u64
+        metadata: Object<Metadata>, account: address, amount: u64
     ) {
         burn(metadata, account, amount)
     }
 }
+

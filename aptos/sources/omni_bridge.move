@@ -10,7 +10,7 @@
 /// [evm/src/omni-bridge/contracts/OmniBridge.sol] for the sibling
 /// implementations whose payload encodings this module mirrors.
 module omni_bridge::omni_bridge {
-    use std::string::String;
+    use std::string::{Self, String};
     use std::option::{Self, Option};
     use aptos_std::aptos_hash;
     use aptos_std::table::{Self, Table};
@@ -25,26 +25,31 @@ module omni_bridge::omni_bridge {
 
     // -------- Errors --------
     // Numeric values are part of the test contract — never reorder.
-    // Grouped: lifecycle → auth → pause → deploy → transfer.
+    // Grouped: lifecycle → auth → pause → deploy → transfer → metadata.
 
     // Lifecycle / auth
     const E_ALREADY_INITIALIZED: u64 = 1;
-    const E_NOT_ADMIN: u64 = 2;
-    const E_NOT_PAUSER: u64 = 3;
+    /// Caller does not hold the role required for this call. The role
+    /// being checked is implicit from the entry point — see the assert
+    /// site for which `ROLE_*` was required.
+    const E_UNAUTHORIZED: u64 = 2;
 
     // Pause flags
-    const E_INIT_TRANSFER_PAUSED: u64 = 4;
-    const E_FIN_TRANSFER_PAUSED: u64 = 5;
-    const E_DEPLOY_TOKEN_PAUSED: u64 = 6;
+    const E_INIT_TRANSFER_PAUSED: u64 = 3;
+    const E_FIN_TRANSFER_PAUSED: u64 = 4;
+    const E_DEPLOY_TOKEN_PAUSED: u64 = 5;
 
     // Deploy token
-    const E_TOKEN_ALREADY_DEPLOYED: u64 = 7;
+    const E_TOKEN_ALREADY_DEPLOYED: u64 = 6;
 
     // Transfer
-    const E_NONCE_ALREADY_USED: u64 = 8;
-    const E_ZERO_AMOUNT: u64 = 9;
-    const E_INVALID_FEE: u64 = 10;
-    const E_AMOUNT_OVERFLOW: u64 = 11;
+    const E_NONCE_ALREADY_USED: u64 = 7;
+    const E_ZERO_AMOUNT: u64 = 8;
+    const E_INVALID_FEE: u64 = 9;
+    const E_AMOUNT_OVERFLOW: u64 = 10;
+
+    // Metadata
+    const E_NOT_BRIDGE_TOKEN: u64 = 11;
 
     /// Largest amount that fits in `u64`, used to bound `u128` payload
     /// amounts before they're handed to the Aptos Fungible Asset APIs.
@@ -65,16 +70,25 @@ module omni_bridge::omni_bridge {
     /// Bitmap word width — keep at 128 so each entry packs nonces [n*128, n*128+127].
     const BITMAP_WIDTH: u64 = 128;
 
+    /// Privileged on-chain role discriminants. Each role is a `u8` so it
+    /// can be passed across the entry/view-function boundary (Aptos
+    /// forbids custom enum types as transaction parameters). Adding a new
+    /// role only requires:
+    ///   1. add a `ROLE_*` const + a `role_*()` public constructor here
+    ///   2. populate it in `initialize` (or grant it via `Admin` using
+    ///      `set_role`)
+    ///   3. assert it at the gated call site
+    ///
+    /// Numeric values are part of the on-chain ABI — never reorder.
+    const ROLE_ADMIN: u8 = 0;
+    const ROLE_PAUSER: u8 = 1;
+    const ROLE_METADATA_ADMIN: u8 = 2;
+
     /// Top-level bridge state. Stored as a resource on the bridge object
     /// (a named Object owned by `@omni_bridge`).
     struct BridgeState has key {
-        /// Address authorized to administer the bridge (set pause flags,
-        /// rotate keys, etc.).
-        admin: address,
-        /// Address authorized to call `pause_all`. Separate from admin so
-        /// the pauser key can be operationally hot without granting full
-        /// admin rights.
-        pauser: address,
+        /// Role discriminant → holder address. See the `ROLE_*` constants.
+        roles: Table<u8, address>,
         /// Bitfield of paused operations. See `PAUSE_*` constants.
         pause_flags: u8,
         /// 20-byte recovered address of the NEAR MPC-derived Ethereum signer.
@@ -151,6 +165,16 @@ module omni_bridge::omni_bridge {
         admin: address
     }
 
+    // Emitted on `set_token_metadata`. `icon_uri` / `project_uri` are
+    // `None` for fields the caller did not change.
+    #[event]
+    struct TokenMetadataChanged has drop, store {
+        token_address: address,
+        icon_uri: Option<String>,
+        project_uri: Option<String>,
+        admin: address
+    }
+
     // -------- Initialization --------
 
     /// Initialize the bridge. Callable exactly once by the module deployer.
@@ -166,7 +190,7 @@ module omni_bridge::omni_bridge {
         native_token_metadata: Object<Metadata>
     ) {
         let deployer_addr = deployer.address_of();
-        assert!(deployer_addr == @omni_bridge, E_NOT_ADMIN);
+        assert!(deployer_addr == @omni_bridge, E_UNAUTHORIZED);
         assert!(
             !exists<BridgeState>(bridge_object_address()),
             E_ALREADY_INITIALIZED
@@ -180,11 +204,15 @@ module omni_bridge::omni_bridge {
         transfer_ref.disable_ungated_transfer();
         let object_signer = constructor_ref.generate_signer();
 
+        let roles = table::new<u8, address>();
+        roles.add(ROLE_ADMIN, deployer_addr);
+        roles.add(ROLE_PAUSER, deployer_addr);
+        roles.add(ROLE_METADATA_ADMIN, deployer_addr);
+
         move_to(
             &object_signer,
             BridgeState {
-                admin: deployer_addr,
-                pauser: deployer_addr,
+                roles,
                 pause_flags: 0,
                 near_bridge_derived_address,
                 chain_id,
@@ -206,29 +234,28 @@ module omni_bridge::omni_bridge {
 
     // -------- Admin --------
 
-    public entry fun set_admin(admin: &signer, new_admin: address) {
+    /// Assign `role` to `new_holder`, replacing the prior holder if any.
+    /// Caller must hold `ROLE_ADMIN`. Works for every `Role` variant,
+    /// including `Admin` itself (use that to rotate the admin key).
+    public entry fun set_role(
+        admin: &signer, role: u8, new_holder: address
+    ) {
         let state = &mut BridgeState[bridge_object_address()];
-        assert_admin(state, admin);
-        state.admin = new_admin;
-    }
-
-    public entry fun set_pauser(admin: &signer, new_pauser: address) {
-        let state = &mut BridgeState[bridge_object_address()];
-        assert_admin(state, admin);
-        state.pauser = new_pauser;
+        assert_role(state, ROLE_ADMIN, admin, E_UNAUTHORIZED);
+        grant_role(state, role, new_holder);
     }
 
     public entry fun set_near_bridge_derived_address(
         admin: &signer, new_address: vector<u8>
     ) {
         let state = &mut BridgeState[bridge_object_address()];
-        assert_admin(state, admin);
+        assert_role(state, ROLE_ADMIN, admin, E_UNAUTHORIZED);
         state.near_bridge_derived_address = new_address;
     }
 
     public entry fun set_pause_flags(admin: &signer, flags: u8) {
         let state = &mut BridgeState[bridge_object_address()];
-        assert_admin(state, admin);
+        assert_role(state, ROLE_ADMIN, admin, E_UNAUTHORIZED);
         let old = state.pause_flags;
         state.pause_flags = flags;
         event::emit(
@@ -242,7 +269,7 @@ module omni_bridge::omni_bridge {
 
     public entry fun pause_all(pauser: &signer) {
         let state = &mut BridgeState[bridge_object_address()];
-        assert!(pauser.address_of() == state.pauser, E_NOT_PAUSER);
+        assert_role(state, ROLE_PAUSER, pauser, E_UNAUTHORIZED);
         let old = state.pause_flags;
         state.pause_flags = PAUSE_ALL;
         event::emit(
@@ -250,6 +277,40 @@ module omni_bridge::omni_bridge {
                 old_flags: old,
                 new_flags: PAUSE_ALL,
                 admin: pauser.address_of()
+            }
+        );
+    }
+
+    /// Update mutable metadata (`icon_uri`, `project_uri`) on a
+    /// bridge-deployed FA. `None` fields are left unchanged. Gated on the
+    /// `metadata_admin` role (separate from the main admin so metadata
+    /// refreshes don't require the high-privilege admin key). Aborts if
+    /// the address is not a bridge-deployed token.
+    public entry fun set_token_metadata(
+        metadata_admin: &signer,
+        token_address: address,
+        icon_uri: Option<String>,
+        project_uri: Option<String>
+    ) {
+        let state = &BridgeState[bridge_object_address()];
+        assert_role(
+            state,
+            ROLE_METADATA_ADMIN,
+            metadata_admin,
+            E_UNAUTHORIZED
+        );
+
+        let metadata = object::address_to_object<Metadata>(token_address);
+        assert!(bridge_token::is_bridge_token(metadata), E_NOT_BRIDGE_TOKEN);
+
+        bridge_token::mutate_metadata(metadata, icon_uri, project_uri);
+
+        event::emit(
+            TokenMetadataChanged {
+                token_address,
+                icon_uri,
+                project_uri,
+                admin: metadata_admin.address_of()
             }
         );
     }
@@ -503,10 +564,66 @@ module omni_bridge::omni_bridge {
         BridgeState[bridge_object_address()].chain_id
     }
 
+    // Return the address currently holding `role`. Aborts if the role
+    // has never been granted (won't happen for roles populated in
+    // `initialize`).
+    #[view]
+    public fun role_holder(role: u8): address {
+        read_role(&BridgeState[bridge_object_address()], role)
+    }
+
+    // -------- Role registry --------
+
+    /// Human-readable name + numeric id for a role. Returned by
+    /// `all_roles()` so off-chain callers can discover the role table
+    /// without hardcoding `ROLE_*` constants.
+    struct RoleInfo has copy, drop, store {
+        name: String,
+        id: u8
+    }
+
+    public fun role_info_name(self: &RoleInfo): String {
+        self.name
+    }
+    public fun role_info_id(self: &RoleInfo): u8 {
+        self.id
+    }
+
+    #[view]
+    public fun all_roles(): vector<RoleInfo> {
+        vector[
+            RoleInfo { name: string::utf8(b"Admin"), id: ROLE_ADMIN },
+            RoleInfo { name: string::utf8(b"Pauser"), id: ROLE_PAUSER },
+            RoleInfo { name: string::utf8(b"MetadataAdmin"), id: ROLE_METADATA_ADMIN }
+        ]
+    }
+
     // -------- Internal --------
 
-    fun assert_admin(state: &BridgeState, who: &signer) {
-        assert!(who.address_of() == state.admin, E_NOT_ADMIN);
+    fun read_role(state: &BridgeState, role: u8): address {
+        *state.roles.borrow(role)
+    }
+
+    /// Assign `role` to `addr`. Replaces the prior holder if any. Caller
+    /// MUST have already authorized the change.
+    fun grant_role(state: &mut BridgeState, role: u8, addr: address) {
+        if (state.roles.contains(role)) {
+            let entry = state.roles.borrow_mut(role);
+            *entry = addr;
+        } else {
+            state.roles.add(role, addr);
+        }
+    }
+
+    /// Assert that `who` is the current holder of `role`, aborting with
+    /// `err` otherwise.
+    fun assert_role(
+        state: &BridgeState,
+        role: u8,
+        who: &signer,
+        err: u64
+    ) {
+        assert!(read_role(state, role) == who.address_of(), err);
     }
 
     fun verify_signature(

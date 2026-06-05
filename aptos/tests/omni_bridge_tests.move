@@ -40,6 +40,22 @@ module omni_bridge::omni_bridge_tests {
         native_metadata
     }
 
+    /// Resolve a role id by name via the on-chain registry. Aborts if the
+    /// name doesn't exist — same error the production code would surface.
+    fun role_id(name: vector<u8>): u8 {
+        let target = string::utf8(name);
+        let roles = omni_bridge::all_roles();
+        let i = 0;
+        while (i < roles.length()) {
+            let role = &roles[i];
+            if (omni_bridge::role_info_name(role) == target) {
+                return omni_bridge::role_info_id(role)
+            };
+            i += 1;
+        };
+        abort 0
+    }
+
     #[test(deployer = @omni_bridge)]
     fun initializes_with_zero_nonce_and_no_pause(deployer: signer) {
         let _native = setup(&deployer);
@@ -175,6 +191,182 @@ module omni_bridge::omni_bridge_tests {
     }
 
     #[test(deployer = @omni_bridge)]
+    fun admin_can_update_token_metadata(deployer: signer) {
+        let _ = setup(&deployer);
+        // Production deploy_token would mint via the bridge object signer;
+        // for the test we create directly under the deployer.
+        let metadata =
+            bridge_token::test_create(
+                &deployer,
+                b"meta_token",
+                string::utf8(b"Meta Token"),
+                string::utf8(b"MTOK"),
+                8
+            );
+        let token_addr = object::object_address(&metadata);
+
+        // Admin updates both URIs.
+        omni_bridge::set_token_metadata(
+            &deployer,
+            token_addr,
+            option::some(
+                string::utf8(b"https://example.com/icon.png")
+            ),
+            option::some(string::utf8(b"https://example.com"))
+        );
+        assert!(
+            fungible_asset::icon_uri(metadata)
+                == string::utf8(b"https://example.com/icon.png"),
+            300
+        );
+        assert!(
+            fungible_asset::project_uri(metadata)
+                == string::utf8(b"https://example.com"),
+            301
+        );
+
+        // Admin updates only icon_uri; project_uri unchanged.
+        omni_bridge::set_token_metadata(
+            &deployer,
+            token_addr,
+            option::some(
+                string::utf8(b"https://example.com/icon2.png")
+            ),
+            option::none()
+        );
+        assert!(
+            fungible_asset::icon_uri(metadata)
+                == string::utf8(b"https://example.com/icon2.png"),
+            302
+        );
+        assert!(
+            fungible_asset::project_uri(metadata)
+                == string::utf8(b"https://example.com"),
+            303
+        );
+    }
+
+    #[test(deployer = @omni_bridge, attacker = @0xBEEF)]
+    #[expected_failure(abort_code = 2, location = omni_bridge::omni_bridge)]
+    fun non_metadata_admin_cannot_update_token_metadata(
+        deployer: signer, attacker: signer
+    ) {
+        let _ = setup(&deployer);
+        let metadata =
+            bridge_token::test_create(
+                &deployer,
+                b"meta_token2",
+                string::utf8(b"Meta Token 2"),
+                string::utf8(b"MTOK2"),
+                8
+            );
+        account::create_account_for_test(attacker.address_of());
+        omni_bridge::set_token_metadata(
+            &attacker,
+            object::object_address(&metadata),
+            option::some(
+                string::utf8(b"https://attacker.example/icon.png")
+            ),
+            option::none()
+        );
+    }
+
+    #[test(deployer = @omni_bridge, meta = @0xBEEF)]
+    fun admin_can_rotate_metadata_admin(deployer: signer, meta: signer) {
+        let _ = setup(&deployer);
+        assert!(
+            omni_bridge::role_holder(role_id(b"MetadataAdmin"))
+                == deployer.address_of(),
+            310
+        );
+
+        account::create_account_for_test(meta.address_of());
+        omni_bridge::set_role(&deployer, role_id(b"MetadataAdmin"), meta.address_of());
+        assert!(
+            omni_bridge::role_holder(role_id(b"MetadataAdmin")) == meta.address_of(),
+            311
+        );
+
+        // After rotation the new metadata_admin can update; the deployer no longer can.
+        let metadata =
+            bridge_token::test_create(
+                &deployer,
+                b"meta_token3",
+                string::utf8(b"Meta Token 3"),
+                string::utf8(b"MTOK3"),
+                8
+            );
+        omni_bridge::set_token_metadata(
+            &meta,
+            object::object_address(&metadata),
+            option::some(
+                string::utf8(b"https://rotated.example/icon.png")
+            ),
+            option::none()
+        );
+        assert!(
+            fungible_asset::icon_uri(metadata)
+                == string::utf8(b"https://rotated.example/icon.png"),
+            312
+        );
+    }
+
+    #[test(deployer = @omni_bridge, meta = @0xBEEF)]
+    #[expected_failure(abort_code = 2, location = omni_bridge::omni_bridge)]
+    fun previous_metadata_admin_loses_access_after_rotation(
+        deployer: signer, meta: signer
+    ) {
+        let _ = setup(&deployer);
+        account::create_account_for_test(meta.address_of());
+        omni_bridge::set_role(&deployer, role_id(b"MetadataAdmin"), meta.address_of());
+
+        // The deployer was the initial metadata_admin but is no longer.
+        let metadata =
+            bridge_token::test_create(
+                &deployer,
+                b"meta_token4",
+                string::utf8(b"Meta Token 4"),
+                string::utf8(b"MTOK4"),
+                8
+            );
+        omni_bridge::set_token_metadata(
+            &deployer,
+            object::object_address(&metadata),
+            option::some(
+                string::utf8(b"https://stale.example/icon.png")
+            ),
+            option::none()
+        );
+    }
+
+    #[test(deployer = @omni_bridge, attacker = @0xBEEF)]
+    #[expected_failure(abort_code = 2, location = omni_bridge::omni_bridge)]
+    fun non_admin_cannot_rotate_metadata_admin(
+        deployer: signer, attacker: signer
+    ) {
+        let _ = setup(&deployer);
+        account::create_account_for_test(attacker.address_of());
+        omni_bridge::set_role(
+            &attacker, role_id(b"MetadataAdmin"), attacker.address_of()
+        );
+    }
+
+    #[test(deployer = @omni_bridge)]
+    #[expected_failure(abort_code = 11, location = omni_bridge::omni_bridge)]
+    fun cannot_update_metadata_of_non_bridge_token(deployer: signer) {
+        let native_fa = setup(&deployer);
+        // `native_fa` is a plain test FA, not bridge-deployed.
+        omni_bridge::set_token_metadata(
+            &deployer,
+            object::object_address(&native_fa),
+            option::some(
+                string::utf8(b"https://attacker.example/icon.png")
+            ),
+            option::none()
+        );
+    }
+
+    #[test(deployer = @omni_bridge)]
     fun bridge_token_create_mint_burn(deployer: signer) {
         let _ = setup(&deployer);
         // Bridge token creation uses the resource account in production;
@@ -287,3 +479,4 @@ module omni_bridge::omni_bridge_tests {
         assert!(bytes[head_len] == 1u8, 291);
     }
 }
+
