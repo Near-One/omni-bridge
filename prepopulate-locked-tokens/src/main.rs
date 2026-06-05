@@ -58,6 +58,13 @@ struct Args {
     /// Additional `token_id`s to skip entirely (comma-separated); merged with SKIP_TOKENS.
     #[arg(long, value_delimiter = ',')]
     skip_tokens: Vec<String>,
+    /// Cleanup mode: set every existing `(Near, token)` locked entry to 0 instead of running
+    /// the normal seeding. The contract never reads or writes `(Near, *)` (a transfer's
+    /// destination can never be Near, and the fin-to-near unlock keys on the foreign origin),
+    /// so these are inert dead-writes left by seeding the NEAR leg of foreign-origin tokens;
+    /// zeroing them is provably safe and just tidies the state. Honors `--execute`.
+    #[arg(long)]
+    zero_near_legs: bool,
 }
 
 #[tokio::main]
@@ -84,6 +91,35 @@ async fn main() -> Result<()> {
         .await
         .with_context(|| format!("Failed to fetch tokens from {tokens_api_url}"))?;
     println!("Fetched {} tokens from {tokens_api_url}", tokens.len());
+
+    // Cleanup mode: zero every existing (Near, token) entry. Independent of the skip-list and
+    // the compute/solvency path — it only reads which (Near, *) keys are set and zeroes them.
+    if args.zero_near_legs {
+        let (entries, failures) = build_zero_near_legs(Arc::clone(&near_client), &tokens).await;
+        let to_change = entries.iter().filter(|entry| entry.changed()).count();
+        println!(
+            "Found {} (Near, token) entries set on-chain; {to_change} are non-zero and would be \
+             zeroed (the rest are already 0).",
+            entries.len()
+        );
+        if failures > 0 {
+            eprintln!(
+                "WARNING: {failures} read failure(s) — some (Near, *) entries may be missing from \
+                 this list; re-run to catch them (zeroing is idempotent)."
+            );
+        }
+        write_artifact(&output_file, &entries)?;
+        print_preview(&entries);
+        if args.execute {
+            apply::run_live(near_client, &config.omni_bridge_account_id, &entries).await?;
+        } else {
+            println!(
+                "Dry run. {to_change} (Near, *) entr{} would be zeroed. Re-run with --execute to apply.",
+                if to_change == 1 { "y" } else { "ies" }
+            );
+        }
+        return Ok(());
+    }
 
     // Skip-list: known-broken / unverifiable tokens (custody 0, non-contract origin,
     // `used_gas` in a view, …). Excluded from compute, solvency, and the write.
@@ -161,7 +197,7 @@ async fn main() -> Result<()> {
         } else if report.is_clean() {
             println!("\nSolvency check passed for all tokens.");
         }
-        let changed = entries.iter().filter(|entry| entry.changed()).count();
+        let changed = entries.iter().filter(|entry| entry.write && entry.changed()).count();
         println!(
             "Dry run. {changed} entr{} would change. Re-run with --execute to apply on-chain.",
             if changed == 1 { "y" } else { "ies" }
@@ -421,6 +457,59 @@ async fn drain_supply_tasks(
     }
 }
 
+/// Build zero-valued entries for every `(Near, token)` key currently set on-chain (used by
+/// `--zero-near-legs`). Reads `get_locked_tokens(Near, token)` per fetched token; for each one
+/// that is set, emits an `Entry` with `computed = 0` so `run_live` sends a zeroing
+/// `set_locked_tokens` only for those not already 0. A token with no Near entry is skipped; a
+/// read failure is logged and counted (the entry is simply omitted — re-running catches it,
+/// since zeroing is idempotent). Returns (entries, failure count).
+async fn build_zero_near_legs(
+    near_client: Arc<clients::near::Client>,
+    tokens: &[TokenInfo],
+) -> (Vec<Entry>, u32) {
+    let mut entries = Vec::new();
+    let mut failures: u32 = 0;
+
+    for chunk in tokens.chunks(BATCH_SIZE) {
+        let mut handles = Vec::new();
+        for token in chunk {
+            let near_client = Arc::clone(&near_client);
+            let token_id = token.token_id.clone();
+            handles.push(tokio::spawn(async move {
+                match near_client.get_locked_tokens(ChainKind::Near, &token_id).await {
+                    Ok(Some(current)) => Ok(Some(Entry {
+                        token_id,
+                        chain: ChainKind::Near,
+                        computed: 0,
+                        current: Some(current),
+                        // Cleanup mode deliberately writes the NEAR legs to 0.
+                        write: true,
+                    })),
+                    Ok(None) => Ok(None),
+                    Err(err) => Err(format!("locked(Near, {token_id}): {err:#}")),
+                }
+            }));
+        }
+        for handle in handles {
+            match handle.await {
+                Ok(Ok(Some(entry))) => entries.push(entry),
+                Ok(Ok(None)) => {}
+                Ok(Err(msg)) => {
+                    failures += 1;
+                    eprintln!("FAILURE reading {msg}");
+                }
+                Err(err) => {
+                    failures += 1;
+                    eprintln!("Zero-leg query task join failed: {err}");
+                }
+            }
+        }
+        sleep(BATCH_SLEEP).await;
+    }
+
+    (entries, failures)
+}
+
 /// Reads the current on-chain locked amount per (token, chain). Resilient: a failed
 /// read logs, counts as a failure, and leaves `current = None` (the entry is still
 /// produced) rather than aborting the whole run. Returns (entries, failure count).
@@ -444,6 +533,9 @@ async fn build_entries(
                             chain,
                             computed,
                             current,
+                            // The NEAR leg of a foreign-origin token is inert (the contract
+                            // never reads/writes `(Near, *)`): count it for solvency, never write it.
+                            write: chain != ChainKind::Near,
                         },
                         false,
                     ),
@@ -457,6 +549,7 @@ async fn build_entries(
                                 chain,
                                 computed,
                                 current: None,
+                                write: chain != ChainKind::Near,
                             },
                             true,
                         )
@@ -518,6 +611,7 @@ fn write_artifact(path: &str, entries: &[Entry]) -> Result<()> {
                 "token_id": entry.token_id,
                 "amount": entry.computed.to_string(),
                 "current_locked": entry.current.map(|value| value.to_string()),
+                "written": entry.write,
             })
         })
         .collect();
@@ -537,7 +631,15 @@ fn print_preview(entries: &[Entry]) {
             .current
             .map(|value| value.to_string())
             .unwrap_or_else(|| "-".to_string());
-        let marker = if entry.changed() { "*" } else { " " };
+        // `*` = will be written and changes state; `~` = NEAR leg, computed for solvency
+        // only and never written; ` ` = already matches.
+        let marker = if entry.write && entry.changed() {
+            "*"
+        } else if !entry.write {
+            "~"
+        } else {
+            " "
+        };
         println!(
             "{marker} {:<6} {:<52} {:>30} {:>30}",
             entry.chain.as_ref(),
@@ -546,8 +648,16 @@ fn print_preview(entries: &[Entry]) {
             current
         );
     }
-    let changed = entries.iter().filter(|entry| entry.changed()).count();
-    println!("({changed} marked * would change on-chain)");
+    let changed = entries.iter().filter(|entry| entry.write && entry.changed()).count();
+    let solvency_only = entries.iter().filter(|entry| !entry.write).count();
+    if solvency_only > 0 {
+        println!(
+            "({changed} marked * will be written on-chain; {solvency_only} '~' NEAR-leg rows are \
+             counted for solvency only, never written)"
+        );
+    } else {
+        println!("({changed} marked * would change on-chain)");
+    }
 }
 
 fn print_report(report: &solvency::Report) {

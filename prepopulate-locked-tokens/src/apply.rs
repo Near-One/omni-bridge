@@ -25,6 +25,12 @@ pub struct Entry {
     pub chain: ChainKind,
     pub computed: u128,
     pub current: Option<u128>,
+    /// Whether this entry is written on-chain by `--execute`. The NEAR leg of a
+    /// foreign-origin token is `false`: its mint is counted in the solvency sum (it's backed
+    /// by origin custody) but never written, because the contract never reads or writes
+    /// `(Near, *)` (a transfer's destination is never Near). The `--zero-near-legs` cleanup
+    /// sets it `true` to deliberately write those legs to 0.
+    pub write: bool,
 }
 
 impl Entry {
@@ -51,10 +57,10 @@ pub async fn run_live(
 ) -> Result<()> {
     let to_set: Vec<SetLockedTokenArg> = entries
         .iter()
-        .filter(|entry| entry.changed())
+        .filter(|entry| entry.write && entry.changed())
         .map(Entry::to_arg)
         .collect();
-    let unchanged = entries.len() - to_set.len();
+    let skipped = entries.len() - to_set.len();
 
     if to_set.is_empty() {
         println!(
@@ -77,7 +83,7 @@ pub async fn run_live(
     println!("LIVE MODE");
     println!("  contract:       {bridge_account}");
     println!("  signer:         {signer_id} (must hold Role::TokenLockController or Role::DAO)");
-    println!("  entries to set: {} ({unchanged} unchanged, skipped)", to_set.len());
+    println!("  entries to set: {} ({skipped} skipped: unchanged or NEAR-leg/solvency-only)", to_set.len());
     println!("  batches:        {batches} (up to {APPLY_BATCH_SIZE} entries each)");
 
     if !confirm("Proceed with sending set_locked_tokens? [y/N] ")? {
