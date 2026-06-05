@@ -12,7 +12,6 @@
 module omni_bridge::omni_bridge {
     use std::string::{Self, String};
     use std::option::{Self, Option};
-    use aptos_std::aptos_hash;
     use aptos_std::table::{Self, Table};
     use aptos_framework::event;
     use aptos_framework::fungible_asset::{Self, Metadata};
@@ -110,8 +109,8 @@ module omni_bridge::omni_bridge {
         completed_transfers: Table<u64, u128>,
         /// FA metadata for the chain native token used for native fees (APT FA).
         native_token_metadata: Object<Metadata>,
-        /// keccak(near_token_id) → FA metadata object address.
-        near_to_aptos_token: Table<vector<u8>, address>,
+        /// near_token_id → FA metadata object address.
+        near_to_aptos_token: Table<String, address>,
         /// ExtendRef for the bridge object. Used to derive the object's signer
         /// on demand for:
         ///   - creating new FA objects in `deploy_token`
@@ -227,7 +226,7 @@ module omni_bridge::omni_bridge {
                 current_origin_nonce: 0,
                 completed_transfers: table::new<u64, u128>(),
                 native_token_metadata,
-                near_to_aptos_token: table::new<vector<u8>, address>(),
+                near_to_aptos_token: table::new<String, address>(),
                 extend_ref
             }
         );
@@ -372,9 +371,9 @@ module omni_bridge::omni_bridge {
         let encoded = payload.metadata_to_borsh();
         verify_signature(state, encoded, signature_rs, signature_v);
 
-        let token_id_hash = aptos_hash::keccak256(*payload.metadata_token().bytes());
+        let token_id = payload.metadata_token();
         assert!(
-            !state.near_to_aptos_token.contains(token_id_hash),
+            !state.near_to_aptos_token.contains(token_id),
             E_TOKEN_ALREADY_DEPLOYED
         );
 
@@ -384,14 +383,16 @@ module omni_bridge::omni_bridge {
         let metadata =
             bridge_token::create(
                 &resource_signer,
-                token_id_hash,
+                // Use the NEAR token id's UTF-8 bytes directly as the seed.
+                // Same token id → same deterministic FA object address.
+                *token_id.bytes(),
                 payload.metadata_name(),
                 payload.metadata_symbol(),
                 normalized_decimals
             );
 
         let token_addr = metadata.object_address();
-        state.near_to_aptos_token.add(token_id_hash, token_addr);
+        state.near_to_aptos_token.add(token_id, token_addr);
         // No reverse-direction table: bridge-token status is determined by
         // the presence of `BridgeTokenRefs` on the FA object itself (see
         // `bridge_token::is_bridge_token`). One source of truth.
@@ -554,9 +555,8 @@ module omni_bridge::omni_bridge {
     #[view]
     public fun get_token_address(near_token_id: String): Option<address> {
         let state = &BridgeState[bridge_object_address()];
-        let token_id_hash = aptos_hash::keccak256(*near_token_id.bytes());
-        if (state.near_to_aptos_token.contains(token_id_hash)) {
-            option::some(*state.near_to_aptos_token.borrow(token_id_hash))
+        if (state.near_to_aptos_token.contains(near_token_id)) {
+            option::some(*state.near_to_aptos_token.borrow(near_token_id))
         } else {
             option::none()
         }
@@ -611,7 +611,8 @@ module omni_bridge::omni_bridge {
     public fun role_info_name(self: &RoleInfo): String {
         self.name
     }
-    public fun role_info_id(self: &RoleInfo): u8 {
+    public fun
+ role_info_id(self: &RoleInfo): u8 {
         self.id
     }
 
@@ -655,7 +656,9 @@ module omni_bridge::omni_bridge {
 
     /// Add `addr` to `role`. No-op if already present. Caller MUST have
     /// already authorized the change.
-    fun add_role_holder(state: &mut BridgeState, role: u8, addr: address) {
+    fun add_role_holder(
+        state: &mut BridgeState, role: u8, addr: address
+    ) {
         if (!state.roles.contains(role)) {
             state.roles.add(role, vector[addr]);
             return
@@ -668,15 +671,13 @@ module omni_bridge::omni_bridge {
 
     /// Remove `addr` from `role`. No-op if not present. Refuses to remove
     /// the last `Admin` holder to keep the bridge governable.
-    fun remove_role_holder(state: &mut BridgeState, role: u8, addr: address) {
-        if (!state.roles.contains(role)) {
-            return
-        };
+    fun remove_role_holder(
+        state: &mut BridgeState, role: u8, addr: address
+    ) {
+        if (!state.roles.contains(role)) { return };
         let holders = state.roles.borrow_mut(role);
         let (found, idx) = find_address(holders, addr);
-        if (!found) {
-            return
-        };
+        if (!found) { return };
         if (role == ROLE_ADMIN) {
             assert!(holders.length() > 1, E_CANNOT_REMOVE_LAST_ADMIN);
         };
@@ -714,7 +715,10 @@ module omni_bridge::omni_bridge {
         who: &signer,
         err: u64
     ) {
-        assert!(is_role_holder(state, role, who.address_of()), err);
+        assert!(
+            is_role_holder(state, role, who.address_of()),
+            err
+        );
     }
 
     fun verify_signature(
