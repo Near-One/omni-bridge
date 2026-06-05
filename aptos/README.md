@@ -81,11 +81,11 @@ deterministic (`keccak256(near_token_id)` is used as the
 
 ## Chain id
 
-The Aptos chain id is **`12`** in [near/omni-types/src/lib.rs](../near/omni-types/src/lib.rs)
-(`ChainKind::Aptos`, the 13th variant). Pass `u8:12` to `initialize` as
+The Aptos chain id is **`13`** in [near/omni-types/src/lib.rs](../near/omni-types/src/lib.rs)
+(`ChainKind::Aptos`, the 13th variant). Pass `u8:13` to `initialize` as
 `chain_id`. NEAR-side support is already wired:
 
-- `ChainKind::Aptos` — tag 12, after `Abs`
+- `ChainKind::Aptos` — tag 13, after `Abs`
 - `OmniAddress::Aptos(AptosAddress)` — `AptosAddress = H256`, 32-byte
   big-endian encoding (analogous to `OmniAddress::Strk`)
 - `"aptos:0x..."` parses to `OmniAddress::Aptos` in `OmniAddress::FromStr`
