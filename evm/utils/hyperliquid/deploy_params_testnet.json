@@ -9,5 +9,5 @@
   "wei_decimals": 8,
   "max_gas": 50000000000,
   "total_supply": "900000000000000000",
-  "start_px": 2.9
+  "start_px": 0
 }
