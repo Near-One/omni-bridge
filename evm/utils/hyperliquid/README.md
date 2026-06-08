@@ -30,7 +30,20 @@ pip install hyperliquid-python-sdk python-dotenv eth-account requests
 
 > Note: `python-dotenv` and `eth-account` are available on `conda-forge`, but `hyperliquid-python-sdk` is **only** on PyPI. Mixing conda + pip in one env can occasionally break dependency resolution — easier to install all three with pip inside the activated conda env.
 
-### 3. Configure secrets — `.env`
+### 3. Create a fresh agent wallet and approve it on Hyperliquid
+
+We never sign with the token owner's private key directly. Instead, create a brand-new EVM key pair that will act as an **API (agent) wallet** for the owner account, and approve it through the Hyperliquid UI:
+
+1. Generate a fresh EVM key locally (any tool that gives you `(address, private key)` — e.g. `cast wallet new`, MetaMask "Create account", or a one-off Python snippet with `eth_account`).
+2. Open <https://app.hyperliquid.xyz/API> while logged in as the **token owner** (the master account).
+3. Add the fresh address as a new API wallet (give it a name like `deploy-script`).
+4. Confirm the approval transaction from the master account.
+
+The agent wallet does not hold funds — it only signs trading-style actions on behalf of the master. The fresh private key is what you will put into `.env` as `HL_SECRET_KEY` in the next step.
+
+> Note: agents are restricted to trading actions. Admin / deploy actions (`spotDeploy.*`, `finalizeEvmContract`, etc.) must still be signed by the master key directly. For those one-off operations you would temporarily put the master key into `.env`; for everyday operations the agent key is enough and safer.
+
+### 4. Configure secrets — `.env`
 
 Copy the example and fill in your values:
 
@@ -46,7 +59,7 @@ Required:
 
 ⚠️ Never commit `.env`. It's already covered by `.gitignore` patterns for env files in the repo.
 
-### 4. Configure deployment parameters — `deploy_params.json`
+### 5. Configure deployment parameters — `deploy_params.json`
 
 This file is **not secret** and is meant to be committed. Edit it before running:
 
@@ -64,7 +77,7 @@ This file is **not secret** and is meant to be committed. Edit it before running
 | `total_supply` | Genesis supply allocation, as a decimal string in atomic units. We use `2^64 - 1` to set the maximum HyperCore-representable cap (bridged tokens only ever circulate what is actually bridged in). |
 | `start_px` | Reference price for `register_hyperliquidity` (anchor price). With `noHyperliquidity = True` it's recorded but no orders are placed. |
 
-### 5. Configure link parameters — `link_tokens_params.json`
+### 6. Configure link parameters — `link_tokens_params.json`
 
 Separate non-secret config consumed by `links_tokens.py`. Fields:
 
