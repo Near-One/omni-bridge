@@ -41,8 +41,6 @@ We never sign with the token owner's private key directly. Instead, create a bra
 
 The agent wallet does not hold funds — it only signs trading-style actions on behalf of the master. The fresh private key is what you will put into `.env` as `HL_SECRET_KEY` in the next step.
 
-> Note: agents are restricted to trading actions. Admin / deploy actions (`spotDeploy.*`, `finalizeEvmContract`, etc.) must still be signed by the master key directly. For those one-off operations you would temporarily put the master key into `.env`; for everyday operations the agent key is enough and safer.
-
 ### 4. Configure secrets — `.env`
 
 Copy the example and fill in your values:
@@ -54,8 +52,12 @@ $EDITOR .env
 
 Required:
 
-- `HL_SECRET_KEY` — private key of your HyperCore deployer (hex, with or without `0x`).
-- `HL_ACCOUNT_ADDRESS` — leave empty if the secret key is your main account's. Set it only if `HL_SECRET_KEY` is an API/agent wallet and you want to act on behalf of a different main account.
+- `HL_SECRET_KEY` — private key of the **agent** wallet you generated and approved in the previous step (hex, with or without `0x`). Not the owner's key.
+- `HL_ACCOUNT_ADDRESS` — address of the **owner** (master) account that approved the agent, *not* the agent's own address. The script signs with the agent key but acts on behalf of this owner.
+- `EVM_SECRET_KEY` — private key used at the **linking step** (`links_tokens.py`). The corresponding address must:
+  - be already registered on HyperEVM / HyperCore (at least one prior deposit / on-chain activity),
+  - hold some HYPE to pay for gas / fees on HC actions,
+  - match the address stored in the `hyper_core_deployer_slot` (`keccak256("HyperCore deployer")`) of the `HyperliquedBridgeToken` proxy on EVM — that's the address HL checks against during `finalizeEvmContract` in `customStorageSlot` mode.
 
 ⚠️ Never commit `.env`. It's already covered by `.gitignore` patterns for env files in the repo.
 
