@@ -13,7 +13,7 @@ from hyperliquid.utils import constants
 load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
 
 
-DEPLOY_PARAMS_PATH = os.path.join(os.path.dirname(__file__), "deploy_params_testnet.json")
+DEPLOY_PARAMS_PATH = os.path.join(os.path.dirname(__file__), "deploy_params.json")
 
 
 def load_params():
@@ -185,6 +185,14 @@ def confirm(prompt):
     return input(f"\n{prompt} [y/N]: ").strip().lower() == "y"
 
 
+def describe_call(func_name, args):
+    """Print the function call we're about to make, with all arguments."""
+    print(f"\nAbout to call:\n  {func_name}(")
+    for arg in args:
+        print(f"    {arg!r},")
+    print("  )")
+
+
 def show_state(info, address):
     """Print current spotDeployState from HL info endpoint."""
     state = info.post("/info", {"type": "spotDeployState", "user": address})
@@ -206,6 +214,16 @@ def main():
         print(f"\nSkipping step1 — last_step={last_step}, token_id={token}")
     else:
         show_state(info, address)
+        describe_call(
+            "exchange.spot_deploy_register_token",
+            [
+                params["token_name"],
+                params["sz_decimals"],
+                params["wei_decimals"],
+                params["max_gas"],
+                params["token_description"],
+            ],
+        )
         if not confirm("Run step1 (register token — IRREVERSIBLE, costs HYPE)?"):
             return
         token = step1(exchange, params)
@@ -219,6 +237,11 @@ def main():
         print(f"\nSkipping step2 — last_step={last_step}, spot_id={spot}")
     else:
         show_state(info, address)
+        system_address = system_address_for_token(token)
+        describe_call(
+            "exchange.spot_deploy_user_genesis",
+            [token, [(system_address, params["total_supply"])], []],
+        )
         if not confirm("Run step2 (user genesis — can be re-run until step3)?"):
             return
         step2(exchange, token, params)
@@ -230,6 +253,10 @@ def main():
         print(f"\nSkipping step3 — last_step={last_step}, spot_id={spot}")
     else:
         show_state(info, address)
+        describe_call(
+            "exchange.spot_deploy_genesis",
+            [token, params["total_supply"], True],
+        )
         if not confirm("Run step3 (genesis — IRREVERSIBLE, finalizes max_supply)?"):
             return
         step3(exchange, token, params)
@@ -241,6 +268,7 @@ def main():
         print(f"\nSkipping step4 — last_step={last_step}, spot_id={spot}")
     else:
         show_state(info, address)
+        describe_call("exchange.spot_deploy_register_spot", [token, 0])
         if not confirm("Run step4 (register <token>/USDC spot pair — IRREVERSIBLE)?"):
             return
         spot = step4(exchange, token)
@@ -254,6 +282,10 @@ def main():
         print(f"\nSkipping step5 — last_step={last_step}")
     else:
         show_state(info, address)
+        describe_call(
+            "exchange.spot_deploy_register_hyperliquidity",
+            [spot, 2.0, 0, 0, None],
+        )
         if not confirm("Run step5 (register hyperliquidity — formal call, n_orders=0)?"):
             return
         step5(exchange, spot, params)
