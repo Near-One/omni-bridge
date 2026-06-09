@@ -1,4 +1,4 @@
-use btc_types::contract_args::{InitArgs, ProofArgs};
+use btc_types::contract_args::{InitArgs, ProofArgs, ProofArgsV2};
 use btc_types::hash::H256;
 use btc_types::header::{BlockHeader, ExtendedHeader, Header, LightHeader};
 use btc_types::network::Network;
@@ -262,6 +262,11 @@ impl BtcLightClient {
 
     /// Verifies that a transaction is included in a block at a given block height
     ///
+    /// # Deprecated
+    /// Use [`verify_transaction_inclusion_v2`] instead, which includes coinbase merkle proof validation
+    /// to mitigate the 64-byte transaction Merkle proof forgery vulnerability:
+    /// https://www.bitmex.com/blog/64-Byte-Transactions
+    ///
     /// @param `tx_id` transaction identifier
     /// @param `tx_block_blockhash` block hash at which transacton is supposedly included
     /// @param `tx_index` index of transaction in the block's tx merkle tree
@@ -275,6 +280,10 @@ impl BtcLightClient {
     ///
     /// # Panics
     /// Multiple cases
+    #[deprecated(
+        since = "0.5.0",
+        note = "Use `verify_transaction_inclusion_v2` instead."
+    )]
     #[pause]
     pub fn verify_transaction_inclusion(&self, #[serializer(borsh)] args: ProofArgs) -> bool {
         require!(
@@ -311,6 +320,52 @@ impl BtcLightClient {
             usize::try_from(args.tx_index).unwrap(),
             &args.merkle_proof,
         ) == header.block_header.merkle_root
+    }
+
+    /// Verifies that a transaction is included in a block at a given block height,
+    /// with an additional coinbase merkle proof validation.
+    /// This is needed to mitigate the 64-byte transaction Merkle proof forgery vulnerability:
+    /// https://www.bitmex.com/blog/64-Byte-Transactions
+    ///
+    /// @param tx_id transaction identifier
+    /// @param tx_block_blockhash block hash at which transaction is supposedly included
+    /// @param tx_index index of transaction in the block's tx merkle tree
+    /// @param merkle_proof merkle tree path (concatenated LE sha256 hashes) (does not contain initial transaction_hash and merkle_root)
+    /// @param coinbase_tx_id coinbase transaction hash
+    /// @param coinbase_merkle_proof merkle proof for the coinbase transaction (must have the same length as merkle_proof)
+    /// @param confirmations how many confirmed blocks we want to have before the transaction is valid
+    /// @return True if tx_id is at the claimed position in the block at the given blockhash, False otherwise
+    ///
+    /// # Panics
+    /// - If `merkle_proof` and `coinbase_merkle_proof` have different lengths
+    /// - If `tx_block_blockhash` is not found in the headers pool
+    /// - If coinbase merkle proof does not match the block's merkle root
+    /// - If the required number of confirmations exceeds the number of stored blocks
+    /// - If the block does not belong to the current main chain
+    /// - If there are not enough confirmed blocks
+    #[pause]
+    pub fn verify_transaction_inclusion_v2(&self, #[serializer(borsh)] args: ProofArgsV2) -> bool {
+        require!(
+            args.merkle_proof.len() == args.coinbase_merkle_proof.len(),
+            "Coinbase merkle proof and transaction merkle proof should have the same length"
+        );
+
+        let header = self
+            .headers_pool
+            .get(&args.tx_block_blockhash)
+            .unwrap_or_else(|| env::panic_str("cannot find requested transaction block"));
+
+        require!(
+            merkle_tools::compute_root_from_merkle_proof(
+                args.coinbase_tx_id.clone(),
+                0usize,
+                &args.coinbase_merkle_proof,
+            ) == header.block_header.merkle_root,
+            "Incorrect coinbase merkle proof"
+        );
+
+        #[allow(deprecated)]
+        self.verify_transaction_inclusion(args.into())
     }
 
     /// Public call to run GC on a mainchain.

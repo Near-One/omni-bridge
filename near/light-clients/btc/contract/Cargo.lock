@@ -363,7 +363,7 @@ dependencies = [
 
 [[package]]
 name = "btc-light-client-contract"
-version = "0.4.1"
+version = "0.5.0"
 dependencies = [
  "bitcoin",
  "borsh",
@@ -384,7 +384,7 @@ dependencies = [
 
 [[package]]
 name = "btc-types"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "bitcoin",
  "borsh",

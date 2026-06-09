@@ -1,6 +1,6 @@
 #[cfg(feature = "bitcoin")]
 mod test_basics {
-    use btc_types::contract_args::{InitArgs, ProofArgs};
+    use btc_types::contract_args::{InitArgs, ProofArgs, ProofArgsV2};
     use btc_types::hash::H256;
     use btc_types::header::{ExtendedHeader, Header};
     use near_sdk::NearToken;
@@ -633,5 +633,251 @@ mod test_basics {
         });
 
         serde_json::from_value(json_value).expect("value is invalid")
+    }
+
+    /// Helper: creates a custom block with a 2-tx merkle tree and submits it to the contract.
+    /// Returns (block_header, coinbase_hash, tx_hash).
+    ///
+    /// Tree structure:
+    ///   merkle_root = double_sha256(coinbase_hash || tx_hash)
+    ///   coinbase at index 0, tx at index 1
+    async fn submit_two_tx_block(
+        contract: &Contract,
+        user_account: &Account,
+    ) -> Result<(Header, H256, H256), Box<dyn std::error::Error>> {
+        let coinbase_hash: H256 =
+            "4a5e1e4baab89f3a32518a88c31bc87f618f76673e2cc77ab2127b7afdeda33b"
+                .parse()
+                .unwrap();
+        let tx_hash: H256 = "0e3e2357e806b6cdb1f70b54c3a3a17b6714ee1f0e68bebb44a74b1efd512098"
+            .parse()
+            .unwrap();
+
+        let mut concat = Vec::with_capacity(64);
+        concat.extend(coinbase_hash.0);
+        concat.extend(tx_hash.0);
+        let merkle_root: H256 = btc_types::hash::double_sha256(&concat);
+
+        let block = Header {
+            version: 1,
+            prev_block_hash: "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f"
+                .parse()
+                .unwrap(),
+            merkle_root,
+            time: 1_231_006_506,
+            bits: 486_604_799,
+            nonce: 2_083_236_893,
+        };
+
+        let outcome = user_account
+            .call(contract.id(), "submit_blocks")
+            .args_borsh([block.clone()].to_vec())
+            .deposit(STORAGE_DEPOSIT_PER_BLOCK)
+            .transact()
+            .await?;
+        assert!(outcome.is_success());
+
+        Ok((block, coinbase_hash, tx_hash))
+    }
+
+    #[tokio::test]
+    async fn test_verify_transaction_inclusion_v2_valid() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let (contract, user_account) = init_contract().await?;
+        let (block, coinbase_hash, tx_hash) = submit_two_tx_block(&contract, &user_account).await?;
+
+        // Verify tx at index 1; coinbase proof for coinbase at index 0.
+        // Both proofs have depth 1: sibling is the other tx.
+        let result: bool = user_account
+            .view(contract.id(), "verify_transaction_inclusion_v2")
+            .args_borsh(ProofArgsV2 {
+                tx_id: tx_hash.clone(),
+                tx_block_blockhash: block.block_hash(),
+                tx_index: 1,
+                merkle_proof: vec![coinbase_hash.clone()],
+                coinbase_tx_id: coinbase_hash,
+                coinbase_merkle_proof: vec![tx_hash],
+                confirmations: 0,
+            })
+            .await?
+            .json()?;
+
+        assert!(result, "Valid transaction inclusion should return true");
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_verify_transaction_inclusion_v2_invalid_coinbase_proof(
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let (contract, user_account) = init_contract().await?;
+        let (block, _coinbase_hash, tx_hash) =
+            submit_two_tx_block(&contract, &user_account).await?;
+
+        // Wrong coinbase_tx_id -> coinbase proof won't match merkle root
+        let result = user_account
+            .view(contract.id(), "verify_transaction_inclusion_v2")
+            .args_borsh(ProofArgsV2 {
+                tx_id: tx_hash.clone(),
+                tx_block_blockhash: block.block_hash(),
+                tx_index: 1,
+                merkle_proof: vec![H256::default()],
+                coinbase_tx_id: H256::default(),
+                coinbase_merkle_proof: vec![tx_hash],
+                confirmations: 0,
+            })
+            .await;
+
+        assert!(
+            result.is_err(),
+            "Should fail when coinbase merkle proof is incorrect"
+        );
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_verify_transaction_inclusion_v2_mismatched_proof_lengths(
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let (contract, user_account) = init_contract().await?;
+        let (block, coinbase_hash, tx_hash) = submit_two_tx_block(&contract, &user_account).await?;
+
+        // merkle_proof has 1 element, coinbase_merkle_proof has 0 — lengths don't match
+        let result = user_account
+            .view(contract.id(), "verify_transaction_inclusion_v2")
+            .args_borsh(ProofArgsV2 {
+                tx_id: tx_hash,
+                tx_block_blockhash: block.block_hash(),
+                tx_index: 1,
+                merkle_proof: vec![coinbase_hash.clone()],
+                coinbase_tx_id: coinbase_hash,
+                coinbase_merkle_proof: vec![],
+                confirmations: 0,
+            })
+            .await;
+
+        assert!(
+            result.is_err(),
+            "Should fail when merkle proof and coinbase merkle proof have different lengths"
+        );
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_verify_transaction_inclusion_v2_valid_coinbase_invalid_tx_proof(
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let (contract, user_account) = init_contract().await?;
+        let (block, coinbase_hash, tx_hash) = submit_two_tx_block(&contract, &user_account).await?;
+
+        // Coinbase proof is valid, but tx proof uses wrong tx_id -> returns false
+        let result: bool = user_account
+            .view(contract.id(), "verify_transaction_inclusion_v2")
+            .args_borsh(ProofArgsV2 {
+                tx_id: H256::default(),
+                tx_block_blockhash: block.block_hash(),
+                tx_index: 1,
+                merkle_proof: vec![coinbase_hash.clone()],
+                coinbase_tx_id: coinbase_hash,
+                coinbase_merkle_proof: vec![tx_hash],
+                confirmations: 0,
+            })
+            .await?
+            .json()?;
+
+        assert!(
+            !result,
+            "Should return false when coinbase proof is valid but transaction proof is not"
+        );
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_verify_transaction_inclusion_v2_block_not_found(
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let (contract, user_account) = init_contract().await?;
+
+        let result = user_account
+            .view(contract.id(), "verify_transaction_inclusion_v2")
+            .args_borsh(ProofArgsV2 {
+                tx_id: H256::default(),
+                tx_block_blockhash: H256::default(),
+                tx_index: 0,
+                merkle_proof: vec![H256::default()],
+                coinbase_tx_id: H256::default(),
+                coinbase_merkle_proof: vec![H256::default()],
+                confirmations: 0,
+            })
+            .await;
+
+        assert!(
+            result.is_err(),
+            "Should fail when block is not found in headers pool"
+        );
+
+        Ok(())
+    }
+
+    /// Verifying the coinbase as if it were the target tx itself: `tx_id == coinbase_tx_id`,
+    /// `tx_index == 0`, and both merkle proofs identical. This is a degenerate-but-valid
+    /// case — v2 must still accept it.
+    #[tokio::test]
+    async fn test_verify_transaction_inclusion_v2_coinbase_self(
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let (contract, user_account) = init_contract().await?;
+        let (block, coinbase_hash, tx_hash) = submit_two_tx_block(&contract, &user_account).await?;
+
+        let result: bool = user_account
+            .view(contract.id(), "verify_transaction_inclusion_v2")
+            .args_borsh(ProofArgsV2 {
+                tx_id: coinbase_hash.clone(),
+                tx_block_blockhash: block.block_hash(),
+                tx_index: 0,
+                merkle_proof: vec![tx_hash.clone()],
+                coinbase_tx_id: coinbase_hash,
+                coinbase_merkle_proof: vec![tx_hash],
+                confirmations: 0,
+            })
+            .await?
+            .json()?;
+
+        assert!(
+            result,
+            "Verifying the coinbase itself (tx_id == coinbase_tx_id, both proofs equal) \
+             should return true"
+        );
+
+        Ok(())
+    }
+
+    /// The test block is at the chain tip after `submit_two_tx_block`, so only 1
+    /// confirmation is available. Asking for 2 must trigger the
+    /// "Not enough blocks confirmed" require in `verify_transaction_inclusion`.
+    #[tokio::test]
+    async fn test_verify_transaction_inclusion_v2_insufficient_confirmations(
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let (contract, user_account) = init_contract().await?;
+        let (block, coinbase_hash, tx_hash) = submit_two_tx_block(&contract, &user_account).await?;
+
+        let result = user_account
+            .view(contract.id(), "verify_transaction_inclusion_v2")
+            .args_borsh(ProofArgsV2 {
+                tx_id: tx_hash.clone(),
+                tx_block_blockhash: block.block_hash(),
+                tx_index: 1,
+                merkle_proof: vec![coinbase_hash.clone()],
+                coinbase_tx_id: coinbase_hash,
+                coinbase_merkle_proof: vec![tx_hash],
+                confirmations: 2,
+            })
+            .await;
+
+        assert!(
+            result.is_err(),
+            "Should fail when fewer confirmations are available than requested"
+        );
+
+        Ok(())
     }
 }
