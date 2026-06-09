@@ -82,20 +82,6 @@ contract HyperliquedBridgeToken is BridgeToken, ICoreReceiveWithData {
         _update(account, _systemAddress, value);
     }
 
-    /// @notice Sets the HyperCore deployer address stored at slot keccak256("HyperCore deployer").
-    /// Used by Hyperliquid's `finalizeEvmContract` action to authorize the linking of this
-    /// EVM contract to the HC token — HL reads this slot and the signer of `finalizeEvmContract`
-    /// must match its value.
-    function setHyperCoreDeployer(
-        address hyperCoreDeployer_
-    ) external onlyOwner {
-        bytes32 slot = HYPER_CORE_DEPLOYER_SLOT;
-        assembly {
-            sstore(slot, hyperCoreDeployer_)
-        }
-        emit HyperCoreDeployerSet(hyperCoreDeployer_);
-    }
-
     /// @notice HyperCore -> HyperEVM callback invoked by the system address when a
     /// HyperCore user triggers `sendToEvmWithData` targeting this token.
     /// `destinationRecipient`, `destinationChainId`, and `coreNonce` are CCTP-shaped
