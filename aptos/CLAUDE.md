@@ -34,9 +34,13 @@ and [evm/src/omni-bridge/contracts/OmniBridge.sol](../evm/src/omni-bridge/contra
   (`bytes[i]`), `for (i in 0..n)` range loops, `package fun` for
   cross-module-restricted entry points, and resource-index expressions
   (`&BridgeState[addr]`).
-- **Optional Wormhole publish**: `Admin` may call `enable_wormhole` once
-  to register the bridge as a Wormhole emitter (at the deployed Wormhole
-  core at `@wormhole = 0x5bc1…`). When enabled, every `init_transfer`,
+- **Optional Wormhole publish**: the bridge registers as a Wormhole
+  emitter inside `initialize` (`wormhole::register_emitter` against the
+  deployed Wormhole core at `@wormhole = 0x5bc1…`) and stores the
+  resulting `EmitterCapability` in `BridgeState`. `Admin` then flips
+  publishing on/off via `set_wormhole_enabled(enable: bool)` — a pure
+  flag flip, the same emitter id is reused across cycles so off-chain
+  consumers see a stable identity. When enabled, every `init_transfer`,
   `fin_transfer`, `deploy_token`, and `log_metadata` also publishes a
   Wormhole VAA whose payload mirrors the EVM `OmniBridgeWormhole.sol`
   byte layout. The caller of each entry pays the Wormhole `message_fee`
@@ -69,7 +73,7 @@ and [evm/src/omni-bridge/contracts/OmniBridge.sol](../evm/src/omni-bridge/contra
 | `set_near_bridge_derived_address` | Rotate the NEAR MPC signer address | `Admin` |
 | `grant_role` | Add an address to a role | `Admin` |
 | `revoke_role` | Remove an address from a role (refuses last Admin) | `Admin` |
-| `enable_wormhole` | Register as Wormhole emitter (one-shot) | `Admin` |
+| `set_wormhole_enabled` | Turn Wormhole publishing on/off (pure flag flip; emitter registered at `initialize`) | `Admin` |
 | `bridge_object_address` | Deterministic address of `BridgeState` / locked-token custody | View |
 | `get_token_address` | NEAR token id → deployed FA metadata object address | View |
 | `role_holders` | All addresses currently holding a role | View |
@@ -127,22 +131,30 @@ side. In particular:
    `(name, id)` registry for off-chain discovery.
 7. **Last-admin guard**: `revoke_role(Admin, last_admin)` aborts with
    `E_CANNOT_REMOVE_LAST_ADMIN`. Prevents bricking via accidental rotation.
-8. **Wormhole opt-in + stub package**: `enable_wormhole` is a one-shot
-   `Admin` switch. Once flipped, the bridge stores an `EmitterCapability`
-   from `wormhole::wormhole::register_emitter()` in `BridgeState`, and
-   every public bridge action also calls `publish_message` with a payload
-   that mirrors the corresponding `OmniBridgeWormhole.sol` extension byte
-   layout (`init_transfer_wormhole_payload`, `fin_transfer_wormhole_payload`,
-   `deploy_token_wormhole_payload`, `log_metadata_wormhole_payload` in
-   `bridge_types`). The Wormhole nonce is always `0` — the bridge's own
-   `origin_nonce` is the replay-prevention identifier and is carried in
-   the payload. The Wormhole Move package is vendored as a compile-time
-   **stub** at `vendor/wormhole/` (modules `wormhole::wormhole`,
-   `wormhole::emitter`, `wormhole::state`). The stub mirrors the deployed
-   Wormhole's public ABI so the bridge can compile against the modern
-   Aptos framework; the stub modules are NOT republished by
-   `aptos move publish` (only `aptos/sources/` modules go on chain), and
-   at runtime calls dispatch by `(address, name)` to the real Wormhole at
+8. **Wormhole emitter + stub package**: `initialize` calls
+   `wormhole::wormhole::register_emitter()` unconditionally and stores
+   the resulting `EmitterCapability` in `BridgeState`. There's only ever
+   one bridge instance, the cap has no `drop` ability (matching the
+   deployed Wormhole's ABI), and registration is cheap — so we pay the
+   one-time cost up front instead of conditionally on first enable. As a
+   consequence, `initialize` has a hard dependency on Wormhole being
+   deployed at `@wormhole`; on chains without a Wormhole deployment the
+   bridge cannot be initialized. `set_wormhole_enabled(admin, bool)`
+   then toggles publishing on/off as a pure flag flip. When enabled,
+   every public bridge action also calls `publish_message` with a
+   payload that mirrors the corresponding `OmniBridgeWormhole.sol`
+   extension byte layout (`init_transfer_wormhole_payload`,
+   `fin_transfer_wormhole_payload`, `deploy_token_wormhole_payload`,
+   `log_metadata_wormhole_payload` in `bridge_types`). The Wormhole
+   nonce is always `0` — the bridge's own `origin_nonce` is the
+   replay-prevention identifier and is carried in the payload. The
+   Wormhole Move package is vendored as a compile-time **stub** at
+   `vendor/wormhole/` (modules `wormhole::wormhole`, `wormhole::emitter`,
+   `wormhole::state`). The stub mirrors the deployed Wormhole's public
+   ABI so the bridge can compile against the modern Aptos framework; the
+   stub modules are NOT republished by `aptos move publish` (only
+   `aptos/sources/` modules go on chain), and at runtime calls dispatch
+   by `(address, name)` to the real Wormhole at
    `@wormhole = 0x5bc11445584a763c1fa7ed39081f1b920954da14e04b32440cba863d03e19625`.
    Never change struct field layouts or function signatures in the stub
    without confirming the deployed Wormhole's ABI hasn't drifted.
@@ -206,8 +218,9 @@ Coverage:
 - **Wormhole payload layouts** (5 tests): tag byte, chain-id offsets, and
   total length for each of `init_transfer`, `fin_transfer` (with and
   without fee_recipient), `deploy_token`, `log_metadata`
-- **`enable_wormhole` gating** (3 tests): admin can enable; second enable
-  aborts; non-admin rejected
+- **`set_wormhole_enabled` gating** (3 tests): admin can round-trip
+  off/on/off/on; setting the flag to its current value is a no-op;
+  non-admin rejected
 
 ## File References
 - Main contract: [sources/omni_bridge.move](sources/omni_bridge.move)

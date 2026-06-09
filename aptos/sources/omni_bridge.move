@@ -60,11 +60,6 @@ module omni_bridge::omni_bridge {
     /// brick the bridge (no one could grant/revoke roles again).
     const E_CANNOT_REMOVE_LAST_ADMIN: u64 = 12;
 
-    // Wormhole
-    /// `enable_wormhole` was called when the bridge already holds an
-    /// `EmitterCapability`. Re-registering would leak the prior cap.
-    const E_WORMHOLE_ALREADY_ENABLED: u64 = 13;
-
     /// Largest amount that fits in `u64`, used to bound `u128` payload
     /// amounts before they're handed to the Aptos Fungible Asset APIs.
     const MAX_U64_AS_U128: u128 = 0xFFFFFFFFFFFFFFFF;
@@ -126,14 +121,16 @@ module omni_bridge::omni_bridge {
         ///   - creating new FA objects in `deploy_token`
         ///   - moving locked tokens out in `fin_transfer` (non-bridge tokens)
         extend_ref: ExtendRef,
-        /// Wormhole emitter capability. `None` until `ROLE_ADMIN` calls
-        /// `enable_wormhole`. When `Some`, every public bridge action
-        /// (`init_transfer`, `fin_transfer`, `deploy_token`, `log_metadata`)
-        /// also publishes a Wormhole VAA whose payload mirrors the EVM
-        /// `OmniBridgeWormhole.sol` byte layout. The caller of each entry
-        /// pays the Wormhole message fee in `Coin<AptosCoin>` from their
-        /// own balance.
-        wormhole_emitter: Option<EmitterCapability>
+        /// Wormhole emitter capability. Registered in `initialize` by
+        /// calling `wormhole::register_emitter()` and held for the
+        /// lifetime of the bridge. `EmitterCapability` has no `drop`
+        /// ability (matching the deployed Wormhole's ABI), and there's
+        /// only ever one bridge instance — so a single up-front
+        /// registration gives off-chain consumers a stable emitter id
+        /// across enable/disable cycles.
+        wormhole_emitter: EmitterCapability,
+        /// Master switch for Wormhole publishing.
+        wormhole_enabled: bool
     }
 
     // -------- Events --------
@@ -246,7 +243,8 @@ module omni_bridge::omni_bridge {
                 native_token_metadata,
                 near_to_aptos_token: table::new<String, address>(),
                 extend_ref,
-                wormhole_emitter: option::none()
+                wormhole_emitter: wormhole::register_emitter(),
+                wormhole_enabled: false
             }
         );
     }
@@ -319,18 +317,17 @@ module omni_bridge::omni_bridge {
         );
     }
 
-    /// Register the bridge as a Wormhole emitter. Once enabled, every
-    /// successful `init_transfer`, `fin_transfer`, `deploy_token`, and
-    /// `log_metadata` also publishes a Wormhole VAA whose payload mirrors
-    /// the corresponding `OmniBridgeWormhole.sol` extension. Callable once;
-    /// re-enabling aborts to avoid leaking the prior emitter cap. The
-    /// caller of each subsequent bridge action pays the Wormhole message
-    /// fee in `Coin<AptosCoin>` from their own balance.
-    public entry fun enable_wormhole(admin: &signer) {
+    /// Turn Wormhole publishing on or off. When on, every successful
+    /// `init_transfer`, `fin_transfer`, `deploy_token`, and `log_metadata`
+    /// also publishes a Wormhole VAA whose payload mirrors the
+    /// `OmniBridgeWormhole.sol` extension. When off, the bridge runs as
+    /// if Wormhole had never been wired up. The caller of each bridge
+    /// action pays the Wormhole message fee in `Coin<AptosCoin>` from
+    /// their own balance.
+    public entry fun set_wormhole_enabled(admin: &signer, enable: bool) {
         let state = &mut BridgeState[bridge_object_address()];
         assert_role(state, ROLE_ADMIN, admin, E_UNAUTHORIZED);
-        assert!(state.wormhole_emitter.is_none(), E_WORMHOLE_ALREADY_ENABLED);
-        state.wormhole_emitter.fill(wormhole::register_emitter());
+        state.wormhole_enabled = enable;
     }
 
     /// Update mutable metadata (`icon_uri`, `project_uri`) on a
@@ -832,30 +829,28 @@ module omni_bridge::omni_bridge {
         );
     }
 
-    /// True iff `enable_wormhole` has been called. Each entry point uses
-    /// this to short-circuit Wormhole payload construction when the
-    /// integration is off, avoiding a several-hundred-byte allocation
-    /// + memcopy per transfer in the common (Wormhole-disabled) case.
+    /// True iff `set_wormhole_enabled(true)` is the most recent toggle.
     inline fun is_wormhole_enabled(state: &BridgeState): bool {
-        state.wormhole_emitter.is_some()
+        state.wormhole_enabled
     }
 
     /// Publish `payload` as a Wormhole VAA. Caller must have already
-    /// confirmed `is_wormhole_enabled(state)` — borrowing the emitter
-    /// here when it's `None` would abort. The Wormhole nonce is `0` for
-    /// every message; the bridge's own `current_origin_nonce` (carried
-    /// inside the payload) is the replay-prevention identifier. `payer`
-    /// funds the Wormhole message fee from `Coin<AptosCoin>`. With the
-    /// current Wormhole `message_fee` at 0 the withdrawal is a no-op,
-    /// but we still wire the path through so a future fee increase
-    /// doesn't require a contract upgrade.
+    /// confirmed `is_wormhole_enabled(state)` — this helper itself does
+    /// no flag check, so calling it when disabled would still emit a
+    /// VAA. The Wormhole nonce is `0` for every message; the bridge's
+    /// own `current_origin_nonce` (carried inside the payload) is the
+    /// replay-prevention identifier. `payer` funds the Wormhole message
+    /// fee from `Coin<AptosCoin>`. With the current Wormhole
+    /// `message_fee` at 0 the withdrawal is a no-op, but we still wire
+    /// the path through so a future fee increase doesn't require a
+    /// contract upgrade.
     fun publish_wormhole(
         state: &mut BridgeState, payer: &signer, payload: vector<u8>
     ) {
         let fee = wormhole_state::get_message_fee();
         let fee_coin = coin::withdraw<AptosCoin>(payer, fee);
         wormhole::publish_message(
-            state.wormhole_emitter.borrow_mut(),
+            &mut state.wormhole_emitter,
             0u64,
             payload,
             fee_coin

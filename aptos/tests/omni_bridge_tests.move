@@ -937,30 +937,36 @@ module omni_bridge::omni_bridge_tests {
         assert!(bytes[len - 1] == 6u8, 543);
     }
 
-    // -------- enable_wormhole gating --------
+    // -------- set_wormhole_enabled gating --------
 
     #[test(deployer = @omni_bridge)]
-    fun admin_can_enable_wormhole(deployer: signer) {
+    fun admin_can_toggle_wormhole(deployer: signer) {
+        // Round-trip: off → on → off → on. Confirms the bool flips
+        // cleanly. The emitter cap is registered once in `initialize` and
+        // never re-registered, so all four calls are pure flag flips.
         let _ = setup(&deployer);
-        omni_bridge::enable_wormhole(&deployer);
+        omni_bridge::set_wormhole_enabled(&deployer, true);
+        omni_bridge::set_wormhole_enabled(&deployer, false);
+        omni_bridge::set_wormhole_enabled(&deployer, true);
     }
 
-    // Re-enabling aborts with E_WORMHOLE_ALREADY_ENABLED = 13.
     #[test(deployer = @omni_bridge)]
-    #[expected_failure(abort_code = 13, location = omni_bridge::omni_bridge)]
-    fun cannot_enable_wormhole_twice(deployer: signer) {
+    fun toggling_wormhole_is_idempotent(deployer: signer) {
+        // Setting the flag to its current value is a no-op — no abort.
         let _ = setup(&deployer);
-        omni_bridge::enable_wormhole(&deployer);
-        omni_bridge::enable_wormhole(&deployer);
+        omni_bridge::set_wormhole_enabled(&deployer, false);
+        omni_bridge::set_wormhole_enabled(&deployer, false);
+        omni_bridge::set_wormhole_enabled(&deployer, true);
+        omni_bridge::set_wormhole_enabled(&deployer, true);
     }
 
-    // Non-admin cannot enable wormhole. E_UNAUTHORIZED = 2.
+    // Non-admin cannot toggle wormhole. E_UNAUTHORIZED = 2.
     #[test(deployer = @omni_bridge, intruder = @0xBADBAD)]
     #[expected_failure(abort_code = 2, location = omni_bridge::omni_bridge)]
-    fun non_admin_cannot_enable_wormhole(deployer: signer, intruder: signer) {
+    fun non_admin_cannot_toggle_wormhole(deployer: signer, intruder: signer) {
         let _ = setup(&deployer);
         account::create_account_for_test(intruder.address_of());
-        omni_bridge::enable_wormhole(&intruder);
+        omni_bridge::set_wormhole_enabled(&intruder, true);
     }
 }
 
