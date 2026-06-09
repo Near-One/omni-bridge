@@ -12,7 +12,9 @@ module omni_bridge::utils {
     /// Recovered Ethereum address does not match the expected signer.
     const E_INVALID_SIGNATURE: u64 = 3;
 
-    const MAX_ALLOWED_DECIMALS: u8 = 18;
+    /// Decimals are clamped to 8 because Aptos FA amounts are `u64`
+    /// (max ~1.84e19).
+    const MAX_ALLOWED_DECIMALS: u8 = 8;
 
     /// Cap decimals at the protocol-wide maximum.
     public fun normalize_decimals(decimals: u8): u8 {
@@ -88,3 +90,4 @@ module omni_bridge::utils {
         );
     }
 }
+

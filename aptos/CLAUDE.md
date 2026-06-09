@@ -97,8 +97,13 @@ side. In particular:
 2. **Permissionless `deploy_token` / `log_metadata`**: the MPC signature is
    the authorization for deploys, and `log_metadata` is just an event
    emission anyone can trigger.
-3. **Decimals normalization**: capped at 18 (silently clamped). Matches
-   Starknet/EVM.
+3. **Decimals normalization**: capped at **8** (silently clamped) — not
+   18 like Starknet/EVM. Aptos FA amounts are `u64`; at 18 decimals one
+   token already consumes 1e18 base units, leaving only ~18 tokens of
+   headroom in `u64::MAX`. 8 decimals matches APT's native precision and
+   gives ~1.84e11 tokens of room. The NEAR side already scales between
+   source-chain and target-chain decimals, so a tighter cap on this side
+   only reduces precision, not value.
 4. **u128 → u64 amount**: Aptos FA amounts are `u64`; the bridge payload
    uses `u128` for cross-chain compatibility. Amounts are explicitly
    bounded by `MAX_U64_AS_U128` before the FA call.

@@ -190,10 +190,11 @@ module omni_bridge::omni_bridge_tests {
     }
 
     #[test]
-    fun normalize_decimals_caps_at_18() {
+    fun normalize_decimals_caps_at_8() {
         assert!(utils::test_normalize_decimals(6) == 6, 250);
-        assert!(utils::test_normalize_decimals(18) == 18, 251);
-        assert!(utils::test_normalize_decimals(24) == 18, 252);
+        assert!(utils::test_normalize_decimals(8) == 8, 251);
+        assert!(utils::test_normalize_decimals(18) == 8, 252);
+        assert!(utils::test_normalize_decimals(24) == 8, 253);
     }
 
     // Recovering a public key from a non-signature byte blob will yield
