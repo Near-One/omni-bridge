@@ -34,14 +34,23 @@ and [evm/src/omni-bridge/contracts/OmniBridge.sol](../evm/src/omni-bridge/contra
   (`bytes[i]`), `for (i in 0..n)` range loops, `package fun` for
   cross-module-restricted entry points, and resource-index expressions
   (`&BridgeState[addr]`).
+- **Optional Wormhole publish**: `Admin` may call `enable_wormhole` once
+  to register the bridge as a Wormhole emitter (at the deployed Wormhole
+  core at `@wormhole = 0x5bc1…`). When enabled, every `init_transfer`,
+  `fin_transfer`, `deploy_token`, and `log_metadata` also publishes a
+  Wormhole VAA whose payload mirrors the EVM `OmniBridgeWormhole.sol`
+  byte layout. The caller of each entry pays the Wormhole `message_fee`
+  in `Coin<AptosCoin>` from their own balance. The Wormhole modules are
+  vendored as a compile-time stub at `vendor/wormhole/` — see that
+  package's `Move.toml` for the rationale.
 
 ## Module Layout
 
 | Module | Purpose |
 |--------|---------|
-| `omni_bridge::omni_bridge` | Main contract: init, deploy_token, init_transfer, fin_transfer, log_metadata, role management, pause, metadata mutation, events, views |
+| `omni_bridge::omni_bridge` | Main contract: init, deploy_token, init_transfer, fin_transfer, log_metadata, role management, pause, metadata mutation, optional Wormhole publish, events, views |
 | `omni_bridge::bridge_token` | Fungible Asset wrapper exposing `create`/`mint`/`burn`/`mutate_metadata` as `package fun` (package-internal only). Holds the per-token capability bundle on the FA object's address |
-| `omni_bridge::bridge_types` | Payload structs (`MetadataPayload`, `TransferMessagePayload`) and their Borsh encoders. Events live in `omni_bridge` because Aptos requires `#[event]` and emit-site in the same module |
+| `omni_bridge::bridge_types` | Payload structs (`MetadataPayload`, `TransferMessagePayload`) and their Borsh encoders, plus the four Wormhole `*_wormhole_payload` encoders mirroring `OmniBridgeWormhole.sol`. Events live in `omni_bridge` because Aptos requires `#[event]` and emit-site in the same module |
 | `omni_bridge::borsh` | Borsh sequence encoders (`encode_string`, `encode_byte_vec`). Fixed-width integers and addresses delegate to `std::bcs::to_bytes` directly at call sites (BCS == Borsh for those types) |
 | `omni_bridge::utils` | `verify_eth_signature` (secp256k1 + keccak256), `normalize_decimals` |
 
@@ -60,6 +69,7 @@ and [evm/src/omni-bridge/contracts/OmniBridge.sol](../evm/src/omni-bridge/contra
 | `set_near_bridge_derived_address` | Rotate the NEAR MPC signer address | `Admin` |
 | `grant_role` | Add an address to a role | `Admin` |
 | `revoke_role` | Remove an address from a role (refuses last Admin) | `Admin` |
+| `enable_wormhole` | Register as Wormhole emitter (one-shot) | `Admin` |
 | `bridge_object_address` | Deterministic address of `BridgeState` / locked-token custody | View |
 | `get_token_address` | NEAR token id → deployed FA metadata object address | View |
 | `role_holders` | All addresses currently holding a role | View |
@@ -117,6 +127,25 @@ side. In particular:
    `(name, id)` registry for off-chain discovery.
 7. **Last-admin guard**: `revoke_role(Admin, last_admin)` aborts with
    `E_CANNOT_REMOVE_LAST_ADMIN`. Prevents bricking via accidental rotation.
+8. **Wormhole opt-in + stub package**: `enable_wormhole` is a one-shot
+   `Admin` switch. Once flipped, the bridge stores an `EmitterCapability`
+   from `wormhole::wormhole::register_emitter()` in `BridgeState`, and
+   every public bridge action also calls `publish_message` with a payload
+   that mirrors the corresponding `OmniBridgeWormhole.sol` extension byte
+   layout (`init_transfer_wormhole_payload`, `fin_transfer_wormhole_payload`,
+   `deploy_token_wormhole_payload`, `log_metadata_wormhole_payload` in
+   `bridge_types`). The Wormhole nonce is always `0` — the bridge's own
+   `origin_nonce` is the replay-prevention identifier and is carried in
+   the payload. The Wormhole Move package is vendored as a compile-time
+   **stub** at `vendor/wormhole/` (modules `wormhole::wormhole`,
+   `wormhole::emitter`, `wormhole::state`). The stub mirrors the deployed
+   Wormhole's public ABI so the bridge can compile against the modern
+   Aptos framework; the stub modules are NOT republished by
+   `aptos move publish` (only `aptos/sources/` modules go on chain), and
+   at runtime calls dispatch by `(address, name)` to the real Wormhole at
+   `@wormhole = 0x5bc11445584a763c1fa7ed39081f1b920954da14e04b32440cba863d03e19625`.
+   Never change struct field layouts or function signatures in the stub
+   without confirming the deployed Wormhole's ABI hasn't drifted.
 
 ### Security Invariants
 - **No replay**: `destination_nonce` is checked against `completed_transfers`
@@ -174,6 +203,11 @@ Coverage:
 - **`init_transfer`** (7 tests): bridged-token burn, non-bridge-token lock,
   origin nonce increment, paused, zero amount, fee≥amount, amount>u64::MAX
 - Decimal normalization cap
+- **Wormhole payload layouts** (5 tests): tag byte, chain-id offsets, and
+  total length for each of `init_transfer`, `fin_transfer` (with and
+  without fee_recipient), `deploy_token`, `log_metadata`
+- **`enable_wormhole` gating** (3 tests): admin can enable; second enable
+  aborts; non-admin rejected
 
 ## File References
 - Main contract: [sources/omni_bridge.move](sources/omni_bridge.move)
