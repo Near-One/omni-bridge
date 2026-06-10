@@ -33,6 +33,8 @@ contract HyperliquedBridgeToken is BridgeToken, ICoreReceiveWithData {
     using SafeCast for uint256;
 
     address internal _systemAddress;
+    bytes32 constant HYPER_CORE_DEPLOYER_SLOT = keccak256("HyperCore deployer");
+    event HyperCoreDeployerSet(address indexed deployer);
 
     uint8 public constant ACTION_TRANSFER = 0;
     uint8 public constant ACTION_INIT_TRANSFER = 1;
@@ -52,7 +54,8 @@ contract HyperliquedBridgeToken is BridgeToken, ICoreReceiveWithData {
         string memory name_,
         string memory symbol_,
         uint8 decimals_,
-        address systemAddress_
+        address systemAddress_,
+        address hyperCoreDeployer_
     ) external initializer {
         __ERC20_init(name_, symbol_);
         __UUPSUpgradeable_init();
@@ -62,6 +65,12 @@ contract HyperliquedBridgeToken is BridgeToken, ICoreReceiveWithData {
         _symbol = symbol_;
         _decimals = decimals_;
         _systemAddress = systemAddress_;
+
+        bytes32 hyperCoreDeployerSlot = HYPER_CORE_DEPLOYER_SLOT;
+        assembly {
+            sstore(hyperCoreDeployerSlot, hyperCoreDeployer_)
+        }
+        emit HyperCoreDeployerSet(hyperCoreDeployer_);
     }
 
     function mint(
