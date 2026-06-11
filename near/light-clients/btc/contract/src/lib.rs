@@ -684,12 +684,14 @@ impl BlocksGetter for BtcLightClient {
 
 mod migrate {
     use crate::{
-        borsh, env, near, BorshDeserialize, BorshSerialize, BtcLightClient, BtcLightClientExt,
+        borsh, env, log, near, BorshDeserialize, BorshSerialize, BtcLightClient, BtcLightClientExt,
         ExtendedHeader, LookupMap, Network, PanicOnDefault, H256,
     };
 
+    /// State layout used between #101 and #116, which contained the
+    /// `used_aux_parent_blocks` field in all chain builds.
     #[derive(BorshDeserialize, BorshSerialize, PanicOnDefault)]
-    pub struct BtcLightClientV1 {
+    pub struct BtcLightClientV2 {
         mainchain_height_to_header: LookupMap<u64, H256>,
         mainchain_header_to_height: LookupMap<H256, u64>,
         mainchain_tip_blockhash: H256,
@@ -697,38 +699,54 @@ mod migrate {
         headers_pool: LookupMap<H256, ExtendedHeader>,
         skip_pow_verification: bool,
         gc_threshold: u64,
+        used_aux_parent_blocks: near_sdk::collections::LookupSet<H256>,
+        network: Network,
     }
 
     #[near]
     impl BtcLightClient {
-        /// Migrates the contract state from `BtcLightClientV1` to the current `BtcLightClient` version.
+        /// Migrates the contract state to the current `BtcLightClient` version.
         ///
-        /// This function reads the old contract state and constructs the new contract instance
-        /// with updated fields.
+        /// The stored state variant is detected automatically. Borsh requires the
+        /// whole buffer to be consumed, so exactly one of the layouts can parse:
+        /// * current layout: returned unchanged (re-running `migrate` is a no-op)
+        /// * `BtcLightClientV2` (#101..#116): drops `used_aux_parent_blocks`;
+        ///   `network` is carried over from the old state
         ///
-        /// # Arguments
-        /// * `network` - The network identifier (e.g., Mainnet, Testnet) to use in the new state.
-        ///
-        /// # Returns
-        /// A new `BtcLightClient` instance containing the migrated state.
+        /// Note: any entries stored under the dropped `LookupSet` prefix are left
+        /// orphaned in storage. They are only present on Dogecoin deployments;
+        /// other chains never wrote to the set.
         ///
         /// # Panics
-        /// This function will panic if:
-        /// - Reading the old state from storage (`env::state_read()`) fails, i.e., if no previous state is found or if deserialization fails.
+        /// This function will panic if no state is found in storage, or it
+        /// matches none of the known layouts.
         #[private]
         #[init(ignore_state)]
-        pub fn migrate(network: Network) -> Self {
-            let old_state: BtcLightClientV1 = env::state_read().expect("failed");
-            Self {
-                mainchain_height_to_header: old_state.mainchain_height_to_header,
-                mainchain_header_to_height: old_state.mainchain_header_to_height,
-                mainchain_tip_blockhash: old_state.mainchain_tip_blockhash,
-                mainchain_initial_blockhash: old_state.mainchain_initial_blockhash,
-                headers_pool: old_state.headers_pool,
-                skip_pow_verification: old_state.skip_pow_verification,
-                gc_threshold: old_state.gc_threshold,
-                network,
+        #[must_use]
+        pub fn migrate() -> Self {
+            let raw_state = env::storage_read(b"STATE")
+                .unwrap_or_else(|| env::panic_str("contract state not found"));
+
+            if let Ok(state) = <Self as BorshDeserialize>::try_from_slice(&raw_state) {
+                log!("state is already in the current layout");
+                return state;
             }
+
+            if let Ok(old_state) = BtcLightClientV2::try_from_slice(&raw_state) {
+                log!("migrating state from the V2 layout");
+                return Self {
+                    mainchain_height_to_header: old_state.mainchain_height_to_header,
+                    mainchain_header_to_height: old_state.mainchain_header_to_height,
+                    mainchain_tip_blockhash: old_state.mainchain_tip_blockhash,
+                    mainchain_initial_blockhash: old_state.mainchain_initial_blockhash,
+                    headers_pool: old_state.headers_pool,
+                    skip_pow_verification: old_state.skip_pow_verification,
+                    gc_threshold: old_state.gc_threshold,
+                    network: old_state.network,
+                };
+            }
+
+            env::panic_str("contract state matches no known layout")
         }
     }
 }

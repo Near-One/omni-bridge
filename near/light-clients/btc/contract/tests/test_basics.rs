@@ -146,6 +146,109 @@ mod test_basics {
         result
     }
 
+    /// Fetches the wasm currently deployed on a mainnet account via plain RPC.
+    /// (`near_workspaces::mainnet()` is not used because its client fails to
+    /// parse responses from current mainnet nodes.)
+    async fn fetch_mainnet_wasm(account_id: &str) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
+        use base64::Engine;
+
+        let response: serde_json::Value = reqwest::Client::new()
+            .post("https://rpc.mainnet.near.org")
+            .json(&json!({
+                "jsonrpc": "2.0",
+                "id": "dontcare",
+                "method": "query",
+                "params": {
+                    "request_type": "view_code",
+                    "finality": "final",
+                    "account_id": account_id,
+                },
+            }))
+            .send()
+            .await?
+            .json()
+            .await?;
+
+        let code_base64 = response["result"]["code_base64"]
+            .as_str()
+            .unwrap_or_else(|| panic!("no code_base64 in response: {response}"));
+        Ok(base64::engine::general_purpose::STANDARD.decode(code_base64)?)
+    }
+
+    /// Initializes a sandbox contract from the wasm currently deployed on
+    /// mainnet (`btc-client.bridge.near`, which is already on the current state
+    /// layout), upgrades it to the locally built wasm and verifies that
+    /// `migrate` detects the up-to-date layout and keeps the state intact.
+    #[tokio::test]
+    async fn test_migration_from_mainnet_wasm() -> Result<(), Box<dyn std::error::Error>> {
+        let sandbox = near_workspaces::sandbox().await?;
+        let old_wasm = fetch_mainnet_wasm("btc-client.bridge.near").await?;
+
+        let contract = sandbox.dev_deploy(&old_wasm).await?;
+
+        let submit_blocks = make_init_submit_blocks();
+        let args = InitArgs {
+            genesis_block_hash: submit_blocks[0].block_hash(),
+            genesis_block_height: 0,
+            skip_pow_verification: true,
+            gc_threshold: 20,
+            network: btc_types::network::Network::Mainnet,
+            submit_blocks,
+        };
+        let outcome = contract
+            .call("init")
+            .args_json(json!({ "args": serde_json::to_value(args).unwrap() }))
+            .transact()
+            .await?;
+        assert!(outcome.is_success(), "{:?}", outcome.failures());
+
+        let header_before_upgrade = contract
+            .view("get_last_block_header")
+            .args_json(json!({}))
+            .await?
+            .json::<ExtendedHeader>()?;
+
+        // Upgrade to the current wasm and migrate. The mainnet contract was
+        // already migrated to the current layout, so this exercises the
+        // "state is already in the current layout" no-op path.
+        let new_wasm = near_workspaces::compile_project("./").await?;
+        contract
+            .as_account()
+            .deploy(&new_wasm)
+            .await?
+            .into_result()?;
+
+        let outcome = contract
+            .call("migrate")
+            .args_json(json!({}))
+            .max_gas()
+            .transact()
+            .await?;
+        assert!(outcome.is_success(), "{:?}", outcome.failures());
+
+        // State is intact after the migration and the contract is functional.
+        let last_header = contract
+            .view("get_last_block_header")
+            .args_json(json!({}))
+            .await?
+            .json::<ExtendedHeader>()?;
+        assert_eq!(last_header, header_before_upgrade);
+
+        let user_account = sandbox.dev_create_account().await?;
+        grant_relayer_role(&contract, &user_account).await?;
+        let (main_block, _, _) = make_reorg_test_blocks();
+        let outcome = user_account
+            .call(contract.id(), "submit_blocks")
+            .args_borsh(vec![main_block])
+            .max_gas()
+            .deposit(STORAGE_DEPOSIT_PER_BLOCK)
+            .transact()
+            .await?;
+        assert!(outcome.is_success(), "{:?}", outcome.failures());
+
+        Ok(())
+    }
+
     #[tokio::test]
     async fn test_setting_genesis_block() -> Result<(), Box<dyn std::error::Error>> {
         let (contract, _user_account) = init_contract().await?;

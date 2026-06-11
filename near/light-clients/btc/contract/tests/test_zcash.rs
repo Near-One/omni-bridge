@@ -94,6 +94,110 @@ mod test_zcash {
         serde_json::from_reader(reader).expect("Unable to parse JSON")
     }
 
+    /// Fetches the wasm currently deployed on a mainnet account via plain RPC.
+    /// (`near_workspaces::mainnet()` is not used because its client fails to
+    /// parse responses from current mainnet nodes.)
+    async fn fetch_mainnet_wasm(account_id: &str) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
+        use base64::Engine;
+
+        let response: serde_json::Value = reqwest::Client::new()
+            .post("https://rpc.mainnet.near.org")
+            .json(&json!({
+                "jsonrpc": "2.0",
+                "id": "dontcare",
+                "method": "query",
+                "params": {
+                    "request_type": "view_code",
+                    "finality": "final",
+                    "account_id": account_id,
+                },
+            }))
+            .send()
+            .await?
+            .json()
+            .await?;
+
+        let code_base64 = response["result"]["code_base64"]
+            .as_str()
+            .unwrap_or_else(|| panic!("no code_base64 in response: {response}"));
+        Ok(base64::engine::general_purpose::STANDARD.decode(code_base64)?)
+    }
+
+    /// Initializes a sandbox contract from the wasm currently deployed on
+    /// mainnet (`zcash-client.bridge.near`, built before #116, whose state
+    /// layout still contains `used_aux_parent_blocks`), upgrades it to the
+    /// locally built wasm and verifies that `migrate` repairs the state.
+    #[tokio::test]
+    async fn test_migration_from_mainnet_wasm() -> Result<(), Box<dyn std::error::Error>> {
+        let sandbox = near_workspaces::sandbox().await?;
+        let old_wasm = fetch_mainnet_wasm("zcash-client.bridge.near").await?;
+
+        let contract = sandbox.dev_deploy(&old_wasm).await?;
+
+        let initial_blocks = read_zcash_blocks();
+        let args = InitArgs {
+            genesis_block_hash: initial_blocks[0].block_hash(),
+            genesis_block_height: 2940821,
+            skip_pow_verification: false,
+            gc_threshold: 2000,
+            network: btc_types::network::Network::Mainnet,
+            submit_blocks: initial_blocks[..29].to_vec(),
+        };
+        let outcome = contract
+            .call("init")
+            .args_json(json!({ "args": serde_json::to_value(args).unwrap() }))
+            .max_gas()
+            .transact()
+            .await?;
+        assert!(outcome.is_success(), "{:?}", outcome.failures());
+
+        // Upgrade to the current wasm. The old state layout contains
+        // `used_aux_parent_blocks`, so without a migration every call fails.
+        let new_wasm = build_contract().await;
+        contract
+            .as_account()
+            .deploy(&new_wasm)
+            .await?
+            .into_result()?;
+
+        let outcome = contract
+            .view("get_last_block_header")
+            .args_json(json!({}))
+            .await;
+        assert!(
+            format!("{:?}", outcome.unwrap_err()).contains("Cannot deserialize the contract state")
+        );
+
+        let outcome = contract
+            .call("migrate")
+            .args_json(json!({}))
+            .max_gas()
+            .transact()
+            .await?;
+        assert!(outcome.is_success(), "{:?}", outcome.failures());
+
+        // State is intact after the migration and the contract is functional.
+        let last_header = contract
+            .view("get_last_block_header")
+            .args_json(json!({}))
+            .await?
+            .json::<ExtendedHeader>()?;
+        assert_eq!(last_header.block_header, initial_blocks[28].clone().into());
+
+        let user_account = sandbox.dev_create_account().await?;
+        grant_relayer_role(&contract, &user_account).await?;
+        let outcome = user_account
+            .call(contract.id(), "submit_blocks")
+            .args_borsh(initial_blocks[29..32].to_vec())
+            .max_gas()
+            .deposit(STORAGE_DEPOSIT_PER_BLOCK.saturating_mul(3))
+            .transact()
+            .await?;
+        assert!(outcome.is_success(), "{:?}", outcome.failures());
+
+        Ok(())
+    }
+
     #[tokio::test]
     async fn test_init() -> Result<(), Box<dyn std::error::Error>> {
         let (contract, _user_account) = init_zcash_contract().await?;
