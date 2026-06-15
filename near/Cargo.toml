@@ -42,7 +42,7 @@ omni-utils = { git = "https://github.com/near-one/omni-utils", rev = "f9bc3ea4a7
 omni-types = { path = "omni-types" }
 strum = "0.27.2"
 strum_macros = "0.27.1"
-near-workspaces = "0.22.0"
+near-workspaces = "0.22.2"
 num_enum = "0.7.3"
 tokio = "1.40"
 anyhow = "1"
