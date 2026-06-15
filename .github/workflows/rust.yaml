@@ -29,7 +29,7 @@ jobs:
       - name: Setup Rust toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: 1.86.0
+          toolchain: 1.96.0
           components: clippy, rustfmt
           target: wasm32-unknown-unknown
 
@@ -72,7 +72,7 @@ jobs:
       - name: Setup Rust toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: 1.86.0
+          toolchain: 1.96.0
           target: wasm32-unknown-unknown
 
       - name: Cache Rust dependencies

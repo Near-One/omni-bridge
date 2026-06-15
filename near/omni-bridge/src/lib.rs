@@ -126,6 +126,7 @@ pub enum Role {
     TokenUpgrader,
     TokenLockController,
     RelayerManager,
+    UnpauseManager,
 }
 
 #[ext_contract(ext_token)]
@@ -209,7 +210,7 @@ pub trait ExtUTXOConnector {
 #[near(contract_state)]
 #[derive(Pausable, Upgradable, PanicOnDefault)]
 #[access_control(role_type(Role))]
-#[pausable(manager_roles(Role::PauseManager))]
+#[pausable(pause_roles(Role::PauseManager), unpause_roles(Role::UnpauseManager))]
 #[upgradable(access_control_roles(
     code_stagers(Role::UpgradableCodeStager, Role::DAO),
     code_deployers(Role::UpgradableCodeDeployer, Role::DAO),

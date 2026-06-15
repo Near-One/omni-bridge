@@ -21,11 +21,12 @@ pub enum Role {
     UpgradableCodeDeployer = 4,
     Controller = 5,
     LegacyController = 10,
+    UnpauseManager = 11,
 }
 
 #[near(contract_state)]
 #[derive(Pausable, Upgradable, PanicOnDefault)]
-#[pausable(manager_roles(Role::PauseManager))]
+#[pausable(pause_roles(Role::PauseManager), unpause_roles(Role::UnpauseManager))]
 #[access_control(role_type(Role))]
 #[upgradable(access_control_roles(
     code_stagers(Role::UpgradableCodeStager, Role::DAO),
