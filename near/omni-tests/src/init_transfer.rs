@@ -23,8 +23,12 @@ mod tests {
     };
 
     const DEFAULT_NEAR_SANDBOX_BALANCE: NearToken = NearToken::from_near(100);
+    // Upper bound on the relayer's net NEAR spend per transfer flow. The relayer receives the
+    // native fee in full; this only bounds gas. Measured ~0.0523 NEAR in the token-fee path on
+    // neard 2.12 / protocol 84 (the token-fee `claim_fee` does an extra cross-contract transfer);
+    // set to 0.1 NEAR (well below the 1-2 NEAR fee, so a missing fee is still caught).
     const EXPECTED_RELAYER_GAS_COST: NearToken =
-        NearToken::from_yoctonear(5_000_000_000_000_000_000_000);
+        NearToken::from_yoctonear(100_000_000_000_000_000_000_000);
 
     struct TestEnv {
         worker: near_workspaces::Worker<near_workspaces::network::Sandbox>,
