@@ -11,7 +11,7 @@ on:
 
 jobs:
   lint:
-    runs-on: warp-ubuntu-2204-x64-16x
+    runs-on: warp-ubuntu-2404-x64-16x
     strategy:
       matrix:
         component: [near]  # Will be expanded with more components later
@@ -54,7 +54,7 @@ jobs:
         run: make fmt-${{ matrix.component }}
 
   build-and-test:
-    runs-on: warp-ubuntu-2204-x64-16x
+    runs-on: warp-ubuntu-2404-x64-16x
     steps:
       - name: Install system dependencies
         run: sudo apt-get update && sudo apt-get install -y liblzma-dev
