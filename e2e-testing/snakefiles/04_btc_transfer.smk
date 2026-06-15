@@ -17,6 +17,7 @@ call_dir = const.common_generated_dir / "04-btc-transfer"
 near_init_account_file = const.near_account_dir / f"{NTA.INIT_ACCOUNT}.json"
 user_account_file = const.near_account_dir / f"{NTA.USER_ACCOUNT}.json"
 
+near_dao_account_file = const.near_account_dir / f"{NTA.INIT_ACCOUNT}.json"
 omni_bridge_file = const.near_deploy_results_dir / f"{NC.OMNI_BRIDGE}.json"
 nbtc_file = const.near_deploy_results_dir / f"nbtc.json"
 btc_connector_file = const.near_deploy_results_dir / f"btc_connector.json"
@@ -124,13 +125,13 @@ rule ft_transfer_btc_to_omni_bridge:
     """
 
 rule submit_transfer_to_btc_connector:
-    message: "Sign BTC transfer on OmniBridge"
+    message: "Submit BTC transfer on OmniBridge"
     input:
        step_7 = rules.ft_transfer_btc_to_omni_bridge.output,
        btc_connector_file = btc_connector_file,
        omni_bridge_file = omni_bridge_file,
        user_account_file = user_account_file
-    output: call_dir / "05_sign_btc_transfer.json"
+    output: call_dir / "05_submit_btc_transfer.json"
     params:
         btc_connector = lambda wc, input: get_json_field(input.btc_connector_file, "contract_id"),
         user_account_id = lambda wc, input: get_json_field(input.user_account_file, "account_id"),
@@ -144,6 +145,7 @@ rule submit_transfer_to_btc_connector:
         --chain btc \
         -n {params.near_tx_hash} \
         -s {params.user_account_id} \
+        -f 0 \
         --near-token-locker-id {params.omni_bridge_account} \
         --btc-connector {params.btc_connector} \
         --near-signer {params.user_account_id} \
@@ -198,7 +200,80 @@ rule send_btc_transfer:
     > {output} \
     """
 
+rule rbf_increase_gas_fee:
+    message: "RBF Increase Gas Fee"
+    input:
+        step_10 = rules.send_btc_transfer.output,
+        btc_connector_file = btc_connector_file,
+        omni_bridge_file = omni_bridge_file,
+        near_dao_account_file = near_dao_account_file
+    output: call_dir / "08_rbf_increase_gas_fee.json"
+    params:
+        btc_tx_hash = lambda wc, input: get_last_value(input.step_10),
+        btc_connector = lambda wc, input: get_json_field(input.btc_connector_file, "contract_id"),
+        user_account_id = lambda wc, input: get_json_field(input.near_dao_account_file, "account_id"),
+        user_private_key = lambda wc, input: get_json_field(input.near_dao_account_file, "private_key"),
+        bridge_sdk_config_file = const.common_bridge_sdk_config_file,
+        omni_bridge_account = lambda wc, input: get_json_field(input.omni_bridge_file, "contract_id"),
+    shell: """
+    bridge-cli testnet btc-rbf-increase-gas-fee \
+    --chain btc \
+    -b {params.btc_tx_hash} \
+    --near-token-locker-id {params.omni_bridge_account} \
+    --btc-connector {params.btc_connector} \
+    --near-signer {params.user_account_id} \
+    --near-private-key {params.user_private_key} \
+    --config {params.bridge_sdk_config_file} \
+    > {output} \
+    """
+
+rule sign_btc_connector_transfer_after_rbf:
+    message: "Sign BTC transfer on BtcConnector after RBF"
+    input:
+        add_utxo_chain = rules.add_utxo_chain_connector.output,
+        step_11 = rules.rbf_increase_gas_fee.output,
+        btc_connector_file = btc_connector_file,
+        omni_bridge_file = omni_bridge_file,
+        user_account_file = user_account_file
+    output: call_dir / "09_sign_btc_connector_transfer_after_rbf.json"
+    params:
+        btc_connector = lambda wc, input: get_json_field(input.btc_connector_file, "contract_id"),
+        user_account_id = lambda wc, input: get_json_field(input.user_account_file, "account_id"),
+        user_private_key = lambda wc, input: get_json_field(input.user_account_file, "private_key"),
+        bridge_sdk_config_file = const.common_bridge_sdk_config_file,
+        near_tx_hash = lambda wc, input: get_tx_hash(input.step_11),
+
+    shell: """
+    bridge-cli testnet near-sign-btc-transaction \
+        --chain btc \
+        --near-tx-hash {params.near_tx_hash} \
+        --user-account {params.user_account_id} \
+        --btc-connector {params.btc_connector} \
+        --near-signer {params.user_account_id} \
+        --near-private-key {params.user_private_key} \
+        --config {params.bridge_sdk_config_file} \
+         > {output} \
+    """
+
+rule send_btc_transfer_after_rbf:
+    message: "Send BTC transfer after RBF"
+    input:
+        step_12 = rules.sign_btc_connector_transfer_after_rbf.output,
+        user_account_file = user_account_file,
+    output: call_dir / "10_send_btc_transfer_after_rbf.json"
+    params:
+        near_tx_hash = lambda wc, input: get_tx_hash(input.step_12),
+        user_account_id = lambda wc, input: get_json_field(input.user_account_file, "account_id"),
+        bridge_sdk_config_file = const.common_bridge_sdk_config_file,
+    shell: """
+    bridge-cli testnet btc-fin-transfer \
+    --chain btc \
+    --near-tx-hash {params.near_tx_hash} \
+    --config {params.bridge_sdk_config_file} \
+    > {output} \
+    """
+
 rule all:
     input:
-        rules.send_btc_transfer.output,
+        rules.send_btc_transfer_after_rbf.output,
     default_target: True
