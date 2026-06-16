@@ -23,12 +23,8 @@ mod tests {
     };
 
     const DEFAULT_NEAR_SANDBOX_BALANCE: NearToken = NearToken::from_near(100);
-    // Upper bound on the relayer's net NEAR spend per transfer flow. The relayer receives the
-    // native fee in full; this only bounds gas. Measured ~0.0523 NEAR in the token-fee path on
-    // neard 2.12 / protocol 84 (the token-fee `claim_fee` does an extra cross-contract transfer);
-    // set to 0.1 NEAR (well below the 1-2 NEAR fee, so a missing fee is still caught).
     const EXPECTED_RELAYER_GAS_COST: NearToken =
-        NearToken::from_yoctonear(100_000_000_000_000_000_000_000);
+        NearToken::from_yoctonear(5_000_000_000_000_000_000_000);
 
     struct TestEnv {
         worker: near_workspaces::Worker<near_workspaces::network::Sandbox>,
@@ -180,6 +176,38 @@ mod tests {
             .transact()
             .await?
             .into_result()?;
+
+        // Wait for async gas-refund receipts to settle before the fee assertions read the balance.
+        settle_relayer_gas_refunds(env).await?;
+        Ok(())
+    }
+
+    /// Advance blocks until the relayer's balance stops changing.
+    ///
+    /// Unused prepaid gas is refunded asynchronously, in blocks AFTER the transaction's final
+    /// outcome — `transact().await` does not wait for the system gas-refund receipts. Protocol 83
+    /// raised max prepaid gas 300 Tgas -> 1 Pgas, so `max_gas()` reserves far more; the unused
+    /// portion (largest for the token-fee path's extra cross-contract `ft_transfer`) is refunded a
+    /// few blocks later. Without this wait the relayer balance reads too low and looks like a
+    /// missing native fee.
+    async fn settle_relayer_gas_refunds(env: &TestEnv) -> anyhow::Result<()> {
+        let mut relayer_balance = env
+            .worker
+            .view_account(env.relayer_account.id())
+            .await?
+            .balance;
+        for _ in 0..5 {
+            env.worker.fast_forward(1).await?;
+            let settled = env
+                .worker
+                .view_account(env.relayer_account.id())
+                .await?
+                .balance;
+            if settled == relayer_balance {
+                break;
+            }
+            relayer_balance = settled;
+        }
         Ok(())
     }
     async fn get_balance_required_for_account(
