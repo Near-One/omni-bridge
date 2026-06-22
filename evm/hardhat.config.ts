@@ -461,6 +461,49 @@ task(
     console.log(JSON.stringify(result, null, 2))
   })
 
+task("token-balance", "Read an ERC-20 token balance for an account")
+  .addParam("token", "Token contract address")
+  .addOptionalParam("account", "Account address to query (defaults to the signer from EVM_PRIVATE_KEY)")
+  .setAction(async (taskArgs, hre) => {
+    const { ethers } = hre
+    const token = ethers.getAddress(taskArgs.token)
+    const account = taskArgs.account
+      ? ethers.getAddress(taskArgs.account)
+      : await (await ethers.getSigners())[0].getAddress()
+
+    const iface = new ethers.Interface([
+      "function balanceOf(address) view returns (uint256)",
+      "function decimals() view returns (uint8)",
+      "function symbol() view returns (string)",
+    ])
+    const c = new ethers.Contract(token, iface, ethers.provider)
+
+    const balance: bigint = await c.balanceOf(account)
+    let decimals: number | null = null
+    let symbol: string | null = null
+    try {
+      decimals = Number(await c.decimals())
+    } catch {}
+    try {
+      symbol = await c.symbol()
+    } catch {}
+
+    console.log(
+      JSON.stringify(
+        {
+          token,
+          account,
+          symbol,
+          decimals,
+          balanceRaw: balance.toString(),
+          balance: decimals !== null ? ethers.formatUnits(balance, decimals) : null,
+        },
+        null,
+        2,
+      ),
+    )
+  })
+
 const config: HardhatUserConfig = {
   zksolc: {
     version: "1.5.15",
