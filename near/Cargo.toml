@@ -38,7 +38,7 @@ hex = "0.4.2"
 borsh = "1.6.0"
 serde = { version = "1.0.200", features = ["derive"] }
 near-plugins = "0.5.2"
-omni-utils = { git = "https://github.com/near-one/omni-utils", rev = "1363780526b56888b0ea44798bc0213511c295ac" }
+omni-utils = { git = "https://github.com/near-one/omni-utils", rev = "7ea4154c66f969f28616c5484a7d22cdc81240cc" }
 omni-types = { path = "omni-types" }
 strum = "0.27.2"
 strum_macros = "0.27.1"
