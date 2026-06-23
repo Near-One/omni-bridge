@@ -3386,7 +3386,7 @@ dependencies = [
 [[package]]
 name = "omni-utils"
 version = "0.1.0"
-source = "git+https://github.com/near-one/omni-utils?rev=f9bc3ea4a72e97f02660b8f1c0b2f79a9fbde3a4#f9bc3ea4a72e97f02660b8f1c0b2f79a9fbde3a4"
+source = "git+https://github.com/near-one/omni-utils?rev=66df1fbae3e6b23c3c29eca0392b666fbefc6659#66df1fbae3e6b23c3c29eca0392b666fbefc6659"
 dependencies = [
  "near-sdk",
  "omni-utils-derive",
@@ -3397,7 +3397,7 @@ dependencies = [
 [[package]]
 name = "omni-utils-derive"
 version = "0.1.0"
-source = "git+https://github.com/near-one/omni-utils?rev=f9bc3ea4a72e97f02660b8f1c0b2f79a9fbde3a4#f9bc3ea4a72e97f02660b8f1c0b2f79a9fbde3a4"
+source = "git+https://github.com/near-one/omni-utils?rev=66df1fbae3e6b23c3c29eca0392b666fbefc6659#66df1fbae3e6b23c3c29eca0392b666fbefc6659"
 dependencies = [
  "proc-macro2",
  "quote",
