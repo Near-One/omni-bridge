@@ -49,8 +49,9 @@ pub struct FinalizeTransferSol<'info> {
     )]
     pub authority: SystemAccount<'info>,
 
+    /// CHECK: this can be any type of account
     #[account(mut)]
-    pub recipient: SystemAccount<'info>,
+    pub recipient: UncheckedAccount<'info>,
 
     #[account(
         mut,
