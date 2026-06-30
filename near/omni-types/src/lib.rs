@@ -12,6 +12,7 @@ use num_enum::IntoPrimitive;
 use schemars::JsonSchema;
 use sol_address::SolAddress;
 
+pub mod aptos;
 pub mod bounded_string;
 pub mod btc;
 pub mod errors;

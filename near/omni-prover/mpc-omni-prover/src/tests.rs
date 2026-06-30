@@ -1,19 +1,131 @@
 use borsh::BorshDeserialize;
 
 use near_mpc_sdk::near_mpc_contract_interface::types::{
-    EvmExtractedValue, EvmExtractor, EvmFinality, EvmLog, EvmRpcRequest, EvmTxId, ExtractedValue,
-    ForeignChainRpcRequest, ForeignTxSignPayload, ForeignTxSignPayloadV1, Hash160, Hash256,
-    SolanaFinality, SolanaRpcRequest, SolanaTxId, StarknetExtractedValue, StarknetExtractor,
-    StarknetFelt, StarknetFinality, StarknetLog, StarknetRpcRequest, StarknetTxId,
+    AptosAddress, AptosEvent, AptosExtractedValue, AptosExtractor, AptosFinality, AptosRpcRequest,
+    AptosTxId, EvmExtractedValue, EvmExtractor, EvmFinality, EvmLog, EvmRpcRequest, EvmTxId,
+    ExtractedValue, ForeignChainRpcRequest, ForeignTxSignPayload, ForeignTxSignPayloadV1, Hash160,
+    Hash256, SolanaFinality, SolanaRpcRequest, SolanaTxId, StarknetExtractedValue,
+    StarknetExtractor, StarknetFelt, StarknetFinality, StarknetLog, StarknetRpcRequest,
+    StarknetTxId,
 };
 
 use near_sdk::base64::Engine;
 use omni_types::prover_args::MpcVerifyProofArgs;
-use omni_types::prover_result::ProofKind;
+use omni_types::prover_result::{ProofKind, ProverResult};
 
-use omni_types::ChainKind;
+use omni_types::{ChainKind, OmniAddress, H256};
 
 use crate::{evm_log_to_rlp, MpcFinality, MpcOmniProver};
+
+fn test_aptos_request() -> AptosRpcRequest {
+    AptosRpcRequest {
+        tx_id: AptosTxId([0xcc; 32]),
+        finality: AptosFinality::Committed,
+        extractors: vec![AptosExtractor::Event { event_index: 0 }],
+    }
+}
+
+/// An `InitTransfer` Aptos event whose `data` follows the Aptos fullnode REST
+/// API JSON conventions (u64/u128 as strings, address/vector<u8> as 0x-hex).
+fn test_aptos_init_transfer_event() -> AptosEvent {
+    AptosEvent {
+        account_address: AptosAddress([0x05; 32]),
+        sequence_number: 0,
+        type_tag: "0x1::omni_bridge::InitTransfer".to_string(),
+        data: r#"{"sender":"0x1","token_address":"0xa","origin_nonce":"7","amount":"1000","fee":"10","native_fee":"5","recipient":"near:frolik.testnet","message":"0x"}"#.to_string(),
+    }
+}
+
+#[test]
+fn test_request_to_chain_kind_aptos() {
+    let request = ForeignChainRpcRequest::Aptos(test_aptos_request());
+    assert_eq!(
+        MpcOmniProver::request_to_chain_kind(&request),
+        Some(ChainKind::Aptos)
+    );
+}
+
+#[test]
+fn test_request_matches_finality_aptos_match() {
+    let request = ForeignChainRpcRequest::Aptos(test_aptos_request());
+    assert!(MpcOmniProver::request_matches_finality(
+        &request,
+        &MpcFinality::Aptos(AptosFinality::Committed)
+    ));
+}
+
+#[test]
+fn test_request_matches_finality_aptos_cross_chain_mismatch() {
+    let aptos_request = ForeignChainRpcRequest::Aptos(test_aptos_request());
+    assert!(!MpcOmniProver::request_matches_finality(
+        &aptos_request,
+        &MpcFinality::Evm(EvmFinality::Finalized)
+    ));
+
+    let evm_request = ForeignChainRpcRequest::Ethereum(test_evm_request());
+    assert!(!MpcOmniProver::request_matches_finality(
+        &evm_request,
+        &MpcFinality::Aptos(AptosFinality::Committed)
+    ));
+}
+
+#[test]
+fn test_aptos_sign_payload_roundtrip() {
+    let payload = ForeignTxSignPayload::V1(ForeignTxSignPayloadV1 {
+        request: ForeignChainRpcRequest::Aptos(test_aptos_request()),
+        values: vec![ExtractedValue::AptosExtractedValue(
+            AptosExtractedValue::Event(test_aptos_init_transfer_event()),
+        )],
+    });
+
+    let bytes = borsh::to_vec(&payload).unwrap();
+    let deserialized = ForeignTxSignPayload::try_from_slice(&bytes).unwrap();
+    assert_eq!(
+        payload.compute_msg_hash().unwrap().0,
+        deserialized.compute_msg_hash().unwrap().0
+    );
+}
+
+#[test]
+fn test_parse_aptos_result_init_transfer() {
+    let payload = ForeignTxSignPayloadV1 {
+        request: ForeignChainRpcRequest::Aptos(test_aptos_request()),
+        values: vec![ExtractedValue::AptosExtractedValue(
+            AptosExtractedValue::Event(test_aptos_init_transfer_event()),
+        )],
+    };
+
+    let result = MpcOmniProver::parse_aptos_result(ProofKind::InitTransfer, &payload).unwrap();
+    match result {
+        ProverResult::InitTransfer(m) => {
+            assert_eq!(m.origin_nonce, 7);
+            assert_eq!(m.amount.0, 1000);
+            assert_eq!(m.fee.fee.0, 10);
+            assert_eq!(m.recipient.to_string(), "near:frolik.testnet");
+            // Emitter is the module address from the event type_tag ("0x1::omni_bridge::..."),
+            // NOT the GUID account_address (which is the 0x0 placeholder for module events).
+            let mut expected_emitter = [0u8; 32];
+            expected_emitter[31] = 1;
+            assert_eq!(
+                m.emitter_address,
+                OmniAddress::Aptos(H256(expected_emitter))
+            );
+        }
+        _ => panic!("expected InitTransfer"),
+    }
+}
+
+#[test]
+fn test_parse_aptos_result_rejects_non_aptos_value() {
+    // An EVM value in an Aptos dispatch must be rejected (no Aptos event present).
+    let payload = ForeignTxSignPayloadV1 {
+        request: ForeignChainRpcRequest::Aptos(test_aptos_request()),
+        values: vec![ExtractedValue::EvmExtractedValue(EvmExtractedValue::Log(
+            test_evm_log(),
+        ))],
+    };
+    assert!(MpcOmniProver::parse_aptos_result(ProofKind::InitTransfer, &payload).is_err());
+}
 
 fn hex_to_hash256(hex_str: &str) -> Hash256 {
     let bytes: [u8; 32] = hex::decode(hex_str).unwrap().try_into().unwrap();
