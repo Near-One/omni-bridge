@@ -1,0 +1,49 @@
+name: Sui CI
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'sui/**'
+      - '.github/workflows/sui.yaml'
+  pull_request:
+    paths:
+      - 'sui/**'
+      - '.github/workflows/sui.yaml'
+
+env:
+  SUI_VERSION: "1.74.1"
+
+jobs:
+  test:
+    name: Build and Test
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: sui
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Sui CLI
+        run: |
+          ASSET="sui-mainnet-v${SUI_VERSION}-ubuntu-x86_64.tgz"
+          URL="https://github.com/MystenLabs/sui/releases/download/mainnet-v${SUI_VERSION}/${ASSET}"
+          curl -fsSL "$URL" -o sui.tgz
+          mkdir -p sui-bin
+          tar -xzf sui.tgz -C sui-bin
+          sudo mv sui-bin/sui /usr/local/bin/
+          rm -rf sui.tgz sui-bin
+          sui --version
+
+      - name: Build
+        run: sui move build
+
+      - name: Run tests
+        run: sui move test
+
+      - name: Build token template
+        working-directory: sui/token_template
+        run: sui move build

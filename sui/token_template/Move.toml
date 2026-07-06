@@ -1,0 +1,8 @@
+[package]
+name = "OmniBridgeTokenTemplate"
+edition = "2024.beta"
+version = "0.1.0"
+authors = ["Near One"]
+
+[addresses]
+token_template = "0x0"
