@@ -54,6 +54,108 @@ aptos move run \
         address:<apt-fa-metadata-object-address>
 ```
 
+## Securing the bridge account with `0x1::multisig_account`
+
+The `@omni_bridge` account is the root of trust: it holds the package
+**upgrade authority**, and `initialize` seeds all three roles
+(`Admin`/`Pauser`/`MetadataAdmin`) to it. Aptos ships a Safe-style
+multisig in the framework — an on-chain k-of-n account with a proposal
+queue, votes, and owner management at a stable address — and an existing
+account can be converted into one **in place**.
+
+After deploying and initializing with a fresh single-key deployer
+account, convert that account:
+
+```sh
+aptos move run \
+    --profile <deployer> \
+    --function-id 0x1::multisig_account::create_with_existing_account_and_revoke_auth_key_call \
+    --args 'address:["<owner-1>", "<owner-2>", "<owner-3>"]' \
+           u64:<signatures-required> \
+           'string:[]' 'vector<u8>:[]'
+# (vector-argument syntax varies slightly by CLI version — see
+#  `aptos move run --help`; the last two args are optional metadata)
+```
+
+This rotates the account's auth key to `0x0` — the deployer's private key
+becomes permanently powerless — and because the **address does not
+change**, the package upgrade authority and all seeded roles land under
+k-of-n control in one step, with no on-chain role churn.
+
+Owners then manage the account via the `aptos multisig` CLI
+(`create-transaction` / `verify-proposal` / `approve` / `reject` /
+`execute`), or the official web UI **[Petra Vault](https://vault.petra.app)**
+(built on `0x1::multisig_account`; import the multisig by address), or
+Thala's CLI-first **[safely](https://github.com/ThalaLabs/safely)** with
+Ledger support.
+
+Operational sharp edges of the framework multisig:
+
+- Proposals execute **strictly in order** and only by an **owner** (who
+  pays gas; the executor's own approval is implicit). At most 20 pending.
+- A payload that aborts still **consumes its sequence number** — fix and
+  re-propose; a stuck proposal blocks the queue until executed or
+  cleared with `execute-reject`.
+- Gas simulation for multisig executions is unreliable
+  (aptos-core [#8304](https://github.com/aptos-labs/aptos-core/issues/8304))
+  — always pass an explicit `--max-gas`.
+
+> **Do not use object code deployment** (`aptos move deploy-object`) for
+> this package: `initialize` requires `signer == @omni_bridge`, and a code
+> object's address can never produce a signer — the bridge would be
+> undeployable. Publish under an account as shown above.
+
+## Upgrading the package
+
+The package uses the default `compatible` upgrade policy: the on-chain
+publisher rejects upgrades that change existing struct layouts or public
+function signatures; new functions/structs and changed function bodies
+are fine. Upgrades replace the code **in place** at `@omni_bridge` —
+callers and state (`BridgeState`, custody, deployed FAs) are untouched,
+and the factory registered on NEAR stays valid.
+
+**Before the multisig conversion** (deployer key still active), an
+upgrade is just a re-publish:
+
+```sh
+aptos move publish \
+    --profile <deployer> \
+    --named-addresses omni_bridge=<deployer-address>
+```
+
+**After the conversion**, upgrades go through the multisig queue:
+
+```sh
+# 1. Build the publish payload (writes a JSON entry-function payload)
+aptos move build-publish-payload \
+    --named-addresses omni_bridge=<multisig-address> \
+    --json-output-file publish.json
+
+# 2. Propose it (hash-only keeps the on-chain proposal small)
+aptos multisig create-transaction \
+    --multisig-address <multisig-address> \
+    --json-file publish.json \
+    --store-hash-only \
+    --profile <owner-1>
+
+# 3. Every owner verifies the payload matches the on-chain hash, then votes
+aptos multisig verify-proposal \
+    --multisig-address <multisig-address> \
+    --json-file publish.json \
+    --sequence-number <N>
+aptos multisig approve \
+    --multisig-address <multisig-address> \
+    --sequence-number <N> \
+    --profile <owner-2>
+
+# 4. Any owner executes once the threshold is met (explicit gas, see above)
+aptos multisig execute-with-payload \
+    --multisig-address <multisig-address> \
+    --json-file publish.json \
+    --max-gas 20000 \
+    --profile <owner-1>
+```
+
 ## Bridge flow
 
 - **Aptos → other chain (`init_transfer`)**: user calls `init_transfer`,
