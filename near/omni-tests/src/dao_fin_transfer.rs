@@ -135,6 +135,40 @@ mod tests {
             .json()?)
     }
 
+    /// Typed args for `fin_transfer_as_dao`. The `json!` macro goes through
+    /// `serde_json::Value`, which cannot represent u128 values above
+    /// `u64::MAX` (e.g. `storage_deposit_amount`) — the writer/reader paths
+    /// used by `args_json` and the contract handle the full u128 range.
+    #[derive(near_sdk::serde::Serialize, near_sdk::serde::Deserialize)]
+    #[serde(crate = "near_sdk::serde")]
+    struct FinTransferAsDaoArgs {
+        init_transfer: InitTransferMessage,
+        storage_deposit_actions: Vec<StorageDepositAction>,
+    }
+
+    #[test]
+    fn dao_args_serialize_full_u128_range() {
+        let deposit = NEP141_DEPOSIT.as_yoctonear();
+        assert!(deposit > u128::from(u64::MAX));
+
+        let args = FinTransferAsDaoArgs {
+            init_transfer: init_transfer_message(OmniAddress::Near(account_n(1)), 1000, 1),
+            storage_deposit_actions: vec![StorageDepositAction {
+                token_id: account_n(3),
+                account_id: account_n(1),
+                storage_deposit_amount: Some(deposit),
+            }],
+        };
+
+        let bytes = serde_json::to_vec(&args).expect("client-side serialization");
+        let decoded: FinTransferAsDaoArgs =
+            serde_json::from_slice(&bytes).expect("contract-side deserialization");
+        assert_eq!(
+            Some(deposit),
+            decoded.storage_deposit_actions[0].storage_deposit_amount
+        );
+    }
+
     /// Calls the proof-based `fin_transfer` (the mock prover echoes `prover_args`).
     async fn fin_transfer_with_proof(
         bridge_contract: &Contract,
@@ -190,11 +224,10 @@ mod tests {
 
         dao_account
             .call(bridge_contract.id(), "fin_transfer_as_dao")
-            .args_json(json!({
-                "init_transfer":
-                    init_transfer_message(OmniAddress::Near(account_n(1)), amount, fee),
-                "storage_deposit_actions": storage_deposit_actions,
-            }))
+            .args_json(FinTransferAsDaoArgs {
+                init_transfer: init_transfer_message(OmniAddress::Near(account_n(1)), amount, fee),
+                storage_deposit_actions,
+            })
             .deposit(attached_deposit)
             .max_gas()
             .transact()
@@ -229,11 +262,10 @@ mod tests {
 
         let err = relayer_account
             .call(bridge_contract.id(), "fin_transfer_as_dao")
-            .args_json(json!({
-                "init_transfer":
-                    init_transfer_message(OmniAddress::Near(account_n(1)), 1000, 0),
-                "storage_deposit_actions": Vec::<StorageDepositAction>::new(),
-            }))
+            .args_json(FinTransferAsDaoArgs {
+                init_transfer: init_transfer_message(OmniAddress::Near(account_n(1)), 1000, 0),
+                storage_deposit_actions: Vec::new(),
+            })
             .max_gas()
             .transact()
             .await?
@@ -293,10 +325,10 @@ mod tests {
         // storage deposit actions are needed.
         dao_account
             .call(bridge_contract.id(), "fin_transfer_as_dao")
-            .args_json(json!({
-                "init_transfer": init_transfer_message(base_eoa_address(), amount, fee),
-                "storage_deposit_actions": Vec::<StorageDepositAction>::new(),
-            }))
+            .args_json(FinTransferAsDaoArgs {
+                init_transfer: init_transfer_message(base_eoa_address(), amount, fee),
+                storage_deposit_actions: Vec::new(),
+            })
             .deposit(
                 required_balance_for_fin_transfer
                     .saturating_add(required_balance_for_init_transfer),
@@ -352,10 +384,10 @@ mod tests {
 
         let err = dao_account
             .call(bridge_contract.id(), "fin_transfer_as_dao")
-            .args_json(json!({
-                "init_transfer": init_transfer,
-                "storage_deposit_actions": Vec::<StorageDepositAction>::new(),
-            }))
+            .args_json(FinTransferAsDaoArgs {
+                init_transfer,
+                storage_deposit_actions: Vec::new(),
+            })
             .max_gas()
             .transact()
             .await?
@@ -387,10 +419,10 @@ mod tests {
 
         let err = dao_account
             .call(bridge_contract.id(), "fin_transfer_as_dao")
-            .args_json(json!({
-                "init_transfer": init_transfer,
-                "storage_deposit_actions": Vec::<StorageDepositAction>::new(),
-            }))
+            .args_json(FinTransferAsDaoArgs {
+                init_transfer,
+                storage_deposit_actions: Vec::new(),
+            })
             .max_gas()
             .transact()
             .await?
@@ -400,6 +432,46 @@ mod tests {
 
         assert!(
             err.contains("ERR_UNKNOWN_FACTORY"),
+            "unexpected error: {err}"
+        );
+
+        assert!(
+            !is_transfer_finalised(&bridge_contract, 1).await?,
+            "failed finalization must not consume the transfer id"
+        );
+        Ok(())
+    }
+
+    #[rstest]
+    #[tokio::test]
+    async fn test_fin_transfer_as_dao_missing_storage_actions_rejected(
+        build_artifacts: &BuildArtifacts,
+    ) -> anyhow::Result<()> {
+        let TestSetup {
+            bridge_contract,
+            dao_account,
+            ..
+        } = setup_contracts(build_artifacts).await?;
+
+        // A valid transfer to a NEAR recipient but WITHOUT the required
+        // storage deposit action for the recipient: must fail with the
+        // dedicated error (short-circuit in process_fin_transfer_to_near),
+        // not an out-of-bounds panic, and must not consume the transfer id.
+        let err = dao_account
+            .call(bridge_contract.id(), "fin_transfer_as_dao")
+            .args_json(FinTransferAsDaoArgs {
+                init_transfer: init_transfer_message(OmniAddress::Near(account_n(1)), 1000, 0),
+                storage_deposit_actions: Vec::new(),
+            })
+            .max_gas()
+            .transact()
+            .await?
+            .into_result()
+            .expect_err("missing recipient storage action must be rejected")
+            .to_string();
+
+        assert!(
+            err.contains("ERR_STORAGE_RECIPIENT_OMITTED"),
             "unexpected error: {err}"
         );
 
@@ -429,15 +501,14 @@ mod tests {
         // 1) DAO finalizes without proof
         dao_account
             .call(bridge_contract.id(), "fin_transfer_as_dao")
-            .args_json(json!({
-                "init_transfer":
-                    init_transfer_message(OmniAddress::Near(account_n(1)), amount, 0),
-                "storage_deposit_actions": vec![StorageDepositAction {
+            .args_json(FinTransferAsDaoArgs {
+                init_transfer: init_transfer_message(OmniAddress::Near(account_n(1)), amount, 0),
+                storage_deposit_actions: vec![StorageDepositAction {
                     token_id: token_contract.id().clone(),
                     account_id: account_n(1),
                     storage_deposit_amount: Some(NEP141_DEPOSIT.as_yoctonear()),
                 }],
-            }))
+            })
             .deposit(NEP141_DEPOSIT.saturating_add(required_balance_for_fin_transfer))
             .max_gas()
             .transact()
@@ -506,15 +577,14 @@ mod tests {
         // 2) DAO tries to finalize the same transfer id — must be rejected
         let err = dao_account
             .call(bridge_contract.id(), "fin_transfer_as_dao")
-            .args_json(json!({
-                "init_transfer":
-                    init_transfer_message(OmniAddress::Near(account_n(1)), amount, 0),
-                "storage_deposit_actions": vec![StorageDepositAction {
+            .args_json(FinTransferAsDaoArgs {
+                init_transfer: init_transfer_message(OmniAddress::Near(account_n(1)), amount, 0),
+                storage_deposit_actions: vec![StorageDepositAction {
                     token_id: token_contract.id().clone(),
                     account_id: account_n(1),
                     storage_deposit_amount: None,
                 }],
-            }))
+            })
             .deposit(required_balance_for_fin_transfer)
             .max_gas()
             .transact()
@@ -644,11 +714,10 @@ mod tests {
         };
         dao_account
             .call(bridge_contract.id(), "fin_transfer_as_dao")
-            .args_json(json!({
-                "init_transfer":
-                    init_transfer_message(OmniAddress::Near(account_n(1)), amount, fee),
-                "storage_deposit_actions": vec![relayer_action.clone(), relayer_action],
-            }))
+            .args_json(FinTransferAsDaoArgs {
+                init_transfer: init_transfer_message(OmniAddress::Near(account_n(1)), amount, fee),
+                storage_deposit_actions: vec![relayer_action.clone(), relayer_action],
+            })
             .deposit(required_balance_for_fin_transfer)
             .max_gas()
             .transact()
