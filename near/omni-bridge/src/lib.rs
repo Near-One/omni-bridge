@@ -210,7 +210,10 @@ pub trait ExtUTXOConnector {
 #[near(contract_state)]
 #[derive(Pausable, Upgradable, PanicOnDefault)]
 #[access_control(role_type(Role))]
-#[pausable(pause_roles(Role::PauseManager), unpause_roles(Role::UnpauseManager))]
+#[pausable(
+    pause_roles(Role::PauseManager),
+    unpause_roles(Role::DAO, Role::UnpauseManager)
+)]
 #[upgradable(access_control_roles(
     code_stagers(Role::UpgradableCodeStager, Role::DAO),
     code_deployers(Role::UpgradableCodeDeployer, Role::DAO),

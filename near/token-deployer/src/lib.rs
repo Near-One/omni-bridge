@@ -26,7 +26,10 @@ pub enum Role {
 
 #[near(contract_state)]
 #[derive(Pausable, Upgradable, PanicOnDefault)]
-#[pausable(pause_roles(Role::PauseManager), unpause_roles(Role::UnpauseManager))]
+#[pausable(
+    pause_roles(Role::PauseManager),
+    unpause_roles(Role::DAO, Role::UnpauseManager)
+)]
 #[access_control(role_type(Role))]
 #[upgradable(access_control_roles(
     code_stagers(Role::UpgradableCodeStager, Role::DAO),
