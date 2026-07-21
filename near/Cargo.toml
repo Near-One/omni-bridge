@@ -32,17 +32,17 @@ overflow-checks = true
 
 [workspace.dependencies]
 cargo-near-build = "0.9.0"
-near-sdk = "=5.24.1"
-near-contract-standards = "=5.24.1"
+near-sdk = "=5.28.1"
+near-contract-standards = "=5.28.1"
 hex = "0.4.2"
 borsh = "1.6.0"
 serde = { version = "1.0.200", features = ["derive"] }
-near-plugins = { git = "https://github.com/aurora-is-near/near-plugins", tag = "v0.4.1" }
-omni-utils = { git = "https://github.com/near-one/omni-utils", rev = "f9bc3ea4a72e97f02660b8f1c0b2f79a9fbde3a4" }
+near-plugins = "0.5.2"
+omni-utils = { git = "https://github.com/near-one/omni-utils", rev = "7ea4154c66f969f28616c5484a7d22cdc81240cc" }
 omni-types = { path = "omni-types" }
 strum = "0.27.2"
 strum_macros = "0.27.1"
-near-workspaces = "0.22.0"
+near-workspaces = "0.22.2"
 num_enum = "0.7.3"
 tokio = "1.40"
 anyhow = "1"
@@ -54,4 +54,4 @@ sha3 = "0.10.0"
 sha2 = "0.10.0"
 k256 = { version = "0.13", default-features = false, features = ["ecdsa"] }
 rstest = "0.26.1"
-near-mpc-sdk = "0.0.1"
+near-mpc-sdk = { git = "https://github.com/near/mpc", rev = "dcc9e042cad6784d33cfa736afb61b876a14ded0" }

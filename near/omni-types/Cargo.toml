@@ -32,3 +32,10 @@ sha2.workspace = true
 # here (only off-wasm, where schemars is actually available) makes
 # `As<Hex>: JsonSchema` resolve via cargo feature unification.
 serde_with = { version = "3", features = ["schemars_0_8"] }
+# Work around upstream bug in mpc-primitives 0.0.1: near-mpc-contract-interface
+# derives `BorshSchema` on types whose `account_id` field is `near_account_id::AccountId`
+# (off-wasm, under `abi`), but `mpc-primitives`' `abi` feature fails to enable
+# `near-account-id/abi` (which is what gates `derive(BorshSchema)` on `AccountId`).
+# Enabling it here makes `AccountId: BorshSchema` resolve via cargo feature unification
+# (only off-wasm, where ABI generation runs).
+near-account-id = { version = "2", features = ["abi"] }
