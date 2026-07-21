@@ -9,7 +9,7 @@ use crate::{
 };
 use std::str::FromStr;
 
-fn chain_kinds_for_borsh() -> [ChainKind; 13] {
+fn chain_kinds_for_borsh() -> [ChainKind; 14] {
     [
         ChainKind::Eth,
         ChainKind::Near,
@@ -24,6 +24,7 @@ fn chain_kinds_for_borsh() -> [ChainKind; 13] {
         ChainKind::Strk,
         ChainKind::Abs,
         ChainKind::Fogo,
+        ChainKind::Aptos,
     ]
 }
 
@@ -50,6 +51,10 @@ fn omni_addresses_for_borsh() -> Vec<OmniAddress> {
         OmniAddress::Abs(H160::from_str("0x23ddd3e3692d1861ed57ede224608875809e127f").unwrap()),
         OmniAddress::Fogo(
             SolAddress::from_str("BXss9YNCX2p6VPf2Em54pHXkXnC2FPBeZgbB9fY1cuBR").unwrap(),
+        ),
+        OmniAddress::Aptos(
+            H256::from_str("0x05558831a603eca8cd69a42d4251f08de3573039b69f23972265cac76639f1cf")
+                .unwrap(),
         ),
     ]
 }
@@ -191,6 +196,14 @@ fn test_chain_kind_from_omni_address() {
         ChainKind::Strk,
         "STRK",
     );
+    test_chain_kind(
+        OmniAddress::Aptos(
+            H256::from_str("0x05558831a603eca8cd69a42d4251f08de3573039b69f23972265cac76639f1cf")
+                .unwrap(),
+        ),
+        ChainKind::Aptos,
+        "Aptos",
+    );
 }
 
 #[test]
@@ -270,6 +283,16 @@ fn test_omni_address_from_str() {
             "Should parse STRK address",
         ),
         (
+            "aptos:0x05558831a603eca8cd69a42d4251f08de3573039b69f23972265cac76639f1cf".to_string(),
+            Ok(OmniAddress::Aptos(
+                H256::from_str(
+                    "0x05558831a603eca8cd69a42d4251f08de3573039b69f23972265cac76639f1cf",
+                )
+                .unwrap(),
+            )),
+            "Should parse Aptos address",
+        ),
+        (
             "invalid_format".to_string(),
             Err("ERR_INVALID_HEX".to_string()),
             "Should fail on missing chain prefix",
@@ -336,6 +359,16 @@ fn test_omni_address_display() {
             ),
             "strk:0x05558831a603eca8cd69a42d4251f08de3573039b69f23972265cac76639f1cf".to_string(),
             "STRK address should format as strk:0x...",
+        ),
+        (
+            OmniAddress::Aptos(
+                H256::from_str(
+                    "0x05558831a603eca8cd69a42d4251f08de3573039b69f23972265cac76639f1cf",
+                )
+                .unwrap(),
+            ),
+            "aptos:0x05558831a603eca8cd69a42d4251f08de3573039b69f23972265cac76639f1cf".to_string(),
+            "Aptos address should format as aptos:0x...",
         ),
     ];
 
@@ -587,9 +620,19 @@ fn test_get_native_token_address_returns_expected_addresses() {
         "Starknet native token should be the hardcoded STRK address"
     );
 
+    // Aptos should return the canonical APT Fungible Asset metadata address (`0xa`)
+    let aptos_address = get_native_token_address(ChainKind::Aptos).unwrap();
+    let mut expected_aptos = [0u8; 32];
+    expected_aptos[31] = 0x0a;
+    assert_eq!(
+        aptos_address,
+        OmniAddress::Aptos(H256(expected_aptos)),
+        "Aptos native token should be the canonical APT FA metadata address (0xa)"
+    );
+
     // All other chains should return zero addresses
     for chain_kind in chain_kinds_for_borsh() {
-        if chain_kind == ChainKind::Strk {
+        if chain_kind == ChainKind::Strk || chain_kind == ChainKind::Aptos {
             continue;
         }
         let address = get_native_token_address(chain_kind).unwrap();

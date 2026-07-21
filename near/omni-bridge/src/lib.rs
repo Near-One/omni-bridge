@@ -126,6 +126,7 @@ pub enum Role {
     TokenUpgrader,
     TokenLockController,
     RelayerManager,
+    UnpauseManager,
 }
 
 #[ext_contract(ext_token)]
@@ -209,7 +210,10 @@ pub trait ExtUTXOConnector {
 #[near(contract_state)]
 #[derive(Pausable, Upgradable, PanicOnDefault)]
 #[access_control(role_type(Role))]
-#[pausable(manager_roles(Role::PauseManager))]
+#[pausable(
+    pause_roles(Role::PauseManager),
+    unpause_roles(Role::DAO, Role::UnpauseManager)
+)]
 #[upgradable(access_control_roles(
     code_stagers(Role::UpgradableCodeStager, Role::DAO),
     code_deployers(Role::UpgradableCodeDeployer, Role::DAO),
@@ -1440,6 +1444,7 @@ impl Contract {
             s if s.starts_with("sol") => ChainKind::Sol,
             s if s.starts_with("fogo") => ChainKind::Fogo,
             s if s.starts_with("strk") || s.starts_with("starknet") => ChainKind::Strk,
+            s if s.starts_with("aptos") => ChainKind::Aptos,
             _ => env::panic_str(&BridgeError::CannotDetermineOriginChain.as_ref()),
         };
 
