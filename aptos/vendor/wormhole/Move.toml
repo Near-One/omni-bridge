@@ -1,0 +1,49 @@
+[package]
+name = "Wormhole"
+version = "0.1.0"
+authors = ["Near One"]
+
+# Minimal stand-in for `wormhole-foundation/wormhole/aptos/wormhole`.
+#
+# This package is a COMPILE-TIME ONLY stub. It declares just enough of
+# the Wormhole modules — `wormhole::wormhole`, `wormhole::emitter`,
+# `wormhole::state` — for our bridge to compile against. The function
+# bodies here are placeholders that never execute on chain.
+#
+# Why this works:
+#   - At compile time the Move compiler resolves `use wormhole::wormhole;`
+#     against this stub and verifies signatures.
+#   - At publish time only modules from `aptos/sources/` go on chain.
+#     The `wormhole::*` modules are NOT republished (we don't own
+#     `@wormhole`); they're treated as already-deployed deps.
+#   - At runtime calls to `wormhole::wormhole::publish_message` dispatch
+#     by module identity (`(address, name)`) to the REAL Wormhole at
+#     `@wormhole = 0x5bc1…`, which was published by Wormhole and contains
+#     the actual implementation.
+#
+# Critical: do NOT add fields, change field types, reorder fields, or
+# change function signatures here without verifying the deployed
+# Wormhole's ABI hasn't drifted. The deployed bytecode is the source of
+# truth; this stub only mirrors its public ABI.
+
+[addresses]
+# Mainnet Wormhole core address. Override via `--named-addresses` for
+# testnet (`0x57641…`) or devnet.
+wormhole = "0x5bc11445584a763c1fa7ed39081f1b920954da14e04b32440cba863d03e19625"
+
+# Same modern framework rev as the parent `aptos/` package, so the bridge
+# and this stub agree on `aptos_framework::coin::Coin<AptosCoin>` identity.
+[dependencies.AptosFramework]
+git = "https://github.com/aptos-labs/aptos-core.git"
+subdir = "aptos-move/framework/aptos-framework"
+rev = "mainnet"
+
+[dependencies.AptosStdlib]
+git = "https://github.com/aptos-labs/aptos-core.git"
+subdir = "aptos-move/framework/aptos-stdlib"
+rev = "mainnet"
+
+[dependencies.MoveStdlib]
+git = "https://github.com/aptos-labs/aptos-core.git"
+subdir = "aptos-move/framework/move-stdlib"
+rev = "mainnet"

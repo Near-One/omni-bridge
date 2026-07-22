@@ -13,10 +13,15 @@ module omni_bridge::omni_bridge {
     use std::string::{Self, String};
     use std::option::{Self, Option};
     use aptos_std::table::{Self, Table};
+    use aptos_framework::aptos_coin::AptosCoin;
+    use aptos_framework::coin;
     use aptos_framework::event;
     use aptos_framework::fungible_asset::{Self, Metadata};
     use aptos_framework::object::{Self, ExtendRef, Object};
     use aptos_framework::primary_fungible_store;
+    use wormhole::emitter::EmitterCapability;
+    use wormhole::state as wormhole_state;
+    use wormhole::wormhole;
 
     use omni_bridge::bridge_token;
     use omni_bridge::bridge_types;
@@ -115,7 +120,17 @@ module omni_bridge::omni_bridge {
         /// on demand for:
         ///   - creating new FA objects in `deploy_token`
         ///   - moving locked tokens out in `fin_transfer` (non-bridge tokens)
-        extend_ref: ExtendRef
+        extend_ref: ExtendRef,
+        /// Wormhole emitter capability. Registered in `initialize` by
+        /// calling `wormhole::register_emitter()` and held for the
+        /// lifetime of the bridge. `EmitterCapability` has no `drop`
+        /// ability (matching the deployed Wormhole's ABI), and there's
+        /// only ever one bridge instance — so a single up-front
+        /// registration gives off-chain consumers a stable emitter id
+        /// across enable/disable cycles.
+        wormhole_emitter: EmitterCapability,
+        /// Master switch for Wormhole publishing.
+        wormhole_enabled: bool
     }
 
     // -------- Events --------
@@ -227,7 +242,9 @@ module omni_bridge::omni_bridge {
                 completed_transfers: table::new<u64, u128>(),
                 native_token_metadata,
                 near_to_aptos_token: table::new<String, address>(),
-                extend_ref
+                extend_ref,
+                wormhole_emitter: wormhole::register_emitter(),
+                wormhole_enabled: false
             }
         );
     }
@@ -300,6 +317,19 @@ module omni_bridge::omni_bridge {
         );
     }
 
+    /// Turn Wormhole publishing on or off. When on, every successful
+    /// `init_transfer`, `fin_transfer`, `deploy_token`, and `log_metadata`
+    /// also publishes a Wormhole VAA whose payload mirrors the
+    /// `OmniBridgeWormhole.sol` extension. When off, the bridge runs as
+    /// if Wormhole had never been wired up. The caller of each bridge
+    /// action pays the Wormhole message fee in `Coin<AptosCoin>` from
+    /// their own balance.
+    public entry fun set_wormhole_enabled(admin: &signer, enable: bool) {
+        let state = &mut BridgeState[bridge_object_address()];
+        assert_role(state, ROLE_ADMIN, admin, E_UNAUTHORIZED);
+        state.wormhole_enabled = enable;
+    }
+
     /// Update mutable metadata (`icon_uri`, `project_uri`) on a
     /// bridge-deployed FA. `None` fields are left unchanged. Gated on the
     /// `metadata_admin` role (separate from the main admin so metadata
@@ -338,22 +368,42 @@ module omni_bridge::omni_bridge {
 
     /// Permissionless: emit a `LogMetadata` event describing an existing FA.
     /// The NEAR side picks this event up to decide whether to sign a
-    /// `deploy_token` payload for the mirror token on its side.
-    public entry fun log_metadata(token: Object<Metadata>) {
+    /// `deploy_token` payload for the mirror token on its side. `caller`
+    /// pays the Wormhole message fee if Wormhole is enabled; the signer is
+    /// otherwise not read on-chain.
+    public entry fun log_metadata(
+        caller: &signer, token: Object<Metadata>
+    ) {
+        let state = &mut BridgeState[bridge_object_address()];
+        let token_address = token.object_address();
         let name = fungible_asset::name(token);
         let symbol = fungible_asset::symbol(token);
         let decimals = fungible_asset::decimals(token);
         event::emit(
-            LogMetadata { token_address: token.object_address(), name, symbol, decimals }
+            LogMetadata { token_address, name, symbol, decimals }
         );
+
+        if (is_wormhole_enabled(state)) {
+            let payload =
+                bridge_types::log_metadata_wormhole_payload(
+                    state.chain_id,
+                    token_address,
+                    &name,
+                    &symbol,
+                    decimals
+                );
+            publish_wormhole(state, caller, payload);
+        };
     }
 
     // -------- Bridge operations --------
 
     /// Deploy a bridged FA token. Anyone may submit the transaction —
     /// security comes from the NEAR MPC signature over the payload, not
-    /// access control. The transaction signer is not read on-chain.
+    /// access control. `caller` pays the Wormhole message fee if Wormhole
+    /// is enabled; the signer is otherwise not read on-chain.
     public entry fun deploy_token(
+        caller: &signer,
         signature_rs: vector<u8>,
         signature_v: u8,
         token: String,
@@ -407,12 +457,26 @@ module omni_bridge::omni_bridge {
                 origin_decimals: payload.metadata_decimals()
             }
         );
+
+        if (is_wormhole_enabled(state)) {
+            let wh_payload =
+                bridge_types::deploy_token_wormhole_payload(
+                    state.chain_id,
+                    &payload.metadata_token(),
+                    token_addr,
+                    normalized_decimals,
+                    payload.metadata_decimals()
+                );
+            publish_wormhole(state, caller, wh_payload);
+        };
     }
 
     /// Finalize an inbound transfer from another chain. Permissionless —
-    /// the NEAR MPC signature is the authorization. The transaction signer
-    /// is not read on-chain.
+    /// the NEAR MPC signature is the authorization. `caller` pays the
+    /// Wormhole message fee if Wormhole is enabled; the signer is
+    /// otherwise not read on-chain.
     public entry fun fin_transfer(
+        caller: &signer,
         signature_rs: vector<u8>,
         signature_v: u8,
         destination_nonce: u64,
@@ -479,6 +543,20 @@ module omni_bridge::omni_bridge {
                 message: payload.transfer_message()
             }
         );
+
+        if (is_wormhole_enabled(state)) {
+            let fr = payload.transfer_fee_recipient();
+            let wh_payload =
+                bridge_types::fin_transfer_wormhole_payload(
+                    state.chain_id,
+                    origin_chain,
+                    origin_nonce,
+                    token_address,
+                    amount,
+                    &fr
+                );
+            publish_wormhole(state, caller, wh_payload);
+        };
     }
 
     /// Start an outbound transfer from Aptos to another chain.
@@ -542,6 +620,22 @@ module omni_bridge::omni_bridge {
                 message
             }
         );
+
+        if (is_wormhole_enabled(state)) {
+            let wh_payload =
+                bridge_types::init_transfer_wormhole_payload(
+                    state.chain_id,
+                    sender_addr,
+                    token_address,
+                    origin_nonce,
+                    amount,
+                    fee,
+                    native_fee,
+                    &recipient,
+                    &message
+                );
+            publish_wormhole(state, sender, wh_payload);
+        };
     }
 
     // -------- Views --------
@@ -732,6 +826,34 @@ module omni_bridge::omni_bridge {
             signature_rs,
             signature_v,
             state.near_bridge_derived_address
+        );
+    }
+
+    /// True iff `set_wormhole_enabled(true)` is the most recent toggle.
+    inline fun is_wormhole_enabled(state: &BridgeState): bool {
+        state.wormhole_enabled
+    }
+
+    /// Publish `payload` as a Wormhole VAA. Caller must have already
+    /// confirmed `is_wormhole_enabled(state)` — this helper itself does
+    /// no flag check, so calling it when disabled would still emit a
+    /// VAA. The Wormhole nonce is `0` for every message; the bridge's
+    /// own `current_origin_nonce` (carried inside the payload) is the
+    /// replay-prevention identifier. `payer` funds the Wormhole message
+    /// fee from `Coin<AptosCoin>`. With the current Wormhole
+    /// `message_fee` at 0 the withdrawal is a no-op, but we still wire
+    /// the path through so a future fee increase doesn't require a
+    /// contract upgrade.
+    fun publish_wormhole(
+        state: &mut BridgeState, payer: &signer, payload: vector<u8>
+    ) {
+        let fee = wormhole_state::get_message_fee();
+        let fee_coin = coin::withdraw<AptosCoin>(payer, fee);
+        wormhole::publish_message(
+            &mut state.wormhole_emitter,
+            0u64,
+            payload,
+            fee_coin
         );
     }
 

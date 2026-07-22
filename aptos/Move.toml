@@ -20,3 +20,11 @@ rev = "mainnet"
 git = "https://github.com/aptos-labs/aptos-core.git"
 subdir = "aptos-move/framework/move-stdlib"
 rev = "mainnet"
+
+# Compile-time-only stub for Wormhole. See `vendor/wormhole/Move.toml`
+# for the full rationale — the stub mirrors the deployed Wormhole's
+# public ABI at `@wormhole = 0x5bc1…` so we can compile against modern
+# framework features while still dispatching to the real Wormhole at
+# runtime. The stub modules are NOT republished by `aptos move publish`.
+[dependencies.Wormhole]
+local = "vendor/wormhole"

@@ -812,5 +812,161 @@ module omni_bridge::omni_bridge_tests {
             b""
         );
     }
+
+    // -------- Wormhole payload encoding tests --------
+    //
+    // Verify each wormhole payload matches the layout that
+    // `OmniBridgeWormhole.sol` produces for the equivalent extension. We
+    // assert on the leading tag byte + chain-id positions + total length
+    // rather than every byte — the underlying primitives (`bcs::to_bytes`,
+    // `borsh::encode_string`) are already exhaustively tested in
+    // `borsh_tests` and the borsh-layout tests above.
+
+    #[test]
+    fun init_transfer_wormhole_payload_layout() {
+        let recipient = string::utf8(b"alice.near");
+        let message = b"hi";
+        let bytes =
+            bridge_types::init_transfer_wormhole_payload(
+                13u8, // chain_id
+                @0xAA,
+                @0xBB,
+                42u64,
+                1_000u128,
+                10u128,
+                5u128,
+                &recipient,
+                &message
+            );
+        // Tag = WH_MSG_INIT_TRANSFER = 0.
+        assert!(bytes[0] == 0u8, 500);
+        // chain_id at byte 1 and again before token_address (at 1 + 1 + 32 = 34).
+        assert!(bytes[1] == 13u8, 501);
+        assert!(bytes[34] == 13u8, 502);
+        // Layout: tag(1) + cid(1) + sender(32) + cid(1) + token(32)
+        //       + origin_nonce(8) + amount(16) + fee(16) + native_fee(16)
+        //       + len(4)+"alice.near"(10) + len(4)+"hi"(2)
+        // = 1+1+32+1+32+8+16+16+16+4+10+4+2 = 143
+        assert!(bytes.length() == 143, 503);
+    }
+
+    #[test]
+    fun fin_transfer_wormhole_payload_layout_with_fee_recipient() {
+        let fr = option::some(string::utf8(b"fee.near"));
+        let bytes =
+            bridge_types::fin_transfer_wormhole_payload(
+                13u8, // chain_id
+                7u8, // origin_chain
+                42u64,
+                @0xCC,
+                999u128,
+                &fr
+            );
+        // Tag = WH_MSG_FIN_TRANSFER = 1.
+        assert!(bytes[0] == 1u8, 510);
+        // origin_chain at byte 1.
+        assert!(bytes[1] == 7u8, 511);
+        // chain_id at 1 + 1 + 8 = 10 (after tag, origin_chain, origin_nonce).
+        assert!(bytes[10] == 13u8, 512);
+        // Layout: 1 + 1 + 8 + 1 + 32 + 16 + (4 + 8) = 71
+        assert!(bytes.length() == 71, 513);
+    }
+
+    #[test]
+    fun fin_transfer_wormhole_payload_layout_without_fee_recipient() {
+        let fr = option::none<string::String>();
+        let bytes =
+            bridge_types::fin_transfer_wormhole_payload(
+                13u8, 7u8, 42u64, @0xCC, 999u128, &fr
+            );
+        assert!(bytes[0] == 1u8, 520);
+        // Layout: 1 + 1 + 8 + 1 + 32 + 16 + 4 (empty length prefix) = 63
+        assert!(bytes.length() == 63, 521);
+        // Last 4 bytes are the zero-length prefix.
+        let len = bytes.length();
+        assert!(bytes[len - 4] == 0u8, 522);
+        assert!(bytes[len - 3] == 0u8, 523);
+        assert!(bytes[len - 2] == 0u8, 524);
+        assert!(bytes[len - 1] == 0u8, 525);
+    }
+
+    #[test]
+    fun deploy_token_wormhole_payload_layout() {
+        let token = string::utf8(b"usdc.near");
+        let bytes =
+            bridge_types::deploy_token_wormhole_payload(
+                13u8,
+                &token,
+                @0xDD,
+                8u8, // decimals
+                6u8 // origin_decimals
+            );
+        // Tag = WH_MSG_DEPLOY_TOKEN = 2.
+        assert!(bytes[0] == 2u8, 530);
+        // chain_id sits after tag + encoded token (4-byte len + 9 utf-8 bytes).
+        let chain_id_offset = 1 + 4 + 9;
+        assert!(bytes[chain_id_offset] == 13u8, 531);
+        // Layout: 1 + (4 + 9) + 1 + 32 + 1 + 1 = 49
+        assert!(bytes.length() == 49, 532);
+        // Last two bytes are decimals + origin_decimals.
+        let len = bytes.length();
+        assert!(bytes[len - 2] == 8u8, 533);
+        assert!(bytes[len - 1] == 6u8, 534);
+    }
+
+    #[test]
+    fun log_metadata_wormhole_payload_layout() {
+        let name = string::utf8(b"USDC");
+        let symbol = string::utf8(b"USDC");
+        let bytes =
+            bridge_types::log_metadata_wormhole_payload(
+                13u8,
+                @0xEE,
+                &name,
+                &symbol,
+                6u8
+            );
+        // Tag = WH_MSG_LOG_METADATA = 3.
+        assert!(bytes[0] == 3u8, 540);
+        // chain_id at byte 1.
+        assert!(bytes[1] == 13u8, 541);
+        // Layout: 1 + 1 + 32 + (4 + 4) + (4 + 4) + 1 = 51
+        assert!(bytes.length() == 51, 542);
+        // Last byte is decimals.
+        let len = bytes.length();
+        assert!(bytes[len - 1] == 6u8, 543);
+    }
+
+    // -------- set_wormhole_enabled gating --------
+
+    #[test(deployer = @omni_bridge)]
+    fun admin_can_toggle_wormhole(deployer: signer) {
+        // Round-trip: off → on → off → on. Confirms the bool flips
+        // cleanly. The emitter cap is registered once in `initialize` and
+        // never re-registered, so all four calls are pure flag flips.
+        let _ = setup(&deployer);
+        omni_bridge::set_wormhole_enabled(&deployer, true);
+        omni_bridge::set_wormhole_enabled(&deployer, false);
+        omni_bridge::set_wormhole_enabled(&deployer, true);
+    }
+
+    #[test(deployer = @omni_bridge)]
+    fun toggling_wormhole_is_idempotent(deployer: signer) {
+        // Setting the flag to its current value is a no-op — no abort.
+        let _ = setup(&deployer);
+        omni_bridge::set_wormhole_enabled(&deployer, false);
+        omni_bridge::set_wormhole_enabled(&deployer, false);
+        omni_bridge::set_wormhole_enabled(&deployer, true);
+        omni_bridge::set_wormhole_enabled(&deployer, true);
+    }
+
+    // Non-admin cannot toggle wormhole. E_UNAUTHORIZED = 2.
+    #[test(deployer = @omni_bridge, intruder = @0xBADBAD)]
+    #[expected_failure(abort_code = 2, location = omni_bridge::omni_bridge)]
+    fun non_admin_cannot_toggle_wormhole(deployer: signer, intruder: signer) {
+        let _ = setup(&deployer);
+        account::create_account_for_test(intruder.address_of());
+        omni_bridge::set_wormhole_enabled(&intruder, true);
+    }
 }
 
