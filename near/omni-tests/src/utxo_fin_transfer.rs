@@ -10,12 +10,14 @@ mod tests {
         types::{Gas, NearToken},
     };
     use omni_types::{
-        BridgeOnTransferMsg, ChainKind, FastFinTransferMsg, Fee, OmniAddress, TransferId,
-        TransferIdKind, UnifiedTransferId, UtxoFinTransferMsg,
+        btc::{BtcPendingSignInfo, TokenReceiverMessage},
+        near_events::OmniBridgeEvent,
+        BridgeOnTransferMsg, ChainKind, FastFinTransferMsg, Fee, InitTransferMsg, OmniAddress,
+        TransferId, TransferIdKind, TransferMessage, UnifiedTransferId, UtxoFinTransferMsg,
     };
     use rstest::rstest;
 
-    use crate::helpers::tests::{account_n, base_eoa_address, build_artifacts};
+    use crate::helpers::tests::{account_n, base_eoa_address, build_artifacts, get_event_data};
     use crate::{environment::*, helpers::tests::BuildArtifacts};
 
     struct UtxoFinTransferCase {
@@ -660,6 +662,135 @@ mod tests {
         assert!(
             result.into_result().is_err(),
             "Unprivileged account should not be able to call submit_transfer_to_utxo_chain_connector"
+        );
+
+        Ok(())
+    }
+
+    #[rstest]
+    #[tokio::test]
+    async fn submit_transfer_to_utxo_chain_connector_calls_connector_methods(
+        build_artifacts: &BuildArtifacts,
+    ) -> anyhow::Result<()> {
+        let env = TestEnv::new(build_artifacts).await?;
+
+        let target_btc_address = "btc-target-address".to_string();
+        let transfer_amount: u128 = 100_000;
+        let fee_amount: u128 = 1_000;
+
+        let init_transfer_msg = InitTransferMsg {
+            recipient: OmniAddress::Btc(target_btc_address.clone()),
+            fee: U128(fee_amount),
+            native_token_fee: U128(0),
+            msg: None,
+            external_id: None,
+        };
+
+        // Relayer initiates an outbound transfer to BTC by ft_transfer_call'ing the bridge.
+        let init_result = env
+            .relayer_account
+            .call(env.token_contract.id(), "ft_transfer_call")
+            .args_json(json!({
+                "receiver_id": env.bridge_contract.id(),
+                "amount": U128(transfer_amount),
+                "memo": None::<String>,
+                "msg": serde_json::to_string(&BridgeOnTransferMsg::InitTransfer(init_transfer_msg))?,
+            }))
+            .deposit(NearToken::from_yoctonear(1))
+            .max_gas()
+            .transact()
+            .await?
+            .into_result()?;
+
+        let init_logs: Vec<&String> = init_result
+            .receipt_outcomes()
+            .iter()
+            .flat_map(|o| &o.logs)
+            .collect();
+        let event: OmniBridgeEvent = serde_json::from_value(
+            get_event_data("InitTransferEvent", &init_logs)?
+                .ok_or_else(|| anyhow::anyhow!("InitTransferEvent not found"))?,
+        )?;
+        let OmniBridgeEvent::InitTransferEvent { transfer_message } = event else {
+            anyhow::bail!("unexpected event variant");
+        };
+        let transfer_id = TransferId {
+            origin_chain: ChainKind::Near,
+            origin_nonce: transfer_message.origin_nonce,
+        };
+
+        let withdraw_msg = TokenReceiverMessage::Withdraw {
+            target_btc_address: target_btc_address.clone(),
+            input: vec![],
+            output: vec![],
+            max_gas_fee: None,
+        };
+        let sign_requests: Vec<BtcPendingSignInfo> = (0..5)
+            .map(|i| BtcPendingSignInfo {
+                btc_pending_sign_id: format!("pending-sign-{}", i + 1),
+                sign_index: i,
+                key_version: 1,
+                gas: Gas::from_tgas(30),
+            })
+            .collect();
+
+        let submit_result = env
+            .relayer_account
+            .call(
+                env.bridge_contract.id(),
+                "submit_transfer_to_utxo_chain_connector",
+            )
+            .args_json(json!({
+                "transfer_id": transfer_id,
+                "msg": serde_json::to_string(&withdraw_msg)?,
+                "fee_recipient": null,
+                "fee": null,
+                "sign_requests": sign_requests,
+            }))
+            .deposit(NearToken::from_yoctonear(1))
+            .max_gas()
+            .transact()
+            .await?;
+
+        assert!(
+            submit_result.failures().is_empty(),
+            "submit_transfer_to_utxo_chain_connector failed: {:?}",
+            submit_result.failures()
+        );
+
+        let logs: Vec<&String> = submit_result
+            .receipt_outcomes()
+            .iter()
+            .flat_map(|o| &o.logs)
+            .collect();
+
+        assert!(
+            logs.iter()
+                .any(|log| log.contains("Mock ft_on_transfer called with sender_id")),
+            "connector's ft_on_transfer was not invoked. logs: {logs:?}",
+        );
+
+        for req in &sign_requests {
+            let needle = format!(
+                "Mock sign_btc_transaction called with btc_pending_sign_id: {}, sign_index: {}, key_version: {}",
+                req.btc_pending_sign_id, req.sign_index, req.key_version,
+            );
+            assert!(
+                logs.iter().any(|log| log.contains(&needle)),
+                "sign_btc_transaction was not called for {req:?}. logs: {logs:?}",
+            );
+        }
+
+        let remaining: Option<TransferMessage> = env
+            .bridge_contract
+            .view("get_transfer_message")
+            .args_json(json!({"transfer_id": transfer_id}))
+            .await
+            .ok()
+            .and_then(|r| r.json().ok());
+        assert!(
+            remaining.is_none(),
+            "pending transfer should be removed after submission"
         );
 
         Ok(())
