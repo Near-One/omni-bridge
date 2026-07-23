@@ -61,6 +61,7 @@ The main bridge contract handling cross-chain transfers. Key state in `Contract`
 - `deploy_token()` - Deploy bridged token on NEAR (requires proof, called by relayer)
 - `bind_token()` - Register existing token as bridge-compatible (requires proof, called by relayer)
 - `claim_fee()` - Claim accumulated fees (requires proof, called by relayer)
+- `fin_transfer_as_dao()` - Finalize incoming transfer without proof, for when proof infra cannot attest a valid transfer (DAO only)
 
 **UTXO Support (btc.rs):**
 - `submit_transfer_to_utxo_chain_connector()` - Send to Bitcoin/Zcash (called by relayer)
