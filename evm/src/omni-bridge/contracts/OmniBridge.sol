@@ -222,6 +222,8 @@ contract OmniBridge is
     }
 
     function logMetadata(address tokenAddress) external payable {
+        require(!isBridgeToken[tokenAddress], "ERR_TOKEN_EXIST");
+
         string memory name = IERC20Metadata(tokenAddress).name();
         string memory symbol = IERC20Metadata(tokenAddress).symbol();
         uint8 decimals = IERC20Metadata(tokenAddress).decimals();
