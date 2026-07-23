@@ -254,19 +254,15 @@ contract OmniBridge is
             }
         }
 
-        logMetadataExtension(
-            deterministicToken,
+        string memory name = string.concat(
             Strings.toHexString(tokenAddress),
-            "",
-            0
+            "#",
+            Strings.toString(tokenId)
         );
 
-        emit BridgeTypes.LogMetadata(
-            deterministicToken,
-            Strings.toHexString(tokenAddress),
-            "",
-            0
-        );
+        logMetadataExtension(deterministicToken, name, "", 0);
+
+        emit BridgeTypes.LogMetadata(deterministicToken, name, "", 0);
     }
 
     function logMetadataExtension(
