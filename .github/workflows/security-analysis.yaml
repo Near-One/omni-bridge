@@ -24,7 +24,7 @@ on:
 jobs:
   build:
     name: Static Analysis (${{ matrix.project }})
-    runs-on: warp-ubuntu-2204-x64-16x
+    runs-on: warp-ubuntu-2404-x64-16x
     strategy:
       fail-fast: false
       matrix:

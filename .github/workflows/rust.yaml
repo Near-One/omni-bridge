@@ -11,7 +11,7 @@ on:
 
 jobs:
   lint:
-    runs-on: warp-ubuntu-2204-x64-16x
+    runs-on: warp-ubuntu-2404-x64-16x
     strategy:
       matrix:
         component: [near]  # Will be expanded with more components later
@@ -29,7 +29,7 @@ jobs:
       - name: Setup Rust toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: 1.86.0
+          toolchain: 1.96.0
           components: clippy, rustfmt
           target: wasm32-unknown-unknown
 
@@ -54,7 +54,7 @@ jobs:
         run: make fmt-${{ matrix.component }}
 
   build-and-test:
-    runs-on: warp-ubuntu-2204-x64-16x
+    runs-on: warp-ubuntu-2404-x64-16x
     steps:
       - name: Install system dependencies
         run: sudo apt-get update && sudo apt-get install -y liblzma-dev
@@ -72,7 +72,7 @@ jobs:
       - name: Setup Rust toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: 1.86.0
+          toolchain: 1.96.0
           target: wasm32-unknown-unknown
 
       - name: Cache Rust dependencies

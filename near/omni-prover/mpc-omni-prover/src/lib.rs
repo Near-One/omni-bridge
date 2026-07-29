@@ -8,14 +8,16 @@ use borsh::BorshDeserialize;
 use near_mpc_sdk::{
     foreign_chain::ForeignTxPayloadVersion,
     near_mpc_contract_interface::types::{
-        EvmExtractedValue, EvmFinality, ExtractedValue, ForeignChainRpcRequest,
-        ForeignTxSignPayload, ForeignTxSignPayloadV1, StarknetExtractedValue, StarknetFinality,
-        VerifyForeignTransactionRequestArgs, VerifyForeignTransactionResponse,
+        AptosExtractedValue, AptosFinality, EvmExtractedValue, EvmFinality, ExtractedValue,
+        ForeignChainRpcRequest, ForeignTxSignPayload, ForeignTxSignPayloadV1,
+        StarknetExtractedValue, StarknetFinality, VerifyForeignTransactionRequestArgs,
+        VerifyForeignTransactionResponse,
     },
     sign::DomainId,
 };
 use near_sdk::{ext_contract, near, require, AccountId, Gas, NearToken, PanicOnDefault, Promise};
 use omni_types::{
+    aptos::events::parse_aptos_proof,
     errors::ProverError,
     evm::events::parse_evm_proof,
     mpc_types::MpcFinality,
@@ -58,6 +60,10 @@ impl MpcOmniProver {
         finalities.insert(
             ChainKind::Strk,
             MpcFinality::Starknet(StarknetFinality::AcceptedOnL2),
+        );
+        finalities.insert(
+            ChainKind::Aptos,
+            MpcFinality::Aptos(AptosFinality::Committed),
         );
 
         Self {
@@ -143,11 +149,13 @@ impl MpcOmniProver {
 
         let ForeignTxSignPayload::V1(ref payload_v1) = sign_payload;
 
-        if chain_kind == ChainKind::Strk {
-            Self::parse_starknet_result(proof_kind, chain_kind, payload_v1)
-        } else {
-            let log_entry_data = Self::extract_evm_log(payload_v1)?;
-            parse_evm_proof(proof_kind, chain_kind, log_entry_data)
+        match chain_kind {
+            ChainKind::Strk => Self::parse_starknet_result(proof_kind, chain_kind, payload_v1),
+            ChainKind::Aptos => Self::parse_aptos_result(proof_kind, payload_v1),
+            _ => {
+                let log_entry_data = Self::extract_evm_log(payload_v1)?;
+                parse_evm_proof(proof_kind, chain_kind, log_entry_data)
+            }
         }
     }
 
@@ -156,6 +164,7 @@ impl MpcOmniProver {
             ForeignChainRpcRequest::Abstract(_) => Some(ChainKind::Abs),
             ForeignChainRpcRequest::Ethereum(_) => Some(ChainKind::Eth),
             ForeignChainRpcRequest::Starknet(_) => Some(ChainKind::Strk),
+            ForeignChainRpcRequest::Aptos(_) => Some(ChainKind::Aptos),
             _ => None,
         }
     }
@@ -167,6 +176,9 @@ impl MpcOmniProver {
                 MpcFinality::Evm(finality),
             ) => args.finality == *finality,
             (ForeignChainRpcRequest::Starknet(args), MpcFinality::Starknet(finality)) => {
+                args.finality == *finality
+            }
+            (ForeignChainRpcRequest::Aptos(args), MpcFinality::Aptos(finality)) => {
                 args.finality == *finality
             }
             _ => false,
@@ -206,6 +218,23 @@ impl MpcOmniProver {
         let data: Vec<[u8; 32]> = starknet_log.data.iter().map(|d| d.0).collect();
 
         parse_starknet_proof(kind, chain_kind, &starknet_log.from_address.0, &keys, &data)
+    }
+
+    fn parse_aptos_result(
+        kind: ProofKind,
+        payload: &ForeignTxSignPayloadV1,
+    ) -> Result<ProverResult, String> {
+        if payload.values.len() != 1 {
+            return Err(ProverError::InvalidPayloadValuesLength.to_string());
+        }
+
+        let Some(ExtractedValue::AptosExtractedValue(AptosExtractedValue::Event(event))) =
+            payload.values.first()
+        else {
+            return Err(ProverError::InvalidProof.to_string());
+        };
+
+        parse_aptos_proof(kind, ChainKind::Aptos, &event.type_tag, &event.data)
     }
 }
 

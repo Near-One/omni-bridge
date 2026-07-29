@@ -176,6 +176,38 @@ mod tests {
             .transact()
             .await?
             .into_result()?;
+
+        // Wait for async gas-refund receipts to settle before the fee assertions read the balance.
+        settle_relayer_gas_refunds(env).await?;
+        Ok(())
+    }
+
+    /// Advance blocks until the relayer's balance stops changing.
+    ///
+    /// Unused prepaid gas is refunded asynchronously, in blocks AFTER the transaction's final
+    /// outcome — `transact().await` does not wait for the system gas-refund receipts. Protocol 83
+    /// raised max prepaid gas 300 Tgas -> 1 Pgas, so `max_gas()` reserves far more; the unused
+    /// portion (largest for the token-fee path's extra cross-contract `ft_transfer`) is refunded a
+    /// few blocks later. Without this wait the relayer balance reads too low and looks like a
+    /// missing native fee.
+    async fn settle_relayer_gas_refunds(env: &TestEnv) -> anyhow::Result<()> {
+        let mut relayer_balance = env
+            .worker
+            .view_account(env.relayer_account.id())
+            .await?
+            .balance;
+        for _ in 0..5 {
+            env.worker.fast_forward(1).await?;
+            let settled = env
+                .worker
+                .view_account(env.relayer_account.id())
+                .await?
+                .balance;
+            if settled == relayer_balance {
+                break;
+            }
+            relayer_balance = settled;
+        }
         Ok(())
     }
     async fn get_balance_required_for_account(

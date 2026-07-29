@@ -1,0 +1,22 @@
+[package]
+name = "OmniBridge"
+version = "0.1.0"
+authors = ["Near One"]
+
+[addresses]
+omni_bridge = "_"
+
+[dependencies.AptosFramework]
+git = "https://github.com/aptos-labs/aptos-core.git"
+subdir = "aptos-move/framework/aptos-framework"
+rev = "mainnet"
+
+[dependencies.AptosStdlib]
+git = "https://github.com/aptos-labs/aptos-core.git"
+subdir = "aptos-move/framework/aptos-stdlib"
+rev = "mainnet"
+
+[dependencies.MoveStdlib]
+git = "https://github.com/aptos-labs/aptos-core.git"
+subdir = "aptos-move/framework/move-stdlib"
+rev = "mainnet"
