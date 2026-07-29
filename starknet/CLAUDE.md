@@ -9,18 +9,6 @@ Cross-chain bridge contract enabling token transfers between Starknet and other 
 - **Token Model**: Bridge-deployed tokens (mint/burn) or native tokens (lock/unlock)
 - **Access Control**: OpenZeppelin AccessControl with DEFAULT_ADMIN_ROLE and PAUSER_ROLE
 
-## Core Functions
-
-| Function | Purpose | Access |
-|----------|---------|--------|
-| `init_transfer` | Send tokens from Starknet to another chain | Public |
-| `fin_transfer` | Receive tokens from another chain (requires signature) | Public |
-| `deploy_token` | Deploy new bridged token (requires signature) | Public |
-| `log_metadata` | Log token metadata for indexers | Public |
-| `get_token_address` | Query deployed token by NEAR token ID | View |
-| `upgrade_token` | Upgrade deployed bridge token | Admin only |
-| `set_pause_flags` / `pause_all` | Pause operations | Admin/Pauser |
-
 ## Key Implementation Details
 
 ### Token Deployment
@@ -53,11 +41,3 @@ Cross-chain bridge contract enabling token transfers between Starknet and other 
 - ✅ Reentrancy safe (CEI pattern + nonce check)
 - ✅ Transfer success validation for all external ERC20 calls
 
-## Testing
-Run tests with `scarb test`
-
-## File References
-- Main contract: [src/omni_bridge.cairo](src/omni_bridge.cairo)
-- Bridge token: [src/bridge_token.cairo](src/bridge_token.cairo)
-- Type definitions: [src/bridge_types.cairo](src/bridge_types.cairo)
-- Borsh encoding: [src/utils/borsh.cairo](src/utils/borsh.cairo)
