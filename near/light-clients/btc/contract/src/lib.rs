@@ -336,6 +336,27 @@ impl BtcLightClient {
     /// @param confirmations how many confirmed blocks we want to have before the transaction is valid
     /// @return True if tx_id is at the claimed position in the block at the given blockhash, False otherwise
     ///
+    /// # Security: the 64-byte transaction forgery
+    /// A leaf txid is `SHA256d(raw tx bytes)`, while an interior node is `SHA256d(left || right)` —
+    /// two 32-byte child hashes concatenated (64 bytes). A *real* 64-byte transaction is therefore
+    /// hashed exactly like an interior node. An attacker crafts and includes a genuine 64-byte tx
+    /// `T = A || B`, then pretends `txid(T)` is an interior node with "children" `A` (left) and `B`
+    /// (right). This lets them prove that `B` (which is not a real transaction) is included, using
+    /// `A` as its left sibling plus `T`'s real path to the root. The forgeable half is the right one
+    /// `B`: the left half `A` is pinned by the fixed header fields at the start of a transaction
+    /// (version, input count, prevout), whereas the tail (last output + locktime) can be stuffed
+    /// with arbitrary bytes. The forged leaf `B` sits one level below the real leaves, so its proof
+    /// is one longer than any genuine transaction's. v2 blocks this by also
+    /// requiring a coinbase proof (leaf index 0) of equal length: since all genuine leaves sit at
+    /// the same depth, this pins `tx_id` to a real leaf position and rejects the deeper forged `A`.
+    /// See https://www.bitmex.com/blog/64-Byte-Transactions
+    ///
+    /// # Warning
+    /// This function does not protect against `tx_id` being the hash of an internal Merkle node
+    /// rather than a real transaction. It receives only the `tx_id` hash, not the transaction
+    /// bytes, so it cannot tell whether that hash belongs to a correct, well-formed transaction.
+    /// Validating this is the responsibility of the caller.
+    ///
     /// # Panics
     /// - If `merkle_proof` and `coinbase_merkle_proof` have different lengths
     /// - If `tx_block_blockhash` is not found in the headers pool
