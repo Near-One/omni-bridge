@@ -55,6 +55,10 @@ module omni_bridge::omni_bridge {
     /// brick the bridge (no one could grant/revoke roles again).
     const E_CANNOT_REMOVE_LAST_ADMIN: u64 = 12;
 
+    /// `log_metadata` was called on a bridge-deployed FA. The NEAR side
+    /// already knows about it; re-emitting would be misleading.
+    const E_TOKEN_EXIST: u64 = 13;
+
     /// Largest amount that fits in `u64`, used to bound `u128` payload
     /// amounts before they're handed to the Aptos Fungible Asset APIs.
     const MAX_U64_AS_U128: u128 = 0xFFFFFFFFFFFFFFFF;
@@ -340,6 +344,8 @@ module omni_bridge::omni_bridge {
     /// The NEAR side picks this event up to decide whether to sign a
     /// `deploy_token` payload for the mirror token on its side.
     public entry fun log_metadata(token: Object<Metadata>) {
+        assert!(!bridge_token::is_bridge_token(token), E_TOKEN_EXIST);
+
         let name = fungible_asset::name(token);
         let symbol = fungible_asset::symbol(token);
         let decimals = fungible_asset::decimals(token);
