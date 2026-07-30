@@ -266,6 +266,11 @@ impl Contract {
             BridgeOnTransferMsg::InitTransfer(init_transfer_msg) => {
                 self.init_transfer(sender_id, signer_id, token_id, amount, init_transfer_msg)
             }
+            #[allow(unreachable_code, unused_variables)]
+            BridgeOnTransferMsg::FastFinTransfer(fast_fin_transfer_msg) => {
+                env::panic_str("FastFinTransfer is paused");
+                self.fast_fin_transfer(token_id, amount, signer_id, fast_fin_transfer_msg)
+            }
             BridgeOnTransferMsg::UtxoFinTransfer(utxo_fin_transfer_msg) => self.utxo_fin_transfer(
                 token_id,
                 amount,
@@ -277,9 +282,6 @@ impl Contract {
                 self.swap_migrated_token(sender_id, token_id, amount)
                     .detach();
                 PromiseOrPromiseIndexOrValue::Value(U128(0))
-            }
-            BridgeOnTransferMsg::FastFinTransfer(_) => {
-                env::panic_str("FastFinTransfer is not supported");
             }
         };
 
@@ -697,7 +699,6 @@ impl Contract {
         }
     }
 
-    #[allow(clippy::needless_pass_by_value, dead_code)]
     fn fast_fin_transfer(
         &mut self,
         token_id: AccountId,
@@ -863,7 +864,6 @@ impl Contract {
         }
     }
 
-    #[allow(dead_code)]
     fn fast_fin_transfer_to_other_chain(
         &mut self,
         fast_transfer: &FastTransfer,
