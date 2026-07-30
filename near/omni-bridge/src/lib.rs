@@ -28,8 +28,7 @@ use omni_types::{
     get_native_token_address, BasicMetadata, BridgeOnTransferMsg, ChainKind, DestinationChainMsg,
     FastFinTransferMsg, FastTransfer, FastTransferId, FastTransferStatus, Fee, InitTransferMsg,
     MetadataPayload, Nonce, OmniAddress, PayloadType, SignRequest, TransferId, TransferIdKind,
-    TransferMessage, TransferMessagePayload, UnifiedTransferId, UpdateFee, UtxoFinTransferMsg,
-    H160,
+    TransferMessage, TransferMessagePayload, UnifiedTransferId, UtxoFinTransferMsg, H160,
 };
 use omni_utils::macros::trusted_relayer;
 use omni_utils::near_expect::NearExpect;
