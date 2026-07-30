@@ -74,6 +74,7 @@ const SET_METADATA_GAS: Gas = Gas::from_tgas(10);
 const RESOLVE_FAST_TRANSFER_GAS: Gas = Gas::from_tgas(6);
 const UTXO_FIN_TRANSFER_CALLBACK_GAS: Gas = Gas::from_tgas(10);
 const RESOLVE_UTXO_FIN_TRANSFER_GAS: Gas = Gas::from_tgas(3);
+#[allow(dead_code)]
 const FAST_TRANSFER_CALLBACK_GAS: Gas = Gas::from_tgas(10);
 const NO_DEPOSIT: NearToken = NearToken::from_near(0);
 const ONE_YOCTO: NearToken = NearToken::from_yoctonear(1);
@@ -696,7 +697,7 @@ impl Contract {
         }
     }
 
-    #[allow(clippy::needless_pass_by_value)]
+    #[allow(clippy::needless_pass_by_value, dead_code)]
     fn fast_fin_transfer(
         &mut self,
         token_id: AccountId,
@@ -862,6 +863,7 @@ impl Contract {
         }
     }
 
+    #[allow(dead_code)]
     fn fast_fin_transfer_to_other_chain(
         &mut self,
         fast_transfer: &FastTransfer,
