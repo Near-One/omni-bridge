@@ -266,9 +266,6 @@ impl Contract {
             BridgeOnTransferMsg::InitTransfer(init_transfer_msg) => {
                 self.init_transfer(sender_id, signer_id, token_id, amount, init_transfer_msg)
             }
-            BridgeOnTransferMsg::FastFinTransfer(fast_fin_transfer_msg) => {
-                self.fast_fin_transfer(token_id, amount, signer_id, fast_fin_transfer_msg)
-            }
             BridgeOnTransferMsg::UtxoFinTransfer(utxo_fin_transfer_msg) => self.utxo_fin_transfer(
                 token_id,
                 amount,
@@ -280,6 +277,9 @@ impl Contract {
                 self.swap_migrated_token(sender_id, token_id, amount)
                     .detach();
                 PromiseOrPromiseIndexOrValue::Value(U128(0))
+            }
+            BridgeOnTransferMsg::FastFinTransfer(_) => {
+                env::panic_str("FastFinTransfer is not supported");
             }
         };
 
@@ -384,58 +384,6 @@ impl Contract {
                 }
                 .to_log_string(),
             );
-        }
-    }
-
-    #[payable]
-    #[pause]
-    pub fn update_transfer_fee(&mut self, transfer_id: TransferId, fee: UpdateFee) {
-        match fee {
-            UpdateFee::Fee(fee) => {
-                let mut transfer = self.get_transfer_message_storage(transfer_id);
-
-                require!(
-                    transfer.message.origin_transfer_id.is_none(),
-                    BridgeError::UpdateFeeNotAllowedForTransfer.as_ref()
-                );
-
-                let current_fee = transfer.message.fee;
-                require!(
-                    fee.fee >= current_fee.fee && fee.fee < transfer.message.amount,
-                    BridgeError::InvalidFee.as_ref()
-                );
-
-                require!(
-                    fee.fee == current_fee.fee
-                        || OmniAddress::Near(env::predecessor_account_id())
-                            == transfer.message.sender,
-                    BridgeError::SenderCanUpdateTokenFeeOnly.as_ref()
-                );
-
-                let diff_native_fee = fee
-                    .native_fee
-                    .0
-                    .checked_sub(current_fee.native_fee.0)
-                    .near_expect(BridgeError::LowerFee);
-
-                require!(
-                    NearToken::from_yoctonear(diff_native_fee) == env::attached_deposit(),
-                    BridgeError::InvalidAttachedDeposit.as_ref()
-                );
-
-                transfer.message.fee = fee;
-                self.insert_raw_transfer(transfer.message.clone(), transfer.owner);
-
-                env::log_str(
-                    &OmniBridgeEvent::UpdateFeeEvent {
-                        transfer_message: transfer.message,
-                    }
-                    .to_log_string(),
-                );
-            }
-            UpdateFee::Proof(_) => {
-                env::panic_str(BridgeError::UnsupportedFeeUpdateProof.to_string().as_str())
-            }
         }
     }
 
