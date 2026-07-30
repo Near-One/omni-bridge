@@ -42,6 +42,7 @@ contract HyperliquedBridgeToken is BridgeToken, ICoreReceiveWithData {
     event CoreReceived(
         address indexed sender,
         uint8 indexed action,
+        uint64 indexed coreNonce,
         uint256 amount,
         bytes data
     );
@@ -84,8 +85,9 @@ contract HyperliquedBridgeToken is BridgeToken, ICoreReceiveWithData {
 
     /// @notice HyperCore -> HyperEVM callback invoked by the system address when a
     /// HyperCore user triggers `sendToEvmWithData` targeting this token.
-    /// `destinationRecipient`, `destinationChainId`, and `coreNonce` are CCTP-shaped
-    /// and not used here; all routing info comes from `data`.
+    /// `destinationRecipient` and `destinationChainId` are unused here; all routing
+    /// info comes from `data`. `coreNonce` is the HyperCore-side sequence number,
+    /// re-emitted in `CoreReceived` for off-chain correlation with the HL event.
     /// @dev Accounting model: the 3-arg `mint` parks HyperCore-bound tokens at
     /// `_systemAddress`, so that account holds the standing pool that mirrors total
     /// HyperCore-side balance. HyperLiquid does NOT pre-transfer tokens before this
@@ -108,7 +110,7 @@ contract HyperliquedBridgeToken is BridgeToken, ICoreReceiveWithData {
         bytes32 /*destinationRecipient*/,
         uint32 /*destinationChainId*/,
         uint256 amount,
-        uint64 /*coreNonce*/,
+        uint64 coreNonce,
         bytes calldata data
     ) external override {
         if (msg.sender != _systemAddress) revert NotSystemAddress();
@@ -137,6 +139,6 @@ contract HyperliquedBridgeToken is BridgeToken, ICoreReceiveWithData {
             revert UnknownAction(action);
         }
 
-        emit CoreReceived(from, action, amount, data);
+        emit CoreReceived(from, action, coreNonce, amount, data);
     }
 }
