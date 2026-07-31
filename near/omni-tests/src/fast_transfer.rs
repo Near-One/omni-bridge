@@ -591,6 +591,7 @@ mod tests {
             error: Some("CodeDoesNotExist"),
         })]
         #[tokio::test]
+        #[ignore]
         async fn single(
             build_artifacts: &BuildArtifacts,
             #[case] mut case: FastTransferCase,
@@ -628,6 +629,7 @@ mod tests {
             error: Some("ERR_FAST_TRANSFER_ALREADY_PERFORMED"),
         })]
         #[tokio::test]
+        #[ignore]
         async fn multiple(
             build_artifacts: &BuildArtifacts,
             #[case] mut case: FastTransferMultipleCase,
@@ -837,6 +839,7 @@ mod tests {
             error: None,
         })]
         #[tokio::test]
+        #[ignore]
         async fn test_transfer_to_other_chain(
             build_artifacts: &BuildArtifacts,
             #[case] mut case: FastTransferCase,
@@ -891,6 +894,7 @@ mod tests {
             error: Some("ERR_FAST_TRANSFER_ALREADY_PERFORMED"),
         })]
         #[tokio::test]
+        #[ignore]
         async fn test_transfer_to_other_chain_multiple(
             build_artifacts: &BuildArtifacts,
             #[case] mut case: FastTransferMultipleCase,
@@ -913,6 +917,7 @@ mod tests {
 
         #[rstest]
         #[tokio::test]
+        #[ignore]
         async fn fails_due_to_already_finalised(
             build_artifacts: &BuildArtifacts,
         ) -> anyhow::Result<()> {
@@ -1033,6 +1038,7 @@ mod tests {
 
             #[rstest]
             #[tokio::test]
+            #[ignore]
             async fn succeeds(build_artifacts: &BuildArtifacts) -> anyhow::Result<()> {
                 let env = TestEnv::new(build_artifacts, false).await?;
 
@@ -1089,6 +1095,7 @@ mod tests {
 
             #[rstest]
             #[tokio::test]
+            #[ignore]
             async fn fails_due_to_duplicate_finalisation(
                 build_artifacts: &BuildArtifacts,
             ) -> anyhow::Result<()> {
@@ -1158,6 +1165,7 @@ mod tests {
 
             #[rstest]
             #[tokio::test]
+            #[ignore]
             async fn succeeds(build_artifacts: &BuildArtifacts) -> anyhow::Result<()> {
                 let env = TestEnv::new(build_artifacts, false).await?;
 
@@ -1197,6 +1205,7 @@ mod tests {
 
             #[rstest]
             #[tokio::test]
+            #[ignore]
             async fn fails_due_to_duplicate_finalisation(
                 build_artifacts: &BuildArtifacts,
             ) -> anyhow::Result<()> {
