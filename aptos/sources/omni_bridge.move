@@ -185,6 +185,24 @@ module omni_bridge::omni_bridge {
         admin: address
     }
 
+    // Emitted on every `grant_role` call, including no-ops where `holder`
+    // already held `role`.
+    #[event]
+    struct RoleGranted has drop, store {
+        role: u8,
+        holder: address,
+        admin: address
+    }
+
+    // Emitted on every `revoke_role` call, including no-ops where `holder`
+    // did not hold `role`.
+    #[event]
+    struct RoleRevoked has drop, store {
+        role: u8,
+        holder: address,
+        admin: address
+    }
+
     // -------- Initialization --------
 
     /// Initialize the bridge. Callable exactly once by the module deployer.
@@ -254,6 +272,7 @@ module omni_bridge::omni_bridge {
         let state = &mut BridgeState[bridge_object_address()];
         assert_role(state, ROLE_ADMIN, admin, E_UNAUTHORIZED);
         add_role_holder(state, role, new_holder);
+        event::emit(RoleGranted { role, holder: new_holder, admin: admin.address_of() });
     }
 
     /// Remove `holder` from the set of `role` holders. No-op if the
@@ -266,6 +285,7 @@ module omni_bridge::omni_bridge {
         let state = &mut BridgeState[bridge_object_address()];
         assert_role(state, ROLE_ADMIN, admin, E_UNAUTHORIZED);
         remove_role_holder(state, role, holder);
+        event::emit(RoleRevoked { role, holder, admin: admin.address_of() });
     }
 
     public entry fun set_near_bridge_derived_address(
