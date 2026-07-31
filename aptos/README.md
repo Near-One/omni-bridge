@@ -197,13 +197,23 @@ The remaining integration step is operational, not code:
 
 **Register the Aptos factory with the bridge contract on NEAR.** After
 deploying the Aptos package, call the bridge's `add_factory` admin function
-with the bridge object's address:
+with the **package address** (`@omni_bridge`) — the address the package was
+deployed under:
 
 ```bash
 near call omni.bridge.near add_factory \
-  '{"address": "aptos:0x<BRIDGE_OBJECT_ADDRESS>"}' \
+  '{"address": "aptos:0x<PACKAGE_ADDRESS>"}' \
   --accountId <dao-admin>
 ```
 
-`<BRIDGE_OBJECT_ADDRESS>` is the value returned by the
-`bridge_object_address()` view on the deployed Aptos package.
+`<PACKAGE_ADDRESS>` is the `<deployer-address>` you passed to
+`--named-addresses omni_bridge=…` at publish time. Every bridge event is
+declared in `omni_bridge::omni_bridge`, so its Move struct type tag
+carries the package address — that is the emitter the NEAR side extracts
+and matches against the registered factory.
+
+> **Do not register `bridge_object_address()`.** That view returns the
+> derived object address where `BridgeState` and locked-token custody
+> live; it never appears as an event emitter, so registering it as the
+> factory rejects every Aptos proof with `UnknownFactory` and silently
+> disables the Aptos-to-NEAR direction.
