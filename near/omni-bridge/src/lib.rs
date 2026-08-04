@@ -23,7 +23,7 @@ use omni_types::locker_args::{
 };
 use omni_types::mpc_types::SignatureResponse;
 use omni_types::near_events::OmniBridgeEvent;
-use omni_types::prover_result::ProverResult;
+use omni_types::prover_result::{InitTransferMessage, ProverResult};
 use omni_types::{
     get_native_token_address, BasicMetadata, BridgeOnTransferMsg, ChainKind, DestinationChainMsg,
     FastFinTransferMsg, FastTransfer, FastTransferId, FastTransferStatus, Fee, InitTransferMsg,
@@ -56,6 +56,7 @@ const MPC_SIGNING_GAS: Gas = Gas::from_tgas(250);
 const SIGN_TRANSFER_CALLBACK_GAS: Gas = Gas::from_tgas(5);
 const SIGN_LOG_METADATA_CALLBACK_GAS: Gas = Gas::from_tgas(5);
 const FIN_TRANSFER_CALLBACK_GAS: Gas = Gas::from_tgas(250);
+const RETURN_INIT_TRANSFER_GAS: Gas = Gas::from_tgas(5);
 const CLAIM_FEE_CALLBACK_GAS: Gas = Gas::from_tgas(50);
 const BIND_TOKEN_CALLBACK_GAS: Gas = Gas::from_tgas(25);
 const BIND_TOKEN_REFUND_GAS: Gas = Gas::from_tgas(5);
@@ -747,6 +748,53 @@ impl Contract {
             self.process_fin_transfer_to_other_chain(predecessor_account_id, transfer_message);
             PromiseOrValue::Value(destination_nonce)
         }
+    }
+
+    #[access_control_any(roles(Role::DAO))]
+    #[payable]
+    #[allow(clippy::needless_pass_by_value)]
+    pub fn fin_transfer_as_dao(
+        &mut self,
+        init_transfer: InitTransferMessage,
+        storage_deposit_actions: Vec<StorageDepositAction>,
+    ) -> Promise {
+        let origin_chain = init_transfer.sender.get_chain();
+        require!(
+            init_transfer.token.get_chain() == origin_chain
+                && init_transfer.emitter_address.get_chain() == origin_chain,
+            BridgeError::CannotDetermineOriginChain.as_ref()
+        );
+        require!(
+            storage_deposit_actions.len() <= 3,
+            BridgeError::InvalidStorageAccountsLen.as_ref()
+        );
+
+        let mut main_promise = Self::ext(env::current_account_id())
+            .with_static_gas(RETURN_INIT_TRANSFER_GAS)
+            .return_init_transfer(init_transfer);
+
+        let mut attached_deposit = env::attached_deposit();
+
+        for action in &storage_deposit_actions {
+            main_promise =
+                main_promise.and(Self::check_or_pay_ft_storage(action, &mut attached_deposit));
+        }
+
+        main_promise.then(
+            Self::ext(env::current_account_id())
+                .with_attached_deposit(attached_deposit)
+                .with_static_gas(FIN_TRANSFER_CALLBACK_GAS)
+                .fin_transfer_callback(&storage_deposit_actions, env::predecessor_account_id()),
+        )
+    }
+
+    #[private]
+    #[result_serializer(borsh)]
+    pub fn return_init_transfer(
+        &self,
+        #[serializer(borsh)] init_transfer: InitTransferMessage,
+    ) -> ProverResult {
+        ProverResult::InitTransfer(init_transfer)
     }
 
     #[allow(clippy::needless_pass_by_value)]
