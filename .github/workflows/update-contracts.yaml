@@ -6,6 +6,11 @@ on:
   workflow_dispatch:
 
 name: Update Contracts
+
+env:
+  APTOS_CLI_VERSION: "9.2.0"
+  SUI_VERSION: "1.74.1"
+
 jobs:
   update-contracts:
     runs-on: warp-ubuntu-2404-x64-16x
@@ -67,6 +72,48 @@ jobs:
           path: solana/target/idl/bridge_token_factory.json
           if-no-files-found: error
 
+      - name: Install Aptos CLI
+        run: |
+          ASSET="aptos-cli-${APTOS_CLI_VERSION}-Linux-x86_64.zip"
+          URL="https://github.com/aptos-labs/aptos-core/releases/download/aptos-cli-v${APTOS_CLI_VERSION}/${ASSET}"
+          curl -fsSL "$URL" -o aptos-cli.zip
+          unzip -q aptos-cli.zip
+          sudo mv aptos /usr/local/bin/
+          rm aptos-cli.zip
+          aptos --version
+
+      # Reference bytecode compiled with the test/CI placeholder address
+      # (Aptos bytecode embeds the named address; deployments recompile
+      # with the deployer's address).
+      - name: Build Aptos contract
+        working-directory: aptos
+        run: aptos move compile --save-metadata --named-addresses omni_bridge=0xCAFE
+        timeout-minutes: 30
+
+      - name: Install Sui CLI
+        run: |
+          ASSET="sui-mainnet-v${SUI_VERSION}-ubuntu-x86_64.tgz"
+          URL="https://github.com/MystenLabs/sui/releases/download/mainnet-v${SUI_VERSION}/${ASSET}"
+          curl -fsSL "$URL" -o sui.tgz
+          mkdir -p sui-bin
+          tar -xzf sui.tgz -C sui-bin
+          sudo mv sui-bin/sui /usr/local/bin/
+          rm -rf sui.tgz sui-bin
+          sui --version
+          # Create a client config now, on a step whose stdout is discarded.
+          # Otherwise the first `sui` invocation that needs one (the build
+          # step below) prints the interactive config-creation prose — and a
+          # generated key's recovery phrase — to stdout, corrupting the
+          # captured base64 JSON artifact. `sui client` is offline here.
+          sui client --yes envs >/dev/null 2>&1
+
+      # Sui packages publish from the 0x0 placeholder, so both the bytecode
+      # modules and the base64 publish payload are directly usable.
+      - name: Build Sui contract
+        working-directory: sui
+        run: sui move build --dump-bytecode-as-base64 > sui_omni_bridge.json
+        timeout-minutes: 30
+
       - name: Archive built WASM files
         env:
            RAW_TAG: ${{ github.ref_name }}
@@ -77,6 +124,12 @@ jobs:
           find ./near/target/near -name "*.wasm" -exec cp {} artifacts/ \;
           cp ./solana/target/verifiable/bridge_token_factory.so artifacts
           cp ./solana/target/verifiable/bridge_token_factory_fogo.so artifacts
+          zip -j artifacts/aptos_omni_bridge.zip \
+            aptos/build/OmniBridge/bytecode_modules/*.mv \
+            aptos/build/OmniBridge/package-metadata.bcs
+          zip -j artifacts/sui_omni_bridge.zip \
+            sui/build/OmniBridge/bytecode_modules/*.mv
+          cp sui/sui_omni_bridge.json artifacts/
           zip -j "$ZIP_NAME" artifacts/*
         shell: bash
 

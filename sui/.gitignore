@@ -1,0 +1,7 @@
+build/
+# Per-deployer publish record. NOT committed: `sui move test` resolves the
+# package's named address from it, but the offline-precomputed signature
+# vectors in tests/ are keccak-bound to the package at 0x0, so a real
+# published address relocates every bridged coin type and breaks the
+# signature tests. Delete/relocate your local copy before `sui move test`.
+Published.toml
