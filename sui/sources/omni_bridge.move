@@ -507,9 +507,16 @@ public fun prepare_token<T: drop>(
 /// bind (which strands pre-published deploy inventory). `TokenSetup` has no
 /// `drop`, so without this the caps are lost.
 ///
+/// Callable by whoever owns the setup object (the template publisher, or
+/// anyone they transferred it to - possession is the authorization), at any
+/// time before `deploy_token` consumes it. Takes no bridge state and is
+/// deliberately not version- or pause-gated: it cannot touch custody or any
+/// registered token.
+///
 /// Cancelling retires the coin type: a `TokenSetup` only comes from
 /// `prepare_token` and the witness is already spent, so the released caps
-/// govern a currency the bridge can never adopt.
+/// govern a currency the bridge can never adopt - equivalent to having
+/// published an ordinary coin outside the bridge.
 public fun cancel_token_setup<T>(setup: TokenSetup<T>): (TreasuryCap<T>, MetadataCap<T>) {
     let TokenSetup {
         id,
