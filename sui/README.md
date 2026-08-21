@@ -35,7 +35,8 @@ string in a `coin_type` field, and the bridge keeps an on-chain
 external state. Sui-native coins are onboarded with `log_metadata<T>`
 (classic `CoinMetadata<T>`) or `log_metadata_registry<T>` (coins under
 the newer `coin_registry` Currency standard that may have no legacy
-metadata object). Native SUI's token id is
+metadata object). Bridge-deployed coins always use `coin_registry`.
+Native SUI's token id is
 `keccak256(b"0000000000000000000000000000000000000000000000000000000000000002::sui::SUI")`
 = `0x669638…df700c`.
 
@@ -54,40 +55,98 @@ metadata object). Native SUI's token id is
 
 ## Deploying a bridged token (NEAR-originated token on Sui)
 
-Sui cannot create a currency at runtime (`create_currency` requires a
-one-time witness, which only exists in a fresh package's `init`), so
-unlike Aptos this is a two-transaction flow:
+Sui cannot create a currency at runtime (`new_currency_with_otw` requires
+a one-time witness, which only exists in a fresh package's `init`), so
+unlike Aptos this is a two-transaction, two-method flow — the same shape
+as Wormhole's `prepare_registration` / `complete_registration`:
 
-1. Copy [`token_template/`](token_template), rename the module + OTW
-   struct, set `decimals = min(origin_decimals, 9)`, `symbol`, `name` to
-   the values from the MPC-signed `MetadataPayload`, and publish it. The
-   publisher receives the `TreasuryCap`, `CoinMetadata` and `UpgradeCap`.
-2. Call `deploy_token<T>(state, signature, token, name, symbol, decimals,
-   treasury_cap, upgrade_cap, coin_metadata)`. The bridge verifies the
-   MPC signature and binds `T` to the NEAR token id after checking:
-   - `TreasuryCap` total supply is zero,
-   - the `UpgradeCap` controls `T`'s defining package at version 1 — it
-     is then made immutable (one coin per package, forever),
-   - `CoinMetadata` name/symbol equal the signed payload and decimals
-     equal the clamped value.
+1. **Publish.** Point the bridge dependency at the live deployment first —
+   `sui/Move.toml` needs *both* `published-at` and
+   `[addresses] omni_bridge` set to the bridge's package id, since the
+   named address defaults to `0x0` and is what the template links against.
+   Then copy [`token_template/`](token_template) and set
+   `DECIMALS = min(origin_decimals, 9)`, `SYMBOL` and `NAME` to the values
+   from the MPC-signed `MetadataPayload` — all three are checked against
+   the signature, so a stock or mismatched value wastes the package. Do
+   **not** rename the module or the `TOKEN` struct. Its `init` calls
+   `omni_bridge::prepare_token(otw, decimals, symbol, name, ctx)`, which
+   creates the currency via `coin_registry::new_currency_with_otw` and
+   returns a `TokenSetup<T>` to the publisher.
+2. **Bind.** Call `deploy_token<T>(state, setup, upgrade_cap, signature,
+   token, name, symbol, decimals)`. The bridge verifies the MPC signature
+   and binds `T` to the NEAR token id after checking:
+   - `setup.version` equals the package `VERSION`,
+   - the `UpgradeCap` controls `T`'s defining package at version 1 — it is
+     then made immutable (one coin per package, forever),
+   - `T` is `<package>::token::TOKEN`,
+   - the recorded name/symbol equal the signed payload and decimals equal
+     the clamped value.
 
 The `DeployToken` event is then proven to NEAR (`bind_token`).
 
-### Known residual risk (accepted design trade-off)
+Afterwards anyone may call `coin_registry::finalize_registration<T>` to
+promote the coin's `Currency<T>` from the `CoinRegistry` address (`0xc`)
+to its derived shared address. That is a prerequisite for
+`set_token_metadata` and for wallets to resolve the coin from the registry;
+it is permissionless and can happen at any time.
+
+### Why the currency is created by the bridge, not the template
 
 The MPC-signed `MetadataPayload` contains only
 `(near_token_id, name, symbol, decimals)` — it *cannot* name the Sui coin
-type, because package ids don't exist when NEAR signs. `deploy_token` is
-deliberately permissionless (parity with the sibling chains), so a
-front-runner watching NEAR for deploy signatures can bind their own
-metadata-matching coin first. The binding checks make such a coin
-functionally identical to an honest one, **except** a coin pre-created as
-a *regulated* currency: the attacker would retain its `DenyCapV2` and
-could later freeze transfers of that bridged token (griefing, not theft —
-but the binding is permanent). Regulated-ness is not verifiable on-chain
-today. Operational mitigations: relayers should submit `deploy_token`
-promptly after the signature appears, and `PAUSE_DEPLOY_TOKEN` (0x04) can
-gate the window.
+type, because package ids don't exist when NEAR signs. A `deploy_token`
+that merely *inspected* a caller-supplied `TreasuryCap` could therefore
+only reject the problems it thought to enumerate, and one was not
+enumerable: a coin pre-created with
+`coin::create_regulated_currency_v2` / `coin_registry::make_regulated`
+hands its creator a `DenyCapV2` that can freeze every transfer of that
+coin forever. It is invisible to any metadata check and cannot be ruled
+out on-chain after the fact.
+
+Creating the currency inside `prepare_token` closes that category
+outright:
+
+- `make_regulated` needs `&mut CurrencyInitializer<T>`, which never leaves
+  `prepare_token`, so **no `DenyCapV2<T>` can ever exist**;
+- the one-time witness is consumed exactly once, so a publisher who spends
+  it on their own regulated currency gets no `TokenSetup` and can never
+  reach `deploy_token`;
+- `coin_registry::new_currency<T>` — the non-OTW constructor, which anyone
+  may call for any unclaimed type — requires `T: key`, and a one-time
+  witness has only `drop`, so the type cannot be squatted in the window
+  between publish and deploy either.
+
+`deploy_token` stays permissionless (parity with the sibling chains), so a
+front-runner can still win the race — but doing so now just produces a
+correct token: metadata equal to the signed payload, a canonical
+`::token::TOKEN` type string, every capability in bridge custody, and no
+deny capability in existence. The winner keeps nothing. `PAUSE_DEPLOY_TOKEN`
+(0x04) remains available if you want to gate the window anyway.
+
+Residual, accepted: whoever wins the race chooses the coin's *package id*
+(never predictable in any design), and the NEAR token id is bound
+permanently — there is no unbind, so a hostile bind is still a denial of
+service for that token on this deployment.
+
+A `TokenSetup` that can never be bound — mismatched metadata, or a bridge
+upgrade that bumped `VERSION` before the bind — is not stranded:
+`cancel_token_setup` returns its `TreasuryCap` and `MetadataCap` to the
+owner and permanently retires that coin type. Note this is what a `VERSION`
+bump does to pre-published deploy inventory, so re-publish it after an
+upgrade.
+
+### Regenerating test signature vectors
+
+The test suite pins real secp256k1 signatures. Regenerate them with:
+
+```sh
+python3 tests/vectors/gen_signatures.py   # needs pycryptodome
+```
+
+The script mirrors the Borsh encoders in `sources/bridge_types.move` and
+self-checks every signature by recovering it. Its `PRIV` is the well-known
+go-ethereum test key; its address is what `derived_address()` in
+`tests/omni_bridge_tests.move` must contain.
 
 ## Native fees
 
@@ -99,14 +158,19 @@ to fee recipients on NEAR and can leave custody again through a regular
 ## Testing
 
 ```sh
-cd sui
-sui move test
+cd sui && sui move test                  # 91 tests
+cd sui/token_template && sui move build
 ```
 
 Coverage highlights: byte-exact borsh payload layouts, real secp256k1
 signature vectors (generated offline; positive + negative), end-to-end
-lock→unlock and deploy→mint→burn flows, nonce-bitmap word boundaries,
-role/pause/version gates, deploy_token binding guards.
+lock→unlock and prepare→deploy→mint→burn flows, nonce-bitmap word
+boundaries, role/pause/version gates, `deploy_token` binding guards
+(canonical type, upgrade cap, setup version, metadata equality), an
+assertion that a prepared currency is unregulated with no deny cap, and
+negative cases pinned to exact abort codes — malformed signature (native
+ecrecover), valid signature from a non-bridge signer, non-ASCII symbol,
+and the sub-clamp (6-decimal) deploy path.
 
 ## NEAR-side status
 

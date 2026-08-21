@@ -4,5 +4,16 @@ edition = "2024.beta"
 version = "0.1.0"
 authors = ["Near One"]
 
+[dependencies]
+# The template calls `omni_bridge::prepare_token` from its `init`, so it
+# compiles and links against the bridge package. Before publishing a token
+# package against a live deployment, the bridge's ../Move.toml needs BOTH:
+#   [package] published-at = "0x<bridge package id>"
+#   [addresses] omni_bridge = "0x<bridge package id>"
+# `published-at` alone is not enough — the named address is what the
+# template's `prepare_token` call links to, and it defaults to 0x0.
+# Re-point `published-at` after every bridge upgrade.
+OmniBridge = { local = ".." }
+
 [addresses]
 token_template = "0x0"

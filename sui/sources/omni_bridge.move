@@ -12,9 +12,10 @@
 /// payload encodings this module mirrors. Sui-specific differences:
 ///   - Coins are types, not addresses: the wire-format `token_address` is
 ///     `keccak256(canonical type string of T)` (see `utils`).
-///   - Coins cannot be created at runtime (one-time-witness rule), so
-///     `deploy_token<T>` binds a `TreasuryCap<T>` from a pre-published
-///     per-token package instead of creating the token itself.
+///   - Coins cannot be created at runtime (one-time-witness rule), so a
+///     bridged token takes two steps: `prepare_token<T>` creates the
+///     currency from inside a per-token package's `init`, then
+///     `deploy_token<T>` binds it to the MPC-signed payload.
 ///   - State lives in one shared `BridgeState` object; `init` cannot take
 ///     parameters, so the MPC signer address and chain id are set by a
 ///     one-shot admin `initialize` call after publish.
@@ -27,7 +28,7 @@ use std::type_name::{Self, TypeName};
 use sui::bag::{Self, Bag};
 use sui::balance::Balance;
 use sui::coin::{Self, Coin, CoinMetadata, TreasuryCap};
-use sui::coin_registry;
+use sui::coin_registry::{Self, Currency, MetadataCap};
 use sui::event;
 use sui::object_bag::{Self, ObjectBag};
 use sui::package::UpgradeCap;
@@ -88,6 +89,23 @@ const E_NOT_MIGRATION: u64 = 19;
 const E_INVALID_DERIVED_ADDRESS: u64 = 20;
 /// `chain_id` must be non-zero (0 is the unconfigured sentinel).
 const E_INVALID_CHAIN_ID: u64 = 21;
+/// `prepare_token` got a type that is not a one-time witness.
+const E_BAD_WITNESS: u64 = 22;
+const E_DECIMALS_TOO_LARGE: u64 = 23;
+/// `TokenSetup` was minted by a different package version. A `VERSION` bump
+/// therefore strands published-but-unbound token packages; see
+/// `cancel_token_setup`.
+const E_SETUP_VERSION_MISMATCH: u64 = 24;
+const E_NON_CANONICAL_COIN_TYPE: u64 = 25;
+/// Symbol is not printable ASCII, which `coin_registry` rejects. NEAR only
+/// requires non-empty, so such a token cannot be bridged to Sui at all.
+const E_INVALID_SYMBOL: u64 = 26;
+
+/// Every bridged coin type must be `<package>::token::TOKEN`. The struct
+/// name is the module name upper-cased, as the one-time-witness rule
+/// requires.
+const CANONICAL_COIN_MODULE: vector<u8> = b"token";
+const CANONICAL_COIN_STRUCT: vector<u8> = b"TOKEN";
 
 /// Largest amount that fits in `u64`, used to bound `u128` payload
 /// amounts before they're handed to the Sui coin APIs.
@@ -153,10 +171,9 @@ public struct BridgeState has key {
     /// Presence of a type here is the single source of truth for
     /// "is a bridge token".
     treasuries: ObjectBag,
-    /// `CoinMetadata<T>` objects surrendered by `deploy_token`, kept
-    /// bridge-owned so `set_token_metadata` can mutate them:
-    /// `TypeName -> CoinMetadata<T>`.
-    metadata_objects: ObjectBag,
+    /// `TypeName -> MetadataCap<T>`, so `set_token_metadata` can update a
+    /// bridged coin's `Currency<T>`.
+    metadata_caps: ObjectBag,
     /// NEAR token account id -> bridge-deployed coin type.
     near_to_sui_token: Table<String, TypeName>,
     /// keccak256(type string) -> coin type. Reverse map so relayers and
@@ -220,7 +237,7 @@ public struct TokenMetadataChanged has copy, drop {
     token_address: address,
     coin_type: String,
     description: Option<String>,
-    icon_url: Option<std::ascii::String>,
+    icon_url: Option<String>,
     admin: address,
 }
 
@@ -248,7 +265,7 @@ fun init(ctx: &mut TxContext) {
         completed_transfers: table::new(ctx),
         custody: bag::new(ctx),
         treasuries: object_bag::new(ctx),
-        metadata_objects: object_bag::new(ctx),
+        metadata_caps: object_bag::new(ctx),
         near_to_sui_token: table::new(ctx),
         token_registry: table::new(ctx),
     });
@@ -257,7 +274,7 @@ fun init(ctx: &mut TxContext) {
 /// One-shot post-publish configuration. Callable once by an `Admin`;
 /// every bridge operation aborts with `E_NOT_INITIALIZED` until this
 /// has run. `chain_id` is the `ChainKind::Sui` discriminant on NEAR
-/// (expected 14) — it is interleaved as the OmniAddress tag byte in every
+/// (expected 14) - it is interleaved as the OmniAddress tag byte in every
 /// signed transfer payload, so it MUST match NEAR's discriminant or all
 /// inbound `fin_transfer`s fail signature verification. `0` is rejected
 /// (it is the unconfigured sentinel); a wrong non-zero value is
@@ -397,7 +414,7 @@ public fun log_metadata<T>(
 /// `CoinMetadata<T>` object at all.
 public fun log_metadata_registry<T>(
     state: &mut BridgeState,
-    currency: &coin_registry::Currency<T>,
+    currency: &Currency<T>,
 ) {
     assert_version(state);
     assert_configured(state);
@@ -415,43 +432,120 @@ public fun log_metadata_registry<T>(
 
 // -------- Bridge operations --------
 
-/// Register a bridged coin for a NEAR token. Anyone may submit the
-/// transaction - security comes from the NEAR MPC signature over the
-/// payload, not access control (parity with the sibling chains).
+/// Proof that `prepare_token` created the currency for `T`. Only this
+/// module can mint one, and `deploy_token` accepts nothing else - that is
+/// what makes the binding safe (see `prepare_token`).
+public struct TokenSetup<phantom T> has key, store {
+    id: UID,
+    treasury_cap: TreasuryCap<T>,
+    metadata_cap: MetadataCap<T>,
+    /// Copied from creation because `Currency<T>` is owned by the
+    /// `CoinRegistry` address until `finalize_registration` runs, so
+    /// `deploy_token` cannot read it back.
+    decimals: u8,
+    symbol: String,
+    name: String,
+    version: u64,
+}
+
+/// Step 1 of 2: create a bridged token's currency. Called from the `init`
+/// of a per-token package (see `token_template/`) - the only place `T`'s
+/// one-time witness exists.
 ///
-/// Sui cannot create a currency at runtime (`create_currency` needs the
-/// one-time witness of `T`), so unlike Aptos the coin arrives
-/// pre-published (see `token_template/`) and this call BINDS it to the
-/// signed payload. The signed payload cannot name `T`, so the binding is
-/// constrained instead:
-///   - `treasury_cap` must have zero supply (protects NEAR's
-///     locked-token accounting),
-///   - `upgrade_cap` must control `T`'s defining package at version 1
-///     and is made immutable here (no future upgrades, one coin per
-///     package),
-///   - `coin_metadata` must match the signed name/symbol and the clamped
-///     decimals, and is surrendered to the bridge so only
-///     `set_token_metadata` can mutate it.
+/// The bridge, not the template, must create the currency: `make_regulated`
+/// needs the `CurrencyInitializer` that never leaves this function, so no
+/// `DenyCapV2<T>` (permanent freeze authority, invisible to any metadata
+/// check) can ever exist for a bridged coin. See README for the full
+/// argument.
 ///
-/// Residual risk (accepted, documented in the README): a front-runner
-/// can bind their own coin matching all of the above; such a coin is
-/// functionally identical unless it was created as a regulated currency,
-/// whose retained `DenyCapV2` allows freezing transfers later -
-/// regulated-ness is not verifiable on-chain today.
+/// Stateless because `init` cannot receive shared objects, so signature
+/// verification is deferred to `deploy_token`.
+///
+/// Pass `decimals = min(origin_decimals, 9)` and the name/symbol from the
+/// signed `MetadataPayload`; `deploy_token` checks them.
+public fun prepare_token<T: drop>(
+    otw: T,
+    decimals: u8,
+    symbol: String,
+    name: String,
+    ctx: &mut TxContext,
+): TokenSetup<T> {
+    // All three are re-checked downstream; asserting here turns an opaque
+    // framework abort inside the template's `init` into a named one.
+    assert!(sui::types::is_one_time_witness(&otw), E_BAD_WITNESS);
+    assert!(decimals <= utils::max_allowed_decimals(), E_DECIMALS_TOO_LARGE);
+    assert!(symbol.as_bytes().all!(|b| std::ascii::is_printable_char(*b)), E_INVALID_SYMBOL);
+
+    let (initializer, treasury_cap) = coin_registry::new_currency_with_otw<T>(
+        otw,
+        decimals,
+        symbol,
+        name,
+        b"".to_string(),
+        b"".to_string(),
+        ctx,
+    );
+    // Consumes the initializer, putting `make_regulated` out of reach, and
+    // sends the `Currency<T>` to the `CoinRegistry` address. Anyone may then
+    // call `coin_registry::finalize_registration<T>` to share it, which
+    // `set_token_metadata` requires.
+    let metadata_cap = initializer.finalize(ctx);
+
+    TokenSetup {
+        id: object::new(ctx),
+        treasury_cap,
+        metadata_cap,
+        decimals,
+        symbol,
+        name,
+        version: VERSION,
+    }
+}
+
+/// Recover the caps from a `TokenSetup` that can never be bound - metadata
+/// that will never match the signed payload, or a `VERSION` bump before the
+/// bind (which strands pre-published deploy inventory). `TokenSetup` has no
+/// `drop`, so without this the caps are lost.
+///
+/// Cancelling retires the coin type: a `TokenSetup` only comes from
+/// `prepare_token` and the witness is already spent, so the released caps
+/// govern a currency the bridge can never adopt.
+public fun cancel_token_setup<T>(setup: TokenSetup<T>): (TreasuryCap<T>, MetadataCap<T>) {
+    let TokenSetup {
+        id,
+        treasury_cap,
+        metadata_cap,
+        decimals: _,
+        symbol: _,
+        name: _,
+        version: _,
+    } = setup;
+    id.delete();
+    (treasury_cap, metadata_cap)
+}
+
+/// Step 2 of 2: bind `prepare_token`'s currency to the NEAR token in the
+/// MPC-signed `MetadataPayload`. Permissionless - security comes from the
+/// signature and from `TokenSetup` being unforgeable, not access control
+/// (parity with the sibling chains).
+///
+/// Front-running is not preventable (the signature is public on NEAR and
+/// cannot name `T`) but is pointless: the winner produces a token the
+/// bridge fully controls and keeps nothing.
 public fun deploy_token<T>(
     state: &mut BridgeState,
+    setup: TokenSetup<T>,
+    upgrade_cap: UpgradeCap,
     signature: vector<u8>,
     token: String,
     name: String,
     symbol: String,
     decimals: u8,
-    treasury_cap: TreasuryCap<T>,
-    upgrade_cap: UpgradeCap,
-    coin_metadata: CoinMetadata<T>,
 ) {
     assert_version(state);
     assert_configured(state);
     assert!((state.pause_flags & PAUSE_DEPLOY_TOKEN) == 0, E_DEPLOY_TOKEN_PAUSED);
+    assert!(setup.version == VERSION, E_SETUP_VERSION_MISMATCH);
 
     let payload = bridge_types::new_metadata_payload(token, name, symbol, decimals);
     let encoded = payload.metadata_to_borsh();
@@ -462,8 +556,12 @@ public fun deploy_token<T>(
     let key = type_name::with_defining_ids<T>();
     assert!(!state.treasuries.contains(key), E_TYPE_ALREADY_USED);
 
-    assert!(coin::total_supply(&treasury_cap) == 0, E_SUPPLY_NOT_ZERO);
+    assert_canonical_coin_type<T>();
 
+    // `commit_upgrade` rewrites `cap.package` to the NEW package id while
+    // `type_package_address<T>` stays the defining id, so the first
+    // conjunct already rejects any upgraded package and no test can isolate
+    // the second. Kept as belt-and-braces against future cap semantics.
     assert!(
         upgrade_cap.upgrade_package().to_address() == utils::type_package_address<T>() &&
         upgrade_cap.version() == 1,
@@ -471,16 +569,31 @@ public fun deploy_token<T>(
     );
     sui::package::make_immutable(upgrade_cap);
 
+    let TokenSetup {
+        id,
+        treasury_cap,
+        metadata_cap,
+        decimals: setup_decimals,
+        symbol: setup_symbol,
+        name: setup_name,
+        version: _,
+    } = setup;
+    id.delete();
+
+    // Unreachable today (the cap is created here and sealed in TokenSetup);
+    // kept in case a refactor ever exposes it.
+    assert!(coin::total_supply(&treasury_cap) == 0, E_SUPPLY_NOT_ZERO);
+
     let normalized_decimals = utils::normalize_decimals(payload.metadata_decimals());
     assert!(
-        coin::get_decimals(&coin_metadata) == normalized_decimals &&
-        coin::get_name(&coin_metadata) == payload.metadata_name() &&
-        *coin::get_symbol(&coin_metadata).as_bytes() == *payload.metadata_symbol().as_bytes(),
+        setup_decimals == normalized_decimals &&
+        setup_name == payload.metadata_name() &&
+        setup_symbol == payload.metadata_symbol(),
         E_METADATA_MISMATCH,
     );
 
     state.treasuries.add(key, treasury_cap);
-    state.metadata_objects.add(key, coin_metadata);
+    state.metadata_caps.add(key, metadata_cap);
     state.near_to_sui_token.add(token_id, key);
     register_coin_type<T>(state);
 
@@ -495,15 +608,20 @@ public fun deploy_token<T>(
     });
 }
 
-/// Update mutable metadata (`description`, `icon_url`) on a
-/// bridge-deployed coin. `None` fields are left unchanged. Gated on the
-/// `MetadataAdmin` role (separate from the main admin so metadata
-/// refreshes don't require the high-privilege admin key). Aborts if `T`
-/// is not a bridge-deployed token.
+/// Update `description` / `icon_url` on a bridge-deployed coin; `None`
+/// leaves a field unchanged. `MetadataAdmin` is separate from `Admin` so
+/// metadata refreshes don't need the high-privilege key.
+///
+/// `name` and `symbol` are not updatable: both are fixed by the signed
+/// payload, and `coin_registry` has no symbol setter anyway.
+///
+/// Requires `coin_registry::finalize_registration<T>` to have run, since
+/// only then is `Currency<T>` a shared object.
 public fun set_token_metadata<T>(
     state: &mut BridgeState,
+    currency: &mut Currency<T>,
     description: Option<String>,
-    icon_url: Option<std::ascii::String>,
+    icon_url: Option<String>,
     ctx: &TxContext,
 ) {
     assert_version(state);
@@ -511,15 +629,13 @@ public fun set_token_metadata<T>(
     assert!(is_bridge_token<T>(state), E_NOT_BRIDGE_TOKEN);
 
     let key = type_name::with_defining_ids<T>();
-    let cap = state.treasuries.borrow<TypeName, TreasuryCap<T>>(key);
-    let coin_metadata =
-        state.metadata_objects.borrow_mut<TypeName, CoinMetadata<T>>(key);
+    let cap = state.metadata_caps.borrow<TypeName, MetadataCap<T>>(key);
 
     if (description.is_some()) {
-        coin::update_description(cap, coin_metadata, *description.borrow());
+        currency.set_description(cap, *description.borrow());
     };
     if (icon_url.is_some()) {
-        coin::update_icon_url(cap, coin_metadata, *icon_url.borrow());
+        currency.set_icon_url(cap, *icon_url.borrow());
     };
 
     event::emit(TokenMetadataChanged {
@@ -839,6 +955,20 @@ fun mint_bridge_token<T>(
     coin::mint(state.treasuries.borrow_mut<TypeName, TreasuryCap<T>>(key), amount, ctx)
 }
 
+/// Require `T` to be `<package>::token::TOKEN`, so a front-runner cannot
+/// choose the readable half of a bridged asset's type string.
+fun assert_canonical_coin_type<T>() {
+    let type_name = type_name::with_defining_ids<T>();
+    // Bound to locals to avoid an implicit-const-copy warning.
+    let expected_module = CANONICAL_COIN_MODULE;
+    let expected_struct = CANONICAL_COIN_STRUCT;
+    assert!(
+        type_name.module_string().as_bytes() == expected_module &&
+        type_name.datatype_string().as_bytes() == expected_struct,
+        E_NON_CANONICAL_COIN_TYPE,
+    );
+}
+
 /// Record `T` in the wire-id -> type reverse map (idempotent).
 fun register_coin_type<T>(state: &mut BridgeState) {
     let token_address = utils::token_address<T>();
@@ -905,15 +1035,13 @@ public fun set_version_for_testing(state: &mut BridgeState, version: u64) {
 }
 
 #[test_only]
-public fun test_token_description<T>(state: &BridgeState): String {
-    let key = type_name::with_defining_ids<T>();
-    coin::get_description(state.metadata_objects.borrow<TypeName, CoinMetadata<T>>(key))
+public fun test_set_setup_version<T>(setup: &mut TokenSetup<T>, version: u64) {
+    setup.version = version;
 }
 
 #[test_only]
-public fun test_token_icon_url<T>(state: &BridgeState): Option<sui::url::Url> {
-    let key = type_name::with_defining_ids<T>();
-    coin::get_icon_url(state.metadata_objects.borrow<TypeName, CoinMetadata<T>>(key))
+public fun test_has_metadata_cap<T>(state: &BridgeState): bool {
+    state.metadata_caps.contains(type_name::with_defining_ids<T>())
 }
 
 // Event structs have private fields outside this module, so tests build

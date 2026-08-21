@@ -10,16 +10,19 @@ use sui::ecdsa_k1;
 use sui::hash;
 
 /// Signature payload could not be parsed.
-#[allow(unused_const)]
 const E_INVALID_SIGNATURE_LENGTH: u64 = 1;
 /// Recovered Ethereum address does not match the expected signer (also used
 /// for malformed expected addresses).
-#[allow(unused_const)]
 const E_INVALID_SIGNATURE: u64 = 3;
 
 /// Decimals are clamped to 9 (native SUI precision) because Sui `Coin`
 /// amounts are `u64` (max ~1.84e19).
 const MAX_ALLOWED_DECIMALS: u8 = 9;
+
+/// The protocol-wide decimals cap that `normalize_decimals` clamps to.
+public fun max_allowed_decimals(): u8 {
+    MAX_ALLOWED_DECIMALS
+}
 
 /// Cap decimals at the protocol-wide maximum.
 public fun normalize_decimals(decimals: u8): u8 {

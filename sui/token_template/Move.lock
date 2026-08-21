@@ -10,11 +10,17 @@ use_environment = "testnet"
 manifest_digest = "C4FE4C91DE74CBF223B2E380AE40F592177D21870DC2D7EB6227D2D694E05363"
 deps = {}
 
-[pinned.testnet.OmniBridgeTokenTemplate]
-source = { root = true }
+[pinned.testnet.OmniBridge]
+source = { local = ".." }
 use_environment = "testnet"
 manifest_digest = "5745706258F61D6CE210904B3E6AE87A73CE9D31A6F93BE4718C442529332A87"
 deps = { std = "MoveStdlib", sui = "Sui" }
+
+[pinned.testnet.OmniBridgeTokenTemplate]
+source = { root = true }
+use_environment = "testnet"
+manifest_digest = "23205692B24EFEB558FBBC7DCA96AFF890468D1393C12092B02F8028D6C12E77"
+deps = { OmniBridge = "OmniBridge", std = "MoveStdlib", sui = "Sui" }
 
 [pinned.testnet.Sui]
 source = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework/packages/sui-framework", rev = "b124567746b3a78a7e294ac2de265f693401ec9d" }
