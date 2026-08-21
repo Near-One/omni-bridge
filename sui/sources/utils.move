@@ -51,31 +51,18 @@ public fun verify_eth_signature(
     assert!(expected_address.length() == 20, E_INVALID_SIGNATURE);
 
     let mut sig = *signature;
-    let v = &mut sig[64];
-    if (*v >= 27) {
-        *v = *v - 27;
-    };
+    let v = sig.pop_back();
+    sig.push_back(if (v >= 27) v - 27 else v);
 
-    let compressed = ecdsa_k1::secp256k1_ecrecover(&sig, message_bytes, 0);
-    let uncompressed = ecdsa_k1::decompress_pubkey(&compressed);
+    let uncompressed = ecdsa_k1::decompress_pubkey(
+        &ecdsa_k1::secp256k1_ecrecover(&sig, message_bytes, 0),
+    );
 
-    // Skip the 0x04 prefix; hash the raw 64-byte public key.
-    let mut pk64 = vector[];
-    let mut i = 1;
-    while (i < 65) {
-        pk64.push_back(uncompressed[i]);
-        i = i + 1;
-    };
-    let digest = hash::keccak256(&pk64);
-
-    let mut addr = vector[];
-    let mut j = 12;
-    while (j < 32) {
-        addr.push_back(digest[j]);
-        j = j + 1;
-    };
-
-    assert!(addr == *expected_address, E_INVALID_SIGNATURE);
+    // `skip(1)` drops the 0x04 uncompressed-point prefix, leaving the raw
+    // 64-byte key Ethereum hashes; `skip(12)` keeps the low 20 bytes of the
+    // digest, which is the address.
+    let digest = hash::keccak256(&uncompressed.skip(1));
+    assert!(digest.skip(12) == *expected_address, E_INVALID_SIGNATURE);
 }
 
 /// Canonical coin-type string for `T`: 64 lowercase hex chars (no `0x`)
