@@ -117,16 +117,9 @@ def transfer_payload(dest_nonce, origin_chain, origin_nonce, token_addr32,
     return b
 
 
-def movevec(sig, indent="        "):
-    out, line = [], []
-    for i, byte in enumerate(sig):
-        line.append(f"0x{byte:02X},")
-        if len(line) == 12:
-            out.append(indent + " ".join(line))
-            line = []
-    if line:
-        out.append(indent + " ".join(line))
-    return "\n".join(out)
+def movevec(sig):
+    """Render as a Move hex byte-string literal (formatter-stable)."""
+    return f'x"{sig.hex().upper()}"'
 
 def recover(sig, msg):
     """Inverse of `sign`, used to self-check each vector."""

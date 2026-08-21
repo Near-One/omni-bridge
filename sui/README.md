@@ -160,7 +160,13 @@ to fee recipients on NEAR and can leave custody again through a regular
 ```sh
 cd sui && sui move test                  # 91 tests
 cd sui/token_template && sui move build
+make fmt-sui                             # prettier-move check (CI-enforced)
 ```
+
+Formatting uses `sui move format` (prettier-move; install with
+`npm i -g prettier @mysten/prettier-plugin-move`). `make fmt-sui-fix`
+rewrites in place. Signature/byte fixtures are `x"…"` hex literals, which
+the formatter leaves intact.
 
 Coverage highlights: byte-exact borsh payload layouts, real secp256k1
 signature vectors (generated offline; positive + negative), end-to-end

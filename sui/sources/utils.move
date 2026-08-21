@@ -3,11 +3,8 @@
 /// normalization, and coin-type identity helpers.
 module omni_bridge::utils;
 
-use std::string::{Self, String};
-use std::type_name;
-use sui::address;
-use sui::ecdsa_k1;
-use sui::hash;
+use std::{string::{Self, String}, type_name};
+use sui::{address, ecdsa_k1, hash};
 
 /// Signature payload could not be parsed.
 const E_INVALID_SIGNATURE_LENGTH: u64 = 1;

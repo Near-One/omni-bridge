@@ -7,8 +7,7 @@
 module omni_bridge::test_coin;
 
 use omni_bridge::omni_bridge::{Self, TokenSetup};
-use sui::coin::{Self, CoinMetadata, TreasuryCap};
-use sui::test_utils;
+use sui::{coin::{Self, CoinMetadata, TreasuryCap}, test_utils};
 
 public struct TEST_COIN has drop {}
 

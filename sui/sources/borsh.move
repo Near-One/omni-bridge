@@ -11,8 +11,7 @@
 /// helpers below encode that prefix explicitly.
 module omni_bridge::borsh;
 
-use std::bcs;
-use std::string::String;
+use std::{bcs, string::String};
 
 /// Borsh-style byte vector: 4-byte little-endian length + bytes.
 public fun encode_byte_vec(val: &vector<u8>): vector<u8> {

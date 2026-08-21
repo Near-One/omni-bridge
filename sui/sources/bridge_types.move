@@ -13,8 +13,7 @@
 module omni_bridge::bridge_types;
 
 use omni_bridge::borsh;
-use std::bcs;
-use std::string::String;
+use std::{bcs, string::String};
 
 // Payload type tags — must match the rust `PayloadType` enum on NEAR.
 const PAYLOAD_TYPE_TRANSFER_MESSAGE: u8 = 0;
@@ -119,10 +118,7 @@ public fun metadata_to_borsh(self: &MetadataPayload): vector<u8> {
 /// sibling chains. `chain_id` is interleaved as the OmniAddress tag before
 /// each of `token_address` and `recipient` and is bound into the signed
 /// hash (not the payload), preventing cross-chain replay.
-public fun transfer_message_to_borsh(
-    self: &TransferMessagePayload,
-    chain_id: u8,
-): vector<u8> {
+public fun transfer_message_to_borsh(self: &TransferMessagePayload, chain_id: u8): vector<u8> {
     let mut buf = vector[PAYLOAD_TYPE_TRANSFER_MESSAGE];
     buf.append(bcs::to_bytes(&self.destination_nonce));
     buf.push_back(self.origin_chain);

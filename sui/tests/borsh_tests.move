@@ -46,4 +46,3 @@ fun encode_string_empty() {
     let encoded = borsh::encode_string(&string::utf8(b""));
     assert!(encoded == vector[0, 0, 0, 0]);
 }
-

@@ -21,19 +21,19 @@
 ///     one-shot admin `initialize` call after publish.
 module omni_bridge::omni_bridge;
 
-use omni_bridge::bridge_types;
-use omni_bridge::utils;
-use std::string::String;
-use std::type_name::{Self, TypeName};
-use sui::bag::{Self, Bag};
-use sui::balance::Balance;
-use sui::coin::{Self, Coin, CoinMetadata, TreasuryCap};
-use sui::coin_registry::{Self, Currency, MetadataCap};
-use sui::event;
-use sui::object_bag::{Self, ObjectBag};
-use sui::package::UpgradeCap;
-use sui::sui::SUI;
-use sui::table::{Self, Table};
+use omni_bridge::{bridge_types, utils};
+use std::{string::String, type_name::{Self, TypeName}};
+use sui::{
+    bag::{Self, Bag},
+    balance::Balance,
+    coin::{Self, Coin, CoinMetadata, TreasuryCap},
+    coin_registry::{Self, Currency, MetadataCap},
+    event,
+    object_bag::{Self, ObjectBag},
+    package::UpgradeCap,
+    sui::SUI,
+    table::{Self, Table}
+};
 
 // -------- Errors --------
 // Values 1-12 match the Aptos contract; 13+ are Sui-specific.
@@ -299,12 +299,7 @@ public fun initialize(
 /// Add `new_holder` to the set of `role` holders. No-op if the
 /// address already holds the role. Caller must hold `ROLE_ADMIN`.
 /// Works for every role, including `ROLE_ADMIN` itself.
-public fun grant_role(
-    state: &mut BridgeState,
-    role: u8,
-    new_holder: address,
-    ctx: &TxContext,
-) {
+public fun grant_role(state: &mut BridgeState, role: u8, new_holder: address, ctx: &TxContext) {
     assert_version(state);
     assert_role(state, ROLE_ADMIN, ctx.sender());
     add_role_holder(state, role, new_holder);
@@ -314,12 +309,7 @@ public fun grant_role(
 /// address does not hold the role. Caller must hold `ROLE_ADMIN`.
 /// Refuses to remove the last `ROLE_ADMIN` holder, which would brick
 /// the bridge's role management.
-public fun revoke_role(
-    state: &mut BridgeState,
-    role: u8,
-    holder: address,
-    ctx: &TxContext,
-) {
+public fun revoke_role(state: &mut BridgeState, role: u8, holder: address, ctx: &TxContext) {
     assert_version(state);
     assert_role(state, ROLE_ADMIN, ctx.sender());
     remove_role_holder(state, role, holder);
@@ -391,10 +381,7 @@ public fun migrate(state: &mut BridgeState, ctx: &TxContext) {
 /// sign a `deploy_token` payload for the mirror token on its side. Also
 /// registers the coin type in `token_registry` so off-chain actors can
 /// resolve the 32-byte token id back to the concrete type.
-public fun log_metadata<T>(
-    state: &mut BridgeState,
-    coin_metadata: &CoinMetadata<T>,
-) {
+public fun log_metadata<T>(state: &mut BridgeState, coin_metadata: &CoinMetadata<T>) {
     assert_version(state);
     assert_configured(state);
 
@@ -412,10 +399,7 @@ public fun log_metadata<T>(
 /// `log_metadata` variant for coins created under the newer
 /// `sui::coin_registry` Currency standard, which may have no legacy
 /// `CoinMetadata<T>` object at all.
-public fun log_metadata_registry<T>(
-    state: &mut BridgeState,
-    currency: &Currency<T>,
-) {
+public fun log_metadata_registry<T>(state: &mut BridgeState, currency: &Currency<T>) {
     assert_version(state);
     assert_configured(state);
 
@@ -737,10 +721,7 @@ public fun fin_transfer<T>(
     assert!((state.pause_flags & PAUSE_FIN_TRANSFER) == 0, E_FIN_TRANSFER_PAUSED);
 
     // Replay protection before anything else (checks-effects-interactions).
-    assert!(
-        !is_nonce_used(&state.completed_transfers, destination_nonce),
-        E_NONCE_ALREADY_USED,
-    );
+    assert!(!is_nonce_used(&state.completed_transfers, destination_nonce), E_NONCE_ALREADY_USED);
     mark_nonce_used(&mut state.completed_transfers, destination_nonce);
 
     let payload = bridge_types::new_transfer_message_payload(
@@ -953,11 +934,7 @@ fun burn_bridge_token<T>(state: &mut BridgeState, coin: Coin<T>) {
 }
 
 /// Mint a bridge-deployed coin via its stored `TreasuryCap`.
-fun mint_bridge_token<T>(
-    state: &mut BridgeState,
-    amount: u64,
-    ctx: &mut TxContext,
-): Coin<T> {
+fun mint_bridge_token<T>(state: &mut BridgeState, amount: u64, ctx: &mut TxContext): Coin<T> {
     let key = type_name::with_defining_ids<T>();
     coin::mint(state.treasuries.borrow_mut<TypeName, TreasuryCap<T>>(key), amount, ctx)
 }
