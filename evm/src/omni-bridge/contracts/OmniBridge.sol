@@ -222,6 +222,8 @@ contract OmniBridge is
     }
 
     function logMetadata(address tokenAddress) external payable {
+        require(!isBridgeToken[tokenAddress], "ERR_TOKEN_EXIST");
+
         string memory name = IERC20Metadata(tokenAddress).name();
         string memory symbol = IERC20Metadata(tokenAddress).symbol();
         uint8 decimals = IERC20Metadata(tokenAddress).decimals();
@@ -254,19 +256,15 @@ contract OmniBridge is
             }
         }
 
-        logMetadataExtension(
-            deterministicToken,
+        string memory name = string.concat(
             Strings.toHexString(tokenAddress),
-            "",
-            0
+            "#",
+            Strings.toString(tokenId)
         );
 
-        emit BridgeTypes.LogMetadata(
-            deterministicToken,
-            Strings.toHexString(tokenAddress),
-            "",
-            0
-        );
+        logMetadataExtension(deterministicToken, name, "", 0);
+
+        emit BridgeTypes.LogMetadata(deterministicToken, name, "", 0);
     }
 
     function logMetadataExtension(

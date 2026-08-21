@@ -140,7 +140,7 @@ describe("HyperliquedBridgeToken", () => {
           .coreReceiveWithData(user1.address, ethers.ZeroHash, 0, AMOUNT, 0, data),
       )
         .to.emit(token, "CoreReceived")
-        .withArgs(user1.address, ACTION_TRANSFER, AMOUNT, data)
+        .withArgs(user1.address, ACTION_TRANSFER, 0, AMOUNT, data)
 
       expect(await token.balanceOf(user2.address)).to.equal(AMOUNT)
       expect(await token.balanceOf(SYSTEM_ADDRESS)).to.equal(0n)
@@ -202,7 +202,7 @@ describe("HyperliquedBridgeToken", () => {
 
       await expect(tx)
         .to.emit(token, "CoreReceived")
-        .withArgs(user1.address, ACTION_INIT_TRANSFER, AMOUNT, data)
+        .withArgs(user1.address, ACTION_INIT_TRANSFER, 0, AMOUNT, data)
 
       expect(await token.balanceOf(tokenAddress)).to.equal(0n)
       expect(await token.totalSupply()).to.equal(0n)

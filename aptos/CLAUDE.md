@@ -29,11 +29,6 @@ and [evm/src/omni-bridge/contracts/OmniBridge.sol](../evm/src/omni-bridge/contra
   can have any number of holders, all equally privileged. The `Admin` role
   grants/revokes any role (including itself) via `grant_role`/`revoke_role`.
   Revoking the last `Admin` aborts with `E_CANNOT_REMOVE_LAST_ADMIN`.
-- **Modern Move (V2)**: Receiver-style method calls (`v.push_back(x)`,
-  `t.contains(k)`, `payload.metadata_to_borsh()`), vector indexing
-  (`bytes[i]`), `for (i in 0..n)` range loops, `package fun` for
-  cross-module-restricted entry points, and resource-index expressions
-  (`&BridgeState[addr]`).
 
 ## Module Layout
 
@@ -44,29 +39,6 @@ and [evm/src/omni-bridge/contracts/OmniBridge.sol](../evm/src/omni-bridge/contra
 | `omni_bridge::bridge_types` | Payload structs (`MetadataPayload`, `TransferMessagePayload`) and their Borsh encoders. Events live in `omni_bridge` because Aptos requires `#[event]` and emit-site in the same module |
 | `omni_bridge::borsh` | Borsh sequence encoders (`encode_string`, `encode_byte_vec`). Fixed-width integers and addresses delegate to `std::bcs::to_bytes` directly at call sites (BCS == Borsh for those types) |
 | `omni_bridge::utils` | `verify_eth_signature` (secp256k1 + keccak256), `normalize_decimals` |
-
-## Core Functions
-
-| Function | Purpose | Access |
-|----------|---------|--------|
-| `initialize` | One-shot: creates the bridge object and seeds all roles to the deployer | Deployer (only `@omni_bridge`) |
-| `init_transfer` | Send tokens from Aptos to another chain. Burns (bridged FA) or locks (native FA), charges optional `native_fee` | Public |
-| `fin_transfer` | Receive tokens from another chain; verifies NEAR MPC signature, marks `destination_nonce` used, mints or unlocks | Public |
-| `deploy_token` | Deploy a new bridged FA; verifies NEAR MPC signature | Public |
-| `log_metadata` | Emit a `LogMetadata` event describing an existing FA | Public |
-| `set_token_metadata` | Update `icon_uri` / `project_uri` on a bridge-deployed FA | `MetadataAdmin` |
-| `set_pause_flags` | Set the full pause-flags bitmap | `Admin` |
-| `pause_all` | Set all pause flags at once (incident response) | `Pauser` |
-| `set_near_bridge_derived_address` | Rotate the NEAR MPC signer address | `Admin` |
-| `grant_role` | Add an address to a role | `Admin` |
-| `revoke_role` | Remove an address from a role (refuses last Admin) | `Admin` |
-| `bridge_object_address` | Deterministic address of `BridgeState` / locked-token custody | View |
-| `get_token_address` | NEAR token id → deployed FA metadata object address | View |
-| `role_holders` | All addresses currently holding a role | View |
-| `has_role` | True if `addr` holds `role` | View |
-| `all_roles` | Registry of `(name, id)` for every defined role | View |
-| `is_transfer_finalised` | Whether a destination nonce has been used | View |
-| `current_origin_nonce` / `pause_flags` / `chain_id` | Plain state views | View |
 
 ## Borsh Encoding
 
@@ -156,28 +128,3 @@ Run unit tests with:
 ```sh
 aptos move test --named-addresses omni_bridge=0xCAFE
 ```
-
-Coverage:
-- Borsh encoding: length-prefix exhaustiveness, empty strings, multi-byte
-  length encoding
-- Metadata and TransferMessage Borsh layouts (length, field offsets, dual
-  chain-id tag, Option-tag semantics for `fee_recipient` vs untagged `message`)
-- Nonce bitmap edge cases (word boundary at 127/128, idempotent mark)
-- Pause flags: admin can set, non-admin rejected, init/fin/deploy gates
-- Role management: grant adds (idempotent), revoke removes, last-admin
-  guard, admin can step down when another admin exists, non-admin cannot
-  grant/revoke
-- Metadata mutation: `MetadataAdmin` can update `icon_uri`/`project_uri`,
-  non-holder rejected, non-bridge tokens rejected
-- Bridge token: create / mint / burn round-trip
-- Signature verification: invalid signature and wrong length both abort
-- **`init_transfer`** (7 tests): bridged-token burn, non-bridge-token lock,
-  origin nonce increment, paused, zero amount, fee≥amount, amount>u64::MAX
-- Decimal normalization cap
-
-## File References
-- Main contract: [sources/omni_bridge.move](sources/omni_bridge.move)
-- Bridge token: [sources/bridge_token.move](sources/bridge_token.move)
-- Payload types and Borsh: [sources/bridge_types.move](sources/bridge_types.move)
-- Borsh primitives: [sources/borsh.move](sources/borsh.move)
-- Signature verification: [sources/utils.move](sources/utils.move)

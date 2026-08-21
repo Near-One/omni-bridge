@@ -22,37 +22,9 @@ make clippy-near                             # Clippy with pedantic mode
 make fmt-near                                # Check formatting
 ```
 
-## Workspace Structure
-
-```
-near/
-├── omni-bridge/       # Main bridge contract
-├── omni-types/        # Shared type definitions
-├── omni-token/        # NEP-141 bridged token implementation
-├── token-deployer/    # Token deployment factory
-├── omni-prover/
-│   ├── evm-prover/                    # EVM light client verification
-│   ├── wormhole-omni-prover-proxy/    # Wormhole VAA verification
-│   └── mpc-omni-prover/              # MPC read-RPC signature verification
-├── omni-tests/        # Integration tests (near-workspaces)
-└── mock/              # Test mocks
-```
-
 ## omni-bridge
 
-The main bridge contract handling cross-chain transfers. Key state in `Contract` struct:
-
-**Token Mappings:**
-- `token_id_to_address` - NEAR token ID → foreign chain address
-- `token_address_to_id` - Foreign address → NEAR token ID
-- `deployed_tokens` - Set of tokens deployed by bridge
-- `factories` - Bridge factory addresses per chain
-
-**Transfer State:**
-- `pending_transfers` - Transfers awaiting finalization
-- `finalised_transfers` - Completed transfer IDs
-- `fast_transfers` - Two-leg fast transfer status
-- `current_origin_nonce` / `destination_nonces` - Transfer sequencing
+The main bridge contract handling cross-chain transfers.
 
 **Key Functions:**
 - `ft_on_transfer()` - Entry point for bridging (receives NEP-141 transfer from token contract)
@@ -65,59 +37,6 @@ The main bridge contract handling cross-chain transfers. Key state in `Contract`
 **UTXO Support (btc.rs):**
 - `submit_transfer_to_utxo_chain_connector()` - Send to Bitcoin/Zcash (called by relayer)
 - `rbf_increase_gas_fee()` - Replace-by-fee for stuck BTC transactions (DAO/RbfOperator only)
-
-## omni-types
-
-Shared types library - defines core types used across all contracts.
-
-**Main types (lib.rs):**
-- `ChainKind` - Supported chains enum
-- `OmniAddress` - Unified address for any chain
-- `TransferId`, `TransferMessage` - Transfer identification and data
-- `Fee` - Token fee + native fee structure
-- `FastTransfer`, `FastTransferId` - Fast transfer types
-
-**Modules:**
-- `errors.rs` - Error types
-- `evm/` - EVM-specific types (BlockHeader, Receipt, LogEntry)
-- `prover_args.rs` - Prover input structs (`EvmVerifyProofArgs`, `WormholeVerifyProofArgs`, `MpcVerifyProofArgs`)
-- `prover_result.rs` - Prover verification results
-- `btc.rs` - Bitcoin/UTXO types
-- `locker_args.rs` - Function argument structs
-
-## omni-token
-
-NEP-141 fungible token contract for bridged tokens.
-
-**State:**
-```rust
-pub struct OmniToken {
-    pub controller: AccountId,  // Bridge contract - can mint/burn
-    pub token: FungibleToken,   // NEP-141 implementation
-    pub metadata: LazyOption<FungibleTokenMetadata>,
-}
-```
-
-**Traits:** FungibleTokenCore, FungibleTokenResolver, StorageManagement, FungibleTokenMetadataProvider
-
-**Custom Traits (omni_ft/):**
-- `MintAndBurn` - `mint()` / `burn()` (controller only)
-- `MetadataManagment` - `set_metadata()`
-
-## token-deployer
-
-Factory for deploying omni-token instances using NEAR global contracts.
-
-**State:**
-```rust
-pub struct TokenDeployer {
-    pub global_code_hash: CryptoHash,  // Hash of omni-token WASM
-}
-```
-
-**Key Method:** `deploy_token()` - Creates account, transfers deposit, deploys global contract, initializes token
-
-**Roles:** DAO, PauseManager, UpgradableCodeStager, UpgradableCodeDeployer, Controller, LegacyController
 
 ## omni-prover
 
@@ -162,20 +81,8 @@ Verifies foreign chain events by calling the NEAR MPC network's `verify_foreign_
 
 ## Code Style
 
-- Rust 2021 edition, 4-space indentation
-- Clippy pedantic mode (see `LINT_OPTIONS` in Makefile)
 - Test naming: `subject_action_expected` pattern
 - Commits: Conventional Commits (`feat:`, `fix:`, `chore:`)
-
-## Key Dependencies
-
-- `near-sdk`, `near-contract-standards` - Core NEAR SDK (versions defined in workspace Cargo.toml)
-- `near-plugins` - Access control (roles) and upgradeable patterns
-- `omni-utils` - Shared utilities (external repo)
-- `alloy` - EVM types and RLP encoding
-- `near-mpc-sdk` - MPC SDK for cross-contract calls to the MPC signer contract (used by mpc-omni-prover)
-- `contract-interface` - MPC network types from `github.com/near/mpc` (used by mpc-omni-prover via near-mpc-sdk)
-- `near-workspaces` - Integration testing
 
 ## Security Audit Notes
 
