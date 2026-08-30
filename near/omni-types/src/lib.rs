@@ -729,13 +729,6 @@ pub struct SignRequest {
     pub key_version: u32,
 }
 
-#[near(serializers=[borsh, json])]
-#[derive(Debug, Clone)]
-pub enum UpdateFee {
-    Fee(Fee),
-    Proof(Vec<u8>),
-}
-
 pub type Nonce = u64;
 
 pub fn stringify<T: std::fmt::Display>(item: T) -> String {
