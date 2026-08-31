@@ -96,7 +96,9 @@ jobs:
           URL="https://github.com/MystenLabs/sui/releases/download/mainnet-v${SUI_VERSION}/${ASSET}"
           curl -fsSL "$URL" -o sui.tgz
           mkdir -p sui-bin
-          tar -xzf sui.tgz -C sui-bin
+          # Extract only the CLI - the full archive also carries multi-GB
+          # debug binaries.
+          tar -xzf sui.tgz -C sui-bin ./sui
           sudo mv sui-bin/sui /usr/local/bin/
           rm -rf sui.tgz sui-bin
           sui --version
