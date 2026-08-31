@@ -384,6 +384,7 @@ public fun migrate(state: &mut BridgeState, ctx: &TxContext) {
 public fun log_metadata<T>(state: &mut BridgeState, coin_metadata: &CoinMetadata<T>) {
     assert_version(state);
     assert_configured(state);
+    assert!(!is_bridge_token<T>(state), E_TYPE_ALREADY_USED);
 
     register_coin_type<T>(state);
 
@@ -402,6 +403,7 @@ public fun log_metadata<T>(state: &mut BridgeState, coin_metadata: &CoinMetadata
 public fun log_metadata_registry<T>(state: &mut BridgeState, currency: &Currency<T>) {
     assert_version(state);
     assert_configured(state);
+    assert!(!is_bridge_token<T>(state), E_TYPE_ALREADY_USED);
 
     register_coin_type<T>(state);
 
