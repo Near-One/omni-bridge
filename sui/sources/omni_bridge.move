@@ -234,13 +234,13 @@ public struct PauseStateChanged has copy, drop {
 public struct RoleGranted has copy, drop {
     role: u8,
     holder: address,
-    admin: address
+    admin: address,
 }
 
 public struct RoleRevoked has copy, drop {
     role: u8,
     holder: address,
-    admin: address
+    admin: address,
 }
 
 // Emitted on `set_token_metadata`. `description` / `icon_url` are
