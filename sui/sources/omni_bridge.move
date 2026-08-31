@@ -231,6 +231,18 @@ public struct PauseStateChanged has copy, drop {
     admin: address,
 }
 
+public struct RoleGranted has copy, drop {
+    role: u8,
+    holder: address,
+    admin: address
+}
+
+public struct RoleRevoked has copy, drop {
+    role: u8,
+    holder: address,
+    admin: address
+}
+
 // Emitted on `set_token_metadata`. `description` / `icon_url` are
 // `None` for fields the caller did not change.
 public struct TokenMetadataChanged has copy, drop {
@@ -303,6 +315,8 @@ public fun grant_role(state: &mut BridgeState, role: u8, new_holder: address, ct
     assert_version(state);
     assert_role(state, ROLE_ADMIN, ctx.sender());
     add_role_holder(state, role, new_holder);
+
+    event::emit(RoleGranted { role, holder: new_holder, admin: ctx.sender() });
 }
 
 /// Remove `holder` from the set of `role` holders. No-op if the
@@ -313,6 +327,8 @@ public fun revoke_role(state: &mut BridgeState, role: u8, holder: address, ctx: 
     assert_version(state);
     assert_role(state, ROLE_ADMIN, ctx.sender());
     remove_role_holder(state, role, holder);
+
+    event::emit(RoleRevoked { role, holder, admin: ctx.sender() });
 }
 
 /// Rotate the NEAR MPC signer address. Admin-only.
