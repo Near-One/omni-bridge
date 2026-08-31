@@ -622,6 +622,14 @@ const config: HardhatUserConfig = {
           browserURL: "https://abscan.org",
         },
       },
+      {
+        network: "hyperEvmMainnet",
+        chainId: 999,
+        urls: {
+          apiURL: "https://api.etherscan.io/v2/api?chainid=999",
+          browserURL: "https://hyperevmscan.io",
+        },
+      },
     ],
   },
 }
