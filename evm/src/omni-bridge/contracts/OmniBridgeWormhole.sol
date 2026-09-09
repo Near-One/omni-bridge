@@ -24,9 +24,6 @@ enum MessageType {
 
 // slither-disable-start unused-return
 contract OmniBridgeWormhole is OmniBridge {
-    // `internal` rather than `private` so deferred-publish subclasses
-    // (OmniBridgeWormholeDeferred) can reach them. Visibility is compile-time
-    // only — the storage layout is unchanged, so existing proxies stay upgradable.
     IWormhole internal _wormhole;
     // https://wormhole.com/docs/build/reference/consistency-levels
     uint8 internal _consistencyLevel;
@@ -118,10 +115,8 @@ contract OmniBridgeWormhole is OmniBridge {
         wormholeNonce++;
     }
 
-    /// @dev Borsh encoding of an InitTransfer Wormhole message. Extracted so that
-    /// OmniBridgeWormholeDeferred queues byte-for-byte the same payload this
-    /// contract publishes inline — the NEAR side parses it positionally, so the
-    /// two must never diverge.
+    /// @dev Shared with OmniBridgeWormholeDeferred so the queued and inline
+    /// payloads stay byte-identical; the NEAR side parses them positionally.
     function encodeInitTransferPayload(
         address sender,
         address tokenAddress,
