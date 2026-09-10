@@ -1,11 +1,17 @@
 import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers"
 import { expect } from "chai"
 import { ethers, upgrades } from "hardhat"
-import type { HyperliquedBridgeToken, OmniBridge } from "../typechain-types"
+import type {
+  HyperliquedBridgeToken,
+  OmniBridgeWormholeDeferred,
+  TestWormhole,
+} from "../typechain-types"
 import { testWallet } from "./helpers/signatures"
 
 const ACTION_TRANSFER = 0
 const ACTION_INIT_TRANSFER = 1
+const WORMHOLE_FEE = 10000n
+const CONSISTENCY_LEVEL = 0
 
 describe("HyperliquedBridgeToken", () => {
   let adminAccount: HardhatEthersSigner
@@ -13,8 +19,9 @@ describe("HyperliquedBridgeToken", () => {
   let user2: HardhatEthersSigner
   let systemSigner: HardhatEthersSigner
 
-  let omniBridge: OmniBridge
+  let omniBridge: OmniBridgeWormholeDeferred
   let omniBridgeAddress: string
+  let testWormhole: TestWormhole
 
   const SYSTEM_ADDRESS = "0x2222000000000000000000000000000000000000"
   const NEAR_TOKEN_ID = "hl.testnet"
@@ -27,20 +34,29 @@ describe("HyperliquedBridgeToken", () => {
       value: ethers.parseEther("1"),
     })
 
-    // Deploy OmniBridge with a generic BridgeToken impl — we register an
-    // externally-deployed HlBridgeToken via addCustomToken, so the implementation
-    // address here is unused for our flows.
     const BridgeToken_factory = await ethers.getContractFactory("BridgeToken")
     const bridgeTokenImpl = await BridgeToken_factory.deploy()
     await bridgeTokenImpl.waitForDeployment()
 
-    const OmniBridge_factory = await ethers.getContractFactory("OmniBridge")
-    const omniBridgeProxy = await upgrades.deployProxy(
-      OmniBridge_factory,
-      [await bridgeTokenImpl.getAddress(), testWallet.address, 0],
-      { initializer: "initialize" },
+    const testWormhole_factory = await ethers.getContractFactory("TestWormhole")
+    testWormhole = await testWormhole_factory.deploy()
+    await testWormhole.waitForDeployment()
+
+    // The HyperEVM deployment is the deferred variant: HyperCore-originated
+    // transfers are committed by the token and submitted in a second transaction.
+    const factory = await ethers.getContractFactory("OmniBridgeWormholeDeferred")
+    const proxy = await upgrades.deployProxy(
+      factory,
+      [
+        await bridgeTokenImpl.getAddress(),
+        testWallet.address,
+        0,
+        await testWormhole.getAddress(),
+        CONSISTENCY_LEVEL,
+      ],
+      { initializer: "initializeWormhole" },
     )
-    omniBridge = (await omniBridgeProxy.waitForDeployment()) as unknown as OmniBridge
+    omniBridge = (await proxy.waitForDeployment()) as unknown as OmniBridgeWormholeDeferred
     omniBridgeAddress = await omniBridge.getAddress()
   })
 
@@ -58,11 +74,13 @@ describe("HyperliquedBridgeToken", () => {
     return { token, address: await token.getAddress() }
   }
 
-  // `addCustomToken` with `customMinter = address(0)` registers the token so that
-  // `OmniBridge.initTransfer` falls into the `isBridgeToken` branch and calls
-  // `BridgeToken.burn(msg.sender, amount)` — exactly the path we want.
+  // `addCustomToken` with `customMinter = address(0)` marks the token as a bridge
+  // token, which both authorizes `queueInitTransfer` and selects the burn path.
   async function registerHlOnBridge(tokenAddress: string) {
-    await omniBridge.addCustomToken(NEAR_TOKEN_ID, tokenAddress, ethers.ZeroAddress, 18)
+    // addCustomToken publishes a LogMetadata message, so it carries the fee too.
+    await omniBridge.addCustomToken(NEAR_TOKEN_ID, tokenAddress, ethers.ZeroAddress, 18, {
+      value: WORMHOLE_FEE,
+    })
   }
 
   describe("3-arg mint (HyperCore path)", () => {
@@ -124,16 +142,15 @@ describe("HyperliquedBridgeToken", () => {
 
     beforeEach(async () => {
       ;({ token, address: tokenAddress } = await deployHlToken())
-      // Seed the system-address pool the way a prior 3-arg mint would.
       await token.connect(adminAccount)["mint(address,uint256)"](SYSTEM_ADDRESS, AMOUNT)
     })
 
-    it("releases tokens from the system-address pool to recipient", async () => {
-      const data = ethers.concat([
-        "0x00",
-        ethers.AbiCoder.defaultAbiCoder().encode(["address"], [user2.address]),
-      ])
+    function transferData(to: string) {
+      return ethers.concat(["0x00", ethers.AbiCoder.defaultAbiCoder().encode(["address"], [to])])
+    }
 
+    it("releases tokens from the system-address pool to recipient", async () => {
+      const data = transferData(user2.address)
       await expect(
         token
           .connect(systemSigner)
@@ -148,37 +165,44 @@ describe("HyperliquedBridgeToken", () => {
     })
 
     it("rejects the zero address, which _update would treat as a burn", async () => {
-      const data = ethers.concat([
-        "0x00",
-        ethers.AbiCoder.defaultAbiCoder().encode(["address"], [ethers.ZeroAddress]),
-      ])
       await expect(
         token
           .connect(systemSigner)
-          .coreReceiveWithData(user1.address, ethers.ZeroHash, 0, AMOUNT, 0, data),
+          .coreReceiveWithData(
+            user1.address,
+            ethers.ZeroHash,
+            0,
+            AMOUNT,
+            0,
+            transferData(ethers.ZeroAddress),
+          ),
       ).to.be.revertedWithCustomError(token, "InvalidRecipient")
       expect(await token.totalSupply()).to.equal(AMOUNT)
     })
 
     it("reverts if the system-address pool is insufficient", async () => {
-      const data = ethers.concat([
-        "0x00",
-        ethers.AbiCoder.defaultAbiCoder().encode(["address"], [user2.address]),
-      ])
       await expect(
         token
           .connect(systemSigner)
-          .coreReceiveWithData(user1.address, ethers.ZeroHash, 0, AMOUNT + 1n, 0, data),
+          .coreReceiveWithData(
+            user1.address,
+            ethers.ZeroHash,
+            0,
+            AMOUNT + 1n,
+            0,
+            transferData(user2.address),
+          ),
       ).to.be.revertedWithCustomError(token, "ERC20InsufficientBalance")
     })
   })
 
-  describe("ACTION_INIT_TRANSFER (0x01) via real OmniBridge", () => {
+  describe("ACTION_INIT_TRANSFER (0x01) — deferred via OmniBridge", () => {
     const AMOUNT = 1000n
     const FEE = 10n
     const RECIPIENT = "near:alice.near"
     const MESSAGE = "ref=hypercore"
     const CORE_NONCE = 7n
+    const ORIGIN_NONCE = 1n
     const PAUSED_INIT_TRANSFER = 1
     let token: HyperliquedBridgeToken
     let tokenAddress: string
@@ -187,9 +211,7 @@ describe("HyperliquedBridgeToken", () => {
       ;({ token, address: tokenAddress } = await deployHlToken())
       // Seed the standing pool at _systemAddress while we're still the owner.
       await token.connect(adminAccount)["mint(address,uint256)"](SYSTEM_ADDRESS, AMOUNT)
-      // Hand ownership to OmniBridge so it can burn from the token contract once
-      // we've moved the bridged amount from the pool to address(this) inside
-      // coreReceiveWithData.
+      // The bridge must own the token to burn from it at submission time.
       await token.transferOwnership(omniBridgeAddress)
       await omniBridge.acceptTokenOwnership(tokenAddress)
       await registerHlOnBridge(tokenAddress)
@@ -205,10 +227,10 @@ describe("HyperliquedBridgeToken", () => {
       ])
     }
 
-    // Mirrors _initTransferCommitment in the contract.
+    // Mirrors _initTransferCommitment on the bridge.
     function commitment(
+      tokenAddr: string,
       sender: string,
-      coreNonce: bigint,
       amount: bigint,
       fee: bigint,
       recipient: string,
@@ -216,8 +238,8 @@ describe("HyperliquedBridgeToken", () => {
     ) {
       return ethers.keccak256(
         ethers.AbiCoder.defaultAbiCoder().encode(
-          ["address", "uint64", "uint128", "uint128", "string", "string"],
-          [sender, coreNonce, amount, fee, recipient, message],
+          ["address", "address", "uint128", "uint128", "string", "string"],
+          [tokenAddr, sender, amount, fee, recipient, message],
         ),
       )
     }
@@ -234,77 +256,98 @@ describe("HyperliquedBridgeToken", () => {
 
     function trigger(
       overrides: Partial<{
-        id: bigint
+        originNonce: bigint
+        tokenAddress: string
         sender: string
-        coreNonce: bigint
         amount: bigint
         fee: bigint
         recipient: string
         message: string
+        value: bigint
       }> = {},
     ) {
       const a = {
-        id: 0n,
+        originNonce: ORIGIN_NONCE,
+        tokenAddress,
         sender: user1.address,
-        coreNonce: CORE_NONCE,
         amount: AMOUNT,
         fee: FEE,
         recipient: RECIPIENT,
         message: MESSAGE,
+        value: WORMHOLE_FEE,
         ...overrides,
       }
       // Permissionless on purpose: any third party may submit a stuck transfer.
-      return token
+      return omniBridge
         .connect(user2)
         .triggerPendingInitTransfer(
-          a.id,
+          a.originNonce,
+          a.tokenAddress,
           a.sender,
-          a.coreNonce,
           a.amount,
           a.fee,
           a.recipient,
           a.message,
+          { value: a.value },
         )
     }
 
-    it("commits the transfer instead of bridging inline", async () => {
+    it("commits on the bridge instead of publishing inline", async () => {
       const data = encodeData()
       const tx = token
         .connect(systemSigner)
         .coreReceiveWithData(user1.address, ethers.ZeroHash, 0, AMOUNT, CORE_NONCE, data)
 
       await expect(tx)
-        .to.emit(token, "PreInitTransfer")
-        .withArgs(0n, user1.address, CORE_NONCE, AMOUNT, FEE, RECIPIENT, MESSAGE)
+        .to.emit(omniBridge, "PreInitTransfer")
+        .withArgs(
+          ORIGIN_NONCE,
+          tokenAddress,
+          user1.address,
+          CORE_NONCE,
+          AMOUNT,
+          FEE,
+          RECIPIENT,
+          MESSAGE,
+        )
 
       await expect(tx)
         .to.emit(token, "CoreReceived")
         .withArgs(user1.address, ACTION_INIT_TRANSFER, CORE_NONCE, AMOUNT, data)
 
-      // Nothing reaches the bridge in this tx — that is the whole point of the split,
-      // since these logs are invisible to bloom-filtered watchers.
+      // Nothing observable by bloom-filtered watchers happens in this tx.
       await expect(tx).to.not.emit(omniBridge, "InitTransfer")
+      await expect(tx).to.not.emit(testWormhole, "MessagePublished")
 
-      expect(await token.pendingInitTransfers(0n)).to.equal(
-        commitment(user1.address, CORE_NONCE, AMOUNT, FEE, RECIPIENT, MESSAGE),
+      expect(await omniBridge.pendingInitTransfers(ORIGIN_NONCE)).to.equal(
+        commitment(tokenAddress, user1.address, AMOUNT, FEE, RECIPIENT, MESSAGE),
       )
       // The cursor a relayer polls instead of relying on logs.
-      expect(await token.nextPendingInitTransferId()).to.equal(1n)
-      // Tokens are parked on the token contract until the second step burns them.
+      expect(await omniBridge.currentOriginNonce()).to.equal(ORIGIN_NONCE)
+      // Tokens are parked on the token contract; nothing burned yet.
       expect(await token.balanceOf(tokenAddress)).to.equal(AMOUNT)
-      expect(await token.balanceOf(SYSTEM_ADDRESS)).to.equal(0n)
+      expect(await token.totalSupply()).to.equal(AMOUNT)
     })
 
-    it("submits the committed transfer and clears the commitment", async () => {
+    it("submits the committed transfer, burning and publishing", async () => {
       await queue()
 
-      await expect(trigger())
+      const tx = trigger()
+      await expect(tx)
         .to.emit(omniBridge, "InitTransfer")
-        .withArgs(tokenAddress, tokenAddress, 1n, AMOUNT, FEE, 0n, RECIPIENT, MESSAGE)
+        .withArgs(tokenAddress, tokenAddress, ORIGIN_NONCE, AMOUNT, FEE, 0n, RECIPIENT, MESSAGE)
+      await expect(tx).to.emit(testWormhole, "MessagePublished")
 
-      expect(await token.pendingInitTransfers(0n)).to.equal(ethers.ZeroHash)
+      expect(await omniBridge.pendingInitTransfers(ORIGIN_NONCE)).to.equal(ethers.ZeroHash)
       expect(await token.balanceOf(tokenAddress)).to.equal(0n)
       expect(await token.totalSupply()).to.equal(0n)
+    })
+
+    it("requires the Wormhole message fee", async () => {
+      await queue()
+      await expect(trigger({ value: 0n })).to.be.revertedWith("invalid fee")
+      // Still retryable once the fee is supplied.
+      await expect(trigger()).to.emit(testWormhole, "MessagePublished")
     })
 
     it("cannot be submitted twice", async () => {
@@ -312,8 +355,8 @@ describe("HyperliquedBridgeToken", () => {
       await trigger()
 
       await expect(trigger())
-        .to.be.revertedWithCustomError(token, "PendingInitTransferNotFound")
-        .withArgs(0n)
+        .to.be.revertedWithCustomError(omniBridge, "NothingPending")
+        .withArgs(ORIGIN_NONCE)
     })
 
     it("rejects a payload that does not hash to the commitment", async () => {
@@ -324,59 +367,68 @@ describe("HyperliquedBridgeToken", () => {
         { amount: AMOUNT + 1n },
         { fee: FEE + 1n },
         { sender: user2.address },
-        { coreNonce: CORE_NONCE + 1n },
         { message: "tampered" },
       ]) {
         await expect(trigger(bad))
-          .to.be.revertedWithCustomError(token, "PayloadMismatch")
-          .withArgs(0n)
+          .to.be.revertedWithCustomError(omniBridge, "PayloadMismatch")
+          .withArgs(ORIGIN_NONCE)
       }
     })
 
-    it("reverts when nothing is committed under the id", async () => {
-      await expect(trigger({ id: 777n }))
-        .to.be.revertedWithCustomError(token, "PendingInitTransferNotFound")
+    it("reverts when nothing is committed under the nonce", async () => {
+      await expect(trigger({ originNonce: 777n }))
+        .to.be.revertedWithCustomError(omniBridge, "NothingPending")
         .withArgs(777n)
     })
 
+    it("only a registered bridge token may queue", async () => {
+      await expect(
+        omniBridge
+          .connect(user1)
+          .queueInitTransfer(user1.address, CORE_NONCE, AMOUNT, FEE, RECIPIENT, MESSAGE),
+      )
+        .to.be.revertedWithCustomError(omniBridge, "NotBridgeToken")
+        .withArgs(user1.address)
+    })
+
     // coreNonce is sequenced per HyperCore sender, so two senders can present the
-    // same value; ids must stay distinct regardless.
-    it("assigns a fresh id per delivery, including a repeated sender/nonce", async () => {
+    // same value; the bridge's own originNonce keeps the commitments distinct.
+    it("assigns a distinct originNonce per delivery", async () => {
       const half = AMOUNT / 2n
       await queue(CORE_NONCE, half, user1.address)
       await queue(CORE_NONCE, half, user2.address)
 
-      expect(await token.nextPendingInitTransferId()).to.equal(2n)
-      expect(await token.pendingInitTransfers(0n)).to.equal(
-        commitment(user1.address, CORE_NONCE, half, FEE, RECIPIENT, MESSAGE),
+      expect(await omniBridge.currentOriginNonce()).to.equal(2n)
+      expect(await omniBridge.pendingInitTransfers(1n)).to.equal(
+        commitment(tokenAddress, user1.address, half, FEE, RECIPIENT, MESSAGE),
       )
-      expect(await token.pendingInitTransfers(1n)).to.equal(
-        commitment(user2.address, CORE_NONCE, half, FEE, RECIPIENT, MESSAGE),
+      expect(await omniBridge.pendingInitTransfers(2n)).to.equal(
+        commitment(tokenAddress, user2.address, half, FEE, RECIPIENT, MESSAGE),
       )
 
-      // Submitting one must leave the other untouched.
-      await trigger({ id: 0n, sender: user1.address, amount: half })
-      expect(await token.pendingInitTransfers(0n)).to.equal(ethers.ZeroHash)
-      expect(await token.pendingInitTransfers(1n)).to.equal(
-        commitment(user2.address, CORE_NONCE, half, FEE, RECIPIENT, MESSAGE),
+      await trigger({ originNonce: 1n, sender: user1.address, amount: half })
+      expect(await omniBridge.pendingInitTransfers(1n)).to.equal(ethers.ZeroHash)
+      expect(await omniBridge.pendingInitTransfers(2n)).to.equal(
+        commitment(tokenAddress, user2.address, half, FEE, RECIPIENT, MESSAGE),
       )
     })
 
-    it("keeps the commitment retryable when the bridge call reverts", async () => {
-      await queue()
+    it("keeps accepting HyperCore deposits while init-transfer is paused", async () => {
       await omniBridge.pause(PAUSED_INIT_TRANSFER)
 
-      await expect(trigger()).to.be.reverted
+      // Queueing must not revert: a revert here strands the tokens on HyperCore,
+      // which does not roll back with this transaction.
+      await expect(queue()).to.emit(omniBridge, "PreInitTransfer")
 
-      // The delete rolled back together with the failed call, so a transient bridge
-      // failure does not burn the transfer.
-      expect(await token.pendingInitTransfers(0n)).to.equal(
-        commitment(user1.address, CORE_NONCE, AMOUNT, FEE, RECIPIENT, MESSAGE),
+      // Submission is what the pause blocks, and it stays retryable.
+      await expect(trigger()).to.be.revertedWith("Pausable: paused")
+      expect(await omniBridge.pendingInitTransfers(ORIGIN_NONCE)).to.equal(
+        commitment(tokenAddress, user1.address, AMOUNT, FEE, RECIPIENT, MESSAGE),
       )
 
       await omniBridge.pause(0)
-      await expect(trigger()).to.emit(omniBridge, "InitTransfer")
-      expect(await token.pendingInitTransfers(0n)).to.equal(ethers.ZeroHash)
+      await expect(trigger()).to.emit(testWormhole, "MessagePublished")
+      expect(await omniBridge.pendingInitTransfers(ORIGIN_NONCE)).to.equal(ethers.ZeroHash)
     })
 
     it("reverts when amount overflows uint128 (SafeCast)", async () => {

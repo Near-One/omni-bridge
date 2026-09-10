@@ -29,6 +29,10 @@ contract OmniBridgeWormhole is OmniBridge {
     uint8 private _consistencyLevel;
     uint32 public wormholeNonce;
 
+    /// @dev Reserved so that adding state here never shifts a subclass's slots.
+    /// Decrease the size by one for each variable added above it.
+    uint256[50] private __gap;
+
     function initializeWormhole(
         address tokenImplementationAddress,
         address nearBridgeDerivedAddress,

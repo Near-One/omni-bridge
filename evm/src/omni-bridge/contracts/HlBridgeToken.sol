@@ -4,15 +4,15 @@ pragma solidity ^0.8.24;
 import {SafeCast} from "@openzeppelin/contracts/utils/math/SafeCast.sol";
 import {BridgeToken} from "./BridgeToken.sol";
 
-interface IOmniBridgeInitTransfer {
-    function initTransfer(
-        address tokenAddress,
+interface IOmniBridgeQueueInitTransfer {
+    function queueInitTransfer(
+        address sender,
+        uint64 coreNonce,
         uint128 amount,
         uint128 fee,
-        uint128 nativeFee,
         string calldata recipient,
         string calldata message
-    ) external payable;
+    ) external returns (uint64 originNonce);
 }
 
 interface ICoreReceiveWithData {
@@ -39,18 +39,6 @@ contract HyperliquedBridgeToken is BridgeToken, ICoreReceiveWithData {
     uint8 public constant ACTION_TRANSFER = 0;
     uint8 public constant ACTION_INIT_TRANSFER = 1;
 
-    /// @notice Id of the next transfer to be committed. Also the relayer's cursor:
-    /// commitments are enumerable by reading this and walking the ids it has not
-    /// submitted yet, which is the only discovery path that does not depend on the
-    /// callback's logs (see `coreReceiveWithData`).
-    uint256 public nextPendingInitTransferId;
-
-    /// @notice id => keccak256(abi.encode(sender, coreNonce, amount, fee, recipient,
-    /// message)) of a transfer awaiting submission; zero means none. Keyed by our own
-    /// counter rather than by `coreNonce`, which HyperCore sequences per sender and
-    /// so does not identify a transfer on its own.
-    mapping(uint256 => bytes32) public pendingInitTransfers;
-
     event CoreReceived(
         address indexed sender,
         uint8 indexed action,
@@ -59,23 +47,9 @@ contract HyperliquedBridgeToken is BridgeToken, ICoreReceiveWithData {
         bytes data
     );
 
-    /// @notice Carries the full record behind a commitment — the canonical source
-    /// for the values a submitter must hand back to `triggerPendingInitTransfer`.
-    event PreInitTransfer(
-        uint256 indexed id,
-        address indexed sender,
-        uint64 indexed coreNonce,
-        uint128 amount,
-        uint128 fee,
-        string recipient,
-        string message
-    );
-
     error NotSystemAddress();
     error EmptyActionData();
     error UnknownAction(uint8 action);
-    error PendingInitTransferNotFound(uint256 id);
-    error PayloadMismatch(uint256 id);
     error InvalidRecipient();
 
     function initialize(
@@ -166,10 +140,9 @@ contract HyperliquedBridgeToken is BridgeToken, ICoreReceiveWithData {
     }
 
     /// @dev Decodes eagerly so a malformed payload reverts while the transfer is
-    /// still atomic with the HyperCore debit. Storing only the commitment keeps this
-    /// callback's storage cost at one slot regardless of payload length, so an
-    /// oversized `message` cannot push it past the HyperEVM small-block gas limit —
-    /// a revert there would strand the tokens on HyperCore with no way to retry.
+    /// still atomic with the HyperCore debit. The commitment itself lives on the
+    /// bridge, keyed by `originNonce`: one contract to monitor instead of one per
+    /// token, and this contract keeps no storage of its own for the flow.
     function _queueInitTransfer(
         address from,
         uint64 coreNonce,
@@ -179,8 +152,7 @@ contract HyperliquedBridgeToken is BridgeToken, ICoreReceiveWithData {
         (uint128 fee, string memory recipient, string memory message) = abi
             .decode(tail, (uint128, string, string));
 
-        uint256 id = nextPendingInitTransferId++;
-        pendingInitTransfers[id] = _initTransferCommitment(
+        IOmniBridgeQueueInitTransfer(owner()).queueInitTransfer(
             from,
             coreNonce,
             amount128,
@@ -188,77 +160,5 @@ contract HyperliquedBridgeToken is BridgeToken, ICoreReceiveWithData {
             recipient,
             message
         );
-
-        emit PreInitTransfer(
-            id,
-            from,
-            coreNonce,
-            amount128,
-            fee,
-            recipient,
-            message
-        );
-    }
-
-    /// @notice Submits a committed HyperCore-originated transfer to OmniBridge.
-    /// Permissionless — the commitment is the only authority needed, so a stuck
-    /// transfer is never operator-gated. Arguments must hash to the commitment.
-    /// @dev Deleting before the external call is both the reentrancy and the replay
-    /// guard. If `initTransfer` reverts the delete rolls back with it, so a transient
-    /// bridge failure leaves the transfer retryable rather than burning it.
-    function triggerPendingInitTransfer(
-        uint256 id,
-        address sender,
-        uint64 coreNonce,
-        uint128 amount,
-        uint128 fee,
-        string calldata recipient,
-        string calldata message
-    ) external {
-        bytes32 committed = pendingInitTransfers[id];
-        if (committed == bytes32(0)) {
-            revert PendingInitTransferNotFound(id);
-        }
-        if (
-            committed !=
-            _initTransferCommitment(
-                sender,
-                coreNonce,
-                amount,
-                fee,
-                recipient,
-                message
-            )
-        ) {
-            revert PayloadMismatch(id);
-        }
-
-        delete pendingInitTransfers[id];
-
-        IOmniBridgeInitTransfer(owner()).initTransfer(
-            address(this),
-            amount,
-            fee,
-            0,
-            recipient,
-            message
-        );
-    }
-
-    /// @dev `abi.encode`, not `encodePacked`: two adjacent dynamic strings would let
-    /// a packed encoding collide (`"ab" + "c"` vs `"a" + "bc"`), which here would
-    /// mean submitting a different recipient than the one HyperCore committed to.
-    function _initTransferCommitment(
-        address sender,
-        uint64 coreNonce,
-        uint128 amount,
-        uint128 fee,
-        string memory recipient,
-        string memory message
-    ) private pure returns (bytes32) {
-        return
-            keccak256(
-                abi.encode(sender, coreNonce, amount, fee, recipient, message)
-            );
     }
 }
