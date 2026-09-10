@@ -165,6 +165,8 @@ describe("HyperliquedBridgeToken", () => {
     const FEE = 10n
     const RECIPIENT = "near:alice.near"
     const MESSAGE = "ref=hypercore"
+    const CORE_NONCE = 7n
+    const PAUSED_INIT_TRANSFER = 1
     let token: HyperliquedBridgeToken
     let tokenAddress: string
 
@@ -190,32 +192,152 @@ describe("HyperliquedBridgeToken", () => {
       ])
     }
 
-    it("emits InitTransfer on the real OmniBridge and burns the bridged amount", async () => {
+    // Mirrors _initTransferCommitment in the contract.
+    function commitment(
+      sender: string,
+      coreNonce: bigint,
+      amount: bigint,
+      fee: bigint,
+      recipient: string,
+      message: string,
+    ) {
+      return ethers.keccak256(
+        ethers.AbiCoder.defaultAbiCoder().encode(
+          ["address", "uint64", "uint128", "uint128", "string", "string"],
+          [sender, coreNonce, amount, fee, recipient, message],
+        ),
+      )
+    }
+
+    function queue(coreNonce: bigint = CORE_NONCE, amount: bigint = AMOUNT) {
+      return token
+        .connect(systemSigner)
+        .coreReceiveWithData(user1.address, ethers.ZeroHash, 0, amount, coreNonce, encodeData())
+    }
+
+    function trigger(
+      overrides: Partial<{
+        sender: string
+        coreNonce: bigint
+        amount: bigint
+        fee: bigint
+        recipient: string
+        message: string
+      }> = {},
+    ) {
+      const a = {
+        sender: user1.address,
+        coreNonce: CORE_NONCE,
+        amount: AMOUNT,
+        fee: FEE,
+        recipient: RECIPIENT,
+        message: MESSAGE,
+        ...overrides,
+      }
+      // Permissionless on purpose: any third party may submit a stuck transfer.
+      return token
+        .connect(user2)
+        .triggerPendingInitTransfer(a.sender, a.coreNonce, a.amount, a.fee, a.recipient, a.message)
+    }
+
+    it("commits the transfer instead of bridging inline", async () => {
       const data = encodeData()
       const tx = token
         .connect(systemSigner)
-        .coreReceiveWithData(user1.address, ethers.ZeroHash, 0, AMOUNT, 0, data)
+        .coreReceiveWithData(user1.address, ethers.ZeroHash, 0, AMOUNT, CORE_NONCE, data)
 
       await expect(tx)
-        .to.emit(omniBridge, "InitTransfer")
-        .withArgs(tokenAddress, tokenAddress, 1n, AMOUNT, FEE, 0n, RECIPIENT, MESSAGE)
+        .to.emit(token, "PreInitTransfer")
+        .withArgs(CORE_NONCE, user1.address, AMOUNT, FEE, RECIPIENT, MESSAGE)
 
       await expect(tx)
         .to.emit(token, "CoreReceived")
-        .withArgs(user1.address, ACTION_INIT_TRANSFER, 0, AMOUNT, data)
+        .withArgs(user1.address, ACTION_INIT_TRANSFER, CORE_NONCE, AMOUNT, data)
 
+      // Nothing reaches the bridge in this tx — that is the whole point of the split,
+      // since these logs are invisible to bloom-filtered watchers.
+      await expect(tx).to.not.emit(omniBridge, "InitTransfer")
+
+      expect(await token.pendingInitTransfers(CORE_NONCE)).to.equal(
+        commitment(user1.address, CORE_NONCE, AMOUNT, FEE, RECIPIENT, MESSAGE),
+      )
+      // Tokens are parked on the token contract until the second step burns them.
+      expect(await token.balanceOf(tokenAddress)).to.equal(AMOUNT)
+      expect(await token.balanceOf(SYSTEM_ADDRESS)).to.equal(0n)
+    })
+
+    it("submits the committed transfer and clears the commitment", async () => {
+      await queue()
+
+      await expect(trigger())
+        .to.emit(omniBridge, "InitTransfer")
+        .withArgs(tokenAddress, tokenAddress, 1n, AMOUNT, FEE, 0n, RECIPIENT, MESSAGE)
+
+      expect(await token.pendingInitTransfers(CORE_NONCE)).to.equal(ethers.ZeroHash)
       expect(await token.balanceOf(tokenAddress)).to.equal(0n)
       expect(await token.totalSupply()).to.equal(0n)
     })
 
+    it("cannot be submitted twice", async () => {
+      await queue()
+      await trigger()
+
+      await expect(trigger())
+        .to.be.revertedWithCustomError(token, "PendingInitTransferNotFound")
+        .withArgs(CORE_NONCE)
+    })
+
+    it("rejects a payload that does not hash to the commitment", async () => {
+      await queue()
+
+      await expect(trigger({ recipient: "near:mallory.near" }))
+        .to.be.revertedWithCustomError(token, "PayloadMismatch")
+        .withArgs(CORE_NONCE)
+
+      await expect(trigger({ amount: AMOUNT + 1n }))
+        .to.be.revertedWithCustomError(token, "PayloadMismatch")
+        .withArgs(CORE_NONCE)
+
+      await expect(trigger({ sender: user2.address }))
+        .to.be.revertedWithCustomError(token, "PayloadMismatch")
+        .withArgs(CORE_NONCE)
+    })
+
+    it("reverts when nothing is committed under the nonce", async () => {
+      await expect(trigger({ coreNonce: 777n }))
+        .to.be.revertedWithCustomError(token, "PendingInitTransferNotFound")
+        .withArgs(777n)
+    })
+
+    it("rejects a second delivery of a nonce that is still pending", async () => {
+      const half = AMOUNT / 2n
+      await queue(CORE_NONCE, half)
+
+      await expect(queue(CORE_NONCE, half))
+        .to.be.revertedWithCustomError(token, "DuplicateCoreNonce")
+        .withArgs(CORE_NONCE)
+    })
+
+    it("keeps the commitment retryable when the bridge call reverts", async () => {
+      await queue()
+      await omniBridge.pause(PAUSED_INIT_TRANSFER)
+
+      await expect(trigger()).to.be.reverted
+
+      // The delete rolled back together with the failed call, so a transient bridge
+      // failure does not burn the transfer.
+      expect(await token.pendingInitTransfers(CORE_NONCE)).to.equal(
+        commitment(user1.address, CORE_NONCE, AMOUNT, FEE, RECIPIENT, MESSAGE),
+      )
+
+      await omniBridge.pause(0)
+      await expect(trigger()).to.emit(omniBridge, "InitTransfer")
+      expect(await token.pendingInitTransfers(CORE_NONCE)).to.equal(ethers.ZeroHash)
+    })
+
     it("reverts when amount overflows uint128 (SafeCast)", async () => {
       const tooBig = 2n ** 128n
-      const data = encodeData()
-      await expect(
-        token
-          .connect(systemSigner)
-          .coreReceiveWithData(user1.address, ethers.ZeroHash, 0, tooBig, 0, data),
-      )
+      await expect(queue(CORE_NONCE, tooBig))
         .to.be.revertedWithCustomError(token, "SafeCastOverflowedUintDowncast")
         .withArgs(128, tooBig)
     })
