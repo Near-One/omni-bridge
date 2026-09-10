@@ -28,6 +28,9 @@ contract OmniBridgeWormhole is OmniBridge {
     // https://wormhole.com/docs/build/reference/consistency-levels
     uint8 internal _consistencyLevel;
     uint32 public wormholeNonce;
+    // Only written by OmniBridgeWormholeDeferred, but declared here so both
+    // variants share one storage layout and a proxy can migrate either way.
+    mapping(uint64 => bytes32) public queuedPayloadHash;
 
     function initializeWormhole(
         address tokenImplementationAddress,

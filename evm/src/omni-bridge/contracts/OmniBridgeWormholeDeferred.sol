@@ -5,8 +5,6 @@ import {OmniBridgeWormhole} from "./OmniBridgeWormhole.sol";
 
 // slither-disable-start unused-return
 contract OmniBridgeWormholeDeferred is OmniBridgeWormhole {
-    mapping(uint64 => bytes32) public queuedPayloadHash;
-
     event InitTransferQueued(
         uint64 indexed originNonce,
         bytes32 payloadHash,
@@ -22,7 +20,6 @@ contract OmniBridgeWormholeDeferred is OmniBridgeWormhole {
 
     error NothingQueued(uint64 originNonce);
     error PayloadMismatch(uint64 originNonce);
-    error UnexpectedValue(uint256 value);
 
     function initTransferExtension(
         address sender,
@@ -33,12 +30,8 @@ contract OmniBridgeWormholeDeferred is OmniBridgeWormhole {
         uint128 nativeFee,
         string calldata recipient,
         string calldata message,
-        uint256 value
+        uint256 /*value*/
     ) internal override {
-        if (value != 0) {
-            revert UnexpectedValue(value);
-        }
-
         bytes memory payload = encodeInitTransferPayload(
             sender,
             tokenAddress,
