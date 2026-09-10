@@ -24,10 +24,13 @@ enum MessageType {
 
 // slither-disable-start unused-return
 contract OmniBridgeWormhole is OmniBridge {
-    IWormhole private _wormhole;
+    IWormhole internal _wormhole;
     // https://wormhole.com/docs/build/reference/consistency-levels
-    uint8 private _consistencyLevel;
+    uint8 internal _consistencyLevel;
     uint32 public wormholeNonce;
+    // Only written by OmniBridgeWormholeDeferred, but declared here so both
+    // variants share one storage layout and a proxy can migrate either way.
+    mapping(uint64 => bytes32) public queuedPayloadHash;
 
     function initializeWormhole(
         address tokenImplementationAddress,
@@ -115,6 +118,34 @@ contract OmniBridgeWormhole is OmniBridge {
         wormholeNonce++;
     }
 
+    /// @dev Shared with OmniBridgeWormholeDeferred so the queued and inline
+    /// payloads stay byte-identical; the NEAR side parses them positionally.
+    function encodeInitTransferPayload(
+        address sender,
+        address tokenAddress,
+        uint64 originNonce,
+        uint128 amount,
+        uint128 fee,
+        uint128 nativeFee,
+        string memory recipient,
+        string memory message
+    ) internal view returns (bytes memory) {
+        return
+            bytes.concat(
+                bytes1(uint8(MessageType.InitTransfer)),
+                bytes1(omniBridgeChainId),
+                Borsh.encodeAddress(sender),
+                bytes1(omniBridgeChainId),
+                Borsh.encodeAddress(tokenAddress),
+                Borsh.encodeUint64(originNonce),
+                Borsh.encodeUint128(amount),
+                Borsh.encodeUint128(fee),
+                Borsh.encodeUint128(nativeFee),
+                Borsh.encodeString(recipient),
+                Borsh.encodeString(message)
+            );
+    }
+
     function initTransferExtension(
         address sender,
         address tokenAddress,
@@ -125,19 +156,16 @@ contract OmniBridgeWormhole is OmniBridge {
         string calldata recipient,
         string calldata message,
         uint256 value
-    ) internal override {
-        bytes memory payload = bytes.concat(
-            bytes1(uint8(MessageType.InitTransfer)),
-            bytes1(omniBridgeChainId),
-            Borsh.encodeAddress(sender),
-            bytes1(omniBridgeChainId),
-            Borsh.encodeAddress(tokenAddress),
-            Borsh.encodeUint64(originNonce),
-            Borsh.encodeUint128(amount),
-            Borsh.encodeUint128(fee),
-            Borsh.encodeUint128(nativeFee),
-            Borsh.encodeString(recipient),
-            Borsh.encodeString(message)
+    ) internal virtual override {
+        bytes memory payload = encodeInitTransferPayload(
+            sender,
+            tokenAddress,
+            originNonce,
+            amount,
+            fee,
+            nativeFee,
+            recipient,
+            message
         );
         // slither-disable-next-line reentrancy-eth
         _wormhole.publishMessage{value: value}(
