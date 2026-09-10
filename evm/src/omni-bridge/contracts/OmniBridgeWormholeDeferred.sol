@@ -35,8 +35,6 @@ contract OmniBridgeWormholeDeferred is OmniBridgeWormhole {
         string calldata message,
         uint256 value
     ) internal override {
-        // The message fee is paid by whoever publishes. Value forwarded here
-        // would be unattributable, so refuse it rather than strand it.
         if (value != 0) {
             revert UnexpectedValue(value);
         }
@@ -76,11 +74,8 @@ contract OmniBridgeWormholeDeferred is OmniBridgeWormhole {
             revert PayloadMismatch(originNonce);
         }
 
-        // SECURITY: clear the entry and bump the nonce before the external call,
-        // so a reentrant call cannot publish the same transfer twice.
         delete queuedPayloadHash[originNonce];
-        uint32 nonce = wormholeNonce;
-        wormholeNonce = nonce + 1;
+        uint32 nonce = wormholeNonce++;
 
         // slither-disable-next-line reentrancy-eth,reentrancy-events
         sequence = _wormhole.publishMessage{value: msg.value}(
@@ -95,36 +90,6 @@ contract OmniBridgeWormholeDeferred is OmniBridgeWormhole {
             sequence,
             _msgSender()
         );
-    }
-
-    /// @notice Builds a payload with the same encoder the queueing path uses, so a
-    /// keeper can reproduce the committed bytes without reimplementing Borsh.
-    function encodeQueuedTransferPayload(
-        address sender,
-        address tokenAddress,
-        uint64 originNonce,
-        uint128 amount,
-        uint128 fee,
-        uint128 nativeFee,
-        string calldata recipient,
-        string calldata message
-    ) external view returns (bytes memory) {
-        return
-            encodeInitTransferPayload(
-                sender,
-                tokenAddress,
-                originNonce,
-                amount,
-                fee,
-                nativeFee,
-                recipient,
-                message
-            );
-    }
-
-    /// @notice Whether `originNonce` still has an unpublished message queued.
-    function isQueued(uint64 originNonce) external view returns (bool) {
-        return queuedPayloadHash[originNonce] != bytes32(0);
     }
 }
 // slither-disable-end unused-return
