@@ -39,9 +39,17 @@ contract HyperliquedBridgeToken is BridgeToken, ICoreReceiveWithData {
     uint8 public constant ACTION_TRANSFER = 0;
     uint8 public constant ACTION_INIT_TRANSFER = 1;
 
-    /// @notice coreNonce => keccak256(abi.encode(sender, coreNonce, amount, fee,
-    /// recipient, message)) of a transfer awaiting submission; zero means none.
-    mapping(uint64 => bytes32) public pendingInitTransfers;
+    /// @notice Id of the next transfer to be committed. Also the relayer's cursor:
+    /// commitments are enumerable by reading this and walking the ids it has not
+    /// submitted yet, which is the only discovery path that does not depend on the
+    /// callback's logs (see `coreReceiveWithData`).
+    uint256 public nextPendingInitTransferId;
+
+    /// @notice id => keccak256(abi.encode(sender, coreNonce, amount, fee, recipient,
+    /// message)) of a transfer awaiting submission; zero means none. Keyed by our own
+    /// counter rather than by `coreNonce`, which HyperCore sequences per sender and
+    /// so does not identify a transfer on its own.
+    mapping(uint256 => bytes32) public pendingInitTransfers;
 
     event CoreReceived(
         address indexed sender,
@@ -54,8 +62,9 @@ contract HyperliquedBridgeToken is BridgeToken, ICoreReceiveWithData {
     /// @notice Carries the full record behind a commitment — the canonical source
     /// for the values a submitter must hand back to `triggerPendingInitTransfer`.
     event PreInitTransfer(
-        uint64 indexed coreNonce,
+        uint256 indexed id,
         address indexed sender,
+        uint64 indexed coreNonce,
         uint128 amount,
         uint128 fee,
         string recipient,
@@ -65,9 +74,9 @@ contract HyperliquedBridgeToken is BridgeToken, ICoreReceiveWithData {
     error NotSystemAddress();
     error EmptyActionData();
     error UnknownAction(uint8 action);
-    error PendingInitTransferNotFound(uint64 coreNonce);
-    error PayloadMismatch(uint64 coreNonce);
-    error DuplicateCoreNonce(uint64 coreNonce);
+    error PendingInitTransferNotFound(uint256 id);
+    error PayloadMismatch(uint256 id);
+    error InvalidRecipient();
 
     function initialize(
         string memory name_,
@@ -104,8 +113,9 @@ contract HyperliquedBridgeToken is BridgeToken, ICoreReceiveWithData {
     /// @notice HyperCore -> HyperEVM callback invoked by the system address when a
     /// HyperCore user triggers `sendToEvmWithData` targeting this token.
     /// `destinationRecipient` and `destinationChainId` are unused; all routing info
-    /// comes from `data`. `coreNonce` is the HyperCore-side sequence number and
-    /// doubles as the key of the pending-transfer commitment.
+    /// comes from `data`. `coreNonce` is the HyperCore-side sequence number, kept
+    /// for correlation with the HL action; it is sequenced per sender and so is not
+    /// used as a key.
     /// @dev Accounting model: the 3-arg `mint` parks HyperCore-bound tokens at
     /// `_systemAddress`, so that account holds the standing pool that mirrors total
     /// HyperCore-side balance. HyperLiquid does NOT pre-transfer tokens before this
@@ -140,6 +150,9 @@ contract HyperliquedBridgeToken is BridgeToken, ICoreReceiveWithData {
 
         if (action == ACTION_TRANSFER) {
             address recipient = abi.decode(tail, (address));
+            // _update to address(0) burns instead of transferring, silently
+            // dropping tokens HyperCore still counts as backed.
+            if (recipient == address(0)) revert InvalidRecipient();
             _update(_systemAddress, recipient, amount);
         } else if (action == ACTION_INIT_TRANSFER) {
             uint128 amount128 = amount.toUint128();
@@ -166,13 +179,8 @@ contract HyperliquedBridgeToken is BridgeToken, ICoreReceiveWithData {
         (uint128 fee, string memory recipient, string memory message) = abi
             .decode(tail, (uint128, string, string));
 
-        // Overwriting a live commitment would make the first transfer unclaimable
-        // while its tokens already sit at address(this).
-        if (pendingInitTransfers[coreNonce] != bytes32(0)) {
-            revert DuplicateCoreNonce(coreNonce);
-        }
-
-        pendingInitTransfers[coreNonce] = _initTransferCommitment(
+        uint256 id = nextPendingInitTransferId++;
+        pendingInitTransfers[id] = _initTransferCommitment(
             from,
             coreNonce,
             amount128,
@@ -182,8 +190,9 @@ contract HyperliquedBridgeToken is BridgeToken, ICoreReceiveWithData {
         );
 
         emit PreInitTransfer(
-            coreNonce,
+            id,
             from,
+            coreNonce,
             amount128,
             fee,
             recipient,
@@ -198,6 +207,7 @@ contract HyperliquedBridgeToken is BridgeToken, ICoreReceiveWithData {
     /// guard. If `initTransfer` reverts the delete rolls back with it, so a transient
     /// bridge failure leaves the transfer retryable rather than burning it.
     function triggerPendingInitTransfer(
+        uint256 id,
         address sender,
         uint64 coreNonce,
         uint128 amount,
@@ -205,9 +215,9 @@ contract HyperliquedBridgeToken is BridgeToken, ICoreReceiveWithData {
         string calldata recipient,
         string calldata message
     ) external {
-        bytes32 committed = pendingInitTransfers[coreNonce];
+        bytes32 committed = pendingInitTransfers[id];
         if (committed == bytes32(0)) {
-            revert PendingInitTransferNotFound(coreNonce);
+            revert PendingInitTransferNotFound(id);
         }
         if (
             committed !=
@@ -220,10 +230,10 @@ contract HyperliquedBridgeToken is BridgeToken, ICoreReceiveWithData {
                 message
             )
         ) {
-            revert PayloadMismatch(coreNonce);
+            revert PayloadMismatch(id);
         }
 
-        delete pendingInitTransfers[coreNonce];
+        delete pendingInitTransfers[id];
 
         IOmniBridgeInitTransfer(owner()).initTransfer(
             address(this),
