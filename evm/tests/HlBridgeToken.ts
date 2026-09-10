@@ -1,11 +1,7 @@
 import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers"
 import { expect } from "chai"
 import { ethers, upgrades } from "hardhat"
-import type {
-  HyperliquedBridgeToken,
-  OmniBridgeWormholeDeferred,
-  TestWormhole,
-} from "../typechain-types"
+import type { HlOmniBridgeWormhole, HyperliquedBridgeToken, TestWormhole } from "../typechain-types"
 import { testWallet } from "./helpers/signatures"
 
 const ACTION_TRANSFER = 0
@@ -19,7 +15,7 @@ describe("HyperliquedBridgeToken", () => {
   let user2: HardhatEthersSigner
   let systemSigner: HardhatEthersSigner
 
-  let omniBridge: OmniBridgeWormholeDeferred
+  let omniBridge: HlOmniBridgeWormhole
   let omniBridgeAddress: string
   let testWormhole: TestWormhole
 
@@ -44,7 +40,7 @@ describe("HyperliquedBridgeToken", () => {
 
     // The HyperEVM deployment is the deferred variant: HyperCore-originated
     // transfers are committed by the token and submitted in a second transaction.
-    const factory = await ethers.getContractFactory("OmniBridgeWormholeDeferred")
+    const factory = await ethers.getContractFactory("HlOmniBridgeWormhole")
     const proxy = await upgrades.deployProxy(
       factory,
       [
@@ -56,7 +52,7 @@ describe("HyperliquedBridgeToken", () => {
       ],
       { initializer: "initializeWormhole" },
     )
-    omniBridge = (await proxy.waitForDeployment()) as unknown as OmniBridgeWormholeDeferred
+    omniBridge = (await proxy.waitForDeployment()) as unknown as HlOmniBridgeWormhole
     omniBridgeAddress = await omniBridge.getAddress()
   })
 

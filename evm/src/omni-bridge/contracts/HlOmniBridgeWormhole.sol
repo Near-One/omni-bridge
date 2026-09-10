@@ -12,7 +12,7 @@ import "./BridgeTypes.sol";
 /// therefore committed by the token and submitted later from an ordinary
 /// transaction. Only that path is split; ordinary `initTransfer` is untouched.
 // slither-disable-start unused-return
-contract OmniBridgeWormholeDeferred is OmniBridgeWormhole {
+contract HlOmniBridgeWormhole is OmniBridgeWormhole {
     /// @notice originNonce => commitment; zero means nothing pending. Enumerable
     /// against `currentOriginNonce`.
     mapping(uint64 => bytes32) public pendingInitTransfers;
