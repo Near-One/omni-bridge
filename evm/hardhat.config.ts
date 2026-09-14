@@ -3,6 +3,7 @@ import "@nomicfoundation/hardhat-ethers"
 import "@typechain/hardhat"
 import * as dotenv from "dotenv"
 import "hardhat-storage-layout"
+import type { ContractFactory } from "ethers"
 import type { HardhatUserConfig } from "hardhat/config"
 import "solidity-coverage"
 import "./src/eNear/scripts"
@@ -15,6 +16,7 @@ import "hardhat/types/config"
 import assert from "node:assert"
 import * as fs from "node:fs"
 
+import { setBigBlocks, withBigBlocks } from "./utils/hyperliquid/bigBlocks"
 import { getProxyImplementationAddress } from "./utils/zksync"
 import "@matterlabs/hardhat-zksync"
 
@@ -225,54 +227,79 @@ task(
     )
   })
 
+task("hl-big-blocks", "Toggles HyperEVM big blocks for the deployer account")
+  .addOptionalParam("enable", "true to enable big blocks, false to go back to small", "true")
+  .setAction(async (taskArgs, hre) => {
+    console.log(JSON.stringify(await setBigBlocks(hre, taskArgs.enable === "true")))
+  })
+
 task("upgrade-bridge-token", "Upgrades a BridgeToken to a new implementation")
   .addParam("factory", "The address of the OmniBridge contract")
   .addParam("nearTokenAccount", "The NEAR token ID")
+  .addOptionalParam("contract", "Implementation contract name", "BridgeToken")
+  .addFlag("bigBlocks", "Deploy inside HyperEVM big blocks (needed for large implementations)")
   .setAction(async (taskArgs, hre) => {
     const { ethers } = hre
 
     const OmniBridgeContract = await ethers.getContractFactory("OmniBridge")
     const OmniBridge = OmniBridgeContract.attach(taskArgs.factory) as OmniBridge
 
-    const BridgeTokenV2Instance = await ethers.getContractFactory("BridgeTokenV2")
-    const BridgeTokenV2 = await BridgeTokenV2Instance.deploy()
-    await BridgeTokenV2.waitForDeployment()
+    // upgradeToken takes the token's proxy address, not the NEAR token id.
+    const tokenProxyAddress = await OmniBridge.nearToEthToken(taskArgs.nearTokenAccount)
+    if (tokenProxyAddress === ethers.ZeroAddress) {
+      throw new Error(`No token registered for NEAR token id ${taskArgs.nearTokenAccount}`)
+    }
 
-    console.log(`BridgeTokenV2 deployed at ${await BridgeTokenV2.getAddress()}`)
+    const implFactory = (await ethers.getContractFactory(taskArgs.contract)) as ContractFactory
+    const deployImpl = async () => {
+      const impl = await implFactory.deploy()
+      await impl.waitForDeployment()
+      return await impl.getAddress()
+    }
+    const implAddress = taskArgs.bigBlocks
+      ? await withBigBlocks(hre, deployImpl)
+      : await deployImpl()
 
-    const tx = await OmniBridge.upgradeToken(
-      taskArgs.nearTokenAccount,
-      await BridgeTokenV2.getAddress(),
-    )
+    const tx = await OmniBridge.upgradeToken(tokenProxyAddress, implAddress)
     await tx.wait()
 
     console.log(
       JSON.stringify({
         upgradingToken: taskArgs.nearTokenAccount,
-        tokenProxyAddress: await OmniBridge.nearToEthToken(taskArgs.nearTokenAccount),
-        newImplementationAddress: await BridgeTokenV2.getAddress(),
+        tokenProxyAddress,
+        implementationContract: taskArgs.contract,
+        newImplementationAddress: implAddress,
       }),
     )
   })
 
 task("upgrade-factory", "Upgrades the OmniBridge contract")
   .addParam("factory", "The address of the OmniBridge contract")
+  .addOptionalParam("contract", "Implementation contract name, overriding the default")
+  .addFlag("bigBlocks", "Deploy inside HyperEVM big blocks (needed for large implementations)")
   .setAction(async (taskArgs, hre) => {
     const { ethers, upgrades } = hre
     const networkConfig = hre.network.config as HttpNetworkUserConfig
     const wormholeAddress = networkConfig.wormholeAddress
     const isWormholeContract = wormholeAddress ?? false
-    const contractName = isWormholeContract ? "OmniBridgeWormhole" : "OmniBridge"
+    const contractName =
+      taskArgs.contract ?? (isWormholeContract ? "OmniBridgeWormhole" : "OmniBridge")
 
-    const OmniBridgeContract = await ethers.getContractFactory(contractName)
+    const OmniBridgeContract = (await ethers.getContractFactory(contractName)) as ContractFactory
 
     const currentImpl = await getProxyImplementationAddress(hre, taskArgs.factory)
-    await upgrades.upgradeProxy(taskArgs.factory, OmniBridgeContract)
+    const doUpgrade = () => upgrades.upgradeProxy(taskArgs.factory, OmniBridgeContract)
+    if (taskArgs.bigBlocks) {
+      await withBigBlocks(hre, doUpgrade)
+    } else {
+      await doUpgrade()
+    }
     const newImpl = await getProxyImplementationAddress(hre, taskArgs.factory)
 
     console.log(
       JSON.stringify({
         proxyAddress: taskArgs.factory,
+        implementationContract: contractName,
         previousImplementation: currentImpl,
         newImplementation: newImpl,
       }),
