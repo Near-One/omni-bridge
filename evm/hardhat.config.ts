@@ -16,7 +16,6 @@ import "hardhat/types/config"
 import assert from "node:assert"
 import * as fs from "node:fs"
 
-import { setBigBlocks, withBigBlocks } from "./utils/hyperliquid/bigBlocks"
 import { getProxyImplementationAddress } from "./utils/zksync"
 import "@matterlabs/hardhat-zksync"
 
@@ -24,6 +23,7 @@ declare module "hardhat/types/config" {
   interface HttpNetworkUserConfig {
     omniChainId: number
     wormholeAddress?: string
+    bigBlocks?: boolean
     zksync?: boolean
     ethNetwork?: string
   }
@@ -227,17 +227,10 @@ task(
     )
   })
 
-task("hl-big-blocks", "Toggles HyperEVM big blocks for the deployer account")
-  .addOptionalParam("enable", "true to enable big blocks, false to go back to small", "true")
-  .setAction(async (taskArgs, hre) => {
-    console.log(JSON.stringify(await setBigBlocks(hre, taskArgs.enable === "true")))
-  })
-
 task("upgrade-bridge-token", "Upgrades a BridgeToken to a new implementation")
   .addParam("factory", "The address of the OmniBridge contract")
   .addParam("nearTokenAccount", "The NEAR token ID")
   .addOptionalParam("contract", "Implementation contract name", "BridgeToken")
-  .addFlag("bigBlocks", "Deploy inside HyperEVM big blocks (needed for large implementations)")
   .setAction(async (taskArgs, hre) => {
     const { ethers } = hre
 
@@ -251,14 +244,9 @@ task("upgrade-bridge-token", "Upgrades a BridgeToken to a new implementation")
     }
 
     const implFactory = (await ethers.getContractFactory(taskArgs.contract)) as ContractFactory
-    const deployImpl = async () => {
-      const impl = await implFactory.deploy()
-      await impl.waitForDeployment()
-      return await impl.getAddress()
-    }
-    const implAddress = taskArgs.bigBlocks
-      ? await withBigBlocks(hre, deployImpl)
-      : await deployImpl()
+    const impl = await implFactory.deploy()
+    await impl.waitForDeployment()
+    const implAddress = await impl.getAddress()
 
     const tx = await OmniBridge.upgradeToken(tokenProxyAddress, implAddress)
     await tx.wait()
@@ -276,7 +264,6 @@ task("upgrade-bridge-token", "Upgrades a BridgeToken to a new implementation")
 task("upgrade-factory", "Upgrades the OmniBridge contract")
   .addParam("factory", "The address of the OmniBridge contract")
   .addOptionalParam("contract", "Implementation contract name, overriding the default")
-  .addFlag("bigBlocks", "Deploy inside HyperEVM big blocks (needed for large implementations)")
   .setAction(async (taskArgs, hre) => {
     const { ethers, upgrades } = hre
     const networkConfig = hre.network.config as HttpNetworkUserConfig
@@ -288,12 +275,7 @@ task("upgrade-factory", "Upgrades the OmniBridge contract")
     const OmniBridgeContract = (await ethers.getContractFactory(contractName)) as ContractFactory
 
     const currentImpl = await getProxyImplementationAddress(hre, taskArgs.factory)
-    const doUpgrade = () => upgrades.upgradeProxy(taskArgs.factory, OmniBridgeContract)
-    if (taskArgs.bigBlocks) {
-      await withBigBlocks(hre, doUpgrade)
-    } else {
-      await doUpgrade()
-    }
+    await upgrades.upgradeProxy(taskArgs.factory, OmniBridgeContract)
     const newImpl = await getProxyImplementationAddress(hre, taskArgs.factory)
 
     console.log(
@@ -566,6 +548,7 @@ const config: HardhatUserConfig = {
       accounts: [`${EVM_PRIVATE_KEY}`],
     },
     hyperEvmMainnet: {
+      bigBlocks: true,
       wormholeAddress: "0x7C0faFc4384551f063e05aee704ab943b8B53aB3",
       omniChainId: 9,
       chainId: 999,
@@ -615,6 +598,7 @@ const config: HardhatUserConfig = {
       accounts: [`${EVM_PRIVATE_KEY}`],
     },
     hyperEvmTestnet: {
+      bigBlocks: true,
       wormholeAddress: "0xBB73cB66C26740F31d1FabDC6b7A46a038A300dd",
       omniChainId: 9,
       chainId: 998,
