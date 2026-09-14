@@ -80,8 +80,6 @@ contract HlOmniBridgeWormhole is OmniBridgeWormhole {
 
     /// @notice Submits a committed transfer. Permissionless, so a stuck transfer is
     /// never operator-gated; `payable` to cover the Wormhole message fee.
-    /// @dev `InitTransfer` carries `sender = tokenAddress`, as the inline path did —
-    /// the HyperCore originator is only in `PreInitTransfer`.
     function triggerPendingInitTransfer(
         uint64 originNonce,
         address tokenAddress,
@@ -115,7 +113,7 @@ contract HlOmniBridgeWormhole is OmniBridgeWormhole {
         BridgeToken(tokenAddress).burn(tokenAddress, amount);
 
         initTransferExtension(
-            tokenAddress,
+            sender,
             tokenAddress,
             originNonce,
             amount,
@@ -127,7 +125,7 @@ contract HlOmniBridgeWormhole is OmniBridgeWormhole {
         );
 
         emit BridgeTypes.InitTransfer(
-            tokenAddress,
+            sender,
             tokenAddress,
             originNonce,
             amount,

@@ -331,7 +331,7 @@ describe("HyperliquedBridgeToken", () => {
       const tx = trigger()
       await expect(tx)
         .to.emit(omniBridge, "InitTransfer")
-        .withArgs(tokenAddress, tokenAddress, ORIGIN_NONCE, AMOUNT, FEE, 0n, RECIPIENT, MESSAGE)
+        .withArgs(user1.address, tokenAddress, ORIGIN_NONCE, AMOUNT, FEE, 0n, RECIPIENT, MESSAGE)
       await expect(tx).to.emit(testWormhole, "MessagePublished")
 
       expect(await omniBridge.pendingInitTransfers(ORIGIN_NONCE)).to.equal(ethers.ZeroHash)

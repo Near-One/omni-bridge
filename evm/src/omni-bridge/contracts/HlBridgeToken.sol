@@ -106,8 +106,6 @@ contract HyperliquedBridgeToken is BridgeToken, ICoreReceiveWithData {
     ///   would never be picked up by the Wormhole guardians and never attested.
     ///   `triggerPendingInitTransfer` submits it later from a normal tx.
     ///   `recipient` is an OmniAddress string (e.g. `near:alice.near`); nativeFee = 0.
-    ///   The resulting InitTransfer event carries `sender = address(this)`, so the
-    ///   NEAR side cannot recover the originating HyperCore user from this path.
     function coreReceiveWithData(
         address from,
         bytes32 /*destinationRecipient*/,
