@@ -311,7 +311,7 @@ describe("HyperliquedBridgeToken", () => {
         .to.emit(token, "CoreReceived")
         .withArgs(user1.address, ACTION_INIT_TRANSFER, CORE_NONCE, AMOUNT, data)
 
-      // Nothing observable by bloom-filtered watchers happens in this tx.
+      // Nothing the Wormhole guardians could attest happens in this tx.
       await expect(tx).to.not.emit(omniBridge, "InitTransfer")
       await expect(tx).to.not.emit(testWormhole, "MessagePublished")
 

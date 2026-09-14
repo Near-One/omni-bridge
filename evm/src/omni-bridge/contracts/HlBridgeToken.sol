@@ -102,8 +102,8 @@ contract HyperliquedBridgeToken is BridgeToken, ICoreReceiveWithData {
     /// - 0x01 || abi.encode(uint128 fee, string recipient, string message): move
     ///   `amount` from the pool to this contract and commit it under `coreNonce`.
     ///   `initTransfer` is NOT called inline: this call's logs are absent from the
-    ///   block's `logsBloom` (HyperCore system tx) and thus invisible to filtered
-    ///   `eth_getLogs`/`eth_subscribe` watchers (Wormhole guardians, our indexer).
+    ///   block's `logsBloom` (HyperCore system tx), so a message published here
+    ///   would never be picked up by the Wormhole guardians and never attested.
     ///   `triggerPendingInitTransfer` submits it later from a normal tx.
     ///   `recipient` is an OmniAddress string (e.g. `near:alice.near`); nativeFee = 0.
     ///   The resulting InitTransfer event carries `sender = address(this)`, so the

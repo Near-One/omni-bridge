@@ -7,10 +7,11 @@ import "./BridgeTypes.sol";
 
 /// @notice OmniBridge variant for HyperEVM.
 /// @dev The HyperCore -> HyperEVM callback runs as a system transaction whose logs
-/// are absent from the block's `logsBloom`, so neither Wormhole guardians nor our
-/// indexer see anything emitted from it. HyperCore-originated transfers are
-/// therefore committed by the token and submitted later from an ordinary
-/// transaction. Only that path is split; ordinary `initTransfer` is untouched.
+/// are absent from the block's `logsBloom`, so a message published from it is never
+/// observed by the Wormhole guardians and never attested. HyperCore-originated
+/// transfers are therefore committed by the token and submitted later from an
+/// ordinary transaction. Only that path is split; ordinary `initTransfer` is
+/// untouched.
 // slither-disable-start unused-return
 contract HlOmniBridgeWormhole is OmniBridgeWormhole {
     /// @notice originNonce => commitment; zero means nothing pending. Enumerable
