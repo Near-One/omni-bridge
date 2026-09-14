@@ -244,10 +244,11 @@ describe("HyperliquedBridgeToken", () => {
       coreNonce: bigint = CORE_NONCE,
       amount: bigint = AMOUNT,
       from: string = user1.address,
+      fee: bigint = FEE,
     ) {
       return token
         .connect(systemSigner)
-        .coreReceiveWithData(from, ethers.ZeroHash, 0, amount, coreNonce, encodeData())
+        .coreReceiveWithData(from, ethers.ZeroHash, 0, amount, coreNonce, encodeData(fee))
     }
 
     function trigger(
@@ -425,6 +426,18 @@ describe("HyperliquedBridgeToken", () => {
       await omniBridge.pause(0)
       await expect(trigger()).to.emit(testWormhole, "MessagePublished")
       expect(await omniBridge.pendingInitTransfers(ORIGIN_NONCE)).to.equal(ethers.ZeroHash)
+    })
+
+    it("accepts an invalid fee at pre-init and rejects it at submission", async () => {
+      await expect(queue(CORE_NONCE, AMOUNT, user1.address, AMOUNT)).to.emit(
+        omniBridge,
+        "PreInitTransfer",
+      )
+
+      await expect(trigger({ fee: AMOUNT })).to.be.revertedWithCustomError(omniBridge, "InvalidFee")
+      expect(await omniBridge.pendingInitTransfers(ORIGIN_NONCE)).to.equal(
+        commitment(tokenAddress, user1.address, AMOUNT, AMOUNT, RECIPIENT, MESSAGE),
+      )
     })
 
     it("reverts when amount overflows uint128 (SafeCast)", async () => {

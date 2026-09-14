@@ -14,8 +14,7 @@ import "./BridgeTypes.sol";
 /// untouched.
 // slither-disable-start unused-return
 contract HlOmniBridgeWormhole is OmniBridgeWormhole {
-    /// @notice originNonce => commitment; zero means nothing pending. Enumerable
-    /// against `currentOriginNonce`.
+    /// @notice originNonce => commitment; zero means nothing pending.
     mapping(uint64 => bytes32) public pendingInitTransfers;
 
     uint256[50] private __gap;
@@ -36,9 +35,8 @@ contract HlOmniBridgeWormhole is OmniBridgeWormhole {
     error NotBridgeToken(address caller);
 
     /// @notice Commits a HyperCore-originated transfer. Nothing is burned yet.
-    /// @dev Deliberately not gated on `PAUSED_INIT_TRANSFER`: a revert here strands
-    /// the tokens on HyperCore, which does not roll back with this transaction.
-    /// `coreNonce` is emitted for correlation and left out of the commitment.
+    /// @dev A revert here strands the tokens on HyperCore, so this step rejects as
+    /// little as possible; the pause and the fee check are in the second step.
     function preInitTransfer(
         address sender,
         uint64 coreNonce,
@@ -49,9 +47,6 @@ contract HlOmniBridgeWormhole is OmniBridgeWormhole {
     ) external returns (uint64 originNonce) {
         if (!isBridgeToken[msg.sender]) {
             revert NotBridgeToken(msg.sender);
-        }
-        if (fee >= amount) {
-            revert InvalidFee();
         }
 
         currentOriginNonce += 1;
@@ -78,8 +73,8 @@ contract HlOmniBridgeWormhole is OmniBridgeWormhole {
         );
     }
 
-    /// @notice Submits a committed transfer. Permissionless, so a stuck transfer is
-    /// never operator-gated; `payable` to cover the Wormhole message fee.
+    /// @notice Submits a committed transfer. Permissionless; `payable` to cover the
+    /// Wormhole message fee.
     function triggerPendingInitTransfer(
         uint64 originNonce,
         address tokenAddress,
@@ -105,6 +100,9 @@ contract HlOmniBridgeWormhole is OmniBridgeWormhole {
             )
         ) {
             revert PayloadMismatch(originNonce);
+        }
+        if (fee >= amount) {
+            revert InvalidFee();
         }
 
         delete pendingInitTransfers[originNonce];
