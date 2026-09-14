@@ -71,7 +71,7 @@ describe("HyperliquedBridgeToken", () => {
   }
 
   // `addCustomToken` with `customMinter = address(0)` marks the token as a bridge
-  // token, which both authorizes `queueInitTransfer` and selects the burn path.
+  // token, which both authorizes `preInitTransfer` and selects the burn path.
   async function registerHlOnBridge(tokenAddress: string) {
     // addCustomToken publishes a LogMetadata message, so it carries the fee too.
     await omniBridge.addCustomToken(NEAR_TOKEN_ID, tokenAddress, ethers.ZeroAddress, 18, {
@@ -377,11 +377,11 @@ describe("HyperliquedBridgeToken", () => {
         .withArgs(777n)
     })
 
-    it("only a registered bridge token may queue", async () => {
+    it("only a registered bridge token may pre-init", async () => {
       await expect(
         omniBridge
           .connect(user1)
-          .queueInitTransfer(user1.address, CORE_NONCE, AMOUNT, FEE, RECIPIENT, MESSAGE),
+          .preInitTransfer(user1.address, CORE_NONCE, AMOUNT, FEE, RECIPIENT, MESSAGE),
       )
         .to.be.revertedWithCustomError(omniBridge, "NotBridgeToken")
         .withArgs(user1.address)

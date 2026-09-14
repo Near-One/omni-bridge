@@ -38,7 +38,7 @@ contract HlOmniBridgeWormhole is OmniBridgeWormhole {
     /// @dev Deliberately not gated on `PAUSED_INIT_TRANSFER`: a revert here strands
     /// the tokens on HyperCore, which does not roll back with this transaction.
     /// `coreNonce` is emitted for correlation and left out of the commitment.
-    function queueInitTransfer(
+    function preInitTransfer(
         address sender,
         uint64 coreNonce,
         uint128 amount,

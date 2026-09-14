@@ -4,8 +4,8 @@ pragma solidity ^0.8.24;
 import {SafeCast} from "@openzeppelin/contracts/utils/math/SafeCast.sol";
 import {BridgeToken} from "./BridgeToken.sol";
 
-interface IOmniBridgeQueueInitTransfer {
-    function queueInitTransfer(
+interface IOmniBridgePreInitTransfer {
+    function preInitTransfer(
         address sender,
         uint64 coreNonce,
         uint128 amount,
@@ -131,7 +131,7 @@ contract HyperliquedBridgeToken is BridgeToken, ICoreReceiveWithData {
         } else if (action == ACTION_INIT_TRANSFER) {
             uint128 amount128 = amount.toUint128();
             _update(_systemAddress, address(this), amount);
-            _queueInitTransfer(from, coreNonce, amount128, tail);
+            _preInitTransfer(from, coreNonce, amount128, tail);
         } else {
             revert UnknownAction(action);
         }
@@ -143,7 +143,7 @@ contract HyperliquedBridgeToken is BridgeToken, ICoreReceiveWithData {
     /// still atomic with the HyperCore debit. The commitment itself lives on the
     /// bridge, keyed by `originNonce`: one contract to monitor instead of one per
     /// token, and this contract keeps no storage of its own for the flow.
-    function _queueInitTransfer(
+    function _preInitTransfer(
         address from,
         uint64 coreNonce,
         uint128 amount128,
@@ -152,7 +152,7 @@ contract HyperliquedBridgeToken is BridgeToken, ICoreReceiveWithData {
         (uint128 fee, string memory recipient, string memory message) = abi
             .decode(tail, (uint128, string, string));
 
-        IOmniBridgeQueueInitTransfer(owner()).queueInitTransfer(
+        IOmniBridgePreInitTransfer(owner()).preInitTransfer(
             from,
             coreNonce,
             amount128,
