@@ -137,10 +137,6 @@ contract HyperliquedBridgeToken is BridgeToken, ICoreReceiveWithData {
         emit CoreReceived(from, action, coreNonce, amount, data);
     }
 
-    /// @dev Decodes eagerly so a malformed payload reverts while the transfer is
-    /// still atomic with the HyperCore debit. The commitment itself lives on the
-    /// bridge, keyed by `originNonce`: one contract to monitor instead of one per
-    /// token, and this contract keeps no storage of its own for the flow.
     function _preInitTransfer(
         address from,
         uint64 coreNonce,
