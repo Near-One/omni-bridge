@@ -30,7 +30,7 @@ contract HlOmniBridgeWormhole is OmniBridgeWormhole {
         string message
     );
 
-    error NothingPending(uint64 originNonce);
+    error NoPendingInitTransfer(uint64 originNonce);
     error PayloadMismatch(uint64 originNonce);
     error NotBridgeToken(address caller);
 
@@ -86,7 +86,7 @@ contract HlOmniBridgeWormhole is OmniBridgeWormhole {
     ) external payable whenNotPaused(PAUSED_INIT_TRANSFER) {
         bytes32 committed = pendingInitTransfers[originNonce];
         if (committed == bytes32(0)) {
-            revert NothingPending(originNonce);
+            revert NoPendingInitTransfer(originNonce);
         }
         if (
             committed !=

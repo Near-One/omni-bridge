@@ -352,7 +352,7 @@ describe("HyperliquedBridgeToken", () => {
       await trigger()
 
       await expect(trigger())
-        .to.be.revertedWithCustomError(omniBridge, "NothingPending")
+        .to.be.revertedWithCustomError(omniBridge, "NoPendingInitTransfer")
         .withArgs(ORIGIN_NONCE)
     })
 
@@ -374,7 +374,7 @@ describe("HyperliquedBridgeToken", () => {
 
     it("reverts when nothing is committed under the nonce", async () => {
       await expect(trigger({ originNonce: 777n }))
-        .to.be.revertedWithCustomError(omniBridge, "NothingPending")
+        .to.be.revertedWithCustomError(omniBridge, "NoPendingInitTransfer")
         .withArgs(777n)
     })
 
