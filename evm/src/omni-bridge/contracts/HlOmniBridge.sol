@@ -13,23 +13,23 @@ import "./BridgeTypes.sol";
 /// ordinary transaction. Only that path is split; ordinary `initTransfer` is
 /// untouched.
 // slither-disable-start unused-return
-contract HlOmniBridgeWormhole is OmniBridgeWormhole {
-    /// @custom:storage-location erc7201:omni.HlOmniBridgeWormhole
-    struct HlOmniBridgeWormholeStorage {
+contract HlOmniBridge is OmniBridgeWormhole {
+    /// @custom:storage-location erc7201:omni.HlOmniBridge
+    struct HlOmniBridgeStorage {
         mapping(uint64 => bytes32) pendingInitTransfers;
     }
 
-    // keccak256(abi.encode(uint256(keccak256("omni.HlOmniBridgeWormhole")) - 1)) & ~bytes32(uint256(0xff))
-    bytes32 private constant HlOmniBridgeWormholeStorageLocation =
-        0x1366e5a56e2d56c5bb0cc72f9964827b60bc5cc2268c99b553475705d16b8100;
+    // keccak256(abi.encode(uint256(keccak256("omni.HlOmniBridge")) - 1)) & ~bytes32(uint256(0xff))
+    bytes32 private constant HlOmniBridgeStorageLocation =
+        0x5b084300798d4a981a7f93ac2e1e5f59f1f1d2f55b57a2ee733cf57101ea9c00;
 
-    function _getHlOmniBridgeWormholeStorage()
+    function _getHlOmniBridgeStorage()
         private
         pure
-        returns (HlOmniBridgeWormholeStorage storage $)
+        returns (HlOmniBridgeStorage storage $)
     {
         assembly {
-            $.slot := HlOmniBridgeWormholeStorageLocation
+            $.slot := HlOmniBridgeStorageLocation
         }
     }
 
@@ -37,8 +37,7 @@ contract HlOmniBridgeWormhole is OmniBridgeWormhole {
     function pendingInitTransfers(
         uint64 originNonce
     ) public view returns (bytes32) {
-        return
-            _getHlOmniBridgeWormholeStorage().pendingInitTransfers[originNonce];
+        return _getHlOmniBridgeStorage().pendingInitTransfers[originNonce];
     }
 
     event PreInitTransfer(
@@ -74,8 +73,7 @@ contract HlOmniBridgeWormhole is OmniBridgeWormhole {
         currentOriginNonce += 1;
         originNonce = currentOriginNonce;
 
-        HlOmniBridgeWormholeStorage
-            storage $ = _getHlOmniBridgeWormholeStorage();
+        HlOmniBridgeStorage storage $ = _getHlOmniBridgeStorage();
         $.pendingInitTransfers[originNonce] = _initTransferCommitment(
             msg.sender,
             sender,
@@ -108,8 +106,7 @@ contract HlOmniBridgeWormhole is OmniBridgeWormhole {
         string calldata recipient,
         string calldata message
     ) external payable whenNotPaused(PAUSED_INIT_TRANSFER) {
-        HlOmniBridgeWormholeStorage
-            storage $ = _getHlOmniBridgeWormholeStorage();
+        HlOmniBridgeStorage storage $ = _getHlOmniBridgeStorage();
         bytes32 committed = $.pendingInitTransfers[originNonce];
         if (committed == bytes32(0)) {
             revert NoPendingInitTransfer(originNonce);
