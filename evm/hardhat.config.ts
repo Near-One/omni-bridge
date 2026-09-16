@@ -23,7 +23,6 @@ declare module "hardhat/types/config" {
   interface HttpNetworkUserConfig {
     omniChainId: number
     wormholeAddress?: string
-    bigBlocks?: boolean
     zksync?: boolean
     ethNetwork?: string
   }
@@ -548,7 +547,6 @@ const config: HardhatUserConfig = {
       accounts: [`${EVM_PRIVATE_KEY}`],
     },
     hyperEvmMainnet: {
-      bigBlocks: true,
       wormholeAddress: "0x7C0faFc4384551f063e05aee704ab943b8B53aB3",
       omniChainId: 9,
       chainId: 999,
@@ -598,7 +596,6 @@ const config: HardhatUserConfig = {
       accounts: [`${EVM_PRIVATE_KEY}`],
     },
     hyperEvmTestnet: {
-      bigBlocks: true,
       wormholeAddress: "0xBB73cB66C26740F31d1FabDC6b7A46a038A300dd",
       omniChainId: 9,
       chainId: 998,
