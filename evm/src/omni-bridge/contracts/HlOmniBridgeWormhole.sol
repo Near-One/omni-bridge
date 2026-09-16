@@ -14,10 +14,32 @@ import "./BridgeTypes.sol";
 /// untouched.
 // slither-disable-start unused-return
 contract HlOmniBridgeWormhole is OmniBridgeWormhole {
-    /// @notice originNonce => commitment; zero means nothing pending.
-    mapping(uint64 => bytes32) public pendingInitTransfers;
+    /// @custom:storage-location erc7201:aurora.HlOmniBridgeWormhole
+    struct HlOmniBridgeWormholeStorage {
+        mapping(uint64 => bytes32) pendingInitTransfers;
+    }
 
-    uint256[50] private __gap;
+    // keccak256(abi.encode(uint256(keccak256("aurora.HlOmniBridgeWormhole")) - 1)) & ~bytes32(uint256(0xff))
+    bytes32 private constant HlOmniBridgeWormholeStorageLocation =
+        0x7876e1b3b94b8102254e2bd34de4c744407920561311bf44bff59507404d2c00;
+
+    function _getHlOmniBridgeWormholeStorage()
+        private
+        pure
+        returns (HlOmniBridgeWormholeStorage storage $)
+    {
+        assembly {
+            $.slot := HlOmniBridgeWormholeStorageLocation
+        }
+    }
+
+    /// @notice originNonce => commitment; zero means nothing pending.
+    function pendingInitTransfers(
+        uint64 originNonce
+    ) public view returns (bytes32) {
+        return
+            _getHlOmniBridgeWormholeStorage().pendingInitTransfers[originNonce];
+    }
 
     event PreInitTransfer(
         uint64 indexed originNonce,
@@ -52,7 +74,9 @@ contract HlOmniBridgeWormhole is OmniBridgeWormhole {
         currentOriginNonce += 1;
         originNonce = currentOriginNonce;
 
-        pendingInitTransfers[originNonce] = _initTransferCommitment(
+        HlOmniBridgeWormholeStorage
+            storage $ = _getHlOmniBridgeWormholeStorage();
+        $.pendingInitTransfers[originNonce] = _initTransferCommitment(
             msg.sender,
             sender,
             amount,
@@ -84,7 +108,9 @@ contract HlOmniBridgeWormhole is OmniBridgeWormhole {
         string calldata recipient,
         string calldata message
     ) external payable whenNotPaused(PAUSED_INIT_TRANSFER) {
-        bytes32 committed = pendingInitTransfers[originNonce];
+        HlOmniBridgeWormholeStorage
+            storage $ = _getHlOmniBridgeWormholeStorage();
+        bytes32 committed = $.pendingInitTransfers[originNonce];
         if (committed == bytes32(0)) {
             revert NoPendingInitTransfer(originNonce);
         }
@@ -105,7 +131,7 @@ contract HlOmniBridgeWormhole is OmniBridgeWormhole {
             revert InvalidFee();
         }
 
-        delete pendingInitTransfers[originNonce];
+        delete $.pendingInitTransfers[originNonce];
 
         // The callback parked the tokens on the token contract itself.
         BridgeToken(tokenAddress).burn(tokenAddress, amount);
