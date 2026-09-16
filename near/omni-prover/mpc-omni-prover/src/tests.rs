@@ -6,7 +6,8 @@ use near_mpc_sdk::near_mpc_contract_interface::types::{
     ExtractedValue, ForeignChainRpcRequest, ForeignTxSignPayload, ForeignTxSignPayloadV1, Hash160,
     Hash256, SolanaFinality, SolanaRpcRequest, SolanaTxId, StarknetExtractedValue,
     StarknetExtractor, StarknetFelt, StarknetFinality, StarknetLog, StarknetRpcRequest,
-    StarknetTxId,
+    StarknetTxId, SuiAddress, SuiEvent, SuiExtractedValue, SuiExtractor, SuiFinality,
+    SuiRpcRequest, SuiTxId,
 };
 
 use near_sdk::base64::Engine;
@@ -622,4 +623,136 @@ fn test_starknet_sepolia_verify_proof_args() {
     let base64_encoded = near_sdk::base64::engine::general_purpose::STANDARD.encode(&call_bytes);
 
     assert!(!base64_encoded.is_empty());
+}
+
+// -------- Sui --------
+
+/// Package id of the bridge deployment in the fixtures below.
+const SUI_PKG: &str = "a0a1a2a3a4a5a6a7a8a9aaabacadaeafb0b1b2b3b4b5b6b7b8b9babbbcbdbebf";
+
+/// BCS of an `InitTransfer` event for coin type `<SUI_PKG>::token::TOKEN`
+/// (nonce 7, amount 1000, fee 10, native_fee 5, recipient near:frolik.testnet).
+const SUI_INIT_TRANSFER_BCS: &str = "111111111111111111111111111111111111111111111111111111111111111197f8c20b1395b10de4b6abba1504cf6481f696a1c1530a9c86bdb479eb19b4ab4e613061316132613361346135613661376138613961616162616361646165616662306231623262336234623562366237623862396261626262636264626562663a3a746f6b656e3a3a544f4b454e0700000000000000e80300000000000000000000000000000a00000000000000000000000000000005000000000000000000000000000000136e6561723a66726f6c696b2e746573746e657400";
+
+fn test_sui_request() -> SuiRpcRequest {
+    SuiRpcRequest {
+        tx_id: SuiTxId([0xdd; 32]),
+        finality: SuiFinality::Checkpointed,
+        extractors: vec![SuiExtractor::Event { event_index: 0 }],
+    }
+}
+
+fn sui_pkg_bytes() -> [u8; 32] {
+    hex::decode(SUI_PKG).unwrap().try_into().unwrap()
+}
+
+fn test_sui_init_transfer_event() -> SuiEvent {
+    SuiEvent {
+        package_id: SuiAddress(sui_pkg_bytes()),
+        transaction_module: "omni_bridge".to_string(),
+        sender: SuiAddress([0x11; 32]),
+        type_tag: format!("0x{SUI_PKG}::omni_bridge::InitTransfer"),
+        bcs: hex::decode(SUI_INIT_TRANSFER_BCS).unwrap(),
+    }
+}
+
+#[test]
+fn test_request_to_chain_kind_sui() {
+    let request = ForeignChainRpcRequest::Sui(test_sui_request());
+    assert_eq!(
+        MpcOmniProver::request_to_chain_kind(&request),
+        Some(ChainKind::Sui)
+    );
+}
+
+#[test]
+fn test_request_matches_finality_sui_match() {
+    let request = ForeignChainRpcRequest::Sui(test_sui_request());
+    assert!(MpcOmniProver::request_matches_finality(
+        &request,
+        &MpcFinality::Sui(SuiFinality::Checkpointed)
+    ));
+}
+
+#[test]
+fn test_request_matches_finality_sui_cross_chain_mismatch() {
+    let sui_request = ForeignChainRpcRequest::Sui(test_sui_request());
+    assert!(!MpcOmniProver::request_matches_finality(
+        &sui_request,
+        &MpcFinality::Aptos(AptosFinality::Committed)
+    ));
+    let aptos_request = ForeignChainRpcRequest::Aptos(test_aptos_request());
+    assert!(!MpcOmniProver::request_matches_finality(
+        &aptos_request,
+        &MpcFinality::Sui(SuiFinality::Checkpointed)
+    ));
+}
+
+#[test]
+fn test_sui_sign_payload_roundtrip() {
+    let payload = ForeignTxSignPayload::V1(ForeignTxSignPayloadV1 {
+        request: ForeignChainRpcRequest::Sui(test_sui_request()),
+        values: vec![ExtractedValue::SuiExtractedValue(SuiExtractedValue::Event(
+            test_sui_init_transfer_event(),
+        ))],
+    });
+
+    let bytes = borsh::to_vec(&payload).unwrap();
+    let deserialized = ForeignTxSignPayload::try_from_slice(&bytes).unwrap();
+    assert_eq!(
+        payload.compute_msg_hash().unwrap().0,
+        deserialized.compute_msg_hash().unwrap().0
+    );
+}
+
+#[test]
+fn test_parse_sui_result_init_transfer() {
+    let payload = ForeignTxSignPayloadV1 {
+        request: ForeignChainRpcRequest::Sui(test_sui_request()),
+        values: vec![ExtractedValue::SuiExtractedValue(SuiExtractedValue::Event(
+            test_sui_init_transfer_event(),
+        ))],
+    };
+
+    let result = MpcOmniProver::parse_sui_result(ProofKind::InitTransfer, &payload).unwrap();
+    match result {
+        ProverResult::InitTransfer(m) => {
+            assert_eq!(m.origin_nonce, 7);
+            assert_eq!(m.amount.0, 1000);
+            assert_eq!(m.fee.fee.0, 10);
+            assert_eq!(m.fee.native_fee.0, 5);
+            assert_eq!(m.recipient.to_string(), "near:frolik.testnet");
+            // Emitter comes from the type_tag's defining package id, which is
+            // stable across bridge package upgrades (unlike event.package_id).
+            assert_eq!(m.emitter_address, OmniAddress::Sui(H256(sui_pkg_bytes())));
+        }
+        _ => panic!("expected InitTransfer"),
+    }
+}
+
+#[test]
+fn test_parse_sui_result_rejects_non_sui_value() {
+    let payload = ForeignTxSignPayloadV1 {
+        request: ForeignChainRpcRequest::Sui(test_sui_request()),
+        values: vec![ExtractedValue::EvmExtractedValue(EvmExtractedValue::Log(
+            test_evm_log(),
+        ))],
+    };
+    assert!(MpcOmniProver::parse_sui_result(ProofKind::InitTransfer, &payload).is_err());
+}
+
+#[test]
+fn test_parse_sui_result_rejects_multiple_values() {
+    let payload = ForeignTxSignPayloadV1 {
+        request: ForeignChainRpcRequest::Sui(test_sui_request()),
+        values: vec![
+            ExtractedValue::SuiExtractedValue(SuiExtractedValue::Event(
+                test_sui_init_transfer_event(),
+            )),
+            ExtractedValue::SuiExtractedValue(SuiExtractedValue::Event(
+                test_sui_init_transfer_event(),
+            )),
+        ],
+    };
+    assert!(MpcOmniProver::parse_sui_result(ProofKind::InitTransfer, &payload).is_err());
 }
