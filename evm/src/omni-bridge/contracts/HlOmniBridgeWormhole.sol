@@ -14,14 +14,14 @@ import "./BridgeTypes.sol";
 /// untouched.
 // slither-disable-start unused-return
 contract HlOmniBridgeWormhole is OmniBridgeWormhole {
-    /// @custom:storage-location erc7201:aurora.HlOmniBridgeWormhole
+    /// @custom:storage-location erc7201:omni.HlOmniBridgeWormhole
     struct HlOmniBridgeWormholeStorage {
         mapping(uint64 => bytes32) pendingInitTransfers;
     }
 
-    // keccak256(abi.encode(uint256(keccak256("aurora.HlOmniBridgeWormhole")) - 1)) & ~bytes32(uint256(0xff))
+    // keccak256(abi.encode(uint256(keccak256("omni.HlOmniBridgeWormhole")) - 1)) & ~bytes32(uint256(0xff))
     bytes32 private constant HlOmniBridgeWormholeStorageLocation =
-        0x7876e1b3b94b8102254e2bd34de4c744407920561311bf44bff59507404d2c00;
+        0x1366e5a56e2d56c5bb0cc72f9964827b60bc5cc2268c99b553475705d16b8100;
 
     function _getHlOmniBridgeWormholeStorage()
         private
