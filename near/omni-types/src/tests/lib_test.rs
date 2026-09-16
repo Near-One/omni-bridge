@@ -9,7 +9,7 @@ use crate::{
 };
 use std::str::FromStr;
 
-fn chain_kinds_for_borsh() -> [ChainKind; 14] {
+fn chain_kinds_for_borsh() -> [ChainKind; 15] {
     [
         ChainKind::Eth,
         ChainKind::Near,
@@ -25,6 +25,7 @@ fn chain_kinds_for_borsh() -> [ChainKind; 14] {
         ChainKind::Abs,
         ChainKind::Fogo,
         ChainKind::Aptos,
+        ChainKind::Sui,
     ]
 }
 
@@ -53,6 +54,10 @@ fn omni_addresses_for_borsh() -> Vec<OmniAddress> {
             SolAddress::from_str("BXss9YNCX2p6VPf2Em54pHXkXnC2FPBeZgbB9fY1cuBR").unwrap(),
         ),
         OmniAddress::Aptos(
+            H256::from_str("0x05558831a603eca8cd69a42d4251f08de3573039b69f23972265cac76639f1cf")
+                .unwrap(),
+        ),
+        OmniAddress::Sui(
             H256::from_str("0x05558831a603eca8cd69a42d4251f08de3573039b69f23972265cac76639f1cf")
                 .unwrap(),
         ),
@@ -204,6 +209,14 @@ fn test_chain_kind_from_omni_address() {
         ChainKind::Aptos,
         "Aptos",
     );
+    test_chain_kind(
+        OmniAddress::Sui(
+            H256::from_str("0x05558831a603eca8cd69a42d4251f08de3573039b69f23972265cac76639f1cf")
+                .unwrap(),
+        ),
+        ChainKind::Sui,
+        "Sui",
+    );
 }
 
 #[test]
@@ -293,6 +306,16 @@ fn test_omni_address_from_str() {
             "Should parse Aptos address",
         ),
         (
+            "sui:0x05558831a603eca8cd69a42d4251f08de3573039b69f23972265cac76639f1cf".to_string(),
+            Ok(OmniAddress::Sui(
+                H256::from_str(
+                    "0x05558831a603eca8cd69a42d4251f08de3573039b69f23972265cac76639f1cf",
+                )
+                .unwrap(),
+            )),
+            "Should parse Sui address",
+        ),
+        (
             "invalid_format".to_string(),
             Err("ERR_INVALID_HEX".to_string()),
             "Should fail on missing chain prefix",
@@ -369,6 +392,16 @@ fn test_omni_address_display() {
             ),
             "aptos:0x05558831a603eca8cd69a42d4251f08de3573039b69f23972265cac76639f1cf".to_string(),
             "Aptos address should format as aptos:0x...",
+        ),
+        (
+            OmniAddress::Sui(
+                H256::from_str(
+                    "0x05558831a603eca8cd69a42d4251f08de3573039b69f23972265cac76639f1cf",
+                )
+                .unwrap(),
+            ),
+            "sui:0x05558831a603eca8cd69a42d4251f08de3573039b69f23972265cac76639f1cf".to_string(),
+            "Sui address should format as sui:0x...",
         ),
     ];
 
@@ -591,6 +624,9 @@ fn test_chain_kind_from_str() {
 
     let chain: ChainKind = "Abs".parse().unwrap();
     assert_eq!(chain, ChainKind::Abs);
+
+    let chain: ChainKind = "Sui".parse().unwrap();
+    assert_eq!(chain, ChainKind::Sui);
 }
 
 #[test]
@@ -630,9 +666,25 @@ fn test_get_native_token_address_returns_expected_addresses() {
         "Aptos native token should be the canonical APT FA metadata address (0xa)"
     );
 
+    // Sui should return keccak256 of the canonical SUI coin type string
+    // (b"0000...0002::sui::SUI") — the wire-format token id for native SUI
+    let sui_address = get_native_token_address(ChainKind::Sui).unwrap();
+    assert_eq!(
+        sui_address,
+        OmniAddress::Sui(H256([
+            0x66, 0x96, 0x38, 0x7a, 0xec, 0xbb, 0x70, 0x52, 0x05, 0x02, 0x67, 0x83, 0x04, 0x2f,
+            0x80, 0x38, 0x71, 0xc1, 0x90, 0x57, 0x0d, 0xd0, 0xa5, 0x78, 0x82, 0xd9, 0xd3, 0x5e,
+            0xe0, 0xdf, 0x70, 0x0c,
+        ])),
+        "Sui native token should be keccak256 of the canonical SUI coin type string"
+    );
+
     // All other chains should return zero addresses
     for chain_kind in chain_kinds_for_borsh() {
-        if chain_kind == ChainKind::Strk || chain_kind == ChainKind::Aptos {
+        if matches!(
+            chain_kind,
+            ChainKind::Strk | ChainKind::Aptos | ChainKind::Sui
+        ) {
             continue;
         }
         let address = get_native_token_address(chain_kind).unwrap();

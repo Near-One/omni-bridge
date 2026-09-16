@@ -1,0 +1,61 @@
+name: Sui CI
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'sui/**'
+      - '.github/workflows/sui.yaml'
+  pull_request:
+    paths:
+      - 'sui/**'
+      - '.github/workflows/sui.yaml'
+
+env:
+  SUI_VERSION: "1.74.1"
+  # `sui move format` shells out to prettier-move; pinned like the CLI so
+  # formatting is reproducible.
+  PRETTIER_VERSION: "3.9.6"
+  PRETTIER_MOVE_VERSION: "0.4.0"
+
+jobs:
+  test:
+    name: Build and Test
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: sui
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Sui CLI
+        run: |
+          ASSET="sui-mainnet-v${SUI_VERSION}-ubuntu-x86_64.tgz"
+          URL="https://github.com/MystenLabs/sui/releases/download/mainnet-v${SUI_VERSION}/${ASSET}"
+          curl -fsSL "$URL" -o sui.tgz
+          mkdir -p sui-bin
+          # Extract only the CLI - the full archive also carries multi-GB
+          # debug binaries.
+          tar -xzf sui.tgz -C sui-bin ./sui
+          sudo mv sui-bin/sui /usr/local/bin/
+          rm -rf sui.tgz sui-bin
+          sui --version
+
+      - name: Install prettier-move
+        run: npm i -g "prettier@${PRETTIER_VERSION}" "@mysten/prettier-plugin-move@${PRETTIER_MOVE_VERSION}"
+
+      - name: Check formatting
+        run: sui move format --check '**/*.move'
+
+      - name: Build
+        run: sui move build
+
+      - name: Run tests
+        run: sui move test
+
+      - name: Build token template
+        working-directory: sui/token_template
+        run: sui move build
