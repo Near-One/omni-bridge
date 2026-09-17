@@ -1,0 +1,39 @@
+[package]
+name = "prepopulate-locked-tokens"
+version = "0.1.0"
+edition = "2024"
+# Match the contract workspace toolchain (near/rust-toolchain). Declaring the MSRV
+# makes cargo's resolver prefer dependency versions that build on this rustc.
+rust-version = "1.86.0"
+
+[dependencies]
+anyhow = "1"
+dotenv = "0.15"
+clap = { version = "4", features = ["derive"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+# Not used directly: `near-mpc-crypto-types` (pulled in via omni-types' near-mpc-sdk
+# "abi" feature) derives JsonSchema over serde_with's `As<Hex>`, which needs serde_with's
+# schemars_0_8 feature — but that crate doesn't enable it. We enable it here so the
+# transitive build succeeds via feature unification.
+serde_with = { version = "=3.17.0", features = ["schemars_0_8"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
+async-trait = "0.1"
+reqwest = { version = "0.12", features = ["json"] }
+
+# Use the in-tree omni-types so the tool always matches the current contract state
+# (chains, addresses, serialization). Avoids drift from a pinned git revision.
+omni-types = { path = "../near/omni-types" }
+
+near-api = "0.8.2"
+solana-client = "2.1.9"
+solana-sdk = "2.1.9"
+# Pinned to the version omni-types uses so the whole graph stays on one alloy that
+# builds on rustc 1.86 (newer alloy bumped its MSRV to 1.88+).
+alloy = { version = "=1.0.9", features = ["contract", "reqwest"] }
+
+# Starknet is read via raw JSON-RPC (reqwest) rather than the `starknet` crate, whose
+# `Felt`/lambdaworks-math backend requires rustc 1.87+. We only need the ERC20
+# `total_supply` selector, computed here with sha3 (starknet_keccak) + hex.
+hex = "0.4"
+sha3 = "0.10"
