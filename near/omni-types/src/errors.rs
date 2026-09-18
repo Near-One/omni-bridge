@@ -48,6 +48,7 @@ pub enum BridgeError {
     ReadPromiseYieldId,
     SenderCanUpdateTokenFeeOnly,
     SenderIsNotConnector,
+    SignTransferNotAllowedForUtxoChain,
     StorageFeeRecipientOmitted,
     StorageNativeFeeRecipientOmitted,
     StoragePendingTransfers,
