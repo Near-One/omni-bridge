@@ -55,7 +55,6 @@ pub enum BridgeError {
     TokenAlreadyMigrated,
     TokenDecimalsNotFound,
     TokenExists,
-    TokenNotDeployed,
     TokenNotFound,
     TokenNotMigrated,
     TokenNotRegistered,

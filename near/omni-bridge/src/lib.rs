@@ -1620,7 +1620,7 @@ impl Contract {
     pub fn burn_bridge_balance(&mut self, token_id: AccountId, amount: U128) -> Promise {
         require!(
             self.is_deployed_token(&token_id),
-            BridgeError::TokenNotDeployed.as_ref()
+            BridgeError::TokenNotFound.as_ref()
         );
 
         env::log_str(&format!(
