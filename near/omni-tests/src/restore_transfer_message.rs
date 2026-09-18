@@ -1,7 +1,6 @@
 #[cfg(test)]
 mod tests {
     use near_sdk::serde_json::{json, Value};
-    use near_workspaces::types::NearToken;
     use omni_types::{ChainKind, TransferId};
     use rstest::rstest;
 
@@ -46,7 +45,6 @@ mod tests {
         env.bridge_contract
             .call("restore_transfer_message")
             .args_json(&args)
-            .deposit(NearToken::from_near(1))
             .max_gas()
             .transact()
             .await?
@@ -67,9 +65,9 @@ mod tests {
             stored,
             json!({
                 "message": transfer_message,
-                "owner": "account_1",
+                "owner": env.bridge_contract.id(),
             }),
-            "The restored message should be stored as it was passed"
+            "The restored message should be stored as it was passed, owned by the DAO"
         );
 
         // A message that is already in the storage can't be overwritten.
@@ -77,7 +75,6 @@ mod tests {
             .bridge_contract
             .call("restore_transfer_message")
             .args_json(&args)
-            .deposit(NearToken::from_near(1))
             .max_gas()
             .transact()
             .await?;
