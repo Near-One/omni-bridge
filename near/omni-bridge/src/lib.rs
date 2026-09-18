@@ -1616,6 +1616,23 @@ impl Contract {
         );
     }
 
+    #[access_control_any(roles(Role::DAO))]
+    pub fn burn_bridge_balance(&mut self, token_id: AccountId, amount: U128) -> Promise {
+        require!(
+            self.is_deployed_token(&token_id),
+            BridgeError::TokenNotDeployed.as_ref()
+        );
+
+        env::log_str(&format!(
+            "Burning {} of {token_id} from the bridge balance",
+            amount.0
+        ));
+
+        ext_token::ext(token_id)
+            .with_static_gas(BURN_TOKEN_GAS)
+            .burn(amount)
+    }
+
     pub fn get_current_destination_nonce(&self, chain_kind: ChainKind) -> Nonce {
         self.destination_nonces.get(&chain_kind).unwrap_or_default()
     }
