@@ -405,6 +405,11 @@ impl Contract {
     ) -> Promise {
         let transfer_message = self.get_transfer_message(transfer_id);
 
+        require!(
+            !transfer_message.recipient.is_utxo_chain(),
+            BridgeError::SignTransferNotAllowedForUtxoChain.as_ref()
+        );
+
         if let Some(fee) = &fee {
             require!(
                 &transfer_message.fee == fee,
@@ -1631,6 +1636,16 @@ impl Contract {
         ext_token::ext(token_id)
             .with_static_gas(BURN_TOKEN_GAS)
             .burn(amount)
+    }
+
+    #[access_control_any(roles(Role::DAO))]
+    pub fn restore_transfer_message(&mut self, transfer_message: TransferMessage) {
+        let transfer_id = transfer_message.get_transfer_id();
+        self.add_transfer_message(transfer_message, env::predecessor_account_id());
+
+        env::log_str(&format!(
+            "Restored the transfer message with the transfer id: {transfer_id:?}"
+        ));
     }
 
     pub fn get_current_destination_nonce(&self, chain_kind: ChainKind) -> Nonce {
