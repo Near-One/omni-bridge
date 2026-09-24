@@ -188,14 +188,17 @@ Mirroring the Aptos rollout (PRs #626 / #629):
   keccak constant above), the origin-chain token-prefix match in
   `omni-bridge`, and the enum-stability tests.
 
+- **Done**: the MPC prover path — `near/omni-types/src/sui/events.rs`
+  parsers (BCS, not JSON: the MPC layer delivers `SuiEvent.bcs`),
+  `MpcFinality::Sui(SuiFinality::Checkpointed)`, and the `ChainKind::Sui`
+  dispatch in `mpc-omni-prover`. Requires `near-mpc-sdk` at a rev that
+  includes near/mpc#3754 (the Sui contract-interface DTOs); the pin was
+  bumped to `70c40b0f`.
+
 Remaining follow-ups:
 
-- `near/omni-types/src/sui/events.rs` parsers — blocked on near/mpc
-  defining the Sui read support (`SuiRpcRequest` / `SuiExtractedValue` /
-  `SuiFinality`), which does not exist yet as of 2026-07.
-  The emitter for the factory check should be the event type's
-  **defining package id** parsed from the event type tag (stable across
-  package upgrades), analogous to the Aptos type-tag-address rule.
-- `MpcFinality::Sui` + dispatch in `mpc-omni-prover`.
 - DAO calls: `add_factory(OmniAddress::Sui(...))`, `add_prover`,
   `add_token_deployer`, `deploy_native_token` for wrapped SUI.
+- Deploy an `mpc-omni-prover` instance for Sui and confirm the MPC network
+  has Sui providers configured (near/mpc#3755 ships the node-side
+  inspector, which reads Sui over gRPC — Sui deprecated JSON-RPC).

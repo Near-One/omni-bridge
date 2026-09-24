@@ -25,6 +25,7 @@ pub mod prover_args;
 pub mod prover_result;
 pub mod sol_address;
 pub mod starknet;
+pub mod sui;
 pub mod utils;
 
 #[cfg(test)]
