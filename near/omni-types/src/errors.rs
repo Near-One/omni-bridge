@@ -59,6 +59,7 @@ pub enum BridgeError {
     TokenNotFound,
     TokenNotMigrated,
     TokenNotRegistered,
+    TooManySignRequests,
     TransferAlreadyFinalised,
     TransferNotExist,
     UnknownFactory,
