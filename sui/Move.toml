@@ -1,0 +1,8 @@
+[package]
+name = "OmniBridge"
+edition = "2024.beta"
+version = "0.1.0"
+authors = ["Near One"]
+
+[addresses]
+omni_bridge = "0x0"
