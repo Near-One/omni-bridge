@@ -37,8 +37,10 @@ and [evm/src/omni-bridge/contracts/OmniBridge.sol](../evm/src/omni-bridge/contra
   `ROLE_RELAYER_MANAGER` holder (or an admin) can reject a staked relayer
   and take the stake; an active relayer can resign and get the stake back.
   Staking state lives in a separate `TrustedRelayers` resource on the bridge
-  object, created by the first `set_relayer_config` call. Mirrors
-  `omni_utils::trusted_relayer` on NEAR.
+  object, created by the first `set_relayer_config` call. Staked relayers
+  are kept in an `OrderedMap` so `get_pending_relayers` / `get_active_relayers`
+  can list them; `role_holders(3)` lists relayers granted by an admin.
+  Mirrors `omni_utils::trusted_relayer` on NEAR.
 
 ## Module Layout
 

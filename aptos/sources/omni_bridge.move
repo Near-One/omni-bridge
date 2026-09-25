@@ -16,6 +16,7 @@ module omni_bridge::omni_bridge {
     use aptos_framework::event;
     use aptos_framework::fungible_asset::{Self, Metadata};
     use aptos_framework::object::{Self, ExtendRef, Object};
+    use aptos_framework::ordered_map::{Self, OrderedMap};
     use aptos_framework::primary_fungible_store;
     use aptos_framework::timestamp;
 
@@ -138,12 +139,17 @@ module omni_bridge::omni_bridge {
     struct TrustedRelayers has key {
         stake_required: u64,
         waiting_period: u64,
-        relayers: Table<address, RelayerState>
+        relayers: OrderedMap<address, RelayerState>
     }
 
     struct RelayerState has copy, drop, store {
         stake: u64,
         activate_at: u64
+    }
+
+    struct RelayerEntry has copy, drop, store {
+        relayer: address,
+        state: RelayerState
     }
 
     // -------- Events --------
@@ -430,7 +436,7 @@ module omni_bridge::omni_bridge {
                 TrustedRelayers {
                     stake_required,
                     waiting_period,
-                    relayers: table::new<address, RelayerState>()
+                    relayers: ordered_map::new<address, RelayerState>()
                 }
             );
         };
@@ -451,7 +457,7 @@ module omni_bridge::omni_bridge {
 
         let relayer_addr = relayer.address_of();
         assert!(
-            !trusted_relayers.relayers.contains(relayer_addr),
+            !trusted_relayers.relayers.contains(&relayer_addr),
             E_RELAYER_APPLICATION_EXISTS
         );
 
@@ -503,8 +509,8 @@ module omni_bridge::omni_bridge {
             return false
         };
         let relayers = &TrustedRelayers[bridge_addr].relayers;
-        relayers.contains(account)
-            && timestamp::now_seconds() >= relayers.borrow(account).activate_at
+        relayers.contains(&account)
+            && timestamp::now_seconds() >= relayers.borrow(&account).activate_at
     }
 
     #[view]
@@ -514,8 +520,8 @@ module omni_bridge::omni_bridge {
             return option::none()
         };
         let relayers = &TrustedRelayers[bridge_addr].relayers;
-        if (relayers.contains(relayer)) {
-            option::some(*relayers.borrow(relayer))
+        if (relayers.contains(&relayer)) {
+            option::some(*relayers.borrow(&relayer))
         } else {
             option::none()
         }
@@ -530,6 +536,24 @@ module omni_bridge::omni_bridge {
         };
         let trusted_relayers = &TrustedRelayers[bridge_addr];
         (trusted_relayers.stake_required, trusted_relayers.waiting_period)
+    }
+
+    #[view]
+    public fun get_active_relayers(from_index: u64, limit: u64): vector<RelayerEntry> {
+        get_staked_relayers(true, from_index, limit)
+    }
+
+    #[view]
+    public fun get_pending_relayers(from_index: u64, limit: u64): vector<RelayerEntry> {
+        get_staked_relayers(false, from_index, limit)
+    }
+
+    public fun relayer_entry_relayer(self: &RelayerEntry): address {
+        self.relayer
+    }
+
+    public fun relayer_entry_state(self: &RelayerEntry): RelayerState {
+        self.state
     }
 
     public fun relayer_state_stake(self: &RelayerState): u64 {
@@ -933,12 +957,40 @@ module omni_bridge::omni_bridge {
         );
     }
 
+    fun get_staked_relayers(
+        active: bool, from_index: u64, limit: u64
+    ): vector<RelayerEntry> {
+        let entries = vector[];
+        let bridge_addr = bridge_object_address();
+        if (!exists<TrustedRelayers>(bridge_addr)) {
+            return entries
+        };
+
+        let relayers = &TrustedRelayers[bridge_addr].relayers;
+        let addresses = relayers.keys();
+        let now = timestamp::now_seconds();
+        let matched = 0;
+        let i = 0;
+        while (i < addresses.length() && entries.length() < limit) {
+            let relayer = addresses[i];
+            let state = *relayers.borrow(&relayer);
+            if ((now >= state.activate_at) == active) {
+                if (matched >= from_index) {
+                    entries.push_back(RelayerEntry { relayer, state });
+                };
+                matched += 1;
+            };
+            i += 1;
+        };
+        entries
+    }
+
     fun remove_relayer(relayer: address): RelayerState {
         let bridge_addr = bridge_object_address();
         assert!(exists<TrustedRelayers>(bridge_addr), E_RELAYER_NOT_FOUND);
         let relayers = &mut TrustedRelayers[bridge_addr].relayers;
-        assert!(relayers.contains(relayer), E_RELAYER_NOT_FOUND);
-        relayers.remove(relayer)
+        assert!(relayers.contains(&relayer), E_RELAYER_NOT_FOUND);
+        relayers.remove(&relayer)
     }
 
     fun send_stake(recipient: address, amount: u64) {

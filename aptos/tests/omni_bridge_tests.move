@@ -1076,4 +1076,114 @@ module omni_bridge::omni_bridge_tests {
         let _ = setup(&deployer);
         omni_bridge::reject_relayer_application(&deployer, @0xA11CE);
     }
+
+    fun relayer_addresses(entries: vector<omni_bridge::RelayerEntry>): vector<address> {
+        entries.map_ref(|entry| omni_bridge::relayer_entry_relayer(entry))
+    }
+
+    #[test(
+        deployer = @omni_bridge,
+        framework = @aptos_framework,
+        first = @0x1001,
+        second = @0x1002
+    )]
+    fun lists_pending_and_active_relayers(
+        deployer: signer,
+        framework: signer,
+        first: signer,
+        second: signer
+    ) {
+        let (_, mint_ref) = setup_staking(&deployer, &framework);
+        fund_and_apply(&mint_ref, &first);
+        timestamp::update_global_time_for_test_secs(NOW + WAITING_PERIOD / 2);
+        fund_and_apply(&mint_ref, &second);
+        stash_mint_ref(&deployer, b"MINT", mint_ref);
+
+        assert!(
+            relayer_addresses(omni_bridge::get_pending_relayers(0, 10))
+                == vector[@0x1001, @0x1002],
+            950
+        );
+        assert!(omni_bridge::get_active_relayers(0, 10).is_empty(), 951);
+
+        timestamp::update_global_time_for_test_secs(NOW + WAITING_PERIOD);
+
+        let active = omni_bridge::get_active_relayers(0, 10);
+        assert!(relayer_addresses(active) == vector[@0x1001], 952);
+        let state = omni_bridge::relayer_entry_state(&active[0]);
+        assert!(omni_bridge::relayer_state_stake(&state) == STAKE, 953);
+        assert!(
+            relayer_addresses(omni_bridge::get_pending_relayers(0, 10)) == vector[@0x1002],
+            954
+        );
+    }
+
+    #[test(
+        deployer = @omni_bridge,
+        framework = @aptos_framework,
+        first = @0x1001,
+        second = @0x1002,
+        third = @0x1003
+    )]
+    fun paginates_relayers(
+        deployer: signer,
+        framework: signer,
+        first: signer,
+        second: signer,
+        third: signer
+    ) {
+        let (_, mint_ref) = setup_staking(&deployer, &framework);
+        fund_and_apply(&mint_ref, &first);
+        fund_and_apply(&mint_ref, &second);
+        fund_and_apply(&mint_ref, &third);
+        stash_mint_ref(&deployer, b"MINT", mint_ref);
+
+        assert!(
+            relayer_addresses(omni_bridge::get_pending_relayers(1, 1)) == vector[@0x1002],
+            960
+        );
+        assert!(
+            relayer_addresses(omni_bridge::get_pending_relayers(1, 100))
+                == vector[@0x1002, @0x1003],
+            961
+        );
+        assert!(omni_bridge::get_pending_relayers(3, 100).is_empty(), 962);
+        assert!(omni_bridge::get_pending_relayers(0, 0).is_empty(), 963);
+    }
+
+    #[test(
+        deployer = @omni_bridge,
+        framework = @aptos_framework,
+        first = @0x1001,
+        second = @0x1002
+    )]
+    fun removes_relayers_on_resign_and_reject(
+        deployer: signer,
+        framework: signer,
+        first: signer,
+        second: signer
+    ) {
+        let (_, mint_ref) = setup_staking(&deployer, &framework);
+        fund_and_apply(&mint_ref, &first);
+        fund_and_apply(&mint_ref, &second);
+        stash_mint_ref(&deployer, b"MINT", mint_ref);
+
+        omni_bridge::reject_relayer_application(&deployer, @0x1001);
+        assert!(
+            relayer_addresses(omni_bridge::get_pending_relayers(0, 10)) == vector[@0x1002],
+            970
+        );
+
+        timestamp::update_global_time_for_test_secs(NOW + WAITING_PERIOD);
+        omni_bridge::resign_trusted_relayer(&second);
+        assert!(omni_bridge::get_active_relayers(0, 10).is_empty(), 971);
+        assert!(omni_bridge::get_pending_relayers(0, 10).is_empty(), 972);
+    }
+
+    #[test(deployer = @omni_bridge)]
+    fun relayer_lists_are_empty_before_config(deployer: signer) {
+        let _ = setup(&deployer);
+        assert!(omni_bridge::get_pending_relayers(0, 10).is_empty(), 980);
+        assert!(omni_bridge::get_active_relayers(0, 10).is_empty(), 981);
+    }
 }
