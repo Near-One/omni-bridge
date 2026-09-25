@@ -1,4 +1,7 @@
-use bridge_token_factory::state::config::{Config, ConfigBumps, WormholeBumps};
+use bridge_token_factory::state::{
+    config::{Config, ConfigBumps, WormholeBumps},
+    relayer::{RelayerEntry, RelayerList, RelayerState},
+};
 use mollusk_svm::Mollusk;
 use sha2::{Digest, Sha256};
 use sha3::Keccak256;
@@ -36,6 +39,8 @@ pub const SOL_VAULT_SEED: &[u8] = b"sol_vault";
 pub const VAULT_SEED: &[u8] = b"vault";
 pub const USED_NONCES_SEED: &[u8] = b"used_nonces";
 pub const METADATA_SEED: &[u8] = b"metadata";
+pub const RELAYER_SEED: &[u8] = b"relayer";
+pub const RELAYER_LIST_SEED: &[u8] = b"relayer_list";
 pub const USED_NONCES_PER_ACCOUNT: u32 = 1024;
 pub const ALL_PAUSED: u8 = 3;
 pub const FINALIZE_TRANSFER_PAUSED: u8 = 2;
@@ -73,6 +78,14 @@ pub fn find_used_nonces_pda(program_id: &Pubkey, nonce: u64) -> (Pubkey, u8) {
         &[USED_NONCES_SEED, &bucket_id.to_le_bytes()],
         program_id,
     )
+}
+
+pub fn find_relayer_pda(program_id: &Pubkey, relayer: &Pubkey) -> (Pubkey, u8) {
+    Pubkey::find_program_address(&[RELAYER_SEED, relayer.as_ref()], program_id)
+}
+
+pub fn find_relayer_list_pda(program_id: &Pubkey) -> (Pubkey, u8) {
+    Pubkey::find_program_address(&[RELAYER_LIST_SEED], program_id)
 }
 
 pub fn find_wormhole_bridge_pda(wormhole_id: &Pubkey) -> (Pubkey, u8) {
@@ -146,6 +159,8 @@ pub struct ConfigParams {
     pub paused: u8,
     pub max_used_nonce: u64,
     pub derived_near_bridge_address: [u8; 64],
+    pub relayer_stake_required: u64,
+    pub relayer_waiting_period: i64,
 }
 
 impl Default for ConfigParams {
@@ -157,6 +172,8 @@ impl Default for ConfigParams {
             paused: 0,
             max_used_nonce: 0,
             derived_near_bridge_address: [0u8; 64],
+            relayer_stake_required: 0,
+            relayer_waiting_period: 0,
         }
     }
 }
@@ -191,7 +208,9 @@ pub fn create_config_account(
         paused: params.paused,
         pausable_admin: params.pausable_admin,
         metadata_admin: params.metadata_admin,
-        padding: [0u8; 35],
+        relayer_stake_required: params.relayer_stake_required,
+        relayer_waiting_period: params.relayer_waiting_period,
+        padding: [0u8; 19],
     };
 
     let discriminator = anchor_account_discriminator("Config");
@@ -214,6 +233,99 @@ pub fn create_config_account(
 
 pub fn create_signer_account(lamports: u64) -> Account {
     Account::new(lamports, 0, &system_program::ID)
+}
+
+// ─── Trusted Relayer Account Builders ──────────────────────────────────────
+
+/// Create a RelayerState account holding `stake` lamports on top of its rent.
+pub fn create_relayer_state_account(
+    program_id: &Pubkey,
+    relayer: &Pubkey,
+    stake: u64,
+    activate_at: i64,
+) -> (Pubkey, Account) {
+    let (pda, bump) = find_relayer_pda(program_id, relayer);
+    let state = RelayerState {
+        stake,
+        activate_at,
+        bump,
+    };
+
+    let mut data = anchor_account_discriminator("RelayerState").to_vec();
+    anchor_lang::AnchorSerialize::serialize(&state, &mut data).unwrap();
+
+    let rent = Rent::default();
+    let lamports = rent.minimum_balance(data.len()) + stake;
+    (pda, Account {
+        lamports,
+        data,
+        owner: *program_id,
+        executable: false,
+        rent_epoch: 0,
+    })
+}
+
+#[derive(Clone, Copy)]
+pub enum RelayerSetup {
+    Active,
+    Pending,
+    Missing,
+    OtherRelayer,
+}
+
+pub fn build_relayer_state_account(
+    program_id: &Pubkey,
+    payer: &Pubkey,
+    setup: RelayerSetup,
+) -> (Pubkey, Account) {
+    match setup {
+        RelayerSetup::Active => create_relayer_state_account(program_id, payer, 0, 0),
+        RelayerSetup::Pending => create_relayer_state_account(program_id, payer, 1, i64::MAX),
+        RelayerSetup::Missing => (
+            find_relayer_pda(program_id, payer).0,
+            Account::new(0, 0, &system_program::ID),
+        ),
+        RelayerSetup::OtherRelayer => {
+            create_relayer_state_account(program_id, &Pubkey::new_unique(), 0, 0)
+        }
+    }
+}
+
+pub fn create_relayer_list_account(
+    program_id: &Pubkey,
+    manager: Pubkey,
+    relayers: Vec<RelayerEntry>,
+) -> (Pubkey, Account) {
+    let (pda, bump) = find_relayer_list_pda(program_id);
+    let list = RelayerList {
+        bump,
+        manager,
+        relayers,
+    };
+
+    let mut data = anchor_account_discriminator("RelayerList").to_vec();
+    anchor_lang::AnchorSerialize::serialize(&list, &mut data).unwrap();
+
+    let rent = Rent::default();
+    let lamports = rent.minimum_balance(data.len());
+    (pda, Account {
+        lamports,
+        data,
+        owner: *program_id,
+        executable: false,
+        rent_epoch: 0,
+    })
+}
+
+pub fn deserialize_relayer_list(data: &[u8]) -> RelayerList {
+    let data = &data[8..];
+    anchor_lang::AnchorDeserialize::deserialize(&mut &data[..]).unwrap()
+}
+
+/// Deserialize RelayerState from an account's data (skips 8-byte Anchor discriminator)
+pub fn deserialize_relayer_state(data: &[u8]) -> RelayerState {
+    let data = &data[8..];
+    anchor_lang::AnchorDeserialize::deserialize(&mut &data[..]).unwrap()
 }
 
 // ─── Wormhole Account Builders ─────────────────────────────────────────────
