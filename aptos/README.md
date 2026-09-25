@@ -54,11 +54,19 @@ aptos move run \
         address:<apt-fa-metadata-object-address>
 ```
 
+`initialize` also sets the trusted relayer config to 5,000 APT (~$4k at
+$0.84/APT, Sep 2026) and a 7 day waiting period, like the 1000 NEAR / 7 days
+default on NEAR. Change it with `set_relayer_config` (`u64:0` as the stake
+disables staking).
+
+Only trusted relayers can call `fin_transfer`: the transaction sender must
+hold the `TrustedRelayer` role or have an active stake.
+
 ## Securing the bridge account with `0x1::multisig_account`
 
 The `@omni_bridge` account is the root of trust: it holds the package
-**upgrade authority**, and `initialize` seeds all three roles
-(`Admin`/`Pauser`/`MetadataAdmin`) to it. Aptos ships a Safe-style
+**upgrade authority**, and `initialize` seeds the `Admin`, `Pauser`,
+`MetadataAdmin` and `RelayerManager` roles to it. Aptos ships a Safe-style
 multisig in the framework — an on-chain k-of-n account with a proposal
 queue, votes, and owner management at a stable address — and an existing
 account can be converted into one **in place**.
