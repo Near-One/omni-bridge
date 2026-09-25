@@ -272,7 +272,9 @@ module omni_bridge::omni_bridge {
         deployer: &signer,
         near_bridge_derived_address: vector<u8>,
         chain_id: u8,
-        native_token_metadata: Object<Metadata>
+        native_token_metadata: Object<Metadata>,
+        relayer_stake_required: u64,
+        relayer_waiting_period: u64
     ) {
         let deployer_addr = deployer.address_of();
         assert!(deployer_addr == @omni_bridge, E_UNAUTHORIZED);
@@ -294,6 +296,7 @@ module omni_bridge::omni_bridge {
         roles.add(ROLE_ADMIN, vector[deployer_addr]);
         roles.add(ROLE_PAUSER, vector[deployer_addr]);
         roles.add(ROLE_METADATA_ADMIN, vector[deployer_addr]);
+        roles.add(ROLE_RELAYER_MANAGER, vector[deployer_addr]);
 
         move_to(
             &object_signer,
@@ -308,6 +311,13 @@ module omni_bridge::omni_bridge {
                 near_to_aptos_token: table::new<String, address>(),
                 extend_ref
             }
+        );
+
+        write_relayer_config(
+            &BridgeState[bridge_object_address()],
+            relayer_stake_required,
+            relayer_waiting_period,
+            deployer_addr
         );
     }
 
@@ -421,29 +431,9 @@ module omni_bridge::omni_bridge {
     public entry fun set_relayer_config(
         admin: &signer, stake_required: u64, waiting_period: u64
     ) {
-        let bridge_addr = bridge_object_address();
-        let state = &BridgeState[bridge_addr];
+        let state = &BridgeState[bridge_object_address()];
         assert_role(state, ROLE_ADMIN, admin, E_UNAUTHORIZED);
-
-        if (exists<TrustedRelayers>(bridge_addr)) {
-            let trusted_relayers = &mut TrustedRelayers[bridge_addr];
-            trusted_relayers.stake_required = stake_required;
-            trusted_relayers.waiting_period = waiting_period;
-        } else {
-            let bridge_signer = state.extend_ref.generate_signer_for_extending();
-            move_to(
-                &bridge_signer,
-                TrustedRelayers {
-                    stake_required,
-                    waiting_period,
-                    relayers: ordered_map::new<address, RelayerState>()
-                }
-            );
-        };
-
-        event::emit(
-            RelayerConfigChanged { stake_required, waiting_period, admin: admin.address_of() }
-        );
+        write_relayer_config(state, stake_required, waiting_period, admin.address_of());
     }
 
     public entry fun apply_for_trusted_relayer(relayer: &signer) {
@@ -483,13 +473,13 @@ module omni_bridge::omni_bridge {
     public entry fun reject_relayer_application(
         manager: &signer, relayer: address
     ) {
-        let manager_addr = manager.address_of();
-        let state = &BridgeState[bridge_object_address()];
-        assert!(
-            is_role_holder(state, ROLE_RELAYER_MANAGER, manager_addr)
-                || is_role_holder(state, ROLE_ADMIN, manager_addr),
+        assert_role(
+            &BridgeState[bridge_object_address()],
+            ROLE_RELAYER_MANAGER,
+            manager,
             E_UNAUTHORIZED
         );
+        let manager_addr = manager.address_of();
 
         let relayer_state = remove_relayer(relayer);
         send_stake(manager_addr, relayer_state.stake);
@@ -985,6 +975,34 @@ module omni_bridge::omni_bridge {
         entries
     }
 
+    /// Creates `TrustedRelayers` on first use; bridges upgraded from a
+    /// version without it get it from the first `set_relayer_config` call.
+    fun write_relayer_config(
+        state: &BridgeState,
+        stake_required: u64,
+        waiting_period: u64,
+        admin: address
+    ) {
+        let bridge_addr = bridge_object_address();
+        if (exists<TrustedRelayers>(bridge_addr)) {
+            let trusted_relayers = &mut TrustedRelayers[bridge_addr];
+            trusted_relayers.stake_required = stake_required;
+            trusted_relayers.waiting_period = waiting_period;
+        } else {
+            let bridge_signer = state.extend_ref.generate_signer_for_extending();
+            move_to(
+                &bridge_signer,
+                TrustedRelayers {
+                    stake_required,
+                    waiting_period,
+                    relayers: ordered_map::new<address, RelayerState>()
+                }
+            );
+        };
+
+        event::emit(RelayerConfigChanged { stake_required, waiting_period, admin });
+    }
+
     fun remove_relayer(relayer: address): RelayerState {
         let bridge_addr = bridge_object_address();
         assert!(exists<TrustedRelayers>(bridge_addr), E_RELAYER_NOT_FOUND);
@@ -1051,13 +1069,17 @@ module omni_bridge::omni_bridge {
         deployer: &signer,
         near_bridge_derived_address: vector<u8>,
         chain_id: u8,
-        native_token_metadata: Object<Metadata>
+        native_token_metadata: Object<Metadata>,
+        relayer_stake_required: u64,
+        relayer_waiting_period: u64
     ) {
         initialize(
             deployer,
             near_bridge_derived_address,
             chain_id,
-            native_token_metadata
+            native_token_metadata,
+            relayer_stake_required,
+            relayer_waiting_period
         );
     }
 

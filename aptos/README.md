@@ -51,14 +51,21 @@ aptos move run \
     --args \
         hex:<20-byte-near-derived-eth-address> \
         u8:<chain-id> \
-        address:<apt-fa-metadata-object-address>
+        address:<apt-fa-metadata-object-address> \
+        u64:500000000000 \
+        u64:604800
 ```
+
+The last two arguments are the trusted relayer stake in octas and the waiting
+period in seconds. 5,000 APT (~$4k at $0.84/APT, Sep 2026) and 7 days match
+the 1000 NEAR / 7 days default on NEAR. Pass `u64:0` as the stake to disable
+staking.
 
 ## Securing the bridge account with `0x1::multisig_account`
 
 The `@omni_bridge` account is the root of trust: it holds the package
-**upgrade authority**, and `initialize` seeds all three roles
-(`Admin`/`Pauser`/`MetadataAdmin`) to it. Aptos ships a Safe-style
+**upgrade authority**, and `initialize` seeds the `Admin`, `Pauser`,
+`MetadataAdmin` and `RelayerManager` roles to it. Aptos ships a Safe-style
 multisig in the framework — an on-chain k-of-n account with a proposal
 queue, votes, and owner management at a stable address — and an existing
 account can be converted into one **in place**.

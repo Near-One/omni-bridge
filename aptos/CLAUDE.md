@@ -34,10 +34,12 @@ and [evm/src/omni-bridge/contracts/OmniBridge.sol](../evm/src/omni-bridge/contra
   relayer signs the transaction). An account is trusted if it holds
   `ROLE_TRUSTED_RELAYER`, or it staked `stake_required` native tokens via
   `apply_for_trusted_relayer` and `waiting_period` seconds have passed. A
-  `ROLE_RELAYER_MANAGER` holder (or an admin) can reject a staked relayer
-  and take the stake; an active relayer can resign and get the stake back.
-  Staking state lives in a separate `TrustedRelayers` resource on the bridge
-  object, created by the first `set_relayer_config` call. Staked relayers
+  `ROLE_RELAYER_MANAGER` holder (`initialize` grants it to the deployer) can
+  reject a staked relayer and take the stake; an active relayer can resign
+  and get the stake back. Staking state lives in a separate `TrustedRelayers`
+  resource on the bridge object. `initialize` creates it with the starting
+  stake and waiting period; bridges upgraded from an older version get it
+  from the first `set_relayer_config` call. Staked relayers
   are kept in an `OrderedMap` so `get_pending_relayers` / `get_active_relayers`
   can list them; `role_holders(3)` lists relayers granted by an admin.
   Mirrors `omni_utils::trusted_relayer` on NEAR.

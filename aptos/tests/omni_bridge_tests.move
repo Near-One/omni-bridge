@@ -77,7 +77,7 @@ module omni_bridge::omni_bridge_tests {
         for (i in 0..20) {
             derived.push_back((i as u8));
         };
-        omni_bridge::test_initialize(deployer, derived, 13u8, native_metadata);
+        omni_bridge::test_initialize(deployer, derived, 13u8, native_metadata, 0, WAITING_PERIOD);
         native_metadata
     }
 
@@ -116,7 +116,7 @@ module omni_bridge::omni_bridge_tests {
             derived.push_back(0u8);
         };
         let other = create_test_fa(&deployer, b"ANOTHER", 8);
-        omni_bridge::test_initialize(&deployer, derived, 13u8, other);
+        omni_bridge::test_initialize(&deployer, derived, 13u8, other, 0, WAITING_PERIOD);
     }
 
     #[test(deployer = @omni_bridge, attacker = @0xBEEF)]
@@ -835,8 +835,14 @@ module omni_bridge::omni_bridge_tests {
         for (i in 0..20) {
             derived.push_back((i as u8));
         };
-        omni_bridge::test_initialize(deployer, derived, 13u8, native_metadata);
-        omni_bridge::set_relayer_config(deployer, STAKE, WAITING_PERIOD);
+        omni_bridge::test_initialize(
+            deployer,
+            derived,
+            13u8,
+            native_metadata,
+            STAKE,
+            WAITING_PERIOD
+        );
         (native_metadata, mint_ref)
     }
 
@@ -896,7 +902,7 @@ module omni_bridge::omni_bridge_tests {
 
     #[test(deployer = @omni_bridge, relayer = @0xA11CE)]
     #[expected_failure(abort_code = 15, location = omni_bridge::omni_bridge)]
-    fun apply_requires_relayer_config(deployer: signer, relayer: signer) {
+    fun apply_rejected_when_initialized_without_stake(deployer: signer, relayer: signer) {
         let _ = setup(&deployer);
         omni_bridge::apply_for_trusted_relayer(&relayer);
     }
@@ -1180,10 +1186,46 @@ module omni_bridge::omni_bridge_tests {
         assert!(omni_bridge::get_pending_relayers(0, 10).is_empty(), 972);
     }
 
-    #[test(deployer = @omni_bridge)]
-    fun relayer_lists_are_empty_before_config(deployer: signer) {
+    #[test(deployer = @omni_bridge, framework = @aptos_framework)]
+    fun relayer_lists_are_empty_initially(deployer: signer, framework: signer) {
+        timestamp::set_time_has_started_for_testing(&framework);
         let _ = setup(&deployer);
         assert!(omni_bridge::get_pending_relayers(0, 10).is_empty(), 980);
         assert!(omni_bridge::get_active_relayers(0, 10).is_empty(), 981);
+    }
+
+    #[test(deployer = @omni_bridge, framework = @aptos_framework)]
+    fun initialize_sets_relayer_config(deployer: signer, framework: signer) {
+        let (_, mint_ref) = setup_staking(&deployer, &framework);
+        stash_mint_ref(&deployer, b"MINT", mint_ref);
+
+        let (stake_required, waiting_period) = omni_bridge::get_relayer_config();
+        assert!(stake_required == STAKE && waiting_period == WAITING_PERIOD, 990);
+    }
+
+    #[test(deployer = @omni_bridge)]
+    fun admin_is_relayer_manager(deployer: signer) {
+        let _ = setup(&deployer);
+        assert!(omni_bridge::has_role(role_id(b"RelayerManager"), @omni_bridge), 991);
+    }
+
+    #[test(deployer = @omni_bridge)]
+    #[expected_failure(abort_code = E_NOT_TRUSTED_RELAYER, location = omni_bridge::omni_bridge)]
+    fun fin_transfer_rejects_admin_without_relayer_role(deployer: signer) {
+        let native_token = setup(&deployer);
+        fin_transfer_with_bad_signature(&deployer, native_token);
+    }
+
+    #[test(deployer = @omni_bridge, framework = @aptos_framework, relayer = @0xA11CE)]
+    #[expected_failure(abort_code = E_UNAUTHORIZED, location = omni_bridge::omni_bridge)]
+    fun admin_without_manager_role_cannot_reject(
+        deployer: signer, framework: signer, relayer: signer
+    ) {
+        let (_, mint_ref) = setup_staking(&deployer, &framework);
+        fund_and_apply(&mint_ref, &relayer);
+        stash_mint_ref(&deployer, b"MINT", mint_ref);
+
+        omni_bridge::revoke_role(&deployer, role_id(b"RelayerManager"), @omni_bridge);
+        omni_bridge::reject_relayer_application(&deployer, @0xA11CE);
     }
 }
