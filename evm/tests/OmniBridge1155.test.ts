@@ -4,6 +4,7 @@ import type { BigNumberish } from "ethers"
 import { ethers, upgrades } from "hardhat"
 import type { BridgeToken, OmniBridge, TestERC1155 } from "../typechain-types"
 import { depositSignature, testWallet } from "./helpers/signatures"
+import { setupTrustedRelayers } from "./helpers/trustedRelayer"
 
 type OmniBridge1155 = OmniBridge & {
   forceSetMultiToken(
@@ -18,7 +19,7 @@ describe("OmniBridge ERC1155", () => {
   const secondaryTokenId = 8n
   const mintedAmount = 5n
 
-  let _admin: HardhatEthersSigner
+  let admin: HardhatEthersSigner
   let user: HardhatEthersSigner
   let recipient: HardhatEthersSigner
   let bridgeTokenImpl: BridgeToken
@@ -26,7 +27,7 @@ describe("OmniBridge ERC1155", () => {
   let erc1155: TestERC1155
 
   beforeEach(async () => {
-    ;[_admin, user, recipient] = await ethers.getSigners()
+    ;[admin, user, recipient] = await ethers.getSigners()
 
     const bridgeTokenFactory = await ethers.getContractFactory("BridgeToken")
     bridgeTokenImpl = (await bridgeTokenFactory.deploy()) as BridgeToken
@@ -39,6 +40,7 @@ describe("OmniBridge ERC1155", () => {
       { initializer: "initialize" },
     )
     bridge = (await deployedBridge.waitForDeployment()) as unknown as OmniBridge1155
+    await setupTrustedRelayers(await bridge.getAddress(), admin, [admin.address])
 
     const erc1155Factory = await ethers.getContractFactory("TestERC1155")
     erc1155 = await erc1155Factory.deploy()
