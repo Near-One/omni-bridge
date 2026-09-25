@@ -24,11 +24,21 @@ and [evm/src/omni-bridge/contracts/OmniBridge.sol](../evm/src/omni-bridge/contra
   `disable_ungated_transfer` in `initialize` so a deployer-key compromise
   cannot move locked funds out.
 - **Role-based access control**: `BridgeState.roles: Table<u8, vector<address>>`
-  maps each role discriminant to a list of holder addresses. Three roles
-  ship today (`ROLE_ADMIN`, `ROLE_PAUSER`, `ROLE_METADATA_ADMIN`); each role
+  maps each role discriminant to a list of holder addresses. Five roles
+  ship today (`ROLE_ADMIN`, `ROLE_PAUSER`, `ROLE_METADATA_ADMIN`,
+  `ROLE_TRUSTED_RELAYER`, `ROLE_RELAYER_MANAGER`); each role
   can have any number of holders, all equally privileged. The `Admin` role
   grants/revokes any role (including itself) via `grant_role`/`revoke_role`.
   Revoking the last `Admin` aborts with `E_CANNOT_REMOVE_LAST_ADMIN`.
+- **Trusted relayers**: only trusted relayers can call `fin_transfer` (the
+  relayer signs the transaction). An account is trusted if it holds
+  `ROLE_TRUSTED_RELAYER`, or it staked `stake_required` native tokens via
+  `apply_for_trusted_relayer` and `waiting_period` seconds have passed. A
+  `ROLE_RELAYER_MANAGER` holder (or an admin) can reject a staked relayer
+  and take the stake; an active relayer can resign and get the stake back.
+  Staking state lives in a separate `TrustedRelayers` resource on the bridge
+  object, created by the first `set_relayer_config` call. Mirrors
+  `omni_utils::trusted_relayer` on NEAR.
 
 ## Module Layout
 
