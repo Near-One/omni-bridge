@@ -18,6 +18,7 @@ describe("TrustedRelayerRegistry", () => {
   let relayer: HardhatEthersSigner
   let manager: HardhatEthersSigner
   let user: HardhatEthersSigner
+  let others: HardhatEthersSigner[]
 
   async function deployBridge(): Promise<OmniBridge> {
     const bridgeTokenFactory = await ethers.getContractFactory("BridgeToken")
@@ -50,7 +51,7 @@ describe("TrustedRelayerRegistry", () => {
   }
 
   beforeEach(async () => {
-    ;[admin, relayer, manager, user] = await ethers.getSigners()
+    ;[admin, relayer, manager, user, ...others] = await ethers.getSigners()
 
     OmniBridge = await deployBridge()
     tokenAddress = await createToken(OmniBridge)
@@ -253,6 +254,72 @@ describe("TrustedRelayerRegistry", () => {
       await expect(
         Registry.rejectRelayerApplication(relayer.address),
       ).to.be.revertedWithCustomError(Registry, "RelayerNotFound")
+    })
+  })
+
+  describe("relayer lists", () => {
+    const addresses = (entries: { relayer: string }[]) => entries.map((entry) => entry.relayer)
+
+    beforeEach(async () => {
+      await Registry.setRelayerConfig(STAKE, WAITING_PERIOD)
+    })
+
+    it("lists pending and active relayers", async () => {
+      const [first, second] = others
+      await Registry.connect(first).applyForTrustedRelayer({ value: STAKE })
+      await time.increase(WAITING_PERIOD / 2)
+      await Registry.connect(second).applyForTrustedRelayer({ value: STAKE })
+
+      expect(addresses(await Registry.getPendingRelayers(0, 10))).to.deep.equal([
+        first.address,
+        second.address,
+      ])
+      expect(await Registry.getActiveRelayers(0, 10)).to.be.empty
+
+      await time.increase(WAITING_PERIOD / 2)
+
+      const active = await Registry.getActiveRelayers(0, 10)
+      expect(addresses(active)).to.deep.equal([first.address])
+      expect(active[0].stake).to.equal(STAKE)
+      expect(addresses(await Registry.getPendingRelayers(0, 10))).to.deep.equal([second.address])
+    })
+
+    it("paginates relayers", async () => {
+      const applicants = others.slice(0, 3)
+      for (const applicant of applicants) {
+        await Registry.connect(applicant).applyForTrustedRelayer({ value: STAKE })
+      }
+
+      expect(addresses(await Registry.getPendingRelayers(1, 1))).to.deep.equal([
+        applicants[1].address,
+      ])
+      expect(addresses(await Registry.getPendingRelayers(1, 100))).to.deep.equal([
+        applicants[1].address,
+        applicants[2].address,
+      ])
+      expect(await Registry.getPendingRelayers(3, 100)).to.be.empty
+      expect(await Registry.getPendingRelayers(0, 0)).to.be.empty
+    })
+
+    it("removes relayers on resign and reject", async () => {
+      const [first, second] = others
+      await Registry.connect(first).applyForTrustedRelayer({ value: STAKE })
+      await Registry.connect(second).applyForTrustedRelayer({ value: STAKE })
+
+      await Registry.rejectRelayerApplication(first.address)
+      expect(addresses(await Registry.getPendingRelayers(0, 10))).to.deep.equal([second.address])
+
+      await time.increase(WAITING_PERIOD)
+      await Registry.connect(second).resignTrustedRelayer()
+      expect(await Registry.getActiveRelayers(0, 10)).to.be.empty
+      expect(await Registry.getPendingRelayers(0, 10)).to.be.empty
+    })
+
+    it("lists relayers granted by the admin", async () => {
+      const role = await Registry.TRUSTED_RELAYER_ROLE()
+      await Registry.grantRole(role, relayer.address)
+
+      expect(await Registry.getRoleMembers(role)).to.deep.equal([relayer.address])
     })
   })
 })

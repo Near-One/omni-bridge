@@ -1,15 +1,18 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 pragma solidity ^0.8.24;
 
-import {AccessControlUpgradeable} from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
+import {AccessControlEnumerableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/extensions/AccessControlEnumerableUpgradeable.sol";
 import {UUPSUpgradeable} from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
+import {EnumerableSet} from "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
 import {ITrustedRelayerRegistry} from "../../common/ITrustedRelayerRegistry.sol";
 
 contract TrustedRelayerRegistry is
     UUPSUpgradeable,
-    AccessControlUpgradeable,
+    AccessControlEnumerableUpgradeable,
     ITrustedRelayerRegistry
 {
+    using EnumerableSet for EnumerableSet.AddressSet;
+
     struct RelayerState {
         uint128 stake;
         uint64 activateAt;
@@ -20,6 +23,12 @@ contract TrustedRelayerRegistry is
         uint64 waitingPeriod;
     }
 
+    struct RelayerEntry {
+        address relayer;
+        uint128 stake;
+        uint64 activateAt;
+    }
+
     bytes32 public constant TRUSTED_RELAYER_ROLE =
         keccak256("TRUSTED_RELAYER_ROLE");
     bytes32 public constant RELAYER_MANAGER_ROLE =
@@ -27,6 +36,7 @@ contract TrustedRelayerRegistry is
 
     RelayerConfig public relayerConfig;
     mapping(address => RelayerState) public relayers;
+    EnumerableSet.AddressSet private stakedRelayers;
 
     event RelayerApplied(
         address indexed relayer,
@@ -55,7 +65,7 @@ contract TrustedRelayerRegistry is
 
     function initialize(address admin) public initializer {
         __UUPSUpgradeable_init();
-        __AccessControl_init();
+        __AccessControlEnumerable_init();
         _grantRole(DEFAULT_ADMIN_ROLE, admin);
     }
 
@@ -86,6 +96,7 @@ contract TrustedRelayerRegistry is
             stake: config.stakeRequired,
             activateAt: activateAt
         });
+        stakedRelayers.add(msg.sender);
 
         emit RelayerApplied(msg.sender, config.stakeRequired, activateAt);
     }
@@ -101,6 +112,7 @@ contract TrustedRelayerRegistry is
         }
 
         delete relayers[msg.sender];
+        stakedRelayers.remove(msg.sender);
 
         emit RelayerResigned(msg.sender, state.stake);
 
@@ -125,6 +137,7 @@ contract TrustedRelayerRegistry is
         }
 
         delete relayers[relayer];
+        stakedRelayers.remove(relayer);
 
         emit RelayerRejected(relayer, state.stake, msg.sender);
 
@@ -143,6 +156,57 @@ contract TrustedRelayerRegistry is
         emit RelayerConfigSet(stakeRequired, waitingPeriod);
     }
 
+    function getActiveRelayers(
+        uint256 fromIndex,
+        uint256 limit
+    ) external view returns (RelayerEntry[] memory) {
+        return _getStakedRelayers(true, fromIndex, limit);
+    }
+
+    function getPendingRelayers(
+        uint256 fromIndex,
+        uint256 limit
+    ) external view returns (RelayerEntry[] memory) {
+        return _getStakedRelayers(false, fromIndex, limit);
+    }
+
+    function _getStakedRelayers(
+        bool active,
+        uint256 fromIndex,
+        uint256 limit
+    ) private view returns (RelayerEntry[] memory) {
+        uint256 length = stakedRelayers.length();
+        address[] memory matching = new address[](length);
+        uint256 matchingCount;
+        for (uint256 i; i < length; ++i) {
+            address relayer = stakedRelayers.at(i);
+            if ((block.timestamp >= relayers[relayer].activateAt) == active) {
+                matching[matchingCount++] = relayer;
+            }
+        }
+
+        if (fromIndex >= matchingCount) {
+            return new RelayerEntry[](0);
+        }
+        uint256 size = matchingCount - fromIndex;
+        if (size > limit) {
+            size = limit;
+        }
+
+        RelayerEntry[] memory entries = new RelayerEntry[](size);
+        for (uint256 i; i < size; ++i) {
+            address relayer = matching[fromIndex + i];
+            RelayerState memory state = relayers[relayer];
+            entries[i] = RelayerEntry({
+                relayer: relayer,
+                stake: state.stake,
+                activateAt: state.activateAt
+            });
+        }
+
+        return entries;
+    }
+
     function _sendStake(address to, uint128 amount) private {
         (bool success, ) = to.call{value: amount}("");
         if (!success) revert FailedToSendStake();
@@ -152,5 +216,5 @@ contract TrustedRelayerRegistry is
         address newImplementation
     ) internal override onlyRole(DEFAULT_ADMIN_ROLE) {}
 
-    uint256[48] private __gap;
+    uint256[50] private __gap;
 }
