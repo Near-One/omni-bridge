@@ -25,6 +25,8 @@ declare module "hardhat/types/config" {
     wormholeAddress?: string
     zksync?: boolean
     ethNetwork?: string
+    // Default trusted relayer stake in native tokens, ~$4k at Sep 2026 prices
+    relayerStakeRequired?: string
   }
   interface HardhatUserConfig {
     zksolc?: {
@@ -128,7 +130,10 @@ task("deploy-bridge-token-factory", "Deploys the OmniBridge contract")
 
 task("deploy-trusted-relayer-registry", "Deploys the TrustedRelayerRegistry contract")
   .addParam("admin", "The address that gets DEFAULT_ADMIN_ROLE on the registry")
-  .addParam("stakeRequired", "Native tokens (in wei) a relayer must stake, 0 disables staking")
+  .addOptionalParam(
+    "stakeRequired",
+    "Native tokens (in wei) a relayer must stake, 0 disables staking. Defaults to the network's relayerStakeRequired",
+  )
   .addOptionalParam(
     "waitingPeriod",
     "Seconds before a staked relayer becomes active",
@@ -136,10 +141,19 @@ task("deploy-trusted-relayer-registry", "Deploys the TrustedRelayerRegistry cont
   )
   .setAction(async (taskArgs, hre) => {
     const { ethers, upgrades } = hre
+    const { relayerStakeRequired } = hre.network.config as HttpNetworkUserConfig
+    let stakeRequired = taskArgs.stakeRequired
+    if (stakeRequired === undefined) {
+      if (relayerStakeRequired === undefined) {
+        throw new Error("Pass --stake-required or set relayerStakeRequired for this network")
+      }
+      stakeRequired = ethers.parseEther(relayerStakeRequired)
+    }
+
     const RegistryContract = await ethers.getContractFactory("TrustedRelayerRegistry")
     const Registry = await upgrades.deployProxy(
       RegistryContract,
-      [taskArgs.admin, taskArgs.stakeRequired, taskArgs.waitingPeriod],
+      [taskArgs.admin, stakeRequired, taskArgs.waitingPeriod],
       {
         initializer: "initialize",
         timeout: 0,
@@ -546,6 +560,7 @@ const config: HardhatUserConfig = {
       omniChainId: 0,
       chainId: 1,
       url: `https://mainnet.infura.io/v3/${INFURA_API_KEY}`,
+      relayerStakeRequired: "1.5",
       accounts: [`${EVM_PRIVATE_KEY}`],
     },
     arbitrumMainnet: {
@@ -553,6 +568,7 @@ const config: HardhatUserConfig = {
       omniChainId: 3,
       chainId: 42161,
       url: `https://arbitrum-mainnet.infura.io/v3/${INFURA_API_KEY}`,
+      relayerStakeRequired: "1.5",
       accounts: [`${EVM_PRIVATE_KEY}`],
     },
     baseMainnet: {
@@ -560,6 +576,7 @@ const config: HardhatUserConfig = {
       omniChainId: 4,
       chainId: 8453,
       url: `https://base-mainnet.infura.io/v3/${INFURA_API_KEY}`,
+      relayerStakeRequired: "1.5",
       accounts: [`${EVM_PRIVATE_KEY}`],
     },
     bnbMainnet: {
@@ -567,6 +584,7 @@ const config: HardhatUserConfig = {
       omniChainId: 5,
       chainId: 56,
       url: `https://bsc-mainnet.infura.io/v3/${INFURA_API_KEY}`,
+      relayerStakeRequired: "5",
       accounts: [`${EVM_PRIVATE_KEY}`],
     },
     polygonMainnet: {
@@ -574,6 +592,7 @@ const config: HardhatUserConfig = {
       omniChainId: 8,
       chainId: 137,
       url: `https://polygon-mainnet.infura.io/v3/${INFURA_API_KEY}`,
+      relayerStakeRequired: "35000",
       accounts: [`${EVM_PRIVATE_KEY}`],
     },
     hyperEvmMainnet: {
@@ -581,6 +600,7 @@ const config: HardhatUserConfig = {
       omniChainId: 9,
       chainId: 999,
       url: "https://rpc.hyperliquid.xyz/evm",
+      relayerStakeRequired: "45",
       accounts: [`${EVM_PRIVATE_KEY}`],
     },
     abstractMainnet: {
@@ -589,6 +609,7 @@ const config: HardhatUserConfig = {
       url: "https://api.mainnet.abs.xyz",
       ethNetwork: "mainnet",
       zksync: true,
+      relayerStakeRequired: "1.5",
       accounts: [`${EVM_PRIVATE_KEY}`],
     },
     sepolia: {
