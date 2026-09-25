@@ -1,15 +1,21 @@
 use core::keccak::compute_keccak_byte_array;
 use omni_bridge::omni_bridge::{
-    FinTransfer, IOmniBridgeDispatcher, IOmniBridgeDispatcherTrait, InitTransfer, LogMetadata,
-    MetadataPayload, OmniEvents, Signature, TransferMessagePayload,
+    FinTransfer, IOmniBridgeDispatcher, IOmniBridgeDispatcherTrait, ITrustedRelayerDispatcher,
+    ITrustedRelayerDispatcherTrait, InitTransfer, LogMetadata, MetadataPayload, OmniEvents,
+    RelayerApplied, RelayerConfig, RelayerRejected, RelayerResigned, RelayerState, Signature,
+    TransferMessagePayload,
 };
 use omni_bridge::utils::{borsh, reverse_u256_bytes};
+use openzeppelin::access::accesscontrol::interface::{
+    IAccessControlDispatcher, IAccessControlDispatcherTrait,
+};
 use openzeppelin::token::erc20::{ERC20ABIDispatcher, ERC20ABIDispatcherTrait};
 use openzeppelin::upgrades::interface::{IUpgradeableDispatcher, IUpgradeableDispatcherTrait};
 use snforge_std::signature::secp256k1_curve::{Secp256k1CurveKeyPairImpl, Secp256k1CurveSignerImpl};
 use snforge_std::{
     ContractClass, ContractClassTrait, DeclareResultTrait, EventSpyAssertionsTrait, declare,
-    spy_events, start_cheat_caller_address, stop_cheat_caller_address,
+    spy_events, start_cheat_block_timestamp_global, start_cheat_caller_address,
+    stop_cheat_caller_address,
 };
 use starknet::eth_signature::public_key_point_to_eth_address;
 use starknet::{ClassHash, ContractAddress, EthAddress, SyscallResultTrait};
@@ -39,12 +45,18 @@ fn get_test_eth_address() -> felt252 {
 }
 
 fn deploy_bridge_contract() -> (IOmniBridgeDispatcher, ContractAddress) {
-    let token_class_hash = declare_bridge_token().class_hash;
-    let owner: ContractAddress = 0x123.try_into().unwrap();
     let native_token: ContractAddress =
         0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7
         .try_into()
         .unwrap();
+    deploy_bridge_contract_with_native_token(native_token)
+}
+
+fn deploy_bridge_contract_with_native_token(
+    native_token: ContractAddress,
+) -> (IOmniBridgeDispatcher, ContractAddress) {
+    let token_class_hash = declare_bridge_token().class_hash;
+    let owner: ContractAddress = 0x123.try_into().unwrap();
 
     let derived_address = get_test_eth_address();
 
@@ -343,7 +355,11 @@ fn test_fin_transfer_with_bridge_token() {
     let message_hash = build_fin_transfer_message(@transfer_payload, STARKNET_CHAIN_ID);
     let fin_signature = sign_message(message_hash);
 
+    let relayer: ContractAddress = 0x777.try_into().unwrap();
+    grant_role(bridge_address, TRUSTED_RELAYER_ROLE, relayer);
+    start_cheat_caller_address(bridge_address, relayer);
     dispatcher.fin_transfer(fin_signature, transfer_payload);
+    stop_cheat_caller_address(bridge_address);
 
     // Verify tokens were minted
     let balance = ERC20ABIDispatcher { contract_address: token_address }.balance_of(recipient);
@@ -438,4 +454,299 @@ fn test_upgrade_token_not_deployed_by_bridge_fails() {
     start_cheat_caller_address(bridge_address, owner);
     bridge.upgrade_token(random_token, new_token_class_hash);
     stop_cheat_caller_address(bridge_address);
+}
+
+// Trusted relayers
+
+const TRUSTED_RELAYER_ROLE: felt252 = selector!("TRUSTED_RELAYER_ROLE");
+const RELAYER_MANAGER_ROLE: felt252 = selector!("RELAYER_MANAGER_ROLE");
+const STAKE: u128 = 1000;
+const WAITING_PERIOD: u64 = 7 * 24 * 60 * 60;
+const NOW: u64 = 1_700_000_000;
+
+fn bridge_owner() -> ContractAddress {
+    0x123.try_into().unwrap()
+}
+
+fn relayer_address() -> ContractAddress {
+    0x777.try_into().unwrap()
+}
+
+fn grant_role(bridge_address: ContractAddress, role: felt252, account: ContractAddress) {
+    start_cheat_caller_address(bridge_address, bridge_owner());
+    IAccessControlDispatcher { contract_address: bridge_address }.grant_role(role, account);
+    stop_cheat_caller_address(bridge_address);
+}
+
+// Bridge with a mintable stake token; the relayer holds STAKE tokens approved to the bridge
+fn setup_staking() -> (
+    IOmniBridgeDispatcher, ITrustedRelayerDispatcher, ContractAddress, ERC20ABIDispatcher,
+) {
+    start_cheat_block_timestamp_global(NOW);
+
+    let (stake_token_address, _) = declare_bridge_token()
+        .deploy(@array![0, 0x5354524b, 4, 0, 0x5354524b, 4, 18]) // "STRK", "STRK", 18
+        .unwrap_syscall();
+    let stake_token = ERC20ABIDispatcher { contract_address: stake_token_address };
+
+    let (bridge, bridge_address) = deploy_bridge_contract_with_native_token(stake_token_address);
+    let relayers = ITrustedRelayerDispatcher { contract_address: bridge_address };
+
+    start_cheat_caller_address(bridge_address, bridge_owner());
+    relayers.set_relayer_config(STAKE, WAITING_PERIOD);
+    stop_cheat_caller_address(bridge_address);
+
+    IBridgeTokenDispatcher { contract_address: stake_token_address }
+        .mint(relayer_address(), STAKE.into());
+    start_cheat_caller_address(stake_token_address, relayer_address());
+    stake_token.approve(bridge_address, STAKE.into());
+    stop_cheat_caller_address(stake_token_address);
+
+    (bridge, relayers, bridge_address, stake_token)
+}
+
+fn apply_as_relayer(relayers: ITrustedRelayerDispatcher) {
+    start_cheat_caller_address(relayers.contract_address, relayer_address());
+    relayers.apply_for_trusted_relayer();
+    stop_cheat_caller_address(relayers.contract_address);
+}
+
+fn signed_fin_transfer(
+    bridge: IOmniBridgeDispatcher, bridge_address: ContractAddress,
+) -> (Signature, TransferMessagePayload) {
+    let token_address = deploy_test_token(bridge, bridge_address);
+    let payload = TransferMessagePayload {
+        destination_nonce: 1,
+        origin_chain: 2,
+        origin_nonce: 100,
+        token_address,
+        amount: 1000,
+        recipient: 0x999.try_into().unwrap(),
+        fee_recipient: Option::None,
+        message: Option::None,
+    };
+    let signature = sign_message(build_fin_transfer_message(@payload, STARKNET_CHAIN_ID));
+    (signature, payload)
+}
+
+#[test]
+#[should_panic(expected: ('ERR_NOT_TRUSTED_RELAYER',))]
+fn test_fin_transfer_not_trusted_relayer_fails() {
+    let (bridge, bridge_address) = deploy_bridge_contract();
+    let (signature, payload) = signed_fin_transfer(bridge, bridge_address);
+
+    start_cheat_caller_address(bridge_address, relayer_address());
+    bridge.fin_transfer(signature, payload);
+}
+
+#[test]
+#[should_panic(expected: ('ERR_NOT_TRUSTED_RELAYER',))]
+fn test_fin_transfer_revoked_relayer_fails() {
+    let (bridge, bridge_address) = deploy_bridge_contract();
+    let (signature, payload) = signed_fin_transfer(bridge, bridge_address);
+
+    grant_role(bridge_address, TRUSTED_RELAYER_ROLE, relayer_address());
+    start_cheat_caller_address(bridge_address, bridge_owner());
+    IAccessControlDispatcher { contract_address: bridge_address }
+        .revoke_role(TRUSTED_RELAYER_ROLE, relayer_address());
+    stop_cheat_caller_address(bridge_address);
+
+    start_cheat_caller_address(bridge_address, relayer_address());
+    bridge.fin_transfer(signature, payload);
+}
+
+#[test]
+fn test_staked_relayer_can_fin_transfer_after_waiting_period() {
+    let (bridge, relayers, bridge_address, stake_token) = setup_staking();
+    let mut spy = spy_events();
+
+    apply_as_relayer(relayers);
+
+    assert_eq!(stake_token.balance_of(relayer_address()), 0);
+    assert_eq!(stake_token.balance_of(bridge_address), STAKE.into());
+    assert_eq!(
+        relayers.get_relayer_state(relayer_address()),
+        RelayerState { stake: STAKE, activate_at: NOW + WAITING_PERIOD },
+    );
+    spy
+        .assert_emitted(
+            @array![
+                (
+                    bridge_address,
+                    OmniEvents::RelayerApplied(
+                        RelayerApplied {
+                            relayer: relayer_address(),
+                            stake: STAKE,
+                            activate_at: NOW + WAITING_PERIOD,
+                        },
+                    ),
+                ),
+            ],
+        );
+
+    assert!(!relayers.is_trusted_relayer(relayer_address()));
+    start_cheat_block_timestamp_global(NOW + WAITING_PERIOD);
+    assert!(relayers.is_trusted_relayer(relayer_address()));
+
+    let (signature, payload) = signed_fin_transfer(bridge, bridge_address);
+    start_cheat_caller_address(bridge_address, relayer_address());
+    bridge.fin_transfer(signature, payload);
+    stop_cheat_caller_address(bridge_address);
+}
+
+#[test]
+#[should_panic(expected: ('ERR_NOT_TRUSTED_RELAYER',))]
+fn test_pending_relayer_cannot_fin_transfer() {
+    let (bridge, relayers, bridge_address, _) = setup_staking();
+    apply_as_relayer(relayers);
+
+    start_cheat_block_timestamp_global(NOW + WAITING_PERIOD - 1);
+    let (signature, payload) = signed_fin_transfer(bridge, bridge_address);
+    start_cheat_caller_address(bridge_address, relayer_address());
+    bridge.fin_transfer(signature, payload);
+}
+
+#[test]
+#[should_panic(expected: ('ERR_RELAYER_STAKING_DISABLED',))]
+fn test_apply_when_staking_disabled_fails() {
+    let (_, relayers, bridge_address, _) = setup_staking();
+
+    start_cheat_caller_address(bridge_address, bridge_owner());
+    relayers.set_relayer_config(0, WAITING_PERIOD);
+    stop_cheat_caller_address(bridge_address);
+
+    apply_as_relayer(relayers);
+}
+
+#[test]
+#[should_panic(expected: ('ERR_RELAYER_APPLICATION_EXISTS',))]
+fn test_apply_twice_fails() {
+    let (_, relayers, _, _) = setup_staking();
+    apply_as_relayer(relayers);
+    apply_as_relayer(relayers);
+}
+
+#[test]
+#[should_panic(expected: ('Caller is missing role',))]
+fn test_set_relayer_config_non_admin_fails() {
+    let (_, bridge_address) = deploy_bridge_contract();
+
+    start_cheat_caller_address(bridge_address, relayer_address());
+    ITrustedRelayerDispatcher { contract_address: bridge_address }
+        .set_relayer_config(STAKE, WAITING_PERIOD);
+}
+
+#[test]
+fn test_get_relayer_config() {
+    let (_, relayers, _, _) = setup_staking();
+    assert_eq!(
+        relayers.get_relayer_config(),
+        RelayerConfig { stake_required: STAKE, waiting_period: WAITING_PERIOD },
+    );
+}
+
+#[test]
+#[should_panic(expected: ('ERR_RELAYER_NOT_ACTIVE',))]
+fn test_resign_pending_relayer_fails() {
+    let (_, relayers, bridge_address, _) = setup_staking();
+    apply_as_relayer(relayers);
+
+    start_cheat_caller_address(bridge_address, relayer_address());
+    relayers.resign_trusted_relayer();
+}
+
+#[test]
+fn test_resign_returns_original_stake_after_config_change() {
+    let (_, relayers, bridge_address, stake_token) = setup_staking();
+    apply_as_relayer(relayers);
+    start_cheat_block_timestamp_global(NOW + WAITING_PERIOD);
+
+    start_cheat_caller_address(bridge_address, bridge_owner());
+    relayers.set_relayer_config(STAKE * 2, 0);
+    stop_cheat_caller_address(bridge_address);
+
+    let mut spy = spy_events();
+    start_cheat_caller_address(bridge_address, relayer_address());
+    relayers.resign_trusted_relayer();
+    stop_cheat_caller_address(bridge_address);
+
+    assert_eq!(stake_token.balance_of(relayer_address()), STAKE.into());
+    assert_eq!(stake_token.balance_of(bridge_address), 0);
+    assert!(!relayers.is_trusted_relayer(relayer_address()));
+    spy
+        .assert_emitted(
+            @array![
+                (
+                    bridge_address,
+                    OmniEvents::RelayerResigned(
+                        RelayerResigned { relayer: relayer_address(), stake: STAKE },
+                    ),
+                ),
+            ],
+        );
+}
+
+#[test]
+fn test_reject_by_manager_takes_stake() {
+    let (_, relayers, bridge_address, stake_token) = setup_staking();
+    let manager: ContractAddress = 0x888.try_into().unwrap();
+    grant_role(bridge_address, RELAYER_MANAGER_ROLE, manager);
+    apply_as_relayer(relayers);
+
+    let mut spy = spy_events();
+    start_cheat_caller_address(bridge_address, manager);
+    relayers.reject_relayer_application(relayer_address());
+    stop_cheat_caller_address(bridge_address);
+
+    assert_eq!(stake_token.balance_of(manager), STAKE.into());
+    assert_eq!(stake_token.balance_of(bridge_address), 0);
+    assert_eq!(
+        relayers.get_relayer_state(relayer_address()), RelayerState { stake: 0, activate_at: 0 },
+    );
+    start_cheat_block_timestamp_global(NOW + WAITING_PERIOD);
+    assert!(!relayers.is_trusted_relayer(relayer_address()));
+    spy
+        .assert_emitted(
+            @array![
+                (
+                    bridge_address,
+                    OmniEvents::RelayerRejected(
+                        RelayerRejected { relayer: relayer_address(), stake: STAKE, manager },
+                    ),
+                ),
+            ],
+        );
+}
+
+#[test]
+fn test_reject_active_relayer_by_admin() {
+    let (_, relayers, bridge_address, stake_token) = setup_staking();
+    apply_as_relayer(relayers);
+    start_cheat_block_timestamp_global(NOW + WAITING_PERIOD);
+
+    start_cheat_caller_address(bridge_address, bridge_owner());
+    relayers.reject_relayer_application(relayer_address());
+    stop_cheat_caller_address(bridge_address);
+
+    assert_eq!(stake_token.balance_of(bridge_owner()), STAKE.into());
+    assert!(!relayers.is_trusted_relayer(relayer_address()));
+}
+
+#[test]
+#[should_panic(expected: ('Caller is missing role',))]
+fn test_reject_by_non_manager_fails() {
+    let (_, relayers, bridge_address, _) = setup_staking();
+    apply_as_relayer(relayers);
+
+    start_cheat_caller_address(bridge_address, relayer_address());
+    relayers.reject_relayer_application(relayer_address());
+}
+
+#[test]
+#[should_panic(expected: ('ERR_RELAYER_NOT_FOUND',))]
+fn test_reject_unknown_relayer_fails() {
+    let (_, relayers, bridge_address, _) = setup_staking();
+
+    start_cheat_caller_address(bridge_address, bridge_owner());
+    relayers.reject_relayer_application(relayer_address());
 }

@@ -139,3 +139,45 @@ pub struct PauseStateChanged {
     #[key]
     pub admin: ContractAddress,
 }
+
+#[derive(Drop, Copy, Serde, PartialEq, Debug, starknet::Store)]
+pub struct RelayerState {
+    pub stake: u128,
+    pub activate_at: u64,
+}
+
+#[derive(Drop, Copy, Serde, PartialEq, Debug)]
+pub struct RelayerConfig {
+    pub stake_required: u128,
+    pub waiting_period: u64,
+}
+
+#[derive(Drop, starknet::Event)]
+pub struct RelayerApplied {
+    #[key]
+    pub relayer: ContractAddress,
+    pub stake: u128,
+    pub activate_at: u64,
+}
+
+#[derive(Drop, starknet::Event)]
+pub struct RelayerResigned {
+    #[key]
+    pub relayer: ContractAddress,
+    pub stake: u128,
+}
+
+#[derive(Drop, starknet::Event)]
+pub struct RelayerRejected {
+    #[key]
+    pub relayer: ContractAddress,
+    pub stake: u128,
+    #[key]
+    pub manager: ContractAddress,
+}
+
+#[derive(Drop, starknet::Event)]
+pub struct RelayerConfigSet {
+    pub stake_required: u128,
+    pub waiting_period: u64,
+}

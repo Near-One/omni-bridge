@@ -1,7 +1,8 @@
 pub use OmniBridge::Event as OmniEvents;
 use starknet::{ClassHash, ContractAddress};
 pub use crate::bridge_types::{
-    DeployToken, FinTransfer, InitTransfer, LogMetadata, MetadataPayload, Signature,
+    DeployToken, FinTransfer, InitTransfer, LogMetadata, MetadataPayload, RelayerApplied,
+    RelayerConfig, RelayerConfigSet, RelayerRejected, RelayerResigned, RelayerState, Signature,
     TransferMessagePayload,
 };
 
@@ -31,6 +32,17 @@ pub trait IOmniBridge<TContractState> {
     fn is_transfer_finalised(self: @TContractState, nonce: u64) -> bool;
 }
 
+#[starknet::interface]
+pub trait ITrustedRelayer<TContractState> {
+    fn apply_for_trusted_relayer(ref self: TContractState);
+    fn resign_trusted_relayer(ref self: TContractState);
+    fn reject_relayer_application(ref self: TContractState, relayer: ContractAddress);
+    fn set_relayer_config(ref self: TContractState, stake_required: u128, waiting_period: u64);
+    fn is_trusted_relayer(self: @TContractState, account: ContractAddress) -> bool;
+    fn get_relayer_state(self: @TContractState, relayer: ContractAddress) -> RelayerState;
+    fn get_relayer_config(self: @TContractState) -> RelayerConfig;
+}
+
 #[starknet::contract]
 mod OmniBridge {
     use core::keccak::compute_keccak_byte_array;
@@ -51,12 +63,14 @@ mod OmniBridge {
     };
     use starknet::syscalls::deploy_syscall;
     use starknet::{
-        ClassHash, ContractAddress, EthAddress, SyscallResultTrait, get_caller_address,
-        get_contract_address, syscalls,
+        ClassHash, ContractAddress, EthAddress, SyscallResultTrait, get_block_timestamp,
+        get_caller_address, get_contract_address, syscalls,
     };
     use crate::bridge_types::{
         DeployToken, FinTransfer, InitTransfer, LogMetadata, MetadataPayload, MetadataPayloadTrait,
-        PauseStateChanged, Signature, TransferMessagePayload, TransferMessagePayloadTrait,
+        PauseStateChanged, RelayerApplied, RelayerConfig, RelayerConfigSet, RelayerRejected,
+        RelayerResigned, RelayerState, Signature, TransferMessagePayload,
+        TransferMessagePayloadTrait,
     };
     use crate::utils;
     use crate::utils::reverse_u256_bytes;
@@ -64,6 +78,8 @@ mod OmniBridge {
     // Role constants
     const DEFAULT_ADMIN_ROLE: felt252 = 0;
     const PAUSER_ROLE: felt252 = selector!("PAUSER_ROLE");
+    const TRUSTED_RELAYER_ROLE: felt252 = selector!("TRUSTED_RELAYER_ROLE");
+    const RELAYER_MANAGER_ROLE: felt252 = selector!("RELAYER_MANAGER_ROLE");
 
     // Pause flag constants
     const PAUSE_INIT_TRANSFER: u8 = 0x01; // 0001
@@ -89,6 +105,10 @@ mod OmniBridge {
         InitTransfer: InitTransfer,
         FinTransfer: FinTransfer,
         PauseStateChanged: PauseStateChanged,
+        RelayerApplied: RelayerApplied,
+        RelayerResigned: RelayerResigned,
+        RelayerRejected: RelayerRejected,
+        RelayerConfigSet: RelayerConfigSet,
         #[flat]
         AccessControlEvent: AccessControlComponent::Event,
         #[flat]
@@ -117,6 +137,9 @@ mod OmniBridge {
         omni_bridge_chain_id: u8,
         omni_bridge_derived_address: EthAddress,
         strk_token_address: ContractAddress,
+        relayers: Map<ContractAddress, RelayerState>,
+        relayer_stake_required: u128,
+        relayer_waiting_period: u64,
     }
 
     #[constructor]
@@ -245,6 +268,10 @@ mod OmniBridge {
             ref self: ContractState, signature: Signature, payload: TransferMessagePayload,
         ) {
             assert(!_is_paused(@self, PAUSE_FIN_TRANSFER), 'ERR_FIN_TRANSFER_PAUSED');
+            assert(
+                TrustedRelayerImpl::is_trusted_relayer(@self, get_caller_address()),
+                'ERR_NOT_TRUSTED_RELAYER',
+            );
 
             assert(
                 !self.is_transfer_finalised(payload.destination_nonce), 'ERR_NONCE_ALREADY_USED',
@@ -389,6 +416,94 @@ mod OmniBridge {
     }
 
     #[abi(embed_v0)]
+    impl TrustedRelayerImpl of super::ITrustedRelayer<ContractState> {
+        fn apply_for_trusted_relayer(ref self: ContractState) {
+            let stake = self.relayer_stake_required.read();
+            assert(stake != 0, 'ERR_RELAYER_STAKING_DISABLED');
+
+            let caller = get_caller_address();
+            assert(self.relayers.read(caller).stake == 0, 'ERR_RELAYER_APPLICATION_EXISTS');
+
+            let activate_at = get_block_timestamp() + self.relayer_waiting_period.read();
+            self.relayers.write(caller, RelayerState { stake, activate_at });
+
+            let success = IERC20Dispatcher { contract_address: self.strk_token_address.read() }
+                .transfer_from(caller, get_contract_address(), stake.into());
+            assert(success, 'ERR_STAKE_TRANSFER_FAILED');
+
+            self
+                .emit(
+                    Event::RelayerApplied(RelayerApplied { relayer: caller, stake, activate_at }),
+                );
+        }
+
+        fn resign_trusted_relayer(ref self: ContractState) {
+            let caller = get_caller_address();
+            let state = self.relayers.read(caller);
+            assert(state.stake != 0, 'ERR_RELAYER_NOT_FOUND');
+            assert(get_block_timestamp() >= state.activate_at, 'ERR_RELAYER_NOT_ACTIVE');
+
+            self.relayers.write(caller, RelayerState { stake: 0, activate_at: 0 });
+            _send_stake(@self, caller, state.stake);
+
+            self
+                .emit(
+                    Event::RelayerResigned(RelayerResigned { relayer: caller, stake: state.stake }),
+                );
+        }
+
+        fn reject_relayer_application(ref self: ContractState, relayer: ContractAddress) {
+            let caller = get_caller_address();
+            assert(
+                self.accesscontrol.has_role(RELAYER_MANAGER_ROLE, caller)
+                    || self.accesscontrol.has_role(DEFAULT_ADMIN_ROLE, caller),
+                AccessControlComponent::Errors::MISSING_ROLE,
+            );
+
+            let state = self.relayers.read(relayer);
+            assert(state.stake != 0, 'ERR_RELAYER_NOT_FOUND');
+
+            self.relayers.write(relayer, RelayerState { stake: 0, activate_at: 0 });
+            _send_stake(@self, caller, state.stake);
+
+            self
+                .emit(
+                    Event::RelayerRejected(
+                        RelayerRejected { relayer, stake: state.stake, manager: caller },
+                    ),
+                );
+        }
+
+        fn set_relayer_config(ref self: ContractState, stake_required: u128, waiting_period: u64) {
+            self.accesscontrol.assert_only_role(DEFAULT_ADMIN_ROLE);
+            self.relayer_stake_required.write(stake_required);
+            self.relayer_waiting_period.write(waiting_period);
+
+            self.emit(Event::RelayerConfigSet(RelayerConfigSet { stake_required, waiting_period }));
+        }
+
+        fn is_trusted_relayer(self: @ContractState, account: ContractAddress) -> bool {
+            if self.accesscontrol.has_role(TRUSTED_RELAYER_ROLE, account) {
+                return true;
+            }
+
+            let state = self.relayers.read(account);
+            state.stake != 0 && get_block_timestamp() >= state.activate_at
+        }
+
+        fn get_relayer_state(self: @ContractState, relayer: ContractAddress) -> RelayerState {
+            self.relayers.read(relayer)
+        }
+
+        fn get_relayer_config(self: @ContractState) -> RelayerConfig {
+            RelayerConfig {
+                stake_required: self.relayer_stake_required.read(),
+                waiting_period: self.relayer_waiting_period.read(),
+            }
+        }
+    }
+
+    #[abi(embed_v0)]
     impl UpgradeableImpl of IUpgradeable<ContractState> {
         fn upgrade(ref self: ContractState, new_class_hash: ClassHash) {
             self.accesscontrol.assert_only_role(DEFAULT_ADMIN_ROLE);
@@ -405,6 +520,12 @@ mod OmniBridge {
 
         let sig = signature_from_vrs(signature.v, signature.r, signature.s);
         verify_eth_signature(message_hash, sig, self.omni_bridge_derived_address.read());
+    }
+
+    fn _send_stake(self: @ContractState, recipient: ContractAddress, amount: u128) {
+        let success = IERC20Dispatcher { contract_address: self.strk_token_address.read() }
+            .transfer(recipient, amount.into());
+        assert(success, 'ERR_STAKE_TRANSFER_FAILED');
     }
 
     fn _is_paused(self: @ContractState, flag: u8) -> bool {
