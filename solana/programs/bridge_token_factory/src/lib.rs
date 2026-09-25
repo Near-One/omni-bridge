@@ -1,12 +1,16 @@
 use anchor_lang::prelude::*;
 use instructions::{
-    ChangeConfig, DeployToken, FinalizeTransfer, FinalizeTransferSol, GetVersion, InitTransfer,
-    InitTransferSol, Initialize, LogMetadata, Pause, UpdateMetadata,
-    __client_accounts_change_config, __client_accounts_deploy_token,
-    __client_accounts_finalize_transfer, __client_accounts_finalize_transfer_sol,
-    __client_accounts_get_version, __client_accounts_init_transfer,
+    ApplyForTrustedRelayer, ChangeConfig, DeployToken, FinalizeTransfer, FinalizeTransferSol,
+    GetVersion, GrantTrustedRelayer, InitTransfer, InitTransferSol, Initialize, LogMetadata, Pause,
+    RejectRelayerApplication, ResignTrustedRelayer, UpdateMetadata,
+    __client_accounts_apply_for_trusted_relayer, __client_accounts_change_config,
+    __client_accounts_deploy_token, __client_accounts_finalize_transfer,
+    __client_accounts_finalize_transfer_sol, __client_accounts_get_version,
+    __client_accounts_grant_trusted_relayer, __client_accounts_init_transfer,
     __client_accounts_init_transfer_sol, __client_accounts_initialize,
-    __client_accounts_log_metadata, __client_accounts_pause, __client_accounts_update_metadata,
+    __client_accounts_log_metadata, __client_accounts_pause,
+    __client_accounts_reject_relayer_application, __client_accounts_resign_trusted_relayer,
+    __client_accounts_update_metadata,
 };
 use state::message::{
     deploy_token::DeployTokenPayload, finalize_transfer::FinalizeTransferPayload,
@@ -28,10 +32,11 @@ pub mod bridge_token_factory {
 
     use super::constants::{FINALIZE_TRANSFER_PAUSED, INIT_TRANSFER_PAUSED};
     use super::{
-        msg, ChangeConfig, Context, DeployToken, DeployTokenPayload, FinalizeTransfer,
-        FinalizeTransferPayload, FinalizeTransferSol, GetVersion, InitTransfer,
-        InitTransferPayload, InitTransferSol, Initialize, Key, LogMetadata, Pause, Pubkey, Result,
-        SignedPayload, UpdateMetadata,
+        msg, ApplyForTrustedRelayer, ChangeConfig, Clock, Context, DeployToken,
+        DeployTokenPayload, FinalizeTransfer, FinalizeTransferPayload, FinalizeTransferSol,
+        GetVersion, GrantTrustedRelayer, InitTransfer, InitTransferPayload, InitTransferSol,
+        Initialize, Key, LogMetadata, Pause, Pubkey, RejectRelayerApplication,
+        ResignTrustedRelayer, Result, SignedPayload, SolanaSysvar, UpdateMetadata,
     };
 
     pub fn initialize(
@@ -83,6 +88,10 @@ pub mod bridge_token_factory {
             ctx.accounts.common.config.paused & FINALIZE_TRANSFER_PAUSED == 0,
             error::ErrorCode::Paused
         );
+        require!(
+            ctx.accounts.relayer_state.is_active(Clock::get()?.unix_timestamp),
+            error::ErrorCode::RelayerNotActive
+        );
         msg!("Finalizing transfer");
 
         data.verify_signature(
@@ -101,6 +110,10 @@ pub mod bridge_token_factory {
         require!(
             ctx.accounts.common.config.paused & FINALIZE_TRANSFER_PAUSED == 0,
             error::ErrorCode::Paused
+        );
+        require!(
+            ctx.accounts.relayer_state.is_active(Clock::get()?.unix_timestamp),
+            error::ErrorCode::RelayerNotActive
         );
         msg!("Finalizing transfer");
 
@@ -196,6 +209,51 @@ pub mod bridge_token_factory {
 
         ctx.accounts
             .set_derived_near_bridge_address(derived_near_bridge_address)?;
+
+        Ok(())
+    }
+
+    pub fn set_relayer_config(
+        ctx: Context<ChangeConfig>,
+        stake_required: u64,
+        waiting_period: i64,
+    ) -> Result<()> {
+        msg!("Setting relayer config");
+
+        ctx.accounts.set_relayer_config(stake_required, waiting_period)?;
+
+        Ok(())
+    }
+
+    pub fn apply_for_trusted_relayer(ctx: Context<ApplyForTrustedRelayer>) -> Result<()> {
+        msg!("Applying for trusted relayer");
+
+        ctx.accounts.process(ctx.bumps.relayer_state)?;
+
+        Ok(())
+    }
+
+    pub fn resign_trusted_relayer(ctx: Context<ResignTrustedRelayer>) -> Result<()> {
+        msg!("Resigning trusted relayer");
+
+        ctx.accounts.process()?;
+
+        Ok(())
+    }
+
+    pub fn grant_trusted_relayer(ctx: Context<GrantTrustedRelayer>, relayer: Pubkey) -> Result<()> {
+        msg!("Granting trusted relayer {}", relayer);
+
+        ctx.accounts.process(ctx.bumps.relayer_state)?;
+
+        Ok(())
+    }
+
+    pub fn reject_relayer_application(
+        _ctx: Context<RejectRelayerApplication>,
+        relayer: Pubkey,
+    ) -> Result<()> {
+        msg!("Rejecting relayer {}", relayer);
 
         Ok(())
     }

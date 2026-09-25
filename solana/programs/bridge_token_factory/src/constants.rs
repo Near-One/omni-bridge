@@ -22,6 +22,9 @@ pub const WRAPPED_MINT_SEED: &[u8] = b"wrapped_mint";
 pub const METADATA_SEED: &[u8] = b"metadata";
 
 #[constant]
+pub const RELAYER_SEED: &[u8] = b"relayer";
+
+#[constant]
 pub const USED_NONCES_PER_ACCOUNT: u32 = 1024;
 
 #[constant]
