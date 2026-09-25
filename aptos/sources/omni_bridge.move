@@ -103,6 +103,9 @@ module omni_bridge::omni_bridge {
     const ROLE_TRUSTED_RELAYER: u8 = 3;
     const ROLE_RELAYER_MANAGER: u8 = 4;
 
+    const DEFAULT_RELAYER_STAKE_REQUIRED: u64 = 500_000_000_000;
+    const DEFAULT_RELAYER_WAITING_PERIOD: u64 = 7 * 24 * 60 * 60;
+
     /// Top-level bridge state. Stored as a resource on the bridge object
     /// (a named Object owned by `@omni_bridge`).
     struct BridgeState has key {
@@ -272,9 +275,7 @@ module omni_bridge::omni_bridge {
         deployer: &signer,
         near_bridge_derived_address: vector<u8>,
         chain_id: u8,
-        native_token_metadata: Object<Metadata>,
-        relayer_stake_required: u64,
-        relayer_waiting_period: u64
+        native_token_metadata: Object<Metadata>
     ) {
         let deployer_addr = deployer.address_of();
         assert!(deployer_addr == @omni_bridge, E_UNAUTHORIZED);
@@ -315,8 +316,8 @@ module omni_bridge::omni_bridge {
 
         write_relayer_config(
             &BridgeState[bridge_object_address()],
-            relayer_stake_required,
-            relayer_waiting_period,
+            DEFAULT_RELAYER_STAKE_REQUIRED,
+            DEFAULT_RELAYER_WAITING_PERIOD,
             deployer_addr
         );
     }
@@ -538,18 +539,22 @@ module omni_bridge::omni_bridge {
         get_staked_relayers(false, from_index, limit)
     }
 
+    #[test_only]
     public fun relayer_entry_relayer(self: &RelayerEntry): address {
         self.relayer
     }
 
+    #[test_only]
     public fun relayer_entry_state(self: &RelayerEntry): RelayerState {
         self.state
     }
 
+    #[test_only]
     public fun relayer_state_stake(self: &RelayerState): u64 {
         self.stake
     }
 
+    #[test_only]
     public fun relayer_state_activate_at(self: &RelayerState): u64 {
         self.activate_at
     }
@@ -631,9 +636,26 @@ module omni_bridge::omni_bridge {
         );
     }
 
+    /// Deprecated: finalization requires a trusted relayer signer, use
+    /// `fin_transfer_v2`. Kept so the package stays upgrade-compatible.
+    public entry fun fin_transfer(
+        _signature_rs: vector<u8>,
+        _signature_v: u8,
+        _destination_nonce: u64,
+        _origin_chain: u8,
+        _origin_nonce: u64,
+        _token_address: address,
+        _amount: u128,
+        _recipient: address,
+        _fee_recipient: Option<String>,
+        _message: Option<vector<u8>>
+    ) {
+        abort E_NOT_TRUSTED_RELAYER
+    }
+
     /// Finalize an inbound transfer from another chain. Only trusted
     /// relayers can submit it; the NEAR MPC signature is the authorization.
-    public entry fun fin_transfer(
+    public entry fun fin_transfer_v2(
         relayer: &signer,
         signature_rs: vector<u8>,
         signature_v: u8,
@@ -1069,18 +1091,21 @@ module omni_bridge::omni_bridge {
         deployer: &signer,
         near_bridge_derived_address: vector<u8>,
         chain_id: u8,
-        native_token_metadata: Object<Metadata>,
-        relayer_stake_required: u64,
-        relayer_waiting_period: u64
+        native_token_metadata: Object<Metadata>
     ) {
         initialize(
             deployer,
             near_bridge_derived_address,
             chain_id,
-            native_token_metadata,
-            relayer_stake_required,
-            relayer_waiting_period
+            native_token_metadata
         );
+    }
+
+    #[test_only]
+    /// Simulates a bridge upgraded from a version without trusted relayers.
+    public fun test_remove_trusted_relayers() {
+        let TrustedRelayers { stake_required: _, waiting_period: _, relayers: _ } =
+            move_from<TrustedRelayers>(bridge_object_address());
     }
 
     #[test_only]

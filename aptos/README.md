@@ -51,15 +51,17 @@ aptos move run \
     --args \
         hex:<20-byte-near-derived-eth-address> \
         u8:<chain-id> \
-        address:<apt-fa-metadata-object-address> \
-        u64:500000000000 \
-        u64:604800
+        address:<apt-fa-metadata-object-address>
 ```
 
-The last two arguments are the trusted relayer stake in octas and the waiting
-period in seconds. 5,000 APT (~$4k at $0.84/APT, Sep 2026) and 7 days match
-the 1000 NEAR / 7 days default on NEAR. Pass `u64:0` as the stake to disable
-staking.
+`initialize` also sets the trusted relayer config to 5,000 APT (~$4k at
+$0.84/APT, Sep 2026) and a 7 day waiting period, like the 1000 NEAR / 7 days
+default on NEAR. Change it with `set_relayer_config` (`u64:0` as the stake
+disables staking).
+
+Relayers finalize transfers with `fin_transfer_v2`, signed by an account that
+holds the `TrustedRelayer` role or has an active stake. The original
+`fin_transfer` is kept only for upgrade compatibility and always aborts.
 
 ## Securing the bridge account with `0x1::multisig_account`
 

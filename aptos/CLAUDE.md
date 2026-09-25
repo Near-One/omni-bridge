@@ -30,16 +30,21 @@ and [evm/src/omni-bridge/contracts/OmniBridge.sol](../evm/src/omni-bridge/contra
   can have any number of holders, all equally privileged. The `Admin` role
   grants/revokes any role (including itself) via `grant_role`/`revoke_role`.
   Revoking the last `Admin` aborts with `E_CANNOT_REMOVE_LAST_ADMIN`.
-- **Trusted relayers**: only trusted relayers can call `fin_transfer` (the
+- **Trusted relayers**: only trusted relayers can call `fin_transfer_v2` (the
   relayer signs the transaction). An account is trusted if it holds
   `ROLE_TRUSTED_RELAYER`, or it staked `stake_required` native tokens via
   `apply_for_trusted_relayer` and `waiting_period` seconds have passed. A
   `ROLE_RELAYER_MANAGER` holder (`initialize` grants it to the deployer) can
   reject a staked relayer and take the stake; an active relayer can resign
   and get the stake back. Staking state lives in a separate `TrustedRelayers`
-  resource on the bridge object. `initialize` creates it with the starting
-  stake and waiting period; bridges upgraded from an older version get it
-  from the first `set_relayer_config` call. Staked relayers
+  resource on the bridge object. `initialize` creates it with the default
+  stake (5,000 APT) and waiting period (7 days); bridges upgraded from an
+  older version get it from the first `set_relayer_config` call.
+- **Upgrade compatibility**: the package is on mainnet with the `compatible`
+  policy, so existing public function signatures can't change. That's why
+  `fin_transfer` keeps its original signature and always aborts, and relayers
+  call `fin_transfer_v2(relayer: &signer, ...)`. Test-only accessors are
+  `#[test_only]` so they don't become permanent public API. Staked relayers
   are kept in an `OrderedMap` so `get_pending_relayers` / `get_active_relayers`
   can list them; `role_holders(3)` lists relayers granted by an admin.
   Mirrors `omni_utils::trusted_relayer` on NEAR.
