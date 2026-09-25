@@ -49,11 +49,11 @@ fn deploy_bridge_contract() -> (IOmniBridgeDispatcher, ContractAddress) {
         0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7
         .try_into()
         .unwrap();
-    deploy_bridge_contract_with_native_token(native_token)
+    deploy_bridge_contract_with(native_token, 0)
 }
 
-fn deploy_bridge_contract_with_native_token(
-    native_token: ContractAddress,
+fn deploy_bridge_contract_with(
+    native_token: ContractAddress, relayer_stake_required: u128,
 ) -> (IOmniBridgeDispatcher, ContractAddress) {
     let token_class_hash = declare_bridge_token().class_hash;
     let owner: ContractAddress = 0x123.try_into().unwrap();
@@ -68,7 +68,9 @@ fn deploy_bridge_contract_with_native_token(
                 STARKNET_CHAIN_ID.into(), // omni_bridge_chain_id
                 token_class_hash.into(), // bridge_token_class_hash
                 owner.into(), // owner
-                native_token.into() // native_token_address
+                native_token.into(), // native_token_address
+                relayer_stake_required.into(), // relayer_stake_required
+                WAITING_PERIOD.into() // relayer_waiting_period
             ],
         )
         .unwrap_syscall();
@@ -489,12 +491,8 @@ fn setup_staking() -> (
         .unwrap_syscall();
     let stake_token = ERC20ABIDispatcher { contract_address: stake_token_address };
 
-    let (bridge, bridge_address) = deploy_bridge_contract_with_native_token(stake_token_address);
+    let (bridge, bridge_address) = deploy_bridge_contract_with(stake_token_address, STAKE);
     let relayers = ITrustedRelayerDispatcher { contract_address: bridge_address };
-
-    start_cheat_caller_address(bridge_address, bridge_owner());
-    relayers.set_relayer_config(STAKE, WAITING_PERIOD);
-    stop_cheat_caller_address(bridge_address);
 
     IBridgeTokenDispatcher { contract_address: stake_token_address }
         .mint(relayer_address(), STAKE.into());
@@ -651,12 +649,43 @@ fn test_set_relayer_config_non_admin_fails() {
 }
 
 #[test]
-fn test_get_relayer_config() {
+fn test_constructor_sets_relayer_config() {
     let (_, relayers, _, _) = setup_staking();
     assert_eq!(
         relayers.get_relayer_config(),
         RelayerConfig { stake_required: STAKE, waiting_period: WAITING_PERIOD },
     );
+}
+
+#[test]
+fn test_admin_is_relayer_manager() {
+    let (_, bridge_address) = deploy_bridge_contract();
+    assert!(
+        IAccessControlDispatcher { contract_address: bridge_address }
+            .has_role(RELAYER_MANAGER_ROLE, bridge_owner()),
+    );
+}
+
+#[test]
+#[should_panic(expected: ('ERR_NOT_TRUSTED_RELAYER',))]
+fn test_fin_transfer_admin_without_relayer_role_fails() {
+    let (bridge, bridge_address) = deploy_bridge_contract();
+    let (signature, payload) = signed_fin_transfer(bridge, bridge_address);
+
+    start_cheat_caller_address(bridge_address, bridge_owner());
+    bridge.fin_transfer(signature, payload);
+}
+
+#[test]
+#[should_panic(expected: ('Caller is missing role',))]
+fn test_admin_without_manager_role_cannot_reject() {
+    let (_, relayers, bridge_address, _) = setup_staking();
+    apply_as_relayer(relayers);
+
+    start_cheat_caller_address(bridge_address, bridge_owner());
+    IAccessControlDispatcher { contract_address: bridge_address }
+        .revoke_role(RELAYER_MANAGER_ROLE, bridge_owner());
+    relayers.reject_relayer_application(relayer_address());
 }
 
 #[test]

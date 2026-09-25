@@ -157,6 +157,8 @@ mod OmniBridge {
         token_class_hash: ClassHash,
         default_admin: ContractAddress,
         strk_token_address: ContractAddress,
+        relayer_stake_required: u128,
+        relayer_waiting_period: u64,
     ) {
         self.omni_bridge_derived_address.write(omni_bridge_derived_address);
         self.omni_bridge_chain_id.write(omni_bridge_chain_id);
@@ -166,6 +168,8 @@ mod OmniBridge {
 
         self.accesscontrol.initializer();
         self.accesscontrol._grant_role(DEFAULT_ADMIN_ROLE, default_admin);
+        self.accesscontrol._grant_role(RELAYER_MANAGER_ROLE, default_admin);
+        _set_relayer_config(ref self, relayer_stake_required, relayer_waiting_period);
     }
 
     #[abi(embed_v0)]
@@ -462,12 +466,8 @@ mod OmniBridge {
         }
 
         fn reject_relayer_application(ref self: ContractState, relayer: ContractAddress) {
+            self.accesscontrol.assert_only_role(RELAYER_MANAGER_ROLE);
             let caller = get_caller_address();
-            assert(
-                self.accesscontrol.has_role(RELAYER_MANAGER_ROLE, caller)
-                    || self.accesscontrol.has_role(DEFAULT_ADMIN_ROLE, caller),
-                AccessControlComponent::Errors::MISSING_ROLE,
-            );
 
             let state = self.relayers.read(relayer);
             assert(state.stake != 0, 'ERR_RELAYER_NOT_FOUND');
@@ -486,10 +486,7 @@ mod OmniBridge {
 
         fn set_relayer_config(ref self: ContractState, stake_required: u128, waiting_period: u64) {
             self.accesscontrol.assert_only_role(DEFAULT_ADMIN_ROLE);
-            self.relayer_stake_required.write(stake_required);
-            self.relayer_waiting_period.write(waiting_period);
-
-            self.emit(Event::RelayerConfigSet(RelayerConfigSet { stake_required, waiting_period }));
+            _set_relayer_config(ref self, stake_required, waiting_period);
         }
 
         fn is_trusted_relayer(self: @ContractState, account: ContractAddress) -> bool {
@@ -582,6 +579,13 @@ mod OmniBridge {
         if i != last_index {
             self.staked_relayers.at(i).write(last);
         }
+    }
+
+    fn _set_relayer_config(ref self: ContractState, stake_required: u128, waiting_period: u64) {
+        self.relayer_stake_required.write(stake_required);
+        self.relayer_waiting_period.write(waiting_period);
+
+        self.emit(Event::RelayerConfigSet(RelayerConfigSet { stake_required, waiting_period }));
     }
 
     fn _send_stake(self: @ContractState, recipient: ContractAddress, amount: u128) {
