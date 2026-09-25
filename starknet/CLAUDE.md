@@ -8,7 +8,7 @@ Cross-chain bridge contract enabling token transfers between Starknet and other 
 - **Security**: Ethereum signature verification using derived NEAR account address
 - **Token Model**: Bridge-deployed tokens (mint/burn) or native tokens (lock/unlock)
 - **Access Control**: OpenZeppelin AccessControl with DEFAULT_ADMIN_ROLE, PAUSER_ROLE, TRUSTED_RELAYER_ROLE and RELAYER_MANAGER_ROLE
-- **Trusted relayers**: Only trusted relayers can call `fin_transfer`. An account is trusted if it holds `TRUSTED_RELAYER_ROLE`, or it staked `stake_required` STRK via `apply_for_trusted_relayer` (needs an allowance) and `waiting_period` seconds have passed. A `RELAYER_MANAGER_ROLE` holder (or the admin) can reject a staked relayer and take the stake; an active relayer can resign and get the stake back. Staking is disabled while `stake_required` is zero. See `ITrustedRelayer`. Mirrors `omni_utils::trusted_relayer` on NEAR
+- **Trusted relayers**: Only trusted relayers can call `fin_transfer`. An account is trusted if it holds `TRUSTED_RELAYER_ROLE`, or it staked `stake_required` STRK via `apply_for_trusted_relayer` (needs an allowance) and `waiting_period` seconds have passed. A `RELAYER_MANAGER_ROLE` holder (or the admin) can reject a staked relayer and take the stake; an active relayer can resign and get the stake back. Staking is disabled while `stake_required` is zero. `get_pending_relayers` / `get_active_relayers` list staked relayers. See `ITrustedRelayer`. Mirrors `omni_utils::trusted_relayer` on NEAR
 
 ## Key Implementation Details
 

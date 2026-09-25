@@ -2,8 +2,8 @@ pub use OmniBridge::Event as OmniEvents;
 use starknet::{ClassHash, ContractAddress};
 pub use crate::bridge_types::{
     DeployToken, FinTransfer, InitTransfer, LogMetadata, MetadataPayload, RelayerApplied,
-    RelayerConfig, RelayerConfigSet, RelayerRejected, RelayerResigned, RelayerState, Signature,
-    TransferMessagePayload,
+    RelayerConfig, RelayerConfigSet, RelayerEntry, RelayerRejected, RelayerResigned, RelayerState,
+    Signature, TransferMessagePayload,
 };
 
 #[starknet::interface]
@@ -41,6 +41,12 @@ pub trait ITrustedRelayer<TContractState> {
     fn is_trusted_relayer(self: @TContractState, account: ContractAddress) -> bool;
     fn get_relayer_state(self: @TContractState, relayer: ContractAddress) -> RelayerState;
     fn get_relayer_config(self: @TContractState) -> RelayerConfig;
+    fn get_active_relayers(
+        self: @TContractState, from_index: u64, limit: u64,
+    ) -> Array<RelayerEntry>;
+    fn get_pending_relayers(
+        self: @TContractState, from_index: u64, limit: u64,
+    ) -> Array<RelayerEntry>;
 }
 
 #[starknet::contract]
@@ -58,8 +64,8 @@ mod OmniBridge {
     use starknet::event::EventEmitter;
     use starknet::secp256_trait::signature_from_vrs;
     use starknet::storage::{
-        Map, StorageMapReadAccess, StorageMapWriteAccess, StoragePointerReadAccess,
-        StoragePointerWriteAccess,
+        Map, MutableVecTrait, StorageMapReadAccess, StorageMapWriteAccess, StoragePointerReadAccess,
+        StoragePointerWriteAccess, Vec, VecTrait,
     };
     use starknet::syscalls::deploy_syscall;
     use starknet::{
@@ -68,8 +74,8 @@ mod OmniBridge {
     };
     use crate::bridge_types::{
         DeployToken, FinTransfer, InitTransfer, LogMetadata, MetadataPayload, MetadataPayloadTrait,
-        PauseStateChanged, RelayerApplied, RelayerConfig, RelayerConfigSet, RelayerRejected,
-        RelayerResigned, RelayerState, Signature, TransferMessagePayload,
+        PauseStateChanged, RelayerApplied, RelayerConfig, RelayerConfigSet, RelayerEntry,
+        RelayerRejected, RelayerResigned, RelayerState, Signature, TransferMessagePayload,
         TransferMessagePayloadTrait,
     };
     use crate::utils;
@@ -138,6 +144,7 @@ mod OmniBridge {
         omni_bridge_derived_address: EthAddress,
         strk_token_address: ContractAddress,
         relayers: Map<ContractAddress, RelayerState>,
+        staked_relayers: Vec<ContractAddress>,
         relayer_stake_required: u128,
         relayer_waiting_period: u64,
     }
@@ -426,6 +433,7 @@ mod OmniBridge {
 
             let activate_at = get_block_timestamp() + self.relayer_waiting_period.read();
             self.relayers.write(caller, RelayerState { stake, activate_at });
+            self.staked_relayers.push(caller);
 
             let success = IERC20Dispatcher { contract_address: self.strk_token_address.read() }
                 .transfer_from(caller, get_contract_address(), stake.into());
@@ -444,6 +452,7 @@ mod OmniBridge {
             assert(get_block_timestamp() >= state.activate_at, 'ERR_RELAYER_NOT_ACTIVE');
 
             self.relayers.write(caller, RelayerState { stake: 0, activate_at: 0 });
+            _remove_staked_relayer(ref self, caller);
             _send_stake(@self, caller, state.stake);
 
             self
@@ -464,6 +473,7 @@ mod OmniBridge {
             assert(state.stake != 0, 'ERR_RELAYER_NOT_FOUND');
 
             self.relayers.write(relayer, RelayerState { stake: 0, activate_at: 0 });
+            _remove_staked_relayer(ref self, relayer);
             _send_stake(@self, caller, state.stake);
 
             self
@@ -501,6 +511,18 @@ mod OmniBridge {
                 waiting_period: self.relayer_waiting_period.read(),
             }
         }
+
+        fn get_active_relayers(
+            self: @ContractState, from_index: u64, limit: u64,
+        ) -> Array<RelayerEntry> {
+            _get_staked_relayers(self, true, from_index, limit)
+        }
+
+        fn get_pending_relayers(
+            self: @ContractState, from_index: u64, limit: u64,
+        ) -> Array<RelayerEntry> {
+            _get_staked_relayers(self, false, from_index, limit)
+        }
     }
 
     #[abi(embed_v0)]
@@ -520,6 +542,46 @@ mod OmniBridge {
 
         let sig = signature_from_vrs(signature.v, signature.r, signature.s);
         verify_eth_signature(message_hash, sig, self.omni_bridge_derived_address.read());
+    }
+
+    fn _get_staked_relayers(
+        self: @ContractState, active: bool, from_index: u64, limit: u64,
+    ) -> Array<RelayerEntry> {
+        let now = get_block_timestamp();
+        let mut entries = array![];
+        let mut count: u64 = 0;
+        let mut matched: u64 = 0;
+        let mut i: u64 = 0;
+        while i < self.staked_relayers.len() && count < limit {
+            let relayer = self.staked_relayers.at(i).read();
+            let state = self.relayers.read(relayer);
+            if (now >= state.activate_at) == active {
+                if matched >= from_index {
+                    entries
+                        .append(
+                            RelayerEntry {
+                                relayer, stake: state.stake, activate_at: state.activate_at,
+                            },
+                        );
+                    count += 1;
+                }
+                matched += 1;
+            }
+            i += 1;
+        }
+        entries
+    }
+
+    fn _remove_staked_relayer(ref self: ContractState, relayer: ContractAddress) {
+        let last_index = self.staked_relayers.len() - 1;
+        let mut i: u64 = 0;
+        while self.staked_relayers.at(i).read() != relayer {
+            i += 1;
+        }
+        let last = self.staked_relayers.pop().unwrap();
+        if i != last_index {
+            self.staked_relayers.at(i).write(last);
+        }
     }
 
     fn _send_stake(self: @ContractState, recipient: ContractAddress, amount: u128) {

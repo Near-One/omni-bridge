@@ -147,6 +147,13 @@ pub struct RelayerState {
 }
 
 #[derive(Drop, Copy, Serde, PartialEq, Debug)]
+pub struct RelayerEntry {
+    pub relayer: ContractAddress,
+    pub stake: u128,
+    pub activate_at: u64,
+}
+
+#[derive(Drop, Copy, Serde, PartialEq, Debug)]
 pub struct RelayerConfig {
     pub stake_required: u128,
     pub waiting_period: u64,

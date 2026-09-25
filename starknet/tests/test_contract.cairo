@@ -2,8 +2,8 @@ use core::keccak::compute_keccak_byte_array;
 use omni_bridge::omni_bridge::{
     FinTransfer, IOmniBridgeDispatcher, IOmniBridgeDispatcherTrait, ITrustedRelayerDispatcher,
     ITrustedRelayerDispatcherTrait, InitTransfer, LogMetadata, MetadataPayload, OmniEvents,
-    RelayerApplied, RelayerConfig, RelayerRejected, RelayerResigned, RelayerState, Signature,
-    TransferMessagePayload,
+    RelayerApplied, RelayerConfig, RelayerEntry, RelayerRejected, RelayerResigned, RelayerState,
+    Signature, TransferMessagePayload,
 };
 use omni_bridge::utils::{borsh, reverse_u256_bytes};
 use openzeppelin::access::accesscontrol::interface::{
@@ -505,6 +505,20 @@ fn setup_staking() -> (
     (bridge, relayers, bridge_address, stake_token)
 }
 
+fn fund_and_apply(
+    relayers: ITrustedRelayerDispatcher, stake_token: ERC20ABIDispatcher, relayer: ContractAddress,
+) {
+    IBridgeTokenDispatcher { contract_address: stake_token.contract_address }
+        .mint(relayer, STAKE.into());
+    start_cheat_caller_address(stake_token.contract_address, relayer);
+    stake_token.approve(relayers.contract_address, STAKE.into());
+    stop_cheat_caller_address(stake_token.contract_address);
+
+    start_cheat_caller_address(relayers.contract_address, relayer);
+    relayers.apply_for_trusted_relayer();
+    stop_cheat_caller_address(relayers.contract_address);
+}
+
 fn apply_as_relayer(relayers: ITrustedRelayerDispatcher) {
     start_cheat_caller_address(relayers.contract_address, relayer_address());
     relayers.apply_for_trusted_relayer();
@@ -749,4 +763,73 @@ fn test_reject_unknown_relayer_fails() {
 
     start_cheat_caller_address(bridge_address, bridge_owner());
     relayers.reject_relayer_application(relayer_address());
+}
+
+#[test]
+fn test_lists_pending_and_active_relayers() {
+    let (_, relayers, _, stake_token) = setup_staking();
+    let first: ContractAddress = 0x1001.try_into().unwrap();
+    let second: ContractAddress = 0x1002.try_into().unwrap();
+
+    fund_and_apply(relayers, stake_token, first);
+    start_cheat_block_timestamp_global(NOW + WAITING_PERIOD / 2);
+    fund_and_apply(relayers, stake_token, second);
+
+    let first_entry = RelayerEntry {
+        relayer: first, stake: STAKE, activate_at: NOW + WAITING_PERIOD,
+    };
+    let second_entry = RelayerEntry {
+        relayer: second, stake: STAKE, activate_at: NOW + WAITING_PERIOD / 2 + WAITING_PERIOD,
+    };
+    assert_eq!(relayers.get_pending_relayers(0, 10), array![first_entry, second_entry]);
+    assert_eq!(relayers.get_active_relayers(0, 10), array![]);
+
+    start_cheat_block_timestamp_global(NOW + WAITING_PERIOD);
+    assert_eq!(relayers.get_active_relayers(0, 10), array![first_entry]);
+    assert_eq!(relayers.get_pending_relayers(0, 10), array![second_entry]);
+}
+
+#[test]
+fn test_paginates_relayers() {
+    let (_, relayers, _, stake_token) = setup_staking();
+    let applicants: Array<ContractAddress> = array![
+        0x1001.try_into().unwrap(), 0x1002.try_into().unwrap(), 0x1003.try_into().unwrap(),
+    ];
+    for applicant in applicants.span() {
+        fund_and_apply(relayers, stake_token, *applicant);
+    }
+
+    let entry = |
+        relayer: ContractAddress,
+    | RelayerEntry { relayer, stake: STAKE, activate_at: NOW + WAITING_PERIOD };
+    assert_eq!(relayers.get_pending_relayers(1, 1), array![entry(*applicants[1])]);
+    assert_eq!(
+        relayers.get_pending_relayers(1, 100), array![entry(*applicants[1]), entry(*applicants[2])],
+    );
+    assert_eq!(relayers.get_pending_relayers(3, 100), array![]);
+    assert_eq!(relayers.get_pending_relayers(0, 0), array![]);
+}
+
+#[test]
+fn test_removes_relayers_on_resign_and_reject() {
+    let (_, relayers, bridge_address, stake_token) = setup_staking();
+    let first: ContractAddress = 0x1001.try_into().unwrap();
+    let second: ContractAddress = 0x1002.try_into().unwrap();
+    fund_and_apply(relayers, stake_token, first);
+    fund_and_apply(relayers, stake_token, second);
+
+    start_cheat_caller_address(bridge_address, bridge_owner());
+    relayers.reject_relayer_application(first);
+    stop_cheat_caller_address(bridge_address);
+    assert_eq!(
+        relayers.get_pending_relayers(0, 10),
+        array![RelayerEntry { relayer: second, stake: STAKE, activate_at: NOW + WAITING_PERIOD }],
+    );
+
+    start_cheat_block_timestamp_global(NOW + WAITING_PERIOD);
+    start_cheat_caller_address(bridge_address, second);
+    relayers.resign_trusted_relayer();
+    stop_cheat_caller_address(bridge_address);
+    assert_eq!(relayers.get_pending_relayers(0, 10), array![]);
+    assert_eq!(relayers.get_active_relayers(0, 10), array![]);
 }
