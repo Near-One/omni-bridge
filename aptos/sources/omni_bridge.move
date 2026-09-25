@@ -19,6 +19,7 @@ module omni_bridge::omni_bridge {
     use aptos_framework::ordered_map::{Self, OrderedMap};
     use aptos_framework::primary_fungible_store;
     use aptos_framework::timestamp;
+    use aptos_framework::transaction_context;
 
     use omni_bridge::bridge_token;
     use omni_bridge::bridge_types;
@@ -636,27 +637,11 @@ module omni_bridge::omni_bridge {
         );
     }
 
-    /// Deprecated: finalization requires a trusted relayer signer, use
-    /// `fin_transfer_v2`. Kept so the package stays upgrade-compatible.
-    public entry fun fin_transfer(
-        _signature_rs: vector<u8>,
-        _signature_v: u8,
-        _destination_nonce: u64,
-        _origin_chain: u8,
-        _origin_nonce: u64,
-        _token_address: address,
-        _amount: u128,
-        _recipient: address,
-        _fee_recipient: Option<String>,
-        _message: Option<vector<u8>>
-    ) {
-        abort E_NOT_TRUSTED_RELAYER
-    }
-
     /// Finalize an inbound transfer from another chain. Only trusted
     /// relayers can submit it; the NEAR MPC signature is the authorization.
-    public entry fun fin_transfer_v2(
-        relayer: &signer,
+    /// The relayer is the transaction sender, read from the transaction
+    /// context so the function keeps its published signature.
+    public entry fun fin_transfer(
         signature_rs: vector<u8>,
         signature_v: u8,
         destination_nonce: u64,
@@ -668,7 +653,35 @@ module omni_bridge::omni_bridge {
         fee_recipient: Option<String>,
         message: Option<vector<u8>>
     ) {
-        assert!(is_trusted_relayer(relayer.address_of()), E_NOT_TRUSTED_RELAYER);
+        fin_transfer_from(
+            transaction_context::sender(),
+            signature_rs,
+            signature_v,
+            destination_nonce,
+            origin_chain,
+            origin_nonce,
+            token_address,
+            amount,
+            recipient,
+            fee_recipient,
+            message
+        );
+    }
+
+    fun fin_transfer_from(
+        relayer: address,
+        signature_rs: vector<u8>,
+        signature_v: u8,
+        destination_nonce: u64,
+        origin_chain: u8,
+        origin_nonce: u64,
+        token_address: address,
+        amount: u128,
+        recipient: address,
+        fee_recipient: Option<String>,
+        message: Option<vector<u8>>
+    ) {
+        assert!(is_trusted_relayer(relayer), E_NOT_TRUSTED_RELAYER);
 
         let state = &mut BridgeState[bridge_object_address()];
         assert!(
@@ -1098,6 +1111,37 @@ module omni_bridge::omni_bridge {
             near_bridge_derived_address,
             chain_id,
             native_token_metadata
+        );
+    }
+
+    #[test_only]
+    /// `transaction_context::sender()` isn't available in unit tests, so tests
+    /// pass the relayer explicitly.
+    public fun test_fin_transfer(
+        relayer: address,
+        signature_rs: vector<u8>,
+        signature_v: u8,
+        destination_nonce: u64,
+        origin_chain: u8,
+        origin_nonce: u64,
+        token_address: address,
+        amount: u128,
+        recipient: address,
+        fee_recipient: Option<String>,
+        message: Option<vector<u8>>
+    ) {
+        fin_transfer_from(
+            relayer,
+            signature_rs,
+            signature_v,
+            destination_nonce,
+            origin_chain,
+            origin_nonce,
+            token_address,
+            amount,
+            recipient,
+            fee_recipient,
+            message
         );
     }
 

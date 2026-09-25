@@ -853,8 +853,8 @@ module omni_bridge::omni_bridge_tests {
         for (_i in 0..32) {
             sig_rs.push_back(0u8);
         };
-        omni_bridge::fin_transfer_v2(
-            relayer,
+        omni_bridge::test_fin_transfer(
+            relayer.address_of(),
             sig_rs,
             27,
             1,
@@ -892,25 +892,6 @@ module omni_bridge::omni_bridge_tests {
         omni_bridge::grant_role(&deployer, role, @0xA11CE);
         omni_bridge::revoke_role(&deployer, role, @0xA11CE);
         fin_transfer_with_bad_signature(&relayer, native_token);
-    }
-
-    #[test(deployer = @omni_bridge, relayer = @0xA11CE)]
-    #[expected_failure(abort_code = E_NOT_TRUSTED_RELAYER, location = omni_bridge::omni_bridge)]
-    fun deprecated_fin_transfer_always_aborts(deployer: signer, relayer: signer) {
-        let native_token = setup(&deployer);
-        omni_bridge::grant_role(&deployer, role_id(b"TrustedRelayer"), relayer.address_of());
-        omni_bridge::fin_transfer(
-            vector[],
-            27,
-            1,
-            1,
-            1,
-            native_token.object_address(),
-            100,
-            @0xB0B,
-            option::none(),
-            option::none()
-        );
     }
 
     #[test(deployer = @omni_bridge, framework = @aptos_framework, relayer = @0xA11CE)]

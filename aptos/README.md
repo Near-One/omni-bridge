@@ -59,9 +59,8 @@ $0.84/APT, Sep 2026) and a 7 day waiting period, like the 1000 NEAR / 7 days
 default on NEAR. Change it with `set_relayer_config` (`u64:0` as the stake
 disables staking).
 
-Relayers finalize transfers with `fin_transfer_v2`, signed by an account that
-holds the `TrustedRelayer` role or has an active stake. The original
-`fin_transfer` is kept only for upgrade compatibility and always aborts.
+Only trusted relayers can call `fin_transfer`: the transaction sender must
+hold the `TrustedRelayer` role or have an active stake.
 
 ## Securing the bridge account with `0x1::multisig_account`
 
