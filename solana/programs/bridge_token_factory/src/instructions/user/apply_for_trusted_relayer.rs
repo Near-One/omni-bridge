@@ -4,9 +4,12 @@ use anchor_lang::{
 };
 
 use crate::{
-    constants::{CONFIG_SEED, RELAYER_SEED},
+    constants::{CONFIG_SEED, RELAYER_LIST_SEED, RELAYER_SEED},
     error::ErrorCode,
-    state::{config::Config, relayer::RelayerState},
+    state::{
+        config::Config,
+        relayer::{RelayerEntry, RelayerList, RelayerState},
+    },
 };
 
 #[derive(Accounts)]
@@ -25,6 +28,16 @@ pub struct ApplyForTrustedRelayer<'info> {
         bump,
     )]
     pub relayer_state: Box<Account<'info, RelayerState>>,
+
+    #[account(
+        mut,
+        seeds = [RELAYER_LIST_SEED],
+        bump = relayer_list.bump,
+        realloc = RelayerList::space(relayer_list.relayers.len() + 1),
+        realloc::payer = signer,
+        realloc::zero = false,
+    )]
+    pub relayer_list: Box<Account<'info, RelayerList>>,
 
     #[account(mut)]
     pub signer: Signer<'info>,
@@ -57,6 +70,11 @@ impl ApplyForTrustedRelayer<'_> {
             stake,
             activate_at,
             bump,
+        });
+        self.relayer_list.relayers.push(RelayerEntry {
+            relayer: self.signer.key(),
+            stake,
+            activate_at,
         });
 
         Ok(())

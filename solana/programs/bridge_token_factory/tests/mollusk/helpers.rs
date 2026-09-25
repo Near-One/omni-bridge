@@ -1,6 +1,6 @@
 use bridge_token_factory::state::{
     config::{Config, ConfigBumps, WormholeBumps},
-    relayer::RelayerState,
+    relayer::{RelayerEntry, RelayerList, RelayerState},
 };
 use mollusk_svm::Mollusk;
 use sha2::{Digest, Sha256};
@@ -40,6 +40,7 @@ pub const VAULT_SEED: &[u8] = b"vault";
 pub const USED_NONCES_SEED: &[u8] = b"used_nonces";
 pub const METADATA_SEED: &[u8] = b"metadata";
 pub const RELAYER_SEED: &[u8] = b"relayer";
+pub const RELAYER_LIST_SEED: &[u8] = b"relayer_list";
 pub const USED_NONCES_PER_ACCOUNT: u32 = 1024;
 pub const ALL_PAUSED: u8 = 3;
 pub const FINALIZE_TRANSFER_PAUSED: u8 = 2;
@@ -81,6 +82,10 @@ pub fn find_used_nonces_pda(program_id: &Pubkey, nonce: u64) -> (Pubkey, u8) {
 
 pub fn find_relayer_pda(program_id: &Pubkey, relayer: &Pubkey) -> (Pubkey, u8) {
     Pubkey::find_program_address(&[RELAYER_SEED, relayer.as_ref()], program_id)
+}
+
+pub fn find_relayer_list_pda(program_id: &Pubkey) -> (Pubkey, u8) {
+    Pubkey::find_program_address(&[RELAYER_LIST_SEED], program_id)
 }
 
 pub fn find_wormhole_bridge_pda(wormhole_id: &Pubkey) -> (Pubkey, u8) {
@@ -284,6 +289,32 @@ pub fn build_relayer_state_account(
             create_relayer_state_account(program_id, &Pubkey::new_unique(), 0, 0)
         }
     }
+}
+
+pub fn create_relayer_list_account(
+    program_id: &Pubkey,
+    relayers: Vec<RelayerEntry>,
+) -> (Pubkey, Account) {
+    let (pda, bump) = find_relayer_list_pda(program_id);
+    let list = RelayerList { bump, relayers };
+
+    let mut data = anchor_account_discriminator("RelayerList").to_vec();
+    anchor_lang::AnchorSerialize::serialize(&list, &mut data).unwrap();
+
+    let rent = Rent::default();
+    let lamports = rent.minimum_balance(data.len());
+    (pda, Account {
+        lamports,
+        data,
+        owner: *program_id,
+        executable: false,
+        rent_epoch: 0,
+    })
+}
+
+pub fn deserialize_relayer_list(data: &[u8]) -> RelayerList {
+    let data = &data[8..];
+    anchor_lang::AnchorDeserialize::deserialize(&mut &data[..]).unwrap()
 }
 
 /// Deserialize RelayerState from an account's data (skips 8-byte Anchor discriminator)

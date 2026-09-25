@@ -1,8 +1,11 @@
 use anchor_lang::prelude::*;
 
 use crate::{
-    constants::{CONFIG_SEED, RELAYER_SEED},
-    state::{config::Config, relayer::RelayerState},
+    constants::{CONFIG_SEED, RELAYER_LIST_SEED, RELAYER_SEED},
+    state::{
+        config::Config,
+        relayer::{RelayerEntry, RelayerList, RelayerState},
+    },
 };
 
 #[derive(Accounts)]
@@ -25,6 +28,16 @@ pub struct GrantTrustedRelayer<'info> {
 
     #[account(
         mut,
+        seeds = [RELAYER_LIST_SEED],
+        bump = relayer_list.bump,
+        realloc = RelayerList::space(relayer_list.relayers.len() + 1),
+        realloc::payer = signer,
+        realloc::zero = false,
+    )]
+    pub relayer_list: Box<Account<'info, RelayerList>>,
+
+    #[account(
+        mut,
         constraint = signer.key() == config.admin @ crate::error::ErrorCode::Unauthorized,
     )]
     pub signer: Signer<'info>,
@@ -33,11 +46,18 @@ pub struct GrantTrustedRelayer<'info> {
 }
 
 impl GrantTrustedRelayer<'_> {
-    pub fn process(&mut self, bump: u8) -> Result<()> {
+    pub fn process(&mut self, relayer: Pubkey, bump: u8) -> Result<()> {
+        let activate_at = Clock::get()?.unix_timestamp;
+
         self.relayer_state.set_inner(RelayerState {
             stake: 0,
-            activate_at: Clock::get()?.unix_timestamp,
+            activate_at,
             bump,
+        });
+        self.relayer_list.relayers.push(RelayerEntry {
+            relayer,
+            stake: 0,
+            activate_at,
         });
 
         Ok(())

@@ -1,20 +1,24 @@
 use anchor_lang::prelude::*;
 use instructions::{
     ApplyForTrustedRelayer, ChangeConfig, DeployToken, FinalizeTransfer, FinalizeTransferSol,
-    GetVersion, GrantTrustedRelayer, InitTransfer, InitTransferSol, Initialize, LogMetadata, Pause,
-    RejectRelayerApplication, ResignTrustedRelayer, UpdateMetadata,
-    __client_accounts_apply_for_trusted_relayer, __client_accounts_change_config,
+    GetRelayers, GetVersion, GrantTrustedRelayer, InitRelayerList, InitTransfer, InitTransferSol,
+    Initialize, LogMetadata, Pause, RejectRelayerApplication, ResignTrustedRelayer,
+    UpdateMetadata, __client_accounts_apply_for_trusted_relayer, __client_accounts_change_config,
     __client_accounts_deploy_token, __client_accounts_finalize_transfer,
-    __client_accounts_finalize_transfer_sol, __client_accounts_get_version,
-    __client_accounts_grant_trusted_relayer, __client_accounts_init_transfer,
+    __client_accounts_finalize_transfer_sol, __client_accounts_get_relayers,
+    __client_accounts_get_version, __client_accounts_grant_trusted_relayer,
+    __client_accounts_init_relayer_list, __client_accounts_init_transfer,
     __client_accounts_init_transfer_sol, __client_accounts_initialize,
     __client_accounts_log_metadata, __client_accounts_pause,
     __client_accounts_reject_relayer_application, __client_accounts_resign_trusted_relayer,
     __client_accounts_update_metadata,
 };
-use state::message::{
-    deploy_token::DeployTokenPayload, finalize_transfer::FinalizeTransferPayload,
-    init_transfer::InitTransferPayload, SignedPayload,
+use state::{
+    message::{
+        deploy_token::DeployTokenPayload, finalize_transfer::FinalizeTransferPayload,
+        init_transfer::InitTransferPayload, SignedPayload,
+    },
+    relayer::RelayerEntry,
 };
 
 pub mod constants;
@@ -34,9 +38,10 @@ pub mod bridge_token_factory {
     use super::{
         msg, ApplyForTrustedRelayer, ChangeConfig, Clock, Context, DeployToken,
         DeployTokenPayload, FinalizeTransfer, FinalizeTransferPayload, FinalizeTransferSol,
-        GetVersion, GrantTrustedRelayer, InitTransfer, InitTransferPayload, InitTransferSol,
-        Initialize, Key, LogMetadata, Pause, Pubkey, RejectRelayerApplication,
-        ResignTrustedRelayer, Result, SignedPayload, SolanaSysvar, UpdateMetadata,
+        GetRelayers, GetVersion, GrantTrustedRelayer, InitRelayerList, InitTransfer,
+        InitTransferPayload, InitTransferSol, Initialize, Key, LogMetadata, Pause, Pubkey,
+        RejectRelayerApplication, RelayerEntry, ResignTrustedRelayer, Result, SignedPayload,
+        SolanaSysvar, UpdateMetadata,
     };
 
     pub fn initialize(
@@ -225,6 +230,14 @@ pub mod bridge_token_factory {
         Ok(())
     }
 
+    pub fn init_relayer_list(ctx: Context<InitRelayerList>) -> Result<()> {
+        msg!("Initializing relayer list");
+
+        ctx.accounts.process(ctx.bumps.relayer_list);
+
+        Ok(())
+    }
+
     pub fn apply_for_trusted_relayer(ctx: Context<ApplyForTrustedRelayer>) -> Result<()> {
         msg!("Applying for trusted relayer");
 
@@ -244,18 +257,36 @@ pub mod bridge_token_factory {
     pub fn grant_trusted_relayer(ctx: Context<GrantTrustedRelayer>, relayer: Pubkey) -> Result<()> {
         msg!("Granting trusted relayer {}", relayer);
 
-        ctx.accounts.process(ctx.bumps.relayer_state)?;
+        ctx.accounts.process(relayer, ctx.bumps.relayer_state)?;
 
         Ok(())
     }
 
     pub fn reject_relayer_application(
-        _ctx: Context<RejectRelayerApplication>,
+        ctx: Context<RejectRelayerApplication>,
         relayer: Pubkey,
     ) -> Result<()> {
         msg!("Rejecting relayer {}", relayer);
 
+        ctx.accounts.process(&relayer);
+
         Ok(())
+    }
+
+    pub fn get_active_relayers(
+        ctx: Context<GetRelayers>,
+        from_index: u32,
+        limit: u32,
+    ) -> Result<Vec<RelayerEntry>> {
+        ctx.accounts.relayer_list.page(true, from_index, limit)
+    }
+
+    pub fn get_pending_relayers(
+        ctx: Context<GetRelayers>,
+        from_index: u32,
+        limit: u32,
+    ) -> Result<Vec<RelayerEntry>> {
+        ctx.accounts.relayer_list.page(false, from_index, limit)
     }
 
     pub fn update_metadata(
