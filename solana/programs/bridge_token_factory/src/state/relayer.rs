@@ -27,12 +27,13 @@ pub struct RelayerEntry {
 #[account]
 pub struct RelayerList {
     pub bump: u8,
+    pub manager: Pubkey,
     pub relayers: Vec<RelayerEntry>,
 }
 
 impl RelayerList {
     pub const fn space(len: usize) -> usize {
-        8 + 1 + 4 + len * RelayerEntry::INIT_SPACE
+        8 + 1 + 32 + 4 + len * RelayerEntry::INIT_SPACE
     }
 
     pub fn remove(&mut self, relayer: &Pubkey) {

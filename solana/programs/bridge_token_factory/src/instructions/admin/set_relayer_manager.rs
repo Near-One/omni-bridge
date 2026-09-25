@@ -6,7 +6,7 @@ use crate::{
 };
 
 #[derive(Accounts)]
-pub struct InitRelayerList<'info> {
+pub struct SetRelayerManager<'info> {
     #[account(
         seeds = [CONFIG_SEED],
         bump = config.bumps.config,
@@ -14,26 +14,20 @@ pub struct InitRelayerList<'info> {
     pub config: Box<Account<'info, Config>>,
 
     #[account(
-        init,
-        payer = signer,
-        space = RelayerList::space(0),
+        mut,
         seeds = [RELAYER_LIST_SEED],
-        bump,
+        bump = relayer_list.bump,
     )]
     pub relayer_list: Box<Account<'info, RelayerList>>,
 
     #[account(
-        mut,
         constraint = signer.key() == config.admin @ crate::error::ErrorCode::Unauthorized,
     )]
     pub signer: Signer<'info>,
-
-    pub system_program: Program<'info, System>,
 }
 
-impl InitRelayerList<'_> {
-    pub fn process(&mut self, bump: u8) {
-        self.relayer_list.bump = bump;
-        self.relayer_list.manager = self.signer.key();
+impl SetRelayerManager<'_> {
+    pub fn process(&mut self, manager: Pubkey) {
+        self.relayer_list.manager = manager;
     }
 }

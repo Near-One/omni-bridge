@@ -3,7 +3,8 @@ use instructions::{
     ApplyForTrustedRelayer, ChangeConfig, DeployToken, FinalizeTransfer, FinalizeTransferSol,
     GetRelayers, GetVersion, GrantTrustedRelayer, InitRelayerList, InitTransfer, InitTransferSol,
     Initialize, LogMetadata, Pause, RejectRelayerApplication, ResignTrustedRelayer,
-    UpdateMetadata, __client_accounts_apply_for_trusted_relayer, __client_accounts_change_config,
+    SetRelayerManager, UpdateMetadata, __client_accounts_apply_for_trusted_relayer,
+    __client_accounts_change_config,
     __client_accounts_deploy_token, __client_accounts_finalize_transfer,
     __client_accounts_finalize_transfer_sol, __client_accounts_get_relayers,
     __client_accounts_get_version, __client_accounts_grant_trusted_relayer,
@@ -11,7 +12,7 @@ use instructions::{
     __client_accounts_init_transfer_sol, __client_accounts_initialize,
     __client_accounts_log_metadata, __client_accounts_pause,
     __client_accounts_reject_relayer_application, __client_accounts_resign_trusted_relayer,
-    __client_accounts_update_metadata,
+    __client_accounts_set_relayer_manager, __client_accounts_update_metadata,
 };
 use state::{
     message::{
@@ -40,8 +41,8 @@ pub mod bridge_token_factory {
         DeployTokenPayload, FinalizeTransfer, FinalizeTransferPayload, FinalizeTransferSol,
         GetRelayers, GetVersion, GrantTrustedRelayer, InitRelayerList, InitTransfer,
         InitTransferPayload, InitTransferSol, Initialize, Key, LogMetadata, Pause, Pubkey,
-        RejectRelayerApplication, RelayerEntry, ResignTrustedRelayer, Result, SignedPayload,
-        SolanaSysvar, UpdateMetadata,
+        RejectRelayerApplication, RelayerEntry, ResignTrustedRelayer, Result, SetRelayerManager,
+        SignedPayload, SolanaSysvar, UpdateMetadata,
     };
 
     pub fn initialize(
@@ -50,6 +51,8 @@ pub mod bridge_token_factory {
         pausable_admin: Pubkey,
         metadata_admin: Pubkey,
         derived_near_bridge_address: [u8; 64],
+        relayer_stake_required: u64,
+        relayer_waiting_period: i64,
     ) -> Result<()> {
         msg!("Initializing");
 
@@ -64,6 +67,8 @@ pub mod bridge_token_factory {
             ctx.bumps.wormhole_bridge,
             ctx.bumps.wormhole_fee_collector,
             ctx.bumps.wormhole_sequence,
+            relayer_stake_required,
+            relayer_waiting_period,
         )?;
 
         Ok(())
@@ -234,6 +239,14 @@ pub mod bridge_token_factory {
         msg!("Initializing relayer list");
 
         ctx.accounts.process(ctx.bumps.relayer_list);
+
+        Ok(())
+    }
+
+    pub fn set_relayer_manager(ctx: Context<SetRelayerManager>, manager: Pubkey) -> Result<()> {
+        msg!("Setting relayer manager {}", manager);
+
+        ctx.accounts.process(manager);
 
         Ok(())
     }

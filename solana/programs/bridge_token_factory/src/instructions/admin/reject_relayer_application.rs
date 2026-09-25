@@ -1,22 +1,13 @@
 use anchor_lang::prelude::*;
 
 use crate::{
-    constants::{CONFIG_SEED, RELAYER_LIST_SEED, RELAYER_SEED},
-    state::{
-        config::Config,
-        relayer::{RelayerList, RelayerState},
-    },
+    constants::{RELAYER_LIST_SEED, RELAYER_SEED},
+    state::relayer::{RelayerList, RelayerState},
 };
 
 #[derive(Accounts)]
 #[instruction(relayer: Pubkey)]
 pub struct RejectRelayerApplication<'info> {
-    #[account(
-        seeds = [CONFIG_SEED],
-        bump = config.bumps.config,
-    )]
-    pub config: Box<Account<'info, Config>>,
-
     #[account(
         mut,
         close = signer,
@@ -37,7 +28,7 @@ pub struct RejectRelayerApplication<'info> {
 
     #[account(
         mut,
-        constraint = signer.key() == config.admin @ crate::error::ErrorCode::Unauthorized,
+        constraint = signer.key() == relayer_list.manager @ crate::error::ErrorCode::Unauthorized,
     )]
     pub signer: Signer<'info>,
 

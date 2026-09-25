@@ -293,10 +293,15 @@ pub fn build_relayer_state_account(
 
 pub fn create_relayer_list_account(
     program_id: &Pubkey,
+    manager: Pubkey,
     relayers: Vec<RelayerEntry>,
 ) -> (Pubkey, Account) {
     let (pda, bump) = find_relayer_list_pda(program_id);
-    let list = RelayerList { bump, relayers };
+    let list = RelayerList {
+        bump,
+        manager,
+        relayers,
+    };
 
     let mut data = anchor_account_discriminator("RelayerList").to_vec();
     anchor_lang::AnchorSerialize::serialize(&list, &mut data).unwrap();

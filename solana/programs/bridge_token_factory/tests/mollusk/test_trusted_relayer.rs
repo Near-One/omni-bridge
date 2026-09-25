@@ -123,12 +123,7 @@ fn build_grant_ix(
     )
 }
 
-fn build_reject_ix(
-    program_id: &Pubkey,
-    config_pda: &Pubkey,
-    signer: &Pubkey,
-    relayer: &Pubkey,
-) -> Instruction {
+fn build_reject_ix(program_id: &Pubkey, signer: &Pubkey, relayer: &Pubkey) -> Instruction {
     let (relayer_state_pda, _) = find_relayer_pda(program_id, relayer);
     let (relayer_list_pda, _) = find_relayer_list_pda(program_id);
     let mut data = anchor_ix_discriminator("reject_relayer_application").to_vec();
@@ -137,7 +132,6 @@ fn build_reject_ix(
         *program_id,
         &data,
         vec![
-            AccountMeta::new_readonly(*config_pda, false),
             AccountMeta::new(relayer_state_pda, false),
             AccountMeta::new(relayer_list_pda, false),
             AccountMeta::new(*signer, true),
@@ -162,6 +156,26 @@ fn build_set_relayer_config_ix(
         vec![
             AccountMeta::new(*config_pda, false),
             AccountMeta::new(*signer, true),
+        ],
+    )
+}
+
+fn build_set_relayer_manager_ix(
+    program_id: &Pubkey,
+    config_pda: &Pubkey,
+    signer: &Pubkey,
+    manager: &Pubkey,
+) -> Instruction {
+    let (relayer_list_pda, _) = find_relayer_list_pda(program_id);
+    let mut data = anchor_ix_discriminator("set_relayer_manager").to_vec();
+    data.extend_from_slice(manager.as_ref());
+    Instruction::new_with_bytes(
+        *program_id,
+        &data,
+        vec![
+            AccountMeta::new_readonly(*config_pda, false),
+            AccountMeta::new(relayer_list_pda, false),
+            AccountMeta::new_readonly(*signer, true),
         ],
     )
 }
@@ -229,7 +243,8 @@ fn apply_for_trusted_relayer_happy_path() {
     let (config_pda, config_account) =
         config_with_relayer_params(&program_id, Pubkey::new_unique(), STAKE);
     let (relayer_state_pda, _) = find_relayer_pda(&program_id, &relayer);
-    let (relayer_list_pda, relayer_list_account) = create_relayer_list_account(&program_id, vec![]);
+    let (relayer_list_pda, relayer_list_account) =
+        create_relayer_list_account(&program_id, Pubkey::default(), vec![]);
 
     let result = mollusk.process_instruction(
         &build_apply_ix(&program_id, &config_pda, &relayer),
@@ -271,7 +286,8 @@ fn apply_for_trusted_relayer_staking_disabled() {
     let (config_pda, config_account) =
         config_with_relayer_params(&program_id, Pubkey::new_unique(), 0);
     let (relayer_state_pda, _) = find_relayer_pda(&program_id, &relayer);
-    let (relayer_list_pda, relayer_list_account) = create_relayer_list_account(&program_id, vec![]);
+    let (relayer_list_pda, relayer_list_account) =
+        create_relayer_list_account(&program_id, Pubkey::default(), vec![]);
 
     let result = mollusk.process_instruction(
         &build_apply_ix(&program_id, &config_pda, &relayer),
@@ -327,6 +343,7 @@ fn apply_for_trusted_relayer_twice_rejected() {
         create_relayer_state_account(&program_id, &relayer, STAKE, NOW + WAITING_PERIOD);
     let (relayer_list_pda, relayer_list_account) = create_relayer_list_account(
         &program_id,
+        Pubkey::default(),
         vec![entry(relayer, STAKE, NOW + WAITING_PERIOD)],
     );
 
@@ -353,6 +370,7 @@ fn resign_trusted_relayer_returns_stake() {
         create_relayer_state_account(&program_id, &relayer, STAKE, NOW);
     let (relayer_list_pda, relayer_list_account) = create_relayer_list_account(
         &program_id,
+        Pubkey::default(),
         vec![entry(relayer, STAKE, NOW), entry(other, STAKE, NOW)],
     );
 
@@ -385,7 +403,11 @@ fn resign_trusted_relayer_pending_rejected() {
     let (relayer_state_pda, relayer_state_account) =
         create_relayer_state_account(&program_id, &relayer, STAKE, NOW + 1);
     let (relayer_list_pda, relayer_list_account) =
-        create_relayer_list_account(&program_id, vec![entry(relayer, STAKE, NOW + 1)]);
+        create_relayer_list_account(
+            &program_id,
+            Pubkey::default(),
+            vec![entry(relayer, STAKE, NOW + 1)],
+        );
 
     let result = mollusk.process_instruction(
         &build_resign_ix(&program_id, &relayer),
@@ -410,7 +432,8 @@ fn grant_trusted_relayer_by_admin() {
     let relayer = Pubkey::new_unique();
     let (config_pda, config_account) = config_with_relayer_params(&program_id, admin, STAKE);
     let (relayer_state_pda, _) = find_relayer_pda(&program_id, &relayer);
-    let (relayer_list_pda, relayer_list_account) = create_relayer_list_account(&program_id, vec![]);
+    let (relayer_list_pda, relayer_list_account) =
+        create_relayer_list_account(&program_id, Pubkey::default(), vec![]);
 
     let result = mollusk.process_instruction(
         &build_grant_ix(&program_id, &config_pda, &admin, &relayer),
@@ -442,7 +465,8 @@ fn grant_trusted_relayer_by_non_admin_rejected() {
     let (config_pda, config_account) =
         config_with_relayer_params(&program_id, Pubkey::new_unique(), STAKE);
     let (relayer_state_pda, _) = find_relayer_pda(&program_id, &relayer);
-    let (relayer_list_pda, relayer_list_account) = create_relayer_list_account(&program_id, vec![]);
+    let (relayer_list_pda, relayer_list_account) =
+        create_relayer_list_account(&program_id, Pubkey::default(), vec![]);
 
     let result = mollusk.process_instruction(
         &build_grant_ix(&program_id, &config_pda, &non_admin, &relayer),
@@ -464,14 +488,14 @@ fn grant_trusted_relayer_by_non_admin_rejected() {
 #[test]
 fn reject_relayer_application_takes_stake() {
     let (mollusk, program_id) = setup();
-    let admin = Pubkey::new_unique();
+    let manager = Pubkey::new_unique();
     let relayer = Pubkey::new_unique();
     let other = Pubkey::new_unique();
-    let (config_pda, config_account) = config_with_relayer_params(&program_id, admin, STAKE);
     let (relayer_state_pda, relayer_state_account) =
         create_relayer_state_account(&program_id, &relayer, STAKE, NOW + WAITING_PERIOD);
     let (relayer_list_pda, relayer_list_account) = create_relayer_list_account(
         &program_id,
+        manager,
         vec![
             entry(other, STAKE, NOW),
             entry(relayer, STAKE, NOW + WAITING_PERIOD),
@@ -479,12 +503,11 @@ fn reject_relayer_application_takes_stake() {
     );
 
     let result = mollusk.process_instruction(
-        &build_reject_ix(&program_id, &config_pda, &admin, &relayer),
+        &build_reject_ix(&program_id, &manager, &relayer),
         &[
-            (config_pda, config_account),
             (relayer_state_pda, relayer_state_account),
             (relayer_list_pda, relayer_list_account),
-            (admin, create_signer_account(SIGNER_BALANCE)),
+            (manager, create_signer_account(SIGNER_BALANCE)),
             (system_program::ID, create_native_program_account()),
         ],
     );
@@ -496,33 +519,79 @@ fn reject_relayer_application_takes_stake() {
         vec![(other, STAKE, NOW)]
     );
     assert_eq!(
-        result.get_account(&admin).unwrap().lamports,
+        result.get_account(&manager).unwrap().lamports,
         SIGNER_BALANCE + STAKE + relayer_state_rent() + relayer_list_entry_rent(1)
     );
 }
 
 #[test]
-fn reject_relayer_application_by_non_admin_rejected() {
+fn reject_relayer_application_by_non_manager_rejected() {
+    // The admin can't reject either unless it's the manager
     let (mollusk, program_id) = setup();
-    let non_admin = Pubkey::new_unique();
+    let admin = Pubkey::new_unique();
     let relayer = Pubkey::new_unique();
-    let (config_pda, config_account) =
-        config_with_relayer_params(&program_id, Pubkey::new_unique(), STAKE);
     let (relayer_state_pda, relayer_state_account) =
         create_relayer_state_account(&program_id, &relayer, STAKE, NOW + WAITING_PERIOD);
     let (relayer_list_pda, relayer_list_account) = create_relayer_list_account(
         &program_id,
+        Pubkey::new_unique(),
         vec![entry(relayer, STAKE, NOW + WAITING_PERIOD)],
     );
 
     let result = mollusk.process_instruction(
-        &build_reject_ix(&program_id, &config_pda, &non_admin, &relayer),
+        &build_reject_ix(&program_id, &admin, &relayer),
         &[
-            (config_pda, config_account),
             (relayer_state_pda, relayer_state_account),
             (relayer_list_pda, relayer_list_account),
-            (non_admin, create_signer_account(SIGNER_BALANCE)),
+            (admin, create_signer_account(SIGNER_BALANCE)),
             (system_program::ID, create_native_program_account()),
+        ],
+    );
+
+    assert_eq!(
+        result.program_result,
+        ProgramResult::Failure(ProgramError::Custom(6009))
+    );
+}
+
+#[test]
+fn set_relayer_manager_by_admin() {
+    let (mollusk, program_id) = setup();
+    let admin = Pubkey::new_unique();
+    let manager = Pubkey::new_unique();
+    let (config_pda, config_account) = config_with_relayer_params(&program_id, admin, STAKE);
+    let (relayer_list_pda, relayer_list_account) =
+        create_relayer_list_account(&program_id, admin, vec![]);
+
+    let result = mollusk.process_instruction(
+        &build_set_relayer_manager_ix(&program_id, &config_pda, &admin, &manager),
+        &[
+            (config_pda, config_account),
+            (relayer_list_pda, relayer_list_account),
+            (admin, create_signer_account(SIGNER_BALANCE)),
+        ],
+    );
+
+    assert!(!result.program_result.is_err(), "{:?}", result.program_result);
+    let list = deserialize_relayer_list(&result.get_account(&relayer_list_pda).unwrap().data);
+    assert_eq!(list.manager, manager);
+}
+
+#[test]
+fn set_relayer_manager_by_non_admin_rejected() {
+    let (mollusk, program_id) = setup();
+    let manager = Pubkey::new_unique();
+    let (config_pda, config_account) =
+        config_with_relayer_params(&program_id, Pubkey::new_unique(), STAKE);
+    let (relayer_list_pda, relayer_list_account) =
+        create_relayer_list_account(&program_id, manager, vec![]);
+
+    let result = mollusk.process_instruction(
+        &build_set_relayer_manager_ix(&program_id, &config_pda, &manager, &manager),
+        &[
+            (config_pda, config_account),
+            (relayer_list_pda, relayer_list_account),
+            (manager, create_signer_account(SIGNER_BALANCE)),
         ],
     );
 
@@ -613,6 +682,7 @@ fn init_relayer_list_by_admin() {
     assert!(!result.program_result.is_err(), "{:?}", result.program_result);
     let list = deserialize_relayer_list(&result.get_account(&relayer_list_pda).unwrap().data);
     assert_eq!(list.bump, relayer_list_bump);
+    assert_eq!(list.manager, admin);
     assert!(list.relayers.is_empty());
 }
 
@@ -621,7 +691,8 @@ fn init_relayer_list_twice_rejected() {
     let (mollusk, program_id) = setup();
     let admin = Pubkey::new_unique();
     let (config_pda, config_account) = config_with_relayer_params(&program_id, admin, 0);
-    let (relayer_list_pda, relayer_list_account) = create_relayer_list_account(&program_id, vec![]);
+    let (relayer_list_pda, relayer_list_account) =
+        create_relayer_list_account(&program_id, Pubkey::default(), vec![]);
 
     let result = mollusk.process_instruction(
         &build_init_relayer_list_ix(&program_id, &config_pda, &admin),
@@ -666,6 +737,7 @@ fn get_pending_and_active_relayers() {
     let (first, second, third) = (Pubkey::new_unique(), Pubkey::new_unique(), Pubkey::new_unique());
     let list = create_relayer_list_account(
         &program_id,
+        Pubkey::default(),
         vec![
             entry(first, STAKE, NOW - 1),
             entry(second, STAKE, NOW + 100),
@@ -689,6 +761,7 @@ fn get_relayers_paginates() {
     let relayers: Vec<Pubkey> = (0..3).map(|_| Pubkey::new_unique()).collect();
     let list = create_relayer_list_account(
         &program_id,
+        Pubkey::default(),
         relayers
             .iter()
             .map(|relayer| entry(*relayer, STAKE, NOW + WAITING_PERIOD))
@@ -712,6 +785,7 @@ fn get_relayers_page_is_capped() {
     let (mollusk, program_id) = setup();
     let list = create_relayer_list_account(
         &program_id,
+        Pubkey::default(),
         (0..25)
             .map(|_| entry(Pubkey::new_unique(), STAKE, NOW))
             .collect(),
