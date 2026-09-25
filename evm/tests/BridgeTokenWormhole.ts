@@ -170,6 +170,18 @@ describe("BridgeTokenWormhole", () => {
     )
   })
 
+  it("can't fin transfer as an untrusted relayer", async () => {
+    const { token } = await createToken(wrappedNearId)
+    const { signature, payload } = depositSignature(
+      await token.getAddress(),
+      await user1.getAddress(),
+    )
+
+    await expect(
+      OmniBridgeWormhole.connect(user1).finTransfer(signature, payload, { value: WormholeFee }),
+    ).to.be.revertedWithCustomError(OmniBridgeWormhole, "NotTrustedRelayer")
+  })
+
   it("init transfer", async () => {
     const { token } = await createToken(wrappedNearId)
     const tokenProxyAddress = await token.getAddress()

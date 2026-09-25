@@ -8,7 +8,7 @@ export async function setupTrustedRelayers(
   relayers: string[],
 ): Promise<TrustedRelayerRegistry> {
   const registryFactory = await ethers.getContractFactory("TrustedRelayerRegistry")
-  const registry = (await upgrades.deployProxy(registryFactory, [admin.address], {
+  const registry = (await upgrades.deployProxy(registryFactory, [admin.address, 0, 0], {
     initializer: "initialize",
   })) as unknown as TrustedRelayerRegistry
   await registry.waitForDeployment()

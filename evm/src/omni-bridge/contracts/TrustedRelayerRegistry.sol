@@ -63,10 +63,16 @@ contract TrustedRelayerRegistry is
         _disableInitializers();
     }
 
-    function initialize(address admin) public initializer {
+    function initialize(
+        address admin,
+        uint128 stakeRequired,
+        uint64 waitingPeriod
+    ) public initializer {
         __UUPSUpgradeable_init();
         __AccessControlEnumerable_init();
         _grantRole(DEFAULT_ADMIN_ROLE, admin);
+        _grantRole(RELAYER_MANAGER_ROLE, admin);
+        _setRelayerConfig(stakeRequired, waitingPeriod);
     }
 
     function isTrustedRelayer(address account) external view returns (bool) {
@@ -119,17 +125,9 @@ contract TrustedRelayerRegistry is
         _sendStake(msg.sender, state.stake);
     }
 
-    function rejectRelayerApplication(address relayer) external {
-        if (
-            !hasRole(RELAYER_MANAGER_ROLE, msg.sender) &&
-            !hasRole(DEFAULT_ADMIN_ROLE, msg.sender)
-        ) {
-            revert AccessControlUnauthorizedAccount(
-                msg.sender,
-                RELAYER_MANAGER_ROLE
-            );
-        }
-
+    function rejectRelayerApplication(
+        address relayer
+    ) external onlyRole(RELAYER_MANAGER_ROLE) {
         RelayerState memory state = relayers[relayer];
 
         if (state.stake == 0) {
@@ -148,12 +146,7 @@ contract TrustedRelayerRegistry is
         uint128 stakeRequired,
         uint64 waitingPeriod
     ) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        relayerConfig = RelayerConfig({
-            stakeRequired: stakeRequired,
-            waitingPeriod: waitingPeriod
-        });
-
-        emit RelayerConfigSet(stakeRequired, waitingPeriod);
+        _setRelayerConfig(stakeRequired, waitingPeriod);
     }
 
     function getActiveRelayers(
@@ -205,6 +198,18 @@ contract TrustedRelayerRegistry is
         }
 
         return entries;
+    }
+
+    function _setRelayerConfig(
+        uint128 stakeRequired,
+        uint64 waitingPeriod
+    ) private {
+        relayerConfig = RelayerConfig({
+            stakeRequired: stakeRequired,
+            waitingPeriod: waitingPeriod
+        });
+
+        emit RelayerConfigSet(stakeRequired, waitingPeriod);
     }
 
     function _sendStake(address to, uint128 amount) private {

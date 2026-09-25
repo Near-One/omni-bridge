@@ -14,7 +14,7 @@ yarn lint:fix
 - **OmniBridge.sol**: Main factory contract, manages token creation and cross-chain transfers
 - **BridgeToken.sol**: ERC20 implementation for bridged tokens (upgradeable)
 - **SelectivePausableUpgradable.sol**: Bit-flag-based granular pause control
-- **TrustedRelayerRegistry.sol**: Separate UUPS contract deciding who may call `finTransfer`. An account is trusted if it holds `TRUSTED_RELAYER_ROLE` (granted by the admin) or staked `stakeRequired` native tokens and waited `waitingPeriod` seconds. A `RELAYER_MANAGER_ROLE` holder (or the admin) can reject a staked relayer and take the stake; an active relayer can resign and get the stake back. Staking is disabled while `stakeRequired` is zero. Mirrors `omni_utils::trusted_relayer` on NEAR. Kept out of `OmniBridge` because `HlOmniBridge` is close to the 24KB contract size limit
+- **TrustedRelayerRegistry.sol**: Separate UUPS contract deciding who may call `finTransfer`. An account is trusted if it holds `TRUSTED_RELAYER_ROLE` (granted by the admin) or staked `stakeRequired` native tokens and waited `waitingPeriod` seconds. A `RELAYER_MANAGER_ROLE` holder (the admin gets it in `initialize`) can reject a staked relayer and take the stake; an active relayer can resign and get the stake back. `initialize(admin, stakeRequired, waitingPeriod)` sets the starting config; staking is disabled while `stakeRequired` is zero. Mirrors `omni_utils::trusted_relayer` on NEAR. Kept out of `OmniBridge` because `HlOmniBridge` is close to the 24KB contract size limit
 - **Borsh.sol** (src/common/Borsh.sol): Binary serialization for NEAR cross-chain compatibility
 
 ### Bridge flow

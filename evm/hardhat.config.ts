@@ -128,13 +128,23 @@ task("deploy-bridge-token-factory", "Deploys the OmniBridge contract")
 
 task("deploy-trusted-relayer-registry", "Deploys the TrustedRelayerRegistry contract")
   .addParam("admin", "The address that gets DEFAULT_ADMIN_ROLE on the registry")
+  .addParam("stakeRequired", "Native tokens (in wei) a relayer must stake, 0 disables staking")
+  .addOptionalParam(
+    "waitingPeriod",
+    "Seconds before a staked relayer becomes active",
+    String(7 * 24 * 60 * 60),
+  )
   .setAction(async (taskArgs, hre) => {
     const { ethers, upgrades } = hre
     const RegistryContract = await ethers.getContractFactory("TrustedRelayerRegistry")
-    const Registry = await upgrades.deployProxy(RegistryContract, [taskArgs.admin], {
-      initializer: "initialize",
-      timeout: 0,
-    })
+    const Registry = await upgrades.deployProxy(
+      RegistryContract,
+      [taskArgs.admin, taskArgs.stakeRequired, taskArgs.waitingPeriod],
+      {
+        initializer: "initialize",
+        timeout: 0,
+      },
+    )
     await Registry.waitForDeployment()
     const registryAddress = await Registry.getAddress()
 

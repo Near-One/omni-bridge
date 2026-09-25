@@ -57,7 +57,7 @@ describe("TrustedRelayerRegistry", () => {
     tokenAddress = await createToken(OmniBridge)
 
     const registryFactory = await ethers.getContractFactory("TrustedRelayerRegistry")
-    Registry = (await upgrades.deployProxy(registryFactory, [admin.address], {
+    Registry = (await upgrades.deployProxy(registryFactory, [admin.address, 0, WAITING_PERIOD], {
       initializer: "initialize",
     })) as unknown as TrustedRelayerRegistry
     await Registry.waitForDeployment()
@@ -81,6 +81,19 @@ describe("TrustedRelayerRegistry", () => {
         OmniBridge,
         "NotTrustedRelayer",
       )
+    })
+
+    it("can't fin transfer as the admin without the relayer role", async () => {
+      await expect(finTransfer(admin)).to.be.revertedWithCustomError(
+        OmniBridge,
+        "NotTrustedRelayer",
+      )
+    })
+
+    it("can't fin transfer when the registry is not a contract", async () => {
+      await OmniBridge.setTrustedRelayerRegistry(user.address)
+
+      await expect(finTransfer(admin)).to.be.reverted
     })
 
     it("can fin transfer as a relayer granted by the admin", async () => {
@@ -115,6 +128,23 @@ describe("TrustedRelayerRegistry", () => {
       await expect(
         Registry.connect(relayer).applyForTrustedRelayer({ value: STAKE }),
       ).to.be.revertedWithCustomError(Registry, "RelayerStakingDisabled")
+    })
+
+    it("initialize sets the relayer config", async () => {
+      const registryFactory = await ethers.getContractFactory("TrustedRelayerRegistry")
+      const registry = (await upgrades.deployProxy(
+        registryFactory,
+        [admin.address, STAKE, WAITING_PERIOD],
+        { initializer: "initialize" },
+      )) as unknown as TrustedRelayerRegistry
+
+      const config = await registry.relayerConfig()
+      expect(config.stakeRequired).to.equal(STAKE)
+      expect(config.waitingPeriod).to.equal(WAITING_PERIOD)
+      await expect(registry.connect(relayer).applyForTrustedRelayer({ value: STAKE })).to.emit(
+        registry,
+        "RelayerApplied",
+      )
     })
 
     it("only the admin can set the relayer config", async () => {
@@ -221,7 +251,10 @@ describe("TrustedRelayerRegistry", () => {
       expect(await Registry.isTrustedRelayer(relayer.address)).to.equal(false)
     })
 
-    it("admin can reject an active relayer", async () => {
+    it("admin is a relayer manager and can reject an active relayer", async () => {
+      expect(await Registry.hasRole(await Registry.RELAYER_MANAGER_ROLE(), admin.address)).to.equal(
+        true,
+      )
       await applyAsRelayer()
       await time.increase(WAITING_PERIOD)
 
@@ -242,7 +275,7 @@ describe("TrustedRelayerRegistry", () => {
       )
     })
 
-    it("only a manager or the admin can reject", async () => {
+    it("only a relayer manager can reject", async () => {
       await applyAsRelayer()
 
       await expect(
