@@ -14,6 +14,7 @@ import {IERC1155Receiver} from "@openzeppelin/contracts/token/ERC1155/IERC1155Re
 import {IERC165} from "@openzeppelin/contracts/utils/introspection/IERC165.sol";
 import {ICustomMinter} from "../../common/ICustomMinter.sol";
 import {IBridgeToken} from "../../common/IBridgeToken.sol";
+import {ITrustedRelayerRegistry} from "../../common/ITrustedRelayerRegistry.sol";
 
 import "./BridgeToken.sol";
 import "./SelectivePausableUpgradable.sol";
@@ -46,6 +47,7 @@ contract OmniBridge is
 
     mapping(address => address) public customMinters;
     mapping(address => MultiTokenInfo) public multiTokens;
+    address public trustedRelayerRegistry;
 
     bytes32 public constant PAUSABLE_ADMIN_ROLE =
         keccak256("PAUSABLE_ADMIN_ROLE");
@@ -63,6 +65,7 @@ contract OmniBridge is
     error ERC1155DirectSendNotAllowed();
     error ERC1155BatchNotSupported();
     error TokenImplementationNotSet();
+    error NotTrustedRelayer();
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
@@ -278,6 +281,14 @@ contract OmniBridge is
         bytes calldata signatureData,
         BridgeTypes.TransferMessagePayload calldata payload
     ) external payable whenNotPaused(PAUSED_FIN_TRANSFER) {
+        address registry = trustedRelayerRegistry;
+        if (
+            registry == address(0) ||
+            !ITrustedRelayerRegistry(registry).isTrustedRelayer(msg.sender)
+        ) {
+            revert NotTrustedRelayer();
+        }
+
         if (completedTransfers[payload.destinationNonce]) {
             revert NonceAlreadyUsed(payload.destinationNonce);
         }
@@ -569,6 +580,12 @@ contract OmniBridge is
         nearBridgeDerivedAddress = nearBridgeDerivedAddress_;
     }
 
+    function setTrustedRelayerRegistry(
+        address trustedRelayerRegistry_
+    ) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        trustedRelayerRegistry = trustedRelayerRegistry_;
+    }
+
     receive() external payable {}
 
     function deriveDeterministicAddress(
@@ -593,5 +610,5 @@ contract OmniBridge is
         address newImplementation
     ) internal override onlyRole(DEFAULT_ADMIN_ROLE) {}
 
-    uint256[49] private __gap;
+    uint256[48] private __gap;
 }

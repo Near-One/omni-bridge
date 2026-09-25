@@ -126,6 +126,26 @@ task("deploy-bridge-token-factory", "Deploys the OmniBridge contract")
     )
   })
 
+task("deploy-trusted-relayer-registry", "Deploys the TrustedRelayerRegistry contract")
+  .addParam("admin", "The address that gets DEFAULT_ADMIN_ROLE on the registry")
+  .setAction(async (taskArgs, hre) => {
+    const { ethers, upgrades } = hre
+    const RegistryContract = await ethers.getContractFactory("TrustedRelayerRegistry")
+    const Registry = await upgrades.deployProxy(RegistryContract, [taskArgs.admin], {
+      initializer: "initialize",
+      timeout: 0,
+    })
+    await Registry.waitForDeployment()
+    const registryAddress = await Registry.getAddress()
+
+    console.log(
+      JSON.stringify({
+        registryAddress,
+        implementationAddress: await getProxyImplementationAddress(hre, registryAddress),
+      }),
+    )
+  })
+
 task("deploy-token-factory-impl", "Deploys the BridgeToken Factory implementation").setAction(
   async (_, hre) => {
     const { ethers } = hre

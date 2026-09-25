@@ -6,6 +6,7 @@ import type { BigNumberish } from "ethers"
 import { ethers, upgrades } from "hardhat"
 import type { BridgeToken, OmniBridgeWormhole, TestWormhole } from "../typechain-types"
 import { depositSignature, metadataSignature, testWallet } from "./helpers/signatures"
+import { setupTrustedRelayers } from "./helpers/trustedRelayer"
 
 const WormholeFee = 10000
 
@@ -112,6 +113,9 @@ describe("BridgeTokenWormhole", () => {
       { initializer: "initializeWormhole" },
     )) as unknown as OmniBridgeWormhole
     await OmniBridgeWormhole.waitForDeployment()
+    await setupTrustedRelayers(await OmniBridgeWormhole.getAddress(), adminAccount, [
+      adminAccount.address,
+    ])
   })
 
   async function fundAddress(address: string, amount: string): Promise<void> {
