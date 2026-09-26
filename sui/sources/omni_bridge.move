@@ -26,10 +26,12 @@ use omni_bridge::utils;
 use std::string::String;
 use std::type_name::{Self, TypeName};
 use sui::bag::{Self, Bag};
-use sui::balance::Balance;
+use sui::balance::{Self, Balance};
+use sui::clock::Clock;
 use sui::coin::{Self, Coin, CoinMetadata, TreasuryCap};
 use sui::coin_registry::{Self, Currency, MetadataCap};
 use sui::event;
+use sui::linked_table::{Self, LinkedTable};
 use sui::object_bag::{Self, ObjectBag};
 use sui::package::UpgradeCap;
 use sui::sui::SUI;
@@ -101,6 +103,14 @@ const E_NON_CANONICAL_COIN_TYPE: u64 = 25;
 /// requires non-empty, so such a token cannot be bridged to Sui at all.
 const E_INVALID_SYMBOL: u64 = 26;
 
+// Trusted relayers
+const E_NOT_TRUSTED_RELAYER: u64 = 27;
+const E_RELAYER_STAKING_DISABLED: u64 = 28;
+const E_RELAYER_APPLICATION_EXISTS: u64 = 29;
+const E_RELAYER_NOT_FOUND: u64 = 30;
+const E_RELAYER_NOT_ACTIVE: u64 = 31;
+const E_INVALID_RELAYER_STAKE: u64 = 32;
+
 /// Every bridged coin type must be `<package>::token::TOKEN`. The struct
 /// name is the module name upper-cased, as the one-time-witness rule
 /// requires.
@@ -139,6 +149,8 @@ const VERSION: u64 = 1;
 const ROLE_ADMIN: u8 = 0;
 const ROLE_PAUSER: u8 = 1;
 const ROLE_METADATA_ADMIN: u8 = 2;
+const ROLE_TRUSTED_RELAYER: u8 = 3;
+const ROLE_RELAYER_MANAGER: u8 = 4;
 
 /// Top-level bridge state: a single shared object created at publish.
 public struct BridgeState has key {
@@ -180,6 +192,26 @@ public struct BridgeState has key {
     /// indexers can resolve wire-format token ids to concrete types.
     /// Populated by `log_metadata` and `deploy_token`.
     token_registry: Table<address, TypeName>,
+    /// SUI a relayer must stake in `apply_for_trusted_relayer`. Zero
+    /// disables new applications.
+    relayer_stake_required: u64,
+    /// Seconds between an application and its activation.
+    relayer_waiting_period: u64,
+    /// Staked relayers (pending and active).
+    relayers: LinkedTable<address, RelayerState>,
+    /// SUI staked by relayers, kept apart from bridge custody.
+    relayer_stakes: Balance<SUI>,
+}
+
+public struct RelayerState has copy, drop, store {
+    stake: u64,
+    /// Timestamp in seconds from which the relayer is trusted.
+    activate_at: u64,
+}
+
+public struct RelayerEntry has copy, drop {
+    relayer: address,
+    state: RelayerState,
 }
 
 // -------- Events --------
@@ -225,6 +257,29 @@ public struct LogMetadata has copy, drop {
     decimals: u8,
 }
 
+public struct RelayerApplied has copy, drop {
+    relayer: address,
+    stake: u64,
+    activate_at: u64,
+}
+
+public struct RelayerResigned has copy, drop {
+    relayer: address,
+    stake: u64,
+}
+
+public struct RelayerRejected has copy, drop {
+    relayer: address,
+    stake: u64,
+    manager: address,
+}
+
+public struct RelayerConfigChanged has copy, drop {
+    stake_required: u64,
+    waiting_period: u64,
+    admin: address,
+}
+
 public struct PauseStateChanged has copy, drop {
     old_flags: u8,
     new_flags: u8,
@@ -253,6 +308,7 @@ fun init(ctx: &mut TxContext) {
     roles.add(ROLE_ADMIN, vector[sender]);
     roles.add(ROLE_PAUSER, vector[sender]);
     roles.add(ROLE_METADATA_ADMIN, vector[sender]);
+    roles.add(ROLE_RELAYER_MANAGER, vector[sender]);
 
     transfer::share_object(BridgeState {
         id: object::new(ctx),
@@ -268,6 +324,10 @@ fun init(ctx: &mut TxContext) {
         metadata_caps: object_bag::new(ctx),
         near_to_sui_token: table::new(ctx),
         token_registry: table::new(ctx),
+        relayer_stake_required: 0,
+        relayer_waiting_period: 0,
+        relayers: linked_table::new(ctx),
+        relayer_stakes: balance::zero(),
     });
 }
 
@@ -279,10 +339,15 @@ fun init(ctx: &mut TxContext) {
 /// inbound `fin_transfer`s fail signature verification. `0` is rejected
 /// (it is the unconfigured sentinel); a wrong non-zero value is
 /// recoverable via `set_chain_id`.
+///
+/// Also sets the starting trusted relayer config (see
+/// `set_relayer_config`).
 public fun initialize(
     state: &mut BridgeState,
     near_bridge_derived_address: vector<u8>,
     chain_id: u8,
+    relayer_stake_required: u64,
+    relayer_waiting_period: u64,
     ctx: &TxContext,
 ) {
     assert_version(state);
@@ -292,6 +357,7 @@ public fun initialize(
     assert!(chain_id != 0, E_INVALID_CHAIN_ID);
     state.near_bridge_derived_address = near_bridge_derived_address;
     state.chain_id = chain_id;
+    write_relayer_config(state, relayer_stake_required, relayer_waiting_period, ctx.sender());
 }
 
 // -------- Admin --------
@@ -382,6 +448,113 @@ public fun migrate(state: &mut BridgeState, ctx: &TxContext) {
     assert_role(state, ROLE_ADMIN, ctx.sender());
     assert!(state.version < VERSION, E_NOT_MIGRATION);
     state.version = VERSION;
+}
+
+// -------- Trusted relayers --------
+
+/// Zero `stake_required` disables new applications. Changes apply only to
+/// new applications.
+public fun set_relayer_config(
+    state: &mut BridgeState,
+    stake_required: u64,
+    waiting_period: u64,
+    ctx: &TxContext,
+) {
+    assert_version(state);
+    assert_role(state, ROLE_ADMIN, ctx.sender());
+    write_relayer_config(state, stake_required, waiting_period, ctx.sender());
+}
+
+/// `stake` must be exactly `relayer_stake_required` (split it in the same
+/// PTB).
+public fun apply_for_trusted_relayer(
+    state: &mut BridgeState,
+    stake: Coin<SUI>,
+    clock: &Clock,
+    ctx: &TxContext,
+) {
+    assert_version(state);
+    let stake_required = state.relayer_stake_required;
+    assert!(stake_required != 0, E_RELAYER_STAKING_DISABLED);
+
+    let relayer = ctx.sender();
+    assert!(!state.relayers.contains(relayer), E_RELAYER_APPLICATION_EXISTS);
+    assert!(stake.value() == stake_required, E_INVALID_RELAYER_STAKE);
+
+    let activate_at = now_seconds(clock) + state.relayer_waiting_period;
+    state.relayers.push_back(relayer, RelayerState { stake: stake_required, activate_at });
+    state.relayer_stakes.join(stake.into_balance());
+
+    event::emit(RelayerApplied { relayer, stake: stake_required, activate_at });
+}
+
+public fun resign_trusted_relayer(state: &mut BridgeState, clock: &Clock, ctx: &mut TxContext) {
+    assert_version(state);
+    let relayer = ctx.sender();
+    assert!(state.relayers.contains(relayer), E_RELAYER_NOT_FOUND);
+    let activate_at = state.relayers.borrow(relayer).activate_at;
+    assert!(now_seconds(clock) >= activate_at, E_RELAYER_NOT_ACTIVE);
+
+    let relayer_state = state.relayers.remove(relayer);
+    send_stake(state, relayer, relayer_state.stake, ctx);
+
+    event::emit(RelayerResigned { relayer, stake: relayer_state.stake });
+}
+
+/// The stake goes to the caller.
+public fun reject_relayer_application(
+    state: &mut BridgeState,
+    relayer: address,
+    ctx: &mut TxContext,
+) {
+    assert_version(state);
+    assert_role(state, ROLE_RELAYER_MANAGER, ctx.sender());
+    assert!(state.relayers.contains(relayer), E_RELAYER_NOT_FOUND);
+
+    let relayer_state = state.relayers.remove(relayer);
+    let manager = ctx.sender();
+    send_stake(state, manager, relayer_state.stake, ctx);
+
+    event::emit(RelayerRejected { relayer, stake: relayer_state.stake, manager });
+}
+
+public fun is_trusted_relayer(state: &BridgeState, account: address, clock: &Clock): bool {
+    if (is_role_holder(state, ROLE_TRUSTED_RELAYER, account)) {
+        return true
+    };
+    state.relayers.contains(account) &&
+        now_seconds(clock) >= state.relayers.borrow(account).activate_at
+}
+
+public fun get_relayer_state(state: &BridgeState, relayer: address): Option<RelayerState> {
+    if (state.relayers.contains(relayer)) {
+        option::some(*state.relayers.borrow(relayer))
+    } else {
+        option::none()
+    }
+}
+
+/// Returns `(stake_required, waiting_period)`.
+public fun get_relayer_config(state: &BridgeState): (u64, u64) {
+    (state.relayer_stake_required, state.relayer_waiting_period)
+}
+
+public fun get_active_relayers(
+    state: &BridgeState,
+    clock: &Clock,
+    from_index: u64,
+    limit: u64,
+): vector<RelayerEntry> {
+    get_staked_relayers(state, clock, true, from_index, limit)
+}
+
+public fun get_pending_relayers(
+    state: &BridgeState,
+    clock: &Clock,
+    from_index: u64,
+    limit: u64,
+): vector<RelayerEntry> {
+    get_staked_relayers(state, clock, false, from_index, limit)
 }
 
 // -------- Token discovery --------
@@ -705,9 +878,9 @@ public fun init_transfer<T>(
     });
 }
 
-/// Finalize an inbound transfer from another chain. Permissionless -
-/// the NEAR MPC signature is the authorization. The transaction sender
-/// is not read on-chain.
+/// Finalize an inbound transfer from another chain. Only trusted relayers
+/// can call it (see `is_trusted_relayer`), and the NEAR MPC signature
+/// authorizes the transfer.
 ///
 /// The wire-format token id is derived from `T` itself
 /// (`keccak256(canonical type string)`), so the signature check binds the
@@ -723,11 +896,13 @@ public fun fin_transfer<T>(
     recipient: address,
     fee_recipient: Option<String>,
     message: vector<u8>,
+    clock: &Clock,
     ctx: &mut TxContext,
 ) {
     assert_version(state);
     assert_configured(state);
     assert!((state.pause_flags & PAUSE_FIN_TRANSFER) == 0, E_FIN_TRANSFER_PAUSED);
+    assert!(is_trusted_relayer(state, ctx.sender(), clock), E_NOT_TRUSTED_RELAYER);
 
     // Replay protection before anything else (checks-effects-interactions).
     assert!(
@@ -873,6 +1048,8 @@ public fun all_roles(): vector<RoleInfo> {
         RoleInfo { name: b"Admin".to_string(), id: ROLE_ADMIN },
         RoleInfo { name: b"Pauser".to_string(), id: ROLE_PAUSER },
         RoleInfo { name: b"MetadataAdmin".to_string(), id: ROLE_METADATA_ADMIN },
+        RoleInfo { name: b"TrustedRelayer".to_string(), id: ROLE_TRUSTED_RELAYER },
+        RoleInfo { name: b"RelayerManager".to_string(), id: ROLE_RELAYER_MANAGER },
     ]
 }
 
@@ -890,6 +1067,53 @@ fun assert_configured(state: &BridgeState) {
 /// otherwise.
 fun assert_role(state: &BridgeState, role: u8, who: address) {
     assert!(is_role_holder(state, role, who), E_UNAUTHORIZED);
+}
+
+// -------- Internal: trusted relayers --------
+
+fun now_seconds(clock: &Clock): u64 {
+    clock.timestamp_ms() / 1000
+}
+
+fun write_relayer_config(
+    state: &mut BridgeState,
+    stake_required: u64,
+    waiting_period: u64,
+    admin: address,
+) {
+    state.relayer_stake_required = stake_required;
+    state.relayer_waiting_period = waiting_period;
+    event::emit(RelayerConfigChanged { stake_required, waiting_period, admin });
+}
+
+fun send_stake(state: &mut BridgeState, recipient: address, amount: u64, ctx: &mut TxContext) {
+    let stake = coin::from_balance(state.relayer_stakes.split(amount), ctx);
+    transfer::public_transfer(stake, recipient);
+}
+
+fun get_staked_relayers(
+    state: &BridgeState,
+    clock: &Clock,
+    active: bool,
+    from_index: u64,
+    limit: u64,
+): vector<RelayerEntry> {
+    let now = now_seconds(clock);
+    let mut entries = vector[];
+    let mut matched = 0;
+    let mut next = *state.relayers.front();
+    while (next.is_some() && entries.length() < limit) {
+        let relayer = next.destroy_some();
+        let relayer_state = *state.relayers.borrow(relayer);
+        if ((now >= relayer_state.activate_at) == active) {
+            if (matched >= from_index) {
+                entries.push_back(RelayerEntry { relayer, state: relayer_state });
+            };
+            matched = matched + 1;
+        };
+        next = *state.relayers.next(relayer);
+    };
+    entries
 }
 
 // -------- Internal: nonce bitmap --------
@@ -1114,6 +1338,26 @@ public fun new_deploy_token_event(
         decimals,
         origin_decimals,
     }
+}
+
+#[test_only]
+public fun new_relayer_entry(relayer: address, stake: u64, activate_at: u64): RelayerEntry {
+    RelayerEntry { relayer, state: RelayerState { stake, activate_at } }
+}
+
+#[test_only]
+public fun relayer_state_stake(self: &RelayerState): u64 {
+    self.stake
+}
+
+#[test_only]
+public fun relayer_state_activate_at(self: &RelayerState): u64 {
+    self.activate_at
+}
+
+#[test_only]
+public fun relayer_stakes_value(state: &BridgeState): u64 {
+    state.relayer_stakes.value()
 }
 
 #[test_only]

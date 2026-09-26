@@ -38,8 +38,19 @@ implementations in this repo: see
   version gate stops them from touching state.
 - **Role-based access control**: `roles: Table<u8, vector<address>>`
   checked against `ctx.sender()`, same discriminants and semantics as
-  Aptos (`ROLE_ADMIN = 0`, `ROLE_PAUSER = 1`, `ROLE_METADATA_ADMIN = 2`;
-  grant/revoke by Admin; last-admin guard).
+  Aptos (`ROLE_ADMIN = 0`, `ROLE_PAUSER = 1`, `ROLE_METADATA_ADMIN = 2`,
+  `ROLE_TRUSTED_RELAYER = 3`, `ROLE_RELAYER_MANAGER = 4`; grant/revoke by
+  Admin; last-admin guard).
+- **Trusted relayers**: only trusted relayers can call `fin_transfer`,
+  mirroring NEAR's `omni_utils::trusted_relayer`. A sender is trusted if
+  it holds `ROLE_TRUSTED_RELAYER`, or staked exactly
+  `relayer_stake_required` SUI via `apply_for_trusted_relayer` and
+  `relayer_waiting_period` seconds have passed (read from the `Clock`,
+  `0x6`). A `RelayerManager` can reject a pending or active staked
+  relayer and takes the stake; an active relayer can resign and gets the
+  stake back. Stakes sit in `relayer_stakes: Balance<SUI>`, apart from
+  bridge custody; staked relayers are kept in a `LinkedTable` so they can
+  be listed.
 
 ## Module Layout
 
@@ -55,9 +66,9 @@ implementations in this repo: see
 
 | Function | Purpose | Access |
 |----------|---------|--------|
-| `initialize` | One-shot: set MPC signer address + chain id | Admin |
+| `initialize` | One-shot: set MPC signer address, chain id and the starting relayer config (stake, waiting period) | Admin |
 | `init_transfer<T>` | Send tokens from Sui: burns (bridged) or locks (native), collects optional `Coin<SUI>` native fee | Public |
-| `fin_transfer<T>` | Receive tokens: verifies MPC signature, marks `destination_nonce`, mints or unlocks to `recipient` | Public |
+| `fin_transfer<T>` | Receive tokens: verifies MPC signature, marks `destination_nonce`, mints or unlocks to `recipient`. Takes the `Clock` | Trusted relayer |
 | `prepare_token<T>` | Step 1/2, called from the template's `init`: creates the currency via `coin_registry::new_currency_with_otw` and returns an unforgeable `TokenSetup<T>`. Stateless (no shared objects — `init` cannot take them) | Public (OTW-authorized) |
 | `deploy_token<T>` | Step 2/2: bind a `TokenSetup<T>` to a signed MetadataPayload; takes `TokenSetup` + `UpgradeCap` (frozen) | Public (signature-authorized) |
 | `cancel_token_setup<T>` | Release `TreasuryCap` + `MetadataCap` from a setup that can never be bound (metadata mismatch, or `VERSION` bumped before the bind), retiring the coin type | Public (setup owner) |
@@ -66,8 +77,12 @@ implementations in this repo: see
 | `set_near_bridge_derived_address` / `set_chain_id` | Correct the MPC signer address / chain id after `initialize` (both baked into the signed preimage, so both are recoverable) | Admin |
 | `set_pause_flags` / `pause_all` | Pause bitmap (`0x01` init, `0x02` fin, `0x04` deploy) | Admin / Pauser |
 | `grant_role` / `revoke_role` | Role management (last-admin guard) | Admin |
+| `set_relayer_config` | Set `relayer_stake_required` (0 disables applications) and `relayer_waiting_period`. Applies only to new applications | Admin |
+| `apply_for_trusted_relayer` | Stake exactly `relayer_stake_required` SUI; trusted after `relayer_waiting_period` | Public |
+| `resign_trusted_relayer` | Active staked relayer leaves and gets the stake back | Staked relayer |
+| `reject_relayer_application` | Remove a pending or active staked relayer; the stake goes to the caller | RelayerManager |
 | `migrate` | Bump shared-object version after a package upgrade | Admin |
-| Views | `is_transfer_finalised`, `get_token_address`, `get_coin_type`, `is_bridge_token<T>`, `locked_balance<T>`, `current_origin_nonce`, `pause_flags`, `chain_id`, `role_holders`, `has_role`, `all_roles` | — |
+| Views | `is_transfer_finalised`, `get_token_address`, `get_coin_type`, `is_bridge_token<T>`, `locked_balance<T>`, `current_origin_nonce`, `pause_flags`, `chain_id`, `role_holders`, `has_role`, `all_roles`, `is_trusted_relayer`, `get_relayer_state`, `get_relayer_config`, `get_pending_relayers` / `get_active_relayers` (paginated) | — |
 
 ## Borsh / signature encoding
 
@@ -152,6 +167,13 @@ Ethereum address = last 20 bytes of `keccak256(decompressed_pubkey[1..65])`.
   different bytes and fails recovery.
 - **No token release without signature**: mint/unlock happens only after
   `verify_eth_signature`.
+- **Only trusted relayers finalize**: `fin_transfer` checks
+  `is_trusted_relayer(ctx.sender())` right after the pause check. The
+  sender can't be spoofed through another package, and `Clock` has no
+  public constructor, so the waiting period can't be skipped.
+- **Stakes are not custody**: only `resign_trusted_relayer` and
+  `reject_relayer_application` take SUI out of `relayer_stakes`, and only
+  the recorded stake of the removed relayer.
 - **Version gate on every state-touching entry point**; the four bridge
   operations (init/fin transfer, deploy_token, log_metadata) additionally
   require `initialize` to have run, as do the `set_near_bridge_derived_address`
@@ -185,7 +207,7 @@ Ethereum address = last 20 bytes of `keccak256(decompressed_pubkey[1..65])`.
 
 ## Testing
 ```sh
-cd sui && sui move test          # 91 tests
+cd sui && sui move test          # 109 tests
 cd sui/token_template && sui move build
 ```
 Signature vectors are generated by

@@ -15,6 +15,30 @@ other chains via NEAR Protocol (Sui ↔ NEAR ↔ other chain). Mirrors the
   Ethereum-style secp256k1 signature produced by the NEAR MPC over a
   borsh-encoded payload, recovered against the configured
   `near_bridge_derived_address` (20 bytes, key path `bridge-1`).
+  `fin_transfer` also requires the sender to be a trusted relayer (see
+  below).
+
+## Trusted relayers
+
+Only trusted relayers can call `fin_transfer`, like on NEAR
+(`omni_utils::trusted_relayer`). A sender is trusted if either:
+
+- it holds the `TrustedRelayer` role (3), granted by an admin, or
+- it staked exactly `relayer_stake_required` SUI with
+  `apply_for_trusted_relayer` and `relayer_waiting_period` seconds have
+  passed.
+
+A `RelayerManager` (4) can reject a pending or active staked relayer and
+takes the stake. An active relayer can resign with
+`resign_trusted_relayer` and gets the stake back. Setting
+`relayer_stake_required` to 0 disables new applications; config changes
+apply only to new applications. Monitoring can read
+`get_pending_relayers` / `get_active_relayers` (paginated, via
+`devInspect`), or index the `RelayerApplied` / `RelayerResigned` /
+`RelayerRejected` events.
+
+`fin_transfer` takes the shared `Clock` (`0x6`) as its last explicit
+argument.
 
 ## Token identity
 
@@ -43,13 +67,18 @@ Native SUI's token id is
 ## Deployment
 
 1. `sui client publish` — `init` creates the shared `BridgeState` with the
-   publisher holding the `Admin` / `Pauser` / `MetadataAdmin` roles.
-2. `initialize(state, near_bridge_derived_address, chain_id)` — one-shot,
+   publisher holding the `Admin` / `Pauser` / `MetadataAdmin` /
+   `RelayerManager` roles.
+2. `initialize(state, near_bridge_derived_address, chain_id,
+   relayer_stake_required, relayer_waiting_period)` — one-shot,
    Admin-gated. `chain_id` is the `ChainKind::Sui` discriminant on NEAR
    (expected **14** — must be reserved with the omni-bridge maintainers
    before mainnet deployment). Every bridge operation aborts until this
-   has run.
-3. Guard the package `UpgradeCap` (multisig) — it is the real root of
+   has run. Suggested relayer config: `3500000000000` (3,500 SUI, about
+   $4k) and `604800` (7 days).
+3. `grant_role(state, 3, <relayer address>)` for the bridge's own
+   relayers. Without it they can't call `fin_transfer`.
+4. Guard the package `UpgradeCap` (multisig) — it is the real root of
    trust for upgrades. The shared state carries a `version` gate +
    `migrate` entry point for the upgrade flow.
 
@@ -158,14 +187,15 @@ to fee recipients on NEAR and can leave custody again through a regular
 ## Testing
 
 ```sh
-cd sui && sui move test                  # 91 tests
+cd sui && sui move test                  # 109 tests
 cd sui/token_template && sui move build
 ```
 
 Coverage highlights: byte-exact borsh payload layouts, real secp256k1
 signature vectors (generated offline; positive + negative), end-to-end
 lock→unlock and prepare→deploy→mint→burn flows, nonce-bitmap word
-boundaries, role/pause/version gates, `deploy_token` binding guards
+boundaries, role/pause/version gates, the trusted relayer gate and
+staking lifecycle, `deploy_token` binding guards
 (canonical type, upgrade cap, setup version, metadata equality), an
 assertion that a prepared currency is unregulated with no deny cap, and
 negative cases pinned to exact abort codes — malformed signature (native
