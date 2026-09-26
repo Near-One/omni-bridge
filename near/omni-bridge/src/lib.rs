@@ -16,7 +16,7 @@ use near_sdk::{
     GasWeight, NearToken, PanicOnDefault, Promise, PromiseError, PromiseOrValue,
 };
 use omni_types::btc::{TxOut, UTXOChainConfig};
-use omni_types::errors::{BridgeError, StorageBalanceError, TokenLockError};
+use omni_types::errors::{BridgeError, StorageBalanceError};
 use omni_types::locker_args::{
     AddDeployedTokenArgs, BindTokenArgs, ClaimFeeArgs, DeployTokenArgs, FinTransferArgs,
     StorageDepositAction,
@@ -1223,18 +1223,13 @@ impl Contract {
             deploy_token.origin_decimals,
         );
 
-        require!(
-            self.locked_tokens
-                .insert(
-                    &(
-                        deploy_token.token_address.get_chain(),
-                        deploy_token.token.clone(),
-                    ),
-                    &0,
-                )
-                .is_none(),
-            TokenLockError::TokenAlreadyLocked.as_ref()
+        let locked_tokens_key = (
+            deploy_token.token_address.get_chain(),
+            deploy_token.token.clone(),
         );
+        if !self.locked_tokens.contains_key(&locked_tokens_key) {
+            self.locked_tokens.insert(&locked_tokens_key, &0);
+        }
 
         let required_deposit = env::storage_byte_cost()
             .saturating_mul((env::storage_usage().saturating_sub(storage_usage)).into());
