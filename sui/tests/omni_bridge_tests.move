@@ -6,6 +6,7 @@ use omni_bridge::test_coin::{Self, TEST_COIN};
 use omni_bridge::token::{Self, TOKEN};
 use omni_bridge::utils;
 use std::string;
+use sui::clock;
 use sui::coin;
 use sui::coin_registry::Currency;
 use sui::event;
@@ -19,6 +20,10 @@ const CHAIN_ID: u8 = 14;
 const ROLE_ADMIN: u8 = 0;
 const ROLE_PAUSER: u8 = 1;
 const ROLE_METADATA_ADMIN: u8 = 2;
+const ROLE_TRUSTED_RELAYER: u8 = 3;
+const ROLE_RELAYER_MANAGER: u8 = 4;
+
+const WAITING_PERIOD: u64 = 7 * 24 * 60 * 60;
 
 fun derived_address(): vector<u8> {
     vector[
@@ -40,7 +45,8 @@ fun setup(): Scenario {
 fun setup_configured(): Scenario {
     let mut ts = setup();
     let mut state = ts.take_shared<BridgeState>();
-    omni_bridge::initialize(&mut state, derived_address(), CHAIN_ID, ts.ctx());
+    omni_bridge::initialize(&mut state, derived_address(), CHAIN_ID, 0, WAITING_PERIOD, ts.ctx());
+    omni_bridge::grant_role(&mut state, ROLE_TRUSTED_RELAYER, ADMIN, ts.ctx());
     test_scenario::return_shared(state);
     ts.next_tx(ADMIN);
     ts
@@ -78,7 +84,7 @@ fun initialize_sets_config() {
 fun initialize_twice_aborts() {
     let mut ts = setup_configured();
     let mut state = ts.take_shared<BridgeState>();
-    omni_bridge::initialize(&mut state, derived_address(), CHAIN_ID, ts.ctx());
+    omni_bridge::initialize(&mut state, derived_address(), CHAIN_ID, 0, WAITING_PERIOD, ts.ctx());
     abort 0
 }
 
@@ -88,7 +94,7 @@ fun initialize_by_non_admin_aborts() {
     let mut ts = setup();
     ts.next_tx(USER);
     let mut state = ts.take_shared<BridgeState>();
-    omni_bridge::initialize(&mut state, derived_address(), CHAIN_ID, ts.ctx());
+    omni_bridge::initialize(&mut state, derived_address(), CHAIN_ID, 0, WAITING_PERIOD, ts.ctx());
     abort 0
 }
 
@@ -99,7 +105,7 @@ fun initialize_with_short_address_aborts() {
     let mut state = ts.take_shared<BridgeState>();
     let mut addr = derived_address();
     addr.pop_back();
-    omni_bridge::initialize(&mut state, addr, CHAIN_ID, ts.ctx());
+    omni_bridge::initialize(&mut state, addr, CHAIN_ID, 0, WAITING_PERIOD, ts.ctx());
     abort 0
 }
 
@@ -108,7 +114,7 @@ fun initialize_with_short_address_aborts() {
 fun initialize_with_zero_chain_id_aborts() {
     let mut ts = setup();
     let mut state = ts.take_shared<BridgeState>();
-    omni_bridge::initialize(&mut state, derived_address(), 0, ts.ctx());
+    omni_bridge::initialize(&mut state, derived_address(), 0, 0, WAITING_PERIOD, ts.ctx());
     abort 0
 }
 
@@ -200,8 +206,8 @@ fun grant_role_by_non_admin_aborts() {
 }
 
 #[test]
-fun all_roles_lists_three() {
-    assert!(omni_bridge::all_roles().length() == 3);
+fun all_roles_lists_five() {
+    assert!(omni_bridge::all_roles().length() == 5);
 }
 
 #[test]
@@ -497,6 +503,7 @@ fun fin_signature(): vector<u8> {
 }
 
 fun call_fin_transfer(state: &mut BridgeState, ts: &mut Scenario) {
+    let clock = clock::create_for_testing(ts.ctx());
     omni_bridge::fin_transfer<TEST_COIN>(
         state,
         fin_signature(),
@@ -507,8 +514,10 @@ fun call_fin_transfer(state: &mut BridgeState, ts: &mut Scenario) {
         USER,
         option::some(string::utf8(b"relayer.near")),
         vector[],
+        &clock,
         ts.ctx(),
     );
+    clock.destroy_for_testing();
 }
 
 fun lock_some_test_coin(state: &mut BridgeState, amount: u64, ts: &mut Scenario) {
@@ -585,6 +594,7 @@ fun fin_transfer_wrong_signer_aborts() {
         0x85, 0xFE, 0xC8, 0xFD, 0x06, 0x20, 0x8B, 0x1C, 0x2A, 0x1D, 0x40, 0xB5,
         0x11, 0x8B, 0xFA, 0xCD, 0x1C,
     ];
+    let clock = clock::create_for_testing(ts.ctx());
     omni_bridge::fin_transfer<TEST_COIN>(
         &mut state,
         wrong_signer_sig,
@@ -595,6 +605,7 @@ fun fin_transfer_wrong_signer_aborts() {
         USER,
         option::some(string::utf8(b"relayer.near")),
         vector[],
+        &clock,
         ts.ctx(),
     );
     abort 0
@@ -608,6 +619,7 @@ fun fin_transfer_tampered_signature_aborts() {
     lock_some_test_coin(&mut state, 1_000, &mut ts);
     let mut sig = fin_signature();
     *(&mut sig[0]) = 0x00;
+    let clock = clock::create_for_testing(ts.ctx());
     omni_bridge::fin_transfer<TEST_COIN>(
         &mut state,
         sig,
@@ -618,6 +630,7 @@ fun fin_transfer_tampered_signature_aborts() {
         USER,
         option::some(string::utf8(b"relayer.near")),
         vector[],
+        &clock,
         ts.ctx(),
     );
     abort 0
@@ -629,6 +642,7 @@ fun fin_transfer_wrong_amount_aborts() {
     let mut ts = setup_configured();
     let mut state = ts.take_shared<BridgeState>();
     lock_some_test_coin(&mut state, 1_000, &mut ts);
+    let clock = clock::create_for_testing(ts.ctx());
     omni_bridge::fin_transfer<TEST_COIN>(
         &mut state,
         fin_signature(),
@@ -639,6 +653,7 @@ fun fin_transfer_wrong_amount_aborts() {
         USER,
         option::some(string::utf8(b"relayer.near")),
         vector[],
+        &clock,
         ts.ctx(),
     );
     abort 0
@@ -659,6 +674,7 @@ fun fin_transfer_amount_over_u64_aborts() {
         0x13, 0xC4, 0x6D, 0xDF, 0x67, 0x6D, 0x30, 0x0B, 0x1E, 0x5A, 0xEA, 0x1E,
         0x4B, 0x0C, 0x6A, 0xD9, 0x1C,
     ];
+    let clock = clock::create_for_testing(ts.ctx());
     omni_bridge::fin_transfer<TEST_COIN>(
         &mut state,
         sig,
@@ -669,6 +685,7 @@ fun fin_transfer_amount_over_u64_aborts() {
         USER,
         option::none(),
         vector[],
+        &clock,
         ts.ctx(),
     );
     abort 0
@@ -693,6 +710,7 @@ fun fin_transfer_with_wrong_coin_type_aborts() {
     let mut ts = setup_configured();
     let mut state = ts.take_shared<BridgeState>();
     lock_some_test_coin(&mut state, 1_000, &mut ts);
+    let clock = clock::create_for_testing(ts.ctx());
     omni_bridge::fin_transfer<SUI>(
         &mut state,
         fin_signature(),
@@ -703,6 +721,7 @@ fun fin_transfer_with_wrong_coin_type_aborts() {
         USER,
         option::some(string::utf8(b"relayer.near")),
         vector[],
+        &clock,
         ts.ctx(),
     );
     abort 0
@@ -791,6 +810,7 @@ fun fin_signature_token(): vector<u8> {
 }
 
 fun call_fin_transfer_token(state: &mut BridgeState, ts: &mut Scenario) {
+    let clock = clock::create_for_testing(ts.ctx());
     omni_bridge::fin_transfer<TOKEN>(
         state,
         fin_signature_token(),
@@ -801,8 +821,10 @@ fun call_fin_transfer_token(state: &mut BridgeState, ts: &mut Scenario) {
         USER,
         option::some(string::utf8(b"relayer.near")),
         vector[],
+        &clock,
         ts.ctx(),
     );
+    clock.destroy_for_testing();
 }
 
 #[test]
@@ -1439,4 +1461,323 @@ fun rotate_derived_address_by_non_admin_aborts() {
     let mut state = ts.take_shared<BridgeState>();
     omni_bridge::set_near_bridge_derived_address(&mut state, derived_address(), ts.ctx());
     abort 0
+}
+
+// -------- trusted relayers --------
+
+const RELAYER: address = @0xCAFE;
+const MANAGER: address = @0x3A7A;
+const STAKE: u64 = 5_000_000_000;
+const NOW: u64 = 1_700_000_000;
+
+/// Configured bridge with staking enabled and a clock at `NOW`.
+fun setup_staking(): (Scenario, clock::Clock) {
+    let mut ts = setup_configured();
+    let mut state = ts.take_shared<BridgeState>();
+    omni_bridge::set_relayer_config(&mut state, STAKE, WAITING_PERIOD, ts.ctx());
+    test_scenario::return_shared(state);
+    let mut clock = clock::create_for_testing(ts.ctx());
+    clock.set_for_testing(NOW * 1000);
+    ts.next_tx(ADMIN);
+    (ts, clock)
+}
+
+fun apply_as(ts: &mut Scenario, clock: &clock::Clock, relayer: address) {
+    ts.next_tx(relayer);
+    let mut state = ts.take_shared<BridgeState>();
+    omni_bridge::apply_for_trusted_relayer(
+        &mut state,
+        coin::mint_for_testing<SUI>(STAKE, ts.ctx()),
+        clock,
+        ts.ctx(),
+    );
+    test_scenario::return_shared(state);
+}
+
+fun fin_transfer_at(state: &mut BridgeState, clock: &clock::Clock, ts: &mut Scenario) {
+    omni_bridge::fin_transfer<TEST_COIN>(
+        state,
+        fin_signature(),
+        5,
+        1,
+        99,
+        250,
+        USER,
+        option::some(string::utf8(b"relayer.near")),
+        vector[],
+        clock,
+        ts.ctx(),
+    );
+}
+
+fun received_sui(ts: &mut Scenario, owner: address): u64 {
+    ts.next_tx(owner);
+    let received = ts.take_from_address<coin::Coin<SUI>>(owner);
+    let value = received.value();
+    test_scenario::return_to_address(owner, received);
+    value
+}
+
+#[test]
+#[expected_failure(abort_code = omni_bridge::E_NOT_TRUSTED_RELAYER)]
+fun fin_transfer_by_untrusted_relayer_aborts() {
+    let mut ts = setup_configured();
+    ts.next_tx(RELAYER);
+    let mut state = ts.take_shared<BridgeState>();
+    lock_some_test_coin(&mut state, 1_000, &mut ts);
+    call_fin_transfer(&mut state, &mut ts);
+    abort 0
+}
+
+#[test]
+#[expected_failure(abort_code = omni_bridge::E_NOT_TRUSTED_RELAYER)]
+fun fin_transfer_by_admin_without_relayer_role_aborts() {
+    let mut ts = setup_configured();
+    let mut state = ts.take_shared<BridgeState>();
+    omni_bridge::revoke_role(&mut state, ROLE_TRUSTED_RELAYER, ADMIN, ts.ctx());
+    lock_some_test_coin(&mut state, 1_000, &mut ts);
+    call_fin_transfer(&mut state, &mut ts);
+    abort 0
+}
+
+#[test]
+fun initialize_sets_relayer_config() {
+    let mut ts = setup();
+    let mut state = ts.take_shared<BridgeState>();
+    omni_bridge::initialize(
+        &mut state,
+        derived_address(),
+        CHAIN_ID,
+        STAKE,
+        WAITING_PERIOD,
+        ts.ctx(),
+    );
+    let (stake_required, waiting_period) = state.get_relayer_config();
+    assert!(stake_required == STAKE && waiting_period == WAITING_PERIOD);
+    test_scenario::return_shared(state);
+    ts.end();
+}
+
+#[test]
+fun init_seeds_relayer_manager_to_publisher() {
+    let ts = setup();
+    let state = ts.take_shared<BridgeState>();
+    assert!(state.has_role(ROLE_RELAYER_MANAGER, ADMIN));
+    assert!(!state.has_role(ROLE_TRUSTED_RELAYER, ADMIN));
+    test_scenario::return_shared(state);
+    ts.end();
+}
+
+#[test]
+#[expected_failure(abort_code = omni_bridge::E_UNAUTHORIZED)]
+fun set_relayer_config_by_non_admin_aborts() {
+    let mut ts = setup_configured();
+    ts.next_tx(USER);
+    let mut state = ts.take_shared<BridgeState>();
+    omni_bridge::set_relayer_config(&mut state, STAKE, WAITING_PERIOD, ts.ctx());
+    abort 0
+}
+
+#[test]
+fun staked_relayer_finalizes_and_resigns_with_original_stake() {
+    let (mut ts, mut clock) = setup_staking();
+    apply_as(&mut ts, &clock, RELAYER);
+
+    ts.next_tx(RELAYER);
+    let mut state = ts.take_shared<BridgeState>();
+    assert!(state.relayer_stakes_value() == STAKE);
+    let relayer_state = state.get_relayer_state(RELAYER).destroy_some();
+    assert!(relayer_state.relayer_state_stake() == STAKE);
+    assert!(relayer_state.relayer_state_activate_at() == NOW + WAITING_PERIOD);
+    assert!(!state.is_trusted_relayer(RELAYER, &clock));
+
+    clock.increment_for_testing(WAITING_PERIOD * 1000);
+    assert!(state.is_trusted_relayer(RELAYER, &clock));
+
+    lock_some_test_coin(&mut state, 1_000, &mut ts);
+    fin_transfer_at(&mut state, &clock, &mut ts);
+    assert!(state.is_transfer_finalised(5));
+
+    test_scenario::return_shared(state);
+    ts.next_tx(ADMIN);
+    let mut state = ts.take_shared<BridgeState>();
+    omni_bridge::set_relayer_config(&mut state, STAKE * 2, 0, ts.ctx());
+    test_scenario::return_shared(state);
+
+    ts.next_tx(RELAYER);
+    let mut state = ts.take_shared<BridgeState>();
+    omni_bridge::resign_trusted_relayer(&mut state, &clock, ts.ctx());
+    assert!(state.relayer_stakes_value() == 0);
+    assert!(state.get_relayer_state(RELAYER).is_none());
+    assert!(!state.is_trusted_relayer(RELAYER, &clock));
+    test_scenario::return_shared(state);
+
+    assert!(received_sui(&mut ts, RELAYER) == STAKE);
+    clock.destroy_for_testing();
+    ts.end();
+}
+
+#[test]
+#[expected_failure(abort_code = omni_bridge::E_NOT_TRUSTED_RELAYER)]
+fun fin_transfer_by_pending_relayer_aborts() {
+    let (mut ts, mut clock) = setup_staking();
+    apply_as(&mut ts, &clock, RELAYER);
+    ts.next_tx(RELAYER);
+    let mut state = ts.take_shared<BridgeState>();
+    clock.increment_for_testing(WAITING_PERIOD * 1000 - 1000);
+    lock_some_test_coin(&mut state, 1_000, &mut ts);
+    fin_transfer_at(&mut state, &clock, &mut ts);
+    abort 0
+}
+
+#[test]
+#[expected_failure(abort_code = omni_bridge::E_RELAYER_STAKING_DISABLED)]
+fun apply_when_staking_disabled_aborts() {
+    let mut ts = setup_configured();
+    let clock = clock::create_for_testing(ts.ctx());
+    apply_as(&mut ts, &clock, RELAYER);
+    abort 0
+}
+
+#[test]
+#[expected_failure(abort_code = omni_bridge::E_INVALID_RELAYER_STAKE)]
+fun apply_with_wrong_stake_aborts() {
+    let (mut ts, clock) = setup_staking();
+    ts.next_tx(RELAYER);
+    let mut state = ts.take_shared<BridgeState>();
+    omni_bridge::apply_for_trusted_relayer(
+        &mut state,
+        coin::mint_for_testing<SUI>(STAKE + 1, ts.ctx()),
+        &clock,
+        ts.ctx(),
+    );
+    abort 0
+}
+
+#[test]
+#[expected_failure(abort_code = omni_bridge::E_RELAYER_APPLICATION_EXISTS)]
+fun apply_twice_aborts() {
+    let (mut ts, clock) = setup_staking();
+    apply_as(&mut ts, &clock, RELAYER);
+    apply_as(&mut ts, &clock, RELAYER);
+    abort 0
+}
+
+#[test]
+#[expected_failure(abort_code = omni_bridge::E_RELAYER_NOT_ACTIVE)]
+fun resign_pending_relayer_aborts() {
+    let (mut ts, clock) = setup_staking();
+    apply_as(&mut ts, &clock, RELAYER);
+    ts.next_tx(RELAYER);
+    let mut state = ts.take_shared<BridgeState>();
+    omni_bridge::resign_trusted_relayer(&mut state, &clock, ts.ctx());
+    abort 0
+}
+
+#[test]
+#[expected_failure(abort_code = omni_bridge::E_RELAYER_NOT_FOUND)]
+fun resign_without_application_aborts() {
+    let (mut ts, clock) = setup_staking();
+    ts.next_tx(RELAYER);
+    let mut state = ts.take_shared<BridgeState>();
+    omni_bridge::resign_trusted_relayer(&mut state, &clock, ts.ctx());
+    abort 0
+}
+
+#[test]
+fun relayer_manager_rejects_and_takes_stake() {
+    let (mut ts, clock) = setup_staking();
+    let mut state = ts.take_shared<BridgeState>();
+    omni_bridge::grant_role(&mut state, ROLE_RELAYER_MANAGER, MANAGER, ts.ctx());
+    test_scenario::return_shared(state);
+    apply_as(&mut ts, &clock, RELAYER);
+
+    ts.next_tx(MANAGER);
+    let mut state = ts.take_shared<BridgeState>();
+    omni_bridge::reject_relayer_application(&mut state, RELAYER, ts.ctx());
+    assert!(state.relayer_stakes_value() == 0);
+    assert!(state.get_relayer_state(RELAYER).is_none());
+    test_scenario::return_shared(state);
+
+    assert!(received_sui(&mut ts, MANAGER) == STAKE);
+    clock.destroy_for_testing();
+    ts.end();
+}
+
+#[test]
+#[expected_failure(abort_code = omni_bridge::E_UNAUTHORIZED)]
+fun admin_without_manager_role_cannot_reject() {
+    let (mut ts, clock) = setup_staking();
+    apply_as(&mut ts, &clock, RELAYER);
+    ts.next_tx(ADMIN);
+    let mut state = ts.take_shared<BridgeState>();
+    omni_bridge::revoke_role(&mut state, ROLE_RELAYER_MANAGER, ADMIN, ts.ctx());
+    omni_bridge::reject_relayer_application(&mut state, RELAYER, ts.ctx());
+    abort 0
+}
+
+#[test]
+#[expected_failure(abort_code = omni_bridge::E_UNAUTHORIZED)]
+fun non_manager_cannot_reject() {
+    let (mut ts, clock) = setup_staking();
+    apply_as(&mut ts, &clock, RELAYER);
+    ts.next_tx(USER);
+    let mut state = ts.take_shared<BridgeState>();
+    omni_bridge::reject_relayer_application(&mut state, RELAYER, ts.ctx());
+    abort 0
+}
+
+#[test]
+#[expected_failure(abort_code = omni_bridge::E_RELAYER_NOT_FOUND)]
+fun reject_unknown_relayer_aborts() {
+    let (mut ts, _clock) = setup_staking();
+    let mut state = ts.take_shared<BridgeState>();
+    omni_bridge::reject_relayer_application(&mut state, RELAYER, ts.ctx());
+    abort 0
+}
+
+#[test]
+fun lists_pending_and_active_relayers() {
+    let (mut ts, mut clock) = setup_staking();
+    apply_as(&mut ts, &clock, RELAYER);
+    clock.increment_for_testing(WAITING_PERIOD / 2 * 1000);
+    apply_as(&mut ts, &clock, USER);
+
+    ts.next_tx(ADMIN);
+    let state = ts.take_shared<BridgeState>();
+    let first = omni_bridge::new_relayer_entry(RELAYER, STAKE, NOW + WAITING_PERIOD);
+    let second_applied_at = NOW + WAITING_PERIOD / 2;
+    let second = omni_bridge::new_relayer_entry(USER, STAKE, second_applied_at + WAITING_PERIOD);
+    assert!(state.get_pending_relayers(&clock, 0, 10) == vector[first, second]);
+    assert!(state.get_active_relayers(&clock, 0, 10).is_empty());
+    assert!(state.get_pending_relayers(&clock, 1, 1) == vector[second]);
+    assert!(state.get_pending_relayers(&clock, 2, 10).is_empty());
+    assert!(state.get_pending_relayers(&clock, 0, 0).is_empty());
+
+    clock.increment_for_testing(WAITING_PERIOD / 2 * 1000);
+    assert!(state.get_active_relayers(&clock, 0, 10) == vector[first]);
+    assert!(state.get_pending_relayers(&clock, 0, 10) == vector[second]);
+
+    test_scenario::return_shared(state);
+    clock.destroy_for_testing();
+    ts.end();
+}
+
+#[test]
+fun rejected_relayer_leaves_the_lists() {
+    let (mut ts, clock) = setup_staking();
+    apply_as(&mut ts, &clock, RELAYER);
+    apply_as(&mut ts, &clock, USER);
+
+    ts.next_tx(ADMIN);
+    let mut state = ts.take_shared<BridgeState>();
+    omni_bridge::reject_relayer_application(&mut state, RELAYER, ts.ctx());
+    assert!(
+        state.get_pending_relayers(&clock, 0, 10) ==
+            vector[omni_bridge::new_relayer_entry(USER, STAKE, NOW + WAITING_PERIOD)],
+    );
+
+    test_scenario::return_shared(state);
+    clock.destroy_for_testing();
+    ts.end();
 }
