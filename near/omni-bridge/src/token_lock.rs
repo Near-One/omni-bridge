@@ -52,8 +52,10 @@ impl Contract {
         amount: u128,
     ) -> LockAction {
         let key = (chain_kind, token_id.clone());
-        let Some(current_amount) = self.locked_tokens.get(&key) else {
-            return LockAction::Unchanged;
+        let current_amount = match self.locked_tokens.get(&key) {
+            Some(current_amount) => current_amount,
+            None if self.token_id_to_address.contains_key(&key) => return LockAction::Unchanged,
+            None => 0,
         };
         let new_amount = current_amount
             .checked_add(amount)

@@ -8,7 +8,7 @@ use near_sdk::{
 };
 use omni_types::{
     locker_args::StorageDepositAction,
-    prover_result::{FinTransferMessage, InitTransferMessage, ProverResult},
+    prover_result::{DeployTokenMessage, FinTransferMessage, InitTransferMessage, ProverResult},
     sol_address::SolAddress,
     BridgeOnTransferMsg, ChainKind, EvmAddress, Fee, InitTransferMsg, Nonce, OmniAddress,
     TransferId, TransferMessage,
@@ -27,6 +27,7 @@ const DEFAULT_WNEAR_ACCOUNT: &str = "wnear.testnet";
 const DEFAULT_NEAR_USER_ACCOUNT: &str = "user.testnet";
 const DEFAULT_FT_CONTRACT_ACCOUNT: &str = "ft_contract.testnet";
 const DEFAULT_ETH_USER_ADDRESS: &str = "0x1234567890123456789012345678901234567890";
+const DEFAULT_ETH_TOKEN_ADDRESS: &str = "0x0000000000000000000000000000000000000001";
 const DEFAULT_TRANSFER_AMOUNT: u128 = 100;
 const DEFAULT_TRANSFER_FEE: u128 = 10;
 const NEP141_DEPOSIT: NearToken = NearToken::from_yoctonear(1_250_000_000_000_000_000_000);
@@ -809,6 +810,206 @@ fn test_fin_transfer_callback_refund_restores_locked_tokens() {
 
     assert_eq!(
         contract.get_locked_tokens(ChainKind::Eth, token_id),
+        Some(U128(DEFAULT_TRANSFER_AMOUNT))
+    );
+}
+
+fn get_eth_factory_address() -> OmniAddress {
+    OmniAddress::Eth(EvmAddress::from_str(DEFAULT_ETH_USER_ADDRESS).unwrap())
+}
+
+fn get_eth_token_address() -> OmniAddress {
+    OmniAddress::Eth(EvmAddress::from_str(DEFAULT_ETH_TOKEN_ADDRESS).unwrap())
+}
+
+fn run_bind_token_on_eth(contract: &mut Contract, token_id: &AccountId) {
+    setup_test_env(
+        DEFAULT_NEAR_USER_ACCOUNT.parse().unwrap(),
+        NearToken::from_near(0),
+        None,
+    );
+    contract.bind_token_callback(
+        NearToken::from_near(1),
+        Ok(ProverResult::DeployToken(DeployTokenMessage {
+            token: token_id.clone(),
+            token_address: get_eth_token_address(),
+            decimals: 24,
+            origin_decimals: 24,
+            emitter_address: get_eth_factory_address(),
+        })),
+    );
+}
+
+fn run_fin_transfer_from_eth_to_near(contract: &mut Contract, token_id: &AccountId, amount: u128) {
+    let recipient: AccountId = DEFAULT_NEAR_USER_ACCOUNT.parse().unwrap();
+    let prover_result = ProverResult::InitTransfer(InitTransferMessage {
+        origin_nonce: DEFAULT_NONCE,
+        token: get_eth_token_address(),
+        amount: U128(amount),
+        recipient: OmniAddress::Near(recipient.clone()),
+        fee: Fee::default(),
+        sender: OmniAddress::Eth(EvmAddress::from_str(DEFAULT_ETH_USER_ADDRESS).unwrap()),
+        msg: String::new(),
+        emitter_address: get_eth_factory_address(),
+    });
+    let storage_actions = vec![StorageDepositAction {
+        token_id: token_id.clone(),
+        account_id: recipient.clone(),
+        storage_deposit_amount: None,
+    }];
+
+    setup_test_env(
+        recipient.clone(),
+        NearToken::from_near(1),
+        Some(vec![
+            PromiseResult::Successful(borsh::to_vec(&prover_result).unwrap()),
+            PromiseResult::Successful(
+                serde_json::to_vec(&Some(StorageBalance {
+                    total: NearToken::from_near(1),
+                    available: NearToken::from_near(1),
+                }))
+                .unwrap(),
+            ),
+        ]),
+    );
+
+    let result = contract.fin_transfer_callback(&storage_actions, recipient);
+    assert!(matches!(result, PromiseOrValue::Promise(_)));
+}
+
+#[test]
+fn test_bind_token_keeps_amount_locked_by_pre_bind_transfer() {
+    let mut contract = get_default_contract();
+    let token_id: AccountId = DEFAULT_FT_CONTRACT_ACCOUNT.parse().unwrap();
+    contract
+        .factories
+        .insert(&ChainKind::Eth, &get_eth_factory_address());
+
+    run_ft_on_transfer(
+        &mut contract,
+        DEFAULT_NEAR_USER_ACCOUNT.to_string(),
+        token_id.to_string(),
+        U128(DEFAULT_TRANSFER_AMOUNT),
+        None,
+        &BridgeOnTransferMsg::InitTransfer(get_init_transfer_msg(DEFAULT_ETH_USER_ADDRESS, 0, 0)),
+    );
+    assert_eq!(
+        contract.get_locked_tokens(ChainKind::Eth, token_id.clone()),
+        Some(U128(DEFAULT_TRANSFER_AMOUNT))
+    );
+
+    run_bind_token_on_eth(&mut contract, &token_id);
+    assert_eq!(
+        contract.get_locked_tokens(ChainKind::Eth, token_id.clone()),
+        Some(U128(DEFAULT_TRANSFER_AMOUNT))
+    );
+
+    run_fin_transfer_from_eth_to_near(&mut contract, &token_id, DEFAULT_TRANSFER_AMOUNT);
+    assert_eq!(
+        contract.get_locked_tokens(ChainKind::Eth, token_id),
+        Some(U128(0))
+    );
+}
+
+#[test]
+fn test_bind_token_keeps_amount_set_before_bind() {
+    let mut contract = get_default_contract();
+    let token_id: AccountId = DEFAULT_FT_CONTRACT_ACCOUNT.parse().unwrap();
+    contract
+        .factories
+        .insert(&ChainKind::Eth, &get_eth_factory_address());
+    contract.locked_tokens.insert(
+        &(ChainKind::Eth, token_id.clone()),
+        &DEFAULT_TRANSFER_AMOUNT,
+    );
+
+    run_bind_token_on_eth(&mut contract, &token_id);
+
+    assert_eq!(
+        contract.get_locked_tokens(ChainKind::Eth, token_id),
+        Some(U128(DEFAULT_TRANSFER_AMOUNT))
+    );
+}
+
+#[test]
+fn test_bind_token_starts_locked_tokens_at_zero() {
+    let mut contract = get_default_contract();
+    let token_id: AccountId = DEFAULT_FT_CONTRACT_ACCOUNT.parse().unwrap();
+    contract
+        .factories
+        .insert(&ChainKind::Eth, &get_eth_factory_address());
+
+    run_bind_token_on_eth(&mut contract, &token_id);
+
+    assert_eq!(
+        contract.get_locked_tokens(ChainKind::Eth, token_id),
+        Some(U128(0))
+    );
+}
+
+#[test]
+fn test_init_transfer_skips_lock_for_bound_token_without_locked_tokens() {
+    let mut contract = get_default_contract();
+    let token_id: AccountId = DEFAULT_FT_CONTRACT_ACCOUNT.parse().unwrap();
+    contract.token_id_to_address.insert(
+        &(ChainKind::Eth, token_id.clone()),
+        &get_eth_token_address(),
+    );
+
+    run_ft_on_transfer(
+        &mut contract,
+        DEFAULT_NEAR_USER_ACCOUNT.to_string(),
+        token_id.to_string(),
+        U128(DEFAULT_TRANSFER_AMOUNT),
+        None,
+        &BridgeOnTransferMsg::InitTransfer(get_init_transfer_msg(DEFAULT_ETH_USER_ADDRESS, 0, 0)),
+    );
+
+    assert_eq!(contract.get_locked_tokens(ChainKind::Eth, token_id), None);
+}
+
+#[test]
+fn test_fin_transfer_callback_non_near_locks_tokens_for_unbound_token() {
+    let mut contract = get_default_contract();
+    let token_id: AccountId = DEFAULT_FT_CONTRACT_ACCOUNT.parse().unwrap();
+    let predecessor: AccountId = DEFAULT_NEAR_USER_ACCOUNT.parse().unwrap();
+    contract
+        .factories
+        .insert(&ChainKind::Eth, &get_eth_factory_address());
+    contract.locked_tokens.insert(
+        &(ChainKind::Eth, token_id.clone()),
+        &DEFAULT_TRANSFER_AMOUNT,
+    );
+    contract.token_decimals.insert(
+        &OmniAddress::Near(token_id.clone()),
+        &Decimals {
+            decimals: 24,
+            origin_decimals: 24,
+        },
+    );
+
+    let solana_address: SolAddress = "2xNweLHLqbS9YpP3UyaPrxKqgqoC6yPBFyuLxA8qtgr4"
+        .parse()
+        .expect("Invalid Solana address");
+    let prover_result = get_prover_result(Some(OmniAddress::Sol(solana_address)));
+
+    setup_test_env(
+        predecessor.clone(),
+        NearToken::from_near(1),
+        Some(vec![PromiseResult::Successful(
+            borsh::to_vec(&prover_result).unwrap(),
+        )]),
+    );
+    let result =
+        contract.fin_transfer_callback(&get_default_storage_deposit_actions(), predecessor);
+
+    assert!(matches!(result, PromiseOrValue::Value(_)));
+    assert_eq!(
+        contract.get_locked_tokens(ChainKind::Eth, token_id.clone()),
+        Some(U128(0))
+    );
+    assert_eq!(
+        contract.get_locked_tokens(ChainKind::Sol, token_id),
         Some(U128(DEFAULT_TRANSFER_AMOUNT))
     );
 }
