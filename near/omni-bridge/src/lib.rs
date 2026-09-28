@@ -1092,7 +1092,7 @@ impl Contract {
     }
 
     #[payable]
-    #[access_control_any(roles(Role::TokenDeployer))]
+    #[access_control_any(roles(Role::DAO, Role::TokenDeployer))]
     #[pause(except(roles(Role::DAO)))]
     pub fn deploy_token(&mut self, #[serializer(borsh)] args: DeployTokenArgs) -> Promise {
         self.verify_proof(args.chain_kind, args.prover_args).then(
@@ -1180,6 +1180,7 @@ impl Contract {
     }
 
     #[payable]
+    #[trusted_relayer(bypass_roles(Role::DAO, Role::UnrestrictedRelayer, Role::TokenDeployer))]
     #[pause(except(roles(Role::DAO)))]
     pub fn bind_token(&mut self, #[serializer(borsh)] args: BindTokenArgs) -> Promise {
         self.verify_proof(args.chain_kind, args.prover_args)
