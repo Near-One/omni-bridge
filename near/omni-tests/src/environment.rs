@@ -281,6 +281,19 @@ impl TestEnvBuilder {
             .await?
             .json()?;
 
+        if !self.deploy_old_version {
+            bridge_contract
+                .call("acl_grant_role")
+                .args_json(json!({
+                    "role": "TokenDeployer",
+                    "account_id": token_deploy_initiator.id(),
+                }))
+                .max_gas()
+                .transact()
+                .await?
+                .into_result()?;
+        }
+
         token_deploy_initiator
             .call(bridge_contract.id(), "deploy_token")
             .args_borsh(get_test_deploy_token_args(
