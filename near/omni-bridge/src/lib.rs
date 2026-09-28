@@ -126,6 +126,7 @@ pub enum Role {
     TokenLockController,
     RelayerManager,
     UnpauseManager,
+    TokenDeployer,
 }
 
 #[ext_contract(ext_token)]
@@ -1091,6 +1092,7 @@ impl Contract {
     }
 
     #[payable]
+    #[access_control_any(roles(Role::TokenDeployer))]
     #[pause(except(roles(Role::DAO)))]
     pub fn deploy_token(&mut self, #[serializer(borsh)] args: DeployTokenArgs) -> Promise {
         self.verify_proof(args.chain_kind, args.prover_args).then(
