@@ -274,7 +274,7 @@ describe("HyperliquedBridgeToken", () => {
         value: WORMHOLE_FEE,
         ...overrides,
       }
-      // Permissionless on purpose: any third party may submit a stuck transfer.
+      // Permissionless for EOAs: any third party may submit a stuck transfer.
       return omniBridge
         .connect(user2)
         .triggerPendingInitTransfer(
@@ -354,6 +354,31 @@ describe("HyperliquedBridgeToken", () => {
       await expect(trigger())
         .to.be.revertedWithCustomError(omniBridge, "NoPendingInitTransfer")
         .withArgs(ORIGIN_NONCE)
+    })
+
+    it("rejects a submission from a contract, as in a HyperCore system transaction", async () => {
+      await queue()
+      const forwarder = await (await ethers.getContractFactory("TestForwarder")).deploy()
+      const data = omniBridge.interface.encodeFunctionData("triggerPendingInitTransfer", [
+        ORIGIN_NONCE,
+        tokenAddress,
+        user1.address,
+        AMOUNT,
+        FEE,
+        RECIPIENT,
+        MESSAGE,
+      ])
+
+      await expect(
+        forwarder.connect(systemSigner).forward(omniBridgeAddress, data, { value: WORMHOLE_FEE }),
+      )
+        .to.be.revertedWithCustomError(omniBridge, "NotTxOrigin")
+        .withArgs(await forwarder.getAddress())
+
+      expect(await omniBridge.pendingInitTransfers(ORIGIN_NONCE)).to.equal(
+        commitment(tokenAddress, user1.address, AMOUNT, FEE, RECIPIENT, MESSAGE),
+      )
+      await expect(trigger()).to.emit(testWormhole, "MessagePublished")
     })
 
     it("rejects a payload that does not hash to the commitment", async () => {
