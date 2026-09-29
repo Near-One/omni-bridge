@@ -95,7 +95,7 @@ contract OmniBridgeWormhole is OmniBridge {
 
     function finTransferExtension(
         BridgeTypes.TransferMessagePayload memory payload
-    ) internal override {
+    ) internal virtual override {
         bytes memory messagePayload = bytes.concat(
             bytes1(uint8(MessageType.FinTransfer)),
             bytes1(payload.originChain),
