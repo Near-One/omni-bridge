@@ -162,6 +162,16 @@ contract HlOmniBridge is OmniBridgeWormhole {
         );
     }
 
+    function finTransferExtension(
+        BridgeTypes.TransferMessagePayload memory payload
+    ) internal override {
+        if (msg.sender != tx.origin) {
+            revert NotTxOrigin(msg.sender);
+        }
+
+        super.finTransferExtension(payload);
+    }
+
     /// @dev `abi.encode`, not `encodePacked`: adjacent dynamic strings would let a
     /// packed encoding collide (`"ab" + "c"` vs `"a" + "bc"`).
     function _initTransferCommitment(
