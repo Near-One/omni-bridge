@@ -378,6 +378,40 @@ fn test_omni_address_display() {
 }
 
 #[test]
+fn test_omni_address_debug_matches_display() {
+    let test_cases = vec![
+        OmniAddress::Eth(H160::from_str("0x5a08feed678c056650b3eb4a5cb1b9bb6f0fe265").unwrap()),
+        OmniAddress::Near("alice.near".parse().unwrap()),
+        OmniAddress::Sol(
+            "BXss9YNCX2p6VPf2Em54pHXkXnC2FPBeZgbB9fY1cuBR"
+                .parse()
+                .unwrap(),
+        ),
+        OmniAddress::Btc("bc1qar0srrr7xfkvy5l643lydnw9re59gtzzwf5mdq".to_string()),
+        OmniAddress::Strk(
+            H256::from_str("0x05558831a603eca8cd69a42d4251f08de3573039b69f23972265cac76639f1cf")
+                .unwrap(),
+        ),
+    ];
+
+    for address in test_cases {
+        assert_eq!(
+            format!("{address:?}"),
+            address.to_string(),
+            "Debug should match Display for {address}"
+        );
+    }
+
+    let eth = OmniAddress::Eth(H160::ZERO);
+    assert_eq!(format!("{eth:?}"), format!("eth:0x{}", "00".repeat(20)));
+    // Nested in a container, `{:?}` still prints the chain:address form
+    assert_eq!(
+        format!("{:?}", vec![eth]),
+        format!("[eth:0x{}]", "00".repeat(20))
+    );
+}
+
+#[test]
 fn test_omni_address_visitor_expecting() {
     let invalid_value = 123;
     let expected_error =
