@@ -6,6 +6,11 @@ NETWORK      ?= sepolia
 OMNI_BRIDGE_CHAIN_ID := 10
 STRK_TOKEN_ADDRESS   := 0x04718f5a0Fc34cC1AF16A1cdee98fFB20C31f5cD61D6Ab07201858f4287c938D
 
+# Relayer stake in STRK base units (18 decimals), 0 disables staking.
+# 100,000 STRK is ~$4k at $0.04/STRK (Sep 2026), close to the 1000 NEAR default on NEAR.
+RELAYER_STAKE_REQUIRED ?= 100000000000000000000000
+RELAYER_WAITING_PERIOD ?= 604800
+
 # Per-network constants
 ifeq ($(NETWORK),sepolia)
   OMNI_BRIDGE_DERIVED_ADDRESS := 0xc31351cbafc2ad612e6dc3e27e1e66615cc8aa73
@@ -47,4 +52,4 @@ deploy-bridge:
 	sncast deploy \
 		--contract-name OmniBridge \
 		--network $(NETWORK) \
-		--arguments "$(OMNI_BRIDGE_DERIVED_ADDRESS), $(OMNI_BRIDGE_CHAIN_ID), $$class_hash, $(DEFAULT_ADMIN), $(STRK_TOKEN_ADDRESS)"
+		--arguments "$(OMNI_BRIDGE_DERIVED_ADDRESS), $(OMNI_BRIDGE_CHAIN_ID), $$class_hash, $(DEFAULT_ADMIN), $(STRK_TOKEN_ADDRESS), $(RELAYER_STAKE_REQUIRED), $(RELAYER_WAITING_PERIOD)"
