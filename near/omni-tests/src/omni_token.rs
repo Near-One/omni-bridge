@@ -19,8 +19,9 @@ mod tests {
         bnb_token_address, eth_eoa_address, eth_factory_address, eth_token_address,
         fogo_factory_address, get_test_deploy_token_args, hyperevm_factory_address, locker_wasm,
         mock_global_contract_deployer_wasm, mock_prover_wasm, omni_token_wasm, pol_factory_address,
-        sol_factory_address, sol_token_address, strk_factory_address, token_deployer_wasm,
-        wasm_code_hash, GLOBAL_STORAGE_COST_PER_BYTE, NEP141_DEPOSIT, STORAGE_DEPOSIT_PER_BYTE,
+        sol_factory_address, sol_token_address, strk_factory_address, sui_factory_address,
+        token_deployer_wasm, wasm_code_hash, GLOBAL_STORAGE_COST_PER_BYTE, NEP141_DEPOSIT,
+        STORAGE_DEPOSIT_PER_BYTE,
     };
 
     const PREV_TOKEN_DEPLOYER_WASM_FILEPATH: &str = "src/data/legacy_token_deployer-0.2.4.wasm";
@@ -144,6 +145,7 @@ mod tests {
                 ChainKind::HyperEvm => hyperevm_factory_address(),
                 ChainKind::Strk => strk_factory_address(),
                 ChainKind::Aptos => aptos_factory_address(),
+                ChainKind::Sui => sui_factory_address(),
                 ChainKind::Near | ChainKind::Btc | ChainKind::Zcash => panic!("Unsupported chain"),
             };
 

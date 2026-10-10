@@ -70,6 +70,18 @@ clippy-near:
 fmt-near:
 	cargo fmt --all --check --manifest-path $(NEAR_MANIFEST)
 
+# Requires the Sui CLI and prettier-move
+# (npm i -g prettier @mysten/prettier-plugin-move).
+fmt-sui:
+	cd $(MAKEFILE_DIR)/sui && sui move format --check '**/*.move'
+
+fmt-sui-fix:
+	cd $(MAKEFILE_DIR)/sui && sui move format --write '**/*.move'
+
+test-sui:
+	cd $(MAKEFILE_DIR)/sui && sui move test
+	cd $(MAKEFILE_DIR)/sui/token_template && sui move build
+
 rust-build-omni-bridge:
 	cargo near build reproducible-wasm --manifest-path $(OMNI_BRIDGE_MANIFEST) --out-dir $(OUT_DIR)
 
