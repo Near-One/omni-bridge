@@ -2,6 +2,7 @@ use anchor_lang::prelude::*;
 
 use crate::{
     constants::{AUTHORITY_SEED, CONFIG_SEED, SOL_VAULT_SEED, USED_NONCES_PER_ACCOUNT},
+    error::ErrorCode,
     state::{
         config::{Config, ConfigBumps, WormholeBumps},
         used_nonces::UsedNonces,
@@ -102,7 +103,11 @@ impl Initialize<'_> {
         wormhole_bridge_bump: u8,
         wormhole_fee_collector_bump: u8,
         wormhole_sequence_bump: u8,
+        relayer_stake_required: u64,
+        relayer_waiting_period: i64,
     ) -> Result<()> {
+        require!(relayer_waiting_period >= 0, ErrorCode::InvalidArgs);
+
         self.config.set_inner(Config {
             max_used_nonce: 0,
             admin,
@@ -120,7 +125,9 @@ impl Initialize<'_> {
             paused: 0,
             pausable_admin,
             metadata_admin,
-            padding: [0; 35],
+            relayer_stake_required,
+            relayer_waiting_period,
+            padding: [0; 19],
         });
 
         let rent = Rent::get()?;

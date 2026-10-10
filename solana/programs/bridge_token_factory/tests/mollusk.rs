@@ -9,5 +9,6 @@ mod mollusk {
     mod test_init_transfer_sol;
     mod test_log_metadata;
     mod test_pause;
+    mod test_trusted_relayer;
     mod test_update_metadata;
 }

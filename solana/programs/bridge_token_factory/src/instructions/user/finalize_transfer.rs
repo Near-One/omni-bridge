@@ -7,7 +7,7 @@ use anchor_spl::{
 
 use crate::{
     constants::{
-        AUTHORITY_SEED, CONFIG_SEED, USED_NONCES_ACCOUNT_SIZE, USED_NONCES_PER_ACCOUNT, USED_NONCES_SEED, VAULT_SEED
+        AUTHORITY_SEED, CONFIG_SEED, RELAYER_SEED, USED_NONCES_ACCOUNT_SIZE, USED_NONCES_PER_ACCOUNT, USED_NONCES_SEED, VAULT_SEED
     },
     error::ErrorCode,
     instructions::wormhole_cpi::{
@@ -16,7 +16,7 @@ use crate::{
     state::{
         config::Config, message::{
             Payload, SignedPayload, finalize_transfer::{FinalizeTransferPayload, FinalizeTransferResponse}
-        }, used_nonces::UsedNonces
+        }, relayer::RelayerState, used_nonces::UsedNonces
     },
 };
 
@@ -84,6 +84,12 @@ pub struct FinalizeTransfer<'info> {
     pub associated_token_program: Program<'info, AssociatedToken>,
     pub system_program: Program<'info, System>,
     pub token_program: Interface<'info, TokenInterface>,
+
+    #[account(
+        seeds = [RELAYER_SEED, common.payer.key().as_ref()],
+        bump = relayer_state.bump,
+    )]
+    pub relayer_state: Box<Account<'info, RelayerState>>,
 }
 
 impl FinalizeTransfer<'_> {
