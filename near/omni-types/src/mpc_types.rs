@@ -1,16 +1,17 @@
 use near_mpc_sdk::{
     foreign_chain::starknet::StarknetFinality,
-    near_mpc_contract_interface::types::{AptosFinality, EvmFinality},
+    near_mpc_contract_interface::types::{AptosFinality, EvmFinality, SuiFinality},
 };
 use near_sdk::near;
 
-/// Finality enum that supports both EVM and Starknet chains.
+/// Per-chain finality level a `mpc-omni-prover` instance accepts.
 #[near(serializers = [borsh, json])]
 #[derive(Debug, Clone, PartialEq)]
 pub enum MpcFinality {
     Evm(EvmFinality),
     Starknet(StarknetFinality),
     Aptos(AptosFinality),
+    Sui(SuiFinality),
 }
 
 #[near(serializers = [json])]

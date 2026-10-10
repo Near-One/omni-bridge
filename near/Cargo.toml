@@ -54,4 +54,4 @@ sha3 = "0.10.0"
 sha2 = "0.10.0"
 k256 = { version = "0.13", default-features = false, features = ["ecdsa"] }
 rstest = "0.26.1"
-near-mpc-sdk = { git = "https://github.com/near/mpc", rev = "dcc9e042cad6784d33cfa736afb61b876a14ded0" }
+near-mpc-sdk = { git = "https://github.com/near/mpc", rev = "70c40b0f83143550c053a12cf446a87b3f324331" }

@@ -60,11 +60,11 @@ Proxy to Wormhole protocol for chains without light clients (Solana, BNB, EVM L2
 4. Return typed `ProverResult`
 
 ### mpc-omni-prover
-Verifies foreign chain events by calling the NEAR MPC network's `verify_foreign_transaction` API on-chain. The prover initiates the MPC verification as a cross-contract call and validates the response in a callback. Each deployed instance is configured for a specific chain and finality level via `MpcFinality`. Supports any chain supported by the MPC network (currently EVM chains and Starknet, extensible to others).
+Verifies foreign chain events by calling the NEAR MPC network's `verify_foreign_transaction` API on-chain. The prover initiates the MPC verification as a cross-contract call and validates the response in a callback. Each deployed instance is configured for a specific chain and finality level via `MpcFinality`. Supports any chain supported by the MPC network (currently EVM chains, Starknet, Aptos and Sui).
 
 **State:**
 - `mpc_contract_id` — AccountId of the MPC signer contract (e.g. `v1.signer`)
-- `finality` — `MpcFinality::Evm(EvmFinality)` or `MpcFinality::Starknet(StarknetFinality)`
+- `finalities` — `ChainKind -> MpcFinality` (`Evm` / `Starknet` / `Aptos` / `Sui`)
 - `chain_kind` — the chain this prover instance verifies
 
 **Flow:**
@@ -75,7 +75,11 @@ Verifies foreign chain events by calling the NEAR MPC network's `verify_foreign_
 5. In callback: verify `SHA-256(borsh(sign_payload)) == response.payload_hash`
 6. For EVM chains: extract the EVM log, convert to RLP, parse via `parse_evm_event`
 7. For Starknet: extract the Starknet log, parse via `parse_starknet_proof` (felt-based event decoding)
-8. Return typed `ProverResult`
+8. For Aptos: extract the Move event, parse its JSON `data` via `parse_aptos_proof`
+9. For Sui: extract the Move event, BCS-decode `event.bcs` via `parse_sui_proof`. The
+   emitter is the defining package id from `type_tag` (stable across package upgrades),
+   and each event's `token_address` is checked to equal `keccak256(coin_type)`
+10. Return typed `ProverResult`
 
 **Dependencies:** Uses `near-mpc-sdk` crate from the MPC repo (pinned git rev) for MPC types (`ForeignTxSignPayload`, `VerifyForeignTransactionRequestArgs`, `VerifyForeignTransactionResponse`, `EvmLog`, `StarknetLog`, etc.).
 

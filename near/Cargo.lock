@@ -2494,8 +2494,8 @@ dependencies = [
 
 [[package]]
 name = "mpc-primitives"
-version = "3.11.0"
-source = "git+https://github.com/near/mpc?rev=dcc9e042cad6784d33cfa736afb61b876a14ded0#dcc9e042cad6784d33cfa736afb61b876a14ded0"
+version = "3.13.0"
+source = "git+https://github.com/near/mpc?rev=70c40b0f83143550c053a12cf446a87b3f324331#70c40b0f83143550c053a12cf446a87b3f324331"
 dependencies = [
  "borsh",
  "derive_more",
@@ -2744,7 +2744,7 @@ dependencies = [
 [[package]]
 name = "near-mpc-bounded-collections"
 version = "0.0.1"
-source = "git+https://github.com/near/mpc?rev=dcc9e042cad6784d33cfa736afb61b876a14ded0#dcc9e042cad6784d33cfa736afb61b876a14ded0"
+source = "git+https://github.com/near/mpc?rev=70c40b0f83143550c053a12cf446a87b3f324331#70c40b0f83143550c053a12cf446a87b3f324331"
 dependencies = [
  "borsh",
  "derive_more",
@@ -2757,7 +2757,7 @@ dependencies = [
 [[package]]
 name = "near-mpc-contract-interface"
 version = "0.0.1"
-source = "git+https://github.com/near/mpc?rev=dcc9e042cad6784d33cfa736afb61b876a14ded0#dcc9e042cad6784d33cfa736afb61b876a14ded0"
+source = "git+https://github.com/near/mpc?rev=70c40b0f83143550c053a12cf446a87b3f324331#70c40b0f83143550c053a12cf446a87b3f324331"
 dependencies = [
  "borsh",
  "derive_more",
@@ -2774,7 +2774,7 @@ dependencies = [
 [[package]]
 name = "near-mpc-crypto-types"
 version = "0.0.1"
-source = "git+https://github.com/near/mpc?rev=dcc9e042cad6784d33cfa736afb61b876a14ded0#dcc9e042cad6784d33cfa736afb61b876a14ded0"
+source = "git+https://github.com/near/mpc?rev=70c40b0f83143550c053a12cf446a87b3f324331#70c40b0f83143550c053a12cf446a87b3f324331"
 dependencies = [
  "borsh",
  "bs58 0.5.1",
@@ -2793,7 +2793,7 @@ dependencies = [
 [[package]]
 name = "near-mpc-sdk"
 version = "0.0.1"
-source = "git+https://github.com/near/mpc?rev=dcc9e042cad6784d33cfa736afb61b876a14ded0#dcc9e042cad6784d33cfa736afb61b876a14ded0"
+source = "git+https://github.com/near/mpc?rev=70c40b0f83143550c053a12cf446a87b3f324331#70c40b0f83143550c053a12cf446a87b3f324331"
 dependencies = [
  "borsh",
  "derive_more",
@@ -2805,7 +2805,7 @@ dependencies = [
 [[package]]
 name = "near-mpc-signature-verifier"
 version = "0.0.1"
-source = "git+https://github.com/near/mpc?rev=dcc9e042cad6784d33cfa736afb61b876a14ded0#dcc9e042cad6784d33cfa736afb61b876a14ded0"
+source = "git+https://github.com/near/mpc?rev=70c40b0f83143550c053a12cf446a87b3f324331#70c40b0f83143550c053a12cf446a87b3f324331"
 dependencies = [
  "near-mpc-contract-interface",
  "near-sdk",
