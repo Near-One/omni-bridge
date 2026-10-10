@@ -2,29 +2,35 @@ use std::collections::HashMap;
 use std::str::FromStr;
 
 use near_contract_standards::storage_management::StorageBalance;
+use near_plugins::AccessControllable;
 use near_sdk::{
-    borsh, json_types::U128, serde_json, test_utils::VMContextBuilder, test_vm_config, testing_env,
-    AccountId, NearToken, PromiseOrValue, PromiseResult, RuntimeFeesConfig,
+    borsh,
+    json_types::{U128, U64},
+    serde_json,
+    test_utils::VMContextBuilder,
+    test_vm_config, testing_env, AccountId, NearToken, PromiseOrValue, PromiseResult,
+    RuntimeFeesConfig,
 };
 use omni_types::{
-    locker_args::StorageDepositAction,
+    locker_args::{BindTokenArgs, DeployTokenArgs, StorageDepositAction},
     prover_result::{FinTransferMessage, InitTransferMessage, ProverResult},
     sol_address::SolAddress,
     BridgeOnTransferMsg, ChainKind, EvmAddress, Fee, InitTransferMsg, Nonce, OmniAddress,
     TransferId, TransferMessage,
 };
 
-use crate::Contract;
 use crate::{
     storage::{Decimals, TransferMessageStorage, TransferMessageStorageValue},
     token_lock::LockAction,
 };
+use crate::{Contract, Role};
 
 const DEFAULT_NONCE: Nonce = 0;
 const DEFAULT_MPC_SIGNER_ACCOUNT: &str = "mpc_signer.testnet";
 const DEFAULT_WNEAR_ACCOUNT: &str = "wnear.testnet";
 
 const DEFAULT_NEAR_USER_ACCOUNT: &str = "user.testnet";
+const DEFAULT_UNPRIVILEGED_ACCOUNT: &str = "unprivileged.testnet";
 const DEFAULT_FT_CONTRACT_ACCOUNT: &str = "ft_contract.testnet";
 const DEFAULT_ETH_USER_ADDRESS: &str = "0x1234567890123456789012345678901234567890";
 const DEFAULT_TRANSFER_AMOUNT: u128 = 100;
@@ -1004,4 +1010,114 @@ fn test_legacy_ft_on_transfer() {
         None,
         &get_init_transfer_msg(DEFAULT_ETH_USER_ADDRESS, 0, 0),
     );
+}
+
+fn get_deploy_token_args() -> DeployTokenArgs {
+    DeployTokenArgs {
+        chain_kind: ChainKind::Eth,
+        prover_args: vec![],
+    }
+}
+
+fn get_bind_token_args() -> BindTokenArgs {
+    BindTokenArgs {
+        chain_kind: ChainKind::Eth,
+        prover_args: vec![],
+    }
+}
+
+fn setup_contract_with_role(account_id: &AccountId, role: Role) -> Contract {
+    let mut contract = get_default_contract();
+    contract
+        .provers
+        .insert(&ChainKind::Eth, &"prover.testnet".parse().unwrap());
+    contract.acl_grant_role(role.into(), account_id.clone());
+    contract
+}
+
+#[test]
+#[should_panic(expected = "Insufficient permissions for method deploy_token")]
+fn test_deploy_token_without_role_panics() {
+    let mut contract = get_default_contract();
+
+    setup_test_env(
+        DEFAULT_UNPRIVILEGED_ACCOUNT.parse().unwrap(),
+        NearToken::from_near(1),
+        None,
+    );
+    contract.deploy_token(get_deploy_token_args()).detach();
+}
+
+#[test]
+#[should_panic(expected = "Insufficient permissions for method deploy_token")]
+fn test_deploy_token_by_unrestricted_relayer_panics() {
+    let relayer: AccountId = DEFAULT_UNPRIVILEGED_ACCOUNT.parse().unwrap();
+    let mut contract = setup_contract_with_role(&relayer, Role::UnrestrictedRelayer);
+
+    setup_test_env(relayer, NearToken::from_near(1), None);
+    contract.deploy_token(get_deploy_token_args()).detach();
+}
+
+#[test]
+fn test_deploy_token_by_token_deployer_succeeds() {
+    let deployer: AccountId = DEFAULT_UNPRIVILEGED_ACCOUNT.parse().unwrap();
+    let mut contract = setup_contract_with_role(&deployer, Role::TokenDeployer);
+
+    setup_test_env(deployer, NearToken::from_near(1), None);
+    contract.deploy_token(get_deploy_token_args()).detach();
+}
+
+#[test]
+fn test_deploy_token_by_dao_succeeds() {
+    let dao: AccountId = DEFAULT_NEAR_USER_ACCOUNT.parse().unwrap();
+    let mut contract = setup_contract_with_role(&dao, Role::DAO);
+
+    setup_test_env(dao, NearToken::from_near(1), None);
+    contract.deploy_token(get_deploy_token_args()).detach();
+}
+
+#[test]
+#[should_panic(expected = "Relayer is not active")]
+fn test_bind_token_without_role_panics() {
+    let mut contract = get_default_contract();
+
+    setup_test_env(
+        DEFAULT_UNPRIVILEGED_ACCOUNT.parse().unwrap(),
+        NearToken::from_near(1),
+        None,
+    );
+    contract.bind_token(get_bind_token_args()).detach();
+}
+
+#[test]
+fn test_bind_token_by_token_deployer_succeeds() {
+    let deployer: AccountId = DEFAULT_UNPRIVILEGED_ACCOUNT.parse().unwrap();
+    let mut contract = setup_contract_with_role(&deployer, Role::TokenDeployer);
+
+    setup_test_env(deployer, NearToken::from_near(1), None);
+    contract.bind_token(get_bind_token_args()).detach();
+}
+
+#[test]
+fn test_bind_token_by_unrestricted_relayer_succeeds() {
+    let relayer: AccountId = DEFAULT_UNPRIVILEGED_ACCOUNT.parse().unwrap();
+    let mut contract = setup_contract_with_role(&relayer, Role::UnrestrictedRelayer);
+
+    setup_test_env(relayer, NearToken::from_near(1), None);
+    contract.bind_token(get_bind_token_args()).detach();
+}
+
+#[test]
+fn test_bind_token_by_staked_relayer_succeeds() {
+    let mut contract = get_default_contract();
+    let relayer: AccountId = DEFAULT_UNPRIVILEGED_ACCOUNT.parse().unwrap();
+    contract
+        .provers
+        .insert(&ChainKind::Eth, &"prover.testnet".parse().unwrap());
+    contract.set_relayer_config(NearToken::from_near(1), U64(0));
+
+    setup_test_env(relayer, NearToken::from_near(1), None);
+    contract.apply_for_trusted_relayer();
+
+    contract.bind_token(get_bind_token_args()).detach();
 }
