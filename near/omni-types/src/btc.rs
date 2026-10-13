@@ -1,6 +1,6 @@
 use near_sdk::json_types::U128;
 use near_sdk::serde::{Deserialize, Serialize};
-use near_sdk::{near, AccountId};
+use near_sdk::{near, AccountId, Gas};
 
 type OutPoint = String;
 
@@ -27,4 +27,13 @@ pub struct UTXOChainConfig {
 pub struct TxOut {
     pub value: u64,
     pub script_pubkey: String,
+}
+
+#[near(serializers=[json])]
+#[derive(Debug, Clone)]
+pub struct BtcPendingSignInfo {
+    pub btc_pending_sign_id: String,
+    pub sign_index: usize,
+    pub key_version: u32,
+    pub gas: Gas,
 }
