@@ -319,6 +319,7 @@ impl Contract {
         contract
     }
 
+    #[access_control_any(roles(Role::DAO, Role::TokenDeployer))]
     #[pause(except(roles(Role::DAO)))]
     pub fn log_metadata(&self, token_id: &AccountId) -> Promise {
         ext_token::ext(token_id.clone())
