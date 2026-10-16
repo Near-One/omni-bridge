@@ -320,7 +320,7 @@ impl Contract {
     }
 
     #[access_control_any(roles(Role::DAO, Role::TokenDeployer))]
-    #[pause(except(roles(Role::DAO)))]
+    #[pause]
     pub fn log_metadata(&self, token_id: &AccountId) -> Promise {
         ext_token::ext(token_id.clone())
             .with_static_gas(LOG_METADATA_GAS)
@@ -1094,7 +1094,7 @@ impl Contract {
 
     #[payable]
     #[access_control_any(roles(Role::DAO, Role::TokenDeployer))]
-    #[pause(except(roles(Role::DAO)))]
+    #[pause]
     pub fn deploy_token(&mut self, #[serializer(borsh)] args: DeployTokenArgs) -> Promise {
         self.verify_proof(args.chain_kind, args.prover_args).then(
             Self::ext(env::current_account_id())
