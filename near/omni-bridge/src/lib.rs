@@ -270,14 +270,20 @@ impl Contract {
                 env::panic_str("FastFinTransfer is paused");
                 self.fast_fin_transfer(token_id, amount, signer_id, fast_fin_transfer_msg)
             }
-            BridgeOnTransferMsg::UtxoFinTransfer(utxo_fin_transfer_msg) => self.utxo_fin_transfer(
-                token_id,
-                amount,
-                &signer_id,
-                &sender_id,
-                utxo_fin_transfer_msg,
-            ),
+            #[allow(unreachable_code, unused_variables)]
+            BridgeOnTransferMsg::UtxoFinTransfer(utxo_fin_transfer_msg) => {
+                env::panic_str("UtxoFinTransfer is paused");
+                self.utxo_fin_transfer(
+                    token_id,
+                    amount,
+                    &signer_id,
+                    &sender_id,
+                    utxo_fin_transfer_msg,
+                )
+            }
+            #[allow(unreachable_code)]
             BridgeOnTransferMsg::SwapMigratedToken => {
+                env::panic_str("SwapMigratedToken is paused");
                 self.swap_migrated_token(sender_id, token_id, amount)
                     .detach();
                 PromiseOrPromiseIndexOrValue::Value(U128(0))
