@@ -570,6 +570,43 @@ mod tests {
             decimals: 18,
         };
 
+        let underfunded_env = DeployEnv::new(
+            eth_token_address(),
+            token_metadata.clone(),
+            mock_prover_wasm.clone(),
+            locker_wasm.clone(),
+            omni_token_wasm.clone(),
+            token_deployer_wasm.clone(),
+            mock_global_contract_deployer_wasm.clone(),
+        )
+        .await?;
+
+        let err = match underfunded_env
+            .deploy_token(DepositStrategy::MinimumRequired, 2)
+            .await
+        {
+            Ok(_) => panic!("deployment with minimal deposit should fail"),
+            Err(err) => err,
+        };
+
+        // The shortfall surfaces differently depending on how large it is: a big gap aborts
+        // before the token account exists, a small one fails its storage-coverage check
+        // after creation. Either way the deployment must not succeed.
+        let err_string = err.to_string();
+        assert!(
+            err_string.contains("LackBalance")
+                || err_string.contains("AccountDoesNotExist")
+                || err_string.contains("doesn't exist")
+                || err_string.contains("unable to fulfill the query request")
+                || err_string.contains("wouldn't have enough balance to cover storage"),
+            "unexpected error for insufficient deposit: {err_string}"
+        );
+
+        // Deploy into a fresh environment rather than retrying in `underfunded_env`.
+        // Whether the failed attempt leaves the token registered in the locker depends on
+        // which receipt failed: the rollback in `deploy_token_by_deployer_callback` only
+        // runs when the deployer's own receipt fails, not when a later sub-receipt does.
+        // Isolating the two deployments keeps this test about deposit sizing.
         let deploy_env = DeployEnv::new(
             eth_token_address(),
             token_metadata.clone(),
@@ -580,27 +617,6 @@ mod tests {
             mock_global_contract_deployer_wasm,
         )
         .await?;
-
-        let err = match deploy_env
-            .deploy_token(DepositStrategy::MinimumRequired, 2)
-            .await
-        {
-            Ok(_) => panic!("deployment with minimal deposit should fail"),
-            Err(err) => err,
-        };
-
-        // The shortfall surfaces differently depending on how large it is: a big gap aborts
-        // before the account exists, a small one fails the storage-coverage check on the
-        // freshly created account. Either way the deployment must not succeed.
-        let err_string = err.to_string();
-        assert!(
-            err_string.contains("LackBalance")
-                || err_string.contains("AccountDoesNotExist")
-                || err_string.contains("doesn't exist")
-                || err_string.contains("unable to fulfill the query request")
-                || err_string.contains("wouldn't have enough balance to cover storage"),
-            "unexpected error for insufficient deposit: {err_string}"
-        );
 
         let token_account_id = deploy_env
             .deploy_token(DepositStrategy::WithBuffer, 3)
