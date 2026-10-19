@@ -23,7 +23,7 @@ use omni_types::locker_args::{
 };
 use omni_types::mpc_types::SignatureResponse;
 use omni_types::near_events::OmniBridgeEvent;
-use omni_types::prover_result::ProverResult;
+use omni_types::prover_result::{ProofMessage, ProverResult};
 use omni_types::{
     get_native_token_address, BasicMetadata, BridgeOnTransferMsg, ChainKind, DestinationChainMsg,
     FastFinTransferMsg, FastTransfer, FastTransferId, FastTransferStatus, Fee, InitTransferMsg,
@@ -671,7 +671,9 @@ impl Contract {
         let Ok(ProverResult::InitTransfer(init_transfer)) = Self::decode_prover_result(0) else {
             env::panic_str(BridgeError::InvalidProofMessage.to_string().as_str())
         };
-        Self::require_proof_chain(&init_transfer.emitter_address, chain_kind);
+        init_transfer
+            .validate_chain(chain_kind)
+            .unwrap_or_else(|err| env::panic_str(err.to_string().as_str()));
         require!(
             self.factories.get(&chain_kind) == Some(init_transfer.emitter_address),
             BridgeError::UnknownFactory.as_ref()
@@ -1040,7 +1042,9 @@ impl Contract {
         let Ok(ProverResult::FinTransfer(fin_transfer)) = call_result else {
             env::panic_str(BridgeError::InvalidProofMessage.to_string().as_str())
         };
-        Self::require_proof_chain(&fin_transfer.emitter_address, chain_kind);
+        fin_transfer
+            .validate_chain(chain_kind)
+            .unwrap_or_else(|err| env::panic_str(err.to_string().as_str()));
 
         let fee_recipient = fin_transfer.fee_recipient.unwrap_or_else(|| {
             env::panic_str(BridgeError::FeeRecipientNotSetOrEmpty.to_string().as_str());
@@ -1125,7 +1129,9 @@ impl Contract {
             env::panic_str(BridgeError::InvalidProofMessage.to_string().as_str());
         };
 
-        Self::require_proof_chain(&metadata.emitter_address, chain_kind);
+        metadata
+            .validate_chain(chain_kind)
+            .unwrap_or_else(|err| env::panic_str(err.to_string().as_str()));
         require!(
             self.factories.get(&chain_kind) == Some(metadata.emitter_address),
             BridgeError::UnknownFactory.as_ref()
@@ -1220,7 +1226,9 @@ impl Contract {
             env::panic_str(BridgeError::InvalidProofMessage.to_string().as_str());
         };
 
-        Self::require_proof_chain(&deploy_token.emitter_address, chain_kind);
+        deploy_token
+            .validate_chain(chain_kind)
+            .unwrap_or_else(|err| env::panic_str(err.to_string().as_str()));
         require!(
             self.factories.get(&chain_kind) == Some(deploy_token.emitter_address),
             BridgeError::UnknownFactory.as_ref()
@@ -2747,13 +2755,6 @@ impl Contract {
         let mint = ext_token::ext(new_token).mint(sender_id, amount, None);
 
         burn.and(mint)
-    }
-
-    fn require_proof_chain(emitter_address: &OmniAddress, chain_kind: ChainKind) {
-        require!(
-            emitter_address.get_chain() == chain_kind,
-            BridgeError::ProofChainMismatch.as_ref()
-        );
     }
 
     fn verify_proof(&self, chain_kind: ChainKind, prover_args: Vec<u8>) -> Promise {

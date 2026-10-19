@@ -3,9 +3,10 @@ use near_sdk::serde_json;
 use near_sdk::{borsh, AccountId, NearToken};
 
 use crate::{
-    get_native_token_address, stringify, BridgeError, ChainKind, DestinationChainMsg, Fee,
-    OmniAddress, OmniError, PayloadType, SolAddress, StorageBalanceError, TransferId,
-    TransferMessage, H160, H256,
+    get_native_token_address,
+    prover_result::{FinTransferMessage, InitTransferMessage, ProofMessage},
+    stringify, BridgeError, ChainKind, DestinationChainMsg, Fee, OmniAddress, OmniError,
+    PayloadType, SolAddress, StorageBalanceError, TransferId, TransferMessage, H160, H256,
 };
 use std::str::FromStr;
 
@@ -716,5 +717,39 @@ fn test_errors_serialization() {
         }
         .to_string(),
         "ERR_NOT_ENOUGH_STORAGE: required=100.00 NEAR, available=50.00 NEAR"
+    );
+}
+
+#[test]
+fn test_validate_chain_accepts_emitter_chain_only() {
+    let init_transfer = InitTransferMessage {
+        origin_nonce: 1,
+        token: OmniAddress::new_zero(ChainKind::Base).unwrap(),
+        amount: U128(1),
+        recipient: OmniAddress::Near("alice.near".parse().unwrap()),
+        fee: Fee::default(),
+        sender: OmniAddress::new_zero(ChainKind::Base).unwrap(),
+        msg: String::new(),
+        emitter_address: OmniAddress::new_zero(ChainKind::Base).unwrap(),
+    };
+    assert_eq!(init_transfer.validate_chain(ChainKind::Base), Ok(()));
+    assert_eq!(
+        init_transfer.validate_chain(ChainKind::Eth),
+        Err(BridgeError::ProofChainMismatch)
+    );
+
+    let fin_transfer = FinTransferMessage {
+        transfer_id: TransferId {
+            origin_chain: ChainKind::Near,
+            origin_nonce: 1,
+        },
+        fee_recipient: None,
+        amount: U128(1),
+        emitter_address: OmniAddress::new_zero(ChainKind::Arb).unwrap(),
+    };
+    assert_eq!(fin_transfer.validate_chain(ChainKind::Arb), Ok(()));
+    assert_eq!(
+        fin_transfer.validate_chain(ChainKind::Sol),
+        Err(BridgeError::ProofChainMismatch)
     );
 }
