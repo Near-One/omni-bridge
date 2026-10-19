@@ -589,12 +589,16 @@ mod tests {
             Err(err) => err,
         };
 
+        // The shortfall surfaces differently depending on how large it is: a big gap aborts
+        // before the account exists, a small one fails the storage-coverage check on the
+        // freshly created account. Either way the deployment must not succeed.
         let err_string = err.to_string();
         assert!(
             err_string.contains("LackBalance")
                 || err_string.contains("AccountDoesNotExist")
                 || err_string.contains("doesn't exist")
-                || err_string.contains("unable to fulfill the query request"),
+                || err_string.contains("unable to fulfill the query request")
+                || err_string.contains("wouldn't have enough balance to cover storage"),
             "unexpected error for insufficient deposit: {err_string}"
         );
 
