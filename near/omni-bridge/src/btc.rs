@@ -51,7 +51,7 @@ impl Contract {
                     BridgeError::IncorrectTargetUtxoAddress.as_ref()
                 );
 
-                let max_gas_fee_msg = DestinationChainMsg::from_json(&transfer.message.msg)
+                let max_gas_fee_msg = DestinationChainMsg::from_json(transfer.message.msg.as_str())
                     .and_then(|s| s.max_gas_fee());
 
                 if let Some(max_gas_fee_msg) = max_gas_fee_msg {

@@ -11,7 +11,7 @@ mod tests {
     use omni_types::{
         locker_args::{FinTransferArgs, StorageDepositAction},
         prover_result::{InitTransferMessage, ProverResult},
-        ChainKind, Fee, OmniAddress,
+        ChainKind, Fee, OmniAddress, TransferMsg,
     };
     use rand::RngCore;
     use rstest::rstest;
@@ -251,7 +251,7 @@ mod tests {
                         native_fee: U128(0),
                     },
                     sender: eth_eoa_address(),
-                    msg,
+                    msg: msg.parse().unwrap(),
                     emitter_address: eth_factory_address(),
                 }))
                 .unwrap(),
@@ -369,7 +369,7 @@ mod tests {
                         native_fee: U128(0),
                     },
                     sender: eth_eoa_address(),
-                    msg: String::new(),
+                    msg: TransferMsg::default(),
                     emitter_address: eth_factory_address(),
                 }))?,
             })
@@ -457,7 +457,7 @@ mod tests {
                         native_fee: U128(0),
                     },
                     sender: eth_eoa_address(),
-                    msg: String::default(),
+                    msg: TransferMsg::default(),
                     emitter_address: eth_factory_address(),
                 }))
                 .unwrap(),
@@ -669,7 +669,7 @@ mod tests {
                         native_fee: U128(0),
                     },
                     sender: eth_eoa_address(),
-                    msg: String::new(),
+                    msg: TransferMsg::default(),
                     emitter_address: eth_factory_address(),
                 }))?,
             })

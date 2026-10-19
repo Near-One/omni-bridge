@@ -25,10 +25,11 @@ use omni_types::mpc_types::SignatureResponse;
 use omni_types::near_events::OmniBridgeEvent;
 use omni_types::prover_result::ProverResult;
 use omni_types::{
-    get_native_token_address, BasicMetadata, BridgeOnTransferMsg, ChainKind, DestinationChainMsg,
-    FastFinTransferMsg, FastTransfer, FastTransferId, FastTransferStatus, Fee, InitTransferMsg,
-    MetadataPayload, Nonce, OmniAddress, PayloadType, SignRequest, TransferId, TransferIdKind,
-    TransferMessage, TransferMessagePayload, UnifiedTransferId, UtxoFinTransferMsg, H160,
+    get_native_token_address, BasicMetadata, BoundedBytes, BoundedString, BridgeOnTransferMsg,
+    ChainKind, DestinationChainMsg, FastFinTransferMsg, FastTransfer, FastTransferId,
+    FastTransferStatus, Fee, InitTransferMsg, MetadataPayload, Nonce, OmniAddress, PayloadType,
+    SignRequest, TokenName, TokenSymbol, TransferId, TransferIdKind, TransferMessage,
+    TransferMessagePayload, TransferMsg, UnifiedTransferId, UtxoFinTransferMsg, H160,
 };
 use omni_utils::macros::trusted_relayer;
 use omni_utils::near_expect::NearExpect;
@@ -351,9 +352,12 @@ impl Contract {
 
         let metadata_payload = MetadataPayload {
             prefix: PayloadType::Metadata,
-            token: token_id.to_string(),
-            name: metadata.name,
-            symbol: metadata.symbol,
+            token: token_id
+                .to_string()
+                .parse()
+                .near_expect(BridgeError::InvalidMetadata),
+            name: BoundedString::new(metadata.name).near_expect(BridgeError::InvalidMetadata),
+            symbol: BoundedString::new(metadata.symbol).near_expect(BridgeError::InvalidMetadata),
             decimals: metadata.decimals,
         };
 
@@ -384,13 +388,11 @@ impl Contract {
         #[serializer(borsh)] metadata_payload: MetadataPayload,
     ) {
         if let Ok(signature) = call_result {
-            env::log_str(
-                &OmniBridgeEvent::LogMetadataEvent {
-                    signature,
-                    metadata_payload,
-                }
-                .to_log_string(),
-            );
+            OmniBridgeEvent::LogMetadataEvent {
+                signature,
+                metadata_payload,
+            }
+            .emit();
         }
     }
 
@@ -448,7 +450,7 @@ impl Contract {
             BridgeError::InvalidAmountToTransfer.as_ref()
         );
 
-        let message = DestinationChainMsg::from_json(&transfer_message.msg)
+        let message = DestinationChainMsg::from_json(transfer_message.msg.as_str())
             .and_then(|s| s.destination_msg())
             .unwrap_or_default();
 
@@ -460,7 +462,7 @@ impl Contract {
             amount: U128(amount_to_transfer),
             recipient: transfer_message.recipient,
             fee_recipient,
-            message,
+            message: BoundedBytes::new(message).near_expect(BridgeError::InvalidMessage),
         };
 
         let payload = near_sdk::env::keccak256_array(
@@ -511,7 +513,7 @@ impl Contract {
                 native_fee: init_transfer_msg.native_token_fee,
             },
             sender: OmniAddress::Near(sender_id),
-            msg: init_transfer_msg.msg.map(String::from).unwrap_or_default(),
+            msg: init_transfer_msg.msg.unwrap_or_default(),
             destination_nonce,
             origin_transfer_id: None,
         };
@@ -621,13 +623,11 @@ impl Contract {
                 self.remove_transfer_message(message_payload.transfer_id);
             }
 
-            env::log_str(
-                &OmniBridgeEvent::SignTransferEvent {
-                    signature,
-                    message_payload,
-                }
-                .to_log_string(),
-            );
+            OmniBridgeEvent::SignTransferEvent {
+                signature,
+                message_payload,
+            }
+            .emit();
         }
     }
 
@@ -824,13 +824,11 @@ impl Contract {
             NearToken::from_yoctonear(0),
         );
 
-        env::log_str(
-            &OmniBridgeEvent::FastTransferEvent {
-                fast_transfer: fast_transfer.clone(),
-                new_transfer_id: None,
-            }
-            .to_log_string(),
-        );
+        OmniBridgeEvent::FastTransferEvent {
+            fast_transfer: fast_transfer.clone(),
+            new_transfer_id: None,
+        }
+        .emit();
 
         let amount_without_fee = U128(
             fast_transfer
@@ -841,7 +839,7 @@ impl Contract {
             fast_transfer.token_id.clone(),
             recipient,
             amount_without_fee,
-            &fast_transfer.msg,
+            fast_transfer.msg.as_str(),
         )
         .then(
             Self::ext(env::current_account_id())
@@ -924,13 +922,11 @@ impl Contract {
             .add_transfer_message(transfer_message, storage_payer.clone())
             .saturating_add(required_balance);
 
-        env::log_str(
-            &OmniBridgeEvent::FastTransferEvent {
-                fast_transfer: fast_transfer.clone(),
-                new_transfer_id: Some(new_transfer_id),
-            }
-            .to_log_string(),
-        );
+        OmniBridgeEvent::FastTransferEvent {
+            fast_transfer: fast_transfer.clone(),
+            new_transfer_id: Some(new_transfer_id),
+        }
+        .emit();
 
         self.update_storage_balance(storage_payer, required_balance, NearToken::from_near(0));
     }
@@ -958,7 +954,7 @@ impl Contract {
             token_id.clone(),
             recipient,
             amount,
-            &utxo_fin_transfer_msg.msg,
+            utxo_fin_transfer_msg.msg.as_str(),
         )
         .then(
             Self::ext(env::current_account_id())
@@ -992,15 +988,13 @@ impl Contract {
             );
             amount
         } else {
-            env::log_str(
-                &OmniBridgeEvent::UtxoTransferEvent {
-                    token_id,
-                    amount,
-                    utxo_transfer_message: utxo_fin_transfer_msg,
-                    new_transfer_id: None,
-                }
-                .to_log_string(),
-            );
+            OmniBridgeEvent::UtxoTransferEvent {
+                token_id,
+                amount,
+                utxo_transfer_message: utxo_fin_transfer_msg,
+                new_transfer_id: None,
+            }
+            .emit();
 
             U128(0)
         }
@@ -1165,8 +1159,8 @@ impl Contract {
     pub fn deploy_native_token(
         &mut self,
         chain_kind: ChainKind,
-        name: String,
-        symbol: String,
+        name: TokenName,
+        symbol: TokenSymbol,
         decimals: u8,
     ) -> Promise {
         let native_token_address = get_native_token_address(chain_kind)
@@ -1250,15 +1244,13 @@ impl Contract {
             BridgeError::InsufficientStorageDeposit.as_ref()
         );
 
-        env::log_str(
-            &OmniBridgeEvent::BindTokenEvent {
-                token_id: deploy_token.token,
-                token_address: deploy_token.token_address,
-                decimals: deploy_token.decimals,
-                origin_decimals: deploy_token.origin_decimals,
-            }
-            .to_log_string(),
-        );
+        OmniBridgeEvent::BindTokenEvent {
+            token_id: deploy_token.token,
+            token_address: deploy_token.token_address,
+            decimals: deploy_token.decimals,
+            origin_decimals: deploy_token.origin_decimals,
+        }
+        .emit();
 
         attached_deposit.saturating_sub(required_deposit)
     }
@@ -1299,7 +1291,7 @@ impl Contract {
                 native_fee: U128(0),
             },
             sender: OmniAddress::Near(sender_id.clone()),
-            msg: String::new(),
+            msg: TransferMsg::default(),
             destination_nonce,
             origin_transfer_id: None,
         };
@@ -1313,7 +1305,7 @@ impl Contract {
             NearToken::from_yoctonear(0),
         );
 
-        env::log_str(&OmniBridgeEvent::InitTransferEvent { transfer_message }.to_log_string());
+        OmniBridgeEvent::InitTransferEvent { transfer_message }.emit();
     }
 
     pub fn is_deployed_token(&self, token: &AccountId) -> bool {
@@ -1519,18 +1511,16 @@ impl Contract {
                 .storage_deposit(&env::current_account_id(), Some(true))
                 .detach();
 
-            env::log_str(
-                &OmniBridgeEvent::DeployTokenEvent {
-                    token_id: token_info.token_id,
-                    token_address: token_info.token_address,
-                    metadata: BasicMetadata {
-                        name: String::new(),
-                        symbol: String::new(),
-                        decimals: token_info.decimals,
-                    },
-                }
-                .to_log_string(),
-            );
+            OmniBridgeEvent::DeployTokenEvent {
+                token_id: token_info.token_id,
+                token_address: token_info.token_address,
+                metadata: BasicMetadata {
+                    name: TokenName::default(),
+                    symbol: TokenSymbol::default(),
+                    decimals: token_info.decimals,
+                },
+            }
+            .emit();
         }
     }
 
@@ -1618,13 +1608,11 @@ impl Contract {
             .storage_deposit(&env::current_account_id(), Some(true))
             .detach();
 
-        env::log_str(
-            &OmniBridgeEvent::MigrateTokenEvent {
-                old_token_id: old_token,
-                new_token_id: new_token,
-            }
-            .to_log_string(),
-        );
+        OmniBridgeEvent::MigrateTokenEvent {
+            old_token_id: old_token,
+            new_token_id: new_token,
+        }
+        .emit();
     }
 
     #[access_control_any(roles(Role::DAO))]
@@ -1704,9 +1692,7 @@ impl Contract {
 
             self.remove_fin_transfer(&transfer_message.get_transfer_id(), storage_owner);
 
-            env::log_str(
-                &OmniBridgeEvent::FailedFinTransferEvent { transfer_message }.to_log_string(),
-            );
+            OmniBridgeEvent::FailedFinTransferEvent { transfer_message }.emit();
         } else {
             // Send fee to the fee recipient
             if transfer_message.fee.fee.0 > 0 {
@@ -1733,7 +1719,7 @@ impl Contract {
                     .detach();
             }
 
-            env::log_str(&OmniBridgeEvent::FinTransferEvent { transfer_message }.to_log_string());
+            OmniBridgeEvent::FinTransferEvent { transfer_message }.emit();
         }
     }
 
@@ -1851,7 +1837,7 @@ impl Contract {
             return transfer_message.amount;
         }
 
-        env::log_str(&OmniBridgeEvent::InitTransferEvent { transfer_message }.to_log_string());
+        OmniBridgeEvent::InitTransferEvent { transfer_message }.emit();
         U128(0)
     }
 
@@ -1883,7 +1869,11 @@ impl Contract {
                     BridgeError::FastTransferAlreadyFinalised.as_ref()
                 );
                 self.remove_fast_transfer(&fast_transfer.id());
-                (status.relayer.clone(), String::new(), status.relayer)
+                (
+                    status.relayer.clone(),
+                    TransferMsg::default(),
+                    status.relayer,
+                )
             }
             None => (
                 recipient,
@@ -1953,7 +1943,7 @@ impl Contract {
                     .amount_without_fee()
                     .near_expect(BridgeError::InvalidFee),
             ),
-            &msg,
+            msg.as_str(),
         )
         .then(
             Self::ext(env::current_account_id())
@@ -2041,7 +2031,7 @@ impl Contract {
             env::attached_deposit(),
         );
 
-        env::log_str(&OmniBridgeEvent::FinTransferEvent { transfer_message }.to_log_string());
+        OmniBridgeEvent::FinTransferEvent { transfer_message }.emit();
     }
 
     fn send_tokens(
@@ -2425,14 +2415,12 @@ impl Contract {
             BridgeError::InsufficientStorageDeposit.as_ref()
         );
 
-        env::log_str(
-            &OmniBridgeEvent::DeployTokenEvent {
-                token_id: token_id.clone(),
-                token_address: token_address.clone(),
-                metadata: metadata.clone(),
-            }
-            .to_log_string(),
-        );
+        OmniBridgeEvent::DeployTokenEvent {
+            token_id: token_id.clone(),
+            token_address: token_address.clone(),
+            metadata: metadata.clone(),
+        }
+        .emit();
 
         ext_deployer::ext(deployer)
             .with_static_gas(DEPLOY_TOKEN_GAS)
@@ -2538,15 +2526,13 @@ impl Contract {
         )
         .detach();
 
-        env::log_str(
-            &OmniBridgeEvent::UtxoTransferEvent {
-                token_id: fast_transfer.token_id,
-                amount,
-                utxo_transfer_message: utxo_fin_transfer_msg,
-                new_transfer_id: None,
-            }
-            .to_log_string(),
-        );
+        OmniBridgeEvent::UtxoTransferEvent {
+            token_id: fast_transfer.token_id,
+            amount,
+            utxo_transfer_message: utxo_fin_transfer_msg,
+            new_transfer_id: None,
+        }
+        .emit();
 
         PromiseOrPromiseIndexOrValue::Value(U128(0))
     }
@@ -2625,15 +2611,13 @@ impl Contract {
             NearToken::from_yoctonear(0),
         );
 
-        env::log_str(
-            &OmniBridgeEvent::UtxoTransferEvent {
-                token_id,
-                amount,
-                utxo_transfer_message: utxo_fin_transfer_msg,
-                new_transfer_id: Some(transfer_message.get_transfer_id()),
-            }
-            .to_log_string(),
-        );
+        OmniBridgeEvent::UtxoTransferEvent {
+            token_id,
+            amount,
+            utxo_transfer_message: utxo_fin_transfer_msg,
+            new_transfer_id: Some(transfer_message.get_transfer_id()),
+        }
+        .emit();
 
         PromiseOrPromiseIndexOrValue::Value(U128(0))
     }
@@ -2665,12 +2649,10 @@ impl Contract {
         }
 
         let token = self.get_token_id(&transfer_message.token);
-        env::log_str(
-            &OmniBridgeEvent::ClaimFeeEvent {
-                transfer_message: transfer_message.clone(),
-            }
-            .to_log_string(),
-        );
+        OmniBridgeEvent::ClaimFeeEvent {
+            transfer_message: transfer_message.clone(),
+        }
+        .emit();
 
         self.unlock_tokens_if_needed(transfer_message.get_destination_chain(), &token, token_fee);
 

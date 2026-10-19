@@ -13,7 +13,7 @@ mod tests {
         locker_args::{FinTransferArgs, StorageDepositAction},
         prover_result::{InitTransferMessage, ProverResult},
         BridgeOnTransferMsg, ChainKind, FastFinTransferMsg, Fee, OmniAddress, TransferId,
-        TransferIdKind, TransferMessage, UnifiedTransferId,
+        TransferIdKind, TransferMessage, TransferMsg, UnifiedTransferId,
     };
     use rstest::rstest;
 
@@ -305,7 +305,7 @@ mod tests {
                     native_fee: U128(0),
                 },
                 amount: U128(101),
-                msg: String::default(),
+                msg: TransferMsg::default(),
                 storage_deposit_amount: Some(U128(NEP141_DEPOSIT.as_yoctonear())),
                 relayer: AccountId::from_str("fake.testnet").unwrap(),
             },
@@ -326,7 +326,7 @@ mod tests {
                     native_fee: U128(0),
                 },
                 amount: U128(100_000_000),
-                msg: String::default(),
+                msg: TransferMsg::default(),
                 storage_deposit_amount: Some(U128(NEP141_DEPOSIT.as_yoctonear())),
                 relayer: AccountId::from_str("fake.testnet").unwrap(),
             },
@@ -454,7 +454,7 @@ mod tests {
                         native_fee: U128(0),
                     },
                     amount: U128(101),
-                    msg: String::default(),
+                    msg: TransferMsg::default(),
                     storage_deposit_amount: Some(U128(NEP141_DEPOSIT.as_yoctonear())),
                     relayer: AccountId::from_str("fake.testnet").unwrap(),
                 }
@@ -474,7 +474,7 @@ mod tests {
                     recipient: OmniAddress::Near(account_n(1)),
                     fee: Fee::default(),
                     amount: U128(100_000_000),
-                    msg: String::default(),
+                    msg: TransferMsg::default(),
                     storage_deposit_amount: Some(U128(NEP141_DEPOSIT.as_yoctonear())),
                     relayer: AccountId::from_str("fake.testnet").unwrap(),
                 }
@@ -497,7 +497,7 @@ mod tests {
                         native_fee: U128(0),
                     },
                     amount: U128(100_010_000),
-                    msg: String::default(),
+                    msg: TransferMsg::default(),
                     storage_deposit_amount: Some(U128(NEP141_DEPOSIT.as_yoctonear())),
                     relayer: AccountId::from_str("fake.testnet").unwrap(),
                 }
@@ -520,7 +520,7 @@ mod tests {
                         native_fee: U128(0),
                     },
                     amount: U128(100),
-                    msg: String::default(),
+                    msg: TransferMsg::default(),
                     storage_deposit_amount: Some(U128(NEP141_DEPOSIT.as_yoctonear())),
                     relayer: AccountId::from_str("fake.testnet").unwrap(),
                 },
@@ -543,7 +543,7 @@ mod tests {
                         native_fee: U128(0),
                     },
                     amount: U128(101),
-                    msg: String::default(),
+                    msg: TransferMsg::default(),
                     storage_deposit_amount: Some(U128(NEP141_DEPOSIT.as_yoctonear())),
                     relayer: AccountId::from_str("fake.testnet").unwrap(),
                 }
@@ -563,7 +563,7 @@ mod tests {
                     recipient: OmniAddress::Near(account_n(1)),
                     fee: Fee::default(),
                     amount: U128(100_000_000),
-                    msg: String::default(),
+                    msg: TransferMsg::default(),
                     storage_deposit_amount: Some(U128(NEP141_DEPOSIT.saturating_mul(100).as_yoctonear())),
                     relayer: AccountId::from_str("fake.testnet").unwrap(),
                 },
@@ -583,7 +583,7 @@ mod tests {
                     recipient: OmniAddress::Near(account_n(1)),
                     fee: Fee::default(),
                     amount: U128(100_000_000),
-                    msg: "Receiver can't accept ft_transfer_call".to_string(),
+                    msg: "Receiver can't accept ft_transfer_call".parse().unwrap(),
                     storage_deposit_amount: Some(U128(NEP141_DEPOSIT.as_yoctonear())),
                     relayer: AccountId::from_str("fake.testnet").unwrap(),
                 },
@@ -808,7 +808,7 @@ mod tests {
                         native_fee: U128(0),
                     },
                     amount: U128(101),
-                    msg: String::default(),
+                    msg: TransferMsg::default(),
                     storage_deposit_amount: Some(U128(NEP141_DEPOSIT.as_yoctonear())),
                     relayer: AccountId::from_str("fake.testnet").unwrap(),
                 }
@@ -831,7 +831,7 @@ mod tests {
                         native_fee: U128(0),
                     },
                     amount: U128(101_000_000),
-                    msg: String::default(),
+                    msg: TransferMsg::default(),
                     storage_deposit_amount: Some(U128(NEP141_DEPOSIT.as_yoctonear())),
                     relayer: AccountId::from_str("fake.testnet").unwrap(),
                 }
@@ -868,7 +868,7 @@ mod tests {
                         native_fee: U128(0),
                     },
                     amount: U128(101),
-                    msg: String::default(),
+                    msg: TransferMsg::default(),
                     storage_deposit_amount: Some(U128(NEP141_DEPOSIT.as_yoctonear())),
                     relayer: AccountId::from_str("fake.testnet").unwrap(),
                 }
@@ -886,7 +886,7 @@ mod tests {
                         native_fee: U128(0),
                     },
                     amount: U128(101),
-                    msg: String::default(),
+                    msg: TransferMsg::default(),
                     storage_deposit_amount: Some(U128(NEP141_DEPOSIT.as_yoctonear())),
                     relayer: AccountId::from_str("fake.testnet").unwrap(),
                 }
@@ -934,7 +934,7 @@ mod tests {
                     native_fee: U128(0),
                 },
                 sender: eth_eoa_address(),
-                msg: String::default(),
+                msg: TransferMsg::default(),
                 emitter_address: eth_factory_address(),
             };
             let fast_transfer_msg =
@@ -1053,7 +1053,7 @@ mod tests {
                         native_fee: U128(0),
                     },
                     sender: eth_eoa_address(),
-                    msg: String::default(),
+                    msg: TransferMsg::default(),
                     emitter_address: eth_factory_address(),
                 };
 
@@ -1112,7 +1112,7 @@ mod tests {
                         native_fee: U128(0),
                     },
                     sender: eth_eoa_address(),
-                    msg: String::default(),
+                    msg: TransferMsg::default(),
                     emitter_address: eth_factory_address(),
                 };
 
@@ -1180,7 +1180,7 @@ mod tests {
                         native_fee: U128(0),
                     },
                     sender: eth_eoa_address(),
-                    msg: String::default(),
+                    msg: TransferMsg::default(),
                     emitter_address: eth_factory_address(),
                 };
                 let fast_transfer_msg =
@@ -1222,7 +1222,7 @@ mod tests {
                         native_fee: U128(0),
                     },
                     sender: eth_eoa_address(),
-                    msg: String::default(),
+                    msg: TransferMsg::default(),
                     emitter_address: eth_factory_address(),
                 };
                 let fast_transfer_msg =

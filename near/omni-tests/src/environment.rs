@@ -11,7 +11,7 @@ use near_workspaces::{network::Sandbox, Account, Contract, Worker};
 use omni_types::{
     locker_args::{FinTransferArgs, StorageDepositAction},
     prover_result::{InitTransferMessage, ProverResult},
-    BasicMetadata, ChainKind, Fee, OmniAddress,
+    BasicMetadata, ChainKind, Fee, OmniAddress, TransferMsg,
 };
 
 use crate::helpers::tests::{
@@ -196,8 +196,8 @@ impl TestEnvBuilder {
 
         let init_token_address = OmniAddress::new_zero(ChainKind::Eth).unwrap();
         let token_metadata = BasicMetadata {
-            name: "ETH from Ethereum".to_string(),
-            symbol: "ETH".to_string(),
+            name: "ETH from Ethereum".parse().unwrap(),
+            symbol: "ETH".parse().unwrap(),
             decimals: 18,
         };
 
@@ -287,8 +287,8 @@ impl TestEnvBuilder {
                 &eth_token_address(),
                 &eth_factory_address(),
                 &BasicMetadata {
-                    name: "Test Token".to_string(),
-                    symbol: "TEST".to_string(),
+                    name: "Test Token".parse().unwrap(),
+                    symbol: "TEST".parse().unwrap(),
                     decimals: 18,
                 },
             ))
@@ -669,7 +669,7 @@ impl TestEnvBuilderWithToken {
                             native_fee: U128(0),
                         },
                         sender: eth_eoa_address(),
-                        msg: String::default(),
+                        msg: TransferMsg::default(),
                         emitter_address: eth_factory_address(),
                     }))?,
                 })

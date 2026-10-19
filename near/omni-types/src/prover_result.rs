@@ -2,7 +2,7 @@ use near_sdk::json_types::U128;
 use near_sdk::{near, AccountId};
 use num_enum::IntoPrimitive;
 
-use crate::{Fee, Nonce, OmniAddress, TransferId};
+use crate::{Fee, Nonce, OmniAddress, TokenName, TokenSymbol, TransferId, TransferMsg};
 
 #[near(serializers=[borsh, json])]
 #[derive(Debug, Clone)]
@@ -13,7 +13,7 @@ pub struct InitTransferMessage {
     pub recipient: OmniAddress,
     pub fee: Fee,
     pub sender: OmniAddress,
-    pub msg: String,
+    pub msg: TransferMsg,
     pub emitter_address: OmniAddress,
 }
 
@@ -40,8 +40,8 @@ pub struct DeployTokenMessage {
 #[derive(Debug, Clone)]
 pub struct LogMetadataMessage {
     pub token_address: OmniAddress,
-    pub name: String,
-    pub symbol: String,
+    pub name: TokenName,
+    pub symbol: TokenSymbol,
     pub decimals: u8,
     pub emitter_address: OmniAddress,
 }

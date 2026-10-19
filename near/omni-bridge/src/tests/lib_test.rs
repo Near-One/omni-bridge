@@ -11,7 +11,7 @@ use omni_types::{
     prover_result::{FinTransferMessage, InitTransferMessage, ProverResult},
     sol_address::SolAddress,
     BridgeOnTransferMsg, ChainKind, EvmAddress, Fee, InitTransferMsg, Nonce, OmniAddress,
-    TransferId, TransferMessage,
+    TransferId, TransferMessage, TransferMsg,
 };
 
 use crate::Contract;
@@ -363,7 +363,7 @@ fn get_prover_result(recipient: Option<OmniAddress>) -> ProverResult {
             native_fee: U128(5),
         },
         sender: OmniAddress::Eth(EvmAddress::from_str(DEFAULT_ETH_USER_ADDRESS).unwrap()),
-        msg: String::new(),
+        msg: TransferMsg::default(),
         emitter_address: OmniAddress::Eth(EvmAddress::from_str(DEFAULT_ETH_USER_ADDRESS).unwrap()),
     })
 }
@@ -667,7 +667,7 @@ fn test_claim_fee_decreases_locked_tokens_for_non_deployed_token() {
             native_fee: U128(0),
         },
         sender: OmniAddress::Near(DEFAULT_NEAR_USER_ACCOUNT.parse().unwrap()),
-        msg: String::new(),
+        msg: TransferMsg::default(),
         destination_nonce: 1,
         origin_transfer_id: None,
     };
@@ -781,7 +781,7 @@ fn test_fin_transfer_callback_refund_restores_locked_tokens() {
             native_fee: U128(0),
         },
         sender: OmniAddress::Eth(EvmAddress::from_str(DEFAULT_ETH_USER_ADDRESS).unwrap()),
-        msg: "refund".to_string(),
+        msg: "refund".parse().unwrap(),
         destination_nonce: 1,
         origin_transfer_id: None,
     };

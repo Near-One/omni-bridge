@@ -5,7 +5,7 @@ use near_sdk::{borsh, AccountId, NearToken};
 use crate::{
     get_native_token_address, stringify, BridgeError, ChainKind, DestinationChainMsg, Fee,
     OmniAddress, OmniError, PayloadType, SolAddress, StorageBalanceError, TransferId,
-    TransferMessage, H160, H256,
+    TransferMessage, TransferMsg, H160, H256,
 };
 use std::str::FromStr;
 
@@ -38,8 +38,8 @@ fn omni_addresses_for_borsh() -> Vec<OmniAddress> {
         OmniAddress::Arb(H160::from_str("0x23ddd3e3692d1861ed57ede224608875809e127f").unwrap()),
         OmniAddress::Base(H160::from_str("0x23ddd3e3692d1861ed57ede224608875809e127f").unwrap()),
         OmniAddress::Bnb(H160::from_str("0x23ddd3e3692d1861ed57ede224608875809e127f").unwrap()),
-        OmniAddress::Btc("btc_address".to_string()),
-        OmniAddress::Zcash("zcash_address".to_string()),
+        OmniAddress::Btc("btc_address".parse().unwrap()),
+        OmniAddress::Zcash("zcash_address".parse().unwrap()),
         OmniAddress::Pol(H160::from_str("0x23ddd3e3692d1861ed57ede224608875809e127f").unwrap()),
         OmniAddress::HyperEvm(
             H160::from_str("0x23ddd3e3692d1861ed57ede224608875809e127f").unwrap(),
@@ -387,7 +387,11 @@ fn test_omni_address_debug_matches_display() {
                 .parse()
                 .unwrap(),
         ),
-        OmniAddress::Btc("bc1qar0srrr7xfkvy5l643lydnw9re59gtzzwf5mdq".to_string()),
+        OmniAddress::Btc(
+            "bc1qar0srrr7xfkvy5l643lydnw9re59gtzzwf5mdq"
+                .parse()
+                .unwrap(),
+        ),
         OmniAddress::Strk(
             H256::from_str("0x05558831a603eca8cd69a42d4251f08de3573039b69f23972265cac76639f1cf")
                 .unwrap(),
@@ -479,7 +483,7 @@ fn test_transfer_message_getters() {
                 recipient: OmniAddress::Near("bob.near".parse().unwrap()),
                 fee: Fee::default(),
                 sender: OmniAddress::Eth(evm_addr.clone()),
-                msg: String::new(),
+                msg: TransferMsg::default(),
                 origin_transfer_id: None,
             },
             ChainKind::Eth,
@@ -498,7 +502,7 @@ fn test_transfer_message_getters() {
                 recipient: OmniAddress::Eth(evm_addr),
                 fee: Fee::default(),
                 sender: OmniAddress::Near("alice.near".parse().unwrap()),
-                msg: String::new(),
+                msg: TransferMsg::default(),
                 origin_transfer_id: None,
             },
             ChainKind::Near,
@@ -517,7 +521,7 @@ fn test_transfer_message_getters() {
                 recipient: OmniAddress::Near("carol.near".parse().unwrap()),
                 fee: Fee::default(),
                 sender: OmniAddress::Sol("11111111111111111111111111111111".parse().unwrap()),
-                msg: String::new(),
+                msg: TransferMsg::default(),
                 origin_transfer_id: None,
             },
             ChainKind::Sol,

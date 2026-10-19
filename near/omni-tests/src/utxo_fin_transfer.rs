@@ -11,7 +11,7 @@ mod tests {
     };
     use omni_types::{
         BridgeOnTransferMsg, ChainKind, FastFinTransferMsg, Fee, OmniAddress, TransferId,
-        TransferIdKind, UnifiedTransferId, UtxoFinTransferMsg,
+        TransferIdKind, TransferMsg, UnifiedTransferId, UtxoFinTransferMsg,
     };
     use rstest::rstest;
 
@@ -135,7 +135,9 @@ mod tests {
 
     fn default_utxo_id() -> omni_types::UtxoId {
         omni_types::UtxoId {
-            tx_hash: "abc94fc5b954136a691594c7044bcfa6c6f127cdb0802ac8b97c0117482f2305".to_string(),
+            tx_hash: "abc94fc5b954136a691594c7044bcfa6c6f127cdb0802ac8b97c0117482f2305"
+                .parse()
+                .unwrap(),
             vout: 1,
         }
     }
@@ -332,7 +334,7 @@ mod tests {
                 utxo_id: default_utxo_id(),
                 recipient: OmniAddress::Near(account_n(1)),
                 relayer_fee: U128(1000),
-                msg: String::default(),
+                msg: TransferMsg::default(),
             },
             is_fast_transfer: false,
             error: None,
@@ -346,7 +348,7 @@ mod tests {
                 utxo_id: default_utxo_id(),
                 recipient: base_eoa_address(),
                 relayer_fee: U128(1000),
-                msg: String::default(),
+                msg: TransferMsg::default(),
             },
             is_fast_transfer: false,
             error: None,
@@ -360,7 +362,7 @@ mod tests {
                 utxo_id: default_utxo_id(),
                 recipient: OmniAddress::Near(account_n(1)),
                 relayer_fee: U128(2000),
-                msg: "Some_message".to_string(),
+                msg: "Some_message".parse().unwrap(),
             },
             is_fast_transfer: false,
             error: Some("CodeDoesNotExist"),
@@ -374,7 +376,7 @@ mod tests {
                 utxo_id: default_utxo_id(),
                 recipient: OmniAddress::Near(account_n(3)),
                 relayer_fee: U128(1000),
-                msg: String::default(),
+                msg: TransferMsg::default(),
             },
             is_fast_transfer: false,
             error: Some("ERR_STORAGE_RECIPIENT_OMITTED"),
@@ -412,7 +414,7 @@ mod tests {
                 utxo_id: default_utxo_id(),
                 recipient: OmniAddress::Near(account_n(1)),
                 relayer_fee: U128(1000),
-                msg: String::default(),
+                msg: TransferMsg::default(),
             },
             is_fast_transfer: true,
             error: None,
@@ -426,7 +428,7 @@ mod tests {
                 utxo_id: default_utxo_id(),
                 recipient: base_eoa_address(),
                 relayer_fee: U128(1000),
-                msg: String::default(),
+                msg: TransferMsg::default(),
             },
             is_fast_transfer: true,
             error: None,
@@ -465,7 +467,7 @@ mod tests {
             utxo_id: default_utxo_id(),
             recipient: OmniAddress::Near(account_n(1)),
             relayer_fee: U128(1000),
-            msg: String::default(),
+            msg: TransferMsg::default(),
         };
 
         // Try to send from relayer (not the connector)
@@ -498,7 +500,7 @@ mod tests {
             utxo_id: default_utxo_id(),
             recipient: base_eoa_address(),
             relayer_fee: U128(1000),
-            msg: String::default(),
+            msg: TransferMsg::default(),
         };
 
         let _ = do_fast_transfer(&env, amount, utxo_msg.clone()).await?;
@@ -573,7 +575,7 @@ mod tests {
             utxo_id: default_utxo_id(),
             recipient: OmniAddress::Near(token_receiver.id().clone()),
             relayer_fee: U128(1000),
-            msg: inner_msg,
+            msg: inner_msg.parse().unwrap(),
         };
 
         let receiver_balance_before =
