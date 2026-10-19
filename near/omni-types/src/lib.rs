@@ -35,7 +35,6 @@ pub use errors::{
     BridgeError, OmniError, ProverError, StorageBalanceError, StorageError, TokenError, TypesError,
 };
 pub use hex_types::{H160, H256};
-pub use near_events::NEAR_MAX_TOTAL_LOG_LENGTH;
 
 #[near(serializers = [borsh, json])]
 #[derive(
