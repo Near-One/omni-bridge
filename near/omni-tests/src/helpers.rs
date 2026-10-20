@@ -316,7 +316,7 @@ pub mod tests {
         let prover_args = borsh::to_vec(&prover_result).expect("Failed to serialize prover result");
 
         BindTokenArgs {
-            chain_kind: ChainKind::Eth,
+            chain_kind: emitter_address.get_chain(),
             prover_args,
         }
     }
