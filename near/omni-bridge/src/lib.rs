@@ -126,6 +126,7 @@ pub enum Role {
     TokenLockController,
     RelayerManager,
     UnpauseManager,
+    TokenDeployer,
 }
 
 #[ext_contract(ext_token)]
@@ -324,7 +325,8 @@ impl Contract {
         contract
     }
 
-    #[pause(except(roles(Role::DAO)))]
+    #[access_control_any(roles(Role::DAO, Role::TokenDeployer))]
+    #[pause]
     pub fn log_metadata(&self, token_id: &AccountId) -> Promise {
         ext_token::ext(token_id.clone())
             .with_static_gas(LOG_METADATA_GAS)
@@ -1097,7 +1099,8 @@ impl Contract {
     }
 
     #[payable]
-    #[pause(except(roles(Role::DAO)))]
+    #[access_control_any(roles(Role::DAO, Role::TokenDeployer))]
+    #[pause]
     pub fn deploy_token(&mut self, #[serializer(borsh)] args: DeployTokenArgs) -> Promise {
         self.verify_proof(args.chain_kind, args.prover_args).then(
             Self::ext(env::current_account_id())
@@ -1183,6 +1186,7 @@ impl Contract {
     }
 
     #[payable]
+    #[trusted_relayer(bypass_roles(Role::DAO, Role::UnrestrictedRelayer, Role::TokenDeployer))]
     #[pause(except(roles(Role::DAO)))]
     pub fn bind_token(&mut self, #[serializer(borsh)] args: BindTokenArgs) -> Promise {
         self.verify_proof(args.chain_kind, args.prover_args)
