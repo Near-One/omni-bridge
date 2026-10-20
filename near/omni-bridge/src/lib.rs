@@ -23,7 +23,7 @@ use omni_types::locker_args::{
 };
 use omni_types::mpc_types::SignatureResponse;
 use omni_types::near_events::OmniBridgeEvent;
-use omni_types::prover_result::ProverResult;
+use omni_types::prover_result::{ProofMessage, ProverResult};
 use omni_types::{
     get_native_token_address, BasicMetadata, BoundedBytes, BoundedString, BridgeOnTransferMsg,
     ChainKind, DestinationChainMsg, FastFinTransferMsg, FastTransfer, FastTransferId,
@@ -655,6 +655,7 @@ impl Contract {
                 .fin_transfer_callback(
                     &args.storage_deposit_actions,
                     env::predecessor_account_id(),
+                    args.chain_kind,
                 ),
         )
     }
@@ -665,16 +666,14 @@ impl Contract {
         &mut self,
         #[serializer(borsh)] storage_deposit_actions: &Vec<StorageDepositAction>,
         #[serializer(borsh)] predecessor_account_id: AccountId,
+        #[serializer(borsh)] chain_kind: ChainKind,
     ) -> PromiseOrValue<Nonce> {
         let Ok(ProverResult::InitTransfer(init_transfer)) = Self::decode_prover_result(0) else {
             env::panic_str(BridgeError::InvalidProofMessage.to_string().as_str())
         };
-        require!(
-            self.factories
-                .get(&init_transfer.emitter_address.get_chain())
-                == Some(init_transfer.emitter_address),
-            BridgeError::UnknownFactory.as_ref()
-        );
+        init_transfer
+            .validate_chain(chain_kind, self.factories.get(&chain_kind).as_ref())
+            .unwrap_or_else(|err| env::panic_str(err.to_string().as_str()));
 
         let decimals = self
             .token_decimals
@@ -1016,7 +1015,7 @@ impl Contract {
             Self::ext(env::current_account_id())
                 .with_attached_deposit(env::attached_deposit())
                 .with_static_gas(CLAIM_FEE_CALLBACK_GAS)
-                .claim_fee_callback(&env::predecessor_account_id()),
+                .claim_fee_callback(&env::predecessor_account_id(), args.chain_kind),
         )
     }
 
@@ -1025,6 +1024,7 @@ impl Contract {
     pub fn claim_fee_callback(
         &mut self,
         #[serializer(borsh)] predecessor_account_id: &AccountId,
+        #[serializer(borsh)] chain_kind: ChainKind,
         #[callback_result]
         #[serializer(borsh)]
         call_result: Result<ProverResult, PromiseError>,
@@ -1032,6 +1032,9 @@ impl Contract {
         let Ok(ProverResult::FinTransfer(fin_transfer)) = call_result else {
             env::panic_str(BridgeError::InvalidProofMessage.to_string().as_str())
         };
+        fin_transfer
+            .validate_chain(chain_kind, self.factories.get(&chain_kind).as_ref())
+            .unwrap_or_else(|err| env::panic_str(err.to_string().as_str()));
 
         let fee_recipient = fin_transfer.fee_recipient.unwrap_or_else(|| {
             env::panic_str(BridgeError::FeeRecipientNotSetOrEmpty.to_string().as_str());
@@ -1041,14 +1044,11 @@ impl Contract {
             fee_recipient == *predecessor_account_id,
             BridgeError::OnlyFeeRecipientCanClaim.as_ref()
         );
-        require!(
-            self.factories
-                .get(&fin_transfer.emitter_address.get_chain())
-                == Some(fin_transfer.emitter_address),
-            BridgeError::UnknownFactory.as_ref()
-        );
-
         let transfer_message = self.remove_transfer_message(fin_transfer.transfer_id);
+        require!(
+            transfer_message.recipient.get_chain() == chain_kind,
+            BridgeError::ProofChainMismatch.as_ref()
+        );
 
         if let Some(origin_transfer_id) = transfer_message.origin_transfer_id.clone() {
             let mut fast_transfer = FastTransfer::from_transfer(
@@ -1097,7 +1097,7 @@ impl Contract {
             Self::ext(env::current_account_id())
                 .with_attached_deposit(NO_DEPOSIT)
                 .with_static_gas(DEPLOY_TOKEN_CALLBACK_GAS)
-                .deploy_token_callback(near_sdk::env::attached_deposit()),
+                .deploy_token_callback(near_sdk::env::attached_deposit(), args.chain_kind),
         )
     }
 
@@ -1105,6 +1105,7 @@ impl Contract {
     pub fn deploy_token_callback(
         &mut self,
         attached_deposit: NearToken,
+        chain_kind: ChainKind,
         #[callback_result]
         #[serializer(borsh)]
         call_result: Result<ProverResult, PromiseError>,
@@ -1113,14 +1114,12 @@ impl Contract {
             env::panic_str(BridgeError::InvalidProofMessage.to_string().as_str());
         };
 
-        let chain = metadata.emitter_address.get_chain();
-        require!(
-            self.factories.get(&chain) == Some(metadata.emitter_address),
-            BridgeError::UnknownFactory.as_ref()
-        );
+        metadata
+            .validate_chain(chain_kind, self.factories.get(&chain_kind).as_ref())
+            .unwrap_or_else(|err| env::panic_str(err.to_string().as_str()));
 
         self.deploy_token_internal(
-            chain,
+            chain_kind,
             &metadata.token_address,
             BasicMetadata {
                 name: metadata.name,
@@ -1185,7 +1184,7 @@ impl Contract {
                 Self::ext(env::current_account_id())
                     .with_attached_deposit(NO_DEPOSIT)
                     .with_static_gas(BIND_TOKEN_CALLBACK_GAS)
-                    .bind_token_callback(near_sdk::env::attached_deposit()),
+                    .bind_token_callback(near_sdk::env::attached_deposit(), args.chain_kind),
             )
             .then(
                 Self::ext(env::current_account_id())
@@ -1199,6 +1198,7 @@ impl Contract {
     pub fn bind_token_callback(
         &mut self,
         attached_deposit: NearToken,
+        chain_kind: ChainKind,
         #[callback_result]
         #[serializer(borsh)]
         call_result: Result<ProverResult, PromiseError>,
@@ -1207,12 +1207,9 @@ impl Contract {
             env::panic_str(BridgeError::InvalidProofMessage.to_string().as_str());
         };
 
-        require!(
-            self.factories
-                .get(&deploy_token.emitter_address.get_chain())
-                == Some(deploy_token.emitter_address),
-            BridgeError::UnknownFactory.as_ref()
-        );
+        deploy_token
+            .validate_chain(chain_kind, self.factories.get(&chain_kind).as_ref())
+            .unwrap_or_else(|err| env::panic_str(err.to_string().as_str()));
 
         let storage_usage = env::storage_usage();
 

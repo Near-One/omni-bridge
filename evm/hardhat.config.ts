@@ -316,6 +316,19 @@ task("update-wormhole-address", "Update the wormhole address")
     console.log("Address upgraded at tx hash:", receipt?.hash)
   })
 
+task("disable-wormhole", "Stops the OmniBridgeWormhole contract from publishing Wormhole messages")
+  .addParam("factory", "The address of the OmniBridge contract")
+  .setAction(async (taskArgs, hre) => {
+    const { ethers } = hre
+
+    const OmniBridgeContract = await ethers.getContractFactory("OmniBridgeWormhole")
+    const OmniBridge = OmniBridgeContract.attach(taskArgs.factory) as OmniBridgeWormhole
+    const tx = await OmniBridge.setWormholeAddress(ethers.ZeroAddress, 0)
+    const receipt = await tx.wait()
+
+    console.log("Wormhole disabled at tx hash:", receipt?.hash)
+  })
+
 task("deploy-bytecode", "Deploys a contract with a given bytecode")
   .addParam("bytecode", "The path to the file containing the bytecode of the contract")
   .setAction(async (taskArgs, hre) => {

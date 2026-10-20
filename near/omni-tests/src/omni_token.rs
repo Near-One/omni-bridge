@@ -1214,7 +1214,7 @@ mod tests {
         locker_contract
             .call("fin_transfer")
             .args_borsh(FinTransferArgs {
-                chain_kind: ChainKind::Eth,
+                chain_kind: emitter_address.get_chain(),
                 storage_deposit_actions,
                 prover_args: borsh::to_vec(&ProverResult::InitTransfer(InitTransferMessage {
                     origin_nonce: 1,

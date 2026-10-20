@@ -383,6 +383,7 @@ mod tests {
         }
     )]
     #[tokio::test]
+    #[ignore = "UtxoFinTransfer is hard-paused in ft_on_transfer since 0.4.17"]
     async fn normal_call(
         build_artifacts: &BuildArtifacts,
         #[case] case: UtxoFinTransferCase,
@@ -458,6 +459,7 @@ mod tests {
 
     #[rstest]
     #[tokio::test]
+    #[ignore = "UtxoFinTransfer is hard-paused in ft_on_transfer since 0.4.17"]
     async fn fails_when_sender_is_not_connector(
         build_artifacts: &BuildArtifacts,
     ) -> anyhow::Result<()> {
@@ -525,6 +527,7 @@ mod tests {
         Some("ERR_NOT_ENOUGH_GAS_FOR_TOKEN_TRANSFER")
     )]
     #[tokio::test]
+    #[ignore = "UtxoFinTransfer is hard-paused in ft_on_transfer since 0.4.17"]
     async fn utxo_fin_transfer_with_msg_gas_budget(
         build_artifacts: &BuildArtifacts,
         #[case] gas: Gas,

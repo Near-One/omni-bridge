@@ -454,7 +454,8 @@ fn test_fin_transfer_callback_near_success() {
         ]),
     );
 
-    let result = contract.fin_transfer_callback(&storage_actions, predecessor.clone());
+    let result =
+        contract.fin_transfer_callback(&storage_actions, predecessor.clone(), ChainKind::Eth);
 
     assert!(matches!(result, PromiseOrValue::Promise(_)));
     assert_eq!(
@@ -554,7 +555,7 @@ fn test_fin_transfer_callback_near_fails_without_locked_tokens() {
     );
 
     // Should panic because locked balance is insufficient.
-    let _ = contract.fin_transfer_callback(&storage_actions, predecessor.clone());
+    let _ = contract.fin_transfer_callback(&storage_actions, predecessor.clone(), ChainKind::Eth);
 }
 
 #[test]
@@ -601,7 +602,8 @@ fn test_fin_transfer_callback_non_near_success() {
         )]),
     );
 
-    let result = contract.fin_transfer_callback(&storage_actions, predecessor.clone());
+    let result =
+        contract.fin_transfer_callback(&storage_actions, predecessor.clone(), ChainKind::Eth);
 
     // For non-NEAR recipients, should return u64 value of current_destination_nonce
     match result {
@@ -694,6 +696,7 @@ fn test_claim_fee_decreases_locked_tokens_for_non_deployed_token() {
 
     let _ = contract.claim_fee_callback(
         &fee_recipient.clone(),
+        destination_chain,
         Ok(ProverResult::FinTransfer(FinTransferMessage {
             transfer_id,
             fee_recipient: Some(fee_recipient),
@@ -727,7 +730,7 @@ fn test_fin_transfer_callback_invalid_proof() {
     );
 
     contract
-        .fin_transfer_callback(&storage_actions, predecessor)
+        .fin_transfer_callback(&storage_actions, predecessor, ChainKind::Eth)
         .detach();
 }
 
@@ -754,8 +757,115 @@ fn test_fin_transfer_callback_unknown_factory() {
     );
 
     contract
-        .fin_transfer_callback(&storage_actions, predecessor)
+        .fin_transfer_callback(&storage_actions, predecessor, ChainKind::Eth)
         .detach();
+}
+
+#[test]
+#[should_panic(expected = "ERR_PROOF_CHAIN_MISMATCH")]
+fn test_fin_transfer_callback_proof_chain_mismatch() {
+    let mut contract = get_default_contract();
+    let storage_actions = get_default_storage_deposit_actions();
+    let predecessor = AccountId::try_from(DEFAULT_NEAR_USER_ACCOUNT.to_string()).unwrap();
+
+    // Both factories are registered; the proof is an Eth proof, but the prover
+    // was selected for Base.
+    contract.factories.insert(
+        &ChainKind::Eth,
+        &OmniAddress::Eth(EvmAddress::from_str(DEFAULT_ETH_USER_ADDRESS).unwrap()),
+    );
+    contract.factories.insert(
+        &ChainKind::Base,
+        &OmniAddress::Base(EvmAddress::from_str(DEFAULT_ETH_USER_ADDRESS).unwrap()),
+    );
+
+    setup_test_env(
+        predecessor.clone(),
+        NearToken::from_near(1),
+        Some(vec![PromiseResult::Successful(
+            borsh::to_vec(&get_prover_result(None)).unwrap(),
+        )]),
+    );
+
+    contract
+        .fin_transfer_callback(&storage_actions, predecessor, ChainKind::Base)
+        .detach();
+}
+
+#[test]
+#[should_panic(expected = "ERR_PROOF_CHAIN_MISMATCH")]
+fn test_claim_fee_callback_proof_chain_mismatch() {
+    let mut contract = get_default_contract();
+    let fee_recipient = AccountId::try_from("relayer.testnet".to_string()).unwrap();
+    let emitter = OmniAddress::Eth(EvmAddress::from_str(DEFAULT_ETH_USER_ADDRESS).unwrap());
+    contract.factories.insert(&ChainKind::Eth, &emitter);
+
+    setup_test_env(fee_recipient.clone(), NearToken::from_near(0), None);
+
+    let _ = contract.claim_fee_callback(
+        &fee_recipient.clone(),
+        ChainKind::Arb,
+        Ok(ProverResult::FinTransfer(FinTransferMessage {
+            transfer_id: TransferId {
+                origin_chain: ChainKind::Near,
+                origin_nonce: DEFAULT_NONCE,
+            },
+            fee_recipient: Some(fee_recipient),
+            amount: U128(DEFAULT_TRANSFER_AMOUNT),
+            emitter_address: emitter,
+        })),
+    );
+}
+
+#[test]
+#[should_panic(expected = "ERR_PROOF_CHAIN_MISMATCH")]
+fn test_claim_fee_callback_transfer_destination_mismatch() {
+    let mut contract = get_default_contract();
+    let token_id = AccountId::try_from(DEFAULT_FT_CONTRACT_ACCOUNT.to_string()).unwrap();
+    let fee_recipient = AccountId::try_from("relayer.testnet".to_string()).unwrap();
+    let eth_factory = OmniAddress::Eth(EvmAddress::from_str(DEFAULT_ETH_USER_ADDRESS).unwrap());
+    contract.factories.insert(&ChainKind::Eth, &eth_factory);
+
+    // The stored transfer goes to Solana, but the FinTransfer proof comes from
+    // the Eth factory through the Eth prover.
+    let solana_address: SolAddress = "2xNweLHLqbS9YpP3UyaPrxKqgqoC6yPBFyuLxA8qtgr4"
+        .parse()
+        .expect("Invalid Solana address");
+    let transfer_message = TransferMessage {
+        origin_nonce: DEFAULT_NONCE,
+        token: OmniAddress::Near(token_id.clone()),
+        amount: U128(DEFAULT_TRANSFER_AMOUNT),
+        recipient: OmniAddress::Sol(solana_address),
+        fee: Fee {
+            fee: U128(DEFAULT_TRANSFER_FEE),
+            native_fee: U128(0),
+        },
+        sender: OmniAddress::Near(DEFAULT_NEAR_USER_ACCOUNT.parse().unwrap()),
+        msg: TransferMsg::default(),
+        destination_nonce: 1,
+        origin_transfer_id: None,
+    };
+    let transfer_id = transfer_message.get_transfer_id();
+    contract.pending_transfers.insert(
+        &transfer_id,
+        &TransferMessageStorage::V2(TransferMessageStorageValue {
+            message: transfer_message,
+            owner: DEFAULT_NEAR_USER_ACCOUNT.parse().unwrap(),
+        }),
+    );
+
+    setup_test_env(fee_recipient.clone(), NearToken::from_near(0), None);
+
+    let _ = contract.claim_fee_callback(
+        &fee_recipient.clone(),
+        ChainKind::Eth,
+        Ok(ProverResult::FinTransfer(FinTransferMessage {
+            transfer_id,
+            fee_recipient: Some(fee_recipient),
+            amount: U128(DEFAULT_TRANSFER_AMOUNT - DEFAULT_TRANSFER_FEE),
+            emitter_address: eth_factory,
+        })),
+    );
 }
 
 #[test]

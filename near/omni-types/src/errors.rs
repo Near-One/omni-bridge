@@ -44,6 +44,7 @@ pub enum BridgeError {
     OnlyFeeRecipientCanClaim,
     ParseAccountId,
     ParseMsg,
+    ProofChainMismatch,
     ProverForChainKindNotRegistered,
     ReadPromiseRegister,
     ReadPromiseYieldId,
