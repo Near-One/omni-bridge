@@ -5,17 +5,25 @@ use num_enum::IntoPrimitive;
 use crate::{errors::BridgeError, ChainKind, Fee, Nonce, OmniAddress, TransferId};
 
 /// Every prover result names the bridge contract that emitted the proven event.
-/// The bridge selects a prover by chain, so the emitter must live on that chain;
-/// otherwise a prover registered for one chain could attest events of another.
+/// The bridge selects a prover by chain, so the emitter must live on that chain
+/// and must be the factory registered for it; otherwise a prover registered for
+/// one chain could attest events of another.
 pub trait ProofMessage {
     fn emitter_address(&self) -> &OmniAddress;
 
-    fn validate_chain(&self, chain_kind: ChainKind) -> Result<(), BridgeError> {
-        if self.emitter_address().get_chain() == chain_kind {
-            Ok(())
-        } else {
-            Err(BridgeError::ProofChainMismatch)
+    fn validate_chain(
+        &self,
+        chain_kind: ChainKind,
+        factory: Option<&OmniAddress>,
+    ) -> Result<(), BridgeError> {
+        let emitter_address = self.emitter_address();
+        if emitter_address.get_chain() != chain_kind {
+            return Err(BridgeError::ProofChainMismatch);
         }
+        if factory != Some(emitter_address) {
+            return Err(BridgeError::UnknownFactory);
+        }
+        Ok(())
     }
 }
 

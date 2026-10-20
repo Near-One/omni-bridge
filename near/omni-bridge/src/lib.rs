@@ -672,12 +672,8 @@ impl Contract {
             env::panic_str(BridgeError::InvalidProofMessage.to_string().as_str())
         };
         init_transfer
-            .validate_chain(chain_kind)
+            .validate_chain(chain_kind, self.factories.get(&chain_kind).as_ref())
             .unwrap_or_else(|err| env::panic_str(err.to_string().as_str()));
-        require!(
-            self.factories.get(&chain_kind) == Some(init_transfer.emitter_address),
-            BridgeError::UnknownFactory.as_ref()
-        );
 
         let decimals = self
             .token_decimals
@@ -1043,7 +1039,7 @@ impl Contract {
             env::panic_str(BridgeError::InvalidProofMessage.to_string().as_str())
         };
         fin_transfer
-            .validate_chain(chain_kind)
+            .validate_chain(chain_kind, self.factories.get(&chain_kind).as_ref())
             .unwrap_or_else(|err| env::panic_str(err.to_string().as_str()));
 
         let fee_recipient = fin_transfer.fee_recipient.unwrap_or_else(|| {
@@ -1054,11 +1050,6 @@ impl Contract {
             fee_recipient == *predecessor_account_id,
             BridgeError::OnlyFeeRecipientCanClaim.as_ref()
         );
-        require!(
-            self.factories.get(&chain_kind) == Some(fin_transfer.emitter_address),
-            BridgeError::UnknownFactory.as_ref()
-        );
-
         let transfer_message = self.remove_transfer_message(fin_transfer.transfer_id);
         require!(
             transfer_message.recipient.get_chain() == chain_kind,
@@ -1130,12 +1121,8 @@ impl Contract {
         };
 
         metadata
-            .validate_chain(chain_kind)
+            .validate_chain(chain_kind, self.factories.get(&chain_kind).as_ref())
             .unwrap_or_else(|err| env::panic_str(err.to_string().as_str()));
-        require!(
-            self.factories.get(&chain_kind) == Some(metadata.emitter_address),
-            BridgeError::UnknownFactory.as_ref()
-        );
 
         self.deploy_token_internal(
             chain_kind,
@@ -1227,12 +1214,8 @@ impl Contract {
         };
 
         deploy_token
-            .validate_chain(chain_kind)
+            .validate_chain(chain_kind, self.factories.get(&chain_kind).as_ref())
             .unwrap_or_else(|err| env::panic_str(err.to_string().as_str()));
-        require!(
-            self.factories.get(&chain_kind) == Some(deploy_token.emitter_address),
-            BridgeError::UnknownFactory.as_ref()
-        );
 
         let storage_usage = env::storage_usage();
 

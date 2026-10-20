@@ -732,10 +732,26 @@ fn test_validate_chain_accepts_emitter_chain_only() {
         msg: String::new(),
         emitter_address: OmniAddress::new_zero(ChainKind::Base).unwrap(),
     };
-    assert_eq!(init_transfer.validate_chain(ChainKind::Base), Ok(()));
+    let base_factory = OmniAddress::new_zero(ChainKind::Base).unwrap();
+    let eth_factory = OmniAddress::new_zero(ChainKind::Eth).unwrap();
+    let other_base_factory: OmniAddress = "base:0x0101010101010101010101010101010101010101"
+        .parse()
+        .unwrap();
     assert_eq!(
-        init_transfer.validate_chain(ChainKind::Eth),
+        init_transfer.validate_chain(ChainKind::Base, Some(&base_factory)),
+        Ok(())
+    );
+    assert_eq!(
+        init_transfer.validate_chain(ChainKind::Eth, Some(&eth_factory)),
         Err(BridgeError::ProofChainMismatch)
+    );
+    assert_eq!(
+        init_transfer.validate_chain(ChainKind::Base, Some(&other_base_factory)),
+        Err(BridgeError::UnknownFactory)
+    );
+    assert_eq!(
+        init_transfer.validate_chain(ChainKind::Base, None),
+        Err(BridgeError::UnknownFactory)
     );
 
     let fin_transfer = FinTransferMessage {
@@ -747,9 +763,13 @@ fn test_validate_chain_accepts_emitter_chain_only() {
         amount: U128(1),
         emitter_address: OmniAddress::new_zero(ChainKind::Arb).unwrap(),
     };
-    assert_eq!(fin_transfer.validate_chain(ChainKind::Arb), Ok(()));
+    let arb_factory = OmniAddress::new_zero(ChainKind::Arb).unwrap();
     assert_eq!(
-        fin_transfer.validate_chain(ChainKind::Sol),
+        fin_transfer.validate_chain(ChainKind::Arb, Some(&arb_factory)),
+        Ok(())
+    );
+    assert_eq!(
+        fin_transfer.validate_chain(ChainKind::Sol, Some(&arb_factory)),
         Err(BridgeError::ProofChainMismatch)
     );
 }
