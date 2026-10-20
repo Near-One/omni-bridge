@@ -403,6 +403,17 @@ mod tests {
                     .await?
                     .into_result()?;
             } else {
+                locker
+                    .call("acl_grant_role")
+                    .args_json(json!({
+                        "role": "TokenDeployer",
+                        "account_id": token_deploy_initiator.id(),
+                    }))
+                    .max_gas()
+                    .transact()
+                    .await?
+                    .into_result()?;
+
                 token_deploy_initiator
                     .call(locker.id(), "deploy_token")
                     .args_borsh(get_test_deploy_token_args(
@@ -1193,7 +1204,7 @@ mod tests {
         locker_contract
             .call("fin_transfer")
             .args_borsh(FinTransferArgs {
-                chain_kind: ChainKind::Eth,
+                chain_kind: emitter_address.get_chain(),
                 storage_deposit_actions,
                 prover_args: borsh::to_vec(&ProverResult::InitTransfer(InitTransferMessage {
                     origin_nonce: 1,

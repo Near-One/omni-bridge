@@ -29,6 +29,11 @@ contract OmniBridgeWormhole is OmniBridge {
     uint8 private _consistencyLevel;
     uint32 public wormholeNonce;
 
+    event WormholeAddressUpdated(
+        address wormholeAddress,
+        uint8 consistencyLevel
+    );
+
     function initializeWormhole(
         address tokenImplementationAddress,
         address nearBridgeDerivedAddress,
@@ -51,6 +56,9 @@ contract OmniBridgeWormhole is OmniBridge {
         uint8 decimals,
         uint8 originDecimals
     ) internal override {
+        if (_wormholeDisabled(msg.value)) {
+            return;
+        }
         bytes memory payload = bytes.concat(
             bytes1(uint8(MessageType.DeployToken)),
             Borsh.encodeString(token),
@@ -75,6 +83,9 @@ contract OmniBridgeWormhole is OmniBridge {
         string memory symbol,
         uint8 decimals
     ) internal override {
+        if (_wormholeDisabled(msg.value)) {
+            return;
+        }
         bytes memory payload = bytes.concat(
             bytes1(uint8(MessageType.LogMetadata)),
             bytes1(omniBridgeChainId),
@@ -96,6 +107,9 @@ contract OmniBridgeWormhole is OmniBridge {
     function finTransferExtension(
         BridgeTypes.TransferMessagePayload memory payload
     ) internal virtual override {
+        if (_wormholeDisabled(msg.value)) {
+            return;
+        }
         bytes memory messagePayload = bytes.concat(
             bytes1(uint8(MessageType.FinTransfer)),
             bytes1(payload.originChain),
@@ -126,6 +140,9 @@ contract OmniBridgeWormhole is OmniBridge {
         string calldata message,
         uint256 value
     ) internal override {
+        if (_wormholeDisabled(value)) {
+            return;
+        }
         bytes memory payload = bytes.concat(
             bytes1(uint8(MessageType.InitTransfer)),
             bytes1(omniBridgeChainId),
@@ -149,12 +166,28 @@ contract OmniBridgeWormhole is OmniBridge {
         wormholeNonce++;
     }
 
+    /// @notice Points the bridge at a Wormhole core contract, or at `address(0)`
+    /// to stop publishing Wormhole messages. While disabled the bridge behaves
+    /// like the base `OmniBridge`: events are still emitted and the NEAR side
+    /// proves them through the MPC prover, and no value may be attached for
+    /// the Wormhole fee.
     function setWormholeAddress(
         address wormholeAddress,
         uint8 consistencyLevel
     ) external onlyRole(DEFAULT_ADMIN_ROLE) {
         _wormhole = IWormhole(wormholeAddress);
         _consistencyLevel = consistencyLevel;
+        emit WormholeAddressUpdated(wormholeAddress, consistencyLevel);
+    }
+
+    function _wormholeDisabled(uint256 value) private view returns (bool) {
+        if (address(_wormhole) != address(0)) {
+            return false;
+        }
+        if (value != 0) {
+            revert InvalidValue();
+        }
+        return true;
     }
 }
 // slither-disable-end unused-return

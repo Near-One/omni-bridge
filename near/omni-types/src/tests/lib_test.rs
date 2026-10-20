@@ -3,9 +3,10 @@ use near_sdk::serde_json;
 use near_sdk::{borsh, AccountId, NearToken};
 
 use crate::{
-    get_native_token_address, stringify, BridgeError, ChainKind, DestinationChainMsg, Fee,
-    OmniAddress, OmniError, PayloadType, SolAddress, StorageBalanceError, TransferId,
-    TransferMessage, H160, H256,
+    get_native_token_address,
+    prover_result::{FinTransferMessage, InitTransferMessage, ProofMessage},
+    stringify, BridgeError, ChainKind, DestinationChainMsg, Fee, OmniAddress, OmniError,
+    PayloadType, SolAddress, StorageBalanceError, TransferId, TransferMessage, H160, H256,
 };
 use std::str::FromStr;
 
@@ -378,6 +379,40 @@ fn test_omni_address_display() {
 }
 
 #[test]
+fn test_omni_address_debug_matches_display() {
+    let test_cases = vec![
+        OmniAddress::Eth(H160::from_str("0x5a08feed678c056650b3eb4a5cb1b9bb6f0fe265").unwrap()),
+        OmniAddress::Near("alice.near".parse().unwrap()),
+        OmniAddress::Sol(
+            "BXss9YNCX2p6VPf2Em54pHXkXnC2FPBeZgbB9fY1cuBR"
+                .parse()
+                .unwrap(),
+        ),
+        OmniAddress::Btc("bc1qar0srrr7xfkvy5l643lydnw9re59gtzzwf5mdq".to_string()),
+        OmniAddress::Strk(
+            H256::from_str("0x05558831a603eca8cd69a42d4251f08de3573039b69f23972265cac76639f1cf")
+                .unwrap(),
+        ),
+    ];
+
+    for address in test_cases {
+        assert_eq!(
+            format!("{address:?}"),
+            address.to_string(),
+            "Debug should match Display for {address}"
+        );
+    }
+
+    let eth = OmniAddress::Eth(H160::ZERO);
+    assert_eq!(format!("{eth:?}"), format!("eth:0x{}", "00".repeat(20)));
+    // Nested in a container, `{:?}` still prints the chain:address form
+    assert_eq!(
+        format!("{:?}", vec![eth]),
+        format!("[eth:0x{}]", "00".repeat(20))
+    );
+}
+
+#[test]
 fn test_omni_address_visitor_expecting() {
     let invalid_value = 123;
     let expected_error =
@@ -682,5 +717,59 @@ fn test_errors_serialization() {
         }
         .to_string(),
         "ERR_NOT_ENOUGH_STORAGE: required=100.00 NEAR, available=50.00 NEAR"
+    );
+}
+
+#[test]
+fn test_validate_chain_accepts_emitter_chain_only() {
+    let init_transfer = InitTransferMessage {
+        origin_nonce: 1,
+        token: OmniAddress::new_zero(ChainKind::Base).unwrap(),
+        amount: U128(1),
+        recipient: OmniAddress::Near("alice.near".parse().unwrap()),
+        fee: Fee::default(),
+        sender: OmniAddress::new_zero(ChainKind::Base).unwrap(),
+        msg: String::new(),
+        emitter_address: OmniAddress::new_zero(ChainKind::Base).unwrap(),
+    };
+    let base_factory = OmniAddress::new_zero(ChainKind::Base).unwrap();
+    let eth_factory = OmniAddress::new_zero(ChainKind::Eth).unwrap();
+    let other_base_factory: OmniAddress = "base:0x0101010101010101010101010101010101010101"
+        .parse()
+        .unwrap();
+    assert_eq!(
+        init_transfer.validate_chain(ChainKind::Base, Some(&base_factory)),
+        Ok(())
+    );
+    assert_eq!(
+        init_transfer.validate_chain(ChainKind::Eth, Some(&eth_factory)),
+        Err(BridgeError::ProofChainMismatch)
+    );
+    assert_eq!(
+        init_transfer.validate_chain(ChainKind::Base, Some(&other_base_factory)),
+        Err(BridgeError::UnknownFactory)
+    );
+    assert_eq!(
+        init_transfer.validate_chain(ChainKind::Base, None),
+        Err(BridgeError::UnknownFactory)
+    );
+
+    let fin_transfer = FinTransferMessage {
+        transfer_id: TransferId {
+            origin_chain: ChainKind::Near,
+            origin_nonce: 1,
+        },
+        fee_recipient: None,
+        amount: U128(1),
+        emitter_address: OmniAddress::new_zero(ChainKind::Arb).unwrap(),
+    };
+    let arb_factory = OmniAddress::new_zero(ChainKind::Arb).unwrap();
+    assert_eq!(
+        fin_transfer.validate_chain(ChainKind::Arb, Some(&arb_factory)),
+        Ok(())
+    );
+    assert_eq!(
+        fin_transfer.validate_chain(ChainKind::Sol, Some(&arb_factory)),
+        Err(BridgeError::ProofChainMismatch)
     );
 }

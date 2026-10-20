@@ -2,29 +2,35 @@ use std::collections::HashMap;
 use std::str::FromStr;
 
 use near_contract_standards::storage_management::StorageBalance;
+use near_plugins::AccessControllable;
 use near_sdk::{
-    borsh, json_types::U128, serde_json, test_utils::VMContextBuilder, test_vm_config, testing_env,
-    AccountId, NearToken, PromiseOrValue, PromiseResult, RuntimeFeesConfig,
+    borsh,
+    json_types::{U128, U64},
+    serde_json,
+    test_utils::VMContextBuilder,
+    test_vm_config, testing_env, AccountId, NearToken, PromiseOrValue, PromiseResult,
+    RuntimeFeesConfig,
 };
 use omni_types::{
-    locker_args::StorageDepositAction,
+    locker_args::{BindTokenArgs, DeployTokenArgs, StorageDepositAction},
     prover_result::{FinTransferMessage, InitTransferMessage, ProverResult},
     sol_address::SolAddress,
     BridgeOnTransferMsg, ChainKind, EvmAddress, Fee, InitTransferMsg, Nonce, OmniAddress,
     TransferId, TransferMessage,
 };
 
-use crate::Contract;
 use crate::{
     storage::{Decimals, TransferMessageStorage, TransferMessageStorageValue},
     token_lock::LockAction,
 };
+use crate::{Contract, Role};
 
 const DEFAULT_NONCE: Nonce = 0;
 const DEFAULT_MPC_SIGNER_ACCOUNT: &str = "mpc_signer.testnet";
 const DEFAULT_WNEAR_ACCOUNT: &str = "wnear.testnet";
 
 const DEFAULT_NEAR_USER_ACCOUNT: &str = "user.testnet";
+const DEFAULT_UNPRIVILEGED_ACCOUNT: &str = "unprivileged.testnet";
 const DEFAULT_FT_CONTRACT_ACCOUNT: &str = "ft_contract.testnet";
 const DEFAULT_ETH_USER_ADDRESS: &str = "0x1234567890123456789012345678901234567890";
 const DEFAULT_TRANSFER_AMOUNT: u128 = 100;
@@ -454,7 +460,8 @@ fn test_fin_transfer_callback_near_success() {
         ]),
     );
 
-    let result = contract.fin_transfer_callback(&storage_actions, predecessor.clone());
+    let result =
+        contract.fin_transfer_callback(&storage_actions, predecessor.clone(), ChainKind::Eth);
 
     assert!(matches!(result, PromiseOrValue::Promise(_)));
     assert_eq!(
@@ -554,7 +561,7 @@ fn test_fin_transfer_callback_near_fails_without_locked_tokens() {
     );
 
     // Should panic because locked balance is insufficient.
-    let _ = contract.fin_transfer_callback(&storage_actions, predecessor.clone());
+    let _ = contract.fin_transfer_callback(&storage_actions, predecessor.clone(), ChainKind::Eth);
 }
 
 #[test]
@@ -601,7 +608,8 @@ fn test_fin_transfer_callback_non_near_success() {
         )]),
     );
 
-    let result = contract.fin_transfer_callback(&storage_actions, predecessor.clone());
+    let result =
+        contract.fin_transfer_callback(&storage_actions, predecessor.clone(), ChainKind::Eth);
 
     // For non-NEAR recipients, should return u64 value of current_destination_nonce
     match result {
@@ -694,6 +702,7 @@ fn test_claim_fee_decreases_locked_tokens_for_non_deployed_token() {
 
     let _ = contract.claim_fee_callback(
         &fee_recipient.clone(),
+        destination_chain,
         Ok(ProverResult::FinTransfer(FinTransferMessage {
             transfer_id,
             fee_recipient: Some(fee_recipient),
@@ -727,7 +736,7 @@ fn test_fin_transfer_callback_invalid_proof() {
     );
 
     contract
-        .fin_transfer_callback(&storage_actions, predecessor)
+        .fin_transfer_callback(&storage_actions, predecessor, ChainKind::Eth)
         .detach();
 }
 
@@ -754,8 +763,115 @@ fn test_fin_transfer_callback_unknown_factory() {
     );
 
     contract
-        .fin_transfer_callback(&storage_actions, predecessor)
+        .fin_transfer_callback(&storage_actions, predecessor, ChainKind::Eth)
         .detach();
+}
+
+#[test]
+#[should_panic(expected = "ERR_PROOF_CHAIN_MISMATCH")]
+fn test_fin_transfer_callback_proof_chain_mismatch() {
+    let mut contract = get_default_contract();
+    let storage_actions = get_default_storage_deposit_actions();
+    let predecessor = AccountId::try_from(DEFAULT_NEAR_USER_ACCOUNT.to_string()).unwrap();
+
+    // Both factories are registered; the proof is an Eth proof, but the prover
+    // was selected for Base.
+    contract.factories.insert(
+        &ChainKind::Eth,
+        &OmniAddress::Eth(EvmAddress::from_str(DEFAULT_ETH_USER_ADDRESS).unwrap()),
+    );
+    contract.factories.insert(
+        &ChainKind::Base,
+        &OmniAddress::Base(EvmAddress::from_str(DEFAULT_ETH_USER_ADDRESS).unwrap()),
+    );
+
+    setup_test_env(
+        predecessor.clone(),
+        NearToken::from_near(1),
+        Some(vec![PromiseResult::Successful(
+            borsh::to_vec(&get_prover_result(None)).unwrap(),
+        )]),
+    );
+
+    contract
+        .fin_transfer_callback(&storage_actions, predecessor, ChainKind::Base)
+        .detach();
+}
+
+#[test]
+#[should_panic(expected = "ERR_PROOF_CHAIN_MISMATCH")]
+fn test_claim_fee_callback_proof_chain_mismatch() {
+    let mut contract = get_default_contract();
+    let fee_recipient = AccountId::try_from("relayer.testnet".to_string()).unwrap();
+    let emitter = OmniAddress::Eth(EvmAddress::from_str(DEFAULT_ETH_USER_ADDRESS).unwrap());
+    contract.factories.insert(&ChainKind::Eth, &emitter);
+
+    setup_test_env(fee_recipient.clone(), NearToken::from_near(0), None);
+
+    let _ = contract.claim_fee_callback(
+        &fee_recipient.clone(),
+        ChainKind::Arb,
+        Ok(ProverResult::FinTransfer(FinTransferMessage {
+            transfer_id: TransferId {
+                origin_chain: ChainKind::Near,
+                origin_nonce: DEFAULT_NONCE,
+            },
+            fee_recipient: Some(fee_recipient),
+            amount: U128(DEFAULT_TRANSFER_AMOUNT),
+            emitter_address: emitter,
+        })),
+    );
+}
+
+#[test]
+#[should_panic(expected = "ERR_PROOF_CHAIN_MISMATCH")]
+fn test_claim_fee_callback_transfer_destination_mismatch() {
+    let mut contract = get_default_contract();
+    let token_id = AccountId::try_from(DEFAULT_FT_CONTRACT_ACCOUNT.to_string()).unwrap();
+    let fee_recipient = AccountId::try_from("relayer.testnet".to_string()).unwrap();
+    let eth_factory = OmniAddress::Eth(EvmAddress::from_str(DEFAULT_ETH_USER_ADDRESS).unwrap());
+    contract.factories.insert(&ChainKind::Eth, &eth_factory);
+
+    // The stored transfer goes to Solana, but the FinTransfer proof comes from
+    // the Eth factory through the Eth prover.
+    let solana_address: SolAddress = "2xNweLHLqbS9YpP3UyaPrxKqgqoC6yPBFyuLxA8qtgr4"
+        .parse()
+        .expect("Invalid Solana address");
+    let transfer_message = TransferMessage {
+        origin_nonce: DEFAULT_NONCE,
+        token: OmniAddress::Near(token_id.clone()),
+        amount: U128(DEFAULT_TRANSFER_AMOUNT),
+        recipient: OmniAddress::Sol(solana_address),
+        fee: Fee {
+            fee: U128(DEFAULT_TRANSFER_FEE),
+            native_fee: U128(0),
+        },
+        sender: OmniAddress::Near(DEFAULT_NEAR_USER_ACCOUNT.parse().unwrap()),
+        msg: String::new(),
+        destination_nonce: 1,
+        origin_transfer_id: None,
+    };
+    let transfer_id = transfer_message.get_transfer_id();
+    contract.pending_transfers.insert(
+        &transfer_id,
+        &TransferMessageStorage::V2(TransferMessageStorageValue {
+            message: transfer_message,
+            owner: DEFAULT_NEAR_USER_ACCOUNT.parse().unwrap(),
+        }),
+    );
+
+    setup_test_env(fee_recipient.clone(), NearToken::from_near(0), None);
+
+    let _ = contract.claim_fee_callback(
+        &fee_recipient.clone(),
+        ChainKind::Eth,
+        Ok(ProverResult::FinTransfer(FinTransferMessage {
+            transfer_id,
+            fee_recipient: Some(fee_recipient),
+            amount: U128(DEFAULT_TRANSFER_AMOUNT - DEFAULT_TRANSFER_FEE),
+            emitter_address: eth_factory,
+        })),
+    );
 }
 
 #[test]
@@ -1004,4 +1120,114 @@ fn test_legacy_ft_on_transfer() {
         None,
         &get_init_transfer_msg(DEFAULT_ETH_USER_ADDRESS, 0, 0),
     );
+}
+
+fn get_deploy_token_args() -> DeployTokenArgs {
+    DeployTokenArgs {
+        chain_kind: ChainKind::Eth,
+        prover_args: vec![],
+    }
+}
+
+fn get_bind_token_args() -> BindTokenArgs {
+    BindTokenArgs {
+        chain_kind: ChainKind::Eth,
+        prover_args: vec![],
+    }
+}
+
+fn setup_contract_with_role(account_id: &AccountId, role: Role) -> Contract {
+    let mut contract = get_default_contract();
+    contract
+        .provers
+        .insert(&ChainKind::Eth, &"prover.testnet".parse().unwrap());
+    contract.acl_grant_role(role.into(), account_id.clone());
+    contract
+}
+
+#[test]
+#[should_panic(expected = "Insufficient permissions for method deploy_token")]
+fn test_deploy_token_without_role_panics() {
+    let mut contract = get_default_contract();
+
+    setup_test_env(
+        DEFAULT_UNPRIVILEGED_ACCOUNT.parse().unwrap(),
+        NearToken::from_near(1),
+        None,
+    );
+    contract.deploy_token(get_deploy_token_args()).detach();
+}
+
+#[test]
+#[should_panic(expected = "Insufficient permissions for method deploy_token")]
+fn test_deploy_token_by_unrestricted_relayer_panics() {
+    let relayer: AccountId = DEFAULT_UNPRIVILEGED_ACCOUNT.parse().unwrap();
+    let mut contract = setup_contract_with_role(&relayer, Role::UnrestrictedRelayer);
+
+    setup_test_env(relayer, NearToken::from_near(1), None);
+    contract.deploy_token(get_deploy_token_args()).detach();
+}
+
+#[test]
+fn test_deploy_token_by_token_deployer_succeeds() {
+    let deployer: AccountId = DEFAULT_UNPRIVILEGED_ACCOUNT.parse().unwrap();
+    let mut contract = setup_contract_with_role(&deployer, Role::TokenDeployer);
+
+    setup_test_env(deployer, NearToken::from_near(1), None);
+    contract.deploy_token(get_deploy_token_args()).detach();
+}
+
+#[test]
+fn test_deploy_token_by_dao_succeeds() {
+    let dao: AccountId = DEFAULT_NEAR_USER_ACCOUNT.parse().unwrap();
+    let mut contract = setup_contract_with_role(&dao, Role::DAO);
+
+    setup_test_env(dao, NearToken::from_near(1), None);
+    contract.deploy_token(get_deploy_token_args()).detach();
+}
+
+#[test]
+#[should_panic(expected = "Relayer is not active")]
+fn test_bind_token_without_role_panics() {
+    let mut contract = get_default_contract();
+
+    setup_test_env(
+        DEFAULT_UNPRIVILEGED_ACCOUNT.parse().unwrap(),
+        NearToken::from_near(1),
+        None,
+    );
+    contract.bind_token(get_bind_token_args()).detach();
+}
+
+#[test]
+fn test_bind_token_by_token_deployer_succeeds() {
+    let deployer: AccountId = DEFAULT_UNPRIVILEGED_ACCOUNT.parse().unwrap();
+    let mut contract = setup_contract_with_role(&deployer, Role::TokenDeployer);
+
+    setup_test_env(deployer, NearToken::from_near(1), None);
+    contract.bind_token(get_bind_token_args()).detach();
+}
+
+#[test]
+fn test_bind_token_by_unrestricted_relayer_succeeds() {
+    let relayer: AccountId = DEFAULT_UNPRIVILEGED_ACCOUNT.parse().unwrap();
+    let mut contract = setup_contract_with_role(&relayer, Role::UnrestrictedRelayer);
+
+    setup_test_env(relayer, NearToken::from_near(1), None);
+    contract.bind_token(get_bind_token_args()).detach();
+}
+
+#[test]
+fn test_bind_token_by_staked_relayer_succeeds() {
+    let mut contract = get_default_contract();
+    let relayer: AccountId = DEFAULT_UNPRIVILEGED_ACCOUNT.parse().unwrap();
+    contract
+        .provers
+        .insert(&ChainKind::Eth, &"prover.testnet".parse().unwrap());
+    contract.set_relayer_config(NearToken::from_near(1), U64(0));
+
+    setup_test_env(relayer, NearToken::from_near(1), None);
+    contract.apply_for_trusted_relayer();
+
+    contract.bind_token(get_bind_token_args()).detach();
 }

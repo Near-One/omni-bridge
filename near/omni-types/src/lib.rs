@@ -188,7 +188,7 @@ pub const ZERO_ACCOUNT_ID: &str =
     "0000000000000000000000000000000000000000000000000000000000000000";
 
 #[near(serializers=[borsh])]
-#[derive(Debug, Clone, Hash, PartialEq, Eq)]
+#[derive(Clone, Hash, PartialEq, Eq)]
 pub enum OmniAddress {
     Eth(EvmAddress),
     Near(AccountId),
@@ -434,6 +434,12 @@ impl FromStr for OmniAddress {
 impl fmt::Display for OmniAddress {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", &self.encode(':', false))
+    }
+}
+
+impl fmt::Debug for OmniAddress {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{self}")
     }
 }
 
