@@ -106,7 +106,7 @@ contract OmniBridgeWormhole is OmniBridge {
 
     function finTransferExtension(
         BridgeTypes.TransferMessagePayload memory payload
-    ) internal override {
+    ) internal virtual override {
         if (_wormholeDisabled(msg.value)) {
             return;
         }

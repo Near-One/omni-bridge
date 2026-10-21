@@ -54,6 +54,7 @@ contract HlOmniBridge is OmniBridgeWormhole {
     error NoPendingInitTransfer(uint64 originNonce);
     error PayloadMismatch(uint64 originNonce);
     error NotBridgeToken(address caller);
+    error NotTxOrigin(address caller);
 
     /// @notice Commits a HyperCore-originated transfer. Nothing is burned yet.
     /// @dev A revert here strands the tokens on HyperCore, so this step rejects as
@@ -95,8 +96,8 @@ contract HlOmniBridge is OmniBridgeWormhole {
         );
     }
 
-    /// @notice Submits a committed transfer. Permissionless; `payable` to cover the
-    /// Wormhole message fee.
+    /// @notice Submits a committed transfer. Permissionless for EOAs; `payable` to
+    /// cover the Wormhole message fee.
     function triggerPendingInitTransfer(
         uint64 originNonce,
         address tokenAddress,
@@ -106,6 +107,10 @@ contract HlOmniBridge is OmniBridgeWormhole {
         string calldata recipient,
         string calldata message
     ) external payable whenNotPaused(PAUSED_INIT_TRANSFER) {
+        if (msg.sender != tx.origin) {
+            revert NotTxOrigin(msg.sender);
+        }
+
         HlOmniBridgeStorage storage $ = _getHlOmniBridgeStorage();
         bytes32 committed = $.pendingInitTransfers[originNonce];
         if (committed == bytes32(0)) {
@@ -155,6 +160,16 @@ contract HlOmniBridge is OmniBridgeWormhole {
             recipient,
             message
         );
+    }
+
+    function finTransferExtension(
+        BridgeTypes.TransferMessagePayload memory payload
+    ) internal override {
+        if (msg.sender != tx.origin) {
+            revert NotTxOrigin(msg.sender);
+        }
+
+        super.finTransferExtension(payload);
     }
 
     /// @dev `abi.encode`, not `encodePacked`: adjacent dynamic strings would let a
