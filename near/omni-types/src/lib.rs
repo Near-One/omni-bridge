@@ -83,6 +83,8 @@ pub enum ChainKind {
     Fogo,
     #[serde(alias = "aptos")]
     Aptos,
+    #[serde(alias = "avax")]
+    Avax,
 }
 
 impl ChainKind {
@@ -94,7 +96,8 @@ impl ChainKind {
             | Self::Bnb
             | Self::Pol
             | Self::HyperEvm
-            | Self::Abs => true,
+            | Self::Abs
+            | Self::Avax => true,
             Self::Btc
             | Self::Zcash
             | Self::Near
@@ -119,7 +122,8 @@ impl ChainKind {
             | Self::Strk
             | Self::Abs
             | Self::Fogo
-            | Self::Aptos => false,
+            | Self::Aptos
+            | Self::Avax => false,
         }
     }
 
@@ -137,7 +141,8 @@ impl ChainKind {
             | Self::Abs
             | Self::Btc
             | Self::Zcash
-            | Self::Aptos => false,
+            | Self::Aptos
+            | Self::Avax => false,
         }
     }
 }
@@ -174,6 +179,7 @@ impl TryFrom<u8> for ChainKind {
             11 => Ok(Self::Abs),
             12 => Ok(Self::Fogo),
             13 => Ok(Self::Aptos),
+            14 => Ok(Self::Avax),
             _ => Err(format!("{input:?} invalid chain kind")),
         }
     }
@@ -204,6 +210,7 @@ pub enum OmniAddress {
     Abs(EvmAddress),
     Fogo(SolAddress),
     Aptos(AptosAddress),
+    Avax(EvmAddress),
 }
 
 impl OmniAddress {
@@ -224,6 +231,7 @@ impl OmniAddress {
             ChainKind::Abs => Ok(Self::Abs(H160::ZERO)),
             ChainKind::Fogo => Ok(Self::Fogo(SolAddress::ZERO)),
             ChainKind::Aptos => Ok(Self::Aptos(H256::ZERO)),
+            ChainKind::Avax => Ok(Self::Avax(H160::ZERO)),
         }
     }
 
@@ -239,6 +247,7 @@ impl OmniAddress {
             ChainKind::Pol => Ok(Self::Pol(address)),
             ChainKind::HyperEvm => Ok(Self::HyperEvm(address)),
             ChainKind::Abs => Ok(Self::Abs(address)),
+            ChainKind::Avax => Ok(Self::Avax(address)),
             _ => Err(format!("{chain_kind:?} is not an EVM chain")),
         }
     }
@@ -253,7 +262,8 @@ impl OmniAddress {
             | ChainKind::Bnb
             | ChainKind::Pol
             | ChainKind::HyperEvm
-            | ChainKind::Abs => {
+            | ChainKind::Abs
+            | ChainKind::Avax => {
                 Self::new_from_evm_address(chain_kind, Self::to_evm_address(address)?)
             }
             ChainKind::Near => Ok(Self::Near(Self::to_near_account_id(address)?)),
@@ -286,6 +296,7 @@ impl OmniAddress {
             Self::Abs(_) => ChainKind::Abs,
             Self::Fogo(_) => ChainKind::Fogo,
             Self::Aptos(_) => ChainKind::Aptos,
+            Self::Avax(_) => ChainKind::Avax,
         }
     }
 
@@ -305,6 +316,7 @@ impl OmniAddress {
             Self::Abs(address) => ("abs", address.to_string()),
             Self::Fogo(address) => ("fogo", address.to_string()),
             Self::Aptos(address) => ("aptos", address.to_string()),
+            Self::Avax(address) => ("avax", address.to_string()),
         };
 
         if skip_zero_address && self.is_zero() {
@@ -322,7 +334,8 @@ impl OmniAddress {
             | Self::Bnb(address)
             | Self::Pol(address)
             | Self::HyperEvm(address)
-            | Self::Abs(address) => address.is_zero(),
+            | Self::Abs(address)
+            | Self::Avax(address) => address.is_zero(),
             Self::Near(address) => *address == ZERO_ACCOUNT_ID,
             Self::Sol(address) | Self::Fogo(address) => address.is_zero(),
             Self::Btc(address) | Self::Zcash(address) => address.is_empty(),
@@ -426,6 +439,7 @@ impl FromStr for OmniAddress {
             "strk" => Ok(Self::Strk(recipient.parse().map_err(stringify)?)),
             "fogo" => Ok(Self::Fogo(recipient.parse().map_err(stringify)?)),
             "aptos" => Ok(Self::Aptos(recipient.parse().map_err(stringify)?)),
+            "avax" => Ok(Self::Avax(recipient.parse().map_err(stringify)?)),
             _ => Err(format!("Chain {chain} is not supported")),
         }
     }
@@ -981,6 +995,7 @@ pub fn get_native_token_address(chain_kind: ChainKind) -> Result<OmniAddress, St
         | ChainKind::Pol
         | ChainKind::HyperEvm
         | ChainKind::Abs
-        | ChainKind::Fogo => OmniAddress::new_zero(chain_kind),
+        | ChainKind::Fogo
+        | ChainKind::Avax => OmniAddress::new_zero(chain_kind),
     }
 }

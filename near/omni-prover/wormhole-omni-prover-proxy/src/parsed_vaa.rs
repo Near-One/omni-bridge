@@ -118,6 +118,7 @@ impl ParsedVAA {
             2 | 10002 => Ok(ChainKind::Eth), // Ethereum, Sepolia
             4 => Ok(ChainKind::Bnb),
             5 | 10007 => Ok(ChainKind::Pol), // Polygon, Polygon Amoy
+            6 => Ok(ChainKind::Avax),        // Avalanche (mainnet and Fuji)
             22 => Ok(ChainKind::Aptos),
             23 | 10003 => Ok(ChainKind::Arb), // Arbitrum, Arbitrum Sepolia
             30 | 10004 => Ok(ChainKind::Base), // Base, Base Sepolia
@@ -300,6 +301,7 @@ mod tests {
             ChainKind::Eth => &[2, 10002],
             ChainKind::Bnb => &[4],
             ChainKind::Pol => &[5, 10007],
+            ChainKind::Avax => &[6],
             ChainKind::Aptos => &[22],
             ChainKind::Arb => &[23, 10003],
             ChainKind::Base => &[30, 10004],

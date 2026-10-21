@@ -1405,6 +1405,7 @@ impl Contract {
             s if s.starts_with("fogo") => ChainKind::Fogo,
             s if s.starts_with("strk") || s.starts_with("starknet") => ChainKind::Strk,
             s if s.starts_with("aptos") => ChainKind::Aptos,
+            s if s.starts_with("avax") => ChainKind::Avax,
             _ => env::panic_str(&BridgeError::CannotDetermineOriginChain.as_ref()),
         };
 
