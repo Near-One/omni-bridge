@@ -689,13 +689,13 @@ fn test_init_default_finalities() {
     for (chain_kind, finality) in [
         (ChainKind::Abs, MpcFinality::Evm(EvmFinality::Latest)),
         (ChainKind::Avax, MpcFinality::Evm(EvmFinality::Finalized)),
-        (ChainKind::Arb, MpcFinality::Evm(EvmFinality::Finalized)),
+        (ChainKind::Arb, MpcFinality::Evm(EvmFinality::Safe)),
         (ChainKind::Pol, MpcFinality::Evm(EvmFinality::Finalized)),
         (
             ChainKind::HyperEvm,
             MpcFinality::Evm(EvmFinality::Finalized),
         ),
-        (ChainKind::Base, MpcFinality::Evm(EvmFinality::Finalized)),
+        (ChainKind::Base, MpcFinality::Evm(EvmFinality::Safe)),
         (ChainKind::Bnb, MpcFinality::Evm(EvmFinality::Finalized)),
         (
             ChainKind::Strk,
