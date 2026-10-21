@@ -67,8 +67,8 @@ impl OmniToken {
                 b"m".to_vec(),
                 Some(&FungibleTokenMetadata {
                     spec: FT_METADATA_SPEC.to_string(),
-                    name: metadata.name,
-                    symbol: metadata.symbol,
+                    name: metadata.name.into(),
+                    symbol: metadata.symbol.into(),
                     icon: None,
                     reference: None,
                     reference_hash: None,

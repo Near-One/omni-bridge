@@ -2,7 +2,7 @@ use crate::{
     prover_result::{
         DeployTokenMessage, FinTransferMessage, InitTransferMessage, LogMetadataMessage,
     },
-    stringify, ChainKind, Fee, OmniAddress, H256,
+    stringify, BoundedString, ChainKind, Fee, OmniAddress, TransferMsg, H256,
 };
 
 /// Precomputed `sn_keccak("InitTransfer")` — keccak256 masked to 250 bits.
@@ -55,7 +55,7 @@ pub fn parse_init_transfer(
     let fee = cursor.read_u128()?;
     let native_fee = cursor.read_u128()?;
     let recipient_str = cursor.read_byte_array()?;
-    let msg = cursor.read_byte_array()?;
+    let msg = TransferMsg::new(cursor.read_byte_array()?).map_err(stringify)?;
 
     let emitter_address = OmniAddress::Strk(H256(*from_address));
     let recipient: OmniAddress = recipient_str.parse().map_err(stringify)?;
@@ -200,8 +200,8 @@ pub fn parse_log_metadata(
     let token_address = OmniAddress::Strk(H256(keys[1]));
 
     let mut cursor = FeltCursor::new(data);
-    let name = cursor.read_byte_array()?;
-    let symbol = cursor.read_byte_array()?;
+    let name = BoundedString::new(cursor.read_byte_array()?).map_err(stringify)?;
+    let symbol = BoundedString::new(cursor.read_byte_array()?).map_err(stringify)?;
     let decimals: u8 = cursor.read_u64()?.try_into().map_err(stringify)?;
 
     let emitter_address = OmniAddress::Strk(H256(*from_address));

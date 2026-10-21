@@ -9,6 +9,7 @@ mod tests {
     use omni_types::{
         near_events::OmniBridgeEvent, BoundedString, BridgeOnTransferMsg, ChainKind, Fee,
         InitTransferMsg, OmniAddress, TransferId, TransferMessage, TransferMessageStorageAccount,
+        TransferMsg,
     };
     use rstest::rstest;
 
@@ -518,7 +519,7 @@ mod tests {
                 native_fee: msg_a.native_token_fee,
             },
             sender: OmniAddress::Near(env.sender_account.id().clone()),
-            msg: String::new(),
+            msg: TransferMsg::default(),
         };
         let virtual_a = storage_account.id(Some("external-id-a".to_string()));
         let virtual_b = storage_account.id(Some("external-id-b".to_string()));

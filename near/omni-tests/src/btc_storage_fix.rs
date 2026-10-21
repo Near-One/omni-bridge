@@ -158,7 +158,7 @@ mod tests {
             .expect("should be a BTC address");
 
         let withdraw_msg = TokenReceiverMessage::Withdraw {
-            target_btc_address: btc_address,
+            target_btc_address: btc_address.into(),
             input: vec![],
             output: vec![],
             max_gas_fee: None,

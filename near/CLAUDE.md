@@ -84,6 +84,22 @@ Verifies foreign chain events by calling the NEAR MPC network's `verify_foreign_
 - Test naming: `subject_action_expected` pattern
 - Commits: Conventional Commits (`feat:`, `fix:`, `chore:`)
 
+## Bounded sizes
+
+NEAR caps a receipt's **total log output at 16,384 bytes** (`max_total_log_length`). Exceeding it raises `HostError::TotalLogLengthExceeded`, which aborts the **entire receipt** — so one informational log line can permanently strand a transfer. Function-call arguments are capped far more loosely (`max_arguments_length`, 4 MiB), so oversized input is *not* rejected by the protocol: it is accepted, charged to storage, and blows up later when something logs it. Much of this data originates on foreign chains or from untrusted callers, so its size is attacker-chosen unless a type bounds it.
+
+Both ends are handled the same way: **every externally-supplied string or byte field is a length-bounded type, never a bare `String`/`Vec<u8>`.** The wrappers in `omni-types/src/bounded_string.rs` enforce their cap on construction *and* on JSON/Borsh deserialization, so contract method arguments and foreign-chain prover payloads are both rejected at the boundary. Their encodings are byte-identical to the types they replace, so bounding a field is not a wire-format change.
+
+**There is no automated check — review is the only gate.**
+
+### Review checklist
+
+1. **No unbounded `String`/`Vec<u8>`** in a logged type or in a public method's arguments. Use a bounded type. Neither the compiler nor any test will catch this.
+2. **Account for JSON escaping.** A byte below `0x20` becomes a six-character `\u00XX` escape, so a free-form field of N bytes can log as `6N + 2`. Charset-restricted wrappers (printable ASCII only) expand exactly 1× — prefer them for values from a known alphabet such as base58/bech32 addresses or hex hashes.
+3. **Raising a cap?** Re-measure the worst case: serialize the largest affected event with every bounded field filled to its cap using escaping characters, and confirm it stays clear of 16,384 bytes. The largest event currently lands near 14 KB, so the slack is only about 2 KB — and the limit is per *receipt*, so leave room for anything else the same call logs.
+4. **Size caps from observed traffic, not guesses**, and check a raise against existing state — a stored value longer than a new cap will fail Borsh deserialization.
+5. **Never log untrusted input verbatim** (a VAA, a proof payload, a caller-supplied message). Log a length or a hash instead.
+
 ## Security Audit Notes
 
 ### Common False Positives to Avoid

@@ -26,6 +26,7 @@ pub enum BridgeError {
     InvalidFee,
     InvalidMaxGasFee,
     InvalidMetadata,
+    InvalidMessage,
     InvalidProof,
     InvalidProofMessage,
     InvalidRecipientAddress,
@@ -133,6 +134,8 @@ pub enum TypesError {
     InvalidHex,
     InvalidHexLength,
     StringTooLong,
+    BytesTooLong,
+    NonPlainString,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, AsRefStr, ErrorDisplay)]

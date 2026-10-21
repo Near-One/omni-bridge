@@ -30,7 +30,7 @@ pub mod utils;
 #[cfg(test)]
 mod tests;
 
-pub use bounded_string::BoundedString;
+pub use bounded_string::{BoundedBytes, BoundedString, PlainString};
 pub use errors::{
     BridgeError, OmniError, ProverError, StorageBalanceError, StorageError, TokenError, TypesError,
 };
@@ -180,9 +180,17 @@ impl TryFrom<u8> for ChainKind {
 }
 
 pub type EvmAddress = H160;
-pub type UTXOChainAddress = String;
 pub type StarknetAddress = H256;
 pub type AptosAddress = H256;
+
+pub type UTXOChainAddress = PlainString<512>;
+pub type TransferMsg = BoundedString<2048>;
+pub type ExternalId = BoundedString<64>;
+pub type UtxoTxHash = PlainString<64>;
+pub type TokenName = BoundedString<256>;
+pub type TokenSymbol = BoundedString<128>;
+pub type TokenAddressStr = PlainString<128>;
+pub type DestinationMsgBytes = BoundedBytes<1024>;
 
 pub const ZERO_ACCOUNT_ID: &str =
     "0000000000000000000000000000000000000000000000000000000000000000";
@@ -218,8 +226,8 @@ impl OmniAddress {
             ChainKind::Bnb => Ok(Self::Bnb(H160::ZERO)),
             ChainKind::Pol => Ok(Self::Pol(H160::ZERO)),
             ChainKind::HyperEvm => Ok(Self::HyperEvm(H160::ZERO)),
-            ChainKind::Btc => Ok(Self::Btc(String::new())),
-            ChainKind::Zcash => Ok(Self::Zcash(String::new())),
+            ChainKind::Btc => Ok(Self::Btc(UTXOChainAddress::default())),
+            ChainKind::Zcash => Ok(Self::Zcash(UTXOChainAddress::default())),
             ChainKind::Strk => Ok(Self::Strk(H256::ZERO)),
             ChainKind::Abs => Ok(Self::Abs(H160::ZERO)),
             ChainKind::Fogo => Ok(Self::Fogo(SolAddress::ZERO)),
@@ -258,11 +266,10 @@ impl OmniAddress {
             }
             ChainKind::Near => Ok(Self::Near(Self::to_near_account_id(address)?)),
             ChainKind::Btc => Ok(Self::Btc(
-                String::from_utf8(address.to_vec())
-                    .map_err(|e| format!("Invalid BTC address: {e}"))?,
+                Self::to_utxo_address(address).map_err(|e| format!("Invalid BTC address: {e}"))?,
             )),
             ChainKind::Zcash => Ok(Self::Zcash(
-                String::from_utf8(address.to_vec())
+                Self::to_utxo_address(address)
                     .map_err(|e| format!("Invalid ZCash address: {e}"))?,
             )),
             ChainKind::Strk => Ok(Self::Strk(H256(address.try_into().map_err(stringify)?))),
@@ -299,8 +306,8 @@ impl OmniAddress {
             Self::Bnb(address) => ("bnb", address.to_string()),
             Self::Pol(address) => ("pol", address.to_string()),
             Self::HyperEvm(address) => ("hlevm", address.to_string()),
-            Self::Btc(address) => ("btc", address.clone()),
-            Self::Zcash(address) => ("zcash", address.clone()),
+            Self::Btc(address) => ("btc", address.to_string()),
+            Self::Zcash(address) => ("zcash", address.to_string()),
             Self::Strk(address) => ("strk", address.to_string()),
             Self::Abs(address) => ("abs", address.to_string()),
             Self::Fogo(address) => ("fogo", address.to_string()),
@@ -399,6 +406,11 @@ impl OmniAddress {
         )
     }
 
+    fn to_utxo_address(address: &[u8]) -> Result<UTXOChainAddress, String> {
+        UTXOChainAddress::new(String::from_utf8(address.to_vec()).map_err(stringify)?)
+            .map_err(stringify)
+    }
+
     fn to_near_account_id(address: &[u8]) -> Result<AccountId, String> {
         AccountId::from_str(&String::from_utf8(address.to_vec()).map_err(stringify)?)
             .map_err(stringify)
@@ -421,8 +433,8 @@ impl FromStr for OmniAddress {
             "pol" => Ok(Self::Pol(recipient.parse().map_err(stringify)?)),
             "hlevm" => Ok(Self::HyperEvm(recipient.parse().map_err(stringify)?)),
             "abs" => Ok(Self::Abs(recipient.parse().map_err(stringify)?)),
-            "btc" => Ok(Self::Btc(recipient.to_string())),
-            "zcash" => Ok(Self::Zcash(recipient.to_string())),
+            "btc" => Ok(Self::Btc(recipient.parse().map_err(stringify)?)),
+            "zcash" => Ok(Self::Zcash(recipient.parse().map_err(stringify)?)),
             "strk" => Ok(Self::Strk(recipient.parse().map_err(stringify)?)),
             "fogo" => Ok(Self::Fogo(recipient.parse().map_err(stringify)?)),
             "aptos" => Ok(Self::Aptos(recipient.parse().map_err(stringify)?)),
@@ -500,25 +512,18 @@ pub enum BridgeOnTransferMsg {
     SwapMigratedToken,
 }
 
-/// Maximum byte length for `InitTransferMsg::msg` — caps the user-supplied hook payload
-/// forwarded to the destination chain.
-pub const MAX_INIT_TRANSFER_MSG_LEN: usize = 2048;
-/// Maximum byte length for `InitTransferMsg::external_id` — large enough for UUIDs or
-/// hex-encoded 32-byte hashes, small enough to bound storage-account-hash inputs.
-pub const MAX_EXTERNAL_ID_LEN: usize = 64;
-
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct InitTransferMsg {
     pub recipient: OmniAddress,
     pub fee: U128,
     pub native_token_fee: U128,
-    /// Optional caller-supplied destination-chain hook payload. Length-capped to
-    /// [`MAX_INIT_TRANSFER_MSG_LEN`] bytes to prevent unbounded storage/gas inflation.
-    pub msg: Option<BoundedString<MAX_INIT_TRANSFER_MSG_LEN>>,
+    /// Optional caller-supplied destination-chain hook payload. Length-capped by
+    /// [`TransferMsg`] to prevent unbounded storage/gas inflation.
+    pub msg: Option<TransferMsg>,
     /// Optional caller-provided identifier mixed into the virtual storage account ID hash.
     /// Lets otherwise-identical transfers derive distinct storage accounts so their
-    /// storage deposits do not collide. Length-capped to [`MAX_EXTERNAL_ID_LEN`] bytes.
-    pub external_id: Option<BoundedString<MAX_EXTERNAL_ID_LEN>>,
+    /// storage deposits do not collide. Length-capped by [`ExternalId`].
+    pub external_id: Option<ExternalId>,
 }
 
 impl InitTransferMsg {
@@ -532,7 +537,7 @@ pub struct FastFinTransferMsg {
     pub transfer_id: UnifiedTransferId,
     pub recipient: OmniAddress,
     pub fee: Fee,
-    pub msg: String,
+    pub msg: TransferMsg,
     pub amount: U128,
     pub storage_deposit_amount: Option<U128>,
     pub relayer: AccountId,
@@ -544,7 +549,7 @@ pub struct UtxoFinTransferMsg {
     pub utxo_id: UtxoId,
     pub recipient: OmniAddress,
     pub relayer_fee: U128,
-    pub msg: String,
+    pub msg: TransferMsg,
 }
 
 impl UtxoFinTransferMsg {
@@ -591,7 +596,7 @@ pub struct TransferMessage {
     pub recipient: OmniAddress,
     pub fee: Fee,
     pub sender: OmniAddress,
-    pub msg: String,
+    pub msg: TransferMsg,
     pub destination_nonce: Nonce,
     pub origin_transfer_id: Option<UnifiedTransferId>,
 }
@@ -630,7 +635,7 @@ pub struct TransferMessageStorageAccount {
     pub recipient: OmniAddress,
     pub fee: Fee,
     pub sender: OmniAddress,
-    pub msg: String,
+    pub msg: TransferMsg,
 }
 
 impl TransferMessageStorageAccount {
@@ -704,7 +709,7 @@ pub struct TransferMessagePayload {
     pub recipient: OmniAddress,
     pub fee_recipient: Option<AccountId>,
     #[serde(default)]
-    pub message: Vec<u8>,
+    pub message: DestinationMsgBytes,
 }
 
 impl TransferMessagePayload {
@@ -721,9 +726,9 @@ impl TransferMessagePayload {
 #[derive(Debug, Clone)]
 pub struct MetadataPayload {
     pub prefix: PayloadType,
-    pub token: String,
-    pub name: String,
-    pub symbol: String,
+    pub token: TokenAddressStr,
+    pub name: TokenName,
+    pub symbol: TokenSymbol,
     pub decimals: u8,
 }
 
@@ -744,8 +749,8 @@ pub fn stringify<T: std::fmt::Display>(item: T) -> String {
 #[near(serializers=[json])]
 #[derive(Clone, Debug)]
 pub struct BasicMetadata {
-    pub name: String,
-    pub symbol: String,
+    pub name: TokenName,
+    pub symbol: TokenSymbol,
     pub decimals: u8,
 }
 
@@ -753,7 +758,7 @@ pub struct BasicMetadata {
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[serde(try_from = "String", into = "String")]
 pub struct UtxoId {
-    pub tx_hash: String,
+    pub tx_hash: UtxoTxHash,
     pub vout: u32,
 }
 
@@ -769,7 +774,7 @@ impl std::str::FromStr for UtxoId {
             ));
         }
 
-        let tx_hash = parts[0].to_string();
+        let tx_hash = parts[0].parse().map_err(stringify)?;
         let vout = parts[1]
             .parse::<u32>()
             .map_err(|e| format!("Invalid vout '{}' in UtxoId: {}", parts[1], e))?;
@@ -867,7 +872,7 @@ pub struct FastTransfer {
     pub amount: U128,
     pub fee: Fee,
     pub recipient: OmniAddress,
-    pub msg: String,
+    pub msg: TransferMsg,
 }
 
 impl FastTransfer {

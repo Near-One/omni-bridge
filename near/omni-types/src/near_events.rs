@@ -1,6 +1,6 @@
 use near_sdk::json_types::U128;
 use near_sdk::serde_json::json;
-use near_sdk::{near, AccountId};
+use near_sdk::{env, near, AccountId};
 
 use crate::mpc_types::SignatureResponse;
 use crate::{
@@ -64,5 +64,9 @@ pub enum OmniBridgeEvent {
 impl OmniBridgeEvent {
     pub fn to_log_string(&self) -> String {
         json!(self).to_string()
+    }
+
+    pub fn emit(&self) {
+        env::log_str(&self.to_log_string());
     }
 }

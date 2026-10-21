@@ -10,7 +10,8 @@ mod tests {
     use omni_types::prover_result::InitTransferMessage;
     use omni_types::prover_result::ProverResult;
     use omni_types::Fee;
-    use omni_types::{BasicMetadata, ChainKind, OmniAddress};
+    use omni_types::TransferMsg;
+    use omni_types::{BasicMetadata, ChainKind, OmniAddress, TokenName, TokenSymbol};
     use rstest::rstest;
 
     use crate::helpers::tests::{
@@ -200,8 +201,8 @@ mod tests {
     impl TestEnv {
         fn default_token_metadata() -> BasicMetadata {
             BasicMetadata {
-                name: "Test Token".to_string(),
-                symbol: "TEST".to_string(),
+                name: "Test Token".parse().unwrap(),
+                symbol: "TEST".parse().unwrap(),
                 decimals: 18,
             }
         }
@@ -534,8 +535,8 @@ mod tests {
         token_deployer_wasm: Vec<u8>,
         mock_global_contract_deployer_wasm: Vec<u8>,
     ) -> anyhow::Result<()> {
-        let huge_name = "TEST NAME".repeat(256);
-        let huge_symbol = "TEST".repeat(64);
+        let huge_name: TokenName = "TEST NAME".repeat(28).parse().unwrap();
+        let huge_symbol: TokenSymbol = "TEST".repeat(32).parse().unwrap();
 
         let env = TestEnv::new_with_metadata(
             eth_token_address(),
@@ -575,11 +576,48 @@ mod tests {
         mock_global_contract_deployer_wasm: Vec<u8>,
     ) -> anyhow::Result<()> {
         let token_metadata = BasicMetadata {
-            name: "TEST NAME".repeat(256),
-            symbol: "TEST".repeat(64),
+            name: "TEST NAME".repeat(28).parse().unwrap(),
+            symbol: "TEST".repeat(32).parse().unwrap(),
             decimals: 18,
         };
 
+        let underfunded_env = DeployEnv::new(
+            eth_token_address(),
+            token_metadata.clone(),
+            mock_prover_wasm.clone(),
+            locker_wasm.clone(),
+            omni_token_wasm.clone(),
+            token_deployer_wasm.clone(),
+            mock_global_contract_deployer_wasm.clone(),
+        )
+        .await?;
+
+        let err = match underfunded_env
+            .deploy_token(DepositStrategy::MinimumRequired, 2)
+            .await
+        {
+            Ok(_) => panic!("deployment with minimal deposit should fail"),
+            Err(err) => err,
+        };
+
+        // The shortfall surfaces differently depending on how large it is: a big gap aborts
+        // before the token account exists, a small one fails its storage-coverage check
+        // after creation. Either way the deployment must not succeed.
+        let err_string = err.to_string();
+        assert!(
+            err_string.contains("LackBalance")
+                || err_string.contains("AccountDoesNotExist")
+                || err_string.contains("doesn't exist")
+                || err_string.contains("unable to fulfill the query request")
+                || err_string.contains("wouldn't have enough balance to cover storage"),
+            "unexpected error for insufficient deposit: {err_string}"
+        );
+
+        // Deploy into a fresh environment rather than retrying in `underfunded_env`.
+        // Whether the failed attempt leaves the token registered in the locker depends on
+        // which receipt failed: the rollback in `deploy_token_by_deployer_callback` only
+        // runs when the deployer's own receipt fails, not when a later sub-receipt does.
+        // Isolating the two deployments keeps this test about deposit sizing.
         let deploy_env = DeployEnv::new(
             eth_token_address(),
             token_metadata.clone(),
@@ -590,23 +628,6 @@ mod tests {
             mock_global_contract_deployer_wasm,
         )
         .await?;
-
-        let err = match deploy_env
-            .deploy_token(DepositStrategy::MinimumRequired, 2)
-            .await
-        {
-            Ok(_) => panic!("deployment with minimal deposit should fail"),
-            Err(err) => err,
-        };
-
-        let err_string = err.to_string();
-        assert!(
-            err_string.contains("LackBalance")
-                || err_string.contains("AccountDoesNotExist")
-                || err_string.contains("doesn't exist")
-                || err_string.contains("unable to fulfill the query request"),
-            "unexpected error for insufficient deposit: {err_string}"
-        );
 
         let token_account_id = deploy_env
             .deploy_token(DepositStrategy::WithBuffer, 3)
@@ -1073,8 +1094,8 @@ mod tests {
             .into_result()?;
 
         let metadata = BasicMetadata {
-            name: "Local Token".to_string(),
-            symbol: "LOC".to_string(),
+            name: "Local Token".parse().unwrap(),
+            symbol: "LOC".parse().unwrap(),
             decimals: 18,
         };
 
@@ -1216,7 +1237,7 @@ mod tests {
                         native_fee: U128(0),
                     },
                     sender,
-                    msg: String::default(),
+                    msg: TransferMsg::default(),
                     emitter_address,
                 }))?,
             })

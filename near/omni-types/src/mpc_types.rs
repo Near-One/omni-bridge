@@ -4,6 +4,10 @@ use near_mpc_sdk::{
 };
 use near_sdk::near;
 
+use crate::PlainString;
+
+pub type MpcHex = PlainString<128>;
+
 /// Finality enum that supports both EVM and Starknet chains.
 #[near(serializers = [borsh, json])]
 #[derive(Debug, Clone, PartialEq)]
@@ -16,13 +20,13 @@ pub enum MpcFinality {
 #[near(serializers = [json])]
 #[derive(Clone, Debug)]
 pub struct AffinePoint {
-    pub affine_point: String,
+    pub affine_point: MpcHex,
 }
 
 #[near(serializers = [json])]
 #[derive(Clone, Debug)]
 pub struct Scalar {
-    pub scalar: String,
+    pub scalar: MpcHex,
 }
 
 #[near(serializers = [json])]
@@ -45,9 +49,9 @@ impl SignatureResponse {
     pub fn to_bytes(&self) -> Vec<u8> {
         let mut bytes = Vec::new();
         bytes.extend_from_slice(
-            &hex::decode(&self.big_r.affine_point).expect("Incorrect Signature")[1..],
+            &hex::decode(self.big_r.affine_point.as_str()).expect("Incorrect Signature")[1..],
         );
-        bytes.extend_from_slice(&hex::decode(&self.s.scalar).expect("Incorrect Signature"));
+        bytes.extend_from_slice(&hex::decode(self.s.scalar.as_str()).expect("Incorrect Signature"));
         bytes.push(self.recovery_id + 27);
 
         bytes
