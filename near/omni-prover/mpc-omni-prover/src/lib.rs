@@ -57,6 +57,15 @@ impl MpcOmniProver {
     pub fn init(mpc_contract_id: AccountId) -> Self {
         let mut finalities = HashMap::new();
         finalities.insert(ChainKind::Abs, MpcFinality::Evm(EvmFinality::Latest));
+        finalities.insert(ChainKind::Avax, MpcFinality::Evm(EvmFinality::Finalized));
+        finalities.insert(ChainKind::Arb, MpcFinality::Evm(EvmFinality::Safe));
+        finalities.insert(ChainKind::Pol, MpcFinality::Evm(EvmFinality::Finalized));
+        finalities.insert(ChainKind::Base, MpcFinality::Evm(EvmFinality::Safe));
+        finalities.insert(ChainKind::Bnb, MpcFinality::Evm(EvmFinality::Finalized));
+        finalities.insert(
+            ChainKind::HyperEvm,
+            MpcFinality::Evm(EvmFinality::Finalized),
+        );
         finalities.insert(
             ChainKind::Strk,
             MpcFinality::Starknet(StarknetFinality::AcceptedOnL2),
@@ -107,6 +116,8 @@ impl MpcOmniProver {
             request: payload_v1.request.clone(),
             domain_id: DomainId(FOREIGN_TX_DOMAIN_ID),
             payload_version: ForeignTxPayloadVersion::V1,
+            // The payload hash is checked against the signed payload in `verify_callback`.
+            expected_payload_hash: None,
         };
 
         ext_mpc_contract::ext(self.mpc_contract_id.clone())
@@ -165,6 +176,12 @@ impl MpcOmniProver {
             ForeignChainRpcRequest::Ethereum(_) => Some(ChainKind::Eth),
             ForeignChainRpcRequest::Starknet(_) => Some(ChainKind::Strk),
             ForeignChainRpcRequest::Aptos(_) => Some(ChainKind::Aptos),
+            ForeignChainRpcRequest::Avalanche(_) => Some(ChainKind::Avax),
+            ForeignChainRpcRequest::Arbitrum(_) => Some(ChainKind::Arb),
+            ForeignChainRpcRequest::Polygon(_) => Some(ChainKind::Pol),
+            ForeignChainRpcRequest::HyperEvm(_) => Some(ChainKind::HyperEvm),
+            ForeignChainRpcRequest::Base(_) => Some(ChainKind::Base),
+            ForeignChainRpcRequest::Bnb(_) => Some(ChainKind::Bnb),
             _ => None,
         }
     }
@@ -172,7 +189,14 @@ impl MpcOmniProver {
     fn request_matches_finality(request: &ForeignChainRpcRequest, finality: &MpcFinality) -> bool {
         match (request, finality) {
             (
-                ForeignChainRpcRequest::Ethereum(args) | ForeignChainRpcRequest::Abstract(args),
+                ForeignChainRpcRequest::Ethereum(args)
+                | ForeignChainRpcRequest::Abstract(args)
+                | ForeignChainRpcRequest::Avalanche(args)
+                | ForeignChainRpcRequest::Arbitrum(args)
+                | ForeignChainRpcRequest::Polygon(args)
+                | ForeignChainRpcRequest::HyperEvm(args)
+                | ForeignChainRpcRequest::Base(args)
+                | ForeignChainRpcRequest::Bnb(args),
                 MpcFinality::Evm(finality),
             ) => args.finality == *finality,
             (ForeignChainRpcRequest::Starknet(args), MpcFinality::Starknet(finality)) => {

@@ -4,9 +4,8 @@ use near_mpc_sdk::near_mpc_contract_interface::types::{
     AptosAddress, AptosEvent, AptosExtractedValue, AptosExtractor, AptosFinality, AptosRpcRequest,
     AptosTxId, EvmExtractedValue, EvmExtractor, EvmFinality, EvmLog, EvmRpcRequest, EvmTxId,
     ExtractedValue, ForeignChainRpcRequest, ForeignTxSignPayload, ForeignTxSignPayloadV1, Hash160,
-    Hash256, SolanaFinality, SolanaRpcRequest, SolanaTxId, StarknetExtractedValue,
-    StarknetExtractor, StarknetFelt, StarknetFinality, StarknetLog, StarknetRpcRequest,
-    StarknetTxId,
+    Hash256, StarknetExtractedValue, StarknetExtractor, StarknetFelt, StarknetFinality,
+    StarknetLog, StarknetRpcRequest, StarknetTxId, SvmFinality, SvmRpcRequest, SvmTxId,
 };
 
 use near_sdk::base64::Engine;
@@ -21,7 +20,7 @@ fn test_aptos_request() -> AptosRpcRequest {
     AptosRpcRequest {
         tx_id: AptosTxId([0xcc; 32]),
         finality: AptosFinality::Committed,
-        extractors: vec![AptosExtractor::Event { event_index: 0 }],
+        extractors: [AptosExtractor::Event { event_index: 0 }].into(),
     }
 }
 
@@ -199,7 +198,7 @@ fn abs_testnet_tx_id() -> EvmTxId {
 fn test_evm_request() -> EvmRpcRequest {
     EvmRpcRequest {
         tx_id: EvmTxId([0xab; 32]),
-        extractors: vec![EvmExtractor::Log { log_index: 0 }],
+        extractors: [EvmExtractor::Log { log_index: 0 }].into(),
         finality: EvmFinality::Finalized,
     }
 }
@@ -207,7 +206,7 @@ fn test_evm_request() -> EvmRpcRequest {
 fn abs_testnet_evm_request() -> EvmRpcRequest {
     EvmRpcRequest {
         tx_id: abs_testnet_tx_id(),
-        extractors: vec![EvmExtractor::Log { log_index: 3 }],
+        extractors: [EvmExtractor::Log { log_index: 3 }].into(),
         finality: EvmFinality::Latest,
     }
 }
@@ -216,7 +215,7 @@ fn test_starknet_request() -> StarknetRpcRequest {
     StarknetRpcRequest {
         tx_id: StarknetTxId(StarknetFelt([0xcc; 32])),
         finality: StarknetFinality::AcceptedOnL1,
-        extractors: vec![StarknetExtractor::Log { log_index: 0 }],
+        extractors: [StarknetExtractor::Log { log_index: 0 }].into(),
     }
 }
 
@@ -358,6 +357,65 @@ fn test_request_to_chain_kind_abstract() {
     );
 }
 
+fn evm_requests_with_chain_kind() -> [(ForeignChainRpcRequest, ChainKind); 6] {
+    [
+        (
+            ForeignChainRpcRequest::Avalanche(test_evm_request()),
+            ChainKind::Avax,
+        ),
+        (
+            ForeignChainRpcRequest::Arbitrum(test_evm_request()),
+            ChainKind::Arb,
+        ),
+        (
+            ForeignChainRpcRequest::Polygon(test_evm_request()),
+            ChainKind::Pol,
+        ),
+        (
+            ForeignChainRpcRequest::HyperEvm(test_evm_request()),
+            ChainKind::HyperEvm,
+        ),
+        (
+            ForeignChainRpcRequest::Base(test_evm_request()),
+            ChainKind::Base,
+        ),
+        (
+            ForeignChainRpcRequest::Bnb(test_evm_request()),
+            ChainKind::Bnb,
+        ),
+    ]
+}
+
+#[test]
+fn test_request_to_chain_kind_evm_chains() {
+    for (request, chain_kind) in evm_requests_with_chain_kind() {
+        assert_eq!(
+            MpcOmniProver::request_to_chain_kind(&request),
+            Some(chain_kind)
+        );
+    }
+}
+
+#[test]
+fn test_request_matches_finality_evm_chains() {
+    for (request, chain_kind) in evm_requests_with_chain_kind() {
+        assert!(
+            MpcOmniProver::request_matches_finality(
+                &request,
+                &MpcFinality::Evm(EvmFinality::Finalized)
+            ),
+            "{chain_kind:?} should match its request finality"
+        );
+        assert!(
+            !MpcOmniProver::request_matches_finality(
+                &request,
+                &MpcFinality::Evm(EvmFinality::Latest)
+            ),
+            "{chain_kind:?} should reject a different finality"
+        );
+    }
+}
+
 #[test]
 fn test_request_to_chain_kind_starknet() {
     let request = ForeignChainRpcRequest::Starknet(test_starknet_request());
@@ -369,10 +427,10 @@ fn test_request_to_chain_kind_starknet() {
 
 #[test]
 fn test_request_to_chain_kind_unsupported() {
-    let solana_request = ForeignChainRpcRequest::Solana(SolanaRpcRequest {
-        tx_id: SolanaTxId([0u8; 64]),
-        finality: SolanaFinality::Confirmed,
-        extractors: vec![],
+    let solana_request = ForeignChainRpcRequest::Solana(SvmRpcRequest {
+        tx_id: SvmTxId([0u8; 64]),
+        finality: SvmFinality::Confirmed,
+        extractors: [].into(),
     });
     assert_eq!(MpcOmniProver::request_to_chain_kind(&solana_request), None);
 }
@@ -456,10 +514,10 @@ fn test_request_matches_finality_cross_chain_mismatch() {
 
 #[test]
 fn test_request_matches_finality_non_evm_returns_false() {
-    let solana_request = ForeignChainRpcRequest::Solana(SolanaRpcRequest {
-        tx_id: SolanaTxId([0u8; 64]),
-        finality: SolanaFinality::Confirmed,
-        extractors: vec![],
+    let solana_request = ForeignChainRpcRequest::Solana(SvmRpcRequest {
+        tx_id: SvmTxId([0u8; 64]),
+        finality: SvmFinality::Confirmed,
+        extractors: [].into(),
     });
 
     assert!(!MpcOmniProver::request_matches_finality(
@@ -587,7 +645,7 @@ fn starknet_sepolia_request() -> StarknetRpcRequest {
             "0x0592d937f74565b8c42c5603083e5536fdcd8e585b5fef5cd5c2c04b65cd80e5",
         )),
         finality: StarknetFinality::AcceptedOnL2,
-        extractors: vec![StarknetExtractor::Log { log_index: 3 }],
+        extractors: [StarknetExtractor::Log { log_index: 3 }].into(),
     }
 }
 
@@ -622,4 +680,37 @@ fn test_starknet_sepolia_verify_proof_args() {
     let base64_encoded = near_sdk::base64::engine::general_purpose::STANDARD.encode(&call_bytes);
 
     assert!(!base64_encoded.is_empty());
+}
+
+#[test]
+fn test_init_default_finalities() {
+    let prover = MpcOmniProver::init("v1.signer".parse().unwrap());
+
+    for (chain_kind, finality) in [
+        (ChainKind::Abs, MpcFinality::Evm(EvmFinality::Latest)),
+        (ChainKind::Avax, MpcFinality::Evm(EvmFinality::Finalized)),
+        (ChainKind::Arb, MpcFinality::Evm(EvmFinality::Finalized)),
+        (ChainKind::Pol, MpcFinality::Evm(EvmFinality::Finalized)),
+        (
+            ChainKind::HyperEvm,
+            MpcFinality::Evm(EvmFinality::Finalized),
+        ),
+        (ChainKind::Base, MpcFinality::Evm(EvmFinality::Finalized)),
+        (ChainKind::Bnb, MpcFinality::Evm(EvmFinality::Finalized)),
+        (
+            ChainKind::Strk,
+            MpcFinality::Starknet(StarknetFinality::AcceptedOnL2),
+        ),
+        (
+            ChainKind::Aptos,
+            MpcFinality::Aptos(AptosFinality::Committed),
+        ),
+    ] {
+        assert_eq!(
+            prover.finalities.get(&chain_kind),
+            Some(&finality),
+            "unexpected default finality for {chain_kind:?}"
+        );
+    }
+    assert_eq!(prover.finalities.len(), 9);
 }
