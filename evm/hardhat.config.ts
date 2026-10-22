@@ -574,6 +574,13 @@ const config: HardhatUserConfig = {
       zksync: true,
       accounts: [`${EVM_PRIVATE_KEY}`],
     },
+    avalancheMainnet: {
+      wormholeAddress: "0x54a8e5f9c4CbA08F9943965859F6c34eAF03E26c",
+      omniChainId: 14,
+      chainId: 43114,
+      url: `https://avalanche-mainnet.infura.io/v3/${INFURA_API_KEY}`,
+      accounts: [`${EVM_PRIVATE_KEY}`],
+    },
     sepolia: {
       omniChainId: 0,
       chainId: 11155111,
@@ -623,6 +630,13 @@ const config: HardhatUserConfig = {
       zksync: true,
       accounts: [`${EVM_PRIVATE_KEY}`],
     },
+    avalancheFuji: {
+      wormholeAddress: "0x7bbcE28e64B3F8b84d876Ab298393c38ad7aac4C",
+      omniChainId: 14,
+      chainId: 43113,
+      url: `https://avalanche-fuji.infura.io/v3/${INFURA_API_KEY}`,
+      accounts: [`${EVM_PRIVATE_KEY}`],
+    },
   },
   etherscan: {
     apiKey: ETHERSCAN_API_KEY,
@@ -649,6 +663,22 @@ const config: HardhatUserConfig = {
         urls: {
           apiURL: "https://api.etherscan.io/v2/api?chainid=999",
           browserURL: "https://hyperevmscan.io",
+        },
+      },
+      {
+        network: "avalancheMainnet",
+        chainId: 43114,
+        urls: {
+          apiURL: "https://api.etherscan.io/v2/api?chainid=43114",
+          browserURL: "https://snowscan.xyz",
+        },
+      },
+      {
+        network: "avalancheFuji",
+        chainId: 43113,
+        urls: {
+          apiURL: "https://api.etherscan.io/v2/api?chainid=43113",
+          browserURL: "https://testnet.snowscan.xyz",
         },
       },
     ],

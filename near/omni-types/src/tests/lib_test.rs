@@ -10,7 +10,7 @@ use crate::{
 };
 use std::str::FromStr;
 
-fn chain_kinds_for_borsh() -> [ChainKind; 14] {
+fn chain_kinds_for_borsh() -> [ChainKind; 15] {
     [
         ChainKind::Eth,
         ChainKind::Near,
@@ -26,6 +26,7 @@ fn chain_kinds_for_borsh() -> [ChainKind; 14] {
         ChainKind::Abs,
         ChainKind::Fogo,
         ChainKind::Aptos,
+        ChainKind::Avax,
     ]
 }
 
@@ -57,6 +58,7 @@ fn omni_addresses_for_borsh() -> Vec<OmniAddress> {
             H256::from_str("0x05558831a603eca8cd69a42d4251f08de3573039b69f23972265cac76639f1cf")
                 .unwrap(),
         ),
+        OmniAddress::Avax(H160::from_str("0x23ddd3e3692d1861ed57ede224608875809e127f").unwrap()),
     ]
 }
 
@@ -190,6 +192,11 @@ fn test_chain_kind_from_omni_address() {
         "ABS",
     );
     test_chain_kind(
+        OmniAddress::Avax(H160::from_str("0x5a08feed678c056650b3eb4a5cb1b9bb6f0fe265").unwrap()),
+        ChainKind::Avax,
+        "AVAX",
+    );
+    test_chain_kind(
         OmniAddress::Strk(
             H256::from_str("0x05558831a603eca8cd69a42d4251f08de3573039b69f23972265cac76639f1cf")
                 .unwrap(),
@@ -219,6 +226,10 @@ fn test_omni_address_from_evm_address() {
     assert_eq!(
         OmniAddress::new_from_evm_address(ChainKind::Abs, evm_address.clone()),
         Ok(OmniAddress::Abs(evm_address.clone()))
+    );
+    assert_eq!(
+        OmniAddress::new_from_evm_address(ChainKind::Avax, evm_address.clone()),
+        Ok(OmniAddress::Avax(evm_address.clone()))
     );
 
     for chain_kind in [ChainKind::Near, ChainKind::Sol] {
@@ -272,6 +283,11 @@ fn test_omni_address_from_str() {
             format!("abs:{evm_addr}"),
             Ok(OmniAddress::Abs(H160::from_str(evm_addr).unwrap())),
             "Should parse ABS address",
+        ),
+        (
+            format!("avax:{evm_addr}"),
+            Ok(OmniAddress::Avax(H160::from_str(evm_addr).unwrap())),
+            "Should parse AVAX address",
         ),
         (
             "strk:0x05558831a603eca8cd69a42d4251f08de3573039b69f23972265cac76639f1cf".to_string(),
@@ -350,6 +366,11 @@ fn test_omni_address_display() {
             OmniAddress::Abs(evm_addr.clone()),
             format!("abs:{evm_addr}"),
             "ABS address should format as abs:0x...",
+        ),
+        (
+            OmniAddress::Avax(evm_addr.clone()),
+            format!("avax:{evm_addr}"),
+            "AVAX address should format as avax:0x...",
         ),
         (
             OmniAddress::Strk(
@@ -569,6 +590,7 @@ fn test_get_native_token_prefix() {
         ChainKind::Eth,
         ChainKind::Arb,
         ChainKind::Abs,
+        ChainKind::Avax,
     ] {
         let prefix = OmniAddress::new_zero(chain_kind)
             .unwrap()
@@ -626,6 +648,12 @@ fn test_chain_kind_from_str() {
 
     let chain: ChainKind = "Abs".parse().unwrap();
     assert_eq!(chain, ChainKind::Abs);
+
+    let chain: ChainKind = "Avax".parse().unwrap();
+    assert_eq!(chain, ChainKind::Avax);
+
+    let chain: ChainKind = "avax".parse().unwrap();
+    assert_eq!(chain, ChainKind::Avax);
 }
 
 #[test]
