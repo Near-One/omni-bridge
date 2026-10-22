@@ -1647,16 +1647,10 @@ impl Contract {
             amount.0
         ));
 
-        if let Some(msg) = msg {
-            ext_token::ext(token_id)
-                .with_attached_deposit(ONE_YOCTO)
-                .with_static_gas(MINT_TOKEN_GAS.saturating_add(FT_TRANSFER_CALL_GAS))
-                .mint(recipient, amount, Some(msg))
-        } else {
-            ext_token::ext(token_id)
-                .with_static_gas(MINT_TOKEN_GAS)
-                .mint(recipient, amount, None)
-        }
+        ext_token::ext(token_id)
+            .with_attached_deposit(ONE_YOCTO)
+            .with_static_gas(MINT_TOKEN_GAS.saturating_add(FT_TRANSFER_CALL_GAS))
+            .mint(recipient, amount, msg)
     }
 
     #[access_control_any(roles(Role::DAO))]
