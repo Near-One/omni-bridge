@@ -1,4 +1,5 @@
 mod btc_storage_fix;
+mod dao_mint_token;
 #[cfg(test)]
 mod environment;
 mod fast_transfer;

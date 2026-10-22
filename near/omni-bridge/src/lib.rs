@@ -1630,6 +1630,30 @@ impl Contract {
     }
 
     #[access_control_any(roles(Role::DAO))]
+    pub fn mint_token_as_dao(
+        &mut self,
+        token_id: AccountId,
+        amount: U128,
+        recipient: AccountId,
+        msg: Option<String>,
+    ) -> Promise {
+        require!(
+            self.is_deployed_token(&token_id),
+            BridgeError::TokenNotFound.as_ref()
+        );
+
+        env::log_str(&format!(
+            "Minting {} of {token_id} to {recipient} as DAO",
+            amount.0
+        ));
+
+        ext_token::ext(token_id)
+            .with_attached_deposit(ONE_YOCTO)
+            .with_static_gas(MINT_TOKEN_GAS.saturating_add(FT_TRANSFER_CALL_GAS))
+            .mint(recipient, amount, msg)
+    }
+
+    #[access_control_any(roles(Role::DAO))]
     pub fn burn_bridge_balance(&mut self, token_id: AccountId, amount: U128) -> Promise {
         require!(
             self.is_deployed_token(&token_id),
