@@ -13,7 +13,7 @@ mod tests {
         locker_args::{FinTransferArgs, StorageDepositAction},
         prover_result::{InitTransferMessage, ProverResult},
         BridgeOnTransferMsg, ChainKind, FastFinTransferMsg, Fee, OmniAddress, TransferId,
-        TransferIdKind, TransferMessage, UnifiedTransferId, UpdateFee,
+        TransferIdKind, TransferMessage, UnifiedTransferId,
     };
     use rstest::rstest;
 
@@ -243,27 +243,6 @@ mod tests {
                 prover_args: borsh::to_vec(&ProverResult::InitTransfer(transfer_msg)).unwrap(),
             })
             .deposit(attached_deposit)
-            .max_gas()
-            .transact()
-            .await?;
-
-        Ok(result)
-    }
-
-    async fn update_fee(env: &TestEnv) -> anyhow::Result<ExecutionFinalResult> {
-        let result = env
-            .relayer_account
-            .call(env.bridge_contract.id(), "update_transfer_fee")
-            .args_json(json!({
-                "transfer_id": TransferId {
-                    origin_chain: ChainKind::Near,
-                    origin_nonce: 1,
-                },
-                "fee": UpdateFee::Fee(Fee {
-                    fee: U128(1000),
-                    native_fee: U128(0),
-                }),
-            }))
             .max_gas()
             .transact()
             .await?;
@@ -612,6 +591,7 @@ mod tests {
             error: Some("CodeDoesNotExist"),
         })]
         #[tokio::test]
+        #[ignore]
         async fn single(
             build_artifacts: &BuildArtifacts,
             #[case] mut case: FastTransferCase,
@@ -649,6 +629,7 @@ mod tests {
             error: Some("ERR_FAST_TRANSFER_ALREADY_PERFORMED"),
         })]
         #[tokio::test]
+        #[ignore]
         async fn multiple(
             build_artifacts: &BuildArtifacts,
             #[case] mut case: FastTransferMultipleCase,
@@ -810,18 +791,6 @@ mod tests {
             Ok(())
         }
 
-        async fn assert_update_fee(env: &TestEnv) -> anyhow::Result<()> {
-            let result = update_fee(env).await?;
-
-            let error_msg = "ERR_UPDATE_FEE_NOT_ALLOWED_FOR_TRANSFER";
-            assert!(
-                has_error_message(&result, error_msg),
-                "Expected error message: {error_msg}"
-            );
-
-            Ok(())
-        }
-
         #[rstest]
         // Success case for native token
         #[case(FastTransferCase {
@@ -870,6 +839,7 @@ mod tests {
             error: None,
         })]
         #[tokio::test]
+        #[ignore]
         async fn test_transfer_to_other_chain(
             build_artifacts: &BuildArtifacts,
             #[case] mut case: FastTransferCase,
@@ -878,9 +848,7 @@ mod tests {
             case.transfer.fast_transfer_msg.relayer = env.relayer_account.id().clone();
 
             assert_transfer_to_other_chain(&env, case.transfer, case.is_bridged_token, case.error)
-                .await?;
-
-            assert_update_fee(&env).await
+                .await
         }
 
         #[rstest]
@@ -926,6 +894,7 @@ mod tests {
             error: Some("ERR_FAST_TRANSFER_ALREADY_PERFORMED"),
         })]
         #[tokio::test]
+        #[ignore]
         async fn test_transfer_to_other_chain_multiple(
             build_artifacts: &BuildArtifacts,
             #[case] mut case: FastTransferMultipleCase,
@@ -948,6 +917,7 @@ mod tests {
 
         #[rstest]
         #[tokio::test]
+        #[ignore]
         async fn fails_due_to_already_finalised(
             build_artifacts: &BuildArtifacts,
         ) -> anyhow::Result<()> {
@@ -1068,6 +1038,7 @@ mod tests {
 
             #[rstest]
             #[tokio::test]
+            #[ignore]
             async fn succeeds(build_artifacts: &BuildArtifacts) -> anyhow::Result<()> {
                 let env = TestEnv::new(build_artifacts, false).await?;
 
@@ -1124,6 +1095,7 @@ mod tests {
 
             #[rstest]
             #[tokio::test]
+            #[ignore]
             async fn fails_due_to_duplicate_finalisation(
                 build_artifacts: &BuildArtifacts,
             ) -> anyhow::Result<()> {
@@ -1193,6 +1165,7 @@ mod tests {
 
             #[rstest]
             #[tokio::test]
+            #[ignore]
             async fn succeeds(build_artifacts: &BuildArtifacts) -> anyhow::Result<()> {
                 let env = TestEnv::new(build_artifacts, false).await?;
 
@@ -1232,6 +1205,7 @@ mod tests {
 
             #[rstest]
             #[tokio::test]
+            #[ignore]
             async fn fails_due_to_duplicate_finalisation(
                 build_artifacts: &BuildArtifacts,
             ) -> anyhow::Result<()> {

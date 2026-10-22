@@ -142,6 +142,8 @@ mod OmniBridge {
     #[feature("safe_dispatcher")]
     impl OmniBridgeImpl of super::IOmniBridge<ContractState> {
         fn log_metadata(ref self: ContractState, token: ContractAddress) {
+            assert(!self.is_bridge_token(token), 'ERR_TOKEN_EXIST');
+
             // There are two possible metadata standards in use.
             // 1. Old style: name and symbol are felt252 values.
             // 2. New style: name and symbol are ByteArray values (ERC20 ABI).

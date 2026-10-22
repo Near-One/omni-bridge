@@ -14,10 +14,10 @@ mod tests {
     use rstest::rstest;
 
     use crate::helpers::tests::{
-        abs_factory_address, account_n, arb_factory_address, arb_token_address,
-        base_factory_address, base_token_address, bnb_factory_address, bnb_token_address,
-        eth_eoa_address, eth_factory_address, eth_token_address, fogo_factory_address,
-        get_test_deploy_token_args, hyperevm_factory_address, locker_wasm,
+        abs_factory_address, account_n, aptos_factory_address, arb_factory_address,
+        arb_token_address, base_factory_address, base_token_address, bnb_factory_address,
+        bnb_token_address, eth_eoa_address, eth_factory_address, eth_token_address,
+        fogo_factory_address, get_test_deploy_token_args, hyperevm_factory_address, locker_wasm,
         mock_global_contract_deployer_wasm, mock_prover_wasm, omni_token_wasm, pol_factory_address,
         sol_factory_address, sol_token_address, strk_factory_address, token_deployer_wasm,
         wasm_code_hash, GLOBAL_STORAGE_COST_PER_BYTE, NEP141_DEPOSIT, STORAGE_DEPOSIT_PER_BYTE,
@@ -143,6 +143,7 @@ mod tests {
                 ChainKind::Abs => abs_factory_address(),
                 ChainKind::HyperEvm => hyperevm_factory_address(),
                 ChainKind::Strk => strk_factory_address(),
+                ChainKind::Aptos => aptos_factory_address(),
                 ChainKind::Near | ChainKind::Btc | ChainKind::Zcash => panic!("Unsupported chain"),
             };
 
@@ -402,6 +403,17 @@ mod tests {
                     .await?
                     .into_result()?;
             } else {
+                locker
+                    .call("acl_grant_role")
+                    .args_json(json!({
+                        "role": "TokenDeployer",
+                        "account_id": token_deploy_initiator.id(),
+                    }))
+                    .max_gas()
+                    .transact()
+                    .await?
+                    .into_result()?;
+
                 token_deploy_initiator
                     .call(locker.id(), "deploy_token")
                     .args_borsh(get_test_deploy_token_args(
@@ -1192,7 +1204,7 @@ mod tests {
         locker_contract
             .call("fin_transfer")
             .args_borsh(FinTransferArgs {
-                chain_kind: ChainKind::Eth,
+                chain_kind: emitter_address.get_chain(),
                 storage_deposit_actions,
                 prover_args: borsh::to_vec(&ProverResult::InitTransfer(InitTransferMessage {
                     origin_nonce: 1,

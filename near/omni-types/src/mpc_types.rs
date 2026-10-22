@@ -1,5 +1,6 @@
 use near_mpc_sdk::{
-    foreign_chain::starknet::StarknetFinality, near_mpc_contract_interface::types::EvmFinality,
+    foreign_chain::starknet::StarknetFinality,
+    near_mpc_contract_interface::types::{AptosFinality, EvmFinality},
 };
 use near_sdk::near;
 
@@ -9,6 +10,7 @@ use near_sdk::near;
 pub enum MpcFinality {
     Evm(EvmFinality),
     Starknet(StarknetFinality),
+    Aptos(AptosFinality),
 }
 
 #[near(serializers = [json])]

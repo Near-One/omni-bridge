@@ -12,7 +12,7 @@ on:
 jobs:
   test:
     name: Mollusk Tests
-    runs-on: warp-ubuntu-2204-x64-16x
+    runs-on: warp-ubuntu-2404-x64-16x
     steps:
       - name: Checkout code
         uses: actions/checkout@v4

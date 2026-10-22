@@ -3,6 +3,7 @@ import "@nomicfoundation/hardhat-ethers"
 import "@typechain/hardhat"
 import * as dotenv from "dotenv"
 import "hardhat-storage-layout"
+import type { ContractFactory } from "ethers"
 import type { HardhatUserConfig } from "hardhat/config"
 import "solidity-coverage"
 import "./src/eNear/scripts"
@@ -228,43 +229,49 @@ task(
 task("upgrade-bridge-token", "Upgrades a BridgeToken to a new implementation")
   .addParam("factory", "The address of the OmniBridge contract")
   .addParam("nearTokenAccount", "The NEAR token ID")
+  .addOptionalParam("contract", "Implementation contract name", "BridgeToken")
   .setAction(async (taskArgs, hre) => {
     const { ethers } = hre
 
     const OmniBridgeContract = await ethers.getContractFactory("OmniBridge")
     const OmniBridge = OmniBridgeContract.attach(taskArgs.factory) as OmniBridge
 
-    const BridgeTokenV2Instance = await ethers.getContractFactory("BridgeTokenV2")
-    const BridgeTokenV2 = await BridgeTokenV2Instance.deploy()
-    await BridgeTokenV2.waitForDeployment()
+    // upgradeToken takes the token's proxy address, not the NEAR token id.
+    const tokenProxyAddress = await OmniBridge.nearToEthToken(taskArgs.nearTokenAccount)
+    if (tokenProxyAddress === ethers.ZeroAddress) {
+      throw new Error(`No token registered for NEAR token id ${taskArgs.nearTokenAccount}`)
+    }
 
-    console.log(`BridgeTokenV2 deployed at ${await BridgeTokenV2.getAddress()}`)
+    const implFactory = (await ethers.getContractFactory(taskArgs.contract)) as ContractFactory
+    const impl = await implFactory.deploy()
+    await impl.waitForDeployment()
+    const implAddress = await impl.getAddress()
 
-    const tx = await OmniBridge.upgradeToken(
-      taskArgs.nearTokenAccount,
-      await BridgeTokenV2.getAddress(),
-    )
+    const tx = await OmniBridge.upgradeToken(tokenProxyAddress, implAddress)
     await tx.wait()
 
     console.log(
       JSON.stringify({
         upgradingToken: taskArgs.nearTokenAccount,
-        tokenProxyAddress: await OmniBridge.nearToEthToken(taskArgs.nearTokenAccount),
-        newImplementationAddress: await BridgeTokenV2.getAddress(),
+        tokenProxyAddress,
+        implementationContract: taskArgs.contract,
+        newImplementationAddress: implAddress,
       }),
     )
   })
 
 task("upgrade-factory", "Upgrades the OmniBridge contract")
   .addParam("factory", "The address of the OmniBridge contract")
+  .addOptionalParam("contract", "Implementation contract name, overriding the default")
   .setAction(async (taskArgs, hre) => {
     const { ethers, upgrades } = hre
     const networkConfig = hre.network.config as HttpNetworkUserConfig
     const wormholeAddress = networkConfig.wormholeAddress
     const isWormholeContract = wormholeAddress ?? false
-    const contractName = isWormholeContract ? "OmniBridgeWormhole" : "OmniBridge"
+    const contractName =
+      taskArgs.contract ?? (isWormholeContract ? "OmniBridgeWormhole" : "OmniBridge")
 
-    const OmniBridgeContract = await ethers.getContractFactory(contractName)
+    const OmniBridgeContract = (await ethers.getContractFactory(contractName)) as ContractFactory
 
     const currentImpl = await getProxyImplementationAddress(hre, taskArgs.factory)
     await upgrades.upgradeProxy(taskArgs.factory, OmniBridgeContract)
@@ -273,6 +280,7 @@ task("upgrade-factory", "Upgrades the OmniBridge contract")
     console.log(
       JSON.stringify({
         proxyAddress: taskArgs.factory,
+        implementationContract: contractName,
         previousImplementation: currentImpl,
         newImplementation: newImpl,
       }),
@@ -306,6 +314,19 @@ task("update-wormhole-address", "Update the wormhole address")
     const receipt = await tx.wait()
 
     console.log("Address upgraded at tx hash:", receipt?.hash)
+  })
+
+task("disable-wormhole", "Stops the OmniBridgeWormhole contract from publishing Wormhole messages")
+  .addParam("factory", "The address of the OmniBridge contract")
+  .setAction(async (taskArgs, hre) => {
+    const { ethers } = hre
+
+    const OmniBridgeContract = await ethers.getContractFactory("OmniBridgeWormhole")
+    const OmniBridge = OmniBridgeContract.attach(taskArgs.factory) as OmniBridgeWormhole
+    const tx = await OmniBridge.setWormholeAddress(ethers.ZeroAddress, 0)
+    const receipt = await tx.wait()
+
+    console.log("Wormhole disabled at tx hash:", receipt?.hash)
   })
 
 task("deploy-bytecode", "Deploys a contract with a given bytecode")
@@ -620,6 +641,14 @@ const config: HardhatUserConfig = {
         urls: {
           apiURL: "https://api.etherscan.io/v2/api?chainid=2741",
           browserURL: "https://abscan.org",
+        },
+      },
+      {
+        network: "hyperEvmMainnet",
+        chainId: 999,
+        urls: {
+          apiURL: "https://api.etherscan.io/v2/api?chainid=999",
+          browserURL: "https://hyperevmscan.io",
         },
       },
     ],

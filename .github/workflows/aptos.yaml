@@ -1,0 +1,44 @@
+name: Aptos CI
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'aptos/**'
+      - '.github/workflows/aptos.yaml'
+  pull_request:
+    paths:
+      - 'aptos/**'
+      - '.github/workflows/aptos.yaml'
+
+env:
+  APTOS_CLI_VERSION: "9.2.0"
+
+jobs:
+  test:
+    name: Build and Test
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: aptos
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Aptos CLI
+        run: |
+          ASSET="aptos-cli-${APTOS_CLI_VERSION}-Linux-x86_64.zip"
+          URL="https://github.com/aptos-labs/aptos-core/releases/download/aptos-cli-v${APTOS_CLI_VERSION}/${ASSET}"
+          curl -fsSL "$URL" -o aptos-cli.zip
+          unzip -q aptos-cli.zip
+          sudo mv aptos /usr/local/bin/
+          rm aptos-cli.zip
+          aptos --version
+
+      - name: Compile
+        run: aptos move compile --named-addresses omni_bridge=0xCAFE
+
+      - name: Run tests
+        run: aptos move test --named-addresses omni_bridge=0xCAFE

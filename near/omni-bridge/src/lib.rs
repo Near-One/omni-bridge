@@ -23,13 +23,12 @@ use omni_types::locker_args::{
 };
 use omni_types::mpc_types::SignatureResponse;
 use omni_types::near_events::OmniBridgeEvent;
-use omni_types::prover_result::{InitTransferMessage, ProverResult};
+use omni_types::prover_result::{InitTransferMessage, ProofMessage, ProverResult};
 use omni_types::{
     get_native_token_address, BasicMetadata, BridgeOnTransferMsg, ChainKind, DestinationChainMsg,
     FastFinTransferMsg, FastTransfer, FastTransferId, FastTransferStatus, Fee, InitTransferMsg,
     MetadataPayload, Nonce, OmniAddress, PayloadType, SignRequest, TransferId, TransferIdKind,
-    TransferMessage, TransferMessagePayload, UnifiedTransferId, UpdateFee, UtxoFinTransferMsg,
-    H160,
+    TransferMessage, TransferMessagePayload, UnifiedTransferId, UtxoFinTransferMsg, H160,
 };
 use omni_utils::macros::trusted_relayer;
 use omni_utils::near_expect::NearExpect;
@@ -127,6 +126,8 @@ pub enum Role {
     TokenUpgrader,
     TokenLockController,
     RelayerManager,
+    UnpauseManager,
+    TokenDeployer,
 }
 
 #[ext_contract(ext_token)]
@@ -210,7 +211,10 @@ pub trait ExtUTXOConnector {
 #[near(contract_state)]
 #[derive(Pausable, Upgradable, PanicOnDefault)]
 #[access_control(role_type(Role))]
-#[pausable(manager_roles(Role::PauseManager))]
+#[pausable(
+    pause_roles(Role::PauseManager),
+    unpause_roles(Role::DAO, Role::UnpauseManager)
+)]
 #[upgradable(access_control_roles(
     code_stagers(Role::UpgradableCodeStager, Role::DAO),
     code_deployers(Role::UpgradableCodeDeployer, Role::DAO),
@@ -263,17 +267,25 @@ impl Contract {
             BridgeOnTransferMsg::InitTransfer(init_transfer_msg) => {
                 self.init_transfer(sender_id, signer_id, token_id, amount, init_transfer_msg)
             }
+            #[allow(unreachable_code, unused_variables)]
             BridgeOnTransferMsg::FastFinTransfer(fast_fin_transfer_msg) => {
+                env::panic_str("FastFinTransfer is paused");
                 self.fast_fin_transfer(token_id, amount, signer_id, fast_fin_transfer_msg)
             }
-            BridgeOnTransferMsg::UtxoFinTransfer(utxo_fin_transfer_msg) => self.utxo_fin_transfer(
-                token_id,
-                amount,
-                &signer_id,
-                &sender_id,
-                utxo_fin_transfer_msg,
-            ),
+            #[allow(unreachable_code, unused_variables)]
+            BridgeOnTransferMsg::UtxoFinTransfer(utxo_fin_transfer_msg) => {
+                env::panic_str("UtxoFinTransfer is paused");
+                self.utxo_fin_transfer(
+                    token_id,
+                    amount,
+                    &signer_id,
+                    &sender_id,
+                    utxo_fin_transfer_msg,
+                )
+            }
+            #[allow(unreachable_code)]
             BridgeOnTransferMsg::SwapMigratedToken => {
+                env::panic_str("SwapMigratedToken is paused");
                 self.swap_migrated_token(sender_id, token_id, amount)
                     .detach();
                 PromiseOrPromiseIndexOrValue::Value(U128(0))
@@ -314,7 +326,8 @@ impl Contract {
         contract
     }
 
-    #[pause(except(roles(Role::DAO)))]
+    #[access_control_any(roles(Role::DAO, Role::TokenDeployer))]
+    #[pause]
     pub fn log_metadata(&self, token_id: &AccountId) -> Promise {
         ext_token::ext(token_id.clone())
             .with_static_gas(LOG_METADATA_GAS)
@@ -384,58 +397,6 @@ impl Contract {
         }
     }
 
-    #[payable]
-    #[pause]
-    pub fn update_transfer_fee(&mut self, transfer_id: TransferId, fee: UpdateFee) {
-        match fee {
-            UpdateFee::Fee(fee) => {
-                let mut transfer = self.get_transfer_message_storage(transfer_id);
-
-                require!(
-                    transfer.message.origin_transfer_id.is_none(),
-                    BridgeError::UpdateFeeNotAllowedForTransfer.as_ref()
-                );
-
-                let current_fee = transfer.message.fee;
-                require!(
-                    fee.fee >= current_fee.fee && fee.fee < transfer.message.amount,
-                    BridgeError::InvalidFee.as_ref()
-                );
-
-                require!(
-                    fee.fee == current_fee.fee
-                        || OmniAddress::Near(env::predecessor_account_id())
-                            == transfer.message.sender,
-                    BridgeError::SenderCanUpdateTokenFeeOnly.as_ref()
-                );
-
-                let diff_native_fee = fee
-                    .native_fee
-                    .0
-                    .checked_sub(current_fee.native_fee.0)
-                    .near_expect(BridgeError::LowerFee);
-
-                require!(
-                    NearToken::from_yoctonear(diff_native_fee) == env::attached_deposit(),
-                    BridgeError::InvalidAttachedDeposit.as_ref()
-                );
-
-                transfer.message.fee = fee;
-                self.insert_raw_transfer(transfer.message.clone(), transfer.owner);
-
-                env::log_str(
-                    &OmniBridgeEvent::UpdateFeeEvent {
-                        transfer_message: transfer.message,
-                    }
-                    .to_log_string(),
-                );
-            }
-            UpdateFee::Proof(_) => {
-                env::panic_str(BridgeError::UnsupportedFeeUpdateProof.to_string().as_str())
-            }
-        }
-    }
-
     /// # Panics
     ///
     /// This function will panic under the following conditions:
@@ -452,6 +413,11 @@ impl Contract {
         fee: &Option<Fee>,
     ) -> Promise {
         let transfer_message = self.get_transfer_message(transfer_id);
+
+        require!(
+            !transfer_message.recipient.is_utxo_chain(),
+            BridgeError::SignTransferNotAllowedForUtxoChain.as_ref()
+        );
 
         if let Some(fee) = &fee {
             require!(
@@ -692,6 +658,7 @@ impl Contract {
                 .fin_transfer_callback(
                     &args.storage_deposit_actions,
                     env::predecessor_account_id(),
+                    args.chain_kind,
                 ),
         )
     }
@@ -702,16 +669,14 @@ impl Contract {
         &mut self,
         #[serializer(borsh)] storage_deposit_actions: &Vec<StorageDepositAction>,
         #[serializer(borsh)] predecessor_account_id: AccountId,
+        #[serializer(borsh)] chain_kind: ChainKind,
     ) -> PromiseOrValue<Nonce> {
         let Ok(ProverResult::InitTransfer(init_transfer)) = Self::decode_prover_result(0) else {
             env::panic_str(BridgeError::InvalidProofMessage.to_string().as_str())
         };
-        require!(
-            self.factories
-                .get(&init_transfer.emitter_address.get_chain())
-                == Some(init_transfer.emitter_address),
-            BridgeError::UnknownFactory.as_ref()
-        );
+        init_transfer
+            .validate_chain(chain_kind, self.factories.get(&chain_kind).as_ref())
+            .unwrap_or_else(|err| env::panic_str(err.to_string().as_str()));
 
         let decimals = self
             .token_decimals
@@ -780,7 +745,11 @@ impl Contract {
             Self::ext(env::current_account_id())
                 .with_attached_deposit(attached_deposit)
                 .with_static_gas(FIN_TRANSFER_CALLBACK_GAS)
-                .fin_transfer_callback(&storage_deposit_actions, env::predecessor_account_id()),
+                .fin_transfer_callback(
+                    &storage_deposit_actions,
+                    env::predecessor_account_id(),
+                    origin_chain,
+                ),
         )
     }
 
@@ -1107,7 +1076,7 @@ impl Contract {
             Self::ext(env::current_account_id())
                 .with_attached_deposit(env::attached_deposit())
                 .with_static_gas(CLAIM_FEE_CALLBACK_GAS)
-                .claim_fee_callback(&env::predecessor_account_id()),
+                .claim_fee_callback(&env::predecessor_account_id(), args.chain_kind),
         )
     }
 
@@ -1116,6 +1085,7 @@ impl Contract {
     pub fn claim_fee_callback(
         &mut self,
         #[serializer(borsh)] predecessor_account_id: &AccountId,
+        #[serializer(borsh)] chain_kind: ChainKind,
         #[callback_result]
         #[serializer(borsh)]
         call_result: Result<ProverResult, PromiseError>,
@@ -1123,6 +1093,9 @@ impl Contract {
         let Ok(ProverResult::FinTransfer(fin_transfer)) = call_result else {
             env::panic_str(BridgeError::InvalidProofMessage.to_string().as_str())
         };
+        fin_transfer
+            .validate_chain(chain_kind, self.factories.get(&chain_kind).as_ref())
+            .unwrap_or_else(|err| env::panic_str(err.to_string().as_str()));
 
         let fee_recipient = fin_transfer.fee_recipient.unwrap_or_else(|| {
             env::panic_str(BridgeError::FeeRecipientNotSetOrEmpty.to_string().as_str());
@@ -1132,14 +1105,11 @@ impl Contract {
             fee_recipient == *predecessor_account_id,
             BridgeError::OnlyFeeRecipientCanClaim.as_ref()
         );
-        require!(
-            self.factories
-                .get(&fin_transfer.emitter_address.get_chain())
-                == Some(fin_transfer.emitter_address),
-            BridgeError::UnknownFactory.as_ref()
-        );
-
         let transfer_message = self.remove_transfer_message(fin_transfer.transfer_id);
+        require!(
+            transfer_message.recipient.get_chain() == chain_kind,
+            BridgeError::ProofChainMismatch.as_ref()
+        );
 
         if let Some(origin_transfer_id) = transfer_message.origin_transfer_id.clone() {
             let mut fast_transfer = FastTransfer::from_transfer(
@@ -1182,13 +1152,14 @@ impl Contract {
     }
 
     #[payable]
-    #[pause(except(roles(Role::DAO)))]
+    #[access_control_any(roles(Role::DAO, Role::TokenDeployer))]
+    #[pause]
     pub fn deploy_token(&mut self, #[serializer(borsh)] args: DeployTokenArgs) -> Promise {
         self.verify_proof(args.chain_kind, args.prover_args).then(
             Self::ext(env::current_account_id())
                 .with_attached_deposit(NO_DEPOSIT)
                 .with_static_gas(DEPLOY_TOKEN_CALLBACK_GAS)
-                .deploy_token_callback(near_sdk::env::attached_deposit()),
+                .deploy_token_callback(near_sdk::env::attached_deposit(), args.chain_kind),
         )
     }
 
@@ -1196,6 +1167,7 @@ impl Contract {
     pub fn deploy_token_callback(
         &mut self,
         attached_deposit: NearToken,
+        chain_kind: ChainKind,
         #[callback_result]
         #[serializer(borsh)]
         call_result: Result<ProverResult, PromiseError>,
@@ -1204,14 +1176,12 @@ impl Contract {
             env::panic_str(BridgeError::InvalidProofMessage.to_string().as_str());
         };
 
-        let chain = metadata.emitter_address.get_chain();
-        require!(
-            self.factories.get(&chain) == Some(metadata.emitter_address),
-            BridgeError::UnknownFactory.as_ref()
-        );
+        metadata
+            .validate_chain(chain_kind, self.factories.get(&chain_kind).as_ref())
+            .unwrap_or_else(|err| env::panic_str(err.to_string().as_str()));
 
         self.deploy_token_internal(
-            chain,
+            chain_kind,
             &metadata.token_address,
             BasicMetadata {
                 name: metadata.name,
@@ -1269,6 +1239,7 @@ impl Contract {
     }
 
     #[payable]
+    #[trusted_relayer(bypass_roles(Role::DAO, Role::UnrestrictedRelayer, Role::TokenDeployer))]
     #[pause(except(roles(Role::DAO)))]
     pub fn bind_token(&mut self, #[serializer(borsh)] args: BindTokenArgs) -> Promise {
         self.verify_proof(args.chain_kind, args.prover_args)
@@ -1276,7 +1247,7 @@ impl Contract {
                 Self::ext(env::current_account_id())
                     .with_attached_deposit(NO_DEPOSIT)
                     .with_static_gas(BIND_TOKEN_CALLBACK_GAS)
-                    .bind_token_callback(near_sdk::env::attached_deposit()),
+                    .bind_token_callback(near_sdk::env::attached_deposit(), args.chain_kind),
             )
             .then(
                 Self::ext(env::current_account_id())
@@ -1290,6 +1261,7 @@ impl Contract {
     pub fn bind_token_callback(
         &mut self,
         attached_deposit: NearToken,
+        chain_kind: ChainKind,
         #[callback_result]
         #[serializer(borsh)]
         call_result: Result<ProverResult, PromiseError>,
@@ -1298,12 +1270,9 @@ impl Contract {
             env::panic_str(BridgeError::InvalidProofMessage.to_string().as_str());
         };
 
-        require!(
-            self.factories
-                .get(&deploy_token.emitter_address.get_chain())
-                == Some(deploy_token.emitter_address),
-            BridgeError::UnknownFactory.as_ref()
-        );
+        deploy_token
+            .validate_chain(chain_kind, self.factories.get(&chain_kind).as_ref())
+            .unwrap_or_else(|err| env::panic_str(err.to_string().as_str()));
 
         let storage_usage = env::storage_usage();
 
@@ -1488,6 +1457,7 @@ impl Contract {
             s if s.starts_with("sol") => ChainKind::Sol,
             s if s.starts_with("fogo") => ChainKind::Fogo,
             s if s.starts_with("strk") || s.starts_with("starknet") => ChainKind::Strk,
+            s if s.starts_with("aptos") => ChainKind::Aptos,
             _ => env::panic_str(&BridgeError::CannotDetermineOriginChain.as_ref()),
         };
 
@@ -1709,6 +1679,33 @@ impl Contract {
             }
             .to_log_string(),
         );
+    }
+
+    #[access_control_any(roles(Role::DAO))]
+    pub fn burn_bridge_balance(&mut self, token_id: AccountId, amount: U128) -> Promise {
+        require!(
+            self.is_deployed_token(&token_id),
+            BridgeError::TokenNotFound.as_ref()
+        );
+
+        env::log_str(&format!(
+            "Burning {} of {token_id} from the bridge balance",
+            amount.0
+        ));
+
+        ext_token::ext(token_id)
+            .with_static_gas(BURN_TOKEN_GAS)
+            .burn(amount)
+    }
+
+    #[access_control_any(roles(Role::DAO))]
+    pub fn restore_transfer_message(&mut self, transfer_message: TransferMessage) {
+        let transfer_id = transfer_message.get_transfer_id();
+        self.add_transfer_message(transfer_message, env::predecessor_account_id());
+
+        env::log_str(&format!(
+            "Restored the transfer message with the transfer id: {transfer_id:?}"
+        ));
     }
 
     pub fn get_current_destination_nonce(&self, chain_kind: ChainKind) -> Nonce {
