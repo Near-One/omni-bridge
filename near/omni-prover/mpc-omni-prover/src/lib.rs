@@ -112,13 +112,7 @@ impl MpcOmniProver {
             ProverError::FinalityMismatch.as_ref()
         );
 
-        let request_args = VerifyForeignTransactionRequestArgs {
-            request: payload_v1.request.clone(),
-            domain_id: DomainId(FOREIGN_TX_DOMAIN_ID),
-            payload_version: ForeignTxPayloadVersion::V1,
-            // The payload hash is checked against the signed payload in `verify_callback`.
-            expected_payload_hash: None,
-        };
+        let request_args = Self::build_request_args(&sign_payload);
 
         ext_mpc_contract::ext(self.mpc_contract_id.clone())
             .with_static_gas(VERIFY_FOREIGN_TX_GAS)
@@ -167,6 +161,25 @@ impl MpcOmniProver {
                 let log_entry_data = Self::extract_evm_log(payload_v1)?;
                 parse_evm_proof(proof_kind, chain_kind, log_entry_data)
             }
+        }
+    }
+
+    fn build_request_args(
+        sign_payload: &ForeignTxSignPayload,
+    ) -> VerifyForeignTransactionRequestArgs {
+        let ForeignTxSignPayload::V1(payload_v1) = sign_payload;
+
+        // Lets the MPC contract reject a response for a different payload before it
+        // reaches us. `verify_callback` still checks the hash independently.
+        let expected_payload_hash = sign_payload
+            .compute_msg_hash()
+            .near_expect(ProverError::InvalidPayloadHash);
+
+        VerifyForeignTransactionRequestArgs {
+            request: payload_v1.request.clone(),
+            domain_id: DomainId(FOREIGN_TX_DOMAIN_ID),
+            payload_version: ForeignTxPayloadVersion::V1,
+            expected_payload_hash: Some(expected_payload_hash),
         }
     }
 

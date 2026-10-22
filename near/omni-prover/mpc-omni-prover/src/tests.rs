@@ -714,3 +714,25 @@ fn test_init_default_finalities() {
     }
     assert_eq!(prover.finalities.len(), 9);
 }
+
+#[test]
+fn test_build_request_args_sets_expected_payload_hash() {
+    let sign_payload = test_sign_payload();
+    let ForeignTxSignPayload::V1(ref payload_v1) = sign_payload;
+    let expected_hash = sign_payload.compute_msg_hash().unwrap();
+
+    let request_args = MpcOmniProver::build_request_args(&sign_payload);
+
+    assert_eq!(request_args.request, payload_v1.request);
+    assert_eq!(
+        request_args.expected_payload_hash,
+        Some(expected_hash.clone())
+    );
+
+    // The MPC contract receives the request as JSON, so the hash must be serialized.
+    let json = near_sdk::serde_json::to_value(&request_args).unwrap();
+    assert_eq!(
+        json["expected_payload_hash"],
+        near_sdk::serde_json::to_value(&expected_hash).unwrap()
+    );
+}
