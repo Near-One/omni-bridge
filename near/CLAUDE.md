@@ -33,6 +33,7 @@ The main bridge contract handling cross-chain transfers.
 - `deploy_token()` - Deploy bridged token on NEAR (requires proof, DAO/TokenDeployer only)
 - `bind_token()` - Register existing token as bridge-compatible (requires proof, called by trusted relayer or TokenDeployer)
 - `claim_fee()` - Claim accumulated fees (requires proof, called by relayer)
+- `mint_token_as_dao()` - Mint a bridged token on NEAR without a transfer, e.g. to seed liquidity during a migration (DAO only; pair with `burn_bridge_balance()`)
 
 **UTXO Support (btc.rs):**
 - `submit_transfer_to_utxo_chain_connector()` - Send to Bitcoin/Zcash (called by relayer)
