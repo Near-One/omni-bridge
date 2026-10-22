@@ -604,6 +604,7 @@ mod tests {
 
     #[rstest]
     #[tokio::test]
+    #[ignore = "FastFinTransfer is hard-paused in ft_on_transfer since 0.4.17"]
     async fn test_fin_transfer_as_dao_after_fast_transfer_pays_relayer(
         build_artifacts: &BuildArtifacts,
     ) -> anyhow::Result<()> {
