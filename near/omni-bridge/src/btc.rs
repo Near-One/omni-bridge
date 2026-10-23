@@ -27,12 +27,15 @@ const WITHDRAW_RBF_GAS: Gas = Gas::from_tgas(100);
 /// ZIP-317 fee parameters: <https://zips.z.cash/zip-0317>.
 const ZIP317_MARGINAL_FEE: u128 = 5_000;
 const ZIP317_GRACE_ACTIONS: u128 = 2;
+/// The connector accepts a withdrawal Orchard bundle with exactly this many actions.
+const ZCASH_ORCHARD_ACTIONS_PER_WITHDRAWAL: usize = 1;
 
-/// ZIP-317 conventional fee of a transparent Zcash transaction. For P2PKH inputs and outputs
-/// the number of logical actions equals `max(inputs_count, outputs_count)`. For other
-/// transparent scripts it is an upper bound. Shielded components are not supported.
-fn zcash_zip317_fee(inputs_count: usize, outputs_count: usize) -> u128 {
-    let logical_actions = inputs_count.max(outputs_count) as u128;
+/// ZIP-317 conventional fee of a Zcash transaction with the given transparent inputs and
+/// outputs and shielded actions. This mirrors the connector's minimum fee: every input is
+/// counted as a standard P2PKH one (one logical action each) and the transparent outputs by
+/// their serialized size, which is one action per standard P2PKH/P2SH output.
+fn zcash_zip317_fee(inputs_count: usize, outputs_count: usize, shielded_actions: usize) -> u128 {
+    let logical_actions = (inputs_count.max(outputs_count) + shielded_actions) as u128;
     ZIP317_MARGINAL_FEE * logical_actions.max(ZIP317_GRACE_ACTIONS)
 }
 
@@ -42,11 +45,19 @@ fn check_gas_subsidy(
     chain_kind: ChainKind,
     inputs_count: usize,
     outputs_count: usize,
+    has_orchard_bundle: bool,
     user_max_gas_fee: u128,
     gas_subsidy: u128,
 ) {
     let required_gas_fee = match chain_kind {
-        ChainKind::Zcash => zcash_zip317_fee(inputs_count, outputs_count),
+        ChainKind::Zcash => {
+            let shielded_actions = if has_orchard_bundle {
+                ZCASH_ORCHARD_ACTIONS_PER_WITHDRAWAL
+            } else {
+                0
+            };
+            zcash_zip317_fee(inputs_count, outputs_count, shielded_actions)
+        }
         // TODO: BTC fee is market-driven, so the subsidy can only be bounded from above
         // (e.g. by a DAO-configured max fee rate times the estimated vsize).
         ChainKind::Btc => env::panic_str(
@@ -163,6 +174,7 @@ impl Contract {
                 input,
                 output,
                 max_gas_fee,
+                chain_specific_data,
             } = message
             {
                 require!(
@@ -180,6 +192,7 @@ impl Contract {
                         chain_kind,
                         input.len(),
                         output.len(),
+                        chain_specific_data.is_some(),
                         user_max_gas_fee.0,
                         gas_subsidy_amount,
                     );
@@ -376,48 +389,66 @@ mod tests {
 
     #[test]
     fn zcash_zip317_fee_uses_grace_actions_for_small_transactions() {
-        assert_eq!(zcash_zip317_fee(1, 1), 10_000);
-        assert_eq!(zcash_zip317_fee(2, 2), 10_000);
+        assert_eq!(zcash_zip317_fee(1, 1, 0), 10_000);
+        assert_eq!(zcash_zip317_fee(2, 2, 0), 10_000);
+        assert_eq!(zcash_zip317_fee(1, 0, 1), 10_000);
     }
 
     #[test]
     fn zcash_zip317_fee_uses_max_of_inputs_and_outputs() {
-        assert_eq!(zcash_zip317_fee(4, 2), 20_000);
-        assert_eq!(zcash_zip317_fee(2, 3), 15_000);
+        assert_eq!(zcash_zip317_fee(4, 2, 0), 20_000);
+        assert_eq!(zcash_zip317_fee(2, 3, 0), 15_000);
+    }
+
+    #[test]
+    fn zcash_zip317_fee_adds_shielded_actions() {
+        assert_eq!(zcash_zip317_fee(4, 1, 1), 25_000);
+        assert_eq!(zcash_zip317_fee(2, 0, 1), 15_000);
     }
 
     #[test]
     fn check_gas_subsidy_exact_top_up_succeeds() {
-        check_gas_subsidy(ChainKind::Zcash, 4, 2, 15_000, 5_000);
+        check_gas_subsidy(ChainKind::Zcash, 4, 2, false, 15_000, 5_000);
+    }
+
+    #[test]
+    fn check_gas_subsidy_orchard_withdrawal_counts_extra_action() {
+        check_gas_subsidy(ChainKind::Zcash, 4, 1, true, 15_000, 10_000);
+    }
+
+    #[test]
+    #[should_panic(expected = "ERR_INVALID_GAS_SUBSIDY")]
+    fn check_gas_subsidy_transparent_subsidy_for_orchard_withdrawal_fails() {
+        check_gas_subsidy(ChainKind::Zcash, 4, 1, true, 15_000, 5_000);
     }
 
     #[test]
     #[should_panic(expected = "ERR_INVALID_GAS_SUBSIDY")]
     fn check_gas_subsidy_excessive_subsidy_fails() {
-        check_gas_subsidy(ChainKind::Zcash, 4, 2, 15_000, 50_000);
+        check_gas_subsidy(ChainKind::Zcash, 4, 2, false, 15_000, 50_000);
     }
 
     #[test]
     #[should_panic(expected = "ERR_INVALID_GAS_SUBSIDY")]
     fn check_gas_subsidy_insufficient_subsidy_fails() {
-        check_gas_subsidy(ChainKind::Zcash, 4, 2, 15_000, 4_999);
+        check_gas_subsidy(ChainKind::Zcash, 4, 2, false, 15_000, 4_999);
     }
 
     #[test]
     #[should_panic(expected = "ERR_GAS_SUBSIDY_NOT_NEEDED")]
     fn check_gas_subsidy_user_max_gas_fee_is_enough_fails() {
-        check_gas_subsidy(ChainKind::Zcash, 4, 2, 20_000, 1);
+        check_gas_subsidy(ChainKind::Zcash, 4, 2, false, 20_000, 1);
     }
 
     #[test]
     #[should_panic(expected = "ERR_GAS_SUBSIDY_NOT_IMPLEMENTED_FOR_CHAIN")]
     fn check_gas_subsidy_btc_fails() {
-        check_gas_subsidy(ChainKind::Btc, 4, 2, 15_000, 5_000);
+        check_gas_subsidy(ChainKind::Btc, 4, 2, false, 15_000, 5_000);
     }
 
     #[test]
     #[should_panic(expected = "ERR_GAS_SUBSIDY_NOT_SUPPORTED_FOR_CHAIN")]
     fn check_gas_subsidy_non_utxo_chain_fails() {
-        check_gas_subsidy(ChainKind::Eth, 4, 2, 15_000, 5_000);
+        check_gas_subsidy(ChainKind::Eth, 4, 2, false, 15_000, 5_000);
     }
 }

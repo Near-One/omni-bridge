@@ -1,5 +1,6 @@
 use near_sdk::json_types::U128;
 use near_sdk::serde::{Deserialize, Serialize};
+use near_sdk::serde_json::Value;
 use near_sdk::{near, AccountId};
 
 type OutPoint = String;
@@ -12,6 +13,11 @@ pub enum TokenReceiverMessage {
         input: Vec<OutPoint>,
         output: Vec<TxOut>,
         max_gas_fee: Option<U128>,
+        /// Chain-specific part of the connector's message, passed through as is. For Zcash it
+        /// carries the Orchard bundle of a shielded withdrawal, so its presence means the
+        /// transaction has shielded actions on top of the transparent `input`/`output`.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        chain_specific_data: Option<Value>,
     },
 }
 
