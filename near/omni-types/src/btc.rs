@@ -13,9 +13,7 @@ pub enum TokenReceiverMessage {
         input: Vec<OutPoint>,
         output: Vec<TxOut>,
         max_gas_fee: Option<U128>,
-        /// Chain-specific part of the connector's message, passed through as is. For Zcash it
-        /// carries the Orchard bundle of a shielded withdrawal, so its presence means the
-        /// transaction has shielded actions on top of the transparent `input`/`output`.
+        /// Passed through to the connector as is. For Zcash it holds the Orchard bundle.
         #[serde(default, skip_serializing_if = "Option::is_none")]
         chain_specific_data: Option<Value>,
     },

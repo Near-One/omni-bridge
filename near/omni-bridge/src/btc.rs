@@ -19,28 +19,19 @@ use omni_utils::macros::trusted_relayer;
 use omni_utils::near_expect::NearExpect;
 use omni_utils::promise::PromiseOrPromiseIndexOrValue;
 
-/// Covers the callback itself plus the fee payment or the subsidy refund it schedules,
-/// so a lack of gas fails the whole call before the transfer is submitted.
 const SUBMIT_TRANSFER_TO_BTC_CONNECTOR_CALLBACK_GAS: Gas = Gas::from_tgas(20);
 const WITHDRAW_RBF_GAS: Gas = Gas::from_tgas(100);
 
-/// ZIP-317 fee parameters: <https://zips.z.cash/zip-0317>.
+// https://zips.z.cash/zip-0317
 const ZIP317_MARGINAL_FEE: u128 = 5_000;
 const ZIP317_GRACE_ACTIONS: u128 = 2;
-/// The connector accepts a withdrawal Orchard bundle with exactly this many actions.
 const ZCASH_ORCHARD_ACTIONS_PER_WITHDRAWAL: usize = 1;
 
-/// ZIP-317 conventional fee of a Zcash transaction with the given transparent inputs and
-/// outputs and shielded actions. This mirrors the connector's minimum fee: every input is
-/// counted as a standard P2PKH one (one logical action each) and the transparent outputs by
-/// their serialized size, which is one action per standard P2PKH/P2SH output.
 fn zcash_zip317_fee(inputs_count: usize, outputs_count: usize, shielded_actions: usize) -> u128 {
     let logical_actions = (inputs_count.max(outputs_count) + shielded_actions) as u128;
     ZIP317_MARGINAL_FEE * logical_actions.max(ZIP317_GRACE_ACTIONS)
 }
 
-/// Checks that the relayer's gas subsidy tops up the user's `max_gas_fee` exactly to the gas fee
-/// required for a UTXO chain transaction with the given number of inputs and outputs.
 fn check_gas_subsidy(
     chain_kind: ChainKind,
     inputs_count: usize,
@@ -58,8 +49,7 @@ fn check_gas_subsidy(
             };
             zcash_zip317_fee(inputs_count, outputs_count, shielded_actions)
         }
-        // TODO: BTC fee is market-driven, so the subsidy can only be bounded from above
-        // (e.g. by a DAO-configured max fee rate times the estimated vsize).
+        // TODO: BTC fee is market-driven, so only an upper bound is possible.
         ChainKind::Btc => env::panic_str(
             BridgeError::GasSubsidyNotImplementedForChain
                 .to_string()
@@ -82,7 +72,6 @@ fn check_gas_subsidy(
     );
 }
 
-/// Gas fee top-up for a UTXO chain transaction paid by the relayer.
 #[near(serializers=[json])]
 #[derive(Debug, Clone)]
 pub struct GasSubsidy {
@@ -113,11 +102,8 @@ impl Contract {
         )
     }
 
-    /// Same as `submit_transfer_to_utxo_chain_connector`, but called via `ft_transfer_call`
-    /// (manual mode for stuck transfers). The attached tokens are a relayer's subsidy for the
-    /// UTXO chain gas fee. The subsidy is kept by the bridge right away, and the callback
-    /// refunds it explicitly if the connector rejects the transfer. So if the callback fails,
-    /// the subsidy stays in the bridge instead of being refunded from other users' funds.
+    /// The subsidy is kept by the bridge and refunded explicitly in the callback, so a failed
+    /// callback can't make the token refund it from other users' funds.
     pub(crate) fn submit_transfer_to_utxo_chain_connector_with_gas_subsidy(
         &mut self,
         token_id: &AccountId,
@@ -125,8 +111,7 @@ impl Contract {
         gas_subsidy: U128,
         submit_utxo_transfer_msg: SubmitUtxoTransferMsg,
     ) -> PromiseOrPromiseIndexOrValue<U128> {
-        // `relayer_id` is the `sender_id` of `ft_transfer_call`. It can be trusted, because
-        // the internal method requires `token_id` to be the UTXO chain token.
+        // `relayer_id` can be trusted because `token_id` must be the UTXO chain token.
         require!(
             self.is_trusted_relayer(&relayer_id),
             "Relayer is not active"
@@ -262,7 +247,7 @@ impl Contract {
         transfer_msg: TransferMessage,
         transfer_owner: AccountId,
         fee_recipient: AccountId,
-        // `Option` keeps callbacks scheduled before the upgrade (without this argument) working.
+        // `Option` for callbacks scheduled before the upgrade.
         gas_subsidy: Option<GasSubsidy>,
         #[callback_result] call_result: &Result<U128, PromiseError>,
     ) -> PromiseOrValue<()> {
