@@ -946,6 +946,7 @@ fn run_bind_token_on_eth(contract: &mut Contract, token_id: &AccountId) {
     );
     contract.bind_token_callback(
         NearToken::from_near(1),
+        ChainKind::Eth,
         Ok(ProverResult::DeployToken(DeployTokenMessage {
             token: token_id.clone(),
             token_address: get_eth_token_address(),
@@ -989,7 +990,7 @@ fn run_fin_transfer_from_eth_to_near(contract: &mut Contract, token_id: &Account
         ]),
     );
 
-    let result = contract.fin_transfer_callback(&storage_actions, recipient);
+    let result = contract.fin_transfer_callback(&storage_actions, recipient, ChainKind::Eth);
     assert!(matches!(result, PromiseOrValue::Promise(_)));
 }
 
@@ -1116,8 +1117,11 @@ fn test_fin_transfer_callback_non_near_locks_tokens_for_unbound_token() {
             borsh::to_vec(&prover_result).unwrap(),
         )]),
     );
-    let result =
-        contract.fin_transfer_callback(&get_default_storage_deposit_actions(), predecessor);
+    let result = contract.fin_transfer_callback(
+        &get_default_storage_deposit_actions(),
+        predecessor,
+        ChainKind::Eth,
+    );
 
     assert!(matches!(result, PromiseOrValue::Value(_)));
     assert_eq!(
