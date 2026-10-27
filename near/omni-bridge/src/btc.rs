@@ -179,7 +179,7 @@ impl Contract {
     #[payable]
     #[access_control_any(roles(Role::DAO, Role::RbfOperator))]
     pub fn rbf_increase_gas_fee(
-        &self,
+        &mut self,
         chain_kind: ChainKind,
         original_btc_pending_verify_id: String,
         output: Vec<TxOut>,
