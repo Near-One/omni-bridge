@@ -30,9 +30,10 @@ The main bridge contract handling cross-chain transfers.
 - `ft_on_transfer()` - Entry point for bridging (receives NEP-141 transfer from token contract)
 - `fin_transfer()` - Finalize incoming transfer (requires proof, called by relayer)
 - `sign_transfer()` - Request MPC signature for transfer (called by relayer)
-- `deploy_token()` - Deploy bridged token on NEAR (requires proof, called by relayer)
-- `bind_token()` - Register existing token as bridge-compatible (requires proof, called by relayer)
+- `deploy_token()` - Deploy bridged token on NEAR (requires proof, DAO/TokenDeployer only)
+- `bind_token()` - Register existing token as bridge-compatible (requires proof, called by trusted relayer or TokenDeployer)
 - `claim_fee()` - Claim accumulated fees (requires proof, called by relayer)
+- `fin_transfer_as_dao()` - Finalize incoming transfer without proof, for when proof infra cannot attest a valid transfer (DAO only)
 
 **UTXO Support (btc.rs):**
 - `submit_transfer_to_utxo_chain_connector()` - Send to Bitcoin/Zcash (called by relayer)

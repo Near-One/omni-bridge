@@ -57,6 +57,15 @@ impl MpcOmniProver {
     pub fn init(mpc_contract_id: AccountId) -> Self {
         let mut finalities = HashMap::new();
         finalities.insert(ChainKind::Abs, MpcFinality::Evm(EvmFinality::Latest));
+        finalities.insert(ChainKind::Avax, MpcFinality::Evm(EvmFinality::Finalized));
+        finalities.insert(ChainKind::Arb, MpcFinality::Evm(EvmFinality::Safe));
+        finalities.insert(ChainKind::Pol, MpcFinality::Evm(EvmFinality::Finalized));
+        finalities.insert(ChainKind::Base, MpcFinality::Evm(EvmFinality::Safe));
+        finalities.insert(ChainKind::Bnb, MpcFinality::Evm(EvmFinality::Finalized));
+        finalities.insert(
+            ChainKind::HyperEvm,
+            MpcFinality::Evm(EvmFinality::Finalized),
+        );
         finalities.insert(
             ChainKind::Strk,
             MpcFinality::Starknet(StarknetFinality::AcceptedOnL2),
@@ -103,11 +112,7 @@ impl MpcOmniProver {
             ProverError::FinalityMismatch.as_ref()
         );
 
-        let request_args = VerifyForeignTransactionRequestArgs {
-            request: payload_v1.request.clone(),
-            domain_id: DomainId(FOREIGN_TX_DOMAIN_ID),
-            payload_version: ForeignTxPayloadVersion::V1,
-        };
+        let request_args = Self::build_request_args(&sign_payload);
 
         ext_mpc_contract::ext(self.mpc_contract_id.clone())
             .with_static_gas(VERIFY_FOREIGN_TX_GAS)
@@ -159,12 +164,37 @@ impl MpcOmniProver {
         }
     }
 
+    fn build_request_args(
+        sign_payload: &ForeignTxSignPayload,
+    ) -> VerifyForeignTransactionRequestArgs {
+        let ForeignTxSignPayload::V1(payload_v1) = sign_payload;
+
+        // Lets the MPC contract reject a response for a different payload before it
+        // reaches us. `verify_callback` still checks the hash independently.
+        let expected_payload_hash = sign_payload
+            .compute_msg_hash()
+            .near_expect(ProverError::InvalidPayloadHash);
+
+        VerifyForeignTransactionRequestArgs {
+            request: payload_v1.request.clone(),
+            domain_id: DomainId(FOREIGN_TX_DOMAIN_ID),
+            payload_version: ForeignTxPayloadVersion::V1,
+            expected_payload_hash: Some(expected_payload_hash),
+        }
+    }
+
     fn request_to_chain_kind(request: &ForeignChainRpcRequest) -> Option<ChainKind> {
         match request {
             ForeignChainRpcRequest::Abstract(_) => Some(ChainKind::Abs),
             ForeignChainRpcRequest::Ethereum(_) => Some(ChainKind::Eth),
             ForeignChainRpcRequest::Starknet(_) => Some(ChainKind::Strk),
             ForeignChainRpcRequest::Aptos(_) => Some(ChainKind::Aptos),
+            ForeignChainRpcRequest::Avalanche(_) => Some(ChainKind::Avax),
+            ForeignChainRpcRequest::Arbitrum(_) => Some(ChainKind::Arb),
+            ForeignChainRpcRequest::Polygon(_) => Some(ChainKind::Pol),
+            ForeignChainRpcRequest::HyperEvm(_) => Some(ChainKind::HyperEvm),
+            ForeignChainRpcRequest::Base(_) => Some(ChainKind::Base),
+            ForeignChainRpcRequest::Bnb(_) => Some(ChainKind::Bnb),
             _ => None,
         }
     }
@@ -172,7 +202,14 @@ impl MpcOmniProver {
     fn request_matches_finality(request: &ForeignChainRpcRequest, finality: &MpcFinality) -> bool {
         match (request, finality) {
             (
-                ForeignChainRpcRequest::Ethereum(args) | ForeignChainRpcRequest::Abstract(args),
+                ForeignChainRpcRequest::Ethereum(args)
+                | ForeignChainRpcRequest::Abstract(args)
+                | ForeignChainRpcRequest::Avalanche(args)
+                | ForeignChainRpcRequest::Arbitrum(args)
+                | ForeignChainRpcRequest::Polygon(args)
+                | ForeignChainRpcRequest::HyperEvm(args)
+                | ForeignChainRpcRequest::Base(args)
+                | ForeignChainRpcRequest::Bnb(args),
                 MpcFinality::Evm(finality),
             ) => args.finality == *finality,
             (ForeignChainRpcRequest::Starknet(args), MpcFinality::Starknet(finality)) => {

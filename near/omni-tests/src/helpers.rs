@@ -181,6 +181,12 @@ pub mod tests {
             .unwrap()
     }
 
+    pub fn avax_factory_address() -> OmniAddress {
+        "avax:0x252e87862A3A720287E7fd527cE6e8d0738427A2"
+            .parse()
+            .unwrap()
+    }
+
     pub fn hyperevm_factory_address() -> OmniAddress {
         "hlevm:0x252e87862A3A720287E7fd527cE6e8d0738427A2"
             .parse()
@@ -316,7 +322,7 @@ pub mod tests {
         let prover_args = borsh::to_vec(&prover_result).expect("Failed to serialize prover result");
 
         BindTokenArgs {
-            chain_kind: ChainKind::Eth,
+            chain_kind: emitter_address.get_chain(),
             prover_args,
         }
     }
