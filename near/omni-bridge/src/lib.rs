@@ -290,6 +290,13 @@ impl Contract {
                     .detach();
                 PromiseOrPromiseIndexOrValue::Value(U128(0))
             }
+            BridgeOnTransferMsg::SubmitUtxoTransfer(submit_utxo_transfer_msg) => self
+                .submit_transfer_to_utxo_chain_connector_with_gas_subsidy(
+                    &token_id,
+                    sender_id,
+                    amount,
+                    submit_utxo_transfer_msg,
+                ),
         };
 
         promise_or_promise_index_or_value.as_return();

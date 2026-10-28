@@ -162,6 +162,7 @@ mod tests {
             input: vec![],
             output: vec![],
             max_gas_fee: None,
+            chain_specific_data: None,
         };
 
         // The mock connector doesn't implement ft_on_transfer, so the call fails
