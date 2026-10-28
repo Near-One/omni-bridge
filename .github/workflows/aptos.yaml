@@ -12,7 +12,7 @@ on:
       - '.github/workflows/aptos.yaml'
 
 env:
-  APTOS_CLI_VERSION: "9.2.0"
+  APTOS_CLI_VERSION: "9.6.0"
 
 jobs:
   test:
