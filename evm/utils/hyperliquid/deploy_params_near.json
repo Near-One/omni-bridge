@@ -1,0 +1,17 @@
+{
+  "network": "mainnet",
+
+  "token_id": 513,
+  "spot_id": null,
+  "last_step": 1,
+
+  "token_name": "NEAR",
+  "token_description": "NEAR Protocol",
+  "sz_decimals": 2,
+  "wei_decimals": 8,
+  "max_gas": 50000000000,
+
+  "total_supply": "900000000000000000",
+
+  "start_px": 2.0
+}
