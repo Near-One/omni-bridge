@@ -284,7 +284,7 @@ def main():
         show_state(info, address)
         describe_call(
             "exchange.spot_deploy_register_hyperliquidity",
-            [spot, 2.0, 0, 0, None],
+            [spot, 75.0, 0, 0, None],
         )
         if not confirm("Run step5 (register hyperliquidity — formal call, n_orders=0)?"):
             return
