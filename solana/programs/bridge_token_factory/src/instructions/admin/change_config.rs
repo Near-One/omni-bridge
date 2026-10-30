@@ -1,6 +1,6 @@
 use anchor_lang::prelude::*;
 
-use crate::{constants::CONFIG_SEED, state::config::Config};
+use crate::{constants::CONFIG_SEED, error::ErrorCode, state::config::Config};
 
 #[derive(Accounts)]
 pub struct ChangeConfig<'info> {
@@ -48,6 +48,15 @@ impl ChangeConfig<'_> {
         derived_near_bridge_address: [u8; 64],
     ) -> Result<()> {
         self.config.derived_near_bridge_address = derived_near_bridge_address;
+
+        Ok(())
+    }
+
+    pub fn set_relayer_config(&mut self, stake_required: u64, waiting_period: i64) -> Result<()> {
+        require!(waiting_period >= 0, ErrorCode::InvalidArgs);
+
+        self.config.relayer_stake_required = stake_required;
+        self.config.relayer_waiting_period = waiting_period;
 
         Ok(())
     }
