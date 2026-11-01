@@ -5,7 +5,9 @@
 These patterns have been reviewed and confirmed as intentional. Do not flag or "fix" them.
 
 - **Fee-on-transfer tokens not supported**: `initTransfer` emits the requested `amount`, not the actual received balance. Fee-on-transfer and rebasing tokens are intentionally unsupported
-- **`logMetadata` and `deployToken` are permissionless**: Anyone can call `logMetadata` for any ERC20, and anyone can submit a valid MPC signature to `deployToken`. This is by design — the bridge is fully permissionless
+- **`logMetadata` and `deployToken` are permissionless**: Anyone can call `logMetadata` for any ERC20, and anyone can submit a valid MPC signature to `deployToken`. This is by design. Only `finTransfer` is restricted to trusted relayers (`TrustedRelayerRegistry`); the MPC signature stays the only authorization for releasing tokens
+- **`finTransfer` fails closed without a registry**: If `trustedRelayerRegistry` is not set, every `finTransfer` reverts with `NotTrustedRelayer`. Set the registry in the same admin batch as the upgrade
+- **Relayer stakes are paid to the rejecting manager**: `rejectRelayerApplication` sends the stake to the caller (a `RELAYER_MANAGER_ROLE` holder; the admin gets the role in `initialize`) as a punishment, matching the NEAR side
 - **`ENearProxy.burn` uses empty NEAR recipient**: `eNear.transferToNear(amount, "")` is intentional — `transferToNear` is a legacy method used purely as a burn mechanism. The actual NEAR recipient is tracked in the OmniBridge `InitTransfer` event
 - **`deployToken` signature has no chain ID**: Metadata signatures are intentionally chain-agnostic — one NEAR-side signature deploys the same token on all EVM chains
 
