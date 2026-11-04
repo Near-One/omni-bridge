@@ -8,11 +8,7 @@ use btc_types::utils::{target_from_bits, work_from_bits};
 use near_sdk::{env, near, require};
 
 //https://github.com/dogecoin/dogecoin/blob/2c513d0172e8bc86fe9a337693b26f2fdf68a013/src/auxpow.h#L24
-const MERGED_MINING_HEADER: [u8; 4] = [0xfa, 0xbe, 0x6d, 0x6d];
-
-fn find_bytes(haystack: &[u8], needle: &[u8]) -> Option<usize> {
-    haystack.windows(needle.len()).position(|w| w == needle)
-}
+const MERGED_MINING_HEADER: &str = "fabe6d6d";
 
 #[near]
 impl BtcLightClient {
@@ -97,20 +93,21 @@ impl BtcLightClient {
             ) == Some(aux_data.parent_block.merkle_root.clone())
         );
 
-        let script_sig = coinbase_tx.input.first().unwrap().script_sig.as_bytes();
-        let chain_root_bytes: Vec<u8> = chain_root.0.iter().rev().copied().collect();
-
-        let pos_merged_mining_header = find_bytes(script_sig, &MERGED_MINING_HEADER);
-        let mut pos_chain_root = find_bytes(script_sig, &chain_root_bytes)
+        let script_sig = coinbase_tx
+            .input
+            .first()
+            .unwrap()
+            .script_sig
+            .to_hex_string();
+        let pos_merged_mining_header = script_sig.find(MERGED_MINING_HEADER);
+        let mut pos_chain_root = script_sig
+            .find(&chain_root.to_string())
             .expect("Aux POW missing chain merkle root in parent coinbase");
 
         match pos_merged_mining_header {
             Some(pos_merged_mining_header) => {
-                if find_bytes(
-                    &script_sig[pos_merged_mining_header + MERGED_MINING_HEADER.len()..],
-                    &MERGED_MINING_HEADER,
-                )
-                .is_some()
+                if script_sig[pos_merged_mining_header + MERGED_MINING_HEADER.len()..]
+                    .contains(MERGED_MINING_HEADER)
                 {
                     env::panic_str("Multiple merged mining headers in coinbase");
                 }
@@ -121,31 +118,25 @@ impl BtcLightClient {
                 );
             }
             None => {
-                require!(pos_chain_root <= 20, "Aux POW chain merkle root must start in the first 20 bytes of the parent coinbase");
+                require!(pos_chain_root <= 40, "Aux POW chain merkle root must start in the first 20 bytes of the parent coinbase");
             }
         }
 
-        pos_chain_root += chain_root_bytes.len();
+        pos_chain_root += chain_root.to_string().len();
         require!(
-            script_sig.len() - pos_chain_root >= 8,
+            script_sig.len() - pos_chain_root >= 16,
             "Aux POW missing chain merkle tree size and nonce in parent coinbase"
         );
 
-        let n_size = u32::from_le_bytes(
-            script_sig[pos_chain_root..pos_chain_root + 4]
-                .try_into()
-                .unwrap(),
-        );
+        let bytes = hex::decode(&script_sig[pos_chain_root..pos_chain_root + 8]).unwrap();
+        let n_size = u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]);
         require!(
             n_size == (1u32 << aux_data.chain_merkle_proof.len()),
             "Aux POW merkle branch size does not match parent coinbase"
         );
 
-        let n_nonce = u32::from_le_bytes(
-            script_sig[pos_chain_root + 4..pos_chain_root + 8]
-                .try_into()
-                .unwrap(),
-        );
+        let bytes = hex::decode(&script_sig[pos_chain_root + 8..pos_chain_root + 16]).unwrap();
+        let n_nonce = u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]);
 
         let chain_id = block_header.get_chain_id();
 
