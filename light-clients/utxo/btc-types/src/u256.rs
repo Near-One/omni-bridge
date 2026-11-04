@@ -114,14 +114,16 @@ impl U256 {
     }
 
     pub fn overflowing_mul(self, rhs: u64) -> (Self, bool) {
-        let (high, overflow) = self.0.overflowing_mul(u128::from(rhs));
-        let (low, overflow_low) = self.1.overflowing_mul(u128::from(rhs));
+        let low_64_mask = u128::from(!0u64);
+        let rhs = u128::from(rhs);
 
-        if !overflow_low {
-            return (Self(high, low), overflow);
-        }
+        let (high, overflow) = self.0.overflowing_mul(rhs);
 
-        let carry = ((self.1 >> 64) * (u128::from(rhs))) >> 64;
+        let low_lo = (self.1 & low_64_mask) * rhs;
+        let low_hi = (self.1 >> 64) * rhs;
+        let low = low_lo.wrapping_add(low_hi << 64);
+        let carry = (low_hi >> 64) + (((low_hi & low_64_mask) + (low_lo >> 64)) >> 64);
+
         let (high, overflow_add) = high.overflowing_add(carry);
 
         (Self(high, low), overflow | overflow_add)
@@ -339,5 +341,30 @@ impl Shr<u32> for U256 {
     type Output = Self;
     fn shr(self, shift: u32) -> U256 {
         self.wrapping_shr(shift)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_overflowing_mul_carry_from_low_half() {
+        let a = U256(0, 0x5555_5555_5555_5555_ffff_ffff_ffff_ffff);
+        assert_eq!(
+            a.overflowing_mul(3),
+            (U256(1, 0x0000_0000_0000_0001_ffff_ffff_ffff_fffd), false)
+        );
+    }
+
+    #[test]
+    fn test_overflowing_mul_max() {
+        let a = U256(0, u128::MAX);
+        assert_eq!(
+            a.overflowing_mul(u64::MAX),
+            (U256(u128::from(u64::MAX - 1), (u128::MAX << 64) + 1), false)
+        );
+        assert!(U256::MAX.overflowing_mul(2).1);
+        assert_eq!(U256::MAX.overflowing_mul(1), (U256::MAX, false));
     }
 }
