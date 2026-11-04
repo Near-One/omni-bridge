@@ -9,6 +9,7 @@ use crate::{
     PayloadType, SolAddress, StorageBalanceError, TransferId, TransferMessage, H160, H256,
 };
 use std::str::FromStr;
+use strum::IntoEnumIterator;
 
 fn chain_kinds_for_borsh() -> [ChainKind; 15] {
     [
@@ -582,16 +583,7 @@ fn test_stringify() {
 
 #[test]
 fn test_get_native_token_prefix() {
-    for chain_kind in [
-        ChainKind::Near,
-        ChainKind::Sol,
-        ChainKind::Fogo,
-        ChainKind::Base,
-        ChainKind::Eth,
-        ChainKind::Arb,
-        ChainKind::Abs,
-        ChainKind::Avax,
-    ] {
+    for chain_kind in ChainKind::iter() {
         let prefix = OmniAddress::new_zero(chain_kind)
             .unwrap()
             .get_token_prefix();
@@ -611,7 +603,7 @@ fn test_get_evm_token_prefix() {
     let prefix = eth_address.get_token_prefix();
     assert_eq!(prefix, "23ddd3e3692d1861ed57ede224608875809e127f");
 
-    for chain_kind in chain_kinds_for_borsh() {
+    for chain_kind in ChainKind::iter() {
         if chain_kind == ChainKind::Eth || !chain_kind.is_evm_chain() {
             continue;
         }
@@ -694,7 +686,7 @@ fn test_get_native_token_address_returns_expected_addresses() {
     );
 
     // All other chains should return zero addresses
-    for chain_kind in chain_kinds_for_borsh() {
+    for chain_kind in ChainKind::iter() {
         if chain_kind == ChainKind::Strk || chain_kind == ChainKind::Aptos {
             continue;
         }

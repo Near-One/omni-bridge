@@ -91,37 +91,31 @@ Verifies foreign chain events by calling the NEAR MPC network's `verify_foreign_
 
 When auditing this codebase, these patterns are NOT vulnerabilities:
 
-**1. Fast Transfer Fee Manipulation (NOT a vulnerability)**
-- `FastTransferId` is computed from the entire struct including fee
-- If relayer specifies wrong fee, IDs won't match when proof arrives
-- Result: Relayer LOSES their fronted tokens, cannot profit
-- The design is self-protecting
-
-**2. Decimal Arithmetic Underflow (NOT a vulnerability)**
+**1. Decimal Arithmetic Underflow (NOT a vulnerability)**
 - Design expects `origin_decimals >= decimals` (normalization to lower precision)
 - Workspace has `overflow-checks = true` in Cargo.toml
 - Misconfiguration causes panic (correct fail-safe), not silent corruption
 
-**3. Wormhole Emitter Chain (Correct Design)**
+**2. Wormhole Emitter Chain (Correct Design)**
 - Chain ID is explicitly encoded in the payload by source bridge (`OmniBridgeWormhole.sol:131-133`)
 - Using `token_address.get_chain()` is correct - it reads the chain from the signed payload
 - VAA's `emitter_chain` is a Wormhole-specific field; our protocol embeds chain in payload
 
-**4. Gas Griefing via Storage Actions (NOT a vulnerability)**
+**3. Gas Griefing via Storage Actions (NOT a vulnerability)**
 - Caller provides their own `storage_deposit_actions`
 - Bad inputs only harm the caller themselves (self-griefing)
 
-**5. Signer ID Storage Manipulation (NOT profitable)**
+**4. Signer ID Storage Manipulation (NOT profitable)**
 - Attacker must spend their own tokens to create transfer
 - Storage is refunded when transfer completes
 - No profit mechanism for attacker
 
-**6. Missing Emitter Validation in Prover (Correct Architecture)**
+**5. Missing Emitter Validation in Prover (Correct Architecture)**
 - Prover verifies cryptographic proof validity
 - Bridge callback validates emitter against registered factories
 - This separation of concerns is intentional and correct
 
-**7. finish_withdraw_v2 Arbitrary Calls (Requires DAO Compromise)**
+**6. finish_withdraw_v2 Arbitrary Calls (Requires DAO Compromise)**
 - Only callable by tokens in `deployed_tokens`
 - `omni-token` (what bridge deploys) doesn't call this function
 - Exploitation requires DAO to add malicious token (out of scope)

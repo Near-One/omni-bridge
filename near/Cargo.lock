@@ -3070,6 +3070,7 @@ dependencies = [
  "omni-types",
  "omni-utils",
  "serde",
+ "strum 0.27.2",
 ]
 
 [[package]]
