@@ -79,7 +79,8 @@ impl BtcLightClient {
             block_header.block_hash(),
             aux_data.chain_id,
             &aux_data.chain_merkle_proof,
-        );
+        )
+        .unwrap_or_else(|| env::panic_str("Aux POW chain index out of merkle tree range"));
 
         let coinbase_tx = aux_data.get_coinbase_tx();
         let coinbase_tx_hash = coinbase_tx.compute_txid();
@@ -89,7 +90,7 @@ impl BtcLightClient {
                 H256::from(coinbase_tx_hash.to_raw_hash().to_byte_array()),
                 0,
                 &aux_data.merkle_proof,
-            ) == aux_data.parent_block.merkle_root
+            ) == Some(aux_data.parent_block.merkle_root.clone())
         );
 
         let script_sig = coinbase_tx

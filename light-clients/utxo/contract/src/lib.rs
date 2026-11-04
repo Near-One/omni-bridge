@@ -344,7 +344,7 @@ impl BtcLightClient {
             args.tx_id,
             usize::try_from(args.tx_index).unwrap(),
             &args.merkle_proof,
-        ) == header.block_header.merkle_root
+        ) == Some(header.block_header.merkle_root)
     }
 
     /// Same SPV + coinbase checks as `verify_transaction_inclusion_v2`, but returns
@@ -384,7 +384,7 @@ impl BtcLightClient {
                 args.coinbase_tx_id,
                 0usize,
                 &args.coinbase_merkle_proof,
-            ) == meta.expected_merkle_root,
+            ) == Some(meta.expected_merkle_root.clone()),
             "Incorrect coinbase merkle proof"
         );
 
@@ -396,7 +396,7 @@ impl BtcLightClient {
             &args.merkle_proof,
         );
 
-        (computed_root == meta.expected_merkle_root).then_some(TxInclusionInfo {
+        (computed_root == Some(meta.expected_merkle_root)).then_some(TxInclusionInfo {
             tx_block_height: meta.target_block_height,
             mainchain_tip_height: meta.tip_block_height,
         })

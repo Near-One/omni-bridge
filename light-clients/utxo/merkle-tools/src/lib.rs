@@ -35,7 +35,7 @@ pub fn compute_root_from_merkle_proof(
     transaction_hash: H256,
     transaction_position: usize,
     merkle_proof: &Vec<H256>,
-) -> H256 {
+) -> Option<H256> {
     let mut current_hash = transaction_hash;
     let mut current_position = transaction_position;
 
@@ -48,7 +48,7 @@ pub fn compute_root_from_merkle_proof(
         current_position /= 2;
     }
 
-    current_hash
+    (current_position == 0).then_some(current_hash)
 }
 
 fn compute_hash(first_tx_hash: &H256, second_tx_hash: &H256) -> H256 {
@@ -148,7 +148,10 @@ mod tests {
             0,
             &calculated_merkle_proof,
         );
-        assert_eq!(computed_root_from_merkle_proof, calculated_merkle_root);
+        assert_eq!(
+            computed_root_from_merkle_proof,
+            Some(calculated_merkle_root)
+        );
     }
 
     #[test]
@@ -169,6 +172,30 @@ mod tests {
             4,
             &calculated_merkle_proof,
         );
-        assert_eq!(computed_root_from_merkle_proof, calculated_merkle_root);
+        assert_eq!(
+            computed_root_from_merkle_proof,
+            Some(calculated_merkle_root)
+        );
+    }
+
+    #[test]
+    fn test_merkle_proof_position_out_of_range() {
+        let tx_hashes = vec![
+            decode_hex("18afbf37d136ff62644b231fcde72f1fb8edd04a798fb00cb06360da635da275"),
+            decode_hex("30b19832a5f4b952e151de77d96139987492becc8b6e1e914c4103cfbb06c01e"),
+            decode_hex("b94ed12902e35b29dd53cf25e665b4d0bc92f22adbc383ad90566584902b061d"),
+            decode_hex("1920e5d8a10018dc65308bb4d1f11d30b5406c6499688443bfcd1ef364206b14"),
+        ];
+
+        let calculated_merkle_proof = merkle_proof_calculator(tx_hashes, 0);
+
+        assert_eq!(
+            compute_root_from_merkle_proof(
+                decode_hex("18afbf37d136ff62644b231fcde72f1fb8edd04a798fb00cb06360da635da275"),
+                4,
+                &calculated_merkle_proof,
+            ),
+            None
+        );
     }
 }
