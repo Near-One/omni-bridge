@@ -63,11 +63,11 @@ jobs:
 
       - name: Run Claude Code Review
         id: claude-review
-        uses: anthropics/claude-code-action@2cc1ac1331eac7a6a96d716dd204dd2888d0fcd2 # main @ Claude Code 2.1.128 / Agent SDK 0.2.128 (needed for --effort xhigh)
+        uses: anthropics/claude-code-action@97c53473391bff1901034d4b454b5bac7ab7a029 # v1.0.239 @ Claude Code 2.1.287 / Agent SDK 0.3.287 (claude-opus-5-5 needs >= 2.1.280)
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API }}
           prompt: ${{ env.REVIEW_PROMPT }}
           claude_args: >-
-            --model claude-opus-4-8
+            --model claude-opus-5-5
             --effort xhigh
             --allowed-tools "Read,Grep,Glob,Bash(gh issue view:*),Bash(gh search:*),Bash(gh issue list:*),Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*),Bash(gh pr list:*)"
