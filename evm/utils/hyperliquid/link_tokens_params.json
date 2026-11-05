@@ -2,7 +2,7 @@
   "network": "mainnet",
 
   "token_id": 1275,
-  "evm_contract_address": null,
+  "evm_contract_address": "0xB0c51C52b714AC92555Cc8aBC487629858DCf86B",
   "evm_extra_wei_decimals": 4,
 
   "last_link_step": null
