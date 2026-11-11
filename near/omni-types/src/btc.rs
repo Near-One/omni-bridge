@@ -1,5 +1,6 @@
 use near_sdk::json_types::U128;
 use near_sdk::serde::{Deserialize, Serialize};
+use near_sdk::serde_json::Value;
 use near_sdk::{near, AccountId};
 
 type OutPoint = String;
@@ -12,6 +13,9 @@ pub enum TokenReceiverMessage {
         input: Vec<OutPoint>,
         output: Vec<TxOut>,
         max_gas_fee: Option<U128>,
+        /// Passed through to the connector as is. For Zcash it holds the Orchard bundle.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        chain_specific_data: Option<Value>,
     },
 }
 

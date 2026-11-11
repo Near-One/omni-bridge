@@ -511,6 +511,17 @@ pub enum BridgeOnTransferMsg {
     InitTransfer(InitTransferMsg),
     UtxoFinTransfer(UtxoFinTransferMsg),
     SwapMigratedToken,
+    SubmitUtxoTransfer(SubmitUtxoTransferMsg),
+}
+
+/// Arguments of `submit_transfer_to_utxo_chain_connector` sent via `ft_transfer_call`.
+/// The attached tokens are used as a relayer's subsidy for the UTXO chain gas fee.
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct SubmitUtxoTransferMsg {
+    pub transfer_id: TransferId,
+    pub msg: String,
+    pub fee_recipient: Option<AccountId>,
+    pub fee: Option<Fee>,
 }
 
 /// Maximum byte length for `InitTransferMsg::msg` — caps the user-supplied hook payload
