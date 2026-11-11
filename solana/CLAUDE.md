@@ -22,12 +22,16 @@ make -C .. solana-run-tests  # fast unit tests, no validator
 | `b"sol_vault"` | Holds native SOL for cross-chain transfers + rent reserve for nonce accounts |
 | `b"used_nonces" + bucket_id` | Bit-array (1024 nonces/account) preventing replay attacks |
 | `b"wrapped_mint" + hashed_token_id` | Mint accounts for bridged tokens from other chains |
+| `b"relayer" + relayer` | `RelayerState` of a trusted relayer: stake (held as lamports in the account) and activation time |
+| `b"relayer_list"` | `RelayerList`: the relayer `manager` and all relayers with a `RelayerState`, for the `get_pending_relayers` / `get_active_relayers` views. Holds only rent |
 
 ### Bridge flow
 
 **Solana → NEAR (initTransfer / initTransferSol)**: User calls `init_transfer`. Native tokens are locked in the vault; bridged tokens are burned. The transfer payload is Borsh-serialized and posted via Wormhole CPI. The NEAR side reads the Wormhole VAA to complete the transfer.
 
-**NEAR → Solana (finalizeTransfer / finalizeTransferSol)**: A relayer calls `finalize_transfer` with a `SignedPayload` containing a NEAR MPC ECDSA signature. The program verifies the signature against `derived_near_bridge_address` stored in config, marks the `destination_nonce` as used, then unlocks (native) or mints (bridged) tokens to the recipient's ATA (auto-created if needed). A confirmation message is posted back via Wormhole.
+**NEAR → Solana (finalizeTransfer / finalizeTransferSol)**: A trusted relayer calls `finalize_transfer` with a `SignedPayload` containing a NEAR MPC ECDSA signature. The program verifies the signature against `derived_near_bridge_address` stored in config, marks the `destination_nonce` as used, then unlocks (native) or mints (bridged) tokens to the recipient's ATA (auto-created if needed). A confirmation message is posted back via Wormhole.
+
+**Trusted relayers**: `finalize_transfer*` require the `relayer_state` PDA of `common.payer` with `activate_at <= now`. The admin creates it directly with `grant_trusted_relayer` (no stake, active immediately), or a relayer creates it with `apply_for_trusted_relayer` by staking `config.relayer_stake_required` lamports; it becomes active after `config.relayer_waiting_period` seconds. The relayer manager (`relayer_list.manager`, set to the admin by `init_relayer_list` and changed by the admin with `set_relayer_manager`) removes a relayer with `reject_relayer_application` and receives the stake. An active relayer can close its account with `resign_trusted_relayer` to get the stake back. `initialize` takes the starting `relayer_stake_required` and `relayer_waiting_period` (the same program runs on Solana and FOGO, so the amount is per deployment). Staking is disabled while `relayer_stake_required` is zero. The admin creates the `relayer_list` once with `init_relayer_list`; grant, apply, resign and reject keep it in sync (resizing it, with rent paid or refunded to the signer). `get_pending_relayers` / `get_active_relayers(from_index, limit)` return entries as return data, capped at `MAX_RELAYERS_PER_PAGE` (20) to fit the 1024-byte limit. Mirrors `omni_utils::trusted_relayer` on NEAR.
 
 **Token registration**: Native Solana tokens are registered via `log_metadata` (creates vault, posts metadata to NEAR). Bridged tokens from other chains are deployed via `deploy_token` (requires signed payload, creates mint + Metaplex metadata).
 
@@ -47,7 +51,7 @@ make -C .. solana-run-tests  # fast unit tests, no validator
 
 - Verify Borsh serialization matches the NEAR side if changing payload structures (see `state/message/` modules and their `serialize_for_near` implementations)
 - Consider whether changes affect the pause surface (`INIT_TRANSFER_PAUSED` / `FINALIZE_TRANSFER_PAUSED`)
-- The `Config` account has a `padding: [u8; 35]` field — use this for new fields to avoid reallocation
+- The `Config` account has a `padding: [u8; 19]` field — use this for new fields to avoid reallocation
 
 ### Security reference
 

@@ -1,6 +1,6 @@
 use crate::{
     constants::{
-        AUTHORITY_SEED, CONFIG_SEED, SOL_VAULT_SEED, USED_NONCES_ACCOUNT_SIZE,
+        AUTHORITY_SEED, CONFIG_SEED, RELAYER_SEED, SOL_VAULT_SEED, USED_NONCES_ACCOUNT_SIZE,
         USED_NONCES_PER_ACCOUNT, USED_NONCES_SEED,
     },
     error::ErrorCode,
@@ -14,6 +14,7 @@ use crate::{
             finalize_transfer::{FinalizeTransferPayload, FinalizeTransferResponse},
             Payload, SignedPayload,
         },
+        relayer::RelayerState,
         used_nonces::UsedNonces,
     },
 };
@@ -62,6 +63,12 @@ pub struct FinalizeTransferSol<'info> {
 
     pub common: WormholeCPI<'info>,
     pub system_program: Program<'info, System>,
+
+    #[account(
+        seeds = [RELAYER_SEED, common.payer.key().as_ref()],
+        bump = relayer_state.bump,
+    )]
+    pub relayer_state: Box<Account<'info, RelayerState>>,
 }
 
 impl FinalizeTransferSol<'_> {

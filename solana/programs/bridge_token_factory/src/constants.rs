@@ -22,6 +22,16 @@ pub const WRAPPED_MINT_SEED: &[u8] = b"wrapped_mint";
 pub const METADATA_SEED: &[u8] = b"metadata";
 
 #[constant]
+pub const RELAYER_SEED: &[u8] = b"relayer";
+
+#[constant]
+pub const RELAYER_LIST_SEED: &[u8] = b"relayer_list";
+
+// Keeps a page of `RelayerEntry` within the 1024-byte return data limit
+#[constant]
+pub const MAX_RELAYERS_PER_PAGE: u32 = 20;
+
+#[constant]
 pub const USED_NONCES_PER_ACCOUNT: u32 = 1024;
 
 #[constant]

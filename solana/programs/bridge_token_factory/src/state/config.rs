@@ -25,5 +25,7 @@ pub struct Config {
     pub paused: u8,
     pub pausable_admin: Pubkey,
     pub metadata_admin: Pubkey,
-    pub padding: [u8; 35],
+    pub relayer_stake_required: u64,
+    pub relayer_waiting_period: i64,
+    pub padding: [u8; 19],
 }
