@@ -1,6 +1,5 @@
 use std::string::ToString;
 
-use borsh::{BorshDeserialize, BorshSerialize};
 use core::fmt;
 use core::str::FromStr;
 
@@ -46,6 +45,7 @@ pub use hex_types::{H160, H256};
     PartialOrd,
     Ord,
     strum_macros::AsRefStr,
+    strum_macros::EnumIter,
     Default,
     IntoPrimitive,
     Hash,
@@ -509,7 +509,6 @@ impl<'de> Deserialize<'de> for OmniAddress {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum BridgeOnTransferMsg {
     InitTransfer(InitTransferMsg),
-    FastFinTransfer(FastFinTransferMsg),
     UtxoFinTransfer(UtxoFinTransferMsg),
     SwapMigratedToken,
 }
@@ -539,17 +538,6 @@ impl InitTransferMsg {
     pub const fn get_destination_chain(&self) -> ChainKind {
         self.recipient.get_chain()
     }
-}
-
-#[derive(Serialize, Deserialize, BorshSerialize, BorshDeserialize, Debug, Clone)]
-pub struct FastFinTransferMsg {
-    pub transfer_id: UnifiedTransferId,
-    pub recipient: OmniAddress,
-    pub fee: Fee,
-    pub msg: String,
-    pub amount: U128,
-    pub storage_deposit_amount: Option<U128>,
-    pub relayer: AccountId,
 }
 
 #[near(serializers=[borsh, json])]
@@ -867,82 +855,6 @@ impl std::fmt::Display for UnifiedTransferId {
             }
         }
     }
-}
-
-#[near(serializers=[borsh, json])]
-#[derive(Debug, Clone)]
-pub struct FastTransferId(pub [u8; 32]);
-
-#[near(serializers=[borsh, json])]
-#[derive(Debug, Clone)]
-pub struct FastTransfer {
-    pub transfer_id: UnifiedTransferId,
-    pub token_id: AccountId,
-    pub amount: U128,
-    pub fee: Fee,
-    pub recipient: OmniAddress,
-    pub msg: String,
-}
-
-impl FastTransfer {
-    #[allow(clippy::missing_panics_doc)]
-    pub fn id(&self) -> FastTransferId {
-        FastTransferId(utils::sha256(&borsh::to_vec(self).unwrap()))
-    }
-
-    pub const fn get_destination_chain(&self) -> ChainKind {
-        self.recipient.get_chain()
-    }
-
-    pub fn amount_without_fee(&self) -> Option<u128> {
-        self.amount.0.checked_sub(self.fee.fee.0)
-    }
-}
-
-impl FastTransfer {
-    pub fn from_transfer(transfer: TransferMessage, token_id: AccountId) -> Self {
-        Self {
-            transfer_id: UnifiedTransferId {
-                origin_chain: transfer.get_origin_chain(),
-                kind: TransferIdKind::Nonce(transfer.origin_nonce),
-            },
-            token_id,
-            amount: transfer.amount,
-            fee: transfer.fee,
-            recipient: transfer.recipient,
-            msg: transfer.msg,
-        }
-    }
-
-    pub fn from_utxo_transfer(
-        transfer: UtxoFinTransferMsg,
-        token_id: AccountId,
-        amount: U128,
-        origin_chain: ChainKind,
-    ) -> Self {
-        Self {
-            transfer_id: UnifiedTransferId {
-                origin_chain,
-                kind: TransferIdKind::Utxo(transfer.utxo_id),
-            },
-            token_id,
-            amount,
-            fee: Fee {
-                fee: transfer.relayer_fee,
-                native_fee: U128(0),
-            },
-            recipient: transfer.recipient,
-            msg: transfer.msg,
-        }
-    }
-}
-
-#[near(serializers=[borsh, json])]
-#[derive(Debug, Clone)]
-pub struct FastTransferStatus {
-    pub finalised: bool,
-    pub relayer: AccountId,
-    pub storage_owner: AccountId,
 }
 
 #[near(serializers=[json])]

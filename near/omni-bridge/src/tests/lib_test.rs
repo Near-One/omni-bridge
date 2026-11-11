@@ -1436,3 +1436,125 @@ fn test_bind_token_by_staked_relayer_succeeds() {
 
     contract.bind_token(get_bind_token_args()).detach();
 }
+
+fn setup_migrate_tokens(
+    contract: &mut Contract,
+) -> (AccountId, AccountId, OmniAddress, OmniAddress) {
+    let old_token: AccountId = "old-token.testnet".parse().unwrap();
+    let new_token: AccountId = "new-token.testnet".parse().unwrap();
+    let eth_address = OmniAddress::Eth(EvmAddress::from_str(DEFAULT_ETH_TOKEN_ADDRESS).unwrap());
+    let sol_address = OmniAddress::Sol(
+        "2xNweLHLqbS9YpP3UyaPrxKqgqoC6yPBFyuLxA8qtgr4"
+            .parse()
+            .unwrap(),
+    );
+
+    contract.deployed_tokens.insert(&old_token);
+    contract
+        .deployed_tokens_v2
+        .insert(&old_token, &ChainKind::Eth);
+    contract
+        .token_id_to_address
+        .insert(&(ChainKind::Eth, old_token.clone()), &eth_address);
+    contract
+        .token_id_to_address
+        .insert(&(ChainKind::Sol, old_token.clone()), &sol_address);
+    contract
+        .token_address_to_id
+        .insert(&eth_address, &old_token);
+    contract
+        .token_address_to_id
+        .insert(&sol_address, &old_token);
+    contract.locked_tokens.insert(
+        &(ChainKind::Sol, old_token.clone()),
+        &DEFAULT_TRANSFER_AMOUNT,
+    );
+    contract
+        .locked_tokens
+        .insert(&(ChainKind::Near, old_token.clone()), &DEFAULT_TRANSFER_FEE);
+
+    (old_token, new_token, eth_address, sol_address)
+}
+
+#[test]
+fn test_migrate_deployed_token_moves_all_routes_and_locked_tokens() {
+    let dao: AccountId = DEFAULT_UNPRIVILEGED_ACCOUNT.parse().unwrap();
+    let mut contract = setup_contract_with_role(&dao, Role::DAO);
+    let (old_token, new_token, eth_address, sol_address) = setup_migrate_tokens(&mut contract);
+
+    setup_test_env(dao, NEP141_DEPOSIT, None);
+    contract.migrate_deployed_token(ChainKind::Eth, old_token.clone(), new_token.clone());
+
+    assert_eq!(
+        contract.get_token_address(ChainKind::Eth, new_token.clone()),
+        Some(eth_address.clone())
+    );
+    assert_eq!(
+        contract.get_token_address(ChainKind::Sol, new_token.clone()),
+        Some(sol_address.clone())
+    );
+    assert_eq!(
+        contract.get_token_address(ChainKind::Eth, old_token.clone()),
+        None
+    );
+    assert_eq!(
+        contract.get_token_address(ChainKind::Sol, old_token.clone()),
+        None
+    );
+    assert_eq!(contract.get_token_id(&eth_address), new_token);
+    assert_eq!(contract.get_token_id(&sol_address), new_token);
+    assert_eq!(
+        contract.get_locked_tokens(ChainKind::Sol, new_token.clone()),
+        Some(U128(DEFAULT_TRANSFER_AMOUNT))
+    );
+    assert_eq!(
+        contract.get_locked_tokens(ChainKind::Near, new_token.clone()),
+        Some(U128(DEFAULT_TRANSFER_FEE))
+    );
+    assert_eq!(
+        contract.get_locked_tokens(ChainKind::Sol, old_token.clone()),
+        None
+    );
+    assert_eq!(
+        contract.get_locked_tokens(ChainKind::Near, old_token.clone()),
+        None
+    );
+    assert_eq!(
+        contract.get_migrated_token(&old_token),
+        Some(new_token.clone())
+    );
+    assert!(contract.deployed_tokens.contains(&new_token));
+    assert!(!contract.deployed_tokens.contains(&old_token));
+    assert_eq!(contract.get_token_origin_chain(&new_token), ChainKind::Eth);
+}
+
+#[test]
+#[should_panic(expected = "ERR_TOKEN_EXISTS")]
+fn test_migrate_deployed_token_rejects_existing_new_token_route() {
+    let dao: AccountId = DEFAULT_UNPRIVILEGED_ACCOUNT.parse().unwrap();
+    let mut contract = setup_contract_with_role(&dao, Role::DAO);
+    let (old_token, new_token, _, _) = setup_migrate_tokens(&mut contract);
+
+    let other_sol_address = OmniAddress::Sol(
+        "3xNweLHLqbS9YpP3UyaPrxKqgqoC6yPBFyuLxA8qtgr4"
+            .parse()
+            .unwrap(),
+    );
+    contract
+        .token_id_to_address
+        .insert(&(ChainKind::Sol, new_token.clone()), &other_sol_address);
+
+    setup_test_env(dao, NEP141_DEPOSIT, None);
+    contract.migrate_deployed_token(ChainKind::Eth, old_token, new_token);
+}
+
+#[test]
+#[should_panic(expected = "ERR_FAILED_TO_GET_TOKEN_ADDRESS")]
+fn test_migrate_deployed_token_requires_origin_route() {
+    let dao: AccountId = DEFAULT_UNPRIVILEGED_ACCOUNT.parse().unwrap();
+    let mut contract = setup_contract_with_role(&dao, Role::DAO);
+    let (old_token, new_token, _, _) = setup_migrate_tokens(&mut contract);
+
+    setup_test_env(dao, NEP141_DEPOSIT, None);
+    contract.migrate_deployed_token(ChainKind::Base, old_token, new_token);
+}
