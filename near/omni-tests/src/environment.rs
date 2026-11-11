@@ -20,7 +20,7 @@ use crate::helpers::tests::{
     NEP141_DEPOSIT,
 };
 
-const PREV_LOCKER_WASM_FILEPATH: &str = "src/data/omni_bridge-0_4_5.wasm";
+const PREV_LOCKER_WASM_FILEPATH: &str = "src/data/omni_bridge-0_4_18.wasm";
 const DEFAULT_LOCKED_TOKENS: u128 = 1_000_000_000_000_000_000_000_000_000_000;
 
 struct SetLockedTokenArgs {
@@ -185,79 +185,6 @@ impl TestEnvBuilder {
         })
     }
 
-    pub async fn with_bridged_eth(self) -> anyhow::Result<TestEnvBuilderWithToken> {
-        let bridge_contract = self.deploy_bridge(None).await?;
-        let omni_token_code_hash = self.deploy_global_omni_token().await?;
-
-        self.deploy_token_deployer(&bridge_contract, &omni_token_code_hash, ChainKind::Eth)
-            .await?;
-
-        add_factory(&bridge_contract, eth_factory_address()).await?;
-
-        let init_token_address = OmniAddress::new_zero(ChainKind::Eth).unwrap();
-        let token_metadata = BasicMetadata {
-            name: "ETH from Ethereum".parse().unwrap(),
-            symbol: "ETH".parse().unwrap(),
-            decimals: 18,
-        };
-
-        let required_storage: NearToken = bridge_contract
-            .view("required_balance_for_deploy_token")
-            .await?
-            .json()?;
-
-        bridge_contract
-            .call("deploy_native_token")
-            .args_json(json!({
-                "chain_kind": init_token_address.get_chain(),
-                "name": token_metadata.name,
-                "symbol": token_metadata.symbol,
-                "decimals": token_metadata.decimals,
-            }))
-            .deposit(required_storage)
-            .max_gas()
-            .transact()
-            .await?
-            .into_result()?;
-
-        let token_contract = self
-            .get_token_contract(&bridge_contract, &init_token_address)
-            .await?;
-
-        self.worker
-            .root_account()?
-            .transfer_near(token_contract.id(), NearToken::from_near(1))
-            .await?
-            .into_result()?;
-
-        storage_deposit(&token_contract, bridge_contract.id()).await?;
-
-        if !self.deploy_old_version {
-            set_locked_tokens(
-                &bridge_contract,
-                vec![SetLockedTokenArgs {
-                    chain_kind: ChainKind::Base,
-                    token_id: token_contract.id().clone(),
-                    amount: U128(0),
-                }],
-            )
-            .await?;
-        }
-
-        Ok(TestEnvBuilderWithToken {
-            worker: self.worker,
-            bridge_contract,
-            token: BridgeToken {
-                is_deployed: true,
-                contract: token_contract,
-                eth_address: init_token_address,
-            },
-            utxo_connector: None,
-            build_artifacts: self.build_artifacts,
-            token_transfer_nonce: RefCell::new(1),
-        })
-    }
-
     pub async fn with_bridged_token(self) -> anyhow::Result<TestEnvBuilderWithToken> {
         let bridge_contract = self.deploy_bridge(None).await?;
         let omni_token_code_hash = self.deploy_global_omni_token().await?;
@@ -280,6 +207,19 @@ impl TestEnvBuilder {
             .view("required_balance_for_deploy_token")
             .await?
             .json()?;
+
+        if !self.deploy_old_version {
+            bridge_contract
+                .call("acl_grant_role")
+                .args_json(json!({
+                    "role": "TokenDeployer",
+                    "account_id": token_deploy_initiator.id(),
+                }))
+                .max_gas()
+                .transact()
+                .await?
+                .into_result()?;
+        }
 
         token_deploy_initiator
             .call(bridge_contract.id(), "deploy_token")

@@ -4,7 +4,7 @@ use near_sdk::{env, near, AccountId};
 
 use crate::mpc_types::SignatureResponse;
 use crate::{
-    BasicMetadata, FastTransfer, MetadataPayload, OmniAddress, TransferId, TransferMessage,
+    BasicMetadata, MetadataPayload, OmniAddress, TransferId, TransferMessage,
     TransferMessagePayload, UtxoFinTransferMsg,
 };
 
@@ -44,10 +44,6 @@ pub enum OmniBridgeEvent {
         token_address: OmniAddress,
         decimals: u8,
         origin_decimals: u8,
-    },
-    FastTransferEvent {
-        fast_transfer: FastTransfer,
-        new_transfer_id: Option<TransferId>,
     },
     UtxoTransferEvent {
         token_id: AccountId,

@@ -1,6 +1,5 @@
 use std::string::ToString;
 
-use borsh::{BorshDeserialize, BorshSerialize};
 use core::fmt;
 use core::str::FromStr;
 
@@ -46,6 +45,7 @@ pub use hex_types::{H160, H256};
     PartialOrd,
     Ord,
     strum_macros::AsRefStr,
+    strum_macros::EnumIter,
     Default,
     IntoPrimitive,
     Hash,
@@ -83,6 +83,8 @@ pub enum ChainKind {
     Fogo,
     #[serde(alias = "aptos")]
     Aptos,
+    #[serde(alias = "avax")]
+    Avax,
 }
 
 impl ChainKind {
@@ -94,7 +96,8 @@ impl ChainKind {
             | Self::Bnb
             | Self::Pol
             | Self::HyperEvm
-            | Self::Abs => true,
+            | Self::Abs
+            | Self::Avax => true,
             Self::Btc
             | Self::Zcash
             | Self::Near
@@ -119,7 +122,8 @@ impl ChainKind {
             | Self::Strk
             | Self::Abs
             | Self::Fogo
-            | Self::Aptos => false,
+            | Self::Aptos
+            | Self::Avax => false,
         }
     }
 
@@ -137,7 +141,8 @@ impl ChainKind {
             | Self::Abs
             | Self::Btc
             | Self::Zcash
-            | Self::Aptos => false,
+            | Self::Aptos
+            | Self::Avax => false,
         }
     }
 }
@@ -174,6 +179,7 @@ impl TryFrom<u8> for ChainKind {
             11 => Ok(Self::Abs),
             12 => Ok(Self::Fogo),
             13 => Ok(Self::Aptos),
+            14 => Ok(Self::Avax),
             _ => Err(format!("{input:?} invalid chain kind")),
         }
     }
@@ -212,6 +218,7 @@ pub enum OmniAddress {
     Abs(EvmAddress),
     Fogo(SolAddress),
     Aptos(AptosAddress),
+    Avax(EvmAddress),
 }
 
 impl OmniAddress {
@@ -232,6 +239,7 @@ impl OmniAddress {
             ChainKind::Abs => Ok(Self::Abs(H160::ZERO)),
             ChainKind::Fogo => Ok(Self::Fogo(SolAddress::ZERO)),
             ChainKind::Aptos => Ok(Self::Aptos(H256::ZERO)),
+            ChainKind::Avax => Ok(Self::Avax(H160::ZERO)),
         }
     }
 
@@ -247,6 +255,7 @@ impl OmniAddress {
             ChainKind::Pol => Ok(Self::Pol(address)),
             ChainKind::HyperEvm => Ok(Self::HyperEvm(address)),
             ChainKind::Abs => Ok(Self::Abs(address)),
+            ChainKind::Avax => Ok(Self::Avax(address)),
             _ => Err(format!("{chain_kind:?} is not an EVM chain")),
         }
     }
@@ -261,7 +270,8 @@ impl OmniAddress {
             | ChainKind::Bnb
             | ChainKind::Pol
             | ChainKind::HyperEvm
-            | ChainKind::Abs => {
+            | ChainKind::Abs
+            | ChainKind::Avax => {
                 Self::new_from_evm_address(chain_kind, Self::to_evm_address(address)?)
             }
             ChainKind::Near => Ok(Self::Near(Self::to_near_account_id(address)?)),
@@ -293,6 +303,7 @@ impl OmniAddress {
             Self::Abs(_) => ChainKind::Abs,
             Self::Fogo(_) => ChainKind::Fogo,
             Self::Aptos(_) => ChainKind::Aptos,
+            Self::Avax(_) => ChainKind::Avax,
         }
     }
 
@@ -312,6 +323,7 @@ impl OmniAddress {
             Self::Abs(address) => ("abs", address.to_string()),
             Self::Fogo(address) => ("fogo", address.to_string()),
             Self::Aptos(address) => ("aptos", address.to_string()),
+            Self::Avax(address) => ("avax", address.to_string()),
         };
 
         if skip_zero_address && self.is_zero() {
@@ -329,7 +341,8 @@ impl OmniAddress {
             | Self::Bnb(address)
             | Self::Pol(address)
             | Self::HyperEvm(address)
-            | Self::Abs(address) => address.is_zero(),
+            | Self::Abs(address)
+            | Self::Avax(address) => address.is_zero(),
             Self::Near(address) => *address == ZERO_ACCOUNT_ID,
             Self::Sol(address) | Self::Fogo(address) => address.is_zero(),
             Self::Btc(address) | Self::Zcash(address) => address.is_empty(),
@@ -438,6 +451,7 @@ impl FromStr for OmniAddress {
             "strk" => Ok(Self::Strk(recipient.parse().map_err(stringify)?)),
             "fogo" => Ok(Self::Fogo(recipient.parse().map_err(stringify)?)),
             "aptos" => Ok(Self::Aptos(recipient.parse().map_err(stringify)?)),
+            "avax" => Ok(Self::Avax(recipient.parse().map_err(stringify)?)),
             _ => Err(format!("Chain {chain} is not supported")),
         }
     }
@@ -507,7 +521,6 @@ impl<'de> Deserialize<'de> for OmniAddress {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum BridgeOnTransferMsg {
     InitTransfer(InitTransferMsg),
-    FastFinTransfer(FastFinTransferMsg),
     UtxoFinTransfer(UtxoFinTransferMsg),
     SwapMigratedToken,
 }
@@ -530,17 +543,6 @@ impl InitTransferMsg {
     pub const fn get_destination_chain(&self) -> ChainKind {
         self.recipient.get_chain()
     }
-}
-
-#[derive(Serialize, Deserialize, BorshSerialize, BorshDeserialize, Debug, Clone)]
-pub struct FastFinTransferMsg {
-    pub transfer_id: UnifiedTransferId,
-    pub recipient: OmniAddress,
-    pub fee: Fee,
-    pub msg: TransferMsg,
-    pub amount: U128,
-    pub storage_deposit_amount: Option<U128>,
-    pub relayer: AccountId,
 }
 
 #[near(serializers=[borsh, json])]
@@ -860,82 +862,6 @@ impl std::fmt::Display for UnifiedTransferId {
     }
 }
 
-#[near(serializers=[borsh, json])]
-#[derive(Debug, Clone)]
-pub struct FastTransferId(pub [u8; 32]);
-
-#[near(serializers=[borsh, json])]
-#[derive(Debug, Clone)]
-pub struct FastTransfer {
-    pub transfer_id: UnifiedTransferId,
-    pub token_id: AccountId,
-    pub amount: U128,
-    pub fee: Fee,
-    pub recipient: OmniAddress,
-    pub msg: TransferMsg,
-}
-
-impl FastTransfer {
-    #[allow(clippy::missing_panics_doc)]
-    pub fn id(&self) -> FastTransferId {
-        FastTransferId(utils::sha256(&borsh::to_vec(self).unwrap()))
-    }
-
-    pub const fn get_destination_chain(&self) -> ChainKind {
-        self.recipient.get_chain()
-    }
-
-    pub fn amount_without_fee(&self) -> Option<u128> {
-        self.amount.0.checked_sub(self.fee.fee.0)
-    }
-}
-
-impl FastTransfer {
-    pub fn from_transfer(transfer: TransferMessage, token_id: AccountId) -> Self {
-        Self {
-            transfer_id: UnifiedTransferId {
-                origin_chain: transfer.get_origin_chain(),
-                kind: TransferIdKind::Nonce(transfer.origin_nonce),
-            },
-            token_id,
-            amount: transfer.amount,
-            fee: transfer.fee,
-            recipient: transfer.recipient,
-            msg: transfer.msg,
-        }
-    }
-
-    pub fn from_utxo_transfer(
-        transfer: UtxoFinTransferMsg,
-        token_id: AccountId,
-        amount: U128,
-        origin_chain: ChainKind,
-    ) -> Self {
-        Self {
-            transfer_id: UnifiedTransferId {
-                origin_chain,
-                kind: TransferIdKind::Utxo(transfer.utxo_id),
-            },
-            token_id,
-            amount,
-            fee: Fee {
-                fee: transfer.relayer_fee,
-                native_fee: U128(0),
-            },
-            recipient: transfer.recipient,
-            msg: transfer.msg,
-        }
-    }
-}
-
-#[near(serializers=[borsh, json])]
-#[derive(Debug, Clone)]
-pub struct FastTransferStatus {
-    pub finalised: bool,
-    pub relayer: AccountId,
-    pub storage_owner: AccountId,
-}
-
 #[near(serializers=[json])]
 #[derive(Debug, PartialEq)]
 pub enum DestinationChainMsg {
@@ -986,6 +912,7 @@ pub fn get_native_token_address(chain_kind: ChainKind) -> Result<OmniAddress, St
         | ChainKind::Pol
         | ChainKind::HyperEvm
         | ChainKind::Abs
-        | ChainKind::Fogo => OmniAddress::new_zero(chain_kind),
+        | ChainKind::Fogo
+        | ChainKind::Avax => OmniAddress::new_zero(chain_kind),
     }
 }

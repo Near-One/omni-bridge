@@ -176,15 +176,17 @@ impl Contract {
             .detach();
     }
 
+    #[payable]
     #[access_control_any(roles(Role::DAO, Role::RbfOperator))]
     pub fn rbf_increase_gas_fee(
-        &self,
+        &mut self,
         chain_kind: ChainKind,
         original_btc_pending_verify_id: String,
         output: Vec<TxOut>,
     ) -> Promise {
         ext_utxo_connector::ext(self.get_utxo_chain_connector(chain_kind))
             .with_static_gas(WITHDRAW_RBF_GAS)
+            .with_attached_deposit(env::attached_deposit())
             .withdraw_rbf(original_btc_pending_verify_id, output)
     }
 

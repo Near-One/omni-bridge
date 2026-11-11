@@ -2,7 +2,7 @@ import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signer
 import { expect } from "chai"
 import { ethers, upgrades } from "hardhat"
 import type { HlOmniBridge, HyperliquedBridgeToken, TestWormhole } from "../typechain-types"
-import { testWallet } from "./helpers/signatures"
+import { depositSignature, testWallet } from "./helpers/signatures"
 
 const ACTION_TRANSFER = 0
 const ACTION_INIT_TRANSFER = 1
@@ -274,7 +274,7 @@ describe("HyperliquedBridgeToken", () => {
         value: WORMHOLE_FEE,
         ...overrides,
       }
-      // Permissionless on purpose: any third party may submit a stuck transfer.
+      // Permissionless for EOAs: any third party may submit a stuck transfer.
       return omniBridge
         .connect(user2)
         .triggerPendingInitTransfer(
@@ -354,6 +354,31 @@ describe("HyperliquedBridgeToken", () => {
       await expect(trigger())
         .to.be.revertedWithCustomError(omniBridge, "NoPendingInitTransfer")
         .withArgs(ORIGIN_NONCE)
+    })
+
+    it("rejects a submission from a contract, as in a HyperCore system transaction", async () => {
+      await queue()
+      const forwarder = await (await ethers.getContractFactory("TestForwarder")).deploy()
+      const data = omniBridge.interface.encodeFunctionData("triggerPendingInitTransfer", [
+        ORIGIN_NONCE,
+        tokenAddress,
+        user1.address,
+        AMOUNT,
+        FEE,
+        RECIPIENT,
+        MESSAGE,
+      ])
+
+      await expect(
+        forwarder.connect(systemSigner).forward(omniBridgeAddress, data, { value: WORMHOLE_FEE }),
+      )
+        .to.be.revertedWithCustomError(omniBridge, "NotTxOrigin")
+        .withArgs(await forwarder.getAddress())
+
+      expect(await omniBridge.pendingInitTransfers(ORIGIN_NONCE)).to.equal(
+        commitment(tokenAddress, user1.address, AMOUNT, FEE, RECIPIENT, MESSAGE),
+      )
+      await expect(trigger()).to.emit(testWormhole, "MessagePublished")
     })
 
     it("rejects a payload that does not hash to the commitment", async () => {
@@ -445,6 +470,35 @@ describe("HyperliquedBridgeToken", () => {
       await expect(queue(CORE_NONCE, tooBig))
         .to.be.revertedWithCustomError(token, "SafeCastOverflowedUintDowncast")
         .withArgs(128, tooBig)
+    })
+  })
+
+  describe("finTransfer", () => {
+    let tokenAddress: string
+
+    beforeEach(async () => {
+      const hl = await deployHlToken()
+      tokenAddress = hl.address
+      await hl.token.transferOwnership(omniBridgeAddress)
+      await omniBridge.acceptTokenOwnership(tokenAddress)
+      await registerHlOnBridge(tokenAddress)
+    })
+
+    it("rejects a relay from a contract, as in a HyperCore system transaction", async () => {
+      const { signature, payload } = depositSignature(tokenAddress, user1.address)
+      const forwarder = await (await ethers.getContractFactory("TestForwarder")).deploy()
+      const data = omniBridge.interface.encodeFunctionData("finTransfer", [signature, payload])
+
+      await expect(
+        forwarder.connect(systemSigner).forward(omniBridgeAddress, data, { value: WORMHOLE_FEE }),
+      )
+        .to.be.revertedWithCustomError(omniBridge, "NotTxOrigin")
+        .withArgs(await forwarder.getAddress())
+
+      expect(await omniBridge.completedTransfers(payload.destinationNonce)).to.equal(false)
+      await expect(
+        omniBridge.connect(user2).finTransfer(signature, payload, { value: WORMHOLE_FEE }),
+      ).to.emit(testWormhole, "MessagePublished")
     })
   })
 })

@@ -1,7 +1,7 @@
 mod btc_storage_fix;
+mod dao_fin_transfer;
 #[cfg(test)]
 mod environment;
-mod fast_transfer;
 mod fin_transfer;
 mod helpers;
 mod init_transfer;

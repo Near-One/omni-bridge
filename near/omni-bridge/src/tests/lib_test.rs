@@ -2,31 +2,38 @@ use std::collections::HashMap;
 use std::str::FromStr;
 
 use near_contract_standards::storage_management::StorageBalance;
+use near_plugins::AccessControllable;
 use near_sdk::{
-    borsh, json_types::U128, serde_json, test_utils::VMContextBuilder, test_vm_config, testing_env,
-    AccountId, NearToken, PromiseOrValue, PromiseResult, RuntimeFeesConfig,
+    borsh,
+    json_types::{U128, U64},
+    serde_json,
+    test_utils::VMContextBuilder,
+    test_vm_config, testing_env, AccountId, NearToken, PromiseOrValue, PromiseResult,
+    RuntimeFeesConfig,
 };
 use omni_types::{
-    locker_args::StorageDepositAction,
-    prover_result::{FinTransferMessage, InitTransferMessage, ProverResult},
+    locker_args::{BindTokenArgs, DeployTokenArgs, StorageDepositAction},
+    prover_result::{DeployTokenMessage, FinTransferMessage, InitTransferMessage, ProverResult},
     sol_address::SolAddress,
     BridgeOnTransferMsg, ChainKind, EvmAddress, Fee, InitTransferMsg, Nonce, OmniAddress,
     TransferId, TransferMessage, TransferMsg,
 };
 
-use crate::Contract;
 use crate::{
     storage::{Decimals, TransferMessageStorage, TransferMessageStorageValue},
     token_lock::LockAction,
 };
+use crate::{Contract, Role};
 
 const DEFAULT_NONCE: Nonce = 0;
 const DEFAULT_MPC_SIGNER_ACCOUNT: &str = "mpc_signer.testnet";
 const DEFAULT_WNEAR_ACCOUNT: &str = "wnear.testnet";
 
 const DEFAULT_NEAR_USER_ACCOUNT: &str = "user.testnet";
+const DEFAULT_UNPRIVILEGED_ACCOUNT: &str = "unprivileged.testnet";
 const DEFAULT_FT_CONTRACT_ACCOUNT: &str = "ft_contract.testnet";
 const DEFAULT_ETH_USER_ADDRESS: &str = "0x1234567890123456789012345678901234567890";
+const DEFAULT_ETH_TOKEN_ADDRESS: &str = "0x0000000000000000000000000000000000000001";
 const DEFAULT_TRANSFER_AMOUNT: u128 = 100;
 const DEFAULT_TRANSFER_FEE: u128 = 10;
 const NEP141_DEPOSIT: NearToken = NearToken::from_yoctonear(1_250_000_000_000_000_000_000);
@@ -923,6 +930,210 @@ fn test_fin_transfer_callback_refund_restores_locked_tokens() {
     );
 }
 
+fn get_eth_factory_address() -> OmniAddress {
+    OmniAddress::Eth(EvmAddress::from_str(DEFAULT_ETH_USER_ADDRESS).unwrap())
+}
+
+fn get_eth_token_address() -> OmniAddress {
+    OmniAddress::Eth(EvmAddress::from_str(DEFAULT_ETH_TOKEN_ADDRESS).unwrap())
+}
+
+fn run_bind_token_on_eth(contract: &mut Contract, token_id: &AccountId) {
+    setup_test_env(
+        DEFAULT_NEAR_USER_ACCOUNT.parse().unwrap(),
+        NearToken::from_near(0),
+        None,
+    );
+    contract.bind_token_callback(
+        NearToken::from_near(1),
+        ChainKind::Eth,
+        Ok(ProverResult::DeployToken(DeployTokenMessage {
+            token: token_id.clone(),
+            token_address: get_eth_token_address(),
+            decimals: 24,
+            origin_decimals: 24,
+            emitter_address: get_eth_factory_address(),
+        })),
+    );
+}
+
+fn run_fin_transfer_from_eth_to_near(contract: &mut Contract, token_id: &AccountId, amount: u128) {
+    let recipient: AccountId = DEFAULT_NEAR_USER_ACCOUNT.parse().unwrap();
+    let prover_result = ProverResult::InitTransfer(InitTransferMessage {
+        origin_nonce: DEFAULT_NONCE,
+        token: get_eth_token_address(),
+        amount: U128(amount),
+        recipient: OmniAddress::Near(recipient.clone()),
+        fee: Fee::default(),
+        sender: OmniAddress::Eth(EvmAddress::from_str(DEFAULT_ETH_USER_ADDRESS).unwrap()),
+        msg: TransferMsg::default(),
+        emitter_address: get_eth_factory_address(),
+    });
+    let storage_actions = vec![StorageDepositAction {
+        token_id: token_id.clone(),
+        account_id: recipient.clone(),
+        storage_deposit_amount: None,
+    }];
+
+    setup_test_env(
+        recipient.clone(),
+        NearToken::from_near(1),
+        Some(vec![
+            PromiseResult::Successful(borsh::to_vec(&prover_result).unwrap()),
+            PromiseResult::Successful(
+                serde_json::to_vec(&Some(StorageBalance {
+                    total: NearToken::from_near(1),
+                    available: NearToken::from_near(1),
+                }))
+                .unwrap(),
+            ),
+        ]),
+    );
+
+    let result = contract.fin_transfer_callback(&storage_actions, recipient, ChainKind::Eth);
+    assert!(matches!(result, PromiseOrValue::Promise(_)));
+}
+
+#[test]
+fn test_bind_token_keeps_amount_locked_by_pre_bind_transfer() {
+    let mut contract = get_default_contract();
+    let token_id: AccountId = DEFAULT_FT_CONTRACT_ACCOUNT.parse().unwrap();
+    contract
+        .factories
+        .insert(&ChainKind::Eth, &get_eth_factory_address());
+
+    run_ft_on_transfer(
+        &mut contract,
+        DEFAULT_NEAR_USER_ACCOUNT.to_string(),
+        token_id.to_string(),
+        U128(DEFAULT_TRANSFER_AMOUNT),
+        None,
+        &BridgeOnTransferMsg::InitTransfer(get_init_transfer_msg(DEFAULT_ETH_USER_ADDRESS, 0, 0)),
+    );
+    assert_eq!(
+        contract.get_locked_tokens(ChainKind::Eth, token_id.clone()),
+        Some(U128(DEFAULT_TRANSFER_AMOUNT))
+    );
+
+    run_bind_token_on_eth(&mut contract, &token_id);
+    assert_eq!(
+        contract.get_locked_tokens(ChainKind::Eth, token_id.clone()),
+        Some(U128(DEFAULT_TRANSFER_AMOUNT))
+    );
+
+    run_fin_transfer_from_eth_to_near(&mut contract, &token_id, DEFAULT_TRANSFER_AMOUNT);
+    assert_eq!(
+        contract.get_locked_tokens(ChainKind::Eth, token_id),
+        Some(U128(0))
+    );
+}
+
+#[test]
+fn test_bind_token_keeps_amount_set_before_bind() {
+    let mut contract = get_default_contract();
+    let token_id: AccountId = DEFAULT_FT_CONTRACT_ACCOUNT.parse().unwrap();
+    contract
+        .factories
+        .insert(&ChainKind::Eth, &get_eth_factory_address());
+    contract.locked_tokens.insert(
+        &(ChainKind::Eth, token_id.clone()),
+        &DEFAULT_TRANSFER_AMOUNT,
+    );
+
+    run_bind_token_on_eth(&mut contract, &token_id);
+
+    assert_eq!(
+        contract.get_locked_tokens(ChainKind::Eth, token_id),
+        Some(U128(DEFAULT_TRANSFER_AMOUNT))
+    );
+}
+
+#[test]
+fn test_bind_token_starts_locked_tokens_at_zero() {
+    let mut contract = get_default_contract();
+    let token_id: AccountId = DEFAULT_FT_CONTRACT_ACCOUNT.parse().unwrap();
+    contract
+        .factories
+        .insert(&ChainKind::Eth, &get_eth_factory_address());
+
+    run_bind_token_on_eth(&mut contract, &token_id);
+
+    assert_eq!(
+        contract.get_locked_tokens(ChainKind::Eth, token_id),
+        Some(U128(0))
+    );
+}
+
+#[test]
+fn test_init_transfer_skips_lock_for_bound_token_without_locked_tokens() {
+    let mut contract = get_default_contract();
+    let token_id: AccountId = DEFAULT_FT_CONTRACT_ACCOUNT.parse().unwrap();
+    contract.token_id_to_address.insert(
+        &(ChainKind::Eth, token_id.clone()),
+        &get_eth_token_address(),
+    );
+
+    run_ft_on_transfer(
+        &mut contract,
+        DEFAULT_NEAR_USER_ACCOUNT.to_string(),
+        token_id.to_string(),
+        U128(DEFAULT_TRANSFER_AMOUNT),
+        None,
+        &BridgeOnTransferMsg::InitTransfer(get_init_transfer_msg(DEFAULT_ETH_USER_ADDRESS, 0, 0)),
+    );
+
+    assert_eq!(contract.get_locked_tokens(ChainKind::Eth, token_id), None);
+}
+
+#[test]
+fn test_fin_transfer_callback_non_near_locks_tokens_for_unbound_token() {
+    let mut contract = get_default_contract();
+    let token_id: AccountId = DEFAULT_FT_CONTRACT_ACCOUNT.parse().unwrap();
+    let predecessor: AccountId = DEFAULT_NEAR_USER_ACCOUNT.parse().unwrap();
+    contract
+        .factories
+        .insert(&ChainKind::Eth, &get_eth_factory_address());
+    contract.locked_tokens.insert(
+        &(ChainKind::Eth, token_id.clone()),
+        &DEFAULT_TRANSFER_AMOUNT,
+    );
+    contract.token_decimals.insert(
+        &OmniAddress::Near(token_id.clone()),
+        &Decimals {
+            decimals: 24,
+            origin_decimals: 24,
+        },
+    );
+
+    let solana_address: SolAddress = "2xNweLHLqbS9YpP3UyaPrxKqgqoC6yPBFyuLxA8qtgr4"
+        .parse()
+        .expect("Invalid Solana address");
+    let prover_result = get_prover_result(Some(OmniAddress::Sol(solana_address)));
+
+    setup_test_env(
+        predecessor.clone(),
+        NearToken::from_near(1),
+        Some(vec![PromiseResult::Successful(
+            borsh::to_vec(&prover_result).unwrap(),
+        )]),
+    );
+    let result = contract.fin_transfer_callback(
+        &get_default_storage_deposit_actions(),
+        predecessor,
+        ChainKind::Eth,
+    );
+
+    assert!(matches!(result, PromiseOrValue::Value(_)));
+    assert_eq!(
+        contract.get_locked_tokens(ChainKind::Eth, token_id.clone()),
+        Some(U128(0))
+    );
+    assert_eq!(
+        contract.get_locked_tokens(ChainKind::Sol, token_id),
+        Some(U128(DEFAULT_TRANSFER_AMOUNT))
+    );
+}
+
 #[test]
 fn test_is_transfer_finalised() {
     let mut contract = get_default_contract();
@@ -1114,4 +1325,236 @@ fn test_legacy_ft_on_transfer() {
         None,
         &get_init_transfer_msg(DEFAULT_ETH_USER_ADDRESS, 0, 0),
     );
+}
+
+fn get_deploy_token_args() -> DeployTokenArgs {
+    DeployTokenArgs {
+        chain_kind: ChainKind::Eth,
+        prover_args: vec![],
+    }
+}
+
+fn get_bind_token_args() -> BindTokenArgs {
+    BindTokenArgs {
+        chain_kind: ChainKind::Eth,
+        prover_args: vec![],
+    }
+}
+
+fn setup_contract_with_role(account_id: &AccountId, role: Role) -> Contract {
+    let mut contract = get_default_contract();
+    contract
+        .provers
+        .insert(&ChainKind::Eth, &"prover.testnet".parse().unwrap());
+    contract.acl_grant_role(role.into(), account_id.clone());
+    contract
+}
+
+#[test]
+#[should_panic(expected = "Insufficient permissions for method deploy_token")]
+fn test_deploy_token_without_role_panics() {
+    let mut contract = get_default_contract();
+
+    setup_test_env(
+        DEFAULT_UNPRIVILEGED_ACCOUNT.parse().unwrap(),
+        NearToken::from_near(1),
+        None,
+    );
+    contract.deploy_token(get_deploy_token_args()).detach();
+}
+
+#[test]
+#[should_panic(expected = "Insufficient permissions for method deploy_token")]
+fn test_deploy_token_by_unrestricted_relayer_panics() {
+    let relayer: AccountId = DEFAULT_UNPRIVILEGED_ACCOUNT.parse().unwrap();
+    let mut contract = setup_contract_with_role(&relayer, Role::UnrestrictedRelayer);
+
+    setup_test_env(relayer, NearToken::from_near(1), None);
+    contract.deploy_token(get_deploy_token_args()).detach();
+}
+
+#[test]
+fn test_deploy_token_by_token_deployer_succeeds() {
+    let deployer: AccountId = DEFAULT_UNPRIVILEGED_ACCOUNT.parse().unwrap();
+    let mut contract = setup_contract_with_role(&deployer, Role::TokenDeployer);
+
+    setup_test_env(deployer, NearToken::from_near(1), None);
+    contract.deploy_token(get_deploy_token_args()).detach();
+}
+
+#[test]
+fn test_deploy_token_by_dao_succeeds() {
+    let dao: AccountId = DEFAULT_NEAR_USER_ACCOUNT.parse().unwrap();
+    let mut contract = setup_contract_with_role(&dao, Role::DAO);
+
+    setup_test_env(dao, NearToken::from_near(1), None);
+    contract.deploy_token(get_deploy_token_args()).detach();
+}
+
+#[test]
+#[should_panic(expected = "Relayer is not active")]
+fn test_bind_token_without_role_panics() {
+    let mut contract = get_default_contract();
+
+    setup_test_env(
+        DEFAULT_UNPRIVILEGED_ACCOUNT.parse().unwrap(),
+        NearToken::from_near(1),
+        None,
+    );
+    contract.bind_token(get_bind_token_args()).detach();
+}
+
+#[test]
+fn test_bind_token_by_token_deployer_succeeds() {
+    let deployer: AccountId = DEFAULT_UNPRIVILEGED_ACCOUNT.parse().unwrap();
+    let mut contract = setup_contract_with_role(&deployer, Role::TokenDeployer);
+
+    setup_test_env(deployer, NearToken::from_near(1), None);
+    contract.bind_token(get_bind_token_args()).detach();
+}
+
+#[test]
+fn test_bind_token_by_unrestricted_relayer_succeeds() {
+    let relayer: AccountId = DEFAULT_UNPRIVILEGED_ACCOUNT.parse().unwrap();
+    let mut contract = setup_contract_with_role(&relayer, Role::UnrestrictedRelayer);
+
+    setup_test_env(relayer, NearToken::from_near(1), None);
+    contract.bind_token(get_bind_token_args()).detach();
+}
+
+#[test]
+fn test_bind_token_by_staked_relayer_succeeds() {
+    let mut contract = get_default_contract();
+    let relayer: AccountId = DEFAULT_UNPRIVILEGED_ACCOUNT.parse().unwrap();
+    contract
+        .provers
+        .insert(&ChainKind::Eth, &"prover.testnet".parse().unwrap());
+    contract.set_relayer_config(NearToken::from_near(1), U64(0));
+
+    setup_test_env(relayer, NearToken::from_near(1), None);
+    contract.apply_for_trusted_relayer();
+
+    contract.bind_token(get_bind_token_args()).detach();
+}
+
+fn setup_migrate_tokens(
+    contract: &mut Contract,
+) -> (AccountId, AccountId, OmniAddress, OmniAddress) {
+    let old_token: AccountId = "old-token.testnet".parse().unwrap();
+    let new_token: AccountId = "new-token.testnet".parse().unwrap();
+    let eth_address = OmniAddress::Eth(EvmAddress::from_str(DEFAULT_ETH_TOKEN_ADDRESS).unwrap());
+    let sol_address = OmniAddress::Sol(
+        "2xNweLHLqbS9YpP3UyaPrxKqgqoC6yPBFyuLxA8qtgr4"
+            .parse()
+            .unwrap(),
+    );
+
+    contract.deployed_tokens.insert(&old_token);
+    contract
+        .deployed_tokens_v2
+        .insert(&old_token, &ChainKind::Eth);
+    contract
+        .token_id_to_address
+        .insert(&(ChainKind::Eth, old_token.clone()), &eth_address);
+    contract
+        .token_id_to_address
+        .insert(&(ChainKind::Sol, old_token.clone()), &sol_address);
+    contract
+        .token_address_to_id
+        .insert(&eth_address, &old_token);
+    contract
+        .token_address_to_id
+        .insert(&sol_address, &old_token);
+    contract.locked_tokens.insert(
+        &(ChainKind::Sol, old_token.clone()),
+        &DEFAULT_TRANSFER_AMOUNT,
+    );
+    contract
+        .locked_tokens
+        .insert(&(ChainKind::Near, old_token.clone()), &DEFAULT_TRANSFER_FEE);
+
+    (old_token, new_token, eth_address, sol_address)
+}
+
+#[test]
+fn test_migrate_deployed_token_moves_all_routes_and_locked_tokens() {
+    let dao: AccountId = DEFAULT_UNPRIVILEGED_ACCOUNT.parse().unwrap();
+    let mut contract = setup_contract_with_role(&dao, Role::DAO);
+    let (old_token, new_token, eth_address, sol_address) = setup_migrate_tokens(&mut contract);
+
+    setup_test_env(dao, NEP141_DEPOSIT, None);
+    contract.migrate_deployed_token(ChainKind::Eth, old_token.clone(), new_token.clone());
+
+    assert_eq!(
+        contract.get_token_address(ChainKind::Eth, new_token.clone()),
+        Some(eth_address.clone())
+    );
+    assert_eq!(
+        contract.get_token_address(ChainKind::Sol, new_token.clone()),
+        Some(sol_address.clone())
+    );
+    assert_eq!(
+        contract.get_token_address(ChainKind::Eth, old_token.clone()),
+        None
+    );
+    assert_eq!(
+        contract.get_token_address(ChainKind::Sol, old_token.clone()),
+        None
+    );
+    assert_eq!(contract.get_token_id(&eth_address), new_token);
+    assert_eq!(contract.get_token_id(&sol_address), new_token);
+    assert_eq!(
+        contract.get_locked_tokens(ChainKind::Sol, new_token.clone()),
+        Some(U128(DEFAULT_TRANSFER_AMOUNT))
+    );
+    assert_eq!(
+        contract.get_locked_tokens(ChainKind::Near, new_token.clone()),
+        Some(U128(DEFAULT_TRANSFER_FEE))
+    );
+    assert_eq!(
+        contract.get_locked_tokens(ChainKind::Sol, old_token.clone()),
+        None
+    );
+    assert_eq!(
+        contract.get_locked_tokens(ChainKind::Near, old_token.clone()),
+        None
+    );
+    assert_eq!(
+        contract.get_migrated_token(&old_token),
+        Some(new_token.clone())
+    );
+    assert!(contract.deployed_tokens.contains(&new_token));
+    assert!(!contract.deployed_tokens.contains(&old_token));
+    assert_eq!(contract.get_token_origin_chain(&new_token), ChainKind::Eth);
+}
+
+#[test]
+#[should_panic(expected = "ERR_TOKEN_EXISTS")]
+fn test_migrate_deployed_token_rejects_existing_new_token_route() {
+    let dao: AccountId = DEFAULT_UNPRIVILEGED_ACCOUNT.parse().unwrap();
+    let mut contract = setup_contract_with_role(&dao, Role::DAO);
+    let (old_token, new_token, _, _) = setup_migrate_tokens(&mut contract);
+
+    let other_sol_address = OmniAddress::Sol(
+        "3xNweLHLqbS9YpP3UyaPrxKqgqoC6yPBFyuLxA8qtgr4"
+            .parse()
+            .unwrap(),
+    );
+    contract
+        .token_id_to_address
+        .insert(&(ChainKind::Sol, new_token.clone()), &other_sol_address);
+
+    setup_test_env(dao, NEP141_DEPOSIT, None);
+    contract.migrate_deployed_token(ChainKind::Eth, old_token, new_token);
+}
+
+#[test]
+#[should_panic(expected = "ERR_FAILED_TO_GET_TOKEN_ADDRESS")]
+fn test_migrate_deployed_token_requires_origin_route() {
+    let dao: AccountId = DEFAULT_UNPRIVILEGED_ACCOUNT.parse().unwrap();
+    let mut contract = setup_contract_with_role(&dao, Role::DAO);
+    let (old_token, new_token, _, _) = setup_migrate_tokens(&mut contract);
+
+    setup_test_env(dao, NEP141_DEPOSIT, None);
+    contract.migrate_deployed_token(ChainKind::Base, old_token, new_token);
 }
