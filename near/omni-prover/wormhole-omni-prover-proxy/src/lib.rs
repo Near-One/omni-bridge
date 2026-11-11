@@ -37,8 +37,6 @@ impl WormholeOmniProverProxy {
         let args = WormholeVerifyProofArgs::try_from_slice(&input)
             .unwrap_or_else(|_| env::panic_str("ErrorOnArgsParsing"));
 
-        env::log_str(&args.vaa);
-
         ext_prover::ext(self.prover_account.clone())
             .with_static_gas(VERIFY_VAA_GAS)
             .verify_vaa(&args.vaa)

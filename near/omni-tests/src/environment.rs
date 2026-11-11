@@ -11,7 +11,7 @@ use near_workspaces::{network::Sandbox, Account, Contract, Worker};
 use omni_types::{
     locker_args::{FinTransferArgs, StorageDepositAction},
     prover_result::{InitTransferMessage, ProverResult},
-    BasicMetadata, ChainKind, Fee, OmniAddress,
+    BasicMetadata, ChainKind, Fee, OmniAddress, TransferMsg,
 };
 
 use crate::helpers::tests::{
@@ -227,8 +227,8 @@ impl TestEnvBuilder {
                 &eth_token_address(),
                 &eth_factory_address(),
                 &BasicMetadata {
-                    name: "Test Token".to_string(),
-                    symbol: "TEST".to_string(),
+                    name: "Test Token".parse().unwrap(),
+                    symbol: "TEST".parse().unwrap(),
                     decimals: 18,
                 },
             ))
@@ -609,7 +609,7 @@ impl TestEnvBuilderWithToken {
                             native_fee: U128(0),
                         },
                         sender: eth_eoa_address(),
-                        msg: String::default(),
+                        msg: TransferMsg::default(),
                         emitter_address: eth_factory_address(),
                     }))?,
                 })

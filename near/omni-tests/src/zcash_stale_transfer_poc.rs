@@ -7,7 +7,7 @@ mod tests {
     use near_workspaces::{types::NearToken, AccountId};
     use omni_types::{
         BridgeOnTransferMsg, ChainKind, Fee, InitTransferMsg, OmniAddress, TransferId,
-        TransferMessage, TransferMessageStorageAccount,
+        TransferMessage, TransferMessageStorageAccount, TransferMsg,
     };
     use rstest::rstest;
 
@@ -204,7 +204,7 @@ mod tests {
         // variants possible. We use 500 to make the overshoot unambiguous
         // and safe across token-name lengths produced by dev-deploy.
         let long_zcash_ua = format!("u{}", "1".repeat(499));
-        let recipient = OmniAddress::Zcash(long_zcash_ua.clone());
+        let recipient = OmniAddress::Zcash(long_zcash_ua.parse().unwrap());
 
         let transfer_amount: u128 = 50_000;
         let init_msg = InitTransferMsg {
@@ -223,7 +223,7 @@ mod tests {
             recipient: recipient.clone(),
             fee: Fee::default(),
             sender: OmniAddress::Near(attacker.id().clone()),
-            msg: String::new(),
+            msg: TransferMsg::default(),
         };
         let virtual_acct_id = storage_account_data.id(None);
 
@@ -384,7 +384,7 @@ mod tests {
         // 64-char NEAR placeholder, so the synthetic estimate over-covers
         // the actual cost and the storage check passes.
         let btc_address_90 = format!("bc1p{}", "q".repeat(85)); // length 89
-        let recipient = OmniAddress::Btc(btc_address_90.clone());
+        let recipient = OmniAddress::Btc(btc_address_90.parse().unwrap());
 
         let transfer_amount: u128 = 50_000;
         let init_msg = InitTransferMsg {
@@ -401,7 +401,7 @@ mod tests {
             recipient: recipient.clone(),
             fee: Fee::default(),
             sender: OmniAddress::Near(attacker.id().clone()),
-            msg: String::new(),
+            msg: TransferMsg::default(),
         };
         let virtual_acct_id = storage_account_data.id(None);
 

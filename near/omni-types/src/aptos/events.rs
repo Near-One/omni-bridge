@@ -28,7 +28,7 @@ use crate::{
         DeployTokenMessage, FinTransferMessage, InitTransferMessage, LogMetadataMessage, ProofKind,
         ProverResult,
     },
-    stringify, ChainKind, Fee, OmniAddress, TransferId, H256,
+    stringify, ChainKind, Fee, OmniAddress, TransferId, TransferMsg, H256,
 };
 
 /// Move struct-tag suffixes for the omni-bridge events. Matched against the
@@ -166,6 +166,8 @@ pub fn parse_init_transfer(type_tag: &str, data: &str) -> Result<InitTransferMes
     let recipient: OmniAddress = field_str(&v, "recipient")?.parse().map_err(stringify)?;
     let msg = String::from_utf8(parse_bytes(field_str(&v, "message")?)?)
         .map_err(|e| format!("InitTransfer: message is not valid UTF-8: {e}"))?;
+    let msg = TransferMsg::new(msg)
+        .map_err(|e| format!("InitTransfer: message exceeds the bridge limit: {e}"))?;
 
     Ok(InitTransferMessage {
         origin_nonce,
@@ -256,8 +258,8 @@ pub fn parse_log_metadata(type_tag: &str, data: &str) -> Result<LogMetadataMessa
 
     Ok(LogMetadataMessage {
         token_address: OmniAddress::Aptos(H256(field_address(&v, "token_address")?)),
-        name: field_str(&v, "name")?.to_string(),
-        symbol: field_str(&v, "symbol")?.to_string(),
+        name: field_str(&v, "name")?.parse().map_err(stringify)?,
+        symbol: field_str(&v, "symbol")?.parse().map_err(stringify)?,
         decimals: field_u8(&v, "decimals")?,
         emitter_address,
     })

@@ -11,7 +11,7 @@ mod tests {
     use omni_types::{
         locker_args::{FinTransferArgs, StorageDepositAction},
         prover_result::{InitTransferMessage, ProverResult},
-        ChainKind, Fee, OmniAddress,
+        ChainKind, Fee, OmniAddress, TransferMsg,
     };
     use rand::RngCore;
     use rstest::rstest;
@@ -24,9 +24,14 @@ mod tests {
         },
     };
 
-    static HEX_STRING_2000: std::sync::LazyLock<String> = std::sync::LazyLock::new(|| {
+    /// A large hex payload for exercising `msg` near its limit.
+    ///
+    /// 900 bytes hex-encode to 1800 characters, leaving room for the ~49-byte
+    /// `TokenReceiverMessage` JSON envelope inside the 2048-byte `TransferMsg` cap
+    /// (1849 bytes total).
+    static LARGE_HEX_PAYLOAD: std::sync::LazyLock<String> = std::sync::LazyLock::new(|| {
         use std::fmt::Write;
-        let mut bytes = [0u8; 2000];
+        let mut bytes = [0u8; 900];
         rand::rng().fill_bytes(&mut bytes);
 
         bytes.iter().fold(String::new(), |mut output, b| {
@@ -251,7 +256,7 @@ mod tests {
                         native_fee: U128(0),
                     },
                     sender: eth_eoa_address(),
-                    msg,
+                    msg: msg.parse().unwrap(),
                     emitter_address: eth_factory_address(),
                 }))
                 .unwrap(),
@@ -369,7 +374,7 @@ mod tests {
                         native_fee: U128(0),
                     },
                     sender: eth_eoa_address(),
-                    msg: String::new(),
+                    msg: TransferMsg::default(),
                     emitter_address: eth_factory_address(),
                 }))?,
             })
@@ -457,7 +462,7 @@ mod tests {
                         native_fee: U128(0),
                     },
                     sender: eth_eoa_address(),
-                    msg: String::default(),
+                    msg: TransferMsg::default(),
                     emitter_address: eth_factory_address(),
                 }))
                 .unwrap(),
@@ -576,7 +581,7 @@ mod tests {
         msg: TokenReceiverMessage {
             return_value: U128(0),
             panic: false,
-            extra_msg: HEX_STRING_2000.clone(),
+            extra_msg: LARGE_HEX_PAYLOAD.clone(),
         },
         expected_recipient_balance: 999,
         expected_relayer_balance: 1,
@@ -669,7 +674,7 @@ mod tests {
                         native_fee: U128(0),
                     },
                     sender: eth_eoa_address(),
-                    msg: String::new(),
+                    msg: TransferMsg::default(),
                     emitter_address: eth_factory_address(),
                 }))?,
             })
@@ -772,7 +777,7 @@ mod tests {
         msg: TokenReceiverMessage {
             return_value: U128(0),
             panic: false,
-            extra_msg: HEX_STRING_2000.clone(),
+            extra_msg: LARGE_HEX_PAYLOAD.clone(),
         },
         expected_recipient_balance: 999,
         expected_relayer_balance: 1,
