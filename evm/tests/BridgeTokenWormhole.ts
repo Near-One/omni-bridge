@@ -6,6 +6,7 @@ import type { BigNumberish } from "ethers"
 import { ethers, upgrades } from "hardhat"
 import type { BridgeToken, OmniBridgeWormhole, TestWormhole } from "../typechain-types"
 import { depositSignature, metadataSignature, testWallet } from "./helpers/signatures"
+import { setupTrustedRelayers } from "./helpers/trustedRelayer"
 
 const WormholeFee = 10000
 
@@ -112,6 +113,9 @@ describe("BridgeTokenWormhole", () => {
       { initializer: "initializeWormhole" },
     )) as unknown as OmniBridgeWormhole
     await OmniBridgeWormhole.waitForDeployment()
+    await setupTrustedRelayers(await OmniBridgeWormhole.getAddress(), adminAccount, [
+      adminAccount.address,
+    ])
   })
 
   async function fundAddress(address: string, amount: string): Promise<void> {
@@ -164,6 +168,18 @@ describe("BridgeTokenWormhole", () => {
     expect((await token.balanceOf(payload.recipient)).toString()).to.be.equal(
       payload.amount.toString(),
     )
+  })
+
+  it("can't fin transfer as an untrusted relayer", async () => {
+    const { token } = await createToken(wrappedNearId)
+    const { signature, payload } = depositSignature(
+      await token.getAddress(),
+      await user1.getAddress(),
+    )
+
+    await expect(
+      OmniBridgeWormhole.connect(user1).finTransfer(signature, payload, { value: WormholeFee }),
+    ).to.be.revertedWithCustomError(OmniBridgeWormhole, "NotTrustedRelayer")
   })
 
   it("init transfer", async () => {

@@ -4,6 +4,7 @@ import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signer
 import { expect } from "chai"
 import { ethers, upgrades } from "hardhat"
 import { depositSignature, metadataSignature, testWallet } from "./helpers/signatures"
+import { setupTrustedRelayers } from "./helpers/trustedRelayer"
 
 const PauseMode = {
   UnpausedAll: 0,
@@ -48,6 +49,7 @@ describe("BridgeToken", () => {
       { initializer: "initialize" },
     )
     OmniBridge = (await upgradedContract.waitForDeployment()) as unknown as OmniBridge
+    await setupTrustedRelayers(await OmniBridge.getAddress(), adminAccount, [adminAccount.address])
   })
 
   async function fundAddress(address: string, amount: string) {
