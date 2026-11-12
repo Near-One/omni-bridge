@@ -49,7 +49,6 @@ impl Contract {
                 factories: old_state.factories,
                 pending_transfers: old_state.pending_transfers,
                 finalised_transfers: old_state.finalised_transfers,
-                finalised_utxo_transfers: old_state.finalised_utxo_transfers,
                 token_id_to_address: old_state.token_id_to_address,
                 token_address_to_id: old_state.token_address_to_id,
                 token_decimals: old_state.token_decimals,
