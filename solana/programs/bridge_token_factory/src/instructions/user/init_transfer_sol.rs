@@ -32,7 +32,7 @@ pub struct InitTransferSol<'info> {
 }
 
 impl InitTransferSol<'_> {
-    pub fn process(&self, payload: &InitTransferPayload) -> Result<()> {
+    pub fn process(&mut self, payload: &InitTransferPayload) -> Result<()> {
         require!(payload.fee == 0, ErrorCode::InvalidFee);
         require!(payload.amount > 0, ErrorCode::InvalidArgs);
 
@@ -52,8 +52,9 @@ impl InitTransferSol<'_> {
                 .ok_or_else(|| error!(ErrorCode::InvalidArgs))?,
         )?;
 
+        let origin_nonce = self.common.next_origin_nonce()?;
         self.common.post_message(payload.serialize_for_near((
-            self.common.sequence.sequence,
+            origin_nonce,
             self.user.key(),
             Pubkey::default(),
         ))?)?;

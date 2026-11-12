@@ -4,7 +4,7 @@ use bridge_token_factory::state::message::{
 use mollusk_svm::result::ProgramResult;
 use solana_sdk::{
     account::Account,
-    instruction::{AccountMeta, Instruction},
+    instruction::{AccountMeta, Instruction, InstructionError},
     program_error::ProgramError,
     pubkey::Pubkey,
 };
@@ -27,6 +27,8 @@ struct TestParams {
     config_pubkey: Option<[u8; 64]>,
     /// If true, make the signature malleable (high-s)
     malleable: bool,
+    wormhole_disabled: bool,
+    with_program_account: bool,
 }
 
 impl Default for TestParams {
@@ -39,6 +41,8 @@ impl Default for TestParams {
             nonce_preset: false,
             config_pubkey: None,
             malleable: false,
+            wormhole_disabled: false,
+            with_program_account: false,
         }
     }
 }
@@ -60,6 +64,7 @@ fn run_finalize_transfer_sol(params: TestParams) -> mollusk_svm::result::Instruc
             paused: params.paused,
             max_used_nonce: params.max_used_nonce,
             derived_near_bridge_address: config_pubkey,
+            wormhole_disabled: params.wormhole_disabled,
             ..Default::default()
         },
     );
@@ -124,6 +129,9 @@ fn run_finalize_transfer_sol(params: TestParams) -> mollusk_svm::result::Instruc
     ];
     metas.extend(wormhole_metas);
     metas.push(AccountMeta::new_readonly(system_program::ID, false));
+    if params.with_program_account {
+        metas.push(AccountMeta::new_readonly(program_id, false));
+    }
 
     let ix = Instruction::new_with_bytes(program_id, &ix_data, metas);
 
@@ -221,4 +229,29 @@ fn finalize_transfer_sol_amount_overflow() {
         result.program_result,
         ProgramResult::Failure(ProgramError::Custom(6010))
     );
+}
+
+#[test]
+fn finalize_transfer_sol_wormhole_disabled() {
+    let result = run_finalize_transfer_sol(TestParams {
+        wormhole_disabled: true,
+        with_program_account: true,
+        ..Default::default()
+    });
+
+    assert!(
+        !result.program_result.is_err(),
+        "finalize_transfer_sol failed: {:?}",
+        result.program_result
+    );
+}
+
+#[test]
+fn finalize_transfer_sol_wormhole_disabled_without_program_account_rejected() {
+    let result = run_finalize_transfer_sol(TestParams {
+        wormhole_disabled: true,
+        ..Default::default()
+    });
+
+    assert_eq!(result.raw_result, Err(InstructionError::MissingAccount));
 }

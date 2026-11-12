@@ -69,7 +69,7 @@ pub struct InitTransfer<'info> {
 }
 
 impl InitTransfer<'_> {
-    pub fn process(&self, payload: &InitTransferPayload) -> Result<()> {
+    pub fn process(&mut self, payload: &InitTransferPayload) -> Result<()> {
         require!(payload.amount > payload.fee, ErrorCode::InvalidFee);
 
         if payload.native_fee > 0 {
@@ -120,8 +120,9 @@ impl InitTransfer<'_> {
             )?;
         }
 
+        let origin_nonce = self.common.next_origin_nonce()?;
         self.common.post_message(payload.serialize_for_near((
-            self.common.sequence.sequence,
+            origin_nonce,
             self.user.key(),
             self.mint.key(),
         ))?)?;
