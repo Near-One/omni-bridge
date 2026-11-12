@@ -63,3 +63,5 @@ libsecp256k1 = "0.7.1"
 mollusk-svm-programs-token = "0.3.0"
 stub_program = { path = "../stub_program" }
 solana-sdk-ids = "2.2"
+agave-feature-set = "2.3"
+solana-log-collector = "2.3"

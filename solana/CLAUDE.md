@@ -47,7 +47,7 @@ make -C .. solana-run-tests  # fast unit tests, no validator
 
 - Verify Borsh serialization matches the NEAR side if changing payload structures (see `state/message/` modules and their `serialize_for_near` implementations)
 - Consider whether changes affect the pause surface (`INIT_TRANSFER_PAUSED` / `FINALIZE_TRANSFER_PAUSED`)
-- The `Config` account has a `padding: [u8; 35]` field — use this for new fields to avoid reallocation
+- The `Config` account has a `padding: [u8; 26]` field — use this for new fields to avoid reallocation
 
 ### Security reference
 

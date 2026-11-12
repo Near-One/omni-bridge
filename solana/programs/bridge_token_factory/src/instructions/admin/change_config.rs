@@ -43,6 +43,12 @@ impl ChangeConfig<'_> {
         Ok(())
     }
 
+    pub fn set_wormhole_disabled(&mut self, wormhole_disabled: bool) -> Result<()> {
+        self.config.wormhole_disabled = wormhole_disabled;
+
+        Ok(())
+    }
+
     pub fn set_derived_near_bridge_address(
         &mut self,
         derived_near_bridge_address: [u8; 64],

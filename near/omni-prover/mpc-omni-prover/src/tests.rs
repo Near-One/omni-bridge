@@ -2,17 +2,19 @@ use borsh::BorshDeserialize;
 
 use near_mpc_sdk::near_mpc_contract_interface::types::{
     AptosAddress, AptosEvent, AptosExtractedValue, AptosExtractor, AptosFinality, AptosRpcRequest,
-    AptosTxId, EvmExtractedValue, EvmExtractor, EvmFinality, EvmLog, EvmRpcRequest, EvmTxId,
-    ExtractedValue, ForeignChainRpcRequest, ForeignTxSignPayload, ForeignTxSignPayloadV1, Hash160,
-    Hash256, StarknetExtractedValue, StarknetExtractor, StarknetFelt, StarknetFinality,
-    StarknetLog, StarknetRpcRequest, StarknetTxId, SvmFinality, SvmRpcRequest, SvmTxId,
+    AptosTxId, BitcoinRpcRequest, BitcoinTxId, BlockConfirmations, EvmExtractedValue, EvmExtractor,
+    EvmFinality, EvmLog, EvmRpcRequest, EvmTxId, ExtractedValue, ForeignChainRpcRequest,
+    ForeignTxSignPayload, ForeignTxSignPayloadV1, Hash160, Hash256, StarknetExtractedValue,
+    StarknetExtractor, StarknetFelt, StarknetFinality, StarknetLog, StarknetRpcRequest,
+    StarknetTxId, SvmAccount, SvmAddress, SvmExtractedValue, SvmExtractor, SvmFinality,
+    SvmInnerInstruction, SvmRpcRequest, SvmTxId,
 };
 
 use near_sdk::base64::Engine;
 use omni_types::prover_args::MpcVerifyProofArgs;
 use omni_types::prover_result::{ProofKind, ProverResult};
 
-use omni_types::{ChainKind, OmniAddress, H256};
+use omni_types::{sol_address::SolAddress, ChainKind, OmniAddress, H256};
 
 use crate::{evm_log_to_rlp, MpcFinality, MpcOmniProver};
 
@@ -427,12 +429,12 @@ fn test_request_to_chain_kind_starknet() {
 
 #[test]
 fn test_request_to_chain_kind_unsupported() {
-    let solana_request = ForeignChainRpcRequest::Solana(SvmRpcRequest {
-        tx_id: SvmTxId([0u8; 64]),
-        finality: SvmFinality::Confirmed,
+    let bitcoin_request = ForeignChainRpcRequest::Bitcoin(BitcoinRpcRequest {
+        tx_id: BitcoinTxId([0u8; 32]),
+        confirmations: BlockConfirmations(6),
         extractors: [].into(),
     });
-    assert_eq!(MpcOmniProver::request_to_chain_kind(&solana_request), None);
+    assert_eq!(MpcOmniProver::request_to_chain_kind(&bitcoin_request), None);
 }
 
 #[test]
@@ -705,6 +707,8 @@ fn test_init_default_finalities() {
             ChainKind::Aptos,
             MpcFinality::Aptos(AptosFinality::Committed),
         ),
+        (ChainKind::Sol, MpcFinality::Svm(SvmFinality::Finalized)),
+        (ChainKind::Fogo, MpcFinality::Svm(SvmFinality::Finalized)),
     ] {
         assert_eq!(
             prover.finalities.get(&chain_kind),
@@ -712,7 +716,7 @@ fn test_init_default_finalities() {
             "unexpected default finality for {chain_kind:?}"
         );
     }
-    assert_eq!(prover.finalities.len(), 9);
+    assert_eq!(prover.finalities.len(), 11);
 }
 
 #[test]
@@ -734,5 +738,145 @@ fn test_build_request_args_sets_expected_payload_hash() {
     assert_eq!(
         json["expected_payload_hash"],
         near_sdk::serde_json::to_value(&expected_hash).unwrap()
+    );
+}
+
+// Solana mainnet tx eQMdnM7sRgUEAHGE42TGdY16jVC4CLicdA3Ha3o4YyhVMAohz3Ud1wXYLD53wFqTfE6QauLKDJEhRGhjoS96WGc:
+// the bridge's Wormhole shim `post_message` CPI (instruction 1, inner instruction 3) for `init_transfer`.
+const SOLANA_SHIM_INIT_TRANSFER_DATA: &str = "d63264d12622074c0000000001d40000000002bb8c4a509ac06cb755a61509d788e1bea966247935f80dcdcb53a4e55adb844802c6fa7af3bedbad3a3d65f36aabc97431b1bbe4c2d2f6e0e47ca60203452f5d61f5d2100000000000570400000000000000000000000000000000000000000000000000000000000050c40100000000000000000000000000110000006e6561723a696e74656e74732e6e6561724000000031306161643534343237636466656233396265346136376433316631346265336539643532303732366665306237353865393062653435376533636337396130";
+const SOLANA_SHIM_ACCOUNTS: [&str; 11] = [
+    "2yVjuQwpsvdsrywzsJJVs9Ueh4zayyo5DYJbBNc3DDpn",
+    "4NKTVpUKP3Qn7nZtnZbuddr1CC8JYjqFhtEGDTsz4MKj",
+    "2iANpDh96GgithLPTVMZjZFtnbrYBUCLqnEvaytbwTQq",
+    "79nePUUxtfJSdrkbririgL5YMaoEh5g4HNQaar2EuJ7",
+    "9WL2A89YBr6X47ABKYNzPentWiBA3H8tpaiuf5CaYHx6",
+    "9bFNrXNb2WTx8fMHXCheaZqkLZ3YCCaiqTftHxeintHy",
+    "SysvarC1ock11111111111111111111111111111111",
+    "11111111111111111111111111111111",
+    "worm2ZoG2kUd4vFXhvjh93UUH596ayRfgQ2MgjNMTth",
+    "HQS31aApX3DDkuXgSpV9XyDUNtFgQ31pUn5BNWHG2PSp",
+    "EtZMZM22ViKMo4r5y4Anovs3wKQ2owUmDpjygnMMcdEX",
+];
+
+fn svm_address(base58: &str) -> SvmAddress {
+    SvmAddress(base58.parse::<SolAddress>().unwrap().0)
+}
+
+fn solana_shim_init_transfer_instruction() -> SvmInnerInstruction {
+    SvmInnerInstruction {
+        program_id: svm_address("EtZMZM22ViKMo4r5y4Anovs3wKQ2owUmDpjygnMMcdEX"),
+        accounts: SOLANA_SHIM_ACCOUNTS
+            .iter()
+            .map(|a| svm_address(a))
+            .collect(),
+        data: hex::decode(SOLANA_SHIM_INIT_TRANSFER_DATA).unwrap(),
+    }
+}
+
+fn test_svm_request(finality: SvmFinality) -> SvmRpcRequest {
+    SvmRpcRequest {
+        tx_id: SvmTxId([0x11; 64]),
+        finality,
+        extractors: [SvmExtractor::InnerInstruction {
+            instruction_index: 1,
+            inner_instruction_index: 3,
+        }]
+        .into(),
+    }
+}
+
+#[test]
+fn test_request_to_chain_kind_svm_chains() {
+    let solana_request = ForeignChainRpcRequest::Solana(test_svm_request(SvmFinality::Finalized));
+    let fogo_request = ForeignChainRpcRequest::Fogo(test_svm_request(SvmFinality::Finalized));
+
+    assert_eq!(
+        MpcOmniProver::request_to_chain_kind(&solana_request),
+        Some(ChainKind::Sol)
+    );
+    assert_eq!(
+        MpcOmniProver::request_to_chain_kind(&fogo_request),
+        Some(ChainKind::Fogo)
+    );
+}
+
+#[test]
+fn test_request_matches_finality_svm_chains() {
+    for request in [
+        ForeignChainRpcRequest::Solana(test_svm_request(SvmFinality::Finalized)),
+        ForeignChainRpcRequest::Fogo(test_svm_request(SvmFinality::Finalized)),
+    ] {
+        assert!(MpcOmniProver::request_matches_finality(
+            &request,
+            &MpcFinality::Svm(SvmFinality::Finalized)
+        ));
+        assert!(!MpcOmniProver::request_matches_finality(
+            &request,
+            &MpcFinality::Svm(SvmFinality::Confirmed)
+        ));
+        assert!(!MpcOmniProver::request_matches_finality(
+            &request,
+            &MpcFinality::Evm(EvmFinality::Finalized)
+        ));
+    }
+}
+
+#[test]
+fn test_parse_svm_result_solana_init_transfer() {
+    let payload = ForeignTxSignPayloadV1 {
+        request: ForeignChainRpcRequest::Solana(test_svm_request(SvmFinality::Finalized)),
+        values: vec![ExtractedValue::SvmExtractedValue(
+            SvmExtractedValue::InnerInstruction(solana_shim_init_transfer_instruction()),
+        )],
+    };
+
+    let result =
+        MpcOmniProver::parse_svm_result(ProofKind::InitTransfer, ChainKind::Sol, &payload).unwrap();
+
+    let ProverResult::InitTransfer(message) = result else {
+        panic!("expected InitTransfer");
+    };
+    assert_eq!(message.origin_nonce, 1_102_581);
+    assert_eq!(message.amount.0, 1111);
+    assert_eq!(message.recipient.to_string(), "near:intents.near");
+    assert_eq!(
+        message.emitter_address,
+        OmniAddress::Sol(
+            "2iANpDh96GgithLPTVMZjZFtnbrYBUCLqnEvaytbwTQq"
+                .parse()
+                .unwrap()
+        )
+    );
+}
+
+#[test]
+fn test_parse_svm_result_rejects_account_state_value() {
+    let payload = ForeignTxSignPayloadV1 {
+        request: ForeignChainRpcRequest::Solana(test_svm_request(SvmFinality::Finalized)),
+        values: vec![ExtractedValue::SvmExtractedValue(
+            SvmExtractedValue::AccountState(SvmAccount {
+                owner: svm_address("dahPEoZGXfyV58JqqH85okdHmpN8U2q8owgPUXSCPxe"),
+                data: hex::decode(SOLANA_SHIM_INIT_TRANSFER_DATA).unwrap(),
+            }),
+        )],
+    };
+
+    assert!(
+        MpcOmniProver::parse_svm_result(ProofKind::InitTransfer, ChainKind::Sol, &payload).is_err()
+    );
+}
+
+#[test]
+fn test_parse_svm_result_rejects_multiple_values() {
+    let value = ExtractedValue::SvmExtractedValue(SvmExtractedValue::InnerInstruction(
+        solana_shim_init_transfer_instruction(),
+    ));
+    let payload = ForeignTxSignPayloadV1 {
+        request: ForeignChainRpcRequest::Solana(test_svm_request(SvmFinality::Finalized)),
+        values: vec![value.clone(), value],
+    };
+
+    assert!(
+        MpcOmniProver::parse_svm_result(ProofKind::InitTransfer, ChainKind::Sol, &payload).is_err()
     );
 }

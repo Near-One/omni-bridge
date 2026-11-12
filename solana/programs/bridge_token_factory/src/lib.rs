@@ -1,12 +1,13 @@
 use anchor_lang::prelude::*;
 use instructions::{
-    ChangeConfig, DeployToken, FinalizeTransfer, FinalizeTransferSol, GetVersion, InitTransfer,
-    InitTransferSol, Initialize, LogMetadata, Pause, UpdateMetadata,
+    ChangeConfig, DeployToken, EmitMessage, FinalizeTransfer, FinalizeTransferSol, GetVersion,
+    InitTransfer, InitTransferSol, Initialize, LogMetadata, Pause, UpdateMetadata,
     __client_accounts_change_config, __client_accounts_deploy_token,
-    __client_accounts_finalize_transfer, __client_accounts_finalize_transfer_sol,
-    __client_accounts_get_version, __client_accounts_init_transfer,
-    __client_accounts_init_transfer_sol, __client_accounts_initialize,
-    __client_accounts_log_metadata, __client_accounts_pause, __client_accounts_update_metadata,
+    __client_accounts_emit_message, __client_accounts_finalize_transfer,
+    __client_accounts_finalize_transfer_sol, __client_accounts_get_version,
+    __client_accounts_init_transfer, __client_accounts_init_transfer_sol,
+    __client_accounts_initialize, __client_accounts_log_metadata, __client_accounts_pause,
+    __client_accounts_update_metadata,
 };
 use state::message::{
     deploy_token::DeployTokenPayload, finalize_transfer::FinalizeTransferPayload,
@@ -28,8 +29,8 @@ pub mod bridge_token_factory {
 
     use super::constants::{FINALIZE_TRANSFER_PAUSED, INIT_TRANSFER_PAUSED};
     use super::{
-        msg, ChangeConfig, Context, DeployToken, DeployTokenPayload, FinalizeTransfer,
-        FinalizeTransferPayload, FinalizeTransferSol, GetVersion, InitTransfer,
+        msg, ChangeConfig, Context, DeployToken, DeployTokenPayload, EmitMessage,
+        FinalizeTransfer, FinalizeTransferPayload, FinalizeTransferSol, GetVersion, InitTransfer,
         InitTransferPayload, InitTransferSol, Initialize, Key, LogMetadata, Pause, Pubkey, Result,
         SignedPayload, UpdateMetadata,
     };
@@ -148,6 +149,13 @@ pub mod bridge_token_factory {
         Ok(())
     }
 
+    /// Called only by the program itself, through `WormholeCPI::post_message` while Wormhole
+    /// is disabled. Signed by the config PDA.
+    #[allow(unused_variables)]
+    pub fn emit_message(ctx: Context<EmitMessage>, payload: Vec<u8>) -> Result<()> {
+        Ok(())
+    }
+
     pub fn pause(ctx: Context<Pause>) -> Result<()> {
         msg!("Pausing");
 
@@ -184,6 +192,17 @@ pub mod bridge_token_factory {
         msg!("Setting metadata admin");
 
         ctx.accounts.set_metadata_admin(metadata_admin)?;
+
+        Ok(())
+    }
+
+    pub fn set_wormhole_disabled(
+        ctx: Context<ChangeConfig>,
+        wormhole_disabled: bool,
+    ) -> Result<()> {
+        msg!("Setting Wormhole disabled");
+
+        ctx.accounts.set_wormhole_disabled(wormhole_disabled)?;
 
         Ok(())
     }

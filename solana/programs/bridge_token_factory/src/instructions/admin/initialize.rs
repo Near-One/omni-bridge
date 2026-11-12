@@ -120,7 +120,9 @@ impl Initialize<'_> {
             paused: 0,
             pausable_admin,
             metadata_admin,
-            padding: [0; 35],
+            wormhole_disabled: false,
+            next_origin_nonce: 0,
+            padding: [0; 26],
         });
 
         let rent = Rent::get()?;
