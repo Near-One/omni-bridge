@@ -509,7 +509,6 @@ impl<'de> Deserialize<'de> for OmniAddress {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum BridgeOnTransferMsg {
     InitTransfer(InitTransferMsg),
-    UtxoFinTransfer(UtxoFinTransferMsg),
     SwapMigratedToken,
 }
 
@@ -537,28 +536,6 @@ pub struct InitTransferMsg {
 impl InitTransferMsg {
     pub const fn get_destination_chain(&self) -> ChainKind {
         self.recipient.get_chain()
-    }
-}
-
-#[near(serializers=[borsh, json])]
-#[derive(Debug, Clone)]
-pub struct UtxoFinTransferMsg {
-    pub utxo_id: UtxoId,
-    pub recipient: OmniAddress,
-    pub relayer_fee: U128,
-    pub msg: String,
-}
-
-impl UtxoFinTransferMsg {
-    pub const fn get_destination_chain(&self) -> ChainKind {
-        self.recipient.get_chain()
-    }
-
-    pub fn get_transfer_id(&self, origin_chain: ChainKind) -> UnifiedTransferId {
-        UnifiedTransferId {
-            origin_chain,
-            kind: TransferIdKind::Utxo(self.utxo_id.clone()),
-        }
     }
 }
 

@@ -1,7 +1,5 @@
 use near_sdk::json_types::U128;
-use near_sdk::serde_json;
 use near_sdk::{ext_contract, near, AccountId, NearToken, PanicOnDefault, Promise};
-use omni_types::{BridgeOnTransferMsg, UtxoFinTransferMsg};
 
 const ONE_YOCTO: NearToken = NearToken::from_yoctonear(1);
 
@@ -34,15 +32,11 @@ impl MockUtxoConnector {
         }
     }
 
-    #[allow(clippy::missing_panics_doc)]
-    pub fn verify_deposit(&mut self, amount: U128, msg: UtxoFinTransferMsg) -> Promise {
+    /// Mimics the real connector's safe deposit: forwards the depositor-supplied `msg`
+    /// to the bridge verbatim via `ft_transfer_call`.
+    pub fn verify_deposit(&mut self, amount: U128, msg: String) -> Promise {
         ext_token::ext(self.token_account.clone())
             .with_attached_deposit(ONE_YOCTO)
-            .ft_transfer_call(
-                self.bridge_account.clone(),
-                amount,
-                None,
-                serde_json::to_string(&BridgeOnTransferMsg::UtxoFinTransfer(msg)).unwrap(),
-            )
+            .ft_transfer_call(self.bridge_account.clone(), amount, None, msg)
     }
 }
