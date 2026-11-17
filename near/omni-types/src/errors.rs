@@ -43,7 +43,6 @@ pub enum BridgeError {
     ReadPromiseRegister,
     ReadPromiseYieldId,
     SenderCanUpdateTokenFeeOnly,
-    SenderIsNotConnector,
     SignTransferNotAllowedForUtxoChain,
     StorageFeeRecipientOmitted,
     StorageNativeFeeRecipientOmitted,
@@ -60,7 +59,6 @@ pub enum BridgeError {
     UnknownFactory,
     UpdateFeeNotAllowedForTransfer,
     UtxoConfigMissing,
-    UtxoTransferAlreadyFinalised,
     UnsupportedFeeUpdateProof,
 }
 
