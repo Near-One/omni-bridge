@@ -16,7 +16,10 @@ module omni_bridge::omni_bridge {
     use aptos_framework::event;
     use aptos_framework::fungible_asset::{Self, Metadata};
     use aptos_framework::object::{Self, ExtendRef, Object};
+    use aptos_framework::ordered_map::{Self, OrderedMap};
     use aptos_framework::primary_fungible_store;
+    use aptos_framework::timestamp;
+    use aptos_framework::transaction_context;
 
     use omni_bridge::bridge_token;
     use omni_bridge::bridge_types;
@@ -59,6 +62,13 @@ module omni_bridge::omni_bridge {
     /// already knows about it; re-emitting would be misleading.
     const E_TOKEN_EXIST: u64 = 13;
 
+    // Trusted relayers
+    const E_NOT_TRUSTED_RELAYER: u64 = 14;
+    const E_RELAYER_STAKING_DISABLED: u64 = 15;
+    const E_RELAYER_APPLICATION_EXISTS: u64 = 16;
+    const E_RELAYER_NOT_FOUND: u64 = 17;
+    const E_RELAYER_NOT_ACTIVE: u64 = 18;
+
     /// Largest amount that fits in `u64`, used to bound `u128` payload
     /// amounts before they're handed to the Aptos Fungible Asset APIs.
     const MAX_U64_AS_U128: u128 = 0xFFFFFFFFFFFFFFFF;
@@ -91,6 +101,11 @@ module omni_bridge::omni_bridge {
     const ROLE_ADMIN: u8 = 0;
     const ROLE_PAUSER: u8 = 1;
     const ROLE_METADATA_ADMIN: u8 = 2;
+    const ROLE_TRUSTED_RELAYER: u8 = 3;
+    const ROLE_RELAYER_MANAGER: u8 = 4;
+
+    const DEFAULT_RELAYER_STAKE_REQUIRED: u64 = 500_000_000_000;
+    const DEFAULT_RELAYER_WAITING_PERIOD: u64 = 7 * 24 * 60 * 60;
 
     /// Top-level bridge state. Stored as a resource on the bridge object
     /// (a named Object owned by `@omni_bridge`).
@@ -120,6 +135,25 @@ module omni_bridge::omni_bridge {
         ///   - creating new FA objects in `deploy_token`
         ///   - moving locked tokens out in `fin_transfer` (non-bridge tokens)
         extend_ref: ExtendRef
+    }
+
+    /// Staked relayers. Lives on the bridge object, created by the first
+    /// `set_relayer_config` call. Kept out of `BridgeState` so its layout
+    /// stays upgrade-compatible.
+    struct TrustedRelayers has key {
+        stake_required: u64,
+        waiting_period: u64,
+        relayers: OrderedMap<address, RelayerState>
+    }
+
+    struct RelayerState has copy, drop, store {
+        stake: u64,
+        activate_at: u64
+    }
+
+    struct RelayerEntry has copy, drop, store {
+        relayer: address,
+        state: RelayerState
     }
 
     // -------- Events --------
@@ -203,6 +237,33 @@ module omni_bridge::omni_bridge {
         admin: address
     }
 
+    #[event]
+    struct RelayerApplied has drop, store {
+        relayer: address,
+        stake: u64,
+        activate_at: u64
+    }
+
+    #[event]
+    struct RelayerResigned has drop, store {
+        relayer: address,
+        stake: u64
+    }
+
+    #[event]
+    struct RelayerRejected has drop, store {
+        relayer: address,
+        stake: u64,
+        manager: address
+    }
+
+    #[event]
+    struct RelayerConfigChanged has drop, store {
+        stake_required: u64,
+        waiting_period: u64,
+        admin: address
+    }
+
     // -------- Initialization --------
 
     /// Initialize the bridge. Callable exactly once by the module deployer.
@@ -237,6 +298,7 @@ module omni_bridge::omni_bridge {
         roles.add(ROLE_ADMIN, vector[deployer_addr]);
         roles.add(ROLE_PAUSER, vector[deployer_addr]);
         roles.add(ROLE_METADATA_ADMIN, vector[deployer_addr]);
+        roles.add(ROLE_RELAYER_MANAGER, vector[deployer_addr]);
 
         move_to(
             &object_signer,
@@ -251,6 +313,13 @@ module omni_bridge::omni_bridge {
                 near_to_aptos_token: table::new<String, address>(),
                 extend_ref
             }
+        );
+
+        write_relayer_config(
+            &BridgeState[bridge_object_address()],
+            DEFAULT_RELAYER_STAKE_REQUIRED,
+            DEFAULT_RELAYER_WAITING_PERIOD,
+            deployer_addr
         );
     }
 
@@ -358,6 +427,139 @@ module omni_bridge::omni_bridge {
         );
     }
 
+    // -------- Trusted relayers --------
+
+    /// Zero `stake_required` disables new applications.
+    public entry fun set_relayer_config(
+        admin: &signer, stake_required: u64, waiting_period: u64
+    ) {
+        let state = &BridgeState[bridge_object_address()];
+        assert_role(state, ROLE_ADMIN, admin, E_UNAUTHORIZED);
+        write_relayer_config(state, stake_required, waiting_period, admin.address_of());
+    }
+
+    public entry fun apply_for_trusted_relayer(relayer: &signer) {
+        let bridge_addr = bridge_object_address();
+        assert!(exists<TrustedRelayers>(bridge_addr), E_RELAYER_STAKING_DISABLED);
+        let native_token_metadata = BridgeState[bridge_addr].native_token_metadata;
+        let trusted_relayers = &mut TrustedRelayers[bridge_addr];
+
+        let stake = trusted_relayers.stake_required;
+        assert!(stake > 0, E_RELAYER_STAKING_DISABLED);
+
+        let relayer_addr = relayer.address_of();
+        assert!(
+            !trusted_relayers.relayers.contains(&relayer_addr),
+            E_RELAYER_APPLICATION_EXISTS
+        );
+
+        let activate_at = timestamp::now_seconds() + trusted_relayers.waiting_period;
+        trusted_relayers.relayers.add(relayer_addr, RelayerState { stake, activate_at });
+
+        primary_fungible_store::transfer(relayer, native_token_metadata, bridge_addr, stake);
+
+        event::emit(RelayerApplied { relayer: relayer_addr, stake, activate_at });
+    }
+
+    public entry fun resign_trusted_relayer(relayer: &signer) {
+        let relayer_addr = relayer.address_of();
+        let state = remove_relayer(relayer_addr);
+        assert!(timestamp::now_seconds() >= state.activate_at, E_RELAYER_NOT_ACTIVE);
+
+        send_stake(relayer_addr, state.stake);
+
+        event::emit(RelayerResigned { relayer: relayer_addr, stake: state.stake });
+    }
+
+    /// The stake goes to the caller.
+    public entry fun reject_relayer_application(
+        manager: &signer, relayer: address
+    ) {
+        assert_role(
+            &BridgeState[bridge_object_address()],
+            ROLE_RELAYER_MANAGER,
+            manager,
+            E_UNAUTHORIZED
+        );
+        let manager_addr = manager.address_of();
+
+        let relayer_state = remove_relayer(relayer);
+        send_stake(manager_addr, relayer_state.stake);
+
+        event::emit(
+            RelayerRejected { relayer, stake: relayer_state.stake, manager: manager_addr }
+        );
+    }
+
+    #[view]
+    public fun is_trusted_relayer(account: address): bool {
+        let bridge_addr = bridge_object_address();
+        if (is_role_holder(&BridgeState[bridge_addr], ROLE_TRUSTED_RELAYER, account)) {
+            return true
+        };
+        if (!exists<TrustedRelayers>(bridge_addr)) {
+            return false
+        };
+        let relayers = &TrustedRelayers[bridge_addr].relayers;
+        relayers.contains(&account)
+            && timestamp::now_seconds() >= relayers.borrow(&account).activate_at
+    }
+
+    #[view]
+    public fun get_relayer_state(relayer: address): Option<RelayerState> {
+        let bridge_addr = bridge_object_address();
+        if (!exists<TrustedRelayers>(bridge_addr)) {
+            return option::none()
+        };
+        let relayers = &TrustedRelayers[bridge_addr].relayers;
+        if (relayers.contains(&relayer)) {
+            option::some(*relayers.borrow(&relayer))
+        } else {
+            option::none()
+        }
+    }
+
+    #[view]
+    /// Returns `(stake_required, waiting_period)`.
+    public fun get_relayer_config(): (u64, u64) {
+        let bridge_addr = bridge_object_address();
+        if (!exists<TrustedRelayers>(bridge_addr)) {
+            return (0, 0)
+        };
+        let trusted_relayers = &TrustedRelayers[bridge_addr];
+        (trusted_relayers.stake_required, trusted_relayers.waiting_period)
+    }
+
+    #[view]
+    public fun get_active_relayers(from_index: u64, limit: u64): vector<RelayerEntry> {
+        get_staked_relayers(true, from_index, limit)
+    }
+
+    #[view]
+    public fun get_pending_relayers(from_index: u64, limit: u64): vector<RelayerEntry> {
+        get_staked_relayers(false, from_index, limit)
+    }
+
+    #[test_only]
+    public fun relayer_entry_relayer(self: &RelayerEntry): address {
+        self.relayer
+    }
+
+    #[test_only]
+    public fun relayer_entry_state(self: &RelayerEntry): RelayerState {
+        self.state
+    }
+
+    #[test_only]
+    public fun relayer_state_stake(self: &RelayerState): u64 {
+        self.stake
+    }
+
+    #[test_only]
+    public fun relayer_state_activate_at(self: &RelayerState): u64 {
+        self.activate_at
+    }
+
     // -------- Token discovery --------
 
     /// Permissionless: emit a `LogMetadata` event describing an existing FA.
@@ -435,9 +637,10 @@ module omni_bridge::omni_bridge {
         );
     }
 
-    /// Finalize an inbound transfer from another chain. Permissionless —
-    /// the NEAR MPC signature is the authorization. The transaction signer
-    /// is not read on-chain.
+    /// Finalize an inbound transfer from another chain. Only trusted
+    /// relayers can submit it; the NEAR MPC signature is the authorization.
+    /// The relayer is the transaction sender, read from the transaction
+    /// context so the function keeps its published signature.
     public entry fun fin_transfer(
         signature_rs: vector<u8>,
         signature_v: u8,
@@ -450,6 +653,36 @@ module omni_bridge::omni_bridge {
         fee_recipient: Option<String>,
         message: Option<vector<u8>>
     ) {
+        fin_transfer_from(
+            transaction_context::sender(),
+            signature_rs,
+            signature_v,
+            destination_nonce,
+            origin_chain,
+            origin_nonce,
+            token_address,
+            amount,
+            recipient,
+            fee_recipient,
+            message
+        );
+    }
+
+    fun fin_transfer_from(
+        relayer: address,
+        signature_rs: vector<u8>,
+        signature_v: u8,
+        destination_nonce: u64,
+        origin_chain: u8,
+        origin_nonce: u64,
+        token_address: address,
+        amount: u128,
+        recipient: address,
+        fee_recipient: Option<String>,
+        message: Option<vector<u8>>
+    ) {
+        assert!(is_trusted_relayer(relayer), E_NOT_TRUSTED_RELAYER);
+
         let state = &mut BridgeState[bridge_object_address()];
         assert!(
             (state.pause_flags & PAUSE_FIN_TRANSFER) == 0,
@@ -647,7 +880,9 @@ module omni_bridge::omni_bridge {
         vector[
             RoleInfo { name: string::utf8(b"Admin"), id: ROLE_ADMIN },
             RoleInfo { name: string::utf8(b"Pauser"), id: ROLE_PAUSER },
-            RoleInfo { name: string::utf8(b"MetadataAdmin"), id: ROLE_METADATA_ADMIN }
+            RoleInfo { name: string::utf8(b"MetadataAdmin"), id: ROLE_METADATA_ADMIN },
+            RoleInfo { name: string::utf8(b"TrustedRelayer"), id: ROLE_TRUSTED_RELAYER },
+            RoleInfo { name: string::utf8(b"RelayerManager"), id: ROLE_RELAYER_MANAGER }
         ]
     }
 
@@ -747,6 +982,81 @@ module omni_bridge::omni_bridge {
         );
     }
 
+    fun get_staked_relayers(
+        active: bool, from_index: u64, limit: u64
+    ): vector<RelayerEntry> {
+        let entries = vector[];
+        let bridge_addr = bridge_object_address();
+        if (!exists<TrustedRelayers>(bridge_addr)) {
+            return entries
+        };
+
+        let relayers = &TrustedRelayers[bridge_addr].relayers;
+        let addresses = relayers.keys();
+        let now = timestamp::now_seconds();
+        let matched = 0;
+        let i = 0;
+        while (i < addresses.length() && entries.length() < limit) {
+            let relayer = addresses[i];
+            let state = *relayers.borrow(&relayer);
+            if ((now >= state.activate_at) == active) {
+                if (matched >= from_index) {
+                    entries.push_back(RelayerEntry { relayer, state });
+                };
+                matched += 1;
+            };
+            i += 1;
+        };
+        entries
+    }
+
+    /// Creates `TrustedRelayers` on first use; bridges upgraded from a
+    /// version without it get it from the first `set_relayer_config` call.
+    fun write_relayer_config(
+        state: &BridgeState,
+        stake_required: u64,
+        waiting_period: u64,
+        admin: address
+    ) {
+        let bridge_addr = bridge_object_address();
+        if (exists<TrustedRelayers>(bridge_addr)) {
+            let trusted_relayers = &mut TrustedRelayers[bridge_addr];
+            trusted_relayers.stake_required = stake_required;
+            trusted_relayers.waiting_period = waiting_period;
+        } else {
+            let bridge_signer = state.extend_ref.generate_signer_for_extending();
+            move_to(
+                &bridge_signer,
+                TrustedRelayers {
+                    stake_required,
+                    waiting_period,
+                    relayers: ordered_map::new<address, RelayerState>()
+                }
+            );
+        };
+
+        event::emit(RelayerConfigChanged { stake_required, waiting_period, admin });
+    }
+
+    fun remove_relayer(relayer: address): RelayerState {
+        let bridge_addr = bridge_object_address();
+        assert!(exists<TrustedRelayers>(bridge_addr), E_RELAYER_NOT_FOUND);
+        let relayers = &mut TrustedRelayers[bridge_addr].relayers;
+        assert!(relayers.contains(&relayer), E_RELAYER_NOT_FOUND);
+        relayers.remove(&relayer)
+    }
+
+    fun send_stake(recipient: address, amount: u64) {
+        let state = &BridgeState[bridge_object_address()];
+        let bridge_signer = state.extend_ref.generate_signer_for_extending();
+        primary_fungible_store::transfer(
+            &bridge_signer,
+            state.native_token_metadata,
+            recipient,
+            amount
+        );
+    }
+
     fun verify_signature(
         state: &BridgeState,
         message: vector<u8>,
@@ -802,6 +1112,44 @@ module omni_bridge::omni_bridge {
             chain_id,
             native_token_metadata
         );
+    }
+
+    #[test_only]
+    /// `transaction_context::sender()` isn't available in unit tests, so tests
+    /// pass the relayer explicitly.
+    public fun test_fin_transfer(
+        relayer: address,
+        signature_rs: vector<u8>,
+        signature_v: u8,
+        destination_nonce: u64,
+        origin_chain: u8,
+        origin_nonce: u64,
+        token_address: address,
+        amount: u128,
+        recipient: address,
+        fee_recipient: Option<String>,
+        message: Option<vector<u8>>
+    ) {
+        fin_transfer_from(
+            relayer,
+            signature_rs,
+            signature_v,
+            destination_nonce,
+            origin_chain,
+            origin_nonce,
+            token_address,
+            amount,
+            recipient,
+            fee_recipient,
+            message
+        );
+    }
+
+    #[test_only]
+    /// Simulates a bridge upgraded from a version without trusted relayers.
+    public fun test_remove_trusted_relayers() {
+        let TrustedRelayers { stake_required: _, waiting_period: _, relayers: _ } =
+            move_from<TrustedRelayers>(bridge_object_address());
     }
 
     #[test_only]
