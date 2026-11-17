@@ -9,7 +9,7 @@ use {
             DeployTokenMessage, FinTransferMessage, InitTransferMessage, LogMetadataMessage,
             ProofKind,
         },
-        stringify, ChainKind, Fee, Nonce, OmniAddress, TransferId,
+        stringify, BoundedString, ChainKind, Fee, Nonce, OmniAddress, TransferId, TransferMsg,
     },
 };
 
@@ -209,7 +209,7 @@ impl TryInto<InitTransferMessage> for ParsedVAA {
             recipient: transfer.recipient.parse().map_err(stringify)?,
             origin_nonce: transfer.origin_nonce,
             sender: transfer.sender,
-            msg: transfer.message,
+            msg: TransferMsg::new(transfer.message).map_err(stringify)?,
             emitter_address: OmniAddress::new_from_slice(emitter_chain, &self.emitter_address)?,
         })
     }
@@ -283,8 +283,8 @@ impl TryInto<LogMetadataMessage> for ParsedVAA {
 
         Ok(LogMetadataMessage {
             token_address: parsed_payload.token_address,
-            name: parsed_payload.name,
-            symbol: parsed_payload.symbol,
+            name: BoundedString::new(parsed_payload.name).map_err(stringify)?,
+            symbol: BoundedString::new(parsed_payload.symbol).map_err(stringify)?,
             decimals: parsed_payload.decimals,
             emitter_address: OmniAddress::new_from_slice(emitter_chain, &self.emitter_address)?,
         })

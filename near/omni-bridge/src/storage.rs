@@ -2,7 +2,7 @@ use near_contract_standards::storage_management::{StorageBalance, StorageBalance
 use near_sdk::{assert_one_yocto, borsh, near, PromiseOrValue};
 use near_sdk::{env, near_bindgen, AccountId, NearToken};
 use omni_types::errors::{BridgeError, StorageError};
-use omni_types::{Nonce, TransferId, TransferIdKind, UnifiedTransferId};
+use omni_types::{Nonce, TransferId, TransferIdKind, TransferMsg, UnifiedTransferId};
 use omni_utils::near_expect::NearExpect;
 
 use crate::{
@@ -20,7 +20,7 @@ pub struct TransferMessageV0 {
     pub recipient: OmniAddress,
     pub fee: Fee,
     pub sender: OmniAddress,
-    pub msg: String,
+    pub msg: TransferMsg,
     pub destination_nonce: Nonce,
 }
 
@@ -33,7 +33,7 @@ pub struct TransferMessageV1 {
     pub recipient: OmniAddress,
     pub fee: Fee,
     pub sender: OmniAddress,
-    pub msg: String,
+    pub msg: TransferMsg,
     pub destination_nonce: Nonce,
     pub origin_transfer_id: Option<TransferId>,
 }
@@ -290,7 +290,7 @@ impl Contract {
             .saturating_mul((Self::get_basic_storage() + key_len + value_len).into())
     }
 
-    pub fn required_balance_for_init_transfer(&self, msg: Option<String>) -> NearToken {
+    pub fn required_balance_for_init_transfer(&self, msg: Option<TransferMsg>) -> NearToken {
         let max_account_id: AccountId = "a"
             .repeat(64)
             .parse()
@@ -309,7 +309,7 @@ impl Contract {
                 origin_chain: ChainKind::Eth,
                 kind: TransferIdKind::Utxo({
                     omni_types::UtxoId {
-                        tx_hash: "a".repeat(64),
+                        tx_hash: "a".repeat(64).parse().unwrap_or_default(),
                         vout: 0,
                     }
                 }),
@@ -350,7 +350,7 @@ impl Contract {
         let key_len: u64 = borsh::to_vec(&(
             ChainKind::Eth,
             omni_types::UtxoId {
-                tx_hash: "a".repeat(64),
+                tx_hash: "a".repeat(64).parse().unwrap_or_default(),
                 vout: 0,
             },
         ))

@@ -2,7 +2,10 @@ use near_sdk::json_types::U128;
 use near_sdk::{near, AccountId};
 use num_enum::IntoPrimitive;
 
-use crate::{errors::BridgeError, ChainKind, Fee, Nonce, OmniAddress, TransferId};
+use crate::{
+    errors::BridgeError, ChainKind, Fee, Nonce, OmniAddress, TokenName, TokenSymbol, TransferId,
+    TransferMsg,
+};
 
 /// Every prover result names the bridge contract that emitted the proven event.
 /// The bridge selects a prover by chain, so the emitter must live on that chain
@@ -36,7 +39,7 @@ pub struct InitTransferMessage {
     pub recipient: OmniAddress,
     pub fee: Fee,
     pub sender: OmniAddress,
-    pub msg: String,
+    pub msg: TransferMsg,
     pub emitter_address: OmniAddress,
 }
 
@@ -81,8 +84,8 @@ impl ProofMessage for DeployTokenMessage {
 #[derive(Debug, Clone)]
 pub struct LogMetadataMessage {
     pub token_address: OmniAddress,
-    pub name: String,
-    pub symbol: String,
+    pub name: TokenName,
+    pub symbol: TokenSymbol,
     pub decimals: u8,
     pub emitter_address: OmniAddress,
 }

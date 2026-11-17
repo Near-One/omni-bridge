@@ -26,7 +26,7 @@ mod tests {
             ProverResult,
         },
         BridgeOnTransferMsg, ChainKind, Fee, InitTransferMsg, OmniAddress, TransferId,
-        TransferMessage,
+        TransferMessage, TransferMsg,
     };
     use rstest::rstest;
 
@@ -249,7 +249,7 @@ mod tests {
                 native_fee: U128(0),
             },
             sender: sender(proof_chain),
-            msg: String::new(),
+            msg: TransferMsg::default(),
             emitter_address: factory(proof_chain),
         });
         FinTransferArgs {
@@ -436,8 +436,8 @@ mod tests {
 
         let prover_result = ProverResult::LogMetadata(LogMetadataMessage {
             token_address: base_token_address(),
-            name: "Base Token".to_string(),
-            symbol: "BT".to_string(),
+            name: "Base Token".parse().unwrap(),
+            symbol: "BT".parse().unwrap(),
             decimals: 18,
             emitter_address: base_factory_address(),
         });

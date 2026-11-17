@@ -5,7 +5,7 @@ use crate::{
         DeployTokenMessage, FinTransferMessage, InitTransferMessage, LogMetadataMessage, ProofKind,
         ProverResult,
     },
-    stringify, ChainKind, Fee, OmniAddress, H160,
+    stringify, BoundedString, ChainKind, Fee, OmniAddress, TransferMsg, H160,
 };
 
 sol! {
@@ -130,7 +130,7 @@ impl TryFromLog<Log<InitTransfer>> for InitTransferMessage {
                 native_fee: near_sdk::json_types::U128(event.data.nativeTokenFee),
             },
             sender: OmniAddress::new_from_evm_address(chain_kind, H160(event.data.sender.into()))?,
-            msg: event.data.message,
+            msg: TransferMsg::new(event.data.message).map_err(stringify)?,
         })
     }
 }
@@ -164,8 +164,8 @@ impl TryFromLog<Log<LogMetadata>> for LogMetadataMessage {
                 chain_kind,
                 H160(event.data.tokenAddress.into()),
             )?,
-            name: event.data.name,
-            symbol: event.data.symbol,
+            name: BoundedString::new(event.data.name).map_err(stringify)?,
+            symbol: BoundedString::new(event.data.symbol).map_err(stringify)?,
             decimals: event.data.decimals,
 
             emitter_address: OmniAddress::new_from_evm_address(

@@ -10,7 +10,7 @@ mod tests {
     use omni_types::{
         locker_args::{FinTransferArgs, StorageDepositAction},
         prover_result::{InitTransferMessage, ProverResult},
-        ChainKind, Fee, OmniAddress, TransferId, TransferMessage,
+        ChainKind, Fee, OmniAddress, TransferId, TransferMessage, TransferMsg,
     };
     use rstest::rstest;
 
@@ -85,7 +85,7 @@ mod tests {
                 native_fee: U128(0),
             },
             sender: eth_eoa_address(),
-            msg: String::new(),
+            msg: TransferMsg::default(),
             emitter_address: eth_factory_address(),
         }
     }
