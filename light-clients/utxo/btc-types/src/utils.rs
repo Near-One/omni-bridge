@@ -36,6 +36,7 @@ impl std::fmt::Display for DecodeHeaderError {
 impl std::error::Error for DecodeHeaderError {}
 
 /// Computes the target (range [0, T] inclusive) that a blockhash must land in to be valid.
+/// Returns zero for negative or overflowing `bits`.
 #[must_use]
 pub fn target_from_bits(bits: u32) -> U256 {
     let (mant, expt) = {
@@ -47,7 +48,7 @@ pub fn target_from_bits(bits: u32) -> U256 {
         }
     };
 
-    if mant > 0x7F_FFFF {
+    if mant > 0x7F_FFFF || (mant != 0 && (32 - mant.leading_zeros()) + expt > 256) {
         U256::ZERO
     } else {
         U256::from(mant) << expt
@@ -58,4 +59,24 @@ pub fn target_from_bits(bits: u32) -> U256 {
 #[must_use]
 pub fn work_from_bits(bits: u32) -> U256 {
     target_from_bits(bits).inverse()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_target_from_bits_overflow() {
+        assert_eq!(target_from_bits(0x2200_00ff), U256::from(0xffu8) << 248);
+        assert_eq!(target_from_bits(0x2100_ffff), U256::from(0xffffu16) << 240);
+        for bits in [
+            0x2200_0100,
+            0x2201_ffff,
+            0x2300_0001,
+            0x2400_ffff,
+            0xff00_ffff,
+        ] {
+            assert_eq!(target_from_bits(bits), U256::ZERO, "bits {bits:#x}");
+        }
+    }
 }

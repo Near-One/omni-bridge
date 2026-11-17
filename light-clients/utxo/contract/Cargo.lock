@@ -432,7 +432,7 @@ dependencies = [
 
 [[package]]
 name = "btc-light-client-contract"
-version = "0.6.2"
+version = "0.6.3"
 dependencies = [
  "base64 0.22.1",
  "bitcoin",
