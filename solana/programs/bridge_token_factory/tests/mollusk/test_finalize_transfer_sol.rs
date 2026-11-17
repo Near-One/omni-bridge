@@ -27,6 +27,7 @@ struct TestParams {
     config_pubkey: Option<[u8; 64]>,
     /// If true, make the signature malleable (high-s)
     malleable: bool,
+    relayer: RelayerSetup,
 }
 
 impl Default for TestParams {
@@ -39,6 +40,7 @@ impl Default for TestParams {
             nonce_preset: false,
             config_pubkey: None,
             malleable: false,
+            relayer: RelayerSetup::Active,
         }
     }
 }
@@ -80,6 +82,8 @@ fn run_finalize_transfer_sol(params: TestParams) -> mollusk_svm::result::Instruc
     let sol_vault_account = Account::new(10_000_000_000, 0, &system_program::ID);
 
     let payer_account = create_signer_account(10_000_000_000);
+    let (relayer_state_pda, relayer_state_account) =
+        build_relayer_state_account(&program_id, &payer, params.relayer);
 
     let (wormhole_accounts, wormhole_metas) =
         build_wormhole_cpi_accounts(&config_pda, &config_account, &payer, &payer_account);
@@ -124,6 +128,7 @@ fn run_finalize_transfer_sol(params: TestParams) -> mollusk_svm::result::Instruc
     ];
     metas.extend(wormhole_metas);
     metas.push(AccountMeta::new_readonly(system_program::ID, false));
+    metas.push(AccountMeta::new_readonly(relayer_state_pda, false));
 
     let ix = Instruction::new_with_bytes(program_id, &ix_data, metas);
 
@@ -136,6 +141,7 @@ fn run_finalize_transfer_sol(params: TestParams) -> mollusk_svm::result::Instruc
     ];
     accounts.extend(wormhole_accounts);
     accounts.push((system_program::ID, create_native_program_account()));
+    accounts.push((relayer_state_pda, relayer_state_account));
 
     mollusk.process_instruction(&ix, &accounts)
 }
@@ -220,5 +226,46 @@ fn finalize_transfer_sol_amount_overflow() {
     assert_eq!(
         result.program_result,
         ProgramResult::Failure(ProgramError::Custom(6010))
+    );
+}
+
+#[test]
+fn finalize_transfer_sol_relayer_not_active() {
+    let result = run_finalize_transfer_sol(TestParams {
+        relayer: RelayerSetup::Pending,
+        ..Default::default()
+    });
+
+    assert_eq!(
+        result.program_result,
+        ProgramResult::Failure(ProgramError::Custom(6012))
+    );
+}
+
+#[test]
+fn finalize_transfer_sol_not_a_relayer() {
+    // AccountNotInitialized
+    let result = run_finalize_transfer_sol(TestParams {
+        relayer: RelayerSetup::Missing,
+        ..Default::default()
+    });
+
+    assert_eq!(
+        result.program_result,
+        ProgramResult::Failure(ProgramError::Custom(3012))
+    );
+}
+
+#[test]
+fn finalize_transfer_sol_other_relayer_state() {
+    // ConstraintSeeds
+    let result = run_finalize_transfer_sol(TestParams {
+        relayer: RelayerSetup::OtherRelayer,
+        ..Default::default()
+    });
+
+    assert_eq!(
+        result.program_result,
+        ProgramResult::Failure(ProgramError::Custom(2006))
     );
 }

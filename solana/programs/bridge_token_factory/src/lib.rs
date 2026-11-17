@@ -1,16 +1,25 @@
 use anchor_lang::prelude::*;
 use instructions::{
-    ChangeConfig, DeployToken, FinalizeTransfer, FinalizeTransferSol, GetVersion, InitTransfer,
-    InitTransferSol, Initialize, LogMetadata, Pause, UpdateMetadata,
-    __client_accounts_change_config, __client_accounts_deploy_token,
-    __client_accounts_finalize_transfer, __client_accounts_finalize_transfer_sol,
-    __client_accounts_get_version, __client_accounts_init_transfer,
+    ApplyForTrustedRelayer, ChangeConfig, DeployToken, FinalizeTransfer, FinalizeTransferSol,
+    GetRelayers, GetVersion, GrantTrustedRelayer, InitRelayerList, InitTransfer, InitTransferSol,
+    Initialize, LogMetadata, Pause, RejectRelayerApplication, ResignTrustedRelayer,
+    SetRelayerManager, UpdateMetadata, __client_accounts_apply_for_trusted_relayer,
+    __client_accounts_change_config,
+    __client_accounts_deploy_token, __client_accounts_finalize_transfer,
+    __client_accounts_finalize_transfer_sol, __client_accounts_get_relayers,
+    __client_accounts_get_version, __client_accounts_grant_trusted_relayer,
+    __client_accounts_init_relayer_list, __client_accounts_init_transfer,
     __client_accounts_init_transfer_sol, __client_accounts_initialize,
-    __client_accounts_log_metadata, __client_accounts_pause, __client_accounts_update_metadata,
+    __client_accounts_log_metadata, __client_accounts_pause,
+    __client_accounts_reject_relayer_application, __client_accounts_resign_trusted_relayer,
+    __client_accounts_set_relayer_manager, __client_accounts_update_metadata,
 };
-use state::message::{
-    deploy_token::DeployTokenPayload, finalize_transfer::FinalizeTransferPayload,
-    init_transfer::InitTransferPayload, SignedPayload,
+use state::{
+    message::{
+        deploy_token::DeployTokenPayload, finalize_transfer::FinalizeTransferPayload,
+        init_transfer::InitTransferPayload, SignedPayload,
+    },
+    relayer::RelayerEntry,
 };
 
 pub mod constants;
@@ -28,10 +37,12 @@ pub mod bridge_token_factory {
 
     use super::constants::{FINALIZE_TRANSFER_PAUSED, INIT_TRANSFER_PAUSED};
     use super::{
-        msg, ChangeConfig, Context, DeployToken, DeployTokenPayload, FinalizeTransfer,
-        FinalizeTransferPayload, FinalizeTransferSol, GetVersion, InitTransfer,
-        InitTransferPayload, InitTransferSol, Initialize, Key, LogMetadata, Pause, Pubkey, Result,
-        SignedPayload, UpdateMetadata,
+        msg, ApplyForTrustedRelayer, ChangeConfig, Clock, Context, DeployToken,
+        DeployTokenPayload, FinalizeTransfer, FinalizeTransferPayload, FinalizeTransferSol,
+        GetRelayers, GetVersion, GrantTrustedRelayer, InitRelayerList, InitTransfer,
+        InitTransferPayload, InitTransferSol, Initialize, Key, LogMetadata, Pause, Pubkey,
+        RejectRelayerApplication, RelayerEntry, ResignTrustedRelayer, Result, SetRelayerManager,
+        SignedPayload, SolanaSysvar, UpdateMetadata,
     };
 
     pub fn initialize(
@@ -40,6 +51,8 @@ pub mod bridge_token_factory {
         pausable_admin: Pubkey,
         metadata_admin: Pubkey,
         derived_near_bridge_address: [u8; 64],
+        relayer_stake_required: u64,
+        relayer_waiting_period: i64,
     ) -> Result<()> {
         msg!("Initializing");
 
@@ -54,6 +67,8 @@ pub mod bridge_token_factory {
             ctx.bumps.wormhole_bridge,
             ctx.bumps.wormhole_fee_collector,
             ctx.bumps.wormhole_sequence,
+            relayer_stake_required,
+            relayer_waiting_period,
         )?;
 
         Ok(())
@@ -83,6 +98,10 @@ pub mod bridge_token_factory {
             ctx.accounts.common.config.paused & FINALIZE_TRANSFER_PAUSED == 0,
             error::ErrorCode::Paused
         );
+        require!(
+            ctx.accounts.relayer_state.is_active(Clock::get()?.unix_timestamp),
+            error::ErrorCode::RelayerNotActive
+        );
         msg!("Finalizing transfer");
 
         data.verify_signature(
@@ -101,6 +120,10 @@ pub mod bridge_token_factory {
         require!(
             ctx.accounts.common.config.paused & FINALIZE_TRANSFER_PAUSED == 0,
             error::ErrorCode::Paused
+        );
+        require!(
+            ctx.accounts.relayer_state.is_active(Clock::get()?.unix_timestamp),
+            error::ErrorCode::RelayerNotActive
         );
         msg!("Finalizing transfer");
 
@@ -198,6 +221,85 @@ pub mod bridge_token_factory {
             .set_derived_near_bridge_address(derived_near_bridge_address)?;
 
         Ok(())
+    }
+
+    pub fn set_relayer_config(
+        ctx: Context<ChangeConfig>,
+        stake_required: u64,
+        waiting_period: i64,
+    ) -> Result<()> {
+        msg!("Setting relayer config");
+
+        ctx.accounts.set_relayer_config(stake_required, waiting_period)?;
+
+        Ok(())
+    }
+
+    pub fn init_relayer_list(ctx: Context<InitRelayerList>) -> Result<()> {
+        msg!("Initializing relayer list");
+
+        ctx.accounts.process(ctx.bumps.relayer_list);
+
+        Ok(())
+    }
+
+    pub fn set_relayer_manager(ctx: Context<SetRelayerManager>, manager: Pubkey) -> Result<()> {
+        msg!("Setting relayer manager {}", manager);
+
+        ctx.accounts.process(manager);
+
+        Ok(())
+    }
+
+    pub fn apply_for_trusted_relayer(ctx: Context<ApplyForTrustedRelayer>) -> Result<()> {
+        msg!("Applying for trusted relayer");
+
+        ctx.accounts.process(ctx.bumps.relayer_state)?;
+
+        Ok(())
+    }
+
+    pub fn resign_trusted_relayer(ctx: Context<ResignTrustedRelayer>) -> Result<()> {
+        msg!("Resigning trusted relayer");
+
+        ctx.accounts.process()?;
+
+        Ok(())
+    }
+
+    pub fn grant_trusted_relayer(ctx: Context<GrantTrustedRelayer>, relayer: Pubkey) -> Result<()> {
+        msg!("Granting trusted relayer {}", relayer);
+
+        ctx.accounts.process(relayer, ctx.bumps.relayer_state)?;
+
+        Ok(())
+    }
+
+    pub fn reject_relayer_application(
+        ctx: Context<RejectRelayerApplication>,
+        relayer: Pubkey,
+    ) -> Result<()> {
+        msg!("Rejecting relayer {}", relayer);
+
+        ctx.accounts.process(&relayer);
+
+        Ok(())
+    }
+
+    pub fn get_active_relayers(
+        ctx: Context<GetRelayers>,
+        from_index: u32,
+        limit: u32,
+    ) -> Result<Vec<RelayerEntry>> {
+        ctx.accounts.relayer_list.page(true, from_index, limit)
+    }
+
+    pub fn get_pending_relayers(
+        ctx: Context<GetRelayers>,
+        from_index: u32,
+        limit: u32,
+    ) -> Result<Vec<RelayerEntry>> {
+        ctx.accounts.relayer_list.page(false, from_index, limit)
     }
 
     pub fn update_metadata(

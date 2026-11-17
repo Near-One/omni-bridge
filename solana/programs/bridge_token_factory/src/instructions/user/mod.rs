@@ -1,15 +1,21 @@
+pub mod apply_for_trusted_relayer;
 pub mod deploy_token;
 pub mod finalize_transfer;
 pub mod finalize_transfer_sol;
+pub mod get_relayers;
 pub mod get_version;
 pub mod init_transfer;
 pub mod init_transfer_sol;
 pub mod log_metadata;
+pub mod resign_trusted_relayer;
 
+pub use apply_for_trusted_relayer::*;
 pub use deploy_token::*;
 pub use finalize_transfer::*;
 pub use finalize_transfer_sol::*;
+pub use get_relayers::*;
 pub use get_version::*;
 pub use init_transfer::*;
 pub use init_transfer_sol::*;
 pub use log_metadata::*;
+pub use resign_trusted_relayer::*;

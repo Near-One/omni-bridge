@@ -24,4 +24,8 @@ pub enum ErrorCode {
     Unauthorized,
     #[msg("Amount overflow (unexpected state)")]
     AmountOverflow,
+    #[msg("Relayer staking is disabled")]
+    RelayerStakingDisabled,
+    #[msg("Relayer is not active")]
+    RelayerNotActive,
 }
