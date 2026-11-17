@@ -1,0 +1,34 @@
+[package]
+name = "eth-types"
+version = "0.2.0"
+authors = ["Near Inc <hello@nearprotocol.com>"]
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+serde = { version = "1.0", features = ["derive"] }
+near-sdk.workspace = true
+borsh.workspace = true
+rlp.workspace = true
+rlp-derive.workspace = true
+ethereum-types.workspace = true
+derive_more.workspace = true
+ethereum_ssz = { workspace = true, optional = true }
+ethereum_ssz_derive = { workspace = true, optional = true }
+tree_hash = { workspace = true, optional = true }
+tree_hash_derive = { workspace = true, optional = true }
+ethereum_serde_utils = { workspace = true, optional = true }
+hex.workspace = true
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+serde-big-array = "0.4.1"
+sha3 = "0.10.0"
+
+[dev-dependencies]
+serde_json = "1.0"
+
+[features]
+default = ["eth2"]
+eth2 = ["dep:ethereum_ssz", "dep:ethereum_ssz_derive", "dep:tree_hash", "dep:tree_hash_derive", "dep:ethereum_serde_utils"]

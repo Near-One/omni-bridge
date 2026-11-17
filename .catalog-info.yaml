@@ -14,3 +14,6 @@ spec:
     - ./evm/.catalog-info.yaml
     - ./omni-relayer/.catalog-info.yaml
     - ./solana/.catalog-info.yaml
+    - ./light-clients/utxo/contract/.catalog-info.yaml
+    - ./light-clients/utxo/btc-types/.catalog-info.yaml
+    - ./light-clients/utxo/merkle-tools/.catalog-info.yaml
