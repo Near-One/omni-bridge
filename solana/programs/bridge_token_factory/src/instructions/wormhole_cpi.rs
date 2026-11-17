@@ -1,7 +1,12 @@
 declare_program!(wormhole_post_message_shim);
 use anchor_lang::{
     prelude::*,
+    solana_program::{
+        instruction::{AccountMeta, Instruction},
+        program::invoke_signed,
+    },
     system_program::{transfer, Transfer},
+    InstructionData,
 };
 use wormhole_anchor_sdk::wormhole::{self, program::Wormhole};
 use wormhole_post_message_shim::program::WormholePostMessageShim;
@@ -76,7 +81,33 @@ pub struct WormholeCPI<'info> {
 }
 
 impl WormholeCPI<'_> {
+    /// While Wormhole publishes, the origin nonce is the Wormhole sequence of the message.
+    /// Once Wormhole is disabled the sequence stops, so the program continues from it with its
+    /// own counter, which then stays in use even if Wormhole is enabled again.
+    pub fn next_origin_nonce(&mut self) -> Result<u64> {
+        if self.config.next_origin_nonce == 0 {
+            if !self.config.wormhole_disabled {
+                return Ok(self.sequence.sequence);
+            }
+            self.config.next_origin_nonce = self.sequence.sequence;
+        }
+        require!(
+            self.config.to_account_info().is_writable,
+            anchor_lang::error::ErrorCode::ConstraintMut
+        );
+
+        let origin_nonce = self.config.next_origin_nonce;
+        self.config.next_origin_nonce = origin_nonce + 1;
+        self.config.exit(&crate::ID)?;
+
+        Ok(origin_nonce)
+    }
+
     pub fn post_message(&self, data: Vec<u8>) -> Result<()> {
+        if self.config.wormhole_disabled {
+            return self.emit_message(data);
+        }
+
         // If Wormhole requires a fee before posting a message, we need to
         // transfer lamports to the fee collector. Otherwise
         // `wormhole::post_message` will fail.
@@ -118,5 +149,22 @@ impl WormholeCPI<'_> {
             wormhole_post_message_shim::types::Finality::Finalized,
             data,
         )
+    }
+
+    /// Self-CPI that leaves the message in the transaction's inner instructions, where the MPC
+    /// network reads it. Requires the bridge program account among the instruction's accounts.
+    fn emit_message(&self, payload: Vec<u8>) -> Result<()> {
+        let instruction = Instruction {
+            program_id: crate::ID,
+            accounts: vec![AccountMeta::new_readonly(self.config.key(), true)],
+            data: crate::instruction::EmitMessage { payload }.data(),
+        };
+        invoke_signed(
+            &instruction,
+            &[self.config.to_account_info()],
+            &[&[CONFIG_SEED, &[self.config.bumps.config]]],
+        )?;
+
+        Ok(())
     }
 }

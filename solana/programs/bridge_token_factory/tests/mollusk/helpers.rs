@@ -127,6 +127,10 @@ pub fn setup_mollusk() -> (Mollusk, Pubkey) {
 
     let program_id = bridge_program_id();
     let mut mollusk = Mollusk::new(&program_id, "bridge_token_factory");
+    // Not active on Solana mainnet, devnet or Fogo: a CPI needs the callee among the caller's accounts.
+    mollusk
+        .feature_set
+        .deactivate(&agave_feature_set::lift_cpi_caller_restriction::id());
 
     // Load real SPL Token program; noop stubs for Wormhole and Metaplex
     let loader = bpf_loader::ID;
@@ -146,6 +150,8 @@ pub struct ConfigParams {
     pub paused: u8,
     pub max_used_nonce: u64,
     pub derived_near_bridge_address: [u8; 64],
+    pub wormhole_disabled: bool,
+    pub next_origin_nonce: u64,
 }
 
 impl Default for ConfigParams {
@@ -157,6 +163,8 @@ impl Default for ConfigParams {
             paused: 0,
             max_used_nonce: 0,
             derived_near_bridge_address: [0u8; 64],
+            wormhole_disabled: false,
+            next_origin_nonce: 0,
         }
     }
 }
@@ -191,7 +199,9 @@ pub fn create_config_account(
         paused: params.paused,
         pausable_admin: params.pausable_admin,
         metadata_admin: params.metadata_admin,
-        padding: [0u8; 35],
+        wormhole_disabled: params.wormhole_disabled,
+        next_origin_nonce: params.next_origin_nonce,
+        padding: [0u8; 26],
     };
 
     let discriminator = anchor_account_discriminator("Config");
@@ -243,7 +253,7 @@ fn create_fee_collector_account(wormhole_id: &Pubkey) -> (Pubkey, Account) {
     (pda, Account::new(1_000_000, 0, &system_program::ID))
 }
 
-fn create_sequence_tracker_account(
+pub fn create_sequence_tracker_account(
     wormhole_id: &Pubkey,
     emitter: &Pubkey,
     sequence: u64,

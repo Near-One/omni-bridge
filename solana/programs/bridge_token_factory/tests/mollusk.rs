@@ -10,4 +10,5 @@ mod mollusk {
     mod test_log_metadata;
     mod test_pause;
     mod test_update_metadata;
+    mod test_wormhole_disabled;
 }

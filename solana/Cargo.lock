@@ -666,6 +666,7 @@ dependencies = [
 name = "bridge_token_factory"
 version = "0.2.9"
 dependencies = [
+ "agave-feature-set",
  "anchor-lang",
  "anchor-spl",
  "bitvec",
@@ -675,6 +676,7 @@ dependencies = [
  "mollusk-svm-programs-token",
  "sha2 0.10.9",
  "sha3",
+ "solana-log-collector",
  "solana-program",
  "solana-sdk",
  "solana-sdk-ids",

@@ -25,5 +25,7 @@ pub struct Config {
     pub paused: u8,
     pub pausable_admin: Pubkey,
     pub metadata_admin: Pubkey,
-    pub padding: [u8; 35],
+    pub wormhole_disabled: bool,
+    pub next_origin_nonce: u64,
+    pub padding: [u8; 26],
 }
