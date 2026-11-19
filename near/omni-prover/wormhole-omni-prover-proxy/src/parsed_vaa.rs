@@ -307,13 +307,15 @@ mod tests {
             ChainKind::Base => &[30, 10004],
             ChainKind::HyperEvm => &[47],
             ChainKind::Fogo => &[51],
-            // NEAR is the bridge's destination rather than a Wormhole emitter, and Btc, Zcash,
-            // Strk and Abs have no Wormhole chain id at all.
+            // NEAR is the bridge's destination rather than a Wormhole emitter, Btc, Zcash,
+            // Strk and Abs have no Wormhole chain id at all, and Sui is proven only through
+            // the MPC prover.
             ChainKind::Near
             | ChainKind::Btc
             | ChainKind::Zcash
             | ChainKind::Strk
-            | ChainKind::Abs => &[],
+            | ChainKind::Abs
+            | ChainKind::Sui => &[],
         }
     }
 

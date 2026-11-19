@@ -85,6 +85,8 @@ pub enum ChainKind {
     Aptos,
     #[serde(alias = "avax")]
     Avax,
+    #[serde(alias = "sui")]
+    Sui,
 }
 
 impl ChainKind {
@@ -104,7 +106,8 @@ impl ChainKind {
             | Self::Sol
             | Self::Strk
             | Self::Fogo
-            | Self::Aptos => false,
+            | Self::Aptos
+            | Self::Sui => false,
         }
     }
 
@@ -123,7 +126,8 @@ impl ChainKind {
             | Self::Abs
             | Self::Fogo
             | Self::Aptos
-            | Self::Avax => false,
+            | Self::Avax
+            | Self::Sui => false,
         }
     }
 
@@ -142,7 +146,8 @@ impl ChainKind {
             | Self::Btc
             | Self::Zcash
             | Self::Aptos
-            | Self::Avax => false,
+            | Self::Avax
+            | Self::Sui => false,
         }
     }
 }
@@ -180,6 +185,7 @@ impl TryFrom<u8> for ChainKind {
             12 => Ok(Self::Fogo),
             13 => Ok(Self::Aptos),
             14 => Ok(Self::Avax),
+            15 => Ok(Self::Sui),
             _ => Err(format!("{input:?} invalid chain kind")),
         }
     }
@@ -189,6 +195,10 @@ pub type EvmAddress = H160;
 pub type UTXOChainAddress = String;
 pub type StarknetAddress = H256;
 pub type AptosAddress = H256;
+/// Sui coins are types, not addresses: for tokens this carries
+/// `keccak256(canonical coin type string)`; for accounts, the native
+/// 32-byte Sui address.
+pub type SuiAddress = H256;
 
 pub const ZERO_ACCOUNT_ID: &str =
     "0000000000000000000000000000000000000000000000000000000000000000";
@@ -211,6 +221,7 @@ pub enum OmniAddress {
     Fogo(SolAddress),
     Aptos(AptosAddress),
     Avax(EvmAddress),
+    Sui(SuiAddress),
 }
 
 impl OmniAddress {
@@ -232,6 +243,7 @@ impl OmniAddress {
             ChainKind::Fogo => Ok(Self::Fogo(SolAddress::ZERO)),
             ChainKind::Aptos => Ok(Self::Aptos(H256::ZERO)),
             ChainKind::Avax => Ok(Self::Avax(H160::ZERO)),
+            ChainKind::Sui => Ok(Self::Sui(H256::ZERO)),
         }
     }
 
@@ -277,6 +289,7 @@ impl OmniAddress {
             )),
             ChainKind::Strk => Ok(Self::Strk(H256(address.try_into().map_err(stringify)?))),
             ChainKind::Aptos => Ok(Self::Aptos(H256(address.try_into().map_err(stringify)?))),
+            ChainKind::Sui => Ok(Self::Sui(H256(address.try_into().map_err(stringify)?))),
         }
     }
 
@@ -297,6 +310,7 @@ impl OmniAddress {
             Self::Fogo(_) => ChainKind::Fogo,
             Self::Aptos(_) => ChainKind::Aptos,
             Self::Avax(_) => ChainKind::Avax,
+            Self::Sui(_) => ChainKind::Sui,
         }
     }
 
@@ -317,6 +331,7 @@ impl OmniAddress {
             Self::Fogo(address) => ("fogo", address.to_string()),
             Self::Aptos(address) => ("aptos", address.to_string()),
             Self::Avax(address) => ("avax", address.to_string()),
+            Self::Sui(address) => ("sui", address.to_string()),
         };
 
         if skip_zero_address && self.is_zero() {
@@ -339,7 +354,7 @@ impl OmniAddress {
             Self::Near(address) => *address == ZERO_ACCOUNT_ID,
             Self::Sol(address) | Self::Fogo(address) => address.is_zero(),
             Self::Btc(address) | Self::Zcash(address) => address.is_empty(),
-            Self::Strk(address) | Self::Aptos(address) => address.is_zero(),
+            Self::Strk(address) | Self::Aptos(address) | Self::Sui(address) => address.is_zero(),
         }
     }
 
@@ -349,6 +364,7 @@ impl OmniAddress {
             Self::Fogo(address) => Self::hashed_token_prefix("fogo", &H256(address.0)),
             Self::Strk(address) => Self::hashed_token_prefix("strk", address),
             Self::Aptos(address) => Self::hashed_token_prefix("aptos", address),
+            Self::Sui(address) => Self::hashed_token_prefix("sui", address),
             Self::Eth(address) => {
                 if self.is_zero() {
                     "eth".to_string()
@@ -440,6 +456,7 @@ impl FromStr for OmniAddress {
             "fogo" => Ok(Self::Fogo(recipient.parse().map_err(stringify)?)),
             "aptos" => Ok(Self::Aptos(recipient.parse().map_err(stringify)?)),
             "avax" => Ok(Self::Avax(recipient.parse().map_err(stringify)?)),
+            "sui" => Ok(Self::Sui(recipient.parse().map_err(stringify)?)),
             _ => Err(format!("Chain {chain} is not supported")),
         }
     }
@@ -895,6 +912,12 @@ pub fn get_native_token_address(chain_kind: ChainKind) -> Result<OmniAddress, St
         // object address (`0xa`) — identical on mainnet/testnet/devnet.
         ChainKind::Aptos => OmniAddress::from_str(
             "aptos:0x000000000000000000000000000000000000000000000000000000000000000a",
+        ),
+        // Sui coins are identified by keccak256 of the canonical coin type
+        // string; this is keccak256(b"0000...0002::sui::SUI") — identical
+        // on mainnet/testnet/devnet since 0x2::sui::SUI is a framework type.
+        ChainKind::Sui => OmniAddress::from_str(
+            "sui:0x6696387aecbb705205026783042f803871c190570dd0a57882d9d35ee0df700c",
         ),
         ChainKind::Eth
         | ChainKind::Near
