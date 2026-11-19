@@ -9,7 +9,7 @@ name: Update Contracts
 
 env:
   APTOS_CLI_VERSION: "9.2.0"
-  SUI_VERSION: "1.74.1"
+  SUI_VERSION: "1.84.1"
 
 jobs:
   update-contracts:

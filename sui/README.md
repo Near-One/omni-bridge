@@ -15,6 +15,8 @@ other chains via NEAR Protocol (Sui ↔ NEAR ↔ other chain). Mirrors the
   Ethereum-style secp256k1 signature produced by the NEAR MPC over a
   borsh-encoded payload, recovered against the configured
   `near_bridge_derived_address` (20 bytes, key path `bridge-1`).
+  `fin_transfer` credits the recipient's address balance
+  (`balance::send_funds`); it does not create a `Coin<T>` object.
 
 ## Token identity
 

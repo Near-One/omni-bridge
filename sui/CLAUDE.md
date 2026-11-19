@@ -57,7 +57,7 @@ implementations in this repo: see
 |----------|---------|--------|
 | `initialize` | One-shot: set MPC signer address + chain id | Admin |
 | `init_transfer<T>` | Send tokens from Sui: burns (bridged) or locks (native), collects optional `Coin<SUI>` native fee | Public |
-| `fin_transfer<T>` | Receive tokens: verifies MPC signature, marks `destination_nonce`, mints or unlocks to `recipient` | Public |
+| `fin_transfer<T>` | Receive tokens: verifies MPC signature, marks `destination_nonce`, mints or unlocks into `recipient`'s address balance | Public |
 | `prepare_token<T>` | Step 1/2, called from the template's `init`: creates the currency via `coin_registry::new_currency_with_otw` and returns an unforgeable `TokenSetup<T>`. Stateless (no shared objects — `init` cannot take them) | Public (OTW-authorized) |
 | `deploy_token<T>` | Step 2/2: bind a `TokenSetup<T>` to a signed MetadataPayload; takes `TokenSetup` + `UpgradeCap` (frozen) | Public (signature-authorized) |
 | `cancel_token_setup<T>` | Release `TreasuryCap` + `MetadataCap` from a setup that can never be bound (metadata mismatch, or `VERSION` bumped before the bind), retiring the coin type | Public (setup owner) |
@@ -142,6 +142,13 @@ Ethereum address = last 20 bytes of `keccak256(decompressed_pubkey[1..65])`.
 6. **Native SUI wire id** =
    `keccak256(b"0000…0002::sui::SUI")` — needed for NEAR's
    `get_native_token_address`.
+7. **`fin_transfer` pays into address balances** (`balance::send_funds`),
+   never as a new `Coin<T>` object, matching the 1Click Sui relayer.
+   Recipients spend the funds through a `Withdrawal` PTB input
+   (`coin::redeem_funds` gives a `Coin<T>`, e.g. for `init_transfer`).
+   An object recipient needs its module to call
+   `balance::withdraw_funds_from_object`. Tests read payouts with
+   `test_scenario::settled_balance`, which needs Sui 1.81.1 or later.
 
 ### Security Invariants
 - **No replay**: `destination_nonce` checked + marked used *before*

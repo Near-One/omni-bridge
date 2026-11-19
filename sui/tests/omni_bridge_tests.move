@@ -484,7 +484,7 @@ fun fin_signature(): vector<u8> {
     x"06479C9DBCC5A9C7E6C2464E0D176D562D241826272CD1796F173DE60D847FBF61C7FD9C0E2E90C240A61F5974D382FC964F3EBFFD05435175412DFED13A78451C"
 }
 
-fun call_fin_transfer(state: &mut BridgeState, ts: &mut Scenario) {
+fun call_fin_transfer(state: &mut BridgeState) {
     omni_bridge::fin_transfer<TEST_COIN>(
         state,
         fin_signature(),
@@ -495,7 +495,6 @@ fun call_fin_transfer(state: &mut BridgeState, ts: &mut Scenario) {
         USER,
         option::some(string::utf8(b"relayer.near")),
         vector[],
-        ts.ctx(),
     );
 }
 
@@ -517,7 +516,7 @@ fun fin_transfer_unlocks_to_recipient() {
     let mut state = ts.take_shared<BridgeState>();
     lock_some_test_coin(&mut state, 1_000, &mut ts);
 
-    call_fin_transfer(&mut state, &mut ts);
+    call_fin_transfer(&mut state);
 
     assert!(state.locked_balance<TEST_COIN>() == 750);
     assert!(state.is_transfer_finalised(5));
@@ -538,11 +537,10 @@ fun fin_transfer_unlocks_to_recipient() {
     assert!(events[0] == expected);
 
     test_scenario::return_shared(state);
-    // The recipient received the released coin.
+    // The released tokens landed in the recipient's address balance, not in a coin object.
     ts.next_tx(USER);
-    let received = ts.take_from_address<coin::Coin<TEST_COIN>>(USER);
-    assert!(received.value() == 250);
-    ts.return_to_sender(received);
+    assert!(test_scenario::settled_balance<TEST_COIN>(USER) == 250);
+    assert!(!test_scenario::has_most_recent_for_address<coin::Coin<TEST_COIN>>(USER));
     ts.end();
 }
 
@@ -552,8 +550,8 @@ fun fin_transfer_replay_aborts() {
     let mut ts = setup_configured();
     let mut state = ts.take_shared<BridgeState>();
     lock_some_test_coin(&mut state, 1_000, &mut ts);
-    call_fin_transfer(&mut state, &mut ts);
-    call_fin_transfer(&mut state, &mut ts);
+    call_fin_transfer(&mut state);
+    call_fin_transfer(&mut state);
     abort 0
 }
 
@@ -577,7 +575,6 @@ fun fin_transfer_wrong_signer_aborts() {
         USER,
         option::some(string::utf8(b"relayer.near")),
         vector[],
-        ts.ctx(),
     );
     abort 0
 }
@@ -605,7 +602,6 @@ fun fin_transfer_tampered_signature_aborts() {
         USER,
         option::some(string::utf8(b"relayer.near")),
         vector[],
-        ts.ctx(),
     );
     abort 0
 }
@@ -626,7 +622,6 @@ fun fin_transfer_wrong_amount_aborts() {
         USER,
         option::some(string::utf8(b"relayer.near")),
         vector[],
-        ts.ctx(),
     );
     abort 0
 }
@@ -650,7 +645,6 @@ fun fin_transfer_amount_over_u64_aborts() {
         USER,
         option::none(),
         vector[],
-        ts.ctx(),
     );
     abort 0
 }
@@ -661,7 +655,7 @@ fun fin_transfer_paused_aborts() {
     let mut ts = setup_configured();
     let mut state = ts.take_shared<BridgeState>();
     omni_bridge::set_pause_flags(&mut state, 0x02, ts.ctx());
-    call_fin_transfer(&mut state, &mut ts);
+    call_fin_transfer(&mut state);
     abort 0
 }
 
@@ -684,7 +678,6 @@ fun fin_transfer_with_wrong_coin_type_aborts() {
         USER,
         option::some(string::utf8(b"relayer.near")),
         vector[],
-        ts.ctx(),
     );
     abort 0
 }
@@ -694,7 +687,7 @@ fun fin_transfer_with_wrong_coin_type_aborts() {
 fun fin_transfer_unconfigured_aborts() {
     let mut ts = setup();
     let mut state = ts.take_shared<BridgeState>();
-    call_fin_transfer(&mut state, &mut ts);
+    call_fin_transfer(&mut state);
     abort 0
 }
 
@@ -757,7 +750,7 @@ fun fin_signature_token(): vector<u8> {
     x"D1489F1AC9B65B772F3509CAEBC15F29B56EFC471067F52F18D74E5F3FB254D958AA3C11938CBD1BD4881409EDD48A7FCDEE6415CFBBA91052EDC035CD1BBEF11B"
 }
 
-fun call_fin_transfer_token(state: &mut BridgeState, ts: &mut Scenario) {
+fun call_fin_transfer_token(state: &mut BridgeState) {
     omni_bridge::fin_transfer<TOKEN>(
         state,
         fin_signature_token(),
@@ -768,7 +761,6 @@ fun call_fin_transfer_token(state: &mut BridgeState, ts: &mut Scenario) {
         USER,
         option::some(string::utf8(b"relayer.near")),
         vector[],
-        ts.ctx(),
     );
 }
 
@@ -833,13 +825,16 @@ fun bridged_token_mints_on_fin_and_burns_on_init() {
     call_deploy_token(&mut state, &mut ts);
 
     // fin_transfer mints (no custody involved).
-    call_fin_transfer_token(&mut state, &mut ts);
+    call_fin_transfer_token(&mut state);
     assert!(state.locked_balance<TOKEN>() == 0);
 
     test_scenario::return_shared(state);
     ts.next_tx(USER);
-    let minted = ts.take_from_address<coin::Coin<TOKEN>>(USER);
-    assert!(minted.value() == 250);
+    assert!(test_scenario::settled_balance<TOKEN>(USER) == 250);
+    let minted = coin::redeem_funds(
+        test_scenario::withdraw_balance_from_address<TOKEN>(USER, 250),
+        ts.ctx(),
+    );
 
     // init_transfer burns the bridged token instead of locking it.
     let mut state = ts.take_shared<BridgeState>();

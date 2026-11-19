@@ -25,7 +25,7 @@ use omni_bridge::{bridge_types, utils};
 use std::{string::String, type_name::{Self, TypeName}};
 use sui::{
     bag::{Self, Bag},
-    balance::Balance,
+    balance::{Self, Balance},
     coin::{Self, Coin, CoinMetadata, TreasuryCap},
     coin_registry::{Self, Currency, MetadataCap},
     event,
@@ -718,6 +718,9 @@ public fun init_transfer<T>(
 /// the NEAR MPC signature is the authorization. The transaction sender
 /// is not read on-chain.
 ///
+/// The tokens go to `recipient`'s address balance (`balance::send_funds`),
+/// not to a new `Coin<T>` object.
+///
 /// The wire-format token id is derived from `T` itself
 /// (`keccak256(canonical type string)`), so the signature check binds the
 /// generic type argument: submitting with the wrong `T` reconstructs a
@@ -732,7 +735,6 @@ public fun fin_transfer<T>(
     recipient: address,
     fee_recipient: Option<String>,
     message: vector<u8>,
-    ctx: &mut TxContext,
 ) {
     assert_version(state);
     assert_configured(state);
@@ -759,13 +761,13 @@ public fun fin_transfer<T>(
     assert!(amount <= MAX_U64_AS_U128, E_AMOUNT_OVERFLOW);
     let amount_u64 = amount as u64;
 
-    let coin = if (is_bridge_token<T>(state)) {
-        mint_bridge_token<T>(state, amount_u64, ctx)
+    let funds = if (is_bridge_token<T>(state)) {
+        mint_bridge_token<T>(state, amount_u64)
     } else {
         // Locked-token path: release from bridge custody.
-        coin::from_balance(withdraw<T>(state, amount_u64), ctx)
+        withdraw<T>(state, amount_u64)
     };
-    transfer::public_transfer(coin, recipient);
+    balance::send_funds(funds, recipient);
 
     event::emit(FinTransfer {
         origin_chain,
@@ -952,9 +954,9 @@ fun burn_bridge_token<T>(state: &mut BridgeState, coin: Coin<T>) {
 }
 
 /// Mint a bridge-deployed coin via its stored `TreasuryCap`.
-fun mint_bridge_token<T>(state: &mut BridgeState, amount: u64, ctx: &mut TxContext): Coin<T> {
+fun mint_bridge_token<T>(state: &mut BridgeState, amount: u64): Balance<T> {
     let key = type_name::with_defining_ids<T>();
-    coin::mint(state.treasuries.borrow_mut<TypeName, TreasuryCap<T>>(key), amount, ctx)
+    coin::mint_balance(state.treasuries.borrow_mut<TypeName, TreasuryCap<T>>(key), amount)
 }
 
 /// Require `T` to be `<package>::token::TOKEN`, so a front-runner cannot
