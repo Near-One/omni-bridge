@@ -9,10 +9,7 @@ mod tests {
         result::ExecutionFinalResult,
         types::{Gas, NearToken},
     };
-    use omni_types::{
-        BridgeOnTransferMsg, ChainKind, FastFinTransferMsg, Fee, OmniAddress, TransferId,
-        TransferIdKind, UnifiedTransferId, UtxoFinTransferMsg,
-    };
+    use omni_types::{BridgeOnTransferMsg, ChainKind, OmniAddress, TransferId, UtxoFinTransferMsg};
     use rstest::rstest;
 
     use crate::helpers::tests::{account_n, base_eoa_address, build_artifacts};
@@ -21,7 +18,6 @@ mod tests {
     struct UtxoFinTransferCase {
         amount: u128,
         utxo_msg: UtxoFinTransferMsg,
-        is_fast_transfer: bool,
         error: Option<&'static str>,
     }
 
@@ -145,7 +141,6 @@ mod tests {
         env: &TestEnv,
         amount: u128,
         utxo_msg: UtxoFinTransferMsg,
-        is_fast_transfer: bool,
         error: Option<&str>,
     ) -> anyhow::Result<ExecutionFinalResult> {
         let is_transfer_to_near = matches!(utxo_msg.recipient, OmniAddress::Near(_));
@@ -215,16 +210,10 @@ mod tests {
                 "Connector balance is not correct"
             );
 
-            let (recipient_change, relayer_change) = match (is_fast_transfer, is_transfer_to_near) {
-                (true, true) => (0, amount),
-                (true, false) => (0, amount - utxo_msg.relayer_fee.0),
-                (false, true) => (amount, 0),
-                (false, false) => (0, 0),
-            };
+            let recipient_change = if is_transfer_to_near { amount } else { 0 };
 
             assert_eq!(
-                relayer_balance_before.0,
-                relayer_balance_after.0 - relayer_change,
+                relayer_balance_before.0, relayer_balance_after.0,
                 "Relayer balance is not correct"
             );
             assert_eq!(
@@ -239,7 +228,7 @@ mod tests {
             "Locked tokens should be unchanged on Near"
         );
 
-        if !is_fast_transfer && !is_transfer_to_near {
+        if !is_transfer_to_near {
             let transfer_message: Option<omni_types::TransferMessage> = env
                 .bridge_contract
                 .view("get_transfer_message")
@@ -266,63 +255,6 @@ mod tests {
         Ok(result)
     }
 
-    async fn do_fast_transfer(
-        env: &TestEnv,
-        amount: u128,
-        utxo_msg: UtxoFinTransferMsg,
-    ) -> anyhow::Result<ExecutionFinalResult> {
-        let fast_transfer_msg = FastFinTransferMsg {
-            transfer_id: UnifiedTransferId {
-                origin_chain: ChainKind::Btc,
-                kind: TransferIdKind::Utxo(utxo_msg.utxo_id.clone()),
-            },
-            recipient: utxo_msg.recipient.clone(),
-            fee: Fee {
-                fee: utxo_msg.relayer_fee,
-                native_fee: U128(0),
-            },
-            amount: U128(amount),
-            msg: utxo_msg.msg.clone(),
-            storage_deposit_amount: None,
-            relayer: env.relayer_account.id().clone(),
-        };
-
-        let required_storage: NearToken = env
-            .bridge_contract
-            .view("required_balance_for_fast_transfer")
-            .await?
-            .json()?;
-
-        env.relayer_account
-            .call(env.bridge_contract.id(), "storage_deposit")
-            .args_json(json!({
-                "account_id": env.relayer_account.id(),
-            }))
-            .deposit(required_storage)
-            .max_gas()
-            .transact()
-            .await?
-            .into_result()?;
-
-        // Perform fast transfer
-        let result = env.relayer_account
-                .call(env.token_contract.id(), "ft_transfer_call")
-                .args_json(json!({
-                    "receiver_id": env.bridge_contract.id(),
-                    "amount": U128(amount - utxo_msg.relayer_fee.0),
-                    "memo": None::<String>,
-                    "msg": serde_json::to_string(&BridgeOnTransferMsg::FastFinTransfer(fast_transfer_msg))?,
-                }))
-                .deposit(NearToken::from_yoctonear(1))
-                .max_gas()
-                .transact()
-                .await?;
-
-        assert!(result.failures().is_empty(), "Fast transfer should succeed");
-
-        Ok(result)
-    }
-
     #[rstest]
     // Succeeds when transferring to Near
     #[case(
@@ -334,7 +266,6 @@ mod tests {
                 relayer_fee: U128(1000),
                 msg: String::default(),
             },
-            is_fast_transfer: false,
             error: None,
         }
     )]
@@ -348,7 +279,6 @@ mod tests {
                 relayer_fee: U128(1000),
                 msg: String::default(),
             },
-            is_fast_transfer: false,
             error: None,
         }
     )]
@@ -362,36 +292,7 @@ mod tests {
                 relayer_fee: U128(2000),
                 msg: "Some_message".to_string(),
             },
-            is_fast_transfer: false,
             error: Some("CodeDoesNotExist"),
-        }
-    )]
-    // Succeeds after fast transfer to Near
-    #[case(
-        UtxoFinTransferCase {
-            amount: 100_000_000,
-            utxo_msg: UtxoFinTransferMsg {
-                utxo_id: default_utxo_id(),
-                recipient: OmniAddress::Near(account_n(1)),
-                relayer_fee: U128(1000),
-                msg: String::default(),
-            },
-            is_fast_transfer: true,
-            error: None,
-        }
-    )]
-    // Succeeds after fast transfer to other chain
-    #[case(
-        UtxoFinTransferCase {
-            amount: 100_000_000,
-            utxo_msg: UtxoFinTransferMsg {
-                utxo_id: default_utxo_id(),
-                recipient: base_eoa_address(),
-                relayer_fee: U128(1000),
-                msg: String::default(),
-            },
-            is_fast_transfer: true,
-            error: None,
         }
     )]
     // Refunds when recipient not registered
@@ -404,35 +305,25 @@ mod tests {
                 relayer_fee: U128(1000),
                 msg: String::default(),
             },
-            is_fast_transfer: false,
             error: Some("ERR_STORAGE_RECIPIENT_OMITTED"),
         }
     )]
     #[tokio::test]
+    #[ignore = "UtxoFinTransfer is hard-paused in ft_on_transfer since 0.4.17"]
     async fn normal_call(
         build_artifacts: &BuildArtifacts,
         #[case] case: UtxoFinTransferCase,
     ) -> anyhow::Result<()> {
         let env = TestEnv::new(build_artifacts).await?;
 
-        if case.is_fast_transfer {
-            let _ = do_fast_transfer(&env, case.amount, case.utxo_msg.clone()).await?;
-        }
-
-        let _ = do_utxo_fin_transfer(
-            &env,
-            case.amount,
-            case.utxo_msg,
-            case.is_fast_transfer,
-            case.error,
-        )
-        .await?;
+        let _ = do_utxo_fin_transfer(&env, case.amount, case.utxo_msg, case.error).await?;
 
         Ok(())
     }
 
     #[rstest]
     #[tokio::test]
+    #[ignore = "UtxoFinTransfer is hard-paused in ft_on_transfer since 0.4.17"]
     async fn fails_when_sender_is_not_connector(
         build_artifacts: &BuildArtifacts,
     ) -> anyhow::Result<()> {
@@ -466,39 +357,13 @@ mod tests {
     }
 
     #[rstest]
-    #[tokio::test]
-    async fn fails_on_double_finalization(build_artifacts: &BuildArtifacts) -> anyhow::Result<()> {
-        let env = TestEnv::new(build_artifacts).await?;
-        let amount = 100_000_000;
-        let utxo_msg = UtxoFinTransferMsg {
-            utxo_id: default_utxo_id(),
-            recipient: base_eoa_address(),
-            relayer_fee: U128(1000),
-            msg: String::default(),
-        };
-
-        let _ = do_fast_transfer(&env, amount, utxo_msg.clone()).await?;
-
-        let _ = do_utxo_fin_transfer(&env, amount, utxo_msg.clone(), true, None).await?;
-        let _ = do_utxo_fin_transfer(
-            &env,
-            amount,
-            utxo_msg,
-            true,
-            Some("ERR_FAST_TRANSFER_ALREADY_FINALISED"),
-        )
-        .await?;
-
-        Ok(())
-    }
-
-    #[rstest]
     #[case::enough_gas_succeeds(Gas::from_tgas(150), None)]
     #[case::insufficient_gas_fails(
         Gas::from_tgas(50),
         Some("ERR_NOT_ENOUGH_GAS_FOR_TOKEN_TRANSFER")
     )]
     #[tokio::test]
+    #[ignore = "UtxoFinTransfer is hard-paused in ft_on_transfer since 0.4.17"]
     async fn utxo_fin_transfer_with_msg_gas_budget(
         build_artifacts: &BuildArtifacts,
         #[case] gas: Gas,

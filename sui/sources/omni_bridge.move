@@ -286,7 +286,7 @@ fun init(ctx: &mut TxContext) {
 /// One-shot post-publish configuration. Callable once by an `Admin`;
 /// every bridge operation aborts with `E_NOT_INITIALIZED` until this
 /// has run. `chain_id` is the `ChainKind::Sui` discriminant on NEAR
-/// (expected 14) - it is interleaved as the OmniAddress tag byte in every
+/// (expected 15) - it is interleaved as the OmniAddress tag byte in every
 /// signed transfer payload, so it MUST match NEAR's discriminant or all
 /// inbound `fin_transfer`s fail signature verification. `0` is rejected
 /// (it is the unconfigured sentinel); a wrong non-zero value is

@@ -137,10 +137,6 @@ pub mod tests {
         "relayer".parse().unwrap()
     }
 
-    pub fn fast_relayer_account_id() -> AccountId {
-        "fast_relayer".parse().unwrap()
-    }
-
     pub fn account_n(n: u8) -> AccountId {
         format!("account_{n}").parse().unwrap()
     }
@@ -177,6 +173,12 @@ pub mod tests {
 
     pub fn abs_factory_address() -> OmniAddress {
         "abs:0x252e87862A3A720287E7fd527cE6e8d0738427A2"
+            .parse()
+            .unwrap()
+    }
+
+    pub fn avax_factory_address() -> OmniAddress {
+        "avax:0x252e87862A3A720287E7fd527cE6e8d0738427A2"
             .parse()
             .unwrap()
     }
@@ -322,7 +324,7 @@ pub mod tests {
         let prover_args = borsh::to_vec(&prover_result).expect("Failed to serialize prover result");
 
         BindTokenArgs {
-            chain_kind: ChainKind::Eth,
+            chain_kind: emitter_address.get_chain(),
             prover_args,
         }
     }

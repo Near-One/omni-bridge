@@ -177,7 +177,7 @@ def step5(exchange, spot, params):
     #   n_seeded_levels — how many bid levels to pre-fund with USDC instead of the
     #                     base token. None (or 0) means no USDC-funded levels.
     register_hyperliquidity_result = exchange.spot_deploy_register_hyperliquidity(
-        spot, 2.0, 0, 0, None
+        spot, 75.0, 0, 0, None
     )
     print(register_hyperliquidity_result)
 
@@ -284,7 +284,7 @@ def main():
         show_state(info, address)
         describe_call(
             "exchange.spot_deploy_register_hyperliquidity",
-            [spot, 2.0, 0, 0, None],
+            [spot, 75.0, 0, 0, None],
         )
         if not confirm("Run step5 (register hyperliquidity — formal call, n_orders=0)?"):
             return

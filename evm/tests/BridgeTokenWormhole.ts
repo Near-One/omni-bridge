@@ -211,6 +211,194 @@ describe("BridgeTokenWormhole", () => {
     expect((await token.balanceOf(await user1.getAddress())).toString()).to.be.equal("0")
   })
 
+  describe("wormhole disabled", () => {
+    const recipient = "testrecipient.near"
+
+    async function fundUserWithToken(): Promise<string> {
+      const { token } = await createToken(wrappedNearId)
+      const tokenProxyAddress = await token.getAddress()
+      const { signature, payload } = depositSignature(tokenProxyAddress, await user1.getAddress())
+      await OmniBridgeWormhole.finTransfer(signature, payload, { value: WormholeFee })
+      return tokenProxyAddress
+    }
+
+    async function disableWormhole(): Promise<void> {
+      await expect(OmniBridgeWormhole.setWormholeAddress(ethers.ZeroAddress, 0))
+        .to.emit(OmniBridgeWormhole, "WormholeAddressUpdated")
+        .withArgs(ethers.ZeroAddress, 0)
+    }
+
+    it("only admin can change the wormhole address", async () => {
+      await expect(
+        OmniBridgeWormhole.connect(user1).setWormholeAddress(ethers.ZeroAddress, 0),
+      ).to.be.revertedWithCustomError(OmniBridgeWormhole, "AccessControlUnauthorizedAccount")
+    })
+
+    it("init transfer emits the event and publishes nothing", async () => {
+      const tokenProxyAddress = await fundUserWithToken()
+      await disableWormhole()
+
+      const tx = OmniBridgeWormhole.connect(user1).initTransfer(
+        tokenProxyAddress,
+        1,
+        0,
+        0,
+        recipient,
+        "",
+      )
+      await expect(tx)
+        .to.emit(OmniBridgeWormhole, "InitTransfer")
+        .withArgs(await user1.getAddress(), tokenProxyAddress, 1, 1, 0, 0, recipient, "")
+      await expect(tx).to.not.emit(TestWormhole, "MessagePublished")
+    })
+
+    it("init transfer accepts exactly the native fee", async () => {
+      const tokenProxyAddress = await fundUserWithToken()
+      await disableWormhole()
+
+      const nativeFee = 100
+      await expect(
+        OmniBridgeWormhole.connect(user1).initTransfer(
+          tokenProxyAddress,
+          1,
+          0,
+          nativeFee,
+          recipient,
+          "",
+          { value: nativeFee },
+        ),
+      ).to.emit(OmniBridgeWormhole, "InitTransfer")
+    })
+
+    it("native transfer carries only amount and native fee", async () => {
+      await disableWormhole()
+      const amount = 1000n
+      const nativeFee = 100n
+
+      await expect(
+        OmniBridgeWormhole.connect(user1).initTransfer(
+          ethers.ZeroAddress,
+          amount,
+          0,
+          nativeFee,
+          recipient,
+          "",
+          { value: amount + nativeFee },
+        ),
+      )
+        .to.emit(OmniBridgeWormhole, "InitTransfer")
+        .withArgs(
+          await user1.getAddress(),
+          ethers.ZeroAddress,
+          1,
+          amount,
+          0,
+          nativeFee,
+          recipient,
+          "",
+        )
+      expect(await ethers.provider.getBalance(await OmniBridgeWormhole.getAddress())).to.equal(
+        amount + nativeFee,
+      )
+
+      await expect(
+        OmniBridgeWormhole.connect(user1).initTransfer(
+          ethers.ZeroAddress,
+          amount,
+          0,
+          nativeFee,
+          recipient,
+          "",
+          { value: amount + nativeFee + BigInt(WormholeFee) },
+        ),
+      ).to.be.revertedWithCustomError(OmniBridgeWormhole, "InvalidValue")
+    })
+
+    it("init transfer rejects a wormhole fee", async () => {
+      const tokenProxyAddress = await fundUserWithToken()
+      await disableWormhole()
+
+      await expect(
+        OmniBridgeWormhole.connect(user1).initTransfer(tokenProxyAddress, 1, 0, 0, recipient, "", {
+          value: WormholeFee,
+        }),
+      ).to.be.revertedWithCustomError(OmniBridgeWormhole, "InvalidValue")
+    })
+
+    it("deploy token works without value and rejects value", async () => {
+      await disableWormhole()
+      const { signature, payload } = metadataSignature(wrappedNearId)
+
+      await expect(
+        OmniBridgeWormhole.deployToken(signature, payload, { value: WormholeFee }),
+      ).to.be.revertedWithCustomError(OmniBridgeWormhole, "InvalidValue")
+
+      const tx = OmniBridgeWormhole.deployToken(signature, payload)
+      await expect(tx).to.emit(OmniBridgeWormhole, "DeployToken")
+      await expect(tx).to.not.emit(TestWormhole, "MessagePublished")
+    })
+
+    it("fin transfer works without value and rejects value", async () => {
+      const { token } = await createToken(wrappedNearId)
+      const tokenProxyAddress = await token.getAddress()
+      await disableWormhole()
+      const { signature, payload } = depositSignature(tokenProxyAddress, await user1.getAddress())
+
+      await expect(
+        OmniBridgeWormhole.finTransfer(signature, payload, { value: WormholeFee }),
+      ).to.be.revertedWithCustomError(OmniBridgeWormhole, "InvalidValue")
+
+      const tx = OmniBridgeWormhole.finTransfer(signature, payload)
+      await expect(tx).to.emit(OmniBridgeWormhole, "FinTransfer")
+      await expect(tx).to.not.emit(TestWormhole, "MessagePublished")
+      expect(await token.balanceOf(payload.recipient)).to.equal(payload.amount)
+    })
+
+    it("log metadata works without value and rejects value", async () => {
+      // logMetadata is for tokens the bridge did not deploy.
+      const testToken_factory = await ethers.getContractFactory("TestBridgeToken")
+      const testToken = await upgrades.deployProxy(testToken_factory, ["Test Token", "TT", 18], {
+        initializer: "initialize",
+      })
+      await testToken.waitForDeployment()
+      const tokenAddress = await testToken.getAddress()
+      await disableWormhole()
+
+      await expect(
+        OmniBridgeWormhole.logMetadata(tokenAddress, { value: WormholeFee }),
+      ).to.be.revertedWithCustomError(OmniBridgeWormhole, "InvalidValue")
+
+      const tx = OmniBridgeWormhole.logMetadata(tokenAddress)
+      await expect(tx).to.emit(OmniBridgeWormhole, "LogMetadata")
+      await expect(tx).to.not.emit(TestWormhole, "MessagePublished")
+    })
+
+    it("re-enabling resumes publishing with the next nonce", async () => {
+      const tokenProxyAddress = await fundUserWithToken()
+      await disableWormhole()
+      await OmniBridgeWormhole.connect(user1).initTransfer(
+        tokenProxyAddress,
+        1,
+        0,
+        0,
+        recipient,
+        "",
+      )
+
+      await expect(
+        OmniBridgeWormhole.setWormholeAddress(await TestWormhole.getAddress(), consistencyLevel),
+      )
+        .to.emit(OmniBridgeWormhole, "WormholeAddressUpdated")
+        .withArgs(await TestWormhole.getAddress(), consistencyLevel)
+
+      // Nonces 0 and 1 were used while enabled; the disabled init transfer used none.
+      const { signature, payload } = metadataSignature("other.testnet")
+      await expect(OmniBridgeWormhole.deployToken(signature, payload, { value: WormholeFee }))
+        .to.emit(TestWormhole, "MessagePublished")
+        .withArgs(2, anyValue, consistencyLevel)
+    })
+  })
+
   it("can't init transfer without enough value", async () => {
     const { token } = await createToken(wrappedNearId)
     const tokenProxyAddress = await token.getAddress()

@@ -133,7 +133,7 @@ Ethereum address = last 20 bytes of `keccak256(decompressed_pubkey[1..65])`.
    `coin_registry::finalize_registration<T>` to promote it to its derived
    shared address, which is a prerequisite for `set_token_metadata`.
 5. **Chain id is a parameter** (`initialize`), expected to be
-   `ChainKind::Sui = 14`; must be reserved with maintainers before
+   `ChainKind::Sui = 15`; must be reserved with maintainers before
    deployment. It is interleaved as the OmniAddress tag byte in every
    signed transfer payload, so a wrong value silently rejects all inbound
    transfers — `initialize` rejects `0`, and `set_chain_id` (admin) can

@@ -12,7 +12,7 @@ use sui::{coin, coin_registry::Currency, event, sui::SUI, test_scenario::{Self, 
 
 const ADMIN: address = @0xAD;
 const USER: address = @0xB0B;
-const CHAIN_ID: u8 = 14;
+const CHAIN_ID: u8 = 15;
 
 const ROLE_ADMIN: u8 = 0;
 const ROLE_PAUSER: u8 = 1;
@@ -31,7 +31,7 @@ fun setup(): Scenario {
     ts
 }
 
-/// Setup + `initialize` with the test MPC signer and chain id 14.
+/// Setup + `initialize` with the test MPC signer and chain id 15.
 fun setup_configured(): Scenario {
     let mut ts = setup();
     let mut state = ts.take_shared<BridgeState>();
@@ -479,9 +479,9 @@ fun init_transfer_unconfigured_aborts() {
 // dest_nonce=5, origin_chain=1 (Near), origin_nonce=99,
 // token=TEST_COIN (keccak of its type string), amount=250,
 // recipient=@0xB0B, fee_recipient=Some("relayer.near"), empty message,
-// chain_id=14 — signed by the key behind `derived_address()`.
+// chain_id=15 — signed by the key behind `derived_address()`.
 fun fin_signature(): vector<u8> {
-    x"F4FE60AF3850E4C7DDDAE2B8B41E7384882D60473DFB8D0B3F880F00898F6FE5479AD232ED59EDA403E36A81FEE3264A2AE223F17CED3212B74DC3522C1F52901C"
+    x"06479C9DBCC5A9C7E6C2464E0D176D562D241826272CD1796F173DE60D847FBF61C7FD9C0E2E90C240A61F5974D382FC964F3EBFFD05435175412DFED13A78451C"
 }
 
 fun call_fin_transfer(state: &mut BridgeState, ts: &mut Scenario) {
@@ -566,7 +566,7 @@ fun fin_transfer_wrong_signer_aborts() {
     // Valid signature over the right payload from the wrong key: ecrecover
     // succeeds, so the address comparison is what must reject it.
     let wrong_signer_sig =
-        x"F130E76C203359B4E33C340F0C47175FDFB68C144DD2FD3513B37E6E5B4E836021E302A7DD773E7913EECF754A97A12785FEC8FD06208B1C2A1D40B5118BFACD1C";
+        x"BB5936905320AD6C1B32B1A6A003E470FCCBDF655D75ED183E7E239007AEAFD11BCC9F07373AF87E6362C5D0117A5615EA800AA33005A9975E5108D0505CF1211B";
     omni_bridge::fin_transfer<TEST_COIN>(
         &mut state,
         wrong_signer_sig,
@@ -589,7 +589,12 @@ fun fin_transfer_tampered_signature_aborts() {
     let mut state = ts.take_shared<BridgeState>();
     lock_some_test_coin(&mut state, 1_000, &mut ts);
     let mut sig = fin_signature();
-    *(&mut sig[0]) = 0x00;
+    // r = 0 is never a valid ECDSA signature, so the native recovery itself aborts.
+    let mut i = 0;
+    while (i < 32) {
+        *(&mut sig[i]) = 0x00;
+        i = i + 1;
+    };
     omni_bridge::fin_transfer<TEST_COIN>(
         &mut state,
         sig,
@@ -634,7 +639,7 @@ fun fin_transfer_amount_over_u64_aborts() {
     // Signature over dest_nonce=6, origin_nonce=100, amount=2^64,
     // fee_recipient=None — valid signature, unrepresentable amount.
     let sig =
-        x"D0EC56C807AF43E0D6D722D5834044822FA47725549A4A4F44C72C2F4889388569051C29AEB9C714E456EC9AA35014B813C46DDF676D300B1E5AEA1E4B0C6AD91C";
+        x"F7D836EC62314DF4A61DA9F6F812CECA32FBA3CF38B7D7C6EAA11C655A559FA25DAEC364AB4B9406E5D65C39C8C64671458FB370F76FDC9D6B0F75A8C715AF601C";
     omni_bridge::fin_transfer<TEST_COIN>(
         &mut state,
         sig,
@@ -749,7 +754,7 @@ fun call_deploy_token(state: &mut BridgeState, ts: &mut Scenario) {
 // As `fin_signature()` but over TOKEN's type id, so it mints rather than
 // unlocks.
 fun fin_signature_token(): vector<u8> {
-    x"A1B26D6E561B6FE5B50D10B14B5C2789B4A04B0E8E6A782C8935250D3DC343B7445A2F5C242C9EBA5540213429A38BF1C476668702C0D3105D72BE15180B8C271B"
+    x"D1489F1AC9B65B772F3509CAEBC15F29B56EFC471067F52F18D74E5F3FB254D958AA3C11938CBD1BD4881409EDD48A7FCDEE6415CFBBA91052EDC035CD1BBEF11B"
 }
 
 fun call_fin_transfer_token(state: &mut BridgeState, ts: &mut Scenario) {

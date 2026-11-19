@@ -3,13 +3,15 @@ use near_sdk::serde_json;
 use near_sdk::{borsh, AccountId, NearToken};
 
 use crate::{
-    get_native_token_address, stringify, BridgeError, ChainKind, DestinationChainMsg, Fee,
-    OmniAddress, OmniError, PayloadType, SolAddress, StorageBalanceError, TransferId,
-    TransferMessage, H160, H256,
+    get_native_token_address,
+    prover_result::{FinTransferMessage, InitTransferMessage, ProofMessage},
+    stringify, BridgeError, ChainKind, DestinationChainMsg, Fee, OmniAddress, OmniError,
+    PayloadType, SolAddress, StorageBalanceError, TransferId, TransferMessage, H160, H256,
 };
 use std::str::FromStr;
+use strum::IntoEnumIterator;
 
-fn chain_kinds_for_borsh() -> [ChainKind; 15] {
+fn chain_kinds_for_borsh() -> [ChainKind; 16] {
     [
         ChainKind::Eth,
         ChainKind::Near,
@@ -25,6 +27,7 @@ fn chain_kinds_for_borsh() -> [ChainKind; 15] {
         ChainKind::Abs,
         ChainKind::Fogo,
         ChainKind::Aptos,
+        ChainKind::Avax,
         ChainKind::Sui,
     ]
 }
@@ -57,6 +60,7 @@ fn omni_addresses_for_borsh() -> Vec<OmniAddress> {
             H256::from_str("0x05558831a603eca8cd69a42d4251f08de3573039b69f23972265cac76639f1cf")
                 .unwrap(),
         ),
+        OmniAddress::Avax(H160::from_str("0x23ddd3e3692d1861ed57ede224608875809e127f").unwrap()),
         OmniAddress::Sui(
             H256::from_str("0x05558831a603eca8cd69a42d4251f08de3573039b69f23972265cac76639f1cf")
                 .unwrap(),
@@ -194,6 +198,11 @@ fn test_chain_kind_from_omni_address() {
         "ABS",
     );
     test_chain_kind(
+        OmniAddress::Avax(H160::from_str("0x5a08feed678c056650b3eb4a5cb1b9bb6f0fe265").unwrap()),
+        ChainKind::Avax,
+        "AVAX",
+    );
+    test_chain_kind(
         OmniAddress::Strk(
             H256::from_str("0x05558831a603eca8cd69a42d4251f08de3573039b69f23972265cac76639f1cf")
                 .unwrap(),
@@ -231,6 +240,10 @@ fn test_omni_address_from_evm_address() {
     assert_eq!(
         OmniAddress::new_from_evm_address(ChainKind::Abs, evm_address.clone()),
         Ok(OmniAddress::Abs(evm_address.clone()))
+    );
+    assert_eq!(
+        OmniAddress::new_from_evm_address(ChainKind::Avax, evm_address.clone()),
+        Ok(OmniAddress::Avax(evm_address.clone()))
     );
 
     for chain_kind in [ChainKind::Near, ChainKind::Sol] {
@@ -284,6 +297,11 @@ fn test_omni_address_from_str() {
             format!("abs:{evm_addr}"),
             Ok(OmniAddress::Abs(H160::from_str(evm_addr).unwrap())),
             "Should parse ABS address",
+        ),
+        (
+            format!("avax:{evm_addr}"),
+            Ok(OmniAddress::Avax(H160::from_str(evm_addr).unwrap())),
+            "Should parse AVAX address",
         ),
         (
             "strk:0x05558831a603eca8cd69a42d4251f08de3573039b69f23972265cac76639f1cf".to_string(),
@@ -374,6 +392,11 @@ fn test_omni_address_display() {
             "ABS address should format as abs:0x...",
         ),
         (
+            OmniAddress::Avax(evm_addr.clone()),
+            format!("avax:{evm_addr}"),
+            "AVAX address should format as avax:0x...",
+        ),
+        (
             OmniAddress::Strk(
                 H256::from_str(
                     "0x05558831a603eca8cd69a42d4251f08de3573039b69f23972265cac76639f1cf",
@@ -408,6 +431,40 @@ fn test_omni_address_display() {
     for (address, expected, message) in test_cases {
         assert_eq!(address.to_string(), expected, "{message}");
     }
+}
+
+#[test]
+fn test_omni_address_debug_matches_display() {
+    let test_cases = vec![
+        OmniAddress::Eth(H160::from_str("0x5a08feed678c056650b3eb4a5cb1b9bb6f0fe265").unwrap()),
+        OmniAddress::Near("alice.near".parse().unwrap()),
+        OmniAddress::Sol(
+            "BXss9YNCX2p6VPf2Em54pHXkXnC2FPBeZgbB9fY1cuBR"
+                .parse()
+                .unwrap(),
+        ),
+        OmniAddress::Btc("bc1qar0srrr7xfkvy5l643lydnw9re59gtzzwf5mdq".to_string()),
+        OmniAddress::Strk(
+            H256::from_str("0x05558831a603eca8cd69a42d4251f08de3573039b69f23972265cac76639f1cf")
+                .unwrap(),
+        ),
+    ];
+
+    for address in test_cases {
+        assert_eq!(
+            format!("{address:?}"),
+            address.to_string(),
+            "Debug should match Display for {address}"
+        );
+    }
+
+    let eth = OmniAddress::Eth(H160::ZERO);
+    assert_eq!(format!("{eth:?}"), format!("eth:0x{}", "00".repeat(20)));
+    // Nested in a container, `{:?}` still prints the chain:address form
+    assert_eq!(
+        format!("{:?}", vec![eth]),
+        format!("[eth:0x{}]", "00".repeat(20))
+    );
 }
 
 #[test]
@@ -559,15 +616,7 @@ fn test_stringify() {
 
 #[test]
 fn test_get_native_token_prefix() {
-    for chain_kind in [
-        ChainKind::Near,
-        ChainKind::Sol,
-        ChainKind::Fogo,
-        ChainKind::Base,
-        ChainKind::Eth,
-        ChainKind::Arb,
-        ChainKind::Abs,
-    ] {
+    for chain_kind in ChainKind::iter() {
         let prefix = OmniAddress::new_zero(chain_kind)
             .unwrap()
             .get_token_prefix();
@@ -587,7 +636,7 @@ fn test_get_evm_token_prefix() {
     let prefix = eth_address.get_token_prefix();
     assert_eq!(prefix, "23ddd3e3692d1861ed57ede224608875809e127f");
 
-    for chain_kind in chain_kinds_for_borsh() {
+    for chain_kind in ChainKind::iter() {
         if chain_kind == ChainKind::Eth || !chain_kind.is_evm_chain() {
             continue;
         }
@@ -624,6 +673,12 @@ fn test_chain_kind_from_str() {
 
     let chain: ChainKind = "Abs".parse().unwrap();
     assert_eq!(chain, ChainKind::Abs);
+
+    let chain: ChainKind = "Avax".parse().unwrap();
+    assert_eq!(chain, ChainKind::Avax);
+
+    let chain: ChainKind = "avax".parse().unwrap();
+    assert_eq!(chain, ChainKind::Avax);
 
     let chain: ChainKind = "Sui".parse().unwrap();
     assert_eq!(chain, ChainKind::Sui);
@@ -680,7 +735,7 @@ fn test_get_native_token_address_returns_expected_addresses() {
     );
 
     // All other chains should return zero addresses
-    for chain_kind in chain_kinds_for_borsh() {
+    for chain_kind in ChainKind::iter() {
         if matches!(
             chain_kind,
             ChainKind::Strk | ChainKind::Aptos | ChainKind::Sui
@@ -734,5 +789,59 @@ fn test_errors_serialization() {
         }
         .to_string(),
         "ERR_NOT_ENOUGH_STORAGE: required=100.00 NEAR, available=50.00 NEAR"
+    );
+}
+
+#[test]
+fn test_validate_chain_accepts_emitter_chain_only() {
+    let init_transfer = InitTransferMessage {
+        origin_nonce: 1,
+        token: OmniAddress::new_zero(ChainKind::Base).unwrap(),
+        amount: U128(1),
+        recipient: OmniAddress::Near("alice.near".parse().unwrap()),
+        fee: Fee::default(),
+        sender: OmniAddress::new_zero(ChainKind::Base).unwrap(),
+        msg: String::new(),
+        emitter_address: OmniAddress::new_zero(ChainKind::Base).unwrap(),
+    };
+    let base_factory = OmniAddress::new_zero(ChainKind::Base).unwrap();
+    let eth_factory = OmniAddress::new_zero(ChainKind::Eth).unwrap();
+    let other_base_factory: OmniAddress = "base:0x0101010101010101010101010101010101010101"
+        .parse()
+        .unwrap();
+    assert_eq!(
+        init_transfer.validate_chain(ChainKind::Base, Some(&base_factory)),
+        Ok(())
+    );
+    assert_eq!(
+        init_transfer.validate_chain(ChainKind::Eth, Some(&eth_factory)),
+        Err(BridgeError::ProofChainMismatch)
+    );
+    assert_eq!(
+        init_transfer.validate_chain(ChainKind::Base, Some(&other_base_factory)),
+        Err(BridgeError::UnknownFactory)
+    );
+    assert_eq!(
+        init_transfer.validate_chain(ChainKind::Base, None),
+        Err(BridgeError::UnknownFactory)
+    );
+
+    let fin_transfer = FinTransferMessage {
+        transfer_id: TransferId {
+            origin_chain: ChainKind::Near,
+            origin_nonce: 1,
+        },
+        fee_recipient: None,
+        amount: U128(1),
+        emitter_address: OmniAddress::new_zero(ChainKind::Arb).unwrap(),
+    };
+    let arb_factory = OmniAddress::new_zero(ChainKind::Arb).unwrap();
+    assert_eq!(
+        fin_transfer.validate_chain(ChainKind::Arb, Some(&arb_factory)),
+        Ok(())
+    );
+    assert_eq!(
+        fin_transfer.validate_chain(ChainKind::Sol, Some(&arb_factory)),
+        Err(BridgeError::ProofChainMismatch)
     );
 }

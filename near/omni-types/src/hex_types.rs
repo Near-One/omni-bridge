@@ -12,8 +12,14 @@ use crate::errors::TypesError;
 macro_rules! impl_h_type {
     ($name:ident, $size:expr, $padded:expr) => {
         #[near(serializers = [borsh])]
-        #[derive(Debug, Clone, Hash, PartialEq, Eq)]
+        #[derive(Clone, Hash, PartialEq, Eq)]
         pub struct $name(pub [u8; $size]);
+
+        impl fmt::Debug for $name {
+            fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+                write!(f, "{self}")
+            }
+        }
 
         impl FromStr for $name {
             type Err = TypesError;
@@ -202,5 +208,30 @@ mod tests {
         let json = near_sdk::serde_json::to_string(&hash).unwrap();
         let deserialized: H256 = near_sdk::serde_json::from_str(&json).unwrap();
         assert_eq!(hash, deserialized);
+    }
+
+    #[test]
+    fn test_hex_types_debug_prints_hex() {
+        let addr = H160::from_str("0x23ddd3e3692d1861ed57ede224608875809e127f").unwrap();
+        assert_eq!(format!("{addr:?}"), addr.to_string());
+        assert_eq!(
+            format!("{addr:?}"),
+            "0x23ddd3e3692d1861ed57ede224608875809e127f"
+        );
+
+        let hash =
+            H256::from_str("0x05558831a603eca8cd69a42d4251f08de3573039b69f23972265cac76639f1cf")
+                .unwrap();
+        assert_eq!(format!("{hash:?}"), hash.to_string());
+        assert_eq!(
+            format!("{hash:?}"),
+            "0x05558831a603eca8cd69a42d4251f08de3573039b69f23972265cac76639f1cf"
+        );
+
+        // Nested in a container, `{:?}` still prints hex
+        assert_eq!(
+            format!("{:?}", vec![H160::ZERO]),
+            format!("[0x{}]", "00".repeat(20))
+        );
     }
 }

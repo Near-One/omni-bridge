@@ -138,7 +138,18 @@ impl Contract {
         let token_address = get_native_token_address(chain_kind)
             .near_expect(BridgeError::FailedToGetNativeTokenAddress);
 
-        self.add_token(&utxo_chain_token_id, &token_address, decimals, decimals);
+        let chain_kind = token_address.get_chain();
+        self.token_id_to_address
+            .insert(&(chain_kind, utxo_chain_token_id.clone()), &token_address);
+        self.token_address_to_id
+            .insert(&token_address, &utxo_chain_token_id);
+        self.token_decimals.insert(
+            &token_address,
+            &crate::storage::Decimals {
+                decimals,
+                origin_decimals: decimals,
+            },
+        );
 
         self.utxo_chain_connectors.insert(
             chain_kind,
@@ -165,15 +176,17 @@ impl Contract {
             .detach();
     }
 
+    #[payable]
     #[access_control_any(roles(Role::DAO, Role::RbfOperator))]
     pub fn rbf_increase_gas_fee(
-        &self,
+        &mut self,
         chain_kind: ChainKind,
         original_btc_pending_verify_id: String,
         output: Vec<TxOut>,
     ) -> Promise {
         ext_utxo_connector::ext(self.get_utxo_chain_connector(chain_kind))
             .with_static_gas(WITHDRAW_RBF_GAS)
+            .with_attached_deposit(env::attached_deposit())
             .withdraw_rbf(original_btc_pending_verify_id, output)
     }
 

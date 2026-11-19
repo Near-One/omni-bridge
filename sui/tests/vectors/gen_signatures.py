@@ -145,7 +145,7 @@ WRONG_PRIV = 0x1111111111111111111111111111111111111111111111111111111111111111
 # `@omni_bridge` is 0x0 under `sui move test`.
 ZERO_PKG = "0" * 64
 RECIPIENT = (0xB0B).to_bytes(32, "big")  # USER in the tests
-CHAIN_ID = 14
+CHAIN_ID = 15
 
 
 def token_addr(module, name):

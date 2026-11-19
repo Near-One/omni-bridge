@@ -4,7 +4,7 @@ module omni_bridge::bridge_types_tests;
 use omni_bridge::bridge_types;
 use std::string;
 
-const CHAIN_ID: u8 = 14;
+const CHAIN_ID: u8 = 15;
 
 fun token_address(): address {
     @0x1111111111111111111111111111111111111111111111111111111111111111

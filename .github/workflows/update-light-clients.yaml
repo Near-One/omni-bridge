@@ -1,0 +1,91 @@
+on:
+  push:
+    tags:
+      - 'btc-light-client-v[0-9]+.[0-9]+.[0-9]+*'
+      - 'eth2-client-v[0-9]+.[0-9]+.[0-9]+*'
+
+  workflow_dispatch:
+    inputs:
+      client:
+        description: "Light client to build"
+        required: true
+        type: choice
+        options: [ utxo, eth2 ]
+
+name: Update Light Clients
+jobs:
+  update-utxo-light-client:
+    if: startsWith(github.ref_name, 'btc-light-client-v') || inputs.client == 'utxo'
+    runs-on: warp-ubuntu-2404-x64-16x
+    name: Update UTXO Light Client
+    permissions:
+      contents: write
+    steps:
+      - name: Clone the repository
+        uses: actions/checkout@v4
+
+      - name: Install cargo-near
+        run: |
+          curl --proto '=https' --tlsv1.2 -LsSf https://github.com/near/cargo-near/releases/latest/download/cargo-near-installer.sh | sh
+
+      - name: Build contract
+        working-directory: light-clients/utxo/contract
+        run: |
+          for variant in bitcoin dogecoin litecoin zcash; do
+            cargo near build reproducible-wasm --variant "$variant"
+            mv ./target/near/btc_light_client_contract.wasm "./target/near/btc_light_client_contract_${variant}.wasm"
+          done
+        timeout-minutes: 60
+
+      - name: Archive built WASM files
+        env:
+           RAW_TAG: ${{ github.ref_name }}
+        run: |
+          SAFE_TAG="${RAW_TAG//./-}"
+          ZIP_NAME="${SAFE_TAG}.zip"
+          mkdir -p artifacts
+          find ./light-clients/utxo/contract/target/near -name "*.wasm" -exec cp {} artifacts/ \;
+          zip -j "$ZIP_NAME" artifacts/*
+        shell: bash
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          files: "*.zip"
+
+  update-eth2-light-client:
+    if: startsWith(github.ref_name, 'eth2-client-v') || inputs.client == 'eth2'
+    runs-on: warp-ubuntu-2404-x64-16x
+    name: Update ETH2 Light Client
+    permissions:
+      contents: write
+    steps:
+      - name: Clone the repository
+        uses: actions/checkout@v4
+
+      - name: Install cargo-near
+        run: |
+          curl --proto '=https' --tlsv1.2 -LsSf https://github.com/near/cargo-near/releases/latest/download/cargo-near-installer.sh | sh
+
+      - name: Build contract
+        run: |
+          make -C light-clients/eth2 build-eth2-client
+        timeout-minutes: 60
+
+      - name: Archive built WASM files
+        env:
+           RAW_TAG: ${{ github.ref_name }}
+        run: |
+          SAFE_TAG="${RAW_TAG//./-}"
+          ZIP_NAME="${SAFE_TAG}.zip"
+          mkdir -p artifacts
+          find ./light-clients/eth2/target/near -name "*.wasm" -exec cp {} artifacts/ \;
+          zip -j "$ZIP_NAME" artifacts/*
+        shell: bash
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          files: "*.zip"

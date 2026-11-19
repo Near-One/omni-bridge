@@ -2,7 +2,7 @@ use near_contract_standards::storage_management::{StorageBalance, StorageBalance
 use near_sdk::{assert_one_yocto, borsh, near, PromiseOrValue};
 use near_sdk::{env, near_bindgen, AccountId, NearToken};
 use omni_types::errors::{BridgeError, StorageError};
-use omni_types::{FastTransferStatus, Nonce, TransferId, TransferIdKind, UnifiedTransferId};
+use omni_types::{Nonce, TransferId, TransferIdKind, UnifiedTransferId};
 use omni_utils::near_expect::NearExpect;
 
 use crate::{
@@ -111,20 +111,6 @@ impl TransferMessageStorage {
         owner: AccountId,
     ) -> Result<Vec<u8>, std::io::Error> {
         borsh::to_vec(&Self::V2(TransferMessageStorageValue { message, owner }))
-    }
-}
-
-#[near(serializers=[borsh, json])]
-#[derive(Debug, Clone)]
-pub enum FastTransferStatusStorage {
-    V0(FastTransferStatus),
-}
-
-impl FastTransferStatusStorage {
-    pub fn into_main(self) -> FastTransferStatus {
-        match self {
-            Self::V0(status) => status,
-        }
     }
 }
 
@@ -376,34 +362,6 @@ impl Contract {
         let storage_cost =
             env::storage_byte_cost().saturating_mul((Self::get_basic_storage() + key_len).into());
         let ft_transfers_cost = NearToken::from_yoctonear(2);
-
-        storage_cost.saturating_add(ft_transfers_cost)
-    }
-
-    pub fn required_balance_for_fast_transfer(&self) -> NearToken {
-        let key_len: u64 = borsh::to_vec(&[0u8; 32])
-            .near_expect(BridgeError::Borsh)
-            .len()
-            .try_into()
-            .near_expect(BridgeError::Cast);
-
-        let max_account_id: AccountId = "a"
-            .repeat(64)
-            .parse()
-            .near_expect(BridgeError::ParseAccountId);
-        let value_len: u64 = borsh::to_vec(&FastTransferStatusStorage::V0(FastTransferStatus {
-            relayer: max_account_id.clone(),
-            finalised: false,
-            storage_owner: max_account_id,
-        }))
-        .near_expect(BridgeError::Borsh)
-        .len()
-        .try_into()
-        .near_expect(BridgeError::Cast);
-
-        let storage_cost = env::storage_byte_cost()
-            .saturating_mul((Self::get_basic_storage() + key_len + value_len).into());
-        let ft_transfers_cost = NearToken::from_yoctonear(1);
 
         storage_cost.saturating_add(ft_transfers_cost)
     }

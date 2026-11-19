@@ -1,0 +1,9 @@
+{
+  "network": "mainnet",
+
+  "token_id": 513,
+  "evm_contract_address": null,
+  "evm_extra_wei_decimals": 10,
+
+  "last_link_step": null
+}

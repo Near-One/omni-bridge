@@ -46,7 +46,7 @@ Native SUI's token id is
    publisher holding the `Admin` / `Pauser` / `MetadataAdmin` roles.
 2. `initialize(state, near_bridge_derived_address, chain_id)` — one-shot,
    Admin-gated. `chain_id` is the `ChainKind::Sui` discriminant on NEAR
-   (expected **14** — must be reserved with the omni-bridge maintainers
+   (expected **15** — must be reserved with the omni-bridge maintainers
    before mainnet deployment). Every bridge operation aborts until this
    has run.
 3. Guard the package `UpgradeCap` (multisig) — it is the real root of
@@ -182,7 +182,7 @@ and the sub-clamp (6-decimal) deploy path.
 
 Mirroring the Aptos rollout (PRs #626 / #629):
 
-- **Done**: `ChainKind::Sui` (= 14) + `OmniAddress::Sui(H256)` wiring in
+- **Done**: `ChainKind::Sui` (= 15) + `OmniAddress::Sui(H256)` wiring in
   `omni-types` (`new_zero`, `new_from_slice`, `get_token_prefix` →
   `hashed_token_prefix("sui", …)`, `get_native_token_address` → the
   keccak constant above), the origin-chain token-prefix match in

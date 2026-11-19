@@ -6,8 +6,14 @@ use near_sdk::{bs58, near};
 use serde::de::Visitor;
 
 #[near(serializers=[borsh])]
-#[derive(Debug, Clone, Hash, PartialEq, Eq)]
+#[derive(Clone, Hash, PartialEq, Eq)]
 pub struct SolAddress(pub [u8; 32]);
+
+impl fmt::Debug for SolAddress {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{self}")
+    }
+}
 
 impl SolAddress {
     pub const ZERO: Self = Self([0u8; 32]);
@@ -72,5 +78,27 @@ impl Serialize for SolAddress {
         S: serde::Serializer,
     {
         serializer.serialize_str(&self.to_string())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::SolAddress;
+    use core::str::FromStr;
+
+    #[test]
+    fn test_sol_address_debug_prints_base58() {
+        let addr = SolAddress::from_str("BXss9YNCX2p6VPf2Em54pHXkXnC2FPBeZgbB9fY1cuBR").unwrap();
+        assert_eq!(format!("{addr:?}"), addr.to_string());
+        assert_eq!(
+            format!("{addr:?}"),
+            "BXss9YNCX2p6VPf2Em54pHXkXnC2FPBeZgbB9fY1cuBR"
+        );
+
+        // Nested in a container, `{:?}` still prints base58
+        assert_eq!(
+            format!("{:?}", vec![SolAddress::ZERO]),
+            "[11111111111111111111111111111111]"
+        );
     }
 }
