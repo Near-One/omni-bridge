@@ -59,6 +59,9 @@ pub struct TxBlockMeta {
 pub struct TxInclusionInfo {
     pub tx_block_height: u64,
     pub mainchain_tip_height: u64,
+    /// Tip height of the highest tracked fork which does not contain the transaction block,
+    /// i.e. of the fork which would drop the transaction if it won a reorg
+    pub dangerous_fork_tip_height: Option<u64>,
 }
 
 impl From<ProofArgsV2> for ProofArgs {
