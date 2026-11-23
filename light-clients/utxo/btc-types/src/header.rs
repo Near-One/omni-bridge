@@ -35,3 +35,17 @@ pub struct ExtendedHeader {
     /// Block height in the Bitcoin network
     pub block_height: u64,
 }
+
+/// A tip of a chain which is not the current main chain, i.e. a fork.
+#[near(serializers = [borsh, json])]
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ForkTip {
+    /// Height of the lowest common ancestor with the current main chain. Shared by all the
+    /// tips of one subtree, and moved by a chain reorg.
+    pub lca_height: u64,
+    pub tip_hash: H256,
+    pub tip_height: u64,
+    /// Maximum `tip_height` over the fork tips from the beginning of the list up to and
+    /// including this one
+    pub prefix_max_tip_height: u64,
+}

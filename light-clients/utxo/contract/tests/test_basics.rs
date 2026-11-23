@@ -4,7 +4,7 @@ mod test_basics {
         InitArgs, ProofArgs, ProofArgsV2, TxInclusionInfo, TxInclusionProof,
     };
     use btc_types::hash::H256;
-    use btc_types::header::{ExtendedHeader, Header};
+    use btc_types::header::{ExtendedHeader, ForkTip, Header};
     use near_sdk::NearToken;
     use near_workspaces::{Account, Contract};
     use serde_json::json;
@@ -410,16 +410,13 @@ mod test_basics {
         assert!(outcome.is_success());
 
         let storage_usage_after = contract.view_account().await.unwrap().storage_usage;
-        // Reorg removes main_block from storage (replaced by fork_1 at height 2).
-        // delta_reorg = mainchain map overhead only (pool nets to zero: +fork_2, −main_block).
-        // delta_one  = pool entry + mainchain map overhead.
-        // delta_fork = pool entry only.
-        // Therefore: delta_reorg == delta_one − delta_fork.
+        // The reorg keeps main_block in the pool, it is a part of the fork the old main chain
+        // became, and swaps which tip the fork list stores, which nets to zero. What is left
+        // is fork_2 itself: a pool entry plus the mainchain map overhead, i.e. exactly what a
+        // mainchain block costs. Therefore: delta_reorg == delta_one.
         assert_eq!(
             storage_usage_after - storage_usage_fork,
-            storage_usage_one_block
-                - storage_usage_init
-                - (storage_usage_fork - storage_usage_one_block)
+            storage_usage_one_block - storage_usage_init
         );
 
         let outcome = contract
@@ -591,6 +588,113 @@ mod test_basics {
 
         assert_eq!(outcome.json::<u64>().unwrap(), 10);
         Ok(())
+    }
+
+    /// The forks GC runs on every `submit_blocks`, releasing the storage the outdated forks
+    /// occupy
+    #[tokio::test]
+    async fn test_forks_gc() -> Result<(), Box<dyn std::error::Error>> {
+        let (contract, user_account) = init_contract().await?;
+        let (main_block, fork_1, _fork_2) = make_reorg_test_blocks();
+
+        // main_block extends the tip, fork_1 competes with it at height 2. On top of that the
+        // init blocks are all children of the genesis, so there are forks at height 1 as well
+        for header in [main_block.clone(), fork_1] {
+            let outcome = user_account
+                .call(contract.id(), "submit_blocks")
+                .args_borsh([header].to_vec())
+                .deposit(STORAGE_DEPOSIT_PER_BLOCK)
+                .transact()
+                .await?;
+            assert!(outcome.is_success(), "{:?}", outcome.failures());
+        }
+
+        let storage_with_forks = contract.view_account().await.unwrap().storage_usage;
+
+        let outcome = contract
+            .call("acl_grant_role")
+            .args_json(json!({ "role": "DAO", "account_id": user_account.id() }))
+            .transact()
+            .await?;
+        assert!(outcome.is_success(), "{:?}", outcome.failures());
+
+        // The horizon may not exceed gc_threshold, which is 20 for this contract
+        let outcome = user_account
+            .call(contract.id(), "set_max_reorg")
+            .args_json(json!({ "max_reorg": 21 }))
+            .transact()
+            .await?;
+        assert!(outcome.is_failure());
+
+        // No reorg is expected at all from now on, so every tracked fork is outdated
+        let outcome = user_account
+            .call(contract.id(), "set_max_reorg")
+            .args_json(json!({ "max_reorg": 0 }))
+            .transact()
+            .await?;
+        assert!(outcome.is_success(), "{:?}", outcome.failures());
+
+        assert_eq!(
+            contract
+                .view("get_max_reorg")
+                .args_json(json!({}))
+                .await?
+                .json::<u64>()?,
+            0
+        );
+        assert!(!get_forks_tips(&contract).await?.is_empty());
+
+        // A submission collects as many fork blocks as it brings blocks, and these two are
+        // resubmissions of a stored block, so the call only frees storage
+        let outcome = user_account
+            .call(contract.id(), "submit_blocks")
+            .args_borsh([main_block.clone(), main_block].to_vec())
+            .deposit(STORAGE_DEPOSIT_PER_BLOCK)
+            .max_gas()
+            .transact()
+            .await?;
+        assert!(outcome.is_success(), "{:?}", outcome.failures());
+
+        let storage_after_submit = contract.view_account().await.unwrap().storage_usage;
+        assert!(storage_after_submit < storage_with_forks);
+
+        let outcome = user_account
+            .call(contract.id(), "run_forks_gc")
+            .args_json(json!({ "batch_size": 100 }))
+            .max_gas()
+            .transact()
+            .await?;
+        assert!(outcome.is_success(), "{:?}", outcome.failures());
+
+        let storage_after_gc = contract.view_account().await.unwrap().storage_usage;
+        assert!(storage_after_gc < storage_after_submit);
+
+        // Nothing is left to collect
+        let outcome = user_account
+            .call(contract.id(), "run_forks_gc")
+            .args_json(json!({ "batch_size": 100 }))
+            .max_gas()
+            .transact()
+            .await?;
+        assert!(outcome.is_success(), "{:?}", outcome.failures());
+
+        assert_eq!(
+            contract.view_account().await.unwrap().storage_usage,
+            storage_after_gc
+        );
+        assert!(get_forks_tips(&contract).await?.is_empty());
+
+        Ok(())
+    }
+
+    async fn get_forks_tips(
+        contract: &Contract,
+    ) -> Result<Vec<ForkTip>, Box<dyn std::error::Error>> {
+        Ok(contract
+            .view("get_forks_tips")
+            .args_json(json!({ "skip": 0, "limit": 100 }))
+            .await?
+            .json::<Vec<ForkTip>>()?)
     }
 
     #[tokio::test]
