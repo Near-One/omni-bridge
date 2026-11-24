@@ -176,6 +176,12 @@ impl Contract {
             .detach();
     }
 
+    /// Replaces a pending UTXO withdrawal with a new transaction built from `output`.
+    ///
+    /// `chain_specific_data` is passed through to the connector as is. For Zcash it holds
+    /// `{ orchard_bundle_bytes, expiry_height }`: withdrawals with an Orchard bundle must supply
+    /// a freshly built bundle here, because the connector does not carry the original bundle
+    /// over to the replacement transaction. It also lets the caller set the new expiry height.
     #[payable]
     #[access_control_any(roles(Role::DAO, Role::RbfOperator))]
     pub fn rbf_increase_gas_fee(
@@ -183,11 +189,12 @@ impl Contract {
         chain_kind: ChainKind,
         original_btc_pending_verify_id: String,
         output: Vec<TxOut>,
+        chain_specific_data: Option<serde_json::Value>,
     ) -> Promise {
         ext_utxo_connector::ext(self.get_utxo_chain_connector(chain_kind))
             .with_static_gas(WITHDRAW_RBF_GAS)
             .with_attached_deposit(env::attached_deposit())
-            .withdraw_rbf(original_btc_pending_verify_id, output)
+            .withdraw_rbf(original_btc_pending_verify_id, output, chain_specific_data)
     }
 
     /// Returns the `AccountId` of the connector for the given UTXO chain.
