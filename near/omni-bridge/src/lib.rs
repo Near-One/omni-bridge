@@ -201,7 +201,12 @@ pub trait TokenDeployer {
 
 #[ext_contract(ext_utxo_connector)]
 pub trait ExtUTXOConnector {
-    fn withdraw_rbf(&mut self, original_btc_pending_verify_id: String, output: Vec<TxOut>);
+    fn withdraw_rbf(
+        &mut self,
+        original_btc_pending_verify_id: String,
+        output: Vec<TxOut>,
+        chain_specific_data: Option<serde_json::Value>,
+    );
 }
 
 #[near(contract_state)]
