@@ -39,6 +39,7 @@ near-contract-standards = "=5.29.1"
 hex = "0.4.2"
 borsh = "1.6.0"
 serde = { version = "1.0.200", features = ["derive"] }
+serde_with = "3"
 near-plugins = "0.5.2"
 omni-utils = { git = "https://github.com/near-one/omni-utils", rev = "7ea4154c66f969f28616c5484a7d22cdc81240cc" }
 omni-types = { path = "omni-types" }

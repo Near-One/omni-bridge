@@ -12,6 +12,8 @@ cargo near build non-reproducible-wasm --manifest-path token-deployer/Cargo.toml
 cargo near build non-reproducible-wasm --manifest-path omni-prover/evm-prover/Cargo.toml
 cargo near build non-reproducible-wasm --manifest-path omni-prover/wormhole-omni-prover-proxy/Cargo.toml
 cargo near build non-reproducible-wasm --manifest-path omni-prover/mpc-omni-prover/Cargo.toml
+cargo near build non-reproducible-wasm --manifest-path intents-bridge/factory/Cargo.toml --features contract
+cargo near build non-reproducible-wasm --manifest-path intents-bridge/token/Cargo.toml --features contract
 
 # Testing (run from near/ directory)
 cargo nextest run -p omni-tests test_native_fee     # Example: run specific test
@@ -79,6 +81,13 @@ Verifies foreign chain events by calling the NEAR MPC network's `verify_foreign_
 8. Return typed `ProverResult`
 
 **Dependencies:** Uses `near-mpc-sdk` crate from the MPC repo (pinned git rev) for MPC types (`ForeignTxSignPayload`, `VerifyForeignTransactionRequestArgs`, `VerifyForeignTransactionResponse`, `EvmLog`, `StarknetLog`, etc.).
+
+## intents-bridge
+
+Owner-minted NEP-141 tokens for NEAR Intents, deployed as `<token>.<factory>` subaccounts by the factory (mainnet: `omft.near`). Contract code is behind the `contract` feature; without it the crates only expose interfaces and types.
+
+- `factory` - Deploys tokens (embeds the token wasm via `build.rs`), mints through `ft_deposit()` / `ft_omni_deposit()` (deduplicated by `deposit_id`), records cross-chain withdrawals, manages access keys on deployed tokens. Roles: DAO, TokenDeployer, TokenDepositer, OmniProver, Pause/UnpauseManager.
+- `token` - Fungible token mintable only by its owner (the factory). Users withdraw by calling `ft_transfer` to the token itself with a `WITHDRAW_TO:<address>` memo, which burns the tokens. The `no_registration` build variant restricts `storage_deposit` to the owner.
 
 ## Code Style
 
