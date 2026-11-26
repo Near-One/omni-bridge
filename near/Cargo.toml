@@ -14,6 +14,8 @@ members = [
     "omni-token",
     "omni-types",
     "omni-tests",
+    "intents-bridge/factory",
+    "intents-bridge/token",
     "mock/mock-token",
     "mock/mock-prover",
     "mock/mock-token-receiver",
@@ -40,6 +42,7 @@ serde = { version = "1.0.200", features = ["derive"] }
 near-plugins = "0.5.2"
 omni-utils = { git = "https://github.com/near-one/omni-utils", rev = "7ea4154c66f969f28616c5484a7d22cdc81240cc" }
 omni-types = { path = "omni-types" }
+intents-bridge-token = { path = "intents-bridge/token" }
 strum = "0.27.2"
 strum_macros = "0.27.1"
 near-workspaces = "0.22.2"

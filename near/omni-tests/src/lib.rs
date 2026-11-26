@@ -5,6 +5,7 @@ mod environment;
 mod fin_transfer;
 mod helpers;
 mod init_transfer;
+mod intents_bridge;
 mod native_fee_role;
 mod omni_token;
 mod prover_chain_binding;

@@ -29,6 +29,10 @@ pub mod tests {
     }
 
     fn build_wasm(path: &str, target_dir: &str) -> Vec<u8> {
+        build_wasm_with_features(path, target_dir, None)
+    }
+
+    fn build_wasm_with_features(path: &str, target_dir: &str, features: Option<&str>) -> Vec<u8> {
         let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"))
             .canonicalize()
             .expect("canonicalize manifest dir");
@@ -53,6 +57,7 @@ pub mod tests {
                     .expect("camino PathBuf from path"),
             ),
             override_cargo_target_dir: Some(sub_target.to_string_lossy().to_string()),
+            features: features.map(ToString::to_string),
             ..Default::default()
         })
         .unwrap_or_else(|err| panic!("building contract from {path}: {err:?}"));
@@ -114,6 +119,15 @@ pub mod tests {
         build_wasm(
             "../token-deployer/Cargo.toml",
             "test-target-for-token-deployer",
+        )
+    }
+
+    #[fixture]
+    pub fn intents_bridge_factory_wasm() -> Vec<u8> {
+        build_wasm_with_features(
+            "../intents-bridge/factory/Cargo.toml",
+            "test-target-for-intents-bridge-factory",
+            Some("contract"),
         )
     }
 

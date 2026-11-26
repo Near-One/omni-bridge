@@ -1802,6 +1802,29 @@ dependencies = [
 ]
 
 [[package]]
+name = "intents-bridge-factory"
+version = "0.1.0"
+dependencies = [
+ "cargo-near-build",
+ "intents-bridge-token",
+ "near-contract-standards",
+ "near-plugins",
+ "near-sdk",
+ "rstest",
+ "schemars 0.8.22",
+ "serde",
+]
+
+[[package]]
+name = "intents-bridge-token"
+version = "0.1.0"
+dependencies = [
+ "near-contract-standards",
+ "near-plugins",
+ "near-sdk",
+]
+
+[[package]]
 name = "ipnet"
 version = "2.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"

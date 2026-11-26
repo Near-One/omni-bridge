@@ -15,6 +15,8 @@ WORMHOLE_OMNI_PROVER_PROXY_MANIFEST := $(MAKEFILE_DIR)/near/omni-prover/wormhole
 MPC_OMNI_PROVER_MANIFEST := $(MAKEFILE_DIR)/near/omni-prover/mpc-omni-prover/Cargo.toml
 MOCK_PROVER_MANIFEST := $(MAKEFILE_DIR)/near/mock/mock-prover/Cargo.toml
 MOCK_TOKEN_MANIFEST := $(MAKEFILE_DIR)/near/mock/mock-token/Cargo.toml
+INTENTS_BRIDGE_FACTORY_MANIFEST := $(MAKEFILE_DIR)/near/intents-bridge/factory/Cargo.toml
+INTENTS_BRIDGE_TOKEN_MANIFEST := $(MAKEFILE_DIR)/near/intents-bridge/token/Cargo.toml
 
 # OMNI_CHAIN_ID is the omni-bridge ChainKind byte embedded in outgoing payloads.
 # Must match ChainKind on the NEAR side: 2 = Sol, 12 = Fogo.
@@ -94,7 +96,16 @@ rust-build-mock-prover:
 rust-build-mock-token:
 	cargo near build reproducible-wasm --manifest-path $(MOCK_TOKEN_MANIFEST) --out-dir $(OUT_DIR)
 
-rust-build-near: rust-build-omni-bridge rust-build-omni-token rust-build-token-deployer rust-build-evm-prover rust-build-wormhole-omni-prover-proxy rust-build-mpc-omni-prover rust-build-mock-prover rust-build-mock-token
+rust-build-intents-bridge-factory:
+	cargo near build reproducible-wasm --manifest-path $(INTENTS_BRIDGE_FACTORY_MANIFEST) --out-dir $(OUT_DIR)
+
+rust-build-intents-bridge-token:
+	cargo near build reproducible-wasm --manifest-path $(INTENTS_BRIDGE_TOKEN_MANIFEST) --out-dir $(OUT_DIR)
+
+rust-build-intents-bridge-token-no-registration:
+	cargo near build reproducible-wasm --variant no_registration --manifest-path $(INTENTS_BRIDGE_TOKEN_MANIFEST) --out-dir $(OUT_DIR)/no-registration
+
+rust-build-near: rust-build-omni-bridge rust-build-omni-token rust-build-token-deployer rust-build-evm-prover rust-build-wormhole-omni-prover-proxy rust-build-mpc-omni-prover rust-build-mock-prover rust-build-mock-token rust-build-intents-bridge-factory rust-build-intents-bridge-token
 
 solana-generate-program-id:
 	cd solana && solana-keygen new -o $(SVM_PROGRAM_KEYPAIR) --no-passphrase
@@ -158,8 +169,11 @@ solana-deploy-fogo:
 		--program-keypair $(SVM_PROGRAM_KEYPAIR) \
 		--provider.cluster $(FOGO_RPC_URL)
 
+# intents-bridge-factory is tested separately: workspace-wide --all-features would enable the
+# token's `contract` feature (and near-sdk ABI exports), which then collide with the factory's.
 rust-run-tests:
-	cargo nextest run --manifest-path $(NEAR_MANIFEST) --all-features
+	cargo nextest run --manifest-path $(NEAR_MANIFEST) --workspace --exclude intents-bridge-factory --all-features
+	cargo nextest run --manifest-path $(NEAR_MANIFEST) -p intents-bridge-factory --all-features
 
 solana-run-tests:
 	cd $(MAKEFILE_DIR)/solana && cargo build-sbf

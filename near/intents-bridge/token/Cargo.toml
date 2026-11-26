@@ -1,0 +1,44 @@
+[package]
+name = "intents-bridge-token"
+version = "0.1.0"
+authors = ["Near One <info@nearone.org>"]
+edition = "2024"
+publish = false
+repository.workspace = true
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+near-contract-standards.workspace = true
+near-plugins.workspace = true
+near-sdk = { workspace = true, features = ["unstable"] }
+
+[features]
+contract = []
+no-registration = []
+
+[package.metadata.near.reproducible_build]
+image = "sourcescan/cargo-near:0.21.1-rust-1.96.0"
+image_digest = "sha256:ccb22bb4e677ed022d8b9d1aa1b32f0af52dd0471ef1c32e48dedbf68ee6ee17"
+passed_env = []
+container_build_command = [
+  "cargo",
+  "near",
+  "build",
+  "non-reproducible-wasm",
+  "--locked",
+  "--features=contract",
+]
+
+[package.metadata.near.reproducible_build.variant.no_registration]
+image = "sourcescan/cargo-near:0.21.1-rust-1.96.0"
+image_digest = "sha256:ccb22bb4e677ed022d8b9d1aa1b32f0af52dd0471ef1c32e48dedbf68ee6ee17"
+container_build_command = [
+  "cargo",
+  "near",
+  "build",
+  "non-reproducible-wasm",
+  "--locked",
+  "--features=contract,no-registration",
+]
